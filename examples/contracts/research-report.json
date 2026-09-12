@@ -1,0 +1,30 @@
+{
+  "report_id": "report-fixture-001",
+  "question": "What does the synthetic fixture show?",
+  "generated_at": "2026-01-05T15:02:00+07:00",
+  "evidence": [
+    {
+      "evidence_id": "ev-fixture-001",
+      "kind": "market_data",
+      "title": "Synthetic closing-price fixture",
+      "observed_at": "2026-01-05T15:00:00+07:00",
+      "provenance": {
+        "source_id": "synthetic-fixture",
+        "source_uri": null,
+        "retrieved_at": "2026-01-05T15:01:00+07:00",
+        "source_timestamp": "2026-01-05T15:00:00+07:00"
+      },
+      "content": "Synthetic data for schema examples; not a market observation."
+    }
+  ],
+  "claims": [
+    {
+      "claim_id": "claim-fixture-001",
+      "kind": "fact",
+      "content": "The fixture contains synthetic data.",
+      "evidence_ids": ["ev-fixture-001"]
+    }
+  ],
+  "calculations": [],
+  "limitations": ["This fixture is not market data and cannot support an investment decision."]
+}

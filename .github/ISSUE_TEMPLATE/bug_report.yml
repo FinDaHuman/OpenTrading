@@ -1,0 +1,26 @@
+name: Bug report
+description: Report reproducible behavior that differs from a documented contract.
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Observed behavior
+      description: Include the command, sanitized inputs, and exact result.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: Link the relevant contract or capability statement.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, Python version, package version, and provider/data adapter if relevant. Never include secrets.
+    validations:
+      required: true

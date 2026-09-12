@@ -1,0 +1,23 @@
+name: Feature request
+description: Propose a user outcome and its evidence and permission boundaries.
+title: "[Feature]: "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: outcome
+    attributes:
+      label: User outcome
+    validations:
+      required: true
+  - type: textarea
+    id: contracts
+    attributes:
+      label: Inputs, outputs, evidence, and failures
+    validations:
+      required: true
+  - type: textarea
+    id: boundaries
+    attributes:
+      label: Permissions and scope boundaries
+    validations:
+      required: true
