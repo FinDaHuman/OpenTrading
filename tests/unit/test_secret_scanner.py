@@ -1,7 +1,20 @@
 import subprocess
+from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
+from types import ModuleType
 
-import scripts.check_secrets as secret_scanner
+
+def load_secret_scanner() -> ModuleType:
+    script = Path(__file__).resolve().parents[2] / "scripts" / "check_secrets.py"
+    spec = spec_from_file_location("opentrading_check_secrets", script)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"Could not load repository script: {script}")
+    module = module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+secret_scanner = load_secret_scanner()
 
 
 def test_default_secret_scan_uses_only_git_index(monkeypatch, tmp_path: Path) -> None:
