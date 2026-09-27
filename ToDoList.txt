@@ -1,0 +1,38 @@
+OpenTrading — ToDoList
+======================
+
+Provider chưa hỗ trợ (đang ẩn khỏi /connect)
+--------------------------------------------
+Danh mục provider lấy từ models.dev (https://models.opencode.ai/api.json), cùng nguồn với opencode.
+Ngày 28/09/2026: 204/223 provider dùng được. 19 provider dưới đây bị ẩn vì cần SDK riêng hoặc
+cần thêm biến cấu hình ngoài API key. Điều kiện ẩn nằm ở isSupported() trong src/core/providers.ts.
+
+Cần SDK riêng (thêm package vào SDK map trong src/core/providers.ts, kèm form nhập nhiều biến):
+- [ ] AIHubMix (aihubmix) — @aihubmix/ai-sdk-provider; env: AIHUBMIX_API_KEY
+- [ ] Amazon Bedrock (amazon-bedrock) — @ai-sdk/amazon-bedrock; env: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION, AWS_BEARER_TOKEN_BEDROCK
+- [ ] Azure (azure) — @ai-sdk/azure; env: AZURE_RESOURCE_NAME, AZURE_API_KEY
+- [ ] Azure Cognitive Services (azure-cognitive-services) — @ai-sdk/azure; env: AZURE_COGNITIVE_SERVICES_RESOURCE_NAME, AZURE_COGNITIVE_SERVICES_API_KEY
+- [ ] Cloudflare AI Gateway (cloudflare-ai-gateway) — ai-gateway-provider; env: CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_GATEWAY_ID
+- [ ] GitLab Duo (gitlab) — gitlab-ai-provider; env: GITLAB_TOKEN
+- [ ] QVAC (qvac) — @qvac/ai-sdk-provider; env: QVAC_API_KEY
+- [ ] SaladCloud AI Gateway (salad-cloud) — @saladtechnologies-oss/ai-sdk-provider; env: SALAD_CLOUD_API_KEY
+- [ ] SAP AI Core (sap-ai-core) — @jerome-benoit/sap-ai-provider-v2; env: AICORE_SERVICE_KEY
+- [ ] Venice AI (venice) — venice-ai-sdk-provider; env: VENICE_API_KEY
+- [ ] Vercel AI Gateway (vercel) — @ai-sdk/gateway; env: AI_GATEWAY_API_KEY
+- [ ] Vertex (google-vertex) — @ai-sdk/google-vertex; env: GOOGLE_VERTEX_PROJECT, GOOGLE_VERTEX_LOCATION, GOOGLE_APPLICATION_CREDENTIALS
+- [ ] Vertex (Anthropic) (google-vertex-anthropic) — @ai-sdk/google-vertex/anthropic; env: GOOGLE_VERTEX_PROJECT, GOOGLE_VERTEX_LOCATION, GOOGLE_APPLICATION_CREDENTIALS
+- [ ] watsonx.ai (watsonx) — watsonx-ai-provider; env: WATSONX_AI_APIKEY, WATSONX_AI_PROJECT_ID
+
+Dùng được OpenAI-compatible nhưng URL chứa biến (cần hỏi thêm giá trị khi /connect):
+- [ ] Cloudflare Workers AI (cloudflare-workers-ai) — CLOUDFLARE_ACCOUNT_ID; env: CLOUDFLARE_API_KEY
+- [ ] Databricks (databricks) — DATABRICKS_HOST; env: DATABRICKS_TOKEN
+- [ ] Infomaniak (infomaniak) — INFOMANIAK_PRODUCT_ID; env: INFOMANIAK_API_KEY
+- [ ] Neon (neon) — NEON_AI_GATEWAY_BASE_URL; env: NEON_AI_GATEWAY_TOKEN
+- [ ] Snowflake Cortex (snowflake-cortex) — SNOWFLAKE_ACCOUNT; env: SNOWFLAKE_CORTEX_PAT
+
+Chưa có (ngoài scope v0)
+------------------------
+- [ ] OAuth / subscription (ChatGPT Plus, Claude Pro, GitHub Copilot…)
+- [ ] Tool calling + API dữ liệu chứng khoán
+- [ ] Lưu session
+- [ ] Sidecar Python (MCP stdio) cho quant
