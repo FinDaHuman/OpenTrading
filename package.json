@@ -1,0 +1,39 @@
+{
+  "name": "opentrading",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "OpenTrading — AI harness TUI for Vietnamese equity research (demo v0)",
+  "bin": {
+    "opentrading": "./src/index.tsx"
+  },
+  "scripts": {
+    "dev": "bun run ./src/index.tsx",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ai-sdk/alibaba": "1.0.17",
+    "@ai-sdk/anthropic": "3.0.111",
+    "@ai-sdk/cerebras": "2.0.60",
+    "@ai-sdk/cohere": "3.0.27",
+    "@ai-sdk/deepinfra": "2.0.41",
+    "@ai-sdk/google": "3.0.73",
+    "@ai-sdk/groq": "3.0.31",
+    "@ai-sdk/mistral": "3.0.51",
+    "@ai-sdk/openai": "3.0.88",
+    "@ai-sdk/openai-compatible": "2.0.41",
+    "@ai-sdk/perplexity": "3.0.26",
+    "@ai-sdk/togetherai": "2.0.41",
+    "@ai-sdk/vercel": "2.0.39",
+    "@ai-sdk/xai": "3.0.102",
+    "@openrouter/ai-sdk-provider": "2.9.0",
+    "@opentui/core": "0.4.5",
+    "@opentui/solid": "0.4.5",
+    "ai": "6.0.168",
+    "solid-js": "1.9.10"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.9.0"
+  }
+}
