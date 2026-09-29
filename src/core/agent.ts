@@ -1,9 +1,12 @@
-import { stepCountIs, streamText, type ModelMessage, type StreamTextResult, type ToolSet } from "ai"
-import { describeError, resolveTarget } from "./chat"
+import { stepCountIs, streamText, type ModelMessage, type StreamTextResult, type SystemModelMessage, type ToolSet } from "ai"
+import { ChatSetupError, describeError, resolveTarget } from "./chat"
 import type { AgentEvent } from "./events"
-import { systemPrompt } from "./prompt"
+import { loadProfile } from "./profile"
+import { assemble, type Assembled } from "./prompt/assemble"
+import { tierOf, type Tier } from "./prompt/budget"
+import type { ClockSnapshot } from "./prompt/market-clock"
 import { languageModel } from "./providers"
-import type { Skill } from "./skills"
+import type { Skill } from "./skills/schema"
 import type { ToolRegistry } from "./tools/registry"
 
 export const DEFAULT_MAX_STEPS = 10
@@ -18,11 +21,20 @@ const SUMMARY_PROMPT =
  */
 const NUDGE_PROMPT = "Hãy trả lời câu hỏi của người dùng dựa trên kết quả tool ở trên. Không gọi thêm tool."
 
+/** Reminders ride on the user message inside this tag; UIs hide it, history keeps it. */
+export const REMINDER_TAG = "nhac_nho"
+
 export interface RunOptions {
   history: ModelMessage[]
   input: string
+  /** Every loaded skill (catalog + always-on). */
   skills: Skill[]
+  /** Skills the user switched on with /skill <name>. */
+  sticky?: string[]
   registry: ToolRegistry
+  /** Market-clock snapshot last sent in this conversation; undefined = send it. */
+  prevClock?: ClockSnapshot
+  now?: Date
   signal?: AbortSignal
   maxSteps?: number
 }
@@ -54,6 +66,43 @@ function isEmptyAssistant(message: ModelMessage) {
   if (message.role !== "assistant") return false
   if (typeof message.content === "string") return message.content.trim() === ""
   return message.content.every((part) => part.type === "text" && part.text.trim() === "")
+}
+
+/**
+ * Put the per-request user context in front of the first user message instead of adding a
+ * separate one: two user messages in a row are rejected or mishandled by some providers.
+ */
+export function withContext(messages: ModelMessage[], context: string | undefined): ModelMessage[] {
+  if (!context) return messages
+  const index = messages.findIndex((m) => m.role === "user")
+  if (index < 0) return messages
+  const first = messages[index] as Extract<ModelMessage, { role: "user" }>
+  const parts = typeof first.content === "string" ? [{ type: "text" as const, text: first.content }] : first.content
+  const copy = [...messages]
+  copy[index] = { ...first, content: [{ type: "text", text: context }, ...parts] }
+  return copy
+}
+
+/** The user message as stored in history: optional reminder block, then what the user typed. */
+function userMessage(input: string, reminders: string[]): ModelMessage {
+  if (reminders.length === 0) return { role: "user", content: input }
+  return {
+    role: "user",
+    content: [
+      { type: "text", text: `<${REMINDER_TAG}>\n${reminders.join("\n\n")}\n</${REMINDER_TAG}>` },
+      { type: "text", text: input },
+    ],
+  }
+}
+
+/** Visible text of a user message, without reminder blocks (for UIs rebuilding transcripts). */
+export function visibleUserText(message: ModelMessage) {
+  if (message.role !== "user") return ""
+  if (typeof message.content === "string") return message.content
+  return message.content
+    .filter((p) => p.type === "text" && !p.text.startsWith(`<${REMINDER_TAG}>`))
+    .map((p) => (p as { text: string }).text)
+    .join("\n")
 }
 
 interface Outcome {
@@ -114,6 +163,60 @@ async function* relay(
   if (signal?.aborted) outcome.aborted = true
 }
 
+interface Prepared {
+  target: Awaited<ReturnType<typeof resolveTarget>>
+  tier: Tier
+  tools: ToolSet | undefined
+  assembled: Assembled
+  supportsTools: boolean
+}
+
+type TurnInput = Omit<RunOptions, "history" | "signal" | "maxSteps">
+type Target = Awaited<ReturnType<typeof resolveTarget>>
+
+async function assembleFor(opts: TurnInput, target: Target | undefined) {
+  const info = target?.provider.models[target.model]
+  const supportsTools = info?.tool_call !== false
+  const tier = tierOf(info?.limit?.context)
+  const toolNames = supportsTools ? opts.registry.list().map((t) => t.name) : []
+  const assembled = assemble({
+    tier,
+    tools: toolNames,
+    skills: opts.skills,
+    sticky: opts.sticky ?? [],
+    investorProfile: await loadProfile(),
+    input: opts.input,
+    now: opts.now ?? new Date(),
+    prevClock: opts.prevClock,
+  })
+  return { tier, supportsTools, toolNames, assembled }
+}
+
+async function prepare(opts: TurnInput): Promise<Prepared> {
+  const target = await resolveTarget()
+  const { tier, supportsTools, toolNames, assembled } = await assembleFor(opts, target)
+  return { target, tier, supportsTools, tools: toolNames.length > 0 ? opts.registry.toToolSet() : undefined, assembled }
+}
+
+/**
+ * What the next turn would send, per layer — for /context. Works without a configured model
+ * (assumes tier B), so prompt writers can check their layers before connecting a provider.
+ */
+export async function previewContext(opts: TurnInput) {
+  let target: Target | undefined
+  try {
+    target = await resolveTarget()
+  } catch (error) {
+    if (!(error instanceof ChatSetupError)) throw error
+  }
+  const { assembled, tier } = await assembleFor(opts, target)
+  return {
+    report: assembled.report,
+    tier,
+    model: target ? `${target.provider.name} · ${target.model}` : "chưa chọn model (giả định hạng B)",
+  }
+}
+
 /**
  * One user turn: stream the model, run whatever tools it calls, feed results back, repeat
  * until it stops calling tools or hits `maxSteps` (the last step is forced to answer).
@@ -123,22 +226,26 @@ async function* relay(
  * always ending in `done` with history that is safe to send back next turn.
  */
 export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
-  const target = await resolveTarget()
+  const { target, tools, assembled, supportsTools } = await prepare(opts)
   const maxSteps = opts.maxSteps ?? DEFAULT_MAX_STEPS
-  const user: ModelMessage = { role: "user", content: opts.input }
+  if (!supportsTools && opts.registry.list().length > 0) {
+    yield { type: "notice", text: "Model này không hỗ trợ tool; trả lời không dùng tool." }
+  }
 
-  const supportsTools = target.provider.models[target.model]?.tool_call !== false
-  const available = opts.registry.list().length > 0
-  if (!supportsTools && available) yield { type: "notice", text: "Model này không hỗ trợ tool; trả lời không dùng tool." }
-  const tools = supportsTools && available ? opts.registry.toToolSet() : undefined
+  const user = userMessage(opts.input, assembled.reminders)
+  const request = withContext([...opts.history, user], assembled.context)
+  // Anthropic caches only where asked: mark the static system prompt. Others cache by prefix.
+  const system: string | SystemModelMessage =
+    target.provider.npm === "@ai-sdk/anthropic"
+      ? { role: "system", content: assembled.system, providerOptions: { anthropic: { cacheControl: { type: "ephemeral" } } } }
+      : assembled.system
 
   const model = languageModel(target.provider, target.model, target.apiKey)
-  const system = systemPrompt(opts.skills, { tools: Boolean(tools) })
   let summarized = false
   const result = streamText({
     model,
     system,
-    messages: [...opts.history, user],
+    messages: request,
     tools,
     stopWhen: stepCountIs(maxSteps),
     // Last allowed step: keep tools declared (some providers reject tool history otherwise)
@@ -173,7 +280,7 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
       model,
       system,
       // The nudge is only for this request; it is not kept in history.
-      messages: [...opts.history, user, ...kept, { role: "user", content: NUDGE_PROMPT }],
+      messages: [...request, ...kept, { role: "user", content: NUDGE_PROMPT }],
       tools,
       toolChoice: tools ? "none" : undefined,
       abortSignal: opts.signal,
@@ -201,13 +308,18 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
 
   if (messages && !outcome.aborted && !outcome.failure) {
     if (summarized) yield { type: "notice", text: `Đã dùng hết ${maxSteps} bước gọi tool; câu trả lời là bản tổng kết.` }
-    yield { type: "done", messages: [user, ...messages] }
+    yield { type: "done", messages: [user, ...messages], clock: assembled.clock }
     return
   }
 
   if (outcome.failure && !outcome.aborted) yield { type: "error", message: describeError(outcome.failure) }
   // Aborted or failed mid-turn: keep only plain text, so history never holds a tool call
-  // without its result (providers reject that on the next request).
+  // without its result (providers reject that on the next request). The user message keeps
+  // its reminders, so the clock it carried still counts as sent.
   const text = outcome.text
-  yield { type: "done", messages: [user, { role: "assistant", content: text || (outcome.aborted ? "[Đã dừng]" : "[Lỗi]") }] }
+  yield {
+    type: "done",
+    messages: [user, { role: "assistant", content: text || (outcome.aborted ? "[Đã dừng]" : "[Lỗi]") }],
+    clock: assembled.clock,
+  }
 }

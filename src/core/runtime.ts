@@ -1,7 +1,7 @@
 import path from "node:path"
 import { McpManager } from "./mcp/manager"
 import { dataDir } from "./paths"
-import type { Skill } from "./skills"
+import type { Skill } from "./skills/schema"
 import { currentTimeTool } from "./tools/builtin/current-time"
 import { loadSkillTool } from "./tools/builtin/load-skill"
 import { ToolRegistry } from "./tools/registry"

@@ -1,4 +1,5 @@
 import type { ModelMessage } from "ai"
+import type { ClockSnapshot } from "./prompt/market-clock"
 
 /**
  * Everything the agent loop tells a UI. Tool events are correlated by `callId`.
@@ -13,4 +14,4 @@ export type AgentEvent =
   /** The turn failed; `done` still follows. */
   | { type: "error"; message: string }
   /** Messages to append to history. Never contains a tool call without its result. */
-  | { type: "done"; messages: ModelMessage[] }
+  | { type: "done"; messages: ModelMessage[]; clock: ClockSnapshot }

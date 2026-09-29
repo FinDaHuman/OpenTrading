@@ -92,10 +92,14 @@ test("current_time reports Vietnam time", async () => {
   expect(out).toContain("+07:00")
 })
 
-test("load_skill lists skills and returns a body, unknown names are an error", async () => {
-  const tool = loadSkillTool(() => [{ name: "devil-advocate", description: "phản biện", body: "BODY" }])
-  expect(tool.description).toContain("devil-advocate: phản biện")
-  expect(await tool.execute({ name: "devil-advocate" }, ctx())).toBe("BODY")
+test("load_skill returns a body, refuses manual skills and unknown names", async () => {
+  const base = { description: "d", dir: "/skills/x", source: "bundled" as const, body: "BODY" }
+  const tool = loadSkillTool(() => [
+    { ...base, name: "devil-advocate", activation: "auto" },
+    { ...base, name: "hand-only", activation: "manual" },
+  ])
+  expect(await tool.execute({ name: "devil-advocate" }, ctx())).toContain("BODY")
+  await expect(tool.execute({ name: "hand-only" }, ctx())).rejects.toThrow("chỉ người dùng bật")
   await expect(tool.execute({ name: "x" }, ctx())).rejects.toThrow("Không có skill")
 })
 

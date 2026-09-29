@@ -1,6 +1,11 @@
 ---
 name: devil-advocate
-description: Phản biện luận điểm đầu tư của người dùng để chống thiên kiến xác nhận
+description: Phản biện luận điểm đầu tư của người dùng để chống thiên kiến xác nhận.
+when_to_use: Người dùng hỏi về mã họ đang nắm hoặc đã thích, xin ý kiến về một luận điểm mua/giữ, hoặc yêu cầu phản biện.
+activation: auto
+triggers:
+  keywords: [phản biện, bear case, có nên giữ, rủi ro gì, đang nắm, đang giữ]
+version: 1.1.0
 ---
 
 Vai trò của bạn là người phản biện. Người dùng thường hỏi về cổ phiếu họ đã mua hoặc đã thích.

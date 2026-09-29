@@ -246,6 +246,24 @@ test("/tools lists built-in and MCP tools", async () => {
   await setup.waitFor(() => state.dialog === undefined)
 })
 
+test("/profile creates INVESTOR.md from a template", async () => {
+  await setup.mockInput.typeText("/profile")
+  setup.mockInput.pressEnter()
+  await setup.waitForFrame((f) => f.includes("Đã tạo hồ sơ nhà đầu tư mẫu"))
+  expect(await Bun.file(path.join(home, "INVESTOR.md")).text()).toContain("# Hồ sơ nhà đầu tư")
+})
+
+test("/context shows each prompt layer with its token estimate", async () => {
+  await setup.mockInput.typeText("/context")
+  setup.mockInput.pressEnter()
+  const frame = await setup.waitForFrame((f) => f.includes("Danh tính & bất biến") && f.includes("Hồ sơ nhà đầu tư"))
+  expect(frame).toContain("Danh sách skill")
+  expect(frame).toContain("hạng B")
+  show(frame)
+  setup.mockInput.pressEscape()
+  await setup.waitFor(() => state.dialog === undefined)
+})
+
 test("a tool call renders as a ⚙ row with its result, then the answer", async () => {
   await setKey("nvidia", "nvapi-good-key")
   await setup.mockInput.typeText("MẤY-GIỜ rồi?")

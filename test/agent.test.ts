@@ -212,6 +212,43 @@ test("rate-limit errors wrapped in RetryError still read as quota errors", async
   expect(describeError(wrapped)).toContain("Hết quota")
 })
 
+test("context rides on the first user message; reminders are kept in history, the profile is not", async () => {
+  // A marker that appears nowhere else (prompts/style.md itself mentions "bear case").
+  await writeFile(path.join(home, "INVESTOR.md"), "# Hồ sơ\nHO-SO-DAU-TU-MARKER: không dùng margin.")
+  const monday = (hhmm: string) => new Date(`2026-09-28T${hhmm}:00+07:00`)
+  try {
+    const first = await collect(runAgent({ history: [], input: "câu 1", skills: [], registry: registry(), now: monday("10:00") }))
+    const turn1 = done(first)
+    // Request 1: no two user messages in a row; profile is the first part of the first user message.
+    const roles1 = bodies[0]!.messages.map((m) => m.role).filter((r) => r !== "system")
+    expect(roles1).toEqual(["user"])
+    const firstUser = JSON.stringify(bodies[0]!.messages.find((m) => m.role === "user"))
+    expect(firstUser.indexOf("ho_so_nha_dau_tu")).toBeLessThan(firstUser.indexOf("phien_giao_dich"))
+    expect(firstUser).toContain("câu 1")
+    // Stored history keeps the reminder (so turn 2 still sees the clock) but not the profile.
+    const stored = JSON.stringify(turn1.messages)
+    expect(stored).toContain("<nhac_nho>")
+    expect(stored).toContain("phien_giao_dich")
+    expect(stored).not.toContain("HO-SO-DAU-TU-MARKER")
+
+    bodies.length = 0
+    const history = turn1.messages
+    await collect(runAgent({ history, input: "câu 2", skills: [], registry: registry(), now: monday("10:05"), prevClock: turn1.clock }))
+    const sent = bodies[0]!.messages
+    const roles2 = sent.map((m) => m.role).filter((r) => r !== "system")
+    expect(roles2).toEqual(["user", "assistant", "user"])
+    for (let i = 1; i < roles2.length; i++) expect(roles2[i] === "user" && roles2[i - 1] === "user").toBe(false)
+    // Same phase: the clock from turn 1 is still in history, no second copy is added.
+    expect(JSON.stringify(sent).split("<phien_giao_dich>").length - 1).toBe(1)
+    expect(JSON.stringify(sent.at(-1))).not.toContain("phien_giao_dich")
+    // The profile is rebuilt every request, on the first user message only.
+    expect(JSON.stringify(sent).split("HO-SO-DAU-TU-MARKER").length - 1).toBe(1)
+    expect(JSON.stringify(sent[sent.findIndex((m) => m.role === "user")])).toContain("HO-SO-DAU-TU-MARKER")
+  } finally {
+    await rm(path.join(home, "INVESTOR.md"), { force: true })
+  }
+})
+
 test("models without tool support get no tools", async () => {
   await saveConfig({ provider: "groq", model: "plain" })
   plan = { tool: "current_time", args: {} }

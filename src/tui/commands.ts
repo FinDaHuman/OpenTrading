@@ -7,8 +7,10 @@ export interface CommandInfo {
 export const COMMANDS: CommandInfo[] = [
   { name: "connect", description: "Nhập API key (Groq, Gemini, NVIDIA và 200+ provider khác)" },
   { name: "model", description: "Chọn model từ mọi provider đã kết nối" },
-  { name: "skills", description: "Bật / tắt skill" },
-  { name: "skill", args: "<tên>", description: "Bật / tắt một skill theo tên" },
+  { name: "skills", description: "Danh sách skill; bật / tắt skill cho cả phiên" },
+  { name: "skill", args: "<tên>", description: "Bật / tắt một skill cho cả phiên" },
+  { name: "profile", description: "Mở hồ sơ nhà đầu tư (INVESTOR.md)" },
+  { name: "context", description: "Xem các tầng ngữ cảnh gửi cho model và số token" },
   { name: "mcp", description: "Trạng thái MCP server, cho phép / kết nối lại" },
   { name: "tools", description: "Liệt kê mọi tool model đang gọi được" },
   { name: "clear", description: "Xoá hội thoại hiện tại" },
