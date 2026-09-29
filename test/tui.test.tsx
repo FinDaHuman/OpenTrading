@@ -130,6 +130,34 @@ test("home screen shows branding and connect hint", async () => {
   show(frame)
 })
 
+test("the slash-command list never overlaps rows, and scrolls with the arrow keys", async () => {
+  const { COMMANDS } = await import("../src/tui/commands")
+  await setup.mockInput.typeText("/")
+  // Panel rows are the lines showing a command's description (Home also lists some command names).
+  const rowsOf = (f: string) =>
+    f
+      .split("\n")
+      .flatMap((line) => COMMANDS.filter((c) => line.includes(c.description)).map((c) => c.name))
+  let frame = await setup.waitForFrame((f) => f.includes("tab ↹"))
+  show(frame)
+  // Regression: rows were squeezed onto the same line ("/newsions", "/helpr").
+  expect(frame).not.toContain("/newsions")
+  expect(frame).not.toContain("/helpr")
+  const first = rowsOf(frame)
+  expect(first).toEqual(COMMANDS.slice(0, 8).map((c) => c.name))
+  expect(frame).toContain(`1/${COMMANDS.length}`)
+
+  // Walk to the last command: the window follows the highlight, names stay intact.
+  for (let i = 0; i < COMMANDS.length - 1; i++) setup.mockInput.pressArrow("down")
+  frame = await setup.waitForFrame((f) => f.includes(`${COMMANDS.length}/${COMMANDS.length}`))
+  const last = rowsOf(frame)
+  expect(last).toEqual(COMMANDS.slice(-8).map((c) => c.name))
+  expect(frame).toMatch(/▸ \/exit/)
+  show(frame)
+  setup.mockInput.pressBackspace()
+  await setup.waitForFrame((f) => !f.includes("tab ↹"))
+})
+
 test("chat before connecting shows a readable error instead of crashing", async () => {
   await setup.mockInput.typeText("Xin chào")
   setup.mockInput.pressEnter()
@@ -315,6 +343,22 @@ test("/memory: a model proposal is pending until approved with 'a'", async () =>
   setup.mockInput.pressKey("a")
   await setup.waitFor(async () => (await memory.list())[0]?.status === "active")
   await setup.waitForFrame((f) => f.includes("đang dùng"))
+  setup.mockInput.pressEscape()
+  await setup.waitFor(() => state.dialog === undefined)
+})
+
+test("/config turns memory off and on without a restart", async () => {
+  expect(runtime.memory.id).toBe("file")
+  await setup.mockInput.typeText("/config")
+  setup.mockInput.pressEnter()
+  await setup.waitForFrame((f) => f.includes("Cài đặt") && f.includes("Memory"))
+  setup.mockInput.pressEnter()
+  await setup.waitFor(() => runtime.memory.id === "none")
+  expect(runtime.registry.get("propose_memory")).toBeUndefined()
+  expect((await Bun.file(path.join(home, "config.json")).json()).memory).toEqual({ provider: "none" })
+  setup.mockInput.pressEnter()
+  await setup.waitFor(() => runtime.memory.id === "file")
+  expect(runtime.registry.get("propose_memory")).toBeDefined()
   setup.mockInput.pressEscape()
   await setup.waitFor(() => state.dialog === undefined)
 })

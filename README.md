@@ -23,7 +23,8 @@ Trong TUI:
 | `/mcp` | Trạng thái các MCP server; cho phép server của project hoặc kết nối lại |
 | `/tools` | Liệt kê mọi tool model đang gọi được |
 | `/sessions`, `/new` | Mở lại một phiên đã lưu; bắt đầu phiên mới |
-| `/memory` | Xem, duyệt, xoá memory (bật trong config) |
+| `/memory` | Xem, duyệt, xoá memory |
+| `/config` | Cài đặt: bật / tắt memory (có hiệu lực ngay) |
 | `/clear`, `/help`, `/exit` | Xoá màn hình và bắt đầu phiên mới, trợ giúp, thoát |
 
 Phím tắt: `tab` hoàn thành lệnh đang gõ (`/con` → `/connect`), `↑↓` chọn gợi ý, `esc` dừng câu trả lời hoặc đóng hộp thoại, `ctrl+o` mở rộng/thu gọn kết quả tool, `ctrl+c` thoát.

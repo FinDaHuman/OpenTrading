@@ -13,7 +13,10 @@ export interface Runtime {
   registry: ToolRegistry
   mcp: McpManager
   hooks: HookBus
+  /** Current memory provider; replaced in place by switchMemory (callers read it per turn). */
   memory: MemoryProvider
+  /** Undo the current provider's hook subscriptions. */
+  detachMemory?: () => void
 }
 
 export type MemoryChoice = "none" | "file"
@@ -34,15 +37,22 @@ export function initRuntime(opts: { cwd?: string; home?: string; skills: () => S
   registry.register(currentTimeTool())
   registry.register(loadSkillTool(opts.skills))
 
-  const hooks = new HookBus()
-  const memory: MemoryProvider = opts.memory ?? new NoopMemory()
-  for (const tool of memory.tools?.() ?? []) registry.register({ ...tool, source: `memory:${memory.id}` })
-  memory.register?.(hooks)
-
   const mcp = new McpManager(registry, {
     home,
     cwd: opts.cwd ?? process.cwd(),
     trustFile: path.join(home, "mcp-trust.json"),
   })
-  return { registry, mcp, hooks, memory }
+  const runtime: Runtime = { registry, mcp, hooks: new HookBus(), memory: new NoopMemory() }
+  switchMemory(runtime, opts.memory ?? new NoopMemory())
+  return runtime
+}
+
+/** Swap the memory provider live: its tools and hooks are replaced, nothing else restarts. */
+export function switchMemory(runtime: Runtime, memory: MemoryProvider) {
+  runtime.detachMemory?.()
+  runtime.registry.unregisterSource(`memory:${runtime.memory.id}`)
+  runtime.memory = memory
+  for (const tool of memory.tools?.() ?? []) runtime.registry.register({ ...tool, source: `memory:${memory.id}` })
+  const detach = memory.register?.(runtime.hooks)
+  runtime.detachMemory = typeof detach === "function" ? detach : undefined
 }

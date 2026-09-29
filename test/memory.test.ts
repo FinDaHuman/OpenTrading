@@ -77,3 +77,22 @@ test("hook bus: block wins, context is collected, a failing hook is reported not
   off()
   expect((await hooks.emit({ type: "session-end", sessionId: "s" })).context).toEqual([])
 })
+
+test("switching memory live swaps its tools and hooks", async () => {
+  const { initRuntime, switchMemory } = await import("../src/core/runtime")
+  const { NoopMemory } = await import("../src/core/memory/types")
+  const { memory: m } = await memory()
+  const runtime = initRuntime({ skills: () => [], memory: m })
+  expect(runtime.registry.get("propose_memory")).toBeDefined()
+  expect((await runtime.hooks.emit({ type: "user-prompt", sessionId: "s", prompt: "Ghi nhớ: A" })).context).toHaveLength(1)
+
+  switchMemory(runtime, new NoopMemory())
+  expect(runtime.memory.id).toBe("none")
+  expect(runtime.registry.get("propose_memory")).toBeUndefined()
+  // The old provider's hook is detached: "Ghi nhớ" no longer saves anything.
+  expect((await runtime.hooks.emit({ type: "user-prompt", sessionId: "s", prompt: "Ghi nhớ: B" })).context).toEqual([])
+  expect((await m.list()).map((i) => i.text)).toEqual(["A"])
+
+  switchMemory(runtime, m)
+  expect(runtime.registry.get("propose_memory")).toBeDefined()
+})

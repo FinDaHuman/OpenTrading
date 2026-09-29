@@ -149,7 +149,7 @@ export class FileMemory implements MemoryProvider {
 
   /** "Ghi nhớ: …" at the start of a message saves directly (the user said it, no approval needed). */
   register(hooks: HookBus) {
-    hooks.on("user-prompt", async (event) => {
+    return hooks.on("user-prompt", async (event) => {
       const match = event.prompt.match(REMEMBER_PREFIX)
       if (!match) return
       const text = event.prompt.slice(match[0].length).trim()

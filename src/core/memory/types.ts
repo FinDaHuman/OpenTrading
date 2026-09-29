@@ -39,8 +39,11 @@ export interface MemoryProvider {
   recall?(query: string, ctx: MemoryContext): Promise<MemoryItem[]>
   /** Tools the model may call, e.g. propose_memory. Registered once at startup. */
   tools?(): ToolDef[]
-  /** Subscribe to lifecycle events (session-start, user-prompt, turn-end, session-end). */
-  register?(hooks: HookBus): void
+  /**
+   * Subscribe to lifecycle events (session-start, user-prompt, turn-end, session-end).
+   * Return a cleanup function so the provider can be switched off at runtime (/config).
+   */
+  register?(hooks: HookBus): void | (() => void)
   /** Management, used by /memory. */
   list?(): Promise<MemoryItem[]>
   approve?(id: string): Promise<void>

@@ -12,6 +12,7 @@ import { ensureProfile } from "../core/profile"
 import { loadSkills } from "../core/skills/loader"
 import { Background } from "./background"
 import { COMMANDS, parseCommand } from "./commands"
+import { ConfigDialog } from "./dialogs/config"
 import { ConnectDialog } from "./dialogs/connect"
 import { ContextDialog } from "./dialogs/context"
 import { HelpDialog } from "./dialogs/help"
@@ -25,6 +26,7 @@ import { Home } from "./home"
 import { currentSession, recordTurn, resumeFromArgs, startSession } from "./session"
 import { providerName, pushLine, setState, state, type Line } from "./state"
 import { color } from "./theme"
+import { Suggestions } from "./suggestions"
 import { Transcript } from "./transcript"
 
 let abort: AbortController | undefined
@@ -215,6 +217,7 @@ export function App(props: { runtime: Runtime; resume?: string }) {
       case "context":
       case "sessions":
       case "memory":
+      case "config":
         return setState("dialog", cmd.name)
       case "profile":
         return void ensureProfile().then(({ file, created }) =>
@@ -263,19 +266,7 @@ export function App(props: { runtime: Runtime; resume?: string }) {
         </Show>
 
         <Show when={suggestions().length > 0}>
-          <box flexDirection="column" marginLeft={3} marginRight={3} backgroundColor={color.panel} paddingLeft={1}>
-            <For each={suggestions()}>
-              {(c, i) => (
-                <box flexDirection="row" backgroundColor={i() === selected() ? color.rule : undefined}>
-                  <text fg={color.tang} width={18}>{`${i() === selected() ? "▸" : " "} /${c.name}${c.args ? ` ${c.args}` : ""}`}</text>
-                  <text fg={color.tx3} flexGrow={1}>
-                    {c.description}
-                  </text>
-                  <text fg={color.tx3}>{i() === selected() ? "tab ↹ " : ""}</text>
-                </box>
-              )}
-            </For>
-          </box>
+          <Suggestions items={suggestions()} selected={selected()} />
         </Show>
 
         <box
@@ -287,6 +278,7 @@ export function App(props: { runtime: Runtime; resume?: string }) {
           backgroundColor={color.panel2}
           flexDirection="row"
           height={3}
+          flexShrink={0}
           paddingLeft={1}
         >
           <text fg={state.streaming ? color.tham : color.tang}>{"› "}</text>
@@ -336,6 +328,9 @@ export function App(props: { runtime: Runtime; resume?: string }) {
         <Match when={state.dialog === "sessions"}>
           <SessionsDialog runtime={props.runtime} />
         </Match>
+        <Match when={state.dialog === "config"}>
+          <ConfigDialog runtime={props.runtime} />
+        </Match>
         <Match when={state.dialog === "memory"}>
           <MemoryDialog memory={props.runtime.memory} />
         </Match>
@@ -350,7 +345,7 @@ function StatusBar() {
   const ready = () => state.mcp.filter((s) => s.state === "connected").length
   const attention = () => state.mcp.some((s) => s.state === "failed" || s.state === "untrusted")
   return (
-    <box flexDirection="row" height={1} backgroundColor={color.panel2} paddingLeft={2} paddingRight={2}>
+    <box flexDirection="row" height={1} flexShrink={0} backgroundColor={color.panel2} paddingLeft={2} paddingRight={2}>
       <text fg={color.bg} bg={color.tang}>
         {" ▲ OpenTrading "}
       </text>

@@ -128,10 +128,11 @@ interface MemoryItem { id; text; scope: "user" | "workspace"; status: "pending" 
 - Tool `propose_memory` tạo memory `pending`. Người dùng gõ "Ghi nhớ: …" thì lưu thẳng `active`, qua hook `user-prompt`.
 - `recall` khớp theo từ khoá.
 
-**Bật memory:** thêm vào `~/.opentrading/config.json` rồi mở lại app. Mặc định là `"none"` (tắt):
+**Bật memory:** dùng `/config` trong TUI (có hiệu lực ngay, không cần mở lại), hoặc sửa `~/.opentrading/config.json`. Mặc định là `"none"` (tắt):
 ```json
 { "memory": { "provider": "file" } }
 ```
+Khi đổi provider, harness gỡ tool và hook của provider cũ; `register()` nên trả về hàm huỷ đăng ký.
 Đăng ký provider mới: thêm lựa chọn trong `createMemory()` (`src/core/runtime.ts`).
 
 ## 7. Hook: `HookBus`

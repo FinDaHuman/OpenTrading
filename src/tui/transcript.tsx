@@ -1,7 +1,7 @@
 import { useTerminalDimensions } from "@opentui/solid"
 import { createSignal, For, Match, onCleanup, Show, Switch } from "solid-js"
 import { state, type Line } from "./state"
-import { color } from "./theme"
+import { color, markdownStyle } from "./theme"
 
 type ToolLine = Extract<Line, { kind: "tool" }>
 
@@ -72,11 +72,18 @@ function Row(props: { line: Line }) {
         {(line) => {
           const l = line() as Extract<Line, { kind: "assistant" }>
           return (
-            <box flexDirection="column" marginTop={1} paddingLeft={2}>
+            <box flexDirection="column" marginTop={1} paddingLeft={2} flexShrink={0}>
               <text fg={color.tang}>{"◆ OpenTrading"}</text>
-              <text fg={color.tx} flexShrink={1} wrapMode="word">
-                {l.text + (l.done ? "" : "▍")}
-              </text>
+              {/* Models answer in markdown: render it (bold, lists, tables, code) instead of raw ** and *. */}
+              <markdown
+                content={l.text.trim() + (l.done ? "" : " ▍")}
+                syntaxStyle={markdownStyle()}
+                streaming={!l.done}
+                conceal
+                fg={color.tx}
+                bg={color.bg}
+                tableOptions={{ style: "grid" }}
+              />
             </box>
           )
         }}
@@ -103,7 +110,7 @@ function Row(props: { line: Line }) {
 export function Transcript() {
   const dims = useTerminalDimensions()
   return (
-    <box flexGrow={1} flexDirection="row" justifyContent="center">
+    <box flexGrow={1} flexShrink={1} minHeight={0} flexDirection="row" justifyContent="center">
       <scrollbox
         width={Math.min(dims().width - 4, 110)}
         stickyScroll

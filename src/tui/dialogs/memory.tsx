@@ -42,7 +42,7 @@ export function MemoryDialog(props: { memory: MemoryProvider }) {
         <DialogFrame title="Memory" hint="esc đóng" width={80}>
           <text fg={color.tx2}>{`Memory đang tắt (provider: ${props.memory.id}).`}</text>
           <text fg={color.tx3} marginTop={1} wrapMode="word">
-            Bật bản mẫu lưu file bằng cách thêm "memory": {"{"} "provider": "file" {"}"} vào ~/.opentrading/config.json rồi mở lại OpenTrading.
+            Bật memory trong /config (có hiệu lực ngay, không cần mở lại OpenTrading).
           </text>
         </DialogFrame>
       </Match>

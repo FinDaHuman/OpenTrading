@@ -33,9 +33,9 @@ Cập nhật: 30/09/2026 · nhánh `step2b-session-memory`
 | **Skills** (`src/core/skills/`) | Xong. `skills/<tên>/SKILL.md`; 3 nguồn project > user > bundled; activation auto/always/manual; catalog có ngân sách; gợi ý theo từ khoá (preroute L1); `load_skill` đọc được file phụ |
 | Hồ sơ nhà đầu tư `~/.opentrading/INVESTOR.md`, `/profile` | Xong |
 | **Hook** (`src/core/hooks.ts`): session-start, user-prompt (chặn hoặc thêm ngữ cảnh), turn-end, session-end | Xong |
-| **Memory** (`src/core/memory/`): contract `MemoryProvider`, bản mẫu `FileMemory` (đề xuất → duyệt trong `/memory`, "Ghi nhớ: …"), mặc định tắt | Xong |
+| **Memory** (`src/core/memory/`): contract `MemoryProvider`, bản mẫu `FileMemory` (đề xuất → duyệt trong `/memory`, "Ghi nhớ: …"), mặc định tắt; bật trong `/config` | Xong |
 | **Session** (`src/core/session/`): JSONL ghi nối, `/sessions`, `/new`, `--continue`, `--resume <id>`, vá tool-call thiếu kết quả | Xong |
-| Test: typecheck + 77 test (tool, MCP với server thật qua stdio, agent loop, TUI, đường dẫn state) | Xong |
+| Test: typecheck + 81 test (tool, MCP với server thật qua stdio, agent loop, TUI, đường dẫn state) | Xong |
 
 **Chưa kiểm tra:**
 - Chưa chạy với key thật của provider nào. Tool calling mới được test trên định dạng OpenAI-compatible bằng API giả lập; Gemini và Anthropic cần thử bằng key thật.
