@@ -72,6 +72,19 @@ test("abort rejects a running tool", async () => {
   await expect(running).rejects.toThrow("Đã huỷ")
 })
 
+test("finished tool calls do not leave abort listeners on the turn's signal", async () => {
+  const controller = new AbortController()
+  let added = 0
+  let removed = 0
+  const add = controller.signal.addEventListener.bind(controller.signal)
+  const remove = controller.signal.removeEventListener.bind(controller.signal)
+  controller.signal.addEventListener = ((...args: Parameters<typeof add>) => (added++, add(...args))) as typeof add
+  controller.signal.removeEventListener = ((...args: Parameters<typeof remove>) => (removed++, remove(...args))) as typeof remove
+  for (let i = 0; i < 5; i++) await runTool(def({ execute: async () => "ok" }), {}, { signal: controller.signal, callId: "c" }, new RwLock())
+  expect(added).toBeGreaterThan(0)
+  expect(removed).toBe(added)
+})
+
 test("current_time reports Vietnam time", async () => {
   const tool = currentTimeTool(() => new Date("2026-09-28T02:30:00Z"))
   const out = (await tool.execute({}, ctx())) as string

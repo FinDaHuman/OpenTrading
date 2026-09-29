@@ -140,6 +140,16 @@ test("project servers wait for approval, then connect", async () => {
   expect(manager.status()[0]!.state).toBe("connected")
 }, 30_000)
 
+test("approval is tied to what runs: changing env or cwd asks again", async () => {
+  const { trustKey } = await import("../src/core/mcp/trust")
+  const base = { command: "node", args: ["server.js"] }
+  const key = trustKey("/p", "s", base)
+  expect(trustKey("/p", "s", { ...base })).toBe(key)
+  expect(trustKey("/p", "s", { ...base, env: { NODE_OPTIONS: "--require evil.js" } })).not.toBe(key)
+  expect(trustKey("/p", "s", { ...base, cwd: "../other" })).not.toBe(key)
+  expect(trustKey("/other", "s", base)).not.toBe(key)
+})
+
 test("disabled servers are not started", async () => {
   const { manager } = await setup({ demo: { ...demoConfig, enabled: false } })
   await manager.start()

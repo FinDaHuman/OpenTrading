@@ -66,6 +66,7 @@ export async function runTool(def: ToolDef, input: unknown, ctx: ToolContext, lo
   const ms = def.timeoutMs ?? DEFAULT_TIMEOUT_MS
   const timeout = new AbortController()
   let timer: ReturnType<typeof setTimeout> | undefined
+  let onAbort: (() => void) | undefined
   try {
     const signal = AbortSignal.any([ctx.signal, timeout.signal])
     // Race as well as signal: a tool that ignores its signal must still not hang the loop.
@@ -76,8 +77,9 @@ export async function runTool(def: ToolDef, input: unknown, ctx: ToolContext, lo
       }, ms)
     })
     const aborted = new Promise<never>((_, reject) => {
-      if (ctx.signal.aborted) reject(new Error("Đã huỷ."))
-      ctx.signal.addEventListener("abort", () => reject(new Error("Đã huỷ.")), { once: true })
+      onAbort = () => reject(new Error("Đã huỷ."))
+      if (ctx.signal.aborted) onAbort()
+      else ctx.signal.addEventListener("abort", onAbort, { once: true })
     })
     const result = await Promise.race([def.execute(input, { ...ctx, signal }), expired, aborted])
     const output = typeof result === "string" ? result : result.output
@@ -87,6 +89,8 @@ export async function runTool(def: ToolDef, input: unknown, ctx: ToolContext, lo
     throw new Error(String(error))
   } finally {
     clearTimeout(timer)
+    // The turn's signal outlives this call; don't leave one listener behind per tool call.
+    if (onAbort) ctx.signal.removeEventListener("abort", onAbort)
     release()
   }
 }

@@ -10,8 +10,21 @@ import type { ServerConfig } from "./config"
  */
 type TrustFile = Record<string, { approvedAt: string }>
 
+/**
+ * Everything that decides what code runs. `env` and `cwd` count too: NODE_OPTIONS,
+ * PYTHONPATH or a different working directory can make the same command run other code.
+ * Uses the raw (unexpanded) config, so rotating a secret in the environment does not re-ask.
+ */
 function fingerprint(config: ServerConfig) {
-  const what = "url" in config ? { url: config.url } : { command: config.command, args: config.args ?? [] }
+  const what =
+    "url" in config
+      ? { url: config.url }
+      : {
+          command: config.command,
+          args: config.args ?? [],
+          cwd: config.cwd ?? null,
+          env: Object.entries(config.env ?? {}).sort(([a], [b]) => a.localeCompare(b)),
+        }
   return createHash("sha256").update(JSON.stringify(what)).digest("hex").slice(0, 16)
 }
 
