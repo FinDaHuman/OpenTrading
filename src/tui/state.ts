@@ -3,7 +3,8 @@ import { createStore } from "solid-js/store"
 import type { Catalog } from "../core/catalog"
 import type { McpServerStatus } from "../core/mcp/manager"
 import type { ProviderId } from "../core/providers"
-import type { Skill } from "../core/skills"
+import type { ClockSnapshot } from "../core/prompt/market-clock"
+import type { Skill, SkillProblem } from "../core/skills/schema"
 
 export type ToolStatus = "running" | "ok" | "error"
 
@@ -14,7 +15,7 @@ export type Line =
   | { kind: "info"; text: string }
   | { kind: "error"; text: string }
 
-export type DialogName = "connect" | "model" | "skills" | "help" | "mcp" | "tools"
+export type DialogName = "connect" | "model" | "skills" | "help" | "mcp" | "tools" | "context"
 
 export const [state, setState] = createStore({
   lines: [] as Line[],
@@ -29,7 +30,11 @@ export const [state, setState] = createStore({
   /** Pre-filled filter for the next /model dialog (e.g. right after /connect). */
   modelFilter: "",
   skills: [] as Skill[],
+  skillProblems: [] as SkillProblem[],
+  /** Skills pinned for the session with /skill <name>. */
   activeSkills: [] as string[],
+  /** Market-clock snapshot last sent to the model; undefined → send on the next turn. */
+  clock: undefined as ClockSnapshot | undefined,
   mcp: [] as McpServerStatus[],
   /** Show full tool output instead of the first lines (ctrl+o). */
   expandTools: false,

@@ -6,7 +6,8 @@ import { color } from "./theme"
 const TIPS = [
   ["/connect", "nhập API key: Groq, Gemini, NVIDIA, OpenAI…"],
   ["/model", "chọn model"],
-  ["/skills", "bật skill phân tích"],
+  ["/profile", "hồ sơ nhà đầu tư của bạn"],
+  ["/skills", "skill phân tích"],
   ["/help", "tất cả lệnh"],
 ]
 

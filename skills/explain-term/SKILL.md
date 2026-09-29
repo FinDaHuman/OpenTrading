@@ -1,6 +1,11 @@
 ---
 name: explain-term
-description: Giải thích một thuật ngữ chứng khoán / tài chính cho nhà đầu tư cá nhân
+description: Giải thích một thuật ngữ chứng khoán / tài chính cho nhà đầu tư cá nhân.
+when_to_use: Người dùng hỏi một thuật ngữ, chỉ số hoặc khái niệm là gì (P/E, EPS, ROE, margin, ATO/ATC, room ngoại, T+2…).
+activation: auto
+triggers:
+  keywords: [là gì, nghĩa là gì, giải thích, khái niệm, thuật ngữ]
+version: 1.1.0
 ---
 
 Khi người dùng hỏi một thuật ngữ (P/E, EPS, ROE, margin, ATO/ATC, room ngoại, v.v.):

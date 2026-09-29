@@ -17,7 +17,9 @@ Trong TUI:
 | --- | --- |
 | `/connect` | Nhập API key cho hơn 200 provider (Groq, Gemini, NVIDIA, OpenAI, Anthropic, OpenRouter, DeepSeek…) |
 | `/model` | Chọn model từ mọi provider đã kết nối, gõ để lọc |
-| `/skills`, `/skill <tên>` | Bật hoặc tắt skill trong `skills/` |
+| `/skills`, `/skill <tên>` | Danh sách skill; bật hoặc tắt một skill cho cả phiên |
+| `/profile` | Mở hồ sơ nhà đầu tư `~/.opentrading/INVESTOR.md` |
+| `/context` | Xem các tầng ngữ cảnh gửi cho model và số token |
 | `/mcp` | Trạng thái các MCP server; cho phép server của project hoặc kết nối lại |
 | `/tools` | Liệt kê mọi tool model đang gọi được |
 | `/clear`, `/help`, `/exit` | Xoá hội thoại, trợ giúp, thoát |
@@ -42,12 +44,16 @@ bun test          # smoke test TUI chạy headless; SHOW_FRAME=1 để in khung 
 ## Cấu trúc
 
 ```
-src/core/     provider, auth, config, agent loop, skills, system prompt (không import UI)
+src/core/     provider, auth, config, agent loop, hồ sơ nhà đầu tư (không import UI)
+  prompt/     ghép prompt theo tầng, ngân sách token, đồng hồ phiên
+  skills/     schema SKILL.md, loader 3 nguồn, catalog, preroute
   tools/      tool registry, giới hạn/timeout, tool có sẵn
   mcp/        MCP client: config, cho phép, đặt tên tool, quản lý kết nối
 examples/     MCP server mẫu (examples/mcp-demo)
 src/tui/      giao diện: theme, logo, background động, màn hình, dialog
-skills/       skill dạng markdown (frontmatter: name, description)
+prompts/      nội dung system prompt theo tầng (identity, tools, citations, style)
+skills/       skill dạng skills/<tên>/SKILL.md (xem docs/contracts.md)
+market/       lịch phiên giao dịch (dữ liệu, chưa kiểm chứng)
 handbook/     tài liệu thiết kế
 legacy-python/  scaffold Python cũ, giữ lại để làm sidecar quant sau này
 docs/decisions/ các quyết định kiến trúc

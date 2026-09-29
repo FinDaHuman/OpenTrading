@@ -38,12 +38,12 @@ export function describeError(error: unknown): string {
 if (import.meta.main) {
   const { runAgent } = await import("./agent")
   const { initRuntime } = await import("./runtime")
-  const { loadSkills } = await import("./skills")
-  const skills = await loadSkills()
+  const { loadSkills } = await import("./skills/loader")
+  const { skills } = await loadSkills()
   const { registry } = initRuntime({ skills: () => skills })
   const input = process.argv.slice(2).join(" ") || "Xin chào"
   try {
-    for await (const event of runAgent({ history: [], input, skills: [], registry })) {
+    for await (const event of runAgent({ history: [], input, skills, registry })) {
       if (event.type === "text-delta") process.stdout.write(event.text)
       else if (event.type === "tool-start") process.stdout.write(`\n⚙ ${event.label}\n`)
       else if (event.type === "tool-end") process.stdout.write(`${event.ok ? "✓" : "✕"} ${event.output.slice(0, 200)}\n`)

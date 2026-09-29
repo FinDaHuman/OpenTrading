@@ -8,10 +8,12 @@ import { describeError } from "../core/chat"
 import { loadConfig } from "../core/config"
 import { loadCatalog } from "../core/catalog"
 import type { Runtime } from "../core/runtime"
-import { loadSkills } from "../core/skills"
+import { ensureProfile } from "../core/profile"
+import { loadSkills } from "../core/skills/loader"
 import { Background } from "./background"
 import { COMMANDS, parseCommand } from "./commands"
 import { ConnectDialog } from "./dialogs/connect"
+import { ContextDialog } from "./dialogs/context"
 import { HelpDialog } from "./dialogs/help"
 import { McpDialog } from "./dialogs/mcp"
 import { ModelDialog } from "./dialogs/model"
@@ -29,7 +31,8 @@ let epoch = 0
 export function clearTranscript() {
   epoch++
   abort?.abort()
-  setState({ lines: [], history: [] })
+  // A fresh conversation has not seen the market clock yet.
+  setState({ lines: [], history: [], clock: undefined })
 }
 
 function lineIndex(predicate: (line: Line) => boolean) {
@@ -55,8 +58,15 @@ async function send(runtime: Runtime, text: string) {
   abort = controller
   setState("streaming", true)
   try {
-    const skills = state.skills.filter((s) => state.activeSkills.includes(s.name))
-    const turn = runAgent({ history: state.history, input: text, skills, registry: runtime.registry, signal: controller.signal })
+    const turn = runAgent({
+      history: state.history,
+      input: text,
+      skills: state.skills,
+      sticky: state.activeSkills,
+      prevClock: state.clock,
+      registry: runtime.registry,
+      signal: controller.signal,
+    })
     for await (const event of turn) {
       if (!live()) continue
       switch (event.type) {
@@ -85,6 +95,7 @@ async function send(runtime: Runtime, text: string) {
           break
         case "done":
           setState("history", (history) => [...history, ...event.messages])
+          setState("clock", event.clock)
           break
       }
     }
@@ -130,10 +141,20 @@ export function App(props: { runtime: Runtime }) {
 
   onMount(async () => {
     void props.runtime.mcp.start()
-    const [config, skills, catalog] = await Promise.all([loadConfig(), loadSkills(), loadCatalog()])
+    const [config, skillSet, catalog] = await Promise.all([loadConfig(), loadSkills(), loadCatalog()])
     const connected = await connectedProviders()
     // A key from an env var counts as connected even before /connect is used.
-    setState({ provider: config.provider ?? connected[0], model: config.model, skills, catalog, connected })
+    setState({
+      provider: config.provider ?? connected[0],
+      model: config.model,
+      skills: skillSet.skills,
+      skillProblems: skillSet.problems,
+      catalog,
+      connected,
+    })
+    if (skillSet.problems.length > 0) {
+      pushLine({ kind: "error", text: `${skillSet.problems.length} skill bị lỗi và không được nạp. Xem /skills.` })
+    }
   })
 
   const suggestions = createMemo(() => {
@@ -177,7 +198,17 @@ export function App(props: { runtime: Runtime }) {
       case "help":
       case "mcp":
       case "tools":
+      case "context":
         return setState("dialog", cmd.name)
+      case "profile":
+        return void ensureProfile().then(({ file, created }) =>
+          pushLine({
+            kind: "info",
+            text: created
+              ? `Đã tạo hồ sơ nhà đầu tư mẫu: ${file}. Mở file để sửa; OpenTrading đọc lại ở mỗi lượt hỏi.`
+              : `Hồ sơ nhà đầu tư: ${file}. Sửa file này; thay đổi có hiệu lực từ lượt hỏi tiếp theo.`,
+          }),
+        )
       case "skill":
         return cmd.args ? toggleSkill(cmd.args) : setState("dialog", "skills")
       case "clear":
@@ -281,6 +312,9 @@ export function App(props: { runtime: Runtime }) {
         </Match>
         <Match when={state.dialog === "tools"}>
           <ToolsDialog registry={props.runtime.registry} />
+        </Match>
+        <Match when={state.dialog === "context"}>
+          <ContextDialog registry={props.runtime.registry} />
         </Match>
       </Switch>
     </box>

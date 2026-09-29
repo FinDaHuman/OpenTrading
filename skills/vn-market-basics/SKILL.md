@@ -1,6 +1,11 @@
 ---
 name: vn-market-basics
-description: Kiến thức nền về cơ chế giao dịch thị trường chứng khoán Việt Nam
+description: Kiến thức nền về cơ chế giao dịch thị trường chứng khoán Việt Nam.
+when_to_use: Câu hỏi về sàn HOSE/HNX/UPCoM, phiên ATO/liên tục/ATC, biên độ, bước giá, lô giao dịch, chu kỳ thanh toán, loại lệnh.
+activation: auto
+triggers:
+  keywords: [biên độ, bước giá, lô chẵn, lô lẻ, ATO, ATC, loại lệnh, thanh toán T, phiên giao dịch]
+version: 1.1.0
 ---
 
 Trả lời các câu hỏi về cơ chế giao dịch Việt Nam: sàn HOSE / HNX / UPCoM, phiên ATO / liên tục / ATC,

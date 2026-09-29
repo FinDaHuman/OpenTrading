@@ -1,0 +1,29 @@
+{
+  "verified": false,
+  "note": "Lịch phiên viết theo hiểu biết chung về HOSE/HNX/UPCoM, CHƯA đối chiếu thông báo chính thức. Quy chế giao dịch có thể đổi (KRX, lộ trình CCP). Thay file này bằng dữ liệu từ exchange-calendar service khi có.",
+  "asof": "2026-09-29",
+  "timezone": "Asia/Ho_Chi_Minh",
+  "holidays": [],
+  "exchanges": {
+    "HOSE": [
+      { "from": "09:00", "to": "09:15", "phase": "ATO", "label": "khớp lệnh định kỳ mở cửa (ATO)" },
+      { "from": "09:15", "to": "11:30", "phase": "continuous", "label": "khớp lệnh liên tục (sáng)" },
+      { "from": "11:30", "to": "13:00", "phase": "break", "label": "nghỉ trưa" },
+      { "from": "13:00", "to": "14:30", "phase": "continuous", "label": "khớp lệnh liên tục (chiều)" },
+      { "from": "14:30", "to": "14:45", "phase": "ATC", "label": "khớp lệnh định kỳ đóng cửa (ATC)" },
+      { "from": "14:45", "to": "15:00", "phase": "put-through", "label": "chỉ giao dịch thoả thuận" }
+    ],
+    "HNX": [
+      { "from": "09:00", "to": "11:30", "phase": "continuous", "label": "khớp lệnh liên tục (sáng)" },
+      { "from": "11:30", "to": "13:00", "phase": "break", "label": "nghỉ trưa" },
+      { "from": "13:00", "to": "14:30", "phase": "continuous", "label": "khớp lệnh liên tục (chiều)" },
+      { "from": "14:30", "to": "14:45", "phase": "ATC", "label": "khớp lệnh định kỳ đóng cửa (ATC)" },
+      { "from": "14:45", "to": "15:00", "phase": "post-close", "label": "phiên sau giờ (PLO)" }
+    ],
+    "UPCoM": [
+      { "from": "09:00", "to": "11:30", "phase": "continuous", "label": "khớp lệnh liên tục (sáng)" },
+      { "from": "11:30", "to": "13:00", "phase": "break", "label": "nghỉ trưa" },
+      { "from": "13:00", "to": "15:00", "phase": "continuous", "label": "khớp lệnh liên tục (chiều)" }
+    ]
+  }
+}

@@ -1,6 +1,6 @@
 # Trạng thái dự án & kế hoạch
 
-Cập nhật: 29/09/2026 · nhánh `step1-agent-tools`
+Cập nhật: 30/09/2026 · nhánh `step2a-prompt-skills`
 
 ## Phân công
 
@@ -14,7 +14,7 @@ Cập nhật: 29/09/2026 · nhánh `step1-agent-tools`
 
 ## Hiện tại
 
-**Bước 1 đã xong: agent loop, tool registry và MCP client.** Model gọi được tool có sẵn và tool từ MCP server, rồi trả lời dựa trên kết quả. TUI hiển thị từng lần gọi tool.
+**Bước 1 xong** (agent loop, tool registry, MCP client). **Bước 2a xong** (prompt theo tầng, skills chuẩn `SKILL.md`, hồ sơ nhà đầu tư). Bước 2b (session, memory, hook) là việc tiếp theo. Contract cho đồng nghiệp: [docs/contracts.md](contracts.md).
 
 ### Đã có
 
@@ -29,9 +29,10 @@ Cập nhật: 29/09/2026 · nhánh `step1-agent-tools`
 | **MCP client** (`src/core/mcp/`) | Xong. Hỗ trợ stdio và Streamable HTTP; đọc `~/.opentrading/mcp.json` và `.mcp.json` của project; server project phải được cho phép; hỗ trợ `${VAR}`; kết nối song song, có timeout; server không thấy API key của harness |
 | `/mcp`, `/tools`, `ctrl+o`, trạng thái MCP trên status bar | Xong |
 | Server mẫu cho đồng nghiệp: `examples/mcp-demo` | Xong |
-| Skills: đọc `skills/*.md`, bật/tắt, `load_skill` | Bản thô |
-| System prompt: nguyên tắc cơ bản + phần hướng dẫn dùng tool | Bản thô, chưa chia tầng |
-| Test: typecheck + 44 test (tool, MCP với server thật qua stdio, agent loop, TUI, đường dẫn state) | Xong |
+| **Prompt theo tầng** (`src/core/prompt/`, nội dung ở `prompts/*.md`) | Xong. 3 kênh system / context / reminder; ngân sách theo hạng model; đồng hồ phiên từ `market/calendar.json`, chỉ gửi lại khi đổi phiên; cache cho Anthropic; `/context` |
+| **Skills** (`src/core/skills/`) | Xong. `skills/<tên>/SKILL.md`; 3 nguồn project > user > bundled; activation auto/always/manual; catalog có ngân sách; gợi ý theo từ khoá (preroute L1); `load_skill` đọc được file phụ |
+| Hồ sơ nhà đầu tư `~/.opentrading/INVESTOR.md`, `/profile` | Xong |
+| Test: typecheck + 63 test (tool, MCP với server thật qua stdio, agent loop, TUI, đường dẫn state) | Xong |
 
 **Chưa kiểm tra:**
 - Chưa chạy với key thật của provider nào. Tool calling mới được test trên định dạng OpenAI-compatible bằng API giả lập; Gemini và Anthropic cần thử bằng key thật.
@@ -44,10 +45,8 @@ Provider chưa hỗ trợ: xem `ToDoList.txt`.
 1. ~~Agent loop có tool calling~~ ✓
 2. ~~Tool registry~~ ✓
 3. ~~MCP client~~ ✓
-4. **Ghép system prompt theo tầng.** Các khối: base, danh sách skill, memory, ngữ cảnh phiên, danh sách tool. Người viết prompt chỉ viết nội dung từng khối.
-5. **Skill loader hoàn chỉnh.**
-   - Thống nhất frontmatter với người viết skill.
-   - Nạp dần: `load_skill` đã có; bước 2 bỏ hẳn cách nối cả nội dung skill vào prompt.
+4. ~~Ghép system prompt theo tầng~~ ✓ (2a)
+5. ~~Skill loader hoàn chỉnh~~ ✓ (2a)
 6. **Memory interface.** Các hàm `recall(query)`, `remember(fact)`, tóm tắt phiên, cùng hook trước và sau mỗi lượt hỏi–đáp.
 7. **Lưu session.** Lưu hội thoại để mở lại; hội thoại lúc này đã có history dạng message chuẩn của AI SDK (`state.history`).
 8. **Permission gate.** Tool không chỉ đọc phải được người dùng xác nhận trong TUI. AI SDK v6 có sẵn `needsApproval`.
@@ -64,7 +63,8 @@ Việc phụ:
 | Bước | Nội dung | Trạng thái |
 | --- | --- | --- |
 | 1 | Agent loop, tool registry, MCP client, tool mẫu, TUI hiển thị tool call | **Xong** |
-| 2 | Ghép prompt theo tầng, interface cho skill và memory, lưu session, `docs/contracts.md` | Tiếp theo |
+| 2a | Ghép prompt theo tầng, skills chuẩn `SKILL.md`, hồ sơ nhà đầu tư, `/context`, `docs/contracts.md` | **Xong** |
+| 2b | Hook, `MemoryProvider` + bản mẫu, `/memory`, lưu và mở lại session (`/sessions`, `--continue`) | Tiếp theo |
 | 3 | Permission gate, mở rộng config | — |
 
 ## Cho đồng nghiệp: bắt đầu thế nào
@@ -78,8 +78,8 @@ bun test
 ```
 
 - **MCP server:** đọc [docs/mcp.md](mcp.md), bắt đầu từ `examples/mcp-demo/server.ts`. Cắm server vào `.mcp.json` rồi kiểm tra bằng `/mcp` và `/tools`.
-- **Skills:** viết `skills/<tên>.md` với frontmatter `name` và `description`. Model tự gọi `load_skill` khi cần. Định dạng có thể được bổ sung ở bước 2.
-- **System prompt:** bản hiện tại nằm ở `src/core/prompt.ts`. Nên viết nội dung trước theo các tầng ở mục 4.
-- **Memory:** góp ý interface ở mục 6 trước bước 2.
+- **Skills:** viết `skills/<tên>/SKILL.md` theo [docs/contracts.md §3](contracts.md). Kiểm tra bằng `/skills` (lỗi frontmatter hiện ở đây).
+- **System prompt:** sửa các file `prompts/*.md` theo [docs/contracts.md §2](contracts.md). Xem kết quả bằng `/context`, không cần build lại.
+- **Memory:** interface `MemoryProvider` có ở PR 2b; góp ý trước khi merge.
 
 Cấu trúc code: xem `README.md`. Lý do chọn TypeScript: xem `docs/decisions/0001-typescript.md`.
