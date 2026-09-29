@@ -1,4 +1,5 @@
-import { existsSync, readFileSync } from "node:fs"
+import { createHash } from "node:crypto"
+import { existsSync, readdirSync, readFileSync } from "node:fs"
 import path from "node:path"
 import { availableSkills, matchTriggers, renderCatalog } from "../skills/catalog"
 import type { Skill } from "../skills/schema"
@@ -37,7 +38,14 @@ export interface AssembleInput {
   /** Skills switched on by the user (/skill <name>). */
   sticky: string[]
   investorProfile?: string
+  /** MemoryProvider.instructions(): static, goes to system. */
+  memoryInstructions?: string
+  /** MemoryProvider.index(): always-on summary, goes to context. */
   memoryIndex?: string
+  /** MemoryProvider.recall() for this message, already capped: reminder. */
+  recalled?: string
+  /** user-prompt hook additionalContext for this turn: reminder. */
+  hookContext?: string[]
   /** The user's message, for trigger matching. */
   input: string
   now: Date
@@ -64,6 +72,15 @@ export function promptFile(id: string, dir = PROMPTS_DIR): string | undefined {
 
 const tag = (id: string, text: string) => `<${id}>\n${text}\n</${id}>`
 
+/** Short hash of every prompts/*.md, stored with each session to trace which prompt version answered. */
+export function promptVersion(dir = PROMPTS_DIR): string {
+  const hash = createHash("sha1")
+  for (const file of (existsSync(dir) ? readdirSync(dir) : []).filter((f) => f.endsWith(".md")).sort()) {
+    hash.update(file).update(readFileSync(path.join(dir, file)))
+  }
+  return hash.digest("hex").slice(0, 12)
+}
+
 export function assemble(input: AssembleInput, promptsDir = PROMPTS_DIR): Assembled {
   const report: LayerReport[] = []
   const system: string[] = []
@@ -84,6 +101,7 @@ export function assemble(input: AssembleInput, promptsDir = PROMPTS_DIR): Assemb
   add(system, "identity", 1, "system", promptFile("identity", promptsDir))
   if (input.tools.length > 0) add(system, "tools", 7, "system", promptFile("tools", promptsDir))
   add(system, "citations", 1, "system", promptFile("citations", promptsDir))
+  add(system, "memory_policy", 4, "system", input.memoryInstructions?.trim() || undefined)
   add(system, "style", 8, "system", promptFile("style", promptsDir))
 
   // ── system: per-session (changes only when skills or tools change) ────
@@ -115,6 +133,8 @@ export function assemble(input: AssembleInput, promptsDir = PROMPTS_DIR): Assemb
   if (!sameSnapshot(input.prevClock, clock.snapshot)) {
     add(reminders, "phien_giao_dich", 2, "reminder", renderClock(clock, calendar), "market_clock")
   }
+  add(reminders, "memory_lien_quan", 4, "reminder", input.recalled?.trim() || undefined, "memory")
+  for (const context of input.hookContext ?? []) add(reminders, "hook_context", 4, "reminder", context)
   if (input.tools.includes("load_skill")) {
     const hits = matchTriggers(input.input, visible).filter((s) => !input.sticky.includes(s.name) && s.activation === "auto")
     if (hits.length > 0) {

@@ -21,6 +21,8 @@ export const BUDGETS: Record<string, Record<Tier, number | undefined>> = {
   market_clock: { A: undefined, B: undefined, C: undefined },
   investor_profile: { A: 1_400, B: 1_000, C: 600 },
   memory: { A: 1_000, B: 700, C: 300 },
+  memory_policy: { A: undefined, B: undefined, C: undefined },
+  hook_context: { A: 2_500, B: 2_500, C: 1_000 },
   skills_always: { A: 1_800, B: 1_200, C: 600 },
   skills_sticky: { A: 2_500, B: 1_600, C: 800 },
   skill_catalog: { A: 1_400, B: 700, C: 280 },

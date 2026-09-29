@@ -1,4 +1,4 @@
-import { RGBA } from "@opentui/core"
+import { RGBA, SyntaxStyle } from "@opentui/core"
 
 /** Palette from HarnessPlan.html — the Vietnamese price-board colours. */
 export const color = {
@@ -24,6 +24,33 @@ export const color = {
 } as const
 
 export const rgba = (hex: string) => RGBA.fromHex(hex)
+
+let markdown: SyntaxStyle | undefined
+
+/**
+ * Styles for the markdown renderer's `markup.*` scopes (same scope names opencode themes).
+ * Created lazily: SyntaxStyle is backed by the native renderer library.
+ */
+export function markdownStyle(): SyntaxStyle {
+  markdown ??= SyntaxStyle.fromStyles({
+    default: { fg: color.tx },
+    "markup.heading": { fg: color.tang, bold: true },
+    "markup.heading.1": { fg: color.tang, bold: true, underline: true },
+    "markup.bold": { fg: color.tx, bold: true },
+    "markup.strong": { fg: color.tx, bold: true },
+    "markup.italic": { fg: color.tx2, italic: true },
+    "markup.list": { fg: color.tham },
+    "markup.quote": { fg: color.tx2, italic: true },
+    "markup.raw": { fg: color.san },
+    "markup.raw.block": { fg: color.san },
+    "markup.raw.inline": { fg: color.san },
+    "markup.link": { fg: color.san, underline: true },
+    "markup.link.label": { fg: color.san, underline: true },
+    "markup.link.url": { fg: color.tx3, underline: true },
+    conceal: { fg: color.tx3 },
+  })
+  return markdown
+}
 
 /** Linear mix of two hex colours, `t` in 0..1. */
 export function mix(a: string, b: string, t: number): RGBA {

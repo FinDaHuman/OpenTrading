@@ -1,6 +1,6 @@
 # Contracts: prompt, skills, hồ sơ nhà đầu tư
 
-Tài liệu cho đồng nghiệp viết **system prompt** và **skills**. Bạn chỉ sửa file nội dung (`prompts/*.md`, `skills/*/SKILL.md`), không cần sửa code. Phần memory, hook và session được bổ sung ở PR 2b.
+Tài liệu cho đồng nghiệp viết **system prompt**, **skills** và **memory**. Người viết prompt và skill chỉ sửa file nội dung (`prompts/*.md`, `skills/*/SKILL.md`). Người làm memory cài một `MemoryProvider` (§6), không sửa agent loop.
 
 Thiết kế dựa trên cách Claude Code, Codex và Cursor làm, và bám HarnessPlan §4–5. Lý do chi tiết nằm trong plan bước 2.
 
@@ -99,3 +99,65 @@ version: 1.0.0
 - Giờ các phiên HOSE / HNX / UPCoM là **dữ liệu**, không nằm trong code (HarnessPlan §4.2), vì quy chế giao dịch có thể đổi.
 - Hiện `"verified": false`: lịch viết theo hiểu biết chung, chưa đối chiếu thông báo sàn. Đồng hồ vì vậy luôn kèm dòng "(lịch phiên chưa kiểm chứng)".
 - Khi có exchange-calendar service (MCP), thay file này hoặc nạp từ service. Ngày nghỉ lễ đưa vào mảng `holidays` (dạng `YYYY-MM-DD`).
+
+## 6. Memory: `MemoryProvider`
+
+File: `src/core/memory/types.ts`. Harness quyết định memory đi vào prompt **ở đâu** và giới hạn kích thước; provider quyết định **nhớ gì** và lưu thế nào.
+
+```ts
+interface MemoryProvider {
+  readonly id: string
+  instructions?(): string | undefined                    // system (tĩnh): cách model dùng memory
+  index?(ctx): Promise<string | undefined>               // context, mọi request, harness cắt ≤ 4 KB
+  recall?(query, ctx): Promise<MemoryItem[]>             // reminder của lượt, harness giữ ≤ 5 mục / 4 KB
+  tools?(): ToolDef[]                                    // ví dụ propose_memory, đăng ký lúc khởi động
+  register?(hooks: HookBus): void                        // nghe session-start, user-prompt, turn-end, session-end
+  list?(); approve?(id); reject?(id); remove?(id)        // cho /memory
+}
+interface MemoryItem { id; text; scope: "user" | "workspace"; status: "pending" | "active"; source?; createdAt; updatedAt }
+```
+
+**Quy định bắt buộc:**
+- Memory **`pending`** (model đề xuất) không bao giờ được trả về từ `index()` hay `recall()` cho tới khi người dùng duyệt trong `/memory`. Đây là bài học từ Cursor: memory mà người dùng không thấy thì thành chỉ dẫn vô hình.
+- Không lưu dữ liệu thị trường (giá, chỉ số, tín hiệu, nhận định), vì chúng nhanh cũ. Tool lấy chúng mỗi lần.
+- Memory có **ưu tiên thấp nhất**: không ghi đè `INVESTOR.md` hay bất biến an toàn.
+- Mỗi lượt có dùng memory, TUI hiện dòng "Dùng N memory: …" để người dùng biết.
+
+**Bản mẫu `FileMemory`** (`src/core/memory/file-memory.ts`) để tham khảo và thay thế:
+- Mỗi memory là một file markdown trong `~/.opentrading/memory/`.
+- Tool `propose_memory` tạo memory `pending`. Người dùng gõ "Ghi nhớ: …" thì lưu thẳng `active`, qua hook `user-prompt`.
+- `recall` khớp theo từ khoá.
+
+**Bật memory:** dùng `/config` trong TUI (có hiệu lực ngay, không cần mở lại), hoặc sửa `~/.opentrading/config.json`. Mặc định là `"none"` (tắt):
+```json
+{ "memory": { "provider": "file" } }
+```
+Khi đổi provider, harness gỡ tool và hook của provider cũ; `register()` nên trả về hàm huỷ đăng ký.
+Đăng ký provider mới: thêm lựa chọn trong `createMemory()` (`src/core/runtime.ts`).
+
+## 7. Hook: `HookBus`
+
+File: `src/core/hooks.ts`. Chạy trong process, dùng tên sự kiện giống Claude Code và Codex; chưa hỗ trợ hook bằng shell.
+
+| Sự kiện | Khi nào | Hook có thể trả về |
+| --- | --- | --- |
+| `session-start` | Mở app, `/new`, `/clear`, mở lại phiên (`source`: `startup` \| `clear` \| `resume`) | — |
+| `user-prompt` | Trước khi gửi câu hỏi | `block` (chặn lượt, không gọi model) hoặc `additionalContext` (thêm vào reminder, tối đa khoảng 2.500 token) |
+| `turn-end` | Sau khi lượt hỏi–đáp xong (không chờ hook chạy xong) | — |
+| `session-end` | Trước khi đổi phiên hoặc thoát | — |
+
+Hook ném lỗi hoặc chạy quá 5 giây sẽ bị bỏ qua và báo thành một dòng thông báo; lượt hỏi–đáp vẫn tiếp tục.
+
+## 8. Session: `~/.opentrading/sessions/`
+
+- Mỗi phiên là **một file JSONL ghi nối** `YYYY/MM/<id>.jsonl`, chỉ được tạo khi có lượt hỏi–đáp đầu tiên. Ghi nối nên nếu app crash thì chỉ mất dòng cuối, và dòng hỏng đó được bỏ qua khi đọc.
+- Các loại dòng:
+  - `meta`: format, id, cwd, `promptVersion` (hash của `prompts/*.md`), danh sách skill và version.
+  - `message`: một `ModelMessage` của AI SDK.
+  - `turn_end`: provider và model của lượt.
+- `index.jsonl` có một dòng cho mỗi lần cập nhật phiên; dòng sau cùng của cùng một id thắng.
+- **Mở lại phiên:**
+  - Dùng `/sessions`, `bun run dev -- --continue` (phiên mới nhất) hoặc `--resume <id>` (chỉ cần phần đầu của id).
+  - History được dựng lại; tool-call thiếu kết quả được đóng bằng lỗi "bị ngắt"; đồng hồ phiên được gửi lại ở lượt đầu.
+  - Nếu model đang dùng khác model lúc lưu, TUI cảnh báo.
+- Reminder `<nhac_nho>` được lưu trong history (để model luôn biết phiên giao dịch) nhưng TUI không hiển thị. Hồ sơ nhà đầu tư và memory index **không** được lưu vào phiên, vì chúng được dựng lại ở mỗi request.

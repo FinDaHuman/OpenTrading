@@ -7,6 +7,8 @@ import { tierOf, type Tier } from "./prompt/budget"
 import type { ClockSnapshot } from "./prompt/market-clock"
 import { languageModel } from "./providers"
 import type { Skill } from "./skills/schema"
+import type { HookBus } from "./hooks"
+import { MEMORY_INDEX_MAX_CHARS, MEMORY_RECALL_MAX_CHARS, MEMORY_RECALL_MAX_ITEMS, type MemoryProvider } from "./memory/types"
 import type { ToolRegistry } from "./tools/registry"
 
 export const DEFAULT_MAX_STEPS = 10
@@ -37,9 +39,12 @@ export interface RunOptions {
   now?: Date
   signal?: AbortSignal
   maxSteps?: number
+  sessionId?: string
+  hooks?: HookBus
+  memory?: MemoryProvider
 }
 
-function label(registry: ToolRegistry, name: string, input: unknown) {
+export function label(registry: ToolRegistry, name: string, input: unknown) {
   const def = registry.get(name)
   if (def?.summarize) {
     try {
@@ -174,7 +179,16 @@ interface Prepared {
 type TurnInput = Omit<RunOptions, "history" | "signal" | "maxSteps">
 type Target = Awaited<ReturnType<typeof resolveTarget>>
 
-async function assembleFor(opts: TurnInput, target: Target | undefined) {
+/** Per-turn extras gathered before assembly (recall and hooks run only for real turns). */
+interface TurnExtras {
+  recalled?: string
+  hookContext?: string[]
+}
+
+const cap = (text: string | undefined, max: number) =>
+  text && text.length > max ? text.slice(0, max) + "\n[… đã cắt bớt]" : text
+
+async function assembleFor(opts: TurnInput, target: Target | undefined, extras: TurnExtras = {}) {
   const info = target?.provider.models[target.model]
   const supportsTools = info?.tool_call !== false
   const tier = tierOf(info?.limit?.context)
@@ -185,6 +199,10 @@ async function assembleFor(opts: TurnInput, target: Target | undefined) {
     skills: opts.skills,
     sticky: opts.sticky ?? [],
     investorProfile: await loadProfile(),
+    memoryInstructions: opts.memory?.instructions?.(),
+    memoryIndex: cap(await opts.memory?.index?.({ sessionId: opts.sessionId ?? "" }).catch(() => undefined), MEMORY_INDEX_MAX_CHARS),
+    recalled: extras.recalled,
+    hookContext: extras.hookContext,
     input: opts.input,
     now: opts.now ?? new Date(),
     prevClock: opts.prevClock,
@@ -192,9 +210,9 @@ async function assembleFor(opts: TurnInput, target: Target | undefined) {
   return { tier, supportsTools, toolNames, assembled }
 }
 
-async function prepare(opts: TurnInput): Promise<Prepared> {
+async function prepare(opts: TurnInput, extras: TurnExtras): Promise<Prepared> {
   const target = await resolveTarget()
-  const { tier, supportsTools, toolNames, assembled } = await assembleFor(opts, target)
+  const { tier, supportsTools, toolNames, assembled } = await assembleFor(opts, target, extras)
   return { target, tier, supportsTools, tools: toolNames.length > 0 ? opts.registry.toToolSet() : undefined, assembled }
 }
 
@@ -226,7 +244,31 @@ export async function previewContext(opts: TurnInput) {
  * always ending in `done` with history that is safe to send back next turn.
  */
 export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
-  const { target, tools, assembled, supportsTools } = await prepare(opts)
+  const sessionId = opts.sessionId ?? ""
+  // Fail fast on setup problems before any hook side effects run.
+  await resolveTarget()
+
+  // user-prompt hooks: may block the turn or add context for it.
+  const extras: TurnExtras = {}
+  if (opts.hooks) {
+    const hooked = await opts.hooks.emit({ type: "user-prompt", sessionId, prompt: opts.input })
+    for (const error of hooked.errors) yield { type: "notice", text: error }
+    if (hooked.block) {
+      yield { type: "notice", text: `Lượt này bị chặn: ${hooked.block}` }
+      yield { type: "done", messages: [] }
+      return
+    }
+    extras.hookContext = hooked.context
+  }
+  // Memory relevant to this message (active items only; the provider filters pending ones).
+  const recalled = (await opts.memory?.recall?.(opts.input, { sessionId }).catch(() => []))?.slice(0, MEMORY_RECALL_MAX_ITEMS) ?? []
+  if (recalled.length > 0) {
+    extras.recalled = cap(recalled.map((m) => `- ${m.text}`).join("\n"), MEMORY_RECALL_MAX_CHARS)
+    // Never invisible (the lesson from Cursor's memories): say what was used.
+    yield { type: "notice", text: `Dùng ${recalled.length} memory: ${recalled.map((m) => m.text.slice(0, 40)).join("; ")}` }
+  }
+
+  const { target, tools, assembled, supportsTools } = await prepare(opts, extras)
   const maxSteps = opts.maxSteps ?? DEFAULT_MAX_STEPS
   if (!supportsTools && opts.registry.list().length > 0) {
     yield { type: "notice", text: "Model này không hỗ trợ tool; trả lời không dùng tool." }
@@ -309,6 +351,7 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
   if (messages && !outcome.aborted && !outcome.failure) {
     if (summarized) yield { type: "notice", text: `Đã dùng hết ${maxSteps} bước gọi tool; câu trả lời là bản tổng kết.` }
     yield { type: "done", messages: [user, ...messages], clock: assembled.clock }
+    if (opts.hooks) void opts.hooks.emit({ type: "turn-end", sessionId, messages: [user, ...messages] })
     return
   }
 

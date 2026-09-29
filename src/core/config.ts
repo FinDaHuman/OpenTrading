@@ -5,6 +5,8 @@ import { readJson, writeJson } from "./store"
 export interface Config {
   provider?: ProviderId
   model?: string
+  /** Memory implementation: "none" (default) or "file" (reference FileMemory). */
+  memory?: { provider?: "none" | "file" }
 }
 
 export const loadConfig = () => readJson<Config>(configFile(), {})

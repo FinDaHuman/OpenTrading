@@ -1,6 +1,6 @@
 # Trạng thái dự án & kế hoạch
 
-Cập nhật: 30/09/2026 · nhánh `step2a-prompt-skills`
+Cập nhật: 30/09/2026 · nhánh `step2b-session-memory`
 
 ## Phân công
 
@@ -14,7 +14,7 @@ Cập nhật: 30/09/2026 · nhánh `step2a-prompt-skills`
 
 ## Hiện tại
 
-**Bước 1 xong** (agent loop, tool registry, MCP client). **Bước 2a xong** (prompt theo tầng, skills chuẩn `SKILL.md`, hồ sơ nhà đầu tư). Bước 2b (session, memory, hook) là việc tiếp theo. Contract cho đồng nghiệp: [docs/contracts.md](contracts.md).
+**Bước 1 xong** (agent loop, tool registry, MCP client). **Bước 2 xong**: 2a (prompt theo tầng, skills chuẩn `SKILL.md`, hồ sơ nhà đầu tư) và 2b (hook, memory có bước duyệt, lưu và mở lại session). Tiếp theo: bước 3. Contract cho đồng nghiệp: [docs/contracts.md](contracts.md).
 
 ### Đã có
 
@@ -32,7 +32,10 @@ Cập nhật: 30/09/2026 · nhánh `step2a-prompt-skills`
 | **Prompt theo tầng** (`src/core/prompt/`, nội dung ở `prompts/*.md`) | Xong. 3 kênh system / context / reminder; ngân sách theo hạng model; đồng hồ phiên từ `market/calendar.json`, chỉ gửi lại khi đổi phiên; cache cho Anthropic; `/context` |
 | **Skills** (`src/core/skills/`) | Xong. `skills/<tên>/SKILL.md`; 3 nguồn project > user > bundled; activation auto/always/manual; catalog có ngân sách; gợi ý theo từ khoá (preroute L1); `load_skill` đọc được file phụ |
 | Hồ sơ nhà đầu tư `~/.opentrading/INVESTOR.md`, `/profile` | Xong |
-| Test: typecheck + 63 test (tool, MCP với server thật qua stdio, agent loop, TUI, đường dẫn state) | Xong |
+| **Hook** (`src/core/hooks.ts`): session-start, user-prompt (chặn hoặc thêm ngữ cảnh), turn-end, session-end | Xong |
+| **Memory** (`src/core/memory/`): contract `MemoryProvider`, bản mẫu `FileMemory` (đề xuất → duyệt trong `/memory`, "Ghi nhớ: …"), mặc định tắt; bật trong `/config` | Xong |
+| **Session** (`src/core/session/`): JSONL ghi nối, `/sessions`, `/new`, `--continue`, `--resume <id>`, vá tool-call thiếu kết quả | Xong |
+| Test: typecheck + 81 test (tool, MCP với server thật qua stdio, agent loop, TUI, đường dẫn state) | Xong |
 
 **Chưa kiểm tra:**
 - Chưa chạy với key thật của provider nào. Tool calling mới được test trên định dạng OpenAI-compatible bằng API giả lập; Gemini và Anthropic cần thử bằng key thật.
@@ -47,8 +50,8 @@ Provider chưa hỗ trợ: xem `ToDoList.txt`.
 3. ~~MCP client~~ ✓
 4. ~~Ghép system prompt theo tầng~~ ✓ (2a)
 5. ~~Skill loader hoàn chỉnh~~ ✓ (2a)
-6. **Memory interface.** Các hàm `recall(query)`, `remember(fact)`, tóm tắt phiên, cùng hook trước và sau mỗi lượt hỏi–đáp.
-7. **Lưu session.** Lưu hội thoại để mở lại; hội thoại lúc này đã có history dạng message chuẩn của AI SDK (`state.history`).
+6. ~~Memory interface~~ ✓ (2b)
+7. ~~Lưu session~~ ✓ (2b)
 8. **Permission gate.** Tool không chỉ đọc phải được người dùng xác nhận trong TUI. AI SDK v6 có sẵn `needsApproval`.
 9. **Mở rộng config**: thư mục skills, tuỳ chọn memory, giới hạn số bước.
 
@@ -64,8 +67,8 @@ Việc phụ:
 | --- | --- | --- |
 | 1 | Agent loop, tool registry, MCP client, tool mẫu, TUI hiển thị tool call | **Xong** |
 | 2a | Ghép prompt theo tầng, skills chuẩn `SKILL.md`, hồ sơ nhà đầu tư, `/context`, `docs/contracts.md` | **Xong** |
-| 2b | Hook, `MemoryProvider` + bản mẫu, `/memory`, lưu và mở lại session (`/sessions`, `--continue`) | Tiếp theo |
-| 3 | Permission gate, mở rộng config | — |
+| 2b | Hook, `MemoryProvider` + bản mẫu, `/memory`, lưu và mở lại session (`/sessions`, `--continue`) | **Xong** |
+| 3 | Permission gate, mở rộng config | Tiếp theo |
 
 ## Cho đồng nghiệp: bắt đầu thế nào
 
@@ -80,6 +83,6 @@ bun test
 - **MCP server:** đọc [docs/mcp.md](mcp.md), bắt đầu từ `examples/mcp-demo/server.ts`. Cắm server vào `.mcp.json` rồi kiểm tra bằng `/mcp` và `/tools`.
 - **Skills:** viết `skills/<tên>/SKILL.md` theo [docs/contracts.md §3](contracts.md). Kiểm tra bằng `/skills` (lỗi frontmatter hiện ở đây).
 - **System prompt:** sửa các file `prompts/*.md` theo [docs/contracts.md §2](contracts.md). Xem kết quả bằng `/context`, không cần build lại.
-- **Memory:** interface `MemoryProvider` có ở PR 2b; góp ý trước khi merge.
+- **Memory:** cài `MemoryProvider` theo [docs/contracts.md §6](contracts.md); bắt đầu từ `src/core/memory/file-memory.ts`.
 
 Cấu trúc code: xem `README.md`. Lý do chọn TypeScript: xem `docs/decisions/0001-typescript.md`.

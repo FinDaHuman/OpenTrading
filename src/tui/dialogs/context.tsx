@@ -3,7 +3,8 @@ import { createResource, For, Match, Switch } from "solid-js"
 import { previewContext } from "../../core/agent"
 import { describeError } from "../../core/chat"
 import type { LayerReport } from "../../core/prompt/assemble"
-import type { ToolRegistry } from "../../core/tools/registry"
+import type { Runtime } from "../../core/runtime"
+import { currentSession } from "../session"
 import { closeDialog, state } from "../state"
 import { color } from "../theme"
 import { DialogFrame } from "./frame"
@@ -26,19 +27,24 @@ const LAYER_NAME: Record<string, string> = {
   skill_dang_bat: "Skill bật tay",
   phien_giao_dich: "Đồng hồ phiên",
   goi_y_skill: "Gợi ý skill",
+  memory_policy: "Cách dùng memory",
+  memory_lien_quan: "Memory liên quan",
+  hook_context: "Ngữ cảnh từ hook",
 }
 
 const pad = (text: string, width: number) => (text.length >= width ? text.slice(0, width) : text + " ".repeat(width - text.length))
 
 /** What the next request would carry, layer by layer (HarnessPlan §10.2 observability). */
-export function ContextDialog(props: { registry: ToolRegistry }) {
+export function ContextDialog(props: { runtime: Runtime }) {
   const [preview] = createResource(() =>
     previewContext({
       input: "",
       skills: state.skills,
       sticky: state.activeSkills,
       prevClock: state.clock,
-      registry: props.registry,
+      registry: props.runtime.registry,
+      memory: props.runtime.memory,
+      sessionId: currentSession().id,
     }),
   )
 
