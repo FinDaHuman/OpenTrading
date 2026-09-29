@@ -16,10 +16,13 @@ import { ConnectDialog } from "./dialogs/connect"
 import { ContextDialog } from "./dialogs/context"
 import { HelpDialog } from "./dialogs/help"
 import { McpDialog } from "./dialogs/mcp"
+import { MemoryDialog } from "./dialogs/memory"
+import { SessionsDialog } from "./dialogs/sessions"
 import { ModelDialog } from "./dialogs/model"
 import { SkillsDialog, toggleSkill } from "./dialogs/skills"
 import { ToolsDialog } from "./dialogs/tools"
 import { Home } from "./home"
+import { currentSession, recordTurn, resumeFromArgs, startSession } from "./session"
 import { providerName, pushLine, setState, state, type Line } from "./state"
 import { color } from "./theme"
 import { Transcript } from "./transcript"
@@ -28,11 +31,11 @@ let abort: AbortController | undefined
 /** Bumped by /clear so a stream that is still unwinding never touches the new transcript. */
 let epoch = 0
 
-export function clearTranscript() {
+/** /clear and /new: stop any running turn and start a fresh session. */
+export async function clearTranscript(runtime: Runtime) {
   epoch++
   abort?.abort()
-  // A fresh conversation has not seen the market clock yet.
-  setState({ lines: [], history: [], clock: undefined })
+  await startSession(runtime, "clear")
 }
 
 function lineIndex(predicate: (line: Line) => boolean) {
@@ -66,6 +69,9 @@ async function send(runtime: Runtime, text: string) {
       prevClock: state.clock,
       registry: runtime.registry,
       signal: controller.signal,
+      sessionId: currentSession().id,
+      hooks: runtime.hooks,
+      memory: runtime.memory,
     })
     for await (const event of turn) {
       if (!live()) continue
@@ -94,8 +100,11 @@ async function send(runtime: Runtime, text: string) {
           pushLine({ kind: "error", text: event.message })
           break
         case "done":
-          setState("history", (history) => [...history, ...event.messages])
-          setState("clock", event.clock)
+          if (event.messages.length > 0) {
+            setState("history", (history) => [...history, ...event.messages])
+            recordTurn(event.messages)
+          }
+          if (event.clock) setState("clock", event.clock)
           break
       }
     }
@@ -118,7 +127,7 @@ async function send(runtime: Runtime, text: string) {
   }
 }
 
-export function App(props: { runtime: Runtime }) {
+export function App(props: { runtime: Runtime; resume?: string }) {
   const renderer = useRenderer()
   const dims = useTerminalDimensions()
   const [draft, setDraft] = createSignal("")
@@ -131,7 +140,10 @@ export function App(props: { runtime: Runtime }) {
     if (exiting) return
     exiting = true
     abort?.abort()
-    await Promise.race([props.runtime.mcp.stop(), new Promise((r) => setTimeout(r, 2000))])
+    await Promise.race([
+      Promise.all([props.runtime.hooks.emit({ type: "session-end", sessionId: currentSession().id }), props.runtime.mcp.stop()]),
+      new Promise((r) => setTimeout(r, 2000)),
+    ])
     renderer.destroy()
     process.exit(0)
   }
@@ -152,6 +164,8 @@ export function App(props: { runtime: Runtime }) {
       catalog,
       connected,
     })
+    if (props.resume) await resumeFromArgs(props.runtime, props.resume)
+    else await props.runtime.hooks.emit({ type: "session-start", sessionId: currentSession().id, source: "startup" })
     if (skillSet.problems.length > 0) {
       pushLine({ kind: "error", text: `${skillSet.problems.length} skill bị lỗi và không được nạp. Xem /skills.` })
     }
@@ -199,6 +213,8 @@ export function App(props: { runtime: Runtime }) {
       case "mcp":
       case "tools":
       case "context":
+      case "sessions":
+      case "memory":
         return setState("dialog", cmd.name)
       case "profile":
         return void ensureProfile().then(({ file, created }) =>
@@ -212,7 +228,8 @@ export function App(props: { runtime: Runtime }) {
       case "skill":
         return cmd.args ? toggleSkill(cmd.args) : setState("dialog", "skills")
       case "clear":
-        return clearTranscript()
+      case "new":
+        return void clearTranscript(props.runtime)
       case "exit":
       case "quit":
         return void exit()
@@ -314,7 +331,13 @@ export function App(props: { runtime: Runtime }) {
           <ToolsDialog registry={props.runtime.registry} />
         </Match>
         <Match when={state.dialog === "context"}>
-          <ContextDialog registry={props.runtime.registry} />
+          <ContextDialog runtime={props.runtime} />
+        </Match>
+        <Match when={state.dialog === "sessions"}>
+          <SessionsDialog runtime={props.runtime} />
+        </Match>
+        <Match when={state.dialog === "memory"}>
+          <MemoryDialog memory={props.runtime.memory} />
         </Match>
       </Switch>
     </box>

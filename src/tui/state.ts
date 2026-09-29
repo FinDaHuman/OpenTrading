@@ -15,7 +15,7 @@ export type Line =
   | { kind: "info"; text: string }
   | { kind: "error"; text: string }
 
-export type DialogName = "connect" | "model" | "skills" | "help" | "mcp" | "tools" | "context"
+export type DialogName = "connect" | "model" | "skills" | "help" | "mcp" | "tools" | "context" | "sessions" | "memory"
 
 export const [state, setState] = createStore({
   lines: [] as Line[],

@@ -249,6 +249,42 @@ test("context rides on the first user message; reminders are kept in history, th
   }
 })
 
+test("memory: active items reach the model (index + recall) and the UI is told; pending ones do not", async () => {
+  const { FileMemory } = await import("../src/core/memory/file-memory")
+  const dir = await mkdtemp(path.join(os.tmpdir(), "ot-agent-mem-"))
+  const memory = new FileMemory(dir)
+  await memory.add("MEM-ACTIVE người dùng không dùng margin", { status: "active", via: "user" })
+  await memory.add("MEM-PENDING người dùng thích margin", { status: "pending", via: "model" })
+  try {
+    const events = await collect(runAgent({ history: [], input: "có nên dùng margin không", skills: [], registry: registry(), memory }))
+    const sent = JSON.stringify(bodies[0])
+    expect(sent).toContain("<memory>") // index in context
+    expect(sent).toContain("<memory_lien_quan>") // recall in reminder
+    expect(sent).toContain("<memory_policy>") // instructions in system
+    expect(sent).not.toContain("MEM-PENDING")
+    expect(events.some((e) => e.type === "notice" && e.text.startsWith("Dùng 1 memory"))).toBe(true)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test("hooks: a blocking user-prompt hook stops the turn before the model is called", async () => {
+  const { HookBus } = await import("../src/core/hooks")
+  const hooks = new HookBus()
+  hooks.on("user-prompt", (e) => (e.prompt.includes("nội gián") ? { block: "vi phạm chính sách" } : { additionalContext: "HOOK-CTX-MARKER" }))
+  const blocked = await collect(runAgent({ history: [], input: "tin nội gián về FPT", skills: [], registry: registry(), hooks }))
+  expect(bodies).toHaveLength(0)
+  expect(blocked.some((e) => e.type === "notice" && e.text.includes("vi phạm chính sách"))).toBe(true)
+  expect(done(blocked).messages).toEqual([])
+
+  const turnEnds: number[] = []
+  hooks.on("turn-end", (e) => void turnEnds.push(e.messages.length))
+  await collect(runAgent({ history: [], input: "xin chào", skills: [], registry: registry(), hooks }))
+  expect(JSON.stringify(bodies[0])).toContain("HOOK-CTX-MARKER")
+  await new Promise((r) => setTimeout(r, 10))
+  expect(turnEnds).toEqual([2])
+})
+
 test("models without tool support get no tools", async () => {
   await saveConfig({ provider: "groq", model: "plain" })
   plan = { tool: "current_time", args: {} }

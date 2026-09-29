@@ -84,8 +84,10 @@ const { state, setState } = await import("../src/tui/state")
 const { readJson } = await import("../src/core/store")
 const { setKey } = await import("../src/core/auth")
 const { initRuntime } = await import("../src/core/runtime")
+const { FileMemory } = await import("../src/core/memory/file-memory")
 
-const runtime = initRuntime({ cwd, home, skills: () => state.skills })
+const memory = new FileMemory(path.join(home, "memory"))
+const runtime = initRuntime({ cwd, home, skills: () => state.skills, memory })
 let setup: Awaited<ReturnType<typeof testRender>>
 
 beforeAll(async () => {
@@ -239,8 +241,10 @@ test("/mcp shows the global demo server connected with its tools", async () => {
 test("/tools lists built-in and MCP tools", async () => {
   await setup.mockInput.typeText("/tools")
   setup.mockInput.pressEnter()
-  const frame = await setup.waitForFrame((f) => f.includes("Tools · 5"))
+  // 2 built-in + propose_memory (FileMemory) + 3 from the demo MCP server
+  const frame = await setup.waitForFrame((f) => f.includes("Tools · 6"))
   expect(frame).toContain("current_time")
+  expect(frame).toContain("propose_memory")
   expect(frame).toContain("mcp__demo__echo")
   setup.mockInput.pressEscape()
   await setup.waitFor(() => state.dialog === undefined)
@@ -275,4 +279,42 @@ test("a tool call renders as a ⚙ row with its result, then the answer", async 
   await setup.waitFor(() => !state.streaming)
   const roles = state.history.map((m) => m.role)
   expect(roles.slice(-4)).toEqual(["user", "assistant", "tool", "assistant"])
+})
+
+test("/new starts a fresh session; /sessions reopens the previous one with its tool rows", async () => {
+  const before = state.lines.length
+  expect(before).toBeGreaterThan(0)
+  await setup.mockInput.typeText("/new")
+  setup.mockInput.pressEnter()
+  await setup.waitFor(() => state.lines.length === 0 && state.history.length === 0)
+
+  await setup.mockInput.typeText("/sessions")
+  setup.mockInput.pressEnter()
+  const list = await setup.waitForFrame((f) => f.includes("Phiên đã lưu"))
+  expect(list).toContain("lượt")
+  show(list)
+  setup.mockInput.pressEnter() // newest first: the session we just left
+  await setup.waitFor(() => state.dialog === undefined && state.lines.length > 0)
+  // The "reopened" note is the first line (may be scrolled out of view): check state.
+  expect(state.lines[0]).toMatchObject({ kind: "info" })
+  expect((state.lines[0] as { text: string }).text).toContain("Mở lại phiên")
+  const frame = await setup.waitForFrame((f) => f.includes("⚙ current_time()"))
+  expect(frame).not.toContain("<nhac_nho>")
+  expect(state.history.length).toBeGreaterThan(0)
+  expect(state.clock).toBeUndefined() // re-sent on the next turn
+  show(frame)
+})
+
+test("/memory: a model proposal is pending until approved with 'a'", async () => {
+  await memory.add("Người dùng không giao dịch margin", { status: "pending", via: "model" })
+  await setup.mockInput.typeText("/memory")
+  setup.mockInput.pressEnter()
+  await setup.waitForFrame((f) => f.includes("chờ duyệt"))
+  setup.mockInput.pressEnter()
+  await setup.waitForFrame((f) => f.includes("a duyệt"))
+  setup.mockInput.pressKey("a")
+  await setup.waitFor(async () => (await memory.list())[0]?.status === "active")
+  await setup.waitForFrame((f) => f.includes("đang dùng"))
+  setup.mockInput.pressEscape()
+  await setup.waitFor(() => state.dialog === undefined)
 })

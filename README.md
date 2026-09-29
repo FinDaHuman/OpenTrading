@@ -22,7 +22,9 @@ Trong TUI:
 | `/context` | Xem các tầng ngữ cảnh gửi cho model và số token |
 | `/mcp` | Trạng thái các MCP server; cho phép server của project hoặc kết nối lại |
 | `/tools` | Liệt kê mọi tool model đang gọi được |
-| `/clear`, `/help`, `/exit` | Xoá hội thoại, trợ giúp, thoát |
+| `/sessions`, `/new` | Mở lại một phiên đã lưu; bắt đầu phiên mới |
+| `/memory` | Xem, duyệt, xoá memory (bật trong config) |
+| `/clear`, `/help`, `/exit` | Xoá màn hình và bắt đầu phiên mới, trợ giúp, thoát |
 
 Phím tắt: `tab` hoàn thành lệnh đang gõ (`/con` → `/connect`), `↑↓` chọn gợi ý, `esc` dừng câu trả lời hoặc đóng hộp thoại, `ctrl+o` mở rộng/thu gọn kết quả tool, `ctrl+c` thoát.
 
@@ -31,6 +33,8 @@ Model gọi được tool có sẵn (`current_time`, `load_skill`) và tool từ
 Danh sách provider và model lấy từ [models.dev](https://models.dev), cùng nguồn với opencode. Danh sách được cache 1 giờ ở `~/.opentrading/cache/models.json`. Các provider cần SDK riêng hoặc cấu hình thêm (Azure, Bedrock, Vertex…) bị ẩn và được ghi trong `ToDoList.txt`.
 
 Key được lưu ở `~/.opentrading/auth.json`, nằm ngoài repo. Có thể đổi thư mục bằng biến `OPENTRADING_HOME`. Nếu provider chưa có key trong file này, chương trình đọc key từ biến môi trường của provider đó, ví dụ `GROQ_API_KEY`, `GEMINI_API_KEY`, `NVIDIA_API_KEY`.
+
+Mở lại phiên gần nhất: `bun run dev -- --continue`; một phiên cụ thể: `bun run dev -- --resume <id>`. Hội thoại được lưu ở `~/.opentrading/sessions/`.
 
 Muốn thử provider mà không mở TUI (chỉ dùng tool có sẵn): `bun src/core/chat.ts "mấy giờ rồi?"`.
 
@@ -47,6 +51,8 @@ bun test          # smoke test TUI chạy headless; SHOW_FRAME=1 để in khung 
 src/core/     provider, auth, config, agent loop, hồ sơ nhà đầu tư (không import UI)
   prompt/     ghép prompt theo tầng, ngân sách token, đồng hồ phiên
   skills/     schema SKILL.md, loader 3 nguồn, catalog, preroute
+  memory/     contract MemoryProvider, bản mẫu FileMemory
+  session/    lưu phiên JSONL, mở lại, dựng lại transcript
   tools/      tool registry, giới hạn/timeout, tool có sẵn
   mcp/        MCP client: config, cho phép, đặt tên tool, quản lý kết nối
 examples/     MCP server mẫu (examples/mcp-demo)
