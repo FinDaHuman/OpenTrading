@@ -19,7 +19,9 @@ export async function resolveTarget(): Promise<{ provider: CatalogProvider; mode
 /** Turn SDK/network errors into one readable line. */
 export function describeError(error: unknown): string {
   if (error instanceof ChatSetupError) return error.message
-  const e = error as { statusCode?: number; message?: string; name?: string }
+  const e = error as { statusCode?: number; message?: string; name?: string; lastError?: unknown }
+  // When retries run out the SDK wraps the real error ("Failed after 3 attempts…").
+  if (e?.name === "AI_RetryError" && e.lastError) return describeError(e.lastError)
   if (e?.name === "AbortError") return "Đã huỷ."
   const status = e?.statusCode
   if (status === 401 || status === 403)

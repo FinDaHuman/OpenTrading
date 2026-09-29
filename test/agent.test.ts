@@ -26,6 +26,9 @@ type Body = { messages: { role: string; content?: unknown }[]; tools?: unknown[]
 const bodies: Body[] = []
 /** What the fake model does when the conversation has no tool results yet. */
 let plan: { tool: string; args: object; always?: boolean } | undefined
+/** Mimic gemini-2.5-flash-lite: answer with nothing after a tool result. */
+let emptyAfterTool: "once" | "always" | undefined
+const NUDGE = "Hãy trả lời câu hỏi của người dùng dựa trên kết quả tool"
 
 const sse = (chunks: object[]) =>
   new Response(chunks.map((c) => `data: ${JSON.stringify(c)}\n\n`).join("") + "data: [DONE]\n\n", {
@@ -56,6 +59,10 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
       chunk({}, "tool_calls"),
     ])
   }
+  const nudged = JSON.stringify(body.messages.at(-1)?.content ?? "").includes(NUDGE)
+  if (emptyAfterTool && hasToolResult && (emptyAfterTool === "always" || !nudged)) {
+    return sse([chunk({ role: "assistant", content: "" }), chunk({}, "stop")])
+  }
   return sse([chunk({ role: "assistant", content: "Kết quả: " }), chunk({ content: "xong." }), chunk({}, "stop")])
 }) as typeof fetch
 
@@ -79,6 +86,7 @@ afterAll(async () => {
 beforeEach(async () => {
   bodies.length = 0
   plan = undefined
+  emptyAfterTool = undefined
   await saveConfig({ provider: "groq", model: "tooly" })
 })
 
@@ -171,6 +179,37 @@ test("aborting mid-tool leaves no dangling tool call in history", async () => {
   const messages = done(events).messages
   expect(messages.map((m) => m.role)).toEqual(["user", "assistant"])
   expect(JSON.stringify(messages)).not.toContain("tool-call")
+})
+
+test("an empty answer after a tool result is retried once with tools disabled", async () => {
+  plan = { tool: "current_time", args: {} }
+  emptyAfterTool = "once"
+  const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: registry() }))
+  expect(bodies).toHaveLength(3)
+  expect(bodies[2]!.tool_choice).toBe("none")
+  expect(bodies[2]!.tools).toBeDefined()
+  expect(events.filter((e) => e.type === "text-delta").map((e) => (e as { text: string }).text).join("")).toBe("Kết quả: xong.")
+  const messages = done(events).messages
+  // The nudge is not kept in history; the empty answer is replaced by the real one.
+  expect(JSON.stringify(messages)).not.toContain(NUDGE)
+  expect(messages.map((m) => m.role)).toEqual(["user", "assistant", "tool", "assistant"])
+  expect(messages.at(-1)!.content).toBe("Kết quả: xong.")
+})
+
+test("a model that stays silent gets a visible notice, not a blank turn", async () => {
+  plan = { tool: "current_time", args: {} }
+  emptyAfterTool = "always"
+  const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: registry() }))
+  expect(bodies).toHaveLength(3) // one retry only
+  expect(events.some((e) => e.type === "notice" && e.text.includes("không trả lời sau khi gọi tool"))).toBe(true)
+  expect(done(events).messages.map((m) => m.role)).toEqual(["user", "assistant", "tool", "assistant"])
+})
+
+test("rate-limit errors wrapped in RetryError still read as quota errors", async () => {
+  const { describeError } = await import("../src/core/chat")
+  const quota = Object.assign(new Error("quota"), { name: "AI_APICallError", statusCode: 429 })
+  const wrapped = Object.assign(new Error("Failed after 3 attempts. Last error: quota"), { name: "AI_RetryError", lastError: quota })
+  expect(describeError(wrapped)).toContain("Hết quota")
 })
 
 test("models without tool support get no tools", async () => {

@@ -31,7 +31,7 @@ Cập nhật: 29/09/2026 · nhánh `step1-agent-tools`
 | Server mẫu cho đồng nghiệp: `examples/mcp-demo` | Xong |
 | Skills: đọc `skills/*.md`, bật/tắt, `load_skill` | Bản thô |
 | System prompt: nguyên tắc cơ bản + phần hướng dẫn dùng tool | Bản thô, chưa chia tầng |
-| Test: typecheck + 39 test (tool, MCP với server thật qua stdio, agent loop, TUI, đường dẫn state) | Xong |
+| Test: typecheck + 42 test (tool, MCP với server thật qua stdio, agent loop, TUI, đường dẫn state) | Xong |
 
 **Chưa kiểm tra:**
 - Chưa chạy với key thật của provider nào. Tool calling mới được test trên định dạng OpenAI-compatible bằng API giả lập; Gemini và Anthropic cần thử bằng key thật.
