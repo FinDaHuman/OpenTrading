@@ -2,7 +2,7 @@
 
 Harness AI phân tích chứng khoán Việt Nam, chạy trong terminal. Viết bằng TypeScript: Bun, [OpenTUI](https://github.com/sst/opentui), SolidJS và Vercel AI SDK.
 
-> **Bản demo v0.** Hiện chỉ có TUI, kết nối LLM và chat stream. Chưa có dữ liệu thị trường, chưa có tool, chưa lưu session. Đây không phải tư vấn đầu tư.
+> **Bản demo.** Đã có TUI, kết nối LLM, agent loop gọi tool và MCP client. Chưa có dữ liệu thị trường, vì các MCP server dữ liệu đang được phát triển; chưa lưu session. Đây không phải tư vấn đầu tư. Tiến độ: [docs/STATUS.md](docs/STATUS.md).
 
 ## Chạy
 
@@ -18,15 +18,19 @@ Trong TUI:
 | `/connect` | Nhập API key cho hơn 200 provider (Groq, Gemini, NVIDIA, OpenAI, Anthropic, OpenRouter, DeepSeek…) |
 | `/model` | Chọn model từ mọi provider đã kết nối, gõ để lọc |
 | `/skills`, `/skill <tên>` | Bật hoặc tắt skill trong `skills/` |
+| `/mcp` | Trạng thái các MCP server; cho phép server của project hoặc kết nối lại |
+| `/tools` | Liệt kê mọi tool model đang gọi được |
 | `/clear`, `/help`, `/exit` | Xoá hội thoại, trợ giúp, thoát |
 
-Phím tắt: `tab` hoàn thành lệnh đang gõ (`/con` → `/connect`), `↑↓` chọn gợi ý, `esc` dừng câu trả lời hoặc đóng hộp thoại, `ctrl+c` thoát.
+Phím tắt: `tab` hoàn thành lệnh đang gõ (`/con` → `/connect`), `↑↓` chọn gợi ý, `esc` dừng câu trả lời hoặc đóng hộp thoại, `ctrl+o` mở rộng/thu gọn kết quả tool, `ctrl+c` thoát.
+
+Model gọi được tool có sẵn (`current_time`, `load_skill`) và tool từ MCP server, rồi trả lời dựa trên kết quả. Cách gắn MCP server: xem [docs/mcp.md](docs/mcp.md).
 
 Danh sách provider và model lấy từ [models.dev](https://models.dev), cùng nguồn với opencode. Danh sách được cache 1 giờ ở `~/.opentrading/cache/models.json`. Các provider cần SDK riêng hoặc cấu hình thêm (Azure, Bedrock, Vertex…) bị ẩn và được ghi trong `ToDoList.txt`.
 
 Key được lưu ở `~/.opentrading/auth.json`, nằm ngoài repo. Có thể đổi thư mục bằng biến `OPENTRADING_HOME`. Nếu provider chưa có key trong file này, chương trình đọc key từ biến môi trường của provider đó, ví dụ `GROQ_API_KEY`, `GEMINI_API_KEY`, `NVIDIA_API_KEY`.
 
-Muốn thử provider mà không mở TUI: `bun src/core/chat.ts "xin chào"`.
+Muốn thử provider mà không mở TUI (chỉ dùng tool có sẵn): `bun src/core/chat.ts "mấy giờ rồi?"`.
 
 ## Kiểm tra
 
@@ -38,7 +42,10 @@ bun test          # smoke test TUI chạy headless; SHOW_FRAME=1 để in khung 
 ## Cấu trúc
 
 ```
-src/core/     provider, auth, config, chat stream, skills, system prompt (không import UI)
+src/core/     provider, auth, config, agent loop, skills, system prompt (không import UI)
+  tools/      tool registry, giới hạn/timeout, tool có sẵn
+  mcp/        MCP client: config, cho phép, đặt tên tool, quản lý kết nối
+examples/     MCP server mẫu (examples/mcp-demo)
 src/tui/      giao diện: theme, logo, background động, màn hình, dialog
 skills/       skill dạng markdown (frontmatter: name, description)
 handbook/     tài liệu thiết kế
