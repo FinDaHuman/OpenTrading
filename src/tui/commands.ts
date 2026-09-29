@@ -9,6 +9,8 @@ export const COMMANDS: CommandInfo[] = [
   { name: "model", description: "Chọn model từ mọi provider đã kết nối" },
   { name: "skills", description: "Bật / tắt skill" },
   { name: "skill", args: "<tên>", description: "Bật / tắt một skill theo tên" },
+  { name: "mcp", description: "Trạng thái MCP server, cho phép / kết nối lại" },
+  { name: "tools", description: "Liệt kê mọi tool model đang gọi được" },
   { name: "clear", description: "Xoá hội thoại hiện tại" },
   { name: "help", description: "Xem lệnh và phím tắt" },
   { name: "exit", description: "Thoát OpenTrading" },

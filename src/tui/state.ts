@@ -1,18 +1,25 @@
+import type { ModelMessage } from "ai"
 import { createStore } from "solid-js/store"
 import type { Catalog } from "../core/catalog"
+import type { McpServerStatus } from "../core/mcp/manager"
 import type { ProviderId } from "../core/providers"
 import type { Skill } from "../core/skills"
+
+export type ToolStatus = "running" | "ok" | "error"
 
 export type Line =
   | { kind: "user"; text: string }
   | { kind: "assistant"; text: string; done: boolean }
+  | { kind: "tool"; callId: string; name: string; label: string; status: ToolStatus; output?: string; durationMs?: number }
   | { kind: "info"; text: string }
   | { kind: "error"; text: string }
 
-export type DialogName = "connect" | "model" | "skills" | "help"
+export type DialogName = "connect" | "model" | "skills" | "help" | "mcp" | "tools"
 
 export const [state, setState] = createStore({
   lines: [] as Line[],
+  /** What the model sees next turn, including tool calls and results. */
+  history: [] as ModelMessage[],
   streaming: false,
   provider: undefined as ProviderId | undefined,
   model: undefined as string | undefined,
@@ -23,6 +30,9 @@ export const [state, setState] = createStore({
   modelFilter: "",
   skills: [] as Skill[],
   activeSkills: [] as string[],
+  mcp: [] as McpServerStatus[],
+  /** Show full tool output instead of the first lines (ctrl+o). */
+  expandTools: false,
   dialog: undefined as DialogName | undefined,
 })
 
