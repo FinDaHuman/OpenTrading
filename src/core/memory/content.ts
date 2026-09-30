@@ -68,9 +68,23 @@ const MONEY = rx(
 )
 
 // Longest names first so "giá mục tiêu" wins over "giá"; "giá trị"/"giá cả" are ordinary words, not prices.
-const METRIC = rxAll(
-  String.raw`${B}(?:ev/ebitda|p/e|p/b|eps|roe|roa|peg|giá mục tiêu|giá vốn|vùng giá|cắt lỗ|chốt lời|target|giá(?!\s+(?:trị|cả)))${E}`,
-)
+const METRIC_NAMES = [
+  "ev/ebitda",
+  "p/e",
+  "p/b",
+  "eps",
+  "roe",
+  "roa",
+  "peg",
+  "giá mục tiêu",
+  "giá vốn",
+  "vùng giá",
+  "cắt lỗ",
+  "chốt lời",
+  "target",
+  String.raw`giá(?!\s+(?:trị|cả))`,
+]
+const METRIC = rxAll(String.raw`${B}(?:${METRIC_NAMES.join("|")})${E}`)
 const COMPARATOR = rx(String.raw`(?:${B}(?:trên|dưới|không quá|không vượt|tối đa|tối thiểu|quá)${E}|[<>≤≥])`)
 const HAS_NUMBER = /\p{N}/u
 
@@ -80,9 +94,10 @@ const TIME_MARKER = rx(
   String.raw`${B}(?:(?:tuần|tháng|quý|năm)\s+(?:tới|sau|này)|cuối năm|đầu năm|quý\s*\p{N}|năm\s*\p{N}{4})${E}`,
 )
 
-const HOLDING = rxAll(
-  String.raw`${B}(?:đang\s+giữ|nắm\s+giữ|nắm|sở\s+hữu|mua|bán)${E}((?:\s+\p{L}+){0,2})\s+${NUM}\s*(?:cp|cổ\s+phiếu|cổ|lô|hợp\s+đồng|hđ)${E}`,
-)
+const HOLDING_VERB = String.raw`(?:đang\s+giữ|nắm\s+giữ|nắm|sở\s+hữu|mua|bán)`
+const HOLDING_UNIT = String.raw`(?:cp|cổ\s+phiếu|cổ|lô|hợp\s+đồng|hđ)`
+// Group 1 is the up-to-two words between verb and number, checked for a comparator.
+const HOLDING = rxAll(String.raw`${B}${HOLDING_VERB}${E}((?:\s+\p{L}+){0,2})\s+${NUM}\s*${HOLDING_UNIT}${E}`)
 
 // A full stop inside "25.000" is not a sentence end.
 const sentences = (text: string) => text.split(/[!?\n]|\.(?!\p{N})/u)

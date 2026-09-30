@@ -105,10 +105,10 @@ export class MemoryRepo {
   purge(id: string, now: string): "purged" | "not_found" {
     const changes = guard(
       () =>
-        this.db.run("UPDATE memory SET body = NULL, status = 'purged', updated_at = ? WHERE id = ? AND status = 'active'", [
-          now,
-          id,
-        ]).changes,
+        this.db.run(
+          "UPDATE memory SET body = NULL, status = 'purged', updated_at = ? WHERE id = ? AND status = 'active'",
+          [now, id],
+        ).changes,
     )
     return changes === 1 ? "purged" : "not_found"
   }

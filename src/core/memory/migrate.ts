@@ -73,7 +73,8 @@ const busyTimeout = (db: Database) => db.query<{ timeout: number }, []>("PRAGMA 
  */
 export function migrateMemory(db: Database, clock: Clock, opts: { busyTimeoutMs?: number } = {}): number[] {
   const original = busyTimeout(db)
-  if (original === 0) db.run(`PRAGMA busy_timeout = ${Math.max(1, Math.floor(opts.busyTimeoutMs ?? DEFAULT_BUSY_TIMEOUT_MS))}`)
+  const waitMs = Math.max(1, Math.floor(opts.busyTimeoutMs ?? DEFAULT_BUSY_TIMEOUT_MS))
+  if (original === 0) db.run(`PRAGMA busy_timeout = ${waitMs}`)
   const applied: number[] = []
   try {
     for (const m of MIGRATIONS) {

@@ -90,7 +90,7 @@ describe("migrateMemory", () => {
     preset.close()
   })
 
-  test("lock contention: times out with migration_busy, then succeeds once released, with no duplicate row", async () => {
+  test("lock contention: migration_busy on timeout, success once released, no duplicate row", async () => {
     const { open } = await tempFile()
     const holder = open()
     const other = open()
