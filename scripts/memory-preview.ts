@@ -1,6 +1,7 @@
 /**
- * Technical demo for the memory core. Never opens the real DATA_DIR and never calls a model.
- * Usage: bun scripts/memory-preview.ts [g1|g2|g3]
+ * Technical demo for the memory core. Only uses temporary databases, never the user's data directory,
+ * and never calls a model.
+ * Usage: bun scripts/memory-preview.ts [g1|g2|g3|g4]
  * Later gates add their own scenario; earlier scenarios keep running unchanged.
  */
 import { Database } from "bun:sqlite"
@@ -9,7 +10,8 @@ import os from "node:os"
 import path from "node:path"
 import { classifyContent } from "../src/core/memory/content"
 import { parseMemoryConfig } from "../src/core/memory/config"
-import type { Clock } from "../src/core/memory/deps"
+import { createMemoryService } from "../src/core/memory"
+import type { Clock, IdFactory } from "../src/core/memory/deps"
 import { MigrationBusyError, migrateMemory } from "../src/core/memory/migrate"
 // Until the G4 factory exists, the storage demo drives the internal repository directly on a temp database.
 import { MemoryRepo, rowToItem } from "../src/core/memory/repo"
@@ -162,11 +164,69 @@ function g3() {
   )
 }
 
-const scenarios: Record<string, () => void> = { g1, g2, g3 }
+function fixedIds(): IdFactory {
+  let n = 0
+  return { next: () => `0190a000-0000-7000-8000-${String(++n).padStart(12, "0")}` }
+}
+const short = (r: unknown) => JSON.stringify(r, (k, v) => (k === "item" ? `<item ${v.id.slice(-2)}>` : v))
+
+async function g4() {
+  console.log("# G4 — service: factory, remember/purge, beforeTurn, fail-soft, capability")
+  // Test/preview composition root: temp in-memory database, fixed clock and ids.
+  const db = new Database(":memory:")
+  const { port, commands } = createMemoryService(db, { config: {}, clock: fixedClock, ids: fixedIds() })
+  const rows = () => db.query<{ n: number }, []>("SELECT count(*) AS n FROM memory").get()!.n
+  const ctx = { userText: "Phân tích VCB" }
+
+  console.log(
+    `port chỉ có: ${JSON.stringify(Object.keys(port))}; commands có: ${JSON.stringify(Object.keys(commands))}`,
+  )
+  console.log("\n/remember:")
+  for (const [body, opts] of [
+    ["Tôi không sử dụng margin", undefined],
+    ["Báo cáo cho tôi cần có kịch bản rủi ro", undefined],
+    ["giá vốn 25.000 đ", { confirmAmbiguous: true }],
+    ["không vượt 20% danh mục cho một mã", undefined],
+  ] as const) {
+    const r = await commands.remember({ body }, opts)
+    console.log(`  ${JSON.stringify(body)}${opts ? " (confirm)" : ""} → ${short(r)} · số dòng DB: ${rows()}`)
+  }
+  const confirmed = await commands.remember({ body: "không vượt 20% danh mục cho một mã" }, { confirmAmbiguous: true })
+  console.log(`  xác nhận lại câu mơ hồ → ${short(confirmed)} · số dòng DB: ${rows()}`)
+  const unfit = await commands.remember({ body: `Tránh từ "${`"`.repeat(996)}"` }, { confirmAmbiguous: true })
+  console.log(`  1.000 dấu " → ${short(unfit)}`)
+
+  const turn = await port.beforeTurn(ctx)
+  console.log(`\nbeforeTurn → used ${JSON.stringify(turn.used.memories.map((x) => x.slice(-2)))}, ` +
+    `warnings ${JSON.stringify(turn.warnings)}`)
+  console.log(turn.stableBlocks[0])
+
+  const first = turn.used.memories[0]!
+  console.log(`\n/forget ${first.slice(-2)} → ${JSON.stringify(await commands.purge(first))}`)
+  const after = await port.beforeTurn(ctx)
+  console.log(`beforeTurn → used ${JSON.stringify(after.used.memories.map((x) => x.slice(-2)))}; ` +
+    `còn "margin"? ${after.stableBlocks.join("").includes("margin")}`)
+  console.log(`/forget lần nữa → ${JSON.stringify(await commands.purge(first))}`)
+
+  const tight = await port.beforeTurn(ctx, { maxBytes: 200 })
+  console.log(`\nbudget 200 byte → used ${tight.used.memories.length}, warnings ${JSON.stringify(tight.warnings)}`)
+
+  const off = createMemoryService(db, { config: { enabled: false }, clock: fixedClock })
+  console.log(`enabled:false → ${JSON.stringify(await off.port.beforeTurn(ctx))}`)
+
+  db.close()
+  const broken = await port.beforeTurn(ctx)
+  console.log(
+    `DB đã đóng → stableBlocks ${JSON.stringify(broken.stableBlocks)}, warnings ${JSON.stringify(broken.warnings)}`,
+  )
+  console.log(`DB đã đóng, /remember → ${short(await commands.remember({ body: "Tôi thích báo cáo ngắn" }))}`)
+}
+
+const scenarios: Record<string, () => void | Promise<void>> = { g1, g2, g3, g4 }
 const name = (process.argv[2] ?? "g1").toLowerCase()
 const run = scenarios[name]
 if (!run) {
   console.error(`Không có kịch bản "${name}". Có: ${Object.keys(scenarios).join(", ")}`)
   process.exit(1)
 }
-run()
+await run()
