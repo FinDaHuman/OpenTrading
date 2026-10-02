@@ -74,20 +74,22 @@ export class Session {
     readonly id: string,
     /** Relative path; undefined until the first turn is written. */
     public file: string | undefined,
+    /** Wall-clock the session was created at; the resume path takes it from the summary. */
+    createdAt?: string,
     summary?: SessionSummary,
   ) {
     this.turns = summary?.turns ?? 0
     this.title = summary?.title ?? ""
-    this.createdAt = summary?.createdAt ?? new Date().toISOString()
+    this.createdAt = summary?.createdAt ?? createdAt ?? new Date().toISOString()
   }
 
   static create(now = new Date()) {
-    return new Session(newSessionId(now), undefined)
+    return new Session(newSessionId(now), undefined, now.toISOString())
   }
 
   /** Keep appending to an existing session file after resume. */
   static continue(summary: SessionSummary) {
-    return new Session(summary.id, summary.file, summary)
+    return new Session(summary.id, summary.file, summary.createdAt, summary)
   }
 
   get path() {
