@@ -6,13 +6,14 @@ import type { McpManager, McpServerStatus, McpState } from "../../core/mcp/manag
 import type { ToolDef } from "../../core/tools/types"
 import { closeDialog, pushLine, state } from "../state"
 import { color } from "../theme"
-import { truncate } from "../ui/text"
+import { pad, truncate, width as cells } from "../ui/text"
+import { BADGE, BADGE_LEGEND, toolBadge, toolMark } from "../ui/badges"
 import { Field, ToolDetail } from "../ui/tool-detail"
 
 /**
  * /mcp — modelled on Claude Code's MCP settings (components/mcp/*): a full-width pane in
  * place of the prompt, servers grouped by where they are configured, one row per server
- * (`name · ✔ connected`), then a server menu → its tools → one tool's details. Built-in
+ * (`name · ✓ connected`), then a server menu → its tools → one tool's details. Built-in
  * catalog servers sit in their own group and stay off until enabled.
  */
 
@@ -27,11 +28,11 @@ type Screen =
   | { kind: "remove"; name: string }
 
 export const STATUS: Record<McpState, { glyph: string; fg: string; text: string }> = {
-  connected: { glyph: "✔", fg: color.tang, text: "đã kết nối" },
+  connected: { glyph: "✓", fg: color.tang, text: "đã kết nối" },
   connecting: { glyph: "◌", fg: color.tham, text: "đang kết nối…" },
   failed: { glyph: "✘", fg: color.giam, text: "lỗi" },
   "needs-auth": { glyph: "△", fg: color.tham, text: "cần đăng nhập" },
-  disabled: { glyph: "◯", fg: color.tx3, text: "đã tắt" },
+  disabled: { glyph: "○", fg: color.tx3, text: "đã tắt" },
   untrusted: { glyph: "?", fg: color.tham, text: "chờ cho phép" },
 }
 
@@ -230,6 +231,10 @@ export function McpPanel(props: { mcp: McpManager; cwd: string }) {
     return sc.kind === "tools" || sc.kind === "tool" ? props.mcp.toolsOf(sc.name) : []
   })
 
+  const shortName = (t: ToolDef) => (t.displayName ?? t.name).split(" · ").pop()!
+  /** Names padded to one column so the [label] column lines up. */
+  const toolNameWidth = createMemo(() => Math.min(Math.max(8, ...tools().map((t) => cells(shortName(t)))), Math.floor(dims().width * 0.45)))
+
   // ── keys ──────────────────────────────────────────────────────────────
   const count = () => {
     const sc = screen()
@@ -416,7 +421,7 @@ export function McpPanel(props: { mcp: McpManager; cwd: string }) {
                       {(entry) => (
                         <text wrapMode="none">
                           <span style={{ fg: active() ? color.tang : color.tx2 }}>{`${active() ? "❯" : " "} ${entry().id}`}</span>
-                          <span style={{ fg: color.tx3 }}>{` · ◯ ${catalogNeeds(entry().id)} · ${entry().description}`}</span>
+                          <span style={{ fg: color.tx3 }}>{` · ○ ${catalogNeeds(entry().id)} · ${entry().description}`}</span>
                         </text>
                       )}
                     </Match>
@@ -451,7 +456,7 @@ export function McpPanel(props: { mcp: McpManager; cwd: string }) {
                 <Show when={s().oauth}>
                   <Field label="Đăng nhập">
                     {auth() === "authenticated" ? (
-                      <span style={{ fg: color.tang }}>✔ đã đăng nhập</span>
+                      <span style={{ fg: color.tang }}>✓ đã đăng nhập</span>
                     ) : auth() === "expired" ? (
                       <span style={{ fg: color.tham }}>△ hết hạn</span>
                     ) : (
@@ -493,19 +498,20 @@ export function McpPanel(props: { mcp: McpManager; cwd: string }) {
           <text fg={color.tang} marginTop={1}>
             <span style={{ bold: true }}>{`Tool của ${(screen() as { name: string }).name}`}</span>
           </text>
-          <text fg={color.tx3}>{`${tools().length} tool · ◇ chỉ đọc · ⚠ phá huỷ · ◆ ghi (sẽ hỏi trước khi chạy)`}</text>
+          <text fg={color.tx3} wrapMode="none">{`${tools().length} tool · ${BADGE_LEGEND}`}</text>
           <box flexDirection="column" marginTop={1}>
             <For each={tools().slice(Math.max(0, Math.min(index() - 6, tools().length - 12)), Math.max(0, Math.min(index() - 6, tools().length - 12)) + 12)}>
               {(t) => {
                 const active = () => tools()[index()] === t
-                const mark = t.readOnly ? "◇" : t.annotations?.destructive ? "⚠" : "◆"
-                const tags = [t.readOnly ? "chỉ đọc" : "", t.annotations?.destructive ? "phá huỷ" : "", t.annotations?.openWorld ? "ra ngoài" : ""].filter(Boolean)
+                const mark = toolMark(t)
+                const badge = toolBadge(t)
                 return (
                   <text wrapMode="none">
                     <span style={{ fg: active() ? color.tang : color.tx3 }}>{active() ? "❯ " : "  "}</span>
-                    <span style={{ fg: t.annotations?.destructive ? color.giam : t.readOnly ? color.san : color.tham }}>{`${mark} `}</span>
-                    <span style={{ fg: active() ? color.tang : color.tx }}>{(t.displayName ?? t.name).split(" · ").pop()}</span>
-                    <span style={{ fg: color.tx3 }}>{tags.length ? `  ${tags.join(", ")}` : ""}</span>
+                    <span style={{ fg: mark.fg }}>{`${mark.mark} `}</span>
+                    <span style={{ fg: active() ? color.tang : color.tx }}>{pad(shortName(t), toolNameWidth())}</span>
+                    <span style={{ fg: badge.fg }}>{`  ${badge.text}`}</span>
+                    <span style={{ fg: BADGE.openWorld.fg }}>{t.annotations?.openWorld ? ` ${BADGE.openWorld.text}` : ""}</span>
                   </text>
                 )
               }}

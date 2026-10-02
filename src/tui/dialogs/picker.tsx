@@ -1,7 +1,7 @@
 import { useKeyboard, useTerminalDimensions } from "@opentui/solid"
 import { createMemo, createSignal, For, Show } from "solid-js"
 import { color } from "../theme"
-import { rank, truncate, width as cells } from "../ui/text"
+import { pad, rank, truncate, width as cells } from "../ui/text"
 
 export interface PickerItem<T> {
   label: string
@@ -9,8 +9,9 @@ export interface PickerItem<T> {
   /** One-cell glyph before the label (◇ ◆ ● …). */
   mark?: string
   markColor?: string
-  /** Right-aligned column (e.g. a size or a key). */
+  /** Fixed column after the description (e.g. a "[ghi]" label), padded so it lines up. */
   right?: string
+  rightColor?: string
   /** Items with the same group are shown under one heading (in the order given). */
   group?: string
   value: T
@@ -99,7 +100,7 @@ export function Picker<T>(props: {
     <box flexDirection="column">
       <box flexDirection="row" marginBottom={1} height={1} flexShrink={0}>
         <text fg={color.tang} flexShrink={0}>
-          {"⌕ "}
+          {"› "}
         </text>
         <input
           flexGrow={1}
@@ -134,10 +135,10 @@ export function Picker<T>(props: {
                 const label = () => truncate(item.label, labelWidth())
                 return (
                   <box flexDirection="row" height={1} flexShrink={0} backgroundColor={selected() ? color.rule : undefined}>
-                    <text fg={color.tang} width={2} flexShrink={0}>
+                    <text fg={color.tang} width={2} flexShrink={0} selectable={false}>
                       {selected() ? "❯ " : "  "}
                     </text>
-                    <text fg={item.markColor ?? color.tang} width={2} flexShrink={0}>
+                    <text fg={item.markColor ?? color.tang} width={2} flexShrink={0} selectable={false}>
                       {item.mark ?? " "}
                     </text>
                     <text flexGrow={1} flexShrink={1} overflow="hidden" wrapMode="none">
@@ -146,9 +147,9 @@ export function Picker<T>(props: {
                       </span>
                       <span style={{ fg: color.tx3 }}>{item.hint ? `  ${truncate(item.hint, hintWidth())}` : ""}</span>
                     </text>
-                    <Show when={item.right}>
-                      <text fg={color.tx3} flexShrink={0} wrapMode="none">
-                        {`  ${item.right}`}
+                    <Show when={rightWidth() > 0}>
+                      <text fg={item.rightColor ?? color.tx3} flexShrink={0} wrapMode="none" selectable={false}>
+                        {`  ${pad(item.right ?? "", rightWidth() - 2)}`}
                       </text>
                     </Show>
                   </box>

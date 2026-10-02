@@ -92,6 +92,8 @@ export function AskPrompt(props: { broker: AskBroker; request: AskRequest }) {
 
   useKeyboard((evt) => {
     if (evt.eventType === "release") return
+    // Ctrl+C skips the questions like Esc; the app only arms the double-press exit.
+    if (evt.ctrl && evt.name === "c") return decline()
     if (typing()) {
       if (evt.name === "escape") {
         evt.preventDefault()
@@ -149,11 +151,11 @@ export function AskPrompt(props: { broker: AskBroker; request: AskRequest }) {
           <For each={questions()}>
             {(q, i) => (
               <span style={{ fg: tab() === i() ? color.bg : answered(i()) ? color.tang : color.tx3, bg: tab() === i() ? color.san : undefined }}>
-                {` ${answered(i()) ? "☒" : "☐"} ${truncate(q.header, 16)} `}
+                {` ${answered(i()) ? "[x]" : "[ ]"} ${truncate(q.header, 16)} `}
               </span>
             )}
           </For>
-          <span style={{ fg: reviewing() ? color.bg : color.tx2, bg: reviewing() ? color.san : undefined }}>{" ✔ Gửi "}</span>
+          <span style={{ fg: reviewing() ? color.bg : color.tx2, bg: reviewing() ? color.san : undefined }}>{" ✓ Gửi "}</span>
         </text>
       </Show>
 
@@ -201,9 +203,9 @@ export function AskPrompt(props: { broker: AskBroker; request: AskRequest }) {
                     <text wrapMode="none">
                       <span style={{ fg: active() ? color.tang : color.tx3 }}>{active() ? "❯ " : "  "}</span>
                       <span style={{ fg: color.tx3 }}>{`${i() + 1}. `}</span>
-                      <span style={{ fg: color.tang }}>{q().multiSelect ? (chosen() ? "[✔] " : "[ ] ") : ""}</span>
+                      <span style={{ fg: color.tang }}>{q().multiSelect ? (chosen() ? "[x] " : "[ ] ") : ""}</span>
                       <span style={{ fg: active() ? color.tang : color.tx, bold: active() }}>{option.label}</span>
-                      <span style={{ fg: color.tang }}>{!q().multiSelect && chosen() ? "  ✔" : ""}</span>
+                      <span style={{ fg: color.tang }}>{!q().multiSelect && chosen() ? "  ✓" : ""}</span>
                       <span style={{ fg: color.tx2 }}>{isOther() && answers[tab()]!.other ? `  "${truncate(answers[tab()]!.other, 40)}"` : ""}</span>
                     </text>
                     <Show when={option.description}>
@@ -217,7 +219,7 @@ export function AskPrompt(props: { broker: AskBroker; request: AskRequest }) {
             </For>
             <Show when={typing()}>
               <box flexDirection="row" marginTop={1}>
-                <text fg={color.san}>{"✎ Câu trả lời của bạn: "}</text>
+                <text fg={color.san} flexShrink={0}>{"Câu trả lời của bạn: "}</text>
                 <input
                   flexGrow={1}
                   focused

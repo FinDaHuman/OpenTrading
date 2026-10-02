@@ -80,7 +80,7 @@ export function ModelDialog() {
       <Match when={true}>
         <DialogFrame title={`Chọn model · ${state.connected.length} provider`} width={80}>
           <Picker
-            items={[...items(), { label: "✎ Nhập model id thủ công", value: "manual" as Choice }]}
+            items={[...items(), { label: "+ Nhập model id thủ công", value: "manual" as Choice }]}
             onPick={choose}
             rows={14}
             initialFilter={initialFilter}
