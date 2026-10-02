@@ -6,6 +6,7 @@ import type { McpManager, McpServerStatus, McpState } from "../../core/mcp/manag
 import type { ToolDef } from "../../core/tools/types"
 import { closeDialog, pushLine, state } from "../state"
 import { color } from "../theme"
+import { truncate } from "../ui/text"
 import { Field, ToolDetail } from "../ui/tool-detail"
 
 /**
@@ -396,8 +397,8 @@ export function McpPanel(props: { mcp: McpManager; cwd: string }) {
                   <Switch>
                     <Match when={row.kind === "heading" && row}>
                       {(h) => (
-                        <text fg={color.tx2} marginTop={listWindow().rows[0] === row ? 0 : 1}>
-                          <span style={{ bold: true }}>{`  ${h().text}`}</span>
+                        <text fg={color.tx2} marginTop={listWindow().rows[0] === row ? 0 : 1} wrapMode="none">
+                          <span style={{ bold: true }}>{`  ${truncate(h().text, dims().width - 8)}`}</span>
                         </text>
                       )}
                     </Match>

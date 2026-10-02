@@ -46,6 +46,8 @@ const LONG =
 const REPLY = ["Xin chào! ", "T+2.5 là chu kỳ thanh toán.\n\n", LONG, "\n\nHẾT-CÂU-TRẢ-LỜI"]
 const realFetch = globalThis.fetch
 const chatCalls: string[] = []
+/** Set by the esc-while-streaming test: "CHẬM" makes the fake model call the slow tool. */
+let callSlowTool = false
 globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   const url = String(input instanceof Request ? input.url : input)
   const auth = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined)).get("authorization")
@@ -63,6 +65,12 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     // Only tool results of the current turn count (earlier turns left their own in history).
     const lastUser = request.messages.map((m) => m.role).lastIndexOf("user")
     const answeredThisTurn = request.messages.slice(lastUser).some((m) => m.role === "tool")
+    if (callSlowTool && last.includes("CHẬM") && !answeredThisTurn) {
+      const call = { index: 0, id: "call_slow", type: "function", function: { name: "cho_lau", arguments: "{}" } }
+      return new Response(chunk({ role: "assistant", tool_calls: [call] }) + chunk({}, "tool_calls") + "data: [DONE]\n\n", {
+        headers: { "content-type": "text/event-stream" },
+      })
+    }
     if (last.includes("GHI-CHÚ") && !answeredThisTurn) {
       const call = { index: 0, id: "call_note", type: "function", function: { name: "mcp__demo__ghi_chu", arguments: '{"noi_dung":"mua VCB khi về 85"}' } }
       return new Response(chunk({ role: "assistant", tool_calls: [call] }) + chunk({}, "tool_calls") + "data: [DONE]\n\n", {
@@ -200,6 +208,18 @@ test("esc closes the '/' list until the draft changes; tab then does nothing", a
   await setup.mockInput.typeText("d")
   await setup.waitForFrame((f) => f.includes("❯ /model") && f.includes("enter chạy · tab điền"))
   for (let i = 0; i < 4; i++) setup.mockInput.pressBackspace()
+  await setup.waitForFrame((f) => !f.includes("enter chạy · tab điền"))
+
+  // Dismissing "/" itself must not disable the list for good: delete it, type "/" again.
+  await setup.mockInput.typeText("/")
+  await setup.waitForFrame((f) => f.includes("enter chạy · tab điền"))
+  setup.mockInput.pressEscape()
+  await setup.waitForFrame((f) => !f.includes("enter chạy · tab điền"))
+  setup.mockInput.pressBackspace()
+  await setup.waitForFrame((f) => f.includes("Hỏi về thị trường"))
+  await setup.mockInput.typeText("/")
+  await setup.waitForFrame((f) => f.includes("enter chạy · tab điền"))
+  setup.mockInput.pressBackspace()
   await setup.waitForFrame((f) => !f.includes("enter chạy · tab điền"))
 })
 
@@ -619,6 +639,78 @@ test("esc on the approval prompt denies that call without stopping the turn", as
   expect((await decision).allow).toBe(false)
   expect(controller.signal.aborted).toBe(false)
   runtime.registry.unregister("xoa_du_lieu")
+})
+
+test("esc with the '/' list open while answering closes the list, not the answer; a second esc stops it", async () => {
+  // A tool that waits keeps the turn streaming long enough to type during it.
+  const { z } = await import("zod")
+  let release: () => void = () => {}
+  runtime.registry.register({
+    name: "cho_lau",
+    description: "Đợi (tool thử)",
+    input: z.object({}),
+    readOnly: true,
+    execute: (_input, ctx) =>
+      new Promise((resolve, reject) => {
+        release = () => resolve("xong")
+        ctx.signal.addEventListener("abort", () => reject(new Error("aborted")), { once: true })
+      }),
+  })
+  callSlowTool = true
+  try {
+    await setup.mockInput.typeText("CHẬM nhé")
+    setup.mockInput.pressEnter()
+    await waitMcp(() => state.lines.some((l) => l.kind === "tool" && l.label.includes("cho_lau") && l.status === "running"))
+    await setup.mockInput.typeText("/")
+    await setup.waitForFrame((f) => f.includes("enter chạy · tab điền"))
+    setup.mockInput.pressEscape()
+    await setup.waitForFrame((f) => !f.includes("enter chạy · tab điền"))
+    expect(state.streaming).toBe(true) // the answer goes on
+    release()
+    await waitMcp(() => !state.streaming)
+    const answer = state.history.at(-1)
+    expect(JSON.stringify(answer?.content)).toContain("HẾT-CÂU-TRẢ-LỜI")
+    setup.mockInput.pressBackspace()
+
+    // With the list closed, esc stops a running answer as before.
+    await setup.mockInput.typeText("CHẬM lần nữa")
+    setup.mockInput.pressEnter()
+    await waitMcp(() => state.lines.filter((l) => l.kind === "tool" && l.label.includes("cho_lau")).length === 2)
+    setup.mockInput.pressEscape()
+    await waitMcp(() => !state.streaming)
+    expect(JSON.stringify(state.history.at(-1)?.content)).toContain("Đã dừng")
+  } finally {
+    callSlowTool = false
+    runtime.registry.unregister("cho_lau")
+  }
+}, 30_000)
+
+test("80×24: panels and the '/' list keep their hint line and the status bar on screen", async () => {
+  setup.resize(80, 24)
+  try {
+    const visible = (f: string) => f.includes("▲ OpenTrading")
+    await setup.mockInput.typeText("/")
+    let frame = await setup.waitForFrame((f) => f.includes("enter chạy · tab điền") && visible(f))
+    show(frame)
+    expect(frame.split("\n").length).toBeLessThanOrEqual(25)
+    setup.mockInput.pressBackspace()
+    await setup.waitForFrame((f) => !f.includes("enter chạy · tab điền"))
+
+    for (const [command, hint] of [
+      ["/tools", "enter xem chi tiết · esc đóng"],
+      ["/mcp", "space bật/tắt"],
+      ["/help", "enter chạy lệnh · esc đóng"],
+    ] as const) {
+      await setup.mockInput.typeText(command)
+      setup.mockInput.pressEnter()
+      frame = await setup.waitForFrame((f) => f.includes(hint) && visible(f))
+      show(frame)
+      setup.mockInput.pressEscape()
+      await setup.waitFor(() => state.dialog === undefined)
+    }
+  } finally {
+    setup.resize(100, 32)
+  }
 })
 
 test("/new starts a fresh session; /sessions reopens the previous one with its tool rows", async () => {

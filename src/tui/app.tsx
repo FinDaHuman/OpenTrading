@@ -268,6 +268,7 @@ export function App(props: { runtime: Runtime; resume?: string }) {
     }
     setDraft(value)
     setSelected(0)
+    if (value !== dismissedFor()) setDismissedFor(undefined)
   }
 
   /** Tab: put the highlighted command in the input ("/name ") without running it; the list closes. */
@@ -464,6 +465,8 @@ export function App(props: { runtime: Runtime; resume?: string }) {
             onInput={(v) => {
               setDraft(v)
               setSelected(0)
+              // A dismissed list stays closed only until the draft changes.
+              if (v !== dismissedFor()) setDismissedFor(undefined)
             }}
             onSubmit={(v: unknown) => run(typeof v === "string" ? v : (input?.value ?? ""))}
           />

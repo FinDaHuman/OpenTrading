@@ -16,7 +16,10 @@ export function Home() {
     // Shrinks (and clips) when the command list needs the room, never the other way round.
     <box flexGrow={1} flexShrink={1} minHeight={0} overflow="hidden" flexDirection="column" alignItems="center" justifyContent="center">
       {/* Solid card so the animated tape frames the wordmark instead of running through it. */}
+      {/* flexShrink 0: when the "/" list takes the room, the outer box clips this card
+          instead of squeezing its rows on top of each other ("/modelct"). */}
       <box
+        flexShrink={0}
         flexDirection="column"
         alignItems="center"
         backgroundColor={color.bg}
