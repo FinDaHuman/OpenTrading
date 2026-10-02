@@ -7,20 +7,27 @@ import { color } from "../theme"
  * same as /mcp and the approval prompt): a rule on top, bold title, content, one dim hint
  * line. The transcript above shrinks; nothing floats over it.
  */
-export function DialogFrame(props: { title: string; subtitle?: string; hint?: string; width?: number; children: JSX.Element }) {
+export function DialogFrame(props: {
+  title: string
+  subtitle?: string
+  hint?: string
+  /** Rule and title colour: green for panels, yellow/red for approvals, cyan for questions. */
+  accent?: string
+  children: JSX.Element
+}) {
   const dims = useTerminalDimensions()
   return (
     <box
       flexShrink={0}
       maxHeight={Math.max(8, dims().height - 4)}
       border={["top"]}
-      borderColor={color.tang}
+      borderColor={props.accent ?? color.tang}
       backgroundColor={color.panel}
       flexDirection="column"
       paddingLeft={2}
       paddingRight={2}
     >
-      <text fg={color.tang} marginTop={1} wrapMode="none">
+      <text fg={props.accent ?? color.tang} marginTop={1} wrapMode="none">
         <span style={{ bold: true }}>{props.title}</span>
       </text>
       <Show when={props.subtitle}>

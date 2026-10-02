@@ -2,7 +2,10 @@ import { useKeyboard } from "@opentui/solid"
 import { createSignal, For, Show } from "solid-js"
 import type { ApprovalRequest, Choice, PermissionGate } from "../core/permission"
 import { pushLine, setState, state } from "./state"
+import { DialogFrame } from "./dialogs/frame"
 import { color } from "./theme"
+import { truncate } from "./ui/text"
+import { useTerminalDimensions } from "@opentui/solid"
 import { BADGE } from "./ui/badges"
 
 /**
@@ -24,8 +27,7 @@ const MAX_VALUE = 60
 
 function preview(value: unknown) {
   const text = typeof value === "string" ? value.replace(/\s+/g, " ").trim() : JSON.stringify(value)
-  const chars = [...(text ?? "")]
-  return chars.length > MAX_VALUE ? chars.slice(0, MAX_VALUE - 1).join("") + "…" : chars.join("")
+  return truncate(text ?? "", MAX_VALUE)
 }
 
 export function argLines(input: unknown) {
@@ -65,8 +67,8 @@ export function ApprovalPrompt(props: { gate: PermissionGate; request: ApprovalR
         kind: "info",
         text:
           option.choice === "deny"
-            ? `✘ Đã từ chối ${req().label}${message ? ` — "${message}"` : ""}`
-            : `✓ Đã cho phép ${req().label} ${RECORD[option.choice]}`,
+            ? `Đã từ chối ${req().label}${message ? ` — "${message}"` : ""}`
+            : `Đã cho phép ${req().label} ${RECORD[option.choice]}`,
       })
     }
     void props.gate.respond(req().id, option.choice, message)
@@ -82,6 +84,7 @@ export function ApprovalPrompt(props: { gate: PermissionGate; request: ApprovalR
     if (noting()) {
       if (evt.name === "escape") {
         evt.preventDefault()
+        note = ""
         setNoting(false)
       }
       return // the note input handles everything else; enter submits through onSubmit
@@ -92,40 +95,41 @@ export function ApprovalPrompt(props: { gate: PermissionGate; request: ApprovalR
     else if (evt.name === "return") choose(selected())
     else if (evt.name === "escape") choose(3)
     else if (evt.name === "tab") {
+      note = ""
       setSelected(3)
       setNoting(true)
     } else if (/^[1-4]$/.test(evt.name ?? "")) choose(Number(evt.name) - 1)
   })
 
+  const dims = useTerminalDimensions()
+  const room = () => Math.max(20, dims().width - 10)
+
   return (
-    <box
-      flexShrink={0}
-      marginLeft={2}
-      marginRight={2}
-      border={["top"]}
-      borderStyle="rounded"
-      borderColor={destructive() ? color.giam : color.tham}
-      title={destructive() ? " Cần xác nhận · thay đổi không hoàn tác được " : " Cần xác nhận · tool ghi "}
-      titleAlignment="left"
-      backgroundColor={color.panel2}
-      flexDirection="column"
-      paddingLeft={1}
-      paddingRight={1}
+    <DialogFrame
+      title={destructive() ? "Cần xác nhận · thay đổi không hoàn tác được" : "Cần xác nhận · tool ghi"}
+      accent={destructive() ? color.giam : color.tham}
+      hint={noting() ? "enter từ chối kèm lời nhắn · esc quay lại" : "↑↓ chọn · enter xác nhận · 1-4 chọn nhanh · tab từ chối kèm lời nhắn · esc từ chối"}
     >
-      <box flexDirection="column" paddingLeft={2} paddingTop={1}>
+      <box flexDirection="column" paddingLeft={2}>
         <text>
-          <span style={{ fg: color.tx, bold: true }}>{req().label}</span>
+          <span style={{ fg: color.tx, bold: true }}>{truncate(req().label, room() - 30)}</span>
           {destructive() ? <span style={{ fg: BADGE.irreversible.fg }}>{`  ${BADGE.irreversible.text}`}</span> : ""}
           {req().annotations?.openWorld ? <span style={{ fg: BADGE.openWorld.fg }}>{`  ${BADGE.openWorld.text}`}</span> : ""}
         </text>
-        <For each={args().lines}>{(line) => <text fg={color.tx2}>{line}</text>}</For>
+        <For each={args().lines}>
+          {(line) => (
+            <text fg={color.tx2} wrapMode="none">
+              {truncate(line, room())}
+            </text>
+          )}
+        </For>
         <Show when={args().more > 0}>
           <text fg={color.tx3}>{`+${args().more} tham số khác`}</text>
         </Show>
         <For each={description()}>
           {(line) => (
             <text fg={color.tx3} wrapMode="none">
-              {line}
+              {truncate(line, room())}
             </text>
           )}
         </For>
@@ -137,8 +141,8 @@ export function ApprovalPrompt(props: { gate: PermissionGate; request: ApprovalR
         {(option, i) => {
           const active = () => i() === selected()
           return (
-            <box flexDirection="row" height={1}>
-              <text fg={active() ? color.tang : color.tx3} width={5} flexShrink={0}>
+            <box flexDirection="row" height={1} flexShrink={0}>
+              <text fg={active() ? color.tang : color.tx3} width={5} flexShrink={0} selectable={false}>
                 {active() ? "❯ " : "  "}
                 <span style={{ fg: color.tx3 }}>{`${i() + 1}.`}</span>
               </text>
@@ -158,19 +162,17 @@ export function ApprovalPrompt(props: { gate: PermissionGate; request: ApprovalR
           <input
             flexGrow={1}
             focused
+            value=""
             placeholder="ví dụ: dùng repo khác"
             textColor={color.tx}
             focusedTextColor={color.tx}
             backgroundColor={color.panel2}
             focusedBackgroundColor={color.panel2}
             onInput={(v: string) => (note = v)}
-            onSubmit={() => choose(3, note)}
+            onSubmit={() => choose(3, note.trim() || undefined)}
           />
         </box>
       </Show>
-      <text fg={color.tx3} marginTop={1}>
-        {noting() ? "enter gửi lời nhắn và từ chối · esc quay lại" : "↑↓ chọn · enter xác nhận · 1-4 chọn nhanh · tab từ chối kèm lời nhắn · esc từ chối"}
-      </text>
-    </box>
+    </DialogFrame>
   )
 }

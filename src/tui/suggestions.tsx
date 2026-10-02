@@ -64,7 +64,7 @@ export function ArgumentHint(props: { command: CommandInfo }) {
       <text wrapMode="none">
         <span style={{ fg: color.tang }}>{`/${props.command.name} `}</span>
         <span style={{ fg: color.tham }}>{props.command.args}</span>
-        <span style={{ fg: color.tx3 }}>{`  ${props.command.description}`}</span>
+        <span style={{ fg: color.tx3 }}>{`  ${truncate(props.command.description, 60)}`}</span>
       </text>
     </box>
   )

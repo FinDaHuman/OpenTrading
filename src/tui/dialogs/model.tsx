@@ -1,8 +1,8 @@
-import { useKeyboard } from "@opentui/solid"
+import { useKeys } from "../ui/keys"
 import { createMemo, createSignal, Match, Switch } from "solid-js"
 import { saveConfig } from "../../core/config"
 import { chatModels, type ProviderId } from "../../core/providers"
-import { closeDialog, providerName, pushLine, setState, state } from "../state"
+import { blocked, closeDialog, providerName, pushLine, setState, state } from "../state"
 import { color } from "../theme"
 import { DialogFrame } from "./frame"
 import { Picker } from "./picker"
@@ -52,7 +52,7 @@ export function ModelDialog() {
     if (state.provider) return choose({ provider: state.provider, model: value })
   }
 
-  useKeyboard((evt) => {
+  useKeys((evt) => {
     if (evt.eventType !== "release" && evt.name === "escape") manual() ? setManual(false) : closeDialog()
   })
 
@@ -67,7 +67,7 @@ export function ModelDialog() {
         <DialogFrame title="Nhập model id" hint="enter lưu · esc quay lại">
           <text fg={color.tx3}>{`Dạng provider/model, ví dụ ${state.connected[0]}/<model-id>`}</text>
           <input
-            focused
+            focused={!blocked()}
             placeholder="provider/model-id"
             textColor={color.tx}
             focusedTextColor={color.tx}
@@ -78,7 +78,7 @@ export function ModelDialog() {
         </DialogFrame>
       </Match>
       <Match when={true}>
-        <DialogFrame title={`Chọn model · ${state.connected.length} provider`} width={80}>
+        <DialogFrame title={`Chọn model · ${state.connected.length} provider`}>
           <Picker
             items={[...items(), { label: "+ Nhập model id thủ công", value: "manual" as Choice }]}
             onPick={choose}

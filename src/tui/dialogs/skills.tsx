@@ -1,4 +1,4 @@
-import { useKeyboard } from "@opentui/solid"
+import { useKeys } from "../ui/keys"
 import { For, Show } from "solid-js"
 import { closeDialog, pushLine, setState, state } from "../state"
 import { color } from "../theme"
@@ -25,11 +25,11 @@ export function toggleSkill(name: string) {
 }
 
 export function SkillsDialog() {
-  useKeyboard((evt) => {
+  useKeys((evt) => {
     if (evt.eventType !== "release" && evt.name === "escape") closeDialog()
   })
   return (
-    <DialogFrame title={`Skills · ${state.skills.length}`} hint="enter bật/tắt cho cả phiên · esc đóng" width={90}>
+    <DialogFrame title={`Skills · ${state.skills.length}`} hint="enter bật/tắt cho cả phiên · esc đóng">
       <Show when={state.skills.length > 0} fallback={<text fg={color.tx3}>Chưa có skill nào.</text>}>
         <Picker
           items={state.skills.map((s) => ({

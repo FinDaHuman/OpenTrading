@@ -1,4 +1,4 @@
-import { useKeyboard, usePaste } from "@opentui/solid"
+import { useKeys, usePasteWhenFree } from "../ui/keys"
 import { createMemo, createSignal, Match, Switch } from "solid-js"
 import { connectedProviders, maskKey, setKey } from "../../core/auth"
 import { saveConfig } from "../../core/config"
@@ -30,7 +30,7 @@ export function ConnectDialog() {
     setState({ modelFilter: providerName(id), dialog: "model" })
   }
 
-  useKeyboard((evt) => {
+  useKeys((evt) => {
     if (evt.eventType === "release") return
     if (evt.name === "escape") {
       if (provider()) {
@@ -46,7 +46,7 @@ export function ConnectDialog() {
     else if (!evt.ctrl && !evt.meta && evt.sequence.length === 1 && evt.sequence > " ") setKeyText((k) => k + evt.sequence)
   })
 
-  usePaste((evt) => {
+  usePasteWhenFree((evt) => {
     if (!provider()) return
     setKeyText((k) => k + new TextDecoder().decode(evt.bytes).replace(/\s+/g, ""))
   })
@@ -54,7 +54,7 @@ export function ConnectDialog() {
   return (
     <Switch>
       <Match when={!provider()}>
-        <DialogFrame title={`Kết nối provider · ${providers().length}`} width={72}>
+        <DialogFrame title={`Kết nối provider · ${providers().length}`}>
           <Picker
             items={providers().map((p) => {
               const connected = state.connected.includes(p.id)
