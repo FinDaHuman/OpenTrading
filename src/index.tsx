@@ -1,10 +1,5 @@
 #!/usr/bin/env bun
-import { render } from "@opentui/solid"
-import { loadConfig } from "./core/config"
-import { createMemory, initRuntime } from "./core/runtime"
-import { App } from "./tui/app"
-import { state } from "./tui/state"
-import { color } from "./tui/theme"
+export {}
 
 /** `--continue` / `-c` reopens the newest session; `--resume <id>` / `-r <id>` a given one. */
 function resumeArg(argv: string[]): string | undefined {
@@ -13,6 +8,23 @@ function resumeArg(argv: string[]): string | undefined {
   if (argv.includes("--continue") || argv.includes("-c")) return "latest"
   return undefined
 }
+
+const argv = process.argv.slice(2)
+
+// `opentrading mcp …` is a plain CLI: branch before anything loads the TUI or runtime.
+if (argv[0] === "mcp") {
+  const { runMcpCli } = await import("./cli/mcp")
+  process.exit(await runMcpCli(argv.slice(1)))
+}
+
+const [{ render }, { loadConfig }, { createMemory, initRuntime }, { App }, { state }, { color }] = await Promise.all([
+  import("@opentui/solid"),
+  import("./core/config"),
+  import("./core/runtime"),
+  import("./tui/app"),
+  import("./tui/state"),
+  import("./tui/theme"),
+])
 
 const config = await loadConfig()
 const runtime = initRuntime({ skills: () => state.skills, memory: createMemory(config.memory?.provider) })
@@ -24,7 +36,7 @@ process.on("SIGINT", async () => {
   process.exit(0)
 })
 
-await render(() => <App runtime={runtime} resume={resumeArg(process.argv.slice(2))} />, {
+await render(() => <App runtime={runtime} resume={resumeArg(argv)} />, {
   exitOnCtrlC: false,
   targetFps: 30,
   backgroundColor: color.bg,
