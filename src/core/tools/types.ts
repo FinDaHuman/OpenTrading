@@ -4,6 +4,8 @@ import type { z } from "zod"
 export interface ToolContext {
   signal: AbortSignal
   callId: string
+  /** What `prepare` returned, if the tool has one. */
+  prepared?: unknown
 }
 
 export interface ToolImage {
@@ -57,6 +59,12 @@ export interface ToolDef<I = any> {
    * so a project server that reuses a trusted name does not inherit its permissions.
    */
   permissionScope?: string
+  /**
+   * Runs before approval, the timeout and the lock — for waiting on the user (ask_user),
+   * which must neither count as runtime nor hold a lock. Its result reaches `execute` as
+   * `ctx.prepared`.
+   */
+  prepare?(input: I, ctx: ToolContext): Promise<unknown>
   /** Short label for the TUI, e.g. `current_time()` or `add 2 + 3`. */
   summarize?(input: I): string
   execute(input: I, ctx: ToolContext): Promise<string | ToolResult>
