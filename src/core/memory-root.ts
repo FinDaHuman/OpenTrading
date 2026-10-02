@@ -3,7 +3,7 @@ import { randomBytes } from "node:crypto"
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import { loadInstruments, TickerIndex } from "./market/tickers"
-import { createMemoryProvider, createMemoryService } from "./memory"
+import { createMemoryProvider, createMemoryService, type MemoryService } from "./memory"
 import type { MemoryProvider } from "./memory/types"
 import { loadRules } from "./rules/load"
 
@@ -14,7 +14,10 @@ import { loadRules } from "./rules/load"
  * Connection policy (owned here, not by the memory module): WAL for concurrent readers, secure_delete so purged
  * content is overwritten on disk, and a bounded busy_timeout.
  */
-export function openSqliteMemory(home: string, opts: { config?: unknown } = {}): MemoryProvider & { close(): void } {
+export function openSqliteMemory(
+  home: string,
+  opts: { config?: unknown } = {},
+): MemoryProvider & { close(): void; readonly service: MemoryService } {
   mkdirSync(home, { recursive: true })
   const db = new Database(path.join(home, "opentrading.db"), { create: true })
   db.exec("PRAGMA journal_mode = WAL")

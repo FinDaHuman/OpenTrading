@@ -250,21 +250,24 @@ test("context rides on the first user message; reminders are kept in history, th
 })
 
 test("memory: active items reach the model (index + recall) and the UI is told; pending ones do not", async () => {
-  const { FileMemory } = await import("../src/core/memory/file-memory")
-  const dir = await mkdtemp(path.join(os.tmpdir(), "ot-agent-mem-"))
-  const memory = new FileMemory(dir)
-  await memory.add("MEM-ACTIVE người dùng không dùng margin", { status: "active", via: "user" })
-  await memory.add("MEM-PENDING người dùng thích margin", { status: "pending", via: "model" })
+  const { Database } = await import("bun:sqlite")
+  const { createMemoryProvider, createMemoryService } = await import("../src/core/memory")
+  const db = new Database(":memory:")
+  const service = createMemoryService(db, { salt: "t" })
+  const memory = createMemoryProvider(service)
+  await service.commands.remember({ body: "MEM-ACTIVE người dùng không dùng margin" })
+  await service.system.propose({ body: "MEM-PENDING người dùng thích margin", origin: "feedback" })
   try {
     const events = await collect(runAgent({ history: [], input: "có nên dùng margin không", skills: [], registry: registry(), memory }))
     const sent = JSON.stringify(bodies[0])
     expect(sent).toContain("<memory>") // index in context
-    expect(sent).toContain("<memory_lien_quan>") // recall in reminder
+    expect(sent).toContain("MEM-ACTIVE")
+    expect(sent).toContain("<memory_lien_quan>") // recall in reminder: references only
     expect(sent).toContain("<memory_policy>") // instructions in system
     expect(sent).not.toContain("MEM-PENDING")
     expect(events.some((e) => e.type === "notice" && e.text.startsWith("Dùng 1 memory"))).toBe(true)
   } finally {
-    await rm(dir, { recursive: true, force: true })
+    db.close()
   }
 })
 

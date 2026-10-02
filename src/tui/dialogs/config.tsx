@@ -18,16 +18,21 @@ export function ConfigDialog(props: { runtime: Runtime }) {
     if (evt.eventType !== "release" && evt.name === "escape") closeDialog()
   })
 
+  const memoryOn = () => props.runtime.memory.id !== "none"
+
   async function toggle(setting: Setting) {
     if (setting !== "memory") return
-    const next = props.runtime.memory.id === "file" ? "none" : "file"
-    await saveConfig({ memory: { provider: next } })
-    switchMemory(props.runtime, createMemory(next))
+    const next = memoryOn() ? "none" : "sqlite"
+    // Keep the other memory settings (limits, T3…) when only the provider changes.
+    const current = (await loadConfig()).memory ?? {}
+    await saveConfig({ memory: { ...current, provider: next } })
+    switchMemory(props.runtime, createMemory(next, undefined, { ...current, provider: next }))
     pushLine({
       kind: "info",
       text:
-        next === "file"
-          ? "Đã bật memory (lưu file ở ~/.opentrading/memory). Nói \"Ghi nhớ: …\" để lưu; xem và duyệt bằng /memory."
+        next === "sqlite"
+          ? 'Đã bật memory (SQLite ở ~/.opentrading/opentrading.db). Gõ "Ghi nhớ: …" hoặc "Ghi chú <MÃ>: …" để lưu; ' +
+            "xem, duyệt, xoá bằng /memory."
           : "Đã tắt memory. Các memory đã lưu vẫn còn trên đĩa và sẽ dùng lại khi bật.",
     })
     await refetch()
@@ -39,11 +44,8 @@ export function ConfigDialog(props: { runtime: Runtime }) {
         items={[
           {
             label: "Memory",
-            hint:
-              (config()?.memory?.provider ?? props.runtime.memory.id) === "file"
-                ? "Bật · lưu file ở ~/.opentrading/memory"
-                : "Tắt · enter để bật",
-            mark: props.runtime.memory.id === "file" ? "●" : "○",
+            hint: (config(), memoryOn()) ? "Bật · SQLite ở ~/.opentrading/opentrading.db" : "Tắt · enter để bật",
+            mark: memoryOn() ? "●" : "○",
             value: "memory" as Setting,
           },
         ]}

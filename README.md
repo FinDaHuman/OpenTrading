@@ -52,7 +52,10 @@ bun test          # smoke test TUI chạy headless; SHOW_FRAME=1 để in khung 
 src/core/     provider, auth, config, agent loop, hồ sơ nhà đầu tư (không import UI)
   prompt/     ghép prompt theo tầng, ngân sách token, đồng hồ phiên
   skills/     schema SKILL.md, loader 3 nguồn, catalog, preroute
-  memory/     contract MemoryProvider, bản mẫu FileMemory
+  memory/     memory SQLite: hồ sơ, ghi chú theo mã, bài học có duyệt; contract MemoryProvider
+  market/     tách mã chứng khoán (danh sách ở market/instruments.json)
+  rules/      nạp và khớp rule nghiệp vụ (rules/*.md)
+  context/    compaction, validator, prune cho phiên dài (chưa nối agent loop)
   session/    lưu phiên JSONL, mở lại, dựng lại transcript
   tools/      tool registry, giới hạn/timeout, tool có sẵn
   mcp/        MCP client: config, cho phép, đặt tên tool, quản lý kết nối

@@ -84,9 +84,11 @@ const { state, setState } = await import("../src/tui/state")
 const { readJson } = await import("../src/core/store")
 const { setKey } = await import("../src/core/auth")
 const { initRuntime } = await import("../src/core/runtime")
-const { FileMemory } = await import("../src/core/memory/file-memory")
+const { createMemory } = await import("../src/core/runtime")
 
-const memory = new FileMemory(path.join(home, "memory"))
+const memory = createMemory("sqlite", home) as import("../src/core/memory/types").MemoryProvider & {
+  service: import("../src/core/memory").MemoryService
+}
 const runtime = initRuntime({ cwd, home, skills: () => state.skills, memory })
 let setup: Awaited<ReturnType<typeof testRender>>
 
@@ -102,6 +104,8 @@ afterEach(() => {
 
 afterAll(async () => {
   await runtime.mcp.stop()
+  // The SQLite memory holds a database file in `home`; release it before the directory is removed (Windows).
+  ;(runtime.memory as { close?: () => void }).close?.()
   setup.renderer.destroy()
   await rm(cwd, { recursive: true, force: true })
   globalThis.fetch = realFetch
@@ -269,10 +273,11 @@ test("/mcp shows the global demo server connected with its tools", async () => {
 test("/tools lists built-in and MCP tools", async () => {
   await setup.mockInput.typeText("/tools")
   setup.mockInput.pressEnter()
-  // 2 built-in + propose_memory (FileMemory) + 3 from the demo MCP server
-  const frame = await setup.waitForFrame((f) => f.includes("Tools · 6"))
+  // 2 built-in + search_memory and load_rule (memory, read-only) + 3 from the demo MCP server
+  const frame = await setup.waitForFrame((f) => f.includes("Tools · 7"))
   expect(frame).toContain("current_time")
-  expect(frame).toContain("propose_memory")
+  expect(frame).toContain("search_memory")
+  expect(frame).not.toContain("propose_memory")
   expect(frame).toContain("mcp__demo__echo")
   setup.mockInput.pressEscape()
   await setup.waitFor(() => state.dialog === undefined)
@@ -333,32 +338,35 @@ test("/new starts a fresh session; /sessions reopens the previous one with its t
   show(frame)
 })
 
-test("/memory: a model proposal is pending until approved with 'a'", async () => {
-  await memory.add("Người dùng không giao dịch margin", { status: "pending", via: "model" })
+test("/memory: a system proposal is pending until approved with 'a'", async () => {
+  await memory.service.system.propose({ body: "Luôn nêu rủi ro thanh khoản khi phân tích", origin: "feedback" })
   await setup.mockInput.typeText("/memory")
   setup.mockInput.pressEnter()
   await setup.waitForFrame((f) => f.includes("chờ duyệt"))
   setup.mockInput.pressEnter()
   await setup.waitForFrame((f) => f.includes("a duyệt"))
   setup.mockInput.pressKey("a")
-  await setup.waitFor(async () => (await memory.list())[0]?.status === "active")
+  await setup.waitFor(async () => (await memory.list!())[0]?.status === "active")
   await setup.waitForFrame((f) => f.includes("đang dùng"))
   setup.mockInput.pressEscape()
   await setup.waitFor(() => state.dialog === undefined)
 })
 
 test("/config turns memory off and on without a restart", async () => {
-  expect(runtime.memory.id).toBe("file")
+  expect(runtime.memory.id).toBe("sqlite")
   await setup.mockInput.typeText("/config")
   setup.mockInput.pressEnter()
   await setup.waitForFrame((f) => f.includes("Cài đặt") && f.includes("Memory"))
   setup.mockInput.pressEnter()
   await setup.waitFor(() => runtime.memory.id === "none")
-  expect(runtime.registry.get("propose_memory")).toBeUndefined()
+  expect(runtime.registry.get("search_memory")).toBeUndefined()
   expect((await Bun.file(path.join(home, "config.json")).json()).memory).toEqual({ provider: "none" })
   setup.mockInput.pressEnter()
-  await setup.waitFor(() => runtime.memory.id === "file")
-  expect(runtime.registry.get("propose_memory")).toBeDefined()
+  await setup.waitFor(() => runtime.memory.id === "sqlite")
+  expect(runtime.registry.get("search_memory")).toBeDefined()
+  expect((await Bun.file(path.join(home, "config.json")).json()).memory).toEqual({ provider: "sqlite" })
+  // Turned back on, the approved lesson from the /memory test is still there.
+  expect((await runtime.memory.list!()).map((i) => i.text)).toEqual(["[bài học] Luôn nêu rủi ro thanh khoản khi phân tích"])
   setup.mockInput.pressEscape()
   await setup.waitFor(() => state.dialog === undefined)
 })

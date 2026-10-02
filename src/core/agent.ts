@@ -3,7 +3,7 @@ import { ChatSetupError, describeError, resolveTarget } from "./chat"
 import type { AgentEvent } from "./events"
 import { loadProfile } from "./profile"
 import { assemble, type Assembled } from "./prompt/assemble"
-import { tierOf, type Tier } from "./prompt/budget"
+import { BUDGETS, tierOf, type Tier } from "./prompt/budget"
 import type { ClockSnapshot } from "./prompt/market-clock"
 import { languageModel } from "./providers"
 import type { Skill } from "./skills/schema"
@@ -188,6 +188,9 @@ interface TurnExtras {
 const cap = (text: string | undefined, max: number) =>
   text && text.length > max ? text.slice(0, max) + "\n[… đã cắt bớt]" : text
 
+/** Characters memory may use on this tier, so the provider fits its block instead of being cut mid-item. */
+const memoryChars = (tier: Tier) => Math.min(MEMORY_INDEX_MAX_CHARS, (BUDGETS.memory?.[tier] ?? 700) * 4)
+
 async function assembleFor(opts: TurnInput, target: Target | undefined, extras: TurnExtras = {}) {
   const info = target?.provider.models[target.model]
   const supportsTools = info?.tool_call !== false
@@ -200,7 +203,10 @@ async function assembleFor(opts: TurnInput, target: Target | undefined, extras: 
     sticky: opts.sticky ?? [],
     investorProfile: await loadProfile(),
     memoryInstructions: opts.memory?.instructions?.(),
-    memoryIndex: cap(await opts.memory?.index?.({ sessionId: opts.sessionId ?? "" }).catch(() => undefined), MEMORY_INDEX_MAX_CHARS),
+    memoryIndex: cap(
+      await opts.memory?.index?.({ sessionId: opts.sessionId ?? "", maxChars: memoryChars(tier) }).catch(() => undefined),
+      MEMORY_INDEX_MAX_CHARS,
+    ),
     recalled: extras.recalled,
     hookContext: extras.hookContext,
     input: opts.input,
@@ -246,7 +252,8 @@ export async function previewContext(opts: TurnInput) {
 export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
   const sessionId = opts.sessionId ?? ""
   // Fail fast on setup problems before any hook side effects run.
-  await resolveTarget()
+  const early = await resolveTarget()
+  const tier = tierOf(early.provider.models[early.model]?.limit?.context)
 
   // user-prompt hooks: may block the turn or add context for it.
   const extras: TurnExtras = {}
@@ -261,7 +268,11 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
     extras.hookContext = hooked.context
   }
   // Memory relevant to this message (active items only; the provider filters pending ones).
-  const recalled = (await opts.memory?.recall?.(opts.input, { sessionId }).catch(() => []))?.slice(0, MEMORY_RECALL_MAX_ITEMS) ?? []
+  const recalled =
+    (await opts.memory?.recall?.(opts.input, { sessionId, maxChars: memoryChars(tier) }).catch(() => []))?.slice(
+      0,
+      MEMORY_RECALL_MAX_ITEMS,
+    ) ?? []
   if (recalled.length > 0) {
     extras.recalled = cap(recalled.map((m) => `- ${m.text}`).join("\n"), MEMORY_RECALL_MAX_CHARS)
     // Never invisible (the lesson from Cursor's memories): say what was used.

@@ -27,6 +27,11 @@ export interface MemoryItem {
 
 export interface MemoryContext {
   sessionId: string
+  /**
+   * Characters the harness can fit for memory in this request (the model tier's memory budget). A provider sizes
+   * its output to this instead of letting the harness cut it in the middle.
+   */
+  maxChars?: number
 }
 
 export interface MemoryProvider {
@@ -37,7 +42,7 @@ export interface MemoryProvider {
   index?(ctx: MemoryContext): Promise<string | undefined>
   /** Items relevant to this user message, sent as a reminder. The harness keeps ≤ 5 / ~4 KB. */
   recall?(query: string, ctx: MemoryContext): Promise<MemoryItem[]>
-  /** Tools the model may call, e.g. propose_memory. Registered once at startup. */
+  /** Read-only tools the model may call, e.g. search_memory. Registered once at startup. Never a write tool. */
   tools?(): ToolDef[]
   /**
    * Subscribe to lifecycle events (session-start, user-prompt, turn-end, session-end).
@@ -56,7 +61,7 @@ export const MEMORY_INDEX_MAX_CHARS = 4_000
 export const MEMORY_RECALL_MAX_ITEMS = 5
 export const MEMORY_RECALL_MAX_CHARS = 4_000
 
-/** Default: memory off. Everything optional is simply absent. */
+/** Memory off. Everything optional is simply absent. The real provider is the SQLite one (src/core/memory-root.ts). */
 export class NoopMemory implements MemoryProvider {
   readonly id = "none"
 }

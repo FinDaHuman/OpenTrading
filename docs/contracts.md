@@ -110,30 +110,50 @@ interface MemoryProvider {
   instructions?(): string | undefined                    // system (tĩnh): cách model dùng memory
   index?(ctx): Promise<string | undefined>               // context, mọi request, harness cắt ≤ 4 KB
   recall?(query, ctx): Promise<MemoryItem[]>             // reminder của lượt, harness giữ ≤ 5 mục / 4 KB
-  tools?(): ToolDef[]                                    // ví dụ propose_memory, đăng ký lúc khởi động
+  tools?(): ToolDef[]                                    // tool CHỈ ĐỌC, ví dụ search_memory; đăng ký lúc khởi động
   register?(hooks: HookBus): void                        // nghe session-start, user-prompt, turn-end, session-end
   list?(); approve?(id); reject?(id); remove?(id)        // cho /memory
 }
+interface MemoryContext { sessionId; maxChars? }         // maxChars: ngân sách memory theo hạng model
 interface MemoryItem { id; text; scope: "user" | "workspace"; status: "pending" | "active"; source?; createdAt; updatedAt }
 ```
 
 **Quy định bắt buộc:**
-- Memory **`pending`** (model đề xuất) không bao giờ được trả về từ `index()` hay `recall()` cho tới khi người dùng duyệt trong `/memory`. Đây là bài học từ Cursor: memory mà người dùng không thấy thì thành chỉ dẫn vô hình.
+- Memory **`pending`** (hệ thống đề xuất, ví dụ bài học từ góp ý) không bao giờ được trả về từ `index()` hay `recall()` cho tới khi người dùng duyệt trong `/memory`. Đây là bài học từ Cursor: memory mà người dùng không thấy thì thành chỉ dẫn vô hình.
 - Không lưu dữ liệu thị trường (giá, chỉ số, tín hiệu, nhận định), vì chúng nhanh cũ. Tool lấy chúng mỗi lần.
 - Memory có **ưu tiên thấp nhất**: không ghi đè `INVESTOR.md` hay bất biến an toàn.
 - Mỗi lượt có dùng memory, TUI hiện dòng "Dùng N memory: …" để người dùng biết.
 
-**Bản mẫu `FileMemory`** (`src/core/memory/file-memory.ts`) để tham khảo và thay thế:
-- Mỗi memory là một file markdown trong `~/.opentrading/memory/`.
-- Tool `propose_memory` tạo memory `pending`. Người dùng gõ "Ghi nhớ: …" thì lưu thẳng `active`, qua hook `user-prompt`.
-- `recall` khớp theo từ khoá.
+- Model **không có tool ghi** memory. Chỉ thao tác của người dùng mới tạo memory có hiệu lực.
+
+**Provider: memory SQLite** (`src/core/memory/`, mở bởi `src/core/memory-root.ts`):
+- Lưu trong `~/.opentrading/opentrading.db` (WAL, `secure_delete`). Salt cho fingerprint nằm riêng ở `~/.opentrading/memory-salt`.
+- Ba loại: **hồ sơ** (người dùng tự khai), **ghi chú** (theo một mã, có ngày hết hạn theo giờ Việt Nam), **bài học** (hệ thống đề xuất từ góp ý, chờ duyệt).
+- Nội dung memory chỉ đi qua `index()` (kênh context, dựng lại mỗi request, **không** lưu vào phiên). `recall()` chỉ trả tham chiếu (`memory #ab12cd`, `rule ngan-hang`) và cảnh báo `⚠ …`, nên file phiên không chứa nội dung memory và xoá một memory là có hiệu lực ở mọi phiên.
+- Gồm hai khối: `<memory_context>` (rule luôn nạp, hồ sơ, bài học chung; giữ nguyên byte giữa các lượt) và `<memory_scoped>` (ghi chú, bài học, rule của các mã đang được bàn, kể cả khi câu hỏi tiếp theo không nhắc lại mã).
+- Rule nghiệp vụ: `rules/<tên>.md` trong repo và `~/.opentrading/rules/` (trùng tên thì của người dùng thắng). Frontmatter `name`, `description`, `tickers`, `sectors`, `alwaysApply`; 4 chế độ: luôn nạp, theo mã/ngành, model tự đọc bằng `load_rule`, thủ công bằng `@rule:<tên>`.
+- Danh sách mã để tách mã trong câu hỏi: `market/instruments.json` (dữ liệu mẫu, sẽ thay bằng MCP dữ liệu).
+- Tool cho model: `search_memory` (tìm không dấu), `load_rule`. Cả hai chỉ đọc.
+
+**Lệnh người dùng gõ trong chat** (bắt ở hook `user-prompt`, trước khi gửi model):
+
+| Gõ | Tác dụng |
+| --- | --- |
+| `Ghi nhớ: …` | Lưu hồ sơ. Nội dung là giá, số tiền, dự báo, khối lượng nắm giữ hoặc khoá bí mật thì **bị chặn**, không gửi đi. Có con số mà không rõ ràng thì hỏi xác nhận |
+| `Xác nhận ghi nhớ: …` | Lưu nội dung đã được hỏi xác nhận (không áp dụng cho nội dung bị chặn) |
+| `Ghi chú <MÃ> [đến YYYY-MM-DD]: …` | Ghi chú cho một mã, mặc định hết hạn sau 30 ngày |
+| `Góp ý: …` | Đánh giá xấu câu trả lời trước; tạo đề xuất bài học chờ duyệt trong `/memory` |
+| `Đánh giá: tốt` / `Đánh giá: xấu` | Ghi nhận đánh giá; bài học bị đánh giá xấu 2 trong 5 lần gần nhất tự tắt |
+| `Focus: VCB HPG` / `Focus clear` | Đặt hoặc xoá các mã đang theo dõi |
+
+`/memory`: xem, duyệt (`a`), bỏ đề xuất (`r`), xoá (`d`). Xoá là xoá nội dung mọi phiên bản và gỡ khỏi tìm kiếm; bản sao lưu của hệ điều hành và câu trả lời cũ trong phiên thì không xoá được (muốn xoá hẳn thì xoá phiên).
 
 **Bật memory:** dùng `/config` trong TUI (có hiệu lực ngay, không cần mở lại), hoặc sửa `~/.opentrading/config.json`. Mặc định là `"none"` (tắt):
 ```json
-{ "memory": { "provider": "file" } }
+{ "memory": { "provider": "sqlite" } }
 ```
-Khi đổi provider, harness gỡ tool và hook của provider cũ; `register()` nên trả về hàm huỷ đăng ký.
-Đăng ký provider mới: thêm lựa chọn trong `createMemory()` (`src/core/runtime.ts`).
+Giá trị cũ `"file"` cũng được hiểu là `"sqlite"`. Các khoá khác trong `memory` là cấu hình (giới hạn byte, số mã theo dõi, T3…), có giá trị mặc định.
+Khi đổi provider, harness gỡ tool và hook của provider cũ và đóng cơ sở dữ liệu của nó; `register()` trả về hàm huỷ đăng ký.
 
 ## 7. Hook: `HookBus`
 

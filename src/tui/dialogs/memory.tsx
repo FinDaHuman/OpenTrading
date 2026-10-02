@@ -7,8 +7,9 @@ import { DialogFrame } from "./frame"
 import { Picker } from "./picker"
 
 /**
- * Review memory: proposals from the model stay "pending" (never used) until approved here —
- * the propose → approve flow Cursor used, so no memory becomes an invisible instruction.
+ * Review memory: proposals (lessons the system drafts from the user's feedback) stay "pending" and are never used
+ * until approved here — the propose → approve flow Cursor used, so no memory becomes an invisible instruction.
+ * "d" deletes for good: content of every version is erased and the item leaves search and the prompt.
  */
 export function MemoryDialog(props: { memory: MemoryProvider }) {
   const [items, { refetch }] = createResource(async () => (await props.memory.list?.()) ?? [])
@@ -57,7 +58,7 @@ export function MemoryDialog(props: { memory: MemoryProvider }) {
               {item().text}
             </text>
             <text fg={color.tx3} marginTop={1}>
-              {`${item().source?.via === "model" ? "Model đề xuất" : "Người dùng ghi"} · ${item().createdAt.slice(0, 16).replace("T", " ")}`}
+              {`${item().source?.via === "model" ? "Hệ thống đề xuất (từ góp ý)" : "Người dùng ghi"} · ${item().createdAt.slice(0, 16).replace("T", " ")}`}
             </text>
           </DialogFrame>
         )}
@@ -66,7 +67,11 @@ export function MemoryDialog(props: { memory: MemoryProvider }) {
         <DialogFrame title={`Memory · ${items()?.length ?? 0}`} hint="enter xem · esc đóng" width={86}>
           <Show
             when={(items() ?? []).length > 0}
-            fallback={<text fg={color.tx2}>Chưa có memory. Nói "Ghi nhớ: …" trong chat, hoặc để model đề xuất.</text>}
+            fallback={
+              <text fg={color.tx2} wrapMode="word">
+                Chưa có memory. Gõ "Ghi nhớ: …" (sở thích lâu dài) hoặc "Ghi chú &lt;MÃ&gt;: …" (ghi chú theo mã) trong chat.
+              </text>
+            }
           >
             <Picker
               items={(items() ?? []).map((i) => ({

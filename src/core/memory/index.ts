@@ -1,6 +1,6 @@
 /**
- * Public surface of the memory module. Code outside src/core/memory imports from here only (the core's placeholder
- * contract in ./types and ./file-memory is the one exception until it is retired).
+ * Public surface of the memory module. Code outside src/core/memory imports from here only; the harness contract in
+ * ./types (MemoryProvider), which the agent loop and /memory use directly, is the one exception.
  * `createMemoryService` is the capability root: only test/, scripts/ (with temporary databases) and the one
  * production composition root may import it; an architecture test enforces that list.
  */

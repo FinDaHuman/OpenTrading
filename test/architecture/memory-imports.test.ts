@@ -14,12 +14,11 @@ const importsOf = (source: string) =>
   [...source.matchAll(/(?:^|\n)\s*(?:import|export)[^'"`;]*?from\s*["']([^"']+)["']/g)].map((m) => m[1]!)
 
 /*
- * Temporary: the core's placeholder MemoryProvider contract and its reference FileMemory live in the same folder and
- * are wired into the agent loop and /memory directly. The memory rules below do not apply to them. Remove this
- * exception when the placeholder is retired.
+ * The harness's MemoryProvider contract (types.ts) lives in this folder but belongs to the core: the agent loop and
+ * /memory import it directly. The memory rules below do not apply to it, and only the adapter may depend on it.
  */
-const CORE_PLACEHOLDER = ["src/core/memory/types.ts", "src/core/memory/file-memory.ts"]
-const PLACEHOLDER_IMPORT = /memory\/(types|file-memory)$/
+const CORE_PLACEHOLDER = ["src/core/memory/types.ts"]
+const PLACEHOLDER_IMPORT = /memory\/types$/
 /** The adapter is the one memory file that speaks the harness contract. */
 const ADAPTER = "src/core/memory/provider.ts"
 
@@ -45,15 +44,22 @@ const MEMORY_IMPORTS = new Set([
 const ADAPTER_IMPORTS = new Set(["zod", "../hooks", "../tools/types", "./types"])
 
 describe("memory module boundaries", () => {
-  test("the memory module exists", () => {
+  test("the memory module exists and the temporary reference provider is gone", () => {
     for (const f of ["index.ts", "service.ts", "provider.ts"]) expect(MEMORY).toContain(`src/core/memory/${f}`)
+    expect(files("src/core/memory/file-memory.ts")).toEqual([])
+  })
+
+  test("the runtime offers the SQLite memory as the memory provider", () => {
+    const runtime = read("src/core/runtime.ts")
+    expect(runtime).toContain('from "./memory-root"')
+    expect(runtime).not.toContain("FileMemory")
   })
 
   test("memory imports only its own files, zod, bun:sqlite, node:crypto and the market/rules modules", () => {
     for (const file of MEMORY)
       for (const spec of importsOf(read(file))) {
         const ok =
-          (spec.startsWith("./") && !(file !== ADAPTER && /^\.\/(types|file-memory)$/.test(spec))) ||
+          (spec.startsWith("./") && !(file !== ADAPTER && spec === "./types")) ||
           MEMORY_IMPORTS.has(spec) ||
           (file === ADAPTER && ADAPTER_IMPORTS.has(spec))
         expect({ file, spec, ok }).toEqual({ file, spec, ok: true })

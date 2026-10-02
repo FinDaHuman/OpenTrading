@@ -33,7 +33,9 @@ Cập nhật: 30/09/2026 · nhánh `step2b-session-memory`
 | **Skills** (`src/core/skills/`) | Xong. `skills/<tên>/SKILL.md`; 3 nguồn project > user > bundled; activation auto/always/manual; catalog có ngân sách; gợi ý theo từ khoá (preroute L1); `load_skill` đọc được file phụ |
 | Hồ sơ nhà đầu tư `~/.opentrading/INVESTOR.md`, `/profile` | Xong |
 | **Hook** (`src/core/hooks.ts`): session-start, user-prompt (chặn hoặc thêm ngữ cảnh), turn-end, session-end | Xong |
-| **Memory** (`src/core/memory/`): contract `MemoryProvider`, bản mẫu `FileMemory` (đề xuất → duyệt trong `/memory`, "Ghi nhớ: …"), mặc định tắt; bật trong `/config` | Xong |
+| **Memory** (`src/core/memory/`, `src/core/memory-root.ts`): SQLite thay cho bản mẫu `FileMemory`. Hồ sơ, ghi chú theo mã (có hạn), bài học (đề xuất → duyệt). Nội dung chỉ qua kênh context, phiên chỉ lưu tham chiếu. Lệnh trong chat: `Ghi nhớ:`, `Ghi chú <MÃ>:`, `Góp ý:`, `Đánh giá:`, `Focus:`; phân loại chặn giá/số liệu/dự báo/khoá bí mật. Rule nghiệp vụ `rules/*.md` (4 chế độ). Tool chỉ đọc `search_memory`, `load_rule`. Mặc định tắt; bật trong `/config` | Xong |
+| Memory: module compaction / validator / prune (`src/core/context/`) | Có module và test; **chưa** nối vào agent loop |
+| Memory: bật dữ liệu hạn chế theo lượt, model nhỏ cho T3 | Logic có, **chưa** có UI / model |
 | **Session** (`src/core/session/`): JSONL ghi nối, `/sessions`, `/new`, `--continue`, `--resume <id>`, vá tool-call thiếu kết quả | Xong |
 | Test: typecheck + 81 test (tool, MCP với server thật qua stdio, agent loop, TUI, đường dẫn state) | Xong |
 
@@ -83,6 +85,6 @@ bun test
 - **MCP server:** đọc [docs/mcp.md](mcp.md), bắt đầu từ `examples/mcp-demo/server.ts`. Cắm server vào `.mcp.json` rồi kiểm tra bằng `/mcp` và `/tools`.
 - **Skills:** viết `skills/<tên>/SKILL.md` theo [docs/contracts.md §3](contracts.md). Kiểm tra bằng `/skills` (lỗi frontmatter hiện ở đây).
 - **System prompt:** sửa các file `prompts/*.md` theo [docs/contracts.md §2](contracts.md). Xem kết quả bằng `/context`, không cần build lại.
-- **Memory:** cài `MemoryProvider` theo [docs/contracts.md §6](contracts.md); bắt đầu từ `src/core/memory/file-memory.ts`.
+- **Memory:** xem [docs/contracts.md §6](contracts.md). Code ở `src/core/memory/`; thử nhanh không cần model bằng `bun scripts/memory-preview.ts all`.
 
 Cấu trúc code: xem `README.md`. Lý do chọn TypeScript: xem `docs/decisions/0001-typescript.md`.

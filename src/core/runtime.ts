@@ -1,7 +1,7 @@
 import path from "node:path"
 import { HookBus } from "./hooks"
 import { McpManager } from "./mcp/manager"
-import { FileMemory } from "./memory/file-memory"
+import { openSqliteMemory } from "./memory-root"
 import { NoopMemory, type MemoryProvider } from "./memory/types"
 import { dataDir } from "./paths"
 import type { Skill } from "./skills/schema"
@@ -19,11 +19,15 @@ export interface Runtime {
   detachMemory?: () => void
 }
 
-export type MemoryChoice = "none" | "file"
+/** "file" is the old reference provider's name; it now means the SQLite memory. */
+export type MemoryChoice = "none" | "sqlite" | "file"
 
-/** Pick the memory implementation named in config (`memory.provider`). Default: off. */
-export function createMemory(choice: MemoryChoice | undefined, home = dataDir()): MemoryProvider {
-  return choice === "file" ? new FileMemory(path.join(home, "memory")) : new NoopMemory()
+/**
+ * Pick the memory implementation named in config (`memory.provider`). Default: off.
+ * `config` is the whole `memory` section; the SQLite provider reads its own settings from it.
+ */
+export function createMemory(choice: MemoryChoice | undefined, home = dataDir(), config?: unknown): MemoryProvider {
+  return choice === "sqlite" || choice === "file" ? openSqliteMemory(home, { config }) : new NoopMemory()
 }
 
 /**
@@ -51,6 +55,8 @@ export function initRuntime(opts: { cwd?: string; home?: string; skills: () => S
 export function switchMemory(runtime: Runtime, memory: MemoryProvider) {
   runtime.detachMemory?.()
   runtime.registry.unregisterSource(`memory:${runtime.memory.id}`)
+  // A provider that holds a database connection releases it when it is switched out.
+  if (runtime.memory !== memory) (runtime.memory as MemoryProvider & { close?: () => void }).close?.()
   runtime.memory = memory
   for (const tool of memory.tools?.() ?? []) runtime.registry.register({ ...tool, source: `memory:${memory.id}` })
   const detach = memory.register?.(runtime.hooks)
