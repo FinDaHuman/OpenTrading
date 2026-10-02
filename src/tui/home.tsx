@@ -6,13 +6,15 @@ import { color } from "./theme"
 const TIPS = [
   ["/connect", "nhập API key: Groq, Gemini, NVIDIA, OpenAI…"],
   ["/model", "chọn model"],
-  ["/skills", "bật skill phân tích"],
+  ["/profile", "hồ sơ nhà đầu tư của bạn"],
+  ["/skills", "skill phân tích"],
   ["/help", "tất cả lệnh"],
 ]
 
 export function Home() {
   return (
-    <box flexGrow={1} flexDirection="column" alignItems="center" justifyContent="center">
+    // Shrinks (and clips) when the command list needs the room, never the other way round.
+    <box flexGrow={1} flexShrink={1} minHeight={0} overflow="hidden" flexDirection="column" alignItems="center" justifyContent="center">
       {/* Solid card so the animated tape frames the wordmark instead of running through it. */}
       <box
         flexDirection="column"

@@ -33,6 +33,17 @@ Dùng được OpenAI-compatible nhưng URL chứa biến (cần hỏi thêm gi�
 Chưa có (ngoài scope v0)
 ------------------------
 - [ ] OAuth / subscription (ChatGPT Plus, Claude Pro, GitHub Copilot…)
-- [ ] Tool calling + API dữ liệu chứng khoán
+- [x] Tool calling, tool registry, MCP client (bước 1)
+- [ ] MCP server dữ liệu chứng khoán (đồng nghiệp — xem docs/mcp.md)
 - [ ] Lưu session
 - [ ] Sidecar Python (MCP stdio) cho quant
+
+MCP client — chưa hỗ trợ
+------------------------
+- [ ] OAuth cho MCP server remote
+- [ ] Transport SSE / WebSocket (hiện có stdio + Streamable HTTP)
+- [ ] MCP resources, prompts, sampling, elicitation
+- [ ] Tool trả ảnh/âm thanh cho model (hiện chỉ placeholder)
+- [ ] Hỏi xác nhận trước tool không chỉ-đọc (bước 3, dùng needsApproval của AI SDK)
+- [ ] Phát hiện model gọi lặp một tool với cùng input (doom-loop)
+- [ ] Hiện nội dung reasoning của model

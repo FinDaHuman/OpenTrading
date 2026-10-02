@@ -1,6 +1,5 @@
 import { stat } from "node:fs/promises"
-import path from "node:path"
-import { DATA_DIR } from "./paths"
+import { catalogCacheFile } from "./paths"
 import { readJson, writeJson } from "./store"
 
 /**
@@ -33,7 +32,6 @@ export interface CatalogProvider {
 export type Catalog = Record<string, CatalogProvider>
 
 export const CATALOG_URL = process.env.OPENTRADING_MODELS_URL ?? "https://models.opencode.ai/api.json"
-const CACHE_FILE = path.join(DATA_DIR, "cache", "models.json")
 const TTL_MS = 60 * 60 * 1000
 
 /** Used only when the catalog has never been fetched and the network is down. */
@@ -56,24 +54,35 @@ const FALLBACK: Catalog = {
   },
 }
 
-let pending: Promise<Catalog> | undefined
+/**
+ * One load per cache file, so a process only fetches once — but a different state dir
+ * (another OPENTRADING_HOME) gets its own catalog instead of a stale shared one.
+ */
+const pending = new Map<string, Promise<Catalog>>()
 
 export function loadCatalog(): Promise<Catalog> {
-  pending ??= load()
-  return pending
+  const file = catalogCacheFile()
+  let promise = pending.get(file)
+  if (!promise) {
+    promise = load(file)
+    pending.set(file, promise)
+    // Offline fallback is not cached, so the next call retries the network.
+    void promise.then((catalog) => catalog === FALLBACK && pending.delete(file))
+  }
+  return promise
 }
 
-async function load(): Promise<Catalog> {
-  const age = await stat(CACHE_FILE)
+async function load(file: string): Promise<Catalog> {
+  const age = await stat(file)
     .then((s) => Date.now() - s.mtimeMs)
     .catch(() => Infinity)
-  const cached = await readJson<Catalog | undefined>(CACHE_FILE, undefined)
+  const cached = await readJson<Catalog | undefined>(file, undefined)
   if (cached && age < TTL_MS) return cached
   try {
     const res = await fetch(CATALOG_URL, { signal: AbortSignal.timeout(15_000) })
     if (!res.ok) throw new Error(`catalog ${res.status}`)
     const fresh = (await res.json()) as Catalog
-    await writeJson(CACHE_FILE, fresh).catch(() => {})
+    await writeJson(file, fresh).catch(() => {})
     return fresh
   } catch {
     return cached ?? FALLBACK

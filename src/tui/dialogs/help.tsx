@@ -7,7 +7,9 @@ import { DialogFrame } from "./frame"
 
 const KEYS = [
   ["enter", "gửi tin nhắn"],
+  ["tab", "hoàn thành lệnh đang gõ"],
   ["esc", "dừng câu trả lời đang chạy / đóng hộp thoại"],
+  ["ctrl+o", "mở rộng / thu gọn kết quả tool"],
   ["ctrl+c", "thoát"],
 ]
 
