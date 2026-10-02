@@ -40,6 +40,8 @@ const HELP = `Quản lý MCP server
       -e, --env TÊN=giá_trị        biến môi trường cho server stdio
       --client-id <id>  --oauth-scope "<scopes>"  --callback-port <port>  --no-oauth
       --force                      ghi đè server cùng tên
+      --no-connect                 chỉ ghi cấu hình, không kết nối thử
+  Server thêm bằng add/import luôn ở trạng thái bật; tắt bằng: opentrading mcp disable <tên>
   opentrading mcp add-json <tên> '<json>' [-s scope]
   opentrading mcp import claude [--all | <tên>…]  nhập server từ Claude Code / Claude Desktop
   opentrading mcp remove <tên> [-s scope]
@@ -61,7 +63,7 @@ interface Parsed {
 }
 
 const FLAG_ALIASES: Record<string, string> = { s: "scope", t: "transport", H: "header", e: "env" }
-const BOOLEAN_FLAGS = new Set(["force", "all", "no-oauth", "help"])
+const BOOLEAN_FLAGS = new Set(["force", "all", "no-oauth", "no-connect", "help"])
 
 export function parseArgs(argv: string[]): Parsed {
   const positional: string[] = []
@@ -288,10 +290,19 @@ export async function runMcpCli(argv: string[], opts: { home?: string; cwd?: str
         const existing = (await loadServers(home, cwd)).find((e) => e.name === name && e.scope === scope)
         if (existing && !has(p, "force")) throw new UsageError(`Đã có server "${name}" trong ${file}. Thêm --force để ghi đè.`)
         await putServer(file, name!, config)
-        out(`Đã thêm "${name}" vào ${file}.`)
+        // The user added this server themselves, so it is on and approved — even in a
+        // project .mcp.json, where servers from elsewhere still need approval in /mcp.
+        if (scope === "project") await new TrustStore(path.join(home, "mcp-trust.json")).trust(trustKey(cwd, name!, config))
+        out(`Đã thêm "${name}" vào ${file} (đang bật).`)
         const { missing } = expandConfig(config, process.env, await secretEnv(home))
         for (const v of missing) out(`  Cần giá trị cho \${${v}}: opentrading mcp secret set ${v}`)
-        out(`Kiểm tra: opentrading mcp list`)
+        if (missing.length > 0 || has(p, "no-connect")) return 0
+        out(`Đang kết nối thử…`)
+        await withManager(home, cwd, async (m) => {
+          await m.start([name!])
+          const s = m.status().find((x) => x.name === name)
+          if (s) out(`${MARK[s.state]} ${name}: ${describe(s)}`)
+        })
         return 0
       }
 

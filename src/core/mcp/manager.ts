@@ -201,12 +201,12 @@ export class McpManager {
   }
 
   /**
-   * Read config and connect everything. Safe to call again (after editing config):
-   * existing connections are closed first and removed servers disappear.
+   * Read config and connect everything (or just `only`, for the CLI). Safe to call again
+   * (after editing config): existing connections are closed first and removed servers disappear.
    */
-  async start() {
+  async start(only?: string[]) {
     this.stopping = false
-    const entries = await loadServers(this.opts.home, this.opts.cwd)
+    const entries = (await loadServers(this.opts.home, this.opts.cwd)).filter((e) => !only || only.includes(e.name))
     await Promise.allSettled([...this.live.keys()].map((name) => this.disconnect(name)))
     for (const name of this.entries.keys()) this.bump(name)
     this.entries.clear()

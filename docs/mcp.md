@@ -28,6 +28,8 @@ bun run dev -- mcp help            # mọi lệnh: get, add-json, import, remove
 
 Khi đã cài thành lệnh `opentrading`, bỏ `bun run dev --` đi.
 
+Server bạn tự thêm (bằng `add`, `add-json`, `import`) **luôn ở trạng thái bật**: lệnh kết nối thử ngay, và mỗi lần mở OpenTrading sẽ tự kết nối. Tắt bằng `mcp disable <tên>`. Thêm vào project (`-s project`) cũng được coi là đã cho phép, vì chính bạn thêm. Các server có sẵn trong danh mục của OpenTrading thì mặc định tắt, chỉ kết nối khi bạn bật.
+
 ### Ví dụ các server phổ biến
 
 | Server | Lệnh thêm | Đăng nhập |

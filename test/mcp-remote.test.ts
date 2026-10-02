@@ -205,10 +205,11 @@ test("CLI: add, secret, list, remove", async () => {
   const run = (...argv: string[]) => runMcpCli(argv, { home, cwd, out: (l) => lines.push(l), err: (l) => lines.push(`ERR ${l}`) })
 
   expect(await run("add", "gh", "https://api.githubcopilot.com/mcp/", "-H", "Authorization: Bearer ${GITHUB_PAT}")).toBe(0)
+  expect(lines.join(" ")).not.toContain("Đang kết nối thử") // a missing secret skips the connect
   expect(lines.join("\n")).toContain("opentrading mcp secret set GITHUB_PAT")
   expect(await run("add", "gh", "https://x.test/mcp")).toBe(2)
   expect(lines.at(-1)).toContain("--force")
-  expect(await run("add", "fs", "--", "npx", "-y", "@modelcontextprotocol/server-filesystem", "D:/data")).toBe(0)
+  expect(await run("add", "fs", "--no-connect", "--", "npx", "-y", "@modelcontextprotocol/server-filesystem", "D:/data")).toBe(0)
   expect(await run("add", "bad", "npx")).toBe(2)
   expect(await run("secret", "set", "GITHUB_PAT", "ghp_1234567890abcdef")).toBe(0)
   expect(lines.at(-1)).not.toContain("1234567890")
@@ -308,4 +309,19 @@ test("a dropped remote server is detected and reconnected when it comes back", a
 test("CLI refuses headers the shell already emptied", async () => {
   expect(() => configFromArgs(parseArgs(["add", "n", "https://x.test/mcp", "-H", "Authorization: Bearer "]))).toThrow("nháy đơn")
   expect(() => configFromArgs(parseArgs(["add", "n", "https://x.test/mcp", "-H", "Authorization:"]))).toThrow("nháy đơn")
+})
+
+test("CLI add connects right away, and a project server added by the user is approved", async () => {
+  const remote = startHttpServer()
+  cleanups.push(remote.stop)
+  const home = await tempDir("ot-home-")
+  const cwd = await tempDir("ot-cwd-")
+  const lines: string[] = []
+  const run = (...argv: string[]) => runMcpCli(argv, { home, cwd, out: (l) => lines.push(l), err: (l) => lines.push(`ERR ${l}`) })
+  expect(await run("add", "api", remote.url, "-s", "project")).toBe(0)
+  expect(lines.join(" ")).toContain("● api: http · 1 tool")
+  const manager = new McpManager(new ToolRegistry(), { home, cwd, trustFile: path.join(home, "mcp-trust.json") })
+  cleanups.push(() => manager.stop())
+  await manager.start()
+  expect(state(manager, "api").state).toBe("connected")
 })
