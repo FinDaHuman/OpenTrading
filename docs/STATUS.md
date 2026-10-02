@@ -26,8 +26,14 @@ Cập nhật: 30/09/2026 · nhánh `step2b-session-memory`
 | **Agent loop** (`src/core/agent.ts`) | Xong. Gọi tool nhiều bước; giới hạn 10 bước, bước cuối bắt model tổng kết; lỗi tool được trả về cho model; khi huỷ hoặc lỗi, history không còn tool-call nào thiếu kết quả |
 | **Tool registry** (`src/core/tools/`) | Xong. Tool có sẵn và tool MCP dùng chung một interface; tool chỉ đọc chạy song song, tool khác chạy lần lượt; có timeout; output bị cắt ở 30.000 ký tự |
 | Tool có sẵn: `current_time` (giờ VN), `load_skill` (nạp skill khi model cần) | Xong |
-| **MCP client** (`src/core/mcp/`) | Xong. Hỗ trợ stdio và Streamable HTTP; đọc `~/.opentrading/mcp.json` và `.mcp.json` của project; server project phải được cho phép; hỗ trợ `${VAR}`; kết nối song song, có timeout; server không thấy API key của harness |
-| `/mcp`, `/tools`, `ctrl+o`, trạng thái MCP trên status bar | Xong |
+| **MCP client** (`src/core/mcp/`) | Xong, ngang Claude Code/opencode: |
+| ↳ transport | stdio, Streamable HTTP, SSE (tự fallback); tự thử lại, tự kết nối lại, khôi phục khi session hết hạn |
+| ↳ đăng nhập | OAuth 2.1 (DCR, PKCE, refresh); secret trong `mcp-auth.json` |
+| ↳ cấu hình | `~/.opentrading/mcp.json` + `.mcp.json` (project phải được cho phép); lọc tool `enabledTools`/`disabledTools` |
+| ↳ tool | schema chuẩn hoá theo provider; tối đa 128 tool/request; ảnh trong kết quả; prompts → `/server:prompt`; resources |
+| ↳ CLI | `opentrading mcp add/list/login/secret/debug…` |
+| `/mcp` (giống Claude Code: danh sách → server → tool → chi tiết; danh mục server có sẵn, mặc định tắt), `/tools`, `ctrl+o` | Xong |
+| **Xác nhận tool ghi** (`src/core/permission.ts`) | Xong. Tool không chỉ đọc phải được cho phép: một lần / cả phiên / luôn (gắn với server) / không (kèm lời nhắn) |
 | Server mẫu cho đồng nghiệp: `examples/mcp-demo` | Xong |
 | **Prompt theo tầng** (`src/core/prompt/`, nội dung ở `prompts/*.md`) | Xong. 3 kênh system / context / reminder; ngân sách theo hạng model; đồng hồ phiên từ `market/calendar.json`, chỉ gửi lại khi đổi phiên; cache cho Anthropic; `/context` |
 | **Skills** (`src/core/skills/`) | Xong. `skills/<tên>/SKILL.md`; 3 nguồn project > user > bundled; activation auto/always/manual; catalog có ngân sách; gợi ý theo từ khoá (preroute L1); `load_skill` đọc được file phụ |

@@ -367,3 +367,35 @@ test("a tool that breaks its own outputSchema still returns its content (no doub
   // The SDK's callTool would throw here after the tool already ran; we read the content.
   expect(await registry.get("mcp__s__price")!.execute({}, ctx)).toBe("giá 25.000")
 })
+
+test("manager add / setEnabled / remove edit mcp.json and reload only what changed", async () => {
+  const a = startHttpServer()
+  const b = startHttpServer({ token: "tok" })
+  cleanups.push(a.stop, b.stop)
+  const { manager, home, registry } = await managerWith({ first: { url: a.url } })
+  await manager.start()
+  const firstTool = registry.get("mcp__first__echo")
+
+  // Like enabling a catalog entry that needs a token: secret saved, config merged, connected.
+  await manager.add("second", { type: "http", url: b.url, headers: { Authorization: "Bearer ${OT_TEST_SECOND}" } }, { OT_TEST_SECOND: "tok" })
+  expect(state(manager, "second").state).toBe("connected")
+  // The untouched server kept its connection (same registered tool object, not re-listed).
+  expect(registry.get("mcp__first__echo")).toBe(firstTool)
+  const file = JSON.parse(await readFile(path.join(home, "mcp.json"), "utf8"))
+  expect(Object.keys(file.mcpServers)).toEqual(["first", "second"])
+  expect(JSON.stringify(file)).not.toContain('"tok"')
+
+  await manager.setEnabled("second", false)
+  expect(state(manager, "second").state).toBe("disabled")
+  expect(registry.get("mcp__second__echo")).toBeUndefined()
+  await manager.setEnabled("second", true)
+  expect(state(manager, "second").state).toBe("connected")
+
+  await manager.remove("second")
+  expect(manager.status().map((s) => s.name)).toEqual(["first"])
+  expect(registry.get("mcp__second__echo")).toBeUndefined()
+  expect(Object.keys(JSON.parse(await readFile(path.join(home, "mcp.json"), "utf8")).mcpServers)).toEqual(["first"])
+  // MCP tools carry what the approval prompt needs.
+  expect(registry.get("mcp__first__screenshot")).toMatchObject({ readOnly: true, displayName: "first · screenshot" })
+  expect(registry.get("mcp__first__echo")!.permissionScope).toMatch(/^global:first@[0-9a-f]{16}$/)
+})

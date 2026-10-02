@@ -1,6 +1,7 @@
 import path from "node:path"
 import { HookBus } from "./hooks"
 import { McpManager } from "./mcp/manager"
+import { PermissionGate } from "./permission"
 import { FileMemory } from "./memory/file-memory"
 import { NoopMemory, type MemoryProvider } from "./memory/types"
 import { dataDir } from "./paths"
@@ -11,6 +12,8 @@ import { ToolRegistry } from "./tools/registry"
 
 export interface Runtime {
   registry: ToolRegistry
+  /** Approval prompts for tools with side effects; the TUI answers them. */
+  permissions: PermissionGate
   mcp: McpManager
   hooks: HookBus
   /** Current memory provider; replaced in place by switchMemory (callers read it per turn). */
@@ -34,6 +37,8 @@ export function createMemory(choice: MemoryChoice | undefined, home = dataDir())
 export function initRuntime(opts: { cwd?: string; home?: string; skills: () => Skill[]; memory?: MemoryProvider }): Runtime {
   const home = opts.home ?? dataDir()
   const registry = new ToolRegistry()
+  const permissions = new PermissionGate()
+  registry.gate = permissions
   registry.register(currentTimeTool())
   registry.register(loadSkillTool(opts.skills))
 
@@ -42,7 +47,7 @@ export function initRuntime(opts: { cwd?: string; home?: string; skills: () => S
     cwd: opts.cwd ?? process.cwd(),
     trustFile: path.join(home, "mcp-trust.json"),
   })
-  const runtime: Runtime = { registry, mcp, hooks: new HookBus(), memory: new NoopMemory() }
+  const runtime: Runtime = { registry, permissions, mcp, hooks: new HookBus(), memory: new NoopMemory() }
   switchMemory(runtime, opts.memory ?? new NoopMemory())
   return runtime
 }

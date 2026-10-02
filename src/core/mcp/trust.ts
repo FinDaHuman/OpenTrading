@@ -15,7 +15,7 @@ type TrustFile = Record<string, { approvedAt: string }>
  * PYTHONPATH or a different working directory can make the same command run other code.
  * Uses the raw (unexpanded) config, so rotating a secret in the environment does not re-ask.
  */
-function fingerprint(config: ServerConfig) {
+export function fingerprint(config: ServerConfig) {
   // Headers (including `${VAR}` placeholders) count: a header can send a stored secret to
   // the URL, so changing which secret goes where must ask again.
   const what =

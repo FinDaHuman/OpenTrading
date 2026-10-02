@@ -46,6 +46,20 @@ server.registerTool(
   async () => ({ isError: true, content: [{ type: "text", text: "Nguồn dữ liệu demo đang lỗi (cố ý)." }] }),
 )
 
+// A tool that changes something (no readOnlyHint): OpenTrading asks the user before it runs.
+const notes: string[] = []
+server.registerTool(
+  "ghi_chu",
+  {
+    description: "Lưu một ghi chú vào sổ tay demo. Ví dụ về tool ghi: OpenTrading hỏi người dùng trước khi chạy.",
+    inputSchema: { noi_dung: z.string().describe("Nội dung ghi chú") },
+  },
+  async ({ noi_dung }) => {
+    notes.push(noi_dung)
+    return { content: [{ type: "text", text: `Đã lưu ghi chú #${notes.length}.` }] }
+  },
+)
+
 // Prompts are ready-made workflows: OpenTrading shows them as slash commands
 // (`/demo:phan_tich VCB`) and sends the text below as the user's message.
 server.registerPrompt(

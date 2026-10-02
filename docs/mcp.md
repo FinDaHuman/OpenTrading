@@ -10,7 +10,9 @@ bun run dev
 ```
 
 - Gõ `/mcp`. Server `demo` hiện ở trạng thái **? chờ cho phép**: server khai báo trong project phải được bạn cho phép một lần.
-- Chọn server `demo`, rồi Enter để cho phép. Trạng thái chuyển thành **● đã kết nối** và có 3 tool: `mcp__demo__echo`, `mcp__demo__add`, `mcp__demo__fail`.
+- Chọn server `demo`, rồi chọn **Cho phép chạy server này**. Trạng thái chuyển thành **✔ đã kết nối**, server có 4 tool:
+  - `echo`, `add`, `fail`: chỉ đọc.
+  - `ghi_chu`: tool ghi, nên OpenTrading hỏi bạn trước khi chạy.
 - Hỏi model: _"Dùng tool cộng 2 với 3"_. TUI sẽ hiện một dòng `⚙ demo · add({"a":2,"b":3})` kèm kết quả.
 
 Mã nguồn server mẫu: [`examples/mcp-demo/server.ts`](../examples/mcp-demo/server.ts). Dùng file này làm template.
@@ -124,7 +126,7 @@ Notion, Linear, Sentry, Atlassian… dùng OAuth: không cần token, chỉ cầ
   - Tên dài quá 64 ký tự thì bị rút gọn và thêm đuôi hash.
   - Nên đặt tên tool ngắn, dạng snake_case, ví dụ `get_quote` hoặc `financial_statements`.
 - **Mô tả tool** là thứ model đọc để quyết định có gọi tool hay không. Viết rõ tool làm gì và khi nào nên dùng; có thể viết tiếng Việt. Mô tả dài quá 2048 ký tự sẽ bị cắt.
-- **`annotations.readOnlyHint: true`** cho tool chỉ đọc dữ liệu. Các tool này được chạy song song; tool không có hint này chạy lần lượt từng cái. Bước 3 sẽ thêm hỏi xác nhận trước khi chạy tool không chỉ đọc.
+- **`annotations.readOnlyHint: true`** cho tool chỉ đọc dữ liệu. Các tool này chạy song song và không cần xác nhận. Tool không có hint này chạy lần lượt từng cái và **phải được người dùng cho phép** trước khi chạy. Hãy đặt `destructiveHint: true` cho tool xoá hoặc ghi đè dữ liệu; hộp xác nhận sẽ hiện màu đỏ.
 - **Báo lỗi** bằng `{ isError: true, content: [{ type: "text", text: "lý do" }] }`. Model nhận được lý do và có thể thử cách khác. Đừng trả dữ liệu rỗng thay cho lỗi.
 - **Kết quả nên là text hoặc JSON gọn.**
   - Mỗi kết quả tối đa khoảng 30.000 ký tự; phần dài hơn bị cắt, chỉ giữ đầu và cuối.
@@ -160,9 +162,50 @@ Notion, Linear, Sentry, Atlassian… dùng OAuth: không cần token, chỉ cầ
   - Model chọn tool kém đi khi có quá nhiều tool (từ khoảng 30–50), nên hãy lọc bằng `enabledTools`/`disabledTools`.
   - `/context` hiện số token mà định nghĩa tool chiếm.
 
-## 8. Kiểm tra
+## 8. Quản lý bằng `/mcp`
 
-- `/mcp`: xem trạng thái (● đã kết nối, … đang kết nối, ✕ lỗi, ? chờ cho phép, ! cần đăng nhập, ○ đã tắt), transport, lỗi, lệnh hoặc URL, và danh sách tool. Enter để cho phép, đăng nhập hoặc kết nối lại.
+Màn hình làm theo Claude Code. Nó là một panel thay chỗ ô nhập, gồm 4 bậc; Esc lùi lại một bậc.
+
+1. **Danh sách**, chia nhóm:
+   - **Project** (`.mcp.json`) và **Của bạn** (`~/.opentrading/mcp.json`). Mỗi dòng có dạng `tên · ✔ đã kết nối · N tool`.
+   - **Có sẵn**: các server phổ biến, **mặc định tắt**. Chọn một mục để bật; nếu cần token thì dán token, nếu cần OAuth thì trình duyệt mở để đăng nhập.
+   - **+ Thêm server tuỳ chỉnh**: nhập tên và URL hoặc lệnh.
+   - Phím: space bật/tắt, `r` kết nối lại.
+   - Ký hiệu trạng thái:
+
+     | Ký hiệu | Nghĩa |
+     | --- | --- |
+     | ✔ | đã kết nối |
+     | ◌ | đang kết nối |
+     | ✘ | lỗi |
+     | △ | cần đăng nhập |
+     | ? | chờ cho phép |
+     | ◯ | đã tắt / có sẵn |
+
+2. **Server**: Trạng thái, Đăng nhập, URL/Lệnh, Cấu hình, Khả năng (tools · resources · prompts), số tool, các prompt.
+   - Các lựa chọn: Xem tool · Đăng nhập / Đăng nhập lại / Đăng xuất · Kết nối lại · Bật/Tắt · Xoá khỏi cấu hình.
+3. **Tool của server**:
+   - Ký hiệu: ◇ chỉ đọc, ◆ ghi (sẽ hỏi trước khi chạy), ⚠ phá huỷ.
+4. **Chi tiết tool**: các nhãn, tên đầy đủ, mô tả, và tham số (`• tên (bắt buộc): kiểu - mô tả`).
+
+Lệnh nhanh không mở panel: `/mcp enable <tên>`, `/mcp disable <tên>`, `/mcp reconnect <tên>`.
+
+## 9. Xác nhận trước khi chạy tool ghi
+
+- Tool có `readOnlyHint: true` chạy ngay. Tool khác (tạo issue, ghi file, click trên trình duyệt…) dừng lại chờ bạn: một khung **Cần xác nhận** hiện thay chỗ ô nhập.
+- Khung hiện tên tool, tối đa 3 tham số và mô tả ngắn. Có 4 lựa chọn:
+  1. **Có**: chạy lần này.
+  2. **Có, cả phiên này**: không hỏi lại tool này cho tới khi thoát OpenTrading.
+  3. **Luôn cho phép**: lưu vào `~/.opentrading/config.json` (`permissions.allow`). Quyền này gắn với đúng server đó (URL hoặc lệnh), nên server khác trùng tên vẫn bị hỏi.
+  4. **Không**: model nhận thông báo bị từ chối và đi tiếp. Tab để kèm lời nhắn cho model.
+- Phím: ↑↓ + Enter, hoặc 1–4. Esc là từ chối lời gọi đó; lượt trả lời vẫn tiếp tục.
+- Nhiều tool cùng chờ thì hiện lần lượt. Chọn "cả phiên này" thì các lời gọi cùng tool đang chờ được chạy luôn.
+- Thời gian chờ bạn quyết định không tính vào timeout của tool.
+- Chạy không có giao diện (script, test) thì tool ghi luôn bị từ chối.
+
+## 10. Kiểm tra
+
+- `/mcp`: quản lý server (mục 8).
 - `opentrading mcp list`: như `/mcp` nhưng chạy ngoài TUI.
 - `/tools`: liệt kê mọi tool model đang gọi được. ◇ là tool chỉ đọc. Có hơn 128 tool thì báo số tool bị ẩn.
 - `ctrl+o` trong khung chat: mở rộng hoặc thu gọn toàn bộ kết quả tool.

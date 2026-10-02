@@ -7,6 +7,8 @@ export interface Config {
   model?: string
   /** Memory implementation: "none" (default) or "file" (reference FileMemory). */
   memory?: { provider?: "none" | "file" }
+  /** Tools the user chose to always allow (see core/permission.ts). */
+  permissions?: { allow?: { tool: string; scope: string }[] }
 }
 
 export const loadConfig = () => readJson<Config>(configFile(), {})

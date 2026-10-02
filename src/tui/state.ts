@@ -2,6 +2,7 @@ import type { ModelMessage } from "ai"
 import { createStore } from "solid-js/store"
 import type { Catalog } from "../core/catalog"
 import type { McpServerStatus } from "../core/mcp/manager"
+import type { ApprovalRequest } from "../core/permission"
 import type { ProviderId } from "../core/providers"
 import type { ClockSnapshot } from "../core/prompt/market-clock"
 import type { Skill, SkillProblem } from "../core/skills/schema"
@@ -39,6 +40,8 @@ export const [state, setState] = createStore({
   /** Show full tool output instead of the first lines (ctrl+o). */
   expandTools: false,
   dialog: undefined as DialogName | undefined,
+  /** Tool call waiting for the user's yes/no (head of the permission queue). */
+  approval: undefined as ApprovalRequest | undefined,
 })
 
 export function pushLine(line: Line) {

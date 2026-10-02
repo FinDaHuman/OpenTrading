@@ -15,6 +15,10 @@ import { z } from "zod"
 import type { JSONSchema7 } from "@ai-sdk/provider"
 import type { ToolRegistry } from "../tools/registry"
 import {
+  configFiles,
+  deleteServer,
+  putServer,
+  setServerEnabled,
   DEFAULT_STARTUP_TIMEOUT_MS,
   DEFAULT_TOOL_TIMEOUT_MS,
   expandConfig,
@@ -29,9 +33,9 @@ import {
 } from "./config"
 import { blockToParts, resultToOutput } from "./convert"
 import { serverPrefix, toolName } from "./naming"
-import { McpOAuthProvider, NeedsAuthError, openBrowser, startCallbackServer } from "./oauth"
-import { clearOAuth, secretEnv } from "./secrets"
-import { TrustStore, trustKey } from "./trust"
+import { McpOAuthProvider, NeedsAuthError, oauthStatus, openBrowser, startCallbackServer } from "./oauth"
+import { clearOAuth, secretEnv, setSecretEnv } from "./secrets"
+import { fingerprint, TrustStore, trustKey } from "./trust"
 
 export type McpState = "connecting" | "connected" | "failed" | "disabled" | "untrusted" | "needs-auth"
 export type McpTransportKind = "stdio" | "http" | "sse"
@@ -79,7 +83,15 @@ const LooseToolList = z
           name: z.string(),
           description: z.string().optional(),
           inputSchema: z.unknown().optional(),
-          annotations: z.object({ readOnlyHint: z.boolean().optional(), destructiveHint: z.boolean().optional() }).passthrough().optional(),
+          annotations: z
+            .object({
+              title: z.string().optional(),
+              readOnlyHint: z.boolean().optional(),
+              destructiveHint: z.boolean().optional(),
+              openWorldHint: z.boolean().optional(),
+            })
+            .passthrough()
+            .optional(),
         })
         .passthrough(),
     ),
@@ -251,6 +263,11 @@ export class McpManager {
     this.trustStore = new TrustStore(opts.trustFile)
   }
 
+  /** Working directory project config is read from. */
+  get cwd() {
+    return this.opts.cwd
+  }
+
   status(): McpServerStatus[] {
     return [...this.statuses.values()]
   }
@@ -295,24 +312,90 @@ export class McpManager {
     this.statuses.clear()
     for (const entry of entries) {
       this.entries.set(entry.name, entry)
-      const config = entry.config
-      this.statuses.set(entry.name, {
-        name: entry.name,
-        scope: entry.scope,
-        file: entry.file,
-        transport: !config ? "stdio" : isRemote(config) ? config.type : "stdio",
-        target: !config ? "" : isRemote(config) ? config.url : [config.command, ...(config.args ?? [])].join(" "),
-        state: "connecting",
-        tools: [],
-        hiddenTools: 0,
-        oauth: config ? isRemote(config) && usesOAuth(config) : false,
-        exposure: config ? exposure(config) : { vars: [], headers: [], env: [] },
-        prompts: [],
-        resources: false,
-      })
+      this.statuses.set(entry.name, initialStatus(entry))
     }
     this.emit()
     await Promise.allSettled(entries.map((entry) => this.connect(entry)))
+  }
+
+  /**
+   * Re-read the config after an edit (/mcp, `opentrading mcp …`) and touch only what
+   * changed: new or edited servers (re)connect, removed ones disconnect, the rest keep
+   * their live connection.
+   */
+  async reload() {
+    this.stopping = false
+    const entries = await loadServers(this.opts.home, this.opts.cwd)
+    const next = new Map(entries.map((e) => [e.name, e]))
+    for (const name of [...this.entries.keys()]) {
+      if (next.has(name)) continue
+      await this.disconnect(name)
+      this.entries.delete(name)
+      this.statuses.delete(name)
+    }
+    const changed: ServerEntry[] = []
+    const same = (a: ServerEntry, b: ServerEntry) =>
+      a.file === b.file && a.scope === b.scope && a.error === b.error && JSON.stringify(a.config) === JSON.stringify(b.config)
+    const entriesInOrder = new Map<string, ServerEntry>()
+    const statusesInOrder = new Map<string, McpServerStatus>()
+    for (const entry of entries) {
+      const prev = this.entries.get(entry.name)
+      if (prev && same(prev, entry)) {
+        entriesInOrder.set(entry.name, prev)
+        statusesInOrder.set(entry.name, this.statuses.get(entry.name)!)
+        continue
+      }
+      if (prev) await this.disconnect(entry.name)
+      entriesInOrder.set(entry.name, entry)
+      statusesInOrder.set(entry.name, initialStatus(entry))
+      changed.push(entry)
+    }
+    // Map order is config order, which decides tool priority under the provider limit.
+    this.entries = entriesInOrder
+    this.statuses = statusesInOrder
+    this.emit()
+    await Promise.allSettled(changed.map((entry) => this.connect(entry)))
+  }
+
+  /** Turn a server on or off in the file it came from, then apply. */
+  async setEnabled(name: string, enabled: boolean) {
+    const entry = this.entries.get(name)
+    if (!entry) throw new Error(`Không có server "${name}".`)
+    await setServerEnabled(entry.file, name, enabled)
+    await this.reload()
+  }
+
+  /** Remove a server from its config file and forget its OAuth tokens. */
+  async remove(name: string) {
+    const entry = this.entries.get(name)
+    if (!entry) throw new Error(`Không có server "${name}".`)
+    await deleteServer(entry.file, name)
+    await clearOAuth(this.opts.home, name)
+    await this.reload()
+  }
+
+  /** Add (or replace) a server in the user's global config, saving its secrets first. */
+  async add(name: string, config: ServerConfig, secrets: Record<string, string> = {}) {
+    for (const [key, value] of Object.entries(secrets)) await setSecretEnv(this.opts.home, key, value)
+    await putServer(configFiles(this.opts.home, this.opts.cwd).global, name, config)
+    await this.reload()
+  }
+
+  /** OAuth state of a remote server for /mcp ("none" when it does not use OAuth). */
+  async authStatus(name: string) {
+    const config = this.entries.get(name)?.config
+    if (!config || !isRemote(config) || !usesOAuth(config)) return "none" as const
+    return oauthStatus(this.opts.home, name, config.url)
+  }
+
+  /** Configured server entry (raw, unexpanded), for /mcp details. */
+  entry(name: string) {
+    return this.entries.get(name)
+  }
+
+  /** The model-visible tools of one server, with their schemas and annotations. */
+  toolsOf(name: string) {
+    return this.registry.list().filter((t) => t.source === `mcp:${name}`)
   }
 
   /** Global servers are the user's own; project ones need the one-time approval. */
@@ -613,6 +696,12 @@ export class McpManager {
     const taken = new Set(this.registry.list().map((t) => t.name))
     const toolTimeoutMs = config.toolTimeoutMs ?? DEFAULT_TOOL_TIMEOUT_MS
     const priority = Math.max(0, [...this.entries.keys()].indexOf(name))
+    // "Always allow" rules bind to what the server is (URL or command), not just its name.
+    // Scope and the project's folder count too: identical raw config can run different code
+    // in another repo (relative paths), and must not inherit the user's global allows.
+    const entry = this.entries.get(name)
+    const where = entry?.scope === "project" ? `project:${path.dirname(entry.file)}` : "global"
+    const permissionScope = entry?.config ? `${where}:${name}@${fingerprint(entry.config)}` : `${where}:${name}`
     const registered: string[] = []
     let hidden = 0
     for (const tool of tools) {
@@ -631,6 +720,13 @@ export class McpManager {
         // Raw schema; the registry sanitizes it per provider when building a request.
         input: (tool.inputSchema ?? { type: "object", properties: {} }) as JSONSchema7,
         readOnly: tool.annotations?.readOnlyHint ?? false,
+        displayName: `${name} · ${tool.annotations?.title ?? tool.name}`,
+        annotations: {
+          title: tool.annotations?.title,
+          destructive: tool.annotations?.destructiveHint,
+          openWorld: tool.annotations?.openWorldHint,
+        },
+        permissionScope,
         // The wrapper's own timer is a backstop; the SDK enforces the real per-call timeout.
         timeoutMs: toolTimeoutMs + 5_000,
         maxOutputChars: config.maxOutputChars,
@@ -756,6 +852,24 @@ export class McpManager {
     if (!live) throw new Error(`MCP server "${server}" chưa kết nối. Xem /mcp.`)
     const result = await live.client.request({ method: "resources/read", params: { uri } }, LooseReadResource)
     return resultToOutput({ content: result.contents.map((c) => ({ type: "resource", resource: c })) })
+  }
+}
+
+function initialStatus(entry: ServerEntry): McpServerStatus {
+  const config = entry.config
+  return {
+    name: entry.name,
+    scope: entry.scope,
+    file: entry.file,
+    transport: !config ? "stdio" : isRemote(config) ? config.type : "stdio",
+    target: !config ? "" : isRemote(config) ? config.url : [config.command, ...(config.args ?? [])].join(" "),
+    state: "connecting",
+    tools: [],
+    hiddenTools: 0,
+    oauth: config ? isRemote(config) && usesOAuth(config) : false,
+    exposure: config ? exposure(config) : { vars: [], headers: [], env: [] },
+    prompts: [],
+    resources: false,
   }
 }
 

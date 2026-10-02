@@ -1,6 +1,7 @@
 import { dynamicTool, jsonSchema, tool, type ModelMessage, type ToolSet } from "ai"
 import type { JSONSchema7 } from "@ai-sdk/provider"
 import { z } from "zod"
+import type { PermissionGate } from "../permission"
 import { sanitizeSchema, type SchemaFlavor } from "../mcp/schema"
 import type { ToolDef, ToolResult } from "./types"
 import { RwLock, runTool } from "./wrap"
@@ -65,6 +66,8 @@ export class ToolRegistry {
   readonly lock = new RwLock()
   /** Last "tools hidden by the limit" state the user was told about. */
   lastHiddenNotice = ""
+  /** Asks the user before tools with side effects run; unset = run everything (tests). */
+  gate?: PermissionGate
 
   register(def: ToolDef) {
     this.tools.set(def.name, def)
@@ -133,7 +136,7 @@ export class ToolRegistry {
     // Keep the request's tool order stable (by name) for prompt caching.
     for (const def of [...kept].sort((a, b) => a.name.localeCompare(b.name))) {
       const execute = (input: unknown, options: { abortSignal?: AbortSignal; toolCallId: string }) =>
-        runTool(def, input, { signal: options.abortSignal ?? new AbortController().signal, callId: options.toolCallId }, this.lock)
+        runTool(def, input, { signal: options.abortSignal ?? new AbortController().signal, callId: options.toolCallId }, this.lock, this.gate)
       const toModelOutput = ({ output }: { output: unknown }) => modelOutput(output as ToolResult, opts.images ?? false)
       if (def.input instanceof z.ZodType) {
         set[def.name] = tool({ description: def.description, inputSchema: def.input, execute, toModelOutput })

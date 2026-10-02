@@ -42,6 +42,21 @@ export interface ToolDef<I = any> {
    * have none (always first); MCP tools get their server's position in the config.
    */
   priority?: number
+  /** Human label, e.g. `github · create_issue` (MCP); defaults to `name`. */
+  displayName?: string
+  /** MCP tool annotations, shown in /mcp and in the approval prompt. */
+  annotations?: { title?: string; destructive?: boolean; openWorld?: boolean }
+  /**
+   * Who may run this without asking. Read-only tools never ask. `"never"` exempts a
+   * non-read-only tool whose effect is already reviewed elsewhere (propose_memory only
+   * queues a proposal the user approves in /memory).
+   */
+  approval?: "never"
+  /**
+   * Identity used for "always allow" rules: the MCP server's fingerprint (URL or command),
+   * so a project server that reuses a trusted name does not inherit its permissions.
+   */
+  permissionScope?: string
   /** Short label for the TUI, e.g. `current_time()` or `add 2 + 3`. */
   summarize?(input: I): string
   execute(input: I, ctx: ToolContext): Promise<string | ToolResult>

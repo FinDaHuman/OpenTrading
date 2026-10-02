@@ -1,3 +1,4 @@
+import { deniedMessage, type PermissionGate } from "../permission"
 import { DEFAULT_MAX_OUTPUT_CHARS, DEFAULT_TIMEOUT_MS, type ToolContext, type ToolDef, type ToolResult } from "./types"
 
 /**
@@ -64,7 +65,12 @@ export class ToolTimeoutError extends Error {
  * Errors are rethrown with a readable message; the AI SDK turns them into `tool-error`
  * results that go back to the model instead of crashing the loop.
  */
-export async function runTool(def: ToolDef, input: unknown, ctx: ToolContext, lock: RwLock): Promise<ToolResult> {
+export async function runTool(def: ToolDef, input: unknown, ctx: ToolContext, lock: RwLock, gate?: PermissionGate): Promise<ToolResult> {
+  // Ask first: time spent deciding is not tool runtime, and nobody holds the lock meanwhile.
+  if (gate) {
+    const decision = await gate.check(def, input, ctx.signal, def.displayName)
+    if (!decision.allow) throw new Error(deniedMessage(decision))
+  }
   const release = await lock.acquire(!def.readOnly)
   const ms = def.timeoutMs ?? DEFAULT_TIMEOUT_MS
   const timeout = new AbortController()
