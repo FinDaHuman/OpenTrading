@@ -9,7 +9,8 @@ import { languageModel } from "./providers"
 import type { Skill } from "./skills/schema"
 import type { HookBus } from "./hooks"
 import { MEMORY_INDEX_MAX_CHARS, MEMORY_RECALL_MAX_CHARS, MEMORY_RECALL_MAX_ITEMS, type MemoryProvider } from "./memory/types"
-import type { ToolRegistry } from "./tools/registry"
+import { stripImages, type BuiltToolSet, type ToolRegistry, type ToolSetOptions } from "./tools/registry"
+import type { ToolResult } from "./tools/types"
 
 export const DEFAULT_MAX_STEPS = 10
 
@@ -59,6 +60,11 @@ export function label(registry: ToolRegistry, name: string, input: unknown) {
 
 function stringify(value: unknown) {
   if (typeof value === "string") return value
+  // A tool's own result: show its text; images are never dumped as base64 into the UI.
+  if (value && typeof value === "object" && "output" in value && typeof (value as ToolResult).output === "string") {
+    const r = value as ToolResult
+    return r.images?.length ? `${r.output}\n[${r.images.length} ảnh]` : r.output
+  }
   try {
     return JSON.stringify(value, null, 2)
   } catch {
@@ -172,8 +178,45 @@ interface Prepared {
   target: Awaited<ReturnType<typeof resolveTarget>>
   tier: Tier
   tools: ToolSet | undefined
+  built: BuiltToolSet | undefined
+  images: boolean
   assembled: Assembled
   supportsTools: boolean
+}
+
+type TargetLike = {
+  provider: { npm?: string; api?: string; models: Record<string, { modalities?: { input?: string[] }; provider?: { npm?: string; api?: string } }> }
+  model: string
+}
+
+/**
+ * Whether images in tool results reach the model as real image parts. Only the request
+ * shapes checked in test/image-routing.test.ts (against the bundled SDKs) qualify:
+ * - Anthropic: an image block inside tool_result.
+ * - OpenAI Responses API (the official endpoint): input_image in function_call_output.
+ *   OpenAI-SDK providers with their own base URL use Chat Completions, which puts the
+ *   base64 into the tool message as text — never there.
+ * - Gemini 3: inlineData inside functionResponse.parts. Gemini 2.x takes a different
+ *   ("legacy") shape we cannot verify without a live key — placeholders until then.
+ */
+function imagesReachModel(npm: string, api: string | undefined, model: string) {
+  if (npm === "@ai-sdk/anthropic") return true
+  if (npm === "@ai-sdk/openai") return !api
+  if (npm === "@ai-sdk/google") return model.startsWith("gemini-3")
+  return false
+}
+
+/** How to build the tool set for this model: schema dialect and whether it can see images. */
+export function toolSetOptions(target: TargetLike | undefined): ToolSetOptions {
+  if (!target) return {}
+  const info = target.provider.models[target.model]
+  const npm = info?.provider?.npm ?? target.provider.npm ?? ""
+  const api = info?.provider?.api ?? target.provider.api
+  return {
+    // Gemini through OpenRouter or a gateway still has Gemini's schema rules.
+    flavor: npm.startsWith("@ai-sdk/google") || /gemini/i.test(target.model) ? "gemini" : "default",
+    images: imagesReachModel(npm, api, target.model) && (info?.modalities?.input ?? []).includes("image"),
+  }
 }
 
 type TurnInput = Omit<RunOptions, "history" | "signal" | "maxSteps">
@@ -192,7 +235,8 @@ async function assembleFor(opts: TurnInput, target: Target | undefined, extras: 
   const info = target?.provider.models[target.model]
   const supportsTools = info?.tool_call !== false
   const tier = tierOf(info?.limit?.context)
-  const toolNames = supportsTools ? opts.registry.list().map((t) => t.name) : []
+  const built = supportsTools ? opts.registry.toToolSet(toolSetOptions(target)) : undefined
+  const toolNames = built?.names ?? []
   const assembled = assemble({
     tier,
     tools: toolNames,
@@ -207,13 +251,36 @@ async function assembleFor(opts: TurnInput, target: Target | undefined, extras: 
     now: opts.now ?? new Date(),
     prevClock: opts.prevClock,
   })
-  return { tier, supportsTools, toolNames, assembled }
+  if (built && built.names.length > 0) {
+    const share = info?.limit?.context ? built.tokens / info.limit.context : 0
+    assembled.report.push({
+      id: "tool_schemas",
+      layer: 7,
+      channel: "system",
+      tokens: built.tokens,
+      truncated: built.hidden.length > 0,
+      dropped: false,
+      note:
+        `${built.names.length} tool` +
+        (built.hidden.length > 0 ? ` · ẩn ${built.hidden.reduce((n, h) => n + h.count, 0)} do giới hạn ${built.names.length}` : "") +
+        (share > 0.25 ? ` · chiếm ${Math.round(share * 100)}% context, nên lọc bớt tool` : ""),
+    })
+  }
+  return { tier, supportsTools, toolNames, built, assembled }
 }
 
 async function prepare(opts: TurnInput, extras: TurnExtras): Promise<Prepared> {
   const target = await resolveTarget()
-  const { tier, supportsTools, toolNames, assembled } = await assembleFor(opts, target, extras)
-  return { target, tier, supportsTools, tools: toolNames.length > 0 ? opts.registry.toToolSet() : undefined, assembled }
+  const { tier, supportsTools, toolNames, built, assembled } = await assembleFor(opts, target, extras)
+  return {
+    target,
+    tier,
+    supportsTools,
+    built,
+    images: toolSetOptions(target).images ?? false,
+    tools: toolNames.length > 0 ? built!.tools : undefined,
+    assembled,
+  }
 }
 
 /**
@@ -268,14 +335,28 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
     yield { type: "notice", text: `Dùng ${recalled.length} memory: ${recalled.map((m) => m.text.slice(0, 40)).join("; ")}` }
   }
 
-  const { target, tools, assembled, supportsTools } = await prepare(opts, extras)
+  const { target, tools, built, images, assembled, supportsTools } = await prepare(opts, extras)
   const maxSteps = opts.maxSteps ?? DEFAULT_MAX_STEPS
   if (!supportsTools && opts.registry.list().length > 0) {
     yield { type: "notice", text: "Model này không hỗ trợ tool; trả lời không dùng tool." }
   }
+  // Tell the user once whenever the set of tools left out by the provider limit changes.
+  const hiddenKey = JSON.stringify(built?.hidden ?? [])
+  if (hiddenKey !== opts.registry.lastHiddenNotice) {
+    opts.registry.lastHiddenNotice = hiddenKey
+    if (built && built.hidden.length > 0) {
+      const parts = built.hidden.map((h) => `${h.count} tool của ${h.source.replace(/^mcp:/, "")}`).join(", ")
+      yield {
+        type: "notice",
+        text: `Model chỉ nhận tối đa ${built.names.length} tool mỗi lần; đang ẩn ${parts}. Lọc bằng "enabledTools"/"disabledTools" trong cấu hình MCP hoặc tắt bớt server (/mcp).`,
+      }
+    }
+  }
 
   const user = userMessage(opts.input, assembled.reminders)
-  const request = withContext([...opts.history, user], assembled.context)
+  // A vision model's screenshots stay in history; a model without vision gets placeholders.
+  const history = images ? opts.history : stripImages(opts.history)
+  const request = withContext([...history, user], assembled.context)
   // Anthropic caches only where asked: mark the static system prompt. Others cache by prefix.
   const system: string | SystemModelMessage =
     target.provider.npm === "@ai-sdk/anthropic"

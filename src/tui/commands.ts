@@ -27,3 +27,40 @@ export function parseCommand(input: string): { name: string; args: string } | un
   if (!match) return undefined
   return { name: match[1]!.toLowerCase(), args: match[2]!.trim() }
 }
+
+export interface PromptArg {
+  name: string
+  description?: string
+  required?: boolean
+}
+
+/** `<ticker> [focus]` for the suggestion list. */
+export function promptUsage(args: PromptArg[]) {
+  return args.map((a) => (a.required ? `<${a.name}>` : `[${a.name}]`)).join(" ")
+}
+
+/**
+ * Arguments for an MCP prompt typed after its slash command.
+ * - `ticker=VCB focus="biên lãi"`: by name (quotes optional; a value runs until the next `name=`).
+ * - `VCB biên lãi gộp`: positional, in declaration order; the last argument filled takes
+ *   the rest of the line, so free text with spaces works.
+ */
+export function parsePromptArgs(args: PromptArg[], raw: string): { values: Record<string, string> } | { error: string } {
+  const values: Record<string, string> = {}
+  const text = raw.trim()
+  const names = args.map((a) => a.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+  const named = names.length > 0 && new RegExp(`(^|\\s)(${names.join("|")})=`).test(text)
+  if (named) {
+    const re = new RegExp(`(?:^|\\s)(${names.join("|")})=("([^"]*)"|.*?)(?=\\s+(?:${names.join("|")})=|$)`, "g")
+    for (const m of text.matchAll(re)) values[m[1]!] = (m[3] ?? m[2]!).trim()
+  } else if (text) {
+    const words = text.split(/\s+/)
+    args.forEach((arg, i) => {
+      if (i >= words.length) return
+      values[arg.name] = i === args.length - 1 || i === words.length - 1 ? words.slice(i).join(" ") : words[i]!
+    })
+  }
+  const missing = args.filter((a) => a.required && !values[a.name])
+  if (missing.length > 0) return { error: `Thiếu ${missing.map((a) => a.name).join(", ")}. Cách dùng: ${promptUsage(args)}` }
+  return { values }
+}

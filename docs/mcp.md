@@ -130,7 +130,14 @@ Notion, Linear, Sentry, Atlassian… dùng OAuth: không cần token, chỉ cầ
   - Mỗi kết quả tối đa khoảng 30.000 ký tự; phần dài hơn bị cắt, chỉ giữ đầu và cuối.
   - Luôn kèm **nguồn** và **thời điểm dữ liệu** (`asof`), vì system prompt yêu cầu model nêu chúng khi trích số liệu.
   - Nếu `content` rỗng mà có `structuredContent`, JSON đó sẽ được gửi cho model.
-  - Ảnh và âm thanh hiện chỉ hiển thị dưới dạng placeholder.
+  - Ảnh (`image`, hoặc resource nhúng là ảnh png/jpeg/gif/webp) được gửi cho model nếu model xem được ảnh và provider là Anthropic, OpenAI hoặc Google. Với model khác, ảnh thay bằng một dòng mô tả. Tối đa 4 ảnh mỗi kết quả, mỗi ảnh tối đa 5MB. Ảnh không được lưu vào file phiên.
+  - Âm thanh hiện chỉ hiển thị dưới dạng placeholder.
+- **`outputSchema`**: OpenTrading không kiểm `structuredContent` theo `outputSchema`, nên kết quả lệch schema vẫn được đọc, thay vì báo lỗi sau khi tool đã chạy.
+- **Schema tham số** được chuẩn hoá theo provider trước khi gửi:
+  - `$ref` được thay bằng nội dung; bỏ `title`/`$schema`; `const` thành `enum`; mảng luôn có `items`.
+  - Với Gemini: enum số được chuyển vào mô tả, bỏ `format` lạ.
+  - Schema quá 6000 ký tự thì được rút gọn.
+  - Tên tham số không bao giờ bị đổi. Viết schema gọn, phẳng sẽ tốn ít token hơn.
 - **Không in gì ra stdout** ngoài giao thức, vì stdout là kênh MCP. Log thì ghi ra stderr. Khi server không khởi động được, 3 dòng stderr cuối cùng hiện trong `/mcp`.
 - **Timeout:** mặc định 30s để khởi động và 60s cho mỗi lần gọi tool. Đổi bằng `startupTimeoutMs` và `toolTimeoutMs`.
 
@@ -140,14 +147,27 @@ Notion, Linear, Sentry, Atlassian… dùng OAuth: không cần token, chỉ cầ
 - Nếu báo không tìm thấy lệnh, ghi đường dẫn đầy đủ, ví dụ `"command": "C:\\Users\\me\\.local\\bin\\uvx.exe"`.
 - Khi thoát bằng `/exit` hoặc `ctrl+c`, OpenTrading đóng mọi server trước, đợi tối đa 2 giây.
 
-## 7. Kiểm tra
+## 7. Prompts, resources và giới hạn số tool
+
+- **Prompts** của server hiện thành lệnh `/<server>:<prompt>` trong gợi ý khi gõ `/`, ví dụ `/demo:phan_tich VCB biên lãi`.
+  - Tham số theo thứ tự khai báo; tham số cuối nhận phần còn lại của dòng.
+  - Hoặc ghi theo tên: `/data:risk_check symbols=VCB,CTG side=buy`.
+  - Thiếu tham số bắt buộc thì hiện cách dùng.
+  - Nội dung prompt được gửi như tin nhắn của bạn và hiện đầy đủ trong khung chat.
+- **Resources**: khi có server cung cấp resource, model có thêm 2 tool chỉ đọc là `list_mcp_resources` và `read_mcp_resource`.
+- **Giới hạn số tool**: OpenAI, Gemini và Anthropic nhận tối đa khoảng 128 tool mỗi request.
+  - Vượt mức thì OpenTrading giữ tool có sẵn trước, rồi tới tool MCP theo thứ tự server trong file cấu hình, và báo một lần trong chat là đang ẩn bao nhiêu tool của server nào.
+  - Model chọn tool kém đi khi có quá nhiều tool (từ khoảng 30–50), nên hãy lọc bằng `enabledTools`/`disabledTools`.
+  - `/context` hiện số token mà định nghĩa tool chiếm.
+
+## 8. Kiểm tra
 
 - `/mcp`: xem trạng thái (● đã kết nối, … đang kết nối, ✕ lỗi, ? chờ cho phép, ! cần đăng nhập, ○ đã tắt), transport, lỗi, lệnh hoặc URL, và danh sách tool. Enter để cho phép, đăng nhập hoặc kết nối lại.
 - `opentrading mcp list`: như `/mcp` nhưng chạy ngoài TUI.
-- `/tools`: liệt kê mọi tool model đang gọi được. ◇ là tool chỉ đọc.
+- `/tools`: liệt kê mọi tool model đang gọi được. ◇ là tool chỉ đọc. Có hơn 128 tool thì báo số tool bị ẩn.
 - `ctrl+o` trong khung chat: mở rộng hoặc thu gọn toàn bộ kết quả tool.
 - Có thể thử mà không cần TUI: `bun src/core/chat.ts "mấy giờ rồi?"`. Lệnh này chỉ dùng các tool có sẵn.
 
 **Tự phục hồi.** Lỗi mạng hoặc server quá tải (429/5xx) lúc kết nối được thử lại 2 lần. Server remote bị rớt kết nối thì tự kết nối lại (tối đa 5 lần, chờ tăng dần). Server quên phiên (HTTP 404) thì gọi tool lại một lần sau khi khởi tạo phiên mới.
 
-Chưa hỗ trợ trong bản này: transport WebSocket, `headersHelper`, resources và prompts của MCP, elicitation, roots.
+Chưa hỗ trợ trong bản này: transport WebSocket, `headersHelper`, elicitation, roots, đăng ký theo dõi resource, nạp tool theo nhu cầu (tool search).

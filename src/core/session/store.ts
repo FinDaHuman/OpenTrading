@@ -1,3 +1,4 @@
+import { stripImages } from "../tools/registry"
 import { appendFile, mkdir, readFile } from "node:fs/promises"
 import path from "node:path"
 import type { ModelMessage } from "ai"
@@ -119,7 +120,8 @@ export class Session {
         skills: info.skills,
       })
     }
-    for (const message of messages) lines.push({ type: "message", ts, message })
+    // Screenshots would bloat the file by megabytes per turn; keep a text placeholder.
+    for (const message of stripImages(messages)) lines.push({ type: "message", ts, message })
     lines.push({ type: "turn_end", ts, provider: info.provider, model: info.model })
     await appendFile(this.path!, lines.map((l) => JSON.stringify(l)).join("\n") + "\n", "utf8")
 

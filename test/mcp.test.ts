@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { expandConfig, expandEnv, loadServers } from "../src/core/mcp/config"
-import { normalizeSchema, resultToText } from "../src/core/mcp/convert"
+import { resultToOutput, resultToText } from "../src/core/mcp/convert"
 import { McpManager } from "../src/core/mcp/manager"
 import { MAX_TOOL_NAME, toolName } from "../src/core/mcp/naming"
 import { ToolRegistry } from "../src/core/tools/registry"
@@ -65,15 +65,22 @@ test("env expansion supports defaults and reports missing variables", () => {
   expect(missing).toEqual(["MISSING"])
 })
 
-test("MCP results flatten to text; isError throws; schemas are normalised", () => {
+test("MCP results: text, structured fallback, images kept for the model, isError throws", () => {
   expect(resultToText({ content: [{ type: "text", text: "a" }, { type: "text", text: "b" }] })).toBe("a\n\nb")
   expect(resultToText({ content: [], structuredContent: { x: 1 } })).toContain('"x": 1')
   expect(resultToText({ content: [{ type: "image", mimeType: "image/png" }] })).toContain("image/png")
   expect(() => resultToText({ isError: true, content: [{ type: "text", text: "hỏng" }] })).toThrow("hỏng")
-  expect(normalizeSchema({ $schema: "x", additionalProperties: false, properties: { a: {} } })).toEqual({
-    type: "object",
-    properties: { a: {} },
+  expect(resultToOutput({ content: [{ type: "text", text: "chụp" }, { type: "image", data: "AAA=", mimeType: "image/png" }] })).toEqual({
+    output: "chụp",
+    images: [{ data: "AAA=", mediaType: "image/png" }],
   })
+  expect(resultToOutput({ content: [{ type: "resource", resource: { uri: "file:///a.png", blob: "BBB=", mimeType: "image/png" } }] })).toEqual({
+    output: "(tool trả về 1 ảnh)",
+    images: [{ data: "BBB=", mediaType: "image/png" }],
+  })
+  expect(resultToOutput({ content: [{ type: "resource", resource: { uri: "file:///a.pdf", blob: "CCC=", mimeType: "application/pdf" } }] })).toBe(
+    "[tài nguyên: file:///a.pdf (application/pdf)]",
+  )
 })
 
 test("config: project overrides global, invalid entries become errors", async () => {

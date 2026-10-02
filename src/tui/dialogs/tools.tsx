@@ -1,6 +1,6 @@
 import { useKeyboard } from "@opentui/solid"
 import { createSignal, onCleanup } from "solid-js"
-import type { ToolRegistry } from "../../core/tools/registry"
+import { MAX_TOOLS_PER_REQUEST, type ToolRegistry } from "../../core/tools/registry"
 import { closeDialog } from "../state"
 import { DialogFrame } from "./frame"
 import { Picker } from "./picker"
@@ -15,7 +15,15 @@ export function ToolsDialog(props: { registry: ToolRegistry }) {
   })
 
   return (
-    <DialogFrame title={`Tools · ${tools().length}`} width={86} hint="gõ để lọc · esc đóng">
+    <DialogFrame
+      title={`Tools · ${tools().length}`}
+      width={86}
+      hint={
+        tools().length > MAX_TOOLS_PER_REQUEST
+          ? `model chỉ nhận ${MAX_TOOLS_PER_REQUEST}; ${tools().length - MAX_TOOLS_PER_REQUEST} tool của server xếp sau bị ẩn — lọc bằng enabledTools · esc đóng`
+          : "gõ để lọc · esc đóng"
+      }
+    >
       <Picker
         items={tools().map((t) => ({
           label: t.name,

@@ -1,9 +1,11 @@
 import { createHash } from "node:crypto"
 import { createServer, type Server } from "node:http"
 import type { AddressInfo } from "node:net"
+import { Server as McpLowLevelServer } from "@modelcontextprotocol/sdk/server/index.js"
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js"
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js"
+import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js"
 import { z } from "zod"
 
 /**
@@ -19,14 +21,56 @@ function mcpServer() {
     { description: "Echo back the text.", inputSchema: { text: z.string() }, annotations: { readOnlyHint: true } },
     async ({ text }) => ({ content: [{ type: "text", text }] }),
   )
+  server.registerTool(
+    "screenshot",
+    { description: "Return a tiny PNG.", annotations: { readOnlyHint: true } },
+    async () => ({ content: [{ type: "text", text: "đã chụp" }, { type: "image", data: TINY_PNG, mimeType: "image/png" }] }),
+  )
+  server.registerPrompt(
+    "ticker_analysis",
+    { description: "Phân tích một mã", argsSchema: { ticker: z.string(), focus: z.string().optional() } },
+    ({ ticker, focus }) => ({
+      messages: [
+        { role: "user", content: { type: "text", text: `Phân tích ${ticker}${focus ? ` (trọng tâm: ${focus})` : ""}` } },
+        { role: "assistant", content: { type: "text", text: "Tôi sẽ dùng dữ liệu giá." } },
+      ],
+    }),
+  )
+  server.registerResource("calendar", "ot://calendar", { mimeType: "text/plain", description: "Lịch nghỉ lễ" }, async (uri) => ({
+    contents: [{ uri: uri.href, text: "02/09: nghỉ Quốc khánh" }],
+  }))
   return server
 }
+
+/**
+ * A server that declares an output schema and then breaks it (as real servers do). Built on
+ * the low-level Server because McpServer would refuse to send the bad result.
+ */
+function sloppyServer() {
+  const server = new McpLowLevelServer({ name: "sloppy", version: "0.1.0" }, { capabilities: { tools: {} } })
+  server.setRequestHandler(ListToolsRequestSchema, async () => ({
+    tools: [
+      {
+        name: "price",
+        inputSchema: { type: "object" as const, properties: {} },
+        outputSchema: { type: "object" as const, properties: { price: { type: "number" } }, required: ["price"] },
+      },
+    ],
+  }))
+  server.setRequestHandler(CallToolRequestSchema, async () => ({ content: [{ type: "text", text: "giá 25.000" }], structuredContent: { price: "25.000" } }))
+  return server
+}
+
+/** 1×1 transparent PNG. */
+export const TINY_PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="
 
 export interface HttpServerOptions {
   /** Require OAuth: unauthenticated requests get 401 + RFC 9728 metadata. */
   oauth?: boolean
   /** Require this static bearer token (no OAuth metadata). */
   token?: string
+  /** Serve the schema-breaking server instead of the normal one. */
+  sloppy?: boolean
   /** Fail the first N initialize POSTs with this status (transient-error tests). */
   failFirst?: { count: number; status: number }
 }
@@ -129,7 +173,7 @@ export function startHttpServer(opts: HttpServerOptions = {}) {
           sessions.set(id, transport)
         },
       })
-      await mcpServer().connect(transport)
+      await (opts.sloppy ? sloppyServer() : mcpServer()).connect(transport)
       return transport.handleRequest(req)
     },
   })

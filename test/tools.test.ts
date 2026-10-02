@@ -23,7 +23,7 @@ test("truncate keeps head and tail with a marker", () => {
 })
 
 test("long output is truncated before the model sees it", async () => {
-  const out = await runTool(def({ maxOutputChars: 100, execute: async () => "x".repeat(500) }), {}, ctx(), new RwLock())
+  const { output: out } = await runTool(def({ maxOutputChars: 100, execute: async () => "x".repeat(500) }), {}, ctx(), new RwLock())
   expect(out.length).toBeLessThan(200)
   expect(out).toContain("đã lược")
 })
@@ -34,7 +34,7 @@ test("a tool that ignores its signal still times out and releases the lock", asy
   await expect(runTool(hang, {}, ctx(), lock)).rejects.toThrow("quá thời gian")
   // The write lock must be free again.
   const ok = await runTool(def({ readOnly: false, execute: async () => "ok" }), {}, ctx(), lock)
-  expect(ok).toBe("ok")
+  expect(ok).toEqual({ output: "ok" })
 })
 
 test("errors are rethrown as Error with the tool's message", async () => {
@@ -108,7 +108,32 @@ test("registry builds a sorted AI SDK tool set and unregisters by prefix", () =>
   registry.register(def({ name: "mcp__demo__b", execute: async () => "" }))
   registry.register(def({ name: "a_tool", execute: async () => "" }))
   registry.register(def({ name: "mcp__demo__a", input: { type: "object", properties: {} }, execute: async () => "" }))
-  expect(Object.keys(registry.toToolSet())).toEqual(["a_tool", "mcp__demo__a", "mcp__demo__b"])
+  expect(Object.keys(registry.toToolSet().tools)).toEqual(["a_tool", "mcp__demo__a", "mcp__demo__b"])
   registry.unregister("mcp__demo__")
   expect(registry.list().map((t) => t.name)).toEqual(["a_tool"])
+})
+
+test("prompt arguments: positional with free-text tail, by name, missing required", async () => {
+  const { parsePromptArgs, promptUsage } = await import("../src/tui/commands")
+  const args = [{ name: "ticker", required: true }, { name: "focus" }]
+  expect(promptUsage(args)).toBe("<ticker> [focus]")
+  expect(parsePromptArgs(args, "VCB biên lãi gộp")).toEqual({ values: { ticker: "VCB", focus: "biên lãi gộp" } })
+  expect(parsePromptArgs(args, "VCB")).toEqual({ values: { ticker: "VCB" } })
+  expect(parsePromptArgs(args, 'focus="nợ xấu" ticker=CTG')).toEqual({ values: { focus: "nợ xấu", ticker: "CTG" } })
+  expect(parsePromptArgs(args, "ticker=CTG focus=nợ xấu ngắn hạn")).toEqual({ values: { ticker: "CTG", focus: "nợ xấu ngắn hạn" } })
+  expect(parsePromptArgs(args, "")).toEqual({ error: "Thiếu ticker. Cách dùng: <ticker> [focus]" })
+  expect(parsePromptArgs([{ name: "q", required: true }], "giá vàng hôm nay")).toEqual({ values: { q: "giá vàng hôm nay" } })
+})
+
+test("long tool errors are cut before the model sees them", async () => {
+  const html = "<html>" + "x".repeat(10_000) + "</html>"
+  let message = ""
+  try {
+    await runTool(def({ execute: async () => { throw new Error(`Error POSTing to endpoint: ${html}`) } }), {}, ctx(), new RwLock())
+  } catch (error) {
+    message = (error as Error).message
+  }
+  expect(message.length).toBeLessThan(2100)
+  expect(message.startsWith("Error POSTing to endpoint")).toBe(true)
+  expect(message.endsWith("</html>")).toBe(true)
 })

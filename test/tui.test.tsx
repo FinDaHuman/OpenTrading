@@ -278,6 +278,41 @@ test("/tools lists built-in and MCP tools", async () => {
   await setup.waitFor(() => state.dialog === undefined)
 })
 
+test("a lone '/' + enter is never sent to the model", async () => {
+  const before = chatCalls.length
+  const lines = state.lines.length
+  await setup.mockInput.typeText("/")
+  await setup.waitForFrame((f) => f.includes("tab ↹"))
+  setup.mockInput.pressBackspace()
+  await setup.waitForFrame((f) => !f.includes("tab ↹"))
+  await setup.mockInput.typeText("/ ")
+  setup.mockInput.pressEnter()
+  await setup.waitForFrame((f) => !f.includes("› / "))
+  expect(chatCalls.length).toBe(before)
+  expect(state.lines.length).toBe(lines)
+})
+
+test("MCP prompts are slash commands: suggested, argument-checked, sent as the user's message", async () => {
+  await setup.mockInput.typeText("/demo:")
+  const frame = await setup.waitForFrame((f) => f.includes("/demo:phan_tich <ma> [goc_nhin]"))
+  expect(frame).toContain("Phân tích nhanh một mã cổ phiếu")
+  show(frame)
+  for (let i = 0; i < "/demo:".length; i++) setup.mockInput.pressBackspace()
+  await setup.waitForFrame((f) => !f.includes("tab ↹"))
+
+  await setup.mockInput.typeText("/demo:phan_tich")
+  setup.mockInput.pressEnter()
+  await setup.waitForFrame((f) => f.includes("Thiếu ma"))
+
+  await setup.mockInput.typeText("/demo:phan_tich vcb biên lãi gộp")
+  setup.mockInput.pressEnter()
+  const sent = await setup.waitForFrame((f) => f.includes("Phân tích nhanh mã VCB, trọng tâm: biên lãi gộp"))
+  expect(sent).toContain("Prompt /demo:phan_tich của server demo")
+  // Sent as the user's own message (the provider's reply does not matter here).
+  expect(state.lines.some((l) => l.kind === "user" && l.text.startsWith("Phân tích nhanh mã VCB, trọng tâm: biên lãi gộp."))).toBe(true)
+  for (let i = 0; i < 100 && state.streaming; i++) await new Promise((r) => setTimeout(r, 50))
+})
+
 test("/profile creates INVESTOR.md from a template", async () => {
   await setup.mockInput.typeText("/profile")
   setup.mockInput.pressEnter()

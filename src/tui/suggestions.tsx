@@ -18,6 +18,8 @@ export function Suggestions(props: { items: CommandInfo[]; selected: number }) {
     Math.max(0, Math.min(props.selected - Math.floor(SUGGESTION_ROWS / 2), props.items.length - SUGGESTION_ROWS)),
   )
   const visible = createMemo(() => props.items.slice(start(), start() + SUGGESTION_ROWS))
+  // Wide enough for "/server:prompt <args>", without squeezing the description away.
+  const labelWidth = createMemo(() => Math.min(40, Math.max(18, ...props.items.map((c) => c.name.length + (c.args ? c.args.length + 1 : 0) + 4))))
   const hiddenAbove = () => start()
   const hiddenBelow = () => Math.max(0, props.items.length - start() - SUGGESTION_ROWS)
 
@@ -28,7 +30,7 @@ export function Suggestions(props: { items: CommandInfo[]; selected: number }) {
           const active = () => start() + i() === props.selected
           return (
             <box flexDirection="row" flexShrink={0} height={1} backgroundColor={active() ? color.rule : color.panel}>
-              <text fg={color.tang} width={18} flexShrink={0} wrapMode="none">
+              <text fg={color.tang} width={labelWidth()} flexShrink={0} wrapMode="none">
                 {`${active() ? "▸" : " "} /${c.name}${c.args ? ` ${c.args}` : ""}`}
               </text>
               <text fg={color.tx3} flexGrow={1} flexShrink={1} wrapMode="none">

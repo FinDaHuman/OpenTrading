@@ -1,4 +1,4 @@
-import { DEFAULT_MAX_OUTPUT_CHARS, DEFAULT_TIMEOUT_MS, type ToolContext, type ToolDef } from "./types"
+import { DEFAULT_MAX_OUTPUT_CHARS, DEFAULT_TIMEOUT_MS, type ToolContext, type ToolDef, type ToolResult } from "./types"
 
 /**
  * Read/write lock: read-only tools share it, everything else takes it exclusively.
@@ -41,6 +41,9 @@ export class RwLock {
   }
 }
 
+/** Tool error messages longer than this are cut before the model sees them. */
+export const MAX_ERROR_CHARS = 2000
+
 /** Keep the head and tail of long output so both the start and the conclusion survive. */
 export function truncate(text: string, max: number): string {
   if (text.length <= max) return text
@@ -61,7 +64,7 @@ export class ToolTimeoutError extends Error {
  * Errors are rethrown with a readable message; the AI SDK turns them into `tool-error`
  * results that go back to the model instead of crashing the loop.
  */
-export async function runTool(def: ToolDef, input: unknown, ctx: ToolContext, lock: RwLock): Promise<string> {
+export async function runTool(def: ToolDef, input: unknown, ctx: ToolContext, lock: RwLock): Promise<ToolResult> {
   const release = await lock.acquire(!def.readOnly)
   const ms = def.timeoutMs ?? DEFAULT_TIMEOUT_MS
   const timeout = new AbortController()
@@ -83,10 +86,14 @@ export async function runTool(def: ToolDef, input: unknown, ctx: ToolContext, lo
     })
     const result = await Promise.race([def.execute(input, { ...ctx, signal }), expired, aborted])
     const output = typeof result === "string" ? result : result.output
-    return truncate(output, def.maxOutputChars ?? DEFAULT_MAX_OUTPUT_CHARS)
+    const images = typeof result === "string" ? undefined : result.images
+    return { output: truncate(output, def.maxOutputChars ?? DEFAULT_MAX_OUTPUT_CHARS), ...(images?.length ? { images } : {}) }
   } catch (error) {
-    if (error instanceof Error) throw error
-    throw new Error(String(error))
+    // Errors go back to the model too: an HTML 502 page or a stack trace must not fill
+    // the context. Keep the head and tail.
+    const message = error instanceof Error ? error.message : String(error)
+    if (message.length <= MAX_ERROR_CHARS && error instanceof Error) throw error
+    throw new Error(truncate(message, MAX_ERROR_CHARS))
   } finally {
     clearTimeout(timer)
     // The turn's signal outlives this call; don't leave one listener behind per tool call.

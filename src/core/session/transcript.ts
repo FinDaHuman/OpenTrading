@@ -12,7 +12,12 @@ export type TranscriptItem =
 
 function outputText(output: unknown): { ok: boolean; text: string } {
   const o = output as { type?: string; value?: unknown }
-  const text = typeof o?.value === "string" ? o.value : JSON.stringify(o?.value ?? output, null, 2)
+  const text =
+    typeof o?.value === "string"
+      ? o.value
+      : o?.type === "content" && Array.isArray(o.value)
+        ? (o.value as { type: string; text?: string }[]).map((p) => (p.type === "text" ? p.text : "[ảnh]")).join("\n")
+        : JSON.stringify(o?.value ?? output, null, 2)
   return { ok: !String(o?.type ?? "").startsWith("error"), text }
 }
 

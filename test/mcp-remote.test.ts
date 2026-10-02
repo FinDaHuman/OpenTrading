@@ -153,7 +153,7 @@ test("enabledTools / disabledTools filter what the model sees", async () => {
   cleanups.push(remote.stop)
   const { manager, registry } = await managerWith({ api: { url: remote.url, disabledTools: ["ec*"] } })
   await manager.start()
-  expect(state(manager, "api")).toMatchObject({ state: "connected", tools: [], hiddenTools: 1 })
+  expect(state(manager, "api")).toMatchObject({ state: "connected", tools: ["mcp__api__screenshot"], hiddenTools: 1 })
   expect(registry.get("mcp__api__echo")).toBeUndefined()
   const config = ServerConfig.parse({ command: "x", enabledTools: ["get_*", "search"], disabledTools: ["get_secret"] })
   expect(toolAllowed(config, "get_quote")).toBe(true)
@@ -319,9 +319,51 @@ test("CLI add connects right away, and a project server added by the user is app
   const lines: string[] = []
   const run = (...argv: string[]) => runMcpCli(argv, { home, cwd, out: (l) => lines.push(l), err: (l) => lines.push(`ERR ${l}`) })
   expect(await run("add", "api", remote.url, "-s", "project")).toBe(0)
-  expect(lines.join(" ")).toContain("● api: http · 1 tool")
+  expect(lines.join(" ")).toContain("● api: http · 2 tool")
   const manager = new McpManager(new ToolRegistry(), { home, cwd, trustFile: path.join(home, "mcp-trust.json") })
   cleanups.push(() => manager.stop())
   await manager.start()
   expect(state(manager, "api").state).toBe("connected")
+})
+
+test("prompts, resources, images and lenient output schemas work end to end", async () => {
+  const remote = startHttpServer()
+  cleanups.push(remote.stop)
+  const { manager, registry } = await managerWith({ data: { url: remote.url } })
+  await manager.start()
+  const s = state(manager, "data")
+  expect(s.state).toBe("connected")
+  expect(s.resources).toBe(true)
+  expect(s.prompts.map((p) => p.name)).toEqual(["ticker_analysis"])
+  expect(s.prompts[0]!.arguments).toEqual([
+    { name: "ticker", required: true },
+    { name: "focus", required: false },
+  ])
+  expect(manager.allPrompts()[0]).toMatchObject({ server: "data", name: "ticker_analysis" })
+
+  const text = await manager.getPrompt("data", "ticker_analysis", { ticker: "VCB", focus: "biên lãi" })
+  expect(text).toBe("Phân tích VCB (trọng tâm: biên lãi)\n\n(gợi ý của server) Tôi sẽ dùng dữ liệu giá.")
+
+  // Resource tools appear because a server offers resources.
+  const listed = (await registry.get("list_mcp_resources")!.execute({}, ctx)) as string
+  expect(JSON.parse(listed)).toEqual([{ server: "data", uri: "ot://calendar", name: "calendar", description: "Lịch nghỉ lễ", mimeType: "text/plain" }])
+  expect(await registry.get("read_mcp_resource")!.execute({ server: "data", uri: "ot://calendar" }, ctx)).toBe("02/09: nghỉ Quốc khánh")
+
+  const shot = await registry.get("mcp__data__screenshot")!.execute({}, ctx)
+  expect(shot).toMatchObject({ output: "đã chụp", images: [{ mediaType: "image/png" }] })
+
+
+  await manager.stop()
+  await manager.start([])
+  expect(registry.get("list_mcp_resources")).toBeUndefined()
+})
+
+test("a tool that breaks its own outputSchema still returns its content (no double run)", async () => {
+  const remote = startHttpServer({ sloppy: true })
+  cleanups.push(remote.stop)
+  const { manager, registry } = await managerWith({ s: { url: remote.url } })
+  await manager.start()
+  expect(state(manager, "s").state).toBe("connected")
+  // The SDK's callTool would throw here after the tool already ran; we read the content.
+  expect(await registry.get("mcp__s__price")!.execute({}, ctx)).toBe("giá 25.000")
 })

@@ -11,7 +11,7 @@ import type { Runtime } from "../core/runtime"
 import { ensureProfile } from "../core/profile"
 import { loadSkills } from "../core/skills/loader"
 import { Background } from "./background"
-import { COMMANDS, parseCommand } from "./commands"
+import { COMMANDS, parseCommand, parsePromptArgs, promptUsage, type CommandInfo } from "./commands"
 import { ConfigDialog } from "./dialogs/config"
 import { ConnectDialog } from "./dialogs/connect"
 import { ContextDialog } from "./dialogs/context"
@@ -173,11 +173,43 @@ export function App(props: { runtime: Runtime; resume?: string }) {
     }
   })
 
+  /** MCP prompts as `/server:prompt` commands, from every connected server. */
+  const promptCommands = createMemo<(CommandInfo & { server: string; prompt: string })[]>(() =>
+    state.mcp.flatMap((s) =>
+      s.state === "connected"
+        ? s.prompts.map((p) => ({
+            name: `${s.name}:${p.name}`,
+            args: promptUsage(p.arguments) || undefined,
+            description: p.description?.split("\n")[0] ?? `Prompt của MCP server ${s.name}`,
+            server: s.name,
+            prompt: p.name,
+          }))
+        : [],
+    ),
+  )
+
   const suggestions = createMemo(() => {
-    const d = draft()
+    const d = draft().toLowerCase()
     if (!d.startsWith("/") || d.includes(" ")) return []
-    return COMMANDS.filter((c) => `/${c.name}`.startsWith(d.toLowerCase()))
+    return [...COMMANDS, ...promptCommands()].filter((c) => `/${c.name.toLowerCase()}`.startsWith(d))
   })
+
+  /** Fetch an MCP prompt with the typed arguments and send it as the user's message. */
+  async function runPrompt(command: { server: string; prompt: string; name: string }, rawArgs: string) {
+    const info = state.mcp.find((s) => s.name === command.server)?.prompts.find((p) => p.name === command.prompt)
+    if (!info) return pushLine({ kind: "error", text: `Không còn prompt /${command.name}.` })
+    const parsed = parsePromptArgs(info.arguments, rawArgs)
+    if ("error" in parsed) return pushLine({ kind: "error", text: `/${command.name}: ${parsed.error}` })
+    try {
+      const text = await props.runtime.mcp.getPrompt(command.server, command.prompt, parsed.values)
+      if (!text.trim()) return pushLine({ kind: "error", text: `Prompt /${command.name} không có nội dung.` })
+      // What is sent in the user's name is shown in full as their message.
+      pushLine({ kind: "info", text: `Prompt /${command.name} của server ${command.server}:` })
+      void send(props.runtime, text)
+    } catch (error) {
+      pushLine({ kind: "error", text: `/${command.name}: ${error instanceof Error ? error.message : String(error)}` })
+    }
+  }
 
   function setInput(value: string) {
     if (input) {
@@ -201,11 +233,19 @@ export function App(props: { runtime: Runtime; resume?: string }) {
     if (!text) return
     const cmd = parseCommand(text)
     // Enter on a partial command ("/con") runs the highlighted suggestion.
-    if (cmd && !COMMANDS.some((c) => c.name === cmd.name) && highlighted && !cmd.args) cmd.name = highlighted.name
+    const known = (name: string) => COMMANDS.some((c) => c.name === name) || promptCommands().some((c) => c.name.toLowerCase() === name)
+    if (cmd && !known(cmd.name) && highlighted && !cmd.args) cmd.name = highlighted.name.toLowerCase()
     if (!cmd) {
+      // A lone "/" (or "/ text") is never a message for the model.
+      if (text.startsWith("/")) return
       if (state.streaming) return
       void send(props.runtime, text)
       return
+    }
+    const promptCmd = promptCommands().find((c) => c.name.toLowerCase() === cmd.name)
+    if (promptCmd) {
+      if (state.streaming) return pushLine({ kind: "error", text: "Đang trả lời; chờ xong rồi chạy prompt." })
+      return void runPrompt(promptCmd, cmd.args)
     }
     switch (cmd.name) {
       case "connect":
