@@ -1,4 +1,4 @@
-import { useKeyboard } from "@opentui/solid"
+import { useKeys } from "../ui/keys"
 import { createMemo, createSignal, onCleanup, Show } from "solid-js"
 import { MAX_TOOLS_PER_REQUEST, type ToolRegistry } from "../../core/tools/registry"
 import type { ToolDef } from "../../core/tools/types"
@@ -35,7 +35,7 @@ export function ToolsDialog(props: { registry: ToolRegistry }) {
   )
   const detail = () => tools().find((t) => t.name === open())
 
-  useKeyboard((evt) => {
+  useKeys((evt) => {
     if (evt.eventType === "release" || evt.name !== "escape") return
     if (open()) setOpen(undefined)
     else closeDialog()
@@ -54,7 +54,7 @@ export function ToolsDialog(props: { registry: ToolRegistry }) {
               ? `Model nhận tối đa ${MAX_TOOLS_PER_REQUEST} tool mỗi lần; ${over()} tool của server xếp sau đang bị ẩn — lọc bằng enabledTools (/mcp)`
               : BADGE_LEGEND
           }
-          hint="gõ để lọc · ↑↓ di chuyển · enter xem chi tiết · esc đóng"
+          hint="gõ để lọc · ↑↓ chọn · enter xem chi tiết · esc đóng"
         >
           <Picker
             items={sorted().map((t) => ({

@@ -1,4 +1,5 @@
-import { useKeyboard } from "@opentui/solid"
+import { pad } from "../ui/text"
+import { useKeys } from "../ui/keys"
 import { createResource, For, Match, Switch } from "solid-js"
 import { previewContext } from "../../core/agent"
 import { describeError } from "../../core/chat"
@@ -33,7 +34,6 @@ const LAYER_NAME: Record<string, string> = {
   hook_context: "Ngữ cảnh từ hook",
 }
 
-const pad = (text: string, width: number) => (text.length >= width ? text.slice(0, width) : text + " ".repeat(width - text.length))
 
 /** What the next request would carry, layer by layer (HarnessPlan §10.2 observability). */
 export function ContextDialog(props: { runtime: Runtime }) {
@@ -49,12 +49,12 @@ export function ContextDialog(props: { runtime: Runtime }) {
     }),
   )
 
-  useKeyboard((evt) => {
+  useKeys((evt) => {
     if (evt.eventType !== "release" && evt.name === "escape") closeDialog()
   })
 
   return (
-    <DialogFrame title="Ngữ cảnh gửi cho model" hint="esc đóng" width={78}>
+    <DialogFrame title="Ngữ cảnh gửi cho model" hint="esc đóng">
       <Switch>
         <Match when={preview.loading}>
           <text fg={color.tx2}>Đang tính…</text>

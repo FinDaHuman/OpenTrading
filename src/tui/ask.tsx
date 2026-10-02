@@ -2,6 +2,8 @@ import { useKeyboard } from "@opentui/solid"
 import { createMemo, createSignal, For, Show } from "solid-js"
 import { createStore, produce } from "solid-js/store"
 import type { AskBroker, AskRequest } from "../core/ask"
+import { DialogFrame } from "./dialogs/frame"
+import { state } from "./state"
 import { color } from "./theme"
 import { truncate } from "./ui/text"
 import { useTerminalDimensions } from "@opentui/solid"
@@ -92,6 +94,8 @@ export function AskPrompt(props: { broker: AskBroker; request: AskRequest }) {
 
   useKeyboard((evt) => {
     if (evt.eventType === "release") return
+    // An approval covers this prompt: keep everything chosen so far, ignore keys.
+    if (state.approval) return
     // Ctrl+C skips the questions like Esc; the app only arms the double-press exit.
     if (evt.ctrl && evt.name === "c") return decline()
     if (typing()) {
@@ -132,22 +136,19 @@ export function AskPrompt(props: { broker: AskBroker; request: AskRequest }) {
   const width = () => Math.max(20, dims().width - 12)
 
   return (
-    <box
-      flexShrink={0}
-      marginLeft={2}
-      marginRight={2}
-      border={["top"]}
-      borderStyle="rounded"
-      borderColor={color.san}
-      title=" Câu hỏi cho bạn "
-      titleAlignment="left"
-      backgroundColor={color.panel2}
-      flexDirection="column"
-      paddingLeft={1}
-      paddingRight={1}
+    <DialogFrame
+      title="Câu hỏi cho bạn"
+      accent={color.san}
+      hint={
+        typing()
+          ? "enter lưu câu trả lời · esc quay lại"
+          : reviewing()
+            ? "↑↓ chọn · enter xác nhận · ←→ đổi câu · esc bỏ qua"
+            : `↑↓ chọn · ${current()?.multiSelect ? "space bật/tắt · → câu tiếp" : "enter chọn"} · 1-${optionCount()} chọn nhanh${tabbed() ? " · ←→/tab đổi câu" : ""} · esc bỏ qua`
+      }
     >
       <Show when={tabbed()}>
-        <text marginTop={1} wrapMode="none">
+        <text wrapMode="none">
           <For each={questions()}>
             {(q, i) => (
               <span style={{ fg: tab() === i() ? color.bg : answered(i()) ? color.tang : color.tx3, bg: tab() === i() ? color.san : undefined }}>
@@ -222,7 +223,7 @@ export function AskPrompt(props: { broker: AskBroker; request: AskRequest }) {
                 <text fg={color.san} flexShrink={0}>{"Câu trả lời của bạn: "}</text>
                 <input
                   flexGrow={1}
-                  focused
+                  focused={!state.approval}
                   value={answers[tab()]!.other}
                   placeholder="gõ rồi enter"
                   textColor={color.tx}
@@ -238,13 +239,6 @@ export function AskPrompt(props: { broker: AskBroker; request: AskRequest }) {
         )}
       </Show>
 
-      <text fg={color.tx3} marginTop={1} wrapMode="none">
-        {typing()
-          ? "enter lưu câu trả lời · esc quay lại"
-          : reviewing()
-            ? "↑↓ chọn · enter xác nhận · ←→ đổi câu · esc huỷ"
-            : `↑↓ chọn · ${current()?.multiSelect ? "space/enter bật tắt · → câu tiếp" : "enter chọn"} · 1-${optionCount()} chọn nhanh${tabbed() ? " · ←→/tab đổi câu" : ""} · esc huỷ`}
-      </text>
-    </box>
+    </DialogFrame>
   )
 }

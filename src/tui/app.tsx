@@ -13,8 +13,8 @@ import { loadSkills } from "../core/skills/loader"
 import { Background } from "./background"
 import { ApprovalPrompt } from "./approval"
 import { AskPrompt } from "./ask"
-import { McpPanel } from "./mcp/panel"
-import { rank } from "./ui/text"
+import { McpPanel, STATUS } from "./mcp/panel"
+import { rank, truncate } from "./ui/text"
 import { COMMANDS, parseCommand, parsePromptArgs, promptUsage, type CommandInfo } from "./commands"
 import { ConfigDialog } from "./dialogs/config"
 import { ConnectDialog } from "./dialogs/connect"
@@ -214,11 +214,9 @@ export function App(props: {
   // Questions from the model (ask_user) take over the same way; approval goes first.
   props.runtime.questions.interactive = true
   const offQuestion = props.runtime.questions.onChange((head) => {
-    if (head && state.dialog) setState("dialog", undefined)
     setState("question", head)
   })
   const offApproval = props.runtime.permissions.onChange((head) => {
-    if (head && state.dialog) setState("dialog", undefined)
     setState("approval", head)
   })
   onCleanup(() => {
@@ -298,7 +296,7 @@ export function App(props: {
       if (action === "reconnect") await props.runtime.mcp.restart(name)
       else await props.runtime.mcp.setEnabled(name, action === "enable")
       const s = state.mcp.find((x) => x.name === name)
-      pushLine({ kind: "info", text: `MCP "${name}": ${s ? s.state : "?"}${s?.error ? ` — ${s.error}` : ""}` })
+      pushLine({ kind: "info", text: `MCP "${name}": ${s ? STATUS[s.state].text : "?"}${s?.error ? ` — ${s.error}` : ""}` })
     } catch (error) {
       pushLine({ kind: "error", text: `/mcp ${action} ${name}: ${error instanceof Error ? error.message : String(error)}` })
     }
@@ -483,12 +481,22 @@ export function App(props: {
 
         {/* The approval prompt and /mcp take the input's place; the input is hidden, not
             unmounted, so a half-typed message survives. */}
-        <Show when={state.approval}>{(request) => <ApprovalPrompt gate={props.runtime.permissions} request={request()} />}</Show>
-        <Show when={!state.approval && state.question} keyed>
-          {(request) => <AskPrompt broker={props.runtime.questions} request={request} />}
+        {/* Keyed: a new request starts with a fresh selection and no leftover note. */}
+        <Show when={state.approval} keyed>
+          {(request) => <ApprovalPrompt gate={props.runtime.permissions} request={request} />}
         </Show>
-        {/* Every dialog is a pane docked here, in place of the prompt (Claude Code style). */}
-        <Show when={!owner()}>
+        {/* A question stays mounted (answers kept) while an approval covers it. */}
+        <Show when={state.question} keyed>
+          {(request) => (
+            <box visible={!state.approval} flexShrink={0} flexDirection="column">
+              <AskPrompt broker={props.runtime.questions} request={request} />
+            </box>
+          )}
+        </Show>
+        {/* Every dialog is a pane docked here, in place of the prompt (Claude Code style). It
+            stays mounted — hidden and deaf to keys — while a prompt covers it, so a typed key,
+            a pasted token or an OAuth login in progress survives. */}
+        <box visible={!owner()} flexShrink={0} flexDirection="column">
           <Switch>
             <Match when={state.dialog === "mcp"}>
               <McpPanel mcp={props.runtime.mcp} cwd={props.runtime.mcp.cwd} />
@@ -521,7 +529,7 @@ export function App(props: {
               <MemoryDialog memory={props.runtime.memory} />
             </Match>
           </Switch>
-        </Show>
+        </box>
 
         <box
           visible={!owner() && !state.dialog}
@@ -570,15 +578,17 @@ function StatusBar() {
   const attention = () => state.mcp.some((s) => s.state === "failed" || s.state === "untrusted")
   return (
     <box flexDirection="row" height={1} flexShrink={0} backgroundColor={color.panel2} paddingLeft={2} paddingRight={2}>
-      <text fg={color.bg} bg={color.tang}>
+      <text fg={color.bg} bg={color.tang} flexShrink={0} selectable={false}>
         {" ▲ OpenTrading "}
       </text>
-      <text fg={color.tx2}>{` ${target()} `}</text>
+      <text fg={color.tx2} flexShrink={1} wrapMode="none" selectable={false}>{` ${target()} `}</text>
       <Show when={state.mcp.length > 0}>
-        <text fg={attention() ? color.tham : color.san}>{` MCP ${ready()}/${state.mcp.length} `}</text>
+        <text fg={attention() ? color.tham : color.san} flexShrink={0} selectable={false}>{` MCP ${ready()}/${state.mcp.length} `}</text>
       </Show>
       <Show when={state.activeSkills.length > 0}>
-        <text fg={color.tran}>{` ✦ ${state.activeSkills.join(", ")}`}</text>
+        <text fg={color.tran} flexShrink={1} wrapMode="none" selectable={false}>
+          {` ✦ ${truncate(state.activeSkills.join(", "), 30)}`}
+        </text>
       </Show>
       <box flexGrow={1} />
       <text fg={state.flash ? color.tang : state.streaming ? color.tham : color.tx3} flexShrink={0} selectable={false}>

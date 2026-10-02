@@ -1,4 +1,4 @@
-import { useKeyboard } from "@opentui/solid"
+import { useKeys } from "../ui/keys"
 import { createResource, Match, Switch } from "solid-js"
 import type { Runtime } from "../../core/runtime"
 import { listSessions } from "../../core/session/store"
@@ -18,7 +18,7 @@ function when(iso: string) {
 export function SessionsDialog(props: { runtime: Runtime }) {
   const [sessions] = createResource(listSessions)
 
-  useKeyboard((evt) => {
+  useKeys((evt) => {
     if (evt.eventType !== "release" && evt.name === "escape") closeDialog()
   })
 
@@ -47,7 +47,7 @@ export function SessionsDialog(props: { runtime: Runtime }) {
       </Match>
       <Match when={sessions()}>
         {(list) => (
-          <DialogFrame title={`Phiên đã lưu · ${list().length}`} hint="gõ để lọc · enter mở lại · esc đóng" width={90}>
+          <DialogFrame title={`Phiên đã lưu · ${list().length}`} hint="gõ để lọc · enter mở lại · esc đóng">
             <Picker
               items={list().map((s) => ({
                 label: s.title,

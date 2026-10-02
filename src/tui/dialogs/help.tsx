@@ -1,4 +1,4 @@
-import { useKeyboard } from "@opentui/solid"
+import { useKeys } from "../ui/keys"
 import { createMemo } from "solid-js"
 import { COMMANDS } from "../commands"
 import { closeDialog, state } from "../state"
@@ -22,7 +22,7 @@ type Entry = { kind: "command"; name: string } | { kind: "key" }
 
 /** Commands (built-in and MCP prompts) and keys in one filterable list; enter runs a command. */
 export function HelpDialog(props: { onRun: (command: string) => void }) {
-  useKeyboard((evt) => {
+  useKeys((evt) => {
     if (evt.eventType !== "release" && evt.name === "escape") closeDialog()
   })
 
@@ -56,7 +56,7 @@ export function HelpDialog(props: { onRun: (command: string) => void }) {
     <DialogFrame
       title="Trợ giúp"
       subtitle="OpenTrading · harness AI phân tích chứng khoán Việt Nam · không phải tư vấn đầu tư"
-      hint="gõ để lọc · ↑↓ di chuyển · enter chạy lệnh · esc đóng"
+      hint="gõ để lọc · ↑↓ chọn · enter chạy lệnh · esc đóng"
     >
       <Picker
         items={items()}

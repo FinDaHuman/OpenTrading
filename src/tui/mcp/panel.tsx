@@ -1,10 +1,11 @@
-import { useKeyboard, usePaste, useRenderer, useTerminalDimensions } from "@opentui/solid"
+import { useRenderer, useTerminalDimensions } from "@opentui/solid"
+import { useKeys, usePasteWhenFree } from "../ui/keys"
 import { createMemo, createResource, createSignal, For, Match, onCleanup, Show, Switch, type JSX } from "solid-js"
 import { availableCatalog, MCP_CATALOG, missingRequirement } from "../../core/mcp/catalog"
 import { isRemote, type ServerConfig } from "../../core/mcp/config"
 import type { McpManager, McpServerStatus, McpState } from "../../core/mcp/manager"
 import type { ToolDef } from "../../core/tools/types"
-import { closeDialog, pushLine, state } from "../state"
+import { blocked, closeDialog, pushLine, state } from "../state"
 import { color } from "../theme"
 import { pad, truncate, width as cells } from "../ui/text"
 import { BADGE, BADGE_LEGEND, toolBadge, toolMark } from "../ui/badges"
@@ -231,6 +232,8 @@ export function McpPanel(props: { mcp: McpManager; cwd: string }) {
     return sc.kind === "tools" || sc.kind === "tool" ? props.mcp.toolsOf(sc.name) : []
   })
 
+  const toolRows = () => Math.max(4, Math.min(14, dims().height - 14))
+  const toolStart = () => Math.max(0, Math.min(index() - Math.floor(toolRows() / 2), tools().length - toolRows()))
   const shortName = (t: ToolDef) => (t.displayName ?? t.name).split(" · ").pop()!
   /** Names padded to one column so the [label] column lines up. */
   const toolNameWidth = createMemo(() => Math.min(Math.max(8, ...tools().map((t) => cells(shortName(t)))), Math.floor(dims().width * 0.45)))
@@ -284,7 +287,7 @@ export function McpPanel(props: { mcp: McpManager; cwd: string }) {
     }
   }
 
-  useKeyboard((evt) => {
+  useKeys((evt) => {
     if (evt.eventType === "release") return
     const sc = screen()
     const typing = sc.kind === "catalog" || sc.kind === "custom"
@@ -359,12 +362,12 @@ export function McpPanel(props: { mcp: McpManager; cwd: string }) {
     const sc = screen()
     switch (sc.kind) {
       case "list":
-        return "↑↓ di chuyển · enter chọn · space bật/tắt · r kết nối lại · esc đóng"
+        return "↑↓ chọn · enter chọn · space bật/tắt · r kết nối lại · esc đóng"
       case "server":
       case "remove":
-        return "↑↓ di chuyển · enter chọn · 1-9 chọn nhanh · esc quay lại"
+        return "↑↓ chọn · enter chọn · 1-9 chọn nhanh · esc quay lại"
       case "tools":
-        return "↑↓ di chuyển · enter xem chi tiết · esc quay lại"
+        return "↑↓ chọn · enter xem chi tiết · esc quay lại"
       case "auth":
         return "c copy link · esc huỷ đăng nhập"
       case "catalog":
@@ -381,6 +384,8 @@ export function McpPanel(props: { mcp: McpManager; cwd: string }) {
   return (
     <box
       flexShrink={0}
+      maxHeight={Math.max(8, dims().height - 4)}
+      overflow="hidden"
       border={["top"]}
       borderColor={color.tang}
       backgroundColor={color.panel}
@@ -413,7 +418,7 @@ export function McpPanel(props: { mcp: McpManager; cwd: string }) {
                           <span style={{ fg: active() ? color.tang : color.tx }}>{`${active() ? "❯" : " "} ${s().name}`}</span>
                           <span style={{ fg: color.tx3 }}>{" · "}</span>
                           <span style={{ fg: STATUS[s().state].fg }}>{STATUS[s().state].glyph}</span>
-                          <span style={{ fg: active() ? color.tx2 : color.tx3 }}>{` ${statusText(s())}`}</span>
+                          <span style={{ fg: active() ? color.tx2 : color.tx3 }}>{truncate(` ${statusText(s())}`, dims().width - 14 - s().name.length)}</span>
                         </text>
                       )}
                     </Match>
@@ -421,7 +426,7 @@ export function McpPanel(props: { mcp: McpManager; cwd: string }) {
                       {(entry) => (
                         <text wrapMode="none">
                           <span style={{ fg: active() ? color.tang : color.tx2 }}>{`${active() ? "❯" : " "} ${entry().id}`}</span>
-                          <span style={{ fg: color.tx3 }}>{` · ○ ${catalogNeeds(entry().id)} · ${entry().description}`}</span>
+                          <span style={{ fg: color.tx3 }}>{truncate(` · ○ ${catalogNeeds(entry().id)} · ${entry().description}`, dims().width - 10 - entry().id.length)}</span>
                         </text>
                       )}
                     </Match>
@@ -500,7 +505,7 @@ export function McpPanel(props: { mcp: McpManager; cwd: string }) {
           </text>
           <text fg={color.tx3} wrapMode="none">{`${tools().length} tool · ${BADGE_LEGEND}`}</text>
           <box flexDirection="column" marginTop={1}>
-            <For each={tools().slice(Math.max(0, Math.min(index() - 6, tools().length - 12)), Math.max(0, Math.min(index() - 6, tools().length - 12)) + 12)}>
+            <For each={tools().slice(toolStart(), toolStart() + toolRows())}>
               {(t) => {
                 const active = () => tools()[index()] === t
                 const mark = toolMark(t)
@@ -516,7 +521,7 @@ export function McpPanel(props: { mcp: McpManager; cwd: string }) {
                 )
               }}
             </For>
-            <Show when={tools().length > 12}>
+            <Show when={tools().length > toolRows()}>
               <text fg={color.tx3}>{`  ${index() + 1}/${tools().length}`}</text>
             </Show>
           </box>
@@ -600,7 +605,7 @@ export function McpPanel(props: { mcp: McpManager; cwd: string }) {
                   <text fg={color.tham}>{`${entry().folder!.label}: `}</text>
                   <input
                     flexGrow={1}
-                    focused
+                    focused={!blocked()}
                     value={props.cwd}
                     textColor={color.tx}
                     focusedTextColor={color.tx}
@@ -659,7 +664,7 @@ export function McpPanel(props: { mcp: McpManager; cwd: string }) {
           {error()}
         </text>
       </Show>
-      <text fg={color.tx3} marginTop={1}>
+      <text fg={color.tx3} marginTop={1} wrapMode="none" flexShrink={0}>
         {footer()}
       </text>
     </box>
@@ -676,14 +681,14 @@ function SecretField(props: { label: string; onChange: (v: string) => void; onSu
     setValue(next)
     props.onChange(next)
   }
-  useKeyboard((evt) => {
+  useKeys((evt) => {
     if (evt.eventType === "release") return
     if (evt.name === "return") return props.onSubmit()
     if (evt.name === "backspace") set(value().slice(0, -1))
     else if (evt.ctrl && evt.name === "u") set("")
     else if (!evt.ctrl && !evt.meta && evt.sequence.length === 1 && evt.sequence > " ") set(value() + evt.sequence)
   })
-  usePaste((evt) => set(value() + new TextDecoder().decode(evt.bytes).replace(/\s+/g, "")))
+  usePasteWhenFree((evt) => set(value() + new TextDecoder().decode(evt.bytes).replace(/\s+/g, "")))
   return (
     <box flexDirection="row">
       <text fg={color.tham}>{`${props.label}: `}</text>
@@ -696,7 +701,7 @@ function SecretField(props: { label: string; onChange: (v: string) => void; onSu
 
 /** Without an input on screen, enter would otherwise be swallowed: a tiny keyboard hook. */
 function EnterToConfirm(props: { label: string; onEnter: () => void }) {
-  useKeyboard((evt) => {
+  useKeys((evt) => {
     if (evt.eventType !== "release" && evt.name === "return") props.onEnter()
   })
   return (
@@ -708,7 +713,7 @@ function EnterToConfirm(props: { label: string; onEnter: () => void }) {
 
 function CustomForm(props: { onName: (v: string) => void; onTarget: (v: string) => void; onSubmit: () => void }) {
   const [field, setField] = createSignal<"name" | "target">("name")
-  useKeyboard((evt) => {
+  useKeys((evt) => {
     if (evt.eventType === "release") return
     if (evt.name === "tab" || evt.name === "down" || evt.name === "up") {
       evt.preventDefault()
@@ -722,7 +727,7 @@ function CustomForm(props: { onName: (v: string) => void; onTarget: (v: string) 
       </text>
       <input
         flexGrow={1}
-        focused={field() === key}
+        focused={field() === key && !blocked()}
         placeholder={placeholder}
         textColor={color.tx}
         focusedTextColor={color.tx}

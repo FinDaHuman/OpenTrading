@@ -1,4 +1,4 @@
-import { useKeyboard } from "@opentui/solid"
+import { useKeys } from "../ui/keys"
 import { createResource } from "solid-js"
 import { loadConfig, saveConfig } from "../../core/config"
 import { configFile } from "../../core/paths"
@@ -14,7 +14,7 @@ type Setting = "memory"
 export function ConfigDialog(props: { runtime: Runtime }) {
   const [config, { refetch }] = createResource(loadConfig)
 
-  useKeyboard((evt) => {
+  useKeys((evt) => {
     if (evt.eventType !== "release" && evt.name === "escape") closeDialog()
   })
 
@@ -34,7 +34,7 @@ export function ConfigDialog(props: { runtime: Runtime }) {
   }
 
   return (
-    <DialogFrame title="Cài đặt" hint="enter đổi · esc đóng" width={80}>
+    <DialogFrame title="Cài đặt" hint="enter đổi · esc đóng">
       <Picker
         items={[
           {

@@ -1,5 +1,7 @@
-import { useKeyboard, useTerminalDimensions } from "@opentui/solid"
+import { useTerminalDimensions } from "@opentui/solid"
+import { useKeys } from "../ui/keys"
 import { createMemo, createSignal, For, Show } from "solid-js"
+import { blocked } from "../state"
 import { color } from "../theme"
 import { pad, rank, truncate, width as cells } from "../ui/text"
 
@@ -88,7 +90,7 @@ export function Picker<T>(props: {
     props.onHighlight?.(visible()[i]?.value)
   }
 
-  useKeyboard((evt) => {
+  useKeys((evt) => {
     if (evt.eventType === "release") return
     if (evt.name === "up") highlight(wrap(index() - 1))
     else if (evt.name === "down") highlight(wrap(index() + 1))
@@ -104,7 +106,7 @@ export function Picker<T>(props: {
         </text>
         <input
           flexGrow={1}
-          focused
+          focused={!blocked()}
           value={props.initialFilter ?? ""}
           placeholder={props.placeholder ?? "gõ để lọc…"}
           textColor={color.tx}

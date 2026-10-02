@@ -933,6 +933,76 @@ test("highlighting with the mouse copies the words only (no ● / ⎿, no traili
   await setup.waitForFrame((f) => f.includes("Hỏi về thị trường"))
 })
 
+test("an approval in the middle of a question set keeps the answers already picked", async () => {
+  const { z } = await import("zod")
+  const asking = runtime.questions.ask(ASK_MANY.questions as never, new AbortController().signal, "call_keep")
+  await setup.waitForFrame((f) => f.includes("[ ] Khung TG"))
+  await setup.mockInput.typeText("3") // "Trên 3 năm" → moves to the next question
+  await setup.waitForFrame((f) => f.includes("[x] Khung TG") && f.includes("Bạn quan tâm ngành nào?"))
+  await setup.mockInput.typeText("1") // Ngân hàng, picked but not sent
+
+  runtime.registry.register({ name: "ghi_tam", description: "Ghi (tool thử)", input: z.object({}), readOnly: false, execute: async () => "ok" })
+  const decision = runtime.permissions.check(runtime.registry.get("ghi_tam")!, {}, new AbortController().signal, "test · ghi_tam")
+  let frame = await setup.waitForFrame((f) => f.includes("Cần xác nhận") && !f.includes("Bạn quan tâm ngành nào?"))
+  await setup.mockInput.typeText("4")
+  expect((await decision).allow).toBe(false)
+
+  // The question set comes back exactly as it was left.
+  frame = await setup.waitForFrame((f) => f.includes("Bạn quan tâm ngành nào?") && f.includes("[x] Khung TG"))
+  expect(frame).toMatch(/\[x\] Ngân hàng/)
+  setup.mockInput.pressArrow("right")
+  frame = await setup.waitForFrame((f) => f.includes("Xem lại câu trả lời"))
+  expect(frame).toContain("→ Trên 3 năm")
+  expect(frame).toContain("→ Ngân hàng")
+  setup.mockInput.pressEnter()
+  const result = await asking
+  expect(result).toEqual({ answered: true, answers: { "Bạn đầu tư trong bao lâu?": "Trên 3 năm", "Bạn quan tâm ngành nào?": "Ngân hàng" } })
+  runtime.registry.unregister("ghi_tam")
+}, 30_000)
+
+test("an approval while a panel is open keeps what was typed there; the panel ignores keys meanwhile", async () => {
+  const { z } = await import("zod")
+  await setup.mockInput.typeText("/connect")
+  setup.mockInput.pressEnter()
+  await setup.waitForFrame((f) => f.includes("Kết nối provider"))
+  setup.mockInput.pressEnter() // first provider
+  await setup.waitForFrame((f) => f.includes("API key ·"))
+  await setup.mockInput.pasteBracketedText("gsk_giu_nguyen")
+  await setup.waitForFrame((f) => f.includes("14 ký tự"))
+
+  runtime.registry.register({ name: "ghi_tam2", description: "Ghi (tool thử)", input: z.object({}), readOnly: false, execute: async () => "ok" })
+  const decision = runtime.permissions.check(runtime.registry.get("ghi_tam2")!, {}, new AbortController().signal, "test · ghi_tam2")
+  await setup.waitForFrame((f) => f.includes("Cần xác nhận") && !f.includes("14 ký tự"))
+  expect(state.dialog).toBe("connect") // not closed
+  await setup.mockInput.typeText("4") // answers the approval only; nothing typed into the key
+  expect((await decision).allow).toBe(false)
+  await setup.waitForFrame((f) => f.includes("14 ký tự"))
+  runtime.registry.unregister("ghi_tam2")
+  setup.mockInput.pressEscape()
+  await setup.waitForFrame((f) => !f.includes("API key ·"))
+  if (state.dialog) setup.mockInput.pressEscape()
+  await setup.waitFor(() => state.dialog === undefined)
+})
+
+test("approval note: a note abandoned with esc is not sent later", async () => {
+  const { z } = await import("zod")
+  runtime.registry.register({ name: "ghi_tam3", description: "Ghi (tool thử)", input: z.object({}), readOnly: false, execute: async () => "ok" })
+  const decision = runtime.permissions.check(runtime.registry.get("ghi_tam3")!, {}, new AbortController().signal, "test · ghi_tam3")
+  await setup.waitForFrame((f) => f.includes("Cần xác nhận"))
+  setup.mockInput.pressTab()
+  await setup.waitForFrame((f) => f.includes("Lời nhắn cho model"))
+  await setup.mockInput.typeText("lời cũ")
+  setup.mockInput.pressEscape()
+  await setup.waitForFrame((f) => !f.includes("Lời nhắn cho model"))
+  setup.mockInput.pressTab()
+  await setup.waitForFrame((f) => f.includes("Lời nhắn cho model"))
+  setup.mockInput.pressEnter()
+  const d = await decision
+  expect(d.allow).toBe(false)
+  expect(d.message).toBeUndefined()
+  runtime.registry.unregister("ghi_tam3")
+})
+
 test("/new starts a fresh session; /sessions reopens the previous one with its tool rows", async () => {
   const before = state.lines.length
   expect(before).toBeGreaterThan(0)

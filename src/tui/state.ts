@@ -97,3 +97,9 @@ export function requestExit() {
   if (exitHandler) exitHandler()
   else process.exit(0)
 }
+
+/**
+ * A prompt (approval or question) sits on top. Panels and dialogs stay mounted underneath —
+ * nothing typed or chosen is lost — but must not react to keys meanwhile.
+ */
+export const blocked = () => Boolean(state.approval || state.question)

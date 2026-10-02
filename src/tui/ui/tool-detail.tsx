@@ -4,6 +4,7 @@ import { z } from "zod"
 import type { ToolDef } from "../../core/tools/types"
 import { color } from "../theme"
 import { BADGE, toolBadge } from "./badges"
+import { truncate } from "./text"
 
 /** A titled field row: bold label, value (status coloured). */
 export function Field(props: { label: string; children: JSX.Element }) {
@@ -12,7 +13,7 @@ export function Field(props: { label: string; children: JSX.Element }) {
       <text fg={color.tx} width={14} flexShrink={0}>
         <span style={{ bold: true }}>{props.label}</span>
       </text>
-      <text fg={color.tx2} wrapMode="none">
+      <text fg={color.tx2} wrapMode="none" flexShrink={1} overflow="hidden">
         {props.children}
       </text>
     </box>
@@ -68,7 +69,7 @@ export function ToolDetail(props: { tool: ToolDef; server: string }) {
         {(p) => (
           <text wrapMode="none">
             <span style={{ fg: color.tx }}>{`  • ${p.key}`}</span>
-            <span style={{ fg: color.tx3 }}>{`${p.required ? " (bắt buộc)" : ""}: ${p.type}${p.description ? ` - ${p.description}` : ""}`}</span>
+            <span style={{ fg: color.tx3 }}>{truncate(`${p.required ? " (bắt buộc)" : ""}: ${p.type}${p.description ? ` - ${p.description}` : ""}`, 90)}</span>
           </text>
         )}
       </For>
