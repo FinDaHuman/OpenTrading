@@ -1,4 +1,4 @@
-import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid"
+import { useKeyboard, usePaste, useRenderer, useTerminalDimensions } from "@opentui/solid"
 import { createMemo, createResource, createSignal, For, Match, onCleanup, Show, Switch, type JSX } from "solid-js"
 import { availableCatalog, MCP_CATALOG, missingRequirement } from "../../core/mcp/catalog"
 import { isRemote, type ServerConfig } from "../../core/mcp/config"
@@ -50,7 +50,7 @@ function catalogNeeds(id: string) {
 
 interface MenuItem {
   label: string
-  run: () => void | Promise<void>
+  run: () => unknown
   danger?: boolean
 }
 
@@ -107,14 +107,17 @@ export function McpPanel(props: { mcp: McpManager; cwd: string }) {
   }
   const server = (name: string) => state.mcp.find((s) => s.name === name)
 
-  async function act(label: string, fn: () => Promise<unknown>) {
-    if (busy()) return
+  /** Run one action at a time; resolves true when it succeeded. */
+  async function act(label: string, fn: () => Promise<unknown>): Promise<boolean> {
+    if (busy()) return false
     setBusy(label)
     setError(undefined)
     try {
       await fn()
+      return true
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
+      return false
     } finally {
       setBusy(undefined)
     }
@@ -177,6 +180,7 @@ export function McpPanel(props: { mcp: McpManager; cwd: string }) {
   )
 
   function startLogin(name: string) {
+    if (login) return
     login = new AbortController()
     go({ kind: "auth", name })
     void act("đang đăng nhập…", async () => {
@@ -225,7 +229,8 @@ export function McpPanel(props: { mcp: McpManager; cwd: string }) {
       items.push({ label: "Kết nối lại", run: () => act("đang kết nối lại…", () => props.mcp.restart(name)) })
       items.push({ label: "Tắt", run: () => act("đang tắt…", () => props.mcp.setEnabled(name, false)) })
     }
-    items.push({ label: "Xoá khỏi cấu hình…", danger: true, run: () => go({ kind: "remove", name }) })
+    // Project servers live in the repo's .mcp.json (shared, often tracked): edit it by hand.
+    if (s.scope === "global") items.push({ label: "Xoá khỏi cấu hình…", danger: true, run: () => go({ kind: "remove", name }) })
     return items
   })
 
@@ -250,7 +255,9 @@ export function McpPanel(props: { mcp: McpManager; cwd: string }) {
     const sc = screen()
     if (sc.kind === "list") return closeDialog()
     if (sc.kind === "auth") {
-      login?.abort()
+      // Cancel a login in flight (its handler returns to the server screen); otherwise just go back.
+      if (login) login.abort()
+      else go({ kind: "server", name: sc.name })
       return
     }
     if (sc.kind === "tool") {
@@ -321,14 +328,17 @@ export function McpPanel(props: { mcp: McpManager; cwd: string }) {
     const missing = missingRequirement(entry)
     if (missing) return setError(missing)
     if (entry.secret && !input.secret.trim()) return setError(`Dán ${entry.secret.label} trước.`)
-    void act("đang bật và kết nối…", async () => {
-      const secrets = entry.secret ? { [entry.secret.env]: input.secret.trim() } : {}
-      await props.mcp.add(entry.id, entry.build({ folder: input.folder.trim() || props.cwd }), secrets)
-      pushLine({ kind: "info", text: `Đã bật MCP server "${entry.name}".` })
-      const s = server(entry.id)
-      if (entry.auth === "oauth" && s?.state === "needs-auth") startLogin(entry.id)
+    void (async () => {
+      const ok = await act("đang bật và kết nối…", async () => {
+        const secrets = entry.secret ? { [entry.secret.env]: input.secret.trim() } : {}
+        await props.mcp.add(entry.id, entry.build({ folder: input.folder.trim() || props.cwd }), secrets)
+        pushLine({ kind: "info", text: `Đã bật MCP server "${entry.name}".` })
+      })
+      if (!ok) return
+      // Log in only after the enable action finished: one action at a time.
+      if (entry.auth === "oauth" && server(entry.id)?.state === "needs-auth") startLogin(entry.id)
       else go({ kind: "server", name: entry.id })
-    })
+    })()
   }
 
   function addCustom() {
@@ -582,20 +592,11 @@ export function McpPanel(props: { mcp: McpManager; cwd: string }) {
                     <Show when={secret().url}>
                       <text fg={color.tx3}>{`Lấy token: ${secret().url}`}</text>
                     </Show>
-                    <box flexDirection="row">
-                      <text fg={color.tham}>{`${secret().label}: `}</text>
-                      <input
-                        flexGrow={1}
-                        focused
-                        placeholder="dán token rồi enter"
-                        textColor={color.tx}
-                        focusedTextColor={color.tx}
-                        backgroundColor={color.panel2}
-                        focusedBackgroundColor={color.panel2}
-                        onInput={(v: string) => (input.secret = v)}
-                        onSubmit={() => enableCatalog(entry().id)}
-                      />
-                    </box>
+                    <SecretField
+                      label={secret().label}
+                      onChange={(v) => (input.secret = v)}
+                      onSubmit={() => enableCatalog(entry().id)}
+                    />
                   </box>
                 )}
               </Show>
@@ -665,6 +666,34 @@ export function McpPanel(props: { mcp: McpManager; cwd: string }) {
       </Show>
       <text fg={color.tx3} marginTop={1}>
         {footer()}
+      </text>
+    </box>
+  )
+}
+
+/**
+ * Token entry that never shows the token: only `••••  N ký tự`, like /connect — users send
+ * screenshots, and a pasted PAT must not be in them.
+ */
+function SecretField(props: { label: string; onChange: (v: string) => void; onSubmit: () => void }) {
+  const [value, setValue] = createSignal("")
+  const set = (next: string) => {
+    setValue(next)
+    props.onChange(next)
+  }
+  useKeyboard((evt) => {
+    if (evt.eventType === "release") return
+    if (evt.name === "return") return props.onSubmit()
+    if (evt.name === "backspace") set(value().slice(0, -1))
+    else if (evt.ctrl && evt.name === "u") set("")
+    else if (!evt.ctrl && !evt.meta && evt.sequence.length === 1 && evt.sequence > " ") set(value() + evt.sequence)
+  })
+  usePaste((evt) => set(value() + new TextDecoder().decode(evt.bytes).replace(/\s+/g, "")))
+  return (
+    <box flexDirection="row">
+      <text fg={color.tham}>{`${props.label}: `}</text>
+      <text fg={value() ? color.tx : color.tx3}>
+        {value() ? `${"•".repeat(Math.min(value().length, 40))}  ${value().length} ký tự` : "dán token rồi enter (ctrl+u xoá)"}
       </text>
     </box>
   )

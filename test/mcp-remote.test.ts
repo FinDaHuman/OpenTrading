@@ -397,5 +397,5 @@ test("manager add / setEnabled / remove edit mcp.json and reload only what chang
   expect(Object.keys(JSON.parse(await readFile(path.join(home, "mcp.json"), "utf8")).mcpServers)).toEqual(["first"])
   // MCP tools carry what the approval prompt needs.
   expect(registry.get("mcp__first__screenshot")).toMatchObject({ readOnly: true, displayName: "first · screenshot" })
-  expect(registry.get("mcp__first__echo")!.permissionScope).toMatch(/^first@[0-9a-f]{16}$/)
+  expect(registry.get("mcp__first__echo")!.permissionScope).toMatch(/^global:first@[0-9a-f]{16}$/)
 })

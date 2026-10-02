@@ -697,8 +697,11 @@ export class McpManager {
     const toolTimeoutMs = config.toolTimeoutMs ?? DEFAULT_TOOL_TIMEOUT_MS
     const priority = Math.max(0, [...this.entries.keys()].indexOf(name))
     // "Always allow" rules bind to what the server is (URL or command), not just its name.
-    const entryConfig = this.entries.get(name)?.config
-    const permissionScope = entryConfig ? `${name}@${fingerprint(entryConfig)}` : name
+    // Scope and the project's folder count too: identical raw config can run different code
+    // in another repo (relative paths), and must not inherit the user's global allows.
+    const entry = this.entries.get(name)
+    const where = entry?.scope === "project" ? `project:${path.dirname(entry.file)}` : "global"
+    const permissionScope = entry?.config ? `${where}:${name}@${fingerprint(entry.config)}` : `${where}:${name}`
     const registered: string[] = []
     let hidden = 0
     for (const tool of tools) {

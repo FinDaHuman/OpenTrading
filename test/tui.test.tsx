@@ -49,6 +49,8 @@ const chatCalls: string[] = []
 globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   const url = String(input instanceof Request ? input.url : input)
   const auth = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined)).get("authorization")
+  // In-process test servers (MCP over HTTP) are real.
+  if (url.startsWith("http://127.0.0.1:")) return realFetch(input, init)
   if (url.endsWith("/api.json")) return Response.json(CATALOG)
   if (auth?.includes("bad")) return Response.json({ error: { message: "Invalid API Key" } }, { status: 401 })
   if (url.endsWith("/chat/completions")) {
@@ -254,10 +256,10 @@ test("an invalid key surfaces as a Vietnamese error line", async () => {
   await setup.waitFor(() => !state.streaming)
 })
 
-const waitMcp = async (pred: () => boolean) => {
+const waitMcp = async (pred: () => boolean, what = pred.toString()) => {
   // Spawning or stopping the server takes real time, so poll the clock instead of render passes.
   for (let i = 0; i < 200 && !pred(); i++) await new Promise((r) => setTimeout(r, 100))
-  expect(pred()).toBe(true)
+  expect({ what, ok: pred(), mcp: pred() ? undefined : state.mcp.map((s) => `${s.name}:${s.state}:${s.error ?? ""}`) }).toEqual({ what, ok: true, mcp: undefined })
 }
 
 test("/mcp: grouped list → server menu → tools → tool detail, esc steps back", async () => {
@@ -342,6 +344,73 @@ test("/mcp: space turns a server off and on (saved to mcp.json); catalog entries
   await setup.waitFor(() => state.dialog === undefined)
 }, 30_000)
 
+test("/mcp: enabling an OAuth catalog entry connects, then starts the login (no stuck screen)", async () => {
+  const { MCP_CATALOG } = await import("../src/core/mcp/catalog")
+  const { startHttpServer } = await import("./fixtures/remote-mcp")
+  const remote = startHttpServer({ oauth: true })
+  const notion = MCP_CATALOG.find((e) => e.id === "notion")!
+  const build = notion.build
+  notion.build = () => ({ type: "http", url: remote.url })
+  const realLogin = runtime.mcp.login.bind(runtime.mcp)
+  const logins: string[] = []
+  runtime.mcp.login = async (name, opts) => {
+    logins.push(name)
+    opts.onUrl("https://login.example/authorize?client_id=x&state=y")
+    await new Promise<void>((resolve) => opts.signal?.addEventListener("abort", () => resolve(), { once: true }))
+    throw new Error("Đã huỷ đăng nhập.")
+  }
+  try {
+    await setup.mockInput.typeText("/mcp")
+    setup.mockInput.pressEnter()
+    await setup.waitForFrame((f) => f.includes("❯ demo"))
+    for (let i = 0; i < 3; i++) setup.mockInput.pressArrow("down") // context7, github, notion
+    await setup.waitForFrame((f) => f.includes("❯ notion"))
+    setup.mockInput.pressEnter()
+    await setup.waitForFrame((f) => f.includes("Notion · có sẵn, đang tắt") && f.includes("enter để bật"))
+    setup.mockInput.pressEnter()
+    await waitMcp(() => logins.length === 1)
+    expect(logins).toEqual(["notion"])
+    expect(state.mcp.find((s) => s.name === "notion")?.state).toBe("needs-auth")
+    const frame = await setup.waitForFrame((f) => f.includes("Đang đăng nhập notion") && f.includes("login.example"))
+    show(frame)
+    // Esc cancels the login and returns to the server screen.
+    setup.mockInput.pressEscape()
+    await setup.waitForFrame((f) => f.includes("notion · MCP server"))
+    // Then remove it again (global servers can be removed from the panel).
+    // Menu for a server that needs auth: 1 Đăng nhập · 2 Kết nối lại · 3 Tắt · 4 Xoá…
+    const menu = await setup.waitForFrame((f) => f.includes("4. Xoá khỏi cấu hình"))
+    expect(menu).toContain("1. Đăng nhập")
+    await setup.mockInput.typeText("4")
+    await setup.waitForFrame((f) => f.includes("Xoá \"notion\""))
+    setup.mockInput.pressEnter()
+    await waitMcp(() => !state.mcp.some((s) => s.name === "notion"))
+    setup.mockInput.pressEscape()
+    await setup.waitFor(() => state.dialog === undefined)
+  } finally {
+    notion.build = build
+    runtime.mcp.login = realLogin
+    remote.stop()
+  }
+}, 30_000)
+
+test("/mcp: a pasted token is never shown on screen", async () => {
+  await setup.mockInput.typeText("/mcp")
+  setup.mockInput.pressEnter()
+  await setup.waitForFrame((f) => f.includes("❯ demo"))
+  for (let i = 0; i < 2; i++) setup.mockInput.pressArrow("down") // context7, github
+  await setup.waitForFrame((f) => f.includes("❯ github"))
+  setup.mockInput.pressEnter()
+  await setup.waitForFrame((f) => f.includes("GitHub Personal Access Token"))
+  await setup.mockInput.pasteBracketedText("ghp_SECRET_1234567890")
+  const frame = await setup.waitForFrame((f) => f.includes("21 ký tự"))
+  show(frame)
+  expect(frame).not.toContain("ghp_SECRET")
+  setup.mockInput.pressEscape()
+  await setup.waitForFrame((f) => f.includes("Quản lý MCP server"))
+  setup.mockInput.pressEscape()
+  await setup.waitFor(() => state.dialog === undefined)
+})
+
 test("/tools lists built-in and MCP tools", async () => {
   await setup.mockInput.typeText("/tools")
   setup.mockInput.pressEnter()
@@ -420,7 +489,7 @@ test("a tool call renders as a ⚙ row with its result, then the answer", async 
   expect(roles.slice(-4)).toEqual(["user", "assistant", "tool", "assistant"])
 })
 
-test("a write tool asks first: 4 denies (the model is told), 2 allows for the session", async () => {
+test("a write tool asks first: esc denies just that call (the turn goes on), 2 allows for the session", async () => {
   const toolResult = () => {
     const tool = [...state.history].reverse().find((m) => m.role === "tool")
     return JSON.stringify(tool?.content ?? "")
@@ -435,11 +504,16 @@ test("a write tool asks first: 4 denies (the model is told), 2 allows for the se
   expect(frame).toContain("Có, cả phiên này")
   expect(frame).toContain("Luôn cho phép")
   expect(frame).not.toContain("Hỏi về thị trường") // the prompt input is hidden meanwhile
-  await setup.mockInput.typeText("4")
+  // Esc answers the prompt with "no" — it must not also stop the turn.
+  setup.mockInput.pressEscape()
   frame = await setup.waitForFrame((f) => f.includes("✘ Đã từ chối demo · ghi_chu"))
   await waitMcp(() => !state.streaming)
   expect(toolResult()).toContain("Người dùng từ chối chạy tool này")
   expect(state.approval).toBeUndefined()
+  const answer = state.history.at(-1)
+  expect(answer?.role).toBe("assistant")
+  expect(JSON.stringify(answer?.content)).toContain("HẾT-CÂU-TRẢ-LỜI")
+  expect(JSON.stringify(answer?.content)).not.toContain("Đã dừng")
 
   await setup.mockInput.typeText("GHI-CHÚ lần nữa")
   setup.mockInput.pressEnter()
