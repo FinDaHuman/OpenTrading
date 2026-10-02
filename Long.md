@@ -1,22 +1,23 @@
-# Long.md — Việc tiếp theo cho nhánh mcp-server (tạo 02/10/2026)
+# Long.md — Việc tiếp theo cho OpenTrading (cập nhật 02/10/2026)
 
 ## Trạng thái hiện tại
 
-- Nhánh `mcp-server` @ 5c076fe (chưa commit): MCP client dual-transport (http + stdio),
-  preset + `switch_preset` qua hộp phê duyệt, 27+3 skills theo
-  `MCP-server/docs/skills-design-for-harness.md`, MCP prompts → slash commands,
-  doom-loop guard, budget 20 calls/lượt, cap 5 tool đọc song song, maxOutputChars 12k,
-  **onboarding first-run `/mcp-setup`** (tự tạo mcp.json + lưu token secret).
-- Test: 99/100 pass (1 fail cũ từ main — bug date ở `test/session.test.ts`).
+- **PR #11** (nhánh `mcp-server`) đã tạo + push: https://github.com/FinDaHuman/OpenTrading/pull/11
+  gồm 4 commit: fix session-folder date · preset-first + switch_preset + guards +
+  onboarding · 27 skills · docs/samples. Test **100/100 pass**, tsc sạch.
+- **Sau khi merge: team chỉ cần `git checkout main && git pull && bun install`**
+  — hướng dẫn đầy đủ ở mục "HƯỚNG DẪN KẾT NỐI CHO TEAM" dưới đây.
 
 ---
 
-# HƯỚNG DẪN KẾT NỐI CHO TEAM (đã hoàn thành trên nhánh mcp-server)
+---
+
+# HƯỚNG DẪN KẾT NỐI CHO TEAM (đã có trong PR #11)
 
 ## Cách 1 — Có token (khuyên dùng, 4 bước)
 
 ```bash
-# 1. Lấy code
+# 1. Lấy code (SAU KHI PR #11 merge: git checkout main && git pull)
 git fetch origin && git checkout mcp-server && bun install
 
 # 2. Xin TEAM_TOKEN từ admin (kênh nội bộ) — KHÔNG commit token
@@ -72,14 +73,14 @@ bun run dev   # → /mcp → enter cho phép project config lần đầu
 
 ---
 
-## Việc 1 — Commit + PR
+## Việc 1 — Commit + PR ✅ ĐÃ XONG (02/10/2026)
 
-- Fix bug date `test/session.test.ts` trước (`src/core/session/store.ts`: kỳ vọng
-  folder `2026/09` nhưng now() thật là tháng 10 — test dùng ngày cố định phải
-  inject clock).
-- `git add` nhóm: (a) preset + switch_preset + approvals, (b) prompts slash +
-  guards (doom-loop/budget/RwLock cap), (c) 27 skills + schema `tool_budget`.
-- Push `origin mcp-server` → tạo PR lên main.
+- Fix bug date `session.test.ts` (commit `ea46e2f`) — test dùng now thật được
+  inject qua `Session.create(now)`; hiện **100/100 pass**.
+- 4 commit đã push + PR #11: https://github.com/FinDaHuman/OpenTrading/pull/11
+- **Việc còn lại của bạn: review + merge PR #11 trên GitHub.**
+- Sau merge: `git checkout main && git pull` — code đã có trên main; cấu hình
+  MCP + token + key LLM là phần cá nhân theo hướng dẫn ở trên.
 
 ## Việc 2 — Compaction chống tràn context (gap lớn nhất vs opencode)
 
@@ -134,3 +135,5 @@ bun run dev   # → /mcp → enter cho phép project config lần đầu
 - `fillPromptArgs` hỗ trợ `name=value` + positional — prompt >3 tham số nên
   hiện gợi ý cú pháp trong description.
 - Render free-tier sleep 20-40s — cân nhắc warm-up `/healthz` trước `tools/list`.
+- Chạy toàn bộ samples cần model ổn định: qwen3-max cạn free-quota giữa phiên,
+  Groq TPM 8k (413/429) — `/doctor` (Việc 6) sẽ kiểm tra trước khi chạy.
