@@ -21,6 +21,11 @@ export const SkillFrontmatter = z.object({
   triggers: z.object({ keywords: z.array(z.string()).default([]) }).optional(),
   /** Hide the skill unless all these tools are available (e.g. an MCP data tool). */
   requires_tools: z.array(z.string()).optional(),
+  /**
+   * Tool calls this skill may spend per run (skills-design-for-harness §0.3). Shown in the
+   * catalog so the model self-limits; the harness enforces a looser per-turn total cap.
+   */
+  tool_budget: z.number().int().positive().max(30).optional(),
   version: z.union([z.string(), z.number()]).transform(String).optional(),
 })
 
