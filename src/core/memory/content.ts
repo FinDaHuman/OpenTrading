@@ -106,7 +106,11 @@ const sentences = (text: string) => text.split(/[!?\n]|\.(?!\p{N})/u)
 function valuation(text: string): "value" | "threshold" | null {
   let found: "value" | "threshold" | null = null
   for (const m of text.matchAll(METRIC)) {
-    const window = text.slice(m.index + m[0].length).split(/\s+/).filter(Boolean).slice(0, 3)
+    const window = text
+      .slice(m.index + m[0].length)
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 3)
     const at = window.findIndex((t) => HAS_NUMBER.test(t))
     if (at < 0) continue
     if (COMPARATOR.test(window.slice(0, at + 1).join(" "))) found ??= "threshold"
