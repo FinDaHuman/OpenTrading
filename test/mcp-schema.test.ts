@@ -128,6 +128,28 @@ test("synthetic: $ref (incl. cycles) is inlined, const becomes enum, tuples and 
   expect(gemini.properties.when.format).toBeUndefined()
 })
 
+test("synthetic: a root union keeps every variant's parameters (as optional)", () => {
+  // "Give a path or a URL" — a common hand-written shape that OpenAI rejects at the root.
+  const schema = {
+    type: "object",
+    properties: { encoding: { type: "string" } },
+    oneOf: [
+      { properties: { path: { type: "string" } }, required: ["path"] },
+      { properties: { url: { type: "string", format: "uri" } }, required: ["url"] },
+    ],
+    allOf: [{ properties: { mode: { type: "string" } }, required: ["mode"] }],
+  }
+  const before = ["encoding", "path", "url", "mode"]
+  for (const flavor of ["default", "gemini"] as const) {
+    const out = sanitizeSchema(schema, flavor) as Record<string, any>
+    expect(Object.keys(out.properties).sort()).toEqual([...before].sort())
+    expect(out.required).toEqual(["mode"])
+    expect(out.oneOf).toBeUndefined()
+    expect(out.allOf).toBeUndefined()
+    expect(propertyPaths(out).sort()).toEqual([...before].sort())
+  }
+})
+
 test("Gemini: non-string enums keep their type and move into the description", () => {
   const out = sanitizeSchema({ type: "object", properties: { level: { type: "integer", enum: [1, 2, 3], description: "Mức" } } }, "gemini") as Record<string, any>
   expect(out.properties.level).toEqual({ type: "integer", description: "Mức Một trong: 1, 2, 3." })

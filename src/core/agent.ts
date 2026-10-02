@@ -184,18 +184,38 @@ interface Prepared {
   supportsTools: boolean
 }
 
-/** Providers whose AI SDK package passes images inside tool results to the model. */
-const IMAGE_TOOL_RESULTS = new Set(["@ai-sdk/anthropic", "@ai-sdk/openai", "@ai-sdk/google", "@ai-sdk/google-vertex"])
+type TargetLike = {
+  provider: { npm?: string; api?: string; models: Record<string, { modalities?: { input?: string[] }; provider?: { npm?: string; api?: string } }> }
+  model: string
+}
+
+/**
+ * Whether images in tool results reach the model as real image parts. Only the request
+ * shapes checked in test/image-routing.test.ts (against the bundled SDKs) qualify:
+ * - Anthropic: an image block inside tool_result.
+ * - OpenAI Responses API (the official endpoint): input_image in function_call_output.
+ *   OpenAI-SDK providers with their own base URL use Chat Completions, which puts the
+ *   base64 into the tool message as text — never there.
+ * - Gemini 3: inlineData inside functionResponse.parts. Gemini 2.x takes a different
+ *   ("legacy") shape we cannot verify without a live key — placeholders until then.
+ */
+function imagesReachModel(npm: string, api: string | undefined, model: string) {
+  if (npm === "@ai-sdk/anthropic") return true
+  if (npm === "@ai-sdk/openai") return !api
+  if (npm === "@ai-sdk/google") return model.startsWith("gemini-3")
+  return false
+}
 
 /** How to build the tool set for this model: schema dialect and whether it can see images. */
-export function toolSetOptions(target: { provider: { npm?: string; models: Record<string, { modalities?: { input?: string[] } }> }; model: string } | undefined): ToolSetOptions {
+export function toolSetOptions(target: TargetLike | undefined): ToolSetOptions {
   if (!target) return {}
-  const npm = target.provider.npm ?? ""
   const info = target.provider.models[target.model]
+  const npm = info?.provider?.npm ?? target.provider.npm ?? ""
+  const api = info?.provider?.api ?? target.provider.api
   return {
     // Gemini through OpenRouter or a gateway still has Gemini's schema rules.
     flavor: npm.startsWith("@ai-sdk/google") || /gemini/i.test(target.model) ? "gemini" : "default",
-    images: IMAGE_TOOL_RESULTS.has(npm) && (info?.modalities?.input ?? []).includes("image"),
+    images: imagesReachModel(npm, api, target.model) && (info?.modalities?.input ?? []).includes("image"),
   }
 }
 

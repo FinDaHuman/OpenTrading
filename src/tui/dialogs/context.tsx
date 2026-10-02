@@ -18,6 +18,7 @@ const CHANNEL: Record<LayerReport["channel"], string> = {
 const LAYER_NAME: Record<string, string> = {
   identity: "Danh tính & bất biến",
   tools: "Cách dùng tool",
+  tool_schemas: "Định nghĩa tool",
   citations: "Trích nguồn",
   style: "Văn phong",
   skills_always: "Skill luôn bật",
@@ -66,7 +67,7 @@ export function ContextDialog(props: { runtime: Runtime }) {
             const total = () => p().report.reduce((sum, r) => sum + r.tokens, 0)
             return (
               <>
-                <text fg={color.tx2}>{`${p().model} · hạng ${p().tier} · ~${total()} token (ước lượng, chưa gồm history và định nghĩa tool)`}</text>
+                <text fg={color.tx2}>{`${p().model} · hạng ${p().tier} · ~${total()} token (ước lượng, chưa gồm history)`}</text>
                 <text fg={color.tham} marginTop={1}>
                   {`${pad("Tầng", 6)}${pad("Nội dung", 22)}${pad("Kênh", 11)}${pad("Token", 8)}Ghi chú`}
                 </text>
@@ -74,7 +75,7 @@ export function ContextDialog(props: { runtime: Runtime }) {
                   {(r) => (
                     <text fg={r.dropped ? color.tx3 : color.tx}>
                       {`${pad(String(r.layer), 6)}${pad(LAYER_NAME[r.id] ?? r.id, 22)}${pad(CHANNEL[r.channel], 11)}${pad(`~${r.tokens}`, 8)}${
-                        r.dropped ? "bỏ (hết ngân sách)" : r.truncated ? "đã cắt bớt" : ""
+                        r.note ?? (r.dropped ? "bỏ (hết ngân sách)" : r.truncated ? "đã cắt bớt" : "")
                       }`}
                     </text>
                   )}

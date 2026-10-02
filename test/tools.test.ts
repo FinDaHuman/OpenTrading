@@ -124,3 +124,16 @@ test("prompt arguments: positional with free-text tail, by name, missing require
   expect(parsePromptArgs(args, "")).toEqual({ error: "Thiếu ticker. Cách dùng: <ticker> [focus]" })
   expect(parsePromptArgs([{ name: "q", required: true }], "giá vàng hôm nay")).toEqual({ values: { q: "giá vàng hôm nay" } })
 })
+
+test("long tool errors are cut before the model sees them", async () => {
+  const html = "<html>" + "x".repeat(10_000) + "</html>"
+  let message = ""
+  try {
+    await runTool(def({ execute: async () => { throw new Error(`Error POSTing to endpoint: ${html}`) } }), {}, ctx(), new RwLock())
+  } catch (error) {
+    message = (error as Error).message
+  }
+  expect(message.length).toBeLessThan(2100)
+  expect(message.startsWith("Error POSTing to endpoint")).toBe(true)
+  expect(message.endsWith("</html>")).toBe(true)
+})

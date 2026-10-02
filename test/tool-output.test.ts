@@ -38,13 +38,11 @@ test("stripImages turns stored image results into text", () => {
   expect((m!.content[0] as { output: unknown }).output).toEqual({ type: "text", value: "ok\n[ảnh image/png — không còn trong lịch sử]" })
 })
 
-test("tool set options follow the provider and model", () => {
-  const provider = (npm: string, input: string[]) => ({ npm, models: { m: { modalities: { input } }, "google/gemini-2.5-flash": { modalities: { input } } } })
-  expect(toolSetOptions({ provider: provider("@ai-sdk/anthropic", ["text", "image"]), model: "m" })).toEqual({ flavor: "default", images: true })
-  expect(toolSetOptions({ provider: provider("@ai-sdk/anthropic", ["text"]), model: "m" })).toEqual({ flavor: "default", images: false })
-  expect(toolSetOptions({ provider: provider("@ai-sdk/openai-compatible", ["text", "image"]), model: "m" })).toEqual({ flavor: "default", images: false })
-  expect(toolSetOptions({ provider: provider("@ai-sdk/google", ["text", "image"]), model: "m" })).toEqual({ flavor: "gemini", images: true })
-  expect(toolSetOptions({ provider: provider("@openrouter/ai-sdk-provider", ["text"]), model: "google/gemini-2.5-flash" }).flavor).toBe("gemini")
+test("schema flavor follows the provider and model", () => {
+  const provider = (npm: string) => ({ npm, models: { m: {}, "google/gemini-2.5-flash": {} } })
+  expect(toolSetOptions({ provider: provider("@ai-sdk/anthropic"), model: "m" }).flavor).toBe("default")
+  expect(toolSetOptions({ provider: provider("@ai-sdk/google"), model: "m" }).flavor).toBe("gemini")
+  expect(toolSetOptions({ provider: provider("@openrouter/ai-sdk-provider"), model: "google/gemini-2.5-flash" }).flavor).toBe("gemini")
 })
 
 test("schemas are sanitized per flavor and cached per definition", () => {

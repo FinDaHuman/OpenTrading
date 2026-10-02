@@ -160,11 +160,14 @@ function stripNested(node: Node, keys: string[], depth = 0): Node {
 }
 
 /** Replace sub-schemas deeper than `max` with an open schema. */
-function cutDepth(node: Node, max: number, depth = 0): Node {
+function cutDepth(node: Node, max: number, flavor: SchemaFlavor, depth = 0): Node {
   return mapChildren(node, (child) => {
     if (!isObj(child)) return child
-    if (depth + 1 > max) return child.type === "array" ? { type: "array", items: {} } : child.type ? { type: child.type } : {}
-    return cutDepth(child, max, depth + 1)
+    if (depth + 1 > max) {
+      if (child.type === "array") return { type: "array", items: flavor === "gemini" ? { type: "string" } : {} }
+      return child.type ? { type: child.type } : {}
+    }
+    return cutDepth(child, max, flavor, depth + 1)
   })
 }
 
@@ -174,18 +177,35 @@ export const COMPACT_OVER_CHARS = 6000
 export function sanitizeSchema(schema: unknown, flavor: SchemaFlavor = "default", compactOver = COMPACT_OVER_CHARS): JSONSchema7 {
   const root = isObj(schema) ? schema : {}
   let out = clean(inlineRefs(root), flavor) as Node
-  // The root must be a plain object schema; several providers reject root `additionalProperties`.
+  // The root must be a plain object schema: several providers reject root
+  // `additionalProperties` and combinators. A root union ("give path OR url") is flattened:
+  // every variant's parameters become optional root parameters, so none is lost; `allOf`
+  // parts all apply, so their `required` lists are kept too.
   delete out.additionalProperties
-  delete out.anyOf
-  delete out.oneOf
-  delete out.allOf
+  for (const key of ["allOf", "anyOf", "oneOf"] as const) {
+    const variants = out[key]
+    if (!Array.isArray(variants)) continue
+    for (const variant of variants) {
+      if (!isObj(variant)) continue
+      if (isObj(variant.properties)) out.properties = { ...variant.properties, ...(isObj(out.properties) ? out.properties : {}) }
+      if (key === "allOf" && Array.isArray(variant.required)) {
+        out.required = [...new Set([...(Array.isArray(out.required) ? out.required : []), ...variant.required])]
+      }
+    }
+    delete out[key]
+  }
+  if (Array.isArray(out.required)) {
+    const props = isObj(out.properties) ? out.properties : {}
+    out.required = out.required.filter((r) => typeof r === "string" && r in props)
+    if ((out.required as unknown[]).length === 0) delete out.required
+  }
   out.type = "object"
   if (!isObj(out.properties)) out.properties = {}
 
   const size = () => JSON.stringify(out).length
   if (size() > compactOver) out = stripNested(out, ["default"])
   if (size() > compactOver) out = stripNested(out, ["description"])
-  if (size() > compactOver) out = cutDepth(out, 4)
+  if (size() > compactOver) out = cutDepth(out, 4, flavor)
   return out as JSONSchema7
 }
 

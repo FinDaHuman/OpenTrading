@@ -41,6 +41,9 @@ export class RwLock {
   }
 }
 
+/** Tool error messages longer than this are cut before the model sees them. */
+export const MAX_ERROR_CHARS = 2000
+
 /** Keep the head and tail of long output so both the start and the conclusion survive. */
 export function truncate(text: string, max: number): string {
   if (text.length <= max) return text
@@ -86,8 +89,11 @@ export async function runTool(def: ToolDef, input: unknown, ctx: ToolContext, lo
     const images = typeof result === "string" ? undefined : result.images
     return { output: truncate(output, def.maxOutputChars ?? DEFAULT_MAX_OUTPUT_CHARS), ...(images?.length ? { images } : {}) }
   } catch (error) {
-    if (error instanceof Error) throw error
-    throw new Error(String(error))
+    // Errors go back to the model too: an HTML 502 page or a stack trace must not fill
+    // the context. Keep the head and tail.
+    const message = error instanceof Error ? error.message : String(error)
+    if (message.length <= MAX_ERROR_CHARS && error instanceof Error) throw error
+    throw new Error(truncate(message, MAX_ERROR_CHARS))
   } finally {
     clearTimeout(timer)
     // The turn's signal outlives this call; don't leave one listener behind per tool call.
