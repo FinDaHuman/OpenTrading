@@ -46,6 +46,30 @@ const LONG =
 const REPLY = ["Xin chào! ", "T+2.5 là chu kỳ thanh toán.\n\n", LONG, "\n\nHẾT-CÂU-TRẢ-LỜI"]
 const realFetch = globalThis.fetch
 const chatCalls: string[] = []
+const ASK_ONE = {
+  questions: [
+    {
+      header: "Khung TG",
+      question: "Bạn đầu tư trong bao lâu?",
+      options: [
+        { label: "Dưới 1 năm", description: "Lướt sóng, ưu tiên thanh khoản" },
+        { label: "1–3 năm" },
+        { label: "Trên 3 năm", description: "Tích sản dài hạn" },
+      ],
+    },
+  ],
+}
+const ASK_MANY = {
+  questions: [
+    ASK_ONE.questions[0],
+    {
+      header: "Ngành",
+      question: "Bạn quan tâm ngành nào?",
+      multiSelect: true,
+      options: [{ label: "Ngân hàng" }, { label: "Thép" }, { label: "Bất động sản" }],
+    },
+  ],
+}
 /** Set by the esc-while-streaming test: "CHẬM" makes the fake model call the slow tool. */
 let callSlowTool = false
 globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -67,6 +91,13 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const answeredThisTurn = request.messages.slice(lastUser).some((m) => m.role === "tool")
     if (callSlowTool && last.includes("CHẬM") && !answeredThisTurn) {
       const call = { index: 0, id: "call_slow", type: "function", function: { name: "cho_lau", arguments: "{}" } }
+      return new Response(chunk({ role: "assistant", tool_calls: [call] }) + chunk({}, "tool_calls") + "data: [DONE]\n\n", {
+        headers: { "content-type": "text/event-stream" },
+      })
+    }
+    const ask = last.includes("HỎI-NHIỀU") ? ASK_MANY : last.includes("HỎI-TÔI") ? ASK_ONE : undefined
+    if (ask && !answeredThisTurn) {
+      const call = { index: 0, id: "call_ask", type: "function", function: { name: "ask_user", arguments: JSON.stringify(ask) } }
       return new Response(chunk({ role: "assistant", tool_calls: [call] }) + chunk({}, "tool_calls") + "data: [DONE]\n\n", {
         headers: { "content-type": "text/event-stream" },
       })
@@ -482,8 +513,8 @@ test("/mcp: a pasted token is never shown on screen", async () => {
 test("/tools lists built-in and MCP tools", async () => {
   await setup.mockInput.typeText("/tools")
   setup.mockInput.pressEnter()
-  // 2 built-in + propose_memory (FileMemory) + 4 from the demo MCP server
-  let frame = await setup.waitForFrame((f) => f.includes("Tool · 7"))
+  // 3 built-in (current_time, load_skill, ask_user) + propose_memory + 4 from the demo MCP server
+  let frame = await setup.waitForFrame((f) => f.includes("Tool · 8"))
   show(frame)
   // Regression for the 01/10 screenshot: every tool is exactly one line, long descriptions
   // end in "…" instead of wrapping mid-word, and the mark column is straight.
@@ -499,9 +530,11 @@ test("/tools lists built-in and MCP tools", async () => {
   // Enter shows the tool's details; esc goes back to the list, esc again closes.
   setup.mockInput.pressEnter()
   frame = await setup.waitForFrame((f) => f.includes("Chi tiết tool") && f.includes("Tên đầy đủ"))
-  expect(frame).toContain("current_time")
+  // First row is ask_user (built-ins sort by name); native zod schemas show their parameters.
+  expect(frame).toContain("ask_user")
+  expect(frame).toMatch(/• questions \(bắt buộc\): array/)
   setup.mockInput.pressEscape()
-  await setup.waitForFrame((f) => f.includes("Tool · 7"))
+  await setup.waitForFrame((f) => f.includes("Tool · 8"))
   setup.mockInput.pressEscape()
   await setup.waitFor(() => state.dialog === undefined)
 })
@@ -712,6 +745,73 @@ test("80×24: panels and the '/' list keep their hint line and the status bar on
     setup.resize(100, 32)
   }
 })
+
+test("ask_user: one single-choice question sends on pick and the turn goes on", async () => {
+  const lastTool = () => JSON.stringify([...state.history].reverse().find((m) => m.role === "tool")?.content ?? "")
+  await setup.mockInput.typeText("HỎI-TÔI giúp mình")
+  setup.mockInput.pressEnter()
+  const frame = await setup.waitForFrame((f) => f.includes("Câu hỏi cho bạn") && f.includes("Bạn đầu tư trong bao lâu?"))
+  show(frame)
+  expect(frame).toMatch(/❯ 1\. Dưới 1 năm/)
+  expect(frame).toContain("Lướt sóng, ưu tiên thanh khoản")
+  expect(frame).toContain("4. Khác (tự nhập)")
+  expect(frame).not.toContain("Hỏi về thị trường") // the prompt input is hidden meanwhile
+  await setup.mockInput.typeText("2")
+  await waitMcp(() => !state.streaming)
+  expect(lastTool()).toContain('Người dùng đã trả lời: \\"Bạn đầu tư trong bao lâu?\\"=\\"1–3 năm\\"')
+  expect(JSON.stringify(state.history.at(-1)?.content)).toContain("HẾT-CÂU-TRẢ-LỜI")
+  expect(state.question).toBeUndefined()
+}, 30_000)
+
+test("ask_user: esc declines without stopping the turn; 'Khác' takes a typed answer", async () => {
+  const lastTool = () => JSON.stringify([...state.history].reverse().find((m) => m.role === "tool")?.content ?? "")
+  await setup.mockInput.typeText("HỎI-TÔI lần nữa")
+  setup.mockInput.pressEnter()
+  await setup.waitForFrame((f) => f.includes("Câu hỏi cho bạn"))
+  setup.mockInput.pressEscape()
+  await waitMcp(() => !state.streaming)
+  expect(lastTool()).toContain("Người dùng không trả lời")
+  expect(JSON.stringify(state.history.at(-1)?.content)).toContain("HẾT-CÂU-TRẢ-LỜI")
+  expect(JSON.stringify(state.history.at(-1)?.content)).not.toContain("Đã dừng")
+
+  await setup.mockInput.typeText("HỎI-TÔI tự nhập")
+  setup.mockInput.pressEnter()
+  await setup.waitForFrame((f) => f.includes("Câu hỏi cho bạn"))
+  await setup.mockInput.typeText("4")
+  await setup.waitForFrame((f) => f.includes("Câu trả lời của bạn"))
+  setup.mockInput.pressEnter() // empty: nothing typed yet, the question stays open
+  await setup.waitForFrame((f) => f.includes("Bạn đầu tư trong bao lâu?") && !f.includes("Câu trả lời của bạn"))
+  expect(state.question).toBeDefined()
+  await setup.mockInput.typeText("4")
+  await setup.waitForFrame((f) => f.includes("Câu trả lời của bạn"))
+  await setup.mockInput.typeText("6 tháng")
+  setup.mockInput.pressEnter()
+  await waitMcp(() => !state.streaming)
+  expect(lastTool()).toContain("6 tháng")
+}, 30_000)
+
+test("ask_user: several questions have tabs, multi-select and a review before sending", async () => {
+  const lastTool = () => JSON.stringify([...state.history].reverse().find((m) => m.role === "tool")?.content ?? "")
+  await setup.mockInput.typeText("HỎI-NHIỀU nhé")
+  setup.mockInput.pressEnter()
+  let frame = await setup.waitForFrame((f) => f.includes("☐ Khung TG") && f.includes("✔ Gửi"))
+  show(frame)
+  await setup.mockInput.typeText("3") // single choice → next tab
+  frame = await setup.waitForFrame((f) => f.includes("Bạn quan tâm ngành nào?"))
+  expect(frame).toContain("☒ Khung TG")
+  await setup.mockInput.typeText("1")
+  await setup.mockInput.typeText("2")
+  frame = await setup.waitForFrame((f) => (f.match(/\[✔\]/g) ?? []).length === 2)
+  setup.mockInput.pressArrow("right")
+  frame = await setup.waitForFrame((f) => f.includes("Xem lại câu trả lời"))
+  show(frame)
+  expect(frame).toContain("→ Trên 3 năm")
+  expect(frame).toContain("→ Ngân hàng, Thép")
+  setup.mockInput.pressEnter()
+  await waitMcp(() => !state.streaming)
+  expect(lastTool()).toContain("Ngân hàng, Thép")
+  expect(lastTool()).toContain("Trên 3 năm")
+}, 30_000)
 
 test("/new starts a fresh session; /sessions reopens the previous one with its tool rows", async () => {
   const before = state.lines.length

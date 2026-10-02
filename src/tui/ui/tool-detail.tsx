@@ -1,5 +1,6 @@
 import type { JSX } from "solid-js"
 import { For, Show } from "solid-js"
+import { z } from "zod"
 import type { ToolDef } from "../../core/tools/types"
 import { color } from "../theme"
 
@@ -20,7 +21,18 @@ export function Field(props: { label: string; children: JSX.Element }) {
 /** Claude Code's tool detail: badges, names, description, parameters. */
 export function ToolDetail(props: { tool: ToolDef; server: string }) {
   const t = () => props.tool
-  const schema = () => (t().input && typeof t().input === "object" && !("_def" in (t().input as object)) ? (t().input as Record<string, any>) : {})
+  // Native tools declare zod; MCP tools plain JSON Schema. Show both the same way.
+  const schema = (): Record<string, any> => {
+    const input = t().input
+    if (input instanceof z.ZodType) {
+      try {
+        return z.toJSONSchema(input) as Record<string, any>
+      } catch {
+        return {}
+      }
+    }
+    return input && typeof input === "object" ? (input as Record<string, any>) : {}
+  }
   const params = () => {
     const s = schema()
     const required = new Set<string>(Array.isArray(s.required) ? s.required : [])

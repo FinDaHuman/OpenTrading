@@ -12,6 +12,7 @@ import { ensureProfile } from "../core/profile"
 import { loadSkills } from "../core/skills/loader"
 import { Background } from "./background"
 import { ApprovalPrompt } from "./approval"
+import { AskPrompt } from "./ask"
 import { McpPanel } from "./mcp/panel"
 import { rank } from "./ui/text"
 import { COMMANDS, parseCommand, parsePromptArgs, promptUsage, type CommandInfo } from "./commands"
@@ -136,6 +137,11 @@ export function App(props: { runtime: Runtime; resume?: string }) {
   const dims = useTerminalDimensions()
   const [draft, setDraft] = createSignal("")
   const [selected, setSelected] = createSignal(0)
+  /**
+   * Who owns the keyboard instead of the prompt: an approval or a question from the model.
+   * Every rule that hides the prompt, closes dialogs or reroutes Esc goes through this.
+   */
+  const owner = () => state.approval ?? state.question
   /** Draft at which Esc closed the "/" list; it reopens as soon as the draft changes. */
   const [dismissedFor, setDismissedFor] = createSignal<string>()
   let input: InputRenderable | undefined
@@ -160,12 +166,21 @@ export function App(props: { runtime: Runtime; resume?: string }) {
   // Tools with side effects ask first. A pending question takes over the keyboard: any open
   // dialog closes so its keys cannot also act on the prompt.
   props.runtime.permissions.interactive = true
+  // Questions from the model (ask_user) take over the same way; approval goes first.
+  props.runtime.questions.interactive = true
+  const offQuestion = props.runtime.questions.onChange((head) => {
+    if (head && state.dialog) setState("dialog", undefined)
+    setState("question", head)
+  })
   const offApproval = props.runtime.permissions.onChange((head) => {
     if (head && state.dialog) setState("dialog", undefined)
     setState("approval", head)
   })
   onCleanup(() => {
     offApproval()
+    offQuestion()
+    props.runtime.questions.interactive = false
+    props.runtime.questions.cancelAll()
     props.runtime.permissions.interactive = false
     props.runtime.permissions.denyAll()
   })
@@ -356,7 +371,7 @@ export function App(props: { runtime: Runtime; resume?: string }) {
     if (evt.eventType === "release") return
     if (evt.ctrl && evt.name === "c") return void exit()
     if (evt.ctrl && evt.name === "o") return void setState("expandTools", (v) => !v)
-    if (state.approval || state.dialog) return
+    if (owner() || state.dialog) return
     const n = suggestions().length
     // Esc closes the "/" list first (it stays closed until the draft changes) and never
     // also stops the running answer.
@@ -392,18 +407,21 @@ export function App(props: { runtime: Runtime; resume?: string }) {
           </Show>
         </box>
 
-        <Show when={suggestions().length > 0 && !state.approval && !state.dialog}>
+        <Show when={suggestions().length > 0 && !owner() && !state.dialog}>
           <Suggestions items={suggestions()} all={allCommands()} selected={selected()} />
         </Show>
-        <Show when={!state.approval && !state.dialog && suggestions().length === 0 && argHint()}>
+        <Show when={!owner() && !state.dialog && suggestions().length === 0 && argHint()}>
           {(c) => <ArgumentHint command={c()} />}
         </Show>
 
         {/* The approval prompt and /mcp take the input's place; the input is hidden, not
             unmounted, so a half-typed message survives. */}
         <Show when={state.approval}>{(request) => <ApprovalPrompt gate={props.runtime.permissions} request={request()} />}</Show>
+        <Show when={!state.approval && state.question} keyed>
+          {(request) => <AskPrompt broker={props.runtime.questions} request={request} />}
+        </Show>
         {/* Every dialog is a pane docked here, in place of the prompt (Claude Code style). */}
-        <Show when={!state.approval}>
+        <Show when={!owner()}>
           <Switch>
             <Match when={state.dialog === "mcp"}>
               <McpPanel mcp={props.runtime.mcp} cwd={props.runtime.mcp.cwd} />
@@ -439,7 +457,7 @@ export function App(props: { runtime: Runtime; resume?: string }) {
         </Show>
 
         <box
-          visible={!state.approval && !state.dialog}
+          visible={!owner() && !state.dialog}
           marginLeft={2}
           marginRight={2}
           border
@@ -455,7 +473,7 @@ export function App(props: { runtime: Runtime; resume?: string }) {
           <input
             ref={(r) => (input = r)}
             flexGrow={1}
-            focused={!state.dialog && !state.approval}
+            focused={!state.dialog && !owner()}
             placeholder={state.streaming ? "đang trả lời… esc để dừng" : "Hỏi về thị trường, hoặc gõ / để xem lệnh"}
             textColor={color.tx}
             focusedTextColor={color.tx}
