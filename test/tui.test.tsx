@@ -593,12 +593,15 @@ test("/context shows each prompt layer with its token estimate", async () => {
   await setup.waitFor(() => state.dialog === undefined)
 })
 
-test("a tool call renders as a ⚙ row with its result, then the answer", async () => {
+test("a tool call renders as a ● row with its result under ⎿, then the answer", async () => {
   await setKey("nvidia", "nvapi-good-key")
   await setup.mockInput.typeText("MẤY-GIỜ rồi?")
   setup.mockInput.pressEnter()
-  const frame = await setup.waitForFrame((f) => f.includes("HẾT-CÂU-TRẢ-LỜI") && f.includes("⚙ current_time()"))
-  expect(frame).toContain("└ ")
+  const frame = await setup.waitForFrame((f) => f.includes("HẾT-CÂU-TRẢ-LỜI") && f.includes("● current_time()"))
+  // Claude Code style: ❯ for the user, ● for answers and calls, ⎿ for the result.
+  expect(frame).toContain("  ⎿  ")
+  expect(frame).toContain("❯ MẤY-GIỜ rồi?")
+  expect(frame).not.toContain("◆ OpenTrading")
   expect(frame).toContain("giờ Việt Nam")
   show(frame)
   await setup.waitFor(() => !state.streaming)
@@ -623,7 +626,8 @@ test("a write tool asks first: esc denies just that call (the turn goes on), 2 a
   expect(frame).not.toContain("Hỏi về thị trường") // the prompt input is hidden meanwhile
   // Esc answers the prompt with "no" — it must not also stop the turn.
   setup.mockInput.pressEscape()
-  frame = await setup.waitForFrame((f) => f.includes("✘ Đã từ chối demo · ghi_chu"))
+  // The denial shows under its own tool row.
+  frame = await setup.waitForFrame((f) => /● demo · ghi_chu.*\n\s+⎿  ✘ Đã từ chối/.test(f))
   await waitMcp(() => !state.streaming)
   expect(toolResult()).toContain("Người dùng từ chối chạy tool này")
   expect(state.approval).toBeUndefined()
@@ -636,7 +640,7 @@ test("a write tool asks first: esc denies just that call (the turn goes on), 2 a
   setup.mockInput.pressEnter()
   await setup.waitForFrame((f) => f.includes("Cho phép chạy?"))
   await setup.mockInput.typeText("2")
-  await setup.waitForFrame((f) => f.includes("✔ Đã cho phép demo · ghi_chu cho cả phiên"))
+  await setup.waitForFrame((f) => f.includes("⎿  ✔ Đã cho phép cho cả phiên"))
   await waitMcp(() => !state.streaming)
   expect(toolResult()).toContain("Đã lưu ghi chú #1")
 
@@ -832,7 +836,7 @@ test("/new starts a fresh session; /sessions reopens the previous one with its t
   expect((state.lines[0] as { text: string }).text).toContain("Mở lại phiên")
   // Tool rows come back (the older ones may be scrolled out of view: check state too).
   expect(state.lines.some((l) => l.kind === "tool" && l.label.includes("current_time"))).toBe(true)
-  const frame = await setup.waitForFrame((f) => f.includes("⚙ "))
+  const frame = await setup.waitForFrame((f) => f.includes("● "))
   expect(frame).not.toContain("<nhac_nho>")
   expect(state.history.length).toBeGreaterThan(0)
   expect(state.clock).toBeUndefined() // re-sent on the next turn

@@ -7,6 +7,7 @@ const TIPS = [
   ["/connect", "nhập API key: Groq, Gemini, NVIDIA, OpenAI…"],
   ["/model", "chọn model"],
   ["/profile", "hồ sơ nhà đầu tư của bạn"],
+  ["/mcp", "kết nối nguồn dữ liệu (MCP)"],
   ["/skills", "skill phân tích"],
   ["/help", "tất cả lệnh"],
 ]
@@ -40,7 +41,12 @@ export function Home() {
           <span style={{ fg: color.tang }}>{"▲ "}</span>
           <span style={{ fg: color.tx2 }}>Harness AI phân tích chứng khoán Việt Nam</span>
         </text>
-        <text fg={color.tx3}>bản demo v0 · chưa kết nối dữ liệu thị trường · không phải tư vấn đầu tư</text>
+        <text fg={color.tx3}>
+          {(() => {
+            const live = state.mcp.filter((s) => s.state === "connected").length
+            return `${live > 0 ? `${live} nguồn dữ liệu MCP đã kết nối` : "chưa kết nối nguồn dữ liệu — /mcp để thêm"} · không phải tư vấn đầu tư`
+          })()}
+        </text>
 
         <box marginTop={1} flexDirection="column">
           <For each={TIPS}>

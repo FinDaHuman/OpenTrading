@@ -13,7 +13,17 @@ export type ToolStatus = "running" | "ok" | "error"
 export type Line =
   | { kind: "user"; text: string }
   | { kind: "assistant"; text: string; done: boolean }
-  | { kind: "tool"; callId: string; name: string; label: string; status: ToolStatus; output?: string; durationMs?: number }
+  | {
+      kind: "tool"
+      callId: string
+      name: string
+      label: string
+      status: ToolStatus
+      output?: string
+      durationMs?: number
+      /** The user's answer to the approval prompt, shown under the call ("✔ Đã cho phép …"). */
+      decision?: string
+    }
   | { kind: "info"; text: string }
   | { kind: "error"; text: string }
 

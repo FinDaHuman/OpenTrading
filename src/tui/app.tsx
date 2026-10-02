@@ -460,8 +460,7 @@ export function App(props: { runtime: Runtime; resume?: string }) {
           visible={!owner() && !state.dialog}
           marginLeft={2}
           marginRight={2}
-          border
-          borderStyle="rounded"
+          border={["top", "bottom"]}
           borderColor={state.streaming ? color.tham : state.dialog ? color.rule : color.tang}
           backgroundColor={color.panel2}
           flexDirection="row"
@@ -516,7 +515,13 @@ function StatusBar() {
       </Show>
       <box flexGrow={1} />
       <text fg={state.streaming ? color.tham : color.tx3}>
-        {state.streaming ? "● đang trả lời · esc dừng" : "/help · ctrl+c thoát"}
+        {state.approval
+          ? "△ cần bạn xác nhận · esc từ chối"
+          : state.question
+            ? "△ model đang hỏi bạn · esc bỏ qua"
+            : state.streaming
+              ? "● đang trả lời · esc dừng"
+              : "/ lệnh · /help · ctrl+c thoát"}
       </text>
     </box>
   )
