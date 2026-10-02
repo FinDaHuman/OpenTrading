@@ -1,0 +1,20 @@
+{
+  // OpenTrading MCP config — cùng shape với Claude Code .mcp.json.
+  // Copy file này thành .mcp.json ở thư mục repo (project) rồi điền token:
+  //   .env: OPENTRADING_MCP_TOKEN=<TEAM_TOKEN>   (Bun tự đọc .env; .env không commit)
+  // token chỉ lưu máy cục bộ — nếu không dùng project config, chạy /mcp-setup trong TUI
+  // để OpenTrading tự tạo ~/.opentrading/mcp.json + lưu token vào auth.json (chmod 600).
+  "mcpServers": {
+    "opentrading": {
+      "type": "http",
+      "url": "https://opentrading-mcp-web.onrender.com/mcp",
+      "headers": {
+        "Authorization": "Bearer ${OPENTRADING_MCP_TOKEN}",
+        "Accept": "application/json, text/event-stream"
+      },
+      "startupTimeoutMs": 60000,
+      "toolTimeoutMs": 180000,
+      "preset": "scan"
+    }
+  }
+}
