@@ -66,9 +66,11 @@ export class ToolTimeoutError extends Error {
  * results that go back to the model instead of crashing the loop.
  */
 export async function runTool(def: ToolDef, input: unknown, ctx: ToolContext, lock: RwLock, gate?: PermissionGate): Promise<ToolResult> {
-  // Ask first: time spent deciding is not tool runtime, and nobody holds the lock meanwhile.
+  // Waiting on the user (a question, then approval) is not tool runtime, and nobody holds
+  // the lock meanwhile.
+  if (def.prepare) ctx = { ...ctx, prepared: await def.prepare(input, ctx) }
   if (gate) {
-    const decision = await gate.check(def, input, ctx.signal, def.displayName)
+    const decision = await gate.check(def, input, ctx.signal, def.displayName, ctx.callId)
     if (!decision.allow) throw new Error(deniedMessage(decision))
   }
   const release = await lock.acquire(!def.readOnly)

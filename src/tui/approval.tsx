@@ -1,7 +1,7 @@
 import { useKeyboard } from "@opentui/solid"
 import { createSignal, For, Show } from "solid-js"
 import type { ApprovalRequest, Choice, PermissionGate } from "../core/permission"
-import { pushLine } from "./state"
+import { pushLine, setState, state } from "./state"
 import { color } from "./theme"
 
 /**
@@ -54,13 +54,20 @@ export function ApprovalPrompt(props: { gate: PermissionGate; request: ApprovalR
   function choose(index: number, message?: string) {
     const option = OPTIONS[index]
     if (!option) return
-    pushLine({
-      kind: "info",
-      text:
-        option.choice === "deny"
-          ? `✘ Đã từ chối ${req().label}${message ? ` — "${message}"` : ""}`
-          : `✔ Đã cho phép ${req().label} ${RECORD[option.choice]}`,
-    })
+    // The decision belongs under its tool call in the transcript (Claude Code); a denial
+    // already shows there from the tool's error, so only "allowed" needs recording.
+    const row = state.lines.findIndex((l) => l.kind === "tool" && l.callId === req().callId)
+    if (row >= 0) {
+      if (option.choice !== "deny") setState("lines", row, (l) => ({ ...l, decision: `✔ Đã cho phép ${RECORD[option.choice]}` }))
+    } else {
+      pushLine({
+        kind: "info",
+        text:
+          option.choice === "deny"
+            ? `✘ Đã từ chối ${req().label}${message ? ` — "${message}"` : ""}`
+            : `✔ Đã cho phép ${req().label} ${RECORD[option.choice]}`,
+      })
+    }
     void props.gate.respond(req().id, option.choice, message)
     setSelected(0)
     setNoting(false)

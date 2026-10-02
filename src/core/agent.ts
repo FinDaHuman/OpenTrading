@@ -424,7 +424,7 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
             ? "Model không trả lời sau khi gọi tool (câu trả lời rỗng). Kết quả tool ở phía trên; thử hỏi lại hoặc đổi model."
             : "Model trả về câu trả lời rỗng. Thử hỏi lại hoặc đổi model.",
         }
-        messages = [...kept, { role: "assistant", content: "[Không có câu trả lời]" }]
+        messages = [...kept, { role: "assistant", content: "(không có câu trả lời)" }]
       }
     }
   }
@@ -443,7 +443,8 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
   const text = outcome.text
   yield {
     type: "done",
-    messages: [user, { role: "assistant", content: text || (outcome.aborted ? "[Đã dừng]" : "[Lỗi]") }],
+    // No square brackets: the markdown renderer read "[Đã dừng]" as a link.
+    messages: [user, { role: "assistant", content: text || (outcome.aborted ? "(đã dừng)" : "(lỗi)") }],
     clock: assembled.clock,
   }
 }

@@ -24,6 +24,8 @@ export type Choice = "once" | "session" | "always" | "deny"
 
 export interface ApprovalRequest {
   id: number
+  /** Tool call waiting on this answer (the transcript shows "chờ bạn xác nhận"). */
+  callId?: string
   tool: string
   /** Short label, e.g. `github · create_issue`. */
   label: string
@@ -110,7 +112,7 @@ export class PermissionGate {
   }
 
   /** Resolve before the tool runs. Waiting here never counts against the tool's timeout. */
-  async check(def: ToolDef, input: unknown, signal: AbortSignal, label = def.name): Promise<Decision> {
+  async check(def: ToolDef, input: unknown, signal: AbortSignal, label = def.name, callId?: string): Promise<Decision> {
     if (!needsApproval(def)) return { allow: true }
     const key = this.keyOf(def)
     if (this.session.has(key) || (await this.allowedAlways(def))) return { allow: true }
@@ -120,6 +122,7 @@ export class PermissionGate {
     return new Promise<Decision>((resolve) => {
       const request: ApprovalRequest = {
         id: this.nextId++,
+        callId,
         tool: def.name,
         label,
         description: def.description,
