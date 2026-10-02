@@ -40,7 +40,7 @@ function summary(line: ToolLine): { tone: "ok" | "denied" | "answers"; lines: st
     return { tone: "denied", lines: [`✘ Đã từ chối${note ? ` — "${note.trim()}"` : ""}`] }
   }
   if (line.status === "ok" && out.startsWith("Người dùng đã trả lời:")) {
-    const pairs = [...out.matchAll(/"([^"]+)"="([^"]*)"/g)].map((m) => `· ${m[1]} → ${m[2]}`)
+    const pairs = [...out.matchAll(/("(?:[^"\\]|\\.)*")=("(?:[^"\\]|\\.)*")/g)].map((m) => `· ${JSON.parse(m[1]!)} → ${JSON.parse(m[2]!)}`)
     if (pairs.length > 0) return { tone: "answers", lines: pairs }
   }
   return undefined
@@ -132,7 +132,7 @@ function Row(props: { line: Line; prev?: Line; width: number }) {
       <Match when={props.line.kind === "user"}>
         <Hanging glyph="❯" glyphColor={color.tx3} text={(props.line as Extract<Line, { kind: "user" }>).text} fg={color.tx} bg={color.panel2} />
       </Match>
-      <Match when={props.line.kind === "assistant" && props.line}>
+      <Match when={props.line.kind === "assistant" && ((props.line as { text: string }).text.trim() || !(props.line as { done: boolean }).done) && props.line}>
         {(line) => {
           const l = line() as Extract<Line, { kind: "assistant" }>
           return (

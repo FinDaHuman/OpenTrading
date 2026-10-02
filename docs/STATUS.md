@@ -14,13 +14,24 @@ Cập nhật: 30/09/2026 · nhánh `step2b-session-memory`
 
 ## Hiện tại
 
-**Bước 1 xong** (agent loop, tool registry, MCP client). **Bước 2 xong**: 2a (prompt theo tầng, skills chuẩn `SKILL.md`, hồ sơ nhà đầu tư) và 2b (hook, memory có bước duyệt, lưu và mở lại session). Tiếp theo: bước 3. Contract cho đồng nghiệp: [docs/contracts.md](contracts.md).
+**Bước 1, 2a, 2b xong.**
+- **MCP xong**, ngang Claude Code/opencode: OAuth, SSE, CLI, schema theo provider, `/mcp`, xác nhận tool ghi (PR #12–#14).
+- **Giao diện giống Claude Code**:
+  - danh sách 1 dòng, dialog thành panel, phần `/` (PR #15);
+  - khung chat `❯`/`●`/`⎿`, tool hỏi người dùng `ask_user` (PR D2).
+
+Contract cho đồng nghiệp: [docs/contracts.md](contracts.md).
 
 ### Đã có
 
 | Hạng mục | Trạng thái |
 | --- | --- |
 | TUI: logo, background động, Home, Chat, status bar | Xong |
+| Giao diện giống Claude Code | Xong |
+| ↳ khung chat | `❯` tin nhắn, `●` trả lời và tool, kết quả dưới `⎿` (3 dòng, ctrl+o mở rộng) |
+| ↳ panel và danh sách | mọi dialog là panel thay chỗ ô nhập; danh sách 1 dòng, cột thẳng, cắt `…` |
+| ↳ phần `/` | Enter chạy, Tab điền, Esc đóng tới khi gõ thêm |
+| **Tool hỏi người dùng** `ask_user` (`src/core/ask.ts`) | Xong. 1–4 câu trắc nghiệm, chọn nhiều, tự nhập, xem lại trước khi gửi; chờ trả lời không tính timeout |
 | `/connect`: 204 provider (models.dev), `/model` gộp model của mọi provider | Xong |
 | Chat stream, `esc` để dừng, lỗi hiển thị tiếng Việt, Tab hoàn thành lệnh | Xong |
 | **Agent loop** (`src/core/agent.ts`) | Xong. Gọi tool nhiều bước; giới hạn 10 bước, bước cuối bắt model tổng kết; lỗi tool được trả về cho model; khi huỷ hoặc lỗi, history không còn tool-call nào thiếu kết quả |
@@ -41,7 +52,7 @@ Cập nhật: 30/09/2026 · nhánh `step2b-session-memory`
 | **Hook** (`src/core/hooks.ts`): session-start, user-prompt (chặn hoặc thêm ngữ cảnh), turn-end, session-end | Xong |
 | **Memory** (`src/core/memory/`): contract `MemoryProvider`, bản mẫu `FileMemory` (đề xuất → duyệt trong `/memory`, "Ghi nhớ: …"), mặc định tắt; bật trong `/config` | Xong |
 | **Session** (`src/core/session/`): JSONL ghi nối, `/sessions`, `/new`, `--continue`, `--resume <id>`, vá tool-call thiếu kết quả | Xong |
-| Test: typecheck + 81 test (tool, MCP với server thật qua stdio, agent loop, TUI, đường dẫn state) | Xong |
+| Test: typecheck + 150 test (tool, MCP qua stdio/HTTP/SSE/OAuth giả, schema thật, agent loop, TUI headless, quyền) | Xong |
 
 **Chưa kiểm tra:**
 - Chưa chạy với key thật của provider nào. Tool calling mới được test trên định dạng OpenAI-compatible bằng API giả lập; Gemini và Anthropic cần thử bằng key thật.
@@ -58,7 +69,7 @@ Provider chưa hỗ trợ: xem `ToDoList.txt`.
 5. ~~Skill loader hoàn chỉnh~~ ✓ (2a)
 6. ~~Memory interface~~ ✓ (2b)
 7. ~~Lưu session~~ ✓ (2b)
-8. **Permission gate.** Tool không chỉ đọc phải được người dùng xác nhận trong TUI. AI SDK v6 có sẵn `needsApproval`.
+8. ~~Permission gate~~ ✓ (`src/core/permission.ts`)
 9. **Mở rộng config**: thư mục skills, tuỳ chọn memory, giới hạn số bước.
 
 Việc phụ:
@@ -74,7 +85,9 @@ Việc phụ:
 | 1 | Agent loop, tool registry, MCP client, tool mẫu, TUI hiển thị tool call | **Xong** |
 | 2a | Ghép prompt theo tầng, skills chuẩn `SKILL.md`, hồ sơ nhà đầu tư, `/context`, `docs/contracts.md` | **Xong** |
 | 2b | Hook, `MemoryProvider` + bản mẫu, `/memory`, lưu và mở lại session (`/sessions`, `--continue`) | **Xong** |
-| 3 | Permission gate, mở rộng config | Tiếp theo |
+| MCP | Kết nối MCP phổ biến (OAuth, SSE, CLI), tương thích tool, `/mcp`, xác nhận tool ghi | **Xong** (#12–#14) |
+| UI | Giao diện giống Claude Code, `ask_user` | **Xong** (#15, D2) |
+| 3 | Mở rộng config (giới hạn bước…), `/why`, đóng gói `bun build --compile` | Tiếp theo |
 
 ## Cho đồng nghiệp: bắt đầu thế nào
 

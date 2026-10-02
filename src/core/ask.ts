@@ -97,7 +97,8 @@ export class AskBroker {
 /** What the model reads back (Claude Code's wording, in Vietnamese). */
 export function formatAskResult(result: AskResult) {
   if (result.answered) {
-    const pairs = Object.entries(result.answers).map(([q, a]) => `"${q}"="${a}"`)
+    // JSON strings, so a typed answer containing " cannot break the format.
+    const pairs = Object.entries(result.answers).map(([q, a]) => `${JSON.stringify(q)}=${JSON.stringify(a)}`)
     return `Người dùng đã trả lời: ${pairs.join(", ")}. Tiếp tục dựa trên các câu trả lời này.`
   }
   if (result.reason === "headless") {

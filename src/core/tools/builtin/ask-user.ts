@@ -8,7 +8,7 @@ const Option = z.object({
 })
 
 const Question = z.object({
-  header: z.string().min(1).max(12).describe("Nhãn rất ngắn (≤12 ký tự), ví dụ: Khung thời gian"),
+  header: z.string().min(1).max(30).describe("Nhãn rất ngắn cho tab, 1–2 từ, ví dụ: Thời hạn, Rủi ro"),
   question: z.string().min(3).max(300).describe("Câu hỏi đầy đủ, kết thúc bằng dấu ?"),
   options: z.array(Option).min(2).max(4).describe("2–4 lựa chọn rõ ràng, loại trừ nhau (trừ khi multiSelect)"),
   multiSelect: z.boolean().optional().describe("true nếu người dùng được chọn nhiều đáp án"),

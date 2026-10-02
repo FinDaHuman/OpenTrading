@@ -634,7 +634,7 @@ test("a write tool asks first: esc denies just that call (the turn goes on), 2 a
   const answer = state.history.at(-1)
   expect(answer?.role).toBe("assistant")
   expect(JSON.stringify(answer?.content)).toContain("HẾT-CÂU-TRẢ-LỜI")
-  expect(JSON.stringify(answer?.content)).not.toContain("Đã dừng")
+  expect(JSON.stringify(answer?.content)).not.toContain("đã dừng")
 
   await setup.mockInput.typeText("GHI-CHÚ lần nữa")
   setup.mockInput.pressEnter()
@@ -715,7 +715,7 @@ test("esc with the '/' list open while answering closes the list, not the answer
     await waitMcp(() => state.lines.filter((l) => l.kind === "tool" && l.label.includes("cho_lau")).length === 2)
     setup.mockInput.pressEscape()
     await waitMcp(() => !state.streaming)
-    expect(JSON.stringify(state.history.at(-1)?.content)).toContain("Đã dừng")
+    expect(JSON.stringify(state.history.at(-1)?.content)).toContain("(đã dừng)")
   } finally {
     callSlowTool = false
     runtime.registry.unregister("cho_lau")
@@ -776,7 +776,7 @@ test("ask_user: esc declines without stopping the turn; 'Khác' takes a typed an
   await waitMcp(() => !state.streaming)
   expect(lastTool()).toContain("Người dùng không trả lời")
   expect(JSON.stringify(state.history.at(-1)?.content)).toContain("HẾT-CÂU-TRẢ-LỜI")
-  expect(JSON.stringify(state.history.at(-1)?.content)).not.toContain("Đã dừng")
+  expect(JSON.stringify(state.history.at(-1)?.content)).not.toContain("đã dừng")
 
   await setup.mockInput.typeText("HỎI-TÔI tự nhập")
   setup.mockInput.pressEnter()

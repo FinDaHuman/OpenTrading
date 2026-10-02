@@ -149,7 +149,7 @@ export function AskPrompt(props: { broker: AskBroker; request: AskRequest }) {
           <For each={questions()}>
             {(q, i) => (
               <span style={{ fg: tab() === i() ? color.bg : answered(i()) ? color.tang : color.tx3, bg: tab() === i() ? color.san : undefined }}>
-                {` ${answered(i()) ? "☒" : "☐"} ${q.header} `}
+                {` ${answered(i()) ? "☒" : "☐"} ${truncate(q.header, 16)} `}
               </span>
             )}
           </For>

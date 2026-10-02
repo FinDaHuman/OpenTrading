@@ -20,7 +20,9 @@ test("schema: 1–4 questions, 2–4 options, short header, no duplicates", () =
   expect(AskUserInput.safeParse(q).success).toBe(true)
   expect(AskUserInput.safeParse({ questions: [] }).success).toBe(false)
   expect(AskUserInput.safeParse({ questions: [{ ...q.questions[0], options: [{ label: "x" }] }] }).success).toBe(false)
-  expect(AskUserInput.safeParse({ questions: [{ ...q.questions[0], header: "một nhãn quá dài" }] }).success).toBe(false)
+  // Vietnamese labels run longer than Claude Code's 12: accept them, the UI truncates.
+  expect(AskUserInput.safeParse({ questions: [{ ...q.questions[0], header: "Khung thời gian" }] }).success).toBe(true)
+  expect(AskUserInput.safeParse({ questions: [{ ...q.questions[0], header: "x".repeat(31) }] }).success).toBe(false)
   expect(AskUserInput.safeParse({ questions: [q.questions[0], q.questions[0]] }).success).toBe(false)
   expect(AskUserInput.safeParse({ questions: [{ ...q.questions[0], options: [{ label: "a" }, { label: "a" }] }] }).success).toBe(false)
 })
@@ -79,4 +81,9 @@ test("aborting the turn cancels the open question", async () => {
   await running
   expect(broker.head()).toBeUndefined()
   expect(formatAskResult({ answered: false, reason: "cancelled" })).toBe("Lượt hỏi đã bị huỷ.")
+})
+
+test("a typed answer containing quotes stays well-formed for the model", () => {
+  const out = formatAskResult({ answered: true, answers: { "Mã nào?": 'VCB "và" CTG' } })
+  expect(out).toBe('Người dùng đã trả lời: "Mã nào?"="VCB \\"và\\" CTG". Tiếp tục dựa trên các câu trả lời này.')
 })
