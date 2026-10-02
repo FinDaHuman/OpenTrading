@@ -137,11 +137,21 @@ const { initRuntime } = await import("../src/core/runtime")
 const { FileMemory } = await import("../src/core/memory/file-memory")
 
 const memory = new FileMemory(path.join(home, "memory"))
+/** Times the app asked to exit (the real exit is replaced in tests). */
+let exits = 0
+/** What copy-on-select handed to the OS clipboard command (stubbed; CI never runs powershell). */
+const copied: string[] = []
+const { setClipboardSpawn } = await import("../src/tui/clipboard")
+setClipboardSpawn(async (_command, text) => {
+  copied.push(text)
+  return true
+})
 const runtime = initRuntime({ cwd, home, skills: () => state.skills, memory })
 let setup: Awaited<ReturnType<typeof testRender>>
 
 beforeAll(async () => {
-  setup = await testRender(() => <App runtime={runtime} />, { width: 100, height: 32 })
+  // exitOnCtrlC off, as in main.tsx: the app handles Ctrl+C (double press) itself.
+  setup = await testRender(() => <App runtime={runtime} onExit={() => exits++} />, { width: 100, height: 32, exitOnCtrlC: false })
 })
 
 // Tests share one app. If a test fails with a dialog open, close it so the failure does not
@@ -371,9 +381,9 @@ test("/mcp: grouped list → server menu → tools → tool detail, esc steps ba
   show(frame)
   expect(frame).toContain("1 server · 1 đang kết nối")
   expect(frame).toContain("Của bạn (")
-  expect(frame).toMatch(/❯ demo · ✔ đã kết nối · 4 tool/)
+  expect(frame).toMatch(/❯ demo · ✓ đã kết nối · 4 tool/)
   expect(frame).toContain("Có sẵn (đang tắt")
-  expect(frame).toMatch(/context7 · ◯ không cần đăng nhập/)
+  expect(frame).toMatch(/context7 · ○ không cần đăng nhập/)
   expect(frame).toContain("+ Thêm server tuỳ chỉnh")
   // The panel replaces the prompt input.
   expect(frame).not.toContain("Hỏi về thị trường")
@@ -382,7 +392,7 @@ test("/mcp: grouped list → server menu → tools → tool detail, esc steps ba
   frame = await setup.waitForFrame((f) => f.includes("demo · MCP server"))
   show(frame)
   expect(frame).toContain("Trạng thái")
-  expect(frame).toContain("✔ đã kết nối · 4 tool")
+  expect(frame).toContain("✓ đã kết nối · 4 tool")
   expect(frame).toContain("Lệnh")
   expect(frame).toContain("Khả năng")
   expect(frame).toContain("/demo:phan_tich")
@@ -392,14 +402,19 @@ test("/mcp: grouped list → server menu → tools → tool detail, esc steps ba
 
   setup.mockInput.pressEnter()
   frame = await setup.waitForFrame((f) => f.includes("Tool của demo"))
-  expect(frame).toContain("◇ add")
-  expect(frame).toContain("◆ ghi_chu")
+  expect(frame).toMatch(/◇ add +\[chỉ đọc\]/)
+  expect(frame).toMatch(/◆ ghi_chu +\[ghi\]/)
+  // Labels are words in brackets, never emoji (⚠ rendered as a colour emoji in Windows Terminal).
+  expect(frame).not.toContain("⚠")
+  // The [label] column lines up whatever the name length.
+  const labelCols = frame.split("\n").filter((l) => /[◇◆] \S+ +\[/.test(l)).map((l) => l.indexOf("["))
+  expect(new Set(labelCols).size).toBe(1)
   for (let i = 0; i < 3; i++) setup.mockInput.pressArrow("down")
   await setup.waitForFrame((f) => f.includes("❯ ◆ ghi_chu"))
   setup.mockInput.pressEnter()
   frame = await setup.waitForFrame((f) => f.includes("Tên đầy đủ"))
   show(frame)
-  expect(frame).toContain("[hỏi trước khi chạy]")
+  expect(frame).toContain("[ghi]")
   expect(frame).toContain("mcp__demo__ghi_chu")
   expect(frame).toMatch(/• noi_dung \(bắt buộc\): string - Nội dung ghi chú/)
 
@@ -424,7 +439,7 @@ test("/mcp: space turns a server off and on (saved to mcp.json); catalog entries
   await waitMcp(() => state.mcp[0]?.state === "disabled")
   let saved = await readJson<{ mcpServers: Record<string, { enabled?: boolean }> }>(path.join(home, "mcp.json"), { mcpServers: {} })
   expect(saved.mcpServers.demo!.enabled).toBe(false)
-  await setup.waitForFrame((f) => f.includes("demo · ◯ đã tắt"))
+  await setup.waitForFrame((f) => f.includes("demo · ○ đã tắt"))
   setup.mockInput.pressKey(" ")
   await waitMcp(() => state.mcp[0]?.state === "connected")
   saved = await readJson(path.join(home, "mcp.json"), { mcpServers: {} })
@@ -518,11 +533,13 @@ test("/tools lists built-in and MCP tools", async () => {
   show(frame)
   // Regression for the 01/10 screenshot: every tool is exactly one line, long descriptions
   // end in "…" instead of wrapping mid-word, and the mark column is straight.
-  const rows = frame.split("\n").filter((l) => /^ {2}(❯ |  )[◇◆⚠] \S/.test(l))
+  const rows = frame.split("\n").filter((l) => /^ {2}(❯ |  )[◇◆] \S/.test(l))
   expect(rows.length).toBeGreaterThanOrEqual(7)
-  expect(new Set(rows.map((r) => r.search(/[◇◆⚠]/))).size).toBe(1)
+  expect(new Set(rows.map((r) => r.search(/[◇◆]/))).size).toBe(1)
+  // Labels sit in their own right-hand column, so descriptions still start at one cell.
+  expect(new Set(rows.map((r) => r.search(/\[(chỉ đọc|ghi|không hoàn tác)\]/))).size).toBe(1)
   const timeRow = rows.find((r) => r.includes("current_time"))!
-  expect(timeRow).toMatch(/…\s*$/)
+  expect(timeRow).toMatch(/…\s+\[chỉ đọc\]\s*$/)
   expect(frame).not.toMatch(/^\s+Asia\/H/m)
   expect(frame).toContain("Có sẵn")
   expect(frame).toContain("Memory")
@@ -640,7 +657,7 @@ test("a write tool asks first: esc denies just that call (the turn goes on), 2 a
   setup.mockInput.pressEnter()
   await setup.waitForFrame((f) => f.includes("Cho phép chạy?"))
   await setup.mockInput.typeText("2")
-  await setup.waitForFrame((f) => f.includes("⎿  ✔ Đã cho phép cho cả phiên"))
+  await setup.waitForFrame((f) => f.includes("⎿  ✓ Đã cho phép cho cả phiên"))
   await waitMcp(() => !state.streaming)
   expect(toolResult()).toContain("Đã lưu ghi chú #1")
 
@@ -670,8 +687,8 @@ test("esc on the approval prompt denies that call without stopping the turn", as
   })
   const controller = new AbortController()
   const decision = runtime.permissions.check(runtime.registry.get("xoa_du_lieu")!, { bang: "giao_dich" }, controller.signal, "test · xoa_du_lieu")
-  const frame = await setup.waitForFrame((f) => f.includes("Cần xác nhận · tool có thể phá huỷ"))
-  expect(frame).toContain("⚠ phá huỷ")
+  const frame = await setup.waitForFrame((f) => f.includes("Cần xác nhận · thay đổi không hoàn tác được"))
+  expect(frame).toContain("test · xoa_du_lieu  [không hoàn tác]")
   setup.mockInput.pressEscape()
   expect((await decision).allow).toBe(false)
   expect(controller.signal.aborted).toBe(false)
@@ -798,14 +815,14 @@ test("ask_user: several questions have tabs, multi-select and a review before se
   const lastTool = () => JSON.stringify([...state.history].reverse().find((m) => m.role === "tool")?.content ?? "")
   await setup.mockInput.typeText("HỎI-NHIỀU nhé")
   setup.mockInput.pressEnter()
-  let frame = await setup.waitForFrame((f) => f.includes("☐ Khung TG") && f.includes("✔ Gửi"))
+  let frame = await setup.waitForFrame((f) => f.includes("[ ] Khung TG") && f.includes("✓ Gửi"))
   show(frame)
   await setup.mockInput.typeText("3") // single choice → next tab
   frame = await setup.waitForFrame((f) => f.includes("Bạn quan tâm ngành nào?"))
-  expect(frame).toContain("☒ Khung TG")
+  expect(frame).toContain("[x] Khung TG")
   await setup.mockInput.typeText("1")
   await setup.mockInput.typeText("2")
-  frame = await setup.waitForFrame((f) => (f.match(/\[✔\]/g) ?? []).length === 2)
+  frame = await setup.waitForFrame((f) => (f.match(/\[x\] (Ngân hàng|Thép)/g) ?? []).length === 2)
   setup.mockInput.pressArrow("right")
   frame = await setup.waitForFrame((f) => f.includes("Xem lại câu trả lời"))
   show(frame)
@@ -816,6 +833,98 @@ test("ask_user: several questions have tabs, multi-select and a review before se
   expect(lastTool()).toContain("Ngân hàng, Thép")
   expect(lastTool()).toContain("Trên 3 năm")
 }, 30_000)
+
+test("Ctrl+C like Claude Code: the first press clears the draft and says press again; a second within 800 ms exits", async () => {
+  const before = exits
+  await setup.mockInput.typeText("bản nháp dở")
+  await setup.waitForFrame((f) => f.includes("› bản nháp dở"))
+  setup.mockInput.pressKey("c", { ctrl: true })
+  let frame = await setup.waitForFrame((f) => f.includes("Nhấn Ctrl+C lần nữa để thoát"))
+  show(frame)
+  expect(frame).not.toContain("› bản nháp dở")
+  expect(exits).toBe(before)
+  // The hint goes away after the window; a late second press only arms again.
+  await new Promise((r) => setTimeout(r, 900))
+  await setup.waitForFrame((f) => !f.includes("lần nữa để thoát"))
+  setup.mockInput.pressKey("c", { ctrl: true })
+  await setup.waitForFrame((f) => f.includes("Nhấn Ctrl+C lần nữa để thoát"))
+  expect(exits).toBe(before)
+  setup.mockInput.pressKey("c", { ctrl: true })
+  await waitMcp(() => exits === before + 1)
+
+  // Ctrl+D counts only on an empty prompt.
+  await new Promise((r) => setTimeout(r, 900))
+  setup.mockInput.pressKey("d", { ctrl: true })
+  await setup.waitForFrame((f) => f.includes("Nhấn Ctrl+D lần nữa để thoát"))
+  await new Promise((r) => setTimeout(r, 900))
+})
+
+test("Ctrl+C while answering stops the answer (and arms exit); on an approval it denies", async () => {
+  const before = exits
+  const { z } = await import("zod")
+  let release: () => void = () => {}
+  runtime.registry.register({
+    name: "cho_lau",
+    description: "Đợi (tool thử)",
+    input: z.object({}),
+    readOnly: true,
+    execute: (_input, ctx) =>
+      new Promise((resolve, reject) => {
+        release = () => resolve("xong")
+        ctx.signal.addEventListener("abort", () => reject(new Error("aborted")), { once: true })
+      }),
+  })
+  callSlowTool = true
+  try {
+    await setup.mockInput.typeText("CHẬM ctrl c")
+    setup.mockInput.pressEnter()
+    await waitMcp(() => state.lines.some((l) => l.kind === "tool" && l.label.includes("cho_lau") && l.status === "running"))
+    setup.mockInput.pressKey("c", { ctrl: true })
+    await waitMcp(() => !state.streaming)
+    expect(JSON.stringify(state.history.at(-1)?.content)).toContain("(đã dừng)")
+    expect(exits).toBe(before)
+  } finally {
+    release()
+    callSlowTool = false
+    runtime.registry.unregister("cho_lau")
+  }
+  await new Promise((r) => setTimeout(r, 900))
+
+  runtime.registry.register({ name: "xoa_thu", description: "Xoá (tool thử)", input: z.object({}), readOnly: false, execute: async () => "đã xoá" })
+  const decision = runtime.permissions.check(runtime.registry.get("xoa_thu")!, {}, new AbortController().signal, "test · xoa_thu")
+  await setup.waitForFrame((f) => f.includes("Cần xác nhận"))
+  setup.mockInput.pressKey("c", { ctrl: true })
+  expect((await decision).allow).toBe(false)
+  expect(exits).toBe(before)
+  runtime.registry.unregister("xoa_thu")
+  await new Promise((r) => setTimeout(r, 900))
+})
+
+test("highlighting with the mouse copies the words only (no ● / ⎿, no trailing spaces) and says so", async () => {
+  await setup.mockInput.typeText("Chào bạn")
+  setup.mockInput.pressEnter()
+  await waitMcp(() => !state.streaming)
+  const frame = await setup.waitForFrame((f) => f.includes("● Xin chào! T+2.5"))
+  const rows = frame.split("\n")
+  const row = rows.findLastIndex((l) => l.includes("● Xin chào! T+2.5"))
+  const start = rows[row]!.indexOf("Xin")
+  const before = copied.length
+  // Drag from "Xin" across into the next lines of the same answer.
+  await setup.mockMouse.drag(start, row, start + 20, row + 2)
+  await waitMcp(() => copied.length > before)
+  const text = copied.at(-1)!
+  show(text)
+  expect(text.startsWith("Xin chào!")).toBe(true)
+  expect(text).not.toContain("●")
+  expect(text).not.toContain("⎿")
+  expect(text.split("\n").every((l) => l === l.trimEnd())).toBe(true)
+  await setup.waitForFrame((f) => f.includes("✓ Đã copy"))
+  // Clicking moved focus to the transcript; typing must still land in the prompt.
+  await setup.mockInput.typeText("gõ tiếp")
+  await setup.waitForFrame((f) => f.includes("› gõ tiếp"))
+  for (let i = 0; i < "gõ tiếp".length; i++) setup.mockInput.pressBackspace()
+  await setup.waitForFrame((f) => f.includes("Hỏi về thị trường"))
+})
 
 test("/new starts a fresh session; /sessions reopens the previous one with its tool rows", async () => {
   const before = state.lines.length

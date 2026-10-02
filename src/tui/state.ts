@@ -21,7 +21,7 @@ export type Line =
       status: ToolStatus
       output?: string
       durationMs?: number
-      /** The user's answer to the approval prompt, shown under the call ("✔ Đã cho phép …"). */
+      /** The user's answer to the approval prompt, shown under the call ("✓ Đã cho phép …"). */
       decision?: string
     }
   | { kind: "info"; text: string }
@@ -53,6 +53,11 @@ export const [state, setState] = createStore({
   dialog: undefined as DialogName | undefined,
   /** Tool call waiting for the user's yes/no (head of the permission queue). */
   approval: undefined as ApprovalRequest | undefined,
+  /** A short status-bar message ("✓ Đã copy 42 ký tự"), cleared after a moment. */
+  flash: undefined as string | undefined,
+  /** Set after one Ctrl+C / Ctrl+D: a second press within the window exits. */
+  exitArmed: undefined as "Ctrl+C" | "Ctrl+D" | undefined,
+  exiting: false,
   /** Questions from the model waiting for the user (ask_user). */
   question: undefined as AskRequest | undefined,
 })
@@ -64,3 +69,31 @@ export function pushLine(line: Line) {
 export const closeDialog = () => setState("dialog", undefined)
 
 export const providerName = (id?: ProviderId) => (id ? (state.catalog[id]?.name ?? id) : "")
+
+let flashTimer: ReturnType<typeof setTimeout> | undefined
+/** Show a message in the status bar for `ms`. */
+export function flash(text: string, ms = 2000) {
+  clearTimeout(flashTimer)
+  setState("flash", text)
+  flashTimer = setTimeout(() => setState("flash", undefined), ms)
+}
+
+/** Claude Code's double-press window for Ctrl+C / Ctrl+D. */
+export const EXIT_WINDOW_MS = 800
+
+let exitTimer: ReturnType<typeof setTimeout> | undefined
+export function armExit(key: "Ctrl+C" | "Ctrl+D") {
+  clearTimeout(exitTimer)
+  setState("exitArmed", key)
+  exitTimer = setTimeout(() => setState("exitArmed", undefined), EXIT_WINDOW_MS)
+}
+
+let exitHandler: (() => void) | undefined
+/** The app registers its exit routine; SIGINT (main.tsx) goes through the same path. */
+export function onExitRequest(fn: (() => void) | undefined) {
+  exitHandler = fn
+}
+export function requestExit() {
+  if (exitHandler) exitHandler()
+  else process.exit(0)
+}

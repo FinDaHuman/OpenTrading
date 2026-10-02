@@ -10,7 +10,7 @@ bun run dev
 ```
 
 - Gõ `/mcp`. Server `demo` hiện ở trạng thái **? chờ cho phép**: server khai báo trong project phải được bạn cho phép một lần.
-- Chọn server `demo`, rồi chọn **Cho phép chạy server này**. Trạng thái chuyển thành **✔ đã kết nối**, server có 4 tool:
+- Chọn server `demo`, rồi chọn **Cho phép chạy server này**. Trạng thái chuyển thành **✓ đã kết nối**, server có 4 tool:
   - `echo`, `add`, `fail`: chỉ đọc.
   - `ghi_chu`: tool ghi, nên OpenTrading hỏi bạn trước khi chạy.
 - Hỏi model: _"Dùng tool cộng 2 với 3"_. TUI sẽ hiện một dòng `⚙ demo · add({"a":2,"b":3})` kèm kết quả.
@@ -167,7 +167,7 @@ Notion, Linear, Sentry, Atlassian… dùng OAuth: không cần token, chỉ cầ
 Màn hình làm theo Claude Code. Nó là một panel thay chỗ ô nhập, gồm 4 bậc; Esc lùi lại một bậc.
 
 1. **Danh sách**, chia nhóm:
-   - **Project** (`.mcp.json`) và **Của bạn** (`~/.opentrading/mcp.json`). Mỗi dòng có dạng `tên · ✔ đã kết nối · N tool`.
+   - **Project** (`.mcp.json`) và **Của bạn** (`~/.opentrading/mcp.json`). Mỗi dòng có dạng `tên · ✓ đã kết nối · N tool`.
    - **Có sẵn**: các server phổ biến, **mặc định tắt**. Chọn một mục để bật; nếu cần token thì dán token, nếu cần OAuth thì trình duyệt mở để đăng nhập.
    - **+ Thêm server tuỳ chỉnh**: nhập tên và URL hoặc lệnh.
    - Phím: space bật/tắt, `r` kết nối lại.
@@ -175,17 +175,21 @@ Màn hình làm theo Claude Code. Nó là một panel thay chỗ ô nhập, gồ
 
      | Ký hiệu | Nghĩa |
      | --- | --- |
-     | ✔ | đã kết nối |
+     | ✓ | đã kết nối |
      | ◌ | đang kết nối |
      | ✘ | lỗi |
      | △ | cần đăng nhập |
      | ? | chờ cho phép |
-     | ◯ | đã tắt / có sẵn |
+     | ○ | đã tắt / có sẵn |
 
 2. **Server**: Trạng thái, Đăng nhập, URL/Lệnh, Cấu hình, Khả năng (tools · resources · prompts), số tool, các prompt.
    - Các lựa chọn: Xem tool · Đăng nhập / Đăng nhập lại / Đăng xuất · Kết nối lại · Bật/Tắt · Xoá khỏi cấu hình.
 3. **Tool của server**:
-   - Ký hiệu: ◇ chỉ đọc, ◆ ghi (sẽ hỏi trước khi chạy), ⚠ phá huỷ.
+   - Nhãn (như `[destructive]` của Claude Code, không dùng emoji):
+     - `[chỉ đọc]` (xanh): chạy ngay.
+     - `[ghi]` (vàng): hỏi trước khi chạy.
+     - `[không hoàn tác]` (đỏ): tool khai `destructiveHint`, có thể xoá hoặc ghi đè dữ liệu; hỏi trước, khung đỏ.
+     - `[ra ngoài]` (mờ): tool khai `openWorldHint`, tác động ra ngoài hệ thống.
 4. **Chi tiết tool**: các nhãn, tên đầy đủ, mô tả, và tham số (`• tên (bắt buộc): kiểu - mô tả`).
 
 Lệnh nhanh không mở panel: `/mcp enable <tên>`, `/mcp disable <tên>`, `/mcp reconnect <tên>`.

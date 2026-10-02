@@ -4,6 +4,7 @@ import { MAX_TOOLS_PER_REQUEST, type ToolRegistry } from "../../core/tools/regis
 import type { ToolDef } from "../../core/tools/types"
 import { closeDialog } from "../state"
 import { color } from "../theme"
+import { BADGE_LEGEND, toolBadge, toolMark } from "../ui/badges"
 import { ToolDetail } from "../ui/tool-detail"
 import { DialogFrame } from "./frame"
 import { Picker } from "./picker"
@@ -51,7 +52,7 @@ export function ToolsDialog(props: { registry: ToolRegistry }) {
           subtitle={
             over() > 0
               ? `Model nhận tối đa ${MAX_TOOLS_PER_REQUEST} tool mỗi lần; ${over()} tool của server xếp sau đang bị ẩn — lọc bằng enabledTools (/mcp)`
-              : "◇ chỉ đọc · ◆ ghi (hỏi trước khi chạy) · ⚠ có thể phá huỷ"
+              : BADGE_LEGEND
           }
           hint="gõ để lọc · ↑↓ di chuyển · enter xem chi tiết · esc đóng"
         >
@@ -59,8 +60,10 @@ export function ToolsDialog(props: { registry: ToolRegistry }) {
             items={sorted().map((t) => ({
               label: t.source?.startsWith("mcp:") && t.source !== "mcp:resources" ? (t.displayName ?? t.name).split(" · ").pop()! : t.name,
               hint: t.description.split("\n")[0],
-              mark: t.readOnly ? "◇" : t.annotations?.destructive ? "⚠" : "◆",
-              markColor: t.readOnly ? color.san : t.annotations?.destructive ? color.giam : color.tham,
+              mark: toolMark(t).mark,
+              markColor: toolMark(t).fg,
+              right: toolBadge(t).text,
+              rightColor: toolBadge(t).fg,
               group: toolGroup(t),
               value: t.name,
             }))}

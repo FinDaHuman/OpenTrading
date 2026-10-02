@@ -68,46 +68,69 @@ function ToolRow(props: { line: ToolLine; first: boolean; width: number }) {
     preview(props.line.output ?? "", state.expandTools, props.line.status === "error" ? COLLAPSED_ERROR_LINES : COLLAPSED_LINES)
   const textWidth = () => Math.max(10, props.width - RESULT.length)
 
+  /** First result line gets "  ⎿  ", the rest line up under it. */
+  const prefix = (first: boolean) => (first && !props.line.decision ? RESULT : RESULT_CONT)
+
   return (
     <box flexDirection="column" marginTop={props.first ? 1 : 0} flexShrink={0}>
-      <text wrapMode="none">
-        <span style={{ fg: dotColor() }}>{`${dot()} `}</span>
-        <span style={{ fg: color.tx, bold: true }}>{truncate(props.line.label, props.width - 14)}</span>
-        <span style={{ fg: color.tx3 }}>{duration(props.line.durationMs)}</span>
-      </text>
-      <Show when={props.line.decision}>
-        <text fg={color.tx3} wrapMode="none">
-          {`${RESULT}${props.line.decision}`}
+      <box flexDirection="row" height={1}>
+        <Gutter glyph={dot()} fg={dotColor()} />
+        <text wrapMode="none">
+          <span style={{ fg: color.tx, bold: true }}>{truncate(props.line.label, props.width - 14)}</span>
+          <span style={{ fg: color.tx3 }}>{duration(props.line.durationMs)}</span>
         </text>
+      </box>
+      <Show when={props.line.decision}>
+        <ResultLine prefix={RESULT} text={props.line.decision!} fg={color.tx3} />
       </Show>
       <Switch>
         <Match when={waiting()}>
-          <text fg={color.tham} wrapMode="none">{`${props.line.decision ? RESULT_CONT : RESULT}${waiting()}`}</text>
+          <ResultLine prefix={prefix(true)} text={waiting()!} fg={color.tham} />
         </Match>
         <Match when={special()}>
           {(s) => (
             <For each={s().lines}>
-              {(row, i) => (
-                <text fg={s().tone === "denied" ? color.giam : color.tx2} wrapMode="none">
-                  {`${i() === 0 && !props.line.decision ? RESULT : RESULT_CONT}${truncate(row, textWidth())}`}
-                </text>
-              )}
+              {(row, i) => <ResultLine prefix={prefix(i() === 0)} text={truncate(row, textWidth())} fg={s().tone === "denied" ? color.giam : color.tx2} />}
             </For>
           )}
         </Match>
         <Match when={props.line.output}>
           <For each={out().lines}>
             {(row, i) => (
-              <text fg={props.line.status === "error" ? color.giam : color.tx3} wrapMode="none">
-                {`${i() === 0 && !props.line.decision ? RESULT : RESULT_CONT}${truncate(row, textWidth())}`}
-              </text>
+              <ResultLine prefix={prefix(i() === 0)} text={truncate(row, textWidth())} fg={props.line.status === "error" ? color.giam : color.tx3} />
             )}
           </For>
           <Show when={out().hidden > 0}>
-            <text fg={color.tx3} wrapMode="none">{`${RESULT_CONT}… +${out().hidden} dòng (ctrl+o để mở rộng)`}</text>
+            <ResultLine prefix={RESULT_CONT} text={`… +${out().hidden} dòng (ctrl+o để mở rộng)`} fg={color.tx3} />
           </Show>
         </Match>
       </Switch>
+    </box>
+  )
+}
+
+/**
+ * Decorations (❯ ● ⎿ ✻ ✘ and indents) are not selectable: highlighting a reply with the
+ * mouse copies the words only.
+ */
+function Gutter(props: { glyph: string; fg: string }) {
+  return (
+    <text fg={props.fg} width={2} flexShrink={0} selectable={false}>
+      {props.glyph}
+    </text>
+  )
+}
+
+/** One result line under a tool call: a fixed, unselectable "  ⎿  " prefix and the text. */
+function ResultLine(props: { prefix: string; text: string; fg: string }) {
+  return (
+    <box flexDirection="row" height={1}>
+      <text fg={color.tx3} width={RESULT.length} flexShrink={0} selectable={false}>
+        {props.prefix}
+      </text>
+      <text fg={props.fg} wrapMode="none">
+        {props.text}
+      </text>
     </box>
   )
 }
@@ -116,9 +139,7 @@ function ToolRow(props: { line: ToolLine; first: boolean; width: number }) {
 function Hanging(props: { glyph: string; glyphColor: string; text: string; fg: string; marginTop?: number; bg?: string }) {
   return (
     <box flexDirection="row" marginTop={props.marginTop ?? 1} flexShrink={0} backgroundColor={props.bg} paddingRight={props.bg ? 1 : 0}>
-      <text fg={props.glyphColor} width={2} flexShrink={0}>
-        {props.glyph}
-      </text>
+      <Gutter glyph={props.glyph} fg={props.glyphColor} />
       <text fg={props.fg} flexGrow={1} flexShrink={1} wrapMode="word">
         {props.text}
       </text>
@@ -137,9 +158,7 @@ function Row(props: { line: Line; prev?: Line; width: number }) {
           const l = line() as Extract<Line, { kind: "assistant" }>
           return (
             <box flexDirection="row" marginTop={1} flexShrink={0}>
-              <text fg={color.tx} width={2} flexShrink={0}>
-                {"●"}
-              </text>
+              <Gutter glyph="●" fg={color.tx} />
               {/* Models answer in markdown: render it (bold, lists, tables, code) instead of raw ** and *. */}
               <markdown
                 flexGrow={1}

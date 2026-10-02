@@ -3,6 +3,7 @@ import { createSignal, For, Show } from "solid-js"
 import type { ApprovalRequest, Choice, PermissionGate } from "../core/permission"
 import { pushLine, setState, state } from "./state"
 import { color } from "./theme"
+import { BADGE } from "./ui/badges"
 
 /**
  * "Cần xác nhận" — shown in place of the prompt input while a tool with side effects
@@ -58,14 +59,14 @@ export function ApprovalPrompt(props: { gate: PermissionGate; request: ApprovalR
     // already shows there from the tool's error, so only "allowed" needs recording.
     const row = state.lines.findIndex((l) => l.kind === "tool" && l.callId === req().callId)
     if (row >= 0) {
-      if (option.choice !== "deny") setState("lines", row, (l) => ({ ...l, decision: `✔ Đã cho phép ${RECORD[option.choice]}` }))
+      if (option.choice !== "deny") setState("lines", row, (l) => ({ ...l, decision: `✓ Đã cho phép ${RECORD[option.choice]}` }))
     } else {
       pushLine({
         kind: "info",
         text:
           option.choice === "deny"
             ? `✘ Đã từ chối ${req().label}${message ? ` — "${message}"` : ""}`
-            : `✔ Đã cho phép ${req().label} ${RECORD[option.choice]}`,
+            : `✓ Đã cho phép ${req().label} ${RECORD[option.choice]}`,
       })
     }
     void props.gate.respond(req().id, option.choice, message)
@@ -76,6 +77,8 @@ export function ApprovalPrompt(props: { gate: PermissionGate; request: ApprovalR
 
   useKeyboard((evt) => {
     if (evt.eventType === "release") return
+    // Ctrl+C answers "no" like Esc (opencode); the app only arms the double-press exit.
+    if (evt.ctrl && evt.name === "c") return choose(3)
     if (noting()) {
       if (evt.name === "escape") {
         evt.preventDefault()
@@ -102,7 +105,7 @@ export function ApprovalPrompt(props: { gate: PermissionGate; request: ApprovalR
       border={["top"]}
       borderStyle="rounded"
       borderColor={destructive() ? color.giam : color.tham}
-      title={destructive() ? " Cần xác nhận · tool có thể phá huỷ " : " Cần xác nhận · tool ghi "}
+      title={destructive() ? " Cần xác nhận · thay đổi không hoàn tác được " : " Cần xác nhận · tool ghi "}
       titleAlignment="left"
       backgroundColor={color.panel2}
       flexDirection="column"
@@ -112,8 +115,8 @@ export function ApprovalPrompt(props: { gate: PermissionGate; request: ApprovalR
       <box flexDirection="column" paddingLeft={2} paddingTop={1}>
         <text>
           <span style={{ fg: color.tx, bold: true }}>{req().label}</span>
-          {destructive() ? <span style={{ fg: color.giam }}>{"  ⚠ phá huỷ"}</span> : ""}
-          {req().annotations?.openWorld ? <span style={{ fg: color.tx3 }}>{"  ↗ ra ngoài"}</span> : ""}
+          {destructive() ? <span style={{ fg: BADGE.irreversible.fg }}>{`  ${BADGE.irreversible.text}`}</span> : ""}
+          {req().annotations?.openWorld ? <span style={{ fg: BADGE.openWorld.fg }}>{`  ${BADGE.openWorld.text}`}</span> : ""}
         </text>
         <For each={args().lines}>{(line) => <text fg={color.tx2}>{line}</text>}</For>
         <Show when={args().more > 0}>
@@ -151,7 +154,7 @@ export function ApprovalPrompt(props: { gate: PermissionGate; request: ApprovalR
       </For>
       <Show when={noting()}>
         <box flexDirection="row" marginTop={1}>
-          <text fg={color.tham}>{"✎ Lời nhắn cho model: "}</text>
+          <text fg={color.tham} flexShrink={0}>{"Lời nhắn cho model: "}</text>
           <input
             flexGrow={1}
             focused

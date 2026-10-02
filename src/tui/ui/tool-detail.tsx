@@ -3,6 +3,7 @@ import { For, Show } from "solid-js"
 import { z } from "zod"
 import type { ToolDef } from "../../core/tools/types"
 import { color } from "../theme"
+import { BADGE, toolBadge } from "./badges"
 
 /** A titled field row: bold label, value (status coloured). */
 export function Field(props: { label: string; children: JSX.Element }) {
@@ -48,10 +49,8 @@ export function ToolDetail(props: { tool: ToolDef; server: string }) {
     <box flexDirection="column" marginTop={1}>
       <text>
         <span style={{ fg: color.tang, bold: true }}>{short()}</span>
-        {t().readOnly ? <span style={{ fg: color.tang }}>{" [chỉ đọc]"}</span> : ""}
-        {t().annotations?.destructive ? <span style={{ fg: color.giam }}>{" [phá huỷ]"}</span> : ""}
-        {t().annotations?.openWorld ? <span style={{ fg: color.tx3 }}>{" [ra ngoài]"}</span> : ""}
-        {!t().readOnly ? <span style={{ fg: color.tham }}>{" [hỏi trước khi chạy]"}</span> : ""}
+        <span style={{ fg: toolBadge(t()).fg }}>{` ${toolBadge(t()).text}`}</span>
+        {t().annotations?.openWorld ? <span style={{ fg: BADGE.openWorld.fg }}>{` ${BADGE.openWorld.text}`}</span> : ""}
       </text>
       <text fg={color.tx3}>{props.server}</text>
       <Field label="Tên tool">{short()}</Field>

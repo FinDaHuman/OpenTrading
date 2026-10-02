@@ -27,8 +27,9 @@ import { SkillsDialog, toggleSkill } from "./dialogs/skills"
 import { ToolsDialog } from "./dialogs/tools"
 import { Home } from "./home"
 import { currentSession, recordTurn, resumeFromArgs, startSession } from "./session"
-import { providerName, pushLine, setState, state, type Line } from "./state"
+import { armExit, closeDialog, flash, onExitRequest, providerName, pushLine, setState, state, type Line } from "./state"
 import { color } from "./theme"
+import { cleanSelection, writeClipboard } from "./clipboard"
 import { ArgumentHint, Suggestions } from "./suggestions"
 import { Transcript } from "./transcript"
 
@@ -48,7 +49,18 @@ function lineIndex(predicate: (line: Line) => boolean) {
   return -1
 }
 
-async function send(runtime: Runtime, text: string) {
+/** The turn being answered, so exit can wait for it to be saved. */
+let inflight: Promise<void> | undefined
+
+function send(runtime: Runtime, text: string) {
+  const turn = sendTurn(runtime, text)
+  inflight = turn
+  return turn.finally(() => {
+    if (inflight === turn) inflight = undefined
+  })
+}
+
+async function sendTurn(runtime: Runtime, text: string) {
   pushLine({ kind: "user", text })
   const mine = epoch
   const live = () => epoch === mine
@@ -132,7 +144,12 @@ async function send(runtime: Runtime, text: string) {
   }
 }
 
-export function App(props: { runtime: Runtime; resume?: string }) {
+export function App(props: {
+  runtime: Runtime
+  resume?: string
+  /** Tests replace the final step (destroy the renderer, end the process). */
+  onExit?: () => void
+}) {
   const renderer = useRenderer()
   const dims = useTerminalDimensions()
   const [draft, setDraft] = createSignal("")
@@ -146,19 +163,47 @@ export function App(props: { runtime: Runtime; resume?: string }) {
   const [dismissedFor, setDismissedFor] = createSignal<string>()
   let input: InputRenderable | undefined
 
-  let exiting = false
-  /** Stop MCP servers (bounded to 2s) before leaving, so no child process is orphaned. */
+  /**
+   * Leave: stop the running answer and wait — under one 2 s deadline — for it to be saved,
+   * the session-end hook and MCP servers to stop (no orphaned child process), then restore
+   * the terminal.
+   */
   const exit = async () => {
-    if (exiting) return
-    exiting = true
+    if (state.exiting) return
+    if (props.onExit) return props.onExit()
+    setState("exiting", true)
     abort?.abort()
     await Promise.race([
-      Promise.all([props.runtime.hooks.emit({ type: "session-end", sessionId: currentSession().id }), props.runtime.mcp.stop()]),
+      Promise.all([
+        inflight ?? Promise.resolve(),
+        props.runtime.hooks.emit({ type: "session-end", sessionId: currentSession().id }),
+        props.runtime.mcp.stop(),
+      ]),
       new Promise((r) => setTimeout(r, 2000)),
     ])
     renderer.destroy()
     process.exit(0)
   }
+  onExitRequest(() => void exit())
+  onCleanup(() => onExitRequest(undefined))
+
+  /** Copy what the mouse highlighted (opencode's copy-on-select); true when something was copied. */
+  function copySelection() {
+    const text = cleanSelection(renderer.getSelection()?.getSelectedText() ?? "")
+    renderer.clearSelection()
+    if (!text) return false
+    writeClipboard(text, (t) => renderer.copyToClipboardOSC52(t))
+    flash(`✓ Đã copy ${[...text].length} ký tự`)
+    return true
+  }
+  // A finished drag copies at once — no keystroke needed, like Claude Code in a terminal.
+  const onSelection = () => {
+    copySelection()
+    // A click/drag moves focus to what was clicked; typing must still go to the prompt.
+    if (!state.dialog && !owner()) input?.focus()
+  }
+  renderer.on("selection", onSelection)
+  onCleanup(() => renderer.off("selection", onSelection))
 
   const offMcp = props.runtime.mcp.onChange((status) => setState("mcp", status))
   onCleanup(() => offMcp())
@@ -286,6 +331,27 @@ export function App(props: { runtime: Runtime; resume?: string }) {
     if (value !== dismissedFor()) setDismissedFor(undefined)
   }
 
+  /**
+   * Ctrl+C / Ctrl+D like Claude Code: the first press does the nearest useful thing and
+   * says "press again to exit"; a second press within 800 ms exits. Ctrl+C with text
+   * highlighted copies it instead. Ctrl+D only counts on an empty prompt.
+   */
+  function onQuitKey(name: "c" | "d") {
+    if (name === "c" && renderer.hasSelection && copySelection()) return
+    const key = name === "c" ? "Ctrl+C" : "Ctrl+D"
+    if (name === "d" && (draft() || owner() || state.dialog)) return
+    if (state.exitArmed === key) return void exit()
+    if (name === "c") {
+      // An approval or question answers Ctrl+C itself (like Esc: deny / skip).
+      if (owner()) {
+        // handled by the prompt's own keyboard hook
+      } else if (state.dialog) closeDialog()
+      else if (draft()) setInput("")
+      else if (state.streaming) abort?.abort()
+    }
+    armExit(key)
+  }
+
   /** Tab: put the highlighted command in the input ("/name ") without running it; the list closes. */
   function complete() {
     const c = suggestions()[selected()]
@@ -369,8 +435,9 @@ export function App(props: { runtime: Runtime; resume?: string }) {
 
   useKeyboard((evt) => {
     if (evt.eventType === "release") return
-    if (evt.ctrl && evt.name === "c") return void exit()
+    if (evt.ctrl && (evt.name === "c" || evt.name === "d")) return onQuitKey(evt.name)
     if (evt.ctrl && evt.name === "o") return void setState("expandTools", (v) => !v)
+    if (evt.name === "escape" && renderer.hasSelection) return renderer.clearSelection()
     if (owner() || state.dialog) return
     const n = suggestions().length
     // Esc closes the "/" list first (it stays closed until the draft changes) and never
@@ -514,14 +581,20 @@ function StatusBar() {
         <text fg={color.tran}>{` ✦ ${state.activeSkills.join(", ")}`}</text>
       </Show>
       <box flexGrow={1} />
-      <text fg={state.streaming ? color.tham : color.tx3}>
-        {state.approval
-          ? "△ cần bạn xác nhận · esc từ chối"
-          : state.question
-            ? "△ model đang hỏi bạn · esc bỏ qua"
-            : state.streaming
-              ? "● đang trả lời · esc dừng"
-              : "/ lệnh · /help · ctrl+c thoát"}
+      <text fg={state.flash ? color.tang : state.streaming ? color.tham : color.tx3} flexShrink={0} selectable={false}>
+        {state.exiting
+          ? "Đang thoát…"
+          : state.exitArmed
+            ? `Nhấn ${state.exitArmed} lần nữa để thoát`
+            : state.flash
+              ? state.flash
+              : state.approval
+                ? "△ cần bạn xác nhận · esc từ chối"
+                : state.question
+                  ? "△ model đang hỏi bạn · esc bỏ qua"
+                  : state.streaming
+                    ? "● đang trả lời · esc dừng"
+                    : "/ lệnh · /help · ctrl+c ×2 thoát"}
       </text>
     </box>
   )

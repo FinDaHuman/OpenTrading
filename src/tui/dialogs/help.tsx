@@ -13,7 +13,9 @@ const KEYS: [string, string][] = [
   ["↑ ↓", "chọn trong danh sách / và các bảng"],
   ["esc", "đóng danh sách / · đóng bảng · dừng câu trả lời đang chạy"],
   ["ctrl+o", "mở rộng / thu gọn kết quả tool"],
-  ["ctrl+c", "thoát"],
+  ["kéo chuột", "bôi đen để copy (tự copy khi thả chuột) · giữ shift để dùng chọn chữ của terminal"],
+  ["ctrl+c", "copy phần đang bôi đen · xoá ô nhập / dừng câu trả lời · bấm 2 lần để thoát"],
+  ["ctrl+d", "bấm 2 lần khi ô nhập trống để thoát"],
 ]
 
 type Entry = { kind: "command"; name: string } | { kind: "key" }
