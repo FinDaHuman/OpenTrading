@@ -13,6 +13,7 @@ import { loadSkills } from "../core/skills/loader"
 import { Background } from "./background"
 import { ApprovalPrompt } from "./approval"
 import { McpPanel } from "./mcp/panel"
+import { rank } from "./ui/text"
 import { COMMANDS, parseCommand, parsePromptArgs, promptUsage, type CommandInfo } from "./commands"
 import { ConfigDialog } from "./dialogs/config"
 import { ConnectDialog } from "./dialogs/connect"
@@ -27,7 +28,7 @@ import { Home } from "./home"
 import { currentSession, recordTurn, resumeFromArgs, startSession } from "./session"
 import { providerName, pushLine, setState, state, type Line } from "./state"
 import { color } from "./theme"
-import { Suggestions } from "./suggestions"
+import { ArgumentHint, Suggestions } from "./suggestions"
 import { Transcript } from "./transcript"
 
 let abort: AbortController | undefined
@@ -135,6 +136,8 @@ export function App(props: { runtime: Runtime; resume?: string }) {
   const dims = useTerminalDimensions()
   const [draft, setDraft] = createSignal("")
   const [selected, setSelected] = createSignal(0)
+  /** Draft at which Esc closed the "/" list; it reopens as soon as the draft changes. */
+  const [dismissedFor, setDismissedFor] = createSignal<string>()
   let input: InputRenderable | undefined
 
   let exiting = false
@@ -194,6 +197,7 @@ export function App(props: { runtime: Runtime; resume?: string }) {
         ? s.prompts.map((p) => ({
             name: `${s.name}:${p.name}`,
             args: promptUsage(p.arguments) || undefined,
+            argsRequired: p.arguments.some((a) => a.required),
             description: p.description?.split("\n")[0] ?? `Prompt của MCP server ${s.name}`,
             server: s.name,
             prompt: p.name,
@@ -202,10 +206,25 @@ export function App(props: { runtime: Runtime; resume?: string }) {
     ),
   )
 
+  const allCommands = createMemo<CommandInfo[]>(() => [...COMMANDS, ...promptCommands()])
+
+  /**
+   * The "/" list, Claude Code style: open while the draft is "/" + a command name (no
+   * space yet), ranked (exact, prefix, substring, description), and closed by Esc until
+   * the draft changes.
+   */
   const suggestions = createMemo(() => {
-    const d = draft().toLowerCase()
-    if (!d.startsWith("/") || d.includes(" ")) return []
-    return [...COMMANDS, ...promptCommands()].filter((c) => `/${c.name.toLowerCase()}`.startsWith(d))
+    const d = draft()
+    if (!d.startsWith("/") || /\s/.test(d) || d === dismissedFor()) return []
+    return rank(allCommands(), d.slice(1), (c) => c.name, (c) => c.description)
+  })
+
+  /** After "/name " (with the space): the arguments the command takes, shown under the list's place. */
+  const argHint = createMemo(() => {
+    const m = /^\/(\S+) $/.exec(draft())
+    if (!m) return undefined
+    const c = allCommands().find((x) => x.name.toLowerCase() === m[1]!.toLowerCase())
+    return c?.args ? c : undefined
   })
 
   /** `/mcp enable|disable|reconnect <name>` without opening the panel (as in Claude Code). */
@@ -249,30 +268,50 @@ export function App(props: { runtime: Runtime; resume?: string }) {
     }
     setDraft(value)
     setSelected(0)
+    if (value !== dismissedFor()) setDismissedFor(undefined)
   }
 
-  /** Tab: fill in the highlighted command (with a trailing space if it takes arguments). */
+  /** Tab: put the highlighted command in the input ("/name ") without running it; the list closes. */
   function complete() {
     const c = suggestions()[selected()]
-    if (c) setInput(`/${c.name}${c.args ? " " : ""}`)
+    if (c) setInput(`/${c.name} `)
   }
 
+  /**
+   * Enter. With the "/" list open it runs the highlighted command — or, when the command
+   * cannot run without arguments, fills "/name " and waits (Claude Code). Otherwise a
+   * "/…" line is a command (unknown ones are reported, never sent to the model) and
+   * anything else is a message.
+   */
   function run(value: string) {
     const text = value.trim()
-    const highlighted = suggestions()[selected()]
-    setInput("")
-    if (!text) return
+    const list = suggestions()
+    const highlighted = list[selected()]
+    if (highlighted && list.length > 0) {
+      if (highlighted.argsRequired) return setInput(`/${highlighted.name} `)
+      setInput("")
+      return runCommand(highlighted.name.toLowerCase(), "")
+    }
+    if (!text) return setInput("")
     const cmd = parseCommand(text)
-    // Enter on a partial command ("/con") runs the highlighted suggestion.
-    const known = (name: string) => COMMANDS.some((c) => c.name === name) || promptCommands().some((c) => c.name.toLowerCase() === name)
-    if (cmd && !known(cmd.name) && highlighted && !cmd.args) cmd.name = highlighted.name.toLowerCase()
     if (!cmd) {
-      // A lone "/" (or "/ text") is never a message for the model.
-      if (text.startsWith("/")) return
+      if (text.startsWith("/")) return setInput("") // "/" alone or "/ text": nothing to run, nothing to send
+      setInput("")
       if (state.streaming) return
       void send(props.runtime, text)
       return
     }
+    const known = allCommands().some((c) => c.name.toLowerCase() === cmd.name) || cmd.name === "quit"
+    if (!known) {
+      // Keep what was typed so it can be fixed.
+      return pushLine({ kind: "error", text: `Không có lệnh /${cmd.name}. Gõ /help để xem các lệnh.` })
+    }
+    setInput("")
+    runCommand(cmd.name, cmd.args)
+  }
+
+  function runCommand(name: string, args: string) {
+    const cmd = { name, args }
     const promptCmd = promptCommands().find((c) => c.name.toLowerCase() === cmd.name)
     if (promptCmd) {
       if (state.streaming) return pushLine({ kind: "error", text: "Đang trả lời; chờ xong rồi chạy prompt." })
@@ -309,7 +348,7 @@ export function App(props: { runtime: Runtime; resume?: string }) {
       case "quit":
         return void exit()
       default:
-        pushLine({ kind: "error", text: `Không có lệnh /${cmd.name}. Gõ /help.` })
+        pushLine({ kind: "error", text: `Không có lệnh /${cmd.name}. Gõ /help để xem các lệnh.` })
     }
   }
 
@@ -317,17 +356,27 @@ export function App(props: { runtime: Runtime; resume?: string }) {
     if (evt.eventType === "release") return
     if (evt.ctrl && evt.name === "c") return void exit()
     if (evt.ctrl && evt.name === "o") return void setState("expandTools", (v) => !v)
-    // While an approval is up, Esc answers it ("no") instead of stopping the whole turn.
-    if (evt.name === "escape" && !state.dialog && !state.approval && state.streaming) abort?.abort()
-    if (state.approval) return
-    if (state.dialog || suggestions().length === 0) return
+    if (state.approval || state.dialog) return
     const n = suggestions().length
+    // Esc closes the "/" list first (it stays closed until the draft changes) and never
+    // also stops the running answer.
+    if (evt.name === "escape" && n > 0) {
+      evt.preventDefault()
+      setDismissedFor(draft())
+      return
+    }
+    if (evt.name === "escape" && state.streaming) return void abort?.abort()
+    // With the list closed, Tab and the arrows do nothing special (no autofill).
+    if (n === 0) return
     if (evt.name === "tab") {
       evt.preventDefault()
       complete()
-    } else if (evt.name === "up" || evt.name === "down") {
+    } else if (evt.name === "up" || (evt.ctrl && evt.name === "p")) {
       evt.preventDefault()
-      setSelected((i) => (i + (evt.name === "up" ? n - 1 : 1)) % n)
+      setSelected((i) => (i + n - 1) % n)
+    } else if (evt.name === "down" || (evt.ctrl && evt.name === "n")) {
+      evt.preventDefault()
+      setSelected((i) => (i + 1) % n)
     }
   })
 
@@ -338,24 +387,59 @@ export function App(props: { runtime: Runtime; resume?: string }) {
         {/* Tall panels below (/mcp, approval) shrink this area; clip it instead of letting
             flexbox squeeze rows on top of each other. */}
         <box flexGrow={1} flexShrink={1} minHeight={0} overflow="hidden" flexDirection="column">
-          <Show when={state.lines.length > 0} fallback={<Show when={state.dialog !== "mcp"}>{<Home />}</Show>}>
+          <Show when={state.lines.length > 0} fallback={<Show when={!state.dialog}>{<Home />}</Show>}>
             <Transcript />
           </Show>
         </box>
 
-        <Show when={suggestions().length > 0 && !state.approval && state.dialog !== "mcp"}>
-          <Suggestions items={suggestions()} selected={selected()} />
+        <Show when={suggestions().length > 0 && !state.approval && !state.dialog}>
+          <Suggestions items={suggestions()} all={allCommands()} selected={selected()} />
+        </Show>
+        <Show when={!state.approval && !state.dialog && suggestions().length === 0 && argHint()}>
+          {(c) => <ArgumentHint command={c()} />}
         </Show>
 
         {/* The approval prompt and /mcp take the input's place; the input is hidden, not
             unmounted, so a half-typed message survives. */}
         <Show when={state.approval}>{(request) => <ApprovalPrompt gate={props.runtime.permissions} request={request()} />}</Show>
-        <Show when={state.dialog === "mcp" && !state.approval}>
-          <McpPanel mcp={props.runtime.mcp} cwd={props.runtime.mcp.cwd} />
+        {/* Every dialog is a pane docked here, in place of the prompt (Claude Code style). */}
+        <Show when={!state.approval}>
+          <Switch>
+            <Match when={state.dialog === "mcp"}>
+              <McpPanel mcp={props.runtime.mcp} cwd={props.runtime.mcp.cwd} />
+            </Match>
+            <Match when={state.dialog === "connect"}>
+              <ConnectDialog />
+            </Match>
+            <Match when={state.dialog === "model"}>
+              <ModelDialog />
+            </Match>
+            <Match when={state.dialog === "skills"}>
+              <SkillsDialog />
+            </Match>
+            <Match when={state.dialog === "help"}>
+              <HelpDialog onRun={(command) => run(command)} />
+            </Match>
+            <Match when={state.dialog === "tools"}>
+              <ToolsDialog registry={props.runtime.registry} />
+            </Match>
+            <Match when={state.dialog === "context"}>
+              <ContextDialog runtime={props.runtime} />
+            </Match>
+            <Match when={state.dialog === "sessions"}>
+              <SessionsDialog runtime={props.runtime} />
+            </Match>
+            <Match when={state.dialog === "config"}>
+              <ConfigDialog runtime={props.runtime} />
+            </Match>
+            <Match when={state.dialog === "memory"}>
+              <MemoryDialog memory={props.runtime.memory} />
+            </Match>
+          </Switch>
         </Show>
 
         <box
-          visible={!state.approval && state.dialog !== "mcp"}
+          visible={!state.approval && !state.dialog}
           marginLeft={2}
           marginRight={2}
           border
@@ -381,6 +465,8 @@ export function App(props: { runtime: Runtime; resume?: string }) {
             onInput={(v) => {
               setDraft(v)
               setSelected(0)
+              // A dismissed list stays closed only until the draft changes.
+              if (v !== dismissedFor()) setDismissedFor(undefined)
             }}
             onSubmit={(v: unknown) => run(typeof v === "string" ? v : (input?.value ?? ""))}
           />
@@ -389,35 +475,6 @@ export function App(props: { runtime: Runtime; resume?: string }) {
         <StatusBar />
       </box>
 
-      <Switch>
-        <Match when={state.dialog === "connect"}>
-          <ConnectDialog />
-        </Match>
-        <Match when={state.dialog === "model"}>
-          <ModelDialog />
-        </Match>
-        <Match when={state.dialog === "skills"}>
-          <SkillsDialog />
-        </Match>
-        <Match when={state.dialog === "help"}>
-          <HelpDialog />
-        </Match>
-        <Match when={state.dialog === "tools"}>
-          <ToolsDialog registry={props.runtime.registry} />
-        </Match>
-        <Match when={state.dialog === "context"}>
-          <ContextDialog runtime={props.runtime} />
-        </Match>
-        <Match when={state.dialog === "sessions"}>
-          <SessionsDialog runtime={props.runtime} />
-        </Match>
-        <Match when={state.dialog === "config"}>
-          <ConfigDialog runtime={props.runtime} />
-        </Match>
-        <Match when={state.dialog === "memory"}>
-          <MemoryDialog memory={props.runtime.memory} />
-        </Match>
-      </Switch>
     </box>
   )
 }

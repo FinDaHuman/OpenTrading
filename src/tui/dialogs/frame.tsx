@@ -1,29 +1,37 @@
 import { useTerminalDimensions } from "@opentui/solid"
-import type { JSX } from "solid-js"
+import { Show, type JSX } from "solid-js"
 import { color } from "../theme"
 
-export function DialogFrame(props: { title: string; hint?: string; width?: number; children: JSX.Element }) {
+/**
+ * Every dialog is a full-width pane docked where the prompt input sits (Claude Code style,
+ * same as /mcp and the approval prompt): a rule on top, bold title, content, one dim hint
+ * line. The transcript above shrinks; nothing floats over it.
+ */
+export function DialogFrame(props: { title: string; subtitle?: string; hint?: string; width?: number; children: JSX.Element }) {
   const dims = useTerminalDimensions()
-  const width = () => Math.min(props.width ?? 64, dims().width - 4)
   return (
     <box
-      position="absolute"
-      zIndex={20}
-      left={Math.max(0, Math.floor((dims().width - width()) / 2))}
-      top={Math.max(1, Math.floor(dims().height / 6))}
-      width={width()}
-      flexDirection="column"
-      backgroundColor={color.panel}
-      border
-      borderStyle="rounded"
+      flexShrink={0}
+      maxHeight={Math.max(8, dims().height - 4)}
+      border={["top"]}
       borderColor={color.tang}
-      title={` ${props.title} `}
-      titleAlignment="left"
-      paddingLeft={1}
-      paddingRight={1}
+      backgroundColor={color.panel}
+      flexDirection="column"
+      paddingLeft={2}
+      paddingRight={2}
     >
-      {props.children}
-      <text fg={color.tx3} marginTop={1}>
+      <text fg={color.tang} marginTop={1} wrapMode="none">
+        <span style={{ bold: true }}>{props.title}</span>
+      </text>
+      <Show when={props.subtitle}>
+        <text fg={color.tx3} wrapMode="none">
+          {props.subtitle}
+        </text>
+      </Show>
+      <box flexDirection="column" marginTop={1} flexShrink={1} minHeight={0} overflow="hidden">
+        {props.children}
+      </box>
+      <text fg={color.tx3} marginTop={1} wrapMode="none">
         {props.hint ?? "↑↓ chọn · enter xác nhận · esc đóng"}
       </text>
     </box>

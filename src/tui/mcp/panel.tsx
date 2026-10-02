@@ -6,6 +6,8 @@ import type { McpManager, McpServerStatus, McpState } from "../../core/mcp/manag
 import type { ToolDef } from "../../core/tools/types"
 import { closeDialog, pushLine, state } from "../state"
 import { color } from "../theme"
+import { truncate } from "../ui/text"
+import { Field, ToolDetail } from "../ui/tool-detail"
 
 /**
  * /mcp — modelled on Claude Code's MCP settings (components/mcp/*): a full-width pane in
@@ -54,19 +56,6 @@ interface MenuItem {
   danger?: boolean
 }
 
-/** A titled field row: bold label, value (status coloured). */
-function Field(props: { label: string; children: JSX.Element }) {
-  return (
-    <box flexDirection="row" height={1}>
-      <text fg={color.tx} width={14} flexShrink={0}>
-        <span style={{ bold: true }}>{props.label}</span>
-      </text>
-      <text fg={color.tx2} wrapMode="none">
-        {props.children}
-      </text>
-    </box>
-  )
-}
 
 function Menu(props: { items: MenuItem[]; selected: number }) {
   return (
@@ -408,8 +397,8 @@ export function McpPanel(props: { mcp: McpManager; cwd: string }) {
                   <Switch>
                     <Match when={row.kind === "heading" && row}>
                       {(h) => (
-                        <text fg={color.tx2} marginTop={listWindow().rows[0] === row ? 0 : 1}>
-                          <span style={{ bold: true }}>{`  ${h().text}`}</span>
+                        <text fg={color.tx2} marginTop={listWindow().rows[0] === row ? 0 : 1} wrapMode="none">
+                          <span style={{ bold: true }}>{`  ${truncate(h().text, dims().width - 8)}`}</span>
                         </text>
                       )}
                     </Match>
@@ -743,57 +732,6 @@ function CustomForm(props: { onName: (v: string) => void; onTarget: (v: string) 
       {field_("Tên server:", "name", "ví dụ: my-data", props.onName)}
       {field_("URL hoặc lệnh:", "target", "https://example.com/mcp", props.onTarget)}
       <text fg={color.tx3}>tab đổi ô · enter ở ô cuối để thêm</text>
-    </box>
-  )
-}
-
-/** Claude Code's tool detail: badges, names, description, parameters. */
-function ToolDetail(props: { tool: ToolDef; server: string }) {
-  const t = () => props.tool
-  const schema = () => (t().input && typeof t().input === "object" && !("_def" in (t().input as object)) ? (t().input as Record<string, any>) : {})
-  const params = () => {
-    const s = schema()
-    const required = new Set<string>(Array.isArray(s.required) ? s.required : [])
-    return Object.entries((s.properties ?? {}) as Record<string, any>).map(([key, p]) => ({
-      key,
-      required: required.has(key),
-      type: p?.type ? (Array.isArray(p.type) ? p.type.join("|") : String(p.type)) : p?.anyOf ? "nhiều kiểu" : p?.enum ? "enum" : "bất kỳ",
-      description: typeof p?.description === "string" ? p.description.replace(/\s+/g, " ") : "",
-    }))
-  }
-  const short = () => (t().displayName ?? t().name).split(" · ").pop()!
-  return (
-    <box flexDirection="column" marginTop={1}>
-      <text>
-        <span style={{ fg: color.tang, bold: true }}>{short()}</span>
-        {t().readOnly ? <span style={{ fg: color.tang }}>{" [chỉ đọc]"}</span> : ""}
-        {t().annotations?.destructive ? <span style={{ fg: color.giam }}>{" [phá huỷ]"}</span> : ""}
-        {t().annotations?.openWorld ? <span style={{ fg: color.tx3 }}>{" [ra ngoài]"}</span> : ""}
-        {!t().readOnly ? <span style={{ fg: color.tham }}>{" [hỏi trước khi chạy]"}</span> : ""}
-      </text>
-      <text fg={color.tx3}>{props.server}</text>
-      <Field label="Tên tool">{short()}</Field>
-      <Field label="Tên đầy đủ">{t().name}</Field>
-      <text fg={color.tx} marginTop={1}>
-        <span style={{ bold: true }}>Mô tả</span>
-      </text>
-      <text fg={color.tx2} wrapMode="word">
-        {t().description.split("\n").slice(0, 8).join("\n")}
-      </text>
-      <text fg={color.tx} marginTop={1}>
-        <span style={{ bold: true }}>{`Tham số${params().length === 0 ? ": không có" : ""}`}</span>
-      </text>
-      <For each={params().slice(0, 12)}>
-        {(p) => (
-          <text wrapMode="none">
-            <span style={{ fg: color.tx }}>{`  • ${p.key}`}</span>
-            <span style={{ fg: color.tx3 }}>{`${p.required ? " (bắt buộc)" : ""}: ${p.type}${p.description ? ` - ${p.description}` : ""}`}</span>
-          </text>
-        )}
-      </For>
-      <Show when={params().length > 12}>
-        <text fg={color.tx3}>{`  … và ${params().length - 12} tham số khác`}</text>
-      </Show>
     </box>
   )
 }

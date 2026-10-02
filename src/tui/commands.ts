@@ -1,6 +1,8 @@
 export interface CommandInfo {
   name: string
   args?: string
+  /** Cannot run without its arguments: Enter on it in the "/" list fills "/name " and waits. */
+  argsRequired?: boolean
   description: string
 }
 

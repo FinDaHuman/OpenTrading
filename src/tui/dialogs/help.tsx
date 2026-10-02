@@ -1,51 +1,70 @@
 import { useKeyboard } from "@opentui/solid"
-import { For } from "solid-js"
+import { createMemo } from "solid-js"
 import { COMMANDS } from "../commands"
-import { closeDialog } from "../state"
+import { closeDialog, state } from "../state"
 import { color } from "../theme"
+import { promptUsage } from "../commands"
 import { DialogFrame } from "./frame"
+import { Picker, type PickerItem } from "./picker"
 
-const KEYS = [
-  ["enter", "gửi tin nhắn"],
-  ["tab", "hoàn thành lệnh đang gõ"],
-  ["esc", "dừng câu trả lời đang chạy / đóng hộp thoại"],
+const KEYS: [string, string][] = [
+  ["enter", "gửi tin nhắn · chạy lệnh đang chọn trong danh sách /"],
+  ["tab", "điền lệnh đang chọn vào ô nhập (không chạy)"],
+  ["↑ ↓", "chọn trong danh sách / và các bảng"],
+  ["esc", "đóng danh sách / · đóng bảng · dừng câu trả lời đang chạy"],
   ["ctrl+o", "mở rộng / thu gọn kết quả tool"],
   ["ctrl+c", "thoát"],
 ]
 
-export function HelpDialog() {
+type Entry = { kind: "command"; name: string } | { kind: "key" }
+
+/** Commands (built-in and MCP prompts) and keys in one filterable list; enter runs a command. */
+export function HelpDialog(props: { onRun: (command: string) => void }) {
   useKeyboard((evt) => {
     if (evt.eventType !== "release" && evt.name === "escape") closeDialog()
   })
+
+  const items = createMemo<PickerItem<Entry>[]>(() => [
+    ...COMMANDS.map((c) => ({
+      label: `/${c.name}${c.args ? ` ${c.args}` : ""}`,
+      hint: c.description,
+      group: "Lệnh",
+      value: { kind: "command" as const, name: c.name },
+    })),
+    ...state.mcp.flatMap((s) =>
+      s.state === "connected"
+        ? s.prompts.map((p) => ({
+            label: `/${s.name}:${p.name}${p.arguments.length ? ` ${promptUsage(p.arguments)}` : ""}`,
+            hint: p.description?.split("\n")[0] ?? `Prompt của MCP server ${s.name}`,
+            group: "Lệnh từ MCP server",
+            value: { kind: "command" as const, name: `${s.name}:${p.name}` },
+          }))
+        : [],
+    ),
+    ...KEYS.map(([key, description]) => ({
+      label: key,
+      hint: description,
+      markColor: color.san,
+      group: "Phím tắt",
+      value: { kind: "key" as const },
+    })),
+  ])
+
   return (
-    <DialogFrame title="Trợ giúp" hint="esc đóng" width={68}>
-      <text fg={color.tham}>Lệnh</text>
-      <For each={COMMANDS}>
-        {(c) => (
-          <box flexDirection="row">
-            <text fg={color.tang} width={18}>
-              {`/${c.name}${c.args ? ` ${c.args}` : ""}`}
-            </text>
-            <text fg={color.tx2}>{c.description}</text>
-          </box>
-        )}
-      </For>
-      <text fg={color.tham} marginTop={1}>
-        Phím tắt
-      </text>
-      <For each={KEYS}>
-        {([k, d]) => (
-          <box flexDirection="row">
-            <text fg={color.san} width={18}>
-              {k}
-            </text>
-            <text fg={color.tx2}>{d}</text>
-          </box>
-        )}
-      </For>
-      <text fg={color.tx3} marginTop={1}>
-        Bản demo v0: chưa có dữ liệu thị trường, chưa có tool. Không phải tư vấn đầu tư.
-      </text>
+    <DialogFrame
+      title="Trợ giúp"
+      subtitle="OpenTrading · harness AI phân tích chứng khoán Việt Nam · không phải tư vấn đầu tư"
+      hint="gõ để lọc · ↑↓ di chuyển · enter chạy lệnh · esc đóng"
+    >
+      <Picker
+        items={items()}
+        onPick={(entry) => {
+          if (entry.kind !== "command") return
+          closeDialog()
+          props.onRun(`/${entry.name}`)
+        }}
+        rows={16}
+      />
     </DialogFrame>
   )
 }
