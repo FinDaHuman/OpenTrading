@@ -75,14 +75,16 @@ export class Session {
     /** Relative path; undefined until the first turn is written. */
     public file: string | undefined,
     summary?: SessionSummary,
+    createdAt = new Date(),
   ) {
     this.turns = summary?.turns ?? 0
     this.title = summary?.title ?? ""
-    this.createdAt = summary?.createdAt ?? new Date().toISOString()
+    // The folder (YYYY/MM) must agree with the id's timestamp, so both come from one clock.
+    this.createdAt = summary?.createdAt ?? createdAt.toISOString()
   }
 
   static create(now = new Date()) {
-    return new Session(newSessionId(now), undefined)
+    return new Session(newSessionId(now), undefined, undefined, now)
   }
 
   /** Keep appending to an existing session file after resume. */

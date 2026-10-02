@@ -12,6 +12,7 @@ const MARK: Record<McpState, string> = {
   failed: "✕",
   disabled: "○",
   untrusted: "?",
+  "needs-auth": "!",
 }
 
 const STATE_LABEL: Record<McpState, string> = {
@@ -20,10 +21,11 @@ const STATE_LABEL: Record<McpState, string> = {
   failed: "lỗi",
   disabled: "đã tắt",
   untrusted: "chờ cho phép",
+  "needs-auth": "cần đăng nhập",
 }
 
 function hint(s: McpServerStatus) {
-  if (s.state === "connected") return `${s.scope} · ${s.tools.length} tool`
+  if (s.state === "connected") return `${s.scope} · ${s.transport} · ${s.tools.length} tool${s.hiddenTools ? ` (ẩn ${s.hiddenTools})` : ""}`
   if (s.state === "failed") return `${s.scope} · ${s.error ?? "lỗi"}`
   return `${s.scope} · ${STATE_LABEL[s.state]}`
 }
@@ -33,6 +35,9 @@ export function McpDialog(props: { mcp: McpManager }) {
   const [busy, setBusy] = createSignal(false)
   const server = createMemo(() => state.mcp.find((s) => s.name === open()))
 
+  const [loginUrl, setLoginUrl] = createSignal<string>()
+  let loginAbort: AbortController | undefined
+
   async function act() {
     const s = server()
     if (!s || busy()) return
@@ -41,9 +46,29 @@ export function McpDialog(props: { mcp: McpManager }) {
       if (s.state === "untrusted") {
         await props.mcp.trust(s.name)
         pushLine({ kind: "info", text: `Đã cho phép MCP server "${s.name}" (${s.target}).` })
-      } else if (s.state === "failed" || s.state === "connected") {
+      } else if (s.state === "needs-auth" && s.oauth) {
+        loginAbort = new AbortController()
+        await props.mcp.login(s.name, { onUrl: setLoginUrl, signal: loginAbort.signal })
+        pushLine({ kind: "info", text: `Đã đăng nhập MCP server "${s.name}".` })
+      } else if (s.state === "failed" || s.state === "connected" || s.state === "needs-auth") {
         await props.mcp.restart(s.name)
       }
+    } catch (error) {
+      pushLine({ kind: "error", text: `MCP "${s.name}": ${error instanceof Error ? error.message : String(error)}` })
+    } finally {
+      loginAbort = undefined
+      setLoginUrl(undefined)
+      setBusy(false)
+    }
+  }
+
+  async function logout() {
+    const s = server()
+    if (!s || busy() || !s.oauth) return
+    setBusy(true)
+    try {
+      await props.mcp.logout(s.name)
+      pushLine({ kind: "info", text: `Đã đăng xuất MCP server "${s.name}".` })
     } finally {
       setBusy(false)
     }
@@ -51,8 +76,12 @@ export function McpDialog(props: { mcp: McpManager }) {
 
   useKeyboard((evt) => {
     if (evt.eventType === "release") return
-    if (evt.name === "escape") return open() ? setOpen(undefined) : closeDialog()
+    if (evt.name === "escape") {
+      if (loginAbort) return loginAbort.abort()
+      return open() ? setOpen(undefined) : closeDialog()
+    }
     if (open() && evt.name === "return") void act()
+    if (open() && evt.name === "x" && !busy()) void logout()
   })
 
   return (
@@ -72,13 +101,17 @@ export function McpDialog(props: { mcp: McpManager }) {
             title={`MCP · ${s().name}`}
             width={80}
             hint={
-              busy()
-                ? "đang xử lý…"
-                : s().state === "untrusted"
-                  ? "enter cho phép chạy · esc quay lại"
-                  : s().state === "failed" || s().state === "connected"
-                    ? "enter kết nối lại · esc quay lại"
-                    : "esc quay lại"
+              loginUrl()
+                ? "đang chờ đăng nhập trên trình duyệt… · esc huỷ"
+                : busy()
+                  ? "đang xử lý…"
+                  : s().state === "untrusted"
+                    ? "enter cho phép chạy · esc quay lại"
+                    : s().state === "needs-auth" && s().oauth
+                      ? "enter đăng nhập · esc quay lại"
+                      : s().state === "failed" || s().state === "connected" || s().state === "needs-auth"
+                        ? `enter kết nối lại${s().oauth ? " · x đăng xuất" : ""} · esc quay lại`
+                        : "esc quay lại"
             }
           >
             <text>
@@ -94,10 +127,33 @@ export function McpDialog(props: { mcp: McpManager }) {
                 {s().error}
               </text>
             </Show>
+            <Show when={loginUrl()}>
+              <text fg={color.tham} marginTop={1} wrapMode="word">
+                Đã mở trình duyệt. Nếu không thấy, mở link này:
+              </text>
+              <text fg={color.tx} wrapMode="char">
+                {loginUrl()}
+              </text>
+            </Show>
             <Show when={s().state === "untrusted"}>
               <text fg={color.tham} marginTop={1} wrapMode="word">
                 Server này khai báo trong .mcp.json của project. Chỉ cho phép nếu bạn tin lệnh ở trên.
               </text>
+              <Show when={s().exposure.vars.length > 0}>
+                <text fg={color.giam} wrapMode="word">
+                  {`Sẽ gửi giá trị của ${s().exposure.vars.join(", ")} (biến môi trường hoặc secret đã lưu) tới ${s().target}.`}
+                </text>
+              </Show>
+              <Show when={s().exposure.headers.length > 0 || s().exposure.env.length > 0}>
+                <text fg={color.tx2} wrapMode="word">
+                  {[
+                    s().exposure.headers.length > 0 ? `Header: ${s().exposure.headers.join(", ")}` : "",
+                    s().exposure.env.length > 0 ? `Biến môi trường: ${s().exposure.env.join(", ")}` : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </text>
+              </Show>
             </Show>
             <Show when={s().tools.length > 0}>
               <text fg={color.tham} marginTop={1}>{`Tool (${s().tools.length})`}</text>

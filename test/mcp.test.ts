@@ -128,7 +128,10 @@ test("a server that cannot start is reported as failed, not thrown", async () =>
 test("missing env vars fail fast with the variable name", async () => {
   const { manager } = await setup({ demo: { ...demoConfig, env: { API: "${OT_TEST_UNSET_VAR}" } } })
   await manager.start()
-  expect(manager.status()[0]).toMatchObject({ state: "failed", error: "Thiếu biến môi trường: OT_TEST_UNSET_VAR" })
+  const status = manager.status()[0]!
+  expect(status.state).toBe("failed")
+  expect(status.error).toContain("Thiếu biến: OT_TEST_UNSET_VAR")
+  expect(status.error).toContain("opentrading mcp secret set OT_TEST_UNSET_VAR")
 })
 
 test("project servers wait for approval, then connect", async () => {

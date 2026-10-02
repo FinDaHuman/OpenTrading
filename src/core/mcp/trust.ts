@@ -16,9 +16,16 @@ type TrustFile = Record<string, { approvedAt: string }>
  * Uses the raw (unexpanded) config, so rotating a secret in the environment does not re-ask.
  */
 function fingerprint(config: ServerConfig) {
+  // Headers (including `${VAR}` placeholders) count: a header can send a stored secret to
+  // the URL, so changing which secret goes where must ask again.
   const what =
     "url" in config
-      ? { url: config.url }
+      ? {
+          type: config.type,
+          url: config.url,
+          headers: Object.entries(config.headers ?? {}).sort(([a], [b]) => a.localeCompare(b)),
+          oauth: config.oauth ?? null,
+        }
       : {
           command: config.command,
           args: config.args ?? [],
