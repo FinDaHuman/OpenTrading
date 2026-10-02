@@ -139,7 +139,9 @@ const { FileMemory } = await import("../src/core/memory/file-memory")
 const memory = new FileMemory(path.join(home, "memory"))
 /** Times the app asked to exit (the real exit is replaced in tests). */
 let exits = 0
-/** What copy-on-select handed to the OS clipboard command (stubbed; CI never runs powershell). */
+/** What copy-on-select sent over OSC52 (the renderer's method is replaced in beforeAll). */
+const osc52: string[] = []
+/** What it handed to the OS clipboard command (stubbed; CI never runs powershell). */
 const copied: string[] = []
 const { setClipboardSpawn } = await import("../src/tui/clipboard")
 setClipboardSpawn(async (_command, text) => {
@@ -152,6 +154,11 @@ let setup: Awaited<ReturnType<typeof testRender>>
 beforeAll(async () => {
   // exitOnCtrlC off, as in main.tsx: the app handles Ctrl+C (double press) itself.
   setup = await testRender(() => <App runtime={runtime} onExit={() => exits++} />, { width: 100, height: 32, exitOnCtrlC: false })
+  // OSC52 always carries the copy (the OS command may not exist, e.g. on CI without xclip).
+  setup.renderer.copyToClipboardOSC52 = (text: string) => {
+    osc52.push(text)
+    return true
+  }
 })
 
 // Tests share one app. If a test fails with a dialog open, close it so the failure does not
@@ -908,11 +915,11 @@ test("highlighting with the mouse copies the words only (no ● / ⎿, no traili
   const rows = frame.split("\n")
   const row = rows.findLastIndex((l) => l.includes("● Xin chào! T+2.5"))
   const start = rows[row]!.indexOf("Xin")
-  const before = copied.length
+  const before = osc52.length
   // Drag from "Xin" across into the next lines of the same answer.
   await setup.mockMouse.drag(start, row, start + 20, row + 2)
-  await waitMcp(() => copied.length > before)
-  const text = copied.at(-1)!
+  await waitMcp(() => osc52.length > before)
+  const text = osc52.at(-1)!
   show(text)
   expect(text.startsWith("Xin chào!")).toBe(true)
   expect(text).not.toContain("●")
