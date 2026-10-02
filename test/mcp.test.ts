@@ -97,7 +97,7 @@ test("connects to the demo server over stdio and calls its tools", async () => {
   const status = manager.status()[0]!
   expect(status.error).toBeUndefined()
   expect(status.state).toBe("connected")
-  expect(status.tools.sort()).toEqual(["mcp__demo__add", "mcp__demo__echo", "mcp__demo__fail"])
+  expect(status.tools.sort()).toEqual(["mcp__demo__add", "mcp__demo__echo", "mcp__demo__fail", "mcp__demo__ghi_chu"])
 
   const add = registry.get("mcp__demo__add")!
   expect(add.readOnly).toBe(true)

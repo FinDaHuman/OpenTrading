@@ -58,6 +58,15 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const request = JSON.parse(String(init?.body)) as { messages: { role: string; content?: unknown }[] }
     const last = JSON.stringify(request.messages.at(-1)?.content ?? "")
     // "MẤY-GIỜ" asks for a tool call until a tool result is in the conversation.
+    // Only tool results of the current turn count (earlier turns left their own in history).
+    const lastUser = request.messages.map((m) => m.role).lastIndexOf("user")
+    const answeredThisTurn = request.messages.slice(lastUser).some((m) => m.role === "tool")
+    if (last.includes("GHI-CHÚ") && !answeredThisTurn) {
+      const call = { index: 0, id: "call_note", type: "function", function: { name: "mcp__demo__ghi_chu", arguments: '{"noi_dung":"mua VCB khi về 85"}' } }
+      return new Response(chunk({ role: "assistant", tool_calls: [call] }) + chunk({}, "tool_calls") + "data: [DONE]\n\n", {
+        headers: { "content-type": "text/event-stream" },
+      })
+    }
     if (last.includes("MẤY-GIỜ") && !request.messages.some((m) => m.role === "tool")) {
       const call = { index: 0, id: "call_1", type: "function", function: { name: "current_time", arguments: "{}" } }
       return new Response(chunk({ role: "assistant", tool_calls: [call] }) + chunk({}, "tool_calls") + "data: [DONE]\n\n", {
@@ -245,23 +254,90 @@ test("an invalid key surfaces as a Vietnamese error line", async () => {
   await setup.waitFor(() => !state.streaming)
 })
 
-test("/mcp shows the global demo server connected with its tools", async () => {
-  // Spawning the server takes real time, so poll the clock instead of render passes.
-  for (let i = 0; i < 200 && state.mcp[0]?.state !== "connected"; i++) await new Promise((r) => setTimeout(r, 100))
-  expect(state.mcp[0]).toMatchObject({ name: "demo", state: "connected" })
+const waitMcp = async (pred: () => boolean) => {
+  // Spawning or stopping the server takes real time, so poll the clock instead of render passes.
+  for (let i = 0; i < 200 && !pred(); i++) await new Promise((r) => setTimeout(r, 100))
+  expect(pred()).toBe(true)
+}
+
+test("/mcp: grouped list → server menu → tools → tool detail, esc steps back", async () => {
+  await waitMcp(() => state.mcp[0]?.state === "connected")
   const bar = await setup.waitForFrame((f) => f.includes("MCP 1/1"))
   expect(bar).toContain("MCP 1/1")
   await setup.mockInput.typeText("/mcp")
   setup.mockInput.pressEnter()
-  await setup.waitForFrame((f) => f.includes("MCP servers · 1"))
+  let frame = await setup.waitForFrame((f) => f.includes("Quản lý MCP server"))
+  show(frame)
+  expect(frame).toContain("1 server · 1 đang kết nối")
+  expect(frame).toContain("Của bạn (")
+  expect(frame).toMatch(/❯ demo · ✔ đã kết nối · 4 tool/)
+  expect(frame).toContain("Có sẵn (đang tắt")
+  expect(frame).toMatch(/context7 · ◯ không cần đăng nhập/)
+  expect(frame).toContain("+ Thêm server tuỳ chỉnh")
+  // The panel replaces the prompt input.
+  expect(frame).not.toContain("Hỏi về thị trường")
+
   setup.mockInput.pressEnter()
-  const detail = await setup.waitForFrame((f) => f.includes("mcp__demo__add"))
-  expect(detail).toContain("đã kết nối")
-  show(detail)
+  frame = await setup.waitForFrame((f) => f.includes("demo · MCP server"))
+  show(frame)
+  expect(frame).toContain("Trạng thái")
+  expect(frame).toContain("✔ đã kết nối · 4 tool")
+  expect(frame).toContain("Lệnh")
+  expect(frame).toContain("Khả năng")
+  expect(frame).toContain("/demo:phan_tich")
+  expect(frame).toMatch(/❯ 1\. Xem tool/)
+  expect(frame).toContain("Kết nối lại")
+  expect(frame).toContain("Tắt")
+
+  setup.mockInput.pressEnter()
+  frame = await setup.waitForFrame((f) => f.includes("Tool của demo"))
+  expect(frame).toContain("◇ add")
+  expect(frame).toContain("◆ ghi_chu")
+  for (let i = 0; i < 3; i++) setup.mockInput.pressArrow("down")
+  await setup.waitForFrame((f) => f.includes("❯ ◆ ghi_chu"))
+  setup.mockInput.pressEnter()
+  frame = await setup.waitForFrame((f) => f.includes("Tên đầy đủ"))
+  show(frame)
+  expect(frame).toContain("[hỏi trước khi chạy]")
+  expect(frame).toContain("mcp__demo__ghi_chu")
+  expect(frame).toMatch(/• noi_dung \(bắt buộc\): string - Nội dung ghi chú/)
+
   // Wait between presses: two ESC bytes in one read ("\x1b\x1b") parse as a single
-  // alt+escape keypress, so back-to-back presses would only close the detail view.
+  // alt+escape keypress.
   setup.mockInput.pressEscape()
-  await setup.waitForFrame((f) => f.includes("MCP servers · 1") && !f.includes("mcp__demo__add"))
+  await setup.waitForFrame((f) => f.includes("Tool của demo") && f.includes("❯ ◆ ghi_chu"))
+  setup.mockInput.pressEscape()
+  await setup.waitForFrame((f) => f.includes("demo · MCP server"))
+  setup.mockInput.pressEscape()
+  await setup.waitForFrame((f) => f.includes("Quản lý MCP server") && f.includes("❯ demo"))
+  setup.mockInput.pressEscape()
+  await setup.waitFor(() => state.dialog === undefined)
+  await setup.waitForFrame((f) => f.includes("Hỏi về thị trường"))
+}, 30_000)
+
+test("/mcp: space turns a server off and on (saved to mcp.json); catalog entries open their own screen", async () => {
+  await setup.mockInput.typeText("/mcp")
+  setup.mockInput.pressEnter()
+  await setup.waitForFrame((f) => f.includes("❯ demo"))
+  setup.mockInput.pressKey(" ")
+  await waitMcp(() => state.mcp[0]?.state === "disabled")
+  let saved = await readJson<{ mcpServers: Record<string, { enabled?: boolean }> }>(path.join(home, "mcp.json"), { mcpServers: {} })
+  expect(saved.mcpServers.demo!.enabled).toBe(false)
+  await setup.waitForFrame((f) => f.includes("demo · ◯ đã tắt"))
+  setup.mockInput.pressKey(" ")
+  await waitMcp(() => state.mcp[0]?.state === "connected")
+  saved = await readJson(path.join(home, "mcp.json"), { mcpServers: {} })
+  expect(saved.mcpServers.demo!.enabled).toBeUndefined()
+
+  setup.mockInput.pressArrow("down")
+  await setup.waitForFrame((f) => f.includes("❯ context7"))
+  setup.mockInput.pressEnter()
+  const frame = await setup.waitForFrame((f) => f.includes("Context7 · có sẵn, đang tắt"))
+  show(frame)
+  expect(frame).toContain("https://mcp.context7.com/mcp (http)")
+  expect(frame).toContain("enter để bật")
+  setup.mockInput.pressEscape()
+  await setup.waitForFrame((f) => f.includes("❯ context7") && f.includes("Quản lý MCP server"))
   setup.mockInput.pressEscape()
   await setup.waitFor(() => state.dialog === undefined)
 }, 30_000)
@@ -269,8 +345,8 @@ test("/mcp shows the global demo server connected with its tools", async () => {
 test("/tools lists built-in and MCP tools", async () => {
   await setup.mockInput.typeText("/tools")
   setup.mockInput.pressEnter()
-  // 2 built-in + propose_memory (FileMemory) + 3 from the demo MCP server
-  const frame = await setup.waitForFrame((f) => f.includes("Tools · 6"))
+  // 2 built-in + propose_memory (FileMemory) + 4 from the demo MCP server
+  const frame = await setup.waitForFrame((f) => f.includes("Tools · 7"))
   expect(frame).toContain("current_time")
   expect(frame).toContain("propose_memory")
   expect(frame).toContain("mcp__demo__echo")
@@ -344,6 +420,69 @@ test("a tool call renders as a ⚙ row with its result, then the answer", async 
   expect(roles.slice(-4)).toEqual(["user", "assistant", "tool", "assistant"])
 })
 
+test("a write tool asks first: 4 denies (the model is told), 2 allows for the session", async () => {
+  const toolResult = () => {
+    const tool = [...state.history].reverse().find((m) => m.role === "tool")
+    return JSON.stringify(tool?.content ?? "")
+  }
+  await setup.mockInput.typeText("GHI-CHÚ giúp tôi")
+  setup.mockInput.pressEnter()
+  let frame = await setup.waitForFrame((f) => f.includes("Cần xác nhận") && f.includes("Cho phép chạy?"))
+  show(frame)
+  expect(frame).toContain("demo · ghi_chu")
+  expect(frame).toContain("noi_dung: mua VCB khi về 85")
+  expect(frame).toMatch(/❯ 1\. Có/)
+  expect(frame).toContain("Có, cả phiên này")
+  expect(frame).toContain("Luôn cho phép")
+  expect(frame).not.toContain("Hỏi về thị trường") // the prompt input is hidden meanwhile
+  await setup.mockInput.typeText("4")
+  frame = await setup.waitForFrame((f) => f.includes("✘ Đã từ chối demo · ghi_chu"))
+  await waitMcp(() => !state.streaming)
+  expect(toolResult()).toContain("Người dùng từ chối chạy tool này")
+  expect(state.approval).toBeUndefined()
+
+  await setup.mockInput.typeText("GHI-CHÚ lần nữa")
+  setup.mockInput.pressEnter()
+  await setup.waitForFrame((f) => f.includes("Cho phép chạy?"))
+  await setup.mockInput.typeText("2")
+  await setup.waitForFrame((f) => f.includes("✔ Đã cho phép demo · ghi_chu cho cả phiên"))
+  await waitMcp(() => !state.streaming)
+  expect(toolResult()).toContain("Đã lưu ghi chú #1")
+
+  // Allowed for the session: the third call runs without asking.
+  let asked = false
+  const stop = runtime.permissions.onChange((head) => (asked ||= head !== undefined))
+  await setup.mockInput.typeText("GHI-CHÚ lần ba")
+  setup.mockInput.pressEnter()
+  await waitMcp(() => state.history.length > 0 && toolResult().includes("Đã lưu ghi chú #2"))
+  await waitMcp(() => !state.streaming)
+  stop()
+  expect(asked).toBe(false)
+}, 30_000)
+
+test("esc on the approval prompt denies that call without stopping the turn", async () => {
+  // A fresh tool name per session would be cleaner; the session allow above covers ghi_chu,
+  // so deny through the gate directly for a tool that is not allowed yet.
+  const { z } = await import("zod")
+  runtime.registry.register({
+    name: "xoa_du_lieu",
+    description: "Xoá dữ liệu (tool thử)",
+    input: z.object({}),
+    readOnly: false,
+    annotations: { destructive: true },
+    displayName: "test · xoa_du_lieu",
+    execute: async () => "đã xoá",
+  })
+  const controller = new AbortController()
+  const decision = runtime.permissions.check(runtime.registry.get("xoa_du_lieu")!, { bang: "giao_dich" }, controller.signal, "test · xoa_du_lieu")
+  const frame = await setup.waitForFrame((f) => f.includes("Cần xác nhận · tool có thể phá huỷ"))
+  expect(frame).toContain("⚠ phá huỷ")
+  setup.mockInput.pressEscape()
+  expect((await decision).allow).toBe(false)
+  expect(controller.signal.aborted).toBe(false)
+  runtime.registry.unregister("xoa_du_lieu")
+})
+
 test("/new starts a fresh session; /sessions reopens the previous one with its tool rows", async () => {
   const before = state.lines.length
   expect(before).toBeGreaterThan(0)
@@ -361,7 +500,9 @@ test("/new starts a fresh session; /sessions reopens the previous one with its t
   // The "reopened" note is the first line (may be scrolled out of view): check state.
   expect(state.lines[0]).toMatchObject({ kind: "info" })
   expect((state.lines[0] as { text: string }).text).toContain("Mở lại phiên")
-  const frame = await setup.waitForFrame((f) => f.includes("⚙ current_time()"))
+  // Tool rows come back (the older ones may be scrolled out of view: check state too).
+  expect(state.lines.some((l) => l.kind === "tool" && l.label.includes("current_time"))).toBe(true)
+  const frame = await setup.waitForFrame((f) => f.includes("⚙ "))
   expect(frame).not.toContain("<nhac_nho>")
   expect(state.history.length).toBeGreaterThan(0)
   expect(state.clock).toBeUndefined() // re-sent on the next turn

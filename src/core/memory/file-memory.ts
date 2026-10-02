@@ -138,6 +138,8 @@ export class FileMemory implements MemoryProvider {
           "Đề xuất ghi nhớ một sở thích, ràng buộc hay thói quen lâu dài của người dùng. Người dùng phải duyệt trong /memory trước khi nó được dùng. Không dùng cho số liệu hay nhận định thị trường.",
         input: z.object({ text: z.string().min(3).max(500).describe("Một câu ngắn, ví dụ: Người dùng không giao dịch margin.") }),
         readOnly: false,
+        // Only queues a proposal; the user approves it in /memory, so no prompt here.
+        approval: "never",
         summarize: (input: { text: string }) => `propose_memory "${input.text.slice(0, 50)}"`,
         execute: async (input: { text: string }) => {
           await this.add(input.text, { status: "pending", via: "model" })

@@ -11,12 +11,13 @@ import type { Runtime } from "../core/runtime"
 import { ensureProfile } from "../core/profile"
 import { loadSkills } from "../core/skills/loader"
 import { Background } from "./background"
+import { ApprovalPrompt } from "./approval"
+import { McpPanel } from "./mcp/panel"
 import { COMMANDS, parseCommand, parsePromptArgs, promptUsage, type CommandInfo } from "./commands"
 import { ConfigDialog } from "./dialogs/config"
 import { ConnectDialog } from "./dialogs/connect"
 import { ContextDialog } from "./dialogs/context"
 import { HelpDialog } from "./dialogs/help"
-import { McpDialog } from "./dialogs/mcp"
 import { MemoryDialog } from "./dialogs/memory"
 import { SessionsDialog } from "./dialogs/sessions"
 import { ModelDialog } from "./dialogs/model"
@@ -153,6 +154,19 @@ export function App(props: { runtime: Runtime; resume?: string }) {
   const offMcp = props.runtime.mcp.onChange((status) => setState("mcp", status))
   onCleanup(() => offMcp())
 
+  // Tools with side effects ask first. A pending question takes over the keyboard: any open
+  // dialog closes so its keys cannot also act on the prompt.
+  props.runtime.permissions.interactive = true
+  const offApproval = props.runtime.permissions.onChange((head) => {
+    if (head && state.dialog) setState("dialog", undefined)
+    setState("approval", head)
+  })
+  onCleanup(() => {
+    offApproval()
+    props.runtime.permissions.interactive = false
+    props.runtime.permissions.denyAll()
+  })
+
   onMount(async () => {
     void props.runtime.mcp.start()
     const [config, skillSet, catalog] = await Promise.all([loadConfig(), loadSkills(), loadCatalog()])
@@ -193,6 +207,23 @@ export function App(props: { runtime: Runtime; resume?: string }) {
     if (!d.startsWith("/") || d.includes(" ")) return []
     return [...COMMANDS, ...promptCommands()].filter((c) => `/${c.name.toLowerCase()}`.startsWith(d))
   })
+
+  /** `/mcp enable|disable|reconnect <name>` without opening the panel (as in Claude Code). */
+  async function mcpCommand(args: string) {
+    const [action, name] = args.split(/\s+/)
+    const known = state.mcp.some((s) => s.name === name)
+    if (!name || !known || !["enable", "disable", "reconnect"].includes(action ?? "")) {
+      return pushLine({ kind: "error", text: "Dùng: /mcp enable|disable|reconnect <tên server> (hoặc /mcp để mở bảng quản lý)." })
+    }
+    try {
+      if (action === "reconnect") await props.runtime.mcp.restart(name)
+      else await props.runtime.mcp.setEnabled(name, action === "enable")
+      const s = state.mcp.find((x) => x.name === name)
+      pushLine({ kind: "info", text: `MCP "${name}": ${s ? s.state : "?"}${s?.error ? ` — ${s.error}` : ""}` })
+    } catch (error) {
+      pushLine({ kind: "error", text: `/mcp ${action} ${name}: ${error instanceof Error ? error.message : String(error)}` })
+    }
+  }
 
   /** Fetch an MCP prompt with the typed arguments and send it as the user's message. */
   async function runPrompt(command: { server: string; prompt: string; name: string }, rawArgs: string) {
@@ -252,7 +283,6 @@ export function App(props: { runtime: Runtime; resume?: string }) {
       case "model":
       case "skills":
       case "help":
-      case "mcp":
       case "tools":
       case "context":
       case "sessions":
@@ -270,6 +300,8 @@ export function App(props: { runtime: Runtime; resume?: string }) {
         )
       case "skill":
         return cmd.args ? toggleSkill(cmd.args) : setState("dialog", "skills")
+      case "mcp":
+        return cmd.args ? void mcpCommand(cmd.args) : setState("dialog", "mcp")
       case "clear":
       case "new":
         return void clearTranscript(props.runtime)
@@ -285,7 +317,9 @@ export function App(props: { runtime: Runtime; resume?: string }) {
     if (evt.eventType === "release") return
     if (evt.ctrl && evt.name === "c") return void exit()
     if (evt.ctrl && evt.name === "o") return void setState("expandTools", (v) => !v)
-    if (evt.name === "escape" && !state.dialog && state.streaming) abort?.abort()
+    // While an approval is up, Esc answers it ("no") instead of stopping the whole turn.
+    if (evt.name === "escape" && !state.dialog && !state.approval && state.streaming) abort?.abort()
+    if (state.approval) return
     if (state.dialog || suggestions().length === 0) return
     const n = suggestions().length
     if (evt.name === "tab") {
@@ -301,15 +335,27 @@ export function App(props: { runtime: Runtime; resume?: string }) {
     <box width={dims().width} height={dims().height} backgroundColor={color.bg}>
       <Background quiet={state.lines.length > 0} />
       <box position="absolute" left={0} top={0} width="100%" height="100%" zIndex={1} flexDirection="column">
-        <Show when={state.lines.length > 0} fallback={<Home />}>
-          <Transcript />
-        </Show>
+        {/* Tall panels below (/mcp, approval) shrink this area; clip it instead of letting
+            flexbox squeeze rows on top of each other. */}
+        <box flexGrow={1} flexShrink={1} minHeight={0} overflow="hidden" flexDirection="column">
+          <Show when={state.lines.length > 0} fallback={<Show when={state.dialog !== "mcp"}>{<Home />}</Show>}>
+            <Transcript />
+          </Show>
+        </box>
 
-        <Show when={suggestions().length > 0}>
+        <Show when={suggestions().length > 0 && !state.approval && state.dialog !== "mcp"}>
           <Suggestions items={suggestions()} selected={selected()} />
         </Show>
 
+        {/* The approval prompt and /mcp take the input's place; the input is hidden, not
+            unmounted, so a half-typed message survives. */}
+        <Show when={state.approval}>{(request) => <ApprovalPrompt gate={props.runtime.permissions} request={request()} />}</Show>
+        <Show when={state.dialog === "mcp" && !state.approval}>
+          <McpPanel mcp={props.runtime.mcp} cwd={props.runtime.mcp.cwd} />
+        </Show>
+
         <box
+          visible={!state.approval && state.dialog !== "mcp"}
           marginLeft={2}
           marginRight={2}
           border
@@ -325,7 +371,7 @@ export function App(props: { runtime: Runtime; resume?: string }) {
           <input
             ref={(r) => (input = r)}
             flexGrow={1}
-            focused={!state.dialog}
+            focused={!state.dialog && !state.approval}
             placeholder={state.streaming ? "đang trả lời… esc để dừng" : "Hỏi về thị trường, hoặc gõ / để xem lệnh"}
             textColor={color.tx}
             focusedTextColor={color.tx}
@@ -355,9 +401,6 @@ export function App(props: { runtime: Runtime; resume?: string }) {
         </Match>
         <Match when={state.dialog === "help"}>
           <HelpDialog />
-        </Match>
-        <Match when={state.dialog === "mcp"}>
-          <McpDialog mcp={props.runtime.mcp} />
         </Match>
         <Match when={state.dialog === "tools"}>
           <ToolsDialog registry={props.runtime.registry} />
