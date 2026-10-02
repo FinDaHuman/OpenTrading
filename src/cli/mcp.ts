@@ -17,6 +17,7 @@ import {
 import { McpManager, type McpServerStatus } from "../core/mcp/manager"
 import { oauthStatus } from "../core/mcp/oauth"
 import { clearOAuth, secretEnv, setSecretEnv } from "../core/mcp/secrets"
+import { TrustStore, trustKey } from "../core/mcp/trust"
 import { dataDir } from "../core/paths"
 import { readJson } from "../core/store"
 import { ToolRegistry } from "../core/tools/registry"
@@ -114,7 +115,15 @@ export function configFromArgs(p: Parsed): ServerConfig {
   for (const h of p.flags.get("header") ?? []) {
     const i = h.indexOf(":")
     if (i <= 0) throw new UsageError(`Header phải có dạng "Tên: giá trị" (nhận: ${h}).`)
-    headers[h.slice(0, i).trim()] = h.slice(i + 1).trim()
+    const value = h.slice(i + 1).trim()
+    // `-H "Authorization: Bearer ${TOKEN}"` in double quotes: the shell already replaced
+    // ${TOKEN} (usually with nothing) before we ever saw it.
+    if (value === "" || /^(bearer|token|basic)$/i.test(value)) {
+      throw new UsageError(
+        `Header "${h}" không có giá trị — có thể shell đã thay \${BIẾN} bằng chuỗi rỗng. Dùng nháy đơn: -H 'Authorization: Bearer \${TÊN_BIẾN}'`,
+      )
+    }
+    headers[h.slice(0, i).trim()] = value
   }
   const env: Record<string, string> = {}
   for (const e of p.flags.get("env") ?? []) {
@@ -397,6 +406,11 @@ export async function runMcpCli(argv: string[], opts: { home?: string; cwd?: str
       case "debug": {
         const entry = (await loadServers(home, cwd)).find((e) => e.name === need())
         if (!entry?.config) throw new UsageError(entry ? entry.error! : `Không có server "${name}".`)
+        // debug sends expanded headers (saved secrets) to the URL: never for a project
+        // server the user has not approved.
+        if (entry.scope === "project" && !(await new TrustStore(path.join(home, "mcp-trust.json")).isTrusted(trustKey(cwd, entry.name, entry.config)))) {
+          throw new UsageError(`Server "${name}" khai báo trong .mcp.json của project và chưa được cho phép. Mở TUI → /mcp để xem và cho phép trước.`)
+        }
         const { config, missing } = expandConfig(entry.config, process.env, await secretEnv(home))
         if (missing.length > 0) out(`Thiếu biến: ${missing.join(", ")}`)
         if (isRemote(config)) {

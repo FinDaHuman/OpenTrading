@@ -11,6 +11,7 @@ import {
   DEFAULT_STARTUP_TIMEOUT_MS,
   DEFAULT_TOOL_TIMEOUT_MS,
   expandConfig,
+  exposure,
   isRemote,
   loadServers,
   type RemoteConfig,
@@ -45,6 +46,8 @@ export interface McpServerStatus {
   target: string
   /** Remote servers: whether OAuth may be used (no static Authorization header, `oauth` not false). */
   oauth: boolean
+  /** Header names, env keys and `${VAR}`s the server receives once approved. */
+  exposure: ReturnType<typeof exposure>
 }
 
 interface Live {
@@ -69,7 +72,7 @@ export interface McpManagerOptions {
  * Windows needs these for child processes to resolve `.cmd`/`.exe` (npx, uvx) and to find
  * temp/program dirs; the SDK's own allowlist leaves them out. None of them hold secrets.
  */
-const WINDOWS_EXTRA_ENV = ["PATHEXT", "COMSPEC", "ComSpec", "WINDIR", "TMP", "ProgramData", "ProgramFiles(x86)"]
+const WINDOWS_EXTRA_ENV = ["PATHEXT", "COMSPEC", "WINDIR", "TMP", "ProgramData", "ProgramFiles(x86)"]
 
 const MAX_DESCRIPTION = 2048
 const LOGIN_TIMEOUT_MS = 5 * 60_000
@@ -104,6 +107,13 @@ function isTransient(error: unknown) {
   if (status !== undefined) return RETRYABLE_STATUS.has(status)
   const text = errorText(error)
   return error instanceof TypeError || /ECONNRESET|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|fetch failed|socket/i.test(text)
+}
+
+/** The connection itself is gone (server down, network cut) — not a protocol-level error. */
+function isConnectionLost(error: unknown) {
+  if (error instanceof SseError) return true
+  const text = errorText(error)
+  return error instanceof TypeError || /ECONNREFUSED|ECONNRESET|fetch failed|socket|Unable to connect|Maximum reconnection attempts/i.test(text)
 }
 
 /** The server forgot our session (restart, idle expiry): a fresh initialize fixes it. */
@@ -214,10 +224,17 @@ export class McpManager {
         tools: [],
         hiddenTools: 0,
         oauth: config ? isRemote(config) && usesOAuth(config) : false,
+        exposure: config ? exposure(config) : { vars: [], headers: [], env: [] },
       })
     }
     this.emit()
     await Promise.allSettled(entries.map((entry) => this.connect(entry)))
+  }
+
+  /** Global servers are the user's own; project ones need the one-time approval. */
+  async isAllowed(entry: ServerEntry) {
+    if (entry.scope !== "project") return true
+    return Boolean(entry.config) && (await this.trustStore.isTrusted(trustKey(this.opts.cwd, entry.name, entry.config!)))
   }
 
   /** Approve a project server, then connect it. */
@@ -233,6 +250,17 @@ export class McpManager {
     if (!entry) return
     await this.disconnect(name)
     await this.connect(entry)
+  }
+
+  private restarting = new Map<string, Promise<void>>()
+
+  private restartShared(name: string) {
+    let pending = this.restarting.get(name)
+    if (!pending) {
+      pending = this.restart(name).finally(() => this.restarting.delete(name))
+      this.restarting.set(name, pending)
+    }
+    return pending
   }
 
   async stop() {
@@ -259,7 +287,7 @@ export class McpManager {
     const gen = this.bump(name)
     if (entry.error || !entry.config) return this.set(name, { state: "failed", error: entry.error })
     if (entry.config.enabled === false) return this.set(name, { state: "disabled", error: undefined, tools: [] })
-    if (entry.scope === "project" && !(await this.trustStore.isTrusted(trustKey(this.opts.cwd, name, entry.config)))) {
+    if (!(await this.isAllowed(entry))) {
       return this.set(name, { state: "untrusted", error: undefined })
     }
 
@@ -296,12 +324,20 @@ export class McpManager {
 
     this.live.set(name, live)
     const { client } = live
-    client.onclose = () => {
+    const dropped = () => {
       if (!this.current(name, gen) || this.live.get(name)?.client !== client) return
       this.live.delete(name)
       this.registry.unregister(serverPrefix(name))
-      if (isRemote(config)) void this.reconnectLoop(entry, gen)
-      else this.set(name, { state: "failed", error: "Mất kết nối tới server.", tools: [] })
+      if (isRemote(config)) {
+        void client.close().catch(() => {})
+        void this.reconnectLoop(entry, gen)
+      } else this.set(name, { state: "failed", error: "Mất kết nối tới server.", tools: [] })
+    }
+    client.onclose = dropped
+    // Remote transports report a dead connection through onerror, not onclose: a broken
+    // SSE stream, or the HTTP transport giving up on its GET stream.
+    client.onerror = (error) => {
+      if (isRemote(config) && isConnectionLost(error)) dropped()
     }
     client.setNotificationHandler(ToolListChangedNotificationSchema, () => {
       void this.syncTools(name, client, config).catch(() => {})
@@ -415,13 +451,16 @@ export class McpManager {
     if (!entry?.config) throw new Error(`Không có server "${name}".`)
     if (!isRemote(entry.config)) throw new Error(`Server "${name}" chạy bằng lệnh (stdio), không dùng OAuth.`)
     if (!usesOAuth(entry.config)) throw new Error(`Server "${name}" dùng token cố định (header Authorization hoặc "oauth": false).`)
+    if (!(await this.isAllowed(entry))) throw new Error(`Server "${name}" của project chưa được cho phép. Mở /mcp để xem và cho phép trước.`)
     const { config, missing } = await this.expanded(entry)
     if (missing.length > 0) throw new Error(`Thiếu biến: ${missing.join(", ")}`)
     const remote = config as RemoteConfig
     const oauthConfig = remote.oauth || undefined
 
     const probe = new McpOAuthProvider({ home: this.opts.home, name, url: remote.url, config: oauthConfig, mode: "login" })
-    const callback = startCallbackServer(oauthConfig?.callbackPort ?? (await probe.storedCallbackPort()))
+    const callback = oauthConfig?.callbackPort
+      ? startCallbackServer(oauthConfig.callbackPort, true)
+      : startCallbackServer(await probe.storedCallbackPort())
     try {
       const provider = new McpOAuthProvider({
         home: this.opts.home,
@@ -522,7 +561,9 @@ export class McpManager {
             }
             if (!isRemote(config) || !isSessionExpired(error) || ctx.signal.aborted) throw error
             // Session expired on the server: initialize again and retry exactly once.
-            await this.restart(name)
+            // Parallel calls that all hit the 404 share one restart instead of killing
+            // each other's fresh session.
+            await this.restartShared(name)
             const fresh = this.live.get(name)
             if (!fresh) throw error
             return resultToText((await call(fresh)) as Parameters<typeof resultToText>[0])

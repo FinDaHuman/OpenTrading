@@ -139,6 +139,21 @@ export function McpDialog(props: { mcp: McpManager }) {
               <text fg={color.tham} marginTop={1} wrapMode="word">
                 Server này khai báo trong .mcp.json của project. Chỉ cho phép nếu bạn tin lệnh ở trên.
               </text>
+              <Show when={s().exposure.vars.length > 0}>
+                <text fg={color.giam} wrapMode="word">
+                  {`Sẽ gửi giá trị của ${s().exposure.vars.join(", ")} (biến môi trường hoặc secret đã lưu) tới ${s().target}.`}
+                </text>
+              </Show>
+              <Show when={s().exposure.headers.length > 0 || s().exposure.env.length > 0}>
+                <text fg={color.tx2} wrapMode="word">
+                  {[
+                    s().exposure.headers.length > 0 ? `Header: ${s().exposure.headers.join(", ")}` : "",
+                    s().exposure.env.length > 0 ? `Biến môi trường: ${s().exposure.env.join(", ")}` : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </text>
+              </Show>
             </Show>
             <Show when={s().tools.length > 0}>
               <text fg={color.tham} marginTop={1}>{`Tool (${s().tools.length})`}</text>

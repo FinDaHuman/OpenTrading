@@ -203,9 +203,10 @@ export interface CallbackServer {
 /**
  * Loopback HTTP server for the OAuth redirect. Listens on 127.0.0.1 only. Tries `port`
  * first (the one the stored client was registered with); if that is taken, falls back to
- * an OS-assigned port and the provider registers a new client.
+ * an OS-assigned port and the provider registers a new client — unless `strict` (the
+ * port was configured for a pre-registered client), which fails instead.
  */
-export function startCallbackServer(port?: number): CallbackServer {
+export function startCallbackServer(port?: number, strict = false): CallbackServer {
   let deliver: ((result: { code?: string; error?: string; state?: string }) => void) | undefined
   const fetch = (req: Request) => {
     const url = new URL(req.url)
@@ -227,7 +228,10 @@ export function startCallbackServer(port?: number): CallbackServer {
   let server: ReturnType<typeof Bun.serve>
   try {
     server = Bun.serve({ hostname: "127.0.0.1", port: port ?? 0, fetch })
-  } catch {
+  } catch (error) {
+    // A configured port belongs to a pre-registered client: another port would not match
+    // its redirect URI, so say so instead of failing later at the provider.
+    if (strict) throw new Error(`Cổng callback ${port} đang bận (cấu hình "oauth.callbackPort"). Đóng chương trình đang dùng cổng đó rồi thử lại.`)
     server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch })
   }
   const actual = server.port!

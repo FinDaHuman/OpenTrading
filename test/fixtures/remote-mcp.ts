@@ -145,7 +145,7 @@ export function startHttpServer(opts: HttpServerOptions = {}) {
 }
 
 /** Old-style HTTP+SSE server: GET /sse opens the stream, POST /messages carries requests. */
-export async function startSseServer() {
+export async function startSseServer(port = 0) {
   const transports = new Map<string, SSEServerTransport>()
   const server: Server = createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://127.0.0.1")
@@ -168,10 +168,11 @@ export async function startSseServer() {
     // A Streamable HTTP POST to /sse lands here: legacy servers answer 405.
     res.writeHead(405).end("method not allowed")
   })
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve))
-  const port = (server.address() as AddressInfo).port
+  await new Promise<void>((resolve) => server.listen(port, "127.0.0.1", resolve))
+  const actual = (server.address() as AddressInfo).port
   return {
-    url: `http://127.0.0.1:${port}/sse`,
+    port: actual,
+    url: `http://127.0.0.1:${actual}/sse`,
     stop: () =>
       new Promise<void>((resolve) => {
         server.closeAllConnections?.()

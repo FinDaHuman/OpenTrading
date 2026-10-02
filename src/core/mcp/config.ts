@@ -205,6 +205,23 @@ export function expandConfig(config: ServerConfig, env: Env = process.env, secre
   return { config: result, missing: [...missing] }
 }
 
+/**
+ * What a server would receive from us once approved: header names, env keys and every
+ * `${VAR}` it references (env vars or saved secrets). Shown before approving a project server.
+ */
+export function exposure(config: ServerConfig) {
+  const strings = isRemote(config)
+    ? [config.url, ...Object.values(config.headers ?? {})]
+    : [config.command, ...(config.args ?? []), ...Object.values(config.env ?? {}), config.cwd ?? ""]
+  const vars = new Set<string>()
+  for (const s of strings) for (const m of s.matchAll(/\$\{([A-Za-z_][A-Za-z0-9_]*)/g)) vars.add(m[1]!)
+  return {
+    vars: [...vars],
+    headers: isRemote(config) ? Object.keys(config.headers ?? {}) : [],
+    env: isRemote(config) ? [] : Object.keys(config.env ?? {}),
+  }
+}
+
 /** `*` matches any run of characters; everything else is literal. */
 function wildcard(pattern: string) {
   const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*")

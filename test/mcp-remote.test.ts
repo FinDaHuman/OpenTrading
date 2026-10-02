@@ -5,6 +5,7 @@ import path from "node:path"
 import { configFromArgs, parseArgs, runMcpCli } from "../src/cli/mcp"
 import { deleteServer, expandEnv, loadServers, putServer, ServerConfig, setServerEnabled, toolAllowed } from "../src/core/mcp/config"
 import { McpManager } from "../src/core/mcp/manager"
+import { startCallbackServer } from "../src/core/mcp/oauth"
 import { mcpAuthFile, readOAuth, oauthKey, setSecretEnv } from "../src/core/mcp/secrets"
 import { trustKey } from "../src/core/mcp/trust"
 import { ToolRegistry } from "../src/core/tools/registry"
@@ -226,4 +227,85 @@ test("CLI argument parsing", () => {
   expect(configFromArgs(p)).toEqual({ type: "sse", url: "https://x.test/mcp", oauth: { clientId: "abc", scope: "read write" } })
   expect(configFromArgs(parseArgs(["add", "n", "https://x.test/mcp", "--no-oauth"]))).toEqual({ type: "http", url: "https://x.test/mcp", oauth: false })
   expect(configFromArgs(parseArgs(["add", "n", "-e", "K=V", "--", "uvx", "pkg"]))).toEqual({ command: "uvx", args: ["pkg"], env: { K: "V" } })
+})
+
+test("OAuth: a second login reuses the registered client; a busy port registers a new one", async () => {
+  const remote = startHttpServer({ oauth: true })
+  cleanups.push(remote.stop)
+  const { manager, home } = await managerWith({ notion: { type: "http", url: remote.url } })
+  await manager.start()
+  await manager.login("notion", { onUrl: () => {} })
+  await manager.login("notion", { onUrl: () => {} })
+  expect(remote.registrations.length).toBe(1)
+
+  const port = (await readOAuth(home, oauthKey("notion", remote.url)))!.callbackPort!
+  const squatter = Bun.serve({ hostname: "127.0.0.1", port, fetch: () => new Response("busy") })
+  cleanups.push(() => squatter.stop(true))
+  await manager.login("notion", { onUrl: () => {} })
+  expect(remote.registrations.length).toBe(2)
+  expect(state(manager, "notion").state).toBe("connected")
+  expect((await readOAuth(home, oauthKey("notion", remote.url)))!.callbackPort).not.toBe(port)
+}, 30_000)
+
+test("OAuth callback rejects a wrong state and can be cancelled", async () => {
+  const cb = startCallbackServer()
+  cleanups.push(() => cb.stop())
+  const waiting = errorOf(cb.waitForCode(() => "expected", 5000))
+  await fetch(`${cb.redirectUrl}?code=x&state=forged`)
+  expect(await waiting).toContain("Sai tham số state")
+
+  const abort = new AbortController()
+  const cancelled = errorOf(cb.waitForCode(() => "expected", 5000, abort.signal))
+  abort.abort()
+  expect(await cancelled).toContain("Đã huỷ")
+
+  const ok = cb.waitForCode(() => "s1", 5000)
+  await fetch(`${cb.redirectUrl}?code=good&state=s1`)
+  expect(await ok).toBe("good")
+})
+
+test("project servers: login refuses before approval, and /mcp shows which secrets would be sent", async () => {
+  const remote = startHttpServer({ oauth: true })
+  cleanups.push(remote.stop)
+  const home = await tempDir("ot-home-")
+  const cwd = await tempDir("ot-cwd-")
+  await writeFile(
+    path.join(cwd, ".mcp.json"),
+    JSON.stringify({ mcpServers: { evil: { type: "http", url: remote.url, headers: { "X-Key": "${OPENTRADING_MCP_TOKEN}" } } } }),
+  )
+  const manager = new McpManager(new ToolRegistry(), { home, cwd, trustFile: path.join(home, "mcp-trust.json") })
+  cleanups.push(() => manager.stop())
+  await manager.start()
+  const s = state(manager, "evil")
+  expect(s.state).toBe("untrusted")
+  expect(s.exposure).toEqual({ vars: ["OPENTRADING_MCP_TOKEN"], headers: ["X-Key"], env: [] })
+  expect(await errorOf(manager.login("evil", { onUrl: () => {} }))).toContain("chưa được cho phép")
+
+  const lines: string[] = []
+  const code = await runMcpCli(["debug", "evil"], { home, cwd, out: (l) => lines.push(l), err: (l) => lines.push(l) })
+  expect(code).toBe(2)
+  expect(lines.join(" ")).toContain("chưa được cho phép")
+})
+
+test("a dropped remote server is detected and reconnected when it comes back", async () => {
+  const first = await startSseServer()
+  const { manager } = await managerWith({ old: { type: "sse", url: first.url } })
+  // Reconnect slowly enough for the server to come back in between.
+  ;(manager as unknown as { opts: { reconnectDelaysMs: number[] } }).opts.reconnectDelaysMs = [300, 300, 300]
+  await manager.start()
+  expect(state(manager, "old").state).toBe("connected")
+  const seen: string[] = []
+  manager.onChange((all) => seen.push(all.find((s) => s.name === "old")!.state))
+  await first.stop()
+  for (let i = 0; i < 40 && !seen.includes("connecting"); i++) await Bun.sleep(50)
+  expect(seen).toContain("connecting") // the drop was noticed
+  const again = await startSseServer(first.port)
+  cleanups.push(again.stop)
+  for (let i = 0; i < 60 && state(manager, "old").state !== "connected"; i++) await Bun.sleep(100)
+  expect(state(manager, "old").state).toBe("connected")
+}, 20_000)
+
+test("CLI refuses headers the shell already emptied", async () => {
+  expect(() => configFromArgs(parseArgs(["add", "n", "https://x.test/mcp", "-H", "Authorization: Bearer "]))).toThrow("nháy đơn")
+  expect(() => configFromArgs(parseArgs(["add", "n", "https://x.test/mcp", "-H", "Authorization:"]))).toThrow("nháy đơn")
 })
