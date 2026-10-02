@@ -67,13 +67,13 @@ export function ContextDialog(props: { runtime: Runtime }) {
             const total = () => p().report.reduce((sum, r) => sum + r.tokens, 0)
             return (
               <>
-                <text fg={color.tx2}>{`${p().model} · hạng ${p().tier} · ~${total()} token (ước lượng, chưa gồm history)`}</text>
-                <text fg={color.tham} marginTop={1}>
+                <text fg={color.tx2} wrapMode="none">{`${p().model} · hạng ${p().tier} · ~${total()} token (ước lượng, chưa gồm history)`}</text>
+                <text fg={color.tham} marginTop={1} wrapMode="none">
                   {`${pad("Tầng", 6)}${pad("Nội dung", 22)}${pad("Kênh", 11)}${pad("Token", 8)}Ghi chú`}
                 </text>
                 <For each={p().report}>
                   {(r) => (
-                    <text fg={r.dropped ? color.tx3 : color.tx}>
+                    <text fg={r.dropped ? color.tx3 : color.tx} wrapMode="none">
                       {`${pad(String(r.layer), 6)}${pad(LAYER_NAME[r.id] ?? r.id, 22)}${pad(CHANNEL[r.channel], 11)}${pad(`~${r.tokens}`, 8)}${
                         r.note ?? (r.dropped ? "bỏ (hết ngân sách)" : r.truncated ? "đã cắt bớt" : "")
                       }`}

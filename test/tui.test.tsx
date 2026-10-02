@@ -141,32 +141,77 @@ test("home screen shows branding and connect hint", async () => {
   show(frame)
 })
 
-test("the slash-command list never overlaps rows, and scrolls with the arrow keys", async () => {
+test("the slash-command list: one line per command, straight columns, wraps with the arrow keys", async () => {
   const { COMMANDS } = await import("../src/tui/commands")
   await setup.mockInput.typeText("/")
-  // Panel rows are the lines showing a command's description (Home also lists some command names).
-  const rowsOf = (f: string) =>
+  // List rows: after the 2-cell margin (where the animated background may draw), " ❯ /x" or
+  // "   /x". Home's own tips are indented much further.
+  const listRows = (f: string) =>
     f
       .split("\n")
-      .flatMap((line) => COMMANDS.filter((c) => line.includes(c.description)).map((c) => c.name))
-  let frame = await setup.waitForFrame((f) => f.includes("tab ↹"))
+      .map((line) => line.slice(2))
+      .filter((line) => /^ (❯ |  )\/[a-z]/.test(line))
+  let frame = await setup.waitForFrame((f) => f.includes("enter chạy · tab điền"))
   show(frame)
   // Regression: rows were squeezed onto the same line ("/newsions", "/helpr").
   expect(frame).not.toContain("/newsions")
   expect(frame).not.toContain("/helpr")
-  const first = rowsOf(frame)
-  expect(first).toEqual(COMMANDS.slice(0, 8).map((c) => c.name))
-  expect(frame).toContain(`1/${COMMANDS.length}`)
+  const rows = listRows(frame)
+  expect(rows).toHaveLength(8)
+  expect(rows.map((r) => r.trim().replace(/^❯ /, "").split(" ")[0])).toEqual(COMMANDS.slice(0, 8).map((c) => `/${c.name}`))
+  // The description column starts at the same cell on every row.
+  const starts = rows.map((r) => r.search(/\/\S+( \S+)*? {2,}\S/) + (/\/\S+( \S+)*? {2,}/.exec(r)?.[0].length ?? 0))
+  expect(new Set(starts).size).toBe(1)
+  expect(frame).toMatch(/❯ \/connect/)
+  expect(frame).toMatch(/1\/\d+ · còn \d+ lệnh/)
 
-  // Walk to the last command: the window follows the highlight, names stay intact.
-  for (let i = 0; i < COMMANDS.length - 1; i++) setup.mockInput.pressArrow("down")
-  frame = await setup.waitForFrame((f) => f.includes(`${COMMANDS.length}/${COMMANDS.length}`))
-  const last = rowsOf(frame)
-  expect(last).toEqual(COMMANDS.slice(-8).map((c) => c.name))
-  expect(frame).toMatch(/▸ \/exit/)
+  // ↑ from the first row wraps to the last command.
+  setup.mockInput.pressArrow("up")
+  frame = await setup.waitForFrame((f) => f.includes("❯ /exit"))
   show(frame)
   setup.mockInput.pressBackspace()
-  await setup.waitForFrame((f) => !f.includes("tab ↹"))
+  await setup.waitForFrame((f) => !f.includes("enter chạy · tab điền"))
+})
+
+test("'/' + ↓ + enter runs the highlighted command (never sends '/')", async () => {
+  const before = chatCalls.length
+  await setup.mockInput.typeText("/")
+  await setup.waitForFrame((f) => f.includes("❯ /connect"))
+  setup.mockInput.pressArrow("down")
+  await setup.waitForFrame((f) => f.includes("❯ /model"))
+  setup.mockInput.pressEnter()
+  await setup.waitFor(() => state.dialog === "model")
+  expect(chatCalls.length).toBe(before)
+  expect(state.lines.some((l) => l.kind === "user" && l.text === "/")).toBe(false)
+  setup.mockInput.pressEscape()
+  await setup.waitFor(() => state.dialog === undefined)
+})
+
+test("esc closes the '/' list until the draft changes; tab then does nothing", async () => {
+  await setup.mockInput.typeText("/mo")
+  await setup.waitForFrame((f) => f.includes("❯ /model"))
+  setup.mockInput.pressEscape()
+  let frame = await setup.waitForFrame((f) => !f.includes("enter chạy · tab điền"))
+  expect(frame).toContain("› /mo")
+  setup.mockInput.pressTab() // no autofill while dismissed
+  frame = await setup.waitForFrame((f) => f.includes("› /mo"))
+  expect(frame).not.toContain("› /model")
+  // Typing reopens it.
+  await setup.mockInput.typeText("d")
+  await setup.waitForFrame((f) => f.includes("❯ /model") && f.includes("enter chạy · tab điền"))
+  for (let i = 0; i < 4; i++) setup.mockInput.pressBackspace()
+  await setup.waitForFrame((f) => !f.includes("enter chạy · tab điền"))
+})
+
+test("an unknown /command is reported and kept for editing, never sent to the model", async () => {
+  const before = chatCalls.length
+  await setup.mockInput.typeText("/khongco ")
+  setup.mockInput.pressEnter()
+  const frame = await setup.waitForFrame((f) => f.includes("Không có lệnh /khongco"))
+  expect(frame).toContain("› /khongco")
+  expect(chatCalls.length).toBe(before)
+  for (let i = 0; i < "/khongco ".length; i++) setup.mockInput.pressBackspace()
+  await setup.waitForFrame((f) => f.includes("Hỏi về thị trường"))
 })
 
 test("chat before connecting shows a readable error instead of crashing", async () => {
@@ -176,9 +221,12 @@ test("chat before connecting shows a readable error instead of crashing", async 
 })
 
 test("tab completes a partial command, enter opens it", async () => {
-  await setup.mockInput.typeText("/con")
-  await setup.waitForFrame((f) => f.includes("tab ↹"))
-  setup.mockInput.pressTab()
+  // "/con" ranks /config first (same prefix, shorter name — as in Claude Code); "/conn" is /connect.
+  await setup.mockInput.typeText("/conn")
+  await setup.waitForFrame((f) => f.includes("❯ /connect"))
+  setup.mockInput.pressTab() // fills "/connect " and closes the list, without running it
+  await setup.waitForFrame((f) => !f.includes("enter chạy · tab điền"))
+  expect(state.dialog).toBeUndefined()
   const frame = await setup.waitForFrame((f) => f.includes("› /connect "))
   show(frame)
   setup.mockInput.pressEnter()
@@ -194,7 +242,7 @@ test("tab completes a partial command, enter opens it", async () => {
 test("enter on a partial command runs the highlighted suggestion", async () => {
   await setup.mockInput.typeText("/hel")
   setup.mockInput.pressEnter()
-  await setup.waitForFrame((f) => f.includes("Phím tắt"))
+  await setup.waitForFrame((f) => f.includes("Trợ giúp") && f.includes("enter chạy lệnh"))
   setup.mockInput.pressEscape()
   await setup.waitFor(() => state.dialog === undefined)
 })
@@ -415,10 +463,25 @@ test("/tools lists built-in and MCP tools", async () => {
   await setup.mockInput.typeText("/tools")
   setup.mockInput.pressEnter()
   // 2 built-in + propose_memory (FileMemory) + 4 from the demo MCP server
-  const frame = await setup.waitForFrame((f) => f.includes("Tools · 7"))
+  let frame = await setup.waitForFrame((f) => f.includes("Tool · 7"))
+  show(frame)
+  // Regression for the 01/10 screenshot: every tool is exactly one line, long descriptions
+  // end in "…" instead of wrapping mid-word, and the mark column is straight.
+  const rows = frame.split("\n").filter((l) => /^ {2}(❯ |  )[◇◆⚠] \S/.test(l))
+  expect(rows.length).toBeGreaterThanOrEqual(7)
+  expect(new Set(rows.map((r) => r.search(/[◇◆⚠]/))).size).toBe(1)
+  const timeRow = rows.find((r) => r.includes("current_time"))!
+  expect(timeRow).toMatch(/…\s*$/)
+  expect(frame).not.toMatch(/^\s+Asia\/H/m)
+  expect(frame).toContain("Có sẵn")
+  expect(frame).toContain("Memory")
+  expect(frame).toContain("MCP · demo")
+  // Enter shows the tool's details; esc goes back to the list, esc again closes.
+  setup.mockInput.pressEnter()
+  frame = await setup.waitForFrame((f) => f.includes("Chi tiết tool") && f.includes("Tên đầy đủ"))
   expect(frame).toContain("current_time")
-  expect(frame).toContain("propose_memory")
-  expect(frame).toContain("mcp__demo__echo")
+  setup.mockInput.pressEscape()
+  await setup.waitForFrame((f) => f.includes("Tool · 7"))
   setup.mockInput.pressEscape()
   await setup.waitFor(() => state.dialog === undefined)
 })
@@ -426,10 +489,6 @@ test("/tools lists built-in and MCP tools", async () => {
 test("a lone '/' + enter is never sent to the model", async () => {
   const before = chatCalls.length
   const lines = state.lines.length
-  await setup.mockInput.typeText("/")
-  await setup.waitForFrame((f) => f.includes("tab ↹"))
-  setup.mockInput.pressBackspace()
-  await setup.waitForFrame((f) => !f.includes("tab ↹"))
   await setup.mockInput.typeText("/ ")
   setup.mockInput.pressEnter()
   await setup.waitForFrame((f) => !f.includes("› / "))
@@ -443,9 +502,14 @@ test("MCP prompts are slash commands: suggested, argument-checked, sent as the u
   expect(frame).toContain("Phân tích nhanh một mã cổ phiếu")
   show(frame)
   for (let i = 0; i < "/demo:".length; i++) setup.mockInput.pressBackspace()
-  await setup.waitForFrame((f) => !f.includes("tab ↹"))
+  await setup.waitForFrame((f) => !f.includes("enter chạy · tab điền"))
 
+  // The prompt needs <ma>: enter on it in the list fills "/demo:phan_tich " and shows the arguments.
   await setup.mockInput.typeText("/demo:phan_tich")
+  setup.mockInput.pressEnter()
+  const hint = await setup.waitForFrame((f) => f.includes("› /demo:phan_tich ") && f.includes("<ma> [goc_nhin]"))
+  show(hint)
+  // Enter again without arguments: the usage error.
   setup.mockInput.pressEnter()
   await setup.waitForFrame((f) => f.includes("Thiếu ma"))
 
