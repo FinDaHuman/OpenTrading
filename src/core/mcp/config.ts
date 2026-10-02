@@ -1,6 +1,7 @@
 import path from "node:path"
 import { z } from "zod"
 import { readJson } from "../store"
+import { PRESETS } from "./presets"
 
 /**
  * MCP server config, in the same `{ "mcpServers": { ... } }` shape Claude Code uses,
@@ -12,6 +13,10 @@ const Common = {
   startupTimeoutMs: z.number().int().positive().optional(),
   /** Per tool call timeout. Default 60s. */
   toolTimeoutMs: z.number().int().positive().optional(),
+  /** Which OpenTrading preset of tools to expose. Default "market"; "all" = every tool. */
+  preset: z.enum(PRESETS).optional(),
+  /** Tool output longer than this is cut (head + tail) before the model sees it. Default 12 000. */
+  maxOutputChars: z.number().int().positive().optional(),
 }
 
 const Stdio = z.object({
@@ -47,6 +52,8 @@ export interface ServerEntry {
 
 export const DEFAULT_STARTUP_TIMEOUT_MS = 30_000
 export const DEFAULT_TOOL_TIMEOUT_MS = 60_000
+export const DEFAULT_MCP_OUTPUT_CHARS = 12_000
+export const DEFAULT_MCP_PRESET = "market" as const
 
 export function configFiles(home: string, cwd: string) {
   return {

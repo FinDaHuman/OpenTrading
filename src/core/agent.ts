@@ -247,6 +247,8 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
   const sessionId = opts.sessionId ?? ""
   // Fail fast on setup problems before any hook side effects run.
   await resolveTarget()
+  // Per-turn call budget and doom-loop counters restart here.
+  opts.registry.resetTurnBudgets()
 
   // user-prompt hooks: may block the turn or add context for it.
   const extras: TurnExtras = {}
@@ -283,7 +285,19 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
       : assembled.system
 
   const model = languageModel(target.provider, target.model, target.apiKey)
+  // Names in the frozen snapshot; a preset switch cannot add tools mid-stream, but
+  // prepareStep narrows the visible set per step, so switch_preset takes effect
+  // on the very next step of the same turn.
+  const frozenNames = new Set(opts.registry.list().map((t) => t.name))
   let summarized = false
+  const visibleNames = () => {
+    const active = opts.registry.activePreset ?? "market"
+    return opts.registry
+      .list()
+      .filter((t) => !t.presets || t.presets.length === 0 || t.presets.includes(active))
+      .filter((t) => frozenNames.has(t.name))
+      .map((t) => t.name)
+  }
   const result = streamText({
     model,
     system,
@@ -293,9 +307,15 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
     // Last allowed step: keep tools declared (some providers reject tool history otherwise)
     // but forbid calling them, so the turn always ends with an answer.
     prepareStep: ({ stepNumber, messages }) => {
-      if (!tools || stepNumber < maxSteps - 1) return undefined
-      summarized = true
-      return { toolChoice: "none", messages: [...messages, { role: "user", content: SUMMARY_PROMPT }] }
+      if (!tools) return undefined
+      const active = visibleNames()
+      // Last allowed step: keep tools declared (some providers reject tool history otherwise)
+      // but forbid calling them, so the turn always ends with an answer.
+      if (stepNumber >= maxSteps - 1) {
+        summarized = true
+        return { activeTools: active, toolChoice: "none" as const, messages: [...messages, { role: "user", content: SUMMARY_PROMPT }] }
+      }
+      return { activeTools: active }
     },
     abortSignal: opts.signal,
     maxRetries: 1,

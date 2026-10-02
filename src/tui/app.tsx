@@ -3,20 +3,24 @@ import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid"
 import { createMemo, createSignal, For, Match, onCleanup, onMount, Show, Switch } from "solid-js"
 import { produce } from "solid-js/store"
 import { runAgent } from "../core/agent"
+import { setApprovalHandler, type Decision } from "../core/approvals"
 import { connectedProviders } from "../core/auth"
 import { describeError } from "../core/chat"
 import { loadConfig } from "../core/config"
 import { loadCatalog } from "../core/catalog"
+import { needsOnboarding } from "../core/mcp/onboard"
+import { dataDir } from "../core/paths"
 import type { Runtime } from "../core/runtime"
 import { ensureProfile } from "../core/profile"
 import { loadSkills } from "../core/skills/loader"
 import { Background } from "./background"
-import { COMMANDS, parseCommand } from "./commands"
+import { COMMANDS, fillPromptArgs, parseCommand, promptCommands, type CommandInfo } from "./commands"
 import { ConfigDialog } from "./dialogs/config"
 import { ConnectDialog } from "./dialogs/connect"
 import { ContextDialog } from "./dialogs/context"
 import { HelpDialog } from "./dialogs/help"
 import { McpDialog } from "./dialogs/mcp"
+import { McpSetupDialog } from "./dialogs/mcp-setup"
 import { MemoryDialog } from "./dialogs/memory"
 import { SessionsDialog } from "./dialogs/sessions"
 import { ModelDialog } from "./dialogs/model"
@@ -150,8 +154,24 @@ export function App(props: { runtime: Runtime; resume?: string }) {
     process.exit(0)
   }
 
-  const offMcp = props.runtime.mcp.onChange((status) => setState("mcp", status))
+  const offMcp = props.runtime.mcp.onChange((status) => {
+    setState("mcp", status)
+    setState("mcpPrompts", props.runtime.mcp.allPrompts())
+  })
   onCleanup(() => offMcp())
+
+  // Tools that need approval (e.g. switch_preset) wait on this handler: it opens the
+  // approval box; the keyboard handler resolves it with once/always/deny.
+  const offApprovals = setApprovalHandler(
+    (req) =>
+      new Promise<Decision>((resolve) =>
+        setState("approval", { title: req.title, detail: req.detail, resolve: (d) => resolve(d) }),
+      ),
+  )
+  onCleanup(() => {
+    offApprovals()
+    setState("approval", undefined)
+  })
 
   onMount(async () => {
     void props.runtime.mcp.start()
@@ -171,12 +191,19 @@ export function App(props: { runtime: Runtime; resume?: string }) {
     if (skillSet.problems.length > 0) {
       pushLine({ kind: "error", text: `${skillSet.problems.length} skill bị lỗi và không được nạp. Xem /skills.` })
     }
+    // First run: offer the company data server instead of asking users to hand-write JSON.
+    if (!(await needsOnboarding(dataDir(), process.cwd()))) return
+    const hasKey = await connectedProviders()
+    setState("dialog", "mcp-setup")
+    if (hasKey.length === 0)
+      pushLine({ kind: "info", text: "Bước 2 (sau khi nối server): gõ /connect để nhập key LLM." })
   })
 
   const suggestions = createMemo(() => {
     const d = draft()
     if (!d.startsWith("/") || d.includes(" ")) return []
-    return COMMANDS.filter((c) => `/${c.name}`.startsWith(d.toLowerCase()))
+    const all: CommandInfo[] = [...promptCommands(state.mcpPrompts), ...COMMANDS]
+    return all.filter((c) => `/${c.name}`.startsWith(d.toLowerCase()))
   })
 
   function setInput(value: string) {
@@ -201,12 +228,15 @@ export function App(props: { runtime: Runtime; resume?: string }) {
     if (!text) return
     const cmd = parseCommand(text)
     // Enter on a partial command ("/con") runs the highlighted suggestion.
-    if (cmd && !COMMANDS.some((c) => c.name === cmd.name) && highlighted && !cmd.args) cmd.name = highlighted.name
+    if (cmd && ![...COMMANDS, ...promptCommands(state.mcpPrompts)].some((c) => c.name === cmd.name) && highlighted && !cmd.args)
+      cmd.name = highlighted.name
     if (!cmd) {
       if (state.streaming) return
       void send(props.runtime, text)
       return
     }
+    const knownCommand = COMMANDS.some((c) => c.name === cmd.name)
+    if (!knownCommand && state.streaming) return
     switch (cmd.name) {
       case "connect":
       case "model":
@@ -219,6 +249,8 @@ export function App(props: { runtime: Runtime; resume?: string }) {
       case "memory":
       case "config":
         return setState("dialog", cmd.name)
+      case "mcp-setup":
+        return setState("dialog", "mcp-setup")
       case "profile":
         return void ensureProfile().then(({ file, created }) =>
           pushLine({
@@ -236,8 +268,22 @@ export function App(props: { runtime: Runtime; resume?: string }) {
       case "exit":
       case "quit":
         return void exit()
-      default:
-        pushLine({ kind: "error", text: `Không có lệnh /${cmd.name}. Gõ /help.` })
+      default: {
+        // Not a built-in: if an MCP prompt carries this name, run its workflow.
+        const prompt = state.mcpPrompts.find((p) => p.name === cmd.name)
+        if (prompt) {
+          const filled = fillPromptArgs(prompt.arguments, cmd.args)
+          if (typeof filled === "string") return pushLine({ kind: "error", text: filled })
+          return void props.runtime.mcp
+            .promptByName(prompt.name, filled)
+            .then(({ text: body }) => {
+              pushLine({ kind: "user", text: `/${prompt.name}${cmd.args ? ` ${cmd.args}` : ""}` })
+              return send(props.runtime, body)
+            })
+            .catch((error) => pushLine({ kind: "error", text: error instanceof Error ? error.message : String(error) }))
+        }
+        return pushLine({ kind: "error", text: `Không có lệnh /${cmd.name}. Gõ /help.` })
+      }
     }
   }
 
@@ -245,6 +291,17 @@ export function App(props: { runtime: Runtime; resume?: string }) {
     if (evt.eventType === "release") return
     if (evt.ctrl && evt.name === "c") return void exit()
     if (evt.ctrl && evt.name === "o") return void setState("expandTools", (v) => !v)
+    const pending = state.approval
+    if (pending) {
+      const decide = (d: Decision) => {
+        setState("approval", undefined)
+        pending.resolve(d)
+      }
+      if (evt.name === "return" || evt.name === "1") decide("once")
+      else if (evt.name === "a" || evt.name === "2") decide("always")
+      else if (evt.name === "escape" || evt.name === "d" || evt.name === "3") decide("deny")
+      return
+    }
     if (evt.name === "escape" && !state.dialog && state.streaming) abort?.abort()
     if (state.dialog || suggestions().length === 0) return
     const n = suggestions().length
@@ -285,7 +342,7 @@ export function App(props: { runtime: Runtime; resume?: string }) {
           <input
             ref={(r) => (input = r)}
             flexGrow={1}
-            focused={!state.dialog}
+            focused={!state.dialog && !state.approval}
             placeholder={state.streaming ? "đang trả lời… esc để dừng" : "Hỏi về thị trường, hoặc gõ / để xem lệnh"}
             textColor={color.tx}
             focusedTextColor={color.tx}
@@ -299,6 +356,20 @@ export function App(props: { runtime: Runtime; resume?: string }) {
             onSubmit={(v: unknown) => run(typeof v === "string" ? v : (input?.value ?? ""))}
           />
         </box>
+
+        <Show when={state.approval}>
+          {(a) => (
+            <box marginLeft={2} marginRight={2} marginBottom={1} border borderStyle="rounded" borderColor={color.tham} backgroundColor={color.panel} padding={1}>
+              <text fg={color.tham}>{`⚠ ${a().title}`}</text>
+              <Show when={a().detail}>
+                <text fg={color.tx2} wrapMode="word">{a().detail}</text>
+              </Show>
+              <text fg={color.tx3} marginTop={1}>
+                {"enter/1 cho phép lần này · a/2 luôn cho phép · esc/3 từ chối"}
+              </text>
+            </box>
+          )}
+        </Show>
 
         <StatusBar />
       </box>
@@ -318,6 +389,9 @@ export function App(props: { runtime: Runtime; resume?: string }) {
         </Match>
         <Match when={state.dialog === "mcp"}>
           <McpDialog mcp={props.runtime.mcp} />
+        </Match>
+        <Match when={state.dialog === "mcp-setup"}>
+          <McpSetupDialog mcp={props.runtime.mcp} />
         </Match>
         <Match when={state.dialog === "tools"}>
           <ToolsDialog registry={props.runtime.registry} />
@@ -357,8 +431,8 @@ function StatusBar() {
         <text fg={color.tran}>{` ✦ ${state.activeSkills.join(", ")}`}</text>
       </Show>
       <box flexGrow={1} />
-      <text fg={state.streaming ? color.tham : color.tx3}>
-        {state.streaming ? "● đang trả lời · esc dừng" : "/help · ctrl+c thoát"}
+      <text fg={state.streaming ? color.tham : state.approval ? color.tham : color.tx3}>
+        {state.approval ? "● cần phê duyệt" : state.streaming ? "● đang trả lời · esc dừng" : "/help · ctrl+c thoát"}
       </text>
     </box>
   )

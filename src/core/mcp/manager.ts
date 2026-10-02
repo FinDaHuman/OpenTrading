@@ -6,6 +6,8 @@ import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js"
 import { ToolListChangedNotificationSchema } from "@modelcontextprotocol/sdk/types.js"
 import type { ToolRegistry } from "../tools/registry"
 import {
+  DEFAULT_MCP_OUTPUT_CHARS,
+  DEFAULT_MCP_PRESET,
   DEFAULT_STARTUP_TIMEOUT_MS,
   DEFAULT_TOOL_TIMEOUT_MS,
   expandConfig,
@@ -16,9 +18,18 @@ import {
 } from "./config"
 import { normalizeSchema, resultToText } from "./convert"
 import { serverPrefix, toolName } from "./naming"
+import { isPreset, presetCounts, presetsOf, type PresetName } from "./presets"
+import { envSecrets } from "./onboard"
 import { TrustStore, trustKey } from "./trust"
 
 export type McpState = "connecting" | "connected" | "failed" | "disabled" | "untrusted"
+
+export interface McpPromptInfo {
+  name: string
+  description?: string
+  /** Prompt arguments, in declaration order. */
+  arguments?: { name: string; description?: string; required?: boolean }[]
+}
 
 export interface McpServerStatus {
   name: string
@@ -28,6 +39,12 @@ export interface McpServerStatus {
   error?: string
   /** Model-visible tool names. */
   tools: string[]
+  /** Configured preset for this server. */
+  preset: PresetName
+  /** Tool counts per preset across everything the server serves; `khác` = untable. */
+  presetCounts?: Record<string, number>
+  /** Workflows the server exposes as MCP prompts. */
+  prompts: McpPromptInfo[]
   /** Config file the server came from. */
   file: string
   /** What it runs or connects to — shown before the user approves a project server. */
@@ -77,6 +94,19 @@ export class McpManager {
     return [...this.statuses.values()]
   }
 
+  /** Prompts of every connected server, flattened with their server name. */
+  allPrompts(): (McpPromptInfo & { server: string })[] {
+    return this.status().flatMap((s) => s.prompts.map((p) => ({ ...p, server: s.name })))
+  }
+
+  /** Convenience for the slash-command path: fetch a prompt by name from its server. */
+  async promptByName(promptName: string, args: Record<string, string>): Promise<{ server: string; text: string }> {
+    const entry = this.allPrompts().find((p) => p.name === promptName)
+    if (!entry) throw new Error(`Không có MCP prompt "${promptName}".`)
+    const text = await this.getPrompt(entry.server, promptName, args)
+    return { server: entry.server, text }
+  }
+
   onChange(listener: (status: McpServerStatus[]) => void) {
     this.listeners.add(listener)
     return () => this.listeners.delete(listener)
@@ -99,9 +129,11 @@ export class McpManager {
         scope: entry.scope,
         file: entry.file,
         transport: entry.config && "url" in entry.config ? "http" : "stdio",
+        preset: entry.config?.preset && isPreset(entry.config.preset) ? entry.config.preset : DEFAULT_MCP_PRESET,
         target: !entry.config ? "" : "url" in entry.config ? entry.config.url : [entry.config.command, ...(entry.config.args ?? [])].join(" "),
         state: "connecting",
         tools: [],
+        prompts: [],
       })
     }
     for (const listener of this.listeners) listener(this.status())
@@ -114,6 +146,14 @@ export class McpManager {
     if (!entry?.config) return
     await this.trustStore.trust(trustKey(this.opts.cwd, name, entry.config))
     await this.connect(entry)
+  }
+
+  /** Switch which tool preset a server exposes; takes effect on the model's next step. */
+  async setPreset(name: string, preset: PresetName) {
+    const entry = this.entries.get(name)
+    if (!entry?.config) return
+    this.entries.set(name, { ...entry, config: { ...entry.config, preset } })
+    this.set(name, { preset })
   }
 
   async restart(name: string) {
@@ -143,9 +183,18 @@ export class McpManager {
       return this.set(name, { state: "untrusted", error: undefined })
     }
 
-    const { config, missing } = expandConfig(entry.config)
+    // `${NAME}` placeholders resolve from process.env plus the secret entries saved by
+    // onboarding (auth.json `_env_<NAME>` — keys on disk, not exported shell vars).
+    const env = { ...process.env, ...(await envSecrets(this.opts.home)) }
+    const { config, missing } = expandConfig(entry.config, env)
     if (missing.length > 0) {
-      return this.set(name, { state: "failed", error: `Thiếu biến môi trường: ${missing.join(", ")}` })
+      const hint = missing.some((m) => m === "OPENTRADING_MCP_TOKEN")
+        ? " Xin TEAM_TOKEN từ admin, dán vào /mcp-setup hoặc ~/.opentrading/auth.json."
+        : ""
+      return this.set(name, {
+        state: "failed",
+        error: `Thiếu biến môi trường: ${missing.join(", ")}${hint ? "." + hint : ""}`,
+      })
     }
 
     this.set(name, { state: "connecting", error: undefined, tools: [] })
@@ -179,11 +228,50 @@ export class McpManager {
 
     try {
       await this.syncTools(name, client, config)
+      await this.syncPrompts(name, client)
       this.set(name, { state: "connected" })
     } catch (error) {
       await this.disconnect(name)
       this.set(name, { state: "failed", error: `Không lấy được danh sách tool: ${errorText(error)}` })
     }
+  }
+
+  /** Read the server's prompt workflows (best effort — most servers have none). */
+  private async syncPrompts(name: string, client: Client) {
+    try {
+      const caps = client.getServerCapabilities()
+      if (!caps?.prompts) return this.set(name, { prompts: [] })
+      const prompts: McpPromptInfo[] = []
+      let cursor: string | undefined
+      do {
+        const page = await client.listPrompts(cursor ? { cursor } : undefined)
+        prompts.push(
+          ...page.prompts.map((p) => ({
+            name: p.name,
+            description: p.description,
+            arguments: (p.arguments ?? []).map((a) => ({ name: a.name, description: a.description, required: a.required })),
+          })),
+        )
+        cursor = page.nextCursor
+      } while (cursor && prompts.length < 128)
+      this.set(name, { prompts })
+    } catch {
+      this.set(name, { prompts: [] })
+    }
+  }
+
+  /** Fetch a prompt's composed text (the slash-command body). Throws on server errors. */
+  async getPrompt(name: string, promptName: string, args: Record<string, string> = {}): Promise<string> {
+    const live = this.live.get(name)
+    if (!live) throw new Error(`MCP server "${name}" chưa kết nối. Xem /mcp.`)
+    const result = await live.client.getPrompt({ name: promptName, arguments: args })
+    return result.messages
+      .map((message) => {
+        const content = message.content
+        if (content.type === "text") return content.text
+        return `[nội dung loại ${content.type}]`
+      })
+      .join("\n\n")
   }
 
   private transport(entry: ServerEntry, config: ServerConfig, stderr: string[]): Transport {
@@ -219,9 +307,13 @@ export class McpManager {
       cursor = page.nextCursor
     } while (cursor && tools.length < 2048)
 
+    // Everything the server serves is registered; which preset the model may call is
+    // narrowed per step by the agent (activeTools), so a switch_preset takes effect
+    // immediately without re-serialising tool definitions.
     this.registry.unregister(serverPrefix(name))
     const taken = new Set(this.registry.list().map((t) => t.name))
     const toolTimeoutMs = config.toolTimeoutMs ?? DEFAULT_TOOL_TIMEOUT_MS
+    const maxOutputChars = config.maxOutputChars ?? DEFAULT_MCP_OUTPUT_CHARS
     const registered: string[] = []
     for (const tool of tools) {
       const modelName = toolName(name, tool.name, taken)
@@ -233,8 +325,10 @@ export class McpManager {
         description: (tool.description ?? `Tool ${tool.name} của MCP server ${name}.`).slice(0, MAX_DESCRIPTION),
         input: normalizeSchema(tool.inputSchema),
         readOnly: tool.annotations?.readOnlyHint ?? false,
+        presets: presetsOf(tool.name),
         // The wrapper's own timer is a backstop; the SDK enforces the real per-call timeout.
         timeoutMs: toolTimeoutMs + 5_000,
+        maxOutputChars,
         summarize: (input) => `${name} · ${tool.name}(${compactArgs(input)})`,
         execute: async (input, ctx) => {
           const live = this.live.get(name)
@@ -248,7 +342,10 @@ export class McpManager {
         },
       })
     }
-    this.set(name, { tools: registered })
+    this.set(name, {
+      tools: registered,
+      presetCounts: presetCounts(tools.map((t) => t.name)),
+    })
   }
 }
 

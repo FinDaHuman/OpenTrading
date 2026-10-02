@@ -1,5 +1,6 @@
 import type { JSONSchema7 } from "@ai-sdk/provider"
 import type { z } from "zod"
+import type { PresetName } from "../mcp/presets"
 
 export interface ToolContext {
   signal: AbortSignal
@@ -29,6 +30,8 @@ export interface ToolDef<I = any> {
   maxOutputChars?: number
   /** Where the tool came from, shown in /tools. */
   source?: string
+  /** Which MCP presets the tool belongs to (opentrading server only; empty otherwise). */
+  presets?: PresetName[]
   /** Short label for the TUI, e.g. `current_time()` or `add 2 + 3`. */
   summarize?(input: I): string
   execute(input: I, ctx: ToolContext): Promise<string | ToolResult>

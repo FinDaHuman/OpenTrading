@@ -3,7 +3,10 @@ import { DEFAULT_MAX_OUTPUT_CHARS, DEFAULT_TIMEOUT_MS, type ToolContext, type To
 /**
  * Read/write lock: read-only tools share it, everything else takes it exclusively.
  * Writers are queued FIFO and block new readers so they cannot starve.
+ * Readers are capped (skills-design-for-harness §0.4: vnstock throttles bursts >5).
  */
+export const MAX_PARALLEL_READERS = 5
+
 export class RwLock {
   private readers = 0
   private writer = false
@@ -23,7 +26,7 @@ export class RwLock {
   }
 
   private canEnter(write: boolean) {
-    return write ? !this.writer && this.readers === 0 : !this.writer
+    return write ? !this.writer && this.readers === 0 : !this.writer && this.readers < MAX_PARALLEL_READERS
   }
 
   private enter(write: boolean) {
@@ -49,6 +52,9 @@ export function truncate(text: string, max: number): string {
   const omitted = text.length - head - tail
   return `${text.slice(0, head)}\n\n[... đã lược ${omitted} ký tự ...]\n\n${text.slice(text.length - tail)}`
 }
+
+/** Tool errors (and upstream HTML error pages) reaching the model stay short. */
+export const MAX_ERROR_CHARS = 500
 
 export class ToolTimeoutError extends Error {
   constructor(name: string, ms: number) {
@@ -85,7 +91,8 @@ export async function runTool(def: ToolDef, input: unknown, ctx: ToolContext, lo
     const output = typeof result === "string" ? result : result.output
     return truncate(output, def.maxOutputChars ?? DEFAULT_MAX_OUTPUT_CHARS)
   } catch (error) {
-    if (error instanceof Error) throw error
+    // An upstream proxy can answer failures with a full HTML page; the model must never see it.
+    if (error instanceof Error) throw new Error(truncate(error.message, MAX_ERROR_CHARS))
     throw new Error(String(error))
   } finally {
     clearTimeout(timer)

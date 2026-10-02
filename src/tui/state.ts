@@ -1,7 +1,8 @@
 import type { ModelMessage } from "ai"
 import { createStore } from "solid-js/store"
+import type { Decision } from "../core/approvals"
 import type { Catalog } from "../core/catalog"
-import type { McpServerStatus } from "../core/mcp/manager"
+import type { McpPromptInfo, McpServerStatus } from "../core/mcp/manager"
 import type { ProviderId } from "../core/providers"
 import type { ClockSnapshot } from "../core/prompt/market-clock"
 import type { Skill, SkillProblem } from "../core/skills/schema"
@@ -15,7 +16,18 @@ export type Line =
   | { kind: "info"; text: string }
   | { kind: "error"; text: string }
 
-export type DialogName = "connect" | "model" | "skills" | "help" | "mcp" | "tools" | "context" | "sessions" | "memory" | "config"
+export type DialogName =
+  | "connect"
+  | "model"
+  | "skills"
+  | "help"
+  | "mcp"
+  | "tools"
+  | "context"
+  | "sessions"
+  | "memory"
+  | "config"
+  | "mcp-setup"
 
 export const [state, setState] = createStore({
   lines: [] as Line[],
@@ -36,9 +48,13 @@ export const [state, setState] = createStore({
   /** Market-clock snapshot last sent to the model; undefined → send on the next turn. */
   clock: undefined as ClockSnapshot | undefined,
   mcp: [] as McpServerStatus[],
+  /** MCP prompt workflows across servers, flattened for slash commands. */
+  mcpPrompts: [] as (McpPromptInfo & { server: string })[],
   /** Show full tool output instead of the first lines (ctrl+o). */
   expandTools: false,
   dialog: undefined as DialogName | undefined,
+  /** Approval request waiting for the user (e.g. switch_preset); resolves the waiting tool. */
+  approval: undefined as { title: string; detail?: string; resolve: (decision: Decision) => void } | undefined,
 })
 
 export function pushLine(line: Line) {
