@@ -5,7 +5,14 @@ import { SSEClientTransport, SseError } from "@modelcontextprotocol/sdk/client/s
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { StreamableHTTPClientTransport, StreamableHTTPError } from "@modelcontextprotocol/sdk/client/streamableHttp.js"
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js"
-import { ToolListChangedNotificationSchema } from "@modelcontextprotocol/sdk/types.js"
+import {
+  CallToolResultSchema,
+  PromptListChangedNotificationSchema,
+  ResourceListChangedNotificationSchema,
+  ToolListChangedNotificationSchema,
+} from "@modelcontextprotocol/sdk/types.js"
+import { z } from "zod"
+import type { JSONSchema7 } from "@ai-sdk/provider"
 import type { ToolRegistry } from "../tools/registry"
 import {
   DEFAULT_STARTUP_TIMEOUT_MS,
@@ -20,7 +27,7 @@ import {
   type ServerEntry,
   toolAllowed,
 } from "./config"
-import { normalizeSchema, resultToText } from "./convert"
+import { blockToParts, resultToOutput } from "./convert"
 import { serverPrefix, toolName } from "./naming"
 import { McpOAuthProvider, NeedsAuthError, openBrowser, startCallbackServer } from "./oauth"
 import { clearOAuth, secretEnv } from "./secrets"
@@ -48,7 +55,82 @@ export interface McpServerStatus {
   oauth: boolean
   /** Header names, env keys and `${VAR}`s the server receives once approved. */
   exposure: ReturnType<typeof exposure>
+  /** Prompts (workflows) the server offers; the TUI shows them as /server:prompt. */
+  prompts: McpPromptInfo[]
+  /** Whether the server offers resources (read through list/read_mcp_resource). */
+  resources: boolean
 }
+
+export interface McpPromptInfo {
+  name: string
+  description?: string
+  arguments: { name: string; description?: string; required?: boolean }[]
+}
+
+/**
+ * `tools/list` parsed loosely: one tool with an odd `outputSchema` (or a missing field)
+ * must not make the whole server unusable, as the SDK's strict schema would.
+ */
+const LooseToolList = z
+  .object({
+    tools: z.array(
+      z
+        .object({
+          name: z.string(),
+          description: z.string().optional(),
+          inputSchema: z.unknown().optional(),
+          annotations: z.object({ readOnlyHint: z.boolean().optional(), destructiveHint: z.boolean().optional() }).passthrough().optional(),
+        })
+        .passthrough(),
+    ),
+    nextCursor: z.string().optional(),
+  })
+  .passthrough()
+
+const LoosePromptList = z
+  .object({
+    prompts: z.array(
+      z
+        .object({
+          name: z.string(),
+          description: z.string().optional(),
+          arguments: z
+            .array(z.object({ name: z.string(), description: z.string().optional(), required: z.boolean().optional() }).passthrough())
+            .optional(),
+        })
+        .passthrough(),
+    ),
+    nextCursor: z.string().optional(),
+  })
+  .passthrough()
+
+const LooseResourceList = z
+  .object({
+    resources: z.array(
+      z.object({ uri: z.string(), name: z.string().optional(), description: z.string().optional(), mimeType: z.string().optional() }).passthrough(),
+    ),
+    nextCursor: z.string().optional(),
+  })
+  .passthrough()
+
+const LooseReadResource = z
+  .object({
+    contents: z.array(
+      z.object({ uri: z.string(), mimeType: z.string().optional(), text: z.string().optional(), blob: z.string().optional() }).passthrough(),
+    ),
+  })
+  .passthrough()
+
+const LooseGetPrompt = z
+  .object({
+    description: z.string().optional(),
+    messages: z.array(z.object({ role: z.string(), content: z.object({ type: z.string() }).passthrough() }).passthrough()),
+  })
+  .passthrough()
+
+/** Native tools for MCP resources; registered while at least one server offers resources. */
+export const RESOURCE_TOOLS = ["list_mcp_resources", "read_mcp_resource"] as const
+
 
 interface Live {
   client: Client
@@ -225,6 +307,8 @@ export class McpManager {
         hiddenTools: 0,
         oauth: config ? isRemote(config) && usesOAuth(config) : false,
         exposure: config ? exposure(config) : { vars: [], headers: [], env: [] },
+        prompts: [],
+        resources: false,
       })
     }
     this.emit()
@@ -274,6 +358,8 @@ export class McpManager {
     const live = this.live.get(name)
     this.live.delete(name)
     this.registry.unregister(serverPrefix(name))
+    if (this.statuses.has(name)) this.set(name, { prompts: [], resources: false })
+    this.syncResourceTools()
     if (live) await live.client.close().catch(() => {})
   }
 
@@ -342,10 +428,17 @@ export class McpManager {
     client.setNotificationHandler(ToolListChangedNotificationSchema, () => {
       void this.syncTools(name, client, config).catch(() => {})
     })
+    client.setNotificationHandler(PromptListChangedNotificationSchema, () => {
+      void this.syncPrompts(name, client).catch(() => {})
+    })
+    client.setNotificationHandler(ResourceListChangedNotificationSchema, () => {})
 
     try {
       await this.syncTools(name, client, config)
-      this.set(name, { state: "connected", transport: live.kind })
+      // Prompts are optional extras: a server that fails to list them still works.
+      await this.syncPrompts(name, client).catch(() => {})
+      this.set(name, { state: "connected", transport: live.kind, resources: Boolean(client.getServerCapabilities()?.resources) })
+      this.syncResourceTools()
     } catch (error) {
       await this.disconnect(name)
       this.set(name, { state: "failed", error: `Không lấy được danh sách tool: ${errorText(error)}` })
@@ -508,10 +601,10 @@ export class McpManager {
   }
 
   private async syncTools(name: string, client: Client, config: ServerConfig) {
-    const tools: { name: string; description?: string; inputSchema?: unknown; annotations?: { readOnlyHint?: boolean } }[] = []
+    const tools: z.infer<typeof LooseToolList>["tools"] = []
     let cursor: string | undefined
     do {
-      const page = await client.listTools(cursor ? { cursor } : undefined)
+      const page = await client.request({ method: "tools/list", params: cursor ? { cursor } : {} }, LooseToolList)
       tools.push(...page.tools)
       cursor = page.nextCursor
     } while (cursor && tools.length < 2048)
@@ -519,6 +612,7 @@ export class McpManager {
     this.registry.unregister(serverPrefix(name))
     const taken = new Set(this.registry.list().map((t) => t.name))
     const toolTimeoutMs = config.toolTimeoutMs ?? DEFAULT_TOOL_TIMEOUT_MS
+    const priority = Math.max(0, [...this.entries.keys()].indexOf(name))
     const registered: string[] = []
     let hidden = 0
     for (const tool of tools) {
@@ -532,8 +626,10 @@ export class McpManager {
       this.registry.register({
         name: modelName,
         source: `mcp:${name}`,
+        priority,
         description: (tool.description ?? `Tool ${tool.name} của MCP server ${name}.`).slice(0, MAX_DESCRIPTION),
-        input: normalizeSchema(tool.inputSchema),
+        // Raw schema; the registry sanitizes it per provider when building a request.
+        input: (tool.inputSchema ?? { type: "object", properties: {} }) as JSONSchema7,
         readOnly: tool.annotations?.readOnlyHint ?? false,
         // The wrapper's own timer is a backstop; the SDK enforces the real per-call timeout.
         timeoutMs: toolTimeoutMs + 5_000,
@@ -541,8 +637,12 @@ export class McpManager {
         summarize: (input) => `${name} · ${tool.name}(${compactArgs(input)})`,
         execute: async (input, ctx) => {
           const args = (input as Record<string, unknown>) ?? {}
+          // A plain request instead of client.callTool: callTool checks structuredContent
+          // against the tool's outputSchema and throws on a mismatch — after the tool ran.
+          // Retrying would run a write tool twice, so we skip that check; the model reads
+          // the content either way.
           const call = (live: Live) =>
-            live.client.callTool({ name: tool.name, arguments: args }, undefined, {
+            live.client.request({ method: "tools/call", params: { name: tool.name, arguments: args } }, CallToolResultSchema, {
               signal: ctx.signal,
               timeout: toolTimeoutMs,
               resetTimeoutOnProgress: true,
@@ -553,7 +653,7 @@ export class McpManager {
           const live = this.live.get(name)
           if (!live) throw new Error(`MCP server "${name}" chưa kết nối. Xem /mcp.`)
           try {
-            return resultToText((await call(live)) as Parameters<typeof resultToText>[0])
+            return resultToOutput(await call(live))
           } catch (error) {
             if (isRemote(config) && isAuthError(error)) {
               this.set(name, { state: "needs-auth", error: authHint(name, config, error) })
@@ -566,12 +666,96 @@ export class McpManager {
             await this.restartShared(name)
             const fresh = this.live.get(name)
             if (!fresh) throw error
-            return resultToText((await call(fresh)) as Parameters<typeof resultToText>[0])
+            return resultToOutput(await call(fresh))
           }
         },
       })
     }
     this.set(name, { tools: registered, hiddenTools: hidden })
+  }
+
+  private async syncPrompts(name: string, client: Client) {
+    if (!client.getServerCapabilities()?.prompts) return this.set(name, { prompts: [] })
+    const prompts: McpPromptInfo[] = []
+    let cursor: string | undefined
+    do {
+      const page = await client.request({ method: "prompts/list", params: cursor ? { cursor } : {} }, LoosePromptList)
+      for (const p of page.prompts) prompts.push({ name: p.name, description: p.description, arguments: p.arguments ?? [] })
+      cursor = page.nextCursor
+    } while (cursor && prompts.length < 512)
+    this.set(name, { prompts })
+  }
+
+  /** Every prompt of every connected server, for slash-command suggestions. */
+  allPrompts(): (McpPromptInfo & { server: string })[] {
+    return this.status().flatMap((s) => (s.state === "connected" ? s.prompts.map((p) => ({ ...p, server: s.name })) : []))
+  }
+
+  /**
+   * Fetch a prompt and flatten it to the text sent as the user's message. Messages in
+   * other roles are kept and labelled, so nothing the server adds is hidden.
+   */
+  async getPrompt(server: string, prompt: string, args: Record<string, string>) {
+    const live = this.live.get(server)
+    if (!live) throw new Error(`MCP server "${server}" chưa kết nối. Xem /mcp.`)
+    const result = await live.client.request({ method: "prompts/get", params: { name: prompt, arguments: args } }, LooseGetPrompt)
+    const parts = result.messages.map((m) => {
+      const { text, image } = blockToParts(m.content as Parameters<typeof blockToParts>[0])
+      const body = text ?? (image ? `[ảnh ${image.mediaType} — chưa hỗ trợ trong prompt]` : "")
+      return m.role === "user" ? body : `(${m.role === "assistant" ? "gợi ý của server" : m.role}) ${body}`
+    })
+    return parts.filter(Boolean).join("\n\n")
+  }
+
+  /** Register or remove the resource tools depending on whether any server offers resources. */
+  private syncResourceTools() {
+    const any = this.status().some((s) => s.state === "connected" && s.resources)
+    const has = Boolean(this.registry.get(RESOURCE_TOOLS[0]))
+    if (any === has) return
+    if (!any) return this.registry.unregisterSource("mcp:resources")
+    this.registry.register({
+      name: "list_mcp_resources",
+      source: "mcp:resources",
+      description:
+        "Liệt kê tài nguyên (file, tài liệu, bảng dữ liệu…) mà các MCP server cung cấp: server, uri, tên, mô tả. Đọc nội dung bằng read_mcp_resource.",
+      input: { type: "object", properties: { server: { type: "string", description: "Tên server; bỏ trống = mọi server" } } },
+      readOnly: true,
+      summarize: (input: { server?: string }) => `list_mcp_resources(${input?.server ?? ""})`,
+      execute: async (input: { server?: string }) => JSON.stringify(await this.listResources(input?.server), null, 2),
+    })
+    this.registry.register({
+      name: "read_mcp_resource",
+      source: "mcp:resources",
+      description: "Đọc nội dung một tài nguyên MCP theo server và uri (lấy từ list_mcp_resources).",
+      input: { type: "object", properties: { server: { type: "string" }, uri: { type: "string" } }, required: ["server", "uri"] },
+      readOnly: true,
+      summarize: (input: { server?: string; uri?: string }) => `read_mcp_resource(${input?.server ?? ""} ${input?.uri ?? ""})`,
+      execute: (input: { server: string; uri: string }) => this.readResource(input.server, input.uri),
+    })
+  }
+
+  async listResources(server?: string) {
+    const targets = this.status().filter((s) => s.state === "connected" && s.resources && (!server || s.name === server))
+    if (server && targets.length === 0) throw new Error(`Server "${server}" không có tài nguyên hoặc chưa kết nối.`)
+    const out: { server: string; uri: string; name?: string; description?: string; mimeType?: string }[] = []
+    for (const s of targets) {
+      const live = this.live.get(s.name)
+      if (!live) continue
+      let cursor: string | undefined
+      do {
+        const page = await live.client.request({ method: "resources/list", params: cursor ? { cursor } : {} }, LooseResourceList)
+        for (const r of page.resources) out.push({ server: s.name, uri: r.uri, name: r.name, description: r.description, mimeType: r.mimeType })
+        cursor = page.nextCursor
+      } while (cursor && out.length < 1000)
+    }
+    return out
+  }
+
+  async readResource(server: string, uri: string) {
+    const live = this.live.get(server)
+    if (!live) throw new Error(`MCP server "${server}" chưa kết nối. Xem /mcp.`)
+    const result = await live.client.request({ method: "resources/read", params: { uri } }, LooseReadResource)
+    return resultToOutput({ content: result.contents.map((c) => ({ type: "resource", resource: c })) })
   }
 }
 

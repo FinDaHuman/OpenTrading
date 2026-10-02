@@ -46,5 +46,23 @@ server.registerTool(
   async () => ({ isError: true, content: [{ type: "text", text: "Nguồn dữ liệu demo đang lỗi (cố ý)." }] }),
 )
 
+// Prompts are ready-made workflows: OpenTrading shows them as slash commands
+// (`/demo:phan_tich VCB`) and sends the text below as the user's message.
+server.registerPrompt(
+  "phan_tich",
+  {
+    description: "Phân tích nhanh một mã cổ phiếu",
+    argsSchema: { ma: z.string().describe("Mã cổ phiếu, ví dụ VCB"), goc_nhin: z.string().optional().describe("Trọng tâm phân tích") },
+  },
+  ({ ma, goc_nhin }) => ({
+    messages: [
+      {
+        role: "user",
+        content: { type: "text", text: `Phân tích nhanh mã ${ma.toUpperCase()}${goc_nhin ? `, trọng tâm: ${goc_nhin}` : ""}. Nêu nguồn và thời điểm dữ liệu.` },
+      },
+    ],
+  }),
+)
+
 await server.connect(new StdioServerTransport())
 console.error("opentrading-demo MCP server đang chạy (stdio)")

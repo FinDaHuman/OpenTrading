@@ -1,0 +1,4676 @@
+{
+ "source": "captured",
+ "capturedAt": "2026-10-02",
+ "server": "opentrading",
+ "capabilities": {
+  "experimental": {},
+  "prompts": {
+   "listChanged": false
+  },
+  "resources": {
+   "subscribe": false,
+   "listChanged": false
+  },
+  "tools": {
+   "listChanged": false
+  }
+ },
+ "tools": [
+  {
+   "name": "market_snapshot",
+   "description": "Snapshot of VN market with provenance. Use when a broad market picture is needed.\n\n        symbols: tickers to quote — default the full VN30 basket (P14).\n        as_of: requested timestamp label, recorded as requested_as_of\n        (data is always latest).\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "symbols": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Symbols"
+     },
+     "as_of": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "As Of"
+     }
+    },
+    "title": "market_snapshotArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "market_snapshotDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "source_status",
+   "description": "Health of every upstream plus TTL state. Use to debug stale data.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {},
+    "title": "source_statusArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "source_statusDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "market_candles_batch",
+   "description": "Batch OHLCV for symbols, one request per symbol. Use for multi-chart context.\n\n        days: daily bars per symbol (max 100 symbols). summary/columns: summary\n        returns {count,last,high,low} only; columns keeps named fields.\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "symbols": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Symbols",
+      "type": "array"
+     },
+     "days": {
+      "default": 30,
+      "title": "Days",
+      "type": "integer"
+     },
+     "summary": {
+      "default": false,
+      "title": "Summary",
+      "type": "boolean"
+     },
+     "columns": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Columns"
+     }
+    },
+    "required": [
+     "symbols"
+    ],
+    "title": "market_candles_batchArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "market_candles_batchDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "symbol_lookup",
+   "description": "Resolve company name to symbol, venue and sector. Use before any symbol-scoped call.\n\n        limit: max hits returned (matched by symbol or company name,\n        case- and accent-insensitive).\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "query": {
+      "title": "Query",
+      "type": "string"
+     },
+     "limit": {
+      "default": 10,
+      "title": "Limit",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "query"
+    ],
+    "title": "symbol_lookupArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "symbol_lookupDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "market_movers",
+   "description": "Top gainers, losers and volume leaders. Use for session pulse checks.\n\n        top_n: rows per list.\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "top_n": {
+      "default": 10,
+      "title": "Top N",
+      "type": "integer"
+     }
+    },
+    "title": "market_moversArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "market_moversDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "breadth_scan",
+   "description": "Advancers, decliners, ceiling and floor counts. Use to judge rally health.\n\n        exchange: filter rows carrying venue info (HOSE/HNX/UPCOM); ignored\n        with a warning when rows carry no venue info.\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "exchange": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Exchange"
+     }
+    },
+    "title": "breadth_scanArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "breadth_scanDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "market_overview",
+   "description": "One-call market context: bluechip quotes, movers, breadth, session. Use for briefs.\n\n        top_n: gainers/losers rows each. Breadth counts the bluechip board\n        (breadth_scan covers the full Vietstock board). Legs degrade\n        independently: a dead leg becomes null plus a warning.\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "top_n": {
+      "default": 3,
+      "title": "Top N",
+      "type": "integer"
+     }
+    },
+    "title": "market_overviewArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "market_overviewDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "dnse_market_status",
+   "description": "DNSE session state plus latest index snapshot. Use for open/close checks.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {},
+    "title": "dnse_market_statusArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "dnse_market_statusDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "vn_quote_history",
+   "description": "Candles for a VN symbol (1D/1W/1M), VCI then KBS fallback. Use for any price history.\n\n        days: bars requested (max 365 nến; weekly/monthly span nhân hệ số).\n        interval: '1D' (mặc định), '1W', '1M'. summary/columns: summary returns\n        {count,last,high,low} only; columns keeps named fields.\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "symbol": {
+      "title": "Symbol",
+      "type": "string"
+     },
+     "days": {
+      "default": 365,
+      "title": "Days",
+      "type": "integer"
+     },
+     "summary": {
+      "default": false,
+      "title": "Summary",
+      "type": "boolean"
+     },
+     "columns": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Columns"
+     },
+     "interval": {
+      "default": "1D",
+      "title": "Interval",
+      "type": "string"
+     }
+    },
+    "required": [
+     "symbol"
+    ],
+    "title": "vn_quote_historyArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "vn_quote_historyDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "vn_equity_quote_batch",
+   "description": "One-request price board for many symbols. Use for snapshots and movers.\n\n        summary/columns: summary returns {count,symbols} only; columns keeps\n        named fields per quote.\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "symbols": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Symbols",
+      "type": "array"
+     },
+     "summary": {
+      "default": false,
+      "title": "Summary",
+      "type": "boolean"
+     },
+     "columns": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Columns"
+     }
+    },
+    "required": [
+     "symbols"
+    ],
+    "title": "vn_equity_quote_batchArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "vn_equity_quote_batchDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "vn_listing",
+   "description": "Full symbol list with company names. Use for universe and lookup.\n\n        limit: max symbols returned (universe ~1500).\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "limit": {
+      "default": 500,
+      "title": "Limit",
+      "type": "integer"
+     }
+    },
+    "title": "vn_listingArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "vn_listingDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "vn_fundamentals",
+   "description": "Ratios and statements via vnstock Fundamental and Finance. Use for quick valuation.\n\n        period: 'year' or 'quarter'. report_type: 'ttm' (trailing twelve months) or 'latest'.\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "symbol": {
+      "title": "Symbol",
+      "type": "string"
+     },
+     "period": {
+      "default": "year",
+      "title": "Period",
+      "type": "string"
+     },
+     "report_type": {
+      "default": "ttm",
+      "title": "Report Type",
+      "type": "string"
+     }
+    },
+    "required": [
+     "symbol"
+    ],
+    "title": "vn_fundamentalsArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "vn_fundamentalsDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "vn_retail_gold",
+   "description": "SJC and ring gold buy/sell from BTMC retail. Use for local gold premium.\n\n        source: retail source id (default 'btmc'). Direct BTMC https fetch\n        first (15s); vnstock lib fallback (its http URL hangs without timeout).\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "source": {
+      "default": "btmc",
+      "title": "Source",
+      "type": "string"
+     }
+    },
+    "title": "vn_retail_goldArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "vn_retail_goldDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "vn_retail_fx",
+   "description": "VCB USD buy/sell rates. Use for currency conversion context.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {},
+    "title": "vn_retail_fxArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "vn_retail_fxDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "vs_auth_status",
+   "description": "Vietstock JWT state and expiry. Use before any paid BCTC call.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {},
+    "title": "vs_auth_statusArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "vs_auth_statusDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "vs_financeinfo",
+   "description": "Free-mirror statements, 12 quarters or years. Use when JWT is absent.\n\n        period: 'quarter' (12 quarters) or 'year' (annual).\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "symbol": {
+      "title": "Symbol",
+      "type": "string"
+     },
+     "period": {
+      "default": "quarter",
+      "title": "Period",
+      "type": "string"
+     }
+    },
+    "required": [
+     "symbol"
+    ],
+    "title": "vs_financeinfoArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "vs_financeinfoDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "vs_market_price",
+   "description": "Live board snapshot from Vietstock. Use as secondary quote source.\n\n        type: board id (2 = main board).\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "type": {
+      "default": 2,
+      "title": "Type",
+      "type": "integer"
+     }
+    },
+    "title": "vs_market_priceArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "vs_market_priceDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "vs_market_index",
+   "description": "Index closes with 1M and YTD change. Use for index context.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {},
+    "title": "vs_market_indexArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "vs_market_indexDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "vs_nn_flow",
+   "description": "Foreign investor buy/sell chart. Use to cross-check DNSE WS flows.\n\n        days: keep only the most recent N chart points.\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "days": {
+      "default": 90,
+      "title": "Days",
+      "type": "integer"
+     }
+    },
+    "title": "vs_nn_flowArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "vs_nn_flowDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "vs_categories",
+   "description": "Macro indicator catalogue (~60 categories). Use before indicator queries.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {},
+    "title": "vs_categoriesArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "vs_categoriesDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "vs_indicator_data",
+   "description": "Macro series (GDP/CPI/FX/trade) via browser-session replay. Use for macro reads.\n\n        term_type_id: 1 daily, 2 monthly, 3 quarterly, 4 yearly, 5 YTD, 6 MoM,\n        7 YoY, 8 QoQ — pairs must match each category's ListTermType metadata\n        (e.g. GDP 73 tt=3, CPI 15 tt=7 sub=2). from_date default 2022-01-01.\n        Uses the full browser cookie jar (HAR/env seed); Standard pack serves it.\n        Rows: {name, group, period, year, value, unit, timeorder}.\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "category_id": {
+      "title": "Category Id",
+      "type": "integer"
+     },
+     "term_type_id": {
+      "default": 3,
+      "title": "Term Type Id",
+      "type": "integer"
+     },
+     "sub_term_type_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Sub Term Type Id"
+     },
+     "from_date": {
+      "default": "2022-01-01",
+      "title": "From Date",
+      "type": "string"
+     },
+     "to_date": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "To Date"
+     }
+    },
+    "required": [
+     "category_id"
+    ],
+    "title": "vs_indicator_dataArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "vs_indicator_dataDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "vs_trading_info",
+   "description": "Ceiling, floor, room, EPS, BVPS, PE, PB per symbol. Use for reference snapshot.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "symbol": {
+      "title": "Symbol",
+      "type": "string"
+     }
+    },
+    "required": [
+     "symbol"
+    ],
+    "title": "vs_trading_infoArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "vs_trading_infoDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "vs_financial_terms",
+   "description": "Report term catalogue (annual, Q1-Q4, H1, 9M). Use before BCTC value queries.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {},
+    "title": "vs_financial_termsArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "vs_financial_termsDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "vs_financial_norms",
+   "description": "190+ BCTC line items for a business type. Use to resolve norm ids.\n\n        btype: 1 CTCP (general), 2 securities, 3 bank, 5 insurance.\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "btype": {
+      "default": 1,
+      "title": "Btype",
+      "type": "integer"
+     }
+    },
+    "title": "vs_financial_normsArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "vs_financial_normsDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "vs_company_info",
+   "description": "Company names, exchange and description. Use for profiles.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "symbol": {
+      "title": "Symbol",
+      "type": "string"
+     }
+    },
+    "required": [
+     "symbol"
+    ],
+    "title": "vs_company_infoArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "vs_company_infoDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "vs_overview_trading",
+   "description": "EPS, BVPS, PE, PB, ROEA/ROAA snapshot. Use for valuation inputs.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "symbol": {
+      "title": "Symbol",
+      "type": "string"
+     }
+    },
+    "required": [
+     "symbol"
+    ],
+    "title": "vs_overview_tradingArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "vs_overview_tradingDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "vs_documents",
+   "description": "Filings and disclosures with links. Use for corporate actions.\n\n        page_size: max documents returned (default 60).\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "symbol": {
+      "title": "Symbol",
+      "type": "string"
+     },
+     "page_size": {
+      "default": 60,
+      "title": "Page Size",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "symbol"
+    ],
+    "title": "vs_documentsArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "vs_documentsDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "vs_industry_tree",
+   "description": "GICS industry tree. Use before sector mapping.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {},
+    "title": "vs_industry_treeArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "vs_industry_treeDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "vs_industry_heatmap",
+   "description": "Live sector heatmap. Use for intraday rotation.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {},
+    "title": "vs_industry_heatmapArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "vs_industry_heatmapDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "vs_selftrading",
+   "description": "Prop-desk flow chart. Use alongside foreign flows.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {},
+    "title": "vs_selftradingArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "vs_selftradingDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "vs_gics_index",
+   "description": "GICS index closes with foreign flow. Use for sector context.\n\n        group: index set (1, 2 or 3 return different groups).\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "group": {
+      "default": 1,
+      "title": "Group",
+      "type": "integer"
+     }
+    },
+    "title": "vs_gics_indexArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "vs_gics_indexDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "vs_currency",
+   "description": "Reference FX table. Use as fallback FX source.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {},
+    "title": "vs_currencyArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "vs_currencyDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "vs_market_info",
+   "description": "Per-exchange board row: index, breadth, put-through. Use for 5s snapshots in hours.\n\n        exchange: HOSE, HNX or UPCOM (endpoint is per-exchange, not per-symbol).\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "exchange": {
+      "default": "HOSE",
+      "title": "Exchange",
+      "type": "string"
+     }
+    },
+    "title": "vs_market_infoArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "vs_market_infoDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "vs_xnk_detail",
+   "description": "Import/export by country via browser-session replay. Use for trade structure.\n\n        direction: 'xk' exports (cat 64), 'nk' imports (65). termType monthly,\n        from_date default current year (ISO). Standard pack serves it; rows\n        {name=country, group, period, year, value 'Triệu USD', timeorder}.\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "direction": {
+      "default": "xk",
+      "title": "Direction",
+      "type": "string"
+     },
+     "from_date": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "From Date"
+     }
+    },
+    "title": "vs_xnk_detailArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "vs_xnk_detailDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "vn_index_ohlcv",
+   "description": "Index bars for VN tickers. Use for index history and breadth.\n\n        interval: bar size ('1D' daily; intraday like '1m'/'15m' where supported).\n        summary/columns: summary returns {count,last,high,low} only; columns keeps named fields.\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "symbol": {
+      "default": "VNINDEX",
+      "title": "Symbol",
+      "type": "string"
+     },
+     "count": {
+      "default": 100,
+      "title": "Count",
+      "type": "integer"
+     },
+     "summary": {
+      "default": false,
+      "title": "Summary",
+      "type": "boolean"
+     },
+     "columns": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Columns"
+     },
+     "interval": {
+      "default": "1D",
+      "title": "Interval",
+      "type": "string"
+     }
+    },
+    "title": "vn_index_ohlcvArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "vn_index_ohlcvDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "vn_equity_ohlcv",
+   "description": "Equity bars via Market API. Use as OHLCV alternative to quotes.\n\n        interval: bar size ('1D' daily; intraday like '1m'/'15m' where supported).\n        summary/columns: summary returns {count,last,high,low} only; columns keeps named fields.\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "symbol": {
+      "title": "Symbol",
+      "type": "string"
+     },
+     "count": {
+      "default": 100,
+      "title": "Count",
+      "type": "integer"
+     },
+     "summary": {
+      "default": false,
+      "title": "Summary",
+      "type": "boolean"
+     },
+     "columns": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Columns"
+     },
+     "interval": {
+      "default": "1D",
+      "title": "Interval",
+      "type": "string"
+     }
+    },
+    "required": [
+     "symbol"
+    ],
+    "title": "vn_equity_ohlcvArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "vn_equity_ohlcvDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "vn_futures_ohlcv",
+   "description": "Futures bars. Use for derivatives backtest input.\n\n        interval: bar size ('1D' daily; intraday like '1m'/'15m' where supported).\n        summary/columns: summary returns {count,last,high,low} only; columns keeps named fields.\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "symbol": {
+      "default": "VN30F1M",
+      "title": "Symbol",
+      "type": "string"
+     },
+     "count": {
+      "default": 100,
+      "title": "Count",
+      "type": "integer"
+     },
+     "summary": {
+      "default": false,
+      "title": "Summary",
+      "type": "boolean"
+     },
+     "columns": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Columns"
+     },
+     "interval": {
+      "default": "1D",
+      "title": "Interval",
+      "type": "string"
+     }
+    },
+    "title": "vn_futures_ohlcvArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "vn_futures_ohlcvDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "vn_forex_ohlcv",
+   "description": "FX bars. Use for currency context.\n\n        pair like 'USDVND'. summary/columns: summary returns {count,last,high,low}\n        only; columns keeps named fields.\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "pair": {
+      "default": "USDVND",
+      "title": "Pair",
+      "type": "string"
+     },
+     "count": {
+      "default": 30,
+      "title": "Count",
+      "type": "integer"
+     },
+     "summary": {
+      "default": false,
+      "title": "Summary",
+      "type": "boolean"
+     },
+     "columns": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Columns"
+     }
+    },
+    "title": "vn_forex_ohlcvArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "vn_forex_ohlcvDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "vn_crypto_ohlv",
+   "description": "Crypto bars. Use for digital-asset regime reads.\n\n        summary/columns: summary returns {count,last,high,low} only; columns keeps named fields.\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "symbol": {
+      "default": "BTCUSDT",
+      "title": "Symbol",
+      "type": "string"
+     },
+     "count": {
+      "default": 30,
+      "title": "Count",
+      "type": "integer"
+     },
+     "summary": {
+      "default": false,
+      "title": "Summary",
+      "type": "boolean"
+     },
+     "columns": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Columns"
+     }
+    },
+    "title": "vn_crypto_ohlvArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "vn_crypto_ohlvDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "vn_global_index",
+   "description": "Global index bars. Use as yfinance fallback.\n\n        summary/columns: summary returns {count,last,high,low} only; columns keeps named fields.\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "symbol": {
+      "default": "USA30",
+      "title": "Symbol",
+      "type": "string"
+     },
+     "count": {
+      "default": 30,
+      "title": "Count",
+      "type": "integer"
+     },
+     "summary": {
+      "default": false,
+      "title": "Summary",
+      "type": "boolean"
+     },
+     "columns": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Columns"
+     }
+    },
+    "title": "vn_global_indexArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "vn_global_indexDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "vn_reference",
+   "description": "ICB reference by exchange, group or industry. Use for universe construction.\n\n        by: 'exchange' (use exchange=HOSE/HNX/UPCOM), 'group' or 'industry'\n        (use key=group/industry name).\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "exchange": {
+      "default": "HOSE",
+      "title": "Exchange",
+      "type": "string"
+     },
+     "by": {
+      "default": "exchange",
+      "title": "By",
+      "type": "string"
+     },
+     "key": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Key"
+     }
+    },
+    "title": "vn_referenceArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "vn_referenceDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "vn_company",
+   "description": "Profile, holders and officers. Use for company research.\n\n        detail: false returns profile only; true adds holders and officers (heavier).\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "symbol": {
+      "title": "Symbol",
+      "type": "string"
+     },
+     "detail": {
+      "default": false,
+      "title": "Detail",
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "symbol"
+    ],
+    "title": "vn_companyArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "vn_companyDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "vn_msn_fx_gold",
+   "description": "USDVND and XAUUSD via MSN. Use for gold-basis math.\n\n        symbols: subset to fetch (default both); days: history depth.\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "symbols": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Symbols"
+     },
+     "days": {
+      "default": 35,
+      "title": "Days",
+      "type": "integer"
+     }
+    },
+    "title": "vn_msn_fx_goldArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "vn_msn_fx_goldDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "vn_trades",
+   "description": "Tick-level matched trades. Use for microstructure reads.\n\n        board: board filter (default all boards). from_date/to_date: ISO dates\n        bounding the trade window.\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "symbol": {
+      "title": "Symbol",
+      "type": "string"
+     },
+     "limit": {
+      "default": 20,
+      "title": "Limit",
+      "type": "integer"
+     },
+     "board": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Board"
+     },
+     "from_date": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "From Date"
+     },
+     "to_date": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "To Date"
+     }
+    },
+    "required": [
+     "symbol"
+    ],
+    "title": "vn_tradesArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "vn_tradesDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "yf_global_indices",
+   "description": "9 global benchmarks. Use for overnight context.\n\n        tickers: subset override (default GLOBAL 9). period/interval: yfinance\n        spellings ('2d', '1wk', '1mo'... x '1d'/'1wk').\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "tickers": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Tickers"
+     },
+     "period": {
+      "default": "2d",
+      "title": "Period",
+      "type": "string"
+     },
+     "interval": {
+      "default": "1d",
+      "title": "Interval",
+      "type": "string"
+     }
+    },
+    "title": "yf_global_indicesArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "yf_global_indicesDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "yf_commodities",
+   "description": "Gold, oil, metals, BTC, VND and dollar index. Use for input-cost context.\n\n        tickers: subset override (default COMMO 13). period/interval: yfinance\n        spellings.\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "tickers": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Tickers"
+     },
+     "period": {
+      "default": "2d",
+      "title": "Period",
+      "type": "string"
+     },
+     "interval": {
+      "default": "1d",
+      "title": "Interval",
+      "type": "string"
+     }
+    },
+    "title": "yf_commoditiesArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "yf_commoditiesDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "yf_yield_curve",
+   "description": "US 2Y/10Y and inversion flag. Use for rates and regime context.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {},
+    "title": "yf_yield_curveArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "yf_yield_curveDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "yf_world_indices",
+   "description": "24 world benchmarks. Use for global breadth.\n\n        tickers: subset override (default WORLD 24).\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "tickers": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Tickers"
+     }
+    },
+    "title": "yf_world_indicesArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "yf_world_indicesDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "yf_oracle_markets",
+   "description": "40 markets in 6 groups with 30d stats. Use for cross-asset state.\n\n        groups: keep only named groups (crypto/metals/energy/agri/bonds_fx/index).\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "groups": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Groups"
+     }
+    },
+    "title": "yf_oracle_marketsArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "yf_oracle_marketsDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "yf_regime_assets",
+   "description": "7 regime drivers with 2y history. Use for RISK-ON/OFF calls.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {},
+    "title": "yf_regime_assetsArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "yf_regime_assetsDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "yf_mega_flows",
+   "description": "Mega-cap leader flows. Use to follow global smart money.\n\n        top_n: leaders evaluated (default 15 of the ~20-name universe).\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "top_n": {
+      "default": 15,
+      "title": "Top N",
+      "type": "integer"
+     }
+    },
+    "title": "yf_mega_flowsArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "yf_mega_flowsDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "yf_alloc_history",
+   "description": "Long allocation history per asset. Use for regime backtests.\n\n        asset: GC/VND/BTC/OIL/SILVER/COFFEE (unknown falls back to GC).\n        timeframe: '1d' or '1wk'; returns last 60 closes over 5y.\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "asset": {
+      "default": "GC",
+      "title": "Asset",
+      "type": "string"
+     },
+     "timeframe": {
+      "default": "1d",
+      "title": "Timeframe",
+      "type": "string"
+     }
+    },
+    "title": "yf_alloc_historyArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "yf_alloc_historyDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "yf_market_pins",
+   "description": "5-day pins for world majors plus VN watchlist. Use for brief headers.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {},
+    "title": "yf_market_pinsArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "yf_market_pinsDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "dnse_ohlc_history",
+   "description": "Paginated futures/index bars via cursor. Use for VN30F1M backtest input.\n\n        symbol: futures code (VN30F1M) or index (VN30). resolution: bar size in\n        minutes (1/5/15/30/60). bar_type: 'derivative' for futures, 'index' for\n        indices. from_date/to_date: ISO dates (YYYY-MM-DD). summary: return only\n        {symbol, count, last, high, low} instead of full bars. columns: keep only\n        named fields per bar (t/o/h/l/c/v).\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "symbol": {
+      "default": "VN30F1M",
+      "title": "Symbol",
+      "type": "string"
+     },
+     "resolution": {
+      "default": 15,
+      "title": "Resolution",
+      "type": "integer"
+     },
+     "bar_type": {
+      "default": "derivative",
+      "title": "Bar Type",
+      "type": "string"
+     },
+     "from_date": {
+      "default": "2018-08-01",
+      "title": "From Date",
+      "type": "string"
+     },
+     "summary": {
+      "default": false,
+      "title": "Summary",
+      "type": "boolean"
+     },
+     "columns": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Columns"
+     },
+     "to_date": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "To Date"
+     },
+     "page_size": {
+      "default": 10000,
+      "title": "Page Size",
+      "type": "integer"
+     }
+    },
+    "title": "dnse_ohlc_historyArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "dnse_ohlc_historyDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "dnse_latest_trade",
+   "description": "Latest match price and totals per symbol. Use for realtime fallback.\n\n        summary/columns: summary returns {count,symbols} only; columns keeps\n        named fields per trade.\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "symbols": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Symbols",
+      "type": "array"
+     },
+     "summary": {
+      "default": false,
+      "title": "Summary",
+      "type": "boolean"
+     },
+     "columns": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Columns"
+     }
+    },
+    "required": [
+     "symbols"
+    ],
+    "title": "dnse_latest_tradeArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "dnse_latest_tradeDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "dnse_foreign_flow",
+   "description": "Net foreign flow from WS cache. Use as primary smart-money read.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {},
+    "title": "dnse_foreign_flowArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "dnse_foreign_flowDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "dnse_ws_snapshot",
+   "description": "Raw worker snapshot for symbols. Use to debug realtime staleness.\n\n        symbols: channels to read (None reads VN30F1M+VNINDEX+VN30).\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "symbols": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Symbols"
+     }
+    },
+    "title": "dnse_ws_snapshotArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "dnse_ws_snapshotDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "dnse_orderbook",
+   "description": "Bid/ask depth. Use for microstructure reads.\n\n        depth: levels per side (default 3). Equity symbols return live depth;\n        VN30F1M futures book is usually empty upstream — use vn_trades tape.\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "symbol": {
+      "title": "Symbol",
+      "type": "string"
+     },
+     "depth": {
+      "default": 3,
+      "title": "Depth",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "symbol"
+    ],
+    "title": "dnse_orderbookArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "dnse_orderbookDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "dnse_indices",
+   "description": "Index snapshots from WS cache. Use for live index reads.\n\n        symbols: index channels to read (default VNINDEX+VN30).\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "symbols": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Symbols"
+     }
+    },
+    "title": "dnse_indicesArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "dnse_indicesDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "dnse_vn30f1m_live",
+   "description": "VN30F1M 1m bars aggregated to 15m with session remap. Use for intraday.\n\n        bars: keep only the most recent N aggregated 15m bars.\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "bars": {
+      "default": 60,
+      "title": "Bars",
+      "type": "integer"
+     }
+    },
+    "title": "dnse_vn30f1m_liveArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "dnse_vn30f1m_liveDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "dnse_working_dates",
+   "description": "Trading calendar. Use for session planning.\n\n        year: keep only dates starting with this year (e.g. 2026). Actual\n        trading dates; exchange_calendar holds static session mechanics.\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "year": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Year"
+     }
+    },
+    "title": "dnse_working_datesArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "dnse_working_datesDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "exchange_calendar",
+   "description": "HOSE/HNX/UPCOM hours, ATO/ATC, T+ settlement. Use for mechanics.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {},
+    "title": "exchange_calendarArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "exchange_calendarDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "crypto_spot",
+   "description": "Binance spot 24h tickers. Use for crypto price and volume reads.\n\n        symbols: up to 10, any of BTCUSDT / BTC/USDT / btc-usdt spellings.\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "symbols": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Symbols",
+      "type": "array"
+     }
+    },
+    "required": [
+     "symbols"
+    ],
+    "title": "crypto_spotArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "crypto_spotDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "crypto_derivs",
+   "description": "Binance futures funding, OI and long/short ratios. Use for leverage reads.\n\n        symbols: up to 5 perpetual symbols (BTCUSDT ...). Rows carry per-symbol\n        error instead of failing the batch when one symbol is delisted.\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "symbols": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Symbols",
+      "type": "array"
+     }
+    },
+    "required": [
+     "symbols"
+    ],
+    "title": "crypto_derivsArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "crypto_derivsDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "stock_screener",
+   "description": "Screen universe by valuation and quality. Use when hunting candidates.\n\n        filters: {field: [min, max]} ranges (None side unbounded) or plain\n        strings for symbol/exchange equality; use signals_screener_columns\n        to discover valid fields. max_pe/min_roe are shortcuts for the same.\n        technical: optional stage-3 timing filter on post-filter candidates\n        ({rsi_lt, rsi_gt, above_sma20: true, below_sma20: true}).\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "filters": {
+      "anyOf": [
+       {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Filters"
+     },
+     "max_pe": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Max Pe"
+     },
+     "min_roe": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Min Roe"
+     },
+     "limit": {
+      "default": 20,
+      "title": "Limit",
+      "type": "integer"
+     },
+     "technical": {
+      "anyOf": [
+       {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Technical"
+     }
+    },
+    "title": "stock_screenerArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "stock_screenerDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "signals_screener_columns",
+   "description": "Screener column catalog (valuation/quality/universe/price). Use to build filters.\n\n        group: keep only that column group; search: keep columns whose\n        key or label contains this substring (case-insensitive).\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "group": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Group"
+     },
+     "search": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Search"
+     }
+    },
+    "title": "signals_screener_columnsArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "signals_screener_columnsDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "signals_technical",
+   "description": "Full technicals rating from local candles (daily only). Use for timing entries.\n\n        indicators: keep only named outputs (e.g. rsi14, macd, sma20, recommend,\n        patterns, support, resistance, rs_vs_bench, pos_52w, sma150);\n        omit for the full set. interval other\n        than '1D' is accepted but ignored.\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "symbol": {
+      "title": "Symbol",
+      "type": "string"
+     },
+     "interval": {
+      "default": "1D",
+      "title": "Interval",
+      "type": "string"
+     },
+     "indicators": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Indicators"
+     }
+    },
+    "required": [
+     "symbol"
+    ],
+    "title": "signals_technicalArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "signals_technicalDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "sector_performance",
+   "description": "GICS heatmap rows. Use for sector rotation reads.\n\n        level: GICS tree depth. top_n: rows returned.\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "level": {
+      "default": 1,
+      "title": "Level",
+      "type": "integer"
+     },
+     "top_n": {
+      "default": 50,
+      "title": "Top N",
+      "type": "integer"
+     }
+    },
+    "title": "sector_performanceArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "sector_performanceDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "money_flow",
+   "description": "Compose foreign flow: DNSE WS then Vietstock cross-check. Use for smart money.\n\n        symbols: WS channels to read (default [\"VNINDEX\"]); falls back to\n        Vietstock NN chart when cache is cold. Pair with block_trades for\n        per-symbol negotiated put-through prints (different granularity).\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "symbols": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Symbols"
+     }
+    },
+    "title": "money_flowArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "money_flowDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "alert_check",
+   "description": "Evaluate price/RSI rules against live quotes. Use for live watch.\n\n        Each rule: {symbol, threshold, metric ('price'|'rsi14'), op ('>'|'gt'|'>='|'gte'|\n        '<'|'lt'|'<='|'lte'|'cross_up'|'cross_down')}.\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "rules": {
+      "items": {
+       "additionalProperties": true,
+       "type": "object"
+      },
+      "title": "Rules",
+      "type": "array"
+     }
+    },
+    "required": [
+     "rules"
+    ],
+    "title": "alert_checkArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "alert_checkDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "stock_forensic",
+   "description": "Beneish M-Score + Piotroski F-Score from FULL detailed statements (P15).\n\n        Sources: KQKD/CDKT/LCTT detail (real per-quarter lines incl. receivables,\n        cash, CFO). M-Score is 7-index (DEPI excluded — not exposed); full\n        formula only when every input exists, else partial with missing list.\n        F-Score: 6 of 9 items on Standard pack (CFO from LCTT is empty upstream;\n        share-count item unavailable); 8 of 9 when BCTC paid unlocks LCTT.\n        detail=true adds raw input series.\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "symbol": {
+      "title": "Symbol",
+      "type": "string"
+     },
+     "detail": {
+      "default": false,
+      "title": "Detail",
+      "type": "boolean"
+     },
+     "periods_n": {
+      "default": 4,
+      "title": "Periods N",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "symbol"
+    ],
+    "title": "stock_forensicArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "stock_forensicDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "valuation_run",
+   "description": "PER/PB ensemble with DCF-lite. Use for fair-value ranges.\n\n        btype: 1 general, 2 securities, 3 bank, 5 insurance. method: 'auto'\n        (default, picks by btype) or force 'dcf'/'per'/'pb'/'ev'/'ensemble'.\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "symbol": {
+      "title": "Symbol",
+      "type": "string"
+     },
+     "btype": {
+      "default": 1,
+      "title": "Btype",
+      "type": "integer"
+     },
+     "method": {
+      "default": "auto",
+      "title": "Method",
+      "type": "string"
+     }
+    },
+    "required": [
+     "symbol"
+    ],
+    "title": "valuation_runArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "valuation_runDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "fred_series",
+   "description": "FRED observations. Use for US macro context.\n\n        series_id like 'DGS10'; spark adds a value-only sparkline list.\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "series_id": {
+      "title": "Series Id",
+      "type": "string"
+     },
+     "limit": {
+      "default": 60,
+      "title": "Limit",
+      "type": "integer"
+     },
+     "spark": {
+      "default": false,
+      "title": "Spark",
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "series_id"
+    ],
+    "title": "fred_seriesArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "fred_seriesDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "world_macro_country",
+   "description": "WorldBank series per country. Use for global GDP/CPI/debt context.\n\n        iso3: 3-letter country code (VNM/USA); indicator like 'NY.GDP.MKTP.KD.ZG'.\n        limit caps returned points.\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "iso3": {
+      "title": "Iso3",
+      "type": "string"
+     },
+     "indicator": {
+      "title": "Indicator",
+      "type": "string"
+     },
+     "limit": {
+      "default": 60,
+      "title": "Limit",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "iso3",
+     "indicator"
+    ],
+    "title": "world_macro_countryArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "world_macro_countryDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "world_fear_greed",
+   "description": "Crypto fear/greed index. Use for risk-appetite reads.\n\n        limit: number of recent daily readings returned.\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "limit": {
+      "default": 7,
+      "title": "Limit",
+      "type": "integer"
+     }
+    },
+    "title": "world_fear_greedArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "world_fear_greedDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "sentiment_score",
+   "description": "Crowd sentiment from Fireant posts, Groq-scored. Use for hype risk.\n\n        limit: max posts scored; without Groq key falls back to likes heuristic.\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "symbol": {
+      "title": "Symbol",
+      "type": "string"
+     },
+     "limit": {
+      "default": 20,
+      "title": "Limit",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "symbol"
+    ],
+    "title": "sentiment_scoreArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "sentiment_scoreDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "insider_trading",
+   "description": "Insider deals via vnstock Company. Use for informed-flow reads.\n\n        limit: max deals returned.\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "symbol": {
+      "title": "Symbol",
+      "type": "string"
+     },
+     "limit": {
+      "default": 10,
+      "title": "Limit",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "symbol"
+    ],
+    "title": "insider_tradingArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "insider_tradingDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "stock_overview",
+   "description": "Trading info plus company profile. Use for quick dossiers.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "symbol": {
+      "title": "Symbol",
+      "type": "string"
+     }
+    },
+    "required": [
+     "symbol"
+    ],
+    "title": "stock_overviewArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "stock_overviewDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "company_events",
+   "description": "Classified disclosures and corporate actions. Use for event calendars.\n\n        types: comma-separated kinds to keep, matched against kind/type\n        fields (e.g. 'bctc,nghi_quyet'). corporate_calendar is the raw\n        unfiltered feed; company_events classifies it per symbol.\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "symbol": {
+      "title": "Symbol",
+      "type": "string"
+     },
+     "types": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Types"
+     }
+    },
+    "required": [
+     "symbol"
+    ],
+    "title": "company_eventsArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "company_eventsDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "financial_statements",
+   "description": "Mirror statements alias (v3 compat). Use for statement reads.\n\n        Wraps vs_financeinfo (no JWT needed). statement: which statement\n        section to return ('all', or a section key like 'KQKD'/'CDKT');\n        periods_n caps returned periods.\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "symbol": {
+      "title": "Symbol",
+      "type": "string"
+     },
+     "period": {
+      "default": "quarter",
+      "title": "Period",
+      "type": "string"
+     },
+     "statement": {
+      "default": "all",
+      "title": "Statement",
+      "type": "string"
+     },
+     "periods_n": {
+      "default": 15,
+      "title": "Periods N",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "symbol"
+    ],
+    "title": "financial_statementsArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "financial_statementsDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "financial_ratios",
+   "description": "Overview plus vnstock ratios merged. Use for ratio screens.\n\n        set: keep only ratio keys containing this substring ('all' keeps all).\n        period: statement period ('year'); peers: extra symbols merged as list.\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "symbol": {
+      "title": "Symbol",
+      "type": "string"
+     },
+     "set": {
+      "default": "all",
+      "title": "Set",
+      "type": "string"
+     },
+     "period": {
+      "default": "year",
+      "title": "Period",
+      "type": "string"
+     },
+     "peers": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Peers"
+     }
+    },
+    "required": [
+     "symbol"
+    ],
+    "title": "financial_ratiosArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "financial_ratiosDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "peer_compare",
+   "description": "Head-to-head overview rows. Use when picking tickers.\n\n        peers: up to 5 extra symbols. metrics: keep only matching ratio keys\n        (symbol column always kept).\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "symbol": {
+      "title": "Symbol",
+      "type": "string"
+     },
+     "peers": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Peers",
+      "type": "array"
+     },
+     "metrics": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Metrics"
+     }
+    },
+    "required": [
+     "symbol",
+     "peers"
+    ],
+    "title": "peer_compareArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "peer_compareDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "signals_scan",
+   "description": "Donchian-20d breakout scan. Use to hunt momentum across the market.\n\n        Default universe: 10 bluechips. exchange='HOSE' scans the exchange\n        list capped at max_symbols (P14: up to 300, semaphore 5, progress +\n        truncated honest). Scanning hundreds takes minutes — cache the call.\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "universe": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Universe"
+     },
+     "exchange": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Exchange"
+     },
+     "max_symbols": {
+      "default": 10,
+      "title": "Max Symbols",
+      "type": "integer"
+     }
+    },
+    "title": "signals_scanArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "signals_scanDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "pattern_match",
+   "description": "Self-similarity of return windows by correlation. Use for analogies.\n\n        lookback: daily closes fetched (window is last 20 bars). limit: top-N\n        matches by correlation (best_* fields describe rank 1).\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "symbol": {
+      "title": "Symbol",
+      "type": "string"
+     },
+     "lookback": {
+      "default": 60,
+      "title": "Lookback",
+      "type": "integer"
+     },
+     "limit": {
+      "default": 5,
+      "title": "Limit",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "symbol"
+    ],
+    "title": "pattern_matchArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "pattern_matchDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "snapshot_history",
+   "description": "Daily-snapshot history saved by the worker. Use for data that vanishes.\n\n        kind: market_board, breadth_3ex, flows_charts (NN/prop 30d rolling),\n        heatmap_gics, gold_btmc, sbv_rates, nso_releases, analyst_titles,\n        macro_curated, vn30_quotes, futures_basis, documents_feed, events_feed.\n        days: history depth (newest first).\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "kind": {
+      "title": "Kind",
+      "type": "string"
+     },
+     "days": {
+      "default": 90,
+      "title": "Days",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "kind"
+    ],
+    "title": "snapshot_historyArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "snapshot_historyDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "event_stats",
+   "description": "GDELT event counts for a query. Use for base-rate checks.\n\n        limit: max articles fetched from GDELT.\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "query": {
+      "default": "stock market",
+      "title": "Query",
+      "type": "string"
+     },
+     "limit": {
+      "default": 20,
+      "title": "Limit",
+      "type": "integer"
+     }
+    },
+    "title": "event_statsArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "event_statsDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "compare_assets",
+   "description": "Cross-asset last prices via yfinance. Use for allocation reads.\n\n        assets: yfinance tickers (max 10). timeframe: '1d' (2d/1d),\n        '1wk' (3mo/1wk), '1mo' (1y/1d) download window.\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "assets": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Assets",
+      "type": "array"
+     },
+     "timeframe": {
+      "default": "1d",
+      "title": "Timeframe",
+      "type": "string"
+     }
+    },
+    "required": [
+     "assets"
+    ],
+    "title": "compare_assetsArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "compare_assetsDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "runs_list",
+   "description": "Local run registry. Use to resume analysis sessions.\n\n        id: filter by run id substring; use run_get for one full run.\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Id"
+     }
+    },
+    "title": "runs_listArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "runs_listDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "run_get",
+   "description": "Local run registry fetch. Use to inspect past outputs.\n\n        run_id: exact id from runs_list output.\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "run_id": {
+      "title": "Run Id",
+      "type": "string"
+     }
+    },
+    "required": [
+     "run_id"
+    ],
+    "title": "run_getArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "run_getDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "doctor",
+   "description": "Local self-check: env keys present, package versions. Use before handoff.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {},
+    "title": "doctorArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "doctorDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "dividends_splits",
+   "description": "Cash dividends and share issues/splits. Use for payout history.\n\n        region: 'vn' (vnstock Company events: DIV cash, ISS bonus/private) or\n        'world' (yfinance actions). limit: max events returned.\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "symbol": {
+      "title": "Symbol",
+      "type": "string"
+     },
+     "region": {
+      "default": "vn",
+      "title": "Region",
+      "type": "string"
+     },
+     "limit": {
+      "default": 20,
+      "title": "Limit",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "symbol"
+    ],
+    "title": "dividends_splitsArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "dividends_splitsDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "holders",
+   "description": "Shareholder and institutional holder tables. Use for ownership reads.\n\n        region: 'vn' (vnstock shareholders) or 'world' (yfinance).\n        kind: 'major'|'institutional'|'mutualfund'|'all' (world only;\n        vn returns shareholders for any kind).\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "symbol": {
+      "title": "Symbol",
+      "type": "string"
+     },
+     "region": {
+      "default": "vn",
+      "title": "Region",
+      "type": "string"
+     },
+     "kind": {
+      "default": "all",
+      "title": "Kind",
+      "type": "string"
+     }
+    },
+    "required": [
+     "symbol"
+    ],
+    "title": "holdersArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "holdersDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "event_calendar_vn",
+   "description": "Vietstock corporate-action calendar. Use for dividend/meeting/listing dates.\n\n        event: 'dividends' (payouts, bonus, issues), 'listings', 'meetings'.\n        symbol: filter one ticker (omit for market-wide). No earnings-report\n        dates exist upstream; KQKD dates come from company_events instead.\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "event": {
+      "default": "dividends",
+      "title": "Event",
+      "type": "string"
+     },
+     "symbol": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Symbol"
+     },
+     "limit": {
+      "default": 20,
+      "title": "Limit",
+      "type": "integer"
+     }
+    },
+    "title": "event_calendar_vnArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "event_calendar_vnDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "block_trades",
+   "description": "Matched vs negotiated put-through splits per day. Use for dark-pool-style reads.\n\n        from_date/to_date: ISO dates (default last 30d). pt_vol/pt_val are the\n        thỏa thuận leg; pt_pct is its share of daily value.\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "symbol": {
+      "title": "Symbol",
+      "type": "string"
+     },
+     "from_date": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "From Date"
+     },
+     "to_date": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "To Date"
+     },
+     "limit": {
+      "default": 30,
+      "title": "Limit",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "symbol"
+    ],
+    "title": "block_tradesArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "block_tradesDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "analyst_consensus",
+   "description": "Analyst ratings and price targets parsed from report titles. Use for street views.\n\n        symbol: filter one ticker (omit for latest across market). Ratings come\n        from title text (MUA/BÁN/NẮM GIỮ...), not a consensus feed; history per\n        symbol shows upgrades/downgrades by history.\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "symbol": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Symbol"
+     },
+     "limit": {
+      "default": 30,
+      "title": "Limit",
+      "type": "integer"
+     }
+    },
+    "title": "analyst_consensusArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "analyst_consensusDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "ipo_calendar_vn",
+   "description": "HNX auction calendar plus announcement fallback. Use for upcoming supply.\n\n        Calendar is often empty (no scheduled auctions); announcements carry\n        the latest auction news with dates.\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {},
+    "title": "ipo_calendar_vnArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "ipo_calendar_vnDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "futures_basis",
+   "description": "VN30F1M price minus VN30 spot. Use for premium/discount reads.\n\n        DNSE exposes no open-interest field, so no OI is reported; basis_bps\n        is (futures-spot)/spot in basis points. Futures leg prefers the latest\n        trade, falling back to the last 15m ohlc bar (trades/latest is often\n        empty); spot accepts raw or normalized candle keys.\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {},
+    "title": "futures_basisArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "futures_basisDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "planned_targets",
+   "description": "Business-plan targets (CTKH: planned revenue/profit by year). Use as expectation anchor.\n\n        years: latest N plan years (unit VND billions). Browser-session replay\n        (HAR/env seed); reports unavailable while the gate rejects — mirror +\n        analyst_consensus cover expectations meanwhile.\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "symbol": {
+      "title": "Symbol",
+      "type": "string"
+     },
+     "years": {
+      "default": 3,
+      "title": "Years",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "symbol"
+    ],
+    "title": "planned_targetsArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "planned_targetsDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "financial_detail",
+   "description": "FULL detailed statements, every line item per period. Use for deep BCTC reads.\n\n        statement: KQKD (income), CDKT (balance), LCTT (cashflow), TM (notes),\n        BCTT. periods_n: recent permitted periods (unit VND billions; only\n        IsShowData_Permission=True periods). Real values on the Standard pack\n        via browser-session replay (HAR/env seed) — rows {norm_id, name,\n        values[...]}; report unavailable when the session gate rejects.\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "symbol": {
+      "title": "Symbol",
+      "type": "string"
+     },
+     "statement": {
+      "default": "KQKD",
+      "title": "Statement",
+      "type": "string"
+     },
+     "periods_n": {
+      "default": 4,
+      "title": "Periods N",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "symbol"
+    ],
+    "title": "financial_detailArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "financial_detailDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "watchlist_create",
+   "description": "Create a named watchlist. Use to start tracking a symbol group.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "title": "Name",
+      "type": "string"
+     }
+    },
+    "required": [
+     "name"
+    ],
+    "title": "watchlist_createArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "watchlist_createDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "watchlist_list",
+   "description": "List all watchlists with their symbols. Use to recall tracking state.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {},
+    "title": "watchlist_listArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "watchlist_listDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "watchlist_get",
+   "description": "Get one watchlist's symbols by id. Use before quoting a saved set.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "list_id": {
+      "title": "List Id",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "list_id"
+    ],
+    "title": "watchlist_getArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "watchlist_getDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "watchlist_add",
+   "description": "Add symbols (deduped, uppercase) to a watchlist. Use to track more.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "list_id": {
+      "title": "List Id",
+      "type": "integer"
+     },
+     "symbols": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Symbols",
+      "type": "array"
+     }
+    },
+    "required": [
+     "list_id",
+     "symbols"
+    ],
+    "title": "watchlist_addArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "watchlist_addDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "watchlist_remove",
+   "description": "Remove symbols from a watchlist. Use to trim tracking.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "list_id": {
+      "title": "List Id",
+      "type": "integer"
+     },
+     "symbols": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Symbols",
+      "type": "array"
+     }
+    },
+    "required": [
+     "list_id",
+     "symbols"
+    ],
+    "title": "watchlist_removeArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "watchlist_removeDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "watchlist_delete",
+   "description": "Delete a watchlist and its items (cascade). Use to clean up.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "list_id": {
+      "title": "List Id",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "list_id"
+    ],
+    "title": "watchlist_deleteArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "watchlist_deleteDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "watchlist_update",
+   "description": "Rename a watchlist. Use sparingly; names are unique labels.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "list_id": {
+      "title": "List Id",
+      "type": "integer"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     }
+    },
+    "required": [
+     "list_id",
+     "name"
+    ],
+    "title": "watchlist_updateArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "watchlist_updateDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "alert_create",
+   "description": "Create a stored alert rule (input to alert_check). Use for live watch.\n\n        metric: 'price' or 'rsi14'. op: '>'/'>='/<'/'<=' (aliases 'gt'/'gte'/\n        'lt'/'lte' accepted). threshold: comparison value for the metric.\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "symbol": {
+      "title": "Symbol",
+      "type": "string"
+     },
+     "op": {
+      "default": ">",
+      "title": "Op",
+      "type": "string"
+     },
+     "threshold": {
+      "default": 0,
+      "title": "Threshold",
+      "type": "number"
+     },
+     "metric": {
+      "default": "price",
+      "title": "Metric",
+      "type": "string"
+     }
+    },
+    "required": [
+     "symbol"
+    ],
+    "title": "alert_createArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "alert_createDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "alert_list",
+   "description": "List stored alert rules (active and paused). Use before alert_check.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {},
+    "title": "alert_listArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "alert_listDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "alert_delete",
+   "description": "Delete a stored alert rule by id. Use to clean up alerts.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "rule_id": {
+      "title": "Rule Id",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "rule_id"
+    ],
+    "title": "alert_deleteArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "alert_deleteDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "alert_pause",
+   "description": "Pause a stored alert rule (active=false). Use to silence alerts.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "rule_id": {
+      "title": "Rule Id",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "rule_id"
+    ],
+    "title": "alert_pauseArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "alert_pauseDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "alert_resume",
+   "description": "Resume a paused alert rule (active=true). Use to re-enable alerts.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "rule_id": {
+      "title": "Rule Id",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "rule_id"
+    ],
+    "title": "alert_resumeArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "alert_resumeDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "quant_backtest",
+   "description": "Buy-and-hold backtest with costs over available history. Use for baseline stats.\n\n        strategy: recorded label only (engine is buy-and-hold). cost_bps/slippage_bps:\n        round-trip bps each deducted twice from gross. benchmark: reference index label.\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "symbol": {
+      "title": "Symbol",
+      "type": "string"
+     },
+     "cost_bps": {
+      "default": 10,
+      "title": "Cost Bps",
+      "type": "number"
+     },
+     "strategy": {
+      "default": "buy_hold",
+      "title": "Strategy",
+      "type": "string"
+     },
+     "slippage_bps": {
+      "default": 5,
+      "title": "Slippage Bps",
+      "type": "number"
+     },
+     "benchmark": {
+      "default": "VNINDEX",
+      "title": "Benchmark",
+      "type": "string"
+     }
+    },
+    "required": [
+     "symbol"
+    ],
+    "title": "quant_backtestArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "quant_backtestDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "quant_risk",
+   "description": "Sharpe, max drawdown and win rate from a return series. Use to gate models.\n\n        returns: per-period simple returns. periods_per_year: annualization\n        factor for Sharpe (252 daily, 52 weekly, 12 monthly).\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "returns": {
+      "items": {
+       "type": "number"
+      },
+      "title": "Returns",
+      "type": "array"
+     },
+     "periods_per_year": {
+      "default": 252,
+      "title": "Periods Per Year",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "returns"
+    ],
+    "title": "quant_riskArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "quant_riskDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "quant_factors",
+   "description": "Momentum, volatility and drawdown factors from candles. Use to expand features.\n\n        lookback: daily closes fetched (20d factor windows fixed); also adds\n        max_dd_full_pct over the full window.\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "symbol": {
+      "default": "VCB",
+      "title": "Symbol",
+      "type": "string"
+     },
+     "lookback": {
+      "default": 60,
+      "title": "Lookback",
+      "type": "integer"
+     }
+    },
+    "title": "quant_factorsArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "quant_factorsDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "scenario_simulate",
+   "description": "Apply a price shock to latest close and report P/L per 1000 shares. Use for sizing.\n\n        shock_pct: percent shock, negative for drops (e.g. -5.0).\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "scenario": {
+      "title": "Scenario",
+      "type": "string"
+     },
+     "symbol": {
+      "default": "VCB",
+      "title": "Symbol",
+      "type": "string"
+     },
+     "shock_pct": {
+      "default": -5,
+      "title": "Shock Pct",
+      "type": "number"
+     }
+    },
+    "required": [
+     "scenario"
+    ],
+    "title": "scenario_simulateArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "scenario_simulateDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "correlation_matrix",
+   "description": "Pairwise Pearson correlation of daily returns. Use for diversification reads.\n\n        symbols: up to 8 tickers (same market). days: daily bars each.\n        Dates inner-join; vnstock day-only labels fall back to business-day\n        walkback (see date_note).\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "symbols": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Symbols",
+      "type": "array"
+     },
+     "days": {
+      "default": 90,
+      "title": "Days",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "symbols"
+    ],
+    "title": "correlation_matrixArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "correlation_matrixDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "seasonality",
+   "description": "Rolling-window return stats per calendar month. Use for seasonal bias.\n\n        window: trading days per window, 5-63 (21 ~= month). Buckets by window\n        end month; vnstock day-only labels use business-day walkback.\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "symbol": {
+      "title": "Symbol",
+      "type": "string"
+     },
+     "window": {
+      "default": 21,
+      "title": "Window",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "symbol"
+    ],
+    "title": "seasonalityArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "seasonalityDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "backtest_strategies",
+   "description": "Rule-based backtests beyond buy-and-hold. Use to compare timing rules.\n\n        strategy: 'sma_cross' (fast SMA over slow), 'momentum' (close over\n        close[slow] ago), 'buy_hold'. fast/slow: lookback bars. cost_bps:\n        in+out bps deducted per position flip.\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "symbol": {
+      "title": "Symbol",
+      "type": "string"
+     },
+     "strategy": {
+      "default": "sma_cross",
+      "title": "Strategy",
+      "type": "string"
+     },
+     "fast": {
+      "default": 10,
+      "title": "Fast",
+      "type": "integer"
+     },
+     "slow": {
+      "default": 30,
+      "title": "Slow",
+      "type": "integer"
+     },
+     "cost_bps": {
+      "default": 10,
+      "title": "Cost Bps",
+      "type": "number"
+     }
+    },
+    "required": [
+     "symbol"
+    ],
+    "title": "backtest_strategiesArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "backtest_strategiesDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "portfolio_optimize",
+   "description": "Long-only weights by rule. Use for allocation starting points.\n\n        objective: 'equal', 'inv_vol' (1/sigma), 'max_sharpe' (closed-form\n        long-only heuristic, no scipy). days: daily bars each (max 8 symbols).\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "symbols": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Symbols",
+      "type": "array"
+     },
+     "objective": {
+      "default": "max_sharpe",
+      "title": "Objective",
+      "type": "string"
+     },
+     "days": {
+      "default": 180,
+      "title": "Days",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "symbols"
+    ],
+    "title": "portfolio_optimizeArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "portfolio_optimizeDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "param_sweep",
+   "description": "Grid-search strategy lookbacks, ranked by net return. Use to avoid overfit picks.\n\n        fast_range/slow_range: candidate bars (product capped at 30 combos).\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "symbol": {
+      "title": "Symbol",
+      "type": "string"
+     },
+     "strategy": {
+      "default": "sma_cross",
+      "title": "Strategy",
+      "type": "string"
+     },
+     "fast_range": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "integer"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Fast Range"
+     },
+     "slow_range": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "integer"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Slow Range"
+     },
+     "cost_bps": {
+      "default": 10,
+      "title": "Cost Bps",
+      "type": "number"
+     }
+    },
+    "required": [
+     "symbol"
+    ],
+    "title": "param_sweepArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "param_sweepDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "brief_build",
+   "description": "Compose morning brief from news, odds and calendars. Use at session start.\n\n        scope: 'vn' or 'world'. date: ISO date the brief is for (recorded as-is).\n        calendars: also attach IPO/macro/SBV sections (sbv_rates, macro_events_vn,\n        ipo_calendar_vn); off by default to keep the brief fast.\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "scope": {
+      "default": "vn",
+      "title": "Scope",
+      "type": "string"
+     },
+     "date": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Date"
+     },
+     "calendars": {
+      "default": false,
+      "title": "Calendars",
+      "type": "boolean"
+     }
+    },
+    "title": "brief_buildArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "brief_buildDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "news_market",
+   "description": "Market news: Fireant posts first, GDELT fallback. Use for catalyst checks.\n\n        sources: 'gdelt' routes straight to GDELT. Default reads the Fireant\n        crowd feed (token from env) and falls back to GDELT when empty.\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "limit": {
+      "default": 10,
+      "title": "Limit",
+      "type": "integer"
+     },
+     "sources": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Sources"
+     }
+    },
+    "title": "news_marketArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "news_marketDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "news_symbol",
+   "description": "Symbol news: Fireant posts about the ticker, GDELT fallback. Use to verify rumors.\n\n        sources: 'gdelt' routes straight to GDELT. Default reads Fireant posts\n        tagged with the symbol and falls back to GDELT when empty.\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "symbol": {
+      "title": "Symbol",
+      "type": "string"
+     },
+     "limit": {
+      "default": 10,
+      "title": "Limit",
+      "type": "integer"
+     },
+     "sources": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Sources"
+     }
+    },
+    "required": [
+     "symbol"
+    ],
+    "title": "news_symbolArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "news_symbolDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "economic_calendar",
+   "description": "Macro series catalogue as event proxy. Use for data-availability checks.\n\n        scope: 'vn' only (others return empty with a warning). limit: max series.\n        Not a real calendar; for trading dates use dnse_working_dates instead.\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "scope": {
+      "default": "vn",
+      "title": "Scope",
+      "type": "string"
+     },
+     "limit": {
+      "default": 20,
+      "title": "Limit",
+      "type": "integer"
+     }
+    },
+    "title": "economic_calendarArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "economic_calendarDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "sbv_rates",
+   "description": "SBV policy and interbank rates, scraped static page. Use for rate regime.\n\n        Values change rarely; upstream has no API.\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {},
+    "title": "sbv_ratesArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "sbv_ratesDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "macro_events_vn",
+   "description": "NSO release listings with reference and next dates. Use for data calendar.\n\n        Covers CPI schedule and releases; full year schedule lives in an NSO PDF.\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {},
+    "title": "macro_events_vnArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "macro_events_vnDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "corporate_calendar",
+   "description": "Disclosures feed as corporate actions. Use for dividend/meeting scans.\n\n        symbol: omit for VN overview; limit: max disclosures. Raw feed;\n        company_events classifies the same disclosures into kinds.\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "symbol": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Symbol"
+     },
+     "limit": {
+      "default": 20,
+      "title": "Limit",
+      "type": "integer"
+     }
+    },
+    "title": "corporate_calendarArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "corporate_calendarDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "world_prediction_odds",
+   "description": "Polymarket odds via jina proxy to Gamma, then direct. Use for Fed/macro odds.\n\n        query: substring in title/slug/description. tag: Polymarket tag\n        (e.g. 'economics', 'fed', 'crypto'). Rows carry outcomes + prob_pct,\n        sorted by 24h volume.\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "query": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Query"
+     },
+     "limit": {
+      "default": 20,
+      "title": "Limit",
+      "type": "integer"
+     },
+     "tag": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Tag"
+     }
+    },
+    "title": "world_prediction_oddsArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "world_prediction_oddsDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "polymarket_event",
+   "description": "One Polymarket event detail by slug (every market + odds). Use to drill in.\n\n        slug: from world_prediction_odds rows. Returns description, markets\n        with outcome probs, volumes and end dates.\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "slug": {
+      "title": "Slug",
+      "type": "string"
+     }
+    },
+    "required": [
+     "slug"
+    ],
+    "title": "polymarket_eventArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "polymarket_eventDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "geo_intel",
+   "description": "Geopolitical coverage via GDELT. Use when geopolitics threatens markets.\n\n        limit: max articles. days: keep articles from the last N days\n        (undated articles are kept).\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "topic": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Topic"
+     },
+     "limit": {
+      "default": 20,
+      "title": "Limit",
+      "type": "integer"
+     },
+     "days": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Days"
+     }
+    },
+    "title": "geo_intelArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "geo_intelDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "assets_rotation",
+   "description": "Cross-asset 1y momentum classes into RISK-ON/OFF. Use for allocation reads.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {},
+    "title": "assets_rotationArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "assets_rotationDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "compare_equities",
+   "description": "Head-to-head overview rows and momentum. Use when picking tickers.\n\n        metrics: keep only matching row keys (symbol column always kept).\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "symbols": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Symbols",
+      "type": "array"
+     },
+     "metrics": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Metrics"
+     }
+    },
+    "required": [
+     "symbols"
+    ],
+    "title": "compare_equitiesArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "compare_equitiesDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "evidence_bundle",
+   "description": "Lock weighted conclusion by evidence bundle. Use last for final verdict.\n\n        claim_ids: claim ids to lock; calc_ids: supporting calculation ids\n        (pass [] when none).\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "claim_ids": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Claim Ids",
+      "type": "array"
+     },
+     "calc_ids": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Calc Ids"
+     }
+    },
+    "required": [
+     "claim_ids"
+    ],
+    "title": "evidence_bundleArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "evidence_bundleDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "oracle_meta",
+   "description": "Aggregator snapshot plus source health. Use for dashboard meta.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {},
+    "title": "oracle_metaArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "oracle_metaDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "web_fetch",
+   "description": "Fetch a URL and convert to markdown, text or html. Use for reading web content.\n\n        format: 'markdown' (default), 'text' or 'html'. timeout_seconds: max\n        fetch time (default 30).\n        ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "url": {
+      "title": "Url",
+      "type": "string"
+     },
+     "format": {
+      "default": "markdown",
+      "title": "Format",
+      "type": "string"
+     },
+     "timeout_seconds": {
+      "default": 30,
+      "title": "Timeout Seconds",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "url"
+    ],
+    "title": "web_fetchArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "web_fetchDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "web_search",
+   "description": "Search the web via Exa/Parallel providers. Use for up-to-date information.\n\n            num_results: results requested (default 8). livecrawl: 'fallback' uses\n            cached index first, 'preferred' crawls live. search_type: 'auto' (default),\n            'fast', or 'deep'. context_max_chars: cap on returned context.\n            ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "query": {
+      "title": "Query",
+      "type": "string"
+     },
+     "num_results": {
+      "default": 8,
+      "title": "Num Results",
+      "type": "integer"
+     },
+     "livecrawl": {
+      "default": "fallback",
+      "title": "Livecrawl",
+      "type": "string"
+     },
+     "search_type": {
+      "default": "auto",
+      "title": "Search Type",
+      "type": "string"
+     },
+     "context_max_chars": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Context Max Chars"
+     }
+    },
+    "required": [
+     "query"
+    ],
+    "title": "web_searchArguments"
+   },
+   "outputSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "title": "web_searchDictOutput"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "idempotentHint": true
+   }
+  }
+ ],
+ "prompts": [
+  {
+   "name": "morning_briefing",
+   "description": "Compose the session-open brief. Use at market open.",
+   "arguments": [
+    {
+     "name": "scope",
+     "required": false
+    }
+   ]
+  },
+  {
+   "name": "ticker_analysis",
+   "description": "Deep dive on one ticker. Use before recommending a name.",
+   "arguments": [
+    {
+     "name": "symbol",
+     "required": true
+    }
+   ]
+  },
+  {
+   "name": "pre_earnings",
+   "description": "Reliability grade before earnings. Use when results are near.",
+   "arguments": [
+    {
+     "name": "symbol",
+     "required": true
+    }
+   ]
+  },
+  {
+   "name": "sector_rotation",
+   "description": "Rotate across sectors. Use for allocation reads.",
+   "arguments": []
+  },
+  {
+   "name": "ai_detect",
+   "description": "Breakout detect (SEPA-style heuristic). Use to hunt or validate breakouts.",
+   "arguments": [
+    {
+     "name": "symbol",
+     "required": false
+    }
+   ]
+  },
+  {
+   "name": "risk_check",
+   "description": "Pre-trade risk checklist. Use before sizing any position.",
+   "arguments": [
+    {
+     "name": "symbols",
+     "required": true
+    },
+    {
+     "name": "side",
+     "required": false
+    },
+    {
+     "name": "size_vnd",
+     "required": false
+    }
+   ]
+  }
+ ],
+ "resourcesCount": 4
+}

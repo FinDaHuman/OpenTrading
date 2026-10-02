@@ -6,9 +6,17 @@ export interface ToolContext {
   callId: string
 }
 
+export interface ToolImage {
+  /** Base64, no data: prefix. */
+  data: string
+  mediaType: string
+}
+
 export interface ToolResult {
   output: string
   title?: string
+  /** Images for models that can see them (screenshots, charts); others get a placeholder. */
+  images?: ToolImage[]
 }
 
 /**
@@ -29,6 +37,11 @@ export interface ToolDef<I = any> {
   maxOutputChars?: number
   /** Where the tool came from, shown in /tools. */
   source?: string
+  /**
+   * Order when the provider's tool limit forces some out: lower comes first. Native tools
+   * have none (always first); MCP tools get their server's position in the config.
+   */
+  priority?: number
   /** Short label for the TUI, e.g. `current_time()` or `add 2 + 3`. */
   summarize?(input: I): string
   execute(input: I, ctx: ToolContext): Promise<string | ToolResult>

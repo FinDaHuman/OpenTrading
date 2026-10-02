@@ -1,16 +1,70 @@
-import { dynamicTool, jsonSchema, tool, type ToolSet } from "ai"
+import { dynamicTool, jsonSchema, tool, type ModelMessage, type ToolSet } from "ai"
 import type { JSONSchema7 } from "@ai-sdk/provider"
 import { z } from "zod"
-import type { ToolDef } from "./types"
+import { sanitizeSchema, type SchemaFlavor } from "../mcp/schema"
+import type { ToolDef, ToolResult } from "./types"
 import { RwLock, runTool } from "./wrap"
 
 type Listener = () => void
+
+/**
+ * OpenAI, Gemini and Anthropic all reject requests with more than 128 tool definitions
+ * (OpenAI answers 400). Tool choice degrades long before that, so this is a hard ceiling,
+ * not a target.
+ */
+export const MAX_TOOLS_PER_REQUEST = 128
+
+/** Images bigger than this, or beyond this many per result, are replaced by a placeholder. */
+const MAX_IMAGE_BASE64 = 5 * 1024 * 1024 * (4 / 3)
+const MAX_IMAGES_PER_RESULT = 4
+
+export interface ToolSetOptions {
+  /** Schema dialect of the target provider. */
+  flavor?: SchemaFlavor
+  /** Whether the target model can see images in tool results. */
+  images?: boolean
+  maxTools?: number
+}
+
+export interface BuiltToolSet {
+  tools: ToolSet
+  /** Model-visible names, in priority order. */
+  names: string[]
+  /** Tools left out because of `maxTools`, per source. */
+  hidden: { source: string; count: number }[]
+  /** Rough token cost of the definitions (name + description + schema, chars / 4). */
+  tokens: number
+}
+
+const imageNote = (mediaType: string, why: string) => `[ảnh ${mediaType} — ${why}]`
+
+/** What the model receives for a tool result: text, plus images only when it can see them. */
+export function modelOutput(result: ToolResult, images: boolean) {
+  const list = result.images ?? []
+  const sendable = images ? list.filter((i) => i.data.length <= MAX_IMAGE_BASE64).slice(0, MAX_IMAGES_PER_RESULT) : []
+  const notes = list
+    .filter((i) => !sendable.includes(i))
+    .map((i) => imageNote(i.mediaType, images ? "quá lớn hoặc quá nhiều ảnh, không gửi cho model" : "model này không xem được ảnh"))
+  const text = [result.output, ...notes].filter(Boolean).join("\n")
+  if (sendable.length === 0) return { type: "text" as const, value: text }
+  return {
+    type: "content" as const,
+    value: [
+      { type: "text" as const, text },
+      ...sendable.map((i) => ({ type: "image-data" as const, data: i.data, mediaType: i.mediaType })),
+    ],
+  }
+}
 
 /** Every tool the model can call: native ones plus whatever MCP servers expose. */
 export class ToolRegistry {
   private tools = new Map<string, ToolDef>()
   private listeners = new Set<Listener>()
+  /** Sanitized schemas per tool definition and flavor; a re-registered tool is a new key. */
+  private schemas = new WeakMap<ToolDef, Map<SchemaFlavor, JSONSchema7>>()
   readonly lock = new RwLock()
+  /** Last "tools hidden by the limit" state the user was told about. */
+  lastHiddenNotice = ""
 
   register(def: ToolDef) {
     this.tools.set(def.name, def)
@@ -53,17 +107,71 @@ export class ToolRegistry {
     for (const listener of this.listeners) listener()
   }
 
-  /** Snapshot as an AI SDK ToolSet. The list is frozen for the whole turn. */
-  toToolSet(): ToolSet {
+  private schemaFor(def: ToolDef, flavor: SchemaFlavor): JSONSchema7 {
+    let perFlavor = this.schemas.get(def)
+    if (!perFlavor) this.schemas.set(def, (perFlavor = new Map()))
+    let schema = perFlavor.get(flavor)
+    if (!schema) perFlavor.set(flavor, (schema = sanitizeSchema(def.input, flavor)))
+    return schema
+  }
+
+  /**
+   * The tools for one request, frozen for the whole turn: schemas sanitized for the
+   * provider, capped at `maxTools` (native first, then MCP servers in config order), with
+   * results converted to text or text + images for the model.
+   */
+  toToolSet(opts: ToolSetOptions = {}): BuiltToolSet {
+    const flavor = opts.flavor ?? "default"
+    const max = opts.maxTools ?? MAX_TOOLS_PER_REQUEST
+    const ordered = this.list().sort((a, b) => (a.priority ?? -1) - (b.priority ?? -1) || a.name.localeCompare(b.name))
+    const kept = ordered.slice(0, max)
+    const hiddenBySource = new Map<string, number>()
+    for (const def of ordered.slice(max)) hiddenBySource.set(def.source ?? "?", (hiddenBySource.get(def.source ?? "?") ?? 0) + 1)
+
     const set: ToolSet = {}
-    for (const def of this.list()) {
+    let chars = 0
+    // Keep the request's tool order stable (by name) for prompt caching.
+    for (const def of [...kept].sort((a, b) => a.name.localeCompare(b.name))) {
       const execute = (input: unknown, options: { abortSignal?: AbortSignal; toolCallId: string }) =>
         runTool(def, input, { signal: options.abortSignal ?? new AbortController().signal, callId: options.toolCallId }, this.lock)
-      set[def.name] =
-        def.input instanceof z.ZodType
-          ? tool({ description: def.description, inputSchema: def.input, execute })
-          : dynamicTool({ description: def.description, inputSchema: jsonSchema(def.input as JSONSchema7), execute })
+      const toModelOutput = ({ output }: { output: unknown }) => modelOutput(output as ToolResult, opts.images ?? false)
+      if (def.input instanceof z.ZodType) {
+        set[def.name] = tool({ description: def.description, inputSchema: def.input, execute, toModelOutput })
+        chars += def.name.length + def.description.length + JSON.stringify(z.toJSONSchema(def.input)).length
+      } else {
+        const schema = this.schemaFor(def, flavor)
+        set[def.name] = dynamicTool({ description: def.description, inputSchema: jsonSchema(schema), execute, toModelOutput })
+        chars += def.name.length + def.description.length + JSON.stringify(schema).length
+      }
     }
-    return set
+    return {
+      tools: set,
+      names: kept.map((d) => d.name),
+      hidden: [...hiddenBySource].map(([source, count]) => ({ source, count })),
+      tokens: Math.ceil(chars / 4),
+    }
   }
+}
+
+type ToolMessage = Extract<ModelMessage, { role: "tool" }>
+
+/**
+ * History for a model that cannot see images (or for the session file): tool results that
+ * carried images become plain text with a placeholder. Needed per request, because the
+ * user may switch from a vision model to one that would choke on base64.
+ */
+export function stripImages<M extends ModelMessage>(messages: M[]): M[] {
+  return messages.map((m) => {
+    if (m.role !== "tool") return m
+    let changed = false
+    const content = (m as ToolMessage).content.map((part) => {
+      if (part.type !== "tool-result" || part.output.type !== "content") return part
+      changed = true
+      const text = part.output.value
+        .map((item) => (item.type === "text" ? item.text : imageNote("mediaType" in item ? String(item.mediaType) : item.type, "không còn trong lịch sử")))
+        .join("\n")
+      return { ...part, output: { type: "text" as const, value: text } }
+    })
+    return changed ? ({ ...m, content } as M) : m
+  })
 }
