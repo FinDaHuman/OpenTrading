@@ -133,6 +133,7 @@ const { App } = await import("../src/tui/app")
 const { state, setState } = await import("../src/tui/state")
 const { readJson } = await import("../src/core/store")
 const { setKey } = await import("../src/core/auth")
+const { saveConfig } = await import("../src/core/config")
 const { initRuntime } = await import("../src/core/runtime")
 const { FileMemory } = await import("../src/core/memory/file-memory")
 
@@ -533,10 +534,12 @@ test("/mcp: a pasted token is never shown on screen", async () => {
 })
 
 test("/tools lists built-in and MCP tools", async () => {
+  // Tool search forced on: the demo server's tools are marked as deferred.
+  await saveConfig({ toolSearch: "on" })
   await setup.mockInput.typeText("/tools")
   setup.mockInput.pressEnter()
-  // 3 built-in (current_time, load_skill, ask_user) + propose_memory + 4 from the demo MCP server
-  let frame = await setup.waitForFrame((f) => f.includes("Tool · 8"))
+  // 4 built-in (current_time, load_skill, ask_user, tool_search) + propose_memory + 4 from the demo MCP server
+  let frame = await setup.waitForFrame((f) => f.includes("Tool · 9"))
   show(frame)
   // Regression for the 01/10 screenshot: every tool is exactly one line, long descriptions
   // end in "…" instead of wrapping mid-word, and the mark column is straight.
@@ -551,6 +554,10 @@ test("/tools lists built-in and MCP tools", async () => {
   expect(frame).toContain("Có sẵn")
   expect(frame).toContain("Memory")
   expect(frame).toContain("MCP · demo")
+  expect(frame).toContain("4 tool hoãn: model chỉ thấy tên")
+  expect(rows.find((r) => r.includes(" echo "))).toContain("hoãn · ")
+  expect(timeRow).not.toContain("hoãn · ")
+  await saveConfig({ toolSearch: undefined })
   // Enter shows the tool's details; esc goes back to the list, esc again closes.
   setup.mockInput.pressEnter()
   frame = await setup.waitForFrame((f) => f.includes("Chi tiết tool") && f.includes("Tên đầy đủ"))
@@ -558,7 +565,7 @@ test("/tools lists built-in and MCP tools", async () => {
   expect(frame).toContain("ask_user")
   expect(frame).toMatch(/• questions \(bắt buộc\): array/)
   setup.mockInput.pressEscape()
-  await setup.waitForFrame((f) => f.includes("Tool · 8"))
+  await setup.waitForFrame((f) => f.includes("Tool · 9"))
   setup.mockInput.pressEscape()
   await setup.waitFor(() => state.dialog === undefined)
 })

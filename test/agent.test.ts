@@ -26,6 +26,8 @@ type Body = { messages: { role: string; content?: unknown }[]; tools?: unknown[]
 const bodies: Body[] = []
 /** What the fake model does when the conversation has no tool results yet. */
 let plan: { tool: string; args: object; always?: boolean } | undefined
+/** Several tool calls in one turn: call `script[n]` after n tool results (this turn), then answer. */
+let script: { tool: string; args: object }[] | undefined
 /** Mimic gemini-2.5-flash-lite: answer with nothing after a tool result. */
 let emptyAfterTool: "once" | "always" | undefined
 const NUDGE = "Hãy trả lời câu hỏi của người dùng dựa trên kết quả tool"
@@ -51,6 +53,17 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   bodies.push(body)
   // Branch on the request, not on call counts: tool results present → answer in text.
   const hasToolResult = body.messages.some((m) => m.role === "tool")
+  const lastUser = body.messages.map((m) => m.role).lastIndexOf("user")
+  const resultsThisTurn = body.messages.slice(lastUser + 1).filter((m) => m.role === "tool").length
+  const scripted = body.tool_choice !== "none" ? script?.[resultsThisTurn] : undefined
+  if (scripted) {
+    const id = `call_${bodies.length}`
+    return sse([
+      chunk({ role: "assistant", tool_calls: [{ index: 0, id, type: "function", function: { name: scripted.tool, arguments: "" } }] }),
+      chunk({ tool_calls: [{ index: 0, function: { arguments: JSON.stringify(scripted.args) } }] }),
+      chunk({}, "tool_calls"),
+    ])
+  }
   if (plan && body.tool_choice !== "none" && (plan.always || !hasToolResult)) {
     const id = `call_${bodies.length}`
     return sse([
@@ -70,6 +83,7 @@ const { runAgent } = await import("../src/core/agent")
 const { ToolRegistry } = await import("../src/core/tools/registry")
 const { currentTimeTool } = await import("../src/core/tools/builtin/current-time")
 const { saveConfig } = await import("../src/core/config")
+const { toolSearchTool } = await import("../src/core/tools/builtin/tool-search")
 const { setKey } = await import("../src/core/auth")
 type AgentEvent = import("../src/core/events").AgentEvent
 
@@ -86,8 +100,9 @@ afterAll(async () => {
 beforeEach(async () => {
   bodies.length = 0
   plan = undefined
+  script = undefined
   emptyAfterTool = undefined
-  await saveConfig({ provider: "groq", model: "tooly" })
+  await saveConfig({ provider: "groq", model: "tooly", toolSearch: undefined, toolSearchMinTools: undefined })
 })
 
 function registry() {
@@ -294,16 +309,14 @@ test("models without tool support get no tools", async () => {
 })
 
 test("more tools than the provider allows: capped at 128, MCP after native, told once", async () => {
-  const r = registry()
-  for (let i = 0; i < 130; i++) {
-    r.register({ name: `mcp__big__t${String(i).padStart(3, "0")}`, source: "mcp:big", priority: 0, description: "x", input: { type: "object", properties: {} }, readOnly: true, execute: async () => "" })
-  }
+  await saveConfig({ toolSearch: "off" })
+  const r = bigRegistry(130)
   const first = await collect(runAgent({ history: [], input: "chào", skills: [], registry: r }))
   expect(bodies.at(-1)!.tools).toHaveLength(128)
   const names = (bodies.at(-1)!.tools as { function: { name: string } }[]).map((t) => t.function.name)
   expect(names).toContain("current_time") // native tools are never the ones dropped
   const notice = first.find((e) => e.type === "notice" && e.text.includes("tối đa 128 tool"))
-  expect(notice && "text" in notice && notice.text).toContain("5 tool của big")
+  expect(notice && "text" in notice && notice.text).toContain("6 tool của big")
   const second = await collect(runAgent({ history: [], input: "chào", skills: [], registry: r }))
   expect(second.some((e) => e.type === "notice" && e.text.includes("tối đa"))).toBe(false)
 })
@@ -330,4 +343,115 @@ test("images in history never reach a model that cannot see them", async () => {
   expect(sent).not.toContain("QUJDREVGRw==")
   expect(sent).toContain("đã chụp")
   expect(sent).toContain("ảnh image/png")
+})
+
+/** registry() + tool_search + `n` deferrable MCP tools mcp__big__t000… that echo their input. */
+function bigRegistry(n: number) {
+  const r = registry()
+  r.register(toolSearchTool(r))
+  for (let i = 0; i < n; i++) {
+    const name = `mcp__big__t${String(i).padStart(3, "0")}`
+    r.register({
+      name,
+      source: "mcp:big",
+      priority: 0,
+      deferrable: true,
+      description: i === 7 ? "Lịch sử giá cổ phiếu theo ngày" : "x",
+      input: { type: "object", properties: { symbol: { type: "string" } } },
+      readOnly: true,
+      execute: async (input) => `${name} ${JSON.stringify(input)}`,
+    })
+  }
+  return r
+}
+
+const toolNames = (body: Body | undefined) => ((body?.tools ?? []) as { function: { name: string } }[]).map((t) => t.function.name)
+const systemText = (body: Body | undefined) => JSON.stringify(body?.messages.filter((m) => m.role === "system") ?? [])
+const ends = (events: AgentEvent[]) => events.filter((e) => e.type === "tool-end") as Extract<AgentEvent, { type: "tool-end" }>[]
+
+test("tool search: many MCP tools go out by name only; a loaded tool is callable at the next step", async () => {
+  const r = bigRegistry(130)
+  script = [
+    { tool: "tool_search", args: { query: "select:t001,big/t002" } },
+    { tool: "mcp__big__t001", args: { symbol: "FPT" } },
+  ]
+  const events = await collect(runAgent({ history: [], input: "giá FPT", skills: [], registry: r }))
+  // First request: built-ins + tool_search, no MCP schema; the names are in <tool_hoan>.
+  expect(toolNames(bodies[0])).toContain("tool_search")
+  expect(toolNames(bodies[0]).some((n) => n.startsWith("mcp__big__"))).toBe(false)
+  expect(systemText(bodies[0])).toContain("tool_hoan")
+  expect(systemText(bodies[0])).toContain("big (130): t000, t001")
+  expect(events.some((e) => e.type === "notice" && e.text.includes("Đang hoãn 130 tool MCP"))).toBe(true)
+  // tool_search loaded two tools; the very next step declares exactly those.
+  expect(ends(events)[0]!.output.split("\n")[0]).toBe("Đã nạp tool: mcp__big__t001, mcp__big__t002")
+  expect(toolNames(bodies[1])).toEqual(expect.arrayContaining(["mcp__big__t001", "mcp__big__t002"]))
+  expect(toolNames(bodies[1])).not.toContain("mcp__big__t003")
+  expect(ends(events)[1]).toMatchObject({ ok: true, output: 'mcp__big__t001 {"symbol":"FPT"}' })
+
+  // Next turn: the loaded tools are still there, recovered from history alone.
+  const history = done(events).messages
+  bodies.length = 0
+  script = undefined
+  await collect(runAgent({ history, input: "còn VCB?", skills: [], registry: r }))
+  expect(toolNames(bodies[0])).toEqual(expect.arrayContaining(["mcp__big__t001", "mcp__big__t002"]))
+  expect(toolNames(bodies[0])).not.toContain("mcp__big__t003")
+})
+
+test("tool search: keyword search finds tools by description, ignoring diacritics", async () => {
+  const r = bigRegistry(60)
+  script = [{ tool: "tool_search", args: { query: "lich su gia" } }]
+  const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: r }))
+  expect(ends(events)[0]!.output.split("\n")[0]).toBe("Đã nạp tool: mcp__big__t007")
+  expect(ends(events)[0]!.output).toContain("- symbol (string)")
+  expect(toolNames(bodies[1])).toContain("mcp__big__t007")
+})
+
+test("tool search: a short name from <tool_hoan> is repaired to the full name and loads the tool", async () => {
+  const r = bigRegistry(60)
+  script = [{ tool: "t005", args: { symbol: "HPG" } }]
+  const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: r }))
+  expect(ends(events)[0]).toMatchObject({ ok: true, output: 'mcp__big__t005 {"symbol":"HPG"}' })
+  const call = done(events).messages.find((m) => m.role === "assistant" && JSON.stringify(m.content).includes("tool-call"))
+  expect(JSON.stringify(call)).toContain("mcp__big__t005")
+  expect(toolNames(bodies[1])).toContain("mcp__big__t005")
+})
+
+test("tool search: an unknown name tells the model to search first", async () => {
+  const r = bigRegistry(60)
+  script = [{ tool: "khong_co_tool_nay", args: {} }]
+  const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: r }))
+  expect(ends(events)[0]!.ok).toBe(false)
+  expect(JSON.stringify(bodies[1]!.messages)).toContain("tool_search")
+  expect(events.at(-1)!.type).toBe("done")
+})
+
+test("tool search: few MCP tools are sent directly in auto mode; 'on' defers them anyway", async () => {
+  const r = bigRegistry(5)
+  await collect(runAgent({ history: [], input: "x", skills: [], registry: r }))
+  expect(toolNames(bodies[0])).toContain("mcp__big__t004")
+  expect(systemText(bodies[0])).not.toContain("Các tool dưới đây đang hoãn")
+  await saveConfig({ toolSearch: "on" })
+  bodies.length = 0
+  await collect(runAgent({ history: [], input: "x", skills: [], registry: r }))
+  expect(toolNames(bodies[0])).not.toContain("mcp__big__t004")
+})
+
+test("tool search: alwaysLoad tools are never deferred", async () => {
+  const r = bigRegistry(60)
+  r.register({ ...r.get("mcp__big__t010")!, name: "mcp__core__quote", source: "mcp:core", deferrable: false })
+  await collect(runAgent({ history: [], input: "x", skills: [], registry: r }))
+  expect(toolNames(bodies[0])).toContain("mcp__core__quote")
+  expect(toolNames(bodies[0])).not.toContain("mcp__big__t010")
+})
+
+test("tool search: the forced last step keeps loaded tools declared", async () => {
+  const r = bigRegistry(60)
+  script = [
+    { tool: "tool_search", args: { query: "select:t003" } },
+    { tool: "mcp__big__t003", args: {} },
+    { tool: "mcp__big__t003", args: {} },
+  ]
+  await collect(runAgent({ history: [], input: "x", skills: [], registry: r, maxSteps: 3 }))
+  expect(bodies[2]!.tool_choice).toBe("none")
+  expect(toolNames(bodies[2])).toContain("mcp__big__t003")
 })

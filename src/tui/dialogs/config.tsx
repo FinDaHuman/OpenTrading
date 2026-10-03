@@ -8,7 +8,14 @@ import { color } from "../theme"
 import { DialogFrame } from "./frame"
 import { Picker } from "./picker"
 
-type Setting = "memory"
+type Setting = "memory" | "toolSearch"
+
+const TOOL_SEARCH_NEXT = { auto: "on", on: "off", off: "auto" } as const
+const TOOL_SEARCH_HINT = {
+  auto: "Tự động · hoãn tool MCP khi > 40 tool hoặc > 10% context; model nạp bằng tool_search",
+  on: "Luôn hoãn tool MCP · model nạp bằng tool_search",
+  off: "Tắt · gửi mọi tool (tối đa 128)",
+} as const
 
 /** Settings that used to require editing ~/.opentrading/config.json by hand. Applied live. */
 export function ConfigDialog(props: { runtime: Runtime }) {
@@ -19,7 +26,12 @@ export function ConfigDialog(props: { runtime: Runtime }) {
   })
 
   async function toggle(setting: Setting) {
-    if (setting !== "memory") return
+    if (setting === "toolSearch") {
+      const next = TOOL_SEARCH_NEXT[config()?.toolSearch ?? "auto"]
+      await saveConfig({ toolSearch: next })
+      await refetch()
+      return
+    }
     const next = props.runtime.memory.id === "file" ? "none" : "file"
     await saveConfig({ memory: { provider: next } })
     switchMemory(props.runtime, createMemory(next))
@@ -45,6 +57,12 @@ export function ConfigDialog(props: { runtime: Runtime }) {
                 : "Tắt · enter để bật",
             mark: props.runtime.memory.id === "file" ? "●" : "○",
             value: "memory" as Setting,
+          },
+          {
+            label: "Tìm tool",
+            hint: TOOL_SEARCH_HINT[config()?.toolSearch ?? "auto"],
+            mark: (config()?.toolSearch ?? "auto") === "off" ? "○" : "●",
+            value: "toolSearch" as Setting,
           },
         ]}
         onPick={(s) => void toggle(s)}

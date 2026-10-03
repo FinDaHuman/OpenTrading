@@ -26,6 +26,7 @@ export const BUDGETS: Record<string, Record<Tier, number | undefined>> = {
   skills_always: { A: 1_800, B: 1_200, C: 600 },
   skills_sticky: { A: 2_500, B: 1_600, C: 800 },
   skill_catalog: { A: 1_400, B: 700, C: 280 },
+  deferred_tools: { A: 2_000, B: 1_200, C: 600 },
   tools: { A: undefined, B: undefined, C: undefined },
   citations: { A: undefined, B: undefined, C: undefined },
   style: { A: 400, B: 250, C: 0 },

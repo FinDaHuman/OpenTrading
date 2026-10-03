@@ -19,6 +19,8 @@ const Common = {
   disabledTools: z.array(z.string()).optional(),
   /** Per-result output cap in characters. */
   maxOutputChars: z.number().int().positive().optional(),
+  /** Always send this server's tools to the model, even when tool search defers MCP tools. */
+  alwaysLoad: z.boolean().optional(),
 }
 
 const OAuth = z.union([

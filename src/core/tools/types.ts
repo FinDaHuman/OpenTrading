@@ -44,6 +44,13 @@ export interface ToolDef<I = any> {
    * have none (always first); MCP tools get their server's position in the config.
    */
   priority?: number
+  /**
+   * May be left out of the request until the model loads it with tool_search (MCP tools,
+   * unless the server is `alwaysLoad`). Built-in tools are never deferred.
+   */
+  deferrable?: boolean
+  /** Extra words tool_search matches on (MCP `_meta["anthropic/searchHint"]`). */
+  searchHint?: string
   /** Human label, e.g. `github · create_issue` (MCP); defaults to `name`. */
   displayName?: string
   /** MCP tool annotations, shown in /mcp and in the approval prompt. */
