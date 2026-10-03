@@ -10,12 +10,20 @@
  * - Report failures with `isError: true` and a readable message; the model sees the message.
  * - Never write to stdout except through the transport (stdout is the protocol channel);
  *   use console.error for logs.
+ * - `instructions` tell the model how to use the server as a whole (OpenTrading puts them in
+ *   the system prompt, capped at 2048 characters).
+ * - `_meta["anthropic/searchHint"]` adds words tool search matches on (e.g. Vietnamese terms
+ *   for an English description); `_meta["anthropic/alwaysLoad"]: true` keeps a core tool out
+ *   of deferral.
  */
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod"
 
-const server = new McpServer({ name: "opentrading-demo", version: "0.1.0" })
+const server = new McpServer(
+  { name: "opentrading-demo", version: "0.1.0" },
+  { instructions: "Server demo: echo để thử kết nối, add để cộng số, ghi_chu để lưu ghi chú." },
+)
 
 server.registerTool(
   "echo",
@@ -23,6 +31,7 @@ server.registerTool(
     description: "Trả lại nguyên văn đoạn text được gửi vào. Dùng để kiểm tra kết nối.",
     inputSchema: { text: z.string().describe("Nội dung cần trả lại") },
     annotations: { readOnlyHint: true },
+    _meta: { "anthropic/searchHint": "lap lai van ban | repeat ping" },
   },
   async ({ text }) => ({ content: [{ type: "text", text }] }),
 )
@@ -33,6 +42,7 @@ server.registerTool(
     description: "Cộng hai số và trả về kết quả.",
     inputSchema: { a: z.number(), b: z.number() },
     annotations: { readOnlyHint: true },
+    _meta: { "anthropic/alwaysLoad": true },
   },
   async ({ a, b }) => ({ content: [{ type: "text", text: String(a + b) }] }),
 )

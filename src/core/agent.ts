@@ -49,6 +49,8 @@ export interface RunOptions {
   sessionId?: string
   hooks?: HookBus
   memory?: MemoryProvider
+  /** `instructions` of connected MCP servers (McpManager.instructions). */
+  serverInstructions?: () => { server: string; text: string }[]
 }
 
 export function label(registry: ToolRegistry, name: string, input: unknown) {
@@ -343,6 +345,7 @@ async function assembleFor(opts: TurnInput, target: Target | undefined, extras: 
     prevClock: opts.prevClock,
     deferredTools: built && built.deferred.length > 0 ? deferredByServer(opts.registry, built.deferred) : undefined,
     declaredTools: built ? Object.keys(built.tools) : undefined,
+    mcpInstructions: opts.serverInstructions?.(),
   })
   if (built && built.names.length > 0) {
     const share = info?.limit?.context ? built.tokens / info.limit.context : 0

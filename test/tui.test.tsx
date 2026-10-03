@@ -556,7 +556,7 @@ test("/tools lists built-in and MCP tools", async () => {
     expect(frame).toContain("Có sẵn")
     expect(frame).toContain("Memory")
     expect(frame).toContain("MCP · demo")
-    expect(frame).toContain("4 tool hoãn: model chỉ thấy tên")
+    expect(frame).toContain("3 tool hoãn: model chỉ thấy tên") // add is alwaysLoad
     expect(rows.find((r) => r.includes(" echo "))).toContain("hoãn · ")
     expect(timeRow).not.toContain("hoãn · ")
   } finally {

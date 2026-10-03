@@ -169,7 +169,12 @@ Notion, Linear, Sentry, Atlassian… dùng OAuth: không cần token, chỉ cầ
   - Danh sách tên tool hoãn nằm trong system prompt (`<tool_hoan>`), nhóm theo server. Danh sách quá dài thì chỉ ghi số tool của mỗi server.
   - `tool_search` nhận `select:a,b` (tên đầy đủ, `server/tool` hoặc tên ngắn) hoặc từ khoá. Tìm từ khoá không phân biệt dấu và hiểu một số thuật ngữ tiếng Việt như "lịch sử giá", "khối ngoại", "BCTC".
   - Tool đã nạp gọi được ngay ở bước kế tiếp và giữ nguyên trong cả phiên, kể cả sau `--resume`, vì OpenTrading suy ra từ lịch sử hội thoại. Model gọi thẳng tên ngắn thì OpenTrading tự đổi sang tên đầy đủ.
-  - Server muốn luôn gửi đủ schema thì đặt `"alwaysLoad": true` trong cấu hình server.
+  - Muốn một server luôn gửi đủ schema thì đặt `"alwaysLoad": true` trong cấu hình server đó.
+  - Phía server có thể đánh dấu từng tool qua `_meta` (quy ước của Claude Code):
+    - `_meta["anthropic/alwaysLoad"]: true`: tool đó không bị hoãn;
+    - `_meta["anthropic/searchHint"]`: thêm từ khoá cho `tool_search`, ví dụ thuật ngữ tiếng Việt cho tool mô tả bằng tiếng Anh.
+  - Skill khai `requires_tools` thì nạp skill cũng nạp luôn các tool đó (xem `docs/contracts.md`).
+- **Hướng dẫn của server**: `instructions` mà server gửi lúc kết nối được đưa vào system prompt (block `<huong_dan_mcp>`, cắt ở 2048 ký tự mỗi server). Chỉ server đã được cho phép mới gửi được hướng dẫn. `/context` có dòng "Hướng dẫn từ MCP server".
   - `/tools` ghi `hoãn ·` / `đã nạp ·` trước mô tả. `/context` có dòng "Danh sách tool hoãn".
 - **Giới hạn số tool**: OpenAI, Gemini và Anthropic nhận tối đa khoảng 128 tool mỗi request.
   - Với tìm tool đang tắt (hoặc tool không hoãn được), vượt mức thì OpenTrading giữ tool có sẵn trước, rồi tới tool MCP theo thứ tự server trong file cấu hình, và báo một lần trong chat là đang ẩn bao nhiêu tool của server nào.

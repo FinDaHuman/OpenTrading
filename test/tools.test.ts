@@ -103,6 +103,22 @@ test("load_skill returns a body, refuses manual skills and unknown names", async
   await expect(tool.execute({ name: "x" }, ctx())).rejects.toThrow("Không có skill")
 })
 
+test("load_skill loads the deferred tools a skill requires (first line, for the agent loop)", async () => {
+  const base = { description: "d", dir: "/skills/x", source: "bundled" as const, body: "BODY", activation: "auto" as const }
+  const deferred = ["mcp__ot__vn_quote_history", "mcp__ot__vn_index_ohlcv", "mcp__ot__money_flow"]
+  const tool = loadSkillTool(
+    () => [
+      { ...base, name: "prices", requires_tools: ["ot/vn_*", "current_time"] },
+      { ...base, name: "plain" },
+    ],
+    () => deferred,
+  )
+  const out = (await tool.execute({ name: "prices" }, ctx())) as string
+  expect(out.split("\n")[0]).toBe("Đã nạp tool: mcp__ot__vn_quote_history, mcp__ot__vn_index_ohlcv")
+  expect(out).toContain("BODY")
+  expect(((await tool.execute({ name: "plain" }, ctx())) as string).startsWith("Thư mục skill")).toBe(true)
+})
+
 test("registry builds a sorted AI SDK tool set and unregisters by prefix", () => {
   const registry = new ToolRegistry()
   registry.register(def({ name: "mcp__demo__b", execute: async () => "" }))

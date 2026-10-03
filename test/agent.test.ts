@@ -456,3 +456,24 @@ test("tool search: the forced last step keeps loaded tools declared", async () =
   expect(bodies[2]!.tool_choice).toBe("none")
   expect(toolNames(bodies[2])).toContain("mcp__big__t003")
 })
+
+test("tool search: load_skill loads the skill's deferred tools for the next step", async () => {
+  const { loadSkillTool } = await import("../src/core/tools/builtin/load-skill")
+  const r = bigRegistry(60)
+  const skill = { name: "gia", description: "giá", dir: "/s", source: "bundled" as const, body: "Làm theo", activation: "auto" as const, requires_tools: ["big/t01*"] }
+  r.register(loadSkillTool(() => [skill], () => r.list().filter((d) => d.deferrable).map((d) => d.name)))
+  script = [{ tool: "load_skill", args: { name: "gia" } }]
+  await collect(runAgent({ history: [], input: "x", skills: [skill], registry: r }))
+  expect(toolNames(bodies[0])).not.toContain("mcp__big__t012")
+  expect(toolNames(bodies[1])).toEqual(expect.arrayContaining(["mcp__big__t010", "mcp__big__t019"]))
+  expect(toolNames(bodies[1])).not.toContain("mcp__big__t020")
+  // The skill is listed although its tools are only deferred.
+  expect(systemText(bodies[0])).toContain("- gia:")
+})
+
+test("MCP server instructions reach the system prompt", async () => {
+  await collect(
+    runAgent({ history: [], input: "x", skills: [], registry: registry(), serverInstructions: () => [{ server: "ot", text: "HUONG-DAN-OT" }] }),
+  )
+  expect(systemText(bodies[0])).toContain("HUONG-DAN-OT")
+})

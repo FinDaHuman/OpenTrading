@@ -101,11 +101,17 @@ test("connects to the demo server over stdio and calls its tools", async () => {
 
   const add = registry.get("mcp__demo__add")!
   expect(add.readOnly).toBe(true)
+  // Server instructions and _meta hints reach the harness.
+  expect(manager.instructions()).toEqual([{ server: "demo", text: expect.stringContaining("echo để thử kết nối") }])
+  expect(registry.get("mcp__demo__echo")!.searchHint).toBe("lap lai van ban | repeat ping")
+  expect(registry.get("mcp__demo__echo")!.deferrable).toBe(true)
+  expect(add.deferrable).toBe(false) // _meta["anthropic/alwaysLoad"]
   expect(await add.execute({ a: 2, b: 3 }, ctx)).toBe("5")
   expect(await errorOf(registry.get("mcp__demo__fail")!.execute({}, ctx))).toContain("cố ý")
 
   await manager.stop()
   expect(registry.list()).toHaveLength(0)
+  expect(manager.instructions()).toEqual([])
 }, 30_000)
 
 test("stop() leaves no server process behind", async () => {
