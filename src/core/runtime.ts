@@ -47,7 +47,14 @@ export function initRuntime(opts: { cwd?: string; home?: string; skills: () => S
   const questions = new AskBroker()
   registry.register(currentTimeTool())
   registry.register(askUserTool(questions))
-  registry.register(loadSkillTool(opts.skills))
+  registry.register(
+    loadSkillTool(opts.skills, () =>
+      registry
+        .list()
+        .filter((d) => d.deferrable)
+        .map((d) => d.name),
+    ),
+  )
 
   const mcp = new McpManager(registry, {
     home,

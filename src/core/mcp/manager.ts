@@ -63,6 +63,8 @@ export interface McpServerStatus {
   prompts: McpPromptInfo[]
   /** Whether the server offers resources (read through list/read_mcp_resource). */
   resources: boolean
+  /** The server's `instructions` from initialize (capped), sent to the model in system. */
+  instructions?: string
 }
 
 export interface McpPromptInfo {
@@ -169,6 +171,16 @@ export interface McpManagerOptions {
 const WINDOWS_EXTRA_ENV = ["PATHEXT", "COMSPEC", "WINDIR", "TMP", "ProgramData", "ProgramFiles(x86)"]
 
 const MAX_DESCRIPTION = 2048
+/** Same cap as Claude Code for a server's `instructions`. */
+export const MAX_INSTRUCTIONS = 2048
+const SEARCH_HINT_META = "anthropic/searchHint"
+const ALWAYS_LOAD_META = "anthropic/alwaysLoad"
+
+function capInstructions(text: string | undefined) {
+  const trimmed = text?.trim()
+  if (!trimmed) return undefined
+  return trimmed.length > MAX_INSTRUCTIONS ? trimmed.slice(0, MAX_INSTRUCTIONS) + "… [đã cắt]" : trimmed
+}
 const LOGIN_TIMEOUT_MS = 5 * 60_000
 const RETRYABLE_STATUS = new Set([408, 429, 500, 502, 503, 504])
 
@@ -270,6 +282,13 @@ export class McpManager {
 
   status(): McpServerStatus[] {
     return [...this.statuses.values()]
+  }
+
+  /** `instructions` of connected servers (only trusted servers ever connect), for the system prompt. */
+  instructions(): { server: string; text: string }[] {
+    return this.status()
+      .filter((s) => s.state === "connected" && this.live.has(s.name) && s.instructions)
+      .map((s) => ({ server: s.name, text: s.instructions! }))
   }
 
   onChange(listener: (status: McpServerStatus[]) => void) {
@@ -441,7 +460,7 @@ export class McpManager {
     const live = this.live.get(name)
     this.live.delete(name)
     this.registry.unregister(serverPrefix(name))
-    if (this.statuses.has(name)) this.set(name, { prompts: [], resources: false })
+    if (this.statuses.has(name)) this.set(name, { prompts: [], resources: false, instructions: undefined })
     this.syncResourceTools()
     if (live) await live.client.close().catch(() => {})
   }
@@ -520,7 +539,12 @@ export class McpManager {
       await this.syncTools(name, client, config)
       // Prompts are optional extras: a server that fails to list them still works.
       await this.syncPrompts(name, client).catch(() => {})
-      this.set(name, { state: "connected", transport: live.kind, resources: Boolean(client.getServerCapabilities()?.resources) })
+      this.set(name, {
+        state: "connected",
+        transport: live.kind,
+        resources: Boolean(client.getServerCapabilities()?.resources),
+        instructions: capInstructions(client.getInstructions()),
+      })
       this.syncResourceTools()
     } catch (error) {
       await this.disconnect(name)
@@ -705,6 +729,8 @@ export class McpManager {
     const registered: string[] = []
     let hidden = 0
     for (const tool of tools) {
+      const meta = (tool as { _meta?: Record<string, unknown> })._meta ?? {}
+      const hint = typeof meta[SEARCH_HINT_META] === "string" ? (meta[SEARCH_HINT_META] as string).replace(/\s+/g, " ").trim().slice(0, 200) : undefined
       if (!toolAllowed(config, tool.name)) {
         hidden++
         continue
@@ -716,7 +742,9 @@ export class McpManager {
         name: modelName,
         source: `mcp:${name}`,
         priority,
-        deferrable: !config.alwaysLoad,
+        // Claude Code's convention: a server marks its core tools to skip deferral.
+        deferrable: !config.alwaysLoad && meta[ALWAYS_LOAD_META] !== true,
+        searchHint: hint || undefined,
         description: (tool.description ?? `Tool ${tool.name} của MCP server ${name}.`).slice(0, MAX_DESCRIPTION),
         // Raw schema; the registry sanitizes it per provider when building a request.
         input: (tool.inputSchema ?? { type: "object", properties: {} }) as JSONSchema7,

@@ -58,7 +58,7 @@ when_to_use: Câu hỏi về cổ phiếu ngân hàng hoặc BCTC ngân hàng.  
 activation: auto                     # auto (mặc định) | always | manual
 triggers:
   keywords: [ngân hàng, NIM, CASA, nợ xấu, room tín dụng]   # tuỳ chọn, xem mục Kích hoạt
-requires_tools: [mcp__vnstock__financials]                  # tuỳ chọn: ẩn skill khi thiếu tool này
+requires_tools: [opentrading/financial_*, vn_quote_history]  # tuỳ chọn, xem dưới
 version: 1.0.0
 ---
 
@@ -67,6 +67,19 @@ version: 1.0.0
 1. Lấy BCTC 8 quý gần nhất…
 2. Xem bảng chỉ tiêu trong kpi.md (model đọc bằng load_skill với file: "kpi.md").
 ```
+
+**`requires_tools`** là danh sách tool mà skill dùng. Mỗi mục có thể viết theo một trong bốn cách:
+
+| Cách viết | Ví dụ | Khớp với |
+| --- | --- | --- |
+| Tên đầy đủ | `mcp__opentrading__vn_quote_history` | đúng tool đó |
+| `server/tool` | `opentrading/vn_quote_history` | tool của đúng server đó |
+| Tên ngắn | `vn_quote_history` | tool có sẵn, hoặc tool cùng tên của bất kỳ server nào |
+| Có `*` | `opentrading/financial_*` | mọi tool khớp mẫu |
+
+- Mục nào không khớp tool nào thì skill bị ẩn.
+- Khi model nạp skill (`load_skill`), các tool khớp mà đang bị hoãn (tool search) được **nạp luôn**, nên model dùng được ngay mà không phải `tool_search`.
+- Vì vậy hãy ghi đủ các tool skill cần, nhưng đừng dùng `*` quá rộng: mỗi tool nạp vào sẽ ở lại trong cả phiên.
 
 **Nơi đặt skill.** Nếu trùng tên, nơi đứng trước thắng:
 1. Project: `./.opentrading/skills/<tên>/SKILL.md`

@@ -21,6 +21,7 @@ const LAYER_NAME: Record<string, string> = {
   tools: "Cách dùng tool",
   tool_schemas: "Định nghĩa tool",
   tool_hoan: "Danh sách tool hoãn",
+  huong_dan_mcp: "Hướng dẫn từ MCP server",
   citations: "Trích nguồn",
   style: "Văn phong",
   skills_always: "Skill luôn bật",
@@ -47,6 +48,7 @@ export function ContextDialog(props: { runtime: Runtime }) {
       history: state.history,
       registry: props.runtime.registry,
       memory: props.runtime.memory,
+      serverInstructions: () => props.runtime.mcp.instructions(),
       sessionId: currentSession().id,
     }),
   )

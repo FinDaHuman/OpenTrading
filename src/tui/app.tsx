@@ -89,6 +89,7 @@ async function sendTurn(runtime: Runtime, text: string) {
       sessionId: currentSession().id,
       hooks: runtime.hooks,
       memory: runtime.memory,
+      serverInstructions: () => runtime.mcp.instructions(),
     })
     for await (const event of turn) {
       if (!live()) continue
