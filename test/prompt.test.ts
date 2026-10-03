@@ -148,6 +148,8 @@ test("MCP server instructions go to system, framed below the invariants, within 
   const a = assemble(input)
   expect(a.system).toContain('<server name="ot">\nDùng symbol_lookup khi chưa chắc mã.\n</server>')
   expect(a.system.indexOf("<identity>")).toBeLessThan(a.system.indexOf("<huong_dan_mcp>"))
+  // Third-party text: ranked like a skill, below the user's direct request.
+  expect(a.system).toContain("xếp ngang skill trong thứ tự ưu tiên: dưới yêu cầu trực tiếp của người dùng")
   expect(a.report.find((r) => r.id === "huong_dan_mcp")?.channel).toBe("system")
   // A model without tools gets no tool instructions.
   expect(assemble({ ...input, tools: [] }).system).not.toContain("<huong_dan_mcp>")
