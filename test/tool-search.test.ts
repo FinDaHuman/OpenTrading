@@ -31,6 +31,8 @@ function registry() {
   r.register(mcp("ot", "money_flow", "Dòng tiền khối ngoại và tự doanh theo mã.", { searchHint: "foreign flow nuoc ngoai" }))
   r.register(mcp("ot", "market_snapshot", "Realtime board for several symbols."))
   r.register(mcp("other", "market_snapshot", "Another server's snapshot."))
+  r.register(mcp("ot", "dividends_splits", "Cash dividends and splits."))
+  r.register(mcp("ot", "event_calendar", "Corporate actions such as dividend dates."))
   r.register(toolSearchTool(r))
   return r
 }
@@ -76,7 +78,7 @@ test("mcp__server lists one server's tools; no match names the servers", async (
   const r = registry()
   expect(firstLine(await search(r, "mcp__other"))).toBe(`${LOADED_PREFIX}mcp__other__market_snapshot`)
   const none = await search(r, "zzz")
-  expect(none).toContain("ot (3 tool), other (1 tool)")
+  expect(none).toContain("ot (5 tool), other (1 tool)")
   expect(none).not.toContain(LOADED_PREFIX)
 })
 
@@ -115,4 +117,9 @@ test("the deferred list falls back to per-server counts over budget", () => {
 test("Vietnamese market terms also match English descriptions", async () => {
   const r = registry()
   expect(firstLine(await search(r, "lịch sử giá FPT", 1))).toBe(`${LOADED_PREFIX}mcp__ot__vn_quote_history`)
+})
+
+test("keyword search loads only hits close to the best one (loading is permanent)", async () => {
+  const r = registry()
+  expect(firstLine(await search(r, "dividend"))).toBe(`${LOADED_PREFIX}mcp__ot__dividends_splits`)
 })

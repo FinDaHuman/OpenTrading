@@ -44,7 +44,12 @@ export function toolSearchTool(registry: ToolRegistry, pending: () => string[] =
         const prefix = q.endsWith("__") ? q : `${q}__`
         found = candidates.filter((d) => d.name.startsWith(prefix)).slice(0, limit)
       } else {
-        found = scoreTools(registry, candidates, q)
+        // Loading is permanent for the session: keep only hits close to the best one, so a
+        // search does not drag in every tool that merely mentions a word.
+        const hits = scoreTools(registry, candidates, q)
+        const floor = (hits[0]?.score ?? 0) / 2
+        found = hits
+          .filter((h) => h.score >= floor)
           .slice(0, limit)
           .map((h) => h.def)
       }

@@ -536,28 +536,32 @@ test("/mcp: a pasted token is never shown on screen", async () => {
 test("/tools lists built-in and MCP tools", async () => {
   // Tool search forced on: the demo server's tools are marked as deferred.
   await saveConfig({ toolSearch: "on" })
-  await setup.mockInput.typeText("/tools")
-  setup.mockInput.pressEnter()
-  // 4 built-in (current_time, load_skill, ask_user, tool_search) + propose_memory + 4 from the demo MCP server
-  let frame = await setup.waitForFrame((f) => f.includes("Tool · 9"))
-  show(frame)
-  // Regression for the 01/10 screenshot: every tool is exactly one line, long descriptions
-  // end in "…" instead of wrapping mid-word, and the mark column is straight.
-  const rows = frame.split("\n").filter((l) => /^ {2}(❯ |  )[◇◆] \S/.test(l))
-  expect(rows.length).toBeGreaterThanOrEqual(7)
-  expect(new Set(rows.map((r) => r.search(/[◇◆]/))).size).toBe(1)
-  // Labels sit in their own right-hand column, so descriptions still start at one cell.
-  expect(new Set(rows.map((r) => r.search(/\[(chỉ đọc|ghi|không hoàn tác)\]/))).size).toBe(1)
-  const timeRow = rows.find((r) => r.includes("current_time"))!
-  expect(timeRow).toMatch(/…\s+\[chỉ đọc\]\s*$/)
-  expect(frame).not.toMatch(/^\s+Asia\/H/m)
-  expect(frame).toContain("Có sẵn")
-  expect(frame).toContain("Memory")
-  expect(frame).toContain("MCP · demo")
-  expect(frame).toContain("4 tool hoãn: model chỉ thấy tên")
-  expect(rows.find((r) => r.includes(" echo "))).toContain("hoãn · ")
-  expect(timeRow).not.toContain("hoãn · ")
-  await saveConfig({ toolSearch: undefined })
+  let frame: string
+  try {
+    await setup.mockInput.typeText("/tools")
+    setup.mockInput.pressEnter()
+    // 4 built-in (current_time, load_skill, ask_user, tool_search) + propose_memory + 4 from the demo MCP server
+    frame = await setup.waitForFrame((f) => f.includes("Tool · 9"))
+    show(frame)
+    // Regression for the 01/10 screenshot: every tool is exactly one line, long descriptions
+    // end in "…" instead of wrapping mid-word, and the mark column is straight.
+    const rows = frame.split("\n").filter((l) => /^ {2}(❯ |  )[◇◆] \S/.test(l))
+    expect(rows.length).toBeGreaterThanOrEqual(7)
+    expect(new Set(rows.map((r) => r.search(/[◇◆]/))).size).toBe(1)
+    // Labels sit in their own right-hand column, so descriptions still start at one cell.
+    expect(new Set(rows.map((r) => r.search(/\[(chỉ đọc|ghi|không hoàn tác)\]/))).size).toBe(1)
+    const timeRow = rows.find((r) => r.includes("current_time"))!
+    expect(timeRow).toMatch(/…\s+\[chỉ đọc\]\s*$/)
+    expect(frame).not.toMatch(/^\s+Asia\/H/m)
+    expect(frame).toContain("Có sẵn")
+    expect(frame).toContain("Memory")
+    expect(frame).toContain("MCP · demo")
+    expect(frame).toContain("4 tool hoãn: model chỉ thấy tên")
+    expect(rows.find((r) => r.includes(" echo "))).toContain("hoãn · ")
+    expect(timeRow).not.toContain("hoãn · ")
+  } finally {
+    await saveConfig({ toolSearch: undefined })
+  }
   // Enter shows the tool's details; esc goes back to the list, esc again closes.
   setup.mockInput.pressEnter()
   frame = await setup.waitForFrame((f) => f.includes("Chi tiết tool") && f.includes("Tên đầy đủ"))

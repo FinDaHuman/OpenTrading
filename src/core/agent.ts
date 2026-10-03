@@ -438,18 +438,19 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
   if (!supportsTools && opts.registry.list().length > 0) {
     yield { type: "notice", text: "Model này không hỗ trợ tool; trả lời không dùng tool." }
   }
-  // Tell the user once whenever the set of deferred or hidden tools changes.
-  const deferredCount = built?.deferred.length ?? 0
-  const hiddenKey = JSON.stringify([built?.hidden ?? [], deferredCount])
+  // Tell the user once whenever deferral or the hidden tools change. Keyed on every
+  // deferrable tool, not on those still unloaded: loading tools must not repeat the notice.
+  const deferrable = built?.deferring ? opts.registry.list().filter((d) => d.deferrable).map((d) => d.name) : []
+  const hiddenKey = JSON.stringify([built?.hidden ?? [], deferrable.length])
   if (hiddenKey !== opts.registry.lastHiddenNotice) {
     opts.registry.lastHiddenNotice = hiddenKey
-    if (built && deferredCount > 0) {
-      const servers = deferredByServer(opts.registry, built.deferred)
+    if (deferrable.length > 0) {
+      const servers = deferredByServer(opts.registry, deferrable)
         .map((g) => `${g.tools.length} của ${g.server}`)
         .join(", ")
       yield {
         type: "notice",
-        text: `Đang hoãn ${deferredCount} tool MCP (${servers}); model tự nạp bằng tool_search khi cần. Đổi trong /config.`,
+        text: `Đang hoãn ${deferrable.length} tool MCP (${servers}); model tự nạp bằng tool_search khi cần. Đổi trong /config.`,
       }
     }
     if (built && built.hidden.length > 0) {

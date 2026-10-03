@@ -392,7 +392,8 @@ test("tool search: many MCP tools go out by name only; a loaded tool is callable
   const history = done(events).messages
   bodies.length = 0
   script = undefined
-  await collect(runAgent({ history, input: "còn VCB?", skills: [], registry: r }))
+  const next = await collect(runAgent({ history, input: "còn VCB?", skills: [], registry: r }))
+  expect(next.some((e) => e.type === "notice" && e.text.includes("Đang hoãn"))).toBe(false)
   expect(toolNames(bodies[0])).toEqual(expect.arrayContaining(["mcp__big__t001", "mcp__big__t002"]))
   expect(toolNames(bodies[0])).not.toContain("mcp__big__t003")
 })

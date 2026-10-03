@@ -41,6 +41,8 @@ export interface BuiltToolSet {
   names: string[]
   /** Deferred tools not loaded yet: declared, not shown to the model. */
   deferred: string[]
+  /** Whether tool search is on for this request (`defer`). */
+  deferring: boolean
   /** Tools left out because of `maxTools`, per source. */
   hidden: { source: string; count: number }[]
   /** Rough token cost of the visible definitions (name + description + schema, chars / 4). */
@@ -173,6 +175,7 @@ export class ToolRegistry {
       tools: set,
       names: kept.map((d) => d.name),
       deferred: deferred.map((d) => d.name),
+      deferring: !!opts.defer,
       hidden: [...hiddenBySource].map(([source, count]) => ({ source, count })),
       tokens: this.estimateTokens(kept, flavor),
     }
