@@ -10,6 +10,7 @@ import { dataDir } from "./paths"
 import type { Skill } from "./skills/schema"
 import { currentTimeTool } from "./tools/builtin/current-time"
 import { loadSkillTool } from "./tools/builtin/load-skill"
+import { toolSearchTool } from "./tools/builtin/tool-search"
 import { ToolRegistry } from "./tools/registry"
 
 export interface Runtime {
@@ -53,6 +54,7 @@ export function initRuntime(opts: { cwd?: string; home?: string; skills: () => S
     cwd: opts.cwd ?? process.cwd(),
     trustFile: path.join(home, "mcp-trust.json"),
   })
+  registry.register(toolSearchTool(registry, () => mcp.status().filter((s) => s.state === "connecting").map((s) => s.name)))
   const runtime: Runtime = { registry, permissions, questions, mcp, hooks: new HookBus(), memory: new NoopMemory() }
   switchMemory(runtime, opts.memory ?? new NoopMemory())
   return runtime

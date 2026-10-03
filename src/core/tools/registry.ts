@@ -25,15 +25,27 @@ export interface ToolSetOptions {
   /** Whether the target model can see images in tool results. */
   images?: boolean
   maxTools?: number
+  /**
+   * Tool search: leave `deferrable` tools out of the model-visible set (unless in `loaded`)
+   * but still declare them, so they run when called and can be activated per step.
+   */
+  defer?: boolean
+  /** Deferred tools the model already loaded (tool_search, load_skill, or a direct call). */
+  loaded?: ReadonlySet<string>
 }
 
 export interface BuiltToolSet {
+  /** Declared tools. With `defer`, every tool; otherwise only the visible ones. */
   tools: ToolSet
   /** Model-visible names, in priority order. */
   names: string[]
+  /** Deferred tools not loaded yet: declared, not shown to the model. */
+  deferred: string[]
+  /** Whether tool search is on for this request (`defer`). */
+  deferring: boolean
   /** Tools left out because of `maxTools`, per source. */
   hidden: { source: string; count: number }[]
-  /** Rough token cost of the definitions (name + description + schema, chars / 4). */
+  /** Rough token cost of the visible definitions (name + description + schema, chars / 4). */
   tokens: number
 }
 
@@ -118,40 +130,54 @@ export class ToolRegistry {
     return schema
   }
 
+  /** JSON Schema the provider receives for this tool. */
+  jsonSchemaFor(def: ToolDef, flavor: SchemaFlavor = "default"): JSONSchema7 {
+    return def.input instanceof z.ZodType ? (z.toJSONSchema(def.input) as JSONSchema7) : this.schemaFor(def, flavor)
+  }
+
+  /** Rough token cost of sending these definitions (name + description + schema, chars / 4). */
+  estimateTokens(defs: ToolDef[], flavor: SchemaFlavor = "default") {
+    let chars = 0
+    for (const def of defs) chars += def.name.length + def.description.length + JSON.stringify(this.jsonSchemaFor(def, flavor)).length
+    return Math.ceil(chars / 4)
+  }
+
   /**
-   * The tools for one request, frozen for the whole turn: schemas sanitized for the
-   * provider, capped at `maxTools` (native first, then MCP servers in config order), with
-   * results converted to text or text + images for the model.
+   * The tools for one request: schemas sanitized for the provider, the visible set capped at
+   * `maxTools` (native first, then MCP servers in config order), with results converted to
+   * text or text + images for the model. With `defer`, deferred tools are declared too but
+   * kept out of `names`; the agent loop exposes them per step via `activeTools`.
    */
   toToolSet(opts: ToolSetOptions = {}): BuiltToolSet {
     const flavor = opts.flavor ?? "default"
     const max = opts.maxTools ?? MAX_TOOLS_PER_REQUEST
     const ordered = this.list().sort((a, b) => (a.priority ?? -1) - (b.priority ?? -1) || a.name.localeCompare(b.name))
-    const kept = ordered.slice(0, max)
+    const isDeferred = (def: ToolDef) => !!opts.defer && !!def.deferrable && !opts.loaded?.has(def.name)
+    const visible = ordered.filter((d) => !isDeferred(d))
+    const kept = visible.slice(0, max)
     const hiddenBySource = new Map<string, number>()
-    for (const def of ordered.slice(max)) hiddenBySource.set(def.source ?? "?", (hiddenBySource.get(def.source ?? "?") ?? 0) + 1)
+    for (const def of visible.slice(max)) hiddenBySource.set(def.source ?? "?", (hiddenBySource.get(def.source ?? "?") ?? 0) + 1)
+    const deferred = ordered.filter(isDeferred)
 
     const set: ToolSet = {}
-    let chars = 0
     // Keep the request's tool order stable (by name) for prompt caching.
-    for (const def of [...kept].sort((a, b) => a.name.localeCompare(b.name))) {
+    const declared = opts.defer ? ordered : kept
+    for (const def of [...declared].sort((a, b) => a.name.localeCompare(b.name))) {
       const execute = (input: unknown, options: { abortSignal?: AbortSignal; toolCallId: string }) =>
         runTool(def, input, { signal: options.abortSignal ?? new AbortController().signal, callId: options.toolCallId }, this.lock, this.gate)
       const toModelOutput = ({ output }: { output: unknown }) => modelOutput(output as ToolResult, opts.images ?? false)
-      if (def.input instanceof z.ZodType) {
-        set[def.name] = tool({ description: def.description, inputSchema: def.input, execute, toModelOutput })
-        chars += def.name.length + def.description.length + JSON.stringify(z.toJSONSchema(def.input)).length
-      } else {
-        const schema = this.schemaFor(def, flavor)
-        set[def.name] = dynamicTool({ description: def.description, inputSchema: jsonSchema(schema), execute, toModelOutput })
-        chars += def.name.length + def.description.length + JSON.stringify(schema).length
-      }
+      set[def.name] =
+        def.input instanceof z.ZodType
+          ? tool({ description: def.description, inputSchema: def.input, execute, toModelOutput })
+          : dynamicTool({ description: def.description, inputSchema: jsonSchema(this.schemaFor(def, flavor)), execute, toModelOutput })
     }
     return {
       tools: set,
       names: kept.map((d) => d.name),
+      deferred: deferred.map((d) => d.name),
+      deferring: !!opts.defer,
       hidden: [...hiddenBySource].map(([source, count]) => ({ source, count })),
-      tokens: Math.ceil(chars / 4),
+      tokens: this.estimateTokens(kept, flavor),
     }
   }
 }

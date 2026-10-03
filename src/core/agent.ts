@@ -1,4 +1,4 @@
-import { stepCountIs, streamText, type ModelMessage, type StreamTextResult, type SystemModelMessage, type ToolSet } from "ai"
+import { NoSuchToolError, stepCountIs, streamText, type ModelMessage, type StreamTextResult, type SystemModelMessage, type ToolSet } from "ai"
 import { ChatSetupError, describeError, resolveTarget } from "./chat"
 import type { AgentEvent } from "./events"
 import { loadProfile } from "./profile"
@@ -9,7 +9,13 @@ import { languageModel } from "./providers"
 import type { Skill } from "./skills/schema"
 import type { HookBus } from "./hooks"
 import { MEMORY_INDEX_MAX_CHARS, MEMORY_RECALL_MAX_CHARS, MEMORY_RECALL_MAX_ITEMS, type MemoryProvider } from "./memory/types"
-import { stripImages, type BuiltToolSet, type ToolRegistry, type ToolSetOptions } from "./tools/registry"
+import { loadConfig, type Config } from "./config"
+import { sanitize, serverPrefix } from "./mcp/naming"
+import type { SchemaFlavor } from "./mcp/schema"
+import { loadedTools } from "./tools/loaded"
+import { MAX_TOOLS_PER_REQUEST, stripImages, type BuiltToolSet, type ToolRegistry, type ToolSetOptions } from "./tools/registry"
+import { resolveToolName } from "./tools/search"
+import { TOOL_SEARCH } from "./tools/builtin/tool-search"
 import type { ToolResult } from "./tools/types"
 
 export const DEFAULT_MAX_STEPS = 10
@@ -116,6 +122,37 @@ export function visibleUserText(message: ModelMessage) {
     .join("\n")
 }
 
+/**
+ * Calls the SDK could not parse. A short name from <tool_hoan> (`vn_quote_history`,
+ * `server/tool`) that matches one declared tool is rewritten to its full name; otherwise a
+ * deferred tool the model has not loaded gets a hint to load it first. `null` = keep the
+ * SDK's own error.
+ */
+async function repairCall<T extends { toolName: string }>(
+  registry: ToolRegistry,
+  built: BuiltToolSet | undefined,
+  active: string[] | undefined,
+  toolCall: T,
+  error: unknown,
+): Promise<T | null> {
+  if (!built) return null
+  const deferring = built.deferred.length > 0
+  if (NoSuchToolError.isInstance(error)) {
+    const names = resolveToolName(registry, toolCall.toolName).filter((n) => n in built.tools)
+    if (names.length === 1) return { ...toolCall, toolName: names[0]! }
+    if (!deferring) return null
+    const many = names.length > 1 ? ` Tên này khớp nhiều tool: ${names.join(", ")}.` : ""
+    throw new Error(`Không có tool "${toolCall.toolName}".${many} Gọi tool_search (query "select:<tên>" hoặc từ khoá) để nạp tool rồi gọi lại.`)
+  }
+  // Wrong arguments for a tool the model never loaded: it guessed the schema.
+  if (deferring && active && !active.includes(toolCall.toolName) && built.deferred.includes(toolCall.toolName)) {
+    throw new Error(
+      `Tham số không hợp lệ. Tool "${toolCall.toolName}" chưa được nạp: gọi tool_search với query "select:${toolCall.toolName}" để xem tham số rồi gọi lại.`,
+    )
+  }
+  return null
+}
+
 interface Outcome {
   text: string
   aborted: boolean
@@ -219,7 +256,58 @@ export function toolSetOptions(target: TargetLike | undefined): ToolSetOptions {
   }
 }
 
-type TurnInput = Omit<RunOptions, "history" | "signal" | "maxSteps">
+/** Deferred tools are worth it once their definitions would take this share of the context. */
+export const DEFER_CONTEXT_SHARE = 0.1
+export const DEFAULT_DEFER_MIN_TOOLS = 40
+
+/**
+ * Whether MCP tools go out by name only this request (tool search). "auto" defers once
+ * the deferrable tools are many (tool choice degrades past ~30–50) or heavy for the context.
+ */
+export function shouldDefer(
+  config: Pick<Config, "toolSearch" | "toolSearchMinTools">,
+  registry: ToolRegistry,
+  context: number | undefined,
+  flavor?: SchemaFlavor,
+) {
+  const mode = config.toolSearch ?? "auto"
+  if (mode === "off" || !registry.get(TOOL_SEARCH)) return false
+  const deferrable = registry.list().filter((d) => d.deferrable)
+  if (deferrable.length === 0) return false
+  if (mode === "on") return true
+  if (deferrable.length > (config.toolSearchMinTools ?? DEFAULT_DEFER_MIN_TOOLS)) return true
+  return !!context && registry.estimateTokens(deferrable, flavor) > context * DEFER_CONTEXT_SHARE
+}
+
+/** Deferred tool names grouped by MCP server, short names where they are unambiguous. */
+export function deferredByServer(registry: ToolRegistry, names: string[]) {
+  const groups = new Map<string, string[]>()
+  for (const name of names) {
+    const source = registry.get(name)?.source ?? "?"
+    const server = source.replace(/^mcp:/, "")
+    const prefix = serverPrefix(server)
+    const short = source.startsWith("mcp:") && name.startsWith(prefix) ? name.slice(prefix.length) : name
+    const unique = short === name || resolveToolName(registry, short).length === 1
+    groups.set(server, [...(groups.get(server) ?? []), unique ? short : `${sanitize(server)}/${short}`])
+  }
+  return [...groups].map(([server, tools]) => ({ server, tools }))
+}
+
+/**
+ * Tools the model may call at a step: the visible set plus deferred tools the conversation
+ * loaded (tool_search results, load_skill, direct calls). Undefined = no narrowing.
+ */
+export function activeFor(built: BuiltToolSet | undefined, messages: readonly ModelMessage[]): string[] | undefined {
+  if (!built || built.deferred.length === 0) return undefined
+  const visible = new Set(built.names)
+  const extra = loadedTools(messages).filter((n) => !visible.has(n) && n in built.tools)
+  return [...built.names, ...extra].slice(0, MAX_TOOLS_PER_REQUEST)
+}
+
+type TurnInput = Omit<RunOptions, "history" | "signal" | "maxSteps"> & {
+  /** Conversation so far; decides which deferred tools are already loaded. */
+  history?: ModelMessage[]
+}
 type Target = Awaited<ReturnType<typeof resolveTarget>>
 
 /** Per-turn extras gathered before assembly (recall and hooks run only for real turns). */
@@ -235,7 +323,10 @@ async function assembleFor(opts: TurnInput, target: Target | undefined, extras: 
   const info = target?.provider.models[target.model]
   const supportsTools = info?.tool_call !== false
   const tier = tierOf(info?.limit?.context)
-  const built = supportsTools ? opts.registry.toToolSet(toolSetOptions(target)) : undefined
+  const setOptions = toolSetOptions(target)
+  const defer = supportsTools && shouldDefer(await loadConfig(), opts.registry, info?.limit?.context, setOptions.flavor)
+  const loaded = new Set(loadedTools(opts.history ?? []))
+  const built = supportsTools ? opts.registry.toToolSet({ ...setOptions, defer, loaded }) : undefined
   const toolNames = built?.names ?? []
   const assembled = assemble({
     tier,
@@ -250,6 +341,8 @@ async function assembleFor(opts: TurnInput, target: Target | undefined, extras: 
     input: opts.input,
     now: opts.now ?? new Date(),
     prevClock: opts.prevClock,
+    deferredTools: built && built.deferred.length > 0 ? deferredByServer(opts.registry, built.deferred) : undefined,
+    declaredTools: built ? Object.keys(built.tools) : undefined,
   })
   if (built && built.names.length > 0) {
     const share = info?.limit?.context ? built.tokens / info.limit.context : 0
@@ -262,6 +355,7 @@ async function assembleFor(opts: TurnInput, target: Target | undefined, extras: 
       dropped: false,
       note:
         `${built.names.length} tool` +
+        (built.deferred.length > 0 ? ` · hoãn ${built.deferred.length}` : "") +
         (built.hidden.length > 0 ? ` · ẩn ${built.hidden.reduce((n, h) => n + h.count, 0)} do giới hạn ${built.names.length}` : "") +
         (share > 0.25 ? ` · chiếm ${Math.round(share * 100)}% context, nên lọc bớt tool` : ""),
     })
@@ -294,10 +388,14 @@ export async function previewContext(opts: TurnInput) {
   } catch (error) {
     if (!(error instanceof ChatSetupError)) throw error
   }
-  const { assembled, tier } = await assembleFor(opts, target)
+  const { assembled, tier, built } = await assembleFor(opts, target)
+  const loaded = new Set(loadedTools(opts.history ?? []))
   return {
     report: assembled.report,
     tier,
+    /** Tool search state: tools sent by name only, and deferred tools already loaded. */
+    deferred: built?.deferred ?? [],
+    loaded: built ? Object.keys(built.tools).filter((n) => loaded.has(n) && opts.registry.get(n)?.deferrable && !built.deferred.includes(n)) : [],
     model: target ? `${target.provider.name} · ${target.model}` : "chưa chọn model (giả định hạng B)",
   }
 }
@@ -340,10 +438,21 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
   if (!supportsTools && opts.registry.list().length > 0) {
     yield { type: "notice", text: "Model này không hỗ trợ tool; trả lời không dùng tool." }
   }
-  // Tell the user once whenever the set of tools left out by the provider limit changes.
-  const hiddenKey = JSON.stringify(built?.hidden ?? [])
+  // Tell the user once whenever deferral or the hidden tools change. Keyed on every
+  // deferrable tool, not on those still unloaded: loading tools must not repeat the notice.
+  const deferrable = built?.deferring ? opts.registry.list().filter((d) => d.deferrable).map((d) => d.name) : []
+  const hiddenKey = JSON.stringify([built?.hidden ?? [], deferrable.length])
   if (hiddenKey !== opts.registry.lastHiddenNotice) {
     opts.registry.lastHiddenNotice = hiddenKey
+    if (deferrable.length > 0) {
+      const servers = deferredByServer(opts.registry, deferrable)
+        .map((g) => `${g.tools.length} của ${g.server}`)
+        .join(", ")
+      yield {
+        type: "notice",
+        text: `Đang hoãn ${deferrable.length} tool MCP (${servers}); model tự nạp bằng tool_search khi cần. Đổi trong /config.`,
+      }
+    }
     if (built && built.hidden.length > 0) {
       const parts = built.hidden.map((h) => `${h.count} tool của ${h.source.replace(/^mcp:/, "")}`).join(", ")
       yield {
@@ -365,19 +474,26 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
 
   const model = languageModel(target.provider, target.model, target.apiKey)
   let summarized = false
+  // Visible tools at the current step; deferred tools join once loaded (tool search).
+  let active = activeFor(built, request)
   const result = streamText({
     model,
     system,
     messages: request,
     tools,
     stopWhen: stepCountIs(maxSteps),
+    // Every step exposes what the conversation has loaded so far, so a tool found by
+    // tool_search is callable at the very next step.
     // Last allowed step: keep tools declared (some providers reject tool history otherwise)
     // but forbid calling them, so the turn always ends with an answer.
     prepareStep: ({ stepNumber, messages }) => {
-      if (!tools || stepNumber < maxSteps - 1) return undefined
+      if (!tools) return undefined
+      active = activeFor(built, messages)
+      if (stepNumber < maxSteps - 1) return active ? { activeTools: active } : undefined
       summarized = true
-      return { toolChoice: "none", messages: [...messages, { role: "user", content: SUMMARY_PROMPT }] }
+      return { toolChoice: "none", activeTools: active, messages: [...messages, { role: "user", content: SUMMARY_PROMPT }] }
     },
+    experimental_repairToolCall: async ({ toolCall, error }) => repairCall(opts.registry, built, active, toolCall, error),
     abortSignal: opts.signal,
     maxRetries: 1,
     onError: () => {}, // errors are read from the stream
@@ -405,6 +521,7 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
       // The nudge is only for this request; it is not kept in history.
       messages: [...request, ...kept, { role: "user", content: NUDGE_PROMPT }],
       tools,
+      activeTools: activeFor(built, [...request, ...kept]),
       toolChoice: tools ? "none" : undefined,
       abortSignal: opts.signal,
       maxRetries: 1,

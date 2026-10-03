@@ -149,7 +149,7 @@ Notion, Linear, Sentry, Atlassian… dùng OAuth: không cần token, chỉ cầ
 - Nếu báo không tìm thấy lệnh, ghi đường dẫn đầy đủ, ví dụ `"command": "C:\\Users\\me\\.local\\bin\\uvx.exe"`.
 - Khi thoát bằng `/exit` hoặc `ctrl+c`, OpenTrading đóng mọi server trước, đợi tối đa 2 giây.
 
-## 7. Prompts, resources và giới hạn số tool
+## 7. Prompts, resources, tìm tool và giới hạn số tool
 
 - **Prompts** của server hiện thành lệnh `/<server>:<prompt>` trong gợi ý khi gõ `/`, ví dụ `/demo:phan_tich VCB biên lãi`.
   - Tham số theo thứ tự khai báo; tham số cuối nhận phần còn lại của dòng.
@@ -157,9 +157,23 @@ Notion, Linear, Sentry, Atlassian… dùng OAuth: không cần token, chỉ cầ
   - Thiếu tham số bắt buộc thì hiện cách dùng.
   - Nội dung prompt được gửi như tin nhắn của bạn và hiện đầy đủ trong khung chat.
 - **Resources**: khi có server cung cấp resource, model có thêm 2 tool chỉ đọc là `list_mcp_resources` và `read_mcp_resource`.
+- **Tìm tool (nạp theo nhu cầu)**: khi có nhiều tool MCP, model chỉ nhận **tên** của chúng, không nhận schema. Khi cần thì model gọi `tool_search` để nạp, giống ToolSearch của Claude Code.
+  - Chế độ (`/config` → Tìm tool, hoặc `toolSearch` trong `~/.opentrading/config.json`):
+
+    | Chế độ | Hành vi |
+    | --- | --- |
+    | `auto` (mặc định) | Hoãn mọi tool MCP khi có hơn 40 tool (`toolSearchMinTools`) hoặc schema chiếm hơn 10% context của model |
+    | `on` | Luôn hoãn |
+    | `off` | Gửi mọi tool như trước |
+
+  - Danh sách tên tool hoãn nằm trong system prompt (`<tool_hoan>`), nhóm theo server. Danh sách quá dài thì chỉ ghi số tool của mỗi server.
+  - `tool_search` nhận `select:a,b` (tên đầy đủ, `server/tool` hoặc tên ngắn) hoặc từ khoá. Tìm từ khoá không phân biệt dấu và hiểu một số thuật ngữ tiếng Việt như "lịch sử giá", "khối ngoại", "BCTC".
+  - Tool đã nạp gọi được ngay ở bước kế tiếp và giữ nguyên trong cả phiên, kể cả sau `--resume`, vì OpenTrading suy ra từ lịch sử hội thoại. Model gọi thẳng tên ngắn thì OpenTrading tự đổi sang tên đầy đủ.
+  - Server muốn luôn gửi đủ schema thì đặt `"alwaysLoad": true` trong cấu hình server.
+  - `/tools` ghi `hoãn ·` / `đã nạp ·` trước mô tả. `/context` có dòng "Danh sách tool hoãn".
 - **Giới hạn số tool**: OpenAI, Gemini và Anthropic nhận tối đa khoảng 128 tool mỗi request.
-  - Vượt mức thì OpenTrading giữ tool có sẵn trước, rồi tới tool MCP theo thứ tự server trong file cấu hình, và báo một lần trong chat là đang ẩn bao nhiêu tool của server nào.
-  - Model chọn tool kém đi khi có quá nhiều tool (từ khoảng 30–50), nên hãy lọc bằng `enabledTools`/`disabledTools`.
+  - Với tìm tool đang tắt (hoặc tool không hoãn được), vượt mức thì OpenTrading giữ tool có sẵn trước, rồi tới tool MCP theo thứ tự server trong file cấu hình, và báo một lần trong chat là đang ẩn bao nhiêu tool của server nào.
+  - Model chọn tool kém đi khi có quá nhiều tool (từ khoảng 30–50); tìm tool hoặc `enabledTools`/`disabledTools` giải quyết việc này.
   - `/context` hiện số token mà định nghĩa tool chiếm.
 
 ## 8. Quản lý bằng `/mcp`
@@ -211,10 +225,10 @@ Lệnh nhanh không mở panel: `/mcp enable <tên>`, `/mcp disable <tên>`, `/m
 
 - `/mcp`: quản lý server (mục 8).
 - `opentrading mcp list`: như `/mcp` nhưng chạy ngoài TUI.
-- `/tools`: liệt kê mọi tool model đang gọi được. ◇ là tool chỉ đọc. Có hơn 128 tool thì báo số tool bị ẩn.
+- `/tools`: liệt kê mọi tool model đang gọi được. ◇ là tool chỉ đọc. Tool đang hoãn ghi `hoãn ·`; có hơn 128 tool không hoãn thì báo số tool bị ẩn.
 - `ctrl+o` trong khung chat: mở rộng hoặc thu gọn toàn bộ kết quả tool.
 - Có thể thử mà không cần TUI: `bun src/core/chat.ts "mấy giờ rồi?"`. Lệnh này chỉ dùng các tool có sẵn.
 
 **Tự phục hồi.** Lỗi mạng hoặc server quá tải (429/5xx) lúc kết nối được thử lại 2 lần. Server remote bị rớt kết nối thì tự kết nối lại (tối đa 5 lần, chờ tăng dần). Server quên phiên (HTTP 404) thì gọi tool lại một lần sau khi khởi tạo phiên mới.
 
-Chưa hỗ trợ trong bản này: transport WebSocket, `headersHelper`, elicitation, roots, đăng ký theo dõi resource, nạp tool theo nhu cầu (tool search).
+Chưa hỗ trợ trong bản này: transport WebSocket, `headersHelper`, elicitation, roots, đăng ký theo dõi resource.

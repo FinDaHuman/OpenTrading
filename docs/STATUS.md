@@ -41,7 +41,7 @@ Contract cho đồng nghiệp: [docs/contracts.md](contracts.md).
 | ↳ transport | stdio, Streamable HTTP, SSE (tự fallback); tự thử lại, tự kết nối lại, khôi phục khi session hết hạn |
 | ↳ đăng nhập | OAuth 2.1 (DCR, PKCE, refresh); secret trong `mcp-auth.json` |
 | ↳ cấu hình | `~/.opentrading/mcp.json` + `.mcp.json` (project phải được cho phép); lọc tool `enabledTools`/`disabledTools` |
-| ↳ tool | schema chuẩn hoá theo provider; tối đa 128 tool/request; ảnh trong kết quả; prompts → `/server:prompt`; resources |
+| ↳ tool | schema chuẩn hoá theo provider; tối đa 128 tool/request; tìm tool `tool_search` (tool MCP hoãn, nạp theo nhu cầu); ảnh trong kết quả; prompts → `/server:prompt`; resources |
 | ↳ CLI | `opentrading mcp add/list/login/secret/debug…` |
 | `/mcp` (giống Claude Code: danh sách → server → tool → chi tiết; danh mục server có sẵn, mặc định tắt), `/tools`, `ctrl+o` | Xong |
 | **Xác nhận tool ghi** (`src/core/permission.ts`) | Xong. Tool không chỉ đọc phải được cho phép: một lần / cả phiên / luôn (gắn với server) / không (kèm lời nhắn) |

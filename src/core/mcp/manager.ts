@@ -716,6 +716,7 @@ export class McpManager {
         name: modelName,
         source: `mcp:${name}`,
         priority,
+        deferrable: !config.alwaysLoad,
         description: (tool.description ?? `Tool ${tool.name} của MCP server ${name}.`).slice(0, MAX_DESCRIPTION),
         // Raw schema; the registry sanitizes it per provider when building a request.
         input: (tool.inputSchema ?? { type: "object", properties: {} }) as JSONSchema7,

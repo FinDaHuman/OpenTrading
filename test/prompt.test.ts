@@ -123,3 +123,22 @@ test("budget helpers", () => {
   expect(fit("ngắn", 100)).toMatchObject({ truncated: false, dropped: false })
   expect(fit("x".repeat(1000), 0)).toMatchObject({ dropped: true, text: "" })
 })
+
+test("deferred tools are listed by server in system, after the skill catalog; skills may need deferred tools", () => {
+  const needs = skill({ name: "flows", requires_tools: ["mcp__ot__money_flow"] })
+  const input = base({
+    tools: ["current_time", "load_skill", "tool_search"],
+    skills: [needs],
+    deferredTools: [{ server: "ot", tools: ["money_flow", "vn_quote_history"] }],
+    declaredTools: ["current_time", "load_skill", "tool_search", "mcp__ot__money_flow", "mcp__ot__vn_quote_history"],
+  })
+  const a = assemble(input)
+  expect(a.system).toContain("<tool_hoan>\n")
+  expect(a.system).toContain("ot (2): money_flow, vn_quote_history")
+  expect(a.system.indexOf("<skill_catalog>")).toBeLessThan(a.system.indexOf("<tool_hoan>\n"))
+  // The skill stays visible although its tool is only deferred.
+  expect(a.system).toContain("- flows:")
+  expect(a.report.find((r) => r.id === "tool_hoan")?.channel).toBe("system")
+  // Without tool_search there is nothing to load them with: no list.
+  expect(assemble({ ...input, tools: ["current_time", "load_skill"] }).system).not.toContain("<tool_hoan>\n")
+})

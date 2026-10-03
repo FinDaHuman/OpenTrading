@@ -106,3 +106,20 @@ test("the transcript is rebuilt without reminder blocks", () => {
     { kind: "assistant", text: "Không có gì." },
   ])
 })
+
+test("tools loaded by tool_search survive a resume (derived from the stored history)", async () => {
+  const { loadedTools } = await import("../src/core/tools/loaded")
+  const turn: ModelMessage[] = [
+    { role: "user", content: "giá FPT" },
+    { role: "assistant", content: [{ type: "tool-call", toolCallId: "s1", toolName: "tool_search", input: { query: "select:a" } }] },
+    {
+      role: "tool",
+      content: [{ type: "tool-result", toolCallId: "s1", toolName: "tool_search", output: { type: "text", value: "Đã nạp tool: mcp__ot__a, mcp__ot__b\n\n## mcp__ot__a" } }],
+    },
+    { role: "assistant", content: "xong" },
+  ]
+  const s = Session.create(new Date("2026-10-03T03:15:00Z"))
+  await s.appendTurn(turn, info)
+  const loaded = await loadSession(s.id)
+  expect(loadedTools(loaded.messages)).toEqual(["tool_search", "mcp__ot__a", "mcp__ot__b"])
+})

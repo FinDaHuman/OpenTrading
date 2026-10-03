@@ -514,7 +514,7 @@ export function App(props: {
               <HelpDialog onRun={(command) => run(command)} />
             </Match>
             <Match when={state.dialog === "tools"}>
-              <ToolsDialog registry={props.runtime.registry} />
+              <ToolsDialog registry={props.runtime.registry} runtime={props.runtime} />
             </Match>
             <Match when={state.dialog === "context"}>
               <ContextDialog runtime={props.runtime} />

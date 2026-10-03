@@ -52,6 +52,10 @@ export interface AssembleInput {
   /** Clock snapshot last sent to the model in this conversation; undefined = never. */
   prevClock?: ClockSnapshot
   calendar?: Calendar
+  /** Tools sent by name only (tool search), grouped by MCP server. */
+  deferredTools?: { server: string; tools: string[] }[]
+  /** Every declared tool, deferred ones included (for skills' requires_tools). */
+  declaredTools?: string[]
 }
 
 export interface Assembled {
@@ -81,6 +85,20 @@ export function promptVersion(dir = PROMPTS_DIR): string {
   return hash.digest("hex").slice(0, 12)
 }
 
+const DEFERRED_HEADER =
+  "Các tool dưới đây đang hoãn: chỉ có tên, chưa có tham số. Muốn dùng thì gọi tool_search trước (\"select:ten_a,ten_b\" để nạp nhiều tool một lần, hoặc tìm theo từ khoá); nạp xong là gọi được ngay. Đừng nói là không có dữ liệu khi chưa tìm."
+
+/**
+ * Deferred tool names per server, within a token budget; over budget each server shrinks
+ * to its tool count (the model then searches by keyword).
+ */
+export function renderDeferred(groups: { server: string; tools: string[] }[], budgetTokens: number) {
+  const full = [DEFERRED_HEADER, ...groups.map((g) => `${g.server} (${g.tools.length}): ${g.tools.join(", ")}`)].join("\n")
+  if (estimateTokens(full) <= budgetTokens) return { text: full, truncated: false }
+  const short = groups.map((g) => `${g.server}: ${g.tools.length} tool — tìm bằng tool_search (từ khoá hoặc "mcp__${g.server}")`)
+  return { text: [DEFERRED_HEADER, ...short].join("\n"), truncated: true }
+}
+
 export function assemble(input: AssembleInput, promptsDir = PROMPTS_DIR): Assembled {
   const report: LayerReport[] = []
   const system: string[] = []
@@ -94,7 +112,8 @@ export function assemble(input: AssembleInput, promptsDir = PROMPTS_DIR): Assemb
     if (!fitted.dropped) target.push(tag(id, fitted.text))
   }
 
-  const toolSet = new Set(input.tools)
+  // Deferred tools still count: a skill may need tools the model loads on demand.
+  const toolSet = new Set([...input.tools, ...(input.declaredTools ?? [])])
   const visible = availableSkills(input.skills, toolSet)
 
   // ── system: static first ─────────────────────────────────────────────
@@ -117,6 +136,13 @@ export function assemble(input: AssembleInput, promptsDir = PROMPTS_DIR): Assemb
       report.push({ id: "skill_catalog", layer: 6, channel: "system", tokens, truncated: catalog.truncated, dropped: false })
       system.push(tag("skill_catalog", catalog.text))
     }
+  }
+
+  if (input.deferredTools && input.deferredTools.length > 0 && input.tools.includes("tool_search")) {
+    const budget = BUDGETS.deferred_tools![input.tier] ?? 0
+    const listing = renderDeferred(input.deferredTools, budget)
+    report.push({ id: "tool_hoan", layer: 7, channel: "system", tokens: estimateTokens(listing.text), truncated: listing.truncated, dropped: false })
+    system.push(tag("tool_hoan", listing.text))
   }
 
   // ── context: user data, rebuilt every request ──────────────────────────
