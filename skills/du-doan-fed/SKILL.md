@@ -41,3 +41,7 @@ odds", KHÔNG thay bằng nhận định riêng.
 ## Nghiệm thu
 
 "Fed tháng tới" → prob ≥2 kịch bản + lịch họp + 1 dòng hàm ý VN.
+
+## Ghi chú review
+
+Đã lấy dữ liệu từ polymarket đúng yêu cầu (Gamma qua jina + drill event + curve + fed.gov).

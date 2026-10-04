@@ -1,37 +1,35 @@
 ---
 name: ky-thuat-chuyen-sau
-description: Phân tích THUẦN kỹ thuật 1 mã — chỉ báo, pattern, S-R, RS vs index, intraday/orderbook.
-when_to_use: "VCB kỹ thuật sao, FPT có breakout không, đọc băng HPG, RSI và hỗ trợ-kháng cự. Không dùng khi: cơ bản (co-ban-chuyen-sau), định giá (dinh-gia-chuyen-sau), săn toàn thị trường (san-loc-co-phieu)."
+description: Phân tích THUẦN kỹ thuật 1 mã đa khung (1D/1W/1M) — RSI/MACD/BB/Ichimoku, Elliott/Wyckoff, hỗ trợ-kháng cự, higher-high hay lower-low.
+when_to_use: "VCB kỹ thuật đa khung sao, FPT có breakout không, đọc băng HPG, higher-high hay lower-low, sóng Elliott. Không dùng khi: cơ bản (co-ban-chuyen-sau), định giá (dinh-gia-chuyen-sau)."
 activation: auto
 requires_tools: [mcp__opentrading__signals_technical]
 tool_budget: 8
 triggers:
-  keywords: [kỹ thuật, rsi, macd, hỗ trợ, kháng cự, breakout, pattern, orderbook, băng giá, chỉ báo, adx, ema, sma]
-version: 1.0.0
+  keywords: [kỹ thuật, rsi, macd, bb, bollinger, ichimoku, elliott, wyckoff, hỗ trợ, kháng cự, breakout, pattern, orderbook, băng giá, chỉ báo, adx, ema, sma, higher high, lower low, đa khung]
+version: 1.1.0
 ---
 
-# Kỹ thuật chuyên sâu 1 mã
+# Kỹ thuật chuyên sâu 1 mã (đa khung)
 
 ## Workflow
 
 | Wave | Tools | Ghi chú |
 |---|---|---|
-| 1 | `signals_technical`(symbol) | 1 call = RSI/MACD/Bands/ADX/patterns/S-R/RS/pos_52w/sma150 |
-| 2 (chọn) | `pattern_match`(symbol) · `vn_quote_history`(symbol, days=250) | analogy + tự vẽ đường xu hướng |
-| 3 (intraday) | `dnse_latest_trade` · `dnse_orderbook` · `vn_trades` | ≤3, cùng upstream DNSE |
-| 4 (index context) | `vn_index_ohlcv`(VNINDEX) | khi cần so trend index |
+| 1. Nến đa khung | `signals_technical`(symbol, interval=1D) · (interval=1W) · [1M nếu hỏi dài hạn] | mỗi khung 1 call: RSI/MACD/BB/Ichimoku/S-R/patterns |
+| 2. Cấu trúc sóng | đọc từ output wave 1: swings + swing_trend + fib + elliott + wyckoff | nhãn HH/HL/LH/LL + Fibonacci 7 mức + Elliott (impulse/corrective/developing + invalidation) + Wyckoff phase |
+| 3. Xác nhận (chọn) | `pattern_match`(analogy lịch sử) · `dnse_latest_trade`/`dnse_orderbook`/`vn_trades` (intraday) · `vn_index_ohlcv` (trend index) | ≤3, theo câu hỏi |
 
-## Verdict
+## Verdict mỗi khung (1D/1W[/1M])
 
-Trạng thái trend (đỉnh/đáy/downtrend/đi ngang bằng SMA stack + ADX) · momentum (RSI/MACD/
-stoch) · vùng S-R + giá hiện tại nằm đâu · pattern + xác suất lịch sử (pattern_match corr) ·
-RS vs VNINDEX · kết luận timing (MUA/CHỜ/BÁN + trigger giá).
+Trend (SMA stack + ADX) · momentum (RSI/MACD/BB/Ichimoku) · S-R của khung · cấu trúc
+(HH/HL/LH/LL + Fibo) · Elliott pattern/invalidation + Wyckoff phase · **kết luận higher-high
+hay lower-low**. Tổng hợp: đồng thuận đa khung hay phân kỳ + trigger giá → timing MUA/CHỜ/BÁN.
 
 ## Chống tràn lan
 
-- Wave 2 CHỈ khi user hỏi "mẫu hình/quá khứ"; wave 3 CHỈ khi intraday.
-- `interval` khác 1D → tool trả warning — về 1D, không retry đổi params.
-- `signals_technical` 1 call đã đủ 80% verdict — skill "1 tool trụ cột" mẫu mực.
+- `interval` chấp nhận 1D/1W/1M (1W ≥30 bars, 1M ≥24 bars); interval lạ → unavailable, đừng retry.
+- Elliott/Wyckoff là heuristic (kèm confidence) — verdict ghi confidence + invalidation, không diễn giải sóng chuẩn bằng lời suông.
 
 ## Lỗi thường gặp
 
@@ -41,9 +39,9 @@ Mã mới <60 nến → indicators null, báo "thiếu lịch sử". DNSE hết 
 
 ## Bằng chứng live (02-10-2026)
 
-VCB — RSI 39.2, ADX 12.1 (trend yếu), MACD −0.31/−0.13, EMA10 58.09, pos_52w 0.21, recommend
-Sell (HPG) · HPG pattern best_corr 0.409 (yếu — ghi đúng) · orderbook VCB depth live · băng 10:18 giá 58.1.
+VCB — RSI 39.2, ADX 12.1 (trend yếu), MACD −0.31/−0.13, EMA10 58.09, pos_52w 0.21 ·
+HPG pattern best_corr 0.409 (yếu — ghi đúng) · VCB 1W bearish/lower-low/fib-down nhất quán.
 
 ## Nghiệm thu
 
-"RSI FPT và vùng hỗ trợ" → 2 mục verdict ≤2 calls; "intraday SSI" → thêm leg orderbook, tổng ≤8.
+"FPT kỹ thuật 1D+1W" → verdict 2 khung + HH/LL + Ichimoku signal, ≤8 calls.

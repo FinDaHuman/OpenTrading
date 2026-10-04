@@ -41,3 +41,7 @@ US10Y 5.24% / 2Y 4.61%, không đảo chiều · WorldBank GDP VN 8.02% · fear/
 ## Nghiệm thu
 
 "Kinh tế Mỹ hiện tại" → 5 mục verdict, curve + ≥2 series fred có số.
+
+## Ghi chú review
+
+ỔN — giữ nguyên. Verdict bắt buộc có 1 dòng so sánh VN-vs-global (GDP VN cross-ref).

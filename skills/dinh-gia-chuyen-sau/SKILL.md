@@ -43,3 +43,7 @@ VCB per_pb @57,400 (2 method đồng thuận) · FPT per_pb @62,700 · US10Y 5.2
 ## Nghiệm thu
 
 "FPT đắt chưa" → UPSIDE % + so lịch sử 2 dòng, ≤7 calls.
+
+## Ghi chú review
+
+ỔN — mỏng nhưng đúng bản chất định giá. Bổ sung duy nhất: verdict thêm dòng "upside theo target CTCK" (cross-ref tim-co-hoi-bao-cao-ctck) để neo kỳ vọng.

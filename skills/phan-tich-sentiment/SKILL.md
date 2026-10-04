@@ -45,3 +45,10 @@ VCB posts lãi suất 0.1-6% · Groq key có trên prod, thiếu trên local dev
 ## Nghiệm thu
 
 "Phố nói gì về FPT" → điểm + ≥3 quotes + nhãn nguồn, ≤4 calls.
+
+## Ghi chú review — dữ liệu CÓ ý nghĩa nếu đọc đúng
+
+Sentiment đo *đám đông*, không đo *doanh nghiệp* (live: FPT heuristic −0.25 trong khi
+M −2.06 sạch). Ngưỡng diễn giải heuristic: <−0.3 hoảng loạn · >+0.3 FOMO · giữa = trung
+tính; KHÔNG chuẩn hóa chéo 2 mode Groq/heuristic; không bao giờ dùng sentiment làm leg
+duy nhất của quyết định.

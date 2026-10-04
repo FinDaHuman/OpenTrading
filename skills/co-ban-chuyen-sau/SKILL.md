@@ -49,3 +49,7 @@ SBV 74.8% · VCB cổ tức 450đ · insider empty là đúng data.
 ## Nghiệm thu
 
 "BCTC FPT có gì lạ" → wave 1 (2 calls) đủ M/F + 4 quý; "toàn cảnh cơ bản VPL" → ≤9 calls, không leg gọi 2 lần.
+
+## Ghi chú review
+
+ỔN — aspect-gating giữ run điển hình 4–7 calls, giữ nguyên.

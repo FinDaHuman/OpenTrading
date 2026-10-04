@@ -32,3 +32,7 @@ mega_flows AAPL/MSFT/NVDA OK · fear/greed 70-74 Greed 7 ngày.
 ## Nghiệm thu
 
 "Tin thế giới" → ≥5 headline + ≥2 mục reaction định lượng.
+
+## Ghi chú review
+
+Như tin-tuc-nong-viet-nam — không kế thừa gì từ 8010 (đã retire).

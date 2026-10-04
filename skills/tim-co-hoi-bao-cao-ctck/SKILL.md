@@ -7,7 +7,7 @@ requires_tools: [mcp__opentrading__analyst_consensus]
 tool_budget: 8
 triggers:
   keywords: [ctck, khuyên mua, giá mục tiêu, target, báo cáo phân tích, khuyến nghị, rating]
-version: 1.0.0
+version: 1.1.0
 ---
 
 # Tìm cơ hội từ báo cáo CTCK
@@ -17,7 +17,8 @@ version: 1.0.0
 | Wave | Tools | Ghi chú |
 |---|---|---|
 | 1 | `analyst_consensus`(limit=30) | **feed chung không symbol** — parse rating + giá mục tiêu từ titles |
-| 2 (mã cụ thể) | `analyst_consensus`(symbol, limit=15) · `vs_documents`(symbol) | report cho mã + tài liệu gốc |
+| 1b (báo cáo vĩ mô) | `analyst_consensus`(report_type=macro) | lọc báo cáo vĩ mô CTCK (entry section/report); không có dated reports thì dùng số liệu gốc |
+| 2 (mã cụ thể) | `analyst_consensus`(symbol, limit=15) · `vs_documents`(symbol) · `web_fetch`(format=pdf, URL báo cáo) | report cho mã + tài liệu gốc + **đọc nội dung PDF** (stdlib-only, scan báo trung thực; cap 10 trang/20k ký tự) |
 | 3 (xác nhận) | `stock_overview`(mã target) 1-2 call | so giá hiện tại vs mục tiêu → upside % |
 
 ## Verdict

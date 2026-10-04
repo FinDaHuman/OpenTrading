@@ -24,7 +24,7 @@ version: 1.0.0
 
 Cường độ (event counts GDELT trend) · giá đã phản ánh chưa (dầu/vàng move vs baseline) ·
 kênh truyền dẫn (energy→inflation→rates) · xác suất leo thang (odds) · hàm ý vị thế
-(kiem-tra-rui-ro-vi-the trước khi hành động).
+(đánh giá cushion/size trong danh-gia-truoc-bctc leg 6 trước khi hành động).
 
 ## Chống tràn lan
 
@@ -41,3 +41,7 @@ geo_intel("Vietnam") trả articles · event_stats("vietnam") articles >0 · gol
 ## Nghiệm thu
 
 "Xung đột X ảnh hưởng gì" → 5 mục verdict, có số dầu/vàng phiên gần nhất.
+
+## Ghi chú review
+
+ỔN, giữ nguyên. Hàm ý vị thế final: đánh giá cushion/size trong danh-gia-truoc-bctc leg 6 trước khi hành động.

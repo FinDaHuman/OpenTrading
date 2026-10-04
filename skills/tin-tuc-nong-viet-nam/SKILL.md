@@ -43,3 +43,7 @@ sạch mã số thuế) · `news_symbol("VCB")` → posts lãi suất 0.1-6%.
 ## Nghiệm thu
 
 "Tin nóng hôm nay" → ≥5 headline có provenance, ≤9 calls.
+
+## Ghi chú review
+
+KHÔNG liên quan server 8010 cũ — 8010 đã retire, nguồn tin là Fireant→GDELT hoàn toàn mới.

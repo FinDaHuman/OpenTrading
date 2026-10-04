@@ -42,3 +42,7 @@ Fed October 2026: "no change" **74.5%** (volume 24h ~2.6M USD) · Brazil preside
 ## Nghiệm thu
 
 "Rủi ro chính trị toàn cầu" → ≥4 mục có prob_pct + provenance event URL.
+
+## Ghi chú review
+
+ỔN — skill tổ chức cross-ref (tools home ở bat-on-quoc-gia/du-doan-polymarket), giữ nguyên thiết kế.
