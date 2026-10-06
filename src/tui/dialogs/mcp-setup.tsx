@@ -55,7 +55,6 @@ export function McpSetupDialog(props: { mcp: McpManager }) {
     <DialogFrame
       title="Kết nối MCP-server công ty"
       hint={saving() ? "đang lưu…" : "dán token · enter lưu & kết nối · esc bỏ qua"}
-      width={78}
     >
       <text fg={color.tx2}>{`Server: ${COMPANY_MCP_TEMPLATE.mcpServers.opentrading.url}`}</text>
       <text fg={color.tx2}>{"Xin TEAM_TOKEN từ admin (MCP_BEARER_TEAM). Token chỉ lưu trên máy này."}</text>

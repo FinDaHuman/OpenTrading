@@ -62,7 +62,7 @@ if (import.meta.main) {
       console.error(filled)
       process.exit(1)
     }
-    input = (await runtime.mcp.promptByName(prompt.name, filled)).text
+    input = await runtime.mcp.getPrompt(prompt.server, prompt.name, filled)
   }
   try {
     for await (const event of runAgent({ history: [], input, skills, registry })) {

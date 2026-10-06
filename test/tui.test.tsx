@@ -562,8 +562,9 @@ test("/tools lists built-in and MCP tools", async () => {
   try {
     await setup.mockInput.typeText("/tools")
     setup.mockInput.pressEnter()
-    // 5 built-in (current_time, load_skill, ask_user, todo_write, tool_search) + propose_memory + 4 from the demo MCP server
-    frame = await setup.waitForFrame((f) => f.includes("Tool · 10") && f.includes("tool hoãn"))
+    // Merged runtime (2026-10-06): 5 built-in (current_time, load_skill, ask_user, todo_write,
+    // tool_search) + propose_memory + chart/session/watchlist-local/web/spawn/doctor_local + 4 demo.
+    frame = await setup.waitForFrame((f) => f.includes("Tool · ") && f.includes("tool hoãn"))
     show(frame)
     // Regression for the 01/10 screenshot: every tool is exactly one line, long descriptions
     // end in "…" instead of wrapping mid-word, and the mark column is straight.
@@ -576,11 +577,11 @@ test("/tools lists built-in and MCP tools", async () => {
     expect(timeRow).toMatch(/…\s+\[chỉ đọc\]\s*$/)
     expect(frame).not.toMatch(/^\s+Asia\/H/m)
     expect(frame).toContain("Có sẵn")
-    expect(frame).toContain("Memory")
-    expect(frame).toContain("MCP · demo")
     expect(frame).toContain("3 tool hoãn: model chỉ thấy tên") // add is alwaysLoad
-    expect(rows.find((r) => r.includes(" echo "))).toContain("hoãn · ")
+    // (echo row sits below the fold with the merged 24-tool runtime — deferral is
+    // already verified by the "3 tool hoãn" subtitle and the non-deferred timeRow.)
     expect(timeRow).not.toContain("hoãn · ")
+    expect(frame).toContain("1/24") // merged runtime: 24 tools, Memory/MCP groups sit below the fold
   } finally {
     await saveConfig({ toolSearch: undefined })
   }
@@ -591,7 +592,7 @@ test("/tools lists built-in and MCP tools", async () => {
   expect(frame).toContain("ask_user")
   expect(frame).toMatch(/• questions \(bắt buộc\): array/)
   setup.mockInput.pressEscape()
-  await setup.waitForFrame((f) => f.includes("Tool · 10"))
+  await setup.waitForFrame((f) => f.includes("Tool · 24"))
   setup.mockInput.pressEscape()
   await setup.waitFor(() => state.dialog === undefined)
 })
