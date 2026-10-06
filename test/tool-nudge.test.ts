@@ -2,7 +2,7 @@ import { expect, test } from "bun:test"
 import { createAnthropic } from "@ai-sdk/anthropic"
 import { createGoogleGenerativeAI } from "@ai-sdk/google"
 import { generateText, type LanguageModel, type ModelMessage } from "ai"
-import { TOOL_NUDGE } from "../src/core/agent"
+import { TOOL_NUDGE, nudgeAfterTools } from "../src/core/agent"
 import type { CatalogProvider } from "../src/core/catalog"
 import { languageModel, mergeGeminiTurns } from "../src/core/providers"
 
@@ -66,4 +66,15 @@ test("mergeGeminiTurns only joins neighbours with the same role", () => {
     ["model", 1],
     ["user", 1],
   ])
+})
+
+test("the nudge is sent only on routes whose request shape was checked", () => {
+  const target = (npm: string, api?: string) => ({ provider: { npm, api, models: { m: {} } }, model: "m" })
+  expect(nudgeAfterTools(target("@ai-sdk/anthropic"))).toBe(true)
+  expect(nudgeAfterTools(target("@ai-sdk/google"))).toBe(true)
+  expect(nudgeAfterTools(target("@ai-sdk/openai"))).toBe(true)
+  expect(nudgeAfterTools(target("@ai-sdk/mistral"))).toBe(false)
+  expect(nudgeAfterTools(target("@ai-sdk/openai", "https://x.test/v1"))).toBe(false)
+  expect(nudgeAfterTools(target("@ai-sdk/openai-compatible", "https://x.test/v1"))).toBe(false)
+  expect(nudgeAfterTools(undefined)).toBe(false)
 })
