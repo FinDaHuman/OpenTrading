@@ -1,5 +1,6 @@
 import type { ModelMessage } from "ai"
 import { z } from "zod"
+import { compactCarry, isCompactMarker } from "../compact-marker"
 
 export const TODO_WRITE = "todo_write"
 /** First line of every successful todo_write result; the TUI keys its one-line summary on it. */
@@ -67,6 +68,14 @@ export function currentTodos(messages: readonly ModelMessage[]): Todo[] {
   let userTurnsSince = 0
   for (const message of messages) {
     if (message.role === "user") userTurnsSince++
+    // The list in force when the history was compacted (its todo_write calls were summarized).
+    if (isCompactMarker(message)) {
+      const carried = z.array(Todo).safeParse(compactCarry(message).todos)
+      if (carried.success) {
+        current = carried.data
+        userTurnsSince = 0
+      }
+    }
     if (typeof message.content === "string") continue
     for (const part of message.content as Part[]) {
       if (part.type === "tool-call" && part.toolName === TODO_WRITE && part.toolCallId) calls.set(part.toolCallId, part.input)

@@ -2,6 +2,7 @@ import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test"
 import { mkdtemp, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
+import type { ModelMessage } from "ai"
 import { z } from "zod"
 
 // Isolated state dir before core modules read it.
@@ -30,6 +31,8 @@ let plan: { tool: string; args: object; always?: boolean } | undefined
 let script: { tool: string; args: object }[] | undefined
 /** Mimic gemini-2.5-flash-lite: answer with nothing after a tool result. */
 let emptyAfterTool: "once" | "always" | undefined
+/** Token usage reported on the answer's last chunk (Groq sends it as x_groq.usage). */
+let usage: { prompt_tokens: number; completion_tokens: number } | undefined
 const NUDGE = "Hãy trả lời câu hỏi của người dùng dựa trên kết quả tool"
 const TOOL_NUDGE_START = "Nếu còn cần dữ liệu, gọi cùng lúc"
 
@@ -50,8 +53,19 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   const url = String(input instanceof Request ? input.url : input)
   if (url.endsWith("/api.json")) return Response.json(CATALOG)
   if (!url.endsWith("/chat/completions")) throw new Error(`unexpected fetch ${url}`)
-  const body = JSON.parse(String(init?.body)) as Body
+  const body = JSON.parse(String(init?.body)) as Body & { stream?: boolean }
   bodies.push(body)
+  // generateText (the compaction summary) does not stream.
+  if (!body.stream) {
+    return Response.json({
+      id: "c",
+      object: "chat.completion",
+      created: 1,
+      model: "tooly",
+      choices: [{ index: 0, message: { role: "assistant", content: "Kết quả: xong." }, finish_reason: "stop" }],
+      usage: { prompt_tokens: 1, completion_tokens: 1 },
+    })
+  }
   // Branch on the request, not on call counts: tool results present → answer in text.
   const hasToolResult = body.messages.some((m) => m.role === "tool")
   // The turn starts at the last real user message; the per-step tool nudge does not count.
@@ -78,7 +92,8 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   if (emptyAfterTool && hasToolResult && (emptyAfterTool === "always" || !nudged)) {
     return sse([chunk({ role: "assistant", content: "" }), chunk({}, "stop")])
   }
-  return sse([chunk({ role: "assistant", content: "Kết quả: " }), chunk({ content: "xong." }), chunk({}, "stop")])
+  const last = usage ? { ...chunk({}, "stop"), x_groq: { usage } } : chunk({}, "stop")
+  return sse([chunk({ role: "assistant", content: "Kết quả: " }), chunk({ content: "xong." }), last])
 }) as typeof fetch
 
 const { runAgent } = await import("../src/core/agent")
@@ -104,6 +119,7 @@ beforeEach(async () => {
   plan = undefined
   script = undefined
   emptyAfterTool = undefined
+  usage = undefined
   await saveConfig({ provider: "groq", model: "tooly", toolSearch: undefined, toolSearchMinTools: undefined })
 })
 
@@ -520,4 +536,49 @@ test("a todo_write the tool rejects is recorded as an error, so the list comes f
   ]
   const fixed = await collect(runAgent({ history: [], input: "x", skills: [], registry: r }))
   expect(currentTodos(done(fixed).messages)).toEqual(good)
+})
+
+test("done carries the context size: provider usage of the last step, else an estimate", async () => {
+  usage = { prompt_tokens: 1_234, completion_tokens: 56 }
+  const measured = done(await collect(runAgent({ history: [], input: "x", skills: [], registry: registry() })))
+  expect(measured.usage).toEqual({ contextTokens: 1_290, estimated: false })
+  usage = undefined
+  const guessed = done(await collect(runAgent({ history: [], input: "x", skills: [], registry: registry() })))
+  expect(guessed.usage?.estimated).toBe(true)
+  expect(guessed.usage!.contextTokens).toBeGreaterThan(100) // system prompt + tool schemas
+})
+
+test("the compaction summary is asked with the turn's system prompt and visible tools, tools off, the prompt last", async () => {
+  const { summarizeConversation } = await import("../src/core/agent")
+  const r = bigRegistry(130) // MCP tools deferred: only what history loaded may be declared
+  const head: ModelMessage[] = [
+    { role: "user", content: "chụp" },
+    { role: "assistant", content: [{ type: "tool-call", toolCallId: "s", toolName: "mcp__big__t001", input: {} }] },
+    {
+      role: "tool",
+      content: [
+        {
+          type: "tool-result",
+          toolCallId: "s",
+          toolName: "mcp__big__t001",
+          output: { type: "content", value: [{ type: "text", text: "đã chụp" }, { type: "image-data", data: "QUJDREVGRw==", mediaType: "image/png" }] },
+        },
+      ],
+    },
+    { role: "assistant", content: "xong" },
+  ]
+  await collect(runAgent({ history: head, input: "x", skills: [], registry: r }))
+  const turnSystem = systemText(bodies[0])
+  bodies.length = 0
+  const text = await summarizeConversation({ head, prompt: "TÓM-TẮT-ĐI", skills: [], registry: r })
+  expect(text).toBe("Kết quả: xong.")
+  const body = bodies[0]!
+  expect(systemText(body)).toBe(turnSystem)
+  expect(body.tool_choice).toBe("none")
+  expect(JSON.stringify(body.messages.at(-1)!.content)).toContain("TÓM-TẮT-ĐI")
+  // Deferred tools stay deferred; the one history used is declared.
+  expect(toolNames(body)).toContain("mcp__big__t001")
+  expect(toolNames(body)).not.toContain("mcp__big__t003")
+  // A model without vision gets the image as a placeholder.
+  expect(JSON.stringify(body.messages)).not.toContain("QUJDREVGRw==")
 })

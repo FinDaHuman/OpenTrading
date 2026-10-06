@@ -1,4 +1,5 @@
 import type { ModelMessage } from "ai"
+import { isCompactMarker } from "../compact-marker"
 
 /**
  * Rebuild a UI-neutral transcript from stored model messages, so a resumed session looks the
@@ -9,6 +10,8 @@ export type TranscriptItem =
   | { kind: "user"; text: string }
   | { kind: "assistant"; text: string }
   | { kind: "tool"; callId: string; name: string; input: unknown; ok: boolean; output: string }
+  /** The history was compacted here; `text` is the summary that replaced what came before. */
+  | { kind: "compact"; text: string }
 
 function outputText(output: unknown): { ok: boolean; text: string } {
   const o = output as { type?: string; value?: unknown }
@@ -29,7 +32,19 @@ export function transcriptFromMessages(messages: ModelMessage[]): TranscriptItem
   }
 
   const items: TranscriptItem[] = []
+  let summaryNext = false
   for (const m of messages) {
+    if (isCompactMarker(m)) {
+      summaryNext = true
+      continue
+    }
+    if (summaryNext && m.role === "assistant") {
+      summaryNext = false
+      const text = typeof m.content === "string" ? m.content : m.content.map((p) => (p.type === "text" ? p.text : "")).join("")
+      items.push({ kind: "compact", text })
+      continue
+    }
+    summaryNext = false
     if (m.role === "user") {
       const text =
         typeof m.content === "string"

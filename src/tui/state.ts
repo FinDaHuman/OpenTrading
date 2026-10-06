@@ -26,6 +26,8 @@ export type Line =
       decision?: string
     }
   | { kind: "info"; text: string }
+  /** History was compacted here. `summary` is absent when only old tool results were pruned. */
+  | { kind: "compact"; summary?: string; before?: number; after?: number; pruned?: number }
   | { kind: "error"; text: string }
 
 export type DialogName = "connect" | "model" | "skills" | "help" | "mcp" | "tools" | "context" | "sessions" | "memory" | "config"
@@ -63,7 +65,21 @@ export const [state, setState] = createStore({
   question: undefined as AskRequest | undefined,
   /** todo_write accepted during the running turn; undefined → derive from history. */
   liveTodos: undefined as Todo[] | undefined,
+  /** Context size after the last turn (provider usage, else estimated); undefined = unknown. */
+  contextTokens: undefined as number | undefined,
+  /** Size right after a compaction that stayed above the threshold: wait for growth past it. */
+  compactFloor: undefined as number | undefined,
+  /** Consecutive failed automatic compactions in this session. */
+  compactFailures: 0,
+  compacting: false,
 })
+
+/** Context window of the selected model (models.dev), if known. */
+export const contextWindow = (): number | undefined =>
+  state.provider && state.model ? state.catalog[state.provider]?.models[state.model]?.limit?.context : undefined
+
+/** Fresh-session values for the compaction bookkeeping. */
+export const NO_COMPACTION = { contextTokens: undefined, compactFloor: undefined, compactFailures: 0 } as const
 
 export function pushLine(line: Line) {
   setState("lines", (lines) => [...lines, line])

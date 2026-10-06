@@ -1,4 +1,5 @@
 import type { ModelMessage } from "ai"
+import { compactCarry, isCompactMarker } from "../compact-marker"
 import { LOADED_PREFIX } from "./search"
 
 /** Tools whose results may announce loaded tools on their first line. */
@@ -24,6 +25,8 @@ function firstText(output: unknown): string | undefined {
 export function loadedTools(messages: readonly ModelMessage[]): string[] {
   const seen = new Set<string>()
   for (const message of messages) {
+    // A compacted history starts with a marker listing what the summarized head had loaded.
+    if (isCompactMarker(message)) for (const name of compactCarry(message).tools) seen.add(name)
     if (typeof message.content === "string") continue
     for (const part of message.content as { type: string; toolName?: string; output?: unknown }[]) {
       if (part.type === "tool-call" && part.toolName) seen.add(part.toolName)

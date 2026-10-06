@@ -185,10 +185,43 @@ function Row(props: { line: Line; prev?: Line; width: number }) {
       <Match when={props.line.kind === "info"}>
         <Hanging glyph="✻" glyphColor={color.tx3} text={(props.line as Extract<Line, { kind: "info" }>).text} fg={color.tx3} />
       </Match>
+      <Match when={props.line.kind === "compact" && props.line}>
+        {(line) => <CompactRow line={line() as Extract<Line, { kind: "compact" }>} />}
+      </Match>
       <Match when={props.line.kind === "error"}>
         <Hanging glyph="✘" glyphColor={color.giam} text={(props.line as Extract<Line, { kind: "error" }>).text} fg={color.giam} />
       </Match>
     </Switch>
+  )
+}
+
+const kTokens = (n: number) => (n >= 1000 ? `${Math.round(n / 1000)}k` : String(n))
+
+/** "● Đã nén hội thoại (42k → 6k token)"; ctrl+o shows the summary that replaced the start. */
+function CompactRow(props: { line: Extract<Line, { kind: "compact" }> }) {
+  const sizes = () =>
+    props.line.before !== undefined && props.line.after !== undefined ? ` (~${kTokens(props.line.before)} → ~${kTokens(props.line.after)} token)` : ""
+  const title = () =>
+    props.line.summary !== undefined
+      ? `Đã nén hội thoại${sizes()}${state.expandTools ? "" : " · ctrl+o xem tóm tắt"}`
+      : `Đã dọn ${props.line.pruned ?? 0} kết quả tool cũ${sizes()}`
+  return (
+    <box flexDirection="column" marginTop={1} flexShrink={0}>
+      <box flexDirection="row" height={1}>
+        <Gutter glyph="●" fg={color.san} />
+        <text fg={color.tx2} wrapMode="none">
+          {title()}
+        </text>
+      </box>
+      <Show when={state.expandTools && props.line.summary}>
+        <box flexDirection="row" flexShrink={0}>
+          <text fg={color.tx3} width={RESULT.length} flexShrink={0} selectable={false}>
+            {RESULT}
+          </text>
+          <markdown flexGrow={1} flexShrink={1} content={props.line.summary!} syntaxStyle={markdownStyle()} conceal fg={color.tx3} bg={color.bg} />
+        </box>
+      </Show>
+    </box>
   )
 }
 

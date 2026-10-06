@@ -1,4 +1,5 @@
 import { stripImages } from "../tools/registry"
+import { isCompactMarker } from "../compact-marker"
 import { appendFile, mkdir, readFile } from "node:fs/promises"
 import path from "node:path"
 import type { ModelMessage } from "ai"
@@ -27,7 +28,12 @@ export type SessionEntry =
       skills?: { name: string; version?: string }[]
     }
   | { type: "message"; ts: string; message: ModelMessage }
-  | { type: "turn_end"; ts: string; provider?: string; model?: string }
+  | { type: "turn_end"; ts: string; provider?: string; model?: string; contextTokens?: number }
+  /**
+   * The history was compacted: `messages` replaces everything before it for the model. The
+   * earlier `message` entries stay in the file, so the transcript can still show them.
+   */
+  | { type: "compact"; ts: string; trigger: "auto" | "manual"; before: number; after: number; messages: ModelMessage[] }
 
 export interface SessionSummary {
   id: string
@@ -97,13 +103,23 @@ export class Session {
     return this.file ? path.join(sessionsDir(), this.file) : undefined
   }
 
+  /** Record a compaction. Nothing to do before the first turn created the file. */
+  appendCompact(entry: Omit<Extract<SessionEntry, { type: "compact" }>, "type" | "ts">) {
+    this.writing = this.writing.then(async () => {
+      if (!this.path) return
+      const line: SessionEntry = { type: "compact", ts: new Date().toISOString(), ...entry, messages: stripImages(entry.messages) }
+      await appendFile(this.path, JSON.stringify(line) + "\n", "utf8")
+    })
+    return this.writing
+  }
+
   /** Append one completed turn. Writes are serialised so turns never interleave. */
-  appendTurn(messages: ModelMessage[], info: SessionInfo & { provider?: string; model?: string }) {
+  appendTurn(messages: ModelMessage[], info: SessionInfo & { provider?: string; model?: string; contextTokens?: number }) {
     this.writing = this.writing.then(() => this.write(messages, info))
     return this.writing
   }
 
-  private async write(messages: ModelMessage[], info: SessionInfo & { provider?: string; model?: string }) {
+  private async write(messages: ModelMessage[], info: SessionInfo & { provider?: string; model?: string; contextTokens?: number }) {
     const ts = new Date().toISOString()
     const lines: SessionEntry[] = []
     if (!this.file) {
@@ -122,7 +138,7 @@ export class Session {
     }
     // Screenshots would bloat the file by megabytes per turn; keep a text placeholder.
     for (const message of stripImages(messages)) lines.push({ type: "message", ts, message })
-    lines.push({ type: "turn_end", ts, provider: info.provider, model: info.model })
+    lines.push({ type: "turn_end", ts, provider: info.provider, model: info.model, contextTokens: info.contextTokens })
     await appendFile(this.path!, lines.map((l) => JSON.stringify(l)).join("\n") + "\n", "utf8")
 
     this.turns++
@@ -166,7 +182,12 @@ export async function listSessions(): Promise<SessionSummary[]> {
 export interface LoadedSession {
   summary: SessionSummary
   meta?: Extract<SessionEntry, { type: "meta" }>
+  /** History for the model: from the last compaction on. */
   messages: ModelMessage[]
+  /** Everything for the transcript, with each compaction's marker and summary where it happened. */
+  display: ModelMessage[]
+  /** Context size after the last turn or compaction, if recorded. */
+  contextTokens?: number
   /** Tool calls that had no result and were closed with an "interrupted" result. */
   patched: number
 }
@@ -177,19 +198,29 @@ export async function loadSession(id: string): Promise<LoadedSession> {
   if (!summary) throw new Error(`Không tìm thấy phiên "${id}". Gõ /sessions để xem danh sách.`)
   const text = await readFile(path.join(sessionsDir(), summary.file), "utf8")
   let meta: LoadedSession["meta"]
-  const raw: ModelMessage[] = []
+  let raw: ModelMessage[] = []
+  const shown: ModelMessage[] = []
+  let contextTokens: number | undefined
   for (const line of text.split("\n")) {
     if (!line.trim()) continue
     try {
       const entry = JSON.parse(line) as SessionEntry
       if (entry.type === "meta") meta = entry
-      else if (entry.type === "message") raw.push(entry.message)
+      else if (entry.type === "message") {
+        raw.push(entry.message)
+        shown.push(entry.message)
+      } else if (entry.type === "compact" && Array.isArray(entry.messages)) {
+        raw = [...entry.messages]
+        // The marker and summary (absent when only tool results were pruned).
+        if (entry.messages[0] && isCompactMarker(entry.messages[0])) shown.push(...entry.messages.slice(0, 2))
+        contextTokens = entry.after
+      } else if (entry.type === "turn_end" && entry.contextTokens !== undefined) contextTokens = entry.contextTokens
     } catch {
       // skip
     }
   }
   const { messages, patched } = closeDanglingToolCalls(raw)
-  return { summary, meta, messages, patched }
+  return { summary, meta, messages, display: closeDanglingToolCalls(shown).messages, contextTokens, patched }
 }
 
 /**

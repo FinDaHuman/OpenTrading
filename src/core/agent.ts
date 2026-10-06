@@ -1,9 +1,19 @@
-import { NoSuchToolError, stepCountIs, streamText, type ModelMessage, type StreamTextResult, type SystemModelMessage, type ToolSet } from "ai"
+import {
+  generateText,
+  NoSuchToolError,
+  stepCountIs,
+  streamText,
+  type LanguageModelUsage,
+  type ModelMessage,
+  type StreamTextResult,
+  type SystemModelMessage,
+  type ToolSet,
+} from "ai"
 import { ChatSetupError, describeError, resolveTarget } from "./chat"
 import type { AgentEvent } from "./events"
 import { loadProfile } from "./profile"
 import { assemble, type Assembled } from "./prompt/assemble"
-import { tierOf, type Tier } from "./prompt/budget"
+import { estimateTokens, tierOf, type Tier } from "./prompt/budget"
 import type { ClockSnapshot } from "./prompt/market-clock"
 import { languageModel } from "./providers"
 import type { Skill } from "./skills/schema"
@@ -407,6 +417,74 @@ async function prepare(opts: TurnInput, extras: TurnExtras): Promise<Prepared> {
 }
 
 /**
+ * The request as sent: placeholders for images the model cannot see, the user/session
+ * context on the first user message, the cache mark for Anthropic, and the tools visible
+ * now (tool search). Turns and the compaction summary share it, so both send the same prefix.
+ */
+function requestFor(p: Prepared, messages: ModelMessage[]) {
+  const request = withContext(p.images ? messages : stripImages(messages), p.assembled.context)
+  // Anthropic caches only where asked: mark the static system prompt. Others cache by prefix.
+  const system: string | SystemModelMessage =
+    p.target.provider.npm === "@ai-sdk/anthropic"
+      ? { role: "system", content: p.assembled.system, providerOptions: { anthropic: { cacheControl: { type: "ephemeral" } } } }
+      : p.assembled.system
+  const model = languageModel(p.target.provider, p.target.model, p.target.apiKey)
+  return { system, request, model, active: activeFor(p.built, request) }
+}
+
+/** Context size after a response: the last step's prompt plus its answer, as the provider counted it. */
+async function lastStepTokens(result: { steps: PromiseLike<{ usage: LanguageModelUsage }[]> }): Promise<number | undefined> {
+  try {
+    const usage = (await result.steps).at(-1)?.usage
+    if (usage?.inputTokens === undefined) return undefined
+    return usage.inputTokens + (usage.outputTokens ?? 0)
+  } catch {
+    return undefined
+  }
+}
+
+const estimateRequest = (system: string | SystemModelMessage, messages: ModelMessage[], toolTokens = 0) =>
+  estimateTokens(JSON.stringify([system, ...messages])) + toolTokens
+
+/**
+ * Compaction step 2: the model condenses `head` (older turns) into a structured summary.
+ * Same system prompt, context and tool set as a turn, tools disabled; the instruction comes
+ * last. A prompt-too-long error drops the oldest turn and retries (at most twice).
+ */
+export async function summarizeConversation(
+  opts: Omit<TurnInput, "input"> & { head: ModelMessage[]; prompt: string; signal?: AbortSignal },
+): Promise<string> {
+  let head = opts.head
+  for (let attempt = 0; ; attempt++) {
+    const prepared = await prepare({ ...opts, history: head, input: "" }, {})
+    const { system, request, model, active } = requestFor(prepared, [...head, { role: "user", content: opts.prompt }])
+    try {
+      const result = await generateText({
+        model,
+        system,
+        messages: request,
+        tools: prepared.tools,
+        activeTools: active,
+        toolChoice: prepared.tools ? "none" : undefined,
+        maxOutputTokens: COMPACT_MAX_OUTPUT_TOKENS,
+        abortSignal: opts.signal,
+        maxRetries: 1,
+      })
+      return result.text
+    } catch (error) {
+      const turns = head.reduce((n, m) => n + (m.role === "user" ? 1 : 0), 0)
+      if (attempt >= 2 || turns <= 1 || !TOO_LONG.test(describeError(error))) throw new Error(describeError(error))
+      // Drop the oldest turn: everything up to the second user message.
+      const next = head.findIndex((m, i) => i > 0 && m.role === "user")
+      head = head.slice(next)
+    }
+  }
+}
+
+const COMPACT_MAX_OUTPUT_TOKENS = 4_000
+const TOO_LONG = /context|too long|too large|maximum|token/i
+
+/**
  * What the next turn would send, per layer — for /context. Works without a configured model
  * (assumes tier B), so prompt writers can check their layers before connecting a provider.
  */
@@ -462,7 +540,8 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
     yield { type: "notice", text: `Dùng ${recalled.length} memory: ${recalled.map((m) => m.text.slice(0, 40)).join("; ")}` }
   }
 
-  const { target, tools, built, images, assembled, supportsTools } = await prepare(opts, extras)
+  const prepared = await prepare(opts, extras)
+  const { target, tools, built, assembled, supportsTools } = prepared
   const maxSteps = opts.maxSteps ?? DEFAULT_MAX_STEPS
   if (!supportsTools && opts.registry.list().length > 0) {
     yield { type: "notice", text: "Model này không hỗ trợ tool; trả lời không dùng tool." }
@@ -493,15 +572,7 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
 
   const user = userMessage(opts.input, assembled.reminders)
   // A vision model's screenshots stay in history; a model without vision gets placeholders.
-  const history = images ? opts.history : stripImages(opts.history)
-  const request = withContext([...history, user], assembled.context)
-  // Anthropic caches only where asked: mark the static system prompt. Others cache by prefix.
-  const system: string | SystemModelMessage =
-    target.provider.npm === "@ai-sdk/anthropic"
-      ? { role: "system", content: assembled.system, providerOptions: { anthropic: { cacheControl: { type: "ephemeral" } } } }
-      : assembled.system
-
-  const model = languageModel(target.provider, target.model, target.apiKey)
+  const { system, request, model } = requestFor(prepared, [...opts.history, user])
   let summarized = false
   const nudge = nudgeAfterTools(target)
   // Visible tools at the current step; deferred tools join once loaded (tool search).
@@ -534,6 +605,8 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
 
   const outcome: Outcome = { text: "", aborted: false }
   yield* relay(result, opts.registry, opts.signal, outcome)
+  // The request whose usage measures the context (the empty-answer retry replaces it).
+  let measured: { steps: PromiseLike<{ usage: LanguageModelUsage }[]> } = result
 
   let messages: ModelMessage[] | undefined
   if (!outcome.aborted && !outcome.failure) {
@@ -562,6 +635,7 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
     })
     const second: Outcome = { text: "", aborted: false }
     yield* relay(retry, opts.registry, opts.signal, second)
+    measured = retry
     outcome.aborted = second.aborted
     outcome.failure = second.failure
     outcome.text = second.text
@@ -581,7 +655,12 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
 
   if (messages && !outcome.aborted && !outcome.failure) {
     if (summarized) yield { type: "notice", text: `Đã dùng hết ${maxSteps} bước gọi tool; câu trả lời là bản tổng kết.` }
-    yield { type: "done", messages: [user, ...messages], clock: assembled.clock }
+    const tokens = await lastStepTokens(measured)
+    const usage =
+      tokens !== undefined
+        ? { contextTokens: tokens, estimated: false }
+        : { contextTokens: estimateRequest(system, [...request, ...messages], built?.tokens), estimated: true }
+    yield { type: "done", messages: [user, ...messages], clock: assembled.clock, usage }
     if (opts.hooks) void opts.hooks.emit({ type: "turn-end", sessionId, messages: [user, ...messages] })
     return
   }
@@ -596,5 +675,6 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
     // No square brackets: the markdown renderer read "[Đã dừng]" as a link.
     messages: [user, { role: "assistant", content: text || (outcome.aborted ? "(đã dừng)" : "(lỗi)") }],
     clock: assembled.clock,
+    usage: { contextTokens: estimateRequest(system, [...request, { role: "assistant", content: text }], built?.tokens), estimated: true },
   }
 }

@@ -4,7 +4,7 @@ import { promptVersion } from "../core/prompt/assemble"
 import type { Runtime } from "../core/runtime"
 import { listSessions, loadSession, Session } from "../core/session/store"
 import { transcriptFromMessages } from "../core/session/transcript"
-import { providerName, pushLine, setState, state, type Line } from "./state"
+import { NO_COMPACTION, providerName, pushLine, setState, state, type Line } from "./state"
 
 /** The conversation being written. Replaced by /new, /clear and resume. */
 let current = Session.create()
@@ -12,7 +12,7 @@ let current = Session.create()
 export const currentSession = () => current
 
 /** Persist one finished turn (fire-and-forget: a disk error must not break the chat). */
-export function recordTurn(messages: ModelMessage[]) {
+export function recordTurn(messages: ModelMessage[], contextTokens?: number) {
   if (messages.length === 0) return
   current
     .appendTurn(messages, {
@@ -21,16 +21,25 @@ export function recordTurn(messages: ModelMessage[]) {
       model: state.model,
       promptVersion: promptVersion(),
       skills: state.skills.map((s) => ({ name: s.name, version: s.version })),
+      contextTokens,
     })
-    .catch((error) => pushLine({ kind: "error", text: `Không lưu được phiên: ${error instanceof Error ? error.message : String(error)}` }))
+    .catch(saveFailed)
 }
+
+/** Persist a compaction, so --resume starts from the compacted history. */
+export function recordCompact(entry: { trigger: "auto" | "manual"; before: number; after: number; messages: ModelMessage[] }) {
+  current.appendCompact(entry).catch(saveFailed)
+}
+
+const saveFailed = (error: unknown) =>
+  pushLine({ kind: "error", text: `Không lưu được phiên: ${error instanceof Error ? error.message : String(error)}` })
 
 /** Start a fresh session (startup, /new, /clear). */
 export async function startSession(runtime: Runtime, source: "startup" | "clear") {
   if (source === "clear") await runtime.hooks.emit({ type: "session-end", sessionId: current.id })
   current = Session.create()
   // A fresh conversation has not seen the market clock yet.
-  setState({ lines: [], history: [], clock: undefined })
+  setState({ lines: [], history: [], clock: undefined, ...NO_COMPACTION })
   await runtime.hooks.emit({ type: "session-start", sessionId: current.id, source })
 }
 
@@ -40,7 +49,8 @@ export async function resumeSession(runtime: Runtime, id: string) {
   await runtime.hooks.emit({ type: "session-end", sessionId: current.id })
   current = Session.continue(loaded.summary)
 
-  const lines: Line[] = transcriptFromMessages(loaded.messages).map((item): Line => {
+  const lines: Line[] = transcriptFromMessages(loaded.display).map((item): Line => {
+    if (item.kind === "compact") return { kind: "compact", summary: item.text }
     if (item.kind === "tool") {
       return {
         kind: "tool",
@@ -64,7 +74,7 @@ export async function resumeSession(runtime: Runtime, id: string) {
   }
 
   // The clock snapshot is unknown after resume, so the next turn re-sends it.
-  setState({ lines: [...notes, ...lines], history: loaded.messages, clock: undefined })
+  setState({ lines: [...notes, ...lines], history: loaded.messages, clock: undefined, ...NO_COMPACTION, contextTokens: loaded.contextTokens })
   await runtime.hooks.emit({ type: "session-start", sessionId: current.id, source: "resume" })
 }
 
