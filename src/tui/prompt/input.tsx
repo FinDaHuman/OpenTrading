@@ -1,4 +1,4 @@
-import type { KeyBinding, TextareaRenderable } from "@opentui/core"
+import { decodePasteBytes, stripAnsiSequences, type KeyBinding, type PasteEvent, type TextareaRenderable } from "@opentui/core"
 import { useTerminalDimensions } from "@opentui/solid"
 import { color } from "../theme"
 
@@ -14,12 +14,18 @@ export const PROMPT_KEYS: KeyBinding[] = [
   { name: "return", meta: true, action: "newline" },
   { name: "kpenter", meta: true, action: "newline" },
   { name: "linefeed", action: "newline" },
+  // With the kitty keyboard protocol Ctrl+J arrives as ctrl+j, not as a linefeed byte.
+  { name: "j", ctrl: true, action: "newline" },
   { name: "z", ctrl: true, action: "undo" },
   { name: "y", ctrl: true, action: "redo" },
 ]
 
 /** A thin blinking bar, like a document editor, instead of the terminal's block. */
 export const PROMPT_CURSOR = { style: "line", blinking: true } as const
+
+/** Pasted text as the prompt keeps it: no escape sequences, "\n" line ends, tabs as 4 spaces. */
+export const normalizePaste = (text: string) =>
+  stripAnsiSequences(text).replace(/\r\n?/g, "\n").replaceAll("\t", "    ")
 
 /** Tallest the prompt grows before it scrolls (opencode: max(6, a third of the screen)). */
 export const promptMaxHeight = (rows: number) => Math.max(6, Math.floor(rows / 3))
@@ -51,7 +57,8 @@ export function PromptInput(props: {
       flexShrink={0}
       paddingLeft={1}
     >
-      <text fg={props.busy ? color.tham : color.tang} flexShrink={0}>
+      {/* Not selectable: a drag starting on "›" must still count as a selection inside the prompt. */}
+      <text fg={props.busy ? color.tham : color.tang} flexShrink={0} selectable={false}>
         {"› "}
       </text>
       <textarea
@@ -82,6 +89,11 @@ export function PromptInput(props: {
         // The Solid typing says string, the core passes {}: read the text from the renderable.
         onContentChange={() => props.onChange(input?.plainText ?? "")}
         onSubmit={() => props.onSubmit()}
+        onPaste={(event: PasteEvent) => {
+          // ConPTY (Windows Terminal) can paste CR-only line ends; tabs become spaces (Claude Code).
+          event.preventDefault()
+          input?.insertText(normalizePaste(decodePasteBytes(event.bytes)))
+        }}
       />
     </box>
   )

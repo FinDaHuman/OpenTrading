@@ -1373,6 +1373,28 @@ test("prompt: Ctrl+J and \ + Enter add a line; Enter alone sends", async () => {
   await clearPrompt()
 })
 
+test("prompt: a pasted CR or CRLF (Windows Terminal) becomes a line break", async () => {
+  await setup.mockInput.pasteBracketedText("a\r\nb\rc")
+  const frame = await setup.waitForFrame((f) => promptRows(f).includes("c"))
+  expect(promptRows(frame)).toEqual(["a", "b", "c"])
+  await clearPrompt()
+  const { normalizePaste } = await import("../src/tui/prompt/input")
+  expect(normalizePaste("a\r\nb\rc\td\x1b[31m!")).toBe("a\nb\nc    d!")
+})
+
+test("prompt: with the kitty keyboard protocol, Ctrl+J and Shift+Enter add a line", async () => {
+  const { createMockKeys } = await import("@opentui/core/testing")
+  const kitty = createMockKeys(setup.renderer, { kittyKeyboard: true })
+  await setup.mockInput.typeText("k1")
+  kitty.pressKey("j", { ctrl: true })
+  await setup.mockInput.typeText("k2")
+  kitty.pressEnter({ shift: true })
+  await setup.mockInput.typeText("k3")
+  const frame = await setup.waitForFrame((f) => promptRows(f).includes("k3"))
+  expect(promptRows(frame)).toEqual(["k1", "k2", "k3"])
+  await clearPrompt()
+})
+
 test("prompt: ↑/↓ recall earlier prompts and slash commands, and give the draft back", async () => {
   await setup.mockInput.typeText("/help")
   setup.mockInput.pressEnter()
