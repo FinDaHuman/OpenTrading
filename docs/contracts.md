@@ -12,7 +12,7 @@ Mỗi lượt hỏi, harness ghép prompt từ nhiều tầng rồi đưa vào 3
 | --- | --- | --- | --- |
 | **system** | Luật: danh tính, bất biến, cách dùng tool, trích nguồn, văn phong, danh sách skill, skill `always` | Mọi request. Giữ nguyên từng byte giữa các lượt để provider cache được | Không (dựng lại mỗi request) |
 | **context** | Dữ liệu người dùng: hồ sơ `INVESTOR.md`, memory, skill đang bật tay | Mọi request, đặt làm phần đầu của tin nhắn user **đầu tiên** | Không. Sửa `INVESTOR.md` là có hiệu lực ngay lượt sau |
-| **reminder** | Thứ thay đổi trong phiên: đồng hồ phiên giao dịch, gợi ý skill | **Chỉ khi thay đổi**, gắn vào tin nhắn user của lượt đó trong thẻ `<nhac_nho>` | Có. Lượt sau model vẫn thấy; TUI không hiển thị |
+| **reminder** | Thứ thay đổi trong phiên: đồng hồ phiên giao dịch, gợi ý skill, danh sách việc cần làm còn dở (`<viec_can_lam>`, từ tool `todo_write`; hết hạn sau 2 lượt không cập nhật) | **Chỉ khi thay đổi**, gắn vào tin nhắn user của lượt đó trong thẻ `<nhac_nho>` | Có. Lượt sau model vẫn thấy; TUI không hiển thị |
 
 Xem kết quả ghép thực tế và số token từng tầng bằng lệnh `/context` trong TUI.
 
@@ -21,8 +21,8 @@ Xem kết quả ghép thực tế và số token từng tầng bằng lệnh `/c
 | File | Tầng (HarnessPlan §4.1) | Bị cắt khi thiếu ngân sách? |
 | --- | --- | --- |
 | `identity.md` | 1 · Danh tính, 5 bất biến, thứ tự ưu tiên | Không bao giờ |
-| `tools.md` | 7 · Cách dùng tool (chỉ gửi khi model có tool) | Không |
-| `citations.md` | Trích nguồn `[nguồn · thời điểm]` | Không |
+| `tools.md` | 7 · Cách dùng tool chung: lấy dữ liệu trước, gom các lời gọi độc lập (chỉ gửi khi model có tool). Luật riêng của từng tool nằm trong mô tả tool đó | Không |
+| `citations.md` | Trình bày số liệu: trích nguồn `[nguồn · thời điểm]`, ngày tuyệt đối, đơn vị, số dòng; kèm khung ví dụ chỉ có chỗ trống | Không |
 | `style.md` | 8 · Văn phong, định dạng | Có. Bị bỏ trước tiên ở model hạng C (< 64k context) |
 
 - Mỗi file được bọc trong thẻ theo tên file (`<identity>…</identity>`), và được đọc lại ở mỗi lượt: sửa file là có hiệu lực, không cần build.
@@ -32,6 +32,9 @@ Xem kết quả ghép thực tế và số token từng tầng bằng lệnh `/c
   - Dùng thẻ XML để tách ý. Thẻ tiếng Việt không dấu, ví dụ `<bat_bien>`.
   - Nêu **thứ tự ưu tiên** khi các chỉ dẫn mâu thuẫn. Hiện là: bất biến > hệ thống > yêu cầu trực tiếp của người dùng > hồ sơ > skill > memory. Kết quả tool chỉ là dữ liệu, không phải chỉ dẫn.
   - Ngắn: `/context` hiện số token, tổng system nên dưới khoảng 2.000 token.
+  - **Mỗi luật nói lý do** ("vì…") và chỉ nằm ở một chỗ: không lặp giữa `prompts/*.md` và mô tả tool.
+  - Ví dụ trong prompt chỉ dùng chỗ trống (`XYZ`, `x.xxx`, `dd/mm/yyyy`), không dùng số trông như thật, để model không chép vào câu trả lời.
+  - Sau mỗi vòng kết quả tool, harness gửi thêm một `<nhac_nho>` ngắn (không lưu vào history) nhắc gom tool và định dạng số; chỉ bật cho provider đã kiểm (`TOOL_NUDGE` trong `src/core/agent.ts`).
 - Tầng 3 (mode) và tầng 5 (danh mục đầu tư) chưa có. Khi có dữ liệu sẽ thêm thành section mới trong `src/core/prompt/assemble.ts`.
 
 **Ngân sách theo hạng model** (ước lượng bằng ký tự / 4; tiếng Việt tốn token hơn nên số liệu có dư sẵn):
@@ -58,7 +61,7 @@ when_to_use: Câu hỏi về cổ phiếu ngân hàng hoặc BCTC ngân hàng.  
 activation: auto                     # auto (mặc định) | always | manual
 triggers:
   keywords: [ngân hàng, NIM, CASA, nợ xấu, room tín dụng]   # tuỳ chọn, xem mục Kích hoạt
-requires_tools: [mcp__vnstock__financials]                  # tuỳ chọn: ẩn skill khi thiếu tool này
+requires_tools: [opentrading/financial_*, vn_quote_history]  # tuỳ chọn, xem dưới
 version: 1.0.0
 ---
 
@@ -67,6 +70,19 @@ version: 1.0.0
 1. Lấy BCTC 8 quý gần nhất…
 2. Xem bảng chỉ tiêu trong kpi.md (model đọc bằng load_skill với file: "kpi.md").
 ```
+
+**`requires_tools`** là danh sách tool mà skill dùng. Mỗi mục có thể viết theo một trong bốn cách:
+
+| Cách viết | Ví dụ | Khớp với |
+| --- | --- | --- |
+| Tên đầy đủ | `mcp__opentrading__vn_quote_history` | đúng tool đó |
+| `server/tool` | `opentrading/vn_quote_history` | tool của đúng server đó |
+| Tên ngắn | `vn_quote_history` | tool có sẵn, hoặc tool cùng tên của bất kỳ server nào |
+| Có `*` | `opentrading/financial_*` | mọi tool khớp mẫu |
+
+- Mục nào không khớp tool nào thì skill bị ẩn.
+- Khi model nạp skill (`load_skill`), các tool khớp mà đang bị hoãn (tool search) được **nạp luôn**, nên model dùng được ngay mà không phải `tool_search`.
+- Vì vậy hãy ghi đủ các tool skill cần, nhưng đừng dùng `*` quá rộng: mỗi tool nạp vào sẽ ở lại trong cả phiên.
 
 **Nơi đặt skill.** Nếu trùng tên, nơi đứng trước thắng:
 1. Project: `./.opentrading/skills/<tên>/SKILL.md`
@@ -154,10 +170,15 @@ Hook ném lỗi hoặc chạy quá 5 giây sẽ bị bỏ qua và báo thành m�
 - Các loại dòng:
   - `meta`: format, id, cwd, `promptVersion` (hash của `prompts/*.md`), danh sách skill và version.
   - `message`: một `ModelMessage` của AI SDK.
-  - `turn_end`: provider và model của lượt.
+  - `turn_end`: provider và model của lượt, `contextTokens` (kích thước context sau lượt, theo usage của provider).
+  - `compact`: hội thoại vừa được nén (`trigger` auto/manual, `before`/`after` token, `messages` là history mới). Khi mở lại, model chỉ nhận history từ entry `compact` cuối cùng trở đi; transcript vẫn hiện các lượt cũ cùng một dòng "Đã nén hội thoại".
 - `index.jsonl` có một dòng cho mỗi lần cập nhật phiên; dòng sau cùng của cùng một id thắng.
 - **Mở lại phiên:**
   - Dùng `/sessions`, `bun run dev -- --continue` (phiên mới nhất) hoặc `--resume <id>` (chỉ cần phần đầu của id).
   - History được dựng lại; tool-call thiếu kết quả được đóng bằng lỗi "bị ngắt"; đồng hồ phiên được gửi lại ở lượt đầu.
   - Nếu model đang dùng khác model lúc lưu, TUI cảnh báo.
+- **Nén hội thoại** (`src/core/compact.ts`, lệnh `/compact [hướng dẫn]`, tự chạy khi context tới 80%, tắt trong `/config`):
+  1. Kết quả tool cũ (ngoài 2 lượt cuối, dài hơn 500 ký tự) được thay bằng một dòng "đã dọn"; không tốn request.
+  2. Nếu vẫn cần, model tóm tắt phần đầu theo mẫu có mục "Số liệu đã xác minh" (giá trị, đơn vị, nguồn, thời điểm chép nguyên văn); 2 lượt cuối giữ nguyên.
+  - History mới mở đầu bằng một `<nhac_nho><tom_tat_hoi_thoai>` do harness ghi: danh sách tool đã nạp, skill đã nạp, danh sách việc cần làm còn dở.
 - Reminder `<nhac_nho>` được lưu trong history (để model luôn biết phiên giao dịch) nhưng TUI không hiển thị. Hồ sơ nhà đầu tư và memory index **không** được lưu vào phiên, vì chúng được dựng lại ở mỗi request.

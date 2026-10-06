@@ -1,15 +1,34 @@
-import { stepCountIs, streamText, type ModelMessage, type StreamTextResult, type SystemModelMessage, type ToolSet } from "ai"
+import {
+  generateText,
+  NoSuchToolError,
+  stepCountIs,
+  streamText,
+  type LanguageModelUsage,
+  type ModelMessage,
+  type StreamTextResult,
+  type SystemModelMessage,
+  type ToolSet,
+} from "ai"
 import { ChatSetupError, describeError, resolveTarget } from "./chat"
 import type { AgentEvent } from "./events"
 import { loadProfile } from "./profile"
 import { assemble, type Assembled } from "./prompt/assemble"
-import { tierOf, type Tier } from "./prompt/budget"
+import { estimateTokens, tierOf, type Tier } from "./prompt/budget"
 import type { ClockSnapshot } from "./prompt/market-clock"
 import { languageModel } from "./providers"
 import type { Skill } from "./skills/schema"
 import type { HookBus } from "./hooks"
 import { MEMORY_INDEX_MAX_CHARS, MEMORY_RECALL_MAX_CHARS, MEMORY_RECALL_MAX_ITEMS, type MemoryProvider } from "./memory/types"
-import type { ToolRegistry } from "./tools/registry"
+import { loadConfig, type Config } from "./config"
+import { sanitize, serverPrefix } from "./mcp/naming"
+import type { SchemaFlavor } from "./mcp/schema"
+import { isContextOverflow } from "./compact"
+import { loadedTools } from "./tools/loaded"
+import { currentTodos, todoMark } from "./tools/todos"
+import { MAX_TOOLS_PER_REQUEST, stripImages, type BuiltToolSet, type ToolRegistry, type ToolSetOptions } from "./tools/registry"
+import { resolveToolName } from "./tools/search"
+import { TOOL_SEARCH } from "./tools/builtin/tool-search"
+import type { ToolResult } from "./tools/types"
 
 export const DEFAULT_MAX_STEPS = 10
 
@@ -22,6 +41,45 @@ const SUMMARY_PROMPT =
  * it is a model quirk — so we ask once more, with tools still declared but disabled.
  */
 const NUDGE_PROMPT = "Hãy trả lời câu hỏi của người dùng dựa trên kết quả tool ở trên. Không gọi thêm tool."
+
+/**
+ * Sent after each round of tool results (never stored): weak models drift to one call per
+ * step and lose the formatting rules once tool output piles up. It sits at the very end of
+ * the request, so the cached prefix is unchanged.
+ */
+export const TOOL_NUDGE =
+  "<nhac_nho>\nNếu còn cần dữ liệu, gọi cùng lúc mọi tool không phụ thuộc nhau. Khi trả lời: ngày tuyệt đối, mỗi cột một đơn vị, số dòng khớp lời nói, mỗi số có nguồn.\n</nhac_nho>"
+
+/**
+ * The nudge, plus the open todo items when there are any. Seen with gemini-3.1-flash-lite
+ * (06/10): after its last tool call the model wrote the answer and closed the list only on
+ * the next turn. This step may be the one that answers, so close the list first.
+ */
+export function toolNudge(messages: readonly ModelMessage[]): string {
+  const open = currentTodos(messages).filter((t) => t.status === "pending" || t.status === "in_progress")
+  if (open.length === 0) return TOOL_NUDGE
+  const items = open.map((t) => `${todoMark(t.status)} ${t.content}`).join("\n")
+  return TOOL_NUDGE.replace(
+    "\n</nhac_nho>",
+    `\nViệc cần làm còn mở:\n${items}\nViệc nào đã xong thì gọi todo_write đánh dấu completed (hoặc cancelled nếu bỏ) trước khi viết câu trả lời cuối.\n</nhac_nho>`,
+  )
+}
+
+/**
+ * Routes whose request body was checked to keep a user message right after tool results in
+ * the same user turn (test/tool-nudge.test.ts). Others (Mistral rejects user-after-tool,
+ * OpenAI-compatible gateways vary) get no nudge.
+ */
+const NUDGE_NPM = new Set(["@ai-sdk/anthropic", "@ai-sdk/google", "@ai-sdk/groq", "@ai-sdk/openai"])
+
+export function nudgeAfterTools(target: TargetLike | undefined): boolean {
+  if (!target) return false
+  const info = target.provider.models[target.model]
+  const npm = info?.provider?.npm ?? target.provider.npm ?? ""
+  const api = info?.provider?.api ?? target.provider.api
+  // @ai-sdk/openai with its own base URL is some third party speaking Chat Completions.
+  return NUDGE_NPM.has(npm) && !(npm === "@ai-sdk/openai" && api)
+}
 
 /** Reminders ride on the user message inside this tag; UIs hide it, history keeps it. */
 export const REMINDER_TAG = "nhac_nho"
@@ -42,6 +100,8 @@ export interface RunOptions {
   sessionId?: string
   hooks?: HookBus
   memory?: MemoryProvider
+  /** `instructions` of connected MCP servers (McpManager.instructions). */
+  serverInstructions?: () => { server: string; text: string }[]
 }
 
 export function label(registry: ToolRegistry, name: string, input: unknown) {
@@ -59,6 +119,11 @@ export function label(registry: ToolRegistry, name: string, input: unknown) {
 
 function stringify(value: unknown) {
   if (typeof value === "string") return value
+  // A tool's own result: show its text; images are never dumped as base64 into the UI.
+  if (value && typeof value === "object" && "output" in value && typeof (value as ToolResult).output === "string") {
+    const r = value as ToolResult
+    return r.images?.length ? `${r.output}\n[${r.images.length} ảnh]` : r.output
+  }
   try {
     return JSON.stringify(value, null, 2)
   } catch {
@@ -108,6 +173,37 @@ export function visibleUserText(message: ModelMessage) {
     .filter((p) => p.type === "text" && !p.text.startsWith(`<${REMINDER_TAG}>`))
     .map((p) => (p as { text: string }).text)
     .join("\n")
+}
+
+/**
+ * Calls the SDK could not parse. A short name from <tool_hoan> (`vn_quote_history`,
+ * `server/tool`) that matches one declared tool is rewritten to its full name; otherwise a
+ * deferred tool the model has not loaded gets a hint to load it first. `null` = keep the
+ * SDK's own error.
+ */
+async function repairCall<T extends { toolName: string }>(
+  registry: ToolRegistry,
+  built: BuiltToolSet | undefined,
+  active: string[] | undefined,
+  toolCall: T,
+  error: unknown,
+): Promise<T | null> {
+  if (!built) return null
+  const deferring = built.deferred.length > 0
+  if (NoSuchToolError.isInstance(error)) {
+    const names = resolveToolName(registry, toolCall.toolName).filter((n) => n in built.tools)
+    if (names.length === 1) return { ...toolCall, toolName: names[0]! }
+    if (!deferring) return null
+    const many = names.length > 1 ? ` Tên này khớp nhiều tool: ${names.join(", ")}.` : ""
+    throw new Error(`Không có tool "${toolCall.toolName}".${many} Gọi tool_search (query "select:<tên>" hoặc từ khoá) để nạp tool rồi gọi lại.`)
+  }
+  // Wrong arguments for a tool the model never loaded: it guessed the schema.
+  if (deferring && active && !active.includes(toolCall.toolName) && built.deferred.includes(toolCall.toolName)) {
+    throw new Error(
+      `Tham số không hợp lệ. Tool "${toolCall.toolName}" chưa được nạp: gọi tool_search với query "select:${toolCall.toolName}" để xem tham số rồi gọi lại.`,
+    )
+  }
+  return null
 }
 
 interface Outcome {
@@ -172,11 +268,99 @@ interface Prepared {
   target: Awaited<ReturnType<typeof resolveTarget>>
   tier: Tier
   tools: ToolSet | undefined
+  built: BuiltToolSet | undefined
+  images: boolean
   assembled: Assembled
   supportsTools: boolean
 }
 
-type TurnInput = Omit<RunOptions, "history" | "signal" | "maxSteps">
+type TargetLike = {
+  provider: { npm?: string; api?: string; models: Record<string, { modalities?: { input?: string[] }; provider?: { npm?: string; api?: string } }> }
+  model: string
+}
+
+/**
+ * Whether images in tool results reach the model as real image parts. Only the request
+ * shapes checked in test/image-routing.test.ts (against the bundled SDKs) qualify:
+ * - Anthropic: an image block inside tool_result.
+ * - OpenAI Responses API (the official endpoint): input_image in function_call_output.
+ *   OpenAI-SDK providers with their own base URL use Chat Completions, which puts the
+ *   base64 into the tool message as text — never there.
+ * - Gemini 3: inlineData inside functionResponse.parts. Gemini 2.x takes a different
+ *   ("legacy") shape we cannot verify without a live key — placeholders until then.
+ */
+function imagesReachModel(npm: string, api: string | undefined, model: string) {
+  if (npm === "@ai-sdk/anthropic") return true
+  if (npm === "@ai-sdk/openai") return !api
+  if (npm === "@ai-sdk/google") return model.startsWith("gemini-3")
+  return false
+}
+
+/** How to build the tool set for this model: schema dialect and whether it can see images. */
+export function toolSetOptions(target: TargetLike | undefined): ToolSetOptions {
+  if (!target) return {}
+  const info = target.provider.models[target.model]
+  const npm = info?.provider?.npm ?? target.provider.npm ?? ""
+  const api = info?.provider?.api ?? target.provider.api
+  return {
+    // Gemini through OpenRouter or a gateway still has Gemini's schema rules.
+    flavor: npm.startsWith("@ai-sdk/google") || /gemini/i.test(target.model) ? "gemini" : "default",
+    images: imagesReachModel(npm, api, target.model) && (info?.modalities?.input ?? []).includes("image"),
+  }
+}
+
+/** Deferred tools are worth it once their definitions would take this share of the context. */
+export const DEFER_CONTEXT_SHARE = 0.1
+export const DEFAULT_DEFER_MIN_TOOLS = 40
+
+/**
+ * Whether MCP tools go out by name only this request (tool search). "auto" defers once
+ * the deferrable tools are many (tool choice degrades past ~30–50) or heavy for the context.
+ */
+export function shouldDefer(
+  config: Pick<Config, "toolSearch" | "toolSearchMinTools">,
+  registry: ToolRegistry,
+  context: number | undefined,
+  flavor?: SchemaFlavor,
+) {
+  const mode = config.toolSearch ?? "auto"
+  if (mode === "off" || !registry.get(TOOL_SEARCH)) return false
+  const deferrable = registry.list().filter((d) => d.deferrable)
+  if (deferrable.length === 0) return false
+  if (mode === "on") return true
+  if (deferrable.length > (config.toolSearchMinTools ?? DEFAULT_DEFER_MIN_TOOLS)) return true
+  return !!context && registry.estimateTokens(deferrable, flavor) > context * DEFER_CONTEXT_SHARE
+}
+
+/** Deferred tool names grouped by MCP server, short names where they are unambiguous. */
+export function deferredByServer(registry: ToolRegistry, names: string[]) {
+  const groups = new Map<string, string[]>()
+  for (const name of names) {
+    const source = registry.get(name)?.source ?? "?"
+    const server = source.replace(/^mcp:/, "")
+    const prefix = serverPrefix(server)
+    const short = source.startsWith("mcp:") && name.startsWith(prefix) ? name.slice(prefix.length) : name
+    const unique = short === name || resolveToolName(registry, short).length === 1
+    groups.set(server, [...(groups.get(server) ?? []), unique ? short : `${sanitize(server)}/${short}`])
+  }
+  return [...groups].map(([server, tools]) => ({ server, tools }))
+}
+
+/**
+ * Tools the model may call at a step: the visible set plus deferred tools the conversation
+ * loaded (tool_search results, load_skill, direct calls). Undefined = no narrowing.
+ */
+export function activeFor(built: BuiltToolSet | undefined, messages: readonly ModelMessage[]): string[] | undefined {
+  if (!built || built.deferred.length === 0) return undefined
+  const visible = new Set(built.names)
+  const extra = loadedTools(messages).filter((n) => !visible.has(n) && n in built.tools)
+  return [...built.names, ...extra].slice(0, MAX_TOOLS_PER_REQUEST)
+}
+
+type TurnInput = Omit<RunOptions, "history" | "signal" | "maxSteps"> & {
+  /** Conversation so far; decides which deferred tools are already loaded. */
+  history?: ModelMessage[]
+}
 type Target = Awaited<ReturnType<typeof resolveTarget>>
 
 /** Per-turn extras gathered before assembly (recall and hooks run only for real turns). */
@@ -192,7 +376,11 @@ async function assembleFor(opts: TurnInput, target: Target | undefined, extras: 
   const info = target?.provider.models[target.model]
   const supportsTools = info?.tool_call !== false
   const tier = tierOf(info?.limit?.context)
-  const toolNames = supportsTools ? opts.registry.list().map((t) => t.name) : []
+  const setOptions = toolSetOptions(target)
+  const defer = supportsTools && shouldDefer(await loadConfig(), opts.registry, info?.limit?.context, setOptions.flavor)
+  const loaded = new Set(loadedTools(opts.history ?? []))
+  const built = supportsTools ? opts.registry.toToolSet({ ...setOptions, defer, loaded }) : undefined
+  const toolNames = built?.names ?? []
   const assembled = assemble({
     tier,
     tools: toolNames,
@@ -206,14 +394,119 @@ async function assembleFor(opts: TurnInput, target: Target | undefined, extras: 
     input: opts.input,
     now: opts.now ?? new Date(),
     prevClock: opts.prevClock,
+    deferredTools: built && built.deferred.length > 0 ? deferredByServer(opts.registry, built.deferred) : undefined,
+    declaredTools: built ? Object.keys(built.tools) : undefined,
+    mcpInstructions: opts.serverInstructions?.(),
+    todos: currentTodos(opts.history ?? []),
   })
-  return { tier, supportsTools, toolNames, assembled }
+  if (built && built.names.length > 0) {
+    const share = info?.limit?.context ? built.tokens / info.limit.context : 0
+    assembled.report.push({
+      id: "tool_schemas",
+      layer: 7,
+      channel: "system",
+      tokens: built.tokens,
+      truncated: built.hidden.length > 0,
+      dropped: false,
+      note:
+        `${built.names.length} tool` +
+        (built.deferred.length > 0 ? ` · hoãn ${built.deferred.length}` : "") +
+        (built.hidden.length > 0 ? ` · ẩn ${built.hidden.reduce((n, h) => n + h.count, 0)} do giới hạn ${built.names.length}` : "") +
+        (share > 0.25 ? ` · chiếm ${Math.round(share * 100)}% context, nên lọc bớt tool` : ""),
+    })
+  }
+  return { tier, supportsTools, toolNames, built, assembled }
 }
 
 async function prepare(opts: TurnInput, extras: TurnExtras): Promise<Prepared> {
   const target = await resolveTarget()
-  const { tier, supportsTools, toolNames, assembled } = await assembleFor(opts, target, extras)
-  return { target, tier, supportsTools, tools: toolNames.length > 0 ? opts.registry.toToolSet() : undefined, assembled }
+  const { tier, supportsTools, toolNames, built, assembled } = await assembleFor(opts, target, extras)
+  return {
+    target,
+    tier,
+    supportsTools,
+    built,
+    images: toolSetOptions(target).images ?? false,
+    tools: toolNames.length > 0 ? built!.tools : undefined,
+    assembled,
+  }
+}
+
+/**
+ * The request as sent: placeholders for images the model cannot see, the user/session
+ * context on the first user message, the cache mark for Anthropic, and the tools visible
+ * now (tool search). Turns and the compaction summary share it, so both send the same prefix.
+ */
+function requestFor(p: Prepared, messages: ModelMessage[]) {
+  const request = withContext(p.images ? messages : stripImages(messages), p.assembled.context)
+  // Anthropic caches only where asked: mark the static system prompt. Others cache by prefix.
+  const system: string | SystemModelMessage =
+    p.target.provider.npm === "@ai-sdk/anthropic"
+      ? { role: "system", content: p.assembled.system, providerOptions: { anthropic: { cacheControl: { type: "ephemeral" } } } }
+      : p.assembled.system
+  const model = languageModel(p.target.provider, p.target.model, p.target.apiKey)
+  return { system, request, model, active: activeFor(p.built, request) }
+}
+
+/** Context size after a response: the last step's prompt plus its answer, as the provider counted it. */
+async function lastStepTokens(result: { steps: PromiseLike<{ usage: LanguageModelUsage }[]> }): Promise<number | undefined> {
+  try {
+    const usage = (await result.steps).at(-1)?.usage
+    if (usage?.inputTokens === undefined) return undefined
+    return usage.inputTokens + (usage.outputTokens ?? 0)
+  } catch {
+    return undefined
+  }
+}
+
+const estimateRequest = (system: string | SystemModelMessage, messages: ModelMessage[], toolTokens = 0) =>
+  estimateTokens(JSON.stringify([system, ...messages])) + toolTokens
+
+/**
+ * Compaction step 2: the model condenses `head` (older turns) into a structured summary.
+ * Same system prompt, context and tool set as a turn, tools disabled; the instruction comes
+ * last. A prompt-too-long error drops the oldest turn and retries (at most twice).
+ */
+export async function summarizeConversation(
+  opts: Omit<TurnInput, "input"> & { head: ModelMessage[]; prompt: string; signal?: AbortSignal },
+): Promise<string> {
+  let head = opts.head
+  for (let attempt = 0; ; attempt++) {
+    const prepared = await prepare({ ...opts, history: head, input: "" }, {})
+    const { system, request, model, active } = requestFor(prepared, [...head, { role: "user", content: opts.prompt }])
+    try {
+      const result = await generateText({
+        model,
+        system,
+        messages: request,
+        tools: prepared.tools,
+        activeTools: active,
+        toolChoice: prepared.tools ? "none" : undefined,
+        maxOutputTokens: COMPACT_MAX_OUTPUT_TOKENS,
+        abortSignal: opts.signal,
+        // Each retry is a request off a free tier's daily quota: fail and let the user retry.
+        maxRetries: 0,
+      })
+      // A cut-off summary loses its last section (what to do next): never use it.
+      if (result.finishReason === "length") throw new SummaryTruncated()
+      return result.text
+    } catch (error) {
+      if (error instanceof SummaryTruncated) throw error
+      const turns = head.reduce((n, m) => n + (m.role === "user" ? 1 : 0), 0)
+      if (attempt >= 2 || turns <= 1 || !isContextOverflow(describeError(error))) throw new Error(describeError(error))
+      // Drop the oldest turn: everything up to the second user message.
+      const next = head.findIndex((m, i) => i > 0 && m.role === "user")
+      head = head.slice(next)
+    }
+  }
+}
+
+const COMPACT_MAX_OUTPUT_TOKENS = 8_000
+
+class SummaryTruncated extends Error {
+  constructor() {
+    super(`Bản tóm tắt dài quá ${COMPACT_MAX_OUTPUT_TOKENS} token và bị cắt; đã giữ nguyên hội thoại.`)
+  }
 }
 
 /**
@@ -227,10 +520,14 @@ export async function previewContext(opts: TurnInput) {
   } catch (error) {
     if (!(error instanceof ChatSetupError)) throw error
   }
-  const { assembled, tier } = await assembleFor(opts, target)
+  const { assembled, tier, built } = await assembleFor(opts, target)
+  const loaded = new Set(loadedTools(opts.history ?? []))
   return {
     report: assembled.report,
     tier,
+    /** Tool search state: tools sent by name only, and deferred tools already loaded. */
+    deferred: built?.deferred ?? [],
+    loaded: built ? Object.keys(built.tools).filter((n) => loaded.has(n) && opts.registry.get(n)?.deferrable && !built.deferred.includes(n)) : [],
     model: target ? `${target.provider.name} · ${target.model}` : "chưa chọn model (giả định hạng B)",
   }
 }
@@ -247,8 +544,6 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
   const sessionId = opts.sessionId ?? ""
   // Fail fast on setup problems before any hook side effects run.
   await resolveTarget()
-  // Per-turn call budget and doom-loop counters restart here.
-  opts.registry.resetTurnBudgets()
 
   // user-prompt hooks: may block the turn or add context for it.
   const extras: TurnExtras = {}
@@ -270,50 +565,64 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
     yield { type: "notice", text: `Dùng ${recalled.length} memory: ${recalled.map((m) => m.text.slice(0, 40)).join("; ")}` }
   }
 
-  const { target, tools, assembled, supportsTools } = await prepare(opts, extras)
+  const prepared = await prepare(opts, extras)
+  const { target, tools, built, assembled, supportsTools } = prepared
   const maxSteps = opts.maxSteps ?? DEFAULT_MAX_STEPS
   if (!supportsTools && opts.registry.list().length > 0) {
     yield { type: "notice", text: "Model này không hỗ trợ tool; trả lời không dùng tool." }
   }
+  // Tell the user once whenever deferral or the hidden tools change. Keyed on every
+  // deferrable tool, not on those still unloaded: loading tools must not repeat the notice.
+  const deferrable = built?.deferring ? opts.registry.list().filter((d) => d.deferrable).map((d) => d.name) : []
+  const hiddenKey = JSON.stringify([built?.hidden ?? [], deferrable.length])
+  if (hiddenKey !== opts.registry.lastHiddenNotice) {
+    opts.registry.lastHiddenNotice = hiddenKey
+    if (deferrable.length > 0) {
+      const servers = deferredByServer(opts.registry, deferrable)
+        .map((g) => `${g.tools.length} của ${g.server}`)
+        .join(", ")
+      yield {
+        type: "notice",
+        text: `Đang hoãn ${deferrable.length} tool MCP (${servers}); model tự nạp bằng tool_search khi cần. Đổi trong /config.`,
+      }
+    }
+    if (built && built.hidden.length > 0) {
+      const parts = built.hidden.map((h) => `${h.count} tool của ${h.source.replace(/^mcp:/, "")}`).join(", ")
+      yield {
+        type: "notice",
+        text: `Model chỉ nhận tối đa ${built.names.length} tool mỗi lần; đang ẩn ${parts}. Lọc bằng "enabledTools"/"disabledTools" trong cấu hình MCP hoặc tắt bớt server (/mcp).`,
+      }
+    }
+  }
 
   const user = userMessage(opts.input, assembled.reminders)
-  const request = withContext([...opts.history, user], assembled.context)
-  // Anthropic caches only where asked: mark the static system prompt. Others cache by prefix.
-  const system: string | SystemModelMessage =
-    target.provider.npm === "@ai-sdk/anthropic"
-      ? { role: "system", content: assembled.system, providerOptions: { anthropic: { cacheControl: { type: "ephemeral" } } } }
-      : assembled.system
-
-  const model = languageModel(target.provider, target.model, target.apiKey)
-  // Names in the frozen snapshot; the visible set is everything registered
-  // (single surface — no preset gating since 2026-10-06).
-  const frozenNames = new Set(opts.registry.list().map((t) => t.name))
+  // A vision model's screenshots stay in history; a model without vision gets placeholders.
+  const { system, request, model } = requestFor(prepared, [...opts.history, user])
   let summarized = false
-  const visibleNames = () => {
-    return opts.registry
-      .list()
-      .filter((t) => frozenNames.has(t.name))
-      .map((t) => t.name)
-  }
+  const nudge = nudgeAfterTools(target)
+  // Visible tools at the current step; deferred tools join once loaded (tool search).
+  let active = activeFor(built, request)
   const result = streamText({
     model,
     system,
     messages: request,
     tools,
     stopWhen: stepCountIs(maxSteps),
+    // Every step exposes what the conversation has loaded so far, so a tool found by
+    // tool_search is callable at the very next step.
     // Last allowed step: keep tools declared (some providers reject tool history otherwise)
     // but forbid calling them, so the turn always ends with an answer.
     prepareStep: ({ stepNumber, messages }) => {
       if (!tools) return undefined
-      const active = visibleNames()
-      // Last allowed step: keep tools declared (some providers reject tool history otherwise)
-      // but forbid calling them, so the turn always ends with an answer.
-      if (stepNumber >= maxSteps - 1) {
-        summarized = true
-        return { activeTools: active, toolChoice: "none" as const, messages: [...messages, { role: "user", content: SUMMARY_PROMPT }] }
+      active = activeFor(built, messages)
+      if (stepNumber < maxSteps - 1) {
+        if (!nudge || messages.at(-1)?.role !== "tool") return active ? { activeTools: active } : undefined
+        return { ...(active ? { activeTools: active } : {}), messages: [...messages, { role: "user", content: toolNudge(messages) }] }
       }
-      return { activeTools: active }
+      summarized = true
+      return { toolChoice: "none", activeTools: active, messages: [...messages, { role: "user", content: SUMMARY_PROMPT }] }
     },
+    experimental_repairToolCall: async ({ toolCall, error }) => repairCall(opts.registry, built, active, toolCall, error),
     abortSignal: opts.signal,
     maxRetries: 1,
     onError: () => {}, // errors are read from the stream
@@ -321,6 +630,8 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
 
   const outcome: Outcome = { text: "", aborted: false }
   yield* relay(result, opts.registry, opts.signal, outcome)
+  // The request whose usage measures the context (the empty-answer retry replaces it).
+  let measured: { steps: PromiseLike<{ usage: LanguageModelUsage }[]> } = result
 
   let messages: ModelMessage[] | undefined
   if (!outcome.aborted && !outcome.failure) {
@@ -341,6 +652,7 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
       // The nudge is only for this request; it is not kept in history.
       messages: [...request, ...kept, { role: "user", content: NUDGE_PROMPT }],
       tools,
+      activeTools: activeFor(built, [...request, ...kept]),
       toolChoice: tools ? "none" : undefined,
       abortSignal: opts.signal,
       maxRetries: 1,
@@ -348,6 +660,7 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
     })
     const second: Outcome = { text: "", aborted: false }
     yield* relay(retry, opts.registry, opts.signal, second)
+    measured = retry
     outcome.aborted = second.aborted
     outcome.failure = second.failure
     outcome.text = second.text
@@ -360,14 +673,19 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
             ? "Model không trả lời sau khi gọi tool (câu trả lời rỗng). Kết quả tool ở phía trên; thử hỏi lại hoặc đổi model."
             : "Model trả về câu trả lời rỗng. Thử hỏi lại hoặc đổi model.",
         }
-        messages = [...kept, { role: "assistant", content: "[Không có câu trả lời]" }]
+        messages = [...kept, { role: "assistant", content: "(không có câu trả lời)" }]
       }
     }
   }
 
   if (messages && !outcome.aborted && !outcome.failure) {
     if (summarized) yield { type: "notice", text: `Đã dùng hết ${maxSteps} bước gọi tool; câu trả lời là bản tổng kết.` }
-    yield { type: "done", messages: [user, ...messages], clock: assembled.clock }
+    const tokens = await lastStepTokens(measured)
+    const usage =
+      tokens !== undefined
+        ? { contextTokens: tokens, estimated: false }
+        : { contextTokens: estimateRequest(system, [...request, ...messages], built?.tokens), estimated: true }
+    yield { type: "done", messages: [user, ...messages], clock: assembled.clock, usage }
     if (opts.hooks) void opts.hooks.emit({ type: "turn-end", sessionId, messages: [user, ...messages] })
     return
   }
@@ -379,7 +697,9 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
   const text = outcome.text
   yield {
     type: "done",
-    messages: [user, { role: "assistant", content: text || (outcome.aborted ? "[Đã dừng]" : "[Lỗi]") }],
+    // No square brackets: the markdown renderer read "[Đã dừng]" as a link.
+    messages: [user, { role: "assistant", content: text || (outcome.aborted ? "(đã dừng)" : "(lỗi)") }],
     clock: assembled.clock,
+    usage: { contextTokens: estimateRequest(system, [...request, { role: "assistant", content: text }], built?.tokens), estimated: true },
   }
 }

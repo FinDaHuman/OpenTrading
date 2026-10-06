@@ -19,6 +19,36 @@ import type { Catalog, CatalogModel, CatalogProvider } from "./catalog"
 export type ProviderId = string
 
 type Options = { apiKey: string; baseURL?: string; name: string }
+
+type GeminiContent = { role?: string; parts?: unknown[] }
+
+/**
+ * The Google SDK turns a tool message and a following user message (our per-step nudge,
+ * the step-limit summary prompt) into two `user` contents in a row. Gemini expects turns to
+ * alternate, and Gemini CLI itself sends extra text parts inside the function-response turn,
+ * so adjacent same-role contents are merged into one.
+ */
+export function mergeGeminiTurns(contents: GeminiContent[]): GeminiContent[] {
+  const merged: GeminiContent[] = []
+  for (const content of contents) {
+    const last = merged.at(-1)
+    if (last && content.role && last.role === content.role) last.parts = [...(last.parts ?? []), ...(content.parts ?? [])]
+    else merged.push({ ...content, parts: [...(content.parts ?? [])] })
+  }
+  return merged
+}
+
+const geminiFetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+  if (typeof init?.body === "string" && init.body.includes('"contents"')) {
+    try {
+      const body = JSON.parse(init.body) as { contents?: GeminiContent[] }
+      if (Array.isArray(body.contents)) init = { ...init, body: JSON.stringify({ ...body, contents: mergeGeminiTurns(body.contents) }) }
+    } catch {
+      // not JSON: send as is
+    }
+  }
+  return globalThis.fetch(input, init)
+}) as typeof globalThis.fetch
 type Factory = (o: Options) => (modelId: string) => LanguageModel
 
 /** AI SDK packages bundled with OpenTrading, keyed by the npm name models.dev uses. */
@@ -29,7 +59,7 @@ const SDK: Record<string, Factory> = {
     return o.baseURL ? (id) => sdk.chat(id) : (id) => sdk(id)
   },
   "@ai-sdk/anthropic": (o) => createAnthropic(o),
-  "@ai-sdk/google": (o) => createGoogleGenerativeAI(o),
+  "@ai-sdk/google": (o) => createGoogleGenerativeAI({ ...o, fetch: geminiFetch }),
   "@ai-sdk/groq": (o) => createGroq(o),
   "@ai-sdk/mistral": (o) => createMistral(o),
   "@ai-sdk/xai": (o) => createXai(o),

@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { expandConfig, expandEnv, loadServers } from "../src/core/mcp/config"
-import { normalizeSchema, resultToText } from "../src/core/mcp/convert"
+import { resultToOutput, resultToText } from "../src/core/mcp/convert"
 import { McpManager } from "../src/core/mcp/manager"
 import { MAX_TOOL_NAME, toolName } from "../src/core/mcp/naming"
 import { ToolRegistry } from "../src/core/tools/registry"
@@ -65,15 +65,22 @@ test("env expansion supports defaults and reports missing variables", () => {
   expect(missing).toEqual(["MISSING"])
 })
 
-test("MCP results flatten to text; isError throws; schemas are normalised", () => {
+test("MCP results: text, structured fallback, images kept for the model, isError throws", () => {
   expect(resultToText({ content: [{ type: "text", text: "a" }, { type: "text", text: "b" }] })).toBe("a\n\nb")
   expect(resultToText({ content: [], structuredContent: { x: 1 } })).toContain('"x": 1')
   expect(resultToText({ content: [{ type: "image", mimeType: "image/png" }] })).toContain("image/png")
   expect(() => resultToText({ isError: true, content: [{ type: "text", text: "hỏng" }] })).toThrow("hỏng")
-  expect(normalizeSchema({ $schema: "x", additionalProperties: false, properties: { a: {} } })).toEqual({
-    type: "object",
-    properties: { a: {} },
+  expect(resultToOutput({ content: [{ type: "text", text: "chụp" }, { type: "image", data: "AAA=", mimeType: "image/png" }] })).toEqual({
+    output: "chụp",
+    images: [{ data: "AAA=", mediaType: "image/png" }],
   })
+  expect(resultToOutput({ content: [{ type: "resource", resource: { uri: "file:///a.png", blob: "BBB=", mimeType: "image/png" } }] })).toEqual({
+    output: "(tool trả về 1 ảnh)",
+    images: [{ data: "BBB=", mediaType: "image/png" }],
+  })
+  expect(resultToOutput({ content: [{ type: "resource", resource: { uri: "file:///a.pdf", blob: "CCC=", mimeType: "application/pdf" } }] })).toBe(
+    "[tài nguyên: file:///a.pdf (application/pdf)]",
+  )
 })
 
 test("config: project overrides global, invalid entries become errors", async () => {
@@ -90,15 +97,21 @@ test("connects to the demo server over stdio and calls its tools", async () => {
   const status = manager.status()[0]!
   expect(status.error).toBeUndefined()
   expect(status.state).toBe("connected")
-  expect(status.tools.sort()).toEqual(["mcp__demo__add", "mcp__demo__echo", "mcp__demo__fail"])
+  expect(status.tools.sort()).toEqual(["mcp__demo__add", "mcp__demo__echo", "mcp__demo__fail", "mcp__demo__ghi_chu"])
 
   const add = registry.get("mcp__demo__add")!
   expect(add.readOnly).toBe(true)
+  // Server instructions and _meta hints reach the harness.
+  expect(manager.instructions()).toEqual([{ server: "demo", text: expect.stringContaining("echo để thử kết nối") }])
+  expect(registry.get("mcp__demo__echo")!.searchHint).toBe("lap lai van ban | repeat ping")
+  expect(registry.get("mcp__demo__echo")!.deferrable).toBe(true)
+  expect(add.deferrable).toBe(false) // _meta["anthropic/alwaysLoad"]
   expect(await add.execute({ a: 2, b: 3 }, ctx)).toBe("5")
   expect(await errorOf(registry.get("mcp__demo__fail")!.execute({}, ctx))).toContain("cố ý")
 
   await manager.stop()
   expect(registry.list()).toHaveLength(0)
+  expect(manager.instructions()).toEqual([])
 }, 30_000)
 
 test("stop() leaves no server process behind", async () => {
@@ -128,7 +141,10 @@ test("a server that cannot start is reported as failed, not thrown", async () =>
 test("missing env vars fail fast with the variable name", async () => {
   const { manager } = await setup({ demo: { ...demoConfig, env: { API: "${OT_TEST_UNSET_VAR}" } } })
   await manager.start()
-  expect(manager.status()[0]).toMatchObject({ state: "failed", error: "Thiếu biến môi trường: OT_TEST_UNSET_VAR" })
+  const status = manager.status()[0]!
+  expect(status.state).toBe("failed")
+  expect(status.error).toContain("Thiếu biến: OT_TEST_UNSET_VAR")
+  expect(status.error).toContain("opentrading mcp secret set OT_TEST_UNSET_VAR")
 })
 
 test("project servers wait for approval, then connect", async () => {

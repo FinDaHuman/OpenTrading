@@ -1,6 +1,8 @@
 import { z } from "zod"
 import { readSkillFile } from "../../skills/loader"
 import type { Skill } from "../../skills/schema"
+import { matchToolPattern } from "../patterns"
+import { LOADED_PREFIX } from "../search"
 import type { ToolDef } from "../types"
 
 /**
@@ -8,7 +10,11 @@ import type { ToolDef } from "../types"
  * is fetched only when the model decides it needs it. `file` reads a supporting file inside
  * the skill's own directory (tables, checklists) — nothing outside it.
  */
-export function loadSkillTool(skills: () => Skill[]): ToolDef<{ name: string; file?: string }> {
+export function loadSkillTool(
+  skills: () => Skill[],
+  /** Deferred (tool-search) tools; those a skill requires are loaded with it. */
+  deferrable: () => string[] = () => [],
+): ToolDef<{ name: string; file?: string }> {
   return {
     name: "load_skill",
     description:
@@ -30,7 +36,13 @@ export function loadSkillTool(skills: () => Skill[]): ToolDef<{ name: string; fi
       }
       if (skill.activation === "manual") throw new Error(`Skill "${name}" chỉ người dùng bật được (/skill ${name}).`)
       if (file) return readSkillFile(skill, file)
-      return `Thư mục skill: ${skill.dir}\n\n${skill.body}`
+      // A skill is a bundle of instructions + the tools they use: load those tools too, so
+      // the model can follow the skill without a tool_search first. First line, so the
+      // agent loop still sees it when a long body is cut.
+      const pool = deferrable()
+      const tools = [...new Set((skill.requires_tools ?? []).flatMap((p) => matchToolPattern(p, pool)))]
+      const loaded = tools.length > 0 ? `${LOADED_PREFIX}${tools.join(", ")}\n` : ""
+      return `${loaded}Thư mục skill: ${skill.dir}\n\n${skill.body}`
     },
   }
 }

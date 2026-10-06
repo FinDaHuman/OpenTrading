@@ -1,12 +1,10 @@
-import { DEFAULT_MAX_OUTPUT_CHARS, DEFAULT_TIMEOUT_MS, type ToolContext, type ToolDef } from "./types"
+import { deniedMessage, type PermissionGate } from "../permission"
+import { DEFAULT_MAX_OUTPUT_CHARS, DEFAULT_TIMEOUT_MS, type ToolContext, type ToolDef, type ToolResult } from "./types"
 
 /**
  * Read/write lock: read-only tools share it, everything else takes it exclusively.
  * Writers are queued FIFO and block new readers so they cannot starve.
- * Readers are capped (skills-design-for-harness §0.4: vnstock throttles bursts >5).
  */
-export const MAX_PARALLEL_READERS = 5
-
 export class RwLock {
   private readers = 0
   private writer = false
@@ -26,7 +24,7 @@ export class RwLock {
   }
 
   private canEnter(write: boolean) {
-    return write ? !this.writer && this.readers === 0 : !this.writer && this.readers < MAX_PARALLEL_READERS
+    return write ? !this.writer && this.readers === 0 : !this.writer
   }
 
   private enter(write: boolean) {
@@ -44,6 +42,9 @@ export class RwLock {
   }
 }
 
+/** Tool error messages longer than this are cut before the model sees them. */
+export const MAX_ERROR_CHARS = 2000
+
 /** Keep the head and tail of long output so both the start and the conclusion survive. */
 export function truncate(text: string, max: number): string {
   if (text.length <= max) return text
@@ -52,9 +53,6 @@ export function truncate(text: string, max: number): string {
   const omitted = text.length - head - tail
   return `${text.slice(0, head)}\n\n[... đã lược ${omitted} ký tự ...]\n\n${text.slice(text.length - tail)}`
 }
-
-/** Tool errors (and upstream HTML error pages) reaching the model stay short. */
-export const MAX_ERROR_CHARS = 500
 
 export class ToolTimeoutError extends Error {
   constructor(name: string, ms: number) {
@@ -67,7 +65,14 @@ export class ToolTimeoutError extends Error {
  * Errors are rethrown with a readable message; the AI SDK turns them into `tool-error`
  * results that go back to the model instead of crashing the loop.
  */
-export async function runTool(def: ToolDef, input: unknown, ctx: ToolContext, lock: RwLock): Promise<string> {
+export async function runTool(def: ToolDef, input: unknown, ctx: ToolContext, lock: RwLock, gate?: PermissionGate): Promise<ToolResult> {
+  // Waiting on the user (a question, then approval) is not tool runtime, and nobody holds
+  // the lock meanwhile.
+  if (def.prepare) ctx = { ...ctx, prepared: await def.prepare(input, ctx) }
+  if (gate) {
+    const decision = await gate.check(def, input, ctx.signal, def.displayName, ctx.callId)
+    if (!decision.allow) throw new Error(deniedMessage(decision))
+  }
   const release = await lock.acquire(!def.readOnly)
   const ms = def.timeoutMs ?? DEFAULT_TIMEOUT_MS
   const timeout = new AbortController()
@@ -89,11 +94,14 @@ export async function runTool(def: ToolDef, input: unknown, ctx: ToolContext, lo
     })
     const result = await Promise.race([def.execute(input, { ...ctx, signal }), expired, aborted])
     const output = typeof result === "string" ? result : result.output
-    return truncate(output, def.maxOutputChars ?? DEFAULT_MAX_OUTPUT_CHARS)
+    const images = typeof result === "string" ? undefined : result.images
+    return { output: truncate(output, def.maxOutputChars ?? DEFAULT_MAX_OUTPUT_CHARS), ...(images?.length ? { images } : {}) }
   } catch (error) {
-    // An upstream proxy can answer failures with a full HTML page; the model must never see it.
-    if (error instanceof Error) throw new Error(truncate(error.message, MAX_ERROR_CHARS))
-    throw new Error(String(error))
+    // Errors go back to the model too: an HTML 502 page or a stack trace must not fill
+    // the context. Keep the head and tail.
+    const message = error instanceof Error ? error.message : String(error)
+    if (message.length <= MAX_ERROR_CHARS && error instanceof Error) throw error
+    throw new Error(truncate(message, MAX_ERROR_CHARS))
   } finally {
     clearTimeout(timer)
     // The turn's signal outlives this call; don't leave one listener behind per tool call.

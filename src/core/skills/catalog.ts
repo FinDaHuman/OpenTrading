@@ -1,11 +1,12 @@
 import { estimateTokens } from "../prompt/budget"
+import { matchToolPattern } from "../tools/patterns"
 import type { Skill } from "./schema"
 
 const MAX_ENTRY_CHARS = 250
 
-/** Skills the model may see: `requires_tools` all present. */
+/** Skills the model may see: every `requires_tools` entry matches some tool (see matchToolPattern). */
 export function availableSkills(skills: Skill[], tools: ReadonlySet<string>) {
-  return skills.filter((s) => (s.requires_tools ?? []).every((t) => tools.has(t)))
+  return skills.filter((s) => (s.requires_tools ?? []).every((t) => tools.has(t) || matchToolPattern(t, tools).length > 0))
 }
 
 function entry(skill: Skill, withDescription: boolean) {

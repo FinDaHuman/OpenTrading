@@ -106,3 +106,69 @@ test("the transcript is rebuilt without reminder blocks", () => {
     { kind: "assistant", text: "Không có gì." },
   ])
 })
+
+test("tools loaded by tool_search survive a resume (derived from the stored history)", async () => {
+  const { loadedTools } = await import("../src/core/tools/loaded")
+  const turn: ModelMessage[] = [
+    { role: "user", content: "giá FPT" },
+    { role: "assistant", content: [{ type: "tool-call", toolCallId: "s1", toolName: "tool_search", input: { query: "select:a" } }] },
+    {
+      role: "tool",
+      content: [{ type: "tool-result", toolCallId: "s1", toolName: "tool_search", output: { type: "text", value: "Đã nạp tool: mcp__ot__a, mcp__ot__b\n\n## mcp__ot__a" } }],
+    },
+    { role: "assistant", content: "xong" },
+  ]
+  const s = Session.create(new Date("2026-10-03T03:15:00Z"))
+  await s.appendTurn(turn, info)
+  const loaded = await loadSession(s.id)
+  expect(loadedTools(loaded.messages)).toEqual(["tool_search", "mcp__ot__a", "mcp__ot__b"])
+})
+
+test("the todo list survives a resume (derived from the stored history)", async () => {
+  const { currentTodos } = await import("../src/core/tools/todos")
+  const todos = [
+    { content: "Lấy giá", status: "completed" },
+    { content: "So sánh ngành", status: "in_progress" },
+  ] as const
+  const turn: ModelMessage[] = [
+    { role: "user", content: "phân tích FPT" },
+    { role: "assistant", content: [{ type: "tool-call", toolCallId: "t1", toolName: "todo_write", input: { todos } }] },
+    { role: "tool", content: [{ type: "tool-result", toolCallId: "t1", toolName: "todo_write", output: { type: "text", value: "Đã cập nhật việc cần làm: 1/2 xong." } }] },
+    { role: "assistant", content: "đang làm" },
+  ]
+  const s = Session.create(new Date("2026-10-06T03:15:00Z"))
+  await s.appendTurn(turn, info)
+  expect(currentTodos((await loadSession(s.id)).messages)).toEqual([...todos])
+})
+
+test("a compaction replaces the model's history on resume; the transcript still shows everything", async () => {
+  const { compactPair } = await import("../src/core/compact-marker")
+  const s = Session.create(new Date("2026-10-06T04:00:00Z"))
+  await s.appendTurn(turn1, { ...info, contextTokens: 50_000 })
+  await s.appendTurn(turn2, info)
+  const compacted = [...compactPair("TÓM TẮT", { tools: ["mcp__ot__a"], skills: [], todos: [] }), ...turn2]
+  await s.appendCompact({ trigger: "manual", before: 60_000, after: 9_000, messages: compacted })
+  const turn3: ModelMessage[] = [
+    { role: "user", content: "tiếp" },
+    { role: "assistant", content: "ừ" },
+  ]
+  await s.appendTurn(turn3, { ...info, contextTokens: 9_500 })
+
+  const loaded = await loadSession(s.id)
+  expect(loaded.messages).toEqual([...compacted, ...turn3])
+  expect(loaded.contextTokens).toBe(9_500)
+  // Display: the original turns, then the marker and summary where the compaction happened.
+  expect(loaded.display).toEqual([...turn1, ...turn2, ...compacted.slice(0, 2), ...turn3])
+  const items = transcriptFromMessages(loaded.display)
+  expect(items.filter((i) => i.kind === "compact")).toEqual([{ kind: "compact", text: "TÓM TẮT" }])
+  expect(JSON.stringify(items)).not.toContain("tom_tat_hoi_thoai")
+
+  // Pruning only (no summary): the model history is replaced, the transcript gains nothing.
+  const p = Session.create(new Date("2026-10-06T04:10:00Z"))
+  await p.appendTurn(turn1, info)
+  await p.appendCompact({ trigger: "auto", before: 10_000, after: 4_000, messages: turn2 })
+  const pruned = await loadSession(p.id)
+  expect(pruned.messages).toEqual(turn2)
+  expect(pruned.display).toEqual(turn1)
+  expect(pruned.contextTokens).toBe(4_000)
+})

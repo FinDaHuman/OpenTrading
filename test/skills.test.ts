@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { availableSkills, fold, matchTriggers, renderCatalog } from "../src/core/skills/catalog"
+import { matchToolPattern } from "../src/core/tools/patterns"
 import { loadSkills, readSkillFile, skillRoots } from "../src/core/skills/loader"
 import { parseSkill, type Skill } from "../src/core/skills/schema"
 
@@ -131,6 +132,18 @@ test("skills whose required tools are missing are hidden", () => {
   const skills = [make({ name: "needs-data", requires_tools: ["mcp__vn__quote"] }), make({ name: "free" })]
   expect(availableSkills(skills, new Set()).map((s) => s.name)).toEqual(["free"])
   expect(availableSkills(skills, new Set(["mcp__vn__quote"])).map((s) => s.name)).toEqual(["needs-data", "free"])
+})
+
+test("requires_tools accepts short names, server/tool and wildcards", () => {
+  const tools = new Set(["current_time", "mcp__opentrading__vn_quote_history", "mcp__opentrading__vn_index_ohlcv", "mcp__other__vn_quote_history"])
+  expect(matchToolPattern("vn_quote_history", tools)).toEqual(["mcp__opentrading__vn_quote_history", "mcp__other__vn_quote_history"])
+  expect(matchToolPattern("opentrading/vn_quote_history", tools)).toEqual(["mcp__opentrading__vn_quote_history"])
+  expect(matchToolPattern("opentrading/vn_*", tools)).toEqual(["mcp__opentrading__vn_quote_history", "mcp__opentrading__vn_index_ohlcv"])
+  expect(matchToolPattern("current_time", tools)).toEqual(["current_time"])
+  expect(matchToolPattern("mcp__other__*", tools)).toEqual(["mcp__other__vn_quote_history"])
+  expect(matchToolPattern("quote", tools)).toEqual([]) // no substring matches without *
+  const skills = [make({ name: "prices", requires_tools: ["opentrading/vn_quote_history"] }), make({ name: "gone", requires_tools: ["x/y"] })]
+  expect(availableSkills(skills, tools).map((s) => s.name)).toEqual(["prices"])
 })
 
 test("trigger keywords match without Vietnamese diacritics, on word boundaries", () => {

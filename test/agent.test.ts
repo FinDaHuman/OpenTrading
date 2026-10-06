@@ -2,6 +2,7 @@ import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test"
 import { mkdtemp, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
+import type { ModelMessage } from "ai"
 import { z } from "zod"
 
 // Isolated state dir before core modules read it.
@@ -26,9 +27,17 @@ type Body = { messages: { role: string; content?: unknown }[]; tools?: unknown[]
 const bodies: Body[] = []
 /** What the fake model does when the conversation has no tool results yet. */
 let plan: { tool: string; args: object; always?: boolean } | undefined
+/** Several tool calls in one turn: call `script[n]` after n tool results (this turn), then answer. */
+let script: { tool: string; args: object }[] | undefined
 /** Mimic gemini-2.5-flash-lite: answer with nothing after a tool result. */
 let emptyAfterTool: "once" | "always" | undefined
+/** Non-streamed answers (the compaction summary): an error per request, then the finish reason. */
+let summaryErrors: { status: number; message: string }[] = []
+let summaryFinish = "stop"
+/** Token usage reported on the answer's last chunk (Groq sends it as x_groq.usage). */
+let usage: { prompt_tokens: number; completion_tokens: number } | undefined
 const NUDGE = "Hãy trả lời câu hỏi của người dùng dựa trên kết quả tool"
+const TOOL_NUDGE_START = "Nếu còn cần dữ liệu, gọi cùng lúc"
 
 const sse = (chunks: object[]) =>
   new Response(chunks.map((c) => `data: ${JSON.stringify(c)}\n\n`).join("") + "data: [DONE]\n\n", {
@@ -47,10 +56,35 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   const url = String(input instanceof Request ? input.url : input)
   if (url.endsWith("/api.json")) return Response.json(CATALOG)
   if (!url.endsWith("/chat/completions")) throw new Error(`unexpected fetch ${url}`)
-  const body = JSON.parse(String(init?.body)) as Body
+  const body = JSON.parse(String(init?.body)) as Body & { stream?: boolean }
   bodies.push(body)
+  // generateText (the compaction summary) does not stream.
+  if (!body.stream) {
+    const failure = summaryErrors.shift()
+    if (failure) return Response.json({ error: { message: failure.message, type: "invalid_request_error" } }, { status: failure.status })
+    return Response.json({
+      id: "c",
+      object: "chat.completion",
+      created: 1,
+      model: "tooly",
+      choices: [{ index: 0, message: { role: "assistant", content: "Kết quả: xong." }, finish_reason: summaryFinish }],
+      usage: { prompt_tokens: 1, completion_tokens: 1 },
+    })
+  }
   // Branch on the request, not on call counts: tool results present → answer in text.
   const hasToolResult = body.messages.some((m) => m.role === "tool")
+  // The turn starts at the last real user message; the per-step tool nudge does not count.
+  const lastUser = body.messages.findLastIndex((m) => m.role === "user" && !JSON.stringify(m.content).includes(TOOL_NUDGE_START))
+  const resultsThisTurn = body.messages.slice(lastUser + 1).filter((m) => m.role === "tool").length
+  const scripted = body.tool_choice !== "none" ? script?.[resultsThisTurn] : undefined
+  if (scripted) {
+    const id = `call_${bodies.length}`
+    return sse([
+      chunk({ role: "assistant", tool_calls: [{ index: 0, id, type: "function", function: { name: scripted.tool, arguments: "" } }] }),
+      chunk({ tool_calls: [{ index: 0, function: { arguments: JSON.stringify(scripted.args) } }] }),
+      chunk({}, "tool_calls"),
+    ])
+  }
   if (plan && body.tool_choice !== "none" && (plan.always || !hasToolResult)) {
     const id = `call_${bodies.length}`
     return sse([
@@ -63,13 +97,15 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   if (emptyAfterTool && hasToolResult && (emptyAfterTool === "always" || !nudged)) {
     return sse([chunk({ role: "assistant", content: "" }), chunk({}, "stop")])
   }
-  return sse([chunk({ role: "assistant", content: "Kết quả: " }), chunk({ content: "xong." }), chunk({}, "stop")])
+  const last = usage ? { ...chunk({}, "stop"), x_groq: { usage } } : chunk({}, "stop")
+  return sse([chunk({ role: "assistant", content: "Kết quả: " }), chunk({ content: "xong." }), last])
 }) as typeof fetch
 
 const { runAgent } = await import("../src/core/agent")
 const { ToolRegistry } = await import("../src/core/tools/registry")
 const { currentTimeTool } = await import("../src/core/tools/builtin/current-time")
 const { saveConfig } = await import("../src/core/config")
+const { toolSearchTool } = await import("../src/core/tools/builtin/tool-search")
 const { setKey } = await import("../src/core/auth")
 type AgentEvent = import("../src/core/events").AgentEvent
 
@@ -86,8 +122,12 @@ afterAll(async () => {
 beforeEach(async () => {
   bodies.length = 0
   plan = undefined
+  script = undefined
   emptyAfterTool = undefined
-  await saveConfig({ provider: "groq", model: "tooly" })
+  usage = undefined
+  summaryErrors = []
+  summaryFinish = "stop"
+  await saveConfig({ provider: "groq", model: "tooly", toolSearch: undefined, toolSearchMinTools: undefined })
 })
 
 function registry() {
@@ -168,6 +208,21 @@ test("hitting the step limit forces a final answer without tools", async () => {
   expect(bodies[2]!.tools).toBeDefined()
   expect(events.some((e) => e.type === "notice" && e.text.includes("3 bước"))).toBe(true)
   expect(events.some((e) => e.type === "text-delta")).toBe(true)
+})
+
+test("each round of tool results gets one unstored nudge; the last step gets only the summary prompt", async () => {
+  plan = { tool: "current_time", args: {}, always: true }
+  const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: registry(), maxSteps: 4 }))
+  const nudges = (b: Body) => b.messages.filter((m) => m.role === "user" && JSON.stringify(m.content).includes(TOOL_NUDGE_START)).length
+  expect(bodies).toHaveLength(4)
+  expect(nudges(bodies[0]!)).toBe(0) // no tool result yet
+  expect(nudges(bodies[1]!)).toBe(1)
+  expect(nudges(bodies[2]!)).toBe(1) // not carried over from the previous step
+  expect(bodies[1]!.messages.at(-1)!.role).toBe("user")
+  expect(bodies[1]!.tools).toBeDefined()
+  expect(nudges(bodies[3]!)).toBe(0)
+  expect(bodies[3]!.tool_choice).toBe("none")
+  expect(JSON.stringify(done(events).messages)).not.toContain(TOOL_NUDGE_START)
 })
 
 test("aborting mid-tool leaves no dangling tool call in history", async () => {
@@ -291,4 +346,300 @@ test("models without tool support get no tools", async () => {
   const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: registry() }))
   expect(bodies[0]!.tools).toBeUndefined()
   expect(events.some((e) => e.type === "notice")).toBe(true)
+})
+
+test("more tools than the provider allows: capped at 128, MCP after native, told once", async () => {
+  await saveConfig({ toolSearch: "off" })
+  const r = bigRegistry(130)
+  const first = await collect(runAgent({ history: [], input: "chào", skills: [], registry: r }))
+  expect(bodies.at(-1)!.tools).toHaveLength(128)
+  const names = (bodies.at(-1)!.tools as { function: { name: string } }[]).map((t) => t.function.name)
+  expect(names).toContain("current_time") // native tools are never the ones dropped
+  const notice = first.find((e) => e.type === "notice" && e.text.includes("tối đa 128 tool"))
+  expect(notice && "text" in notice && notice.text).toContain("6 tool của big")
+  const second = await collect(runAgent({ history: [], input: "chào", skills: [], registry: r }))
+  expect(second.some((e) => e.type === "notice" && e.text.includes("tối đa"))).toBe(false)
+})
+
+test("images in history never reach a model that cannot see them", async () => {
+  const history = [
+    { role: "user" as const, content: "chụp màn hình" },
+    { role: "assistant" as const, content: [{ type: "tool-call" as const, toolCallId: "s1", toolName: "current_time", input: {} }] },
+    {
+      role: "tool" as const,
+      content: [
+        {
+          type: "tool-result" as const,
+          toolCallId: "s1",
+          toolName: "current_time",
+          output: { type: "content" as const, value: [{ type: "text" as const, text: "đã chụp" }, { type: "image-data" as const, data: "QUJDREVGRw==", mediaType: "image/png" }] },
+        },
+      ],
+    },
+    { role: "assistant" as const, content: "Đây là ảnh." },
+  ]
+  await collect(runAgent({ history, input: "tiếp", skills: [], registry: registry() }))
+  const sent = JSON.stringify(bodies.at(-1)!.messages)
+  expect(sent).not.toContain("QUJDREVGRw==")
+  expect(sent).toContain("đã chụp")
+  expect(sent).toContain("ảnh image/png")
+})
+
+/** registry() + tool_search + `n` deferrable MCP tools mcp__big__t000… that echo their input. */
+function bigRegistry(n: number) {
+  const r = registry()
+  r.register(toolSearchTool(r))
+  for (let i = 0; i < n; i++) {
+    const name = `mcp__big__t${String(i).padStart(3, "0")}`
+    r.register({
+      name,
+      source: "mcp:big",
+      priority: 0,
+      deferrable: true,
+      description: i === 7 ? "Lịch sử giá cổ phiếu theo ngày" : "x",
+      input: { type: "object", properties: { symbol: { type: "string" } } },
+      readOnly: true,
+      execute: async (input) => `${name} ${JSON.stringify(input)}`,
+    })
+  }
+  return r
+}
+
+const toolNames = (body: Body | undefined) => ((body?.tools ?? []) as { function: { name: string } }[]).map((t) => t.function.name)
+const systemText = (body: Body | undefined) => JSON.stringify(body?.messages.filter((m) => m.role === "system") ?? [])
+const ends = (events: AgentEvent[]) => events.filter((e) => e.type === "tool-end") as Extract<AgentEvent, { type: "tool-end" }>[]
+
+test("tool search: many MCP tools go out by name only; a loaded tool is callable at the next step", async () => {
+  const r = bigRegistry(130)
+  script = [
+    { tool: "tool_search", args: { query: "select:t001,big/t002" } },
+    { tool: "mcp__big__t001", args: { symbol: "FPT" } },
+  ]
+  const events = await collect(runAgent({ history: [], input: "giá FPT", skills: [], registry: r }))
+  // First request: built-ins + tool_search, no MCP schema; the names are in <tool_hoan>.
+  expect(toolNames(bodies[0])).toContain("tool_search")
+  expect(toolNames(bodies[0]).some((n) => n.startsWith("mcp__big__"))).toBe(false)
+  expect(systemText(bodies[0])).toContain("tool_hoan")
+  expect(systemText(bodies[0])).toContain("big (130): t000, t001")
+  expect(events.some((e) => e.type === "notice" && e.text.includes("Đang hoãn 130 tool MCP"))).toBe(true)
+  // tool_search loaded two tools; the very next step declares exactly those.
+  expect(ends(events)[0]!.output.split("\n")[0]).toBe("Đã nạp tool: mcp__big__t001, mcp__big__t002")
+  expect(toolNames(bodies[1])).toEqual(expect.arrayContaining(["mcp__big__t001", "mcp__big__t002"]))
+  expect(toolNames(bodies[1])).not.toContain("mcp__big__t003")
+  expect(ends(events)[1]).toMatchObject({ ok: true, output: 'mcp__big__t001 {"symbol":"FPT"}' })
+
+  // Next turn: the loaded tools are still there, recovered from history alone.
+  const history = done(events).messages
+  bodies.length = 0
+  script = undefined
+  const next = await collect(runAgent({ history, input: "còn VCB?", skills: [], registry: r }))
+  expect(next.some((e) => e.type === "notice" && e.text.includes("Đang hoãn"))).toBe(false)
+  expect(toolNames(bodies[0])).toEqual(expect.arrayContaining(["mcp__big__t001", "mcp__big__t002"]))
+  expect(toolNames(bodies[0])).not.toContain("mcp__big__t003")
+})
+
+test("tool search: keyword search finds tools by description, ignoring diacritics", async () => {
+  const r = bigRegistry(60)
+  script = [{ tool: "tool_search", args: { query: "lich su gia" } }]
+  const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: r }))
+  expect(ends(events)[0]!.output.split("\n")[0]).toBe("Đã nạp tool: mcp__big__t007")
+  expect(ends(events)[0]!.output).toContain("- symbol (string)")
+  expect(toolNames(bodies[1])).toContain("mcp__big__t007")
+})
+
+test("tool search: a short name from <tool_hoan> is repaired to the full name and loads the tool", async () => {
+  const r = bigRegistry(60)
+  script = [{ tool: "t005", args: { symbol: "HPG" } }]
+  const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: r }))
+  expect(ends(events)[0]).toMatchObject({ ok: true, output: 'mcp__big__t005 {"symbol":"HPG"}' })
+  const call = done(events).messages.find((m) => m.role === "assistant" && JSON.stringify(m.content).includes("tool-call"))
+  expect(JSON.stringify(call)).toContain("mcp__big__t005")
+  expect(toolNames(bodies[1])).toContain("mcp__big__t005")
+})
+
+test("tool search: an unknown name tells the model to search first", async () => {
+  const r = bigRegistry(60)
+  script = [{ tool: "khong_co_tool_nay", args: {} }]
+  const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: r }))
+  expect(ends(events)[0]!.ok).toBe(false)
+  expect(JSON.stringify(bodies[1]!.messages)).toContain("tool_search")
+  expect(events.at(-1)!.type).toBe("done")
+})
+
+test("tool search: few MCP tools are sent directly in auto mode; 'on' defers them anyway", async () => {
+  const r = bigRegistry(5)
+  await collect(runAgent({ history: [], input: "x", skills: [], registry: r }))
+  expect(toolNames(bodies[0])).toContain("mcp__big__t004")
+  expect(systemText(bodies[0])).not.toContain("Các tool dưới đây đang hoãn")
+  await saveConfig({ toolSearch: "on" })
+  bodies.length = 0
+  await collect(runAgent({ history: [], input: "x", skills: [], registry: r }))
+  expect(toolNames(bodies[0])).not.toContain("mcp__big__t004")
+})
+
+test("tool search: alwaysLoad tools are never deferred", async () => {
+  const r = bigRegistry(60)
+  r.register({ ...r.get("mcp__big__t010")!, name: "mcp__core__quote", source: "mcp:core", deferrable: false })
+  await collect(runAgent({ history: [], input: "x", skills: [], registry: r }))
+  expect(toolNames(bodies[0])).toContain("mcp__core__quote")
+  expect(toolNames(bodies[0])).not.toContain("mcp__big__t010")
+})
+
+test("tool search: the forced last step keeps loaded tools declared", async () => {
+  const r = bigRegistry(60)
+  script = [
+    { tool: "tool_search", args: { query: "select:t003" } },
+    { tool: "mcp__big__t003", args: {} },
+    { tool: "mcp__big__t003", args: {} },
+  ]
+  await collect(runAgent({ history: [], input: "x", skills: [], registry: r, maxSteps: 3 }))
+  expect(bodies[2]!.tool_choice).toBe("none")
+  expect(toolNames(bodies[2])).toContain("mcp__big__t003")
+})
+
+test("tool search: load_skill loads the skill's deferred tools for the next step", async () => {
+  const { loadSkillTool } = await import("../src/core/tools/builtin/load-skill")
+  const r = bigRegistry(60)
+  const skill = { name: "gia", description: "giá", dir: "/s", source: "bundled" as const, body: "Làm theo", activation: "auto" as const, requires_tools: ["big/t01*"] }
+  r.register(loadSkillTool(() => [skill], () => r.list().filter((d) => d.deferrable).map((d) => d.name)))
+  script = [{ tool: "load_skill", args: { name: "gia" } }]
+  await collect(runAgent({ history: [], input: "x", skills: [skill], registry: r }))
+  expect(toolNames(bodies[0])).not.toContain("mcp__big__t012")
+  expect(toolNames(bodies[1])).toEqual(expect.arrayContaining(["mcp__big__t010", "mcp__big__t019"]))
+  expect(toolNames(bodies[1])).not.toContain("mcp__big__t020")
+  // The skill is listed although its tools are only deferred.
+  expect(systemText(bodies[0])).toContain("- gia:")
+})
+
+test("MCP server instructions reach the system prompt", async () => {
+  await collect(
+    runAgent({ history: [], input: "x", skills: [], registry: registry(), serverInstructions: () => [{ server: "ot", text: "HUONG-DAN-OT" }] }),
+  )
+  expect(systemText(bodies[0])).toContain("HUONG-DAN-OT")
+})
+
+test("a todo_write the tool rejects is recorded as an error, so the list comes from the next valid call", async () => {
+  const { todoWriteTool } = await import("../src/core/tools/builtin/todo-write")
+  const { currentTodos } = await import("../src/core/tools/todos")
+  const r = registry()
+  r.register(todoWriteTool())
+  const bad = [
+    { content: "A", status: "in_progress" },
+    { content: "B", status: "in_progress" },
+  ]
+  const good = [
+    { content: "A", status: "in_progress" as const },
+    { content: "B", status: "pending" as const },
+  ]
+  script = [{ tool: "todo_write", args: { todos: bad } }]
+  const rejected = await collect(runAgent({ history: [], input: "x", skills: [], registry: r }))
+  expect(ends(rejected)[0]).toMatchObject({ ok: false })
+  expect(currentTodos(done(rejected).messages)).toEqual([])
+
+  bodies.length = 0
+  script = [
+    { tool: "todo_write", args: { todos: bad } },
+    { tool: "todo_write", args: { todos: good } },
+  ]
+  const fixed = await collect(runAgent({ history: [], input: "x", skills: [], registry: r }))
+  expect(currentTodos(done(fixed).messages)).toEqual(good)
+})
+
+test("done carries the context size: provider usage of the last step, else an estimate", async () => {
+  usage = { prompt_tokens: 1_234, completion_tokens: 56 }
+  const measured = done(await collect(runAgent({ history: [], input: "x", skills: [], registry: registry() })))
+  expect(measured.usage).toEqual({ contextTokens: 1_290, estimated: false })
+  usage = undefined
+  const guessed = done(await collect(runAgent({ history: [], input: "x", skills: [], registry: registry() })))
+  expect(guessed.usage?.estimated).toBe(true)
+  expect(guessed.usage!.contextTokens).toBeGreaterThan(100) // system prompt + tool schemas
+})
+
+test("the compaction summary is asked with the turn's system prompt and visible tools, tools off, the prompt last", async () => {
+  const { summarizeConversation } = await import("../src/core/agent")
+  const r = bigRegistry(130) // MCP tools deferred: only what history loaded may be declared
+  const head: ModelMessage[] = [
+    { role: "user", content: "chụp" },
+    { role: "assistant", content: [{ type: "tool-call", toolCallId: "s", toolName: "mcp__big__t001", input: {} }] },
+    {
+      role: "tool",
+      content: [
+        {
+          type: "tool-result",
+          toolCallId: "s",
+          toolName: "mcp__big__t001",
+          output: { type: "content", value: [{ type: "text", text: "đã chụp" }, { type: "image-data", data: "QUJDREVGRw==", mediaType: "image/png" }] },
+        },
+      ],
+    },
+    { role: "assistant", content: "xong" },
+  ]
+  await collect(runAgent({ history: head, input: "x", skills: [], registry: r }))
+  const turnSystem = systemText(bodies[0])
+  bodies.length = 0
+  const text = await summarizeConversation({ head, prompt: "TÓM-TẮT-ĐI", skills: [], registry: r })
+  expect(text).toBe("Kết quả: xong.")
+  const body = bodies[0]!
+  expect(systemText(body)).toBe(turnSystem)
+  expect(body.tool_choice).toBe("none")
+  expect(JSON.stringify(body.messages.at(-1)!.content)).toContain("TÓM-TẮT-ĐI")
+  // Deferred tools stay deferred; the one history used is declared.
+  expect(toolNames(body)).toContain("mcp__big__t001")
+  expect(toolNames(body)).not.toContain("mcp__big__t003")
+  // A model without vision gets the image as a placeholder.
+  expect(JSON.stringify(body.messages)).not.toContain("QUJDREVGRw==")
+})
+
+const threeTurns: ModelMessage[] = [1, 2, 3].flatMap((n): ModelMessage[] => [
+  { role: "user", content: `câu ${n}` },
+  { role: "assistant", content: `trả lời ${n}` },
+])
+
+test("a summary cut off at the output limit is rejected, not used", async () => {
+  const { summarizeConversation } = await import("../src/core/agent")
+  summaryFinish = "length"
+  const error = await summarizeConversation({ head: threeTurns, prompt: "TÓM", skills: [], registry: registry() }).then(
+    () => undefined,
+    (e: Error) => e.message,
+  )
+  expect(error).toContain("bị cắt")
+  expect(bodies).toHaveLength(1)
+})
+
+test("a quota error that mentions tokens is not retried; a real overflow drops the oldest turn and retries", async () => {
+  const { summarizeConversation } = await import("../src/core/agent")
+  summaryErrors = [{ status: 429, message: "Resource exhausted: input token count per minute" }]
+  const quota = await summarizeConversation({ head: threeTurns, prompt: "TÓM", skills: [], registry: registry() }).then(
+    () => undefined,
+    (e: Error) => e.message,
+  )
+  expect(quota).toBeDefined()
+  expect(bodies).toHaveLength(1) // one request, no SDK retry, no head trimming
+
+  bodies.length = 0
+  summaryErrors = [{ status: 400, message: "This model's maximum context length is 8192 tokens" }]
+  const text = await summarizeConversation({ head: threeTurns, prompt: "TÓM", skills: [], registry: registry() })
+  expect(text).toBe("Kết quả: xong.")
+  expect(bodies).toHaveLength(2)
+  const users = (b: Body) => b.messages.filter((m) => m.role === "user").length
+  expect(users(bodies[1]!)).toBe(users(bodies[0]!) - 1)
+})
+
+test("while todo items are open, the nudge after tool results lists them and asks to close them before answering", async () => {
+  const { toolNudge, TOOL_NUDGE } = await import("../src/core/agent")
+  const { todoWriteTool } = await import("../src/core/tools/builtin/todo-write")
+  const r = registry()
+  r.register(todoWriteTool())
+  script = [
+    { tool: "todo_write", args: { todos: [{ content: "So sánh FPT với ngành", status: "in_progress" }] } },
+    { tool: "current_time", args: {} },
+  ]
+  await collect(runAgent({ history: [], input: "x", skills: [], registry: r }))
+  // After the todo_write result and after the last tool result: both list the open item.
+  const nudges = bodies.slice(1).map((b) => JSON.stringify(b.messages.at(-1)!.content))
+  expect(nudges.length).toBeGreaterThanOrEqual(2)
+  for (const n of nudges) expect(n).toContain("[>] So sánh FPT với ngành")
+  expect(nudges.at(-1)).toContain("trước khi viết câu trả lời cuối")
+  // Nothing open: the plain nudge.
+  expect(toolNudge([])).toBe(TOOL_NUDGE)
 })

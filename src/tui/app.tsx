@@ -2,36 +2,49 @@ import type { InputRenderable } from "@opentui/core"
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid"
 import { createMemo, createSignal, For, Match, onCleanup, onMount, Show, Switch } from "solid-js"
 import { produce } from "solid-js/store"
-import { runAgent } from "../core/agent"
-import { setApprovalHandler, type Decision } from "../core/approvals"
+import { runAgent, summarizeConversation } from "../core/agent"
+import {
+  AUTO_COMPACT_SHARE,
+  DEFAULT_COMPACT_WINDOW,
+  MAX_AUTO_FAILURES,
+  compactHistory,
+  compactPrompt,
+  isContextOverflow,
+  shouldAutoCompact,
+  tokensOf,
+} from "../core/compact"
+import { estimateTokens } from "../core/prompt/budget"
 import { connectedProviders } from "../core/auth"
 import { describeError } from "../core/chat"
 import { loadConfig } from "../core/config"
 import { loadCatalog } from "../core/catalog"
-import { needsOnboarding } from "../core/mcp/onboard"
-import { dataDir } from "../core/paths"
 import type { Runtime } from "../core/runtime"
 import { ensureProfile } from "../core/profile"
 import { loadSkills } from "../core/skills/loader"
 import { Background } from "./background"
-import { COMMANDS, fillPromptArgs, parseCommand, promptCommands, type CommandInfo } from "./commands"
+import { ApprovalPrompt } from "./approval"
+import { AskPrompt } from "./ask"
+import { McpPanel, STATUS } from "./mcp/panel"
+import { rank, truncate } from "./ui/text"
+import { COMMANDS, parseCommand, parsePromptArgs, promptUsage, type CommandInfo } from "./commands"
 import { ConfigDialog } from "./dialogs/config"
 import { ConnectDialog } from "./dialogs/connect"
 import { ContextDialog } from "./dialogs/context"
 import { HelpDialog } from "./dialogs/help"
-import { McpDialog } from "./dialogs/mcp"
-import { McpSetupDialog } from "./dialogs/mcp-setup"
 import { MemoryDialog } from "./dialogs/memory"
 import { SessionsDialog } from "./dialogs/sessions"
 import { ModelDialog } from "./dialogs/model"
 import { SkillsDialog, toggleSkill } from "./dialogs/skills"
 import { ToolsDialog } from "./dialogs/tools"
 import { Home } from "./home"
-import { currentSession, recordTurn, resumeFromArgs, startSession } from "./session"
-import { providerName, pushLine, setState, state, type Line } from "./state"
+import { currentSession, recordCompact, recordTurn, resumeFromArgs, startSession } from "./session"
+import { armExit, closeDialog, contextWindow, flash, onExitRequest, providerName, pushLine, setState, state, type Line } from "./state"
 import { color } from "./theme"
-import { Suggestions } from "./suggestions"
+import { cleanSelection, writeClipboard } from "./clipboard"
+import { ArgumentHint, Suggestions } from "./suggestions"
 import { Transcript } from "./transcript"
+import { TodoPanel } from "./todo-panel"
+import { TODO_WRITE, TodoWriteInput } from "../core/tools/todos"
 
 let abort: AbortController | undefined
 /** Bumped by /clear so a stream that is still unwinding never touches the new transcript. */
@@ -49,7 +62,95 @@ function lineIndex(predicate: (line: Line) => boolean) {
   return -1
 }
 
-async function send(runtime: Runtime, text: string) {
+/**
+ * Compact the conversation (see core/compact.ts). Runs like a turn: esc stops it, /new
+ * discards it. On failure the history is left as is (or only pruned).
+ */
+export async function compact(runtime: Runtime, trigger: "auto" | "manual", instructions?: string, projected?: number) {
+  if (state.history.length === 0) {
+    if (trigger === "manual") pushLine({ kind: "info", text: "Chưa có hội thoại để nén." })
+    return
+  }
+  const mine = epoch
+  const controller = new AbortController()
+  abort = controller
+  const window = contextWindow()
+  setState({ streaming: true, compacting: true })
+  try {
+    const result = await compactHistory(state.history, {
+      // Auto: what the next request would hold, including the message being sent.
+      contextTokens: projected ?? state.contextTokens,
+      onSummarize: () =>
+        pushLine({
+          kind: "info",
+          text: trigger === "auto" ? "Context gần đầy: đang tóm tắt phần đầu hội thoại (dùng 1 request)…" : "Đang tóm tắt hội thoại (dùng 1 request)…",
+        }),
+      window,
+      manual: trigger === "manual",
+      instructions,
+      summarize: (head, extra) =>
+        summarizeConversation({
+          head,
+          prompt: compactPrompt(extra),
+          skills: state.skills,
+          sticky: state.activeSkills,
+          registry: runtime.registry,
+          sessionId: currentSession().id,
+          memory: runtime.memory,
+          serverInstructions: () => runtime.mcp.instructions(),
+          signal: controller.signal,
+        }),
+    })
+    if (epoch !== mine) return
+    if (controller.signal.aborted) return void pushLine({ kind: "info", text: "Đã dừng nén; hội thoại giữ nguyên." })
+    if (result.summary !== undefined || result.pruned > 0) {
+      // The clock reminder lived in the dropped turns: send it again next turn.
+      setState({ history: result.messages, contextTokens: result.after, clock: undefined })
+      recordCompact({ trigger, before: result.before, after: result.after, messages: result.messages })
+      pushLine({ kind: "compact", summary: result.summary, before: result.before, after: result.after, pruned: result.pruned })
+    }
+    if (result.error) {
+      pushLine({ kind: "error", text: `Không tóm tắt được hội thoại: ${result.error}` })
+      if (trigger === "auto") {
+        setState("compactFailures", (n) => n + 1)
+        if (state.compactFailures >= MAX_AUTO_FAILURES) {
+          pushLine({ kind: "info", text: `Tự nén lỗi ${MAX_AUTO_FAILURES} lần liên tiếp nên đã tắt cho phiên này; gõ /compact để thử lại.` })
+        }
+      }
+    } else setState("compactFailures", 0)
+    // Still above the threshold: do not pay for another compaction until the context grows.
+    setState("compactFloor", window && result.after >= window * AUTO_COMPACT_SHARE ? result.after : undefined)
+  } finally {
+    if (epoch === mine) setState({ streaming: false, compacting: false })
+    if (abort === controller) abort = undefined
+  }
+}
+
+/** The turn being answered, so exit can wait for it to be saved. */
+let inflight: Promise<void> | undefined
+
+function send(runtime: Runtime, text: string) {
+  const turn = (async () => {
+    // Near the window: compact first, so this turn still fits.
+    const config = await loadConfig()
+    const projected = (state.contextTokens ?? tokensOf(state.history)) + estimateTokens(text)
+    const auto = shouldAutoCompact({
+      contextTokens: projected,
+      window: contextWindow(),
+      floor: state.compactFloor,
+      failures: state.compactFailures,
+      disabled: config.autoCompact === "off",
+    })
+    if (auto) await compact(runtime, "auto", undefined, projected)
+    await sendTurn(runtime, text)
+  })()
+  inflight = turn
+  return turn.finally(() => {
+    if (inflight === turn) inflight = undefined
+  })
+}
+
+async function sendTurn(runtime: Runtime, text: string) {
   pushLine({ kind: "user", text })
   const mine = epoch
   const live = () => epoch === mine
@@ -62,6 +163,9 @@ async function send(runtime: Runtime, text: string) {
     edit(current, (l) => (l.done = true))
     current = -1
   }
+
+  // todo_write inputs by call id; the panel updates only once a call is accepted.
+  const todoCalls = new Map<string, unknown>()
 
   const controller = new AbortController()
   abort = controller
@@ -78,6 +182,7 @@ async function send(runtime: Runtime, text: string) {
       sessionId: currentSession().id,
       hooks: runtime.hooks,
       memory: runtime.memory,
+      serverInstructions: () => runtime.mcp.instructions(),
     })
     for await (const event of turn) {
       if (!live()) continue
@@ -92,23 +197,30 @@ async function send(runtime: Runtime, text: string) {
         case "tool-start":
           closeText()
           pushLine({ kind: "tool", callId: event.callId, name: event.name, label: event.label, status: "running" })
+          if (event.name === TODO_WRITE) todoCalls.set(event.callId, event.input)
           break
         case "tool-end":
           edit(
             lineIndex((l) => l.kind === "tool" && l.callId === event.callId),
             (l) => Object.assign(l, { status: event.ok ? "ok" : "error", output: event.output, durationMs: event.durationMs }),
           )
+          if (event.ok && todoCalls.has(event.callId)) {
+            const parsed = TodoWriteInput.safeParse(todoCalls.get(event.callId))
+            if (parsed.success) setState("liveTodos", parsed.data.todos)
+          }
           break
         case "notice":
           pushLine({ kind: "info", text: event.text })
           break
         case "error":
           pushLine({ kind: "error", text: event.message })
+          if (isContextOverflow(event.message)) pushLine({ kind: "info", text: "Hội thoại có thể đã quá dài cho model này: gõ /compact để nén rồi hỏi lại." })
           break
         case "done":
+          if (event.usage) setState("contextTokens", event.usage.contextTokens)
           if (event.messages.length > 0) {
             setState("history", (history) => [...history, ...event.messages])
-            recordTurn(event.messages)
+            recordTurn(event.messages, event.usage?.contextTokens)
           }
           if (event.clock) setState("clock", event.clock)
           break
@@ -128,49 +240,95 @@ async function send(runtime: Runtime, text: string) {
         }),
       )
     }
+    // History now holds the accepted calls (or, after an abort, none of this turn's).
+    setState("liveTodos", undefined)
     setState("streaming", false)
     if (abort === controller) abort = undefined
   }
 }
 
-export function App(props: { runtime: Runtime; resume?: string }) {
+export function App(props: {
+  runtime: Runtime
+  resume?: string
+  /** Tests replace the final step (destroy the renderer, end the process). */
+  onExit?: () => void
+}) {
   const renderer = useRenderer()
   const dims = useTerminalDimensions()
   const [draft, setDraft] = createSignal("")
   const [selected, setSelected] = createSignal(0)
+  /**
+   * Who owns the keyboard instead of the prompt: an approval or a question from the model.
+   * Every rule that hides the prompt, closes dialogs or reroutes Esc goes through this.
+   */
+  const owner = () => state.approval ?? state.question
+  /** Draft at which Esc closed the "/" list; it reopens as soon as the draft changes. */
+  const [dismissedFor, setDismissedFor] = createSignal<string>()
   let input: InputRenderable | undefined
 
-  let exiting = false
-  /** Stop MCP servers (bounded to 2s) before leaving, so no child process is orphaned. */
+  /**
+   * Leave: stop the running answer and wait — under one 2 s deadline — for it to be saved,
+   * the session-end hook and MCP servers to stop (no orphaned child process), then restore
+   * the terminal.
+   */
   const exit = async () => {
-    if (exiting) return
-    exiting = true
+    if (state.exiting) return
+    if (props.onExit) return props.onExit()
+    setState("exiting", true)
     abort?.abort()
     await Promise.race([
-      Promise.all([props.runtime.hooks.emit({ type: "session-end", sessionId: currentSession().id }), props.runtime.mcp.stop()]),
+      Promise.all([
+        inflight ?? Promise.resolve(),
+        props.runtime.hooks.emit({ type: "session-end", sessionId: currentSession().id }),
+        props.runtime.mcp.stop(),
+      ]),
       new Promise((r) => setTimeout(r, 2000)),
     ])
     renderer.destroy()
     process.exit(0)
   }
+  onExitRequest(() => void exit())
+  onCleanup(() => onExitRequest(undefined))
 
-  const offMcp = props.runtime.mcp.onChange((status) => {
-    setState("mcp", status)
-    setState("mcpPrompts", props.runtime.mcp.allPrompts())
-  })
+  /** Copy what the mouse highlighted (opencode's copy-on-select); true when something was copied. */
+  function copySelection() {
+    const text = cleanSelection(renderer.getSelection()?.getSelectedText() ?? "")
+    renderer.clearSelection()
+    if (!text) return false
+    writeClipboard(text, (t) => renderer.copyToClipboardOSC52(t))
+    flash(`✓ Đã copy ${[...text].length} ký tự`)
+    return true
+  }
+  // A finished drag copies at once — no keystroke needed, like Claude Code in a terminal.
+  const onSelection = () => {
+    copySelection()
+    // A click/drag moves focus to what was clicked; typing must still go to the prompt.
+    if (!state.dialog && !owner()) input?.focus()
+  }
+  renderer.on("selection", onSelection)
+  onCleanup(() => renderer.off("selection", onSelection))
+
+  const offMcp = props.runtime.mcp.onChange((status) => setState("mcp", status))
   onCleanup(() => offMcp())
 
-  // Tools that need approval (e.g. doom-loop recaps) wait on this handler: it opens the
-  // approval box; the keyboard handler resolves it with once/always/deny.
-  const offApprovals = setApprovalHandler(
-    (req) =>
-      new Promise<Decision>((resolve) =>
-        setState("approval", { title: req.title, detail: req.detail, resolve: (d) => resolve(d) }),
-      ),
-  )
+  // Tools with side effects ask first. A pending question takes over the keyboard: any open
+  // dialog closes so its keys cannot also act on the prompt.
+  props.runtime.permissions.interactive = true
+  // Questions from the model (ask_user) take over the same way; approval goes first.
+  props.runtime.questions.interactive = true
+  const offQuestion = props.runtime.questions.onChange((head) => {
+    setState("question", head)
+  })
+  const offApproval = props.runtime.permissions.onChange((head) => {
+    setState("approval", head)
+  })
   onCleanup(() => {
-    offApprovals()
-    setState("approval", undefined)
+    offApproval()
+    offQuestion()
+    props.runtime.questions.interactive = false
+    props.runtime.questions.cancelAll()
+    props.runtime.permissions.interactive = false
+    props.runtime.permissions.denyAll()
   })
 
   onMount(async () => {
@@ -185,26 +343,85 @@ export function App(props: { runtime: Runtime; resume?: string }) {
       skillProblems: skillSet.problems,
       catalog,
       connected,
+      compactCap: config.compactWindow ?? DEFAULT_COMPACT_WINDOW,
     })
     if (props.resume) await resumeFromArgs(props.runtime, props.resume)
     else await props.runtime.hooks.emit({ type: "session-start", sessionId: currentSession().id, source: "startup" })
     if (skillSet.problems.length > 0) {
       pushLine({ kind: "error", text: `${skillSet.problems.length} skill bị lỗi và không được nạp. Xem /skills.` })
     }
-    // First run: offer the company data server instead of asking users to hand-write JSON.
-    if (!(await needsOnboarding(dataDir(), process.cwd()))) return
-    const hasKey = await connectedProviders()
-    setState("dialog", "mcp-setup")
-    if (hasKey.length === 0)
-      pushLine({ kind: "info", text: "Bước 2 (sau khi nối server): gõ /connect để nhập key LLM." })
   })
 
+  /** MCP prompts as `/server:prompt` commands, from every connected server. */
+  const promptCommands = createMemo<(CommandInfo & { server: string; prompt: string })[]>(() =>
+    state.mcp.flatMap((s) =>
+      s.state === "connected"
+        ? s.prompts.map((p) => ({
+            name: `${s.name}:${p.name}`,
+            args: promptUsage(p.arguments) || undefined,
+            argsRequired: p.arguments.some((a) => a.required),
+            description: p.description?.split("\n")[0] ?? `Prompt của MCP server ${s.name}`,
+            server: s.name,
+            prompt: p.name,
+          }))
+        : [],
+    ),
+  )
+
+  const allCommands = createMemo<CommandInfo[]>(() => [...COMMANDS, ...promptCommands()])
+
+  /**
+   * The "/" list, Claude Code style: open while the draft is "/" + a command name (no
+   * space yet), ranked (exact, prefix, substring, description), and closed by Esc until
+   * the draft changes.
+   */
   const suggestions = createMemo(() => {
     const d = draft()
-    if (!d.startsWith("/") || d.includes(" ")) return []
-    const all: CommandInfo[] = [...promptCommands(state.mcpPrompts), ...COMMANDS]
-    return all.filter((c) => `/${c.name}`.startsWith(d.toLowerCase()))
+    if (!d.startsWith("/") || /\s/.test(d) || d === dismissedFor()) return []
+    return rank(allCommands(), d.slice(1), (c) => c.name, (c) => c.description)
   })
+
+  /** After "/name " (with the space): the arguments the command takes, shown under the list's place. */
+  const argHint = createMemo(() => {
+    const m = /^\/(\S+) $/.exec(draft())
+    if (!m) return undefined
+    const c = allCommands().find((x) => x.name.toLowerCase() === m[1]!.toLowerCase())
+    return c?.args ? c : undefined
+  })
+
+  /** `/mcp enable|disable|reconnect <name>` without opening the panel (as in Claude Code). */
+  async function mcpCommand(args: string) {
+    const [action, name] = args.split(/\s+/)
+    const known = state.mcp.some((s) => s.name === name)
+    if (!name || !known || !["enable", "disable", "reconnect"].includes(action ?? "")) {
+      return pushLine({ kind: "error", text: "Dùng: /mcp enable|disable|reconnect <tên server> (hoặc /mcp để mở bảng quản lý)." })
+    }
+    try {
+      if (action === "reconnect") await props.runtime.mcp.restart(name)
+      else await props.runtime.mcp.setEnabled(name, action === "enable")
+      const s = state.mcp.find((x) => x.name === name)
+      pushLine({ kind: "info", text: `MCP "${name}": ${s ? STATUS[s.state].text : "?"}${s?.error ? ` — ${s.error}` : ""}` })
+    } catch (error) {
+      pushLine({ kind: "error", text: `/mcp ${action} ${name}: ${error instanceof Error ? error.message : String(error)}` })
+    }
+  }
+
+  /** Fetch an MCP prompt with the typed arguments and send it as the user's message. */
+  async function runPrompt(command: { server: string; prompt: string; name: string }, rawArgs: string) {
+    const info = state.mcp.find((s) => s.name === command.server)?.prompts.find((p) => p.name === command.prompt)
+    if (!info) return pushLine({ kind: "error", text: `Không còn prompt /${command.name}.` })
+    const parsed = parsePromptArgs(info.arguments, rawArgs)
+    if ("error" in parsed) return pushLine({ kind: "error", text: `/${command.name}: ${parsed.error}` })
+    try {
+      const text = await props.runtime.mcp.getPrompt(command.server, command.prompt, parsed.values)
+      if (!text.trim()) return pushLine({ kind: "error", text: `Prompt /${command.name} không có nội dung.` })
+      // What is sent in the user's name is shown in full as their message.
+      pushLine({ kind: "info", text: `Prompt /${command.name} của server ${command.server}:` })
+      void send(props.runtime, text)
+    } catch (error) {
+      pushLine({ kind: "error", text: `/${command.name}: ${error instanceof Error ? error.message : String(error)}` })
+    }
+  }
 
   function setInput(value: string) {
     if (input) {
@@ -213,44 +430,87 @@ export function App(props: { runtime: Runtime; resume?: string }) {
     }
     setDraft(value)
     setSelected(0)
+    if (value !== dismissedFor()) setDismissedFor(undefined)
   }
 
-  /** Tab: fill in the highlighted command (with a trailing space if it takes arguments). */
+  /**
+   * Ctrl+C / Ctrl+D like Claude Code: the first press does the nearest useful thing and
+   * says "press again to exit"; a second press within 800 ms exits. Ctrl+C with text
+   * highlighted copies it instead. Ctrl+D only counts on an empty prompt.
+   */
+  function onQuitKey(name: "c" | "d") {
+    if (name === "c" && renderer.hasSelection && copySelection()) return
+    const key = name === "c" ? "Ctrl+C" : "Ctrl+D"
+    if (name === "d" && (draft() || owner() || state.dialog)) return
+    if (state.exitArmed === key) return void exit()
+    if (name === "c") {
+      // An approval or question answers Ctrl+C itself (like Esc: deny / skip).
+      if (owner()) {
+        // handled by the prompt's own keyboard hook
+      } else if (state.dialog) closeDialog()
+      else if (draft()) setInput("")
+      else if (state.streaming) abort?.abort()
+    }
+    armExit(key)
+  }
+
+  /** Tab: put the highlighted command in the input ("/name ") without running it; the list closes. */
   function complete() {
     const c = suggestions()[selected()]
-    if (c) setInput(`/${c.name}${c.args ? " " : ""}`)
+    if (c) setInput(`/${c.name} `)
   }
 
+  /**
+   * Enter. With the "/" list open it runs the highlighted command — or, when the command
+   * cannot run without arguments, fills "/name " and waits (Claude Code). Otherwise a
+   * "/…" line is a command (unknown ones are reported, never sent to the model) and
+   * anything else is a message.
+   */
   function run(value: string) {
     const text = value.trim()
-    const highlighted = suggestions()[selected()]
-    setInput("")
-    if (!text) return
+    const list = suggestions()
+    const highlighted = list[selected()]
+    if (highlighted && list.length > 0) {
+      if (highlighted.argsRequired) return setInput(`/${highlighted.name} `)
+      setInput("")
+      return runCommand(highlighted.name.toLowerCase(), "")
+    }
+    if (!text) return setInput("")
     const cmd = parseCommand(text)
-    // Enter on a partial command ("/con") runs the highlighted suggestion.
-    if (cmd && ![...COMMANDS, ...promptCommands(state.mcpPrompts)].some((c) => c.name === cmd.name) && highlighted && !cmd.args)
-      cmd.name = highlighted.name
     if (!cmd) {
+      if (text.startsWith("/")) return setInput("") // "/" alone or "/ text": nothing to run, nothing to send
+      setInput("")
       if (state.streaming) return
       void send(props.runtime, text)
       return
     }
-    const knownCommand = COMMANDS.some((c) => c.name === cmd.name)
-    if (!knownCommand && state.streaming) return
+    const known = allCommands().some((c) => c.name.toLowerCase() === cmd.name) || cmd.name === "quit"
+    if (!known) {
+      // Keep what was typed so it can be fixed.
+      return pushLine({ kind: "error", text: `Không có lệnh /${cmd.name}. Gõ /help để xem các lệnh.` })
+    }
+    setInput("")
+    runCommand(cmd.name, cmd.args)
+  }
+
+  function runCommand(name: string, args: string) {
+    const cmd = { name, args }
+    const promptCmd = promptCommands().find((c) => c.name.toLowerCase() === cmd.name)
+    if (promptCmd) {
+      if (state.streaming) return pushLine({ kind: "error", text: "Đang trả lời; chờ xong rồi chạy prompt." })
+      return void runPrompt(promptCmd, cmd.args)
+    }
     switch (cmd.name) {
       case "connect":
       case "model":
       case "skills":
       case "help":
-      case "mcp":
       case "tools":
       case "context":
       case "sessions":
       case "memory":
       case "config":
         return setState("dialog", cmd.name)
-      case "mcp-setup":
-        return setState("dialog", "mcp-setup")
       case "profile":
         return void ensureProfile().then(({ file, created }) =>
           pushLine({
@@ -262,55 +522,48 @@ export function App(props: { runtime: Runtime; resume?: string }) {
         )
       case "skill":
         return cmd.args ? toggleSkill(cmd.args) : setState("dialog", "skills")
+      case "mcp":
+        return cmd.args ? void mcpCommand(cmd.args) : setState("dialog", "mcp")
       case "clear":
       case "new":
         return void clearTranscript(props.runtime)
+      case "compact":
+        if (state.streaming) return pushLine({ kind: "error", text: "Đang trả lời; chờ xong rồi nén." })
+        return void compact(props.runtime, "manual", cmd.args || undefined)
       case "exit":
       case "quit":
         return void exit()
-      default: {
-        // Not a built-in: if an MCP prompt carries this name, run its workflow.
-        const prompt = state.mcpPrompts.find((p) => p.name === cmd.name)
-        if (prompt) {
-          const filled = fillPromptArgs(prompt.arguments, cmd.args)
-          if (typeof filled === "string") return pushLine({ kind: "error", text: filled })
-          return void props.runtime.mcp
-            .promptByName(prompt.name, filled)
-            .then(({ text: body }) => {
-              pushLine({ kind: "user", text: `/${prompt.name}${cmd.args ? ` ${cmd.args}` : ""}` })
-              return send(props.runtime, body)
-            })
-            .catch((error) => pushLine({ kind: "error", text: error instanceof Error ? error.message : String(error) }))
-        }
-        return pushLine({ kind: "error", text: `Không có lệnh /${cmd.name}. Gõ /help.` })
-      }
+      default:
+        pushLine({ kind: "error", text: `Không có lệnh /${cmd.name}. Gõ /help để xem các lệnh.` })
     }
   }
 
   useKeyboard((evt) => {
     if (evt.eventType === "release") return
-    if (evt.ctrl && evt.name === "c") return void exit()
+    if (evt.ctrl && (evt.name === "c" || evt.name === "d")) return onQuitKey(evt.name)
     if (evt.ctrl && evt.name === "o") return void setState("expandTools", (v) => !v)
-    const pending = state.approval
-    if (pending) {
-      const decide = (d: Decision) => {
-        setState("approval", undefined)
-        pending.resolve(d)
-      }
-      if (evt.name === "return" || evt.name === "1") decide("once")
-      else if (evt.name === "a" || evt.name === "2") decide("always")
-      else if (evt.name === "escape" || evt.name === "d" || evt.name === "3") decide("deny")
+    if (evt.name === "escape" && renderer.hasSelection) return renderer.clearSelection()
+    if (owner() || state.dialog) return
+    const n = suggestions().length
+    // Esc closes the "/" list first (it stays closed until the draft changes) and never
+    // also stops the running answer.
+    if (evt.name === "escape" && n > 0) {
+      evt.preventDefault()
+      setDismissedFor(draft())
       return
     }
-    if (evt.name === "escape" && !state.dialog && state.streaming) abort?.abort()
-    if (state.dialog || suggestions().length === 0) return
-    const n = suggestions().length
+    if (evt.name === "escape" && state.streaming) return void abort?.abort()
+    // With the list closed, Tab and the arrows do nothing special (no autofill).
+    if (n === 0) return
     if (evt.name === "tab") {
       evt.preventDefault()
       complete()
-    } else if (evt.name === "up" || evt.name === "down") {
+    } else if (evt.name === "up" || (evt.ctrl && evt.name === "p")) {
       evt.preventDefault()
-      setSelected((i) => (i + (evt.name === "up" ? n - 1 : 1)) % n)
+      setSelected((i) => (i + n - 1) % n)
+    } else if (evt.name === "down" || (evt.ctrl && evt.name === "n")) {
+      evt.preventDefault()
+      setSelected((i) => (i + 1) % n)
     }
   })
 
@@ -318,19 +571,81 @@ export function App(props: { runtime: Runtime; resume?: string }) {
     <box width={dims().width} height={dims().height} backgroundColor={color.bg}>
       <Background quiet={state.lines.length > 0} />
       <box position="absolute" left={0} top={0} width="100%" height="100%" zIndex={1} flexDirection="column">
-        <Show when={state.lines.length > 0} fallback={<Home />}>
-          <Transcript />
+        {/* Tall panels below (/mcp, approval) shrink this area; clip it instead of letting
+            flexbox squeeze rows on top of each other. */}
+        <box flexGrow={1} flexShrink={1} minHeight={0} overflow="hidden" flexDirection="column">
+          <Show when={state.lines.length > 0} fallback={<Show when={!state.dialog}>{<Home />}</Show>}>
+            <Transcript />
+          </Show>
+        </box>
+
+        <Show when={!owner() && !state.dialog}>
+          <TodoPanel />
+        </Show>
+        <Show when={suggestions().length > 0 && !owner() && !state.dialog}>
+          <Suggestions items={suggestions()} all={allCommands()} selected={selected()} />
+        </Show>
+        <Show when={!owner() && !state.dialog && suggestions().length === 0 && argHint()}>
+          {(c) => <ArgumentHint command={c()} />}
         </Show>
 
-        <Show when={suggestions().length > 0}>
-          <Suggestions items={suggestions()} selected={selected()} />
+        {/* The approval prompt and /mcp take the input's place; the input is hidden, not
+            unmounted, so a half-typed message survives. */}
+        {/* Keyed: a new request starts with a fresh selection and no leftover note. */}
+        <Show when={state.approval} keyed>
+          {(request) => <ApprovalPrompt gate={props.runtime.permissions} request={request} />}
         </Show>
+        {/* A question stays mounted (answers kept) while an approval covers it. */}
+        <Show when={state.question} keyed>
+          {(request) => (
+            <box visible={!state.approval} flexShrink={0} flexDirection="column">
+              <AskPrompt broker={props.runtime.questions} request={request} />
+            </box>
+          )}
+        </Show>
+        {/* Every dialog is a pane docked here, in place of the prompt (Claude Code style). It
+            stays mounted — hidden and deaf to keys — while a prompt covers it, so a typed key,
+            a pasted token or an OAuth login in progress survives. */}
+        <box visible={!owner()} flexShrink={0} flexDirection="column">
+          <Switch>
+            <Match when={state.dialog === "mcp"}>
+              <McpPanel mcp={props.runtime.mcp} cwd={props.runtime.mcp.cwd} />
+            </Match>
+            <Match when={state.dialog === "connect"}>
+              <ConnectDialog />
+            </Match>
+            <Match when={state.dialog === "model"}>
+              <ModelDialog />
+            </Match>
+            <Match when={state.dialog === "skills"}>
+              <SkillsDialog />
+            </Match>
+            <Match when={state.dialog === "help"}>
+              <HelpDialog onRun={(command) => run(command)} />
+            </Match>
+            <Match when={state.dialog === "tools"}>
+              <ToolsDialog registry={props.runtime.registry} runtime={props.runtime} />
+            </Match>
+            <Match when={state.dialog === "context"}>
+              <ContextDialog runtime={props.runtime} />
+            </Match>
+            <Match when={state.dialog === "sessions"}>
+              <SessionsDialog runtime={props.runtime} />
+            </Match>
+            <Match when={state.dialog === "config"}>
+              <ConfigDialog runtime={props.runtime} />
+            </Match>
+            <Match when={state.dialog === "memory"}>
+              <MemoryDialog memory={props.runtime.memory} />
+            </Match>
+          </Switch>
+        </box>
 
         <box
+          visible={!owner() && !state.dialog}
           marginLeft={2}
           marginRight={2}
-          border
-          borderStyle="rounded"
+          border={["top", "bottom"]}
           borderColor={state.streaming ? color.tham : state.dialog ? color.rule : color.tang}
           backgroundColor={color.panel2}
           flexDirection="row"
@@ -342,7 +657,7 @@ export function App(props: { runtime: Runtime; resume?: string }) {
           <input
             ref={(r) => (input = r)}
             flexGrow={1}
-            focused={!state.dialog && !state.approval}
+            focused={!state.dialog && !owner()}
             placeholder={state.streaming ? "đang trả lời… esc để dừng" : "Hỏi về thị trường, hoặc gõ / để xem lệnh"}
             textColor={color.tx}
             focusedTextColor={color.tx}
@@ -352,63 +667,16 @@ export function App(props: { runtime: Runtime; resume?: string }) {
             onInput={(v) => {
               setDraft(v)
               setSelected(0)
+              // A dismissed list stays closed only until the draft changes.
+              if (v !== dismissedFor()) setDismissedFor(undefined)
             }}
             onSubmit={(v: unknown) => run(typeof v === "string" ? v : (input?.value ?? ""))}
           />
         </box>
 
-        <Show when={state.approval}>
-          {(a) => (
-            <box marginLeft={2} marginRight={2} marginBottom={1} border borderStyle="rounded" borderColor={color.tham} backgroundColor={color.panel} padding={1}>
-              <text fg={color.tham}>{`⚠ ${a().title}`}</text>
-              <Show when={a().detail}>
-                <text fg={color.tx2} wrapMode="word">{a().detail}</text>
-              </Show>
-              <text fg={color.tx3} marginTop={1}>
-                {"enter/1 cho phép lần này · a/2 luôn cho phép · esc/3 từ chối"}
-              </text>
-            </box>
-          )}
-        </Show>
-
         <StatusBar />
       </box>
 
-      <Switch>
-        <Match when={state.dialog === "connect"}>
-          <ConnectDialog />
-        </Match>
-        <Match when={state.dialog === "model"}>
-          <ModelDialog />
-        </Match>
-        <Match when={state.dialog === "skills"}>
-          <SkillsDialog />
-        </Match>
-        <Match when={state.dialog === "help"}>
-          <HelpDialog />
-        </Match>
-        <Match when={state.dialog === "mcp"}>
-          <McpDialog mcp={props.runtime.mcp} />
-        </Match>
-        <Match when={state.dialog === "mcp-setup"}>
-          <McpSetupDialog mcp={props.runtime.mcp} />
-        </Match>
-        <Match when={state.dialog === "tools"}>
-          <ToolsDialog registry={props.runtime.registry} />
-        </Match>
-        <Match when={state.dialog === "context"}>
-          <ContextDialog runtime={props.runtime} />
-        </Match>
-        <Match when={state.dialog === "sessions"}>
-          <SessionsDialog runtime={props.runtime} />
-        </Match>
-        <Match when={state.dialog === "config"}>
-          <ConfigDialog runtime={props.runtime} />
-        </Match>
-        <Match when={state.dialog === "memory"}>
-          <MemoryDialog memory={props.runtime.memory} />
-        </Match>
-      </Switch>
     </box>
   )
 }
@@ -418,21 +686,46 @@ function StatusBar() {
     state.provider ? `${providerName(state.provider)} · ${state.model ?? "chưa chọn model"}` : "chưa kết nối"
   const ready = () => state.mcp.filter((s) => s.state === "connected").length
   const attention = () => state.mcp.some((s) => s.state === "failed" || s.state === "untrusted")
+  const contextShare = () => {
+    const window = contextWindow()
+    return window && state.contextTokens !== undefined ? Math.min(1, state.contextTokens / window) : undefined
+  }
   return (
     <box flexDirection="row" height={1} flexShrink={0} backgroundColor={color.panel2} paddingLeft={2} paddingRight={2}>
-      <text fg={color.bg} bg={color.tang}>
+      <text fg={color.bg} bg={color.tang} flexShrink={0} selectable={false}>
         {" ▲ OpenTrading "}
       </text>
-      <text fg={color.tx2}>{` ${target()} `}</text>
+      <text fg={color.tx2} flexShrink={1} wrapMode="none" selectable={false}>{` ${target()} `}</text>
       <Show when={state.mcp.length > 0}>
-        <text fg={attention() ? color.tham : color.san}>{` MCP ${ready()}/${state.mcp.length} `}</text>
+        <text fg={attention() ? color.tham : color.san} flexShrink={0} selectable={false}>{` MCP ${ready()}/${state.mcp.length} `}</text>
+      </Show>
+      <Show when={contextShare() !== undefined}>
+        <text fg={contextShare()! >= AUTO_COMPACT_SHARE ? color.giam : contextShare()! >= 0.6 ? color.tham : color.tx3} flexShrink={0} selectable={false}>
+          {` ctx ${Math.round(contextShare()! * 100)}% `}
+        </text>
       </Show>
       <Show when={state.activeSkills.length > 0}>
-        <text fg={color.tran}>{` ✦ ${state.activeSkills.join(", ")}`}</text>
+        <text fg={color.tran} flexShrink={1} wrapMode="none" selectable={false}>
+          {` ✦ ${truncate(state.activeSkills.join(", "), 30)}`}
+        </text>
       </Show>
       <box flexGrow={1} />
-      <text fg={state.streaming ? color.tham : state.approval ? color.tham : color.tx3}>
-        {state.approval ? "● cần phê duyệt" : state.streaming ? "● đang trả lời · esc dừng" : "/help · ctrl+c thoát"}
+      <text fg={state.flash ? color.tang : state.streaming ? color.tham : color.tx3} flexShrink={0} selectable={false}>
+        {state.exiting
+          ? "Đang thoát…"
+          : state.exitArmed
+            ? `Nhấn ${state.exitArmed} lần nữa để thoát`
+            : state.flash
+              ? state.flash
+              : state.approval
+                ? "△ cần bạn xác nhận · esc từ chối"
+                : state.question
+                  ? "△ model đang hỏi bạn · esc bỏ qua"
+                  : state.compacting
+                    ? "● đang nén hội thoại · esc dừng"
+                    : state.streaming
+                    ? "● đang trả lời · esc dừng"
+                    : "/ lệnh · /help · ctrl+c ×2 thoát"}
       </text>
     </box>
   )

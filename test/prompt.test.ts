@@ -123,3 +123,53 @@ test("budget helpers", () => {
   expect(fit("ngắn", 100)).toMatchObject({ truncated: false, dropped: false })
   expect(fit("x".repeat(1000), 0)).toMatchObject({ dropped: true, text: "" })
 })
+
+test("deferred tools are listed by server in system, after the skill catalog; skills may need deferred tools", () => {
+  const needs = skill({ name: "flows", requires_tools: ["mcp__ot__money_flow"] })
+  const input = base({
+    tools: ["current_time", "load_skill", "tool_search"],
+    skills: [needs],
+    deferredTools: [{ server: "ot", tools: ["money_flow", "vn_quote_history"] }],
+    declaredTools: ["current_time", "load_skill", "tool_search", "mcp__ot__money_flow", "mcp__ot__vn_quote_history"],
+  })
+  const a = assemble(input)
+  expect(a.system).toContain("<tool_hoan>\n")
+  expect(a.system).toContain("ot (2): money_flow, vn_quote_history")
+  expect(a.system.indexOf("<skill_catalog>")).toBeLessThan(a.system.indexOf("<tool_hoan>\n"))
+  // The skill stays visible although its tool is only deferred.
+  expect(a.system).toContain("- flows:")
+  expect(a.report.find((r) => r.id === "tool_hoan")?.channel).toBe("system")
+  // Without tool_search there is nothing to load them with: no list.
+  expect(assemble({ ...input, tools: ["current_time", "load_skill"] }).system).not.toContain("<tool_hoan>\n")
+})
+
+test("MCP server instructions go to system, framed below the invariants, within budget", () => {
+  const input = base({ mcpInstructions: [{ server: "ot", text: "Dùng symbol_lookup khi chưa chắc mã." }] })
+  const a = assemble(input)
+  expect(a.system).toContain('<server name="ot">\nDùng symbol_lookup khi chưa chắc mã.\n</server>')
+  expect(a.system.indexOf("<identity>")).toBeLessThan(a.system.indexOf("<huong_dan_mcp>"))
+  // Third-party text: ranked like a skill, below the user's direct request.
+  expect(a.system).toContain("xếp ngang skill trong thứ tự ưu tiên: dưới yêu cầu trực tiếp của người dùng")
+  expect(a.report.find((r) => r.id === "huong_dan_mcp")?.channel).toBe("system")
+  // A model without tools gets no tool instructions.
+  expect(assemble({ ...input, tools: [] }).system).not.toContain("<huong_dan_mcp>")
+  const long = assemble(base({ tier: "C", mcpInstructions: [{ server: "ot", text: "x ".repeat(5_000) }] }))
+  expect(long.report.find((r) => r.id === "huong_dan_mcp")?.truncated).toBe(true)
+})
+
+test("tool guidance lives in one place and the format example carries no real-looking numbers", () => {
+  const a = assemble(base({ tools: ["current_time", "load_skill", "ask_user", "tool_search"], deferredTools: [{ server: "s", tools: ["a", "b"] }] }))
+  const count = (needle: string) => a.system.split(needle).length - 1
+  // tool_search usage is explained by <tool_hoan> (and the tool's own description), not by tools.md.
+  expect(count("select:")).toBe(1)
+  expect(count("ask_user")).toBe(0)
+  // Formatting rules are in <citations>, which is never cut (style is dropped on tier C).
+  const tierC = assemble(base({ tier: "C" })).system
+  expect(tierC).toContain("dd/mm/yyyy")
+  expect(tierC).toContain("đơn vị")
+  const example = a.system.slice(a.system.indexOf("<vi_du>"), a.system.indexOf("</vi_du>"))
+  expect(example.length).toBeGreaterThan(0)
+  expect(example).not.toMatch(/\d/)
+  // Budget guard: the static prompt must not creep back up (≈1.0k tokens on 06/10/2026).
+  expect(Math.ceil(a.system.length / 4)).toBeLessThan(1_150)
+})

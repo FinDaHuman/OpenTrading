@@ -4,11 +4,21 @@ import type { z } from "zod"
 export interface ToolContext {
   signal: AbortSignal
   callId: string
+  /** What `prepare` returned, if the tool has one. */
+  prepared?: unknown
+}
+
+export interface ToolImage {
+  /** Base64, no data: prefix. */
+  data: string
+  mediaType: string
 }
 
 export interface ToolResult {
   output: string
   title?: string
+  /** Images for models that can see them (screenshots, charts); others get a placeholder. */
+  images?: ToolImage[]
 }
 
 /**
@@ -29,6 +39,39 @@ export interface ToolDef<I = any> {
   maxOutputChars?: number
   /** Where the tool came from, shown in /tools. */
   source?: string
+  /**
+   * Order when the provider's tool limit forces some out: lower comes first. Native tools
+   * have none (always first); MCP tools get their server's position in the config.
+   */
+  priority?: number
+  /**
+   * May be left out of the request until the model loads it with tool_search (MCP tools,
+   * unless the server is `alwaysLoad`). Built-in tools are never deferred.
+   */
+  deferrable?: boolean
+  /** Extra words tool_search matches on (MCP `_meta["anthropic/searchHint"]`). */
+  searchHint?: string
+  /** Human label, e.g. `github · create_issue` (MCP); defaults to `name`. */
+  displayName?: string
+  /** MCP tool annotations, shown in /mcp and in the approval prompt. */
+  annotations?: { title?: string; destructive?: boolean; openWorld?: boolean }
+  /**
+   * Who may run this without asking. Read-only tools never ask. `"never"` exempts a
+   * non-read-only tool whose effect is already reviewed elsewhere (propose_memory only
+   * queues a proposal the user approves in /memory).
+   */
+  approval?: "never"
+  /**
+   * Identity used for "always allow" rules: the MCP server's fingerprint (URL or command),
+   * so a project server that reuses a trusted name does not inherit its permissions.
+   */
+  permissionScope?: string
+  /**
+   * Runs before approval, the timeout and the lock — for waiting on the user (ask_user),
+   * which must neither count as runtime nor hold a lock. Its result reaches `execute` as
+   * `ctx.prepared`.
+   */
+  prepare?(input: I, ctx: ToolContext): Promise<unknown>
   /** Short label for the TUI, e.g. `current_time()` or `add 2 + 3`. */
   summarize?(input: I): string
   execute(input: I, ctx: ToolContext): Promise<string | ToolResult>

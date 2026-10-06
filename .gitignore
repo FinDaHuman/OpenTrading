@@ -19,3 +19,6 @@ build/
 # TypeScript
 node_modules/
 *.tsbuildinfo
+
+# Playwright MCP writes screenshots into the working directory
+.playwright-mcp/

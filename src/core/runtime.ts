@@ -1,6 +1,9 @@
 import path from "node:path"
 import { HookBus } from "./hooks"
+import { AskBroker } from "./ask"
 import { McpManager } from "./mcp/manager"
+import { askUserTool } from "./tools/builtin/ask-user"
+import { PermissionGate } from "./permission"
 import { FileMemory } from "./memory/file-memory"
 import { NoopMemory, type MemoryProvider } from "./memory/types"
 import { dataDir } from "./paths"
@@ -11,6 +14,8 @@ import { chartDepthTool, chartRenderTool } from "./tools/chart/render"
 import { chartCompareTool } from "./tools/chart/compare"
 import { doctorLocalTool, sessionHistoryTools } from "./tools/session/history"
 import { spawnSubagentTool } from "./tools/subagent/spawn"
+import { toolSearchTool } from "./tools/builtin/tool-search"
+import { todoWriteTool } from "./tools/builtin/todo-write"
 import { webFetchTool } from "./tools/web/fetch"
 import { webSearchTool } from "./tools/web/search"
 import { localWatchlistTools } from "./tools/watchlist/local"
@@ -18,6 +23,10 @@ import { ToolRegistry } from "./tools/registry"
 
 export interface Runtime {
   registry: ToolRegistry
+  /** Approval prompts for tools with side effects; the TUI answers them. */
+  permissions: PermissionGate
+  /** Questions from the model (ask_user); the TUI answers them. */
+  questions: AskBroker
   mcp: McpManager
   hooks: HookBus
   /** Current memory provider; replaced in place by switchMemory (callers read it per turn). */
@@ -43,8 +52,20 @@ export function createMemory(choice: MemoryChoice | undefined, home = dataDir())
 export function initRuntime(opts: { cwd?: string; home?: string; skills: () => Skill[]; memory?: MemoryProvider }): Runtime {
   const home = opts.home ?? dataDir()
   const registry = new ToolRegistry()
+  const permissions = new PermissionGate()
+  registry.gate = permissions
+  const questions = new AskBroker()
   registry.register(currentTimeTool())
-  registry.register(loadSkillTool(opts.skills))
+  registry.register(askUserTool(questions))
+  registry.register(todoWriteTool())
+  registry.register(
+    loadSkillTool(opts.skills, () =>
+      registry
+        .list()
+        .filter((d) => d.deferrable)
+        .map((d) => d.name),
+    ),
+  )
   registry.register(chartRenderTool())
   registry.register(chartCompareTool())
   registry.register(chartDepthTool())
@@ -65,7 +86,8 @@ export function initRuntime(opts: { cwd?: string; home?: string; skills: () => S
       modelInfo: () => "xem /model (chưa resolve ở đây để tránh đọc key)",
     }),
   )
-  const runtime: Runtime = { registry, mcp, hooks: new HookBus(), memory: new NoopMemory() }
+  registry.register(toolSearchTool(registry, () => mcp.status().filter((s) => s.state === "connecting").map((s) => s.name)))
+  const runtime: Runtime = { registry, permissions, questions, mcp, hooks: new HookBus(), memory: new NoopMemory() }
   switchMemory(runtime, opts.memory ?? new NoopMemory())
   return runtime
 }
