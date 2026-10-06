@@ -23,7 +23,7 @@ export function editorCommand(env = process.env, platform: NodeJS.Platform = pro
 export async function editInEditor(
   text: string,
   terminal: { suspend(): void; resume(): void },
-): Promise<{ text: string } | { error: string }> {
+): Promise<{ text: string; returnedAtOnce: boolean } | { error: string }> {
   const file = path.join(os.tmpdir(), `opentrading-prompt-${process.pid}-${Date.now()}.md`)
   await writeFile(file, text, "utf8")
   const [program, ...args] = editorCommand()
@@ -33,11 +33,15 @@ export async function editInEditor(
   if (process.platform === "win32" && /\.(cmd|bat)$/i.test(resolved)) command = ["cmd.exe", "/d", "/c", resolved, ...args, file]
   terminal.suspend()
   try {
+    const started = Date.now()
     const proc = Bun.spawn(command, { stdin: "inherit", stdout: "inherit", stderr: "inherit" })
     const code = await proc.exited
     if (code !== 0) return { error: `Trình soạn thảo ${program} thoát với mã ${code}` }
+    const saved = await readFile(file, "utf8")
+    // Windows 11 Notepad can hand the file to a window already open and exit at once.
+    const returnedAtOnce = Date.now() - started < 1500 && saved === text
     // Editors add a final line break; the prompt does not want it.
-    return { text: (await readFile(file, "utf8")).replace(/\r\n?/g, "\n").replace(/\n$/, "") }
+    return { text: saved.replace(/\r\n?/g, "\n").replace(/\n$/, ""), returnedAtOnce }
   } catch (error) {
     resolved = error instanceof Error ? error.message : String(error)
     return { error: `Không mở được trình soạn thảo ${program}: ${resolved}. Đặt biến EDITOR (ví dụ "code --wait").` }

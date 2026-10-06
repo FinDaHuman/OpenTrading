@@ -73,6 +73,8 @@ const ASK_MANY = {
     },
   ],
 }
+/** Holds the (non-streamed) summary request open while set. */
+let summaryGate: Promise<void> | undefined
 /** Set by the esc-while-streaming test: "CHẬM" makes the fake model call the slow tool. */
 let callSlowTool = false
 globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -89,6 +91,7 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const request = JSON.parse(String(init?.body)) as { messages: { role: string; content?: unknown }[]; stream?: boolean }
     // generateText (the /compact summary) does not stream.
     if (!request.stream) {
+      await summaryGate
       return Response.json({
         id: "c1",
         object: "chat.completion",
@@ -1737,3 +1740,29 @@ async function waitFrameMs(pred: (frame: string) => boolean) {
   }
   throw new Error(`frame never matched ${pred}:\n${frame}`)
 }
+
+test("prompt: a message typed during /compact is sent once the compaction ends", async () => {
+  // Enough turns that /compact has something to summarize (the last two stay verbatim).
+  for (const text of ["nén một", "nén hai", "nén ba"]) {
+    await setup.mockInput.typeText(text)
+    await sendWith("test-model", text)
+  }
+  let open = () => {}
+  summaryGate = new Promise<void>((r) => (open = r))
+  try {
+    await setup.mockInput.typeText("/compact")
+    setup.mockInput.pressEnter()
+    await waitMcp(() => state.compacting)
+    await setup.mockInput.typeText("sau khi nén")
+    setup.mockInput.pressEnter()
+    await waitMcp(() => state.queue.length === 1)
+    open()
+    await waitMcp(() => state.queue.length === 0 && !state.streaming && state.lines.some((l) => l.kind === "user" && l.text === "sau khi nén"))
+    // In order: the compaction, then the queued message.
+    const kinds = state.lines.map((l) => l.kind)
+    expect(kinds.lastIndexOf("compact")).toBeLessThan(state.lines.findIndex((l) => l.kind === "user" && l.text === "sau khi nén"))
+  } finally {
+    open()
+    summaryGate = undefined
+  }
+}, 30_000)

@@ -74,10 +74,10 @@ function lineIndex(predicate: (line: Line) => boolean) {
  * Compact the conversation (see core/compact.ts). Runs like a turn: esc stops it, /new
  * discards it. On failure the history is left as is (or only pruned).
  */
-export async function compact(runtime: Runtime, trigger: "auto" | "manual", instructions?: string, projected?: number) {
+export async function compact(runtime: Runtime, trigger: "auto" | "manual", instructions?: string, projected?: number): Promise<boolean> {
   if (state.history.length === 0) {
     if (trigger === "manual") pushLine({ kind: "info", text: "Chưa có hội thoại để nén." })
-    return
+    return true
   }
   const mine = epoch
   const controller = new AbortController()
@@ -109,8 +109,11 @@ export async function compact(runtime: Runtime, trigger: "auto" | "manual", inst
           signal: controller.signal,
         }),
     })
-    if (epoch !== mine) return
-    if (controller.signal.aborted) return void pushLine({ kind: "info", text: "Đã dừng nén; hội thoại giữ nguyên." })
+    if (epoch !== mine) return false
+    if (controller.signal.aborted) {
+      pushLine({ kind: "info", text: "Đã dừng nén; hội thoại giữ nguyên." })
+      return false
+    }
     if (result.summary !== undefined || result.pruned > 0) {
       // The clock reminder lived in the dropped turns: send it again next turn.
       setState({ history: result.messages, contextTokens: result.after, clock: undefined })
@@ -132,6 +135,7 @@ export async function compact(runtime: Runtime, trigger: "auto" | "manual", inst
     if (epoch === mine) setState({ streaming: false, compacting: false })
     if (abort === controller) abort = undefined
   }
+  return true
 }
 
 /** The turn being answered, so exit can wait for it to be saved. */
@@ -563,6 +567,9 @@ export function App(props: {
     const result = await editInEditor(parts.expand().text, renderer)
     input?.focus()
     if ("error" in result) return flash(result.error, 5000)
+    if (result.returnedAtOnce) {
+      return flash('Trình soạn thảo đóng ngay (Notepad có thể đã mở thành tab) · đặt biến EDITOR, ví dụ "code --wait"', 6000)
+    }
     let text = result.text
     for (const [id, content] of Object.entries(snap.pastes ?? {})) {
       const at = text.indexOf(content)
@@ -794,7 +801,8 @@ export function App(props: {
         return void clearTranscript(props.runtime)
       case "compact":
         if (state.streaming) return pushLine({ kind: "error", text: "Đang trả lời; chờ xong rồi nén." })
-        return void compact(props.runtime, "manual", cmd.args || undefined)
+        // Messages typed while it runs are queued: send them (or give them back) afterwards.
+        return void compact(props.runtime, "manual", cmd.args || undefined).then((ok) => afterTurn(props.runtime, ok))
       case "exit":
       case "quit":
         return void exit()
