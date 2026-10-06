@@ -87,6 +87,8 @@ export const REMINDER_TAG = "nhac_nho"
 export interface RunOptions {
   history: ModelMessage[]
   input: string
+  /** Images pasted into the prompt, sent after the text (only to models that take image input). */
+  images?: { data: string; mediaType: string }[]
   /** Every loaded skill (catalog + always-on). */
   skills: Skill[]
   /** Skills the user switched on with /skill <name>. */
@@ -153,14 +155,18 @@ export function withContext(messages: ModelMessage[], context: string | undefine
   return copy
 }
 
-/** The user message as stored in history: optional reminder block, then what the user typed. */
-function userMessage(input: string, reminders: string[]): ModelMessage {
-  if (reminders.length === 0) return { role: "user", content: input }
+/**
+ * The user message as stored in history: optional reminder block, what the user typed, then
+ * the pasted images (Claude Code's order: text first; the `[Image #N]` labels refer to them).
+ */
+export function userMessage(input: string, reminders: string[], images: RunOptions["images"] = []): ModelMessage {
+  if (reminders.length === 0 && images.length === 0) return { role: "user", content: input }
   return {
     role: "user",
     content: [
-      { type: "text", text: `<${REMINDER_TAG}>\n${reminders.join("\n\n")}\n</${REMINDER_TAG}>` },
-      { type: "text", text: input },
+      ...(reminders.length > 0 ? [{ type: "text" as const, text: `<${REMINDER_TAG}>\n${reminders.join("\n\n")}\n</${REMINDER_TAG}>` }] : []),
+      { type: "text" as const, text: input },
+      ...images.map((i) => ({ type: "image" as const, image: i.data, mediaType: i.mediaType })),
     ],
   }
 }
@@ -269,7 +275,10 @@ interface Prepared {
   tier: Tier
   tools: ToolSet | undefined
   built: BuiltToolSet | undefined
+  /** Images in tool results reach the model. */
   images: boolean
+  /** Images in user messages reach the model. */
+  userImages: boolean
   assembled: Assembled
   supportsTools: boolean
 }
@@ -307,6 +316,15 @@ export function toolSetOptions(target: TargetLike | undefined): ToolSetOptions {
     flavor: npm.startsWith("@ai-sdk/google") || /gemini/i.test(target.model) ? "gemini" : "default",
     images: imagesReachModel(npm, api, target.model) && (info?.modalities?.input ?? []).includes("image"),
   }
+}
+
+/**
+ * Whether the model takes images the user pasted. Unlike images inside tool results, user
+ * image parts are understood by every bundled SDK; models.dev says which models see them.
+ */
+export function acceptsImageInput(target: TargetLike | undefined): boolean {
+  if (!target) return false
+  return (target.provider.models[target.model]?.modalities?.input ?? []).includes("image")
 }
 
 /** Deferred tools are worth it once their definitions would take this share of the context. */
@@ -427,6 +445,7 @@ async function prepare(opts: TurnInput, extras: TurnExtras): Promise<Prepared> {
     supportsTools,
     built,
     images: toolSetOptions(target).images ?? false,
+    userImages: acceptsImageInput(target),
     tools: toolNames.length > 0 ? built!.tools : undefined,
     assembled,
   }
@@ -438,7 +457,9 @@ async function prepare(opts: TurnInput, extras: TurnExtras): Promise<Prepared> {
  * now (tool search). Turns and the compaction summary share it, so both send the same prefix.
  */
 function requestFor(p: Prepared, messages: ModelMessage[]) {
-  const request = withContext(p.images ? messages : stripImages(messages), p.assembled.context)
+  // After /model to a model without vision, earlier screenshots become placeholders.
+  const visible = p.images && p.userImages ? messages : stripImages(messages, { tool: !p.images, user: !p.userImages })
+  const request = withContext(visible, p.assembled.context)
   // Anthropic caches only where asked: mark the static system prompt. Others cache by prefix.
   const system: string | SystemModelMessage =
     p.target.provider.npm === "@ai-sdk/anthropic"
@@ -595,7 +616,7 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
     }
   }
 
-  const user = userMessage(opts.input, assembled.reminders)
+  const user = userMessage(opts.input, assembled.reminders, opts.images)
   // A vision model's screenshots stay in history; a model without vision gets placeholders.
   const { system, request, model } = requestFor(prepared, [...opts.history, user])
   let summarized = false

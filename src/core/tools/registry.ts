@@ -184,14 +184,27 @@ export class ToolRegistry {
 
 type ToolMessage = Extract<ModelMessage, { role: "tool" }>
 
+type UserMessage = Extract<ModelMessage, { role: "user" }>
+
 /**
- * History for a model that cannot see images (or for the session file): tool results that
- * carried images become plain text with a placeholder. Needed per request, because the
- * user may switch from a vision model to one that would choke on base64.
+ * History for a model that cannot see images (or for the session file): tool results and
+ * user messages that carried images become plain text with a placeholder. Needed per
+ * request, because the user may switch from a vision model to one that would choke on base64.
  */
-export function stripImages<M extends ModelMessage>(messages: M[]): M[] {
+export function stripImages<M extends ModelMessage>(messages: M[], which: { tool?: boolean; user?: boolean } = {}): M[] {
+  const { tool = true, user = true } = which
   return messages.map((m) => {
-    if (m.role !== "tool") return m
+    if (m.role === "user" && user && typeof m.content !== "string") {
+      const parts = (m as UserMessage).content
+      if (typeof parts === "string" || !parts.some((p) => p.type === "image" || p.type === "file")) return m
+      const content = parts.map((p) =>
+        p.type === "image" || p.type === "file"
+          ? { type: "text" as const, text: imageNote(p.mediaType ?? "image", "model này không xem được ảnh, hoặc ảnh không còn trong lịch sử") }
+          : p,
+      )
+      return { ...m, content } as M
+    }
+    if (m.role !== "tool" || !tool) return m
     let changed = false
     const content = (m as ToolMessage).content.map((part) => {
       if (part.type !== "tool-result" || part.output.type !== "content") return part

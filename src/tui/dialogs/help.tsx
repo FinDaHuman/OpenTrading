@@ -16,6 +16,7 @@ const KEYS: [string, string][] = [
   ["shift+← → ↑ ↓", "bôi đen chữ trong ô nhập; gõ hoặc backspace để thay / xoá"],
   ["ctrl+z · ctrl+y", "hoàn tác · làm lại trong ô nhập"],
   ["ctrl+s", "cất bản nháp sang một bên · bấm lại để lấy về"],
+  ["alt+v · ctrl+v", "dán ảnh từ clipboard thành [Image #N] (hoặc kéo thả file ảnh vào) · đoạn dán dài thành [Pasted text #N]"],
   ["esc", "đóng danh sách / · đóng bảng · dừng câu trả lời đang chạy · bấm 2 lần để xoá ô nhập"],
   ["ctrl+o", "mở rộng / thu gọn kết quả tool"],
   ["kéo chuột", "bôi đen để copy (tự copy khi thả chuột); trong ô nhập thì giữ vùng chọn để sửa · giữ shift để dùng chọn chữ của terminal"],

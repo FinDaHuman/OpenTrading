@@ -1,6 +1,6 @@
 import { decodePasteBytes, stripAnsiSequences, type KeyBinding, type PasteEvent, type TextareaRenderable } from "@opentui/core"
 import { useTerminalDimensions } from "@opentui/solid"
-import { color } from "../theme"
+import { color, promptStyle } from "../theme"
 
 /**
  * Enter sends; Shift+Enter, Ctrl+J and Alt/Meta+Enter add a line (opencode, Claude Code).
@@ -42,6 +42,8 @@ export function PromptInput(props: {
   placeholder: string
   onChange: (text: string) => void
   onSubmit: () => void
+  /** Pasted text, already normalised; the caller decides between text, pill and image. */
+  onPaste: (text: string) => void
 }) {
   const dims = useTerminalDimensions()
   let input: TextareaRenderable | undefined
@@ -86,13 +88,15 @@ export function PromptInput(props: {
         cursorColor={color.tx}
         cursorStyle={PROMPT_CURSOR}
         keyBindings={PROMPT_KEYS}
+        // Styles the paste/image pills (extmark.paste).
+        syntaxStyle={promptStyle()}
         // The Solid typing says string, the core passes {}: read the text from the renderable.
         onContentChange={() => props.onChange(input?.plainText ?? "")}
         onSubmit={() => props.onSubmit()}
         onPaste={(event: PasteEvent) => {
           // ConPTY (Windows Terminal) can paste CR-only line ends; tabs become spaces (Claude Code).
           event.preventDefault()
-          input?.insertText(normalizePaste(decodePasteBytes(event.bytes)))
+          props.onPaste(normalizePaste(decodePasteBytes(event.bytes)))
         }}
       />
     </box>

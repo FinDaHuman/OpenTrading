@@ -52,6 +52,17 @@ export function markdownStyle(): SyntaxStyle {
   return markdown
 }
 
+let prompt: SyntaxStyle | undefined
+
+/** The prompt's pills (`[Pasted text #1 +49 lines]`, `[Image #2]`): yellow chips, like opencode. */
+export function promptStyle(): SyntaxStyle {
+  prompt ??= SyntaxStyle.fromStyles({
+    default: { fg: color.tx },
+    "extmark.paste": { fg: color.bg, bg: color.tham, bold: true },
+  })
+  return prompt
+}
+
 /** Linear mix of two hex colours, `t` in 0..1. */
 export function mix(a: string, b: string, t: number): RGBA {
   const x = RGBA.fromHex(a)

@@ -21,6 +21,7 @@ const CATALOG = {
     models: {
       "test-model": { id: "test-model", name: "Test Model", modalities: text, limit: { context: 131072 } },
       "whisper-x": { id: "whisper-x", name: "Whisper X", modalities: { input: ["audio"], output: ["text"] } },
+      "vision-model": { id: "vision-model", name: "Vision Model", modalities: { input: ["text", "image"], output: ["text"] }, limit: { context: 131072 } },
     },
   },
   nvidia: {
@@ -46,6 +47,8 @@ const LONG =
 const REPLY = ["Xin chào! ", "T+2.5 là chu kỳ thanh toán.\n\n", LONG, "\n\nHẾT-CÂU-TRẢ-LỜI"]
 const realFetch = globalThis.fetch
 const chatCalls: string[] = []
+/** Bodies of streamed chat requests, newest last. */
+const chatBodies: { messages: { role: string; content?: unknown }[] }[] = []
 const ASK_ONE = {
   questions: [
     {
@@ -95,6 +98,7 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
         usage: { prompt_tokens: 1, completion_tokens: 1 },
       })
     }
+    chatBodies.push(request)
     const last = JSON.stringify(request.messages.at(-1)?.content ?? "")
     // "MẤY-GIỜ" asks for a tool call until a tool result is in the conversation.
     // Only tool results of the current turn count (earlier turns left their own in history).
@@ -1481,4 +1485,141 @@ test("prompt: Ctrl+S puts the draft aside and brings it back", async () => {
   setup.mockInput.pressKey("s", { ctrl: true })
   await setup.waitForFrame((f) => f.includes("› de sau"))
   await clearPrompt()
+})
+
+// ── Prompt input: pasted-text pills and images ───────────────────────────────────────────────
+
+/** The user message of the newest chat request, as JSON. */
+const lastUserContent = () => {
+  const messages = chatBodies.at(-1)?.messages ?? []
+  return JSON.stringify(messages.filter((m) => m.role === "user").at(-1)?.content ?? "")
+}
+
+/** Send what is in the prompt with groq/<model> and wait for the answer to finish. */
+async function sendWith(model: string, expectUser: string) {
+  await setKey("groq", "gsk-good-key")
+  // The turn reads the model from the config file; the status bar from the store.
+  await saveConfig({ provider: "groq", model })
+  setState({ provider: "groq", model })
+  const before = chatBodies.length
+  setup.mockInput.pressEnter()
+  await waitMcp(() => chatBodies.length > before && !state.streaming && state.lines.some((l) => l.kind === "user" && l.text.includes(expectUser)))
+}
+
+test("prompt: a long paste becomes one pill; one Backspace deletes it; sending puts the text back in place", async () => {
+  const pasted = Array.from({ length: 50 }, (_, i) => `dòng-dán-${i + 1}`).join("\n")
+  await setup.mockInput.pasteBracketedText(pasted)
+  let frame = await setup.waitForFrame((f) => /\[Pasted text #\d+ \+49 lines\]/.test(f))
+  show(frame)
+  expect(frame).not.toContain("dòng-dán-2")
+  // Drawn as a yellow chip (opencode's paste pill).
+  const { RGBA } = await import("@opentui/core")
+  const { color } = await import("../src/tui/theme")
+  const pill = setup
+    .captureSpans()
+    .lines.flatMap((l) => l.spans)
+    .filter((s) => s.text.includes("Pasted text"))
+  expect(pill.some((s) => s.bg.equals(RGBA.fromHex(color.tham)))).toBe(true)
+  // Pill + a space: Backspace removes the space, then the whole pill at once.
+  setup.mockInput.pressBackspace()
+  setup.mockInput.pressBackspace()
+  await setup.waitForFrame((f) => f.includes("Hỏi về thị trường"))
+
+  // Vietnamese and a line break before the pill: the offsets are not string indices.
+  await setup.mockInput.typeText("Phân tích")
+  setup.mockInput.pressKey("LINEFEED")
+  await setup.mockInput.typeText("dữ liệu: ")
+  await setup.mockInput.pasteBracketedText(pasted)
+  await setup.mockInput.typeText("xong")
+  frame = await setup.waitForFrame((f) => /\[Pasted text #\d+ \+49 lines\] xong/.test(f))
+  show(frame)
+  await sendWith("test-model", "dữ liệu: [Pasted text #")
+  // The transcript keeps the pill; the model gets the full text where the pill was.
+  expect(lastUserContent()).toContain(JSON.stringify(`Phân tích\ndữ liệu: ${pasted} xong`).slice(1, -1))
+  frame = await setup.waitForFrame((f) => /❯ Phân tích/.test(f))
+  expect(frame).not.toContain("dòng-dán-50")
+  expect(frame).toMatch(/dữ liệu: \[Pasted text #\d+ \+49 lines\] xong/) // shown as typed, not as a link
+
+  // ↑ brings the prompt back with its pill, and it still expands.
+  setup.mockInput.pressArrow("up")
+  frame = await setup.waitForFrame((f) => /› Phân tích/.test(f) && /\[Pasted text #\d+ \+49 lines\] xong/.test(f))
+  const { historyFlushed, historyFile } = await import("../src/tui/prompt/history")
+  await historyFlushed()
+  const last = JSON.parse((await Bun.file(historyFile()).text()).trim().split("\n").at(-1)!)
+  expect(Object.values(last.pastes)).toEqual([pasted])
+  await clearPrompt()
+})
+
+test("prompt: pasting over a highlight replaces it with the pill, which still expands", async () => {
+  const pasted = Array.from({ length: 10 }, (_, i) => `hàng-${i}`).join("\n")
+  await setup.mockInput.typeText("xem XOÁ-ĐI")
+  for (let i = 0; i < "XOÁ-ĐI".length; i++) setup.mockInput.pressArrow("left", { shift: true })
+  await setup.mockInput.pasteBracketedText(pasted)
+  await setup.waitForFrame((f) => /› xem \[Pasted text #\d+ \+9 lines\]/.test(f))
+  await sendWith("test-model", "xem [Pasted text #")
+  expect(lastUserContent()).toContain(JSON.stringify(`xem ${pasted}`).slice(1, -1))
+  expect(lastUserContent()).not.toContain("XOÁ-ĐI")
+})
+
+test("prompt: Alt+V pastes a clipboard image as [Image #N]; blocked for a text-only model, sent to a vision model", async () => {
+  const { setImageReader } = await import("../src/tui/prompt/image")
+  const png = "iVBORw0KGgo" + "A".repeat(200)
+  let reads = 0
+  setImageReader({
+    clipboard: async () => {
+      reads++
+      return { data: png, mediaType: "image/png" }
+    },
+  })
+  try {
+    await setup.mockInput.typeText("Biểu đồ này nói gì? ")
+    setup.mockInput.pressKey("v", { meta: true })
+    let frame = await setup.waitForFrame((f) => /\[Image #\d+\]/.test(f))
+    show(frame)
+    // An empty paste (Windows Terminal with only an image copied) reads the clipboard too.
+    await setup.mockInput.pasteBracketedText("")
+    await waitMcp(() => reads === 2)
+    frame = await setup.waitForFrame((f) => (f.match(/\[Image #\d+\]/g) ?? []).length === 2)
+    // One image is enough: delete the second pill (space, then pill).
+    setup.mockInput.pressBackspace()
+    setup.mockInput.pressBackspace()
+    frame = await setup.waitForFrame((f) => (f.match(/\[Image #\d+\]/g) ?? []).length === 1)
+
+    // A model without vision: refused, the draft stays.
+    await setKey("groq", "gsk-good-key")
+    setState({ provider: "groq", model: "test-model" })
+    const before = chatBodies.length
+    setup.mockInput.pressEnter()
+    frame = await setup.waitForFrame((f) => f.includes("không đọc được ảnh"))
+    expect(chatBodies.length).toBe(before)
+    expect(frame).toMatch(/› Biểu đồ này nói gì\? \[Image #\d+\]/)
+
+    // A vision model gets the image after the text.
+    await sendWith("vision-model", "Biểu đồ này nói gì?")
+    const content = JSON.parse(lastUserContent()) as { type: string; text?: string; image_url?: { url: string } }[]
+    expect(content.filter((p) => p.type === "image_url")).toHaveLength(1)
+    expect(content.find((p) => p.type === "image_url")!.image_url!.url).toBe(`data:image/png;base64,${png}`)
+    expect(content.find((p) => p.type === "text" && p.text?.startsWith("Biểu đồ"))?.text).toMatch(/\[Image #\d+\]/)
+
+    // Back on the text-only model, the image in history becomes a placeholder.
+    await setup.mockInput.typeText("còn gì nữa?")
+    await sendWith("test-model", "còn gì nữa?")
+    const all = JSON.stringify(chatBodies.at(-1)!.messages)
+    expect(all).not.toContain(png)
+    expect(all).toContain("không xem được ảnh")
+  } finally {
+    setImageReader(undefined)
+  }
+})
+
+test("prompt: no image in the clipboard is reported, nothing is inserted", async () => {
+  const { setImageReader } = await import("../src/tui/prompt/image")
+  setImageReader({ clipboard: async () => undefined })
+  try {
+    setup.mockInput.pressKey("v", { meta: true })
+    const frame = await setup.waitForFrame((f) => f.includes("Không có ảnh trong clipboard"))
+    expect(frame).toContain("Hỏi về thị trường")
+  } finally {
+    setImageReader(undefined)
+  }
 })
