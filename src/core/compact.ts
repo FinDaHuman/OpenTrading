@@ -88,8 +88,10 @@ export const IMAGE_TOKENS = 1600
 /** Estimated size of messages; an image counts as IMAGE_TOKENS, not as its base64 text. */
 export const tokensOf = (messages: readonly ModelMessage[]) => {
   let images = 0
-  const text = JSON.stringify(messages, (key, value) => {
-    if ((key === "image" || key === "data") && typeof value === "string" && value.length > 1000) {
+  const text = JSON.stringify(messages, function (this: Record<string, unknown>, key, value) {
+    // Only the base64 of an image part (user image, tool image-data/media/file), not any long "data".
+    const imagePart = this.type === "image" || this.type === "image-data" || this.type === "media" || this.type === "file" || "mediaType" in this
+    if (imagePart && (key === "image" || key === "data") && typeof value === "string" && value.length > 1000) {
       images++
       return ""
     }

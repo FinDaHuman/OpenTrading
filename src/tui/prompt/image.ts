@@ -40,7 +40,8 @@ export function imagePath(text: string, platform: NodeJS.Platform = process.plat
       return undefined
     }
   } else if (platform !== "win32") value = value.replace(/\\(.)/g, "$1")
-  if (!IMAGE_EXTENSIONS.test(value) || !path.isAbsolute(value)) return undefined
+  // The platform's own rules (a test on Linux still checks Windows paths correctly).
+  if (!IMAGE_EXTENSIONS.test(value) || !(platform === "win32" ? path.win32 : path.posix).isAbsolute(value)) return undefined
   return value
 }
 

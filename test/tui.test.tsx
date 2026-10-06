@@ -1538,6 +1538,7 @@ test("prompt: a long paste becomes one pill; one Backspace deletes it; sending p
   expect(lastUserContent()).toContain(JSON.stringify(`Phân tích\ndữ liệu: ${pasted} xong`).slice(1, -1))
   frame = await setup.waitForFrame((f) => /❯ Phân tích/.test(f))
   expect(frame).not.toContain("dòng-dán-50")
+  expect(frame).toMatch(/dữ liệu: \[Pasted text #\d+ \+49 lines\] xong/) // shown as typed, not as a link
 
   // ↑ brings the prompt back with its pill, and it still expands.
   setup.mockInput.pressArrow("up")
@@ -1547,6 +1548,17 @@ test("prompt: a long paste becomes one pill; one Backspace deletes it; sending p
   const last = JSON.parse((await Bun.file(historyFile()).text()).trim().split("\n").at(-1)!)
   expect(Object.values(last.pastes)).toEqual([pasted])
   await clearPrompt()
+})
+
+test("prompt: pasting over a highlight replaces it with the pill, which still expands", async () => {
+  const pasted = Array.from({ length: 10 }, (_, i) => `hàng-${i}`).join("\n")
+  await setup.mockInput.typeText("xem XOÁ-ĐI")
+  for (let i = 0; i < "XOÁ-ĐI".length; i++) setup.mockInput.pressArrow("left", { shift: true })
+  await setup.mockInput.pasteBracketedText(pasted)
+  await setup.waitForFrame((f) => /› xem \[Pasted text #\d+ \+9 lines\]/.test(f))
+  await sendWith("test-model", "xem [Pasted text #")
+  expect(lastUserContent()).toContain(JSON.stringify(`xem ${pasted}`).slice(1, -1))
+  expect(lastUserContent()).not.toContain("XOÁ-ĐI")
 })
 
 test("prompt: Alt+V pastes a clipboard image as [Image #N]; blocked for a text-only model, sent to a vision model", async () => {

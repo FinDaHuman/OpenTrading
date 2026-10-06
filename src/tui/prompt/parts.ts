@@ -88,6 +88,8 @@ export class PromptParts {
   insert(part: PastePart): string | undefined {
     const input = this.input()
     if (!input) return undefined
+    // Pasting over a highlight replaces it: delete it first, or the cursor moves under us.
+    if (input.hasSelection()) input.deleteSelection()
     const id = this.nextId++
     const label = part.kind === "text" ? pasteLabel(id, part.text) : imageLabel(id)
     const start = input.cursorOffset

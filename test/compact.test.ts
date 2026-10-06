@@ -208,3 +208,16 @@ test("loaded skills survive a second compaction (read back from the first marker
   const second = await compactHistory([...first.messages, ...turn(4), ...turn(5)], { manual: true, summarize: async () => "t2" })
   expect(JSON.stringify(second.messages[0])).toContain("Skill đã nạp: devil-advocate")
 })
+
+test("tokensOf counts an image as IMAGE_TOKENS, but a long non-image `data` string as text", async () => {
+  const { tokensOf, IMAGE_TOKENS } = await import("../src/core/compact")
+  const base64 = "A".repeat(400_000)
+  const withImage: ModelMessage[] = [{ role: "user", content: [{ type: "text", text: "xem" }, { type: "image", image: base64, mediaType: "image/png" }] }]
+  expect(tokensOf(withImage)).toBeLessThan(IMAGE_TOKENS + 100)
+  expect(tokensOf(withImage)).toBeGreaterThanOrEqual(IMAGE_TOKENS)
+  const csv = "x".repeat(40_000)
+  const withData: ModelMessage[] = [
+    { role: "tool", content: [{ type: "tool-result", toolCallId: "1", toolName: "t", output: { type: "json", value: { data: csv } } }] },
+  ]
+  expect(tokensOf(withData)).toBeGreaterThan(10_000)
+})
