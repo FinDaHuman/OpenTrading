@@ -1,3 +1,5 @@
+> Bản ghi lịch sử của đợt eval 02/10/2026 (khi harness còn preset). Long.md đã bỏ; trạng thái hiện tại xem docs/STATUS.md.
+
 # samples-answer.md — Kết quả chạy samples.md (02/10/2026)
 
 > Runner: `bun /tmp/opencode/run-samples.ts` — temp `OPENTRADING_HOME`, MCP remote

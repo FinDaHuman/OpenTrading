@@ -1,12 +1,10 @@
 import { z } from "zod"
-import { dataDir } from "../../paths"
 import { readJson, writeJson } from "../../store"
-import type { ToolDef } from "../types"
+import { LOCAL_SOURCE, type ToolDef } from "../types"
 
 /**
- * WS3-B: watchlist CÁ NHÂN local (~/.opentrading/watchlists.json).
- * Phân biệt với watchlist_* của MCP-server (PG share cho team):
- * đây là tracking của riêng user này, offline vẫn dùng được.
+ * Personal watchlists in `<home>/watchlists.json`: this user's own tracking, available
+ * offline, as opposed to the MCP server's team-shared `watchlist_*` tools.
  */
 
 export interface LocalWatchlist {
@@ -17,25 +15,20 @@ export interface LocalWatchlist {
 
 type Store = Record<string, LocalWatchlist>
 
-const file = () => `${dataDir()}/watchlists.json`
-
-async function load(): Promise<Store> {
-  return (await readJson<Store>(file(), {})) ?? {}
-}
-
-async function save(store: Store) {
-  await writeJson(file(), store)
-}
-
 const norm = (s: string) => s.trim().toUpperCase()
 
-export function localWatchlistTools(): ToolDef[] {
+export function localWatchlistTools(home: string): ToolDef[] {
+  const file = `${home}/watchlists.json`
+  const load = async () => (await readJson<Store>(file, {})) ?? {}
+  const save = (store: Store) => writeJson(file, store)
   const create: ToolDef<{ name: string }> = {
     name: "watchlist_local_create",
     description:
       "Tạo watchlist CÁ NHÂN trên máy này. Dùng khi user muốn theo dõi nhóm mã riêng (không share team — share team thì dùng watchlist_create của MCP server).",
     input: z.object({ name: z.string().min(1).describe("Tên watchlist") }),
     readOnly: false,
+    deferrable: true,
+    source: LOCAL_SOURCE,
     summarize: (input) => `watchlist_local_create(${(input as { name: string }).name})`,
     async execute(input) {
       const name = norm(input.name)
@@ -52,6 +45,8 @@ export function localWatchlistTools(): ToolDef[] {
     description: "Liệt kê watchlist cá nhân trên máy này kèm các mã đang theo dõi.",
     input: z.object({}),
     readOnly: true,
+    deferrable: true,
+    source: LOCAL_SOURCE,
     summarize: () => "watchlist_local_list()",
     async execute() {
       const store = await load()
@@ -68,6 +63,8 @@ export function localWatchlistTools(): ToolDef[] {
       symbols: z.array(z.string()).min(1).describe("Các mã cần theo dõi"),
     }),
     readOnly: false,
+    deferrable: true,
+    source: LOCAL_SOURCE,
     summarize: (input) => {
       const i = input as { name: string; symbols: string[] }
       return `watchlist_local_add ${i.name} +${i.symbols.length}`
@@ -90,6 +87,8 @@ export function localWatchlistTools(): ToolDef[] {
     description: "Bớt mã khỏi watchlist cá nhân.",
     input: z.object({ name: z.string().min(1), symbols: z.array(z.string()).min(1) }),
     readOnly: false,
+    deferrable: true,
+    source: LOCAL_SOURCE,
     summarize: (input) => {
       const i = input as { name: string; symbols: string[] }
       return `watchlist_local_remove ${i.name} -${i.symbols.length}`
@@ -111,6 +110,8 @@ export function localWatchlistTools(): ToolDef[] {
     description: "Xóa watchlist cá nhân.",
     input: z.object({ name: z.string().min(1) }),
     readOnly: false,
+    deferrable: true,
+    source: LOCAL_SOURCE,
     summarize: (input) => `watchlist_local_delete(${(input as { name: string }).name})`,
     async execute(input) {
       const name = norm(input.name)

@@ -1,3 +1,5 @@
+> Bản ghi lịch sử của đợt eval 02/10/2026 (khi harness còn preset). Long.md đã bỏ; trạng thái hiện tại xem docs/STATUS.md.
+
 # samples.md — Bộ câu hỏi test toàn diện OpenTrading (02/10/2026)
 
 > Chạy: `bun run dev` (TUI) hoặc `bun src/core/chat.ts "<câu>"` (headless).

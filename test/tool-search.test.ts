@@ -114,6 +114,25 @@ test("the deferred list falls back to per-server counts over budget", () => {
   expect(short.text).toContain("ot: 200 tool")
 })
 
+test("deferred local tools keep their names: they have no mcp__ prefix to search by", async () => {
+  const groups = [
+    { server: "ot", tools: Array.from({ length: 200 }, (_, i) => `tool_number_${i}`) },
+    { server: "local", tools: ["chart_render", "watchlist_local_add"] },
+  ]
+  const short = renderDeferred(groups, 300)
+  expect(short.truncated).toBe(true)
+  expect(short.text).toContain("local (2): chart_render, watchlist_local_add")
+  expect(short.text).not.toContain("mcp__local")
+
+  const r = new ToolRegistry()
+  r.register({ name: "chart_render", description: "Vẽ biểu đồ", input: z.object({}), readOnly: true, deferrable: true, source: "local", execute: async () => "" })
+  r.register(mcp("ot", "vn_quote_history", "Price history"))
+  const out = (await toolSearchTool(r).execute({ query: "zzz" }, ctx())) as string
+  expect(out).toContain("ot (1 tool)")
+  expect(out).toContain('nạp bằng "select:<tên>"): chart_render.')
+  expect(out).not.toContain("local (")
+})
+
 test("Vietnamese market terms also match English descriptions", async () => {
   const r = registry()
   expect(firstLine(await search(r, "lịch sử giá FPT", 1))).toBe(`${LOADED_PREFIX}mcp__ot__vn_quote_history`)

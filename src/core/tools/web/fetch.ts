@@ -2,70 +2,108 @@ import { z } from "zod"
 import type { ToolDef } from "../types"
 
 const MAX_BYTES = 2 * 1024 * 1024
-const DEFAULT_TIMEOUT_MS = 30_000
+const MAX_CHARS = 60_000
 
 function stripHtml(html: string): string {
   return html
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
     .replace(/<style[\s\S]*?<\/style>/gi, " ")
     .replace(/<!--[\s\S]*?-->/g, " ")
+    .replace(/<(br|\/p|\/div|\/li|\/h[1-6]|\/tr)\b[^>]*>/gi, "\n")
     .replace(/<[^>]+>/g, " ")
     .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, "&")
     .split("\n")
     .map((l) => l.replace(/[ \t]+/g, " ").trim())
     .filter(Boolean)
-    .join("\n");
+    .join("\n")
 }
 
 /**
- * web_fetch kiểu opencode: tải URL về text/markdown/html, cap 2MB, timeout 30s.
- * Không cần API key. Log stderr thay vì stdout (giữ đúng quy ước MCP stdio).
+ * Hosts on this machine or the local network. A page the model reads can carry injected
+ * instructions, so the model must not be steered into probing local services.
  */
-export function webFetchTool(): ToolDef<{ url: string; format?: "text" | "markdown" | "html"; timeoutSeconds?: number }> {
+export function isPrivateHost(hostname: string): boolean {
+  const host = hostname.toLowerCase().replace(/^\[|\]$/g, "")
+  if (host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local") || host === "0.0.0.0") return true
+  const v4 = host.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/)
+  if (v4) {
+    const [a, b] = [Number(v4[1]), Number(v4[2])]
+    return a === 127 || a === 10 || a === 0 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 169 && b === 254)
+  }
+  if (!host.includes(":")) return false
+  return host === "::1" || host === "::" || /^(fc|fd|fe8|fe9|fea|feb)/.test(host) || host.startsWith("::ffff:")
+}
+
+/** Read at most MAX_BYTES; a larger page is an error rather than a silent cut. */
+async function readCapped(res: Response): Promise<string> {
+  const declared = Number(res.headers.get("content-length") ?? 0)
+  if (declared > MAX_BYTES) throw new Error(`Trang quá lớn (${Math.round(declared / 1024)}KB > ${MAX_BYTES / 1024}KB).`)
+  if (!res.body) return ""
+  const reader = res.body.getReader()
+  const chunks: Uint8Array[] = []
+  let size = 0
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    size += value.byteLength
+    if (size > MAX_BYTES) {
+      await reader.cancel()
+      throw new Error(`Trang quá lớn (> ${MAX_BYTES / 1024}KB).`)
+    }
+    chunks.push(value)
+  }
+  return new TextDecoder().decode(Buffer.concat(chunks))
+}
+
+const cut = (text: string) => (text.length > MAX_CHARS ? `${text.slice(0, MAX_CHARS)}\n(đã cắt bớt)` : text)
+
+/** opencode-style web_fetch: one public http(s) URL as text (default) or raw HTML; no key needed. */
+export function webFetchTool(): ToolDef<{ url: string; format?: "text" | "html"; timeoutSeconds?: number }> {
   return {
     name: "web_fetch",
     description:
-      "Tải nội dung 1 URL về text (mặc định), markdown hoặc html thô. Dùng để đọc bài báo, công bố, tài liệu khi đã có link từ web_search/news. Không dùng để search (dùng web_search).",
+      "Tải nội dung một URL công khai về dạng text (mặc định) hoặc html thô. Dùng để đọc bài báo, công bố, tài liệu khi đã có link từ web_search hoặc tool tin tức. Không dùng để tìm kiếm (dùng web_search). Không đọc được PDF scan hay trang chỉ render bằng JavaScript.",
     input: z.object({
       url: z.string().min(1).describe("URL http(s) cần tải"),
-      format: z.enum(["text", "markdown", "html"]).optional().describe("Định dạng trả về (mặc định text)"),
-      timeoutSeconds: z.number().min(1).max(120).optional().describe("Timeout giây (mặc định 30, tối đa 120)"),
+      format: z.enum(["text", "html"]).optional().describe("Định dạng trả về (mặc định text)"),
+      timeoutSeconds: z.number().min(1).max(120).optional().describe("Timeout tính bằng giây (mặc định 30, tối đa 120)"),
     }),
     readOnly: true,
-    summarize: (input) => `web_fetch(${(input as { url: string }).url.slice(0, 50)})`,
-    async execute(input) {
+    timeoutMs: 125_000,
+    summarize: (input) => `web_fetch(${input.url.slice(0, 50)})`,
+    async execute(input, ctx) {
       const url = input.url.trim()
-      if (!/^https?:\/\//i.test(url)) throw new Error("URL phải bắt đầu bằng http:// hoặc https://")
-      const ctrl = new AbortController()
-      const timer = setTimeout(() => ctrl.abort(), Math.min(input.timeoutSeconds ?? 30, 120) * 1000)
+      let parsed: URL
       try {
-        const res = await fetch(url, {
-          signal: ctrl.signal,
+        parsed = new URL(url)
+      } catch {
+        throw new Error("URL không hợp lệ.")
+      }
+      if (!/^https?:$/.test(parsed.protocol)) throw new Error("URL phải bắt đầu bằng http:// hoặc https://")
+      if (isPrivateHost(parsed.hostname)) throw new Error("Không tải địa chỉ nội bộ (localhost, mạng LAN).")
+      const seconds = input.timeoutSeconds ?? 30
+      const signal = AbortSignal.any([ctx.signal, AbortSignal.timeout(seconds * 1000)])
+      try {
+        const res = await fetch(parsed, {
+          signal,
           headers: { "User-Agent": "OpenTrading/0.1 (+market-research)", Accept: "text/html,application/xhtml+xml,text/*;q=0.9,*/*;q=0.1" },
         })
         if (!res.ok) throw new Error(`HTTP ${res.status}: ${url}`)
-        const buf = await res.arrayBuffer()
-        if (buf.byteLength > MAX_BYTES) throw new Error(`Trang quá lớn (${Math.round(buf.byteLength / 1024)}KB > 2048KB).`)
-        const raw = new TextDecoder().decode(buf)
-        const format = input.format ?? "text"
-        if (format === "html") return raw.length > 60000 ? raw.slice(0, 60000) + "\n[… đã cắt bớt]" : raw
+        if (res.url && isPrivateHost(new URL(res.url).hostname)) throw new Error("Trang chuyển hướng tới địa chỉ nội bộ; không đọc.")
+        const raw = await readCapped(res)
+        if ((input.format ?? "text") === "html") return cut(raw)
         const text = stripHtml(raw)
-        if (!text.trim()) throw new Error("Trang không trích được text (có thể là JS-render hoặc PDF scan).")
-        return text.length > 60000 ? text.slice(0, 60000) + "\n[… đã cắt bớt]" : text
+        if (!text.trim()) throw new Error("Trang không trích được text (có thể render bằng JavaScript hoặc là PDF scan).")
+        return cut(text)
       } catch (error) {
-        if (error instanceof Error && error.name === "AbortError")
-          throw new Error(`web_fetch quá thời gian (${input.timeoutSeconds ?? 30}s): ${url}`)
-        throw error instanceof Error ? error : new Error(String(error))
-      } finally {
-        clearTimeout(timer)
+        if (error instanceof Error && error.name === "TimeoutError") throw new Error(`web_fetch quá thời gian (${seconds}s): ${url}`)
+        throw error
       }
     },
   }
 }
-
-export const WEB_FETCH_TIMEOUT_MS = DEFAULT_TIMEOUT_MS

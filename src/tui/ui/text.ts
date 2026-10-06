@@ -6,10 +6,14 @@
 
 export const width = (text: string) => Bun.stringWidth(text)
 
-/** Cut to `max` cells, ending with "…" when something was dropped. */
-export function truncate(text: string, max: number): string {
+/**
+ * Cut to `max` cells, ending with "…" when something was dropped. Whitespace runs collapse
+ * to one space, unless `keepSpaces` (column-aligned text such as tables and charts), where
+ * only tabs and line breaks are replaced.
+ */
+export function truncate(text: string, max: number, keepSpaces = false): string {
   if (max <= 0) return ""
-  const flat = text.replace(/\s+/g, " ")
+  const flat = keepSpaces ? text.replace(/\t/g, "  ").replace(/[\r\n]+/g, " ").trimEnd() : text.replace(/\s+/g, " ")
   if (width(flat) <= max) return flat
   let out = ""
   let used = 0

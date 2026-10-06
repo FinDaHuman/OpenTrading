@@ -1,6 +1,7 @@
 import path from "node:path"
 import { HookBus } from "./hooks"
 import { AskBroker } from "./ask"
+import { loadConfig } from "./config"
 import { McpManager } from "./mcp/manager"
 import { askUserTool } from "./tools/builtin/ask-user"
 import { PermissionGate } from "./permission"
@@ -46,8 +47,6 @@ export function createMemory(choice: MemoryChoice | undefined, home = dataDir())
  * Build the tool registry, hooks, memory and MCP manager. Called explicitly by the entry point
  * (never on import), so tests can build their own runtime against temporary directories. This
  * is the seam where a daemon would later live.
- *
- * Single surface (2026-10-06): preset-gating đã xóa — model luôn thấy toàn bộ tools.
  */
 export function initRuntime(opts: { cwd?: string; home?: string; skills: () => Skill[]; memory?: MemoryProvider }): Runtime {
   const home = opts.home ?? dataDir()
@@ -70,7 +69,7 @@ export function initRuntime(opts: { cwd?: string; home?: string; skills: () => S
   registry.register(chartCompareTool())
   registry.register(chartDepthTool())
   for (const tool of sessionHistoryTools()) registry.register(tool)
-  for (const tool of localWatchlistTools()) registry.register(tool)
+  for (const tool of localWatchlistTools(home)) registry.register(tool)
   registry.register(webFetchTool())
   registry.register(webSearchTool())
   registry.register(spawnSubagentTool(registry))
@@ -83,7 +82,8 @@ export function initRuntime(opts: { cwd?: string; home?: string; skills: () => S
   registry.register(
     doctorLocalTool({
       mcpStatus: () => mcp.status().map((s) => ({ name: s.name, state: s.state, tools: s.tools })),
-      modelInfo: () => "xem /model (chưa resolve ở đây để tránh đọc key)",
+      model: async () => (await loadConfig()).model,
+      home,
     }),
   )
   registry.register(toolSearchTool(registry, () => mcp.status().filter((s) => s.state === "connecting").map((s) => s.name)))

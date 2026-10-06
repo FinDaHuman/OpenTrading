@@ -1,7 +1,7 @@
 import { z } from "zod"
 import type { ToolRegistry } from "../registry"
 import { LOADED_PREFIX, describeTool, resolveToolName, scoreTools } from "../search"
-import type { ToolDef } from "../types"
+import { LOCAL_SOURCE, type ToolDef } from "../types"
 
 export const TOOL_SEARCH = "tool_search"
 const DEFAULT_RESULTS = 5
@@ -57,13 +57,19 @@ export function toolSearchTool(registry: ToolRegistry, pending: () => string[] =
 
       if (found.length === 0) {
         const servers = new Map<string, number>()
-        for (const d of candidates) servers.set(d.source ?? "?", (servers.get(d.source ?? "?") ?? 0) + 1)
+        const local: string[] = []
+        for (const d of candidates) {
+          if (d.source === LOCAL_SOURCE) local.push(d.name)
+          else servers.set(d.source ?? "?", (servers.get(d.source ?? "?") ?? 0) + 1)
+        }
         const list = [...servers].map(([s, n]) => `${s.replace(/^mcp:/, "")} (${n} tool)`).join(", ")
         const waiting = pending()
         return [
           `Không tìm thấy tool khớp "${q}".`,
           ...notes,
-          list ? `Các server có tool hoãn: ${list}. Thử từ khoá khác hoặc "mcp__<server>" để xem tool của một server.` : "Không có tool hoãn nào.",
+          list ? `Các server có tool hoãn: ${list}. Thử từ khoá khác hoặc "mcp__<server>" để xem tool của một server.` : "",
+          local.length > 0 ? `Tool có sẵn đang hoãn (nạp bằng "select:<tên>"): ${local.join(", ")}.` : "",
+          !list && local.length === 0 ? "Không có tool hoãn nào." : "",
           waiting.length > 0 ? `Server đang kết nối (thử lại sau): ${waiting.join(", ")}.` : "",
         ]
           .filter(Boolean)

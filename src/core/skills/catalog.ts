@@ -13,8 +13,7 @@ function entry(skill: Skill, withDescription: boolean) {
   if (!withDescription) return `- ${skill.name}`
   const text = skill.when_to_use ? `${skill.description} Dùng khi: ${skill.when_to_use}` : skill.description
   const oneLine = text.replace(/\s+/g, " ").trim()
-  const budget = skill.tool_budget ? ` (ngân sách ≤${skill.tool_budget} lần gọi tool)` : ""
-  return `- ${skill.name}: ${oneLine.length > MAX_ENTRY_CHARS - budget.length ? oneLine.slice(0, MAX_ENTRY_CHARS - budget.length - 1) + "…" : oneLine}${budget}`
+  return `- ${skill.name}: ${oneLine.length > MAX_ENTRY_CHARS ? oneLine.slice(0, MAX_ENTRY_CHARS - 1) + "…" : oneLine}`
 }
 
 /**

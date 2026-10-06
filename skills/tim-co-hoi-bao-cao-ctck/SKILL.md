@@ -1,59 +1,48 @@
 ---
 name: tim-co-hoi-bao-cao-ctck
-description: "Săn cơ hội theo báo cáo phân tích CTCK: bảng rating + giá mục tiêu + upside % đã kiểm chứng giá hiện tại. Luôn dùng skill này khi user hỏi CTCK khuyên mua gì, target mới cho mã nào, hay báo cáo của CTCK nói gì — ví dụ 'CTCK gần đây khuyên mua gì', 'có target mới cho MSN không' — ngay cả khi user không nói rõ muốn 'tìm báo cáo CTCK'."
+description: "Tổng hợp khuyến nghị của CTCK: rating, giá mục tiêu, upside đã đối chiếu giá hiện tại. Dùng khi hỏi CTCK khuyên mua gì hoặc target mới của một mã."
 activation: auto
 requires_tools: [mcp__opentrading__analyst_consensus]
-tool_budget: 8
 triggers:
   keywords: [ctck, khuyên mua, giá mục tiêu, target, báo cáo phân tích, khuyến nghị, rating]
-version: 1.2.0
+version: 1.3.0
 ---
 
-# Hunting Broker-Report Opportunities
+# Cơ hội từ báo cáo CTCK
 
 Khuyến nghị CTCK là INPUT, không phải chân lý — bắt buộc kiểm chứng upside bằng giá hiện tại và kèm disclaimer. Không bao giờ suy diễn khuyến nghị thành "nên mua", không bịa giá mục tiêu khi feed không có.
 
-## When to Use
+## Khi nào dùng
 
 - Dùng khi: hỏi rating/target/báo cáo CTCK theo feed chung hoặc theo mã cụ thể, cần bảng upside %.
 - Khi KHÔNG dùng (dùng skill khác thay thế): rumor/crowd → `phan-tich-sentiment` / `tim-kiem-tin-tuc`; tự định giá → `dinh-gia-chuyen-sau`; backtest → `kiem-chien-luoc-backtest`.
 
-## Workflow
+## Các bước
 
-Copy checklist và tick theo tiến độ:
-
-```
-Task Progress:
-- [ ] Step 1: feed chung (1 call duy nhất)
-- [ ] Step 2: mã cụ thể + tài liệu gốc + đọc PDF
-- [ ] Step 3: kiểm chứng upside 1-2 mã top
-- [ ] Step 4: bảng + disclaimer
-```
-
-**Step 1: Feed chung (1 call duy nhất).**
+**Bước 1: Feed chung (1 call duy nhất).**
 
 Chạy `analyst_consensus` (limit=30) — feed chung không symbol, parse rating + giá mục tiêu từ titles. Báo cáo vĩ mô thì thêm `analyst_consensus` (report_type=macro): lọc báo cáo vĩ mô CTCK (entry section/report); không có dated reports thì dùng số liệu gốc. Feed rỗng thật (cuối tuần) → empty hợp lệ, nới `days` 1 lần duy nhất rồi kết luận.
 
-**Step 2: Mã cụ thể + tài liệu gốc (tuần tự sau Step 1).**
+**Bước 2: Mã cụ thể + tài liệu gốc (tuần tự sau Bước 1).**
 
-Chạy `analyst_consensus` (symbol, limit=15) + `vs_documents` (symbol, chỉ lấy 1 mã đáng giá nhất) + `web_fetch` (format=pdf, URL báo cáo — đọc nội dung PDF stdlib-only, scan báo trung thực, cap 10 trang/20k ký tự). Hỏi mã cụ thể mà `analyst_consensus` (symbol) empty → đọc feed chung và lọc title chứa mã (title-scrape filter có thể sót), không retry đổi limit.
+Chạy `analyst_consensus` (symbol, limit=15) + `vs_documents` (symbol, chỉ lấy 1 mã đáng giá nhất) + `web_fetch` (URL trang báo cáo dạng HTML; web_fetch không đọc được file PDF — khi chỉ có PDF thì đưa link cho người dùng và nói rõ chưa đọc nội dung). Hỏi mã cụ thể mà `analyst_consensus` (symbol) empty → đọc feed chung và lọc title chứa mã (title-scrape filter có thể sót), không retry đổi limit.
 
-**Step 3: Kiểm chứng upside (tuần tự, 1–2 mã nổi bật nhất).**
+**Bước 3: Kiểm chứng upside (tuần tự, 1–2 mã nổi bật nhất).**
 
 Chạy `stock_overview` (1–2 call) so giá hiện tại vs mục tiêu → upside %. Chỉ kiểm chứng top, không kiểm chứng tất cả.
 
-## Template
+## Cấu trúc câu trả lời
 
-ALWAYS use this exact verdict structure:
+Trình bày kết luận đúng cấu trúc sau:
 
 - Bảng {mã · CTCK · rating · giá mục tiêu · ngày · upside % so giá hiện tại}, lọc trong `days` (default 7).
 - Top 3 cơ hội (upside lớn + rating MUA + còn hiệu lực).
-- Cột **"đã kiểm chứng"** bắt buộc = Step 3 chạy cho 1–2 mã nổi bật nhất (có `stock_overview`); mã chưa kiểm chứng ghi rõ "chưa kiểm chứng giá hiện tại".
+- Cột **"đã kiểm chứng"** bắt buộc = Bước 3 chạy cho 1–2 mã nổi bật nhất (có `stock_overview`); mã chưa kiểm chứng ghi rõ "chưa kiểm chứng giá hiện tại".
 - Disclaimer bắt buộc: khuyến nghị CTCK là INPUT, không phải chân lý — không suy diễn thành "nên mua".
 - Provenance: nguồn ngày từ URL/title; nếu `source/date null` (đặc trưng parse titles) → suy ngày từ URL/title + ghi rõ nguồn ngày "không chắc chắn". Đủ bảng ≥5 dòng + kiểm chứng 2 mã top thì dừng, không đào thêm mã ngoài top.
 
-## Examples
+## Ví dụ
 
-**Example 1 (live 02-10-2026, không bịa số mới):**
-Input: CTCK khuyên mua gì tuần này
-Output: Feed chung **7 reports** — MBB MUA 28,200 · **MSN MUA 89,200 (30/09)** · VPB KHẢ QUAN 30,500 · MSB GIẢM TỶ TRỌNG 13,200 · FRT THEO DÕI 157,000 · filter symbol=VCB/FPT từng empty đúng hiện tượng → bảng ≥5 dòng có upside %, kiểm chứng 2 mã top, ≤8 calls. Thiếu cột "đã kiểm chứng" hoặc thiếu disclaimer thì chưa đạt; bịa target khi feed rỗng thì chưa đạt.
+**Ví dụ 1:**
+Hỏi: CTCK khuyên mua gì tuần này
+Trả lời: Feed chung **7 reports** — MBB MUA <số> · **MSN MUA <số> (<số>)** · VPB KHẢ QUAN <số> · MSB GIẢM TỶ TRỌNG <số> · FRT THEO DÕI <số> · filter symbol=VCB/FPT từng empty đúng hiện tượng → bảng ≥5 dòng có upside %, kiểm chứng 2 mã top, ≤8 calls. Thiếu cột "đã kiểm chứng" hoặc thiếu disclaimer thì chưa đạt; bịa target khi feed rỗng thì chưa đạt.

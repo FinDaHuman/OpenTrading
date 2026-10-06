@@ -100,7 +100,7 @@ function ToolRow(props: { line: ToolLine; first: boolean; width: number }) {
         <Match when={props.line.output}>
           <For each={out().lines}>
             {(row, i) => (
-              <ResultLine prefix={prefix(i() === 0)} text={truncate(row, textWidth())} fg={props.line.status === "error" ? color.giam : color.tx3} />
+              <ResultLine prefix={prefix(i() === 0)} text={truncate(row, textWidth(), true)} fg={props.line.status === "error" ? color.giam : color.tx3} />
             )}
           </For>
           <Show when={out().hidden > 0}>

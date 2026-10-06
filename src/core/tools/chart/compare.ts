@@ -1,70 +1,66 @@
 import { z } from "zod"
-import { FIN_COLORS } from "./render"
-import type { ToolDef } from "../types"
-
-type AnsiColor = "red" | "green" | "yellow" | "blue" | "magenta" | "cyan" | "white" | "gray"
+import { LOCAL_SOURCE, type ToolDef } from "../types"
 
 export type ChartCompareInput = {
   title?: string
   series: { label: string; values: number[] }[]
   width?: number
-  height?: number
-  color?: "auto" | "always" | "never"
 }
 
+const BLOCKS = "▁▂▃▄▅▆▇█"
+
+/** Evenly spaced samples, first and last kept, so long series fit the width. */
+function sample(values: number[], width: number) {
+  if (values.length <= width) return values
+  return Array.from({ length: width }, (_, i) => values[Math.round((i * (values.length - 1)) / (width - 1))]!)
+}
+
+const pct = (v: number) => `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`
+
 /**
- * So sánh nhiều chuỗi giá trên cùng 1 trục (VCB vs HPG vs VNINDEX...).
- * Data do MCP tools cung cấp — tool này chỉ render overlay + legend.
+ * Several series side by side (VCB vs HPG vs VNINDEX), each as % change from its first
+ * point on one shared scale, one row per series. Plain text: lines overlaid on one axis
+ * cannot be told apart without colour, and colour breaks the TUI (see render.ts).
  */
 export function chartCompareTool(): ToolDef<ChartCompareInput> {
   return {
     name: "chart_compare",
     description:
-      "Vẽ nhiều đường giá chồng nhau để so sánh (tối đa 5 chuỗi, mỗi chuỗi ≥2 điểm, độ dài có thể khác nhau — chuỗi ngắn được căn phải). Dùng khi so VCB vs HPG, mã vs index, tài sản vs tài sản (compare_assets/compare_equities). Không dùng cho 1 chuỗi duy nhất (dùng chart_render kind=line).",
+      "So sánh 2–5 chuỗi giá (mã với mã, mã với chỉ số, tài sản với tài sản) theo % thay đổi từ điểm đầu, cùng một thang, mỗi chuỗi một dòng. Chuỗi có thể dài ngắn khác nhau (căn theo điểm cuối). Dùng sau khi đã có dữ liệu giá; một chuỗi thì dùng chart_render kind=line.",
     input: z.object({
       title: z.string().optional().describe("Tiêu đề, ví dụ VCB vs HPG"),
       series: z
-        .array(z.object({ label: z.string(), values: z.array(z.number()).min(2) }))
+        .array(z.object({ label: z.string().min(1).max(20), values: z.array(z.number()).min(2).max(2000) }))
         .min(2)
         .max(5)
-        .describe("2-5 chuỗi cần so"),
-      width: z.number().int().min(20).max(200).optional(),
-      height: z.number().int().min(5).max(40).optional(),
-      color: z.enum(["auto", "always", "never"]).optional(),
+        .describe("2–5 chuỗi cần so"),
+      width: z.number().int().min(10).max(80).optional().describe("Số điểm mỗi dòng (mặc định 40)"),
     }),
     readOnly: true,
-    summarize: (input) =>
-      `chart_compare(${(input as ChartCompareInput).series.map((s) => s.label).join(" vs ")})`,
+    deferrable: true,
+    source: LOCAL_SOURCE,
+    summarize: (input) => `chart_compare(${input.series.map((s) => s.label).join(" vs ")})`,
     async execute(input) {
-      if (input.series.length < 2) throw new Error("chart_compare cần 2-5 chuỗi; 1 chuỗi dùng chart_render kind=line.")
-      if (input.series.length > 5) throw new Error("chart_compare tối đa 5 chuỗi.")
-      const lib = await import("@crafter/charts")
-      const useColor = (input.color ?? "auto") !== "never"
-      const width = Math.min(Math.max(input.width ?? 64, 20), 200)
-      const height = Math.min(Math.max(input.height ?? 10, 5), 40)
-      const palette = FIN_COLORS.compare as readonly string[]
-      const maxLen = Math.max(...input.series.map((s) => s.values.length))
-      // Chuẩn hóa % thay đổi từ điểm đầu để so được các thang giá khác nhau.
-      const rows = Array.from({ length: maxLen }, (_, t) => {
-        const row: Record<string, number> = { t }
-        for (const s of input.series) {
-          const pad = maxLen - s.values.length
-          const v = s.values[t - pad]
-          const base = s.values[0]!
-          if (v !== undefined && base !== 0) row[s.label] = ((v - base) / Math.abs(base)) * 100
-        }
-        return row
+      const width = input.width ?? 40
+      const bad = input.series.find((s) => s.values[0] === 0)
+      if (bad) throw new Error(`Chuỗi ${bad.label} bắt đầu bằng 0, không tính được % thay đổi.`)
+      const changes = input.series.map((s) => s.values.map((v) => ((v - s.values[0]!) / Math.abs(s.values[0]!)) * 100))
+      const longest = Math.max(...changes.map((c) => c.length))
+      const lo = Math.min(...changes.flat())
+      const hi = Math.max(...changes.flat())
+      const span = hi - lo || 1
+      const cols = Math.min(width, longest)
+      const labelWidth = Math.max(...input.series.map((s) => s.label.length))
+      const rows = input.series.map((s, i) => {
+        const points = sample(changes[i]!, Math.max(2, Math.round((cols * changes[i]!.length) / longest)))
+        const spark = points.map((v) => BLOCKS[Math.min(BLOCKS.length - 1, Math.floor(((v - lo) / span) * BLOCKS.length))]).join("")
+        const last = changes[i]![changes[i]!.length - 1]!
+        return `${s.label.padEnd(labelWidth)} ${spark.padStart(cols)} ${pct(last)}`
       })
-      let builder = lib.chart({ width, height }).data(rows, { xKey: "t" })
-      input.series.forEach((s, i) => {
-        builder = builder.line({
-          key: s.label,
-          label: s.label,
-          ...(useColor ? { color: palette[i % palette.length] as AnsiColor } : {}),
-        })
-      })
-      const chart = useColor ? lib.renderToAnsi(builder.yAxis()) : lib.renderToString(builder.yAxis())
-      return `${input.title ? input.title + " · " : ""}so sánh % thay đổi từ điểm đầu (${input.series.length} chuỗi):\n${chart}`
+      return [
+        `${input.title ? `${input.title} · ` : ""}% thay đổi từ điểm đầu, cùng thang ${pct(lo)} … ${pct(hi)}:`,
+        ...rows,
+      ].join("\n")
     },
   }
 }
