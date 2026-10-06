@@ -156,3 +156,20 @@ test("MCP server instructions go to system, framed below the invariants, within 
   const long = assemble(base({ tier: "C", mcpInstructions: [{ server: "ot", text: "x ".repeat(5_000) }] }))
   expect(long.report.find((r) => r.id === "huong_dan_mcp")?.truncated).toBe(true)
 })
+
+test("tool guidance lives in one place and the format example carries no real-looking numbers", () => {
+  const a = assemble(base({ tools: ["current_time", "load_skill", "ask_user", "tool_search"], deferredTools: [{ server: "s", tools: ["a", "b"] }] }))
+  const count = (needle: string) => a.system.split(needle).length - 1
+  // tool_search usage is explained by <tool_hoan> (and the tool's own description), not by tools.md.
+  expect(count("select:")).toBe(1)
+  expect(count("ask_user")).toBe(0)
+  // Formatting rules are in <citations>, which is never cut (style is dropped on tier C).
+  const tierC = assemble(base({ tier: "C" })).system
+  expect(tierC).toContain("dd/mm/yyyy")
+  expect(tierC).toContain("đơn vị")
+  const example = a.system.slice(a.system.indexOf("<vi_du>"), a.system.indexOf("</vi_du>"))
+  expect(example.length).toBeGreaterThan(0)
+  expect(example).not.toMatch(/\d/)
+  // Budget guard: the static prompt must not creep back up (≈1.0k tokens on 06/10/2026).
+  expect(Math.ceil(a.system.length / 4)).toBeLessThan(1_150)
+})

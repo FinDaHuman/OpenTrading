@@ -31,6 +31,7 @@ let script: { tool: string; args: object }[] | undefined
 /** Mimic gemini-2.5-flash-lite: answer with nothing after a tool result. */
 let emptyAfterTool: "once" | "always" | undefined
 const NUDGE = "Hãy trả lời câu hỏi của người dùng dựa trên kết quả tool"
+const TOOL_NUDGE_START = "Nếu còn cần dữ liệu, gọi cùng lúc"
 
 const sse = (chunks: object[]) =>
   new Response(chunks.map((c) => `data: ${JSON.stringify(c)}\n\n`).join("") + "data: [DONE]\n\n", {
@@ -53,7 +54,8 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   bodies.push(body)
   // Branch on the request, not on call counts: tool results present → answer in text.
   const hasToolResult = body.messages.some((m) => m.role === "tool")
-  const lastUser = body.messages.map((m) => m.role).lastIndexOf("user")
+  // The turn starts at the last real user message; the per-step tool nudge does not count.
+  const lastUser = body.messages.findLastIndex((m) => m.role === "user" && !JSON.stringify(m.content).includes(TOOL_NUDGE_START))
   const resultsThisTurn = body.messages.slice(lastUser + 1).filter((m) => m.role === "tool").length
   const scripted = body.tool_choice !== "none" ? script?.[resultsThisTurn] : undefined
   if (scripted) {
@@ -183,6 +185,21 @@ test("hitting the step limit forces a final answer without tools", async () => {
   expect(bodies[2]!.tools).toBeDefined()
   expect(events.some((e) => e.type === "notice" && e.text.includes("3 bước"))).toBe(true)
   expect(events.some((e) => e.type === "text-delta")).toBe(true)
+})
+
+test("each round of tool results gets one unstored nudge; the last step gets only the summary prompt", async () => {
+  plan = { tool: "current_time", args: {}, always: true }
+  const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: registry(), maxSteps: 4 }))
+  const nudges = (b: Body) => b.messages.filter((m) => m.role === "user" && JSON.stringify(m.content).includes(TOOL_NUDGE_START)).length
+  expect(bodies).toHaveLength(4)
+  expect(nudges(bodies[0]!)).toBe(0) // no tool result yet
+  expect(nudges(bodies[1]!)).toBe(1)
+  expect(nudges(bodies[2]!)).toBe(1) // not carried over from the previous step
+  expect(bodies[1]!.messages.at(-1)!.role).toBe("user")
+  expect(bodies[1]!.tools).toBeDefined()
+  expect(nudges(bodies[3]!)).toBe(0)
+  expect(bodies[3]!.tool_choice).toBe("none")
+  expect(JSON.stringify(done(events).messages)).not.toContain(TOOL_NUDGE_START)
 })
 
 test("aborting mid-tool leaves no dangling tool call in history", async () => {

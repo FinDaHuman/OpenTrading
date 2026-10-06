@@ -30,6 +30,14 @@ const SUMMARY_PROMPT =
  */
 const NUDGE_PROMPT = "Hãy trả lời câu hỏi của người dùng dựa trên kết quả tool ở trên. Không gọi thêm tool."
 
+/**
+ * Sent after each round of tool results (never stored): weak models drift to one call per
+ * step and lose the formatting rules once tool output piles up. It sits at the very end of
+ * the request, so the cached prefix is unchanged.
+ */
+export const TOOL_NUDGE =
+  "Nếu còn cần dữ liệu, gọi cùng lúc mọi tool không phụ thuộc nhau. Khi trả lời: ngày tuyệt đối, mỗi cột một đơn vị, số dòng khớp lời nói, mỗi số có nguồn."
+
 /** Reminders ride on the user message inside this tag; UIs hide it, history keeps it. */
 export const REMINDER_TAG = "nhac_nho"
 
@@ -492,7 +500,10 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
     prepareStep: ({ stepNumber, messages }) => {
       if (!tools) return undefined
       active = activeFor(built, messages)
-      if (stepNumber < maxSteps - 1) return active ? { activeTools: active } : undefined
+      if (stepNumber < maxSteps - 1) {
+        if (messages.at(-1)?.role !== "tool") return active ? { activeTools: active } : undefined
+        return { ...(active ? { activeTools: active } : {}), messages: [...messages, { role: "user", content: TOOL_NUDGE }] }
+      }
       summarized = true
       return { toolChoice: "none", activeTools: active, messages: [...messages, { role: "user", content: SUMMARY_PROMPT }] }
     },
