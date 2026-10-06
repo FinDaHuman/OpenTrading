@@ -184,7 +184,7 @@ function capInstructions(text: string | undefined) {
 const LOGIN_TIMEOUT_MS = 5 * 60_000
 const RETRYABLE_STATUS = new Set([408, 429, 500, 502, 503, 504])
 
-const MAX_ERROR = 600
+const MAX_ERROR = 1000
 
 /**
  * One-line, bounded error text. Proxies and PaaS hosts (Render, Cloudflare) answer a cold
