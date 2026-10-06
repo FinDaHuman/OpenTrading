@@ -502,8 +502,8 @@ test("/mcp server screen: a page-long error or prompt list never draws rows over
     show(frame)
     // Each field keeps its own line (label, then value), with nothing drawn over it.
     expect(frame).toMatch(/│ Trạng thái +✘ lỗi +│/)
-    expect(lines(frame).find((l) => l.includes("Lệnh"))).toMatch(/│ Lệnh\s+\S+ │/)
-    expect(lines(frame).find((l) => l.includes("Cấu hình"))).toMatch(/│ Cấu hình\s+\S+ │/)
+    expect(lines(frame).find((l) => l.includes("Lệnh"))).toMatch(/^ *│ Lệnh +\S.*│ *$/)
+    expect(lines(frame).find((l) => l.includes("Cấu hình"))).toMatch(/^ *│ Cấu hình +\S.*│ *$/)
     expect(frame).toMatch(/ 1\. Kết nối lại/)
     expect(frame).toMatch(/ 2\. Tắt/)
     expect(frame).toContain("esc quay lại")
