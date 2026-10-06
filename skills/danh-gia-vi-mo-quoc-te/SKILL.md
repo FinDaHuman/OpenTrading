@@ -1,6 +1,6 @@
 ---
 name: danh-gia-vi-mo-quoc-te
-description: Đọc chu kỳ kinh tế Mỹ và chế độ rủi ro toàn cầu (soft/hard landing, đường cong lợi suất, RISK-ON/OFF, so VN-vs-global) trong tối đa 10 calls. Luôn dùng skill này khi user hỏi bối cảnh vĩ mô Mỹ/global, việc làm, GDP các nước, risk regime — ví dụ "kinh tế Mỹ soft landing không", "yield curve đảo chưa" — ngay cả khi user không nói rõ muốn "đánh giá vĩ mô".
+description: Đọc chu kỳ kinh tế Mỹ và chế độ rủi ro toàn cầu (soft/hard landing, đường cong lợi suất, RISK-ON/OFF, so VN-vs-global). Luôn dùng skill này khi user hỏi bối cảnh vĩ mô Mỹ/global, việc làm, GDP các nước, risk regime — ví dụ "kinh tế Mỹ soft landing không", "yield curve đảo chưa" — ngay cả khi user không nói rõ muốn "đánh giá vĩ mô".
 activation: auto
 requires_tools: [mcp__opentrading__fred_series]
 tool_budget: 10

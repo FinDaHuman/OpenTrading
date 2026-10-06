@@ -1,12 +1,12 @@
 ---
 name: phan-tich-sentiment
-description: Đo dư luận crowd về 1 mã trên Fireant (điểm sentiment + quotes + cảnh báo FOMO), trong tối đa 6 calls. Luôn dùng skill này khi user hỏi phố/crowd nói gì về một mã, sentiment hay FOMO — ví dụ "Phố nói gì về FPT", "crowd có FOMO HPG không" — ngay cả khi user không nói rõ muốn "đo sentiment".
+description: Đo dư luận crowd về 1 mã trên Fireant (điểm sentiment + quotes + cảnh báo FOMO). Luôn dùng skill này khi user hỏi phố/crowd nói gì về một mã, sentiment hay FOMO — ví dụ "Phố nói gì về FPT", "crowd có FOMO HPG không" — ngay cả khi user không nói rõ muốn "đo sentiment".
 activation: auto
 requires_tools: [mcp__opentrading__sentiment_score]
 tool_budget: 6
 triggers:
   keywords: [sentiment, dư luận, phố nói gì, crowd, fomo, tâm lý nhà đầu tư, comment]
-version: 1.1.0
+version: 1.1.1
 ---
 
 # Measuring Single-Stock Crowd Sentiment
@@ -24,14 +24,14 @@ Copy checklist và tick theo tiến độ:
 
 ```
 Task Progress:
-- [ ] Step 1: posts + điểm (song song)
+- [ ] Step 1: top 20 posts + điểm + comments post nóng nhất (song song)
 - [ ] Step 2: đối chiếu công bố (chỉ khi mâu thuẫn)
-- [ ] Step 3: verdict (điểm + quotes + FOMO + cảnh báo)
+- [ ] Step 3: verdict (điểm + quotes + comments + FOMO + cảnh báo)
 ```
 
-**Step 1: Posts + điểm (song song).**
+**Step 1: Top 20 posts + điểm + comments (song song).**
 
-Chạy `news_symbol` (symbol, limit=20) + `sentiment_score` (symbol, limit=20) — cùng nguồn Fireant. Đủ điểm + ≥3 quotes + nhãn nguồn thì dừng.
+Chạy `sentiment_score` (symbol, limit=20) — điểm + posts từ Fireant. Chạy `news_symbol`/Fireant posts (limit=20) đọc title/summary top 20. Chọn post nóng nhất (interact/comment cao nhất) → chạy `fireant_thread` (post_id) lấy comments (replies) thực tế — đọc mood comments, không chỉ đọc điểm. Đủ điểm + ≥3 quotes + comments ≥3 + nhãn nguồn thì dừng.
 
 **Step 2: Đối chiếu công bố (chỉ khi mâu thuẫn, tuần tự).**
 

@@ -1,12 +1,12 @@
 ---
 name: danh-gia-tinh-hinh-xung-dot
-description: Đánh giá 1 cuộc xung đột vũ trang (cường độ, giá dầu/vàng đã phản ánh chưa, kênh truyền dẫn, xác suất leo thang) trong tối đa 9 calls. Luôn dùng skill này khi user hỏi xung đột/chiến sự cụ thể và ảnh hưởng của nó tới thị trường — ví dụ "Trung Đông leo thang, dầu lên không", "Biển Đông căng thẳng ảnh hưởng gì" — ngay cả khi user không nói rõ muốn "đánh giá xung đột".
+description: Đánh giá 1 cuộc xung đột vũ trang (cường độ, giá dầu/vàng đã phản ánh chưa, kênh truyền dẫn, xác suất leo thang). Luôn dùng skill này khi user hỏi xung đột/chiến sự cụ thể và ảnh hưởng của nó tới thị trường — ví dụ "Trung Đông leo thang, dầu lên không", "Biển Đông căng thẳng ảnh hưởng gì" — ngay cả khi user không nói rõ muốn "đánh giá xung đột".
 activation: auto
 requires_tools: [mcp__opentrading__event_stats]
 tool_budget: 9
 triggers:
   keywords: [xung đột, chiến tranh, biển đông, trung đông, leo thang, dầu hay vàng lên, chiến sự]
-version: 1.1.0
+version: 1.1.1
 ---
 
 # Assessing Armed-Conflict Market Impact
@@ -29,6 +29,7 @@ Copy checklist và tick theo tiến độ:
 Task Progress:
 - [ ] Step 1: đo cường độ (GDELT, song song)
 - [ ] Step 2: kiểm tra giá đã phản ánh (dầu/vàng, song song)
+- [ ] Step 2b: tần suất máy bay quân sự gần vùng xung đột (geo_intel military=true)
 - [ ] Step 3: odds leo thang + xác minh (chỉ khi cần)
 - [ ] Step 4: verdict 5 mục
 ```
@@ -40,6 +41,10 @@ Chạy `geo_intel` (topic xung đột) + `event_stats` (query) cùng lúc. Từ 
 **Step 2: Kiểm tra giá đã phản ánh (song song, tuần tự sau Step 1).**
 
 Chạy `yf_commodities` (dầu + vàng) + `assets_rotation`. Thiếu phiên mới thì dùng phiên gần nhất có + ghi rõ date, không bịa giá hiện tại. Đủ counts Step 1 + giá dầu/vàng Step 2 là đủ verdict cơ bản.
+
+**Step 2b: Tần suất máy bay quân sự (tham chiếu oracle 8010, 1 call).**
+
+Chạy `geo_intel` với `military=true` — trả máy bay quân sự live từ adsb.lol (count, by_country, by_type), khoảng cách tới vùng xung đột gần nhất (km) và signal-loss diff (máy bay biến mất gần zone = nghi tắt transponder, tín hiệu OSINT). Đọc: count cao + nhiều máy tankers/recon gần zone → tăng cường hoạt động; "Unknown" operator nhiều → mất dấu vết chính thức. Tool chết (adsb.lol 429/geo-block) thì ghi trung thực, không bịa số máy bay.
 
 **Step 3: Odds leo thang + xác minh (chỉ khi cần).**
 

@@ -1,12 +1,12 @@
 ---
 name: co-ban-chuyen-sau
-description: Đọc BCTC và đánh giá chất lượng cơ bản của 1 mã (M-Score thao túng, F-score, tăng trưởng, sở hữu, cổ tức) trong tối đa 9 calls. Luôn dùng skill này khi user hỏi đọc BCTC, chất lượng lợi nhuận, M-Score, cổ đông lớn, insider hay cổ tức của một mã — ví dụ "BCTC FPT có gì lạ", "VCB có thao túng không", "cổ đông lớn HPG" — ngay cả khi user không nói rõ muốn "phân tích cơ bản".
+description: Đọc BCTC và đánh giá chất lượng cơ bản của 1 mã (M-Score thao túng, F-score, tăng trưởng, sở hữu, cổ tức). Luôn dùng skill này khi user hỏi đọc BCTC, chất lượng lợi nhuận, M-Score, cổ đông lớn, insider hay cổ tức của một mã — ví dụ "BCTC FPT có gì lạ", "VCB có thao túng không", "cổ đông lớn HPG" — ngay cả khi user không nói rõ muốn "phân tích cơ bản".
 activation: auto
 requires_tools: [mcp__opentrading__financial_detail]
 tool_budget: 9
 triggers:
   keywords: [bctc, báo cáo tài chính, cơ bản, lợi nhuận gộp, nợ phải trả, vốn chủ, m-score, thao túng, cổ đông lớn, cổ tức, kế hoạch kinh doanh]
-version: 1.1.0
+version: 1.1.1
 ---
 
 # Analyzing Single-Stock Fundamentals
@@ -65,6 +65,11 @@ ALWAYS use this exact verdict structure, mỗi mục ghi số + trend + provenan
 5. Cấu trúc sở hữu + thay đổi insider (`provenance: holders` / `insider_trading`).
 6. Chính sách cổ tức (`provenance: dividends_splits`).
 7. Kết luận 1 câu: CƠ BẢN TỐT/TRUNG BÌNH/YẾU + 3 rủi ro lớn nhất.
+
+**Giải thích con số forensic (bắt buộc khi có leg 3):** không chỉ liệt kê số — giải thích nghĩa từng biến và vì sao dẫn tới kết luận:
+- M-Score từng biến: DSRI (chất lượng doanh thu — >1.03 nghi kê khớp doanh thu), GMI (biên gộp xấu đi), AQI (chất lượng tài sản), SGI (tăng trưởng), SGAI (chi phí bán hàng), LVGI (đòn bẩy), TATA (accruals). M < −1.78 = ít dấu thao túng; M > −1.78 = nghi ngờ.
+- F-score từng điểm mất/giữ (ROA, CF>ROA, dROA, leverage, margin, turnover) — điểm mất vì sao (kỳ nào, dòng nào).
+- Kết luận "sạch/đỏ" bắt buộc dẫn từng con số làm căn cứ, không kết luận chay.
 
 ## Examples
 

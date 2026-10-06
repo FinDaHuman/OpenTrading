@@ -1,12 +1,12 @@
 ---
 name: danh-gia-vi-mo-viet-nam
-description: Đọc vĩ mô Việt Nam (GDP, CPI, XNK, tỷ giá USDVND, lãi suất SBV, câu chuyện dẫn dắt thị trường + lịch sự kiện) trong tối đa 12 calls. Luôn dùng skill này khi user hỏi số liệu, bối cảnh hoặc lịch công bố vĩ mô VN — ví dụ "GDP quý này bao nhiêu", "lãi suất SBV bao nhiêu" — ngay cả khi user không nói rõ muốn "đánh giá vĩ mô".
+description: Đọc vĩ mô Việt Nam (GDP, CPI, XNK, tỷ giá USDVND, lãi suất SBV, câu chuyện dẫn dắt thị trường + lịch sự kiện). Luôn dùng skill này khi user hỏi số liệu, bối cảnh hoặc lịch công bố vĩ mô VN — ví dụ "GDP quý này bao nhiêu", "lãi suất SBV bao nhiêu" — ngay cả khi user không nói rõ muốn "đánh giá vĩ mô".
 activation: auto
 requires_tools: [mcp__opentrading__vs_indicator_data]
 tool_budget: 12
 triggers:
   keywords: [vĩ mô, GDP, CPI, lạm phát, xuất khẩu, nhập khẩu, lãi suất điều hành, sbv, xnk, cán cân, câu chuyện thị trường, dẫn dắt]
-version: 1.2.0
+version: 1.2.1
 ---
 
 # Reading Vietnam Macro

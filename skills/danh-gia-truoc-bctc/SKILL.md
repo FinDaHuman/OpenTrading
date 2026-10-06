@@ -6,7 +6,7 @@ requires_tools: [mcp__opentrading__company_events]
 tool_budget: 10
 triggers:
   keywords: [trước bctc, sắp ra báo cáo, pre earnings, công bố lợi nhuận, setup bctc]
-version: 1.1.0
+version: 1.1.1
 ---
 
 # Grading Pre-Earnings Setup
@@ -28,15 +28,15 @@ Copy checklist và tick theo tiến độ:
 
 ```
 Task Progress:
-- [ ] Step 1: chốt ngày BCTC (dated hay rumor)
+- [ ] Step 1: kiểm tra ngày công bố (thường không công khai — chỉ đối chiếu, không chốt)
 - [ ] Step 2: reuse trend + thao túng từ co-ban-chuyen-sau
 - [ ] Step 3: kỳ vọng + positioning (gọi trực tiếp)
 - [ ] Step 4: reuse đệm định giá + grade A/B/C
 ```
 
-**Step 1: Chốt ngày BCTC (bắt buộc, gọi trực tiếp đầu tiên).**
+**Step 1: Kiểm tra ngày công bố (chỉ đối chiếu, KHÔNG chốt dated).**
 
-Chạy `company_events` + `event_calendar_vn`. Chưa rõ ngày thì các leg còn lại ghi `unknown ngày` và grade tối đa B.
+Ngày công bố BCTC tại VN thường KHÔNG công khai chính xác (công ty chỉ báo trước tháng/quý; `event_calendar_vn` không có earnings-date type). Chạy `company_events` + `news_symbol` chỉ để đối chiếu tin lịch công bố nếu user hỏi; nếu không thấy ngày rõ ràng → coi như `unknown ngày`, các leg ghi accordingly và grade tối đa B (đây là mặc định, không cần cố chốt ngày).
 
 **Step 2: Reuse trend + thao túng (không gọi tool gốc).**
 
@@ -44,11 +44,11 @@ LOAD `co-ban-chuyen-sau` aspect=baokao (trend) và aspect=chataluong (M-Score/Pi
 
 **Step 3: Kỳ vọng + positioning (gọi trực tiếp).**
 
-Chạy `planned_targets` + `analyst_consensus` + `news_symbol` + `sentiment_score` (anchor = kế hoạch DN vì VN không có consensus EPS; sentiment là heuristic, không tính là leg xanh) và `insider_trading` + `money_flow` + `block_trades`.
+Chạy `planned_targets` + `analyst_consensus` + `news_symbol` + `sentiment_score` (anchor = kế hoạch DN vì VN không có consensus EPS; sentiment là heuristic, không tính là leg xanh) và `insider_trading` + `money_flow` + `block_trades`. `planned_targets` trả số THẬT từ Vietstock CTKH (chain verified live) nhưng session-gated: Render/không session → `unavailable` — ghi trung thực "thiếu neo kế hoạch", không bịa số kế hoạch.
 
 **Step 4: Reuse đệm định giá + chấm grade.**
 
-LOAD `dinh-gia-chuyen-sau` + chạy `scenario_simulate` (−5%) để lấy size gợi ý. Không gọi trực tiếp `valuation_run` ở đây. Đủ 6 leg evidence (kể cả partial) thì dừng — không gọi thêm vòng tin/dòng tiền thứ hai, không thêm leg thứ 7.
+LOAD `dinh-gia-chuyen-sau` + chạy `scenario_simulate` (−5%) để lấy size gợi ý. `scenario_simulate` là PHÉP TÍNH TUYẾN TÍNH chính xác trên giá close gần nhất (shock × giá, P/L/1000cp) — dùng để đệm cỡ vị thế, KHÔNG phải dự báo giá. Không gọi trực tiếp `valuation_run` ở đây. Đủ 6 leg evidence (kể cả partial) thì dừng — không gọi thêm vòng tin/dòng tiền thứ hai, không thêm leg thứ 7.
 
 ## Template
 

@@ -1,12 +1,12 @@
 ---
 name: ky-thuat-chuyen-sau
-description: Đọc kỹ thuật thuần 1 mã đa khung 1D/1W/1M (RSI/MACD/BB/Ichimoku/ADX, Elliott/Wyckoff, hỗ trợ-kháng cự, higher-high hay lower-low) trong tối đa 8 calls. Luôn dùng skill này khi user hỏi kỹ thuật, breakout, đọc băng, sóng Elliott hay HH/LL của một mã — ví dụ "VCB kỹ thuật sao", "FPT có breakout không" — ngay cả khi user không nói rõ muốn "phân tích kỹ thuật".
+description: Đọc kỹ thuật thuần 1 mã đa khung 1D/1W/1M (RSI/MACD/BB/Ichimoku/ADX, Elliott/Wyckoff, hỗ trợ-kháng cự, higher-high hay lower-low). Luôn dùng skill này khi user hỏi kỹ thuật, breakout, đọc băng, sóng Elliott hay HH/LL của một mã — ví dụ "VCB kỹ thuật sao", "FPT có breakout không" — ngay cả khi user không nói rõ muốn "phân tích kỹ thuật".
 activation: auto
 requires_tools: [mcp__opentrading__signals_technical]
 tool_budget: 8
 triggers:
   keywords: [kỹ thuật, rsi, macd, bb, bollinger, ichimoku, elliott, wyckoff, hỗ trợ, kháng cự, breakout, pattern, orderbook, băng giá, chỉ báo, adx, ema, sma, higher high, lower low, đa khung]
-version: 1.2.0
+version: 1.2.1
 ---
 
 # Reading Single-Stock Technicals

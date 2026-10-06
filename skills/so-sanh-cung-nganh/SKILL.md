@@ -1,12 +1,12 @@
 ---
 name: so-sanh-cung-nganh
-description: "Xếp hạng 2-6 mã cùng ngành và chọn leader (chất lượng × momentum) trong tối đa 8 calls nhà. Luôn dùng skill này khi user hỏi so sánh mã cùng ngành, mã nào mạnh nhất/đáng mua — ví dụ 'VCB vs BID vs CTG', 'steel mạnh nhất là ai' — ngay cả khi user không nói rõ muốn 'so sánh cùng ngành'."
+description: "Xếp hạng 2-6 mã cùng ngành và chọn leader (chất lượng × momentum). Luôn dùng skill này khi user hỏi so sánh mã cùng ngành, mã nào mạnh nhất/đáng mua — ví dụ 'VCB vs BID vs CTG', 'steel mạnh nhất là ai' — ngay cả khi user không nói rõ muốn 'so sánh cùng ngành'."
 activation: auto
 requires_tools: [mcp__opentrading__compare_equities]
 tool_budget: 8
 triggers:
   keywords: [so sánh, vs, so với, cùng ngành, mạnh nhất, leader, hơn kém, xếp hạng mã]
-version: 1.2.0
+version: 1.2.1
 ---
 
 # Ranking Same-Sector Stocks
