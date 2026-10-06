@@ -140,3 +140,35 @@ test("the todo list survives a resume (derived from the stored history)", async 
   await s.appendTurn(turn, info)
   expect(currentTodos((await loadSession(s.id)).messages)).toEqual([...todos])
 })
+
+test("a compaction replaces the model's history on resume; the transcript still shows everything", async () => {
+  const { compactPair } = await import("../src/core/compact-marker")
+  const s = Session.create(new Date("2026-10-06T04:00:00Z"))
+  await s.appendTurn(turn1, { ...info, contextTokens: 50_000 })
+  await s.appendTurn(turn2, info)
+  const compacted = [...compactPair("TÓM TẮT", { tools: ["mcp__ot__a"], skills: [], todos: [] }), ...turn2]
+  await s.appendCompact({ trigger: "manual", before: 60_000, after: 9_000, messages: compacted })
+  const turn3: ModelMessage[] = [
+    { role: "user", content: "tiếp" },
+    { role: "assistant", content: "ừ" },
+  ]
+  await s.appendTurn(turn3, { ...info, contextTokens: 9_500 })
+
+  const loaded = await loadSession(s.id)
+  expect(loaded.messages).toEqual([...compacted, ...turn3])
+  expect(loaded.contextTokens).toBe(9_500)
+  // Display: the original turns, then the marker and summary where the compaction happened.
+  expect(loaded.display).toEqual([...turn1, ...turn2, ...compacted.slice(0, 2), ...turn3])
+  const items = transcriptFromMessages(loaded.display)
+  expect(items.filter((i) => i.kind === "compact")).toEqual([{ kind: "compact", text: "TÓM TẮT" }])
+  expect(JSON.stringify(items)).not.toContain("tom_tat_hoi_thoai")
+
+  // Pruning only (no summary): the model history is replaced, the transcript gains nothing.
+  const p = Session.create(new Date("2026-10-06T04:10:00Z"))
+  await p.appendTurn(turn1, info)
+  await p.appendCompact({ trigger: "auto", before: 10_000, after: 4_000, messages: turn2 })
+  const pruned = await loadSession(p.id)
+  expect(pruned.messages).toEqual(turn2)
+  expect(pruned.display).toEqual(turn1)
+  expect(pruned.contextTokens).toBe(4_000)
+})

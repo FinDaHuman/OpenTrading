@@ -14,4 +14,10 @@ export type AgentEvent =
   /** The turn failed; `done` still follows. */
   | { type: "error"; message: string }
   /** Messages to append to history. Never contains a tool call without its result. */
-  | { type: "done"; messages: ModelMessage[]; clock?: ClockSnapshot }
+  | {
+      type: "done"
+      messages: ModelMessage[]
+      clock?: ClockSnapshot
+      /** Context size after this turn: the provider's count, or chars/4 when it gave none. */
+      usage?: { contextTokens: number; estimated: boolean }
+    }

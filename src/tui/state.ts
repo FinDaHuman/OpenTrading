@@ -1,4 +1,5 @@
 import type { ModelMessage } from "ai"
+import { DEFAULT_COMPACT_WINDOW, effectiveWindow } from "../core/compact"
 import type { Todo } from "../core/tools/todos"
 import { createStore } from "solid-js/store"
 import type { Catalog } from "../core/catalog"
@@ -26,6 +27,8 @@ export type Line =
       decision?: string
     }
   | { kind: "info"; text: string }
+  /** History was compacted here. `summary` is absent when only old tool results were pruned. */
+  | { kind: "compact"; summary?: string; before?: number; after?: number; pruned?: number }
   | { kind: "error"; text: string }
 
 export type DialogName = "connect" | "model" | "skills" | "help" | "mcp" | "tools" | "context" | "sessions" | "memory" | "config"
@@ -63,7 +66,23 @@ export const [state, setState] = createStore({
   question: undefined as AskRequest | undefined,
   /** todo_write accepted during the running turn; undefined → derive from history. */
   liveTodos: undefined as Todo[] | undefined,
+  /** Context size after the last turn (provider usage, else estimated); undefined = unknown. */
+  contextTokens: undefined as number | undefined,
+  /** Size right after a compaction that stayed above the threshold: wait for growth past it. */
+  compactFloor: undefined as number | undefined,
+  /** Consecutive failed automatic compactions in this session. */
+  compactFailures: 0,
+  compacting: false,
+  /** Effective-window cap (config compactWindow). */
+  compactCap: DEFAULT_COMPACT_WINDOW,
 })
+
+/** Effective context window of the selected model: models.dev limit, capped (see core/compact). */
+export const contextWindow = (): number | undefined =>
+  effectiveWindow(state.provider && state.model ? state.catalog[state.provider]?.models[state.model]?.limit?.context : undefined, state.compactCap)
+
+/** Fresh-session values for the compaction bookkeeping. */
+export const NO_COMPACTION = { contextTokens: undefined, compactFloor: undefined, compactFailures: 0 } as const
 
 export function pushLine(line: Line) {
   setState("lines", (lines) => [...lines, line])

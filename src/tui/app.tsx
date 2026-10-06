@@ -2,7 +2,18 @@ import type { InputRenderable } from "@opentui/core"
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid"
 import { createMemo, createSignal, For, Match, onCleanup, onMount, Show, Switch } from "solid-js"
 import { produce } from "solid-js/store"
-import { runAgent } from "../core/agent"
+import { runAgent, summarizeConversation } from "../core/agent"
+import {
+  AUTO_COMPACT_SHARE,
+  DEFAULT_COMPACT_WINDOW,
+  MAX_AUTO_FAILURES,
+  compactHistory,
+  compactPrompt,
+  isContextOverflow,
+  shouldAutoCompact,
+  tokensOf,
+} from "../core/compact"
+import { estimateTokens } from "../core/prompt/budget"
 import { connectedProviders } from "../core/auth"
 import { describeError } from "../core/chat"
 import { loadConfig } from "../core/config"
@@ -26,8 +37,8 @@ import { ModelDialog } from "./dialogs/model"
 import { SkillsDialog, toggleSkill } from "./dialogs/skills"
 import { ToolsDialog } from "./dialogs/tools"
 import { Home } from "./home"
-import { currentSession, recordTurn, resumeFromArgs, startSession } from "./session"
-import { armExit, closeDialog, flash, onExitRequest, providerName, pushLine, setState, state, type Line } from "./state"
+import { currentSession, recordCompact, recordTurn, resumeFromArgs, startSession } from "./session"
+import { armExit, closeDialog, contextWindow, flash, onExitRequest, providerName, pushLine, setState, state, type Line } from "./state"
 import { color } from "./theme"
 import { cleanSelection, writeClipboard } from "./clipboard"
 import { ArgumentHint, Suggestions } from "./suggestions"
@@ -51,11 +62,88 @@ function lineIndex(predicate: (line: Line) => boolean) {
   return -1
 }
 
+/**
+ * Compact the conversation (see core/compact.ts). Runs like a turn: esc stops it, /new
+ * discards it. On failure the history is left as is (or only pruned).
+ */
+export async function compact(runtime: Runtime, trigger: "auto" | "manual", instructions?: string, projected?: number) {
+  if (state.history.length === 0) {
+    if (trigger === "manual") pushLine({ kind: "info", text: "Chưa có hội thoại để nén." })
+    return
+  }
+  const mine = epoch
+  const controller = new AbortController()
+  abort = controller
+  const window = contextWindow()
+  setState({ streaming: true, compacting: true })
+  try {
+    const result = await compactHistory(state.history, {
+      // Auto: what the next request would hold, including the message being sent.
+      contextTokens: projected ?? state.contextTokens,
+      onSummarize: () =>
+        pushLine({
+          kind: "info",
+          text: trigger === "auto" ? "Context gần đầy: đang tóm tắt phần đầu hội thoại (dùng 1 request)…" : "Đang tóm tắt hội thoại (dùng 1 request)…",
+        }),
+      window,
+      manual: trigger === "manual",
+      instructions,
+      summarize: (head, extra) =>
+        summarizeConversation({
+          head,
+          prompt: compactPrompt(extra),
+          skills: state.skills,
+          sticky: state.activeSkills,
+          registry: runtime.registry,
+          sessionId: currentSession().id,
+          memory: runtime.memory,
+          serverInstructions: () => runtime.mcp.instructions(),
+          signal: controller.signal,
+        }),
+    })
+    if (epoch !== mine) return
+    if (controller.signal.aborted) return void pushLine({ kind: "info", text: "Đã dừng nén; hội thoại giữ nguyên." })
+    if (result.summary !== undefined || result.pruned > 0) {
+      // The clock reminder lived in the dropped turns: send it again next turn.
+      setState({ history: result.messages, contextTokens: result.after, clock: undefined })
+      recordCompact({ trigger, before: result.before, after: result.after, messages: result.messages })
+      pushLine({ kind: "compact", summary: result.summary, before: result.before, after: result.after, pruned: result.pruned })
+    }
+    if (result.error) {
+      pushLine({ kind: "error", text: `Không tóm tắt được hội thoại: ${result.error}` })
+      if (trigger === "auto") {
+        setState("compactFailures", (n) => n + 1)
+        if (state.compactFailures >= MAX_AUTO_FAILURES) {
+          pushLine({ kind: "info", text: `Tự nén lỗi ${MAX_AUTO_FAILURES} lần liên tiếp nên đã tắt cho phiên này; gõ /compact để thử lại.` })
+        }
+      }
+    } else setState("compactFailures", 0)
+    // Still above the threshold: do not pay for another compaction until the context grows.
+    setState("compactFloor", window && result.after >= window * AUTO_COMPACT_SHARE ? result.after : undefined)
+  } finally {
+    if (epoch === mine) setState({ streaming: false, compacting: false })
+    if (abort === controller) abort = undefined
+  }
+}
+
 /** The turn being answered, so exit can wait for it to be saved. */
 let inflight: Promise<void> | undefined
 
 function send(runtime: Runtime, text: string) {
-  const turn = sendTurn(runtime, text)
+  const turn = (async () => {
+    // Near the window: compact first, so this turn still fits.
+    const config = await loadConfig()
+    const projected = (state.contextTokens ?? tokensOf(state.history)) + estimateTokens(text)
+    const auto = shouldAutoCompact({
+      contextTokens: projected,
+      window: contextWindow(),
+      floor: state.compactFloor,
+      failures: state.compactFailures,
+      disabled: config.autoCompact === "off",
+    })
+    if (auto) await compact(runtime, "auto", undefined, projected)
+    await sendTurn(runtime, text)
+  })()
   inflight = turn
   return turn.finally(() => {
     if (inflight === turn) inflight = undefined
@@ -126,11 +214,13 @@ async function sendTurn(runtime: Runtime, text: string) {
           break
         case "error":
           pushLine({ kind: "error", text: event.message })
+          if (isContextOverflow(event.message)) pushLine({ kind: "info", text: "Hội thoại có thể đã quá dài cho model này: gõ /compact để nén rồi hỏi lại." })
           break
         case "done":
+          if (event.usage) setState("contextTokens", event.usage.contextTokens)
           if (event.messages.length > 0) {
             setState("history", (history) => [...history, ...event.messages])
-            recordTurn(event.messages)
+            recordTurn(event.messages, event.usage?.contextTokens)
           }
           if (event.clock) setState("clock", event.clock)
           break
@@ -253,6 +343,7 @@ export function App(props: {
       skillProblems: skillSet.problems,
       catalog,
       connected,
+      compactCap: config.compactWindow ?? DEFAULT_COMPACT_WINDOW,
     })
     if (props.resume) await resumeFromArgs(props.runtime, props.resume)
     else await props.runtime.hooks.emit({ type: "session-start", sessionId: currentSession().id, source: "startup" })
@@ -436,6 +527,9 @@ export function App(props: {
       case "clear":
       case "new":
         return void clearTranscript(props.runtime)
+      case "compact":
+        if (state.streaming) return pushLine({ kind: "error", text: "Đang trả lời; chờ xong rồi nén." })
+        return void compact(props.runtime, "manual", cmd.args || undefined)
       case "exit":
       case "quit":
         return void exit()
@@ -592,6 +686,10 @@ function StatusBar() {
     state.provider ? `${providerName(state.provider)} · ${state.model ?? "chưa chọn model"}` : "chưa kết nối"
   const ready = () => state.mcp.filter((s) => s.state === "connected").length
   const attention = () => state.mcp.some((s) => s.state === "failed" || s.state === "untrusted")
+  const contextShare = () => {
+    const window = contextWindow()
+    return window && state.contextTokens !== undefined ? Math.min(1, state.contextTokens / window) : undefined
+  }
   return (
     <box flexDirection="row" height={1} flexShrink={0} backgroundColor={color.panel2} paddingLeft={2} paddingRight={2}>
       <text fg={color.bg} bg={color.tang} flexShrink={0} selectable={false}>
@@ -600,6 +698,11 @@ function StatusBar() {
       <text fg={color.tx2} flexShrink={1} wrapMode="none" selectable={false}>{` ${target()} `}</text>
       <Show when={state.mcp.length > 0}>
         <text fg={attention() ? color.tham : color.san} flexShrink={0} selectable={false}>{` MCP ${ready()}/${state.mcp.length} `}</text>
+      </Show>
+      <Show when={contextShare() !== undefined}>
+        <text fg={contextShare()! >= AUTO_COMPACT_SHARE ? color.giam : contextShare()! >= 0.6 ? color.tham : color.tx3} flexShrink={0} selectable={false}>
+          {` ctx ${Math.round(contextShare()! * 100)}% `}
+        </text>
       </Show>
       <Show when={state.activeSkills.length > 0}>
         <text fg={color.tran} flexShrink={1} wrapMode="none" selectable={false}>
@@ -618,7 +721,9 @@ function StatusBar() {
                 ? "△ cần bạn xác nhận · esc từ chối"
                 : state.question
                   ? "△ model đang hỏi bạn · esc bỏ qua"
-                  : state.streaming
+                  : state.compacting
+                    ? "● đang nén hội thoại · esc dừng"
+                    : state.streaming
                     ? "● đang trả lời · esc dừng"
                     : "/ lệnh · /help · ctrl+c ×2 thoát"}
       </text>

@@ -8,7 +8,7 @@ import { color } from "../theme"
 import { DialogFrame } from "./frame"
 import { Picker } from "./picker"
 
-type Setting = "memory" | "toolSearch"
+type Setting = "memory" | "toolSearch" | "autoCompact"
 
 const TOOL_SEARCH_NEXT = { auto: "on", on: "off", off: "auto" } as const
 const TOOL_SEARCH_HINT = {
@@ -26,6 +26,11 @@ export function ConfigDialog(props: { runtime: Runtime }) {
   })
 
   async function toggle(setting: Setting) {
+    if (setting === "autoCompact") {
+      await saveConfig({ autoCompact: config()?.autoCompact === "off" ? "auto" : "off" })
+      await refetch()
+      return
+    }
     if (setting === "toolSearch") {
       const next = TOOL_SEARCH_NEXT[config()?.toolSearch ?? "auto"]
       await saveConfig({ toolSearch: next })
@@ -64,9 +69,18 @@ export function ConfigDialog(props: { runtime: Runtime }) {
             mark: (config()?.toolSearch ?? "auto") === "off" ? "○" : "●",
             value: "toolSearch" as Setting,
           },
+          {
+            label: "Tự nén hội thoại",
+            hint:
+              config()?.autoCompact === "off"
+                ? "Tắt · chỉ nén khi gõ /compact"
+                : "Tự động · khi context tới 80%: dọn kết quả tool cũ, rồi tóm tắt nếu cần (1 request)",
+            mark: config()?.autoCompact === "off" ? "○" : "●",
+            value: "autoCompact" as Setting,
+          },
         ]}
         onPick={(s) => void toggle(s)}
-        rows={4}
+        rows={5}
       />
       <text fg={color.tx3} marginTop={1}>{`File cấu hình: ${configFile()}`}</text>
     </DialogFrame>

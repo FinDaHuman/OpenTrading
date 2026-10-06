@@ -170,10 +170,15 @@ Hook ném lỗi hoặc chạy quá 5 giây sẽ bị bỏ qua và báo thành m�
 - Các loại dòng:
   - `meta`: format, id, cwd, `promptVersion` (hash của `prompts/*.md`), danh sách skill và version.
   - `message`: một `ModelMessage` của AI SDK.
-  - `turn_end`: provider và model của lượt.
+  - `turn_end`: provider và model của lượt, `contextTokens` (kích thước context sau lượt, theo usage của provider).
+  - `compact`: hội thoại vừa được nén (`trigger` auto/manual, `before`/`after` token, `messages` là history mới). Khi mở lại, model chỉ nhận history từ entry `compact` cuối cùng trở đi; transcript vẫn hiện các lượt cũ cùng một dòng "Đã nén hội thoại".
 - `index.jsonl` có một dòng cho mỗi lần cập nhật phiên; dòng sau cùng của cùng một id thắng.
 - **Mở lại phiên:**
   - Dùng `/sessions`, `bun run dev -- --continue` (phiên mới nhất) hoặc `--resume <id>` (chỉ cần phần đầu của id).
   - History được dựng lại; tool-call thiếu kết quả được đóng bằng lỗi "bị ngắt"; đồng hồ phiên được gửi lại ở lượt đầu.
   - Nếu model đang dùng khác model lúc lưu, TUI cảnh báo.
+- **Nén hội thoại** (`src/core/compact.ts`, lệnh `/compact [hướng dẫn]`, tự chạy khi context tới 80%, tắt trong `/config`):
+  1. Kết quả tool cũ (ngoài 2 lượt cuối, dài hơn 500 ký tự) được thay bằng một dòng "đã dọn"; không tốn request.
+  2. Nếu vẫn cần, model tóm tắt phần đầu theo mẫu có mục "Số liệu đã xác minh" (giá trị, đơn vị, nguồn, thời điểm chép nguyên văn); 2 lượt cuối giữ nguyên.
+  - History mới mở đầu bằng một `<nhac_nho><tom_tat_hoi_thoai>` do harness ghi: danh sách tool đã nạp, skill đã nạp, danh sách việc cần làm còn dở.
 - Reminder `<nhac_nho>` được lưu trong history (để model luôn biết phiên giao dịch) nhưng TUI không hiển thị. Hồ sơ nhà đầu tư và memory index **không** được lưu vào phiên, vì chúng được dựng lại ở mỗi request.

@@ -17,6 +17,14 @@ export interface Config {
   toolSearch?: "auto" | "on" | "off"
   /** MCP tool count above which "auto" defers. Default 40. */
   toolSearchMinTools?: number
+  /**
+   * "auto" (default): before a turn that would pass 80% of the context window, prune old tool
+   * results and, if still needed, summarize the start of the conversation (1 request).
+   * "off": only /compact does it.
+   */
+  autoCompact?: "auto" | "off"
+  /** Cap on the context window used for the 80% threshold and ctx %. Default 200000. */
+  compactWindow?: number
 }
 
 export const loadConfig = () => readJson<Config>(configFile(), {})
