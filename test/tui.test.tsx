@@ -269,12 +269,18 @@ test("/mcp shows the global demo server connected with its tools", async () => {
 test("/tools lists built-in and MCP tools", async () => {
   await setup.mockInput.typeText("/tools")
   setup.mockInput.pressEnter()
-  // 2 built-in + switch_preset + propose_memory (FileMemory) + 3 from the demo MCP server
-  const frame = await setup.waitForFrame((f) => f.includes("Tools · 7"))
+  // 2 built-in + switch_preset + chart_render + chart_compare + chart_depth + session_list + session_get
+  // + doctor_local + 5 watchlist_local_* + web_fetch + web_search + spawn_subagent
+  // + propose_memory (FileMemory) + 3 from the demo MCP server
+  const frame = await setup.waitForFrame((f) => f.includes("Tools · 21"))
   expect(frame).toContain("current_time")
   expect(frame).toContain("propose_memory")
-  expect(frame).toContain("switch_preset")
+  expect(frame).toContain("chart_render")
+  expect(frame).toContain("chart_compare")
   expect(frame).toContain("mcp__demo__echo")
+  setup.mockInput.typeText("switch_preset")
+  const filtered = await setup.waitForFrame((f) => f.includes("switch_preset"))
+  expect(filtered).toContain("switch_preset")
   setup.mockInput.pressEscape()
   await setup.waitFor(() => state.dialog === undefined)
 })

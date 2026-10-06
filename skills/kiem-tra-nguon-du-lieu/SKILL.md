@@ -1,53 +1,57 @@
 ---
 name: kiem-tra-nguon-du-lieu
-description: Kiểm tra toàn bộ nguồn dữ liệu trong 1 lượt — bảng trạng thái từng upstream + khuyến nghị skill nào chạy được.
-when_to_use: "Server còn sống không, Vietstock chết chưa, sáng nay data có đủ không, check nguồn trước phiên. Không dùng để phân tích thị trường."
+description: Quét sức khỏe toàn bộ upstream trong 1 lượt (bảng trạng thái từng nguồn + khuyến nghị skill nào chạy được). Luôn dùng skill này khi user hỏi nguồn sống không, check trước phiên, hoặc khi các skill khác báo unavailable hàng loạt — ví dụ "Vietstock chết chưa", "sáng nay data có đủ không" — ngay cả khi user không nói rõ muốn "check nguồn".
 activation: manual
 requires_tools: [mcp__opentrading__doctor]
 tool_budget: 12
 triggers:
   keywords: [check nguồn, kiểm tra nguồn, server sống không, vietstock chết, data có đủ không, health check, nguồn dữ liệu]
-version: 1.0.0
+version: 1.1.0
 ---
 
-# Kiểm tra nguồn dữ liệu (1 lượt duy nhất)
+# Checking Data-Source Health
 
-Chạy định kỳ mỗi phiên hoặc khi skills khác báo unavailable hàng loạt.
+Trả về bảng trạng thái 9 nguồn + 1 dòng khuyến nghị skill nào chạy được. Smoke ở đây là ping (limit/days nhỏ nhất), không lấy dữ liệu thật. Skill này không phân tích thị trường.
+
+## When to Use
+
+- Dùng khi: user hỏi server còn sống không, Vietstock chết chưa, sáng nay có đủ data không, check nguồn trước phiên, hoặc khi các skill khác báo unavailable hàng loạt.
+- Khi KHÔNG dùng (dùng skill khác thay thế): phân tích mã/thị trường (dùng `phan-tich-chuyen-sau-1-ma`, `ky-thuat-chuyen-sau`).
 
 ## Workflow
 
-| Wave | Tools | Nguồn kiểm tra |
-|---|---|---|
-| 0 | `doctor` | env keys + versions local |
-| 1 (song song 5) | `source_status` · `vs_auth_status` | tổng quan upstream + hạn JWT |
-| 2 (smoke mỗi upstream, song song 5) | `vn_quote_history`(VCB, days=5) · `vs_market_index` · `dnse_latest_trade`(VN30F1M) · `yf_market_pins` · `crypto_spot`(BTCUSDT) | vnstock · Vietstock · DNSE · yfinance · Binance |
-| 3 (smoke tiếp, song song 4) | `news_market`(limit=1) · `fred_series`(DGS10, limit=1) · `world_prediction_odds`(limit=1) · `sbv_rates` | Fireant/GDELT · FRED · Gamma · SBV scrape |
+Copy checklist và tick theo tiến độ:
 
-## Verdict (bảng bắt buộc)
+```
+Task Progress:
+- [ ] Step 0: doctor local
+- [ ] Step 1: tổng quan upstream + JWT (song song)
+- [ ] Step 2: smoke từng upstream (limit/days nhỏ nhất)
+- [ ] Step 3: bảng verdict + khuyến nghị
+```
 
-| Nguồn | Trạng thái | Độ trễ | Skills ảnh hưởng nếu chết |
-|---|---|---|---|
-| vnstock | ok/throttle/down | giây | kỹ thuật/cơ bản/so sánh/backtest... |
-| Vietstock JWT | còn hạn tới.../HẾT | — | cơ bản/CTCK/macro (chuyển mirror/HAR) |
-| Vietstock HAR-session | sống/chết | — | macro VN, CTKH |
-| DNSE | ok/lạnh | — | intraday (WS trio cần worker) |
-| yfinance/Binance/GDELT/Fireant/Gamma/FRED/SBV | ... | ... | ... |
+**Step 0: Doctor.**
 
-+ 1 dòng khuyến nghị ("sáng nay đủ data chạy dossier/backtest/ky-thuat" hay "chỉ chạy legs không-Vietstock").
+Chạy `doctor` (env keys + versions local).
 
-## Chống tràn lan
+**Step 1: Tổng quan (song song).**
 
-Smoke dùng limit/days NHỎ NHẤT (limit=1, days=5) — mục đích là ping, không lấy dữ liệu; không retry quá 1 lần/upstream.
+Chạy `source_status` + `vs_auth_status`: tổng quan upstream + hạn JWT.
 
-## Lỗi thường gặp
+**Step 2: Smoke từng upstream (song song, limit/days nhỏ nhất).**
+
+`vn_quote_history` (VCB, days=5) · `vs_market_index` · `dnse_latest_trade` (VN30F1M) · `yf_market_pins` · `crypto_spot` (BTCUSDT), rồi `news_market` (limit=1) · `fred_series` (DGS10, limit=1) · `world_prediction_odds` (limit=1) · `sbv_rates`. Retry tối đa 1 lần/upstream. Tài khoản Vietstock login Google thì password fallback bị từ chối ("đăng nhập bằng Google!") — phải re-login Google + export HAR/cookie mới.
+
+**Step 3: Validate trước khi chốt.**
 
 Chính skill này cũng có thể partial (1–2 nguồn chết) — verdict vẫn ra đủ bảng, đánh dấu đỏ nguồn chết.
-Tài khoản Vietstock login Google → password fallback bị từ chối ("đăng nhập bằng Google!") — phải re-login Google + export HAR/cookie mới (sự cố 02-10-2026).
 
-## Bằng chứng live (02-10-2026)
+## Template
 
-Sự cố JWT hết hạn 19:15 → skill này bắt được ở wave 1 (`vs_auth_status` false) trước khi skills khác fail hàng loạt; HAR-session sống độc lập (macro vẫn available khi JWT chết).
+ALWAYS use this exact verdict structure — bảng {Nguồn · Trạng thái · Độ trễ · Skills ảnh hưởng nếu chết} cho đủ 9 nguồn: vnstock (ok/throttle/down) · Vietstock JWT (còn hạn tới.../HẾT) · Vietstock HAR-session (sống/chết) · DNSE (ok/lạnh) · yfinance/Binance/GDELT/Fireant/Gamma/FRED/SBV + 1 dòng khuyến nghị ("sáng nay đủ data chạy ..." hay "chỉ chạy legs không-Vietstock").
 
-## Nghiệm thu
+## Examples
 
-Chạy 1 lượt → bảng đủ 9 nguồn + khuyến nghị, ≤12 calls, ≤3 phút.
+**Example 1 (live 02-10-2026, không bịa số mới):**
+Input: check nguồn trước phiên
+Output: sự cố JWT hết hạn 19:15 bắt được ở Step 1 (`vs_auth_status` false) trước khi skills khác fail hàng loạt; HAR-session sống độc lập (macro vẫn available khi JWT chết) → bảng đủ 9 nguồn + khuyến nghị, ≤12 calls, ≤3 phút.

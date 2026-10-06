@@ -10,6 +10,13 @@ import { dataDir } from "./paths"
 import type { Skill } from "./skills/schema"
 import { currentTimeTool } from "./tools/builtin/current-time"
 import { loadSkillTool } from "./tools/builtin/load-skill"
+import { chartDepthTool, chartRenderTool } from "./tools/chart/render"
+import { chartCompareTool } from "./tools/chart/compare"
+import { doctorLocalTool, sessionHistoryTools } from "./tools/session/history"
+import { spawnSubagentTool } from "./tools/subagent/spawn"
+import { webFetchTool } from "./tools/web/fetch"
+import { webSearchTool } from "./tools/web/search"
+import { localWatchlistTools } from "./tools/watchlist/local"
 import { ToolRegistry } from "./tools/registry"
 
 export interface Runtime {
@@ -96,6 +103,14 @@ export function initRuntime(opts: { cwd?: string; home?: string; skills: () => S
   const registry = new ToolRegistry()
   registry.register(currentTimeTool())
   registry.register(loadSkillTool(opts.skills))
+  registry.register(chartRenderTool())
+  registry.register(chartCompareTool())
+  registry.register(chartDepthTool())
+  for (const tool of sessionHistoryTools()) registry.register(tool)
+  for (const tool of localWatchlistTools()) registry.register(tool)
+  registry.register(webFetchTool())
+  registry.register(webSearchTool())
+  registry.register(spawnSubagentTool(registry))
 
   const mcp = new McpManager(registry, {
     home,
@@ -104,6 +119,12 @@ export function initRuntime(opts: { cwd?: string; home?: string; skills: () => S
   })
   const switcher = switchPresetTool(registry, mcp)
   switcher.register()
+  registry.register(
+    doctorLocalTool({
+      mcpStatus: () => mcp.status().map((s) => ({ name: s.name, state: s.state, tools: s.tools })),
+      modelInfo: () => "xem /model (chưa resolve ở đây để tránh đọc key)",
+    }),
+  )
   // Statuses arrive after start(); sync the initial preset and keep the overview true.
   mcp.onChange((statuses) => {
     switcher.refresh()

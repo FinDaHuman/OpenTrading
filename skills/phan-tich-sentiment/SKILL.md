@@ -1,54 +1,57 @@
 ---
 name: phan-tich-sentiment
-description: Dư luận/crowd sentiment về 1 mã trên Fireant — điểm + quotes + cảnh báo FOMO, bắt buộc ghi nhãn nguồn.
-when_to_use: "Phố nói gì về FPT, sentiment VCB, crowd có FOMO HPG không. Không dùng khi: tin chính thống (tim-kiem-tin-tuc), fear/greed thị trường chung (danh-gia-vi-mo-quoc-te / nhip-dap-crypto)."
+description: Đo dư luận crowd về 1 mã trên Fireant (điểm sentiment + quotes + cảnh báo FOMO), trong tối đa 6 calls. Luôn dùng skill này khi user hỏi phố/crowd nói gì về một mã, sentiment hay FOMO — ví dụ "Phố nói gì về FPT", "crowd có FOMO HPG không" — ngay cả khi user không nói rõ muốn "đo sentiment".
 activation: auto
 requires_tools: [mcp__opentrading__sentiment_score]
 tool_budget: 6
 triggers:
   keywords: [sentiment, dư luận, phố nói gì, crowd, fomo, tâm lý nhà đầu tư, comment]
-version: 1.0.0
+version: 1.1.0
 ---
 
-# Phân tích sentiment
+# Measuring Single-Stock Crowd Sentiment
+
+Đo *đám đông*, không đo *doanh nghiệp* — crowd có thể sai, sentiment không bao giờ là leg duy nhất của quyết định. Chỉ 1 symbol/run; limit 20 đủ 90% mẫu, không nới limit.
+
+## When to Use
+
+- Dùng khi: hỏi dư luận/crowd/FOMO/comment về 1 mã cụ thể trên Fireant.
+- Khi KHÔNG dùng (dùng skill khác thay thế): tin chính thống/rumor → `tim-kiem-tin-tuc`; fear/greed chung → `danh-gia-vi-mo-quoc-te` / `nhip-dap-crypto`; rating CTCK → `tim-co-hoi-bao-cao-ctck`.
 
 ## Workflow
 
-| Wave | Tools | Ghi chú |
-|---|---|---|
-| 1 | `news_symbol`(symbol, limit=20) · `sentiment_score`(symbol, limit=20) | song song — cùng nguồn Fireant |
-| 2 (chọn khi mâu) | `company_events`(symbol) | đối chiếu cmt với công bố chính thức |
+Copy checklist và tick theo tiến độ:
 
-## Verdict
+```
+Task Progress:
+- [ ] Step 1: posts + điểm (song song)
+- [ ] Step 2: đối chiếu công bố (chỉ khi mâu thuẫn)
+- [ ] Step 3: verdict (điểm + quotes + FOMO + cảnh báo)
+```
 
-Điểm sentiment (Groq hoặc heuristic — **BẮT BUỘC ghi nhãn nguồn**, heuristic thang khác) +
-3-5 trích comment tiêu biểu (positive/negative/repeat-thuyết) + nhận diện FOMO/hoảng loạn
-(tần suất symbol tag + likes) + **cảnh báo vòng lặp**: crowd có thể sai — sentiment KHÔNG
-được là leg duy nhất của quyết định.
+**Step 1: Posts + điểm (song song).**
 
-## Chống tràn lan
+Chạy `news_symbol` (symbol, limit=20) + `sentiment_score` (symbol, limit=20) — cùng nguồn Fireant. Đủ điểm + ≥3 quotes + nhãn nguồn thì dừng.
 
-- 1 symbol/run; limit 20 đủ 90% mẫu — không call lại limit lớn hơn.
-- `company_events` chỉ khi comment contradicts disclosures; không dùng sentiment "chốt luận" — chỉ confirm/deny.
+**Step 2: Đối chiếu công bố (chỉ khi mâu thuẫn, tuần tự).**
 
-## Lỗi thường gặp
+Chạy `company_events` (symbol) khi comment contradicts disclosures. Không dùng sentiment để "chốt luận" — chỉ confirm/deny.
 
-Thiếu Groq → `score_heuristic` + warning "groq unavailable" → nhãn "heuristic" trong
-verdict. Posts rỗng = mã ít bàn (empty hợp lệ). Fireant chết → fallback duy nhất: GDELT
-titles qua tim-kiem-tin-tuc (1 call).
+**Step 3: Validate trước khi chốt.**
 
-## Bằng chứng live (02-10-2026)
+Thiếu Groq → `score_heuristic` + warning "groq unavailable" → bắt buộc nhãn `heuristic` trong verdict (heuristic thang khác, không chuẩn hóa chéo 2 mode Groq/heuristic). Posts rỗng = mã ít bàn (empty hợp lệ), không bịa quotes, ghi rõ "ít bàn luận". Fireant chết → fallback duy nhất: GDELT titles qua `tim-kiem-tin-tuc` (1 call), ghi rõ nguồn thay thế. Không diễn giải heuristic thành "nên mua/bán".
 
-FPT — 20 posts, heuristic **−0.25**, trong khi M −2.06 sạch (điển hình crowd≠fundamentals) ·
-VCB posts lãi suất 0.1-6% · Groq key có trên prod, thiếu trên local dev.
+## Template
 
-## Nghiệm thu
+ALWAYS use this exact verdict structure:
 
-"Phố nói gì về FPT" → điểm + ≥3 quotes + nhãn nguồn, ≤4 calls.
+- **Điểm sentiment** (Groq hoặc heuristic — bắt buộc ghi nhãn nguồn).
+- **3–5 trích comment tiêu biểu** (positive / negative / repeat-thuyết) + provenance Fireant.
+- **Nhận diện FOMO/hoảng loạn** (tần suất symbol tag + likes); ngưỡng heuristic: <−0.3 hoảng loạn · >+0.3 FOMO · giữa = trung tính.
+- **Cảnh báo vòng lặp bắt buộc:** crowd có thể sai — sentiment không được là leg duy nhất của quyết định.
 
-## Ghi chú review — dữ liệu CÓ ý nghĩa nếu đọc đúng
+## Examples
 
-Sentiment đo *đám đông*, không đo *doanh nghiệp* (live: FPT heuristic −0.25 trong khi
-M −2.06 sạch). Ngưỡng diễn giải heuristic: <−0.3 hoảng loạn · >+0.3 FOMO · giữa = trung
-tính; KHÔNG chuẩn hóa chéo 2 mode Groq/heuristic; không bao giờ dùng sentiment làm leg
-duy nhất của quyết định.
+**Example 1 (live 02-10-2026, không bịa số mới):**
+Input: Phố nói gì về FPT
+Output: FPT — 20 posts, heuristic **−0.25**, trong khi M −2.06 sạch (điển hình crowd≠fundamentals) · VCB posts lãi suất 0.1-6% → điểm + ≥3 quotes + nhãn nguồn, ≤4 calls. Thiếu nhãn nguồn hoặc thiếu cảnh báo vòng lặp thì chưa đạt.

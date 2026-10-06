@@ -1,55 +1,77 @@
 ---
 name: co-ban-chuyen-sau
-description: Phân tích THUẦN cơ bản 1 mã — BCTC từng dòng, chất lượng lợi nhuận (M-Score), kế hoạch, sở hữu, cổ tức.
-when_to_use: "Đọc BCTC FPT, VCB có dấu hiệu thao túng không, cổ đông lớn HPG. Không dùng khi: kỹ thuật (ky-thuat-chuyen-sau), định giá (dinh-gia-chuyen-sau), so sánh nhiều mã (so-sanh-cung-nganh)."
+description: Đọc BCTC và đánh giá chất lượng cơ bản của 1 mã (M-Score thao túng, F-score, tăng trưởng, sở hữu, cổ tức) trong tối đa 9 calls. Luôn dùng skill này khi user hỏi đọc BCTC, chất lượng lợi nhuận, M-Score, cổ đông lớn, insider hay cổ tức của một mã — ví dụ "BCTC FPT có gì lạ", "VCB có thao túng không", "cổ đông lớn HPG" — ngay cả khi user không nói rõ muốn "phân tích cơ bản".
 activation: auto
 requires_tools: [mcp__opentrading__financial_detail]
 tool_budget: 9
 triggers:
   keywords: [bctc, báo cáo tài chính, cơ bản, lợi nhuận gộp, nợ phải trả, vốn chủ, m-score, thao túng, cổ đông lớn, cổ tức, kế hoạch kinh doanh]
-version: 1.0.0
+version: 1.1.0
 ---
 
-# Cơ bản chuyên sâu 1 mã
+# Analyzing Single-Stock Fundamentals
+
+Phân tích THUẦN cơ bản 1 mã theo aspect: hỏi khía cạnh nào thì chỉ chạy leg đó rồi dừng — đừng quét hết BCTC vì "cho chắc".
+
+## When to Use
+
+- Dùng khi: user hỏi BCTC, chất lượng lợi nhuận, M-Score/thao túng, F-score, kế hoạch kinh doanh, cổ đông lớn, insider, cổ tức của 1 mã.
+- Khi KHÔNG dùng (dùng skill khác thay thế):
+  - Hỏi kỹ thuật (RSI, MACD, breakout, hỗ trợ/kháng cự) → `ky-thuat-chuyen-sau`.
+  - Hỏi định giá (fair value, PER, upside) → `dinh-gia-chuyen-sau`.
+  - So sánh 2-6 mã → `so-sanh-cung-nganh`.
+  - Phân tích toàn diện 1 mã → `phan-tich-chuyen-sau-1-ma`.
+  - Đọc báo cáo CTCK (không phải BCTC gốc) → `tim-co-hoi-bao-cao-ctck`.
 
 ## Workflow
 
-| Wave | Tools | Ghi chú |
-|---|---|---|
-| 0 | `vs_auth_status` | JWT sống = được dùng `financial_detail`; chết → nhánh mirror |
-| 1 | `financial_detail`(statement=KQKD, periods_n=4) · `stock_forensic`(symbol) | song song 2 |
-| 2 (chọn) | `financial_statements` · `financial_ratios` · `vn_fundamentals` | trend + ratios; 3 call max |
-| 3 (chọn) | `planned_targets` · `holders` · `insider_trading` · `dividends_splits` | sở hữu/kế hoạch/chia cổ tức |
-| 4 (tham chiếu) | `vs_financial_norms`/`vs_financial_terms`/`vs_company_info` | CHỈ khi cần giải thích norm_id/kỳ |
+Copy checklist và tick theo tiến độ:
 
-## Verdict
+```
+Task Progress:
+- [ ] Step 0: kiểm tra JWT sống hay chết
+- [ ] Step 1: lõi BCTC + chất lượng (aspect chataluong dừng tại đây)
+- [ ] Step 2-3: chỉ chạy aspect user hỏi (trend/ratios, sở hữu/kế hoạch)
+- [ ] Step 4: chốt verdict 7 mục + provenance
+```
 
-Chất lượng tăng trưởng (DT/LN 4 quý, biên) · ratios chủ chốt · M-Score + F-score + red flags ·
-so với kế hoạch (vượt/hụt %) · cấu trúc sở hữu + thay đổi insider · chính sách cổ tức.
-Kết luận 1 câu: CƠ BẢN TỐT/TRUNG BÌNH/YẾU + 3 rủi ro lớn nhất.
+**Step 0: Kiểm tra JWT (bắt buộc, gọi trực tiếp đầu tiên).**
 
-## Chống tràn lan
+Chạy `vs_auth_status`. JWT sống thì được dùng `financial_detail`; JWT chết thì chuyển nhánh mirror `vs_financeinfo` — hai tool này không bao giờ chạy song song vì cùng một nguồn số.
 
-- Aspect nào mới chạy leg đó — "chataluong" chỉ wave 1; "sohuu" chỉ wave 3.
-- `vs_financeinfo` chỉ là fallback JWT-chết; `vs_documents` KHÔNG thuộc skill này (tim-co-hoi-bao-cao-ctck).
-- LCTT/CDKT chỉ gọi khi user hỏi dòng tiền/bảng cân đối (statement param).
+**Step 1: Lõi BCTC + chất lượng.**
 
-## Lỗi thường gặp
+Chạy song song 2 calls: `financial_detail` (statement=KQKD, periods_n=4) + `stock_forensic` (symbol). Nếu user chỉ hỏi chất lượng (`chataluong`) thì dừng ngay tại đây.
 
-Bank m_partial (SGAI null do LCTT rỗng — VCB live) → "M không kết luận", không gán M=0.
-`financial_detail` periods vượt gói → rows rỗng + warning → degrade `vs_financeinfo` 1 lần.
-`financial_statements` warning "statement not found, returning all pages" = đặc trưng v3-compat
-— đọc trang trong data, đừng abort. vn_company chậm 30s khi throttle → đặt cuối wave, thiếu được.
+**Step 2: Mở rộng theo aspect (mỗi aspect là 1 leg, chỉ chạy leg được hỏi).**
 
-## Bằng chứng live (02-10-2026)
+- Trend/ratios: `financial_statements` · `financial_ratios` · `vn_fundamentals` (tối đa 3 calls).
+- Sở hữu/kế hoạch (`sohuu`/`cophieu`/`kehoach`): `planned_targets` · `holders` · `insider_trading` · `dividends_splits` (+ Step 1 nếu cần nền).
+- Tham chiếu: `vs_financial_norms` / `vs_financial_terms` / `vs_company_info` — chỉ khi cần giải thích norm_id/kỳ.
+- Không bao giờ gọi `vs_documents` ở đây (đó là tool của `tim-co-hoi-bao-cao-ctck). LCTT/CDKT chỉ gọi khi user hỏi explicitly dòng tiền/bảng cân đối qua param `statement`.
 
-FPT detail 25 norms × 138 số · M **−2.06**, F 2/6 · KH DT 61,850/75,400/58,580 · VCB holders
-SBV 74.8% · VCB cổ tức 450đ · insider empty là đúng data.
+**Step 3: Validate trước khi chốt verdict.**
 
-## Nghiệm thu
+Leg nào rỗng thì verdict partial + ghi rõ nguồn thiếu, không bịa số lấp chỗ trống. Bank cho M partial (SGAI null do LCTT rỗng — VCB live) thì ghi "M không kết luận", không gán M=0. `financial_detail` periods vượt gói → rows rỗng + warning → degrade sang `vs_financeinfo` đúng 1 lần, ghi rõ fallback. `vn_company` chậm ~30s khi throttle thì đặt cuối, thiếu thì ghi thiếu.
 
-"BCTC FPT có gì lạ" → wave 1 (2 calls) đủ M/F + 4 quý; "toàn cảnh cơ bản VPL" → ≤9 calls, không leg gọi 2 lần.
+## Template
 
-## Ghi chú review
+ALWAYS use this exact verdict structure, mỗi mục ghi số + trend + provenance:
 
-ỔN — aspect-gating giữ run điển hình 4–7 calls, giữ nguyên.
+1. Chất lượng tăng trưởng: DT/LN 4 quý + trend QoQ/YoY + biên (`provenance: financial_detail`).
+2. Ratios chủ chốt (`provenance: financial_ratios` / `vn_fundamentals`).
+3. M-Score + F-score + red flags (`provenance: stock_forensic`).
+4. So với kế hoạch: vượt/hụt % (`provenance: planned_targets`).
+5. Cấu trúc sở hữu + thay đổi insider (`provenance: holders` / `insider_trading`).
+6. Chính sách cổ tức (`provenance: dividends_splits`).
+7. Kết luận 1 câu: CƠ BẢN TỐT/TRUNG BÌNH/YẾU + 3 rủi ro lớn nhất.
+
+## Examples
+
+**Example 1:**
+Input: BCTC FPT có gì lạ
+Output (Wave 1 đủ, 2 calls): M-Score/F-score + 4 quý DT/LN + verdict 7 mục, không mở Wave 3–4.
+
+**Example 2 (live 02-10-2026, không bịa số mới):**
+Input: cơ bản FPT
+Output: FPT detail 25 norms × 138 số · M **−2.06**, F 2/6 · KH DT 61,850/75,400/58,580 · VCB holders SBV 74.8% · VCB cổ tức 450đ · insider empty là đúng data.

@@ -1,49 +1,82 @@
 ---
 name: phan-tich-chuyen-sau-1-ma
-description: Phân tích TOÀN DIỆN một mã cụ thể theo 8 bước (mã → ngành → kỹ thuật → định giá → lợi nhuận quý → tin → sự kiện → tổng hợp tích cực/tiêu cực/động lực).
-when_to_use: "Người dùng yêu cầu phân tích toàn diện một mã (phân tích FPT, VCB thế nào). Không dùng khi: user chỉ hỏi 1 chiều (RSI → ky-thuat-chuyen-sau; BCTC → co-ban-chuyen-sau; fair value → dinh-gia-chuyen-sau)."
+description: "Điều phối phân tích toàn diện 1 mã theo 8 bước: tự nhận diện mã/ngành/tin/sự kiện, gọi các skill chuyên (kỹ thuật, định giá) rồi gộp verdict bảng Tích cực/Tiêu cực/Động lực. Luôn dùng skill này khi user yêu cầu phân tích toàn diện 1 mã — ví dụ 'phân tích FPT', 'VCB thế nào', 'mã này sao' — ngay cả khi user không nói rõ muốn 'phân tích toàn diện'."
 activation: auto
 requires_tools: [mcp__opentrading__stock_overview]
 tool_budget: 8
 triggers:
   keywords: [phân tích, phân tích cổ phiếu, phân tích mã, toàn diện, chi tiết mã, mã này sao]
-version: 1.1.0
+version: 1.2.1
 ---
 
-# Phân tích chuyên sâu 1 mã
+# Coordinating Full Single-Stock Analysis
 
-Skill điều phối: tự làm nhận diện + ngành + tin + sự kiện, dispatch kỹ thuật/định giá
-sang sub-skills rồi gộp verdict. CẤM gọi trực tiếp `signals_technical`/`financial_detail`/
-`valuation_run`/`stock_forensic`… — ai cần chiều nào kích sub-skill chiều đó.
+Skill điều phối 8 bước: tự làm nhận diện mã + ngành + tin + sự kiện, dispatch kỹ thuật/định giá sang sub-skill, rồi gộp verdict. Budget 8 chỉ đếm tool nhà của skill này; tool của sub-skill nằm trong budget của sub-skill, không cộng dồn.
+
+## When to Use
+
+- Dùng khi: user yêu cầu phân tích toàn diện 1 mã (`phân tích FPT`, `VCB thế nào`, `mã này sao`).
+- Khi KHÔNG dùng (dùng skill khác thay thế):
+  - Chỉ hỏi kỹ thuật (RSI, breakout, đa khung, higher-high/lower-low) → `ky-thuat-chuyen-sau`.
+  - Chỉ hỏi BCTC/cơ bản (M-Score, cổ đông, cổ tức) → `co-ban-chuyen-sau`.
+  - Chỉ hỏi định giá (fair value, PER, upside) → `dinh-gia-chuyen-sau`.
+  - So sánh 2-6 mã cùng ngành → `so-sanh-cung-nganh`.
+  - Đánh giá setup trước khi BCTC ra → `danh-gia-truoc-bctc`.
 
 ## Workflow
 
-| Bước | Việc | Tools |
-|---|---|---|
-| 1. Xác định mã | Chuẩn hóa mã CK (VCB, BID...). Mã nhập nhằng (vàng/BTC/USD) → `symbol_resolve` trước | `symbol_lookup` (tên Cty) · `symbol_resolve` (mã đa loại, có fallback xếp hạng) |
-| 2. Ngành + kiếm tiền nhờ đâu | Ngành (GICS), mô hình kinh doanh, nguồn thu chính | `vn_company` · `vs_company_info` · `vs_industry_tree` |
-| 3. Trạng thái kỹ thuật | Dispatch S22 | reuse `ky-thuat-chuyen-sau` |
-| 4. Định giá | Dispatch S24 | reuse `dinh-gia-chuyen-sau` |
-| 5. Lợi nhuận các quý gần đây | KQKD 4 quý + so QoQ/YoY, biên | `financial_detail` (cross-ref S23, chỉ lấy số nhanh) |
-| 6. Tin tức doanh nghiệp | Tin + công bố | `news_symbol` (cross-ref S26) · `company_events` |
-| 7. Sự kiện tương lai | Lịch 30–90 ngày (BCTC/ĐHĐCĐ/cổ tức) | `event_calendar_vn` |
-| 8. Tổng hợp | **Điểm tích cực + tiêu cực + động lực tương lai của mã** | `evidence_bundle` (khóa verdict) |
+Copy checklist và tick theo tiến độ:
 
-## Verdict
+```
+Task Progress:
+- [ ] Step 1: xác định mã (resolve tên nhập nhằng)
+- [ ] Step 2: ngành + kiếm tiền nhờ đâu (gọi trực tiếp)
+- [ ] Step 2b: chart giá (dùng lại nến đã có → chart_render local, đính kèm verdict)
+- [ ] Step 3-4: dispatch kỹ thuật + định giá sang sub-skill
+- [ ] Step 5-7: lợi nhuận quý + tin + sự kiện (gọi trực tiếp)
+- [ ] Step 8: tổng hợp + khóa verdict
+```
 
-1 câu nhận định · ngành + cách kiếm tiền (2 dòng) · kỹ thuật (từ S22) · định giá (từ S24) ·
-lợi nhuận quý (số + trend) · tin + sự kiện sắp tới · **bảng Tích cực / Tiêu cực / Động lực tương lai**.
+**Step 1: Xác định mã (gọi trực tiếp).**
 
-## Chống tràn lan
+Chạy `symbol_lookup` (tên công ty) · `symbol_resolve` (mã đa loại, có fallback xếp hạng). Mã nhập nhằng (vàng/BTC/USD) thì bắt buộc `symbol_resolve` trước. `symbol_resolve` trả nhiều ứng viên → chọn hạng cao nhất + ghi rõ đã resolve từ tên nào sang mã nào; thiếu mã thì dừng và hỏi lại, không đoán mã.
 
-- Budget 8 chỉ đếm tool nhà của skill; tool của sub-skill nằm trong budget sub-skill.
-- User hỏi 1 chiều ("RSI FPT") → trả lời bằng sub-skill tương ứng, không chạy skill này.
+**Step 2: Ngành + kiếm tiền nhờ đâu (gọi trực tiếp).**
 
-## Lỗi thường gặp
+Chạy `vn_company` · `vs_company_info` · `vs_industry_tree`. Lấy ngành GICS, mô hình kinh doanh, nguồn thu chính. Mã mới chưa phân loại ngành (`vs_industry_tree` không match) → ghi "chưa phân loại", vẫn chạy các bước còn lại.
 
-Sub-skill chết 1 chân → vẫn ra verdict với leg còn sống + ghi leg thiếu, không bù số.
-Mã mới chưa phân loại ngành → ghi "chưa phân loại", vẫn chạy các bước còn.
+**Step 2b: Chart giá (tool local, không tốn budget remote).**
 
-## Nghiệm thu
+Dùng lại nến đã có trong context (từ Step 1 `vn_quote_history` hoặc sub-skill kỹ thuật) → gọi `chart_render` (local, kind=`candlestick` ≥5 nến) rồi đính kèm hình vào verdict cuối. Không fetch lại nến chỉ để vẽ; chưa có nến thì bỏ qua chart, không thêm call data. Chi tiết kind/màu xem `ve-bieu-do-ky-thuat`.
 
-"Phân tích FPT" → đủ 8 bước, bảng 3 cột tích cực/tiêu cực/động lực, ≤8 calls nhà.
+**Step 3-4: Dispatch kỹ thuật + định giá (không gọi tool gốc).**
+
+Dispatch `ky-thuat-chuyen-sau` (trạng thái kỹ thuật) và `dinh-gia-chuyen-sau` (định giá). Không bao giờ gọi trực tiếp `signals_technical` / `valuation_run` / `stock_forensic` ở đây để thay thế — ai cần kỹ thuật/định giá thì đi qua sub-skill.
+
+**Step 5-7: Lợi nhuận quý + tin + sự kiện (gọi trực tiếp).**
+
+Chạy `financial_detail` (chỉ lấy số nhanh KQKD 4 quý + so QoQ/YoY/biên — không đào sâu BCTC/M-Score/F-score, đó là việc của `co-ban-chuyen-sau`), `news_symbol` + `company_events` (tin + công bố), `event_calendar_vn` (lịch 30–90 ngày: BCTC/ĐHĐCĐ/cổ tức).
+
+**Step 8: Tổng hợp + validate.**
+
+Chạy `evidence_bundle` để khóa verdict thành bảng Tích cực / Tiêu cực / Động lực tương lai. Sub-skill chết 1 chân thì vẫn ra verdict với leg còn sống + ghi rõ leg thiếu, không bù số. User hỏi 1 chiều (`RSI FPT`) thì bắt buộc trả lời bằng sub-skill tương ứng, không chạy đủ 8 bước. Đủ 8 bước hoặc đủ dữ liệu ra bảng 3 cột thì dừng, không gọi thêm vòng tin/sự kiện thứ hai.
+
+## Template
+
+ALWAYS use this exact verdict structure, mỗi mục ghi số + trend + provenance (tool/sub-skill nào ra số đó):
+
+1. Nhận định 1 câu (khuyến nghị/tone chính).
+2. Ngành + cách kiếm tiền (2 dòng, từ Step 2).
+3. Kỹ thuật (`provenance: ky-thuat-chuyen-sau`, kèm khung 1D/1W).
+4. Định giá (`provenance: dinh-gia-chuyen-sau`, kèm UPSIDE/DOWNSIDE % nếu có).
+5. Lợi nhuận quý (số DT/LN 4 quý + trend QoQ/YoY + biên, từ `financial_detail` Step 5).
+6. Tin + sự kiện sắp tới (từ `news_symbol` / `company_events` / `event_calendar_vn`).
+7. Bảng Tích cực / Tiêu cực / Động lực tương lai (3 cột, khóa bằng `evidence_bundle`).
+8. Chart nến đính kèm (từ Step 2b, nếu có).
+9. Kết luận 1 câu chốt lại toàn mã.
+
+## Examples
+
+**Example 1:**
+Input: Phân tích FPT
+Output: đủ 8 bước, có bảng 3 cột tích cực/tiêu cực/động lực, ≤8 calls nhà (chưa tính calls trong sub-skill). Số liệu live nằm ở sub-skill `ky-thuat-chuyen-sau` và `dinh-gia-chuyen-sau` — không bịa số tại skill này.

@@ -1,42 +1,69 @@
 ---
 name: danh-gia-truoc-bctc
-description: "Đánh giá setup trước BCTC — grade A/B/C từ 6 leg: sự kiện, trend, thao túng, kỳ vọng, positioning, đệm."
-when_to_use: "Mùa BCTC cận kề (FPT sắp ra báo cáo, đánh giá setup). Không dùng khi: phân tích mã thường (phan-tich-chuyen-sau-1-ma), BCTC đã công bố (co-ban-chuyen-sau)."
+description: Chấm grade A/B/C cho setup 1 mã trước thềm BCTC từ 6 leg (ngày công bố, trend, thao túng, kỳ vọng, positioning, đệm định giá). Luôn dùng skill này khi BCTC chưa ra mà user hỏi có nên mua/giữ qua báo cáo không — ví dụ "FPT sắp ra báo cáo có nên mua", "setup HPG trước BCTC ra sao" — ngay cả khi user không nói rõ muốn "đánh giá setup".
 activation: auto
 requires_tools: [mcp__opentrading__company_events]
 tool_budget: 10
 triggers:
   keywords: [trước bctc, sắp ra báo cáo, pre earnings, công bố lợi nhuận, setup bctc]
-version: 1.0.0
+version: 1.1.0
 ---
 
-# Đánh giá trước BCTC
+# Grading Pre-Earnings Setup
 
-## Workflow (6 leg)
+Chấm grade cho setup trước BCTC. Không forecast KQKD — không bao giờ đưa số DT/LN dự báo. BCTC đã ra rồi thì dừng ngay, chuyển sang `co-ban-chuyen-sau`, không cố chấm grade.
 
-| Leg | Tools | Ghi chú |
-|---|---|---|
-| 1 Ngày | `company_events` + `event_calendar_vn` | dated hay rumor? |
-| 2 Trend | load `co-ban-chuyen-sau` (aspect=baokao) | reuse leg, không gọi lại financial_* chồng chéo |
-| 3 Thao túng | co-ban-chuyen-sau (aspect=chataluong) | M-Score/Piotroski |
-| 4 Kỳ vọng | `planned_targets` + `analyst_consensus` + `news_symbol` + `sentiment_score` | anchor = kế hoạch DN (VN không consensus EPS) |
-| 5 Positioning | `insider_trading` + `money_flow` + `block_trades` | |
-| 6 Đệm | load `dinh-gia-chuyen-sau` + `scenario_simulate`(−5%) | size gợi ý |
+## When to Use
 
-## Verdict
+- Dùng khi: BCTC chưa ra và user hỏi setup trước BCTC (`FPT sắp ra báo cáo`, `đánh giá setup HPG trước BCTC`, `pre-earnings`).
+- Khi KHÔNG dùng (dùng skill khác thay thế):
+  - Phân tích mã thường (không gắn BCTC) → `phan-tich-chuyen-sau-1-ma`.
+  - BCTC đã công bố, cần đọc số/M-Score → `co-ban-chuyen-sau`.
+  - Hỏi kỹ thuật lẻ → `ky-thuat-chuyen-sau`.
+  - Hỏi định giá lẻ → `dinh-gia-chuyen-sau`.
 
-Grade **A/B/C** + 1 dòng evidence/leg + size đề xuất + unknowns tường minh.
-Rubric: A = ≥5 leg xanh + M-Score sạch + KH rõ; B = 4-5 leg; C = <4 leg hoặc M-Score đỏ (> −1.78).
+## Workflow
 
-## Chống tràn lan
+Copy checklist và tick theo tiến độ:
 
-Không forecast KQKD. `sentiment_score` heuristic không được tính là leg xanh đầy đủ.
+```
+Task Progress:
+- [ ] Step 1: chốt ngày BCTC (dated hay rumor)
+- [ ] Step 2: reuse trend + thao túng từ co-ban-chuyen-sau
+- [ ] Step 3: kỳ vọng + positioning (gọi trực tiếp)
+- [ ] Step 4: reuse đệm định giá + grade A/B/C
+```
 
-## Bằng chứng live (02-10-2026, FPT)
+**Step 1: Chốt ngày BCTC (bắt buộc, gọi trực tiếp đầu tiên).**
 
-M **−2.06** sạch · F 2/6 · KH DT 61,850/75,400/**58,580** · thưởng CP 10:1 ex 21-09 ·
-sentiment heuristic −0.25 · NN bán ròng · pt 0% phiên → grade B.
+Chạy `company_events` + `event_calendar_vn`. Chưa rõ ngày thì các leg còn lại ghi `unknown ngày` và grade tối đa B.
 
-## Nghiệm thu
+**Step 2: Reuse trend + thao túng (không gọi tool gốc).**
 
-"Đánh giá trước BCTC HPG" → grade + 6 leg evidence + unknowns, ≤10 calls (reuse legs).
+LOAD `co-ban-chuyen-sau` aspect=baokao (trend) và aspect=chataluong (M-Score/Piotroski). Lý do reuse thay vì gọi trực tiếp `financial_detail`/`stock_forensic`: tránh gọi chồng chéo cùng nguồn số trong 1 run. Ghi rõ aspect reuse ở từng leg.
+
+**Step 3: Kỳ vọng + positioning (gọi trực tiếp).**
+
+Chạy `planned_targets` + `analyst_consensus` + `news_symbol` + `sentiment_score` (anchor = kế hoạch DN vì VN không có consensus EPS; sentiment là heuristic, không tính là leg xanh) và `insider_trading` + `money_flow` + `block_trades`.
+
+**Step 4: Reuse đệm định giá + chấm grade.**
+
+LOAD `dinh-gia-chuyen-sau` + chạy `scenario_simulate` (−5%) để lấy size gợi ý. Không gọi trực tiếp `valuation_run` ở đây. Đủ 6 leg evidence (kể cả partial) thì dừng — không gọi thêm vòng tin/dòng tiền thứ hai, không thêm leg thứ 7.
+
+## Template
+
+ALWAYS use this exact verdict structure:
+
+1. Grade **A/B/C** (rubric: A = ≥5 leg xanh + M-Score sạch + KH rõ; B = 4–5 leg; C = <4 leg hoặc M-Score đỏ > −1.78).
+2. 1 dòng evidence/leg (6 dòng, mỗi dòng số + trend + provenance).
+3. Size đề xuất (từ `scenario_simulate` −5%).
+4. Unknowns tường minh (liệt kê điều chưa biết).
+5. Kết luận 1 câu: grade + có nên giữ/mua trước BCTC + rủi ro lớn nhất.
+
+Partial data (thiếu positioning hoặc kỳ vọng) → verdict partial + unknowns. `sentiment_score` âm/dương nhẹ thì ghi đúng là heuristic, không nâng thành leg xanh/đỏ.
+
+## Examples
+
+**Example 1 (live 02-10-2026, FPT, không bịa số mới):**
+Input: Đánh giá trước BCTC HPG
+Output: M **−2.06** sạch · F 2/6 · KH DT 61,850/75,400/**58,580** · thưởng CP 10:1 ex 21-09 · sentiment heuristic −0.25 · NN bán ròng · pt 0% phiên → grade B + 6 leg evidence + unknowns, ≤10 calls (reuse legs).
