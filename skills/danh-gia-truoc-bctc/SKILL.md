@@ -6,7 +6,7 @@ requires_tools: [mcp__opentrading__company_events]
 tool_budget: 10
 triggers:
   keywords: [trước bctc, sắp ra báo cáo, pre earnings, công bố lợi nhuận, setup bctc]
-version: 1.1.1
+version: 1.1.2
 ---
 
 # Grading Pre-Earnings Setup
@@ -40,7 +40,7 @@ Ngày công bố BCTC tại VN thường KHÔNG công khai chính xác (công ty
 
 **Step 2: Reuse trend + thao túng (không gọi tool gốc).**
 
-LOAD `co-ban-chuyen-sau` aspect=baokao (trend) và aspect=chataluong (M-Score/Piotroski). Lý do reuse thay vì gọi trực tiếp `financial_detail`/`stock_forensic`: tránh gọi chồng chéo cùng nguồn số trong 1 run. Ghi rõ aspect reuse ở từng leg.
+LOAD `co-ban-chuyen-sau` (gọi `load_skill` CHỈ với tên skill — không có file phụ `aspect=...`, aspect là các section trong body; load_skill file lạ sẽ fail). Sau khi load: dùng leg "Chất lượng tăng trưởng" (trend) + leg "M-Score + F-score" (thao túng) từ body skill đó. Lý do reuse thay vì gọi trực tiếp `financial_detail`/`stock_forensic`: tránh gọi chồng chéo cùng nguồn số trong 1 run. Ghi rõ reuse ở từng leg.
 
 **Step 3: Kỳ vọng + positioning (gọi trực tiếp).**
 
