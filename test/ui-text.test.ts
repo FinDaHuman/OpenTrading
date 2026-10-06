@@ -14,6 +14,12 @@ test("truncate cuts to terminal cells with …, keeping Vietnamese accents intac
   expect(pad("ab", 5)).toBe("ab   ")
 })
 
+test("truncate keeps column alignment when asked (tool output: tables, charts)", () => {
+  expect(truncate("  60┤      │  ████", 40, true)).toBe("  60┤      │  ████")
+  expect(truncate("a\tb  \r\n", 40, true)).toBe("a  b")
+  expect(truncate("VCB    57.3    +1.2%", 10, true)).toBe("VCB    57…")
+})
+
 test("rank: exact, then prefix (shorter first), substring, in-order letters, description; accent-insensitive", () => {
   const cmds = [
     { name: "connect", d: "Nhập API key" },

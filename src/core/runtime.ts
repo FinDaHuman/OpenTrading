@@ -1,6 +1,7 @@
 import path from "node:path"
 import { HookBus } from "./hooks"
 import { AskBroker } from "./ask"
+import { loadConfig } from "./config"
 import { McpManager } from "./mcp/manager"
 import { askUserTool } from "./tools/builtin/ask-user"
 import { PermissionGate } from "./permission"
@@ -10,8 +11,15 @@ import { dataDir } from "./paths"
 import type { Skill } from "./skills/schema"
 import { currentTimeTool } from "./tools/builtin/current-time"
 import { loadSkillTool } from "./tools/builtin/load-skill"
+import { chartDepthTool, chartRenderTool } from "./tools/chart/render"
+import { chartCompareTool } from "./tools/chart/compare"
+import { doctorLocalTool, sessionHistoryTools } from "./tools/session/history"
+import { spawnSubagentTool } from "./tools/subagent/spawn"
 import { toolSearchTool } from "./tools/builtin/tool-search"
 import { todoWriteTool } from "./tools/builtin/todo-write"
+import { webFetchTool } from "./tools/web/fetch"
+import { webSearchTool } from "./tools/web/search"
+import { localWatchlistTools } from "./tools/watchlist/local"
 import { ToolRegistry } from "./tools/registry"
 
 export interface Runtime {
@@ -57,12 +65,27 @@ export function initRuntime(opts: { cwd?: string; home?: string; skills: () => S
         .map((d) => d.name),
     ),
   )
+  registry.register(chartRenderTool())
+  registry.register(chartCompareTool())
+  registry.register(chartDepthTool())
+  for (const tool of sessionHistoryTools()) registry.register(tool)
+  for (const tool of localWatchlistTools(home)) registry.register(tool)
+  registry.register(webFetchTool())
+  registry.register(webSearchTool())
+  registry.register(spawnSubagentTool(registry))
 
   const mcp = new McpManager(registry, {
     home,
     cwd: opts.cwd ?? process.cwd(),
     trustFile: path.join(home, "mcp-trust.json"),
   })
+  registry.register(
+    doctorLocalTool({
+      mcpStatus: () => mcp.status().map((s) => ({ name: s.name, state: s.state, tools: s.tools })),
+      model: async () => (await loadConfig()).model,
+      home,
+    }),
+  )
   registry.register(toolSearchTool(registry, () => mcp.status().filter((s) => s.state === "connecting").map((s) => s.name)))
   const runtime: Runtime = { registry, permissions, questions, mcp, hooks: new HookBus(), memory: new NoopMemory() }
   switchMemory(runtime, opts.memory ?? new NoopMemory())

@@ -34,16 +34,40 @@ export function describeError(error: unknown): string {
   return status ? `Lỗi ${status}: ${message}` : message
 }
 
-// Quick manual check without the TUI (built-in tools only): `bun src/core/chat.ts "mấy giờ rồi?"`
+// Quick manual check without the TUI: `bun src/core/chat.ts "mấy giờ rồi?"`.
+// MCP prompts run as in the TUI: `/server:prompt args` (or `/prompt args` when the name is unique).
+// Write tools are refused here: there is no UI to approve them.
 if (import.meta.main) {
   const { runAgent } = await import("./agent")
   const { initRuntime } = await import("./runtime")
   const { loadSkills } = await import("./skills/loader")
+  const { parseCommand, parsePromptArgs } = await import("../tui/commands")
   const { skills } = await loadSkills()
-  const { registry } = initRuntime({ skills: () => skills })
-  const input = process.argv.slice(2).join(" ") || "Xin chào"
+  const runtime = initRuntime({ skills: () => skills })
+  const { registry } = runtime
+  const fail = async (message: string) => {
+    console.error(message)
+    await runtime.mcp.stop()
+    process.exit(1)
+  }
+  await runtime.mcp.start()
+  let input = process.argv.slice(2).join(" ") || "Xin chào"
+  const cmd = input.startsWith("/") ? parseCommand(input) : undefined
+  if (cmd) {
+    const prompts = runtime.mcp.allPrompts()
+    const exact = prompts.filter((p) => `${p.server}:${p.name}`.toLowerCase() === cmd.name)
+    const bare = prompts.filter((p) => p.name.toLowerCase() === cmd.name)
+    const prompt = exact[0] ?? (bare.length === 1 ? bare[0] : undefined)
+    if (!prompt) {
+      await fail(bare.length > 1 ? `/${cmd.name} có ở nhiều server; gõ /server:${cmd.name}.` : `Không có prompt /${cmd.name}.`)
+    } else {
+      const parsed = parsePromptArgs(prompt.arguments, cmd.args)
+      if ("error" in parsed) await fail(`/${cmd.name}: ${parsed.error}`)
+      else input = await runtime.mcp.getPrompt(prompt.server, prompt.name, parsed.values)
+    }
+  }
   try {
-    for await (const event of runAgent({ history: [], input, skills, registry })) {
+    for await (const event of runAgent({ history: [], input, skills, registry, serverInstructions: () => runtime.mcp.instructions() })) {
       if (event.type === "text-delta") process.stdout.write(event.text)
       else if (event.type === "tool-start") process.stdout.write(`\n⚙ ${event.label}\n`)
       else if (event.type === "tool-end") process.stdout.write(`${event.ok ? "✓" : "✕"} ${event.output.slice(0, 200)}\n`)
@@ -52,7 +76,7 @@ if (import.meta.main) {
     }
     process.stdout.write("\n")
   } catch (error) {
-    console.error(describeError(error))
-    process.exit(1)
+    await fail(describeError(error))
   }
+  await runtime.mcp.stop()
 }

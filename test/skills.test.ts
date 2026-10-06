@@ -67,7 +67,34 @@ test("project overrides user overrides bundled; broken skills are reported, not 
 test("the bundled skills all load cleanly", async () => {
   const { skills, problems } = await loadSkills(skillRoots(await root()).filter((r) => r.source === "bundled"))
   expect(problems).toEqual([])
-  expect(skills.map((s) => s.name)).toEqual(["devil-advocate", "explain-term", "vn-market-basics"])
+  expect(skills.map((s) => s.name)).toEqual([
+    "bat-on-quoc-gia",
+    "co-ban-chuyen-sau",
+    "danh-gia-tinh-hinh-chinh-tri-toan-cau",
+    "danh-gia-tinh-hinh-xung-dot",
+    "danh-gia-truoc-bctc",
+    "danh-gia-vi-mo-quoc-te",
+    "danh-gia-vi-mo-viet-nam",
+    "devil-advocate",
+    "dinh-gia-chuyen-sau",
+    "du-doan-fed",
+    "du-doan-polymarket",
+    "explain-term",
+    "kiem-chien-luoc-backtest",
+    "kiem-tra-nguon-du-lieu",
+    "ky-thuat-chuyen-sau",
+    "nhip-dap-crypto",
+    "phan-tich-chuyen-sau-1-ma",
+    "phan-tich-sentiment",
+    "phan-tich-vang-ty-gia",
+    "so-sanh-cung-nganh",
+    "tim-co-hoi-bao-cao-ctck",
+    "tim-kiem-tin-tuc",
+    "tin-tuc-nong-quoc-te",
+    "tin-tuc-nong-viet-nam",
+    "ve-bieu-do-ky-thuat",
+    "vn-market-basics",
+  ])
 })
 
 test("supporting files are readable only inside the skill directory", async () => {

@@ -562,8 +562,10 @@ test("/tools lists built-in and MCP tools", async () => {
   try {
     await setup.mockInput.typeText("/tools")
     setup.mockInput.pressEnter()
-    // 5 built-in (current_time, load_skill, ask_user, todo_write, tool_search) + propose_memory + 4 from the demo MCP server
-    frame = await setup.waitForFrame((f) => f.includes("Tool · 10") && f.includes("tool hoãn"))
+    // 5 core built-ins (current_time, load_skill, ask_user, todo_write, tool_search)
+    // + 14 local tools (chart, session, watchlist, web, spawn_subagent, doctor_local)
+    // + propose_memory + 4 from the demo MCP server
+    frame = await setup.waitForFrame((f) => f.includes("Tool · 24") && f.includes("14 tool hoãn"))
     show(frame)
     // Regression for the 01/10 screenshot: every tool is exactly one line, long descriptions
     // end in "…" instead of wrapping mid-word, and the mark column is straight.
@@ -576,11 +578,20 @@ test("/tools lists built-in and MCP tools", async () => {
     expect(timeRow).toMatch(/…\s+\[chỉ đọc\]\s*$/)
     expect(frame).not.toMatch(/^\s+Asia\/H/m)
     expect(frame).toContain("Có sẵn")
-    expect(frame).toContain("Memory")
-    expect(frame).toContain("MCP · demo")
-    expect(frame).toContain("3 tool hoãn: model chỉ thấy tên") // add is alwaysLoad
-    expect(rows.find((r) => r.includes(" echo "))).toContain("hoãn · ")
+    // 3 demo tools (add is alwaysLoad) + 11 optional local tools (chart, session, watchlist, doctor)
+    expect(frame).toContain("14 tool hoãn: model chỉ thấy tên")
     expect(timeRow).not.toContain("hoãn · ")
+    expect(rows.find((r) => r.includes(" spawn_subagent "))).not.toContain("hoãn · ")
+    expect(rows.find((r) => r.includes(" chart_render "))).toContain("hoãn · ")
+    // ↑ from the first row wraps to the last: the Memory and MCP groups sit below the fold.
+    setup.mockInput.pressArrow("up")
+    frame = await setup.waitForFrame((f) => f.includes("MCP · demo") && f.includes("24/24"))
+    show(frame)
+    expect(frame).toContain("Memory")
+    const tail = frame.split("\n").filter((l) => /^ {2}(❯ |  )[◇◆] \S/.test(l))
+    expect(tail.find((r) => r.includes(" echo "))).toContain("hoãn · ")
+    setup.mockInput.pressArrow("down")
+    await setup.waitForFrame((f) => f.includes("1/24"))
   } finally {
     await saveConfig({ toolSearch: undefined })
   }
@@ -591,7 +602,7 @@ test("/tools lists built-in and MCP tools", async () => {
   expect(frame).toContain("ask_user")
   expect(frame).toMatch(/• questions \(bắt buộc\): array/)
   setup.mockInput.pressEscape()
-  await setup.waitForFrame((f) => f.includes("Tool · 10"))
+  await setup.waitForFrame((f) => f.includes("Tool · 24"))
   setup.mockInput.pressEscape()
   await setup.waitFor(() => state.dialog === undefined)
 })

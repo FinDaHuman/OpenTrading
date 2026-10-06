@@ -46,7 +46,8 @@ export interface ToolDef<I = any> {
   priority?: number
   /**
    * May be left out of the request until the model loads it with tool_search (MCP tools,
-   * unless the server is `alwaysLoad`). Built-in tools are never deferred.
+   * unless the server is `alwaysLoad`, and optional local tools such as charts). Core
+   * built-ins (load_skill, ask_user, todo_write, tool_search…) are never deferred.
    */
   deferrable?: boolean
   /** Extra words tool_search matches on (MCP `_meta["anthropic/searchHint"]`). */
@@ -76,6 +77,9 @@ export interface ToolDef<I = any> {
   summarize?(input: I): string
   execute(input: I, ctx: ToolContext): Promise<string | ToolResult>
 }
+
+/** `source` of OpenTrading's optional local tools (charts, watchlist, sessions): deferrable, not MCP. */
+export const LOCAL_SOURCE = "local"
 
 export const DEFAULT_TIMEOUT_MS = 60_000
 export const DEFAULT_MAX_OUTPUT_CHARS = 30_000

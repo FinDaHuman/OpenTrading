@@ -1,0 +1,48 @@
+---
+name: tim-co-hoi-bao-cao-ctck
+description: "Tổng hợp khuyến nghị của CTCK: rating, giá mục tiêu, upside đã đối chiếu giá hiện tại. Dùng khi hỏi CTCK khuyên mua gì hoặc target mới của một mã."
+activation: auto
+requires_tools: [mcp__opentrading__analyst_consensus]
+triggers:
+  keywords: [ctck, khuyên mua, giá mục tiêu, target, báo cáo phân tích, khuyến nghị, rating]
+version: 1.3.0
+---
+
+# Cơ hội từ báo cáo CTCK
+
+Khuyến nghị CTCK là INPUT, không phải chân lý — bắt buộc kiểm chứng upside bằng giá hiện tại và kèm disclaimer. Không bao giờ suy diễn khuyến nghị thành "nên mua", không bịa giá mục tiêu khi feed không có.
+
+## Khi nào dùng
+
+- Dùng khi: hỏi rating/target/báo cáo CTCK theo feed chung hoặc theo mã cụ thể, cần bảng upside %.
+- Khi KHÔNG dùng (dùng skill khác thay thế): rumor/crowd → `phan-tich-sentiment` / `tim-kiem-tin-tuc`; tự định giá → `dinh-gia-chuyen-sau`; backtest → `kiem-chien-luoc-backtest`.
+
+## Các bước
+
+**Bước 1: Feed chung (1 call duy nhất).**
+
+Chạy `analyst_consensus` (limit=30) — feed chung không symbol, parse rating + giá mục tiêu từ titles. Báo cáo vĩ mô thì thêm `analyst_consensus` (report_type=macro): lọc báo cáo vĩ mô CTCK (entry section/report); không có dated reports thì dùng số liệu gốc. Feed rỗng thật (cuối tuần) → empty hợp lệ, nới `days` 1 lần duy nhất rồi kết luận.
+
+**Bước 2: Mã cụ thể + tài liệu gốc (tuần tự sau Bước 1).**
+
+Chạy `analyst_consensus` (symbol, limit=15) + `vs_documents` (symbol, chỉ lấy 1 mã đáng giá nhất) + `web_fetch` (URL trang báo cáo dạng HTML; web_fetch không đọc được file PDF — khi chỉ có PDF thì đưa link cho người dùng và nói rõ chưa đọc nội dung). Hỏi mã cụ thể mà `analyst_consensus` (symbol) empty → đọc feed chung và lọc title chứa mã (title-scrape filter có thể sót), không retry đổi limit.
+
+**Bước 3: Kiểm chứng upside (tuần tự, 1–2 mã nổi bật nhất).**
+
+Chạy `stock_overview` (1–2 call) so giá hiện tại vs mục tiêu → upside %. Chỉ kiểm chứng top, không kiểm chứng tất cả.
+
+## Cấu trúc câu trả lời
+
+Trình bày kết luận đúng cấu trúc sau:
+
+- Bảng {mã · CTCK · rating · giá mục tiêu · ngày · upside % so giá hiện tại}, lọc trong `days` (default 7).
+- Top 3 cơ hội (upside lớn + rating MUA + còn hiệu lực).
+- Cột **"đã kiểm chứng"** bắt buộc = Bước 3 chạy cho 1–2 mã nổi bật nhất (có `stock_overview`); mã chưa kiểm chứng ghi rõ "chưa kiểm chứng giá hiện tại".
+- Disclaimer bắt buộc: khuyến nghị CTCK là INPUT, không phải chân lý — không suy diễn thành "nên mua".
+- Provenance: nguồn ngày từ URL/title; nếu `source/date null` (đặc trưng parse titles) → suy ngày từ URL/title + ghi rõ nguồn ngày "không chắc chắn". Đủ bảng ≥5 dòng + kiểm chứng 2 mã top thì dừng, không đào thêm mã ngoài top.
+
+## Ví dụ
+
+**Ví dụ 1:**
+Hỏi: CTCK khuyên mua gì tuần này
+Trả lời: Feed chung **7 reports** — MBB MUA <số> · **MSN MUA <số> (<số>)** · VPB KHẢ QUAN <số> · MSB GIẢM TỶ TRỌNG <số> · FRT THEO DÕI <số> · filter symbol=VCB/FPT từng empty đúng hiện tượng → bảng ≥5 dòng có upside %, kiểm chứng 2 mã top, ≤8 calls. Thiếu cột "đã kiểm chứng" hoặc thiếu disclaimer thì chưa đạt; bịa target khi feed rỗng thì chưa đạt.

@@ -4,6 +4,7 @@ import path from "node:path"
 import { availableSkills, matchTriggers, renderCatalog } from "../skills/catalog"
 import type { Skill } from "../skills/schema"
 import { TODO_WRITE, hasOpenTodos, renderTodos, type Todo } from "../tools/todos"
+import { LOCAL_SOURCE } from "../tools/types"
 import { BUDGETS, estimateTokens, fit, type Tier } from "./budget"
 import { clockState, loadCalendar, renderClock, sameSnapshot, type Calendar, type ClockSnapshot } from "./market-clock"
 
@@ -101,12 +102,17 @@ const DEFERRED_HEADER =
 
 /**
  * Deferred tool names per server, within a token budget; over budget each server shrinks
- * to its tool count (the model then searches by keyword).
+ * to its tool count (the model then searches by keyword or `mcp__<server>`). Local tools
+ * have no `mcp__` prefix to search by and are few, so their names always stay.
  */
 export function renderDeferred(groups: { server: string; tools: string[] }[], budgetTokens: number) {
   const full = [DEFERRED_HEADER, ...groups.map((g) => `${g.server} (${g.tools.length}): ${g.tools.join(", ")}`)].join("\n")
   if (estimateTokens(full) <= budgetTokens) return { text: full, truncated: false }
-  const short = groups.map((g) => `${g.server}: ${g.tools.length} tool — tìm bằng tool_search (từ khoá hoặc "mcp__${g.server}")`)
+  const short = groups.map((g) =>
+    g.server === LOCAL_SOURCE
+      ? `${g.server} (${g.tools.length}): ${g.tools.join(", ")}`
+      : `${g.server}: ${g.tools.length} tool — tìm bằng tool_search (từ khoá hoặc "mcp__${g.server}")`,
+  )
   return { text: [DEFERRED_HEADER, ...short].join("\n"), truncated: true }
 }
 
