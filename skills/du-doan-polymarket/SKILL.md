@@ -1,59 +1,59 @@
 ---
 name: du-doan-polymarket
-description: Đọc xác suất Polymarket theo chủ đề (bảng event + prob_pct + volume + cờ tin cậy liquidity/end-date). Luôn dùng skill này khi user hỏi odds/xác suất, market nào đang nóng, hay "bao giờ X" — ví dụ "odds bầu cử Mỹ", "BTC bao giờ chạm 100k" — ngay cả khi user không nói rõ muốn "xem Polymarket". Không dùng cho Fed chuyên biệt (dùng du-doan-fed).
+description: Read Polymarket odds by topic (event table + prob_pct + volume + liquidity/end-date trust flags). Always use this skill when the user asks about odds/probabilities, which markets are hot, or "bao giờ X" (when will X happen) — e.g. "odds bầu cử Mỹ", "BTC bao giờ chạm 100k" — even when the user doesn't explicitly say they want "xem Polymarket" (Polymarket odds). Do not use for Fed specifically (use du-doan-fed).
 activation: auto
 requires_tools: [mcp__opentrading__world_prediction_odds]
 tool_budget: 6
 triggers:
   keywords: [polymarket, odds, xác suất, prediction market, bao giờ bitcoin, cá cược sự kiện]
-version: 1.1.0
+version: 1.2.0
 ---
 
 # Reading Polymarket Odds
 
-Trả về bảng event có prob_pct + volume + liquidity + end-date, mỗi dòng đủ 2 cờ tin cậy. Drill-down tối đa 2 events/run — người dùng chọn, không tự mở cả top-10.
+Return an event table with prob_pct + volume + liquidity + end-date, every row carrying both trust flags. At most 2 events drilled per run — the user picks, never open the whole top-10 yourself. Verdict labels, units and output formatting stay in Vietnamese (user-visible); answer in the user's language (Vietnamese by default).
 
 ## When to Use
 
-- Dùng khi: user hỏi odds/xác suất Polymarket theo chủ đề (kinh tế, bầu cử, crypto...), "market nào đang nóng", drill-down 1–2 events.
-- Khi KHÔNG dùng (dùng skill khác thay thế):
-  - Fed chuyên biệt (cần curve + FOMC + hàm ý VN) → dùng `du-doan-fed`.
-  - Bản đồ chính trị rộng cần ghép odds + tin GDELT → dùng `danh-gia-tinh-hinh-chinh-tri-toan-cau`.
+- Use when: the user asks for Polymarket odds/probabilities by topic (economy, elections, crypto...), "market nào đang nóng" (which markets are hot), or drill-down of 1–2 events.
+- When NOT to use (use another skill instead):
+  - Fed specifically (needs curve + FOMC + VN implications) → use `du-doan-fed`.
+  - Broad political map combining odds + GDELT news → use `danh-gia-tinh-hinh-chinh-tri-toan-cau`.
 
 ## Workflow
 
-Copy checklist và tick theo tiến độ:
+Copy the checklist and tick off as you progress:
 
 ```
 Task Progress:
-- [ ] Step 1: quét odds (1 call, lấy top đã sort vol24h)
-- [ ] Step 2: drill-down event user quan tâm (tối đa 2)
-- [ ] Step 3: bảng + cờ + kết luận 1 câu
+- [ ] Step 1: scan odds (1 call, take the top sorted by vol24h)
+- [ ] Step 2: drill down into the events the user cares about (max 2)
+- [ ] Step 3: table + flags + 1-sentence conclusion
 ```
 
-**Step 1: Quét odds (bắt buộc).**
+**Step 1: Scan odds (mandatory).**
 
-Chạy `world_prediction_odds` (query hoặc tag, limit=10). Query rỗng thì đổi tag tối đa 1 lần rồi kết luận "không có market cho chủ đề". User chỉ hỏi "đang nóng gì" và Wave 1 đủ ≥5 events thì dừng, không drill-down.
+Run `world_prediction_odds` (query or tag, limit=10). Empty query → switch to tag at most once, then conclude "không có market cho chủ đề" (no market for this topic). If the user only asked "đang nóng gì" (what's hot) and Wave 1 already has ≥5 events, stop — no drill-down.
 
-**Step 2: Drill-down (tuần tự sau Step 1, tối đa 2).**
+**Step 2: Drill-down (after Step 1, max 2).**
 
-Chạy `polymarket_event` cho slug user quan tâm (drill outcomes đầy đủ), event thứ 2 chỉ khi user hỏi rõ. Không chạy Step 2 + 3 song song.
+Run `polymarket_event` for the slug the user cares about (drill full outcomes); a second event only if the user asks explicitly. Never run Step 2 + 3 in parallel.
 
-**Step 3: Validate trước khi chốt.**
+**Step 3: Validate before finalizing.**
 
-Slug sai/không tồn tại → đổi slug top kế tiếp 1 lần rồi ghi "không drill được event X". Jina proxy chậm thì tool tự fallback direct (xem warnings), chờ 1 lần, không retry dồn dập. Gamma chết cả 2 đường → ghi rõ "không có odds", không bịa xác suất.
+Wrong/nonexistent slug → switch to the next top slug once, then note "không drill được event X" (could not drill event X). Slow Jina proxy → the tool falls back to direct by itself (see warnings), wait once, no rapid-fire retries. Gamma down on both paths → state clearly "không có odds" (no odds available), never fabricate probabilities.
 
 ## Template
 
 ALWAYS use this exact verdict structure:
 
-1. **Bảng event:** mỗi dòng {title · prob_pct từng outcome (đơn vị %) · volume24h (USD) · liquidity (USD) · end-date (ngày) · URL event}.
-2. **Cờ tin cậy bắt buộc trên từng dòng:** (1) liquidity thấp (<50k USD) → "odds kém tin"; (2) end-date đã qua → LOẠI khỏi bảng.
-3. **Kết luận:** 1 câu "thị trường đặt cược X với xác suất Y" (đơn vị %).
-4. **Provenance:** mỗi dòng bắt buộc URL event.
+1. **Event table:** each row {title · prob_pct per outcome (unit %) · volume24h (USD) · liquidity (USD) · end-date (day) · event URL}.
+2. **Mandatory trust flags on every row:** (1) low liquidity (<50k USD) → "odds kém tin" (low-trust odds); (2) end-date passed → LOẠI from the table.
+3. **Conclusion:** 1 sentence "thị trường đặt cược X với xác suất Y" (unit %).
+4. **Provenance:** every row requires the event URL.
 
 ## Examples
 
-**Example 1 (live 02-10-2026, không bịa số mới):**
+**Example 1 (live 02-10-2026, no fabricated numbers):**
 Input: Polymarket đang nóng gì về kinh tế
-Output: Fed T10/2026 no-change 74.5% (vol 2.6M) · Brazil presidential detail OK · sort vol24h hoạt động → ≥5 events + cờ tin-cậy trên từng dòng.
+Output: Fed T10/2026 no-change 74.5% (vol 2.6M) · Brazil presidential detail OK · sort vol24h active → ≥5 events + trust flags on every row.

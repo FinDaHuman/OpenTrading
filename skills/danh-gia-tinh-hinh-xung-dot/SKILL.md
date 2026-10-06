@@ -1,71 +1,71 @@
 ---
 name: danh-gia-tinh-hinh-xung-dot
-description: Đánh giá 1 cuộc xung đột vũ trang (cường độ, giá dầu/vàng đã phản ánh chưa, kênh truyền dẫn, xác suất leo thang). Luôn dùng skill này khi user hỏi xung đột/chiến sự cụ thể và ảnh hưởng của nó tới thị trường — ví dụ "Trung Đông leo thang, dầu lên không", "Biển Đông căng thẳng ảnh hưởng gì" — ngay cả khi user không nói rõ muốn "đánh giá xung đột".
+description: Assess 1 armed conflict (intensity, whether oil/gold prices have priced it in, transmission channels, escalation probability). Always use this skill when the user asks about a specific conflict/combat and its impact on markets — e.g. "Trung Đông leo thang, dầu lên không", "Biển Đông căng thẳng ảnh hưởng gì" — even when the user doesn't explicitly say they want a "đánh giá xung đột".
 activation: auto
 requires_tools: [mcp__opentrading__event_stats]
 tool_budget: 9
 triggers:
   keywords: [xung đột, chiến tranh, biển đông, trung đông, leo thang, dầu hay vàng lên, chiến sự]
-version: 1.1.1
+version: 1.2.0
 ---
 
 # Assessing Armed-Conflict Market Impact
 
-Trả lời 5 mục cố định: cường độ → giá đã phản ánh → kênh truyền dẫn → xác suất leo thang → hàm ý vị thế. Không khuyến nghị mua/bán trực tiếp.
+Answer 5 fixed items: intensity → whether the price has priced it in → transmission channel → escalation probability → position implication. No direct buy/sell recommendations. Verdict labels, units and output formatting stay in Vietnamese (user-visible); answer in the user's language (Vietnamese by default).
 
 ## When to Use
 
-- Dùng khi: user nêu 1 xung đột/chiến sự cụ thể + hỏi cường độ, leo thang, giá đã phản ánh, kênh truyền dẫn, hàm ý vị thế.
-- Khi KHÔNG dùng (dùng skill khác thay thế):
-  - Chính trị/bầu cử rộng → dùng `danh-gia-tinh-hinh-chinh-tri-toan-cau`.
-  - Bất ổn 1 nước (biểu tình/đảo chính, chưa thành chiến sự) → dùng `bat-on-quoc-gia`.
-  - Chỉ xin odds thuần → dùng `du-doan-polymarket`.
+- Use when: the user names 1 specific conflict/combat + asks about intensity, escalation, whether the price has priced it in, transmission channel, position implication.
+- When NOT to use (use another skill instead):
+  - Broad politics/elections → use `danh-gia-tinh-hinh-chinh-tri-toan-cau`.
+  - Single-country unrest (protests/coup, not yet combat) → use `bat-on-quoc-gia`.
+  - Just want pure odds → use `du-doan-polymarket`.
 
 ## Workflow
 
-Copy checklist và tick theo tiến độ:
+Copy the checklist and tick as you go:
 
 ```
 Task Progress:
-- [ ] Step 1: đo cường độ (GDELT, song song)
-- [ ] Step 2: kiểm tra giá đã phản ánh (dầu/vàng, song song)
-- [ ] Step 2b: tần suất máy bay quân sự gần vùng xung đột (geo_intel military=true)
-- [ ] Step 3: odds leo thang + xác minh (chỉ khi cần)
-- [ ] Step 4: verdict 5 mục
+- [ ] Step 1: measure intensity (GDELT, parallel)
+- [ ] Step 2: check whether the price has priced it in (oil/gold, parallel)
+- [ ] Step 2b: military aircraft frequency near the conflict zone (geo_intel military=true)
+- [ ] Step 3: escalation odds + verification (only if needed)
+- [ ] Step 4: 5-item verdict
 ```
 
-**Step 1: Đo cường độ (bắt buộc, song song).**
+**Step 1: Measure intensity (mandatory, parallel).**
 
-Chạy `geo_intel` (topic xung đột) + `event_stats` (query) cùng lúc. Từ khóa thử cả tiếng Việt lẫn Anh; GDELT rỗng với tiếng Việt là đặc trưng data (ghi "query VN rỗng, dùng EN query X", retry tối đa 1 lần EN), không phải lỗi.
+Run `geo_intel` (conflict topic) + `event_stats` (query) at the same time. Try keywords in both Vietnamese and English; GDELT being empty for Vietnamese is a data characteristic (record "VN query empty, used EN query X", retry EN at most 1 time), not an error.
 
-**Step 2: Kiểm tra giá đã phản ánh (song song, tuần tự sau Step 1).**
+**Step 2: Check whether the price has priced it in (parallel, sequential after Step 1).**
 
-Chạy `yf_commodities` (dầu + vàng) + `assets_rotation`. Thiếu phiên mới thì dùng phiên gần nhất có + ghi rõ date, không bịa giá hiện tại. Đủ counts Step 1 + giá dầu/vàng Step 2 là đủ verdict cơ bản.
+Run `yf_commodities` (oil + gold) + `assets_rotation`. If the latest session is missing, use the most recent session available + state the date clearly; never fabricate current prices. Step 1 counts + Step 2 oil/gold prices are enough for a basic verdict.
 
-**Step 2b: Tần suất máy bay quân sự (tham chiếu oracle 8010, 1 call).**
+**Step 2b: Military aircraft frequency (oracle 8010 reference, 1 call).**
 
-Chạy `geo_intel` với `military=true` — trả máy bay quân sự live từ adsb.lol (count, by_country, by_type), khoảng cách tới vùng xung đột gần nhất (km) và signal-loss diff (máy bay biến mất gần zone = nghi tắt transponder, tín hiệu OSINT). Đọc: count cao + nhiều máy tankers/recon gần zone → tăng cường hoạt động; "Unknown" operator nhiều → mất dấu vết chính thức. Tool chết (adsb.lol 429/geo-block) thì ghi trung thực, không bịa số máy bay.
+Run `geo_intel` with `military=true` — returns live military aircraft from adsb.lol (count, by_country, by_type), distance to the nearest conflict zone (km) and signal-loss diff (aircraft disappearing near the zone = suspected transponder shutdown, an OSINT signal). Read it as: high count + many tankers/recon near the zone → activity buildup; many "Unknown" operators → official tracking lost. If the tool is dead (adsb.lol 429/geo-block), record honestly; never fabricate aircraft counts.
 
-**Step 3: Odds leo thang + xác minh (chỉ khi cần).**
+**Step 3: Escalation odds + verification (only if needed).**
 
-Chạy `world_prediction_odds` (từ khóa cuộc chiến) + `web_search`/`web_fetch` (chỉ 1-2 nguồn). Không có market cho cuộc chiến thì ghi "không có odds", không thay bằng nhận định riêng.
+Run `world_prediction_odds` (war keywords) + `web_search`/`web_fetch` (1-2 sources only). If there is no market for the war, record "no odds available"; don't substitute a personal take.
 
-**Step 4: Validate trước khi chốt.**
+**Step 4: Validate before locking.**
 
-Chỉ 1 topic/call; từ khóa tối đa 2 lần thử ("biển đông" → "south china sea") rồi chấp nhận "ít coverage". Không mở rộng sang nhiều cuộc chiến trong 1 run (user hỏi rộng thì đề nghị tách từng xung đột).
+Only 1 topic/call; at most 2 keyword attempts ("biển đông" → "south china sea") then accept "thin coverage". Don't expand to multiple wars within 1 run (if the user asks broadly, suggest splitting per conflict).
 
 ## Template
 
 ALWAYS use this exact verdict structure:
 
-1. **Cường độ:** event counts GDELT trend (đơn vị counts + trend tăng/giảm) + URL.
-2. **Giá đã phản ánh chưa:** dầu/vàng move vs baseline (đơn vị USD/thùng, USD/oz, % move) + URL.
-3. **Kênh truyền dẫn:** energy → inflation → rates, 1–2 dòng + URL.
-4. **Xác suất leo thang:** odds prob_pct (đơn vị %) + end-date + URL event.
-5. **Hàm ý vị thế:** cushion/size (tham chiếu leg 6 `danh-gia-truoc-bctc`), KHÔNG khuyến nghị mua/bán trực tiếp.
+1. **Intensity:** GDELT event counts trend (unit counts + up/down trend) + URL.
+2. **Priced in yet:** oil/gold move vs baseline (unit USD/barrel, USD/oz, % move) + URL.
+3. **Transmission channel:** energy → inflation → rates, 1–2 lines + URL.
+4. **Escalation probability:** odds prob_pct (unit %) + end-date + event URL.
+5. **Position implication:** cushion/size (references leg 6 of `danh-gia-truoc-bctc`), NO direct buy/sell recommendation.
 
 ## Examples
 
-**Example 1 (live 02-10-2026, không bịa số mới):**
+**Example 1 (live 02-10-2026, don't fabricate new numbers):**
 Input: Xung đột ảnh hưởng dầu/vàng
-Output: `geo_intel("Vietnam")` trả articles · `event_stats("vietnam")` articles >0 · gold 4,195 USD/oz cùng phiên → verdict đủ 5 mục, có số dầu/vàng phiên gần nhất.
+Output: `geo_intel("Vietnam")` returns articles · `event_stats("vietnam")` articles >0 · gold 4,195 USD/oz same session → verdict covers all 5 items, with latest-session oil/gold numbers.

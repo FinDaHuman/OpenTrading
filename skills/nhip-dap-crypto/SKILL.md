@@ -1,55 +1,55 @@
 ---
 name: nhip-dap-crypto
-description: "Nhịp đập crypto bằng ngôn ngữ thường cho người ít chuyên: xu hướng giá, đòn bẩy funding/OI có nóng không, fear/greed, giá quy VND. Luôn dùng skill này khi user hỏi BTC/ETH/SOL sao rồi, crypto lên hay xuống, funding rate, có nên quan tâm crypto không — ngay cả khi user không nói rõ muốn 'phân tích crypto'."
+description: "Crypto pulse in plain language for non-experts: price trend, whether leverage funding/OI is heating up, fear/greed, VND-converted price. Always use this skill when the user asks how BTC/ETH/SOL is doing, whether crypto is up or down, funding rate, whether they should care about crypto — even when the user doesn't say explicitly they want 'phân tích crypto'."
 activation: auto
 requires_tools: [mcp__opentrading__crypto_spot]
 tool_budget: 6
 triggers:
   keywords: [btc, bitcoin, eth, ethereum, crypto, tiền số, tiền ảo, funding]
-version: 1.2.1
+version: 1.3.0
 ---
 
 # Reading Crypto Pulse in Plain Language
 
-Viết cho người ít chuyên crypto: mọi thuật ngữ bắt buộc giải thích 1 dòng kèm theo số. Trả lời đúng 3 câu. Crypto chạy 24/7 nên số "hôm nay" khác phiên chứng khoán VN — đừng so lệch phiên.
+Written for people who aren't crypto experts: every term must be explained in 1 line alongside its number. Answer in exactly 3 sentences. Crypto runs 24/7 so "today" numbers differ from VN stock sessions — don't compare across mismatched sessions. Verdict labels, units and output formatting stay in Vietnamese (user-visible); answer in the user's language (Vietnamese by default).
 
 ## When to Use
 
-- Dùng khi: user hỏi BTC/ETH/SOL sao rồi, crypto lên hay xuống, funding/OI nói gì, giá crypto quy ra VND, crypto có liên thông gì tới chứng khoán VN.
-- Khi KHÔNG dùng (dùng skill khác thay thế): bối cảnh regime vĩ mô toàn cầu (chỉ dùng `danh-gia-vi-mo-quoc-te`); odds xác suất sự kiện crypto (chỉ dùng `du-doan-polymarket`); phân tích vàng/tỷ giá (chỉ dùng `phan-tich-vang-ty-gia`).
+- Use when: the user asks how BTC/ETH/SOL is doing, whether crypto is up or down, what funding/OI says, crypto price converted to VND, how crypto links to VN stocks.
+- When NOT to use (use a different skill instead): global macro regime context (only `danh-gia-vi-mo-quoc-te`); crypto event probability odds (only `du-doan-polymarket`); gold/FX analysis (only `phan-tich-vang-ty-gia`).
 
 ## Workflow
 
-Copy checklist và tick theo tiến độ:
+Copy the checklist and tick as you go:
 
 ```
 Task Progress:
-- [ ] Step 1: giá spot (tối đa 3 đồng)
-- [ ] Step 2: đòn bẩy derivs
-- [ ] Step 3: sentiment + giá VND
-- [ ] Step 4: verdict 3 câu
+- [ ] Step 1: spot prices (max 3 coins)
+- [ ] Step 2: derivatives leverage
+- [ ] Step 3: sentiment + VND price
+- [ ] Step 4: 3-sentence verdict
 ```
 
-**Step 1: Giá spot.**
+**Step 1: Spot prices.**
 
-Chạy `crypto_spot` (BTC ETH SOL — tối đa 3 đồng/wave 1). Giá + % 24h = "tăng/giảm bao nhiêu hôm nay". CẤM dùng `vn_crypto_ohlcv` thay thế (giá quy VND ≠ giá USD thật) — tool đó chỉ dùng ở Step 3 khi user hỏi giá VND.
+Run `crypto_spot` (BTC ETH SOL — max 3 coins/wave 1). Price + % 24h = "tăng/giảm bao nhiêu hôm nay". NEVER use `vn_crypto_ohlcv` as a substitute (VND-converted price ≠ real USD price) — that tool is only for Step 3 when the user asks the VND price.
 
-**Step 2: Đòn bẩy derivs.**
+**Step 2: Derivatives leverage.**
 
-Chạy `crypto_derivs` (BTC ETH). Giải thích kèm số: funding rate = "phe mua đang trả tiền cho phe bán (dương = đám đông cược lên)"; OI = "tổng tiền đang cược"; long/short = "bên nào đông hơn"; funding cao + OI cao = đòn bẩy nóng, dễ đảo chiều. Funding/OI rỗng do Binance geo-block từ worker Singapore thì ghi "không lấy được do giới hạn vùng", không kết luận thị trường chết.
+Run `crypto_derivs` (BTC ETH). Explain alongside the numbers: funding rate = "phe mua đang trả tiền cho phe bán (dương = đám đông cược lên)"; OI = "tổng tiền đang cược"; long/short = "bên nào đông hơn"; high funding + high OI = hot leverage, prone to reversal. Funding/OI empty because Binance geo-blocks the Singapore worker → write "không lấy được do giới hạn vùng", don't conclude the market is dead.
 
-**Step 3: Sentiment + giá VND.**
+**Step 3: Sentiment + VND price.**
 
-Chạy `world_fear_greed` + `vn_crypto_ohlcv` (path quy VND). Chỉ drill Polymarket crypto khi user hỏi xác suất; không tự lan sang odds/event-study.
+Run `world_fear_greed` + `vn_crypto_ohlcv` (VND-conversion path). Only drill into Polymarket crypto when the user asks probabilities; don't drift into odds/event-study on your own.
 
 ## Template
 
-ALWAYS use this exact verdict structure (đúng 3 câu):
+ALWAYS use this exact verdict structure (exactly 3 sentences):
 
-1. Xu hướng gì (lên/xuống/đi ngang + %). 2. Đòn bẩy có nóng không (funding cao + OI cao = dễ đảo chiều). 3. Liên thông gì tới VN (giá VND + chứng khoán còn lại — không có thì ghi "độc lập").
+1. What the trend is (up/down/sideways + %). 2. Whether leverage is hot (high funding + high OI = prone to reversal). 3. What it links to for VN (VND price + rest for stocks — if none, write "độc lập").
 
 ## Examples
 
-**Example 1 (live 02-10-2026, không bịa số mới):**
+**Example 1 (live 02-10-2026, no new fabricated numbers):**
 Input: BTC sao rồi
-Output: BTC 83,476 (+0.33%) · funding 2.8e-05 (trung tính) · OI 95.7k · fear/greed 70-74 → 3 câu trả lời + 0 jargon không giải thích, ≤6 calls.
+Output: BTC 83,476 (+0.33%) · funding 2.8e-05 (trung tính) · OI 95.7k · fear/greed 70-74 → 3-sentence answer + 0 unexplained jargon, ≤6 calls.

@@ -1,62 +1,62 @@
 ---
 name: phan-tich-vang-ty-gia
-description: "Phân tích vàng SJC, premium SJC-thế giới, tỷ giá USDVND và lãi suất 2 đầu SBV-Fed (tối đa 10 calls). Luôn dùng skill này khi user hỏi vàng SJC đắt hơn thế giới bao nhiêu, tỷ giá có áp lực không, hay dự đoán khung vàng VN — ngay cả khi user không nói rõ muốn 'phân tích vàng'."
+description: "Analyze SJC gold, the SJC-vs-world premium, the USDVND rate and rates at both ends SBV-Fed (max 10 calls). Always use this skill when the user asks how much more expensive SJC gold is than the world, whether the FX rate is under pressure, or a VN gold frame forecast — even when the user doesn't say explicitly they want 'phân tích vàng'."
 activation: auto
 requires_tools: [mcp__opentrading__vn_retail_gold]
 tool_budget: 10
 triggers:
   keywords: [vàng sjc, vàng miếng, giá vàng, usdvnd, tỷ giá, premium vàng, vàng thế giới, xauusd, dự đoán vàng]
-version: 1.2.0
+version: 1.3.0
 ---
 
 # Analyzing Gold Premium and USDVND Pressure
 
-Trả về: giá TG + TA 3 dòng · premium % + dự đoán khung vàng VN (theo TG / ngược TG khi premium nở) · lãi suất 2 đầu + hàm ý tỷ giá · kịch bản odds. Không point-forecast giá cụ thể ("vàng sẽ lên X triệu") — chỉ nêu premium + driver + kịch bản odds.
+Returns: world price + 3-line TA · premium % + VN gold frame forecast (with the world / against the world when the premium widens) · rates at both ends + FX implications · odds scenarios. No point forecast of a specific price ("vàng sẽ lên X triệu") — only premium + drivers + odds scenarios. Verdict labels, units and output formatting stay in Vietnamese (user-visible); answer in the user's language (Vietnamese by default).
 
 ## When to Use
 
-- Dùng khi: user hỏi giá vàng SJC/vàng miếng, chênh lệch (premium) VN–TG, giá vàng thế giới + TA vàng, áp lực tỷ giá USDVND, dự đoán khung vàng VN, lãi suất 2 đầu SBV–Fed và hàm ý tỷ giá.
-- Khi KHÔNG dùng (dùng skill khác thay thế): lãi suất điều hành VN chung (chỉ dùng `danh-gia-vi-mo-viet-nam`); nhịp đập crypto (chỉ dùng `nhip-dap-crypto`); TA mã chứng khoán VN (chỉ dùng `ky-thuat-chuyen-sau`).
+- Use when: the user asks SJC gold/gold bar prices, the VN–world gap (premium), world gold price + gold TA, USDVND FX pressure, a VN gold frame forecast, SBV–Fed rates at both ends and FX implications.
+- When NOT to use (use a different skill instead): general VN policy rates (only `danh-gia-vi-mo-viet-nam`); crypto pulse (only `nhip-dap-crypto`); VN stock TA (only `ky-thuat-chuyen-sau`).
 
 ## Workflow
 
-Copy checklist và tick theo tiến độ:
+Copy the checklist and tick as you go:
 
 ```
 Task Progress:
-- [ ] Step 1: giá vàng quốc tế + TA vàng
-- [ ] Step 2: rủi ro địa chính trị (cross-ref, không gọi lại)
-- [ ] Step 3: so lệch VN–TG → premium
-- [ ] Step 4: lãi suất 2 đầu
-- [ ] Step 5: kịch bản odds + verdict
+- [ ] Step 1: international gold price + gold TA
+- [ ] Step 2: geopolitical risk (cross-ref, no re-calls)
+- [ ] Step 3: VN–world gap → premium
+- [ ] Step 4: rates at both ends
+- [ ] Step 5: odds scenarios + verdict
 ```
 
-**Step 1: Giá vàng quốc tế + TA vàng.**
+**Step 1: International gold price + gold TA.**
 
-Chạy `yf_commodities` (GC — 1 call đã gồm GC+DXY, không tách tick riêng lẻ) + `vn_msn_fx_gold`. Đọc trend/momentum trên nến daily (giá vs SMA20/50 + RSI ước từ series). `signals_technical` chỉ hỗ trợ mã VN — không ép dùng cho GC=F, đọc TA từ series có sẵn.
+Run `yf_commodities` (GC — 1 call already includes GC+DXY, don't split into separate ticks) + `vn_msn_fx_gold`. Read trend/momentum on daily candles (price vs SMA20/50 + RSI estimated from the series). `signals_technical` only supports VN stocks — never force it for GC=F, read TA from the series you already have.
 
-**Step 2: Rủi ro địa chính trị (cross-ref, không gọi lại).**
+**Step 2: Geopolitical risk (cross-ref, no re-calls).**
 
-Tham chiếu `danh-gia-tinh-hinh-xung-dot` / `bat-on-quoc-gia` nếu vừa chạy ở skill trước (leo thang = vàng lên); không gọi lại tốn budget.
+Reference `danh-gia-tinh-hinh-xung-dot` / `bat-on-quoc-gia` if just run in a previous skill (escalation = gold up); don't re-call and waste budget.
 
-**Step 3: So lệch VN–TG → premium.**
+**Step 3: VN–world gap → premium.**
 
-Chạy `vn_retail_gold` (SJC mua/bán). Premium = (SJC mua vào − giá TG quy đổi) / giá TG — bắt buộc ghi giả định quy đổi đơn vị (SJC VND/lượng vs XAUUSD USD/oz). Premium nở = vàng VN khó giảm theo TG.
+Run `vn_retail_gold` (SJC mua/bán). Premium = (SJC mua vào − converted world price) / world price — mandatory to state the unit-conversion assumption (SJC VND/lượng vs XAUUSD USD/oz). Widening premium = VN gold resists following the world price down.
 
-**Step 4: Lãi suất 2 đầu.**
+**Step 4: Rates at both ends.**
 
-Chạy `sbv_rates` + `fred_series` (DGS10) + `yf_yield_curve`: SBV (tái cấp vốn/chiết khấu) vs US (DGS10/curve) — chênh lệch hút vốn, hàm ý tỷ giá.
+Run `sbv_rates` + `fred_series` (DGS10) + `yf_yield_curve`: SBV (refinancing/discount) vs US (DGS10/curve) — the spread pulls capital, implies FX pressure.
 
-**Step 5: Kịch bản odds + validate.**
+**Step 5: Odds scenarios + validate.**
 
-Tham chiếu `world_prediction_odds` (cross-ref `du-doan-fed`) + `macro_events_vn` cho bối cảnh. Chỉ nêu premium + driver + kịch bản odds, không point-forecast.
+Reference `world_prediction_odds` (cross-ref `du-doan-fed`) + `macro_events_vn` for context. Only state premium + drivers + odds scenarios, no point forecasts.
 
 ## Template
 
-ALWAYS use this exact verdict structure: giá TG + TA 3 dòng · premium % + dự đoán khung vàng VN (theo TG / ngược TG khi premium nở) · lãi suất 2 đầu + hàm ý tỷ giá · kịch bản odds · KHÔNG point-forecast giá.
+ALWAYS use this exact verdict structure: world price + 3-line TA · premium % + VN gold frame forecast (with the world / against the world when the premium widens) · rates at both ends + FX implications · odds scenarios · NO point price forecast.
 
 ## Examples
 
-**Example 1 (live 02-10-2026, không bịa số mới):**
+**Example 1 (live 02-10-2026, no new fabricated numbers):**
 Input: Vàng SJC hôm nay đắt hơn thế giới bao nhiêu
-Output: VÀNG MIẾNG SJC 999.9 (BTMC live) · XAUUSD 4,195 · USDVND 25,970 (MSN) · SBV 4.5% tái cấp vốn · Fed giữ 74.5% → số premium % + giả định + 2 driver, ≤10 calls.
+Output: VÀNG MIẾNG SJC 999.9 (BTMC live) · XAUUSD 4,195 · USDVND 25,970 (MSN) · SBV 4.5% tái cấp vốn · Fed giữ 74.5% → premium % number + assumption + 2 drivers, ≤10 calls.

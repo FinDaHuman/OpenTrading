@@ -1,58 +1,58 @@
 ---
 name: explain-term
-description: "Giải thích thuật ngữ chứng khoán (P/E, EPS, ROE, margin, ATO/ATC, room ngoại, T+2) bằng tiếng Việt đơn giản: định nghĩa 1 câu + công thức bằng chữ + ví dụ giả định + bẫy hay gặp. Luôn dùng skill này khi user hỏi một chỉ số hoặc khái niệm là gì — ngay cả khi câu hỏi chỉ có 2-3 chữ như 'P/E là gì'."
+description: "Explain securities terms (P/E, EPS, ROE, margin, ATO/ATC, room ngoại, T+2) in simple Vietnamese: 1-sentence definition + formula in words + hypothetical example + common pitfalls. Always use this skill when the user asks what an indicator or concept is — even when the question is only 2-3 words like 'P/E là gì'."
 activation: auto
 triggers:
   keywords: [là gì, nghĩa là gì, giải thích, khái niệm, thuật ngữ]
-version: 1.2.0
+version: 1.3.0
 ---
 
 # Explaining Securities Terms Simply
 
-Trả lời đúng 5 bước, gọn nhẹ, không lan sang phân tích mã hay khuyến nghị. Mọi số minh họa là số tròn giả định — bắt buộc ghi rõ "ví dụ giả định", không bao giờ để user tưởng là số thật.
+Answer in exactly 5 steps, keep it lean, never drift into stock analysis or recommendations. All illustrative numbers are rounded hypotheticals — always label them "ví dụ giả định" (hypothetical example), never let the user mistake them for real figures. Verdict labels, units and output formatting stay in Vietnamese (user-visible); answer in the user's language (Vietnamese by default).
 
 ## When to Use
 
-- Dùng khi: user hỏi một thuật ngữ, chỉ số hoặc khái niệm là gì (P/E, EPS, ROE, margin, ATO/ATC, room ngoại, T+2...).
-- Khi KHÔNG dùng (dùng skill khác thay thế): phản biện luận điểm mua/giữ (dùng `devil-advocate`); phân tích mã cụ thể (dùng `phan-tich-chuyen-sau-1-ma`); vẽ chart (dùng `ve-bieu-do-ky-thuat`).
+- Use when: the user asks what a term, indicator or concept is (P/E, EPS, ROE, margin, ATO/ATC, room ngoại, T+2...).
+- When NOT to use (use another skill instead): countering buy/hold theses (use `devil-advocate`); analyzing a specific stock (use `phan-tich-chuyen-sau-1-ma`); drawing charts (use `ve-bieu-do-ky-thuat`).
 
 ## Workflow
 
-Copy checklist và tick theo tiến độ:
+Copy the checklist and tick off as you progress:
 
 ```
 Task Progress:
-- [ ] Step 1: định nghĩa 1 câu, tiếng Việt đơn giản
-- [ ] Step 2: công thức bằng chữ (nếu có)
-- [ ] Step 3: ví dụ giả định (ghi rõ giả định)
-- [ ] Step 4: cách dùng ở VN + 1 bẫy hay gặp
-- [ ] Step 5: 1 câu hỏi gợi mở
+- [ ] Step 1: 1-sentence definition, simple Vietnamese
+- [ ] Step 2: formula in words (if any)
+- [ ] Step 3: hypothetical example (clearly labeled)
+- [ ] Step 4: how it works in VN + 1 common pitfall
+- [ ] Step 5: 1 open-ended question
 ```
 
-**Step 1–2: Định nghĩa + công thức.**
+**Step 1–2: Definition + formula.**
 
-Định nghĩa trong một câu, không dùng biệt ngữ khác chưa giải thích. Công thức viết bằng chữ, không tự thay số thật.
+Definition in one sentence, no other unexplained jargon. Formula written in words, never swap in real numbers.
 
-**Step 3: Ví dụ minh họa.**
+**Step 3: Illustrative example.**
 
-Số tròn giả định, bắt buộc ghi rõ "ví dụ giả định".
+Rounded hypothetical numbers, always labeled "ví dụ giả định".
 
-**Step 4: Cách dùng thực tế ở VN + 1 bẫy hay gặp.**
+**Step 4: Real-world usage in VN + 1 common pitfall.**
 
-Ví dụ: P/E thấp ảo do lợi nhuận đột biến, margin call, room ngoại khóa.
+Examples: deceptively low P/E from one-off profits, margin call, locked foreign room.
 
-**Step 5: Kết thúc bằng 1 câu hỏi gợi mở.**
+**Step 5: End with 1 open-ended question.**
 
-Giúp user đào sâu (ví dụ "bạn muốn xem P/E này so với ngành không?"). Chỉ giải thích 1 thuật ngữ/lượt.
+Helps the user dig deeper (e.g. "bạn muốn xem P/E này so với ngành không?"). Explain only 1 term per turn.
 
 ## Template
 
-ALWAYS use this exact output structure: định nghĩa 1 câu · công thức bằng chữ · ví dụ giả định (ghi rõ giả định) · cách dùng ở VN + bẫy hay gặp · 1 câu hỏi gợi mở.
+ALWAYS use this exact output structure: 1-sentence definition · formula in words · hypothetical example (clearly labeled as such) · VN usage + common pitfall · 1 open-ended question.
 
 ## Examples
 
 **Example 1:**
 Input: P/E là gì
-Output: định nghĩa 1 câu + công thức chữ + ví dụ giả định có ghi rõ + bẫy VN + 1 câu hỏi gợi mở.
+Output: 1-sentence definition + formula in words + clearly-labeled hypothetical example + VN pitfall + 1 open-ended question.
 
-**Anti-pattern (không làm thế này):** định nghĩa bằng biệt ngữ khó hơn; quên ghi "ví dụ giả định" khiến user tưởng số thật; trả lời dài như giáo trình.
+**Anti-pattern (never do this):** defining with harder jargon; forgetting the "ví dụ giả định" label so the user mistakes numbers for real ones; answering like a textbook chapter.

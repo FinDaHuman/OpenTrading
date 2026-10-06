@@ -1,66 +1,66 @@
 ---
 name: du-doan-fed
-description: Đọc xác suất và kịch bản lãi suất Fed kỳ tới (cắt/giữ/tăng) kèm đường cong lợi suất, lịch FOMC và hàm ý cho VN. Luôn dùng skill này khi user hỏi Fed, FOMC, dot plot hay xác suất lãi suất Mỹ — ví dụ "Fed tháng tới cắt hay giữ", "dot plot mới nhất" — ngay cả khi user không nói rõ muốn "dự đoán Fed".
+description: Read next-meeting Fed rate probabilities and scenarios (cut/hold/hike) with the yield curve, FOMC calendar and implications for VN. Always use this skill when the user asks about Fed, FOMC, dot plot or US rate odds — e.g. "Fed tháng tới cắt hay giữ", "dot plot mới nhất" — even when the user doesn't explicitly say they want a "dự đoán Fed" (Fed forecast).
 activation: auto
 requires_tools: [mcp__opentrading__world_prediction_odds]
 tool_budget: 8
 triggers:
   keywords: [fed, fomc, cắt giảm lãi suất, dot plot, xác suất fed, lãi suất mỹ]
-version: 1.1.0
+version: 1.2.0
 ---
 
 # Reading the Next Fed Decision
 
-Trả về đúng 5 mục: xác suất từng kịch bản → đường cong → lịch FOMC → biến số theo dõi → hàm ý VN. Chỉ drill 1 event Fed chính (slug mới nhất, đã sort vol24h) — không bắn 5 query biến thể.
+Return exactly 5 items: probability per scenario → curve → FOMC calendar → variables to watch → VN implications. Drill only the 1 main Fed event (latest slug, already sorted by vol24h) — never fire 5 query variants. Verdict labels, units and output formatting stay in Vietnamese (user-visible); answer in the user's language (Vietnamese by default).
 
 ## When to Use
 
-- Dùng khi: user hỏi Fed kỳ tới (cắt/giữ/tăng), FOMC, dot plot, xác suất odds + đường cong + hàm ý VN.
-- Khi KHÔNG dùng (dùng skill khác thay thế):
-  - Bối cảnh vĩ mô Mỹ chung (chu kỳ, việc làm, risk regime) không cần odds → dùng `danh-gia-vi-mo-quoc-te`.
-  - Odds chủ đề ngoài Fed (bầu cử, BTC...) → dùng `du-doan-polymarket`.
-  - Bản đồ rủi ro chính trị rộng → dùng `danh-gia-tinh-hinh-chinh-tri-toan-cau`.
+- Use when: the user asks about the next Fed decision (cut/hold/hike), FOMC, dot plot, or odds probabilities + curve + VN implications.
+- When NOT to use (use another skill instead):
+  - General US macro context (cycle, jobs, risk regime) without odds → use `danh-gia-vi-mo-quoc-te`.
+  - Odds on non-Fed topics (elections, BTC...) → use `du-doan-polymarket`.
+  - Broad political-risk map → use `danh-gia-tinh-hinh-chinh-tri-toan-cau`.
 
 ## Workflow
 
-Copy checklist và tick theo tiến độ:
+Copy the checklist and tick off as you progress:
 
 ```
 Task Progress:
-- [ ] Step 1: odds Fed (1 call, lấy event top)
-- [ ] Step 2: drill-down + macro (song song)
-- [ ] Step 3: curve + xác minh nguồn chính thức
-- [ ] Step 4: verdict 5 mục
+- [ ] Step 1: Fed odds (1 call, take the top event)
+- [ ] Step 2: drill-down + macro (parallel)
+- [ ] Step 3: curve + verify official source
+- [ ] Step 4: verdict, 5 items
 ```
 
-**Step 1: Odds Fed (bắt buộc).**
+**Step 1: Fed odds (mandatory).**
 
-Chạy `world_prediction_odds` (query=fed). Có prob ≥2 kịch bản + lịch họp là đủ verdict; Step 3 sau đó chỉ để xác minh.
+Run `world_prediction_odds` (query=fed). Probabilities for ≥2 scenarios + meeting dates are enough for a verdict; Step 3 afterwards is only for verification.
 
-**Step 2: Drill-down + macro (song song, tuần tự sau Step 1).**
+**Step 2: Drill-down + macro (parallel, after Step 1).**
 
-Chạy `polymarket_event` (slug fed-decision-*) + `fred_series` (DGS10, thêm EFFR/DFII nếu cần). Không drill quá 1 slug Fed/run.
+Run `polymarket_event` (slug fed-decision-*) + `fred_series` (DGS10, add EFFR/DFII if needed). Never drill more than 1 Fed slug per run.
 
-**Step 3: Curve + xác minh (song song, tuần tự sau Step 2).**
+**Step 3: Curve + verification (parallel, after Step 2).**
 
-Chạy `yf_yield_curve` + `web_fetch` (chỉ statement/nguồn chính thức fed.gov trong odds).
+Run `yf_yield_curve` + `web_fetch` (only the statement/official fed.gov source cited in the odds).
 
-**Step 4: Validate trước khi chốt.**
+**Step 4: Validate before finalizing.**
 
-Odds stale (end-date qua) → lọc `end > today`, bỏ event hết hạn, retry 1 lần query fed mới. Gamma chết cả proxy + direct thì ghi rõ "không có odds", không thay bằng nhận định riêng. Curve flaky → retry tối đa 1 lần sau backoff rồi bỏ, ghi chú thiếu curve. `fred_series` tối đa 3 series ngoài Fed thì dừng.
+Stale odds (end-date passed) → filter `end > today`, drop expired events, retry once with a fresh fed query. If Gamma is down on both proxy + direct, state clearly "không có odds" (no odds available) — never substitute your own opinion. Flaky curve → retry at most once after backoff, then drop with a note that the curve is missing. `fred_series`: at most 3 series beyond the Fed ones, then stop.
 
 ## Template
 
 ALWAYS use this exact verdict structure:
 
-1. **Xác suất từng kịch bản:** cắt/giữ/tăng, mỗi kịch bản prob_pct (đơn vị %) + volume (USD) + end-date + URL event.
-2. **Đường cong ám chỉ:** US10Y/2Y (đơn vị %) + inverted hay không + URL.
-3. **Lịch FOMC kế tiếp:** ngày họp (đơn vị ngày/tháng) + nguồn fed.gov URL.
-4. **Biến số theo dõi:** CPI Mỹ, jobs, đơn vị %/K jobs + URL.
-5. **Hàm ý cho VN:** tỷ giá/lãi suất, 1–2 dòng + URL.
+1. **Probability per scenario:** cut/hold/hike, each with prob_pct (unit %) + volume (USD) + end-date + event URL.
+2. **Implied curve:** US10Y/2Y (unit %) + whether inverted or not + URL.
+3. **Next FOMC date:** meeting day (unit day/month) + fed.gov source URL.
+4. **Variables to watch:** US CPI, jobs, unit %/K jobs + URL.
+5. **Implications for VN:** FX/rates, 1–2 lines + URL.
 
 ## Examples
 
-**Example 1 (live 02-10-2026, không bịa số mới):**
+**Example 1 (live 02-10-2026, no fabricated numbers):**
 Input: Fed tháng tới
-Output: "Fed Decision in October 2026": Yes(no change) 74.5% / No 25.5%, volume24h 2.6M · curve US10Y 5.24% không đảo → prob ≥2 kịch bản + lịch họp + 1 dòng hàm ý VN.
+Output: "Fed Decision in October 2026": Yes(no change) 74.5% / No 25.5%, volume24h 2.6M · curve US10Y 5.24% not inverted → probabilities for ≥2 scenarios + meeting dates + 1 line of VN implications.
