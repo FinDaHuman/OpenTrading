@@ -138,6 +138,20 @@ test("transient 503 on initialize is retried", async () => {
   expect(state(manager, "flaky").state).toBe("connected")
 })
 
+test("a 502 HTML page (cold PaaS host) becomes a short one-line error with a retry hint", async () => {
+  const page = `<!DOCTYPE html>\n<html lang="en">\n  <head>\n    <title>502</title>\n    <style>@font-face { src: url("data:font/woff2;base64,${"A".repeat(20_000)}") }</style>\n  </head>\n</html>`
+  const remote = startHttpServer({ failFirst: { count: 99, status: 502, body: page } })
+  cleanups.push(remote.stop)
+  const { manager } = await managerWith({ cold: { type: "http", url: remote.url } })
+  await manager.start()
+  const s = state(manager, "cold")
+  expect(s.state).toBe("failed")
+  expect(s.error).toContain('[trang HTML "502"]')
+  expect(s.error).toContain("HTTP 502")
+  expect(s.error).not.toMatch(/<html|base64|\n/)
+  expect(s.error!.length).toBeLessThan(700)
+}, 20_000)
+
 test("Streamable HTTP falls back to SSE for legacy servers; type sse connects directly", async () => {
   const legacy = await startSseServer()
   cleanups.push(legacy.stop)

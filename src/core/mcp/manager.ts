@@ -184,7 +184,25 @@ function capInstructions(text: string | undefined) {
 const LOGIN_TIMEOUT_MS = 5 * 60_000
 const RETRYABLE_STATUS = new Set([408, 429, 500, 502, 503, 504])
 
-const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error))
+const MAX_ERROR = 600
+
+/**
+ * One-line, bounded error text. Proxies and PaaS hosts (Render, Cloudflare) answer a cold
+ * or overloaded server with a whole HTML page, which the SDK puts verbatim in the message:
+ * keep what precedes it plus the page title.
+ */
+export function cleanErrorText(text: string): string {
+  const html = text.search(/<!doctype html|<html[\s>]/i)
+  let out = text
+  if (html >= 0) {
+    const title = text.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1]?.trim()
+    out = `${text.slice(0, html).trim()} [trang HTML${title ? ` "${title}"` : ""}]`
+  }
+  out = out.replace(/\s+/g, " ").trim()
+  return out.length > MAX_ERROR ? out.slice(0, MAX_ERROR) + "…" : out
+}
+
+const errorText = (error: unknown) => cleanErrorText(error instanceof Error ? error.message : String(error))
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
 class TimeoutError extends Error {}
@@ -304,6 +322,7 @@ export class McpManager {
   private set(name: string, patch: Partial<McpServerStatus>) {
     const prev = this.statuses.get(name)
     if (!prev) return
+    if (patch.error) patch = { ...patch, error: cleanErrorText(patch.error) }
     this.statuses.set(name, { ...prev, ...patch })
     this.emit()
   }
@@ -502,8 +521,14 @@ export class McpManager {
       if (!isRemote(config) && /is not recognized|command not found|ENOENT|No such file/i.test(tail + errorText(error))) {
         return this.set(name, { state: "failed", error: missingCommandHint(config.command) })
       }
-      const timeoutHint = error instanceof TimeoutError ? ` Có thể tăng "startupTimeoutMs" cho server "${name}".` : ""
-      return this.set(name, { state: "failed", error: errorText(error) + timeoutHint + (tail ? ` — stderr: ${tail}` : "") })
+      const status = httpStatus(error)
+      const hint =
+        error instanceof TimeoutError
+          ? ` Có thể tăng "startupTimeoutMs" cho server "${name}".`
+          : status !== undefined && [502, 503, 504].includes(status)
+            ? ` Server tạm thời không phản hồi (HTTP ${status}, có thể đang khởi động hoặc quá tải) — thử "Kết nối lại" sau ít phút.`
+            : ""
+      return this.set(name, { state: "failed", error: errorText(error) + hint + (tail ? ` — stderr: ${tail}` : "") })
     }
     if (!this.current(name, gen)) {
       await live.client.close().catch(() => {})
