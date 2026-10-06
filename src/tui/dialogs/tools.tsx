@@ -9,8 +9,8 @@ import { Picker } from "./picker"
 export function ToolsDialog(props: { registry: ToolRegistry }) {
   const [tools, setTools] = createSignal(props.registry.list())
   onCleanup(props.registry.onChange(() => setTools(props.registry.list())))
-  // Cluster preset tools together so 130+ tools read as groups, not one flat wall.
-  const order = new Map([...["market", "scan", "quant", "brief", "intel"]].map((p, i) => [p, i]))
+  // Group MCP tools by server source so 130+ tools read as groups, not one flat wall.
+  const order = new Map(["mcp:opentrading"].map((p, i) => [p, i]))
 
   useKeyboard((evt) => {
     if (evt.eventType !== "release" && evt.name === "escape") closeDialog()
@@ -21,10 +21,10 @@ export function ToolsDialog(props: { registry: ToolRegistry }) {
       <Picker
         items={tools()
           .slice()
-          .sort((a, b) => (order.get(a.presets?.[0] ?? "") ?? 99) - (order.get(b.presets?.[0] ?? "") ?? 99) || a.name.localeCompare(b.name))
+          .sort((a, b) => (order.get(a.source ?? "") ?? 99) - (order.get(b.source ?? "") ?? 99) || a.name.localeCompare(b.name))
           .map((t) => ({
             label: t.name,
-            hint: `${t.source ?? "built-in"}${t.presets?.length ? ` · ${t.presets.join("+")}` : ""}${t.readOnly ? " · chỉ đọc" : ""} · ${t.description.split("\n")[0]!.slice(0, 40)}`,
+            hint: `${t.source ?? "built-in"}${t.readOnly ? " · chỉ đọc" : ""} · ${t.description.split("\n")[0]!.slice(0, 40)}`,
             mark: t.readOnly ? "◇" : "◆",
             value: t.name,
           }))}

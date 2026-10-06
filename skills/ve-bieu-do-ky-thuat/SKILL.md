@@ -6,7 +6,7 @@ requires_tools: [chart_render]
 triggers:
   keywords: [vẽ, chart, nến, candlestick, đường giá, sparkline, biểu đồ, đồ thị, so sánh, bar, gauge, heatmap, donut, histogram, fear, greed, tương quan, tỷ trọng]
 tool_budget: 8
-version: 1.2.0
+version: 1.2.1
 ---
 
 # Drawing Charts Inside the TUI
@@ -46,7 +46,7 @@ Task Progress:
 
 **Step 1: Lấy dữ liệu.**
 
-Lấy tool dữ liệu theo bảng tra trên. Thiếu thì báo trung thực, không vẽ chay. Ngưỡng tối thiểu: candlestick ≥5 nến; line/sparkline/area/winloss ≥2 điểm; histogram ≥5 điểm; heatmap matrix phi rỗng; gauge/donut cần value+max. Chưa đủ thì không vẽ, báo thiếu data.
+Lấy tool dữ liệu theo bảng tra trên. Chọn nguồn đúng trước khi vẽ: mã VN → `vn_equity_ohlcv`/`vn_quote_history` (KHÔNG dùng `vn_crypto_ohlcv` cho cổ phiếu); crypto USD → `crypto_spot`. Thiếu thì báo trung thực, không vẽ chay. Ngưỡng tối thiểu: candlestick ≥5 nến; line/sparkline/area/winloss ≥2 điểm; histogram ≥5 điểm; heatmap matrix phi rỗng; gauge/donut cần value+max. Chưa đủ thì không vẽ, báo thiếu data.
 
 **Step 2: Vẽ.**
 

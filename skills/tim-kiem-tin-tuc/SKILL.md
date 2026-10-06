@@ -6,7 +6,7 @@ requires_tools: [mcp__opentrading__news_symbol]
 tool_budget: 10
 triggers:
   keywords: [tin về, tìm tin, tin tức về, news về, tin trên, dư luận về, nghe đồn, tin đồn, có thật không]
-version: 1.2.0
+version: 1.2.1
 ---
 
 # Hunting News Including Rumors
@@ -32,7 +32,7 @@ Task Progress:
 
 **Mode A — Theo mã (+ rumor).**
 
-1. Chạy `news_symbol` (symbol, limit=20) trước.
+1. Chạy `news_symbol` (symbol, limit=20) trước. CẤM đi web_search trước khi có kết quả `news_symbol` — web chỉ để xác minh chéo sau.
 2. Săn web + comments song song: `web_search` ("tên mã" + "đồn"/"tin đồn"/rumor, tối đa 2 query) → `web_fetch` 1–2 URL đáng ngờ nhất + `fireant_thread` (post_id từ bước 1 — rumor nằm ở replies; Fireant posts giờ có id thật, không bịa post_id).
 3. Đối chiếu tuần tự: `corporate_calendar` (symbol) + `company_events` (symbol) — tin có khớp công bố không?
 4. Dư luận: `sentiment_score` (symbol). Đủ ≥5 tin đạt chuẩn thì dừng.

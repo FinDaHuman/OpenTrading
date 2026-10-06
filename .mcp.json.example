@@ -13,8 +13,7 @@
         "Accept": "application/json, text/event-stream"
       },
       "startupTimeoutMs": 60000,
-      "toolTimeoutMs": 180000,
-      "preset": "scan"
+      "toolTimeoutMs": 180000
     }
   }
 }

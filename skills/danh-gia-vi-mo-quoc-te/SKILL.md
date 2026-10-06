@@ -6,7 +6,7 @@ requires_tools: [mcp__opentrading__fred_series]
 tool_budget: 10
 triggers:
   keywords: [kinh tế mỹ, recession, suy thoái, đường cong lợi suất, yield curve, risk-on, risk-off, fed bối cảnh, kinh tế toàn cầu]
-version: 1.1.0
+version: 1.1.1
 ---
 
 # Reading US and Global Macro Regime
@@ -34,7 +34,7 @@ Task Progress:
 
 **Step 1: Chu kỳ Mỹ (song song).**
 
-Chạy `fred_series` (DGS10) + `fred_series` (CPIAUCSL) + `yf_yield_curve`. FRED thiếu key → trả unavailable → chuyển nhánh không-FRED (dùng `yf_yield_curve` + `yf_global_indices`) + ghi chú trung thực thiếu series nào. Curve flaky thì retry tối đa 1 lần sau backoff rồi bỏ.
+Chạy `fred_series` (DGS10) + `fred_series` (CPIAUCSL) + `yf_yield_curve`. CẤM đi web_search/web_fetch trước khi gọi tool chuyên — web chỉ bổ sung sau khi đã có số FRED. FRED thiếu key → trả unavailable → chuyển nhánh không-FRED (dùng `yf_yield_curve` + `yf_global_indices`) + ghi chú trung thực thiếu series nào. Curve flaky thì retry tối đa 1 lần sau backoff rồi bỏ.
 
 **Step 2: Chế độ rủi ro (song song, tuần tự sau Step 1).**
 

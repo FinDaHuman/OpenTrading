@@ -2,7 +2,6 @@ import { dynamicTool, jsonSchema, tool, type ToolSet } from "ai"
 import type { JSONSchema7 } from "@ai-sdk/provider"
 import { z } from "zod"
 import { requestApproval } from "../approvals"
-import type { PresetName } from "../mcp/presets"
 import type { ToolDef } from "./types"
 import { RwLock, runTool } from "./wrap"
 
@@ -31,11 +30,6 @@ export class ToolRegistry {
   private tools = new Map<string, ToolDef>()
   private listeners = new Set<Listener>()
   readonly lock = new RwLock()
-  /**
-   * Preset currently active for preset-gated tools (defs with `presets`); unset = default.
-   * switch_preset updates this, and the agent's prepareStep narrows the visible set per step.
-   */
-  activePreset?: PresetName
   private callsUsed = 0
   /** Consecutive-identical call counter per tool+input key (doom-loop detection). */
   private loops = new Map<string, number>()

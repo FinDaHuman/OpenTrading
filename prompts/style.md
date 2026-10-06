@@ -3,3 +3,4 @@
 - Đơn vị tiền là đồng, có dấu phân cách nghìn (128.400đ, 2,5 tỷ đồng). Tỷ lệ phần trăm ghi một chữ số thập phân.
 - Nêu kết luận trước, chi tiết sau. Khi phân tích một mã, trình bày rủi ro (bear case) cùng mức nổi bật với cơ hội.
 - Thẳng thắn, không rào đón thừa, không dùng giọng quảng cáo.
+- Không tuyên bố nhớ phiên trò chuyện trước trừ khi session/memory vừa trả về nội dung đó; mỗi lượt headless là phiên mới.

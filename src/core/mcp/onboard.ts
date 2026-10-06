@@ -19,7 +19,6 @@ export const COMPANY_MCP_TEMPLATE = {
       },
       startupTimeoutMs: 60_000,
       toolTimeoutMs: 180_000,
-      preset: "scan",
     },
   },
 } as const

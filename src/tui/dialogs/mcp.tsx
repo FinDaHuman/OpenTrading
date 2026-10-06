@@ -1,7 +1,6 @@
 import { useKeyboard } from "@opentui/solid"
 import { createMemo, createSignal, For, Match, Show, Switch } from "solid-js"
 import type { McpManager, McpServerStatus, McpState } from "../../core/mcp/manager"
-import type { PresetName } from "../../core/mcp/presets"
 import { closeDialog, pushLine, state } from "../state"
 import { color } from "../theme"
 import { DialogFrame } from "./frame"
@@ -50,28 +49,10 @@ export function McpDialog(props: { mcp: McpManager }) {
     }
   }
 
-  async function switchPreset(dir: 1 | -1) {
-    const s = server()
-    if (!s || busy()) return
-    const order: PresetName[] = ["market", "scan", "quant", "brief", "intel", "all"]
-    const next = order[(order.indexOf(s.preset) + dir + order.length) % order.length]!
-    setBusy(true)
-    try {
-      await props.mcp.setPreset(s.name, next)
-      pushLine({ kind: "info", text: `Preset của "${s.name}" → ${next}.` })
-    } finally {
-      setBusy(false)
-    }
-  }
-
   useKeyboard((evt) => {
     if (evt.eventType === "release") return
     if (evt.name === "escape") return open() ? setOpen(undefined) : closeDialog()
     if (open() && evt.name === "return") void act()
-    if (open() && !busy()) {
-      if (evt.name === "left") void switchPreset(-1)
-      if (evt.name === "right") void switchPreset(1)
-    }
   })
 
   return (
@@ -95,9 +76,9 @@ export function McpDialog(props: { mcp: McpManager }) {
                 ? "đang xử lý…"
                 : s().state === "untrusted"
                   ? "enter cho phép chạy · esc quay lại"
-                  : s().state === "failed" || s().state === "connected"
-                    ? "←/→ đổi preset · enter kết nối lại · esc quay lại"
-                    : "esc quay lại"
+                : s().state === "failed" || s().state === "connected"
+                  ? "enter kết nối lại · esc quay lại"
+                  : "esc quay lại"
             }
           >
             <text>
@@ -109,21 +90,9 @@ export function McpDialog(props: { mcp: McpManager }) {
             <text fg={color.tx2}>{`Nguồn       ${s().scope} · ${s().file}`}</text>
             <text fg={color.tx2}>{`${s().transport === "http" ? "URL         " : "Lệnh        "}${s().target}`}</text>
             <text>
-              <span style={{ fg: color.tx3 }}>{"Preset     "}</span>
-              <span style={{ fg: color.tang }}>
-                {`${s().preset} (${s().presetCounts?.[s().preset] ?? s().tools.length} tool model thấy · ${s().tools.length} tool server có)`}
-              </span>
-              <span style={{ fg: color.tx3 }}>{" · ←/→ đổi"}</span>
+              <span style={{ fg: color.tx3 }}>{"Tools      "}</span>
+              <span style={{ fg: color.tang }}>{`${s().tools.length} tool (single surface — model thấy toàn bộ)`}</span>
             </text>
-            <Show when={s().presetCounts}>
-              {(counts) => (
-                <text fg={color.tx2}>
-                  {`Có sẵn    market ${counts().market} · scan ${counts().scan} · quant ${counts().quant} · brief ${counts().brief} · intel ${counts().intel}${
-                    counts()["khác"] > 0 ? ` · khác ${counts()["khác"]}` : ""
-                  }`}
-                </text>
-              )}
-            </Show>
             <Show when={s().error}>
               <text fg={color.giam} marginTop={1} wrapMode="word">
                 {s().error}

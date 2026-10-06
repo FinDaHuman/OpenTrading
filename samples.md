@@ -10,11 +10,11 @@
 |---|---|---|
 | A1 | `/connect` → chọn Groq/NVIDIA/Alibaba → nhập key | key lưu `~/.opentrading/auth.json` (600), nhảy `/model` |
 | A2 | `/model` → gõ lọc → chọn | StatusBar đổi; model chết → lỗi Việt hoá có hướng dẫn |
-| A3 | `/mcp` | hiện `Preset scan (47 tool đang gửi model)` + đếm 6 preset + URL |
-| A4 | `/mcp` → chọn server → `←/→` | đổi preset tức thì, không reconnect; tool count đổi |
+| A3 | `/mcp` | hiện `● đã kết nối` + số tool (single surface, không preset) + URL |
+| A4 | `/mcp` → chọn server → Enter | kết nối lại; tool count = toàn bộ server (không đổi preset vì đã xóa) |
 | A5 | `/mcp` → Enter (kết nối lại) | trạng thái ● đã kết nối |
-| A6 | `/tools` | nhóm theo preset (market→scan→…), tag `presets`, ◇ = chỉ đọc |
-| A7 | `/skills` | 30 skill, mark ●/○ |
+| A6 | `/tools` | liệt kê toàn bộ tools (không nhóm preset), ◇ = chỉ đọc |
+| A7 | `/skills` | 26 skill, mark ●/○ |
 | A8 | `/context` | từng tầng + số token + hạng A/B/C |
 | A9 | `/config`, `/memory`, `/sessions`, `/new`, `/clear`, `/help` | mở dialog / hành động đúng |
 | A10 | `tab` hoàn thành `/tic` → `/ticker_analysis ` | gợi ý lọc đúng cả slash-command của MCP |

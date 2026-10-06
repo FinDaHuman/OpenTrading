@@ -1,7 +1,7 @@
 /**
  * Approval gate for actions the model may trigger but must not perform silently —
  * the harness-side twin of opencode's permission `ask` flow. The model requests
- * (e.g. switch_preset), a UI handler shows a dialog, and the user decides.
+ * (e.g. doom-loop recap), a UI handler shows a dialog, and the user decides.
  *
  * Without a handler (scripts, tests) every request is allowed once: nothing to show
  * a dialog to, and the user explicitly asked for allow-by-default in that setting.

@@ -285,16 +285,13 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
       : assembled.system
 
   const model = languageModel(target.provider, target.model, target.apiKey)
-  // Names in the frozen snapshot; a preset switch cannot add tools mid-stream, but
-  // prepareStep narrows the visible set per step, so switch_preset takes effect
-  // on the very next step of the same turn.
+  // Names in the frozen snapshot; the visible set is everything registered
+  // (single surface — no preset gating since 2026-10-06).
   const frozenNames = new Set(opts.registry.list().map((t) => t.name))
   let summarized = false
   const visibleNames = () => {
-    const active = opts.registry.activePreset ?? "market"
     return opts.registry
       .list()
-      .filter((t) => !t.presets || t.presets.length === 0 || t.presets.includes(active))
       .filter((t) => frozenNames.has(t.name))
       .map((t) => t.name)
   }

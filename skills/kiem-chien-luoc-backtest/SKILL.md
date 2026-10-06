@@ -6,7 +6,7 @@ requires_tools: [mcp__opentrading__quant_backtest]
 tool_budget: 12
 triggers:
   keywords: [backtest, kiểm chứng, chiến lược, sma cross, rsi dưới, quá bán, momentum chiến lược, param sweep, mùa vụ tháng, sau tết, sau chia cổ tức, theo giá dầu, theo giá vàng]
-version: 1.2.1
+version: 1.2.2
 ---
 
 # Backtesting Trading Strategies Honestly
@@ -34,7 +34,7 @@ Task Progress:
 
 **Step 1: Dữ liệu (tuần tự đầu tiên).**
 
-Chạy `vn_quote_history` (stock) hoặc `dnse_ohlc_history` (futures/index) + `vn_index_ohlcv` (benchmark). Chỉ 1 symbol mỗi lần sweep.
+Chạy `vn_quote_history` (stock) hoặc `dnse_ohlc_history` (futures/index) + `vn_index_ohlcv` (benchmark). Chỉ 1 symbol mỗi lần sweep. Mã cổ phiếu VN thì dùng nến equity — CẤM dùng `vn_crypto_ohlcv`.
 
 **Step 2: Điều kiện kỹ thuật.**
 

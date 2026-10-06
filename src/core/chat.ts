@@ -34,14 +34,36 @@ export function describeError(error: unknown): string {
   return status ? `Lỗi ${status}: ${message}` : message
 }
 
-// Quick manual check without the TUI (built-in tools only): `bun src/core/chat.ts "mấy giờ rồi?"`
+// Quick manual check without the TUI: `bun src/core/chat.ts "mấy giờ rồi?"`.
+// Slash-commands (`/ticker_analysis VCB`) resolve via prompts/get like the TUI does.
 if (import.meta.main) {
   const { runAgent } = await import("./agent")
   const { initRuntime } = await import("./runtime")
   const { loadSkills } = await import("./skills/loader")
   const { skills } = await loadSkills()
-  const { registry } = initRuntime({ skills: () => skills })
-  const input = process.argv.slice(2).join(" ") || "Xin chào"
+  const runtime = initRuntime({ skills: () => skills })
+  const { registry } = runtime
+  await runtime.mcp.start()
+  let input = process.argv.slice(2).join(" ") || "Xin chào"
+  if (input.startsWith("/")) {
+    const { fillPromptArgs, parseCommand } = await import("../tui/commands")
+    const cmd = parseCommand(input)
+    if (!cmd) {
+      console.error("Lệnh trống.")
+      process.exit(1)
+    }
+    const prompt = runtime.mcp.allPrompts().find((p) => p.name === cmd.name)
+    if (!prompt) {
+      console.error(`Không có lệnh /${cmd.name}. Gõ /help trong TUI.`)
+      process.exit(1)
+    }
+    const filled = fillPromptArgs(prompt.arguments, cmd.args)
+    if (typeof filled === "string") {
+      console.error(filled)
+      process.exit(1)
+    }
+    input = (await runtime.mcp.promptByName(prompt.name, filled)).text
+  }
   try {
     for await (const event of runAgent({ history: [], input, skills, registry })) {
       if (event.type === "text-delta") process.stdout.write(event.text)

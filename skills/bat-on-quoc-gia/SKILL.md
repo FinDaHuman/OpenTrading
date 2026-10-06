@@ -6,7 +6,7 @@ requires_tools: [mcp__opentrading__geo_intel]
 tool_budget: 6
 triggers:
   keywords: [bất ổn, bất ổn quốc gia, biểu tình, đảo chính, ổn định, thái lan, bangladesh]
-version: 1.1.0
+version: 1.1.1
 ---
 
 # Assessing Single-Country Stability
@@ -33,7 +33,7 @@ Task Progress:
 
 **Step 1: Đo cường độ (bắt buộc).**
 
-Chạy song song 2 calls cùng upstream GDELT: `geo_intel` (topic = tên nước tiếng Anh) + `event_stats` (query = tên nước tiếng Anh). Query tiếng Anh 1 lần + tối đa 1 biến thể; query tiếng Việt rỗng là đặc trưng data, không phải lỗi. GDELT rate-limit thì retry tối đa 1 lần sau backoff (server đã cache 600s); vẫn lỗi thì ghi trung thực và verdict dựa trên dữ liệu cũ.
+Chạy song song 2 calls cùng upstream GDELT: `geo_intel` (topic = tên nước tiếng Anh) + `event_stats` (query = tên nước tiếng Anh). CẤM đi web_search/web_fetch trước khi có counts GDELT — web chỉ dùng ở Step 2 khi Step 1 mỏng. Query tiếng Anh 1 lần + tối đa 1 biến thể; query tiếng Việt rỗng là đặc trưng data, không phải lỗi. GDELT rate-limit thì retry tối đa 1 lần sau backoff (server đã cache 600s); vẫn lỗi thì ghi trung thực và verdict dựa trên dữ liệu cũ.
 
 **Step 2: Xác minh bằng tin (chỉ khi Step 1 mỏng).**
 

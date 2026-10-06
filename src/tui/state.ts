@@ -53,7 +53,7 @@ export const [state, setState] = createStore({
   /** Show full tool output instead of the first lines (ctrl+o). */
   expandTools: false,
   dialog: undefined as DialogName | undefined,
-  /** Approval request waiting for the user (e.g. switch_preset); resolves the waiting tool. */
+  /** Approval request waiting for the user (e.g. doom-loop); resolves the waiting tool. */
   approval: undefined as { title: string; detail?: string; resolve: (decision: Decision) => void } | undefined,
 })
 

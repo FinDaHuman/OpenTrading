@@ -42,7 +42,6 @@ Nếu hai file có server trùng tên, cấu hình của project được dùng.
       "type": "http",
       "url": "https://data.example.com/mcp",
       "headers": { "Authorization": "Bearer ${DATA_TOKEN}" },
-      "preset": "market",                // market|scan|quant|brief|intel|all (mặc định market)
       "maxOutputChars": 12000,           // mặc định 12000; cắt đầu + đuôi kết quả dài
       "startupTimeoutMs": 15000          // mặc định 30000
     },
@@ -83,10 +82,9 @@ Nếu hai file có server trùng tên, cấu hình của project được dùng.
 
 ## 5. Kiểm tra
 
-- `/mcp`: xem trạng thái (● đã kết nối, … đang kết nối, ✕ lỗi, ? chờ cho phép, ○ đã tắt), preset đang dùng, đếm tool theo preset, lỗi, lệnh hoặc URL, và danh sách tool. `←/→` đổi preset (kết nối lại tức thì), Enter để cho phép hoặc kết nối lại.
-- `/tools`: liệt kê mọi tool model đang gọi được, nhóm theo preset. ◇ là tool chỉ đọc.
+- `/mcp`: xem trạng thái (● đã kết nối, … đang kết nối, ✕ lỗi, ? chờ cho phép, ○ đã tắt), số tool, lỗi, lệnh hoặc URL, và danh sách tool. Enter để cho phép hoặc kết nối lại. Single surface: model luôn thấy toàn bộ tools, không còn preset.
+- `/tools`: liệt kê mọi tool model đang gọi được. ◇ là tool chỉ đọc.
 - `ctrl+o` trong khung chat: mở rộng hoặc thu gọn toàn bộ kết quả tool.
-- **Đổi preset từ chat:** tool `switch_preset` luôn trong bộ tool (description là bảng tổng quan preset). Model tự gọi khi thiếu dữ liệu; TUI hiện hộp phê duyệt — enter cho phép 1 lần, `a` luôn cho phép, esc từ chối. Có hiệu lực từ step kế tiếp trong cùng lượt. Khi không có TUI (script/test), mặc định cho phép.
 - **Prompt workflows thành lệnh slash:** các MCP prompt của server hiện như lệnh (`/ticker_analysis VCB`, `/morning_briefing`…) trong gợi ý `/`; nội dung prompt được fetch từ server rồi gửi như tin nhắn user.
 - **Ngân sách chống gọi tràn lan:** mỗi skill khai `tool_budget` (model tự giới hạn theo catalog); harness chặn cứng: tối đa 20 lần gọi tool/lượt, gọi giống hệt lần 3 → hỏi phê duyệt, tối đa 5 tool đọc chạy song song (upstream throttle).
 - Có thể thử mà không cần TUI: `bun src/core/chat.ts "mấy giờ rồi?"`. Lệnh này chỉ dùng các tool có sẵn.

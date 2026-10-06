@@ -160,7 +160,7 @@ export function App(props: { runtime: Runtime; resume?: string }) {
   })
   onCleanup(() => offMcp())
 
-  // Tools that need approval (e.g. switch_preset) wait on this handler: it opens the
+  // Tools that need approval (e.g. doom-loop recaps) wait on this handler: it opens the
   // approval box; the keyboard handler resolves it with once/always/deny.
   const offApprovals = setApprovalHandler(
     (req) =>

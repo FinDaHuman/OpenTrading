@@ -72,7 +72,7 @@ export function McpSetupDialog(props: { mcp: McpManager }) {
         </text>
       </box>
       <text fg={color.tx3}>
-        {"Sẽ tạo ~/.opentrading/mcp.json (preset scan) + lưu token vào ~/.opentrading/auth.json"}
+        {"Sẽ tạo ~/.opentrading/mcp.json + lưu token vào ~/.opentrading/auth.json"}
       </text>
       <Switch>
         <Match when={saving()}>

@@ -6,7 +6,7 @@ requires_tools: [mcp__opentrading__crypto_spot]
 tool_budget: 6
 triggers:
   keywords: [btc, bitcoin, eth, ethereum, crypto, tiền số, tiền ảo, funding]
-version: 1.2.0
+version: 1.2.1
 ---
 
 # Reading Crypto Pulse in Plain Language
@@ -32,7 +32,7 @@ Task Progress:
 
 **Step 1: Giá spot.**
 
-Chạy `crypto_spot` (BTC ETH SOL — tối đa 3 đồng/wave 1). Giá + % 24h = "tăng/giảm bao nhiêu hôm nay".
+Chạy `crypto_spot` (BTC ETH SOL — tối đa 3 đồng/wave 1). Giá + % 24h = "tăng/giảm bao nhiêu hôm nay". CẤM dùng `vn_crypto_ohlcv` thay thế (giá quy VND ≠ giá USD thật) — tool đó chỉ dùng ở Step 3 khi user hỏi giá VND.
 
 **Step 2: Đòn bẩy derivs.**
 

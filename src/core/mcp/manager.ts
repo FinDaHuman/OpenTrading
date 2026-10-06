@@ -7,7 +7,6 @@ import { ToolListChangedNotificationSchema } from "@modelcontextprotocol/sdk/typ
 import type { ToolRegistry } from "../tools/registry"
 import {
   DEFAULT_MCP_OUTPUT_CHARS,
-  DEFAULT_MCP_PRESET,
   DEFAULT_STARTUP_TIMEOUT_MS,
   DEFAULT_TOOL_TIMEOUT_MS,
   expandConfig,
@@ -18,7 +17,6 @@ import {
 } from "./config"
 import { normalizeSchema, resultToText } from "./convert"
 import { serverPrefix, toolName } from "./naming"
-import { isPreset, presetCounts, presetsOf, type PresetName } from "./presets"
 import { envSecrets } from "./onboard"
 import { TrustStore, trustKey } from "./trust"
 
@@ -39,10 +37,6 @@ export interface McpServerStatus {
   error?: string
   /** Model-visible tool names. */
   tools: string[]
-  /** Configured preset for this server. */
-  preset: PresetName
-  /** Tool counts per preset across everything the server serves; `khác` = untable. */
-  presetCounts?: Record<string, number>
   /** Workflows the server exposes as MCP prompts. */
   prompts: McpPromptInfo[]
   /** Config file the server came from. */
@@ -129,7 +123,6 @@ export class McpManager {
         scope: entry.scope,
         file: entry.file,
         transport: entry.config && "url" in entry.config ? "http" : "stdio",
-        preset: entry.config?.preset && isPreset(entry.config.preset) ? entry.config.preset : DEFAULT_MCP_PRESET,
         target: !entry.config ? "" : "url" in entry.config ? entry.config.url : [entry.config.command, ...(entry.config.args ?? [])].join(" "),
         state: "connecting",
         tools: [],
@@ -146,14 +139,6 @@ export class McpManager {
     if (!entry?.config) return
     await this.trustStore.trust(trustKey(this.opts.cwd, name, entry.config))
     await this.connect(entry)
-  }
-
-  /** Switch which tool preset a server exposes; takes effect on the model's next step. */
-  async setPreset(name: string, preset: PresetName) {
-    const entry = this.entries.get(name)
-    if (!entry?.config) return
-    this.entries.set(name, { ...entry, config: { ...entry.config, preset } })
-    this.set(name, { preset })
   }
 
   async restart(name: string) {
@@ -307,9 +292,8 @@ export class McpManager {
       cursor = page.nextCursor
     } while (cursor && tools.length < 2048)
 
-    // Everything the server serves is registered; which preset the model may call is
-    // narrowed per step by the agent (activeTools), so a switch_preset takes effect
-    // immediately without re-serialising tool definitions.
+    // Everything the server serves is registered and visible to the model
+    // (single surface — no preset gating since 2026-10-06).
     this.registry.unregister(serverPrefix(name))
     const taken = new Set(this.registry.list().map((t) => t.name))
     const toolTimeoutMs = config.toolTimeoutMs ?? DEFAULT_TOOL_TIMEOUT_MS
@@ -325,7 +309,6 @@ export class McpManager {
         description: (tool.description ?? `Tool ${tool.name} của MCP server ${name}.`).slice(0, MAX_DESCRIPTION),
         input: normalizeSchema(tool.inputSchema),
         readOnly: tool.annotations?.readOnlyHint ?? false,
-        presets: presetsOf(tool.name),
         // The wrapper's own timer is a backstop; the SDK enforces the real per-call timeout.
         timeoutMs: toolTimeoutMs + 5_000,
         maxOutputChars,
@@ -344,7 +327,6 @@ export class McpManager {
     }
     this.set(name, {
       tools: registered,
-      presetCounts: presetCounts(tools.map((t) => t.name)),
     })
   }
 }
