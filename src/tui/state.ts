@@ -1,4 +1,5 @@
 import type { ModelMessage } from "ai"
+import { DEFAULT_COMPACT_WINDOW, effectiveWindow } from "../core/compact"
 import type { Todo } from "../core/tools/todos"
 import { createStore } from "solid-js/store"
 import type { Catalog } from "../core/catalog"
@@ -72,11 +73,13 @@ export const [state, setState] = createStore({
   /** Consecutive failed automatic compactions in this session. */
   compactFailures: 0,
   compacting: false,
+  /** Effective-window cap (config compactWindow). */
+  compactCap: DEFAULT_COMPACT_WINDOW,
 })
 
-/** Context window of the selected model (models.dev), if known. */
+/** Effective context window of the selected model: models.dev limit, capped (see core/compact). */
 export const contextWindow = (): number | undefined =>
-  state.provider && state.model ? state.catalog[state.provider]?.models[state.model]?.limit?.context : undefined
+  effectiveWindow(state.provider && state.model ? state.catalog[state.provider]?.models[state.model]?.limit?.context : undefined, state.compactCap)
 
 /** Fresh-session values for the compaction bookkeeping. */
 export const NO_COMPACTION = { contextTokens: undefined, compactFloor: undefined, compactFailures: 0 } as const

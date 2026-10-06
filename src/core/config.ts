@@ -23,6 +23,8 @@ export interface Config {
    * "off": only /compact does it.
    */
   autoCompact?: "auto" | "off"
+  /** Cap on the context window used for the 80% threshold and ctx %. Default 200000. */
+  compactWindow?: number
 }
 
 export const loadConfig = () => readJson<Config>(configFile(), {})

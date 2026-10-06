@@ -1,4 +1,5 @@
 import { pad } from "../ui/text"
+import { AUTO_COMPACT_SHARE, tokensOf } from "../../core/compact"
 import { useKeys } from "../ui/keys"
 import { createResource, For, Match, Switch } from "solid-js"
 import { previewContext } from "../../core/agent"
@@ -6,7 +7,7 @@ import { describeError } from "../../core/chat"
 import type { LayerReport } from "../../core/prompt/assemble"
 import type { Runtime } from "../../core/runtime"
 import { currentSession } from "../session"
-import { closeDialog, state } from "../state"
+import { closeDialog, contextWindow, state } from "../state"
 import { color } from "../theme"
 import { DialogFrame } from "./frame"
 
@@ -70,9 +71,16 @@ export function ContextDialog(props: { runtime: Runtime }) {
         <Match when={preview()}>
           {(p) => {
             const total = () => p().report.reduce((sum, r) => sum + r.tokens, 0)
+            const history = () => tokensOf(state.history)
+            const window = contextWindow()
             return (
               <>
                 <text fg={color.tx2} wrapMode="none">{`${p().model} · hạng ${p().tier} · ~${total()} token (ước lượng, chưa gồm history)`}</text>
+                <text fg={color.tx2} wrapMode="none">
+                  {`History ~${history()} token · lượt trước dùng ${state.contextTokens !== undefined ? `~${state.contextTokens}` : "?"} token${
+                    window ? ` / ${window} (tự nén ở ${Math.round(window * AUTO_COMPACT_SHARE)})` : ""
+                  }`}
+                </text>
                 <text fg={color.tham} marginTop={1} wrapMode="none">
                   {`${pad("Tầng", 6)}${pad("Nội dung", 22)}${pad("Kênh", 11)}${pad("Token", 8)}Ghi chú`}
                 </text>

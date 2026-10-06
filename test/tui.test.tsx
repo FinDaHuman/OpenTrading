@@ -1193,3 +1193,37 @@ test("/compact is refused while an answer is streaming", async () => {
     setState("streaming", false)
   }
 })
+
+test("near the window, sending a message compacts first, then answers on the compacted history", async () => {
+  const saved = { provider: state.provider, model: state.model }
+  await setKey("groq", "gsk-good-key")
+  await setup.mockInput.typeText("/new")
+  setup.mockInput.pressEnter()
+  await setup.waitFor(() => state.history.length === 0)
+  setState({ provider: "groq", model: "test-model" }) // 131072-token window
+  try {
+    for (const text of ["lượt một", "lượt hai", "lượt ba"]) {
+      await setup.mockInput.typeText(text)
+      setup.mockInput.pressEnter()
+      await setup.waitFor(() => state.lines.some((l) => l.kind === "user" && l.text === text))
+      await waitMcp(() => !state.streaming)
+    }
+    setState("contextTokens", Math.round(131_072 * 0.9))
+    await setup.mockInput.typeText("lượt bốn")
+    setup.mockInput.pressEnter()
+    await waitMcp(() => state.lines.some((l) => l.kind === "user" && l.text === "lượt bốn") && !state.streaming)
+    const kinds = state.lines.map((l) => l.kind)
+    // The compaction comes before the new question, then the answer.
+    expect(kinds.lastIndexOf("compact")).toBeLessThan(state.lines.findIndex((l) => l.kind === "user" && l.text === "lượt bốn"))
+    expect(state.lines.some((l) => l.kind === "info" && l.text.includes("Context gần đầy"))).toBe(true)
+    expect(JSON.stringify(state.history[0])).toContain("tom_tat_hoi_thoai")
+    expect(state.history.filter((m) => m.role === "user").map((m) => JSON.stringify(m.content))).toHaveLength(4) // marker + 2 kept + new
+    expect(JSON.stringify(state.history.at(-2))).toContain("lượt bốn")
+    // The turn's own usage replaced the pre-compaction size.
+    expect(state.contextTokens!).toBeLessThan(131_072 * 0.8)
+    const frame = await setup.waitForFrame((f) => f.includes("Đã nén hội thoại"))
+    show(frame)
+  } finally {
+    setState(saved)
+  }
+})

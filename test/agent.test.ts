@@ -31,6 +31,9 @@ let plan: { tool: string; args: object; always?: boolean } | undefined
 let script: { tool: string; args: object }[] | undefined
 /** Mimic gemini-2.5-flash-lite: answer with nothing after a tool result. */
 let emptyAfterTool: "once" | "always" | undefined
+/** Non-streamed answers (the compaction summary): an error per request, then the finish reason. */
+let summaryErrors: { status: number; message: string }[] = []
+let summaryFinish = "stop"
 /** Token usage reported on the answer's last chunk (Groq sends it as x_groq.usage). */
 let usage: { prompt_tokens: number; completion_tokens: number } | undefined
 const NUDGE = "Hãy trả lời câu hỏi của người dùng dựa trên kết quả tool"
@@ -57,12 +60,14 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   bodies.push(body)
   // generateText (the compaction summary) does not stream.
   if (!body.stream) {
+    const failure = summaryErrors.shift()
+    if (failure) return Response.json({ error: { message: failure.message, type: "invalid_request_error" } }, { status: failure.status })
     return Response.json({
       id: "c",
       object: "chat.completion",
       created: 1,
       model: "tooly",
-      choices: [{ index: 0, message: { role: "assistant", content: "Kết quả: xong." }, finish_reason: "stop" }],
+      choices: [{ index: 0, message: { role: "assistant", content: "Kết quả: xong." }, finish_reason: summaryFinish }],
       usage: { prompt_tokens: 1, completion_tokens: 1 },
     })
   }
@@ -120,6 +125,8 @@ beforeEach(async () => {
   script = undefined
   emptyAfterTool = undefined
   usage = undefined
+  summaryErrors = []
+  summaryFinish = "stop"
   await saveConfig({ provider: "groq", model: "tooly", toolSearch: undefined, toolSearchMinTools: undefined })
 })
 
@@ -581,4 +588,39 @@ test("the compaction summary is asked with the turn's system prompt and visible 
   expect(toolNames(body)).not.toContain("mcp__big__t003")
   // A model without vision gets the image as a placeholder.
   expect(JSON.stringify(body.messages)).not.toContain("QUJDREVGRw==")
+})
+
+const threeTurns: ModelMessage[] = [1, 2, 3].flatMap((n): ModelMessage[] => [
+  { role: "user", content: `câu ${n}` },
+  { role: "assistant", content: `trả lời ${n}` },
+])
+
+test("a summary cut off at the output limit is rejected, not used", async () => {
+  const { summarizeConversation } = await import("../src/core/agent")
+  summaryFinish = "length"
+  const error = await summarizeConversation({ head: threeTurns, prompt: "TÓM", skills: [], registry: registry() }).then(
+    () => undefined,
+    (e: Error) => e.message,
+  )
+  expect(error).toContain("bị cắt")
+  expect(bodies).toHaveLength(1)
+})
+
+test("a quota error that mentions tokens is not retried; a real overflow drops the oldest turn and retries", async () => {
+  const { summarizeConversation } = await import("../src/core/agent")
+  summaryErrors = [{ status: 429, message: "Resource exhausted: input token count per minute" }]
+  const quota = await summarizeConversation({ head: threeTurns, prompt: "TÓM", skills: [], registry: registry() }).then(
+    () => undefined,
+    (e: Error) => e.message,
+  )
+  expect(quota).toBeDefined()
+  expect(bodies).toHaveLength(1) // one request, no SDK retry, no head trimming
+
+  bodies.length = 0
+  summaryErrors = [{ status: 400, message: "This model's maximum context length is 8192 tokens" }]
+  const text = await summarizeConversation({ head: threeTurns, prompt: "TÓM", skills: [], registry: registry() })
+  expect(text).toBe("Kết quả: xong.")
+  expect(bodies).toHaveLength(2)
+  const users = (b: Body) => b.messages.filter((m) => m.role === "user").length
+  expect(users(bodies[1]!)).toBe(users(bodies[0]!) - 1)
 })

@@ -22,6 +22,7 @@ import { MEMORY_INDEX_MAX_CHARS, MEMORY_RECALL_MAX_CHARS, MEMORY_RECALL_MAX_ITEM
 import { loadConfig, type Config } from "./config"
 import { sanitize, serverPrefix } from "./mcp/naming"
 import type { SchemaFlavor } from "./mcp/schema"
+import { isContextOverflow } from "./compact"
 import { loadedTools } from "./tools/loaded"
 import { currentTodos } from "./tools/todos"
 import { MAX_TOOLS_PER_REQUEST, stripImages, type BuiltToolSet, type ToolRegistry, type ToolSetOptions } from "./tools/registry"
@@ -468,12 +469,16 @@ export async function summarizeConversation(
         toolChoice: prepared.tools ? "none" : undefined,
         maxOutputTokens: COMPACT_MAX_OUTPUT_TOKENS,
         abortSignal: opts.signal,
-        maxRetries: 1,
+        // Each retry is a request off a free tier's daily quota: fail and let the user retry.
+        maxRetries: 0,
       })
+      // A cut-off summary loses its last section (what to do next): never use it.
+      if (result.finishReason === "length") throw new SummaryTruncated()
       return result.text
     } catch (error) {
+      if (error instanceof SummaryTruncated) throw error
       const turns = head.reduce((n, m) => n + (m.role === "user" ? 1 : 0), 0)
-      if (attempt >= 2 || turns <= 1 || !TOO_LONG.test(describeError(error))) throw new Error(describeError(error))
+      if (attempt >= 2 || turns <= 1 || !isContextOverflow(describeError(error))) throw new Error(describeError(error))
       // Drop the oldest turn: everything up to the second user message.
       const next = head.findIndex((m, i) => i > 0 && m.role === "user")
       head = head.slice(next)
@@ -481,8 +486,13 @@ export async function summarizeConversation(
   }
 }
 
-const COMPACT_MAX_OUTPUT_TOKENS = 4_000
-const TOO_LONG = /context|too long|too large|maximum|token/i
+const COMPACT_MAX_OUTPUT_TOKENS = 8_000
+
+class SummaryTruncated extends Error {
+  constructor() {
+    super(`Bản tóm tắt dài quá ${COMPACT_MAX_OUTPUT_TOKENS} token và bị cắt; đã giữ nguyên hội thoại.`)
+  }
+}
 
 /**
  * What the next turn would send, per layer — for /context. Works without a configured model

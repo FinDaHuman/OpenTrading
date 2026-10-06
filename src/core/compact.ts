@@ -1,7 +1,7 @@
 import type { ModelMessage } from "ai"
 import { estimateTokens } from "./prompt/budget"
 import { loadedTools } from "./tools/loaded"
-import { compactPair } from "./compact-marker"
+import { compactCarry, compactPair, isCompactMarker } from "./compact-marker"
 import { LOADED_PREFIX } from "./tools/search"
 import { currentTodos } from "./tools/todos"
 
@@ -18,8 +18,24 @@ import { currentTodos } from "./tools/todos"
  * open todo list), so those survive the head being dropped.
  */
 
-/** Share of the context window at which the next turn compacts first. */
+/** Share of the (effective) context window at which the next turn compacts first. */
 export const AUTO_COMPACT_SHARE = 0.8
+/**
+ * Effective window cap. Models now offer ~1M tokens, but every turn resends the whole
+ * history (the user pays), answers degrade long before the limit, and old quotes go stale.
+ * Claude Code and Codex let users cap it too. Config: `compactWindow`.
+ */
+export const DEFAULT_COMPACT_WINDOW = 200_000
+
+export const effectiveWindow = (window: number | undefined, cap: number = DEFAULT_COMPACT_WINDOW) =>
+  window ? Math.min(window, cap) : undefined
+
+/** Provider wording for "the request does not fit the context window". */
+const CONTEXT_OVERFLOW = /context (length|window)|too long|maximum context|token limit|too many tokens|prompt is too long/i
+/** Quota and auth errors may mention tokens too; they are never a reason to retry. */
+const NOT_OVERFLOW = /\b(429|401|403)\b|quota|rate.?limit|resource.?exhausted/i
+
+export const isContextOverflow = (message: string) => CONTEXT_OVERFLOW.test(message) && !NOT_OVERFLOW.test(message)
 /** After a compaction that stays above the threshold, wait for this much growth. */
 export const RECOMPACT_GROWTH_SHARE = 0.1
 /** Turns kept verbatim after the summary. */
@@ -107,10 +123,11 @@ export function pruneToolResults(messages: readonly ModelMessage[], keepTurns = 
   return { messages: out, pruned }
 }
 
-/** Skills whose body was loaded with load_skill (tool-call inputs). */
+/** Skills whose body was loaded with load_skill (tool-call inputs, and an earlier compaction's list). */
 function loadedSkills(messages: readonly ModelMessage[]): string[] {
   const names = new Set<string>()
   for (const m of messages) {
+    if (isCompactMarker(m)) for (const name of compactCarry(m).skills) names.add(name)
     if (m.role !== "assistant" || typeof m.content === "string") continue
     for (const p of m.content) {
       if (p.type === "tool-call" && p.toolName === "load_skill") {
@@ -132,6 +149,8 @@ export interface CompactOptions {
   instructions?: string
   /** Summarize the head (everything but the kept turns). Throws on failure. */
   summarize: (head: ModelMessage[], instructions?: string) => Promise<string>
+  /** Called right before the summary request is sent (it costs one request). */
+  onSummarize?: () => void
 }
 
 export interface CompactResult {
@@ -163,11 +182,13 @@ export async function compactHistory(history: readonly ModelMessage[], opts: Com
   const turns = splitTurns(prunedMessages)
   let keep = KEEP_TURNS
   if (opts.window && tokensOf(turns.slice(-keep).flat()) > opts.window * TAIL_MAX_SHARE) keep = 1
-  if (turns.length <= keep) return { ...base, error: turns.length === 0 ? undefined : "Hội thoại còn quá ngắn để tóm tắt." }
+  // Too short to summarize: worth saying only when the user asked.
+  if (turns.length <= keep) return { ...base, error: opts.manual && turns.length > 0 ? "Hội thoại còn quá ngắn để tóm tắt." : undefined }
   const head = turns.slice(0, -keep).flat()
   const tail = turns.slice(-keep).flat()
 
   let summary: string
+  opts.onSummarize?.()
   try {
     summary = (await opts.summarize(head, opts.instructions)).trim()
   } catch (error) {

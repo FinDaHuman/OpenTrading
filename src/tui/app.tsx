@@ -3,7 +3,16 @@ import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid"
 import { createMemo, createSignal, For, Match, onCleanup, onMount, Show, Switch } from "solid-js"
 import { produce } from "solid-js/store"
 import { runAgent, summarizeConversation } from "../core/agent"
-import { AUTO_COMPACT_SHARE, MAX_AUTO_FAILURES, compactHistory, compactPrompt, shouldAutoCompact, tokensOf } from "../core/compact"
+import {
+  AUTO_COMPACT_SHARE,
+  DEFAULT_COMPACT_WINDOW,
+  MAX_AUTO_FAILURES,
+  compactHistory,
+  compactPrompt,
+  isContextOverflow,
+  shouldAutoCompact,
+  tokensOf,
+} from "../core/compact"
 import { estimateTokens } from "../core/prompt/budget"
 import { connectedProviders } from "../core/auth"
 import { describeError } from "../core/chat"
@@ -57,7 +66,7 @@ function lineIndex(predicate: (line: Line) => boolean) {
  * Compact the conversation (see core/compact.ts). Runs like a turn: esc stops it, /new
  * discards it. On failure the history is left as is (or only pruned).
  */
-export async function compact(runtime: Runtime, trigger: "auto" | "manual", instructions?: string) {
+export async function compact(runtime: Runtime, trigger: "auto" | "manual", instructions?: string, projected?: number) {
   if (state.history.length === 0) {
     if (trigger === "manual") pushLine({ kind: "info", text: "Chưa có hội thoại để nén." })
     return
@@ -67,13 +76,15 @@ export async function compact(runtime: Runtime, trigger: "auto" | "manual", inst
   abort = controller
   const window = contextWindow()
   setState({ streaming: true, compacting: true })
-  pushLine({
-    kind: "info",
-    text: trigger === "auto" ? "Context gần đầy: đang nén hội thoại (có thể dùng 1 request)…" : "Đang nén hội thoại (dùng 1 request)…",
-  })
   try {
     const result = await compactHistory(state.history, {
-      contextTokens: state.contextTokens,
+      // Auto: what the next request would hold, including the message being sent.
+      contextTokens: projected ?? state.contextTokens,
+      onSummarize: () =>
+        pushLine({
+          kind: "info",
+          text: trigger === "auto" ? "Context gần đầy: đang tóm tắt phần đầu hội thoại (dùng 1 request)…" : "Đang tóm tắt hội thoại (dùng 1 request)…",
+        }),
       window,
       manual: trigger === "manual",
       instructions,
@@ -115,9 +126,6 @@ export async function compact(runtime: Runtime, trigger: "auto" | "manual", inst
   }
 }
 
-/** Provider wording for "the request does not fit the context window". */
-const OVERFLOW = /context (length|window)|too long|maximum context|token limit|too many tokens/i
-
 /** The turn being answered, so exit can wait for it to be saved. */
 let inflight: Promise<void> | undefined
 
@@ -133,7 +141,7 @@ function send(runtime: Runtime, text: string) {
       failures: state.compactFailures,
       disabled: config.autoCompact === "off",
     })
-    if (auto) await compact(runtime, "auto")
+    if (auto) await compact(runtime, "auto", undefined, projected)
     await sendTurn(runtime, text)
   })()
   inflight = turn
@@ -206,7 +214,7 @@ async function sendTurn(runtime: Runtime, text: string) {
           break
         case "error":
           pushLine({ kind: "error", text: event.message })
-          if (OVERFLOW.test(event.message)) pushLine({ kind: "info", text: "Hội thoại có thể đã quá dài cho model này: gõ /compact để nén rồi hỏi lại." })
+          if (isContextOverflow(event.message)) pushLine({ kind: "info", text: "Hội thoại có thể đã quá dài cho model này: gõ /compact để nén rồi hỏi lại." })
           break
         case "done":
           if (event.usage) setState("contextTokens", event.usage.contextTokens)
@@ -335,6 +343,7 @@ export function App(props: {
       skillProblems: skillSet.problems,
       catalog,
       connected,
+      compactCap: config.compactWindow ?? DEFAULT_COMPACT_WINDOW,
     })
     if (props.resume) await resumeFromArgs(props.runtime, props.resume)
     else await props.runtime.hooks.emit({ type: "session-start", sessionId: currentSession().id, source: "startup" })

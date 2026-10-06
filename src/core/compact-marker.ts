@@ -26,8 +26,17 @@ const markerText = (m: ModelMessage) =>
 export const isCompactMarker = (m: ModelMessage) => m.role === "user" && markerText(m).includes(`<${COMPACT_TAG}>`)
 
 /** What the harness wrote into a compact marker. */
-export function compactCarry(m: ModelMessage): { tools: string[]; todos?: unknown } {
+export function compactCarry(m: ModelMessage): { tools: string[]; skills: string[]; todos?: unknown } {
   const text = markerText(m)
+  const skillLine = text.split("\n").find((l) => l.startsWith(SKILLS_PREFIX))
+  const skills = skillLine
+    ? skillLine
+        .slice(SKILLS_PREFIX.length)
+        .split(" — ")[0]!
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)
+    : []
   const line = text.split("\n").find((l) => l.startsWith(LOADED_PREFIX))
   const tools = line
     ? line
@@ -45,7 +54,7 @@ export function compactCarry(m: ModelMessage): { tools: string[]; todos?: unknow
       todos = undefined
     }
   }
-  return { tools, todos }
+  return { tools, skills, todos }
 }
 
 export function compactPair(summary: string, carry: { tools: string[]; skills: string[]; todos: CarriedTodo[] }): ModelMessage[] {

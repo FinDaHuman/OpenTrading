@@ -3,6 +3,9 @@ import type { ModelMessage } from "ai"
 import { isCompactMarker } from "../src/core/compact-marker"
 import {
   AUTO_COMPACT_SHARE,
+  DEFAULT_COMPACT_WINDOW,
+  effectiveWindow,
+  isContextOverflow,
   MAX_AUTO_FAILURES,
   PRUNED_TEXT,
   compactHistory,
@@ -171,4 +174,37 @@ test("the summary prompt asks for verbatim sourced figures and carries the user'
   expect(prompt).toContain("không gọi tool")
   expect(prompt).toContain("tập trung vào ngân hàng")
   expect(compactPrompt()).not.toContain("Yêu cầu thêm")
+})
+
+test("the effective window is capped (1M models compact around 160k by default)", () => {
+  expect(effectiveWindow(1_048_576)).toBe(DEFAULT_COMPACT_WINDOW)
+  expect(effectiveWindow(131_072)).toBe(131_072)
+  expect(effectiveWindow(1_048_576, 500_000)).toBe(500_000)
+  expect(effectiveWindow(undefined)).toBeUndefined()
+})
+
+test("context-overflow wording is told apart from quota and auth errors", () => {
+  expect(isContextOverflow("This model's maximum context length is 8192 tokens")).toBe(true)
+  expect(isContextOverflow("prompt is too long: 210000 tokens > 200000 maximum")).toBe(true)
+  expect(isContextOverflow("Lỗi 429: Resource exhausted: input token count per minute")).toBe(false)
+  expect(isContextOverflow("You exceeded your current quota")).toBe(false)
+  expect(isContextOverflow("Invalid API key")).toBe(false)
+})
+
+test("a short history is no error for auto-compaction (only for /compact)", async () => {
+  const auto = await compactHistory(turn(1), { contextTokens: 9_000, window: 10_000, summarize: neverSummarize })
+  expect(auto.error).toBeUndefined()
+})
+
+test("loaded skills survive a second compaction (read back from the first marker)", async () => {
+  const skillTurn: ModelMessage[] = [
+    { role: "user", content: "phản biện FPT" },
+    { role: "assistant", content: [{ type: "tool-call", toolCallId: "s1", toolName: "load_skill", input: { name: "devil-advocate" } }] },
+    { role: "tool", content: [{ type: "tool-result", toolCallId: "s1", toolName: "load_skill", output: { type: "text", value: "BODY" } }] },
+    { role: "assistant", content: "ok" },
+  ]
+  const first = await compactHistory([...skillTurn, ...turn(2), ...turn(3)], { manual: true, summarize: async () => "t1" })
+  expect(JSON.stringify(first.messages[0])).toContain("Skill đã nạp: devil-advocate")
+  const second = await compactHistory([...first.messages, ...turn(4), ...turn(5)], { manual: true, summarize: async () => "t2" })
+  expect(JSON.stringify(second.messages[0])).toContain("Skill đã nạp: devil-advocate")
 })
