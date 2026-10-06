@@ -123,3 +123,20 @@ test("tools loaded by tool_search survive a resume (derived from the stored hist
   const loaded = await loadSession(s.id)
   expect(loadedTools(loaded.messages)).toEqual(["tool_search", "mcp__ot__a", "mcp__ot__b"])
 })
+
+test("the todo list survives a resume (derived from the stored history)", async () => {
+  const { currentTodos } = await import("../src/core/tools/todos")
+  const todos = [
+    { content: "Lấy giá", status: "completed" },
+    { content: "So sánh ngành", status: "in_progress" },
+  ]
+  const turn: ModelMessage[] = [
+    { role: "user", content: "phân tích FPT" },
+    { role: "assistant", content: [{ type: "tool-call", toolCallId: "t1", toolName: "todo_write", input: { todos } }] },
+    { role: "tool", content: [{ type: "tool-result", toolCallId: "t1", toolName: "todo_write", output: { type: "text", value: "Đã cập nhật việc cần làm: 1/2 xong." } }] },
+    { role: "assistant", content: "đang làm" },
+  ]
+  const s = Session.create(new Date("2026-10-06T03:15:00Z"))
+  await s.appendTurn(turn, info)
+  expect(currentTodos((await loadSession(s.id)).messages)).toEqual(todos)
+})

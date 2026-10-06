@@ -11,6 +11,7 @@ import type { Skill } from "./skills/schema"
 import { currentTimeTool } from "./tools/builtin/current-time"
 import { loadSkillTool } from "./tools/builtin/load-skill"
 import { toolSearchTool } from "./tools/builtin/tool-search"
+import { todoWriteTool } from "./tools/builtin/todo-write"
 import { ToolRegistry } from "./tools/registry"
 
 export interface Runtime {
@@ -47,6 +48,7 @@ export function initRuntime(opts: { cwd?: string; home?: string; skills: () => S
   const questions = new AskBroker()
   registry.register(currentTimeTool())
   registry.register(askUserTool(questions))
+  registry.register(todoWriteTool())
   registry.register(
     loadSkillTool(opts.skills, () =>
       registry

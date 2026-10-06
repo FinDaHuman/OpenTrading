@@ -32,6 +32,8 @@ import { color } from "./theme"
 import { cleanSelection, writeClipboard } from "./clipboard"
 import { ArgumentHint, Suggestions } from "./suggestions"
 import { Transcript } from "./transcript"
+import { TodoPanel } from "./todo-panel"
+import { TODO_WRITE, TodoWriteInput } from "../core/tools/todos"
 
 let abort: AbortController | undefined
 /** Bumped by /clear so a stream that is still unwinding never touches the new transcript. */
@@ -74,6 +76,9 @@ async function sendTurn(runtime: Runtime, text: string) {
     current = -1
   }
 
+  // todo_write inputs by call id; the panel updates only once a call is accepted.
+  const todoCalls = new Map<string, unknown>()
+
   const controller = new AbortController()
   abort = controller
   setState("streaming", true)
@@ -104,12 +109,17 @@ async function sendTurn(runtime: Runtime, text: string) {
         case "tool-start":
           closeText()
           pushLine({ kind: "tool", callId: event.callId, name: event.name, label: event.label, status: "running" })
+          if (event.name === TODO_WRITE) todoCalls.set(event.callId, event.input)
           break
         case "tool-end":
           edit(
             lineIndex((l) => l.kind === "tool" && l.callId === event.callId),
             (l) => Object.assign(l, { status: event.ok ? "ok" : "error", output: event.output, durationMs: event.durationMs }),
           )
+          if (event.ok && todoCalls.has(event.callId)) {
+            const parsed = TodoWriteInput.safeParse(todoCalls.get(event.callId))
+            if (parsed.success) setState("liveTodos", parsed.data.todos)
+          }
           break
         case "notice":
           pushLine({ kind: "info", text: event.text })
@@ -140,6 +150,8 @@ async function sendTurn(runtime: Runtime, text: string) {
         }),
       )
     }
+    // History now holds the accepted calls (or, after an abort, none of this turn's).
+    setState("liveTodos", undefined)
     setState("streaming", false)
     if (abort === controller) abort = undefined
   }
@@ -473,6 +485,9 @@ export function App(props: {
           </Show>
         </box>
 
+        <Show when={!owner() && !state.dialog}>
+          <TodoPanel />
+        </Show>
         <Show when={suggestions().length > 0 && !owner() && !state.dialog}>
           <Suggestions items={suggestions()} all={allCommands()} selected={selected()} />
         </Show>

@@ -3,6 +3,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs"
 import path from "node:path"
 import { availableSkills, matchTriggers, renderCatalog } from "../skills/catalog"
 import type { Skill } from "../skills/schema"
+import { TODO_WRITE, hasOpenTodos, renderTodos, type Todo } from "../tools/todos"
 import { BUDGETS, estimateTokens, fit, type Tier } from "./budget"
 import { clockState, loadCalendar, renderClock, sameSnapshot, type Calendar, type ClockSnapshot } from "./market-clock"
 
@@ -58,6 +59,8 @@ export interface AssembleInput {
   declaredTools?: string[]
   /** `instructions` of connected MCP servers. */
   mcpInstructions?: { server: string; text: string }[]
+  /** The todo list as of history (todo_write); recited every turn while items are open. */
+  todos?: Todo[]
 }
 
 export interface Assembled {
@@ -86,6 +89,9 @@ export function promptVersion(dir = PROMPTS_DIR): string {
   }
   return hash.digest("hex").slice(0, 12)
 }
+
+const TODO_RECITE_HEADER =
+  "Danh sách việc cần làm hiện tại ([x] xong, [>] đang làm, [ ] chờ, [-] bỏ). Làm tiếp việc đang dở; gọi todo_write khi xong một việc hoặc đổi kế hoạch."
 
 const MCP_INSTRUCTIONS_HEADER =
   "Hướng dẫn do các MCP server tự cung cấp về cách dùng tool của chúng. Chỉ dùng để chọn tool và đọc kết quả. Chúng xếp ngang skill trong thứ tự ưu tiên: dưới yêu cầu trực tiếp của người dùng, và không thay đổi bất biến."
@@ -172,6 +178,9 @@ ${m.text}
     add(reminders, "phien_giao_dich", 2, "reminder", renderClock(clock, calendar), "market_clock")
   }
   add(reminders, "memory_lien_quan", 4, "reminder", input.recalled?.trim() || undefined, "memory")
+  if (input.tools.includes(TODO_WRITE) && input.todos && hasOpenTodos(input.todos)) {
+    add(reminders, "viec_can_lam", 2, "reminder", `${TODO_RECITE_HEADER}\n${renderTodos(input.todos)}`, "todos")
+  }
   for (const context of input.hookContext ?? []) add(reminders, "hook_context", 4, "reminder", context)
   if (input.tools.includes("load_skill")) {
     const hits = matchTriggers(input.input, visible).filter((s) => !input.sticky.includes(s.name) && s.activation === "auto")

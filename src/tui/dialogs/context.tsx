@@ -22,7 +22,7 @@ const LAYER_NAME: Record<string, string> = {
   tool_schemas: "Định nghĩa tool",
   tool_hoan: "Danh sách tool hoãn",
   huong_dan_mcp: "Hướng dẫn từ MCP server",
-  citations: "Trích nguồn",
+  citations: "Trình bày số liệu",
   style: "Văn phong",
   skills_always: "Skill luôn bật",
   skill_catalog: "Danh sách skill",
@@ -34,6 +34,7 @@ const LAYER_NAME: Record<string, string> = {
   memory_policy: "Cách dùng memory",
   memory_lien_quan: "Memory liên quan",
   hook_context: "Ngữ cảnh từ hook",
+  viec_can_lam: "Việc cần làm",
 }
 
 

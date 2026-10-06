@@ -3,6 +3,7 @@ import { createSignal, For, Match, onCleanup, Show, Switch } from "solid-js"
 import { state, type Line } from "./state"
 import { color, markdownStyle } from "./theme"
 import { truncate } from "./ui/text"
+import { TODO_PREFIX } from "../core/tools/todos"
 
 /**
  * The conversation, in Claude Code's style (components/messages/*):
@@ -35,6 +36,8 @@ function preview(output: string, expanded: boolean, max: number) {
 /** What a tool row says under its header, besides raw output. */
 function summary(line: ToolLine): { tone: "ok" | "denied" | "answers"; lines: string[] } | undefined {
   const out = line.output ?? ""
+  // The pinned panel shows the list; the transcript keeps one line (ctrl+o for the list).
+  if (line.status === "ok" && out.startsWith(TODO_PREFIX) && !state.expandTools) return { tone: "ok", lines: [] }
   if (line.status === "error" && out.startsWith("Người dùng từ chối chạy tool này")) {
     const note = /Lời nhắn của người dùng: (.*)$/s.exec(out)?.[1]
     return { tone: "denied", lines: [`✘ Đã từ chối${note ? ` — "${note.trim()}"` : ""}`] }

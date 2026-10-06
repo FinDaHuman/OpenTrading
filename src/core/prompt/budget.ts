@@ -31,6 +31,7 @@ export const BUDGETS: Record<string, Record<Tier, number | undefined>> = {
   tools: { A: undefined, B: undefined, C: undefined },
   citations: { A: undefined, B: undefined, C: undefined },
   style: { A: 400, B: 250, C: 0 },
+  todos: { A: 600, B: 400, C: 300 },
 }
 
 export interface Fitted {
