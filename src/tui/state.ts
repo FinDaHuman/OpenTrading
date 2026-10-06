@@ -9,6 +9,8 @@ import type { ApprovalRequest } from "../core/permission"
 import type { ProviderId } from "../core/providers"
 import type { ClockSnapshot } from "../core/prompt/market-clock"
 import type { Skill, SkillProblem } from "../core/skills/schema"
+import type { PromptImage } from "./prompt/image"
+import type { DraftSnapshot } from "./prompt/parts"
 
 export type ToolStatus = "running" | "ok" | "error"
 
@@ -30,6 +32,12 @@ export type Line =
   /** History was compacted here. `summary` is absent when only old tool results were pruned. */
   | { kind: "compact"; summary?: string; before?: number; after?: number; pruned?: number }
   | { kind: "error"; text: string }
+
+/**
+ * A message typed while an answer was streaming, sent once it ends (Claude Code). `display`
+ * is what the box showed; `saved` turns its pills back on if it returns to the box.
+ */
+export type Queued = { text: string; display: string; images: PromptImage[]; saved: Omit<DraftSnapshot, "text"> }
 
 export type DialogName = "connect" | "model" | "skills" | "help" | "mcp" | "tools" | "context" | "sessions" | "memory" | "config"
 
@@ -73,6 +81,8 @@ export const [state, setState] = createStore({
   /** Consecutive failed automatic compactions in this session. */
   compactFailures: 0,
   compacting: false,
+  /** Messages waiting for the running answer to finish. */
+  queue: [] as Queued[],
   /** Effective-window cap (config compactWindow). */
   compactCap: DEFAULT_COMPACT_WINDOW,
 })
