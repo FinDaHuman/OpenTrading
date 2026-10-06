@@ -60,6 +60,31 @@ async function readCapped(res: Response): Promise<string> {
   return new TextDecoder().decode(Buffer.concat(chunks))
 }
 
+const MAX_REDIRECTS = 5
+
+/**
+ * Follow redirects by hand so every hop is checked before a request is sent: with the
+ * default `redirect: "follow"`, a public page redirecting to 127.0.0.1 would already
+ * have reached the local service by the time we saw the final URL.
+ */
+export async function fetchPublic(start: URL, signal: AbortSignal, fetchImpl: typeof fetch = fetch): Promise<Response> {
+  let url = start
+  for (let hop = 0; ; hop++) {
+    if (isPrivateHost(url.hostname)) throw new Error("Không tải địa chỉ nội bộ (localhost, mạng LAN).")
+    const res = await fetchImpl(url, {
+      signal,
+      redirect: "manual",
+      headers: { "User-Agent": "OpenTrading/0.1 (+market-research)", Accept: "text/html,application/xhtml+xml,text/*;q=0.9,*/*;q=0.1" },
+    })
+    const location = res.status >= 300 && res.status < 400 ? res.headers.get("location") : null
+    if (!location) return res
+    await res.body?.cancel()
+    if (hop >= MAX_REDIRECTS) throw new Error(`Quá nhiều lần chuyển hướng (> ${MAX_REDIRECTS}).`)
+    url = new URL(location, url)
+    if (!/^https?:$/.test(url.protocol)) throw new Error("Trang chuyển hướng tới địa chỉ không phải http(s).")
+  }
+}
+
 const cut = (text: string) => (text.length > MAX_CHARS ? `${text.slice(0, MAX_CHARS)}\n(đã cắt bớt)` : text)
 
 /** opencode-style web_fetch: one public http(s) URL as text (default) or raw HTML; no key needed. */
@@ -89,12 +114,8 @@ export function webFetchTool(): ToolDef<{ url: string; format?: "text" | "html";
       const seconds = input.timeoutSeconds ?? 30
       const signal = AbortSignal.any([ctx.signal, AbortSignal.timeout(seconds * 1000)])
       try {
-        const res = await fetch(parsed, {
-          signal,
-          headers: { "User-Agent": "OpenTrading/0.1 (+market-research)", Accept: "text/html,application/xhtml+xml,text/*;q=0.9,*/*;q=0.1" },
-        })
+        const res = await fetchPublic(parsed, signal)
         if (!res.ok) throw new Error(`HTTP ${res.status}: ${url}`)
-        if (res.url && isPrivateHost(new URL(res.url).hostname)) throw new Error("Trang chuyển hướng tới địa chỉ nội bộ; không đọc.")
         const raw = await readCapped(res)
         if ((input.format ?? "text") === "html") return cut(raw)
         const text = stripHtml(raw)

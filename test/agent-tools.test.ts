@@ -2,9 +2,9 @@ import { expect, test } from "bun:test"
 import { z } from "zod"
 import { PermissionGate } from "../src/core/permission"
 import { ToolRegistry } from "../src/core/tools/registry"
-import { childRegistry, spawnSubagentTool } from "../src/core/tools/subagent/spawn"
+import { childRegistry, SUBAGENT_TIMEOUT_MS, spawnSubagentTool } from "../src/core/tools/subagent/spawn"
 import type { ToolDef } from "../src/core/tools/types"
-import { isPrivateHost, webFetchTool } from "../src/core/tools/web/fetch"
+import { fetchPublic, isPrivateHost, webFetchTool } from "../src/core/tools/web/fetch"
 import { parseDuckDuckGo, webSearchTool } from "../src/core/tools/web/search"
 
 const ctx = () => ({ signal: new AbortController().signal, callId: "c1" })
@@ -33,6 +33,24 @@ test("private hosts are recognised; public names that merely look similar are no
   for (const host of ["cafef.vn", "fcbarcelona.com", "fd.example.com", "172.32.0.1", "8.8.8.8"]) {
     expect(isPrivateHost(host)).toBe(false)
   }
+})
+
+test("web_fetch checks every redirect hop before sending a request to it", async () => {
+  const sent: string[] = []
+  const fake = (async (input: URL) => {
+    sent.push(input.href)
+    if (input.hostname === "news.example") return new Response(null, { status: 302, headers: { location: "https://cdn.example/a" } })
+    if (input.hostname === "cdn.example") return new Response(null, { status: 301, headers: { location: "http://127.0.0.1:9000/admin" } })
+    return new Response("ok")
+  }) as unknown as typeof fetch
+  const signal = new AbortController().signal
+  await expect(fetchPublic(new URL("https://news.example/x"), signal, fake)).rejects.toThrow("nội bộ")
+  expect(sent).toEqual(["https://news.example/x", "https://cdn.example/a"]) // 127.0.0.1 never requested
+
+  const loop = (async (input: URL) => new Response(null, { status: 302, headers: { location: `${input.href}x` } })) as unknown as typeof fetch
+  await expect(fetchPublic(new URL("https://loop.example/"), signal, loop)).rejects.toThrow("Quá nhiều lần chuyển hướng")
+  const ok = await fetchPublic(new URL("https://news.example.org/"), signal, (async () => new Response("body")) as unknown as typeof fetch)
+  expect(await ok.text()).toBe("body")
 })
 
 test("DuckDuckGo results are parsed and redirect links unwrapped", () => {
@@ -73,5 +91,8 @@ test("spawn_subagent reports an empty tool set before calling any model", async 
   const parent = new ToolRegistry()
   parent.register(tool("watchlist_local_add", false))
   const spawn = spawnSubagentTool(parent)
+  // A whole agent loop: the default 60s tool timeout would cut it off.
+  expect(spawn.timeoutMs).toBe(SUBAGENT_TIMEOUT_MS)
+  expect(SUBAGENT_TIMEOUT_MS).toBeGreaterThanOrEqual(10 * 60_000)
   await expect(spawn.execute({ description: "t", task: "ask" }, ctx())).rejects.toThrow("không có tool chỉ đọc")
 })

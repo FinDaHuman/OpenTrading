@@ -11,6 +11,8 @@ import type { ToolDef } from "../types"
  */
 const EXCLUDED = new Set(["spawn_subagent", "tool_search", "load_skill", "ask_user", "todo_write"])
 
+export const SUBAGENT_TIMEOUT_MS = 15 * 60_000
+
 /** The subagent's registry: the parent's read-only tools (optionally narrowed), same gate. */
 export function childRegistry(parent: ToolRegistry, only?: string[]) {
   const child = new ToolRegistry()
@@ -45,6 +47,8 @@ export function spawnSubagentTool(parent: ToolRegistry): ToolDef<{
       tools: z.array(z.string()).optional().describe("Thu hẹp danh sách tool chỉ đọc được dùng (mặc định: mọi tool chỉ đọc)"),
     }),
     readOnly: true,
+    // A whole agent loop: up to 15 steps, each a model call plus tools (MCP calls may take 180s).
+    timeoutMs: SUBAGENT_TIMEOUT_MS,
     summarize: (input) => `spawn_subagent(${input.description})`,
     async execute(input, ctx) {
       const child = childRegistry(parent, input.tools)

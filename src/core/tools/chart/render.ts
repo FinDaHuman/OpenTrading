@@ -7,7 +7,6 @@ import { LOCAL_SOURCE, type ToolDef } from "../types"
  * roughly double the tokens. Some library marks (gauge, donut) colour unconditionally,
  * so every result is stripped.
  */
-// biome-ignore lint/suspicious/noControlCharactersInRegex: matching ANSI escapes is the point
 export const stripAnsi = (text: string) => text.replace(/\x1b\[[0-9;]*[A-Za-z]/g, "")
 
 /** Widths above this wrap in the transcript's tool output. */
