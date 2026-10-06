@@ -12,7 +12,7 @@ Mỗi lượt hỏi, harness ghép prompt từ nhiều tầng rồi đưa vào 3
 | --- | --- | --- | --- |
 | **system** | Luật: danh tính, bất biến, cách dùng tool, trích nguồn, văn phong, danh sách skill, skill `always` | Mọi request. Giữ nguyên từng byte giữa các lượt để provider cache được | Không (dựng lại mỗi request) |
 | **context** | Dữ liệu người dùng: hồ sơ `INVESTOR.md`, memory, skill đang bật tay | Mọi request, đặt làm phần đầu của tin nhắn user **đầu tiên** | Không. Sửa `INVESTOR.md` là có hiệu lực ngay lượt sau |
-| **reminder** | Thứ thay đổi trong phiên: đồng hồ phiên giao dịch, gợi ý skill | **Chỉ khi thay đổi**, gắn vào tin nhắn user của lượt đó trong thẻ `<nhac_nho>` | Có. Lượt sau model vẫn thấy; TUI không hiển thị |
+| **reminder** | Thứ thay đổi trong phiên: đồng hồ phiên giao dịch, gợi ý skill, danh sách việc cần làm còn dở (`<viec_can_lam>`, từ tool `todo_write`; hết hạn sau 2 lượt không cập nhật) | **Chỉ khi thay đổi**, gắn vào tin nhắn user của lượt đó trong thẻ `<nhac_nho>` | Có. Lượt sau model vẫn thấy; TUI không hiển thị |
 
 Xem kết quả ghép thực tế và số token từng tầng bằng lệnh `/context` trong TUI.
 

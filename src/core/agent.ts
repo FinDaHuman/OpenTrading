@@ -13,6 +13,7 @@ import { loadConfig, type Config } from "./config"
 import { sanitize, serverPrefix } from "./mcp/naming"
 import type { SchemaFlavor } from "./mcp/schema"
 import { loadedTools } from "./tools/loaded"
+import { currentTodos } from "./tools/todos"
 import { MAX_TOOLS_PER_REQUEST, stripImages, type BuiltToolSet, type ToolRegistry, type ToolSetOptions } from "./tools/registry"
 import { resolveToolName } from "./tools/search"
 import { TOOL_SEARCH } from "./tools/builtin/tool-search"
@@ -370,6 +371,7 @@ async function assembleFor(opts: TurnInput, target: Target | undefined, extras: 
     deferredTools: built && built.deferred.length > 0 ? deferredByServer(opts.registry, built.deferred) : undefined,
     declaredTools: built ? Object.keys(built.tools) : undefined,
     mcpInstructions: opts.serverInstructions?.(),
+    todos: currentTodos(opts.history ?? []),
   })
   if (built && built.names.length > 0) {
     const share = info?.limit?.context ? built.tokens / info.limit.context : 0

@@ -102,6 +102,17 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
         headers: { "content-type": "text/event-stream" },
       })
     }
+    if (last.includes("VIỆC-CẦN-LÀM") && !answeredThisTurn) {
+      const todos = [
+        { content: "Lấy giá 30 phiên FPT", status: "completed" },
+        { content: "Lấy BCTC 4 quý", status: "in_progress" },
+        { content: "So sánh với ngành", status: "pending" },
+      ]
+      const call = { index: 0, id: "call_todo", type: "function", function: { name: "todo_write", arguments: JSON.stringify({ todos }) } }
+      return new Response(chunk({ role: "assistant", tool_calls: [call] }) + chunk({}, "tool_calls") + "data: [DONE]\n\n", {
+        headers: { "content-type": "text/event-stream" },
+      })
+    }
     if (last.includes("GHI-CHÚ") && !answeredThisTurn) {
       const call = { index: 0, id: "call_note", type: "function", function: { name: "mcp__demo__ghi_chu", arguments: '{"noi_dung":"mua VCB khi về 85"}' } }
       return new Response(chunk({ role: "assistant", tool_calls: [call] }) + chunk({}, "tool_calls") + "data: [DONE]\n\n", {
@@ -540,8 +551,8 @@ test("/tools lists built-in and MCP tools", async () => {
   try {
     await setup.mockInput.typeText("/tools")
     setup.mockInput.pressEnter()
-    // 4 built-in (current_time, load_skill, ask_user, tool_search) + propose_memory + 4 from the demo MCP server
-    frame = await setup.waitForFrame((f) => f.includes("Tool · 9"))
+    // 5 built-in (current_time, load_skill, ask_user, todo_write, tool_search) + propose_memory + 4 from the demo MCP server
+    frame = await setup.waitForFrame((f) => f.includes("Tool · 10") && f.includes("tool hoãn"))
     show(frame)
     // Regression for the 01/10 screenshot: every tool is exactly one line, long descriptions
     // end in "…" instead of wrapping mid-word, and the mark column is straight.
@@ -569,7 +580,7 @@ test("/tools lists built-in and MCP tools", async () => {
   expect(frame).toContain("ask_user")
   expect(frame).toMatch(/• questions \(bắt buộc\): array/)
   setup.mockInput.pressEscape()
-  await setup.waitForFrame((f) => f.includes("Tool · 9"))
+  await setup.waitForFrame((f) => f.includes("Tool · 10"))
   setup.mockInput.pressEscape()
   await setup.waitFor(() => state.dialog === undefined)
 })
@@ -781,6 +792,24 @@ test("80×24: panels and the '/' list keep their hint line and the status bar on
       await setup.waitFor(() => state.dialog === undefined)
     }
   } finally {
+    setup.resize(100, 32)
+  }
+})
+
+test("80×24: a full todo panel and the '/' list still leave the prompt, hint and status bar on screen", async () => {
+  setup.resize(80, 24)
+  setState("liveTodos", Array.from({ length: 8 }, (_, i) => ({ content: `Việc số ${i}`, status: i === 0 ? ("in_progress" as const) : ("pending" as const) })))
+  try {
+    await setup.mockInput.typeText("/")
+    const frame = await setup.waitForFrame((f) => f.includes("enter chạy · tab điền") && f.includes("Việc cần làm · 0/8"))
+    show(frame)
+    expect(frame).toContain("▲ OpenTrading")
+    expect(frame).toContain("… +3 việc")
+    expect(frame.split("\n").length).toBeLessThanOrEqual(25)
+    setup.mockInput.pressBackspace()
+    await setup.waitForFrame((f) => !f.includes("enter chạy · tab điền"))
+  } finally {
+    setState("liveTodos", undefined)
     setup.resize(100, 32)
   }
 })
@@ -1068,4 +1097,31 @@ test("/config turns memory off and on without a restart", async () => {
   expect(runtime.registry.get("propose_memory")).toBeDefined()
   setup.mockInput.pressEscape()
   await setup.waitFor(() => state.dialog === undefined)
+})
+
+test("todo_write: the open list is pinned above the prompt, the transcript keeps one line, /new clears it", async () => {
+  await setKey("nvidia", "nvapi-good-key")
+  await setup.mockInput.typeText("VIỆC-CẦN-LÀM cho FPT")
+  setup.mockInput.pressEnter()
+  await setup.waitFor(() => !state.streaming && state.lines.some((l) => l.kind === "tool" && l.name === "todo_write" && l.status === "ok"))
+  const frame = await setup.waitForFrame((f) => f.includes("Việc cần làm · 1/3") && f.includes("● Cập nhật việc cần làm (1/3 xong)"))
+  show(frame)
+  expect(frame).toContain("● Cập nhật việc cần làm (1/3 xong)")
+  expect(frame).toContain("[>] Lấy BCTC 4 quý")
+  expect(frame).toContain("[ ] So sánh với ngành")
+  // The list is in the panel, not repeated under the tool row.
+  expect(frame.split("Lấy BCTC 4 quý").length - 1).toBe(1)
+  // The panel sits between the transcript and the prompt.
+  const rows = frame.split("\n")
+  const panel = rows.findIndex((r) => r.includes("Việc cần làm · 1/3"))
+  const prompt = rows.findIndex((r) => r.includes("› "))
+  expect(panel).toBeGreaterThan(rows.findIndex((r) => r.includes("❯ VIỆC-CẦN-LÀM")))
+  expect(prompt).toBeGreaterThan(panel)
+  await setup.waitFor(() => !state.streaming)
+  expect(state.liveTodos).toBeUndefined() // back to history once the turn is saved
+
+  await setup.mockInput.typeText("/new")
+  setup.mockInput.pressEnter()
+  const cleared = await setup.waitForFrame((f) => !f.includes("Việc cần làm"))
+  expect(cleared).not.toContain("[>]")
 })

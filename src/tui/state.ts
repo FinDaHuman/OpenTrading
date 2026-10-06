@@ -1,4 +1,5 @@
 import type { ModelMessage } from "ai"
+import type { Todo } from "../core/tools/todos"
 import { createStore } from "solid-js/store"
 import type { Catalog } from "../core/catalog"
 import type { McpServerStatus } from "../core/mcp/manager"
@@ -60,6 +61,8 @@ export const [state, setState] = createStore({
   exiting: false,
   /** Questions from the model waiting for the user (ask_user). */
   question: undefined as AskRequest | undefined,
+  /** todo_write accepted during the running turn; undefined → derive from history. */
+  liveTodos: undefined as Todo[] | undefined,
 })
 
 export function pushLine(line: Line) {
