@@ -7,7 +7,15 @@ import { dataDir } from "../../core/paths"
  * one global append-only file, every submitted line (slash commands included), newest
  * last. Only the most recent entries are kept in memory and recalled.
  */
-export type HistoryEntry = { text: string; ts: number }
+export type HistoryEntry = {
+  text: string
+  ts: number
+  /** Content of the `[Pasted text #N]` pills in `text`, by N (images are not kept). */
+  pastes?: Record<string, string>
+}
+
+/** Pastes bigger than this in total are not written to the file; their labels stay plain text. */
+const MAX_PASTES_CHARS = 1_000_000
 
 /** How many entries ↑ and Ctrl+R can reach (Claude Code reads back 100). */
 export const MAX_RECALL = 100
@@ -26,7 +34,9 @@ function parse(raw: string): HistoryEntry[] {
     if (!line.trim()) continue
     try {
       const value = JSON.parse(line) as Partial<HistoryEntry>
-      if (typeof value.text === "string" && value.text.trim()) out.push({ text: value.text, ts: Number(value.ts) || 0 })
+      if (typeof value.text !== "string" || !value.text.trim()) continue
+      const pastes = value.pastes && typeof value.pastes === "object" ? value.pastes : undefined
+      out.push({ text: value.text, ts: Number(value.ts) || 0, ...(pastes ? { pastes } : {}) })
     } catch {
       // A torn last line (crash mid-write) is skipped, the rest still loads.
     }
@@ -64,10 +74,13 @@ async function write(data: string, append: boolean) {
 }
 
 /** Remember a submitted (or cleared) prompt. Blank text and a repeat of the newest entry are skipped. */
-export function addHistory(text: string) {
+export function addHistory(text: string, pastes?: Record<string, string>) {
   if (!text.trim()) return
-  if (entries.at(-1)?.text === text) return
-  const entry = { text, ts: Date.now() }
+  const size = Object.values(pastes ?? {}).reduce((n, p) => n + p.length, 0)
+  const kept = size > 0 && size <= MAX_PASTES_CHARS ? pastes : undefined
+  const last = entries.at(-1)
+  if (last?.text === text && JSON.stringify(last.pastes) === JSON.stringify(kept)) return
+  const entry: HistoryEntry = { text, ts: Date.now(), ...(kept ? { pastes: kept } : {}) }
   entries.push(entry)
   if (entries.length > MAX_RECALL) entries = entries.slice(-MAX_RECALL)
   writing = writing.then(() => write(JSON.stringify(entry) + "\n", true)).catch(() => {})
@@ -76,6 +89,12 @@ export function addHistory(text: string) {
 /** Newest first. */
 export function historyEntries(): string[] {
   return entries.map((e) => e.text).reverse()
+}
+
+/** Pasted content behind the pills of the newest entry with this text. */
+export function pastesFor(text: string): Record<string, string> | undefined {
+  for (let i = entries.length - 1; i >= 0; i--) if (entries[i]!.text === text) return entries[i]!.pastes
+  return undefined
 }
 
 /** Wait for pending writes (tests, exit). */

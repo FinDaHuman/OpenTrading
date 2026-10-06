@@ -82,7 +82,21 @@ export function splitTurns(messages: readonly ModelMessage[]): ModelMessage[][] 
   return turns
 }
 
-export const tokensOf = (messages: readonly ModelMessage[]) => estimateTokens(JSON.stringify(messages))
+/** What one image costs (Anthropic: about 1.6k tokens for a 1092×1092 picture). */
+export const IMAGE_TOKENS = 1600
+
+/** Estimated size of messages; an image counts as IMAGE_TOKENS, not as its base64 text. */
+export const tokensOf = (messages: readonly ModelMessage[]) => {
+  let images = 0
+  const text = JSON.stringify(messages, (key, value) => {
+    if ((key === "image" || key === "data") && typeof value === "string" && value.length > 1000) {
+      images++
+      return ""
+    }
+    return value
+  })
+  return estimateTokens(text) + images * IMAGE_TOKENS
+}
 
 type ResultPart = { type: string; toolName?: string; output?: { type?: string; value?: unknown } }
 

@@ -6,6 +6,7 @@ import { runAgent, summarizeConversation } from "../core/agent"
 import {
   AUTO_COMPACT_SHARE,
   DEFAULT_COMPACT_WINDOW,
+  IMAGE_TOKENS,
   MAX_AUTO_FAILURES,
   compactHistory,
   compactPrompt,
@@ -14,6 +15,7 @@ import {
   tokensOf,
 } from "../core/compact"
 import { estimateTokens } from "../core/prompt/budget"
+import { acceptsImageInput } from "../core/agent"
 import { connectedProviders } from "../core/auth"
 import { describeError } from "../core/chat"
 import { loadConfig } from "../core/config"
@@ -39,13 +41,15 @@ import { ToolsDialog } from "./dialogs/tools"
 import { Home } from "./home"
 import { currentSession, recordCompact, recordTurn, resumeFromArgs, startSession } from "./session"
 import { armExit, closeDialog, contextWindow, EXIT_WINDOW_MS, flash, onExitRequest, providerName, pushLine, setState, state, type Line } from "./state"
-import { color } from "./theme"
+import { color, promptStyle } from "./theme"
 import { cleanSelection, writeClipboard } from "./clipboard"
 import { ArgumentHint, Suggestions } from "./suggestions"
 import { Transcript } from "./transcript"
 import { TodoPanel } from "./todo-panel"
 import { PromptInput } from "./prompt/input"
-import { addHistory, HistoryCursor, loadHistory, searchHistory } from "./prompt/history"
+import { addHistory, HistoryCursor, loadHistory, pastesFor, searchHistory } from "./prompt/history"
+import { imagePath, MAX_IMAGE_BASE64, readClipboardImage, readImageFile, type PromptImage } from "./prompt/image"
+import { isLargePaste, PromptParts, type DraftSnapshot, type ExpandedPrompt } from "./prompt/parts"
 import { TODO_WRITE, TodoWriteInput } from "../core/tools/todos"
 
 let abort: AbortController | undefined
@@ -131,11 +135,16 @@ export async function compact(runtime: Runtime, trigger: "auto" | "manual", inst
 /** The turn being answered, so exit can wait for it to be saved. */
 let inflight: Promise<void> | undefined
 
-function send(runtime: Runtime, text: string) {
+/** A message to send: the text for the model, what the transcript shows, pasted images. */
+type Outgoing = { text: string; display?: string; images?: PromptImage[] }
+
+function send(runtime: Runtime, message: string | Outgoing) {
+  const msg = typeof message === "string" ? { text: message } : message
   const turn = (async () => {
     // Near the window: compact first, so this turn still fits.
     const config = await loadConfig()
-    const projected = (state.contextTokens ?? tokensOf(state.history)) + estimateTokens(text)
+    const projected =
+      (state.contextTokens ?? tokensOf(state.history)) + estimateTokens(msg.text) + (msg.images?.length ?? 0) * IMAGE_TOKENS
     const auto = shouldAutoCompact({
       contextTokens: projected,
       window: contextWindow(),
@@ -144,7 +153,7 @@ function send(runtime: Runtime, text: string) {
       disabled: config.autoCompact === "off",
     })
     if (auto) await compact(runtime, "auto", undefined, projected)
-    await sendTurn(runtime, text)
+    await sendTurn(runtime, msg)
   })()
   inflight = turn
   return turn.finally(() => {
@@ -152,8 +161,8 @@ function send(runtime: Runtime, text: string) {
   })
 }
 
-async function sendTurn(runtime: Runtime, text: string) {
-  pushLine({ kind: "user", text })
+async function sendTurn(runtime: Runtime, msg: Outgoing) {
+  pushLine({ kind: "user", text: msg.display ?? msg.text })
   const mine = epoch
   const live = () => epoch === mine
   // Index of the assistant line currently receiving text; -1 after a tool call.
@@ -175,7 +184,8 @@ async function sendTurn(runtime: Runtime, text: string) {
   try {
     const turn = runAgent({
       history: state.history,
-      input: text,
+      input: msg.text,
+      images: msg.images,
       skills: state.skills,
       sticky: state.activeSkills,
       prevClock: state.clock,
@@ -431,10 +441,20 @@ export function App(props: {
     }
   }
 
-  /** Replace the draft; the cursor goes to the end (or the start, for an entry recalled with ↑). */
-  function setInput(value: string, cursor: "start" | "end" = "end") {
+  /** Pasted pills in the prompt: `[Pasted text #1 +49 lines]`, `[Image #2]`. */
+  const parts = new PromptParts(
+    () => input,
+    () => promptStyle().getStyleId("extmark.paste") ?? undefined,
+  )
+
+  /**
+   * Replace the draft; the cursor goes to the end (or the start, for an entry recalled with
+   * ↑). `saved` turns known labels back into pills.
+   */
+  function setInput(value: string, cursor: "start" | "end" = "end", saved?: Omit<DraftSnapshot, "text">) {
     if (input) {
       input.setText(value)
+      parts.restore(saved)
       if (cursor === "start") input.gotoBufferHome()
       else input.gotoBufferEnd()
     }
@@ -442,12 +462,42 @@ export function App(props: {
     setSelected(0)
     if (value !== dismissedFor()) setDismissedFor(undefined)
   }
+  /** Remember what is in the box (with the pastes behind its pills) before clearing it. */
+  function rememberDraft() {
+    const snap = parts.snapshot()
+    addHistory(snap.text, snap.pastes)
+  }
+
+  /** Ctrl+V / Alt+V, or an empty paste (Windows Terminal with only an image copied). */
+  async function pasteImage() {
+    flash("Đang đọc ảnh từ clipboard…", 15_000)
+    const image = await readClipboardImage()
+    if (!image) return flash(`Không có ảnh trong clipboard · ${process.platform === "win32" ? "alt+v" : "ctrl+v"} để dán ảnh`, 3000)
+    attachImage(image)
+  }
+  function attachImage(image: PromptImage) {
+    if (image.data.length > MAX_IMAGE_BASE64) return flash("Ảnh quá lớn để gửi (tối đa 5 MB)", 3000)
+    parts.insert({ kind: "image", ...image })
+    flash("Đã đính ảnh", 1500)
+  }
+  /** A paste: an image path becomes `[Image #N]`, a long text `[Pasted text #N +X lines]`. */
+  function onPaste(text: string) {
+    if (!input) return
+    if (!text.trim()) return void pasteImage()
+    const file = imagePath(text)
+    if (file) {
+      void readImageFile(file).then((image) => (image ? attachImage(image) : input?.insertText(text)))
+      return
+    }
+    if (isLargePaste(text)) return void parts.insert({ kind: "text", text })
+    input.insertText(text)
+  }
 
   /** ↑/↓ through earlier prompts (slash commands included), Claude Code style. */
   const recall = new HistoryCursor()
   void loadHistory()
-  function showRecalled(text: string, cursor: "start" | "end") {
-    setInput(text, cursor)
+  function showRecalled(text: string, cursor: "start" | "end", saved: Omit<DraftSnapshot, "text"> | undefined = { pastes: pastesFor(text) }) {
+    setInput(text, cursor, saved)
     // A recalled "/model" must not open the "/" list: the next ↑ would move in the list
     // instead of going further back.
     setDismissedFor(text)
@@ -468,20 +518,20 @@ export function App(props: {
   }
 
   /** Ctrl+S: put the draft aside (or bring it back); it also returns after the next send. */
-  let stash: string | undefined
+  let stash: DraftSnapshot | undefined
   function toggleStash() {
     if (draft().trim()) {
-      stash = draft()
+      stash = parts.snapshot()
       setInput("")
       flash("Đã cất bản nháp · ctrl+s để lấy lại", 3000)
     } else if (stash !== undefined) {
-      setInput(stash)
+      setInput(stash.text, "end", stash)
       stash = undefined
     }
   }
   function restoreStash() {
     if (stash === undefined || draft()) return
-    setInput(stash)
+    setInput(stash.text, "end", stash)
     stash = undefined
   }
 
@@ -491,7 +541,7 @@ export function App(props: {
     // Two quick presses can arrive in one read ("\x1b\x1b", parsed as alt+escape).
     if (evt.sequence === "\x1b\x1b" || Date.now() - escArmedAt <= EXIT_WINDOW_MS) {
       escArmedAt = 0
-      addHistory(draft())
+      rememberDraft()
       recall.reset()
       setInput("")
       return
@@ -505,12 +555,12 @@ export function App(props: {
    * again goes to an older match, Enter sends it, Tab/Esc keep it in the input to edit,
    * Ctrl+C gives the draft back.
    */
-  const [search, setSearch] = createSignal<{ query: string; skip: number; original: string }>()
+  const [search, setSearch] = createSignal<{ query: string; skip: number; original: DraftSnapshot }>()
   const searchMatches = createMemo(() => {
     const s = search()
     return s ? searchHistory(s.query) : []
   })
-  function showSearch(next: { query: string; skip: number; original: string }) {
+  function showSearch(next: { query: string; skip: number; original: DraftSnapshot }) {
     setSearch(next)
     const match = searchMatches()[next.skip]
     if (match !== undefined) showRecalled(match, "end")
@@ -524,7 +574,7 @@ export function App(props: {
     }
     if (evt.ctrl && evt.name === "c") {
       end()
-      return setInput(s.original)
+      return setInput(s.original.text, "end", s.original)
     }
     if (evt.ctrl && evt.name === "r") {
       if (s.skip + 1 < searchMatches().length) showSearch({ ...s, skip: s.skip + 1 })
@@ -532,12 +582,12 @@ export function App(props: {
     }
     if (evt.name === "return" || evt.name === "kpenter") {
       end()
-      return run(searchMatches()[s.skip] ?? draft())
+      return submit()
     }
     if (evt.name === "backspace") {
       if (!s.query) {
         end()
-        return setInput(s.original)
+        return setInput(s.original.text, "end", s.original)
       }
       return showSearch({ ...s, query: s.query.slice(0, -1), skip: 0 })
     }
@@ -565,7 +615,7 @@ export function App(props: {
       } else if (state.dialog) closeDialog()
       else if (draft()) {
         // Cleared, not lost: ↑ brings it back (Codex, Claude Code).
-        addHistory(draft())
+        rememberDraft()
         recall.reset()
         setInput("")
       }
@@ -586,8 +636,16 @@ export function App(props: {
    * "/…" line is a command (unknown ones are reported, never sent to the model) and
    * anything else is a message.
    */
-  function run(value: string) {
-    const text = value.trim()
+  /** Enter in the prompt: what the box shows, with its pills expanded. */
+  function submit() {
+    run(input?.plainText ?? draft(), parts.expand())
+  }
+
+  function run(value: string, expanded?: ExpandedPrompt) {
+    const shown = value.trim()
+    // What the model gets: pasted text put back in place of its pill.
+    const text = (expanded?.text ?? value).trim()
+    const images = expanded?.images ?? []
     const list = suggestions()
     const highlighted = list[selected()]
     recall.reset()
@@ -598,16 +656,24 @@ export function App(props: {
       runCommand(highlighted.name.toLowerCase(), "")
       return restoreStash()
     }
-    if (!text) return setInput("")
+    if (!text && images.length === 0) return setInput("")
     // Every line sent or run is remembered for ↑ — typos in a command name too, to fix them.
-    addHistory(text)
+    addHistory(shown, expanded?.pastes)
     const cmd = parseCommand(text)
     if (!cmd) {
       if (text.startsWith("/")) return setInput("") // "/" alone or "/ text": nothing to run, nothing to send
+      const target = state.provider && state.model ? { provider: state.catalog[state.provider]!, model: state.model } : undefined
+      if (images.length > 0 && target?.provider && !acceptsImageInput(target)) {
+        // Keep the draft: switch model or delete the image, then send again.
+        return pushLine({
+          kind: "error",
+          text: `Model ${state.model} không đọc được ảnh. Đổi model bằng /model, hoặc xoá ${images.length > 1 ? "các ảnh" : "ảnh"} khỏi ô nhập rồi gửi lại.`,
+        })
+      }
       setInput("")
       restoreStash()
       if (state.streaming) return
-      void send(props.runtime, text)
+      void send(props.runtime, { text, display: shown, images })
       return
     }
     const known = allCommands().some((c) => c.name.toLowerCase() === cmd.name) || cmd.name === "quit"
@@ -691,11 +757,17 @@ export function App(props: {
     }
     if (evt.ctrl && evt.name === "r") {
       evt.preventDefault()
-      return showSearch({ query: "", skip: 0, original: draft() })
+      return showSearch({ query: "", skip: 0, original: parts.snapshot() })
     }
     if (evt.ctrl && evt.name === "s") {
       evt.preventDefault()
       return toggleStash()
+    }
+    // Paste an image from the clipboard: Alt+V (Windows Terminal keeps Ctrl+V for its own
+    // text paste, as in Claude Code), or Ctrl+V where the terminal passes the key through.
+    if ((evt.meta || evt.ctrl) && evt.name === "v" && !evt.shift) {
+      evt.preventDefault()
+      return void pasteImage()
     }
     // With the list closed, Tab does nothing special (no autofill) and the arrows walk
     // through the prompt history.
@@ -826,7 +898,8 @@ export function App(props: {
             // A dismissed list stays closed only until the draft changes.
             if (v !== dismissedFor()) setDismissedFor(undefined)
           }}
-          onSubmit={() => run(input?.plainText ?? "")}
+          onSubmit={submit}
+          onPaste={onPaste}
         />
 
         <StatusBar />
