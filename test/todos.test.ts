@@ -71,6 +71,20 @@ test("currentTodos is the last accepted list in history; rejected calls are igno
   expect(currentTodos([...history, call("3", []), result("3")])).toEqual([])
 })
 
+test("a list the model stops updating expires after two user turns (it belonged to an earlier question)", () => {
+  const list: Todo[] = [{ content: "So sánh FPT, CMG", status: "in_progress" }]
+  const turn = (text: string): ModelMessage[] => [
+    { role: "user", content: text },
+    { role: "assistant", content: "ok" },
+  ]
+  const written: ModelMessage[] = [{ role: "user", content: "so sánh" }, call("1", list), result("1")]
+  expect(currentTodos(written)).toEqual(list) // recited on the next turn
+  expect(currentTodos([...written, ...turn("tiếp")])).toEqual(list) // still in play
+  expect(currentTodos([...written, ...turn("tiếp"), ...turn("giá VCB?")])).toEqual([]) // stale
+  // Updating it keeps it alive.
+  expect(currentTodos([...written, ...turn("tiếp"), { role: "user", content: "tiếp nữa" }, call("2", list), result("2")])).toEqual(list)
+})
+
 test("open todos are recited in the turn's reminder; a finished list is not", () => {
   const base = {
     tier: "B" as const,

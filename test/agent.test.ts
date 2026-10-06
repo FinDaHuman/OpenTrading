@@ -494,3 +494,30 @@ test("MCP server instructions reach the system prompt", async () => {
   )
   expect(systemText(bodies[0])).toContain("HUONG-DAN-OT")
 })
+
+test("a todo_write the tool rejects is recorded as an error, so the list comes from the next valid call", async () => {
+  const { todoWriteTool } = await import("../src/core/tools/builtin/todo-write")
+  const { currentTodos } = await import("../src/core/tools/todos")
+  const r = registry()
+  r.register(todoWriteTool())
+  const bad = [
+    { content: "A", status: "in_progress" },
+    { content: "B", status: "in_progress" },
+  ]
+  const good = [
+    { content: "A", status: "in_progress" as const },
+    { content: "B", status: "pending" as const },
+  ]
+  script = [{ tool: "todo_write", args: { todos: bad } }]
+  const rejected = await collect(runAgent({ history: [], input: "x", skills: [], registry: r }))
+  expect(ends(rejected)[0]).toMatchObject({ ok: false })
+  expect(currentTodos(done(rejected).messages)).toEqual([])
+
+  bodies.length = 0
+  script = [
+    { tool: "todo_write", args: { todos: bad } },
+    { tool: "todo_write", args: { todos: good } },
+  ]
+  const fixed = await collect(runAgent({ history: [], input: "x", skills: [], registry: r }))
+  expect(currentTodos(done(fixed).messages)).toEqual(good)
+})

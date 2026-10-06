@@ -51,22 +51,34 @@ export const hasOpenTodos = (todos: readonly Todo[]) => todos.some((t) => t.stat
 type Part = { type: string; toolCallId?: string; toolName?: string; input?: unknown; output?: { type?: string } }
 
 /**
- * The todo list as of the last successful todo_write call in history. Derived from history
- * alone (like loadedTools), so it survives --resume and empties with /new.
+ * A list the model has not touched for this many user turns belongs to an earlier question:
+ * it is no longer recited or pinned, so it cannot pull a new question back to old work.
+ */
+export const TODO_STALE_TURNS = 2
+
+/**
+ * The todo list as of the last successful todo_write call in history, or [] once it is
+ * stale. Derived from history alone (like loadedTools), so it survives --resume and empties
+ * with /new.
  */
 export function currentTodos(messages: readonly ModelMessage[]): Todo[] {
   const calls = new Map<string, unknown>()
   let current: Todo[] = []
+  let userTurnsSince = 0
   for (const message of messages) {
+    if (message.role === "user") userTurnsSince++
     if (typeof message.content === "string") continue
     for (const part of message.content as Part[]) {
       if (part.type === "tool-call" && part.toolName === TODO_WRITE && part.toolCallId) calls.set(part.toolCallId, part.input)
       if (part.type === "tool-result" && part.toolName === TODO_WRITE && part.toolCallId) {
         const failed = part.output?.type === "error-text" || part.output?.type === "error-json"
         const parsed = TodoWriteInput.safeParse(calls.get(part.toolCallId))
-        if (!failed && parsed.success) current = parsed.data.todos
+        if (!failed && parsed.success) {
+          current = parsed.data.todos
+          userTurnsSince = 0
+        }
       }
     }
   }
-  return current
+  return userTurnsSince >= TODO_STALE_TURNS ? [] : current
 }

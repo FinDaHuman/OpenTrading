@@ -129,7 +129,7 @@ test("the todo list survives a resume (derived from the stored history)", async 
   const todos = [
     { content: "Lấy giá", status: "completed" },
     { content: "So sánh ngành", status: "in_progress" },
-  ]
+  ] as const
   const turn: ModelMessage[] = [
     { role: "user", content: "phân tích FPT" },
     { role: "assistant", content: [{ type: "tool-call", toolCallId: "t1", toolName: "todo_write", input: { todos } }] },
@@ -138,5 +138,5 @@ test("the todo list survives a resume (derived from the stored history)", async 
   ]
   const s = Session.create(new Date("2026-10-06T03:15:00Z"))
   await s.appendTurn(turn, info)
-  expect(currentTodos((await loadSession(s.id)).messages)).toEqual(todos)
+  expect(currentTodos((await loadSession(s.id)).messages)).toEqual([...todos])
 })

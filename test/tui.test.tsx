@@ -796,6 +796,24 @@ test("80×24: panels and the '/' list keep their hint line and the status bar on
   }
 })
 
+test("80×24: a full todo panel and the '/' list still leave the prompt, hint and status bar on screen", async () => {
+  setup.resize(80, 24)
+  setState("liveTodos", Array.from({ length: 8 }, (_, i) => ({ content: `Việc số ${i}`, status: i === 0 ? ("in_progress" as const) : ("pending" as const) })))
+  try {
+    await setup.mockInput.typeText("/")
+    const frame = await setup.waitForFrame((f) => f.includes("enter chạy · tab điền") && f.includes("Việc cần làm · 0/8"))
+    show(frame)
+    expect(frame).toContain("▲ OpenTrading")
+    expect(frame).toContain("… +3 việc")
+    expect(frame.split("\n").length).toBeLessThanOrEqual(25)
+    setup.mockInput.pressBackspace()
+    await setup.waitForFrame((f) => !f.includes("enter chạy · tab điền"))
+  } finally {
+    setState("liveTodos", undefined)
+    setup.resize(100, 32)
+  }
+})
+
 test("ask_user: one single-choice question sends on pick and the turn goes on", async () => {
   const lastTool = () => JSON.stringify([...state.history].reverse().find((m) => m.role === "tool")?.content ?? "")
   await setup.mockInput.typeText("HỎI-TÔI giúp mình")
@@ -1085,7 +1103,8 @@ test("todo_write: the open list is pinned above the prompt, the transcript keeps
   await setKey("nvidia", "nvapi-good-key")
   await setup.mockInput.typeText("VIỆC-CẦN-LÀM cho FPT")
   setup.mockInput.pressEnter()
-  const frame = await setup.waitForFrame((f) => f.includes("HẾT-CÂU-TRẢ-LỜI") && f.includes("Việc cần làm · 1/3"))
+  await setup.waitFor(() => !state.streaming && state.lines.some((l) => l.kind === "tool" && l.name === "todo_write" && l.status === "ok"))
+  const frame = await setup.waitForFrame((f) => f.includes("Việc cần làm · 1/3") && f.includes("● Cập nhật việc cần làm (1/3 xong)"))
   show(frame)
   expect(frame).toContain("● Cập nhật việc cần làm (1/3 xong)")
   expect(frame).toContain("[>] Lấy BCTC 4 quý")
@@ -1096,7 +1115,7 @@ test("todo_write: the open list is pinned above the prompt, the transcript keeps
   const rows = frame.split("\n")
   const panel = rows.findIndex((r) => r.includes("Việc cần làm · 1/3"))
   const prompt = rows.findIndex((r) => r.includes("› "))
-  expect(panel).toBeGreaterThan(rows.findIndex((r) => r.includes("HẾT-CÂU-TRẢ-LỜI")))
+  expect(panel).toBeGreaterThan(rows.findIndex((r) => r.includes("❯ VIỆC-CẦN-LÀM")))
   expect(prompt).toBeGreaterThan(panel)
   await setup.waitFor(() => !state.streaming)
   expect(state.liveTodos).toBeUndefined() // back to history once the turn is saved
