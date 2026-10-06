@@ -24,7 +24,7 @@ import { sanitize, serverPrefix } from "./mcp/naming"
 import type { SchemaFlavor } from "./mcp/schema"
 import { isContextOverflow } from "./compact"
 import { loadedTools } from "./tools/loaded"
-import { currentTodos } from "./tools/todos"
+import { currentTodos, todoMark } from "./tools/todos"
 import { MAX_TOOLS_PER_REQUEST, stripImages, type BuiltToolSet, type ToolRegistry, type ToolSetOptions } from "./tools/registry"
 import { resolveToolName } from "./tools/search"
 import { TOOL_SEARCH } from "./tools/builtin/tool-search"
@@ -49,6 +49,21 @@ const NUDGE_PROMPT = "Hãy trả lời câu hỏi của người dùng dựa tr�
  */
 export const TOOL_NUDGE =
   "<nhac_nho>\nNếu còn cần dữ liệu, gọi cùng lúc mọi tool không phụ thuộc nhau. Khi trả lời: ngày tuyệt đối, mỗi cột một đơn vị, số dòng khớp lời nói, mỗi số có nguồn.\n</nhac_nho>"
+
+/**
+ * The nudge, plus the open todo items when there are any. Seen with gemini-3.1-flash-lite
+ * (06/10): after its last tool call the model wrote the answer and closed the list only on
+ * the next turn. This step may be the one that answers, so close the list first.
+ */
+export function toolNudge(messages: readonly ModelMessage[]): string {
+  const open = currentTodos(messages).filter((t) => t.status === "pending" || t.status === "in_progress")
+  if (open.length === 0) return TOOL_NUDGE
+  const items = open.map((t) => `${todoMark(t.status)} ${t.content}`).join("\n")
+  return TOOL_NUDGE.replace(
+    "\n</nhac_nho>",
+    `\nViệc cần làm còn mở:\n${items}\nViệc nào đã xong thì gọi todo_write đánh dấu completed (hoặc cancelled nếu bỏ) trước khi viết câu trả lời cuối.\n</nhac_nho>`,
+  )
+}
 
 /**
  * Routes whose request body was checked to keep a user message right after tool results in
@@ -602,7 +617,7 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
       active = activeFor(built, messages)
       if (stepNumber < maxSteps - 1) {
         if (!nudge || messages.at(-1)?.role !== "tool") return active ? { activeTools: active } : undefined
-        return { ...(active ? { activeTools: active } : {}), messages: [...messages, { role: "user", content: TOOL_NUDGE }] }
+        return { ...(active ? { activeTools: active } : {}), messages: [...messages, { role: "user", content: toolNudge(messages) }] }
       }
       summarized = true
       return { toolChoice: "none", activeTools: active, messages: [...messages, { role: "user", content: SUMMARY_PROMPT }] }
