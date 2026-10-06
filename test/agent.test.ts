@@ -624,3 +624,22 @@ test("a quota error that mentions tokens is not retried; a real overflow drops t
   const users = (b: Body) => b.messages.filter((m) => m.role === "user").length
   expect(users(bodies[1]!)).toBe(users(bodies[0]!) - 1)
 })
+
+test("while todo items are open, the nudge after tool results lists them and asks to close them before answering", async () => {
+  const { toolNudge, TOOL_NUDGE } = await import("../src/core/agent")
+  const { todoWriteTool } = await import("../src/core/tools/builtin/todo-write")
+  const r = registry()
+  r.register(todoWriteTool())
+  script = [
+    { tool: "todo_write", args: { todos: [{ content: "So sánh FPT với ngành", status: "in_progress" }] } },
+    { tool: "current_time", args: {} },
+  ]
+  await collect(runAgent({ history: [], input: "x", skills: [], registry: r }))
+  // After the todo_write result and after the last tool result: both list the open item.
+  const nudges = bodies.slice(1).map((b) => JSON.stringify(b.messages.at(-1)!.content))
+  expect(nudges.length).toBeGreaterThanOrEqual(2)
+  for (const n of nudges) expect(n).toContain("[>] So sánh FPT với ngành")
+  expect(nudges.at(-1)).toContain("trước khi viết câu trả lời cuối")
+  // Nothing open: the plain nudge.
+  expect(toolNudge([])).toBe(TOOL_NUDGE)
+})
