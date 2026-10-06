@@ -1,4 +1,4 @@
-import type { InputRenderable } from "@opentui/core"
+import type { KeyEvent, TextareaRenderable } from "@opentui/core"
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid"
 import { createMemo, createSignal, For, Match, onCleanup, onMount, Show, Switch } from "solid-js"
 import { produce } from "solid-js/store"
@@ -38,12 +38,14 @@ import { SkillsDialog, toggleSkill } from "./dialogs/skills"
 import { ToolsDialog } from "./dialogs/tools"
 import { Home } from "./home"
 import { currentSession, recordCompact, recordTurn, resumeFromArgs, startSession } from "./session"
-import { armExit, closeDialog, contextWindow, flash, onExitRequest, providerName, pushLine, setState, state, type Line } from "./state"
+import { armExit, closeDialog, contextWindow, EXIT_WINDOW_MS, flash, onExitRequest, providerName, pushLine, setState, state, type Line } from "./state"
 import { color } from "./theme"
 import { cleanSelection, writeClipboard } from "./clipboard"
 import { ArgumentHint, Suggestions } from "./suggestions"
 import { Transcript } from "./transcript"
 import { TodoPanel } from "./todo-panel"
+import { PromptInput } from "./prompt/input"
+import { addHistory, HistoryCursor, loadHistory, searchHistory } from "./prompt/history"
 import { TODO_WRITE, TodoWriteInput } from "../core/tools/todos"
 
 let abort: AbortController | undefined
@@ -264,7 +266,7 @@ export function App(props: {
   const owner = () => state.approval ?? state.question
   /** Draft at which Esc closed the "/" list; it reopens as soon as the draft changes. */
   const [dismissedFor, setDismissedFor] = createSignal<string>()
-  let input: InputRenderable | undefined
+  let input: TextareaRenderable | undefined
 
   /**
    * Leave: stop the running answer and wait — under one 2 s deadline — for it to be saved,
@@ -290,10 +292,13 @@ export function App(props: {
   onExitRequest(() => void exit())
   onCleanup(() => onExitRequest(undefined))
 
-  /** Copy what the mouse highlighted (opencode's copy-on-select); true when something was copied. */
-  function copySelection() {
+  /**
+   * Copy what the mouse highlighted (opencode's copy-on-select); true when something was
+   * copied. `keep` leaves the highlight in place.
+   */
+  function copySelection(keep = false) {
     const text = cleanSelection(renderer.getSelection()?.getSelectedText() ?? "")
-    renderer.clearSelection()
+    if (!keep) renderer.clearSelection()
     if (!text) return false
     writeClipboard(text, (t) => renderer.copyToClipboardOSC52(t))
     flash(`✓ Đã copy ${[...text].length} ký tự`)
@@ -301,7 +306,10 @@ export function App(props: {
   }
   // A finished drag copies at once — no keystroke needed, like Claude Code in a terminal.
   const onSelection = () => {
-    copySelection()
+    // Text highlighted inside the prompt stays highlighted, so typing or Backspace
+    // replaces it as in a document editor.
+    const selected = renderer.getSelection()?.selectedRenderables ?? []
+    copySelection(selected.length > 0 && selected.every((r) => r === input))
     // A click/drag moves focus to what was clicked; typing must still go to the prompt.
     if (!state.dialog && !owner()) input?.focus()
   }
@@ -423,14 +431,121 @@ export function App(props: {
     }
   }
 
-  function setInput(value: string) {
+  /** Replace the draft; the cursor goes to the end (or the start, for an entry recalled with ↑). */
+  function setInput(value: string, cursor: "start" | "end" = "end") {
     if (input) {
-      input.value = value
-      input.cursorOffset = value.length
+      input.setText(value)
+      if (cursor === "start") input.gotoBufferHome()
+      else input.gotoBufferEnd()
     }
     setDraft(value)
     setSelected(0)
     if (value !== dismissedFor()) setDismissedFor(undefined)
+  }
+
+  /** ↑/↓ through earlier prompts (slash commands included), Claude Code style. */
+  const recall = new HistoryCursor()
+  void loadHistory()
+  function showRecalled(text: string, cursor: "start" | "end") {
+    setInput(text, cursor)
+    // A recalled "/model" must not open the "/" list: the next ↑ would move in the list
+    // instead of going further back.
+    setDismissedFor(text)
+  }
+  /**
+   * ↑ moves up a line first; only when the cursor cannot go higher does it bring back the
+   * previous prompt (the cursor then sits at its start, so another ↑ goes further back).
+   */
+  function historyKey(evt: KeyEvent, direction: "up" | "down") {
+    if (!input || input.hasSelection()) return
+    evt.preventDefault()
+    const before = input.cursorOffset
+    if (direction === "up") input.moveCursorUp()
+    else input.moveCursorDown()
+    if (input.cursorOffset !== before) return
+    const text = direction === "up" ? recall.up(input.plainText) : recall.down(input.plainText)
+    if (text !== undefined) showRecalled(text, direction === "up" ? "start" : "end")
+  }
+
+  /** Ctrl+S: put the draft aside (or bring it back); it also returns after the next send. */
+  let stash: string | undefined
+  function toggleStash() {
+    if (draft().trim()) {
+      stash = draft()
+      setInput("")
+      flash("Đã cất bản nháp · ctrl+s để lấy lại", 3000)
+    } else if (stash !== undefined) {
+      setInput(stash)
+      stash = undefined
+    }
+  }
+  function restoreStash() {
+    if (stash === undefined || draft()) return
+    setInput(stash)
+    stash = undefined
+  }
+
+  /** Esc twice on a draft clears it (saved to history first, so ↑ brings it back). */
+  let escArmedAt = 0
+  function escapeClear(evt: KeyEvent) {
+    // Two quick presses can arrive in one read ("\x1b\x1b", parsed as alt+escape).
+    if (evt.sequence === "\x1b\x1b" || Date.now() - escArmedAt <= EXIT_WINDOW_MS) {
+      escArmedAt = 0
+      addHistory(draft())
+      recall.reset()
+      setInput("")
+      return
+    }
+    escArmedAt = Date.now()
+    flash("Esc lần nữa để xoá ô nhập", EXIT_WINDOW_MS)
+  }
+
+  /**
+   * Ctrl+R: search earlier prompts as you type; the input shows the newest match. Ctrl+R
+   * again goes to an older match, Enter sends it, Tab/Esc keep it in the input to edit,
+   * Ctrl+C gives the draft back.
+   */
+  const [search, setSearch] = createSignal<{ query: string; skip: number; original: string }>()
+  const searchMatches = createMemo(() => {
+    const s = search()
+    return s ? searchHistory(s.query) : []
+  })
+  function showSearch(next: { query: string; skip: number; original: string }) {
+    setSearch(next)
+    const match = searchMatches()[next.skip]
+    if (match !== undefined) showRecalled(match, "end")
+  }
+  function searchKey(evt: KeyEvent) {
+    const s = search()!
+    evt.preventDefault()
+    const end = () => {
+      setSearch(undefined)
+      recall.reset()
+    }
+    if (evt.ctrl && evt.name === "c") {
+      end()
+      return setInput(s.original)
+    }
+    if (evt.ctrl && evt.name === "r") {
+      if (s.skip + 1 < searchMatches().length) showSearch({ ...s, skip: s.skip + 1 })
+      return
+    }
+    if (evt.name === "return" || evt.name === "kpenter") {
+      end()
+      return run(searchMatches()[s.skip] ?? draft())
+    }
+    if (evt.name === "backspace") {
+      if (!s.query) {
+        end()
+        return setInput(s.original)
+      }
+      return showSearch({ ...s, query: s.query.slice(0, -1), skip: 0 })
+    }
+    if (!evt.ctrl && !evt.meta && evt.sequence && evt.sequence.length >= 1 && evt.sequence.charCodeAt(0) >= 32 && evt.sequence !== "\x7f") {
+      return showSearch({ ...s, query: s.query + evt.sequence, skip: 0 })
+    }
+    // Tab, Esc, arrows, anything else: keep the match in the input and edit it there.
+    end()
   }
 
   /**
@@ -448,7 +563,12 @@ export function App(props: {
       if (owner()) {
         // handled by the prompt's own keyboard hook
       } else if (state.dialog) closeDialog()
-      else if (draft()) setInput("")
+      else if (draft()) {
+        // Cleared, not lost: ↑ brings it back (Codex, Claude Code).
+        addHistory(draft())
+        recall.reset()
+        setInput("")
+      }
       else if (state.streaming) abort?.abort()
     }
     armExit(key)
@@ -470,16 +590,22 @@ export function App(props: {
     const text = value.trim()
     const list = suggestions()
     const highlighted = list[selected()]
+    recall.reset()
     if (highlighted && list.length > 0) {
       if (highlighted.argsRequired) return setInput(`/${highlighted.name} `)
+      addHistory(`/${highlighted.name}`)
       setInput("")
-      return runCommand(highlighted.name.toLowerCase(), "")
+      runCommand(highlighted.name.toLowerCase(), "")
+      return restoreStash()
     }
     if (!text) return setInput("")
+    // Every line sent or run is remembered for ↑ — typos in a command name too, to fix them.
+    addHistory(text)
     const cmd = parseCommand(text)
     if (!cmd) {
       if (text.startsWith("/")) return setInput("") // "/" alone or "/ text": nothing to run, nothing to send
       setInput("")
+      restoreStash()
       if (state.streaming) return
       void send(props.runtime, text)
       return
@@ -491,6 +617,7 @@ export function App(props: {
     }
     setInput("")
     runCommand(cmd.name, cmd.args)
+    restoreStash()
   }
 
   function runCommand(name: string, args: string) {
@@ -540,9 +667,14 @@ export function App(props: {
 
   useKeyboard((evt) => {
     if (evt.eventType === "release") return
+    if (search() && !owner() && !state.dialog) return searchKey(evt)
     if (evt.ctrl && (evt.name === "c" || evt.name === "d")) return onQuitKey(evt.name)
     if (evt.ctrl && evt.name === "o") return void setState("expandTools", (v) => !v)
-    if (evt.name === "escape" && renderer.hasSelection) return renderer.clearSelection()
+    if (evt.name === "escape" && renderer.hasSelection) {
+      evt.preventDefault()
+      input?.clearSelection()
+      return renderer.clearSelection()
+    }
     if (owner() || state.dialog) return
     const n = suggestions().length
     // Esc closes the "/" list first (it stays closed until the draft changes) and never
@@ -553,8 +685,36 @@ export function App(props: {
       return
     }
     if (evt.name === "escape" && state.streaming) return void abort?.abort()
-    // With the list closed, Tab and the arrows do nothing special (no autofill).
-    if (n === 0) return
+    if (evt.name === "escape" && draft()) {
+      evt.preventDefault()
+      return escapeClear(evt)
+    }
+    if (evt.ctrl && evt.name === "r") {
+      evt.preventDefault()
+      return showSearch({ query: "", skip: 0, original: draft() })
+    }
+    if (evt.ctrl && evt.name === "s") {
+      evt.preventDefault()
+      return toggleStash()
+    }
+    // With the list closed, Tab does nothing special (no autofill) and the arrows walk
+    // through the prompt history.
+    if (n === 0) {
+      const plain = !evt.ctrl && !evt.meta && !evt.shift
+      // "\" then Enter: a new line, for terminals that send Shift+Enter as Enter (Claude Code).
+      if (plain && evt.name === "return" && input) {
+        const at = input.cursorOffset
+        if (at > 0 && input.getTextRange(at - 1, at) === "\\") {
+          evt.preventDefault()
+          input.deleteCharBackward()
+          input.newLine()
+        }
+        return
+      }
+      if ((plain && evt.name === "up") || (evt.ctrl && evt.name === "p")) return historyKey(evt, "up")
+      if ((plain && evt.name === "down") || (evt.ctrl && evt.name === "n")) return historyKey(evt, "down")
+      return
+    }
     if (evt.name === "tab") {
       evt.preventDefault()
       complete()
@@ -584,6 +744,16 @@ export function App(props: {
         </Show>
         <Show when={suggestions().length > 0 && !owner() && !state.dialog}>
           <Suggestions items={suggestions()} all={allCommands()} selected={selected()} />
+        </Show>
+        <Show when={!owner() && !state.dialog && search()}>
+          {(s) => (
+            <box marginLeft={2} marginRight={2} paddingLeft={1} flexShrink={0} backgroundColor={color.bg}>
+              <text fg={color.tx2} wrapMode="none">
+                {`${searchMatches().length > 0 ? "tìm trong lịch sử" : "không thấy prompt nào khớp"}: ${s().query}`}
+                <span style={{ fg: color.tx3 }}>{"   ctrl+r cũ hơn · enter gửi · tab/esc sửa · ctrl+c huỷ"}</span>
+              </text>
+            </box>
+          )}
         </Show>
         <Show when={!owner() && !state.dialog && suggestions().length === 0 && argHint()}>
           {(c) => <ArgumentHint command={c()} />}
@@ -641,38 +811,23 @@ export function App(props: {
           </Switch>
         </box>
 
-        <box
+        <PromptInput
+          ref={(r) => (input = r)}
           visible={!owner() && !state.dialog}
-          marginLeft={2}
-          marginRight={2}
-          border={["top", "bottom"]}
-          borderColor={state.streaming ? color.tham : state.dialog ? color.rule : color.tang}
-          backgroundColor={color.panel2}
-          flexDirection="row"
-          height={3}
-          flexShrink={0}
-          paddingLeft={1}
-        >
-          <text fg={state.streaming ? color.tham : color.tang}>{"› "}</text>
-          <input
-            ref={(r) => (input = r)}
-            flexGrow={1}
-            focused={!state.dialog && !owner()}
-            placeholder={state.streaming ? "đang trả lời… esc để dừng" : "Hỏi về thị trường, hoặc gõ / để xem lệnh"}
-            textColor={color.tx}
-            focusedTextColor={color.tx}
-            backgroundColor={color.panel2}
-            focusedBackgroundColor={color.panel2}
-            placeholderColor={color.tx3}
-            onInput={(v) => {
-              setDraft(v)
-              setSelected(0)
-              // A dismissed list stays closed only until the draft changes.
-              if (v !== dismissedFor()) setDismissedFor(undefined)
-            }}
-            onSubmit={(v: unknown) => run(typeof v === "string" ? v : (input?.value ?? ""))}
-          />
-        </box>
+          focused={!state.dialog && !owner()}
+          busy={state.streaming}
+          placeholder={
+            state.streaming ? "đang trả lời… esc để dừng" : "Hỏi về thị trường, hoặc gõ / để xem lệnh · ↑ lịch sử · ctrl+j xuống dòng"
+          }
+          onChange={(v) => {
+            if (v === draft()) return
+            setDraft(v)
+            setSelected(0)
+            // A dismissed list stays closed only until the draft changes.
+            if (v !== dismissedFor()) setDismissedFor(undefined)
+          }}
+          onSubmit={() => run(input?.plainText ?? "")}
+        />
 
         <StatusBar />
       </box>

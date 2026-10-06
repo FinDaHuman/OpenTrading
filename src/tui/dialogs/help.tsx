@@ -9,11 +9,16 @@ import { Picker, type PickerItem } from "./picker"
 
 const KEYS: [string, string][] = [
   ["enter", "gửi tin nhắn · chạy lệnh đang chọn trong danh sách /"],
+  ["ctrl+j · \\ enter", "xuống dòng trong ô nhập (shift+enter nếu terminal hỗ trợ)"],
   ["tab", "điền lệnh đang chọn vào ô nhập (không chạy)"],
-  ["↑ ↓", "chọn trong danh sách / và các bảng"],
-  ["esc", "đóng danh sách / · đóng bảng · dừng câu trả lời đang chạy"],
+  ["↑ ↓", "chọn trong danh sách / và các bảng · gọi lại prompt và lệnh đã dùng"],
+  ["ctrl+r", "tìm trong các prompt đã dùng"],
+  ["shift+← → ↑ ↓", "bôi đen chữ trong ô nhập; gõ hoặc backspace để thay / xoá"],
+  ["ctrl+z · ctrl+y", "hoàn tác · làm lại trong ô nhập"],
+  ["ctrl+s", "cất bản nháp sang một bên · bấm lại để lấy về"],
+  ["esc", "đóng danh sách / · đóng bảng · dừng câu trả lời đang chạy · bấm 2 lần để xoá ô nhập"],
   ["ctrl+o", "mở rộng / thu gọn kết quả tool"],
-  ["kéo chuột", "bôi đen để copy (tự copy khi thả chuột) · giữ shift để dùng chọn chữ của terminal"],
+  ["kéo chuột", "bôi đen để copy (tự copy khi thả chuột); trong ô nhập thì giữ vùng chọn để sửa · giữ shift để dùng chọn chữ của terminal"],
   ["ctrl+c", "copy phần đang bôi đen · xoá ô nhập / dừng câu trả lời · bấm 2 lần để thoát"],
   ["ctrl+d", "bấm 2 lần khi ô nhập trống để thoát"],
 ]
