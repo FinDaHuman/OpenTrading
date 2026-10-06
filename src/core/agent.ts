@@ -30,6 +30,30 @@ const SUMMARY_PROMPT =
  */
 const NUDGE_PROMPT = "Hãy trả lời câu hỏi của người dùng dựa trên kết quả tool ở trên. Không gọi thêm tool."
 
+/**
+ * Sent after each round of tool results (never stored): weak models drift to one call per
+ * step and lose the formatting rules once tool output piles up. It sits at the very end of
+ * the request, so the cached prefix is unchanged.
+ */
+export const TOOL_NUDGE =
+  "<nhac_nho>\nNếu còn cần dữ liệu, gọi cùng lúc mọi tool không phụ thuộc nhau. Khi trả lời: ngày tuyệt đối, mỗi cột một đơn vị, số dòng khớp lời nói, mỗi số có nguồn.\n</nhac_nho>"
+
+/**
+ * Routes whose request body was checked to keep a user message right after tool results in
+ * the same user turn (test/tool-nudge.test.ts). Others (Mistral rejects user-after-tool,
+ * OpenAI-compatible gateways vary) get no nudge.
+ */
+const NUDGE_NPM = new Set(["@ai-sdk/anthropic", "@ai-sdk/google", "@ai-sdk/groq", "@ai-sdk/openai"])
+
+export function nudgeAfterTools(target: TargetLike | undefined): boolean {
+  if (!target) return false
+  const info = target.provider.models[target.model]
+  const npm = info?.provider?.npm ?? target.provider.npm ?? ""
+  const api = info?.provider?.api ?? target.provider.api
+  // @ai-sdk/openai with its own base URL is some third party speaking Chat Completions.
+  return NUDGE_NPM.has(npm) && !(npm === "@ai-sdk/openai" && api)
+}
+
 /** Reminders ride on the user message inside this tag; UIs hide it, history keeps it. */
 export const REMINDER_TAG = "nhac_nho"
 
@@ -477,6 +501,7 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
 
   const model = languageModel(target.provider, target.model, target.apiKey)
   let summarized = false
+  const nudge = nudgeAfterTools(target)
   // Visible tools at the current step; deferred tools join once loaded (tool search).
   let active = activeFor(built, request)
   const result = streamText({
@@ -492,7 +517,10 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
     prepareStep: ({ stepNumber, messages }) => {
       if (!tools) return undefined
       active = activeFor(built, messages)
-      if (stepNumber < maxSteps - 1) return active ? { activeTools: active } : undefined
+      if (stepNumber < maxSteps - 1) {
+        if (!nudge || messages.at(-1)?.role !== "tool") return active ? { activeTools: active } : undefined
+        return { ...(active ? { activeTools: active } : {}), messages: [...messages, { role: "user", content: TOOL_NUDGE }] }
+      }
       summarized = true
       return { toolChoice: "none", activeTools: active, messages: [...messages, { role: "user", content: SUMMARY_PROMPT }] }
     },

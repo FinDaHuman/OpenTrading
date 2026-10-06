@@ -17,7 +17,7 @@ export function toolSearchTool(registry: ToolRegistry, pending: () => string[] =
     name: TOOL_SEARCH,
     description: [
       "Tìm và nạp các tool đang hoãn (liệt kê theo tên trong <tool_hoan>). Tool hoãn chưa có schema nên phải nạp trước khi gọi; nạp xong thì gọi được ngay như tool bình thường.",
-      'Cách viết query: "select:ten_a,ten_b" để nạp đúng các tool đã biết tên (nên nạp nhiều tool một lần); hoặc từ khoá như "gia lich su co phieu"; "+tu" bắt buộc khớp từ đó; "mcp__server" lấy tool của một server. Mô tả tool thường viết bằng tiếng Anh, nên thêm từ khoá tiếng Anh (ví dụ "price history", "foreign flow").',
+      'Cách viết query: "select:ten_a,ten_b" để nạp đúng các tool đã biết tên — gộp mọi tool sẽ cần vào một lần gọi thay vì gọi tool_search nhiều lần; hoặc từ khoá như "gia lich su co phieu"; "+tu" bắt buộc khớp từ đó; "mcp__server" lấy tool của một server. Mô tả tool thường viết bằng tiếng Anh, nên thêm từ khoá tiếng Anh (ví dụ "price history", "foreign flow").',
       "Kết quả gồm mô tả và tham số của từng tool đã nạp.",
     ].join(" "),
     input: z.object({
