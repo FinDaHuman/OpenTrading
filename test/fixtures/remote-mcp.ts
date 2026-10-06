@@ -72,7 +72,7 @@ export interface HttpServerOptions {
   /** Serve the schema-breaking server instead of the normal one. */
   sloppy?: boolean
   /** Fail the first N initialize POSTs with this status (transient-error tests). */
-  failFirst?: { count: number; status: number }
+  failFirst?: { count: number; status: number; body?: string }
 }
 
 export function startHttpServer(opts: HttpServerOptions = {}) {
@@ -165,7 +165,7 @@ export function startHttpServer(opts: HttpServerOptions = {}) {
       }
       if (req.method === "POST" && failuresLeft > 0) {
         failuresLeft--
-        return new Response("try later", { status: opts.failFirst!.status })
+        return new Response(opts.failFirst!.body ?? "try later", { status: opts.failFirst!.status })
       }
       const transport: WebStandardStreamableHTTPServerTransport = new WebStandardStreamableHTTPServerTransport({
         sessionIdGenerator: () => crypto.randomUUID(),

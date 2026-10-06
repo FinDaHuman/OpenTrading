@@ -6,14 +6,18 @@ import { color } from "../theme"
 import { BADGE, toolBadge } from "./badges"
 import { truncate } from "./text"
 
-/** A titled field row: bold label, value (status coloured). */
-export function Field(props: { label: string; children: JSX.Element }) {
+/**
+ * A titled field row: bold label, value (status coloured). One line, clipped; `wrap` lets a
+ * long value (a list of prompts) continue on the next lines under the value column. Never
+ * shrinks: a squeezed row would be drawn over its neighbours.
+ */
+export function Field(props: { label: string; wrap?: boolean; children: JSX.Element }) {
   return (
-    <box flexDirection="row" height={1}>
+    <box flexDirection="row" height={props.wrap ? undefined : 1} flexShrink={0}>
       <text fg={color.tx} width={14} flexShrink={0}>
         <span style={{ bold: true }}>{props.label}</span>
       </text>
-      <text fg={color.tx2} wrapMode="none" flexShrink={1} overflow="hidden">
+      <text fg={color.tx2} wrapMode={props.wrap ? "word" : "none"} flexGrow={props.wrap ? 1 : 0} flexShrink={1} overflow="hidden">
         {props.children}
       </text>
     </box>
@@ -47,34 +51,35 @@ export function ToolDetail(props: { tool: ToolDef; server: string }) {
   }
   const short = () => (t().displayName ?? t().name).split(" · ").pop()!
   return (
+    // Only the description may shrink (and clip) when the pane is short; every other row keeps its line.
     <box flexDirection="column" marginTop={1}>
-      <text>
+      <text flexShrink={0}>
         <span style={{ fg: color.tang, bold: true }}>{short()}</span>
         <span style={{ fg: toolBadge(t()).fg }}>{` ${toolBadge(t()).text}`}</span>
         {t().annotations?.openWorld ? <span style={{ fg: BADGE.openWorld.fg }}>{` ${BADGE.openWorld.text}`}</span> : ""}
       </text>
-      <text fg={color.tx3}>{props.server}</text>
+      <text fg={color.tx3} flexShrink={0}>{props.server}</text>
       <Field label="Tên tool">{short()}</Field>
       <Field label="Tên đầy đủ">{t().name}</Field>
-      <text fg={color.tx} marginTop={1}>
+      <text fg={color.tx} marginTop={1} flexShrink={0}>
         <span style={{ bold: true }}>Mô tả</span>
       </text>
-      <text fg={color.tx2} wrapMode="word">
+      <text fg={color.tx2} wrapMode="word" overflow="hidden">
         {t().description.split("\n").slice(0, 8).join("\n")}
       </text>
-      <text fg={color.tx} marginTop={1}>
+      <text fg={color.tx} marginTop={1} flexShrink={0}>
         <span style={{ bold: true }}>{`Tham số${params().length === 0 ? ": không có" : ""}`}</span>
       </text>
       <For each={params().slice(0, 12)}>
         {(p) => (
-          <text wrapMode="none">
+          <text wrapMode="none" flexShrink={0}>
             <span style={{ fg: color.tx }}>{`  • ${p.key}`}</span>
             <span style={{ fg: color.tx3 }}>{truncate(`${p.required ? " (bắt buộc)" : ""}: ${p.type}${p.description ? ` - ${p.description}` : ""}`, 90)}</span>
           </text>
         )}
       </For>
       <Show when={params().length > 12}>
-        <text fg={color.tx3}>{`  … và ${params().length - 12} tham số khác`}</text>
+        <text fg={color.tx3} flexShrink={0}>{`  … và ${params().length - 12} tham số khác`}</text>
       </Show>
     </box>
   )

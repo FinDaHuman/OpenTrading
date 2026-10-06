@@ -3,7 +3,7 @@ import { useKeys, usePasteWhenFree } from "../ui/keys"
 import { createMemo, createResource, createSignal, For, Match, onCleanup, Show, Switch, type JSX } from "solid-js"
 import { availableCatalog, MCP_CATALOG, missingRequirement } from "../../core/mcp/catalog"
 import { isRemote, type ServerConfig } from "../../core/mcp/config"
-import type { McpManager, McpServerStatus, McpState } from "../../core/mcp/manager"
+import { cleanErrorText, type McpManager, type McpServerStatus, type McpState } from "../../core/mcp/manager"
 import type { ToolDef } from "../../core/tools/types"
 import { blocked, closeDialog, pushLine, state } from "../state"
 import { color } from "../theme"
@@ -61,12 +61,12 @@ interface MenuItem {
 
 function Menu(props: { items: MenuItem[]; selected: number }) {
   return (
-    <box flexDirection="column" marginTop={1}>
+    <box flexDirection="column" marginTop={1} flexShrink={0}>
       <For each={props.items}>
         {(item, i) => {
           const active = () => i() === props.selected
           return (
-            <text fg={active() ? color.tang : item.danger ? color.giam : color.tx}>
+            <text fg={active() ? color.tang : item.danger ? color.giam : color.tx} flexShrink={0}>
               {`${active() ? "❯" : " "} ${i() + 1}. ${item.label}`}
             </text>
           )
@@ -107,7 +107,7 @@ export function McpPanel(props: { mcp: McpManager; cwd: string }) {
       await fn()
       return true
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+      setError(cleanErrorText(e instanceof Error ? e.message : String(e)))
       return false
     } finally {
       setBusy(undefined)
@@ -378,6 +378,45 @@ export function McpPanel(props: { mcp: McpManager; cwd: string }) {
     }
   }
 
+  /**
+   * Cut a long error to what fits the pane: the server screen's other rows are fixed, so a
+   * page-long error (an HTML 502 body, a stderr dump) must give way, never push them over.
+   */
+  const clampError = (text: string, reserved: number) => {
+    const cols = Math.max(20, dims().width - 8)
+    const lines = Math.max(2, dims().height - 4 - reserved)
+    return truncate(text, cols * lines)
+  }
+
+  /**
+   * Prompts packed into the lines the pane can spare (the menu must stay on screen), with
+   * "… +N" for the rest; the full list is in the / menu.
+   */
+  const promptLines = (s: McpServerStatus) => {
+    const cols = Math.max(20, dims().width - 22)
+    const budget = Math.max(1, Math.min(4, dims().height - 19 - serverMenu().length - (s.oauth ? 1 : 0)))
+    const names = s.prompts.map((p) => `/${s.name}:${p.name}`)
+    const fits = (line: string[]) => cells(line.join("  ")) <= cols
+    const lines: string[][] = [[]]
+    for (const name of names) {
+      const last = lines[lines.length - 1]!
+      if (last.length === 0 || fits([...last, name])) last.push(name)
+      else lines.push([name])
+    }
+    const kept = lines.slice(0, budget)
+    if (lines.length > budget) {
+      const last = kept[kept.length - 1]!
+      let shown = kept.flat().length
+      // Make room for "… +N" at the end of the last line.
+      while (last.length > 1 && !fits([...last, `… +${names.length - shown}`])) {
+        last.pop()
+        shown--
+      }
+      last.push(`… +${names.length - shown}`)
+    }
+    return kept.map((line) => truncate(line.join("  "), cols)).join("\n")
+  }
+
   const total = () => state.mcp.length
   const live = () => state.mcp.filter((s) => s.state === "connected").length
 
@@ -450,11 +489,11 @@ export function McpPanel(props: { mcp: McpManager; cwd: string }) {
 
         <Match when={screen().kind === "server" && server((screen() as { name: string }).name)}>
           {(s) => (
-            <box border borderStyle="rounded" borderColor={color.rule} paddingLeft={1} paddingRight={1} flexDirection="column" marginTop={1}>
-              <text fg={color.tx}>
+            <box border borderStyle="rounded" borderColor={color.rule} paddingLeft={1} paddingRight={1} flexDirection="column" marginTop={1} overflow="hidden">
+              <text fg={color.tx} flexShrink={0}>
                 <span style={{ bold: true }}>{`${s().name} · MCP server`}</span>
               </text>
-              <box flexDirection="column" marginTop={1}>
+              <box flexDirection="column" marginTop={1} flexShrink={0}>
                 <Field label="Trạng thái">
                   <span style={{ fg: STATUS[s().state].fg }}>{`${STATUS[s().state].glyph} ${statusText(s())}`}</span>
                 </Field>
@@ -477,12 +516,15 @@ export function McpPanel(props: { mcp: McpManager; cwd: string }) {
                   </Field>
                   <Field label="Tool">{`${s().tools.length}${s().hiddenTools ? ` (ẩn ${s().hiddenTools} bằng enabledTools/disabledTools)` : ""}`}</Field>
                   <Show when={s().prompts.length > 0}>
-                    <Field label="Prompt">{s().prompts.map((p) => `/${s().name}:${p.name}`).join("  ")}</Field>
+                    <Field label="Prompt" wrap>{promptLines(s())}</Field>
                   </Show>
                 </Show>
               </box>
               <Show when={s().error && s().state !== "connecting"}>
-                <text fg={color.giam} marginTop={1} wrapMode="word">{`Lỗi: ${s().error}`}</text>
+                {/* The one elastic row: it clips instead of overlapping the fields and menu. */}
+                <text fg={color.giam} marginTop={1} wrapMode="char" overflow="hidden">
+                  {clampError(`Lỗi: ${cleanErrorText(s().error!)}`, 16 + serverMenu().length)}
+                </text>
               </Show>
               <Show when={s().state === "untrusted"}>
                 <text fg={color.tham} marginTop={1} wrapMode="word">
@@ -657,11 +699,11 @@ export function McpPanel(props: { mcp: McpManager; cwd: string }) {
       </Switch>
 
       <Show when={busy()}>
-        <text fg={color.tham} marginTop={1}>{`◌ ${busy()}`}</text>
+        <text fg={color.tham} marginTop={1} flexShrink={0}>{`◌ ${busy()}`}</text>
       </Show>
       <Show when={error()}>
-        <text fg={color.giam} marginTop={1} wrapMode="word">
-          {error()}
+        <text fg={color.giam} marginTop={1} wrapMode="char" flexShrink={0}>
+          {truncate(error()!, Math.max(20, dims().width - 4) * 3)}
         </text>
       </Show>
       <text fg={color.tx3} marginTop={1} wrapMode="none" flexShrink={0}>

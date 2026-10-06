@@ -461,6 +461,64 @@ test("/mcp: grouped list → server menu → tools → tool detail, esc steps ba
   await setup.waitForFrame((f) => f.includes("Hỏi về thị trường"))
 }, 30_000)
 
+test("/mcp server screen: a page-long error or prompt list never draws rows over each other", async () => {
+  await waitMcp(() => state.mcp[0]?.state === "connected")
+  const { state: was, error, tools, prompts: hadPrompts } = state.mcp[0]!
+  const original = { state: was, error, tools: [...tools], prompts: [...hadPrompts] }
+  const lines = (f: string) => f.split("\n")
+  setup.resize(80, 24)
+  try {
+    // A long prompt list wraps under the value column instead of being cut at the edge.
+    const prompts = Array.from({ length: 6 }, (_, i) => ({ name: `quy_trinh_rat_dai_so_${i}`, arguments: [] }))
+    setState("mcp", 0, { prompts })
+    await setup.mockInput.typeText("/mcp")
+    setup.mockInput.pressEnter()
+    await setup.waitForFrame((f) => f.includes("❯ demo"))
+    setup.mockInput.pressEnter()
+    let frame = await setup.waitForFrame((f) => f.includes("demo · MCP server") && f.includes("Xem tool"))
+    show(frame)
+    // Short terminal: the list is cut to what fits ("… +N"), and the whole menu stays.
+    expect(frame).toContain("/demo:quy_trinh_rat_dai_so_0")
+    expect(frame).toMatch(/… \+\d+/)
+    expect(frame).toContain("4. Xoá khỏi cấu hình")
+    setup.resize(160, 40)
+    frame = await setup.waitForFrame((f) => f.includes("/demo:quy_trinh_rat_dai_so_5"))
+    show(frame)
+    setup.resize(80, 24)
+
+    // A raw HTML 502 body as the SDK reports it (the manager already shortens these; the
+    // panel cleans whatever it is given too).
+    const html = `Streamable HTTP error: Error POSTing to endpoint: <!DOCTYPE html>\n<html lang="en">\n${"  <meta name=x content=y>\n".repeat(40)}${"d09GMk9UVE8AAKewAAwAAAABa6QAAKdfAAEAAAAAAAAAAAAA".repeat(60)}`
+    setState("mcp", 0, { state: "failed", error: html, tools: [], prompts: [] })
+    frame = await setup.waitForFrame((f) => f.includes("Lỗi:") && f.includes("[trang HTML]"))
+    expect(frame).not.toContain("<meta")
+    // Any other page-long error (a stderr dump) is cut to what fits.
+    setState("mcp", 0, { error: `stderr: ${"Traceback line with some details\n".repeat(200)}` })
+    frame = await setup.waitForFrame((f) => f.includes("Lỗi: stderr") && f.includes("Kết nối lại"))
+    // Scroll the menu: the bug showed while moving through it.
+    setup.mockInput.pressArrow("down")
+    setup.mockInput.pressArrow("down")
+    frame = await setup.waitForFrame((f) => f.includes("❯ 3. Xoá khỏi cấu hình"))
+    show(frame)
+    // Each field keeps its own line (label, then value), with nothing drawn over it.
+    expect(frame).toMatch(/│ Trạng thái +✘ lỗi +│/)
+    expect(lines(frame).find((l) => l.includes("Lệnh"))).toMatch(/^ *│ Lệnh +\S.*│ *$/)
+    expect(lines(frame).find((l) => l.includes("Cấu hình"))).toMatch(/^ *│ Cấu hình +\S.*│ *$/)
+    expect(frame).toMatch(/ 1\. Kết nối lại/)
+    expect(frame).toMatch(/ 2\. Tắt/)
+    expect(frame).toContain("esc quay lại")
+    expect(lines(frame).filter((l) => l.includes("Lỗi:"))).toHaveLength(1)
+    expect(frame).toContain("…")
+  } finally {
+    setState("mcp", 0, original)
+    setup.resize(100, 32)
+  }
+  setup.mockInput.pressEscape()
+  await setup.waitForFrame((f) => f.includes("Quản lý MCP server"))
+  setup.mockInput.pressEscape()
+  await setup.waitFor(() => state.dialog === undefined)
+}, 30_000)
+
 test("/mcp: space turns a server off and on (saved to mcp.json); catalog entries open their own screen", async () => {
   await setup.mockInput.typeText("/mcp")
   setup.mockInput.pressEnter()
