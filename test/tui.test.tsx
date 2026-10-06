@@ -1623,3 +1623,117 @@ test("prompt: no image in the clipboard is reported, nothing is inserted", async
     setImageReader(undefined)
   }
 })
+
+// ── Prompt input: messages queued while answering, Ctrl+G editor ─────────────────────────────
+
+/** A tool that waits until released keeps the turn streaming. */
+async function slowTool() {
+  const { z } = await import("zod")
+  const gate = { release: () => {} }
+  runtime.registry.register({
+    name: "cho_lau",
+    description: "Đợi (tool thử)",
+    input: z.object({}),
+    readOnly: true,
+    execute: (_input, ctx) =>
+      new Promise((resolve, reject) => {
+        gate.release = () => resolve("xong")
+        ctx.signal.addEventListener("abort", () => reject(new Error("aborted")), { once: true })
+      }),
+  })
+  callSlowTool = true
+  return gate
+}
+
+test("prompt: a message sent while answering waits, shows above the prompt, then goes next", async () => {
+  await setKey("groq", "gsk-good-key")
+  await saveConfig({ provider: "groq", model: "test-model" })
+  setState({ provider: "groq", model: "test-model" })
+  const gate = await slowTool()
+  try {
+    await setup.mockInput.typeText("CHẬM xếp hàng")
+    setup.mockInput.pressEnter()
+    await waitMcp(() => state.lines.some((l) => l.kind === "tool" && l.label.includes("cho_lau") && l.status === "running"))
+    await setup.mockInput.typeText("câu hỏi tiếp theo")
+    setup.mockInput.pressEnter()
+    const frame = await setup.waitForFrame((f) => f.includes("(chờ) câu hỏi tiếp theo"))
+    show(frame)
+    expect(state.queue).toHaveLength(1)
+    expect(state.lines.some((l) => l.kind === "user" && l.text === "câu hỏi tiếp theo")).toBe(false)
+    callSlowTool = false
+    gate.release()
+    // The first answer ends, then the queued message is sent and answered.
+    await waitMcp(() => state.queue.length === 0 && !state.streaming && state.lines.some((l) => l.kind === "user" && l.text === "câu hỏi tiếp theo"))
+    expect(lastUserContent()).toContain("câu hỏi tiếp theo")
+  } finally {
+    callSlowTool = false
+    runtime.registry.unregister("cho_lau")
+  }
+}, 30_000)
+
+test("prompt: after Esc stops the answer, queued messages come back to the prompt; ↑ also takes them back", async () => {
+  const gate = await slowTool()
+  try {
+    await setup.mockInput.typeText("CHẬM dừng")
+    setup.mockInput.pressEnter()
+    await waitMcp(() => state.lines.some((l) => l.kind === "tool" && l.label.includes("cho_lau") && l.status === "running" && state.streaming))
+    await setup.mockInput.typeText("tin một")
+    setup.mockInput.pressEnter()
+    await setup.mockInput.typeText("tin hai")
+    setup.mockInput.pressEnter()
+    await waitMcp(() => state.queue.length === 2)
+    // ↑ on the empty prompt takes them back to edit; Enter queues them again as one.
+    setup.mockInput.pressArrow("up")
+    let frame = await setup.waitForFrame((f) => promptRows(f).join("|") === "tin một|tin hai")
+    expect(state.queue).toHaveLength(0)
+    setup.mockInput.pressEnter()
+    await waitMcp(() => state.queue.length === 1)
+    setup.mockInput.pressEscape()
+    await waitMcp(() => !state.streaming && state.queue.length === 0)
+    frame = await setup.waitForFrame((f) => promptRows(f).join("|") === "tin một|tin hai")
+    show(frame)
+    expect(state.lines.some((l) => l.kind === "user" && l.text.startsWith("tin một"))).toBe(false)
+    gate.release()
+    await clearPrompt()
+  } finally {
+    callSlowTool = false
+    runtime.registry.unregister("cho_lau")
+  }
+}, 30_000)
+
+test("prompt: Ctrl+G edits the prompt in $EDITOR; untouched pastes go back into their pill", async () => {
+  // A stand-in editor: appends a line to the file it is given.
+  const script = path.join(home, "fake-editor.ts")
+  await writeFile(script, 'const f = process.argv[2]!; await Bun.write(f, (await Bun.file(f).text()) + "\\nthêm từ editor\\n")\n')
+  const saved = { VISUAL: process.env.VISUAL, EDITOR: process.env.EDITOR }
+  delete process.env.VISUAL
+  process.env.EDITOR = `"${process.execPath}" "${script}"`
+  try {
+    const pasted = Array.from({ length: 5 }, (_, i) => `p${i}`).join("\n")
+    await setup.mockInput.typeText("đầu ")
+    await setup.mockInput.pasteBracketedText(pasted)
+    await setup.waitForFrame((f) => /› đầu \[Pasted text #\d+ \+4 lines\]/.test(f))
+    setup.mockInput.pressKey("g", { ctrl: true })
+    const frame = await waitFrameMs((f) => promptRows(f).includes("thêm từ editor"))
+    show(frame)
+    expect(promptRows(frame)[0]).toMatch(/^đầu \[Pasted text #\d+ \+4 lines\]/)
+    await sendWith("test-model", "thêm từ editor")
+    expect(lastUserContent()).toContain(JSON.stringify(`đầu ${pasted} \nthêm từ editor`).slice(1, -1))
+  } finally {
+    process.env.EDITOR = saved.EDITOR
+    if (saved.EDITOR === undefined) delete process.env.EDITOR
+    if (saved.VISUAL !== undefined) process.env.VISUAL = saved.VISUAL
+  }
+}, 30_000)
+
+/** Poll frames on the clock (an editor is a real process). */
+async function waitFrameMs(pred: (frame: string) => boolean) {
+  let frame = ""
+  for (let i = 0; i < 100; i++) {
+    await setup.renderOnce()
+    frame = setup.captureCharFrame()
+    if (pred(frame)) return frame
+    await new Promise((r) => setTimeout(r, 100))
+  }
+  throw new Error(`frame never matched ${pred}:\n${frame}`)
+}

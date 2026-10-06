@@ -40,7 +40,7 @@ import { SkillsDialog, toggleSkill } from "./dialogs/skills"
 import { ToolsDialog } from "./dialogs/tools"
 import { Home } from "./home"
 import { currentSession, recordCompact, recordTurn, resumeFromArgs, startSession } from "./session"
-import { armExit, closeDialog, contextWindow, EXIT_WINDOW_MS, flash, onExitRequest, providerName, pushLine, setState, state, type Line } from "./state"
+import { armExit, type Queued, closeDialog, contextWindow, EXIT_WINDOW_MS, flash, onExitRequest, providerName, pushLine, setState, state, type Line } from "./state"
 import { color, promptStyle } from "./theme"
 import { cleanSelection, writeClipboard } from "./clipboard"
 import { ArgumentHint, Suggestions } from "./suggestions"
@@ -49,7 +49,8 @@ import { TodoPanel } from "./todo-panel"
 import { PromptInput } from "./prompt/input"
 import { addHistory, HistoryCursor, loadHistory, pastesFor, searchHistory } from "./prompt/history"
 import { imagePath, MAX_IMAGE_BASE64, readClipboardImage, readImageFile, type PromptImage } from "./prompt/image"
-import { isLargePaste, PromptParts, type DraftSnapshot, type ExpandedPrompt } from "./prompt/parts"
+import { isLargePaste, pasteLabel, PromptParts, type DraftSnapshot, type ExpandedPrompt } from "./prompt/parts"
+import { editInEditor } from "./prompt/editor"
 import { TODO_WRITE, TodoWriteInput } from "../core/tools/todos"
 
 let abort: AbortController | undefined
@@ -59,6 +60,7 @@ let epoch = 0
 /** /clear and /new: stop any running turn and start a fresh session. */
 export async function clearTranscript(runtime: Runtime) {
   epoch++
+  setState("queue", [])
   abort?.abort()
   await startSession(runtime, "clear")
 }
@@ -153,18 +155,44 @@ function send(runtime: Runtime, message: string | Outgoing) {
       disabled: config.autoCompact === "off",
     })
     if (auto) await compact(runtime, "auto", undefined, projected)
-    await sendTurn(runtime, msg)
+    return sendTurn(runtime, msg)
   })()
-  inflight = turn
-  return turn.finally(() => {
-    if (inflight === turn) inflight = undefined
+  const settled = turn.then(
+    (ok) => ok,
+    () => false,
+  )
+  const done = settled.then(() => {})
+  inflight = done
+  return settled.then((ok) => {
+    if (inflight === done) inflight = undefined
+    afterTurn(runtime, ok)
   })
 }
 
-async function sendTurn(runtime: Runtime, msg: Outgoing) {
+let returnQueue: ((items: Queued[]) => void) | undefined
+
+/**
+ * A turn ended. Messages typed meanwhile go next, one per turn; after a stop or an error
+ * they return to the input instead, to be checked before sending (Claude Code).
+ */
+function afterTurn(runtime: Runtime, ok: boolean) {
+  if (state.queue.length === 0 || state.streaming) return
+  if (!ok) {
+    const items = [...state.queue]
+    setState("queue", [])
+    return returnQueue?.(items)
+  }
+  const [next, ...rest] = state.queue
+  setState("queue", rest)
+  void send(runtime, next!)
+}
+
+/** One turn; true when it ran to the end (not stopped, no error, no /clear meanwhile). */
+async function sendTurn(runtime: Runtime, msg: Outgoing): Promise<boolean> {
   pushLine({ kind: "user", text: msg.display ?? msg.text })
   const mine = epoch
   const live = () => epoch === mine
+  let failed = false
   // Index of the assistant line currently receiving text; -1 after a tool call.
   let current = -1
   const edit = (index: number, fn: (line: any) => void) => {
@@ -225,6 +253,7 @@ async function sendTurn(runtime: Runtime, msg: Outgoing) {
           pushLine({ kind: "info", text: event.text })
           break
         case "error":
+          failed = true
           pushLine({ kind: "error", text: event.message })
           if (isContextOverflow(event.message)) pushLine({ kind: "info", text: "Hội thoại có thể đã quá dài cho model này: gõ /compact để nén rồi hỏi lại." })
           break
@@ -241,6 +270,7 @@ async function sendTurn(runtime: Runtime, msg: Outgoing) {
     if (live() && controller.signal.aborted) pushLine({ kind: "info", text: "Đã dừng." })
   } catch (error) {
     // Setup problems (no provider, model or key) are thrown before the turn starts.
+    failed = true
     if (live()) pushLine({ kind: "error", text: describeError(error) })
   } finally {
     if (live()) {
@@ -257,6 +287,7 @@ async function sendTurn(runtime: Runtime, msg: Outgoing) {
     setState("streaming", false)
     if (abort === controller) abort = undefined
   }
+  return live() && !failed && !controller.signal.aborted
 }
 
 export function App(props: {
@@ -509,6 +540,12 @@ export function App(props: {
   function historyKey(evt: KeyEvent, direction: "up" | "down") {
     if (!input || input.hasSelection()) return
     evt.preventDefault()
+    // ↑ on an empty prompt first takes back the queued messages, to edit them.
+    if (direction === "up" && !draft() && state.queue.length > 0) {
+      const items = [...state.queue]
+      setState("queue", [])
+      return pullBack(items)
+    }
     const before = input.cursorOffset
     if (direction === "up") input.moveCursorUp()
     else input.moveCursorDown()
@@ -516,6 +553,39 @@ export function App(props: {
     const text = direction === "up" ? recall.up(input.plainText) : recall.down(input.plainText)
     if (text !== undefined) showRecalled(text, direction === "up" ? "start" : "end")
   }
+
+  /**
+   * Ctrl+G: write the prompt in $EDITOR (Notepad by default on Windows). Pastes come out in
+   * full; those left untouched go back into their pills.
+   */
+  async function openEditor() {
+    const snap = parts.snapshot()
+    const result = await editInEditor(parts.expand().text, renderer)
+    input?.focus()
+    if ("error" in result) return flash(result.error, 5000)
+    let text = result.text
+    for (const [id, content] of Object.entries(snap.pastes ?? {})) {
+      const at = text.indexOf(content)
+      if (at >= 0) text = text.slice(0, at) + pasteLabel(Number(id), content) + text.slice(at + content.length)
+    }
+    setInput(text, "end", snap)
+  }
+
+  /** Queued messages back into the box (joined by line breaks), ahead of any draft. */
+  function pullBack(items: Queued[]) {
+    const current = parts.snapshot()
+    const all = [...items, ...(current.text.trim() ? [{ display: current.text, saved: current }] : [])]
+    const saved = {
+      pastes: Object.assign({}, ...all.map((i) => i.saved.pastes ?? {})),
+      images: Object.assign({}, ...all.map((i) => i.saved.images ?? {})),
+    }
+    setInput(all.map((i) => i.display).join("\n"), "end", saved)
+  }
+  returnQueue = (items) => {
+    pullBack(items)
+    flash("Tin đang chờ đã được trả về ô nhập", 3000)
+  }
+  onCleanup(() => (returnQueue = undefined))
 
   /** Ctrl+S: put the draft aside (or bring it back); it also returns after the next send. */
   let stash: DraftSnapshot | undefined
@@ -670,9 +740,11 @@ export function App(props: {
           text: `Model ${state.model} không đọc được ảnh. Đổi model bằng /model, hoặc xoá ${images.length > 1 ? "các ảnh" : "ảnh"} khỏi ô nhập rồi gửi lại.`,
         })
       }
+      const saved = expanded ? parts.snapshot() : {}
       setInput("")
       restoreStash()
-      if (state.streaming) return
+      // Typed while an answer is streaming: sent when it ends (Claude Code), ↑ to edit it.
+      if (state.streaming) return void setState("queue", (q) => [...q, { text, display: shown, images, saved }])
       void send(props.runtime, { text, display: shown, images })
       return
     }
@@ -763,6 +835,10 @@ export function App(props: {
       evt.preventDefault()
       return toggleStash()
     }
+    if (evt.ctrl && evt.name === "g") {
+      evt.preventDefault()
+      return void openEditor()
+    }
     // Paste an image from the clipboard: Alt+V (Windows Terminal keeps Ctrl+V for its own
     // text paste, as in Claude Code), or Ctrl+V where the terminal passes the key through.
     if ((evt.meta || evt.ctrl) && evt.name === "v" && !evt.shift) {
@@ -827,6 +903,21 @@ export function App(props: {
             </box>
           )}
         </Show>
+        {/* Messages waiting for the answer to finish (Claude Code shows them above the prompt). */}
+        <Show when={!owner() && !state.dialog && state.queue.length > 0}>
+          <box marginLeft={2} marginRight={2} paddingLeft={1} flexShrink={0} flexDirection="column" backgroundColor={color.bg}>
+            <For each={state.queue}>
+              {(item) => (
+                <text fg={color.tx3} wrapMode="none">
+                  {`(chờ) ${truncate(item.display.split("\n")[0] ?? "", Math.max(10, dims().width - 30))}`}
+                </text>
+              )}
+            </For>
+            <text fg={color.tx3} wrapMode="none">
+              {"  gửi khi câu trả lời xong · ↑ để sửa"}
+            </text>
+          </box>
+        </Show>
         <Show when={!owner() && !state.dialog && suggestions().length === 0 && argHint()}>
           {(c) => <ArgumentHint command={c()} />}
         </Show>
@@ -889,7 +980,7 @@ export function App(props: {
           focused={!state.dialog && !owner()}
           busy={state.streaming}
           placeholder={
-            state.streaming ? "đang trả lời… esc để dừng" : "Hỏi về thị trường, hoặc gõ / để xem lệnh · ↑ lịch sử · ctrl+j xuống dòng"
+            state.streaming ? "đang trả lời… esc để dừng · enter để xếp hàng tin tiếp" : "Hỏi về thị trường, hoặc gõ / để xem lệnh · ↑ lịch sử · ctrl+j xuống dòng"
           }
           onChange={(v) => {
             if (v === draft()) return
