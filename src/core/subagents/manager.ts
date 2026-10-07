@@ -100,6 +100,11 @@ export class SubagentManager {
   private listeners = new Set<Listener>()
   private session?: { id: string; dir: string }
   private max = DEFAULT_MAX_CONCURRENT
+  /**
+   * Setup (config, model) runs one spawn after another, so slots are taken in the order
+   * the model asked for them, not in whichever order the async setup happened to finish.
+   */
+  private setup: Promise<unknown> = Promise.resolve()
   /** Disk errors, reported once per run to whoever listens (the TUI shows them). */
   onPersistError?: (error: unknown) => void
 
@@ -205,10 +210,14 @@ export class SubagentManager {
     let idleStop = false
     let streamed = ""
     try {
-      const config = await loadConfig()
-      this.max = config.subagents?.maxConcurrent ?? this.max
       const fallback: SidechainEntry[] = []
-      const target = await this.targetFor(spec, config.subagents, fallback)
+      const prepared = this.setup.then(async () => {
+        const config = await loadConfig()
+        this.max = config.subagents?.maxConcurrent ?? this.max
+        return this.targetFor(spec, config.subagents, fallback)
+      })
+      this.setup = prepared.catch(() => {})
+      const target = await prepared
       run.model = `${target.provider.name} · ${target.model}`
       if (target.provider.models[target.model]?.tool_call === false) {
         throw new Error(`Model ${target.model} không hỗ trợ gọi tool nên không chạy được subagent. Đổi "Model cho subagent" trong /config.`)

@@ -1872,7 +1872,9 @@ test("subagents: parallel spawns render as one block; over the limit one waits f
     expect((await listSessions()).every((x) => !x.file.includes("subagents"))).toBe(true)
   } finally {
     setState("expandTools", false)
+    release?.()
     childGate = undefined
+    await waitMcp(() => !state.streaming)
     runtime.subagents.setMax(10)
     await saveConfig({ subagents: undefined })
   }
