@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeAll, expect, test } from "bun:test"
-import { mkdtemp, readdir, rm, writeFile } from "node:fs/promises"
+import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { testRender } from "@opentui/solid"
@@ -1917,3 +1917,27 @@ test("subagents: a child's write tool asks in the main prompt, named after the s
     runtime.registry.unregister("ghi_tam")
   }
 }, 30_000)
+
+test("/agents lists the subagent types by source; ctrl+r picks up a new file; enter shows the tools it resolves to", async () => {
+  const dir = path.join(home, "agents")
+  await mkdir(dir, { recursive: true })
+  await writeFile(path.join(dir, "rieng-tui.md"), "---\nname: rieng-tui\ndescription: Loại riêng để thử\ntools: [current_time]\nmaxSteps: 3\n---\nCHỈ-DẪN-RIÊNG\n")
+  await setup.mockInput.typeText("/agents")
+  setup.mockInput.pressEnter()
+  let frame = await setup.waitForFrame((f) => f.includes("Subagent · 4 loại") && f.includes("Có sẵn"))
+  expect(frame).toContain("tra-cuu")
+  setup.mockInput.pressKey("r", { ctrl: true })
+  frame = await setup.waitForFrame((f) => f.includes("Subagent · 5 loại") && f.includes("Người dùng") && f.includes("Đã nạp lại 5 loại"))
+  show(frame)
+  expect(runtime.registry.get("spawn_subagent")!.description).toContain("- rieng-tui: Loại riêng để thử (Tool: current_time)")
+  await setup.mockInput.typeText("rieng")
+  setup.mockInput.pressEnter()
+  frame = await setup.waitForFrame((f) => f.includes("Subagent · rieng-tui") && f.includes("Tool hiện có (1): current_time"))
+  show(frame)
+  expect(frame).toContain("CHỈ-DẪN-RIÊNG")
+  expect(frame).toContain("tối đa 3 bước")
+  setup.mockInput.pressEscape()
+  await setup.waitForFrame((f) => f.includes("Subagent · 5 loại"))
+  setup.mockInput.pressEscape()
+  await setup.waitFor(() => state.dialog === undefined)
+})

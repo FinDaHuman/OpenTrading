@@ -16,3 +16,6 @@ export const catalogCacheFile = () => path.join(dataDir(), "cache", "models.json
 
 /** Bundled skills shipped with the repo. */
 export const SKILLS_DIR = path.resolve(import.meta.dir, "../../skills")
+
+/** Bundled subagent types (agents/<name>.md). */
+export const AGENTS_DIR = path.resolve(import.meta.dir, "../../agents")

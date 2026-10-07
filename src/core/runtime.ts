@@ -16,6 +16,7 @@ import { chartCompareTool } from "./tools/chart/compare"
 import { doctorLocalTool, sessionHistoryTools } from "./tools/session/history"
 import { spawnSubagentTool } from "./tools/subagent/spawn"
 import { SubagentManager } from "./subagents/manager"
+import type { AgentDefinition } from "./agents/schema"
 import { toolSearchTool } from "./tools/builtin/tool-search"
 import { todoWriteTool } from "./tools/builtin/todo-write"
 import { webFetchTool } from "./tools/web/fetch"
@@ -94,6 +95,11 @@ export function initRuntime(opts: { cwd?: string; home?: string; skills: () => S
   const runtime: Runtime = { registry, permissions, questions, mcp, hooks: new HookBus(), memory: new NoopMemory(), subagents }
   switchMemory(runtime, opts.memory ?? new NoopMemory())
   return runtime
+}
+
+/** Re-register spawn_subagent with the loaded agent types (its description lists them). */
+export function setAgents(runtime: Runtime, agents: AgentDefinition[]) {
+  runtime.registry.register(spawnSubagentTool(runtime.subagents, agents))
 }
 
 /** Swap the memory provider live: its tools and hooks are replaced, nothing else restarts. */
