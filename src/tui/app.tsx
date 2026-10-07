@@ -38,6 +38,9 @@ import { SessionsDialog } from "./dialogs/sessions"
 import { ModelDialog } from "./dialogs/model"
 import { SkillsDialog, toggleSkill } from "./dialogs/skills"
 import { AgentsDialog, reloadAgents } from "./dialogs/agents"
+import { TasksDialog } from "./dialogs/tasks"
+import { noticesMessage, notificationText } from "../core/subagents/notification"
+import { fmtSeconds, fmtTokens } from "../core/subagents/result"
 import { ToolsDialog } from "./dialogs/tools"
 import { Home } from "./home"
 import { attachSubagents, currentSession, recordCompact, recordTurn, resumeFromArgs, startSession } from "./session"
@@ -144,10 +147,30 @@ export async function compact(runtime: Runtime, trigger: "auto" | "manual", inst
 let inflight: Promise<void> | undefined
 
 /** A message to send: the text for the model, what the transcript shows, pasted images. */
-type Outgoing = { text: string; display?: string; images?: PromptImage[] }
+type Outgoing = { text: string; display?: string; images?: PromptImage[]; notice?: boolean }
+
+/**
+ * Background subagent results go to the model on their own turn when nothing else is
+ * going on (Claude Code's task notifications). They wait while an answer runs, a prompt
+ * owns the keyboard or messages are queued, and after a failed turn until the user sends
+ * something (a 429 must not loop).
+ */
+export function deliverNotices(runtime: Runtime) {
+  if (state.notices.length === 0 || state.noticeHold || state.streaming || state.compacting) return
+  if (state.approval || state.question || inflight || state.queue.length > 0) return
+  const texts = [...state.notices]
+  setState("notices", [])
+  void send(runtime, { text: noticesMessage(texts), notice: true })
+}
 
 function send(runtime: Runtime, message: string | Outgoing) {
-  const msg = typeof message === "string" ? { text: message } : message
+  let msg: Outgoing = typeof message === "string" ? { text: message } : message
+  // Undelivered subagent results ride in front of what the user typed.
+  if (!msg.notice && state.notices.length > 0) {
+    msg = { ...msg, display: msg.display ?? msg.text, text: `${noticesMessage(state.notices)}\n\n${msg.text}` }
+    setState("notices", [])
+  }
+  if (!msg.notice) setState("noticeHold", false)
   const turn = (async () => {
     // Near the window: compact first, so this turn still fits.
     const config = await loadConfig()
@@ -182,7 +205,9 @@ let returnQueue: ((items: Queued[]) => void) | undefined
  * they return to the input instead, to be checked before sending (Claude Code).
  */
 function afterTurn(runtime: Runtime, ok: boolean) {
-  if (state.queue.length === 0 || state.streaming) return
+  if (state.streaming) return
+  if (!ok) setState("noticeHold", true)
+  if (state.queue.length === 0) return deliverNotices(runtime)
   if (!ok) {
     const items = [...state.queue]
     setState("queue", [])
@@ -195,7 +220,8 @@ function afterTurn(runtime: Runtime, ok: boolean) {
 
 /** One turn; true when it ran to the end (not stopped, no error, no /clear meanwhile). */
 async function sendTurn(runtime: Runtime, msg: Outgoing): Promise<boolean> {
-  pushLine({ kind: "user", text: msg.display ?? msg.text })
+  // A notification turn already has its "◆ Subagent nền …" lines.
+  if (!msg.notice) pushLine({ kind: "user", text: msg.display ?? msg.text })
   const mine = epoch
   const live = () => epoch === mine
   let failed = false
@@ -226,7 +252,8 @@ async function sendTurn(runtime: Runtime, msg: Outgoing): Promise<boolean> {
       registry: runtime.registry,
       signal: controller.signal,
       sessionId: currentSession().id,
-      hooks: runtime.hooks,
+      // A notification is harness text, not the user's: no user-prompt hooks on it.
+      hooks: msg.notice ? undefined : runtime.hooks,
       memory: runtime.memory,
       serverInstructions: () => runtime.mcp.instructions(),
     })
@@ -375,20 +402,35 @@ export function App(props: {
   props.runtime.questions.interactive = true
   const offQuestion = props.runtime.questions.onChange((head) => {
     setState("question", head)
+    if (!head) deliverNotices(props.runtime)
   })
   const offPending = props.runtime.permissions.onPending((pending) => setState("approvals", pending))
   const subagents = props.runtime.subagents
-  const offAgents = subagents.onChange((view) => setState("agents", view.id, reconcile(view)))
+  // Runs of a session no longer shown (/clear, /new) still report while they stop: ignore them.
+  const offAgents = subagents.onChange((view) => {
+    if (view.sessionId === currentSession().id) setState("agents", view.id, reconcile(view))
+  })
   const offSlots = subagents.limiter.onChange(() => setState("agentSlots", subagents.limiter.stats()))
+  // A background subagent finished: a line now, its result to the model when idle.
+  const offFinished = subagents.onFinished((view) => {
+    if (view.sessionId !== currentSession().id) return
+    const stats = `${view.toolCount} tool · ${fmtTokens(view.usage.input + view.usage.output)} token · ${fmtSeconds((view.endedAt ?? Date.now()) - (view.startedAt ?? view.createdAt))}`
+    const status = { completed: "xong", failed: "lỗi", stopped: "đã dừng" }[view.status as string] ?? view.status
+    pushLine({ kind: "agent-notice", agentId: view.id, status, text: `Subagent nền ${view.type} (${view.description}) · ${status} · ${stats}${view.error ? ` · ${view.error}` : ""}` })
+    setState("notices", (n) => [...n, notificationText(view)])
+    deliverNotices(props.runtime)
+  })
   subagents.onPersistError = (error) =>
     pushLine({ kind: "error", text: `Không lưu được transcript của subagent: ${error instanceof Error ? error.message : String(error)}` })
   onCleanup(() => {
     offPending()
     offAgents()
     offSlots()
+    offFinished()
   })
   const offApproval = props.runtime.permissions.onChange((head) => {
     setState("approval", head)
+    if (!head) queueMicrotask(() => deliverNotices(props.runtime))
   })
   onCleanup(() => {
     offApproval()
@@ -805,6 +847,7 @@ export function App(props: {
       case "memory":
       case "config":
       case "agents":
+      case "tasks":
         return setState("dialog", cmd.name)
       case "profile":
         return void ensureProfile().then(({ file, created }) =>
@@ -987,6 +1030,9 @@ export function App(props: {
             <Match when={state.dialog === "agents"}>
               <AgentsDialog runtime={props.runtime} />
             </Match>
+            <Match when={state.dialog === "tasks"}>
+              <TasksDialog runtime={props.runtime} />
+            </Match>
             <Match when={state.dialog === "help"}>
               <HelpDialog onRun={(command) => run(command)} />
             </Match>
@@ -1037,6 +1083,9 @@ export function App(props: {
 const approvalStatus = (request: { agent?: { type: string } } | undefined) =>
   request?.agent ? `△ subagent ${request.agent.type} cần bạn xác nhận · esc từ chối` : "△ cần bạn xác nhận · esc từ chối"
 
+const backgroundRunning = () =>
+  Object.values(state.agents).filter((a) => a.background && (a.status === "running" || a.status === "queued")).length
+
 function StatusBar() {
   const target = () =>
     state.provider ? `${providerName(state.provider)} · ${state.model ?? "chưa chọn model"}` : "chưa kết nối"
@@ -1059,6 +1108,9 @@ function StatusBar() {
         <text fg={contextShare()! >= AUTO_COMPACT_SHARE ? color.giam : contextShare()! >= 0.6 ? color.tham : color.tx3} flexShrink={0} selectable={false}>
           {` ctx ${Math.round(contextShare()! * 100)}% `}
         </text>
+      </Show>
+      <Show when={backgroundRunning() > 0}>
+        <text fg={color.san} flexShrink={0} selectable={false}>{` ⧗ ${backgroundRunning()} subagent nền `}</text>
       </Show>
       <Show when={state.activeSkills.length > 0}>
         <text fg={color.tran} flexShrink={1} wrapMode="none" selectable={false}>

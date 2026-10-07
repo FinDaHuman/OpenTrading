@@ -113,6 +113,13 @@ function firstLine(output: ResultPart["output"]): string | undefined {
 }
 
 /** Replace large tool results outside the last `keepTurns` turns with a placeholder. */
+/** The `<subagent_meta>` block of a spawn_subagent result, if any. */
+function subagentMeta(output: unknown): string | undefined {
+  const value = (output as { value?: unknown } | undefined)?.value
+  if (typeof value !== "string") return undefined
+  return /<subagent_meta>[\s\S]*?<\/subagent_meta>/.exec(value)?.[0]
+}
+
 export function pruneToolResults(messages: readonly ModelMessage[], keepTurns = KEEP_TURNS): { messages: ModelMessage[]; pruned: number } {
   const turns = splitTurns(messages)
   const old = Math.max(0, turns.length - keepTurns)
@@ -128,8 +135,10 @@ export function pruneToolResults(messages: readonly ModelMessage[], keepTurns = 
         const head = firstLine(p.output)
         if (size < PRUNE_MIN_CHARS || head === PRUNED_TEXT) return part
         pruned++
-        // The loaded-tools line is how later turns know which deferred tools are callable.
-        const value = head?.startsWith(LOADED_PREFIX) ? `${head}\n${PRUNED_TEXT}` : PRUNED_TEXT
+        // The loaded-tools line is how later turns know which deferred tools are callable;
+        // a subagent's metadata block keeps its agent_id reachable for send_message.
+        const meta = subagentMeta(p.output)
+        const value = head?.startsWith(LOADED_PREFIX) ? `${head}\n${PRUNED_TEXT}` : meta ? `${PRUNED_TEXT}\n${meta}` : PRUNED_TEXT
         const failed = p.output?.type === "error-text" || p.output?.type === "error-json"
         return { ...part, output: { type: failed ? "error-text" : "text", value } } as typeof part
       })

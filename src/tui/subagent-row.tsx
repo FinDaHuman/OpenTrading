@@ -54,6 +54,7 @@ interface AgentInfo {
   prompt?: string
   tools: ChildToolView[]
   report?: string
+  background?: boolean
 }
 
 const TRAILER_STATUS: Record<string, AgentStatus> = { xong: "completed", lỗi: "failed", "đã dừng": "stopped" }
@@ -63,6 +64,7 @@ function infoFor(line: ToolLine): AgentInfo {
   const view = Object.values(state.agents).find((a) => a.parentCallId === line.callId)
   const report = line.status === "ok" && line.output ? stripTrailer(line.output) : undefined
   if (view) {
+    const background = view.background
     return {
       type: view.type,
       description: view.description,
@@ -76,7 +78,9 @@ function infoFor(line: ToolLine): AgentInfo {
       waitingApproval: state.approvals.some((r) => r.agent?.id === view.id),
       prompt: view.prompt,
       tools: view.tools,
-      report,
+      // A background call's own output is only "started"; the report is the agent's text.
+      report: background ? view.text || undefined : report,
+      background,
     }
   }
   // Resumed session (or a call that never started): label "type(description)" plus the trailer.
@@ -101,9 +105,10 @@ function infoFor(line: ToolLine): AgentInfo {
 const active = (s: AgentStatus) => s === "queued" || s === "running"
 
 function stats(info: AgentInfo) {
-  if (info.status === "queued") return ` · đang chờ slot (${state.agentSlots.running}/${state.agentSlots.max})`
-  if (info.status !== "running") return ""
-  return ` · ${info.toolCount ?? 0} tool · ${fmtTokens(info.tokens ?? 0)} token`
+  const bg = info.background ? " · chạy nền" : ""
+  if (info.status === "queued") return `${bg} · đang chờ slot (${state.agentSlots.running}/${state.agentSlots.max})`
+  if (info.status !== "running") return bg
+  return `${bg} · ${info.toolCount ?? 0} tool · ${fmtTokens(info.tokens ?? 0)} token`
 }
 
 /** The line under an agent: what it is doing, or how it ended. */

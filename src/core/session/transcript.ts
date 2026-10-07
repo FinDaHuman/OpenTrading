@@ -1,5 +1,6 @@
 import type { ModelMessage } from "ai"
 import { isCompactMarker } from "../compact-marker"
+import { splitNotices, type ParsedNotice } from "../subagents/notification"
 
 /**
  * Rebuild a UI-neutral transcript from stored model messages, so a resumed session looks the
@@ -12,6 +13,8 @@ export type TranscriptItem =
   | { kind: "tool"; callId: string; name: string; input: unknown; ok: boolean; output: string }
   /** The history was compacted here; `text` is the summary that replaced what came before. */
   | { kind: "compact"; text: string }
+  /** A background subagent's result was delivered here. */
+  | ({ kind: "agent-notice" } & ParsedNotice)
 
 function outputText(output: unknown): { ok: boolean; text: string } {
   const o = output as { type?: string; value?: unknown }
@@ -53,7 +56,9 @@ export function transcriptFromMessages(messages: ModelMessage[]): TranscriptItem
               .filter((p) => p.type === "text" && !p.text.trimStart().startsWith("<nhac_nho>"))
               .map((p) => (p as { text: string }).text)
               .join("\n")
-      if (text.trim()) items.push({ kind: "user", text })
+      const { notices, rest } = splitNotices(text)
+      for (const n of notices) items.push({ kind: "agent-notice", ...n })
+      if (rest.trim()) items.push({ kind: "user", text: rest })
     } else if (m.role === "assistant") {
       if (typeof m.content === "string") {
         if (m.content.trim()) items.push({ kind: "assistant", text: m.content })

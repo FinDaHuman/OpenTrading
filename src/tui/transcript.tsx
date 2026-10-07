@@ -192,6 +192,13 @@ function Row(props: { line: Line; prev?: Line; index: number; width: number }) {
       <Match when={props.line.kind === "compact" && props.line}>
         {(line) => <CompactRow line={line() as Extract<Line, { kind: "compact" }>} />}
       </Match>
+      <Match when={props.line.kind === "agent-notice" && props.line}>
+        {(line) => {
+          const l = line() as Extract<Line, { kind: "agent-notice" }>
+          const fg = l.status === "xong" || l.status === "completed" ? color.tang : l.status === "lỗi" || l.status === "failed" ? color.giam : color.tx3
+          return <Hanging glyph="◆" glyphColor={fg} text={l.text} fg={color.tx2} />
+        }}
+      </Match>
       <Match when={props.line.kind === "error"}>
         <Hanging glyph="✘" glyphColor={color.giam} text={(props.line as Extract<Line, { kind: "error" }>).text} fg={color.giam} />
       </Match>

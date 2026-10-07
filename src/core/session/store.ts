@@ -1,5 +1,6 @@
 import { stripImages } from "../tools/registry"
 import { isCompactMarker } from "../compact-marker"
+import { splitNotices } from "../subagents/notification"
 import { appendFile, mkdir, readFile } from "node:fs/promises"
 import path from "node:path"
 import type { ModelMessage } from "ai"
@@ -58,10 +59,10 @@ export function newSessionId(now = new Date()) {
 /** Plain user text: string content, or text parts that are not reminder blocks. */
 function userText(message: ModelMessage) {
   if (message.role !== "user") return ""
-  if (typeof message.content === "string") return message.content
+  if (typeof message.content === "string") return splitNotices(message.content).rest
   return message.content
     .filter((p) => p.type === "text" && !p.text.trimStart().startsWith("<nhac_nho>"))
-    .map((p) => (p as { text: string }).text)
+    .map((p) => splitNotices((p as { text: string }).text).rest)
     .join(" ")
 }
 

@@ -1,6 +1,9 @@
 import { expect, test } from "bun:test"
 import { Limiter } from "../src/core/subagents/limiter"
 import { fmtTokens, formatResult, parseTrailer, stripTrailer } from "../src/core/subagents/result"
+import { noticesMessage, notificationText, splitNotices } from "../src/core/subagents/notification"
+import { pruneToolResults } from "../src/core/compact"
+import type { ModelMessage } from "ai"
 
 const tick = () => new Promise((r) => setTimeout(r, 0))
 
@@ -85,4 +88,54 @@ test("result: trailer round-trips, report survives without it, token counts read
   expect(fmtTokens(12_345)).toBe("12,3k")
   expect(fmtTokens(18_000)).toBe("18k")
   expect(fmtTokens(123_456)).toBe("123k")
+})
+
+test("notifications: built from a view, split back out of a user message (resume, session title)", () => {
+  const view = {
+    id: "ag-abc123",
+    type: "nghien-cuu",
+    description: "Định giá FPT",
+    prompt: "x",
+    background: true,
+    model: "Groq · m",
+    status: "completed" as const,
+    createdAt: 0,
+    startedAt: 1_000,
+    endedAt: 43_000,
+    tools: [],
+    toolCount: 6,
+    usage: { input: 15_000, output: 3_234 },
+    text: "FPT ổn.",
+  }
+  const one = notificationText(view)
+  expect(one).toContain("<thong_bao_subagent>\nagent_id: ag-abc123 · loại: nghien-cuu · mô tả: Định giá FPT · trạng thái: xong")
+  expect(one).toContain("<ket_qua>\nFPT ổn.\n</ket_qua>")
+  expect(one).toContain("6 tool · 18.234 token · 42s")
+  const failed = notificationText({ ...view, id: "ag-def456", status: "failed", error: "429", text: "" })
+  const message = `${noticesMessage([one, failed])}\n\ncòn câu hỏi của tôi`
+  const { notices, rest } = splitNotices(message)
+  expect(notices).toEqual([
+    { agentId: "ag-abc123", type: "nghien-cuu", description: "Định giá FPT", status: "xong", stats: "6 tool · 18.234 token · 42s" },
+    { agentId: "ag-def456", type: "nghien-cuu", description: "Định giá FPT", status: "lỗi", stats: "6 tool · 18.234 token · 42s" },
+  ])
+  expect(rest).toBe("còn câu hỏi của tôi")
+  expect(splitNotices(noticesMessage([one])).rest).toBe("")
+})
+
+test("pruning old tool results keeps a subagent's metadata block (its agent_id stays usable)", () => {
+  const report = formatResult(
+    { id: "ag-abc123", type: "nghien-cuu" },
+    { status: "completed", text: "x".repeat(2_000), toolCount: 1, usage: { input: 1, output: 1 }, durationMs: 1_000 },
+  )
+  const turn = (n: number): ModelMessage[] => [
+    { role: "user", content: `câu ${n}` },
+    { role: "assistant", content: [{ type: "tool-call", toolCallId: `c${n}`, toolName: "spawn_subagent", input: {} }] },
+    { role: "tool", content: [{ type: "tool-result", toolCallId: `c${n}`, toolName: "spawn_subagent", output: { type: "text", value: report } }] },
+    { role: "assistant", content: "xong" },
+  ]
+  const { messages, pruned } = pruneToolResults([...turn(1), ...turn(2), ...turn(3)])
+  expect(pruned).toBe(1)
+  const value = JSON.stringify(messages[2])
+  expect(value).not.toContain("xxxxxxxxxx")
+  expect(value).toContain("agent_id: ag-abc123")
 })

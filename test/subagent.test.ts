@@ -36,6 +36,8 @@ let childCall: Call | undefined
 let childReport = "Báo cáo: FPT ổn."
 let childStatus: number | undefined
 let childUsage = { prompt_tokens: 1_000, completion_tokens: 200 }
+/** Child requests wait for this before answering. */
+let childGate: Promise<void> | undefined
 
 const sse = (chunks: object[]) =>
   new Response(chunks.map((c) => `data: ${JSON.stringify(c)}\n\n`).join("") + "data: [DONE]\n\n", {
@@ -72,6 +74,11 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   const hasToolResult = body.messages.some((m) => m.role === "tool")
   if (isChild(body)) {
     childBodies.push(body)
+    // Held requests still end when the caller aborts (stop_agent, Esc).
+    await Promise.race([
+      childGate,
+      new Promise<void>((_, reject) => init?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")))),
+    ])
     if (childStatus) return Response.json({ error: { message: "upstream down", type: "server_error" } }, { status: childStatus })
     if (childCall && !hasToolResult && body.tool_choice !== "none") return toolCalls([childCall])
     return answer(childReport, childUsage)
@@ -88,7 +95,7 @@ const { saveConfig } = await import("../src/core/config")
 const { setKey } = await import("../src/core/auth")
 const { PermissionGate } = await import("../src/core/permission")
 const { SubagentManager } = await import("../src/core/subagents/manager")
-const { spawnSubagentTool } = await import("../src/core/tools/subagent/spawn")
+const { sendMessageTool, spawnSubagentTool, stopAgentTool } = await import("../src/core/tools/subagent/spawn")
 const { parseTrailer } = await import("../src/core/subagents/result")
 type AgentEvent = import("../src/core/events").AgentEvent
 
@@ -109,6 +116,7 @@ beforeEach(async () => {
   childReport = "Báo cáo: FPT ổn."
   childStatus = undefined
   childUsage = { prompt_tokens: 1_000, completion_tokens: 200 }
+  childGate = undefined
   await saveConfig({ provider: "groq", model: "tooly", subagents: undefined })
 })
 
@@ -389,4 +397,95 @@ test("an agent type brings its instructions, tool filter, step limit and model",
   expect(childBodies[1]!.tool_choice).toBe("none")
   expect(manager.list()[0]).toMatchObject({ type: "thu", toolCount: 1 })
   expect(parseTrailer(ends(events)[0]!.output)?.type).toBe("thu")
+})
+
+const ctxOf = () => ({ signal: new AbortController().signal, callId: "c" })
+const waitFor = async (pred: () => boolean) => {
+  for (let i = 0; i < 400 && !pred(); i++) await new Promise((r) => setTimeout(r, 5))
+  expect(pred()).toBe(true)
+}
+
+test("background: the call returns at once with the id; the result arrives through onFinished; Esc on the parent does not stop it", async () => {
+  const { registry, manager } = setup()
+  const finished: string[] = []
+  manager.onFinished((v) => finished.push(`${v.id}:${v.status}:${v.text}`))
+  let release!: () => void
+  childGate = new Promise((r) => (release = r))
+  parentCalls = [{ name: "spawn_subagent", args: { description: "Định giá FPT", prompt: "định giá", run_in_background: true } }]
+  const controller = new AbortController()
+  const events = await collect(runAgent({ history: [], input: "x", skills: [], registry, signal: controller.signal }))
+  const [end] = ends(events)
+  expect(end!.ok).toBe(true)
+  expect(end!.output).toMatch(/^Đã chạy nền subagent ag-[a-z0-9]{6} \(nghien-cuu · Định giá FPT\)/)
+  const id = /ag-[a-z0-9]{6}/.exec(end!.output)![0]
+  controller.abort() // the parent turn is over (and even aborted): the background agent goes on
+  expect(manager.get(id)).toMatchObject({ background: true })
+  expect(finished).toEqual([])
+  release()
+  await waitFor(() => finished.length === 1)
+  expect(finished[0]).toBe(`${id}:completed:Báo cáo: FPT ổn.`)
+})
+
+test("send_message: queued for a running agent, resumes a finished one with its conversation, and rebuilds one from its sidechain", async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "ot-sub-session-"))
+  const { manager } = setup()
+  manager.attachSession({ id: "s-2", dir })
+  const finished: string[] = []
+  manager.onFinished((v) => finished.push(v.id))
+  const send = sendMessageTool(manager)
+
+  // Running: the message waits for the end of the current turn, then gets its own turn.
+  let release!: () => void
+  childGate = new Promise((r) => (release = r))
+  const run = manager.start({ description: "FPT", prompt: "VIỆC-ĐẦU", background: true })
+  await waitFor(() => childBodies.length === 1)
+  expect(await send.execute({ to: run.id, message: "VIỆC-THÊM" }, ctxOf())).toContain("Đã xếp tin")
+  release()
+  await run.done
+  expect(childBodies).toHaveLength(2)
+  const second = JSON.stringify(childBodies[1]!.messages)
+  expect(second).toContain("VIỆC-ĐẦU")
+  expect(second).toContain("VIỆC-THÊM")
+  expect(finished).toEqual([run.id])
+
+  // Finished, in memory: resumes in the background with the whole conversation.
+  childGate = undefined
+  expect(await send.execute({ to: run.id, message: "VIỆC-BA" }, ctxOf())).toContain("đang chạy tiếp ở chế độ nền")
+  await waitFor(() => finished.length === 2)
+  expect(JSON.stringify(childBodies[2]!.messages)).toContain("VIỆC-THÊM")
+  expect(JSON.stringify(childBodies[2]!.messages)).toContain("VIỆC-BA")
+
+  // A fresh manager (resumed session): rebuilt from the sidechain file.
+  await manager.flush()
+  const { manager: other } = setup()
+  other.attachSession({ id: "s-2", dir })
+  const later: string[] = []
+  other.onFinished((v) => later.push(v.text))
+  await sendMessageTool(other).execute({ to: run.id, message: "VIỆC-BỐN" }, ctxOf())
+  await waitFor(() => later.length === 1)
+  const rebuilt = JSON.stringify(childBodies.at(-1)!.messages)
+  expect(rebuilt).toContain("VIỆC-ĐẦU")
+  expect(rebuilt).toContain("VIỆC-BA")
+  expect(rebuilt).toContain("VIỆC-BỐN")
+
+  await expect(sendMessageTool(other).execute({ to: "ag-zzzzzz", message: "x" }, ctxOf())).rejects.toThrow('Không có subagent "ag-zzzzzz"')
+  // Another session's agent cannot be continued from here.
+  other.attachSession({ id: "s-3", dir: path.join(dir, "khac") })
+  await expect(sendMessageTool(other).execute({ to: run.id, message: "x" }, ctxOf())).rejects.toThrow("Không có subagent")
+  await rm(dir, { recursive: true, force: true })
+})
+
+test("stop_agent stops a running background agent; its partial result still notifies", async () => {
+  const { manager } = setup()
+  const finished: string[] = []
+  manager.onFinished((v) => finished.push(v.status))
+  childGate = new Promise(() => {}) // never answers
+  const run = manager.start({ description: "FPT", prompt: "x", background: true })
+  await waitFor(() => childBodies.length === 1)
+  const stop = stopAgentTool(manager)
+  expect(await stop.execute({ id: run.id }, ctxOf())).toBe(`Đã dừng subagent ${run.id}.`)
+  await run.done
+  expect(finished).toEqual(["stopped"])
+  expect(await stop.execute({ id: run.id }, ctxOf())).toContain("không còn chạy")
+  await expect(stop.execute({ id: "ag-nope00" }, ctxOf())).rejects.toThrow("Không có subagent")
 })

@@ -47,9 +47,9 @@ const RECORD: Record<Choice, string> = {
 }
 
 /**
- * Keys pressed this soon after a subagent's prompt appears are ignored for answering: it can
- * pop up while the user is typing, and Enter or a digit meant for the input must not
- * approve it.
+ * A subagent's prompt can pop up while the user is typing (background agents): it takes no
+ * digit shortcuts at all, and Enter pressed this soon after it appears is ignored, so keys
+ * meant for the input never approve it.
  */
 export const ANSWER_GUARD_MS = 400
 
@@ -104,7 +104,7 @@ export function ApprovalPrompt(props: { gate: PermissionGate; request: ApprovalR
     }
     evt.preventDefault()
     const early = !!req().agent && Date.now() - shownAt < ANSWER_GUARD_MS
-    if (early && (evt.name === "return" || /^[1-4]$/.test(evt.name ?? ""))) return
+    if (early && evt.name === "return") return
     if (evt.name === "up") setSelected((i) => (i + OPTIONS.length - 1) % OPTIONS.length)
     else if (evt.name === "down") setSelected((i) => (i + 1) % OPTIONS.length)
     else if (evt.name === "return") choose(selected())
@@ -113,7 +113,7 @@ export function ApprovalPrompt(props: { gate: PermissionGate; request: ApprovalR
       note = ""
       setSelected(3)
       setNoting(true)
-    } else if (/^[1-4]$/.test(evt.name ?? "")) choose(Number(evt.name) - 1)
+    } else if (/^[1-4]$/.test(evt.name ?? "") && !req().agent) choose(Number(evt.name) - 1)
   })
 
   const dims = useTerminalDimensions()
@@ -126,7 +126,13 @@ export function ApprovalPrompt(props: { gate: PermissionGate; request: ApprovalR
         (req().agent ? ` · subagent ${req().agent!.type} (${truncate(req().agent!.description, 30)})` : "")
       }
       accent={destructive() ? color.giam : color.tham}
-      hint={noting() ? "enter từ chối kèm lời nhắn · esc quay lại" : "↑↓ chọn · enter xác nhận · 1-4 chọn nhanh · tab từ chối kèm lời nhắn · esc từ chối"}
+      hint={
+        noting()
+          ? "enter từ chối kèm lời nhắn · esc quay lại"
+          : req().agent
+            ? "↑↓ chọn · enter xác nhận · tab từ chối kèm lời nhắn · esc từ chối"
+            : "↑↓ chọn · enter xác nhận · 1-4 chọn nhanh · tab từ chối kèm lời nhắn · esc từ chối"
+      }
     >
       <box flexDirection="column" paddingLeft={2}>
         <text>

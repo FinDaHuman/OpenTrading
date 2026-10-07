@@ -1,6 +1,8 @@
+import { readFile } from "node:fs/promises"
 import { runAgent } from "../agent"
 import { describeError, resolveTarget, type Target } from "../chat"
 import { loadConfig } from "../config"
+import { closeDanglingToolCalls } from "../session/store"
 import type { Skill } from "../skills/schema"
 import { loadSkillTool } from "../tools/builtin/load-skill"
 import { toolSearchTool } from "../tools/builtin/tool-search"
@@ -17,7 +19,7 @@ export const DEFAULT_SUBAGENT_TYPE = "nghien-cuu"
 /** A subagent that reports nothing for this long (not queued, not waiting on the user) is stopped. */
 export const SUBAGENT_IDLE_MS = 5 * 60_000
 /** Finished runs kept in memory (the sidechain files keep the rest). */
-const MAX_FINISHED = 50
+const MAX_FINISHED = 20
 
 /**
  * Tools a subagent never gets (Claude Code strips the Agent tool from subagents): no
@@ -53,22 +55,26 @@ export function childRegistry(parent: ToolRegistry, origin: AgentOrigin, filter?
   return child
 }
 
-export interface StartSpec {
-  type?: string
-  description: string
-  prompt: string
+/** What an agent type contributes to a run (spawn_subagent and send_message resolve it). */
+export interface TypeSpec {
   maxSteps?: number
-  /** The spawn_subagent call in the parent transcript. */
-  parentCallId?: string
-  /** Aborts the subagent with the parent turn (foreground); background runs have none. */
-  parentSignal?: AbortSignal
-  background?: boolean
   /** Extra instructions of the agent type. */
   agentPrompt?: string
   /** Narrow the tools beyond EXCLUDED_TOOLS. */
   toolFilter?: (def: ToolDef) => boolean
   /** Model of the agent type; else config subagents, else the session's. */
   model?: { provider?: string; model?: string }
+}
+
+export interface StartSpec extends TypeSpec {
+  type?: string
+  description: string
+  prompt: string
+  /** The spawn_subagent call in the parent transcript. */
+  parentCallId?: string
+  /** Aborts the subagent with the parent turn (foreground); background runs have none. */
+  parentSignal?: AbortSignal
+  background?: boolean
 }
 
 export interface ManagerDeps {
@@ -79,6 +85,16 @@ export interface ManagerDeps {
 
 type Listener = (view: SubagentView) => void
 
+/** Per-run state the views never carry. */
+interface RunContext {
+  child: ToolRegistry
+  spec: StartSpec
+  /** Messages from send_message, taken after the current turn. */
+  inbox: string[]
+  /** The parent turn's signal, for foreground runs. */
+  parentSignal?: AbortSignal
+}
+
 const newId = () => `ag-${Math.random().toString(36).slice(2, 8).padEnd(6, "0")}`
 
 /** A copy without the live parts (controller, messages, promise): what UIs store. */
@@ -87,19 +103,24 @@ export function viewOf(run: SubagentRun): SubagentView {
   return { ...view, tools: run.tools.map((t) => ({ ...t })), usage: { ...run.usage } }
 }
 
+const isActive = (run: { status: string }) => run.status === "queued" || run.status === "running"
+
 /**
- * Starts, tracks and stops subagents for one runtime. UIs follow progress through
- * `onChange` (the parent's tool call is still pending while a child works, so nothing
- * reaches the agent event stream until it returns).
+ * Starts, tracks, continues and stops subagents for one runtime. UIs follow progress
+ * through `onChange` (the parent's tool call is still pending while a child works, so
+ * nothing reaches the agent event stream until it returns), and background results
+ * through `onFinished`.
  */
 export class SubagentManager {
   readonly limiter: Limiter
   private runs = new Map<string, SubagentRun>()
-  /** Sidechain writes not finished yet (exit waits for them). */
-  private writes = new Set<Promise<unknown>>()
+  private contexts = new Map<string, RunContext>()
   private listeners = new Set<Listener>()
+  private finished = new Set<Listener>()
   private session?: { id: string; dir: string }
   private max = DEFAULT_MAX_CONCURRENT
+  /** Sidechain writes not finished yet (exit waits for them). */
+  private writes = new Set<Promise<unknown>>()
   /**
    * Setup (config, model) runs one spawn after another, so slots are taken in the order
    * the model asked for them, not in whichever order the async setup happened to finish.
@@ -111,6 +132,9 @@ export class SubagentManager {
   constructor(private deps: ManagerDeps) {
     this.limiter = new Limiter(() => this.max)
   }
+
+  /** Session each run belongs to: only runs of the attached session notify (/clear, /new, resume). */
+  private owners = new Map<string, string | undefined>()
 
   /** Where sidechains go; undefined (headless runs) = not persisted. */
   attachSession(session: { id: string; dir: string } | undefined) {
@@ -127,6 +151,12 @@ export class SubagentManager {
     return () => this.listeners.delete(listener)
   }
 
+  /** A background run finished a turn (completed, failed or stopped): its result is ready. */
+  onFinished(listener: Listener) {
+    this.finished.add(listener)
+    return () => this.finished.delete(listener)
+  }
+
   get(id: string): SubagentView | undefined {
     const run = this.runs.get(id)
     return run && viewOf(run)
@@ -139,7 +169,7 @@ export class SubagentManager {
   /** Stop one subagent (queued or running). */
   stop(id: string) {
     const run = this.runs.get(id)
-    if (!run || (run.status !== "queued" && run.status !== "running")) return false
+    if (!run || !isActive(run)) return false
     run.controller.abort()
     return true
   }
@@ -172,8 +202,7 @@ export class SubagentManager {
   start(spec: StartSpec): SubagentRun {
     const id = newId()
     const type = spec.type ?? DEFAULT_SUBAGENT_TYPE
-    const origin: AgentOrigin = { id, type, description: spec.description }
-    const child = childRegistry(this.deps.parent, origin, spec.toolFilter, this.deps.skills)
+    const child = childRegistry(this.deps.parent, { id, type, description: spec.description }, spec.toolFilter, this.deps.skills)
     const run: SubagentRun = {
       id,
       type,
@@ -191,20 +220,109 @@ export class SubagentManager {
       controller: new AbortController(),
       messages: [],
       done: Promise.resolve(undefined as never),
+      sessionId: this.session?.id,
     }
     this.runs.set(id, run)
+    this.owners.set(id, this.session?.id)
+    this.contexts.set(id, { child, spec, inbox: [], parentSignal: spec.parentSignal })
     this.prune()
-    run.done = this.loop(run, child, spec)
+    run.done = this.loop(run, spec.prompt, true)
     this.emit(run)
     return run
   }
 
-  private async loop(run: SubagentRun, child: ToolRegistry, spec: StartSpec): Promise<SubagentResult> {
-    const signal = spec.parentSignal ? AbortSignal.any([spec.parentSignal, run.controller.signal]) : run.controller.signal
+  /**
+   * send_message: a running agent gets the message after its current turn; a finished one
+   * resumes in the background with its conversation (from memory, else its sidechain).
+   * `resolve` gives the agent type's settings when it has to be rebuilt from disk.
+   */
+  async continue(id: string, message: string, resolve: (type: string) => TypeSpec | undefined): Promise<"queued" | "resumed"> {
+    let run = this.runs.get(id)
+    // Another session's agent (after /clear or a resume) is not this conversation's to continue.
+    if (run && this.owners.get(id) !== this.session?.id) run = undefined
+    if (!run) run = await this.restore(id, resolve)
+    const context = this.contexts.get(id)!
+    if (isActive(run)) {
+      context.inbox.push(message)
+      return "queued"
+    }
+    context.parentSignal = undefined
+    Object.assign(run, { status: "queued", background: true, controller: new AbortController(), text: "", error: undefined, endedAt: undefined })
+    run.done = this.loop(run, message, false)
+    this.emit(run)
+    return "resumed"
+  }
+
+  /** Rebuild a finished agent from its sidechain (a resumed session, or evicted from memory). */
+  private async restore(id: string, resolve: (type: string) => TypeSpec | undefined): Promise<SubagentRun> {
+    const known = this.list()
+      .filter((v) => this.owners.get(v.id) === this.session?.id)
+      .map((v) => v.id)
+    const missing = () => new Error(`Không có subagent "${id}".${known.length > 0 ? ` Các subagent hiện có: ${known.join(", ")}.` : ""}`)
+    if (!this.session || !/^ag-[a-z0-9]+$/.test(id)) throw missing()
+    const text = await readFile(new Sidechain(this.session.dir, id).file, "utf8").catch(() => undefined)
+    if (!text) throw missing()
+    const entries = text
+      .split("\n")
+      .filter((l) => l.trim())
+      .flatMap((l) => {
+        try {
+          return [JSON.parse(l) as SidechainEntry]
+        } catch {
+          return []
+        }
+      })
+    const meta = entries.find((e) => e.type === "agent_meta")
+    if (meta?.type !== "agent_meta") throw missing()
+    const { messages } = closeDanglingToolCalls(entries.flatMap((e) => (e.type === "message" ? [e.message] : [])))
+    const ends = entries.filter((e) => e.type === "agent_end")
+    const type = resolve(meta.agentType)
+    const spec: StartSpec = {
+      ...type,
+      type: meta.agentType,
+      description: meta.description,
+      prompt: meta.prompt,
+      model: type?.model ?? { provider: meta.provider || undefined, model: meta.model },
+      background: true,
+    }
+    const child = childRegistry(this.deps.parent, { id, type: meta.agentType, description: meta.description }, spec.toolFilter, this.deps.skills)
+    const run: SubagentRun = {
+      id,
+      type: meta.agentType,
+      description: meta.description,
+      prompt: meta.prompt,
+      parentCallId: meta.parentCallId,
+      background: true,
+      model: "",
+      status: "completed",
+      createdAt: Date.parse(meta.createdAt) || Date.now(),
+      tools: [],
+      toolCount: ends.reduce((n, e) => n + (e.type === "agent_end" ? e.toolCount : 0), 0),
+      usage: { input: 0, output: 0 },
+      text: lastAssistantText(messages),
+      controller: new AbortController(),
+      messages,
+      done: Promise.resolve(undefined as never),
+      sessionId: this.session.id,
+    }
+    this.runs.set(id, run)
+    this.owners.set(id, this.session.id)
+    this.contexts.set(id, { child, spec, inbox: [] })
+    return run
+  }
+
+  /** One run: setup, a slot, then turns until the inbox is empty. */
+  private async loop(run: SubagentRun, input: string, first: boolean): Promise<SubagentResult> {
+    const context = this.contexts.get(run.id)!
+    const { child, spec } = context
+    const signal = context.parentSignal ? AbortSignal.any([context.parentSignal, run.controller.signal]) : run.controller.signal
     const session = this.session
     const sidechain = session ? new Sidechain(session.dir, run.id) : undefined
     const persistError = once(this.onPersistError)
     const entries: SidechainEntry[] = []
+    const started = Date.now()
+    const toolsBefore = run.toolCount
+    const usageBefore = { ...run.usage }
     let release: (() => void) | undefined
     let watchdog: ReturnType<typeof setInterval> | undefined
     let idleStop = false
@@ -225,7 +343,7 @@ export class SubagentManager {
         throw new Error(`Model ${target.model} không hỗ trợ gọi tool nên không chạy được subagent. Đổi "Model cho subagent" trong /config.`)
       }
       this.emit(run)
-      if (sidechain && session) {
+      if (sidechain && session && first) {
         entries.push({
           type: "agent_meta",
           format: 1,
@@ -245,7 +363,7 @@ export class SubagentManager {
 
       release = await this.limiter.acquire(signal)
       run.status = "running"
-      run.startedAt = Date.now()
+      run.startedAt ??= Date.now()
       this.emit(run)
 
       // Idle watchdog instead of a wall-clock limit: waiting for a slot or for the user's
@@ -261,63 +379,75 @@ export class SubagentManager {
       }, 10_000)
       watchdog.unref?.()
 
-      for await (const event of runAgent({
-        history: [],
-        input: run.prompt,
-        skills: this.deps.skills?.() ?? [],
-        registry: child,
-        maxSteps: spec.maxSteps ?? DEFAULT_SUBAGENT_STEPS,
-        signal,
-        role: "subagent",
-        target,
-        agentPrompt: spec.agentPrompt,
-        serverInstructions: this.deps.serverInstructions,
-      })) {
-        last = Date.now()
-        switch (event.type) {
-          case "text-delta":
-            streamed += event.text
-            break
-          case "tool-start":
-            run.toolCount++
-            run.tools.push({ callId: event.callId, name: event.name, label: event.label, status: "running" })
-            if (run.tools.length > MAX_TOOL_VIEWS) run.tools.splice(0, run.tools.length - MAX_TOOL_VIEWS)
-            this.emit(run)
-            break
-          case "tool-end": {
-            const call = run.tools.find((t) => t.callId === event.callId)
-            if (call) Object.assign(call, { status: event.ok ? "ok" : "error", durationMs: event.durationMs })
-            this.emit(run)
-            break
-          }
-          case "step-usage":
-            run.usage.input += event.inputTokens
-            run.usage.output += event.outputTokens
-            this.emit(run)
-            break
-          case "notice":
-            entries.push({ type: "notice", ts: new Date().toISOString(), text: event.text })
-            break
-          case "error":
-            run.error = event.message
-            break
-          case "done": {
-            run.messages = event.messages
-            const ts = new Date().toISOString()
-            for (const message of event.messages) entries.push({ type: "message", ts, message })
-            if (event.outcome === "completed") {
-              const text = lastAssistantText(event.messages)
-              run.text = text === "(không có câu trả lời)" ? "" : text
-              run.status = "completed"
-            } else {
-              run.text = streamed.trim()
-              run.status = event.outcome === "aborted" ? "stopped" : "failed"
+      // A turn per message: the task, then whatever send_message queued meanwhile.
+      for (let next: string | undefined = input; next !== undefined; next = context.inbox.length > 0 ? context.inbox.splice(0).join("\n\n") : undefined) {
+        const history = run.messages
+        streamed = ""
+        run.status = "running"
+        for await (const event of runAgent({
+          history,
+          input: next,
+          skills: this.deps.skills?.() ?? [],
+          registry: child,
+          maxSteps: spec.maxSteps ?? DEFAULT_SUBAGENT_STEPS,
+          signal,
+          role: "subagent",
+          target,
+          agentPrompt: spec.agentPrompt,
+          serverInstructions: this.deps.serverInstructions,
+        })) {
+          last = Date.now()
+          switch (event.type) {
+            case "text-delta":
+              streamed += event.text
+              break
+            case "tool-start":
+              run.toolCount++
+              run.tools.push({ callId: event.callId, name: event.name, label: event.label, status: "running" })
+              if (run.tools.length > MAX_TOOL_VIEWS) run.tools.splice(0, run.tools.length - MAX_TOOL_VIEWS)
+              this.emit(run)
+              break
+            case "tool-end": {
+              const call = run.tools.find((t) => t.callId === event.callId)
+              if (call) Object.assign(call, { status: event.ok ? "ok" : "error", durationMs: event.durationMs })
+              this.emit(run)
+              break
             }
-            break
+            case "step-usage":
+              run.usage.input += event.inputTokens
+              run.usage.output += event.outputTokens
+              this.emit(run)
+              break
+            case "notice":
+              entries.push({ type: "notice", ts: new Date().toISOString(), text: event.text })
+              break
+            case "error":
+              run.error = event.message
+              break
+            case "done": {
+              run.messages = [...history, ...event.messages]
+              const ts = new Date().toISOString()
+              for (const message of event.messages) entries.push({ type: "message", ts, message })
+              if (event.outcome === "completed") {
+                const text = lastAssistantText(event.messages)
+                run.text = text === "(không có câu trả lời)" ? "" : text
+                run.status = "completed"
+              } else {
+                run.text = streamed.trim()
+                run.status = event.outcome === "aborted" ? "stopped" : "failed"
+              }
+              break
+            }
           }
         }
+        if (run.status !== "completed") break
       }
       if (run.status === "running") run.status = signal.aborted ? "stopped" : "failed"
+      // Messages that arrived for a turn that never came: say so rather than drop them.
+      if (context.inbox.length > 0) {
+        const lost = context.inbox.splice(0)
+        run.error = `${run.error ? `${run.error}. ` : ""}Chưa xử lý ${lost.length} tin nhắn gửi thêm: ${lost.join(" / ").slice(0, 300)}`
+      }
       if (idleStop) run.error = `Subagent không có tiến triển trong ${SUBAGENT_IDLE_MS / 60_000} phút nên đã bị dừng.`
     } catch (error) {
       run.status = signal.aborted ? "stopped" : "failed"
@@ -335,9 +465,9 @@ export class SubagentManager {
       status: run.status,
       text: run.text,
       error: run.error,
-      toolCount: run.toolCount,
-      usage: { ...run.usage },
-      durationMs: run.endedAt! - (run.startedAt ?? run.createdAt),
+      toolCount: run.toolCount - toolsBefore,
+      usage: { input: run.usage.input - usageBefore.input, output: run.usage.output - usageBefore.output },
+      durationMs: run.endedAt! - (first ? (run.startedAt ?? run.createdAt) : started),
     }
     if (sidechain) {
       entries.push({ type: "agent_end", ts: new Date().toISOString(), ...result })
@@ -359,13 +489,17 @@ export class SubagentManager {
       this.writes.add(written)
       void written.finally(() => this.writes.delete(written))
     }
+    if (run.background && this.owners.get(run.id) === this.session?.id) {
+      const view = viewOf(run)
+      for (const listener of this.finished) listener(view)
+    }
     return result
   }
 
   /**
    * The agent type's model, else config `subagents`, else the session's model. A chosen
    * model that cannot be used (key removed, provider gone) falls back to the session's,
-   * with a note in the sidechain: the session model still works, so the child should too.
+   * with a note: the session model still works, so the child should too.
    */
   private async targetFor(spec: StartSpec, config: { provider?: string; model?: string } | undefined, notes: SidechainEntry[]): Promise<Target> {
     const own = spec.model?.model || spec.model?.provider ? spec.model : undefined
@@ -381,8 +515,12 @@ export class SubagentManager {
   }
 
   private prune() {
-    const finished = [...this.runs.values()].filter((r) => r.status !== "queued" && r.status !== "running")
-    for (const run of finished.slice(0, Math.max(0, finished.length - MAX_FINISHED))) this.runs.delete(run.id)
+    const finished = [...this.runs.values()].filter((r) => !isActive(r))
+    for (const run of finished.slice(0, Math.max(0, finished.length - MAX_FINISHED))) {
+      this.runs.delete(run.id)
+      this.contexts.delete(run.id)
+      this.owners.delete(run.id)
+    }
   }
 
   private emit(run: SubagentRun) {
@@ -400,3 +538,4 @@ function once(fn: ((error: unknown) => void) | undefined) {
     fn?.(error)
   }
 }
+
