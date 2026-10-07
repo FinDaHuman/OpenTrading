@@ -3,7 +3,7 @@ import type { JSONSchema7 } from "@ai-sdk/provider"
 import { z } from "zod"
 import type { PermissionGate } from "../permission"
 import { sanitizeSchema, type SchemaFlavor } from "../mcp/schema"
-import type { ToolDef, ToolResult } from "./types"
+import type { AgentOrigin, ToolDef, ToolResult } from "./types"
 import { RwLock, runTool } from "./wrap"
 
 type Listener = () => void
@@ -75,11 +75,19 @@ export class ToolRegistry {
   private listeners = new Set<Listener>()
   /** Sanitized schemas per tool definition and flavor; a re-registered tool is a new key. */
   private schemas = new WeakMap<ToolDef, Map<SchemaFlavor, JSONSchema7>>()
-  readonly lock = new RwLock()
+  readonly lock: RwLock
+  /** The subagent this registry belongs to; its tool calls carry it (approval prompts). */
+  readonly origin?: AgentOrigin
   /** Last "tools hidden by the limit" state the user was told about. */
   lastHiddenNotice = ""
   /** Asks the user before tools with side effects run; unset = run everything (tests). */
   gate?: PermissionGate
+
+  constructor(opts: { lock?: RwLock; origin?: AgentOrigin } = {}) {
+    // A subagent shares its parent's lock, so its writes exclude the parent's and siblings'.
+    this.lock = opts.lock ?? new RwLock()
+    this.origin = opts.origin
+  }
 
   register(def: ToolDef) {
     this.tools.set(def.name, def)
@@ -164,7 +172,13 @@ export class ToolRegistry {
     const declared = opts.defer ? ordered : kept
     for (const def of [...declared].sort((a, b) => a.name.localeCompare(b.name))) {
       const execute = (input: unknown, options: { abortSignal?: AbortSignal; toolCallId: string }) =>
-        runTool(def, input, { signal: options.abortSignal ?? new AbortController().signal, callId: options.toolCallId }, this.lock, this.gate)
+        runTool(
+          def,
+          input,
+          { signal: options.abortSignal ?? new AbortController().signal, callId: options.toolCallId, agent: this.origin },
+          this.lock,
+          this.gate,
+        )
       const toModelOutput = ({ output }: { output: unknown }) => modelOutput(output as ToolResult, opts.images ?? false)
       set[def.name] =
         def.input instanceof z.ZodType

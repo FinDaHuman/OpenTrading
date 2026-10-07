@@ -70,10 +70,10 @@ export async function runTool(def: ToolDef, input: unknown, ctx: ToolContext, lo
   // the lock meanwhile.
   if (def.prepare) ctx = { ...ctx, prepared: await def.prepare(input, ctx) }
   if (gate) {
-    const decision = await gate.check(def, input, ctx.signal, def.displayName, ctx.callId)
+    const decision = await gate.check(def, input, ctx.signal, def.displayName, ctx.callId, ctx.agent)
     if (!decision.allow) throw new Error(deniedMessage(decision))
   }
-  const release = await lock.acquire(!def.readOnly)
+  const release = def.unlocked ? () => {} : await lock.acquire(!def.readOnly)
   const ms = def.timeoutMs ?? DEFAULT_TIMEOUT_MS
   const timeout = new AbortController()
   let timer: ReturnType<typeof setTimeout> | undefined
@@ -82,6 +82,7 @@ export async function runTool(def: ToolDef, input: unknown, ctx: ToolContext, lo
     const signal = AbortSignal.any([ctx.signal, timeout.signal])
     // Race as well as signal: a tool that ignores its signal must still not hang the loop.
     const expired = new Promise<never>((_, reject) => {
+      if (ms <= 0) return
       timer = setTimeout(() => {
         timeout.abort()
         reject(new ToolTimeoutError(def.name, ms))

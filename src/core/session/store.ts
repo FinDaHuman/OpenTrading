@@ -103,6 +103,11 @@ export class Session {
     return this.file ? path.join(sessionsDir(), this.file) : undefined
   }
 
+  /** Folder for this session's side files (subagent transcripts); exists before the first turn is written. */
+  get dir() {
+    return path.join(sessionsDir(), this.createdAt.slice(0, 4), this.createdAt.slice(5, 7), this.id)
+  }
+
   /** Record a compaction. Nothing to do before the first turn created the file. */
   appendCompact(entry: Omit<Extract<SessionEntry, { type: "compact" }>, "type" | "ts">) {
     this.writing = this.writing.then(async () => {

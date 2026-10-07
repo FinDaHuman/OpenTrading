@@ -4,6 +4,7 @@ import { promptVersion } from "../core/prompt/assemble"
 import type { Runtime } from "../core/runtime"
 import { listSessions, loadSession, Session } from "../core/session/store"
 import { transcriptFromMessages } from "../core/session/transcript"
+import { reconcile } from "solid-js/store"
 import { NO_COMPACTION, providerName, pushLine, setState, state, type Line } from "./state"
 
 /** The conversation being written. Replaced by /new, /clear and resume. */
@@ -34,10 +35,17 @@ export function recordCompact(entry: { trigger: "auto" | "manual"; before: numbe
 const saveFailed = (error: unknown) =>
   pushLine({ kind: "error", text: `Không lưu được phiên: ${error instanceof Error ? error.message : String(error)}` })
 
+/** Subagent transcripts go next to the session being written. */
+export function attachSubagents(runtime: Runtime) {
+  runtime.subagents.attachSession({ id: current.id, dir: current.dir })
+}
+
 /** Start a fresh session (startup, /new, /clear). */
 export async function startSession(runtime: Runtime, source: "startup" | "clear") {
   if (source === "clear") await runtime.hooks.emit({ type: "session-end", sessionId: current.id })
   current = Session.create()
+  attachSubagents(runtime)
+  setState("agents", reconcile({}))
   // A fresh conversation has not seen the market clock yet.
   setState({ lines: [], history: [], clock: undefined, ...NO_COMPACTION })
   await runtime.hooks.emit({ type: "session-start", sessionId: current.id, source })
@@ -48,6 +56,8 @@ export async function resumeSession(runtime: Runtime, id: string) {
   const loaded = await loadSession(id)
   await runtime.hooks.emit({ type: "session-end", sessionId: current.id })
   current = Session.continue(loaded.summary)
+  attachSubagents(runtime)
+  setState("agents", reconcile({}))
 
   const lines: Line[] = transcriptFromMessages(loaded.display).map((item): Line => {
     if (item.kind === "compact") return { kind: "compact", summary: item.text }

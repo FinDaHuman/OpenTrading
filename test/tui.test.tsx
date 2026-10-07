@@ -1,8 +1,9 @@
 import { afterAll, afterEach, beforeAll, expect, test } from "bun:test"
-import { mkdtemp, rm, writeFile } from "node:fs/promises"
+import { mkdtemp, readdir, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { testRender } from "@opentui/solid"
+import { z } from "zod"
 
 // Isolate state from the real ~/.opentrading before any core module loads.
 const home = await mkdtemp(path.join(os.tmpdir(), "opentrading-test-"))
@@ -77,6 +78,8 @@ const ASK_MANY = {
 let summaryGate: Promise<void> | undefined
 /** Set by the esc-while-streaming test: "CHẬM" makes the fake model call the slow tool. */
 let callSlowTool = false
+/** Subagent requests wait for this before answering (their rows stay "running"). */
+let childGate: Promise<void> | undefined
 globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   const url = String(input instanceof Request ? input.url : input)
   const auth = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined)).get("authorization")
@@ -103,6 +106,17 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     }
     chatBodies.push(request)
     const last = JSON.stringify(request.messages.at(-1)?.content ?? "")
+    const sseOf = (text: string) => new Response(text, { headers: { "content-type": "text/event-stream" } })
+    // A subagent's request: its system prompt carries <subagent>.
+    if (String(request.messages[0]?.content ?? "").includes("<subagent>")) {
+      await childGate
+      const childHasResult = request.messages.some((m) => m.role === "tool")
+      if (JSON.stringify(request.messages).includes("CON-GHI") && !childHasResult) {
+        const call = { index: 0, id: "call_child_write", type: "function", function: { name: "ghi_tam", arguments: '{"ma":"FPT"}' } }
+        return sseOf(chunk({ role: "assistant", tool_calls: [call] }) + chunk({}, "tool_calls") + "data: [DONE]\n\n")
+      }
+      return sseOf(chunk({ role: "assistant", content: "BÁO-CÁO-CON: FPT ổn." }) + chunk({}, "stop") + "data: [DONE]\n\n")
+    }
     // "MẤY-GIỜ" asks for a tool call until a tool result is in the conversation.
     // Only tool results of the current turn count (earlier turns left their own in history).
     const lastUser = request.messages.map((m) => m.role).lastIndexOf("user")
@@ -136,6 +150,16 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
       return new Response(chunk({ role: "assistant", tool_calls: [call] }) + chunk({}, "tool_calls") + "data: [DONE]\n\n", {
         headers: { "content-type": "text/event-stream" },
       })
+    }
+    if (last.includes("SUBAGENT-") && !answeredThisTurn) {
+      const tasks = last.includes("SUBAGENT-GHI") ? [["Ghi FPT", "CON-GHI"]] : [["Định giá FPT", "FPT"], ["Định giá CMG", "CMG"]]
+      const calls = tasks.map(([description, prompt], index) => ({
+        index,
+        id: `call_sub_${index}_${chatBodies.length}`,
+        type: "function",
+        function: { name: "spawn_subagent", arguments: JSON.stringify({ description, prompt }) },
+      }))
+      return sseOf(chunk({ role: "assistant", tool_calls: calls }) + chunk({}, "tool_calls") + "data: [DONE]\n\n")
     }
     if (last.includes("MẤY-GIỜ") && !request.messages.some((m) => m.role === "tool")) {
       const call = { index: 0, id: "call_1", type: "function", function: { name: "current_time", arguments: "{}" } }
@@ -1186,6 +1210,51 @@ test("/config turns memory off and on without a restart", async () => {
   await setup.waitFor(() => state.dialog === undefined)
 })
 
+test("/config: subagent limit is a number ≥ 1 applied live; subagent model lists tool-capable models and can go back to the session's", async () => {
+  await setup.mockInput.typeText("/config")
+  setup.mockInput.pressEnter()
+  let frame = await setup.waitForFrame((f) => f.includes("Subagent chạy song song") && f.includes("Model cho subagent"))
+  show(frame)
+  expect(frame).toContain("10 cùng lúc")
+  await setup.mockInput.typeText("song song")
+  setup.mockInput.pressEnter()
+  await setup.waitForFrame((f) => f.includes("Số subagent chạy cùng lúc"))
+  await setup.mockInput.typeText("0")
+  setup.mockInput.pressEnter()
+  await setup.waitForFrame((f) => f.includes("Nhập một số nguyên từ 1 trở lên."))
+  setup.mockInput.pressBackspace()
+  await setup.mockInput.typeText("3")
+  setup.mockInput.pressEnter()
+  await setup.waitForFrame((f) => f.includes("3 cùng lúc"))
+  expect((await Bun.file(path.join(home, "config.json")).json()).subagents).toEqual({ maxConcurrent: 3 })
+  expect(runtime.subagents.limiter.stats().max).toBe(3)
+
+  await setup.mockInput.typeText("model cho")
+  setup.mockInput.pressEnter()
+  frame = await setup.waitForFrame((f) => f.includes("Theo model của phiên (mặc định)"))
+  show(frame)
+  setup.mockInput.pressArrow("down")
+  setup.mockInput.pressEnter()
+  // Wait for the list to show the choice, then read the file once (reading while it is
+  // being replaced is what Windows refuses).
+  await setup.waitForFrame((f) => f.includes("Cài đặt") && f.includes("Model cho subagent") && !f.includes("Theo model của phiên · enter"))
+  const saved = (await Bun.file(path.join(home, "config.json")).json()).subagents
+  expect(saved.maxConcurrent).toBe(3)
+  expect(state.catalog[saved.provider]?.models[saved.model]?.tool_call).not.toBe(false)
+  await setup.waitForFrame((f) => f.includes("Cài đặt"))
+  await setup.mockInput.typeText("model cho")
+  setup.mockInput.pressEnter()
+  await setup.waitForFrame((f) => f.includes("Theo model của phiên (mặc định)"))
+  setup.mockInput.pressEnter()
+  // Back on the settings list (the sub-view closes after saving) before Esc closes the dialog.
+  await setup.waitForFrame((f) => f.includes("Cài đặt") && f.includes("Theo model của phiên · enter"))
+  expect((await Bun.file(path.join(home, "config.json")).json()).subagents?.model).toBeUndefined()
+  setup.mockInput.pressEscape()
+  await setup.waitFor(() => state.dialog === undefined)
+  await saveConfig({ subagents: undefined })
+  runtime.subagents.setMax(10)
+})
+
 test("todo_write: the open list is pinned above the prompt, the transcript keeps one line, /new clears it", async () => {
   await setKey("nvidia", "nvapi-good-key")
   await setup.mockInput.typeText("VIỆC-CẦN-LÀM cho FPT")
@@ -1764,5 +1833,91 @@ test("prompt: a message typed during /compact is sent once the compaction ends",
   } finally {
     open()
     summaryGate = undefined
+  }
+}, 30_000)
+
+test("subagents: parallel spawns render as one block; over the limit one waits for a slot; ctrl+o shows the brief and report", async () => {
+  await saveConfig({ ...(await readJson<object>(path.join(home, "config.json"), {})), subagents: { maxConcurrent: 1 } })
+  runtime.subagents.setMax(1)
+  let release!: () => void
+  childGate = new Promise((r) => (release = r))
+  try {
+    await setup.mockInput.typeText("SUBAGENT-SONG-SONG")
+    setup.mockInput.pressEnter()
+    let frame = await setup.waitForFrame((f) => f.includes("Chạy 2 subagent") && f.includes("đang chờ slot (1/1)"))
+    show(frame)
+    expect(frame).toMatch(/├─ nghien-cuu \(Định giá FPT\) · 0 tool · 0 token/)
+    expect(frame).toMatch(/│  ⎿ Đang khởi động…/)
+    expect(frame).toMatch(/└─ nghien-cuu \(Định giá CMG\) · đang chờ slot \(1\/1\)/)
+    expect(frame).toContain("đang trả lời")
+    release()
+    frame = await setup.waitForFrame((f) => f.includes("2 subagent đã xong"))
+    await waitMcp(() => !state.streaming)
+    frame = await setup.waitForFrame((f) => /2 subagent đã xong[\s\S]*HẾT-CÂU-TRẢ-LỜI/.test(f))
+    show(frame)
+    expect(frame).toMatch(/├─ nghien-cuu \(Định giá FPT\)[^\n]*\n\s*│  ⎿ Xong \(0 tool · /)
+    expect(frame).toMatch(/└─ nghien-cuu \(Định giá CMG\)[^\n]*\n\s*⎿ Xong \(0 tool · /)
+    // The parent model got both reports with their trailers.
+    const results = state.history.filter((m) => m.role === "tool").slice(-2)
+    for (const r of results) expect(JSON.stringify(r.content)).toContain("BÁO-CÁO-CON")
+    expect(JSON.stringify(results[0]!.content)).toContain("agent_id: ag-")
+
+    setState("expandTools", true)
+    frame = await setup.waitForFrame((f) => f.includes("Yêu cầu:") && f.includes("Kết quả:"))
+    show(frame)
+    expect(frame).toContain("BÁO-CÁO-CON: FPT ổn.")
+    expect(frame).not.toContain("subagent_meta")
+    // Sidechains sit next to the session and never show up as sessions themselves.
+    const { listSessions } = await import("../src/core/session/store")
+    const { currentSession } = await import("../src/tui/session")
+    await runtime.subagents.flush()
+    const side = await readdir(path.join(currentSession().dir, "subagents"))
+    expect(side.filter((f) => f.endsWith(".jsonl"))).toHaveLength(2)
+    expect((await listSessions()).every((x) => !x.file.includes("subagents"))).toBe(true)
+  } finally {
+    setState("expandTools", false)
+    release?.()
+    childGate = undefined
+    await waitMcp(() => !state.streaming)
+    runtime.subagents.setMax(10)
+    await saveConfig({ subagents: undefined })
+  }
+}, 30_000)
+
+test("subagents: a child's write tool asks in the main prompt, named after the subagent; the answer shows under its call", async () => {
+  let wrote = 0
+  runtime.registry.register({
+    name: "ghi_tam",
+    description: "ghi tạm một mã",
+    input: z.object({ ma: z.string() }),
+    readOnly: false,
+    async execute() {
+      wrote++
+      return "đã ghi"
+    },
+  })
+  try {
+    await setup.mockInput.typeText("SUBAGENT-GHI")
+    setup.mockInput.pressEnter()
+    let frame = await setup.waitForFrame((f) => f.includes("Cho phép chạy?"))
+    show(frame)
+    expect(frame).toContain("subagent nghien-cuu (Ghi FPT)")
+    expect(frame).toContain("nghien-cuu › ghi_tam")
+    expect(frame).toContain("Đang chờ bạn xác nhận…")
+    expect(frame).toContain("subagent nghien-cuu cần bạn xác nhận")
+    // Keys within the guard window are ignored: a prompt that pops up mid-typing is not answered by accident.
+    await setup.mockInput.typeText("1")
+    await new Promise((r) => setTimeout(r, 450))
+    expect(state.approval).toBeDefined()
+    await setup.mockInput.typeText("1")
+    await waitMcp(() => !state.streaming)
+    expect(wrote).toBe(1)
+    setState("expandTools", true)
+    frame = await setup.waitForFrame((f) => f.includes("✓ Đã cho phép lần này"))
+    show(frame)
+    expect(frame).toContain("● ghi_tam")
+  } finally {
+    setState("expandTools", false)
+    runtime.registry.unregister("ghi_tam")
   }
 }, 30_000)

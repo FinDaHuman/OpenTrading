@@ -6,6 +6,15 @@ export interface ToolContext {
   callId: string
   /** What `prepare` returned, if the tool has one. */
   prepared?: unknown
+  /** Set when a subagent makes the call: approval prompts name it. */
+  agent?: AgentOrigin
+}
+
+/** The subagent behind a tool call (see core/subagents). */
+export interface AgentOrigin {
+  id: string
+  type: string
+  description: string
 }
 
 export interface ToolImage {
@@ -33,8 +42,13 @@ export interface ToolDef<I = any> {
   input: z.ZodType<I> | JSONSchema7
   /** Read-only tools may run in parallel; anything else runs alone. */
   readOnly: boolean
-  /** Default 60s. */
+  /** Default 60s. 0 = no time limit (the tool watches its own progress, e.g. spawn_subagent). */
   timeoutMs?: number
+  /**
+   * Runs without the read/write lock. Only for tools that wait on other tool calls
+   * (spawn_subagent): holding a read lock while a child waits for the write lock deadlocks.
+   */
+  unlocked?: boolean
   /** Output longer than this is cut (head + tail) before the model sees it. Default 30 000. */
   maxOutputChars?: number
   /** Where the tool came from, shown in /tools. */

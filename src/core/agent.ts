@@ -9,7 +9,7 @@ import {
   type SystemModelMessage,
   type ToolSet,
 } from "ai"
-import { ChatSetupError, describeError, resolveTarget } from "./chat"
+import { ChatSetupError, describeError, resolveTarget, type Target } from "./chat"
 import type { AgentEvent } from "./events"
 import { loadProfile } from "./profile"
 import { assemble, type Assembled } from "./prompt/assemble"
@@ -104,6 +104,12 @@ export interface RunOptions {
   memory?: MemoryProvider
   /** `instructions` of connected MCP servers (McpManager.instructions). */
   serverInstructions?: () => { server: string; text: string }[]
+  /** Provider and model to use instead of the configured ones (a subagent's model). */
+  target?: Target
+  /** "subagent": a child run — its own system prompt, no investor profile or memory. */
+  role?: "main" | "subagent"
+  /** A subagent type's own instructions (the body of its definition). */
+  agentPrompt?: string
 }
 
 export function label(registry: ToolRegistry, name: string, input: unknown) {
@@ -216,6 +222,10 @@ interface Outcome {
   text: string
   aborted: boolean
   failure?: unknown
+  /** Model requests started so far in this turn (tool calls carry the step that made them). */
+  steps: number
+  /** Billed tokens summed over the steps that reported usage; undefined = none did. */
+  usage?: { input: number; output: number }
 }
 
 /** Relay one streamText run as AgentEvents and report what happened. */
@@ -229,6 +239,17 @@ async function* relay(
   try {
     for await (const part of result.fullStream) {
       switch (part.type) {
+        case "start-step":
+          outcome.steps++
+          break
+        case "finish-step": {
+          const input = part.usage?.inputTokens
+          const output = part.usage?.outputTokens
+          if (input === undefined && output === undefined) break
+          outcome.usage = { input: (outcome.usage?.input ?? 0) + (input ?? 0), output: (outcome.usage?.output ?? 0) + (output ?? 0) }
+          yield { type: "step-usage", inputTokens: input ?? 0, outputTokens: output ?? 0 }
+          break
+        }
         case "text-delta":
           outcome.text += part.text
           yield { type: "text-delta", text: part.text }
@@ -241,6 +262,7 @@ async function* relay(
             name: part.toolName,
             label: label(registry, part.toolName, part.input),
             input: part.input,
+            step: Math.max(1, outcome.steps),
           }
           break
         case "tool-result":
@@ -379,7 +401,6 @@ type TurnInput = Omit<RunOptions, "history" | "signal" | "maxSteps"> & {
   /** Conversation so far; decides which deferred tools are already loaded. */
   history?: ModelMessage[]
 }
-type Target = Awaited<ReturnType<typeof resolveTarget>>
 
 /** Per-turn extras gathered before assembly (recall and hooks run only for real turns). */
 interface TurnExtras {
@@ -404,7 +425,10 @@ async function assembleFor(opts: TurnInput, target: Target | undefined, extras: 
     tools: toolNames,
     skills: opts.skills,
     sticky: opts.sticky ?? [],
-    investorProfile: await loadProfile(),
+    role: opts.role,
+    agentPrompt: opts.agentPrompt,
+    // A subagent works for the main agent: no investor profile, no memory about the user.
+    investorProfile: opts.role === "subagent" ? undefined : await loadProfile(),
     memoryInstructions: opts.memory?.instructions?.(),
     memoryIndex: cap(await opts.memory?.index?.({ sessionId: opts.sessionId ?? "" }).catch(() => undefined), MEMORY_INDEX_MAX_CHARS),
     recalled: extras.recalled,
@@ -437,7 +461,7 @@ async function assembleFor(opts: TurnInput, target: Target | undefined, extras: 
 }
 
 async function prepare(opts: TurnInput, extras: TurnExtras): Promise<Prepared> {
-  const target = await resolveTarget()
+  const target = opts.target ?? (await resolveTarget())
   const { tier, supportsTools, toolNames, built, assembled } = await assembleFor(opts, target, extras)
   return {
     target,
@@ -564,7 +588,8 @@ export async function previewContext(opts: TurnInput) {
 export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
   const sessionId = opts.sessionId ?? ""
   // Fail fast on setup problems before any hook side effects run.
-  await resolveTarget()
+  const target0 = opts.target ?? (await resolveTarget())
+  opts = { ...opts, target: target0 }
 
   // user-prompt hooks: may block the turn or add context for it.
   const extras: TurnExtras = {}
@@ -573,7 +598,7 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
     for (const error of hooked.errors) yield { type: "notice", text: error }
     if (hooked.block) {
       yield { type: "notice", text: `Lượt này bị chặn: ${hooked.block}` }
-      yield { type: "done", messages: [] }
+      yield { type: "done", messages: [], outcome: "completed" }
       return
     }
     extras.hookContext = hooked.context
@@ -649,7 +674,7 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
     onError: () => {}, // errors are read from the stream
   })
 
-  const outcome: Outcome = { text: "", aborted: false }
+  const outcome: Outcome = { text: "", aborted: false, steps: 0 }
   yield* relay(result, opts.registry, opts.signal, outcome)
   // The request whose usage measures the context (the empty-answer retry replaces it).
   let measured: { steps: PromiseLike<{ usage: LanguageModelUsage }[]> } = result
@@ -679,9 +704,12 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
       maxRetries: 1,
       onError: () => {},
     })
-    const second: Outcome = { text: "", aborted: false }
+    const second: Outcome = { text: "", aborted: false, steps: 0 }
     yield* relay(retry, opts.registry, opts.signal, second)
     measured = retry
+    if (second.usage) {
+      outcome.usage = { input: (outcome.usage?.input ?? 0) + second.usage.input, output: (outcome.usage?.output ?? 0) + second.usage.output }
+    }
     outcome.aborted = second.aborted
     outcome.failure = second.failure
     outcome.text = second.text
@@ -704,9 +732,9 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
     const tokens = await lastStepTokens(measured)
     const usage =
       tokens !== undefined
-        ? { contextTokens: tokens, estimated: false }
-        : { contextTokens: estimateRequest(system, [...request, ...messages], built?.tokens), estimated: true }
-    yield { type: "done", messages: [user, ...messages], clock: assembled.clock, usage }
+        ? { contextTokens: tokens, estimated: false, total: outcome.usage }
+        : { contextTokens: estimateRequest(system, [...request, ...messages], built?.tokens), estimated: true, total: outcome.usage }
+    yield { type: "done", messages: [user, ...messages], clock: assembled.clock, usage, outcome: "completed" }
     if (opts.hooks) void opts.hooks.emit({ type: "turn-end", sessionId, messages: [user, ...messages] })
     return
   }
@@ -721,6 +749,11 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
     // No square brackets: the markdown renderer read "[Đã dừng]" as a link.
     messages: [user, { role: "assistant", content: text || (outcome.aborted ? "(đã dừng)" : "(lỗi)") }],
     clock: assembled.clock,
-    usage: { contextTokens: estimateRequest(system, [...request, { role: "assistant", content: text }], built?.tokens), estimated: true },
+    usage: {
+      contextTokens: estimateRequest(system, [...request, { role: "assistant", content: text }], built?.tokens),
+      estimated: true,
+      total: outcome.usage,
+    },
+    outcome: outcome.aborted ? "aborted" : "failed",
   }
 }

@@ -1,7 +1,7 @@
 import type { KeyEvent, TextareaRenderable } from "@opentui/core"
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid"
 import { createMemo, createSignal, For, Match, onCleanup, onMount, Show, Switch } from "solid-js"
-import { produce } from "solid-js/store"
+import { produce, reconcile } from "solid-js/store"
 import { runAgent, summarizeConversation } from "../core/agent"
 import {
   AUTO_COMPACT_SHARE,
@@ -39,7 +39,7 @@ import { ModelDialog } from "./dialogs/model"
 import { SkillsDialog, toggleSkill } from "./dialogs/skills"
 import { ToolsDialog } from "./dialogs/tools"
 import { Home } from "./home"
-import { currentSession, recordCompact, recordTurn, resumeFromArgs, startSession } from "./session"
+import { attachSubagents, currentSession, recordCompact, recordTurn, resumeFromArgs, startSession } from "./session"
 import { armExit, type Queued, closeDialog, contextWindow, EXIT_WINDOW_MS, flash, onExitRequest, providerName, pushLine, setState, state, type Line } from "./state"
 import { color, promptStyle } from "./theme"
 import { cleanSelection, writeClipboard } from "./clipboard"
@@ -62,6 +62,7 @@ export async function clearTranscript(runtime: Runtime) {
   epoch++
   setState("queue", [])
   abort?.abort()
+  runtime.subagents.stopAll()
   await startSession(runtime, "clear")
 }
 
@@ -240,7 +241,7 @@ async function sendTurn(runtime: Runtime, msg: Outgoing): Promise<boolean> {
           break
         case "tool-start":
           closeText()
-          pushLine({ kind: "tool", callId: event.callId, name: event.name, label: event.label, status: "running" })
+          pushLine({ kind: "tool", callId: event.callId, name: event.name, label: event.label, status: "running", step: event.step })
           if (event.name === TODO_WRITE) todoCalls.set(event.callId, event.input)
           break
         case "tool-end":
@@ -323,9 +324,11 @@ export function App(props: {
     if (props.onExit) return props.onExit()
     setState("exiting", true)
     abort?.abort()
+    props.runtime.subagents.stopAll()
     await Promise.race([
       Promise.all([
         inflight ?? Promise.resolve(),
+        props.runtime.subagents.flush(),
         props.runtime.hooks.emit({ type: "session-end", sessionId: currentSession().id }),
         props.runtime.mcp.stop(),
       ]),
@@ -372,6 +375,17 @@ export function App(props: {
   const offQuestion = props.runtime.questions.onChange((head) => {
     setState("question", head)
   })
+  const offPending = props.runtime.permissions.onPending((pending) => setState("approvals", pending))
+  const subagents = props.runtime.subagents
+  const offAgents = subagents.onChange((view) => setState("agents", view.id, reconcile(view)))
+  const offSlots = subagents.limiter.onChange(() => setState("agentSlots", subagents.limiter.stats()))
+  subagents.onPersistError = (error) =>
+    pushLine({ kind: "error", text: `Không lưu được transcript của subagent: ${error instanceof Error ? error.message : String(error)}` })
+  onCleanup(() => {
+    offPending()
+    offAgents()
+    offSlots()
+  })
   const offApproval = props.runtime.permissions.onChange((head) => {
     setState("approval", head)
   })
@@ -398,6 +412,9 @@ export function App(props: {
       connected,
       compactCap: config.compactWindow ?? DEFAULT_COMPACT_WINDOW,
     })
+    attachSubagents(props.runtime)
+    if (config.subagents?.maxConcurrent) props.runtime.subagents.setMax(config.subagents.maxConcurrent)
+    setState("agentSlots", props.runtime.subagents.limiter.stats())
     if (props.resume) await resumeFromArgs(props.runtime, props.resume)
     else await props.runtime.hooks.emit({ type: "session-start", sessionId: currentSession().id, source: "startup" })
     if (skillSet.problems.length > 0) {
@@ -934,7 +951,7 @@ export function App(props: {
             unmounted, so a half-typed message survives. */}
         {/* Keyed: a new request starts with a fresh selection and no leftover note. */}
         <Show when={state.approval} keyed>
-          {(request) => <ApprovalPrompt gate={props.runtime.permissions} request={request} />}
+          {(request) => <ApprovalPrompt gate={props.runtime.permissions} request={request} subagents={props.runtime.subagents} />}
         </Show>
         {/* A question stays mounted (answers kept) while an approval covers it. */}
         <Show when={state.question} keyed>
@@ -1008,6 +1025,9 @@ export function App(props: {
   )
 }
 
+const approvalStatus = (request: { agent?: { type: string } } | undefined) =>
+  request?.agent ? `△ subagent ${request.agent.type} cần bạn xác nhận · esc từ chối` : "△ cần bạn xác nhận · esc từ chối"
+
 function StatusBar() {
   const target = () =>
     state.provider ? `${providerName(state.provider)} · ${state.model ?? "chưa chọn model"}` : "chưa kết nối"
@@ -1045,7 +1065,7 @@ function StatusBar() {
             : state.flash
               ? state.flash
               : state.approval
-                ? "△ cần bạn xác nhận · esc từ chối"
+                ? approvalStatus(state.approval)
                 : state.question
                   ? "△ model đang hỏi bạn · esc bỏ qua"
                   : state.compacting

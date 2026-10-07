@@ -1,6 +1,7 @@
 import { useKeyboard } from "@opentui/solid"
 import { createSignal, For, Show } from "solid-js"
 import type { ApprovalRequest, Choice, PermissionGate } from "../core/permission"
+import type { SubagentManager } from "../core/subagents/manager"
 import { pushLine, setState, state } from "./state"
 import { DialogFrame } from "./dialogs/frame"
 import { color } from "./theme"
@@ -45,8 +46,17 @@ const RECORD: Record<Choice, string> = {
   deny: "",
 }
 
-export function ApprovalPrompt(props: { gate: PermissionGate; request: ApprovalRequest }) {
+/**
+ * Keys pressed this soon after a subagent's prompt appears are ignored for answering: it can
+ * pop up while the user is typing, and Enter or a digit meant for the input must not
+ * approve it.
+ */
+export const ANSWER_GUARD_MS = 400
+
+export function ApprovalPrompt(props: { gate: PermissionGate; request: ApprovalRequest; subagents?: SubagentManager }) {
   const [selected, setSelected] = createSignal(0)
+  // The prompt is keyed on the request in app.tsx, so each request mounts afresh.
+  const shownAt = Date.now()
   const [noting, setNoting] = createSignal(false)
   let note = ""
   const req = () => props.request
@@ -60,7 +70,10 @@ export function ApprovalPrompt(props: { gate: PermissionGate; request: ApprovalR
     // The decision belongs under its tool call in the transcript (Claude Code); a denial
     // already shows there from the tool's error, so only "allowed" needs recording.
     const row = state.lines.findIndex((l) => l.kind === "tool" && l.callId === req().callId)
-    if (row >= 0) {
+    const agent = req().agent
+    if (agent && props.subagents) {
+      props.subagents.recordDecision(agent.id, req().callId, option.choice === "deny" ? `✘ Đã từ chối${message ? ` — "${message}"` : ""}` : `✓ Đã cho phép ${RECORD[option.choice]}`)
+    } else if (row >= 0) {
       if (option.choice !== "deny") setState("lines", row, (l) => ({ ...l, decision: `✓ Đã cho phép ${RECORD[option.choice]}` }))
     } else {
       pushLine({
@@ -90,6 +103,8 @@ export function ApprovalPrompt(props: { gate: PermissionGate; request: ApprovalR
       return // the note input handles everything else; enter submits through onSubmit
     }
     evt.preventDefault()
+    const early = !!req().agent && Date.now() - shownAt < ANSWER_GUARD_MS
+    if (early && (evt.name === "return" || /^[1-4]$/.test(evt.name ?? ""))) return
     if (evt.name === "up") setSelected((i) => (i + OPTIONS.length - 1) % OPTIONS.length)
     else if (evt.name === "down") setSelected((i) => (i + 1) % OPTIONS.length)
     else if (evt.name === "return") choose(selected())
@@ -106,12 +121,16 @@ export function ApprovalPrompt(props: { gate: PermissionGate; request: ApprovalR
 
   return (
     <DialogFrame
-      title={destructive() ? "Cần xác nhận · thay đổi không hoàn tác được" : "Cần xác nhận · tool ghi"}
+      title={
+        (destructive() ? "Cần xác nhận · thay đổi không hoàn tác được" : "Cần xác nhận · tool ghi") +
+        (req().agent ? ` · subagent ${req().agent!.type} (${truncate(req().agent!.description, 30)})` : "")
+      }
       accent={destructive() ? color.giam : color.tham}
       hint={noting() ? "enter từ chối kèm lời nhắn · esc quay lại" : "↑↓ chọn · enter xác nhận · 1-4 chọn nhanh · tab từ chối kèm lời nhắn · esc từ chối"}
     >
       <box flexDirection="column" paddingLeft={2}>
         <text>
+          {req().agent ? <span style={{ fg: color.tham }}>{`${req().agent!.type} › `}</span> : ""}
           <span style={{ fg: color.tx, bold: true }}>{truncate(req().label, room() - 30)}</span>
           {destructive() ? <span style={{ fg: BADGE.irreversible.fg }}>{`  ${BADGE.irreversible.text}`}</span> : ""}
           {req().annotations?.openWorld ? <span style={{ fg: BADGE.openWorld.fg }}>{`  ${BADGE.openWorld.text}`}</span> : ""}
