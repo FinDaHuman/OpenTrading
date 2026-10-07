@@ -44,6 +44,8 @@ export interface SubagentView {
   error?: string
   /** Something the user should know about the run (its model fell back to the session's). */
   notice?: string
+  /** Session the run belongs to (UIs ignore runs of a session they no longer show). */
+  sessionId?: string
 }
 
 export interface SubagentResult {

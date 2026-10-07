@@ -252,7 +252,8 @@ async function sendTurn(runtime: Runtime, msg: Outgoing): Promise<boolean> {
       registry: runtime.registry,
       signal: controller.signal,
       sessionId: currentSession().id,
-      hooks: runtime.hooks,
+      // A notification is harness text, not the user's: no user-prompt hooks on it.
+      hooks: msg.notice ? undefined : runtime.hooks,
       memory: runtime.memory,
       serverInstructions: () => runtime.mcp.instructions(),
     })
@@ -405,10 +406,14 @@ export function App(props: {
   })
   const offPending = props.runtime.permissions.onPending((pending) => setState("approvals", pending))
   const subagents = props.runtime.subagents
-  const offAgents = subagents.onChange((view) => setState("agents", view.id, reconcile(view)))
+  // Runs of a session no longer shown (/clear, /new) still report while they stop: ignore them.
+  const offAgents = subagents.onChange((view) => {
+    if (view.sessionId === currentSession().id) setState("agents", view.id, reconcile(view))
+  })
   const offSlots = subagents.limiter.onChange(() => setState("agentSlots", subagents.limiter.stats()))
   // A background subagent finished: a line now, its result to the model when idle.
   const offFinished = subagents.onFinished((view) => {
+    if (view.sessionId !== currentSession().id) return
     const stats = `${view.toolCount} tool · ${fmtTokens(view.usage.input + view.usage.output)} token · ${fmtSeconds((view.endedAt ?? Date.now()) - (view.startedAt ?? view.createdAt))}`
     const status = { completed: "xong", failed: "lỗi", stopped: "đã dừng" }[view.status as string] ?? view.status
     pushLine({ kind: "agent-notice", agentId: view.id, status, text: `Subagent nền ${view.type} (${view.description}) · ${status} · ${stats}${view.error ? ` · ${view.error}` : ""}` })

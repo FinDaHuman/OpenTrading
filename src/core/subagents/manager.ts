@@ -220,6 +220,7 @@ export class SubagentManager {
       controller: new AbortController(),
       messages: [],
       done: Promise.resolve(undefined as never),
+      sessionId: this.session?.id,
     }
     this.runs.set(id, run)
     this.owners.set(id, this.session?.id)
@@ -302,6 +303,7 @@ export class SubagentManager {
       controller: new AbortController(),
       messages,
       done: Promise.resolve(undefined as never),
+      sessionId: this.session.id,
     }
     this.runs.set(id, run)
     this.owners.set(id, this.session.id)
@@ -441,6 +443,11 @@ export class SubagentManager {
         if (run.status !== "completed") break
       }
       if (run.status === "running") run.status = signal.aborted ? "stopped" : "failed"
+      // Messages that arrived for a turn that never came: say so rather than drop them.
+      if (context.inbox.length > 0) {
+        const lost = context.inbox.splice(0)
+        run.error = `${run.error ? `${run.error}. ` : ""}Chưa xử lý ${lost.length} tin nhắn gửi thêm: ${lost.join(" / ").slice(0, 300)}`
+      }
       if (idleStop) run.error = `Subagent không có tiến triển trong ${SUBAGENT_IDLE_MS / 60_000} phút nên đã bị dừng.`
     } catch (error) {
       run.status = signal.aborted ? "stopped" : "failed"

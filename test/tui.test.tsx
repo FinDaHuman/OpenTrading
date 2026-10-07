@@ -189,6 +189,7 @@ await writeFile(path.join(home, "mcp.json"), JSON.stringify({ mcpServers: { demo
 
 const { App } = await import("../src/tui/app")
 const { state, setState } = await import("../src/tui/state")
+const { reconcile } = await import("solid-js/store")
 const { readJson } = await import("../src/core/store")
 const { setKey } = await import("../src/core/auth")
 const { saveConfig } = await import("../src/core/config")
@@ -1983,6 +1984,20 @@ test("background subagent: the answer ends at once; /tasks and ⧗ show it runni
     expect(JSON.stringify(notice?.content)).toContain("BÁO-CÁO-CON")
     expect(frame).not.toContain("❯ <thong_bao_subagent>")
     expect(state.notices).toEqual([])
+
+    // As after a resume: nothing in memory, /tasks still lists it from its .meta.json.
+    await runtime.subagents.flush()
+    setState("agents", reconcile({}))
+    await setup.mockInput.typeText("/tasks")
+    setup.mockInput.pressEnter()
+    frame = await setup.waitForFrame((f) => f.includes("Đã xong") && f.includes(id))
+    show(frame)
+    setup.mockInput.pressEnter()
+    await setup.waitForFrame((f) => f.includes(`Subagent ${id}`) && f.includes("Từ phiên trước"))
+    setup.mockInput.pressEscape()
+    await setup.waitForFrame((f) => f.includes("Subagent của phiên"))
+    setup.mockInput.pressEscape()
+    await setup.waitFor(() => state.dialog === undefined)
   } finally {
     release?.()
     childGate = undefined
@@ -2004,6 +2019,8 @@ test("background subagent: /clear stops it and its result never reaches the new 
     expect(state.notices).toEqual([])
     expect(state.lines.some((l) => l.kind === "agent-notice")).toBe(false)
     expect(state.streaming).toBe(false)
+    // The stopped run of the old session does not reappear in the new one (/tasks, /context).
+    expect(Object.keys(state.agents)).toHaveLength(0)
   } finally {
     childGate = undefined
   }

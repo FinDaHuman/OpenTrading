@@ -1,4 +1,8 @@
-import { createMemo, createSignal, For, Show } from "solid-js"
+import { readdir, readFile } from "node:fs/promises"
+import path from "node:path"
+import { createMemo, createResource, createSignal, For, Show } from "solid-js"
+import { sidechainDir, type SidechainMeta } from "../../core/subagents/sidechain"
+import { currentSession } from "../session"
 import type { Runtime } from "../../core/runtime"
 import { fmtSeconds, fmtTokens } from "../../core/subagents/result"
 import type { SubagentView } from "../../core/subagents/types"
@@ -18,16 +22,53 @@ function line(a: SubagentView) {
 }
 
 /**
+ * Subagents of this session that are no longer in memory (a resumed session): their
+ * .meta.json files next to the session.
+ */
+async function storedAgents(): Promise<SubagentView[]> {
+  const dir = sidechainDir(currentSession().dir)
+  const files = (await readdir(dir).catch(() => [] as string[])).filter((f) => f.endsWith(".meta.json"))
+  const metas = await Promise.all(
+    files.map((f) =>
+      readFile(path.join(dir, f), "utf8")
+        .then((t) => JSON.parse(t) as SidechainMeta)
+        .catch(() => undefined),
+    ),
+  )
+  return metas
+    .filter((m): m is SidechainMeta => !!m?.agentId)
+    .map((m) => ({
+      id: m.agentId,
+      type: m.agentType,
+      description: m.description,
+      prompt: "",
+      parentCallId: m.parentCallId,
+      background: false,
+      model: "",
+      status: m.status,
+      createdAt: Date.parse(m.createdAt) || 0,
+      endedAt: Date.parse(m.updatedAt) || undefined,
+      tools: [],
+      toolCount: m.toolCount,
+      usage: m.usage,
+      text: "",
+    }))
+}
+
+/**
  * /tasks (Claude Code's /tasks): this session's subagents, running first. Enter shows one
  * (brief, calls, result); x stops a running one, as stop_agent would.
  */
 export function TasksDialog(props: { runtime: Runtime }) {
   const [open, setOpen] = createSignal<string>()
   const [highlighted, setHighlighted] = createSignal<string>()
+  const [stored] = createResource(storedAgents)
   const agents = createMemo(() =>
-    Object.values(state.agents).sort((a, b) => Number(active(b)) - Number(active(a)) || b.createdAt - a.createdAt),
+    [...Object.values(state.agents), ...(stored() ?? []).filter((s) => !state.agents[s.id])].sort(
+      (a, b) => Number(active(b)) - Number(active(a)) || b.createdAt - a.createdAt,
+    ),
   )
-  const detail = () => (open() ? state.agents[open()!] : undefined)
+  const detail = () => (open() ? agents().find((a) => a.id === open()) : undefined)
 
   useKeys((evt) => {
     if (evt.eventType === "release") return
@@ -70,12 +111,17 @@ export function TasksDialog(props: { runtime: Runtime }) {
           <Show when={a().error}>
             <text fg={color.giam} wrapMode="word">{`Lỗi: ${a().error}`}</text>
           </Show>
-          <text fg={color.tham} marginTop={1}>
-            Yêu cầu:
-          </text>
-          <text fg={color.tx3} wrapMode="word">
-            {a().prompt}
-          </text>
+          <Show
+            when={a().prompt}
+            fallback={<text fg={color.tx3} marginTop={1}>{`Từ phiên trước: chi tiết trong ${sidechainDir(currentSession().dir)}`}</text>}
+          >
+            <text fg={color.tham} marginTop={1}>
+              Yêu cầu:
+            </text>
+            <text fg={color.tx3} wrapMode="word">
+              {a().prompt}
+            </text>
+          </Show>
           <Show when={a().tools.length > 0}>
             <text fg={color.tham} marginTop={1}>{`Tool (${a().toolCount}):`}</text>
             <For each={a().tools.slice(-8)}>
