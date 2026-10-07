@@ -431,15 +431,6 @@ test("an invalid key surfaces as a Vietnamese error line", async () => {
   await setup.waitFor(() => !state.streaming)
 })
 
-/** Poll an async condition (file contents) for up to 5 s. */
-async function until(pred: () => Promise<boolean>, ms = 5000) {
-  const end = Date.now() + ms
-  while (!(await pred())) {
-    if (Date.now() > end) throw new Error(`timed out: ${pred.toString()}`)
-    await new Promise((r) => setTimeout(r, 20))
-  }
-}
-
 const waitMcp = async (pred: () => boolean, what = pred.toString()) => {
   // Spawning or stopping the server takes real time, so poll the clock instead of render passes.
   for (let i = 0; i < 200 && !pred(); i++) await new Promise((r) => setTimeout(r, 100))
@@ -1249,7 +1240,9 @@ test("/config: subagent limit is a number ≥ 1 applied live; subagent model lis
   show(frame)
   setup.mockInput.pressArrow("down")
   setup.mockInput.pressEnter()
-  await until(async () => !!(await Bun.file(path.join(home, "config.json")).json()).subagents?.model)
+  // Wait for the list to show the choice, then read the file once (reading while it is
+  // being replaced is what Windows refuses).
+  await setup.waitForFrame((f) => f.includes("Cài đặt") && f.includes("Model cho subagent") && !f.includes("Theo model của phiên · enter"))
   const saved = (await Bun.file(path.join(home, "config.json")).json()).subagents
   expect(saved.maxConcurrent).toBe(3)
   expect(state.catalog[saved.provider]?.models[saved.model]?.tool_call).not.toBe(false)
@@ -1258,9 +1251,9 @@ test("/config: subagent limit is a number ≥ 1 applied live; subagent model lis
   setup.mockInput.pressEnter()
   await setup.waitForFrame((f) => f.includes("Theo model của phiên (mặc định)"))
   setup.mockInput.pressEnter()
-  await until(async () => !(await Bun.file(path.join(home, "config.json")).json()).subagents?.model)
   // Back on the settings list (the sub-view closes after saving) before Esc closes the dialog.
-  await setup.waitForFrame((f) => f.includes("Cài đặt") && f.includes("Subagent chạy song song"))
+  await setup.waitForFrame((f) => f.includes("Cài đặt") && f.includes("Theo model của phiên · enter"))
+  expect((await Bun.file(path.join(home, "config.json")).json()).subagents?.model).toBeUndefined()
   setup.mockInput.pressEscape()
   await setup.waitFor(() => state.dialog === undefined)
   await saveConfig({ subagents: undefined })
