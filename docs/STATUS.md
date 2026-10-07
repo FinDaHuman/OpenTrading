@@ -20,6 +20,13 @@ Cập nhật: 30/09/2026 · nhánh `step2b-session-memory`
   - danh sách 1 dòng, dialog thành panel, phần `/` (PR #15);
   - khung chat `❯`/`●`/`⎿`, tool hỏi người dùng `ask_user` (PR D2).
 
+- **Sau đó (tới 07/10/2026)**:
+  - tool search #19–#20; prompt, todo, nén hội thoại #21–#24;
+  - skills và tool local #25; ô nhập kiểu Claude Code #29–#31;
+  - **subagent #32–#34**: [docs/subagents.md](subagents.md).
+
+Giới hạn Gemini API: [docs/gemini-limits.md](gemini-limits.md).
+
 Contract cho đồng nghiệp: [docs/contracts.md](contracts.md).
 
 ### Đã có
@@ -52,10 +59,11 @@ Contract cho đồng nghiệp: [docs/contracts.md](contracts.md).
 | **Hook** (`src/core/hooks.ts`): session-start, user-prompt (chặn hoặc thêm ngữ cảnh), turn-end, session-end | Xong |
 | **Memory** (`src/core/memory/`): contract `MemoryProvider`, bản mẫu `FileMemory` (đề xuất → duyệt trong `/memory`, "Ghi nhớ: …"), mặc định tắt; bật trong `/config` | Xong |
 | **Session** (`src/core/session/`): JSONL ghi nối, `/sessions`, `/new`, `--continue`, `--resume <id>`, vá tool-call thiếu kết quả | Xong |
-| Test: typecheck + 150 test (tool, MCP qua stdio/HTTP/SSE/OAuth giả, schema thật, agent loop, TUI headless, quyền) | Xong |
+| **Subagent** (`src/core/subagents/`, `src/core/agents/`, PR #32–#34) | Xong. `spawn_subagent` chạy song song, giới hạn trong `/config` (mặc định 10, xếp hàng); khối tiến độ kiểu Claude Code; tool ghi hỏi ở UI chính (chỉ Enter); 4 loại có sẵn + `.opentrading/agents/*.md`; chạy nền, `<thong_bao_subagent>`, `send_message`/`stop_agent`, `/agents`, `/tasks`; transcript riêng trong `sessions/…/subagents/` |
+| Test: typecheck + 296 test (tool, MCP qua stdio/HTTP/SSE/OAuth giả, schema thật, agent loop, subagent, TUI headless, quyền) | Xong |
 
 **Chưa kiểm tra:**
-- Chưa chạy với key thật của provider nào. Tool calling mới được test trên định dạng OpenAI-compatible bằng API giả lập; Gemini và Anthropic cần thử bằng key thật.
+- Đã thử với key Gemini thật, gồm cả subagent (người dùng xác nhận ngày 07/10/2026). Anthropic và OpenAI chưa thử bằng key thật.
 - Chưa mở trong Windows Terminal thật.
 
 Provider chưa hỗ trợ: xem `ToDoList.txt`.
@@ -87,6 +95,7 @@ Việc phụ:
 | 2b | Hook, `MemoryProvider` + bản mẫu, `/memory`, lưu và mở lại session (`/sessions`, `--continue`) | **Xong** |
 | MCP | Kết nối MCP phổ biến (OAuth, SSE, CLI), tương thích tool, `/mcp`, xác nhận tool ghi | **Xong** (#12–#14) |
 | UI | Giao diện giống Claude Code, `ask_user` | **Xong** (#15, D2) |
+| Subagent | `spawn_subagent`, loại agent, chạy nền, `/agents`, `/tasks` | **Xong** (#32–#34) |
 | 3 | Mở rộng config (giới hạn bước…), `/why`, đóng gói `bun build --compile` | Tiếp theo |
 
 ## Cho đồng nghiệp: bắt đầu thế nào

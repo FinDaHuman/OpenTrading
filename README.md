@@ -2,7 +2,7 @@
 
 Harness AI phân tích chứng khoán Việt Nam, chạy trong terminal. Viết bằng TypeScript: Bun, [OpenTUI](https://github.com/sst/opentui), SolidJS và Vercel AI SDK.
 
-> **Bản demo.** Đã có TUI, kết nối LLM, agent loop gọi tool và MCP client. Chưa có dữ liệu thị trường, vì các MCP server dữ liệu đang được phát triển; chưa lưu session. Đây không phải tư vấn đầu tư. Tiến độ: [docs/STATUS.md](docs/STATUS.md).
+> **Bản demo.** Đã có TUI, kết nối LLM, agent loop gọi tool, MCP client (dữ liệu thị trường qua server `opentrading-mcp`), skills, subagent, nén hội thoại và lưu phiên. Đây không phải tư vấn đầu tư. Tiến độ: [docs/STATUS.md](docs/STATUS.md).
 
 ## Chạy
 
@@ -23,13 +23,20 @@ Trong TUI:
 | `/mcp` | Trạng thái các MCP server; cho phép server của project hoặc kết nối lại |
 | `/tools` | Liệt kê mọi tool model đang gọi được |
 | `/sessions`, `/new` | Mở lại một phiên đã lưu; bắt đầu phiên mới |
+| `/compact [hướng dẫn]` | Nén hội thoại (dọn kết quả tool cũ, tóm tắt phần đầu) |
+| `/agents` | Các loại subagent (có sẵn, cá nhân, dự án) và tool của từng loại |
+| `/tasks` | Subagent của phiên: đang chạy, đã xong; xem kết quả, dừng (ctrl+x) |
 | `/memory` | Xem, duyệt, xoá memory |
-| `/config` | Cài đặt: bật / tắt memory (có hiệu lực ngay) |
+| `/config` | Cài đặt, có hiệu lực ngay: memory, tìm tool, tự nén, số subagent chạy song song, model cho subagent |
 | `/clear`, `/help`, `/exit` | Xoá màn hình và bắt đầu phiên mới, trợ giúp, thoát |
 
 Phím tắt: `tab` hoàn thành lệnh đang gõ (`/con` → `/connect`), `↑↓` chọn gợi ý, `esc` dừng câu trả lời hoặc đóng hộp thoại, `ctrl+o` mở rộng/thu gọn kết quả tool, `ctrl+c` thoát.
 
-Model gọi được tool có sẵn (`current_time`, `load_skill`) và tool từ MCP server, rồi trả lời dựa trên kết quả. Cách gắn MCP server: xem [docs/mcp.md](docs/mcp.md).
+Model gọi được tool có sẵn (`current_time`, `load_skill`, `todo_write`, `ask_user`, `tool_search`, chart, watchlist, web…) và tool từ MCP server, rồi trả lời dựa trên kết quả. Cách gắn MCP server: xem [docs/mcp.md](docs/mcp.md).
+
+Model có thể giao việc cho **subagent**: chạy song song, chạy nền, chọn loại agent. Xem [docs/subagents.md](docs/subagents.md).
+
+**Dùng key Gemini miễn phí?** Quota theo ngày và theo phút rất thấp, và subagent tốn nhiều request. Xem [docs/gemini-limits.md](docs/gemini-limits.md) trước khi dùng.
 
 Danh sách provider và model lấy từ [models.dev](https://models.dev), cùng nguồn với opencode. Danh sách được cache 1 giờ ở `~/.opentrading/cache/models.json`. Các provider cần SDK riêng hoặc cấu hình thêm (Azure, Bedrock, Vertex…) bị ẩn và được ghi trong `ToDoList.txt`.
 
@@ -55,11 +62,14 @@ src/core/     provider, auth, config, agent loop, hồ sơ nhà đầu tư (khô
   memory/     contract MemoryProvider, bản mẫu FileMemory
   session/    lưu phiên JSONL, mở lại, dựng lại transcript
   tools/      tool registry, giới hạn/timeout, tool có sẵn
+  subagents/  subagent: manager, giới hạn slot, transcript riêng, thông báo nền
+  agents/     loại subagent (file agents/*.md)
   mcp/        MCP client: config, cho phép, đặt tên tool, quản lý kết nối
 examples/     MCP server mẫu (examples/mcp-demo)
 src/tui/      giao diện: theme, logo, background động, màn hình, dialog
 prompts/      nội dung system prompt theo tầng (identity, tools, citations, style)
 skills/       skill dạng skills/<tên>/SKILL.md (xem docs/contracts.md)
+agents/       loại subagent có sẵn (xem docs/subagents.md)
 market/       lịch phiên giao dịch (dữ liệu, chưa kiểm chứng)
 handbook/     tài liệu thiết kế
 legacy-python/  scaffold Python cũ, giữ lại để làm sidecar quant sau này
