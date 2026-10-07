@@ -36,6 +36,8 @@ export type Line =
   /** History was compacted here. `summary` is absent when only old tool results were pruned. */
   | { kind: "compact"; summary?: string; before?: number; after?: number; pruned?: number }
   | { kind: "error"; text: string }
+  /** A background subagent finished; its result went (or goes) to the model as a notification. */
+  | { kind: "agent-notice"; agentId: string; text: string; status: string }
 
 /**
  * A message typed while an answer was streaming, sent once it ends (Claude Code). `display`
@@ -43,7 +45,7 @@ export type Line =
  */
 export type Queued = { text: string; display: string; images: PromptImage[]; saved: Omit<DraftSnapshot, "text"> }
 
-export type DialogName = "connect" | "model" | "skills" | "help" | "mcp" | "tools" | "context" | "sessions" | "memory" | "config" | "agents"
+export type DialogName = "connect" | "model" | "skills" | "help" | "mcp" | "tools" | "context" | "sessions" | "memory" | "config" | "agents" | "tasks"
 
 export const [state, setState] = createStore({
   lines: [] as Line[],
@@ -98,6 +100,10 @@ export const [state, setState] = createStore({
   /** Subagent types (bundled, user, project) and files that failed to load. */
   agentDefs: [] as AgentDefinition[],
   agentProblems: [] as AgentProblem[],
+  /** Background subagent results not yet delivered to the model (<thong_bao_subagent>). */
+  notices: [] as string[],
+  /** The last turn failed: hold notices until the user sends something (no 429 retry loop). */
+  noticeHold: false,
 })
 
 /** Effective context window of the selected model: models.dev limit, capped (see core/compact). */

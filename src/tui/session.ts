@@ -46,6 +46,7 @@ export async function startSession(runtime: Runtime, source: "startup" | "clear"
   current = Session.create()
   attachSubagents(runtime)
   setState("agents", reconcile({}))
+  setState({ notices: [], noticeHold: false })
   // A fresh conversation has not seen the market clock yet.
   setState({ lines: [], history: [], clock: undefined, ...NO_COMPACTION })
   await runtime.hooks.emit({ type: "session-start", sessionId: current.id, source })
@@ -58,9 +59,13 @@ export async function resumeSession(runtime: Runtime, id: string) {
   current = Session.continue(loaded.summary)
   attachSubagents(runtime)
   setState("agents", reconcile({}))
+  setState({ notices: [], noticeHold: false })
 
   const lines: Line[] = transcriptFromMessages(loaded.display).map((item): Line => {
     if (item.kind === "compact") return { kind: "compact", summary: item.text }
+    if (item.kind === "agent-notice") {
+      return { kind: "agent-notice", agentId: item.agentId, status: item.status, text: `Subagent nền ${item.type} (${item.description}) · ${item.status} · ${item.stats}` }
+    }
     if (item.kind === "tool") {
       return {
         kind: "tool",
