@@ -164,6 +164,10 @@ File: `src/core/hooks.ts`. Chạy trong process, dùng tên sự kiện giống 
 
 Hook ném lỗi hoặc chạy quá 5 giây sẽ bị bỏ qua và báo thành một dòng thông báo; lượt hỏi–đáp vẫn tiếp tục.
 
+## 7b. Loại subagent: `agents/<tên>.md`
+
+Frontmatter gồm `name` (trùng tên file), `description`, `tools`, `disallowedTools`, `provider`/`model` và `maxSteps`. Phần thân file là chỉ dẫn riêng của loại đó. Thứ tự ưu tiên: dự án `.opentrading/agents/` > cá nhân `~/.opentrading/agents/` > có sẵn `agents/`. Chi tiết: [subagents.md](subagents.md).
+
 ## 8. Session: `~/.opentrading/sessions/`
 
 - Mỗi phiên là **một file JSONL ghi nối** `YYYY/MM/<id>.jsonl`, chỉ được tạo khi có lượt hỏi–đáp đầu tiên. Ghi nối nên nếu app crash thì chỉ mất dòng cuối, và dòng hỏng đó được bỏ qua khi đọc.
@@ -173,6 +177,7 @@ Hook ném lỗi hoặc chạy quá 5 giây sẽ bị bỏ qua và báo thành m�
   - `turn_end`: provider và model của lượt, `contextTokens` (kích thước context sau lượt, theo usage của provider).
   - `compact`: hội thoại vừa được nén (`trigger` auto/manual, `before`/`after` token, `messages` là history mới). Khi mở lại, model chỉ nhận history từ entry `compact` cuối cùng trở đi; transcript vẫn hiện các lượt cũ cùng một dòng "Đã nén hội thoại".
 - `index.jsonl` có một dòng cho mỗi lần cập nhật phiên; dòng sau cùng của cùng một id thắng.
+- Subagent ghi transcript riêng ở `YYYY/MM/<id>/subagents/agent-<agentId>.jsonl` (các dòng `agent_meta`, `message`, `notice`, `agent_end`) và `.meta.json`. File phiên chính chỉ chứa lời gọi `spawn_subagent` và kết quả (có trailer `<subagent_meta>`). Kết quả của subagent nền vào history dưới dạng tin user `<thong_bao_subagent>`.
 - **Mở lại phiên:**
   - Dùng `/sessions`, `bun run dev -- --continue` (phiên mới nhất) hoặc `--resume <id>` (chỉ cần phần đầu của id).
   - History được dựng lại; tool-call thiếu kết quả được đóng bằng lỗi "bị ngắt"; đồng hồ phiên được gửi lại ở lượt đầu.
