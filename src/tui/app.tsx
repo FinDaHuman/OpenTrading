@@ -328,6 +328,7 @@ export function App(props: {
     await Promise.race([
       Promise.all([
         inflight ?? Promise.resolve(),
+        props.runtime.subagents.flush(),
         props.runtime.hooks.emit({ type: "session-end", sessionId: currentSession().id }),
         props.runtime.mcp.stop(),
       ]),

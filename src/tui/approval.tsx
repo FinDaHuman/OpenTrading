@@ -55,8 +55,8 @@ export const ANSWER_GUARD_MS = 400
 
 export function ApprovalPrompt(props: { gate: PermissionGate; request: ApprovalRequest; subagents?: SubagentManager }) {
   const [selected, setSelected] = createSignal(0)
-  let shownAt = Date.now()
-  let shownFor = props.request.id
+  // The prompt is keyed on the request in app.tsx, so each request mounts afresh.
+  const shownAt = Date.now()
   const [noting, setNoting] = createSignal(false)
   let note = ""
   const req = () => props.request
@@ -103,10 +103,6 @@ export function ApprovalPrompt(props: { gate: PermissionGate; request: ApprovalR
       return // the note input handles everything else; enter submits through onSubmit
     }
     evt.preventDefault()
-    if (shownFor !== req().id) {
-      shownFor = req().id
-      shownAt = Date.now()
-    }
     const early = !!req().agent && Date.now() - shownAt < ANSWER_GUARD_MS
     if (early && (evt.name === "return" || /^[1-4]$/.test(evt.name ?? ""))) return
     if (evt.name === "up") setSelected((i) => (i + OPTIONS.length - 1) % OPTIONS.length)

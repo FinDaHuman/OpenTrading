@@ -289,3 +289,61 @@ test("config subagents.model sends children to another model; a model without to
   expect(childBodies).toHaveLength(0)
   expect(ends(events)[0]!.output).toContain("không hỗ trợ gọi tool")
 })
+
+test("a denied child write reaches the child as a denial; without a UI (headless) it is refused", async () => {
+  let wrote = 0
+  const write = {
+    name: "watchlist_local_add",
+    description: "add to watchlist",
+    input: z.object({ symbol: z.string() }),
+    readOnly: false,
+    async execute() {
+      wrote++
+      return "đã thêm"
+    },
+  }
+  const { registry } = setup((r) => r.register(write))
+  const gate = new PermissionGate({ load: async () => [], save: async () => {} })
+  gate.interactive = true
+  registry.gate = gate
+  parentCalls = [spawn("Thêm FPT")]
+  childCall = { name: "watchlist_local_add", args: { symbol: "FPT" } }
+  const turn = collect(runAgent({ history: [], input: "x", skills: [], registry }))
+  while (!gate.head()) await new Promise((r) => setTimeout(r, 5))
+  await gate.respond(gate.head()!.id, "deny", "đừng thêm")
+  await turn
+  expect(wrote).toBe(0)
+  const toolResult = JSON.stringify(childBodies.at(-1)!.messages.find((m) => m.role === "tool"))
+  expect(toolResult).toContain("Người dùng từ chối chạy tool này")
+  expect(toolResult).toContain("đừng thêm")
+
+  // Headless (scripts, chat.ts): nobody to ask, so the child's write is refused.
+  gate.interactive = false
+  childBodies.length = 0
+  await collect(runAgent({ history: [], input: "x", skills: [], registry }))
+  expect(wrote).toBe(0)
+  expect(JSON.stringify(childBodies.at(-1)!.messages.find((m) => m.role === "tool"))).toContain("không có giao diện để hỏi")
+})
+
+test("a subagent model that cannot be used falls back to the session's model", async () => {
+  await saveConfig({ provider: "groq", model: "tooly", subagents: { provider: "nokey", model: "x" } })
+  const { registry } = setup()
+  parentCalls = [spawn("FPT")]
+  const events = await collect(runAgent({ history: [], input: "x", skills: [], registry }))
+  expect(ends(events)[0]!.ok).toBe(true)
+  expect(childBodies[0]!.model).toBe("tooly")
+})
+
+test("the main agent's prompt does not change with the subagent role in place; identity.md is sent whole", async () => {
+  const { assemble, promptFile } = await import("../src/core/prompt/assemble")
+  const input = { tier: "A" as const, tools: ["current_time", "spawn_subagent"], skills: [], sticky: [], input: "x", now: new Date("2026-10-07T03:00:00Z") }
+  const plain = assemble(input)
+  expect(assemble({ ...input, role: "main" }).system).toBe(plain.system)
+  expect(plain.system).toContain(promptFile("identity")!)
+  expect(plain.system).not.toContain("<subagent>")
+  const child = assemble({ ...input, role: "subagent", agentPrompt: "CHỈ-DẪN" })
+  expect(child.system).toContain("<subagent>")
+  expect(child.system).toContain("<thu_tu_uu_tien>")
+  expect(child.system).toContain("<chi_dan_agent>\nCHỈ-DẪN\n</chi_dan_agent>")
+  expect(child.system).not.toContain("Bạn là OpenTrading, trợ lý")
+})

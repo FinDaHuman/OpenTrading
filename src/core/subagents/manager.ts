@@ -95,6 +95,8 @@ export function viewOf(run: SubagentRun): SubagentView {
 export class SubagentManager {
   readonly limiter: Limiter
   private runs = new Map<string, SubagentRun>()
+  /** Sidechain writes not finished yet (exit waits for them). */
+  private writes = new Set<Promise<unknown>>()
   private listeners = new Set<Listener>()
   private session?: { id: string; dir: string }
   private max = DEFAULT_MAX_CONCURRENT
@@ -142,6 +144,11 @@ export class SubagentManager {
     let n = 0
     for (const run of this.runs.values()) if (this.stop(run.id)) n++
     return n
+  }
+
+  /** Wait for pending sidechain writes (before the process exits). */
+  async flush() {
+    await Promise.all([...this.writes])
   }
 
   /** The user's answer to a subagent's approval prompt, shown under that child call. */
@@ -200,7 +207,8 @@ export class SubagentManager {
     try {
       const config = await loadConfig()
       this.max = config.subagents?.maxConcurrent ?? this.max
-      const target = await this.targetFor(spec, config.subagents)
+      const fallback: SidechainEntry[] = []
+      const target = await this.targetFor(spec, config.subagents, fallback)
       run.model = `${target.provider.name} · ${target.model}`
       if (target.provider.models[target.model]?.tool_call === false) {
         throw new Error(`Model ${target.model} không hỗ trợ gọi tool nên không chạy được subagent. Đổi "Model cho subagent" trong /config.`)
@@ -222,6 +230,7 @@ export class SubagentManager {
           createdAt: new Date(run.createdAt).toISOString(),
         })
       }
+      entries.push(...fallback)
 
       release = await this.limiter.acquire(signal)
       run.status = "running"
@@ -322,7 +331,7 @@ export class SubagentManager {
     if (sidechain) {
       entries.push({ type: "agent_end", ts: new Date().toISOString(), ...result })
       void sidechain.append(entries, persistError)
-      void sidechain.writeMeta(
+      const written = sidechain.writeMeta(
         {
           agentId: run.id,
           agentType: run.type,
@@ -336,15 +345,28 @@ export class SubagentManager {
         },
         persistError,
       )
+      this.writes.add(written)
+      void written.finally(() => this.writes.delete(written))
     }
     return result
   }
 
-  /** The agent type's model, else config `subagents`, else the session's model. */
-  private targetFor(spec: StartSpec, config?: { provider?: string; model?: string }): Promise<Target> {
+  /**
+   * The agent type's model, else config `subagents`, else the session's model. A chosen
+   * model that cannot be used (key removed, provider gone) falls back to the session's,
+   * with a note in the sidechain: the session model still works, so the child should too.
+   */
+  private async targetFor(spec: StartSpec, config: { provider?: string; model?: string } | undefined, notes: SidechainEntry[]): Promise<Target> {
     const own = spec.model?.model || spec.model?.provider ? spec.model : undefined
     const configured = config?.model || config?.provider ? { provider: config.provider, model: config.model } : undefined
-    return resolveTarget(own ?? configured)
+    const chosen = own ?? configured
+    if (!chosen) return resolveTarget()
+    try {
+      return await resolveTarget(chosen)
+    } catch (error) {
+      notes.push({ type: "notice", ts: new Date().toISOString(), text: `Không dùng được model cho subagent (${describeError(error)}); dùng model của phiên.` })
+      return resolveTarget()
+    }
   }
 
   private prune() {

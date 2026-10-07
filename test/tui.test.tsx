@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeAll, expect, test } from "bun:test"
-import { mkdtemp, rm, writeFile } from "node:fs/promises"
+import { mkdtemp, readdir, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { testRender } from "@opentui/solid"
@@ -1863,6 +1863,13 @@ test("subagents: parallel spawns render as one block; over the limit one waits f
     show(frame)
     expect(frame).toContain("BÁO-CÁO-CON: FPT ổn.")
     expect(frame).not.toContain("subagent_meta")
+    // Sidechains sit next to the session and never show up as sessions themselves.
+    const { listSessions } = await import("../src/core/session/store")
+    const { currentSession } = await import("../src/tui/session")
+    await runtime.subagents.flush()
+    const side = await readdir(path.join(currentSession().dir, "subagents"))
+    expect(side.filter((f) => f.endsWith(".jsonl"))).toHaveLength(2)
+    expect((await listSessions()).every((x) => !x.file.includes("subagents"))).toBe(true)
   } finally {
     setState("expandTools", false)
     childGate = undefined

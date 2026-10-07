@@ -60,7 +60,7 @@ export function formatResult(agent: { id: string; type: string }, result: Subage
     result.status === "failed"
       ? `⚠ Subagent gặp lỗi giữa chừng: ${result.error ?? "không rõ"}. Kết quả dưới đây có thể thiếu.\n\n${result.text}`
       : result.status === "stopped"
-        ? `(Subagent đã bị dừng; kết quả dưới đây có thể thiếu.)\n\n${result.text}`
+        ? `(Subagent đã bị dừng${result.error ? `: ${result.error}` : ""}; kết quả dưới đây có thể thiếu.)\n\n${result.text}`
         : result.text || "(Subagent không trả lời. Hãy tự tổng kết từ dữ liệu đã có.)"
   const meta = [
     `agent_id: ${agent.id} · loại: ${agent.type} · trạng thái: ${STATUS_TEXT[result.status]}`,
