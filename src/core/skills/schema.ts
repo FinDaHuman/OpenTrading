@@ -41,8 +41,11 @@ export interface SkillProblem {
   error: string
 }
 
-/** Split `---\nyaml\n---\nbody` and validate the YAML. */
-export function parseSkill(text: string): { meta: SkillFrontmatter; body: string } {
+/**
+ * Split `---\nyaml\n---\nbody` and validate the YAML against `schema` (skills, agent
+ * definitions). Errors are one readable line.
+ */
+export function parseFrontmatter<T>(text: string, schema: z.ZodType<T>): { meta: T; body: string } {
   const normalised = text.replace(/^﻿/, "").replace(/\r\n/g, "\n")
   const match = normalised.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/)
   if (!match) throw new Error("thiếu frontmatter (--- ... ---) ở đầu file")
@@ -52,10 +55,12 @@ export function parseSkill(text: string): { meta: SkillFrontmatter; body: string
   } catch (error) {
     throw new Error(`YAML không hợp lệ: ${error instanceof Error ? error.message : String(error)}`)
   }
-  const parsed = SkillFrontmatter.safeParse(data ?? {})
+  const parsed = schema.safeParse(data ?? {})
   if (!parsed.success) {
     const issue = parsed.error.issues[0]!
     throw new Error(`trường "${issue.path.join(".") || "?"}": ${issue.message}`)
   }
   return { meta: parsed.data, body: match[2]!.trim() }
 }
+
+export const parseSkill = (text: string) => parseFrontmatter(text, SkillFrontmatter)

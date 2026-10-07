@@ -112,12 +112,14 @@ beforeEach(async () => {
   await saveConfig({ provider: "groq", model: "tooly", subagents: undefined })
 })
 
-function setup(extra: (r: InstanceType<typeof ToolRegistry>) => void = () => {}) {
+type AgentDefinition = import("../src/core/agents/schema").AgentDefinition
+
+function setup(extra: (r: InstanceType<typeof ToolRegistry>) => void = () => {}, agents: AgentDefinition[] = []) {
   const registry = new ToolRegistry()
   registry.register(currentTimeTool(() => new Date("2026-09-28T02:30:00Z")))
   extra(registry)
   const manager = new SubagentManager({ parent: registry, skills: () => [] })
-  registry.register(spawnSubagentTool(manager))
+  registry.register(spawnSubagentTool(manager, agents))
   return { registry, manager }
 }
 
@@ -327,11 +329,12 @@ test("a denied child write reaches the child as a denial; without a UI (headless
 
 test("a subagent model that cannot be used falls back to the session's model", async () => {
   await saveConfig({ provider: "groq", model: "tooly", subagents: { provider: "nokey", model: "x" } })
-  const { registry } = setup()
+  const { registry, manager } = setup()
   parentCalls = [spawn("FPT")]
   const events = await collect(runAgent({ history: [], input: "x", skills: [], registry }))
   expect(ends(events)[0]!.ok).toBe(true)
   expect(childBodies[0]!.model).toBe("tooly")
+  expect(manager.list()[0]!.notice).toContain("dùng model của phiên")
 })
 
 test("the main agent's prompt does not change with the subagent role in place; identity.md is sent whole", async () => {
@@ -346,4 +349,44 @@ test("the main agent's prompt does not change with the subagent role in place; i
   expect(child.system).toContain("<thu_tu_uu_tien>")
   expect(child.system).toContain("<chi_dan_agent>\nCHỈ-DẪN\n</chi_dan_agent>")
   expect(child.system).not.toContain("Bạn là OpenTrading, trợ lý")
+})
+
+test("an agent type brings its instructions, tool filter, step limit and model", async () => {
+  await saveConfig({ provider: "groq", model: "tooly", subagents: { provider: "groq", model: "other" } })
+  const thu: AgentDefinition = {
+    name: "thu",
+    description: "loại thử",
+    tools: ["@chi-doc"],
+    maxSteps: 2,
+    model: "tooly",
+    body: "CHỈ-DẪN-THỬ",
+    file: "thu.md",
+    source: "project",
+  }
+  const { registry, manager } = setup(
+    (r) =>
+      r.register({
+        name: "watchlist_local_add",
+        description: "add",
+        input: z.object({ symbol: z.string() }),
+        readOnly: false,
+        execute: async () => "x",
+      }),
+    [thu],
+  )
+  parentCalls = [{ name: "spawn_subagent", args: { description: "Giá FPT", prompt: "giá FPT", subagent_type: "thu" } }]
+  childCall = { name: "current_time", args: {} }
+  const events = await collect(runAgent({ history: [], input: "x", skills: [], registry }))
+  expect(ends(events)[0]!.ok).toBe(true)
+  const first = childBodies[0]!
+  expect(first.messages[0]!.content as string).toContain("<chi_dan_agent>\nCHỈ-DẪN-THỬ\n</chi_dan_agent>")
+  const names = first.tools!.map((t) => t.function.name)
+  expect(names).toContain("current_time")
+  expect(names).not.toContain("watchlist_local_add")
+  // The type's own model beats config subagents.model; its 2 steps end with a forced summary.
+  expect(first.model).toBe("tooly")
+  expect(childBodies).toHaveLength(2)
+  expect(childBodies[1]!.tool_choice).toBe("none")
+  expect(manager.list()[0]).toMatchObject({ type: "thu", toolCount: 1 })
+  expect(parseTrailer(ends(events)[0]!.output)?.type).toBe("thu")
 })

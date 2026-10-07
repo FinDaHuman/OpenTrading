@@ -12,6 +12,7 @@ import type { Skill, SkillProblem } from "../core/skills/schema"
 import type { PromptImage } from "./prompt/image"
 import type { DraftSnapshot } from "./prompt/parts"
 import type { SubagentView } from "../core/subagents/types"
+import type { AgentDefinition, AgentProblem } from "../core/agents/schema"
 
 export type ToolStatus = "running" | "ok" | "error"
 
@@ -42,7 +43,7 @@ export type Line =
  */
 export type Queued = { text: string; display: string; images: PromptImage[]; saved: Omit<DraftSnapshot, "text"> }
 
-export type DialogName = "connect" | "model" | "skills" | "help" | "mcp" | "tools" | "context" | "sessions" | "memory" | "config"
+export type DialogName = "connect" | "model" | "skills" | "help" | "mcp" | "tools" | "context" | "sessions" | "memory" | "config" | "agents"
 
 export const [state, setState] = createStore({
   lines: [] as Line[],
@@ -94,6 +95,9 @@ export const [state, setState] = createStore({
   agentSlots: { running: 0, waiting: 0, max: 10 },
   /** Every approval request waiting (the head is `approval`). */
   approvals: [] as ApprovalRequest[],
+  /** Subagent types (bundled, user, project) and files that failed to load. */
+  agentDefs: [] as AgentDefinition[],
+  agentProblems: [] as AgentProblem[],
 })
 
 /** Effective context window of the selected model: models.dev limit, capped (see core/compact). */

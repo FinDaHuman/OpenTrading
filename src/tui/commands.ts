@@ -10,6 +10,7 @@ export const COMMANDS: CommandInfo[] = [
   { name: "connect", description: "Nhập API key (Groq, Gemini, NVIDIA và 200+ provider khác)" },
   { name: "model", description: "Chọn model từ mọi provider đã kết nối" },
   { name: "skills", description: "Danh sách skill; bật / tắt skill cho cả phiên" },
+  { name: "agents", description: "Các loại subagent (có sẵn, người dùng, dự án) và tool của từng loại" },
   { name: "skill", args: "<tên>", description: "Bật / tắt một skill cho cả phiên" },
   { name: "profile", description: "Mở hồ sơ nhà đầu tư (INVESTOR.md)" },
   { name: "context", description: "Xem các tầng ngữ cảnh gửi cho model và số token" },

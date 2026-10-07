@@ -37,6 +37,7 @@ import { MemoryDialog } from "./dialogs/memory"
 import { SessionsDialog } from "./dialogs/sessions"
 import { ModelDialog } from "./dialogs/model"
 import { SkillsDialog, toggleSkill } from "./dialogs/skills"
+import { AgentsDialog, reloadAgents } from "./dialogs/agents"
 import { ToolsDialog } from "./dialogs/tools"
 import { Home } from "./home"
 import { attachSubagents, currentSession, recordCompact, recordTurn, resumeFromArgs, startSession } from "./session"
@@ -413,6 +414,10 @@ export function App(props: {
       compactCap: config.compactWindow ?? DEFAULT_COMPACT_WINDOW,
     })
     attachSubagents(props.runtime)
+    await reloadAgents(props.runtime)
+    if (state.agentProblems.length > 0) {
+      pushLine({ kind: "error", text: `${state.agentProblems.length} file subagent bị lỗi và không được nạp. Xem /agents.` })
+    }
     if (config.subagents?.maxConcurrent) props.runtime.subagents.setMax(config.subagents.maxConcurrent)
     setState("agentSlots", props.runtime.subagents.limiter.stats())
     if (props.resume) await resumeFromArgs(props.runtime, props.resume)
@@ -799,6 +804,7 @@ export function App(props: {
       case "sessions":
       case "memory":
       case "config":
+      case "agents":
         return setState("dialog", cmd.name)
       case "profile":
         return void ensureProfile().then(({ file, created }) =>
@@ -977,6 +983,9 @@ export function App(props: {
             </Match>
             <Match when={state.dialog === "skills"}>
               <SkillsDialog />
+            </Match>
+            <Match when={state.dialog === "agents"}>
+              <AgentsDialog runtime={props.runtime} />
             </Match>
             <Match when={state.dialog === "help"}>
               <HelpDialog onRun={(command) => run(command)} />

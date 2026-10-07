@@ -50,7 +50,10 @@ if (import.meta.main) {
   const { loadSkills } = await import("./skills/loader")
   const { parseCommand, parsePromptArgs } = await import("../tui/commands")
   const { skills } = await loadSkills()
+  const { loadAgents } = await import("./agents/loader")
+  const { setAgents } = await import("./runtime")
   const runtime = initRuntime({ skills: () => skills })
+  setAgents(runtime, (await loadAgents()).agents)
   const { registry } = runtime
   const fail = async (message: string) => {
     console.error(message)
