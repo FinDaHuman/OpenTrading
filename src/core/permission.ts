@@ -1,5 +1,5 @@
 import { loadConfig, saveConfig } from "./config"
-import type { ToolDef } from "./tools/types"
+import type { AgentOrigin, ToolDef } from "./tools/types"
 
 /**
  * Asking the user before a tool with side effects runs (writes a file, creates an issue,
@@ -32,6 +32,8 @@ export interface ApprovalRequest {
   description: string
   input: unknown
   annotations?: ToolDef["annotations"]
+  /** The subagent asking (its call is not a row of the main transcript). */
+  agent?: AgentOrigin
 }
 
 export interface Decision {
@@ -92,6 +94,11 @@ export class PermissionGate {
     return this.queue[0]?.request
   }
 
+  /** Every waiting request, oldest first (subagent rows behind the head say "chờ xác nhận" too). */
+  pending(): ApprovalRequest[] {
+    return this.queue.map((p) => p.request)
+  }
+
   onChange(listener: (head: ApprovalRequest | undefined) => void) {
     this.listeners.add(listener)
     return () => this.listeners.delete(listener)
@@ -100,6 +107,20 @@ export class PermissionGate {
   private emit() {
     const head = this.head()
     for (const listener of this.listeners) listener(head)
+    this.emitPending()
+  }
+
+  private pendingListeners = new Set<(pending: ApprovalRequest[]) => void>()
+
+  /** Every change to the queue, not only the head (subagent rows waiting behind it). */
+  onPending(listener: (pending: ApprovalRequest[]) => void) {
+    this.pendingListeners.add(listener)
+    return () => this.pendingListeners.delete(listener)
+  }
+
+  private emitPending() {
+    const pending = this.pending()
+    for (const listener of this.pendingListeners) listener(pending)
   }
 
   private keyOf(def: ToolDef) {
@@ -112,7 +133,7 @@ export class PermissionGate {
   }
 
   /** Resolve before the tool runs. Waiting here never counts against the tool's timeout. */
-  async check(def: ToolDef, input: unknown, signal: AbortSignal, label = def.name, callId?: string): Promise<Decision> {
+  async check(def: ToolDef, input: unknown, signal: AbortSignal, label = def.name, callId?: string, agent?: AgentOrigin): Promise<Decision> {
     if (!needsApproval(def)) return { allow: true }
     const key = this.keyOf(def)
     if (this.session.has(key) || (await this.allowedAlways(def))) return { allow: true }
@@ -128,6 +149,7 @@ export class PermissionGate {
         description: def.description,
         input,
         annotations: def.annotations,
+        ...(agent ? { agent } : {}),
       }
       const onAbort = () => {
         this.queue = this.queue.filter((p) => p.request.id !== request.id)
@@ -137,6 +159,7 @@ export class PermissionGate {
       signal.addEventListener("abort", onAbort, { once: true })
       this.queue.push({ request, key, def, resolve, cleanup: () => signal.removeEventListener("abort", onAbort) })
       if (this.queue.length === 1) this.emit()
+      else this.emitPending()
     })
   }
 

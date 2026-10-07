@@ -4,16 +4,23 @@ import { loadCatalog, type CatalogProvider } from "./catalog"
 
 export class ChatSetupError extends Error {}
 
-export async function resolveTarget(): Promise<{ provider: CatalogProvider; model: string; apiKey: string }> {
+export type Target = { provider: CatalogProvider; model: string; apiKey: string }
+
+/**
+ * The provider, model and key a request goes to: the configured ones, or `override` (a
+ * subagent's own model). An override naming only a model keeps the configured provider.
+ */
+export async function resolveTarget(override?: { provider?: string; model?: string }): Promise<Target> {
   const [config, catalog] = await Promise.all([loadConfig(), loadCatalog()])
-  const id = config.provider ?? (await connectedProviders())[0]
+  const id = override?.provider ?? config.provider ?? (await connectedProviders())[0]
   if (!id) throw new ChatSetupError("Chưa kết nối provider. Gõ /connect để nhập API key.")
   const provider = catalog[id]
   if (!provider) throw new ChatSetupError(`Không tìm thấy provider "${id}" trong danh mục. Gõ /connect.`)
   const apiKey = await getKey(id)
   if (!apiKey) throw new ChatSetupError(`Chưa có API key cho ${provider.name}. Gõ /connect.`)
-  if (!config.model) throw new ChatSetupError("Chưa chọn model. Gõ /model.")
-  return { provider, model: config.model, apiKey }
+  const model = override?.provider ? override.model : (override?.model ?? config.model)
+  if (!model) throw new ChatSetupError("Chưa chọn model. Gõ /model.")
+  return { provider, model, apiKey }
 }
 
 /** Turn SDK/network errors into one readable line. */

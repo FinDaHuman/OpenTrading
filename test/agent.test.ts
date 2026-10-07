@@ -548,7 +548,7 @@ test("a todo_write the tool rejects is recorded as an error, so the list comes f
 test("done carries the context size: provider usage of the last step, else an estimate", async () => {
   usage = { prompt_tokens: 1_234, completion_tokens: 56 }
   const measured = done(await collect(runAgent({ history: [], input: "x", skills: [], registry: registry() })))
-  expect(measured.usage).toEqual({ contextTokens: 1_290, estimated: false })
+  expect(measured.usage).toEqual({ contextTokens: 1_290, estimated: false, total: { input: 1_234, output: 56 } })
   usage = undefined
   const guessed = done(await collect(runAgent({ history: [], input: "x", skills: [], registry: registry() })))
   expect(guessed.usage?.estimated).toBe(true)

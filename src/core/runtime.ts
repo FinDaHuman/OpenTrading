@@ -15,6 +15,7 @@ import { chartDepthTool, chartRenderTool } from "./tools/chart/render"
 import { chartCompareTool } from "./tools/chart/compare"
 import { doctorLocalTool, sessionHistoryTools } from "./tools/session/history"
 import { spawnSubagentTool } from "./tools/subagent/spawn"
+import { SubagentManager } from "./subagents/manager"
 import { toolSearchTool } from "./tools/builtin/tool-search"
 import { todoWriteTool } from "./tools/builtin/todo-write"
 import { webFetchTool } from "./tools/web/fetch"
@@ -34,6 +35,8 @@ export interface Runtime {
   memory: MemoryProvider
   /** Undo the current provider's hook subscriptions. */
   detachMemory?: () => void
+  /** Subagents started by spawn_subagent: progress, limits, stop. */
+  subagents: SubagentManager
 }
 
 export type MemoryChoice = "none" | "file"
@@ -72,7 +75,6 @@ export function initRuntime(opts: { cwd?: string; home?: string; skills: () => S
   for (const tool of localWatchlistTools(home)) registry.register(tool)
   registry.register(webFetchTool())
   registry.register(webSearchTool())
-  registry.register(spawnSubagentTool(registry))
 
   const mcp = new McpManager(registry, {
     home,
@@ -87,7 +89,9 @@ export function initRuntime(opts: { cwd?: string; home?: string; skills: () => S
     }),
   )
   registry.register(toolSearchTool(registry, () => mcp.status().filter((s) => s.state === "connecting").map((s) => s.name)))
-  const runtime: Runtime = { registry, permissions, questions, mcp, hooks: new HookBus(), memory: new NoopMemory() }
+  const subagents = new SubagentManager({ parent: registry, skills: opts.skills, serverInstructions: () => mcp.instructions() })
+  registry.register(spawnSubagentTool(subagents))
+  const runtime: Runtime = { registry, permissions, questions, mcp, hooks: new HookBus(), memory: new NoopMemory(), subagents }
   switchMemory(runtime, opts.memory ?? new NoopMemory())
   return runtime
 }

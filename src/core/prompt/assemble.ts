@@ -62,6 +62,14 @@ export interface AssembleInput {
   mcpInstructions?: { server: string; text: string }[]
   /** The todo list as of history (todo_write); recited every turn while items are open. */
   todos?: Todo[]
+  /**
+   * "subagent": a child run working for the main agent. Its system prompt replaces identity
+   * and style with prompts/subagent.md, keeps the invariants and priority order from
+   * identity.md, and adds the agent type's own instructions.
+   */
+  role?: "main" | "subagent"
+  /** The subagent type's own instructions. */
+  agentPrompt?: string
 }
 
 export interface Assembled {
@@ -81,6 +89,14 @@ export function promptFile(id: string, dir = PROMPTS_DIR): string | undefined {
 }
 
 const tag = (id: string, text: string) => `<${id}>\n${text}\n</${id}>`
+
+/** One `<id>…</id>` block of a prompt file, tags included (the subagent reuses identity's invariants). */
+export function section(text: string | undefined, id: string): string | undefined {
+  if (!text) return undefined
+  const start = text.indexOf(`<${id}>`)
+  const end = text.indexOf(`</${id}>`)
+  return start >= 0 && end > start ? text.slice(start, end + id.length + 3) : undefined
+}
 
 /** Short hash of every prompts/*.md, stored with each session to trace which prompt version answered. */
 export function promptVersion(dir = PROMPTS_DIR): string {
@@ -134,11 +150,19 @@ export function assemble(input: AssembleInput, promptsDir = PROMPTS_DIR): Assemb
   const visible = availableSkills(input.skills, toolSet)
 
   // ── system: static first ─────────────────────────────────────────────
-  add(system, "identity", 1, "system", promptFile("identity", promptsDir))
+  const subagent = input.role === "subagent"
+  if (subagent) {
+    const identity = promptFile("identity", promptsDir)
+    const rules = [section(identity, "bat_bien"), section(identity, "thu_tu_uu_tien")].filter(Boolean).join("\n\n")
+    add(system, "subagent", 1, "system", [promptFile("subagent", promptsDir), rules].filter(Boolean).join("\n\n") || undefined, "identity")
+  } else add(system, "identity", 1, "system", promptFile("identity", promptsDir))
   if (input.tools.length > 0) add(system, "tools", 7, "system", promptFile("tools", promptsDir))
   add(system, "citations", 1, "system", promptFile("citations", promptsDir))
-  add(system, "memory_policy", 4, "system", input.memoryInstructions?.trim() || undefined)
-  add(system, "style", 8, "system", promptFile("style", promptsDir))
+  if (subagent) add(system, "chi_dan_agent", 6, "system", input.agentPrompt?.trim() || undefined, "identity")
+  else {
+    add(system, "memory_policy", 4, "system", input.memoryInstructions?.trim() || undefined)
+    add(system, "style", 8, "system", promptFile("style", promptsDir))
+  }
 
   // ── system: per-session (changes only when skills or tools change) ────
   const always = visible.filter((s) => s.activation === "always")

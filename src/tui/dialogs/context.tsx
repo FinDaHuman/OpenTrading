@@ -1,7 +1,8 @@
 import { pad } from "../ui/text"
 import { AUTO_COMPACT_SHARE, tokensOf } from "../../core/compact"
 import { useKeys } from "../ui/keys"
-import { createResource, For, Match, Switch } from "solid-js"
+import { createResource, For, Match, Show, Switch } from "solid-js"
+import { groupDigits } from "../../core/subagents/result"
 import { previewContext } from "../../core/agent"
 import { describeError } from "../../core/chat"
 import type { LayerReport } from "../../core/prompt/assemble"
@@ -81,6 +82,9 @@ export function ContextDialog(props: { runtime: Runtime }) {
                     window ? ` / ${window} (tự nén ở ${Math.round(window * AUTO_COMPACT_SHARE)})` : ""
                   }`}
                 </text>
+                <Show when={Object.keys(state.agents).length > 0}>
+                  <text fg={color.tx2} wrapMode="none">{subagentLine()}</text>
+                </Show>
                 <text fg={color.tham} marginTop={1} wrapMode="none">
                   {`${pad("Tầng", 6)}${pad("Nội dung", 22)}${pad("Kênh", 11)}${pad("Token", 8)}Ghi chú`}
                 </text>
@@ -103,4 +107,11 @@ export function ContextDialog(props: { runtime: Runtime }) {
       </Switch>
     </DialogFrame>
   )
+}
+
+/** Subagents of this session: count and billed tokens (sum over their requests, not comparable to ctx %). */
+function subagentLine() {
+  const all = Object.values(state.agents)
+  const tokens = all.reduce((n, a) => n + a.usage.input + a.usage.output, 0)
+  return `Subagent: ${all.length} lần · ${groupDigits(tokens)} token tính phí (cộng mọi request của subagent, không tính vào ctx)`
 }

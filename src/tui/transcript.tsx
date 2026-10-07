@@ -4,6 +4,7 @@ import { state, type Line } from "./state"
 import { color, markdownStyle } from "./theme"
 import { truncate } from "./ui/text"
 import { TODO_PREFIX } from "../core/tools/todos"
+import { isSpawn, SubagentRow } from "./subagent-row"
 
 /**
  * The conversation, in Claude Code's style (components/messages/*):
@@ -150,7 +151,7 @@ function Hanging(props: { glyph: string; glyphColor: string; text: string; fg: s
   )
 }
 
-function Row(props: { line: Line; prev?: Line; width: number }) {
+function Row(props: { line: Line; prev?: Line; index: number; width: number }) {
   return (
     <Switch>
       <Match when={props.line.kind === "user"}>
@@ -178,9 +179,12 @@ function Row(props: { line: Line; prev?: Line; width: number }) {
           )
         }}
       </Match>
+      <Match when={isSpawn(props.line) && props.line}>
+        {(line) => <SubagentRow line={line() as ToolLine} index={props.index} width={props.width} />}
+      </Match>
       <Match when={props.line.kind === "tool" && props.line}>
         {/* Consecutive tool calls sit together; a new group gets a blank line above. */}
-        {(line) => <ToolRow line={line() as ToolLine} first={props.prev?.kind !== "tool"} width={props.width} />}
+        {(line) => <ToolRow line={line() as ToolLine} first={props.prev?.kind !== "tool" || isSpawn(props.prev)} width={props.width} />}
       </Match>
       <Match when={props.line.kind === "info"}>
         <Hanging glyph="✻" glyphColor={color.tx3} text={(props.line as Extract<Line, { kind: "info" }>).text} fg={color.tx3} />
@@ -232,7 +236,7 @@ export function Transcript() {
   return (
     <box flexGrow={1} flexShrink={1} minHeight={0} flexDirection="row" justifyContent="center">
       <scrollbox width={width()} stickyScroll stickyStart="bottom" backgroundColor={color.bg} paddingLeft={2} paddingRight={2} paddingBottom={1}>
-        <For each={state.lines}>{(line, i) => <Row line={line} prev={state.lines[i() - 1]} width={width() - 4} />}</For>
+        <For each={state.lines}>{(line, i) => <Row line={line} prev={state.lines[i() - 1]} index={i()} width={width() - 4} />}</For>
       </scrollbox>
     </box>
   )

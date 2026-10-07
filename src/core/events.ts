@@ -7,17 +7,25 @@ import type { ClockSnapshot } from "./prompt/market-clock"
  */
 export type AgentEvent =
   | { type: "text-delta"; text: string }
-  | { type: "tool-start"; callId: string; name: string; label: string; input: unknown }
+  /** `step`: the model request (1, 2, …) that made the call; calls of one step run together. */
+  | { type: "tool-start"; callId: string; name: string; label: string; input: unknown; step: number }
   | { type: "tool-end"; callId: string; ok: boolean; output: string; durationMs: number }
   /** Informational: step limit reached, model without tool support… */
   | { type: "notice"; text: string }
   /** The turn failed; `done` still follows. */
   | { type: "error"; message: string }
+  /** Billed tokens of one model request (sent after each step that reported usage). */
+  | { type: "step-usage"; inputTokens: number; outputTokens: number }
   /** Messages to append to history. Never contains a tool call without its result. */
   | {
       type: "done"
       messages: ModelMessage[]
       clock?: ClockSnapshot
-      /** Context size after this turn: the provider's count, or chars/4 when it gave none. */
-      usage?: { contextTokens: number; estimated: boolean }
+      /**
+       * `contextTokens`: context size after this turn (the provider's count, or chars/4 when it
+       * gave none). `total`: billed tokens of every request in the turn, when reported.
+       */
+      usage?: { contextTokens: number; estimated: boolean; total?: { input: number; output: number } }
+      /** How the turn ended. Hook-blocked turns count as completed. */
+      outcome?: "completed" | "failed" | "aborted"
     }

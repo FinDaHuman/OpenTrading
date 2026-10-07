@@ -25,6 +25,12 @@ export interface Config {
   autoCompact?: "auto" | "off"
   /** Cap on the context window used for the 80% threshold and ctx %. Default 200000. */
   compactWindow?: number
+  /**
+   * Subagents (spawn_subagent). `maxConcurrent`: how many run at once, foreground and
+   * background together (default 10, no upper cap); more wait for a slot. `provider` +
+   * `model`: their model; unset = the session's.
+   */
+  subagents?: { maxConcurrent?: number; provider?: string; model?: string }
 }
 
 export const loadConfig = () => readJson<Config>(configFile(), {})

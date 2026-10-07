@@ -11,6 +11,7 @@ import type { ClockSnapshot } from "../core/prompt/market-clock"
 import type { Skill, SkillProblem } from "../core/skills/schema"
 import type { PromptImage } from "./prompt/image"
 import type { DraftSnapshot } from "./prompt/parts"
+import type { SubagentView } from "../core/subagents/types"
 
 export type ToolStatus = "running" | "ok" | "error"
 
@@ -27,6 +28,8 @@ export type Line =
       durationMs?: number
       /** The user's answer to the approval prompt, shown under the call ("✓ Đã cho phép …"). */
       decision?: string
+      /** Model request that made the call; parallel subagents of one step render as one block. */
+      step?: number
     }
   | { kind: "info"; text: string }
   /** History was compacted here. `summary` is absent when only old tool results were pruned. */
@@ -85,6 +88,12 @@ export const [state, setState] = createStore({
   queue: [] as Queued[],
   /** Effective-window cap (config compactWindow). */
   compactCap: DEFAULT_COMPACT_WINDOW,
+  /** Subagents of this session by id (live progress from the SubagentManager). */
+  agents: {} as Record<string, SubagentView>,
+  /** Subagent slots: running, waiting for a slot, limit (config subagents.maxConcurrent). */
+  agentSlots: { running: 0, waiting: 0, max: 10 },
+  /** Every approval request waiting (the head is `approval`). */
+  approvals: [] as ApprovalRequest[],
 })
 
 /** Effective context window of the selected model: models.dev limit, capped (see core/compact). */
