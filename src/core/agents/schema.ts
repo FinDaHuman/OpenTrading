@@ -22,7 +22,7 @@ export const AgentFrontmatter = z.object({
   model: z.string().optional(),
   /** Model requests per run (default 8). */
   maxSteps: z.number().int().min(1).max(30).optional(),
-})
+}).refine((a) => !a.provider || a.model, { path: ["model"], message: "có provider thì phải ghi cả model" })
 
 export type AgentFrontmatter = z.infer<typeof AgentFrontmatter>
 

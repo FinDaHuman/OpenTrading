@@ -47,6 +47,7 @@ interface AgentInfo {
   tokens?: number
   durationMs?: number
   error?: string
+  notice?: string
   /** Label of the call it is making now. */
   current?: string
   waitingApproval: boolean
@@ -70,6 +71,7 @@ function infoFor(line: ToolLine): AgentInfo {
       tokens: view.usage.input + view.usage.output,
       durationMs: view.endedAt !== undefined ? view.endedAt - (view.startedAt ?? view.createdAt) : undefined,
       error: view.error ?? (line.status === "error" ? line.output : undefined),
+      notice: view.notice,
       current: view.tools.findLast((t) => t.status === "running")?.label,
       waitingApproval: state.approvals.some((r) => r.agent?.id === view.id),
       prompt: view.prompt,
@@ -147,6 +149,9 @@ function Details(props: { info: AgentInfo; prefix: string; width: number }) {
   const lines = (text: string) => text.replace(/\r\n/g, "\n").trimEnd().split("\n")
   return (
     <>
+      <Show when={props.info.notice}>
+        <Prefixed prefix={props.prefix} text={truncate(`△ ${props.info.notice}`, room())} fg={color.tham} />
+      </Show>
       <Show when={props.info.prompt}>
         <Prefixed prefix={props.prefix} text="Yêu cầu:" fg={color.tx2} bold />
         <For each={lines(props.info.prompt!)}>{(row) => <Prefixed prefix={props.prefix} text={truncate(row, room(), true)} fg={color.tx3} />}</For>
@@ -230,6 +235,9 @@ export function SubagentRow(props: { line: ToolLine; index: number; width: numbe
       </Show>
       <Show when={status()}>
         {(s) => <Prefixed prefix={under()} text={truncate(s().text, props.width - under().length)} fg={s().fg} />}
+      </Show>
+      <Show when={info().notice && !state.expandTools}>
+        <Prefixed prefix={detailPrefix()} text={truncate(`△ ${info().notice}`, props.width - detailPrefix().length)} fg={color.tham} />
       </Show>
       <Show when={state.expandTools}>
         <Details info={info()} prefix={detailPrefix()} width={props.width} />

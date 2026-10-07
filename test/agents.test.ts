@@ -25,6 +25,7 @@ test("agent files: frontmatter is validated with readable errors", () => {
   expect(() => parseAgent(agentFile("Tên Hoa"))).toThrow('trường "name"')
   expect(() => parseAgent("---\nname: x\n---\n")).toThrow('trường "description"')
   expect(() => parseAgent(agentFile("x", "maxSteps: 0\n"))).toThrow('trường "maxSteps"')
+  expect(() => parseAgent(agentFile("x", "provider: groq\n"))).toThrow("có provider thì phải ghi cả model")
 })
 
 test("agent roots: project beats user beats bundled; broken files are reported, not thrown", async () => {

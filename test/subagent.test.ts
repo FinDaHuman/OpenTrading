@@ -329,11 +329,12 @@ test("a denied child write reaches the child as a denial; without a UI (headless
 
 test("a subagent model that cannot be used falls back to the session's model", async () => {
   await saveConfig({ provider: "groq", model: "tooly", subagents: { provider: "nokey", model: "x" } })
-  const { registry } = setup()
+  const { registry, manager } = setup()
   parentCalls = [spawn("FPT")]
   const events = await collect(runAgent({ history: [], input: "x", skills: [], registry }))
   expect(ends(events)[0]!.ok).toBe(true)
   expect(childBodies[0]!.model).toBe("tooly")
+  expect(manager.list()[0]!.notice).toContain("dùng model của phiên")
 })
 
 test("the main agent's prompt does not change with the subagent role in place; identity.md is sent whole", async () => {

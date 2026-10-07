@@ -42,6 +42,8 @@ export interface SubagentView {
   /** Final answer (or the partial text after a failure or stop). */
   text: string
   error?: string
+  /** Something the user should know about the run (its model fell back to the session's). */
+  notice?: string
 }
 
 export interface SubagentResult {

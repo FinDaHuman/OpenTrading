@@ -31,6 +31,17 @@ function resolvedTools(runtime: Runtime, def: AgentDefinition) {
     .map((t) => t.name)
 }
 
+/** Why the type's own model would not be used (the run falls back to the session's), if so. */
+function modelProblem(def: AgentDefinition) {
+  if (!def.model) return undefined
+  const provider = def.provider ?? state.provider
+  if (!provider || !state.connected.includes(provider)) return `provider "${provider ?? "?"}" chưa kết nối`
+  const info = state.catalog[provider]?.models[def.model]
+  if (state.catalog[provider] && !info) return `không có model "${def.model}" ở ${providerName(provider)}`
+  if (info?.tool_call === false) return `model "${def.model}" không gọi được tool`
+  return undefined
+}
+
 const modelOf = (def: AgentDefinition) =>
   def.model ? `${def.provider ? `${providerName(def.provider)} · ` : ""}${def.model}` : def.provider ? providerName(def.provider) : "model mặc định"
 
@@ -61,7 +72,7 @@ export function AgentsDialog(props: { runtime: Runtime }) {
             items={[...state.agentDefs].sort((a, b) => ORDER.indexOf(a.source) - ORDER.indexOf(b.source)).map((a) => ({
               label: a.name,
               group: SOURCE[a.source],
-              hint: `${a.overrides ? `ghi đè ${SOURCE[a.overrides]!.toLowerCase()} · ` : ""}${modelOf(a)} · tool: ${toolSummary(a)} · ${a.maxSteps ?? 8} bước · ${a.description}`,
+              hint: `${a.overrides ? `ghi đè ${SOURCE[a.overrides]!.toLowerCase()} · ` : ""}${modelOf(a)}${modelProblem(a) ? " (△ không dùng được)" : ""} · tool: ${toolSummary(a)} · ${a.maxSteps ?? 8} bước · ${a.description}`,
               mark: "●",
               value: a.name,
             }))}
@@ -91,6 +102,9 @@ export function AgentsDialog(props: { runtime: Runtime }) {
             <text fg={color.tx2} marginTop={1}>{`Nguồn: ${SOURCE[def().source]}${def().overrides ? ` (ghi đè bản ${SOURCE[def().overrides!]!.toLowerCase()})` : ""}`}</text>
             <text fg={color.tx2} wrapMode="none">{truncate(`File: ${def().file}`, 100)}</text>
             <text fg={color.tx2}>{`Model: ${modelOf(def())} · tối đa ${def().maxSteps ?? 8} bước`}</text>
+            <Show when={modelProblem(def())}>
+              <text fg={color.tham} wrapMode="word">{`△ ${modelProblem(def())}: subagent loại này sẽ dùng model của phiên.`}</text>
+            </Show>
             <text fg={color.tx2} wrapMode="word">{`Tool khai báo: ${toolSummary(def())}`}</text>
             <text fg={color.tx2} wrapMode="word">{`Tool hiện có (${tools().length}): ${tools().join(", ") || "không có — subagent loại này sẽ không chạy được"}`}</text>
             <Show when={def().body}>

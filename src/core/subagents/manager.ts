@@ -219,6 +219,8 @@ export class SubagentManager {
       this.setup = prepared.catch(() => {})
       const target = await prepared
       run.model = `${target.provider.name} · ${target.model}`
+      const fell = fallback.find((e) => e.type === "notice")
+      if (fell?.type === "notice") run.notice = fell.text
       if (target.provider.models[target.model]?.tool_call === false) {
         throw new Error(`Model ${target.model} không hỗ trợ gọi tool nên không chạy được subagent. Đổi "Model cho subagent" trong /config.`)
       }
