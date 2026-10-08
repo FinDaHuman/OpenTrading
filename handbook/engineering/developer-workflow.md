@@ -2,8 +2,7 @@
 
 ## Setup
 
-Install Python 3.12+ and uv. Run `uv sync --extra dev`, then `uv run opentrading doctor`. Windows PowerShell
-and a POSIX shell are supported; examples avoid shell-specific activation by using `uv run`.
+Install Bun, then run `bun install` and `bun run dev`. Windows PowerShell and a POSIX shell are supported.
 
 ## Adding a tool
 

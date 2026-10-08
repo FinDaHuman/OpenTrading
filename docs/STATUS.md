@@ -66,7 +66,7 @@ Contract cho đồng nghiệp: [docs/contracts.md](contracts.md).
 - Đã thử với key Gemini thật, gồm cả subagent (người dùng xác nhận ngày 07/10/2026). Anthropic và OpenAI chưa thử bằng key thật.
 - Chưa mở trong Windows Terminal thật.
 
-Provider chưa hỗ trợ: xem `ToDoList.txt`.
+Provider chưa hỗ trợ (cần SDK riêng hoặc biến cấu hình thêm) bị ẩn khỏi `/connect`: xem `isSupported()` trong `src/core/providers.ts`.
 
 ## Phần khung harness còn thiếu
 

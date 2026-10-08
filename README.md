@@ -38,7 +38,7 @@ Model có thể giao việc cho **subagent**: chạy song song, chạy nền, ch
 
 **Dùng key Gemini miễn phí?** Quota theo ngày và theo phút rất thấp, và subagent tốn nhiều request. Xem [docs/gemini-limits.md](docs/gemini-limits.md) trước khi dùng.
 
-Danh sách provider và model lấy từ [models.dev](https://models.dev), cùng nguồn với opencode. Danh sách được cache 1 giờ ở `~/.opentrading/cache/models.json`. Các provider cần SDK riêng hoặc cấu hình thêm (Azure, Bedrock, Vertex…) bị ẩn và được ghi trong `ToDoList.txt`.
+Danh sách provider và model lấy từ [models.dev](https://models.dev), cùng nguồn với opencode. Danh sách được cache 1 giờ ở `~/.opentrading/cache/models.json`. Các provider cần SDK riêng hoặc cấu hình thêm (Azure, Bedrock, Vertex…) bị ẩn và được lọc bởi `isSupported()` trong `src/core/providers.ts`.
 
 Key được lưu ở `~/.opentrading/auth.json`, nằm ngoài repo. Có thể đổi thư mục bằng biến `OPENTRADING_HOME`. Nếu provider chưa có key trong file này, chương trình đọc key từ biến môi trường của provider đó, ví dụ `GROQ_API_KEY`, `GEMINI_API_KEY`, `NVIDIA_API_KEY`.
 
@@ -72,7 +72,6 @@ skills/       skill dạng skills/<tên>/SKILL.md (xem docs/contracts.md)
 agents/       loại subagent có sẵn (xem docs/subagents.md)
 market/       lịch phiên giao dịch (dữ liệu, chưa kiểm chứng)
 handbook/     tài liệu thiết kế
-legacy-python/  scaffold Python cũ, giữ lại để làm sidecar quant sau này
 docs/decisions/ các quyết định kiến trúc
 ```
 
