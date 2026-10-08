@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeAll, expect, test } from "bun:test"
 import { mkdtemp, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
+import { ImageRenderable } from "@opentui/core"
 import { testRender } from "@opentui/solid"
 
 // Isolate state from the real ~/.opentrading before any core module loads.
@@ -125,9 +126,65 @@ async function connect(filter: string, key: string) {
 
 test("home screen shows branding and connect hint", async () => {
   const frame = await setup.waitForFrame((f) => f.includes("/connect để bắt đầu"))
-  expect(frame).toContain("▟▀▀▙")
+  await setup.waitFor(() => setup.renderer.root.findDescendantById("open-trading-wordmark") instanceof ImageRenderable)
+  const wordmark = setup.renderer.root.findDescendantById("open-trading-wordmark")
+  expect(wordmark).toBeInstanceOf(ImageRenderable)
+  if (!(wordmark instanceof ImageRenderable)) throw new Error("wordmark image was not rendered")
+  await wordmark.loadPromise
+  const homeCard = setup.renderer.root.findDescendantById("home-card")
+  if (!homeCard) throw new Error("compact home card was not rendered")
+  expect(wordmark.image?.info().hasAlpha).toBe(false)
+  expect(wordmark.image?.width).toBeLessThan(1235)
+  expect(wordmark.image?.height).toBeLessThan(261)
+  const pixels = wordmark.image?.raw("rgba8").data
+  expect(Array.from(pixels?.slice(0, 4) ?? [])).toEqual([7, 12, 18, 255])
+  expect(homeCard.width).toBe(60)
+  expect(homeCard.height).toBe(12)
+  expect(wordmark.width).toBe(60)
+  expect(wordmark.height).toBe(4)
+  expect(wordmark.screenX).toBe(20)
   expect(frame).toContain("Harness AI phân tích chứng khoán Việt Nam")
   show(frame)
+})
+
+test("mouse submit follows Enter and leaves keyboard submit working", async () => {
+  await setup.mockInput.typeText("/hel")
+  const prompt = await setup.waitForFrame((f) => f.includes("tab ↹"))
+  show(prompt)
+  const button = setup.renderer.root.findDescendantById("submit-button")
+  if (!button) throw new Error("submit button was not rendered")
+  const composer = setup.renderer.root.findDescendantById("chat-composer")
+  if (!composer) throw new Error("chat composer was not rendered")
+  const icon = button.findDescendantById("submit-trend-icon")
+  expect(icon).toBeInstanceOf(ImageRenderable)
+  if (!(icon instanceof ImageRenderable)) throw new Error("submit trend icon was not rendered")
+  await icon.loadPromise
+  expect(icon.image?.width).toBe(120)
+  expect(icon.image?.height).toBe(72)
+  expect(icon.image?.info().hasAlpha).toBe(false)
+  const iconPixels = icon.image?.raw("rgba8").data ?? new Uint8Array()
+  const greenPixels = Array.from({ length: iconPixels.length / 4 }, (_, pixel) => pixel * 4).filter(
+    (offset) => iconPixels[offset + 1]! > iconPixels[offset]! + 60 && iconPixels[offset + 1]! > iconPixels[offset + 2]! + 30,
+  )
+  expect(greenPixels.length).toBeGreaterThan(1000)
+  expect(composer.height).toBe(3)
+  expect(button.width).toBe(4)
+  expect(button.height).toBe(1)
+  expect(icon.fit).toBe("fill")
+  expect(icon.height).toBe(1)
+  await setup.mockMouse.click(
+    button.screenX + Math.floor((button.width - 1) / 2),
+    button.screenY + Math.floor((button.height - 1) / 2),
+  )
+  await setup.waitForFrame((f) => f.includes("Phím tắt"))
+  setup.mockInput.pressEscape()
+  await setup.waitFor(() => state.dialog === undefined)
+
+  await setup.mockInput.typeText("/hel")
+  setup.mockInput.pressEnter()
+  await setup.waitForFrame((f) => f.includes("Phím tắt"))
+  setup.mockInput.pressEscape()
+  await setup.waitFor(() => state.dialog === undefined)
 })
 
 test("the slash-command list never overlaps rows, and scrolls with the arrow keys", async () => {

@@ -28,10 +28,10 @@
     "@ai-sdk/xai": "3.0.102",
     "@modelcontextprotocol/sdk": "1.29.0",
     "@openrouter/ai-sdk-provider": "2.9.0",
-    "@opentui/core": "0.4.5",
-    "@opentui/solid": "0.4.5",
+    "@opentui/core": "0.5.14",
+    "@opentui/solid": "0.5.14",
     "ai": "6.0.168",
-    "solid-js": "1.9.10",
+    "solid-js": "1.9.12",
     "zod": "4.6.5"
   },
   "devDependencies": {

@@ -1,150 +1,111 @@
-import { FrameBufferRenderable, RGBA, type OptimizedBuffer, type RenderContext } from "@opentui/core"
+import { NativeImagePool, Renderable, type NativeImage, type OptimizedBuffer, type RenderContext, type RenderableOptions } from "@opentui/core"
 import { extend, useRenderer } from "@opentui/solid"
 import { onCleanup, onMount } from "solid-js"
-import { color, mix } from "./theme"
+import { createMarketScene, type ChartRect } from "./background-market"
+import { MarketPainter } from "./background-painter"
 
-/**
- * "Tape" background: a faint board grid with three drifting price-like traces
- * drawn in braille, and a slow scan beam. Purely decorative — no numbers, so it
- * can never be mistaken for market data.
- */
-
-// Braille characters for a single dot in sub-rows 0..3 of a cell (left column).
-const DOTS = ["⠁", "⠂", "⠄", "⡀"]
-
-interface Trace {
-  tint: string
-  strength: number
-  speed: number
-  freqs: [number, number, number]
-  phase: number
-  offset: number
+type MarketOptions = RenderableOptions<MarketRenderable> & {
+  quiet?: boolean
+  layout: () => { card?: ChartRect; composer?: ChartRect; bottom: number }
 }
 
-const TRACES: Trace[] = [
-  { tint: color.tang, strength: 0.55, speed: 0.9, freqs: [0.045, 0.11, 0.023], phase: 0, offset: -0.18 },
-  { tint: color.san, strength: 0.4, speed: 0.6, freqs: [0.037, 0.083, 0.017], phase: 2.1, offset: 0.12 },
-  { tint: color.tran, strength: 0.3, speed: 0.4, freqs: [0.029, 0.067, 0.013], phase: 4.4, offset: 0.3 },
-]
+class MarketRenderable extends Renderable {
+  quiet = false
+  private readonly layout: MarketOptions["layout"]
+  private readonly seed = Math.floor(Math.random() * 0x7fffffff)
+  private time = 0
+  private painter?: MarketPainter
+  private pool?: NativeImagePool
+  private image?: NativeImage
 
-const BG = RGBA.fromHex(color.bg)
-
-// Colours are quantised to 32 steps and cached so a frame allocates nothing.
-const shades = new Map<string, RGBA[]>()
-function shade(tint: string, k: number): RGBA {
-  let ramp = shades.get(tint)
-  if (!ramp) {
-    ramp = Array.from({ length: 33 }, (_, i) => mix(color.bg, tint, i / 32))
-    shades.set(tint, ramp)
-  }
-  return ramp[Math.max(0, Math.min(32, Math.round(k * 32)))]!
-}
-
-type TapeOptions = Omit<ConstructorParameters<typeof FrameBufferRenderable>[1], "width" | "height"> & {
-  width?: number | `${number}%` | "auto"
-  height?: number | `${number}%` | "auto"
-  calm?: number
-}
-
-class TapeRenderable extends FrameBufferRenderable {
-  private t = 0
-  /** Quietness in the centre so foreground text stays readable (0..1). */
-  calm = 0.75
-
-  constructor(ctx: RenderContext, options: TapeOptions) {
-    const { width, height, calm, ...rest } = options
-    super(ctx, {
-      ...rest,
-      width: typeof width === "number" ? width : 1,
-      height: typeof height === "number" ? height : 1,
-      live: true,
-      respectAlpha: false,
-    })
-    if (width !== undefined && typeof width !== "number") this.width = width
-    if (height !== undefined && typeof height !== "number") this.height = height
-    if (calm !== undefined) this.calm = calm
+  constructor(ctx: RenderContext, options: MarketOptions) {
+    super(ctx, { ...options, live: true })
+    this.layout = options.layout
+    this.quiet = options.quiet ?? false
   }
 
-  protected override renderSelf(buffer: OptimizedBuffer, deltaTime = 0): void {
+  protected override renderSelf(buffer: OptimizedBuffer, deltaTime = 0) {
     if (!this.visible || this.isDestroyed) return
-    this.t += Math.min(deltaTime, 100) / 1000
-    this.paint(this.frameBuffer)
-    super.renderSelf(buffer)
+    this.time += Math.min(deltaTime, 100) / 1000
+    const layout = this.layout()
+    const width = Math.floor(this.width)
+    const height = Math.min(Math.floor(this.height), Math.max(0, layout.bottom))
+    if (width < 1 || height < 1) return
+
+    // Keep thin wicks crisp independently of font glyphs. Native graphics are
+    // used when available; OpenTUI supplies the portable block fallback.
+    const pixelWidth = width * 8
+    const pixelHeight = height * 16
+    if (this.painter?.width !== pixelWidth || this.painter.height !== pixelHeight) {
+      this.image?.dispose()
+      this.image = undefined
+      this.pool?.dispose()
+      this.painter = new MarketPainter(pixelWidth, pixelHeight)
+      this.pool = new NativeImagePool({ width: pixelWidth, height: pixelHeight, capacity: 3 })
+    }
+    const scene = createMarketScene({
+      width,
+      height,
+      card: layout.card ?? { x: (width - 60) / 2, y: (height - 12) / 2, width: 60, height: 12 },
+      volumeBounds: layout.composer,
+      time: this.time,
+      seed: this.seed,
+    })
+    const pixels = this.painter.paint(scene, this.quiet)
+    const next = this.pool!.publishPixels(pixels, { format: "rgba8", alpha: "opaque" })
+    if (next) {
+      this.image?.dispose()
+      this.image = next
+    }
+    if (!this.image) return
+    const resolution = this._ctx.resolution
+    const outputWidth = resolution ? Math.round(width * resolution.width / (this._ctx.terminalWidth || width)) : 0
+    const outputHeight = resolution ? Math.round(height * resolution.height / (this._ctx.terminalHeight || this.height)) : 0
+    buffer.drawImage(this.image, this.screenX, this.screenY, width, height, outputWidth, outputHeight, 0, 0, pixelWidth, pixelHeight, "auto")
   }
 
-  /** 1 at the edges, lower near the centre. */
-  private falloff(x: number, y: number, w: number, h: number) {
-    const dx = (x / w - 0.5) * 2
-    const dy = (y / h - 0.5) * 2
-    const d = Math.min(1, Math.sqrt(dx * dx * 0.8 + dy * dy * 1.4))
-    return 1 - this.calm + this.calm * d
-  }
-
-  private paint(fb: OptimizedBuffer) {
-    const w = fb.width
-    const h = fb.height
-    const t = this.t
-    fb.clear(BG)
-
-    // Scan beam sweeping left → right.
-    const beam = ((t * 9) % (w + 60)) - 30
-    for (let x = Math.max(0, Math.floor(beam - 14)); x < Math.min(w, beam + 14); x++) {
-      const k = 1 - Math.abs(x - beam) / 14
-      fb.fillRect(x, 0, 1, h, shade(color.bg2, k * k))
-    }
-
-    // Board grid dots.
-    const dot = shade(color.rule, 0.9)
-    for (let y = 1; y < h; y += 3) {
-      for (let x = 2; x < w; x += 6) fb.setCell(x, y, "·", dot, BG)
-    }
-
-    // Price-like traces, scrolling left like a ticker tape.
-    for (const tr of TRACES) {
-      for (let x = 0; x < w; x++) {
-        const u = x + t * tr.speed * 12
-        const v =
-          Math.sin(u * tr.freqs[0] + tr.phase) * 0.5 +
-          Math.sin(u * tr.freqs[1] + tr.phase * 1.7) * 0.22 +
-          Math.sin(u * tr.freqs[2] + t * 0.3) * 0.28
-        const sub = (0.5 + tr.offset + v * 0.26) * h * 4
-        const row = Math.floor(sub / 4)
-        if (row < 0 || row >= h) continue
-        const k = tr.strength * this.falloff(x, row, w, h) * (0.55 + 0.45 * Math.sin(x * 0.05 - t * 1.3) ** 2)
-        fb.setCell(x, row, DOTS[Math.floor(sub) & 3]!, shade(tr.tint, k), BG)
-      }
-    }
+  protected override destroySelf() {
+    this.image?.dispose()
+    this.pool?.dispose()
+    super.destroySelf()
   }
 }
 
 declare module "@opentui/solid" {
   interface OpenTUIComponents {
-    ot_tape: typeof TapeRenderable
+    ot_market: typeof MarketRenderable
   }
 }
 
-extend({ ot_tape: TapeRenderable })
+extend({ ot_market: MarketRenderable })
 
-/** `quiet` dims the centre further while a conversation is on screen. */
 export function Background(props: { quiet?: boolean }) {
   const renderer = useRenderer()
-  let prev = renderer.targetFps
+  let previousFps = renderer.targetFps
   onMount(() => {
-    prev = renderer.targetFps
-    renderer.targetFps = 24
+    previousFps = renderer.targetFps
+    renderer.targetFps = 18
   })
-  onCleanup(() => {
-    renderer.targetFps = prev
-  })
+  onCleanup(() => { renderer.targetFps = previousFps })
   return (
-    <ot_tape
+    <ot_market
+      id="market-background"
       position="absolute"
       left={0}
       top={0}
       width="100%"
       height="100%"
       zIndex={0}
-      calm={props.quiet ? 0.93 : 0.72}
+      quiet={props.quiet}
+      layout={() => {
+        const home = renderer.root.findDescendantById("home-card")
+        const composer = renderer.root.findDescendantById("chat-composer")
+        return {
+          card: home ? { x: home.screenX, y: home.screenY, width: home.width, height: home.height } : undefined,
+          composer: composer ? { x: composer.screenX, y: composer.screenY, width: composer.width, height: composer.height } : undefined,
+          bottom: Math.max(0, composer?.screenY ?? renderer.height - 4),
+        }
+      }}
     />
   )
 }

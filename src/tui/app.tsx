@@ -25,6 +25,7 @@ import { ToolsDialog } from "./dialogs/tools"
 import { Home } from "./home"
 import { currentSession, recordTurn, resumeFromArgs, startSession } from "./session"
 import { providerName, pushLine, setState, state, type Line } from "./state"
+import { submitTrendIcon } from "./submit-trend-icon"
 import { color } from "./theme"
 import { Suggestions } from "./suggestions"
 import { Transcript } from "./transcript"
@@ -134,6 +135,7 @@ export function App(props: { runtime: Runtime; resume?: string }) {
   const dims = useTerminalDimensions()
   const [draft, setDraft] = createSignal("")
   const [selected, setSelected] = createSignal(0)
+  const [submitPressed, setSubmitPressed] = createSignal(false)
   let input: InputRenderable | undefined
 
   let exiting = false
@@ -270,6 +272,7 @@ export function App(props: { runtime: Runtime; resume?: string }) {
         </Show>
 
         <box
+          id="chat-composer"
           marginLeft={2}
           marginRight={2}
           border
@@ -280,6 +283,7 @@ export function App(props: { runtime: Runtime; resume?: string }) {
           height={3}
           flexShrink={0}
           paddingLeft={1}
+          alignItems="center"
         >
           <text fg={state.streaming ? color.tham : color.tang}>{"› "}</text>
           <input
@@ -298,6 +302,36 @@ export function App(props: { runtime: Runtime; resume?: string }) {
             }}
             onSubmit={(v: unknown) => run(typeof v === "string" ? v : (input?.value ?? ""))}
           />
+          <box
+            id="submit-button"
+            width={4}
+            height={1}
+            flexShrink={0}
+            marginRight={1}
+            flexDirection="column"
+            alignItems="center"
+            justifyContent="center"
+            backgroundColor={submitPressed() ? color.rule : color.panel}
+            onMouseDown={(event) => {
+              if (event.button !== 0) return
+              event.preventDefault()
+              setSubmitPressed(true)
+              input?.submit()
+            }}
+            onMouseUp={(event) => {
+              if (event.button === 0) setSubmitPressed(false)
+            }}
+            onMouseOut={() => setSubmitPressed(false)}
+          >
+            <image
+              id="submit-trend-icon"
+              source={submitTrendIcon(submitPressed())}
+              fit="fill"
+              protocol="auto"
+              width={4}
+              height={1}
+            />
+          </box>
         </box>
 
         <StatusBar />

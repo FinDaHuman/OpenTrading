@@ -1,5 +1,5 @@
-import { For, Show } from "solid-js"
-import { logo } from "./logo"
+import { createResource, For, Show } from "solid-js"
+import { loadOpenTradingWordmark } from "./logo"
 import { state } from "./state"
 import { color } from "./theme"
 
@@ -12,34 +12,41 @@ const TIPS = [
 ]
 
 export function Home() {
+  const [wordmark] = createResource(loadOpenTradingWordmark)
+
   return (
     // Shrinks (and clips) when the command list needs the room, never the other way round.
     <box flexGrow={1} flexShrink={1} minHeight={0} overflow="hidden" flexDirection="column" alignItems="center" justifyContent="center">
-      {/* Solid card so the animated tape frames the wordmark instead of running through it. */}
+      {/* Keep the supplied reference intact instead of redrawing it with terminal glyphs. */}
       <box
+        id="home-card"
+        width={60}
         flexDirection="column"
         alignItems="center"
         backgroundColor={color.bg}
-        paddingLeft={4}
-        paddingRight={4}
-        paddingTop={1}
-        paddingBottom={1}
+        paddingLeft={0}
+        paddingRight={0}
+        paddingTop={0}
+        paddingBottom={0}
       >
-        <For each={logo.left}>
-          {(row, i) => (
-            <text>
-              <span style={{ fg: color.tx }}>{row}</span>
-              <span style={{ fg: color.tang }}>{"  " + logo.right[i()]}</span>
-            </text>
-          )}
-        </For>
-        <text marginTop={1}>
+        <Show when={wordmark()}>
+          <image
+            id="open-trading-wordmark"
+            source={wordmark()!}
+            fit="fit"
+            protocol="auto"
+            width={60}
+            height={4}
+            flexShrink={1}
+          />
+        </Show>
+        <text>
           <span style={{ fg: color.tang }}>{"▲ "}</span>
           <span style={{ fg: color.tx2 }}>Harness AI phân tích chứng khoán Việt Nam</span>
         </text>
-        <text fg={color.tx3}>bản demo v0 · chưa kết nối dữ liệu thị trường · không phải tư vấn đầu tư</text>
+        <text fg={color.tx3}>bản demo · chưa kết nối dữ liệu · không phải tư vấn đầu tư</text>
 
-        <box marginTop={1} flexDirection="column">
+        <box flexDirection="column">
           <For each={TIPS}>
             {([cmd, desc]) => (
               <text>
@@ -51,7 +58,7 @@ export function Home() {
         </box>
 
         <Show when={!state.provider || !state.model}>
-          <text fg={color.tham} marginTop={1}>
+          <text fg={color.tham}>
             {!state.provider ? "● Chưa kết nối provider — gõ /connect để bắt đầu" : "● Chưa chọn model — gõ /model"}
           </text>
         </Show>
