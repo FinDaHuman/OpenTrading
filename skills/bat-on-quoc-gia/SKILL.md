@@ -57,3 +57,7 @@ Provenance: (1 dòng evidence + URL cho mỗi mục trên)
 **Ví dụ 2:**
 Hỏi: Bất ổn Lào
 Trả lời: Verdict kèm ghi chú trung thực "low-coverage ≠ stable", không suy diễn thành ỔN ĐỊNH.
+
+## Trực quan hóa
+
+Dữ liệu skill này nhận: GDELT counts vs baseline, oil/gold. Sau khi MCP trả data, nếu có thể trực quan hóa: nạp skill `ve-bieu-do`, đối chiếu shape data với bảng chọn hình trong đó (line event counts, line oil/gold), chọn và vẽ biểu đồ phù hợp — không vẽ khi thiếu điểm tối thiểu, không bịa số minh họa.

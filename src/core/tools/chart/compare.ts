@@ -1,10 +1,15 @@
 import { z } from "zod"
 import { LOCAL_SOURCE, type ToolDef } from "../types"
+import type { ChartData } from "./data"
 
 export type ChartCompareInput = {
   title?: string
   series: { label: string; values: number[] }[]
   width?: number
+  ymin?: number
+  ymax?: number
+  times?: string[]
+  unit?: string
 }
 
 const BLOCKS = "▁▂▃▄▅▆▇█"
@@ -35,6 +40,10 @@ export function chartCompareTool(): ToolDef<ChartCompareInput> {
         .max(5)
         .describe("2–5 chuỗi cần so"),
       width: z.number().int().min(10).max(80).optional().describe("Số điểm mỗi dòng (mặc định 40)"),
+      ymin: z.number().optional().describe("Trục y dưới tùy biến (%); bỏ qua nếu để trống"),
+      ymax: z.number().optional().describe("Trục y trên tùy biến (%); cần kèm ymin"),
+      times: z.array(z.string()).max(2000).optional().describe("Nhãn trục X theo thời gian"),
+      unit: z.string().max(10).optional().describe("Đơn vị hiển thị, ví dụ %"),
     }),
     readOnly: true,
     deferrable: true,
@@ -57,10 +66,19 @@ export function chartCompareTool(): ToolDef<ChartCompareInput> {
         const last = changes[i]![changes[i]!.length - 1]!
         return `${s.label.padEnd(labelWidth)} ${spark.padStart(cols)} ${pct(last)}`
       })
-      return [
+      const output = [
         `${input.title ? `${input.title} · ` : ""}% thay đổi từ điểm đầu, cùng thang ${pct(lo)} … ${pct(hi)}:`,
         ...rows,
       ].join("\n")
+      const chart: ChartData = {
+        kind: "compare",
+        ...(input.title ? { title: input.title } : {}),
+        series: input.series,
+        ...(input.ymin !== undefined && input.ymax !== undefined ? { domain: [input.ymin, input.ymax] as [number, number] } : {}),
+        ...(input.times ? { times: input.times } : {}),
+        ...(input.unit ? { unit: input.unit } : {}),
+      }
+      return { output, chart }
     },
   }
 }

@@ -1,6 +1,7 @@
 import type { ModelMessage } from "ai"
 import { DEFAULT_COMPACT_WINDOW, effectiveWindow } from "../core/compact"
 import type { Todo } from "../core/tools/todos"
+import type { ChartData } from "../core/tools/chart/data"
 import { createStore } from "solid-js/store"
 import type { Catalog } from "../core/catalog"
 import type { McpServerStatus } from "../core/mcp/manager"
@@ -33,6 +34,8 @@ export type Line =
       step?: number
     }
   | { kind: "info"; text: string }
+  /** A coloured chart the TUI paints itself (chart_render carried structured data). */
+  | { kind: "chart"; data: ChartData }
   /** History was compacted here. `summary` is absent when only old tool results were pruned. */
   | { kind: "compact"; summary?: string; before?: number; after?: number; pruned?: number }
   | { kind: "error"; text: string }

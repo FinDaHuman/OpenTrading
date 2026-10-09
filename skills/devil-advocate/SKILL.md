@@ -14,7 +14,7 @@ Người dùng hỏi về cổ phiếu họ đã mua hoặc đã thích thì m�
 ## Khi nào dùng
 
 - Dùng khi: user nói đang nắm/đang giữ một mã, hỏi có nên giữ không, rủi ro gì, xin bear case, hoặc yêu cầu phản biện luận điểm mua/giữ.
-- Khi KHÔNG dùng (dùng skill khác thay thế): hỏi định nghĩa thuật ngữ (dùng `explain-term`); xin chart/nến (dùng `ve-bieu-do-ky-thuat`); hỏi cơ chế sàn/phiên/biên độ (dùng `vn-market-basics`).
+- Khi KHÔNG dùng (dùng skill khác thay thế): hỏi định nghĩa thuật ngữ (dùng `explain-term`); xin chart/nến (dùng `ve-bieu-do`); hỏi cơ chế sàn/phiên/biên độ (dùng `vn-market-basics`).
 
 ## Các bước
 

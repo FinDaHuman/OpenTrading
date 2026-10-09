@@ -29,6 +29,7 @@ import { MAX_TOOLS_PER_REQUEST, stripImages, type BuiltToolSet, type ToolRegistr
 import { resolveToolName } from "./tools/search"
 import { TOOL_SEARCH } from "./tools/builtin/tool-search"
 import type { ToolResult } from "./tools/types"
+import type { ChartData } from "./tools/chart/data"
 
 export const DEFAULT_MAX_STEPS = 10
 
@@ -137,6 +138,12 @@ function stringify(value: unknown) {
   } catch {
     return String(value)
   }
+}
+
+/** Structured chart payload a tool carried (TUI paints it coloured); absent for other tools. */
+function chartOf(value: unknown): ChartData | undefined {
+  if (!value || typeof value !== "object" || !("chart" in value)) return undefined
+  return (value as { chart?: ChartData }).chart
 }
 
 /** Assistant messages with no content at all (the empty answer itself) are dropped from history. */
@@ -273,6 +280,7 @@ async function* relay(
             callId: part.toolCallId,
             ok,
             output: ok ? stringify(part.output) : describeError(part.error),
+            chart: ok ? chartOf(part.output) : undefined,
             durationMs: Date.now() - (started.get(part.toolCallId) ?? Date.now()),
           }
           break

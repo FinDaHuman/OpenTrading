@@ -69,3 +69,7 @@ Trả lời (Wave 1 đủ, 2 calls): M-Score/F-score + 4 quý DT/LN + verdict 7 
 **Ví dụ 2:**
 Hỏi: cơ bản FPT
 Trả lời: FPT detail 25 norms × <số> số · M **<số>**, F <số> · KH DT <số>/<số>/<số> · VCB holders SBV <số> · VCB cổ tức 450đ · insider empty là đúng data.
+
+## Trực quan hóa
+
+Dữ liệu skill này nhận: P&L 4 quý (DT/LN theo quý), holders %, dividends, KH năm %. Sau khi MCP trả data, nếu có thể trực quan hóa: nạp skill `ve-bieu-do`, đối chiếu shape data với bảng chọn hình trong đó (stacked P&L cấu phần, waterfall P&L, pie ownership, bar KH/dividends), chọn và vẽ biểu đồ phù hợp — không vẽ khi thiếu điểm tối thiểu, không bịa số minh họa.

@@ -55,3 +55,7 @@ Trình bày kết luận đúng cấu trúc sau:
 **Ví dụ 1:**
 Hỏi: Nghe đồn HPG ... thật không
 Trả lời: `news_symbol("VCB")` → lãi suất VCB <số><số> posts · GDELT "dầu" live · corporate VCB <số> docs · `fireant_thread` (post PNJ <số>) → root + 2 replies thật → verdict 4 cột + phân tích chi tiết + nhãn xác nhận, ≤10 calls. Thiếu 1 trong 4 cột verdict → chưa đạt; thiếu nhãn `CHƯA XÁC NHẬN` cho rumor → chưa đạt.
+
+## Trực quan hóa
+
+Dữ liệu skill này nhận: bảng tin + sentiment score (nếu có). Chỉ vẽ gauge khi có sentiment score; tin tức trình bày bảng, không ép chart. Nạp skill `ve-bieu-do` khi vẽ.

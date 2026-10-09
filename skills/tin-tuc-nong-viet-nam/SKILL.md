@@ -44,3 +44,7 @@ Trình bày kết luận đúng cấu trúc sau, mỗi headline gồm: **tiêu �
 **Ví dụ 1:**
 Hỏi: Tin nóng hôm nay
 Trả lời: Fireant posts <số> (quỹ bình ổn xăng dầu về KBNN; đất nền HN đổi tâm lý; chiến dịch làm sạch mã số thuế) · `news_symbol("VCB")` → posts lãi suất <số><số> → ≥5 headline có provenance, ≤9 calls. Thiếu provenance hoặc thiếu phân loại thì chưa đạt; sentiment không nhãn nguồn thì chưa đạt.
+
+## Trực quan hóa
+
+Dữ liệu skill này nhận: bảng tin + sentiment score (nếu có). Chỉ vẽ gauge khi có sentiment score; tin tức trình bày bảng, không ép chart. Nạp skill `ve-bieu-do` khi vẽ.

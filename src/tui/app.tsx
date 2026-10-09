@@ -277,6 +277,7 @@ async function sendTurn(runtime: Runtime, msg: Outgoing): Promise<boolean> {
             lineIndex((l) => l.kind === "tool" && l.callId === event.callId),
             (l) => Object.assign(l, { status: event.ok ? "ok" : "error", output: event.output, durationMs: event.durationMs }),
           )
+          if (event.ok && event.chart) pushLine({ kind: "chart", data: event.chart })
           if (event.ok && todoCalls.has(event.callId)) {
             const parsed = TodoWriteInput.safeParse(todoCalls.get(event.callId))
             if (parsed.success) setState("liveTodos", parsed.data.todos)

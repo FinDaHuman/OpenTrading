@@ -54,3 +54,7 @@ Trình bày kết luận đúng cấu trúc sau:
 **Ví dụ 1:**
 Hỏi: Rủi ro chính trị toàn cầu
 Trả lời: Fed October <số> "no change" <số> (volume 24h ~<số>M USD) · Brazil presidential event OK · mỗi mục đủ prob_pct + provenance event URL.
+
+## Trực quan hóa
+
+Dữ liệu skill này nhận: odds % per event, GDELT counts. Sau khi MCP trả data, nếu có thể trực quan hóa: nạp skill `ve-bieu-do`, đối chiếu shape data với bảng chọn hình trong đó (bar odds per event, line event counts), chọn và vẽ biểu đồ phù hợp — không vẽ khi thiếu điểm tối thiểu, không bịa số minh họa.

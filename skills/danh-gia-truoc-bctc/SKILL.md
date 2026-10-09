@@ -56,3 +56,7 @@ Partial data (thiếu positioning hoặc kỳ vọng) → verdict partial + unkn
 **Ví dụ 1:**
 Hỏi: Đánh giá trước BCTC HPG
 Trả lời: M **<số>** sạch · F <số> · KH DT <số>/<số>/**<số>** · thưởng CP <số> ex <số> · sentiment heuristic <số> · NN bán ròng · pt <số> phiên → grade B + 6 leg evidence + unknowns, ≤10 calls (reuse legs).
+
+## Trực quan hóa
+
+Dữ liệu skill này nhận: trend giá, consensus, sentiment score, NN flow theo phiên, scenario %. Sau khi MCP trả data, nếu có thể trực quan hóa: nạp skill `ve-bieu-do`, đối chiếu shape data với bảng chọn hình trong đó (line trend, gauge sentiment, waterfall NN flow), chọn và vẽ biểu đồ phù hợp — không vẽ khi thiếu điểm tối thiểu, không bịa số minh họa.
