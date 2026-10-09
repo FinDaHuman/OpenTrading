@@ -1,5 +1,6 @@
 import type { JSONSchema7 } from "@ai-sdk/provider"
 import type { z } from "zod"
+import type { ChartData } from "./chart/data"
 
 export interface ToolContext {
   signal: AbortSignal
@@ -28,6 +29,8 @@ export interface ToolResult {
   title?: string
   /** Images for models that can see them (screenshots, charts); others get a placeholder. */
   images?: ToolImage[]
+  /** Structured chart payload the TUI renders as a coloured chart; never sent to the model. */
+  chart?: ChartData
 }
 
 /**

@@ -1,5 +1,11 @@
 import { z } from "zod"
 import { LOCAL_SOURCE, type ToolDef } from "../types"
+import { renderBoxplot } from "./boxplot"
+import type { ChartData } from "./data"
+import { renderMultiline } from "./multiline"
+import { renderPie } from "./pie"
+import { renderStacked } from "./stacked"
+import { renderWaterfall } from "./waterfall"
 
 /**
  * Chart output is plain text. The model reads it and may copy it into its answer, which
@@ -12,17 +18,41 @@ export const stripAnsi = (text: string) => text.replace(/\x1b\[[0-9;]*[A-Za-z]/g
 /** Widths above this wrap in the transcript's tool output. */
 export const MAX_CHART_WIDTH = 120
 
-const BarSchema = z.object({ o: z.number(), h: z.number(), l: z.number(), c: z.number() })
+const BarSchema = z.object({ o: z.number(), h: z.number(), l: z.number(), c: z.number(), v: z.number().nonnegative().optional() })
 
-const KINDS = ["candlestick", "line", "sparkline", "bar", "histogram", "heatmap", "gauge", "donut", "area", "winloss"] as const
+const KINDS = [
+  "candlestick",
+  "line",
+  "sparkline",
+  "bar",
+  "histogram",
+  "heatmap",
+  "gauge",
+  "donut",
+  "area",
+  "winloss",
+  "pie",
+  "waterfall",
+  "multiline",
+  "stacked",
+  "boxplot",
+  "scatter",
+  "sparkcolumn",
+  "linebox",
+] as const
 
 export type ChartRenderInput = {
   kind: (typeof KINDS)[number]
   symbol?: string
-  bars?: { o: number; h: number; l: number; c: number }[]
+  bars?: { o: number; h: number; l: number; c: number; v?: number }[]
   series?: number[]
   labels?: string[]
   matrix?: number[][]
+  points?: { x: number; y: number }[]
+  groups?: number[]
+  times?: string[]
+  dirs?: boolean[]
+  start?: number
   value?: number
   max?: number
   unit?: string
@@ -35,18 +65,31 @@ export function chartRenderTool(): ToolDef<ChartRenderInput> {
   return {
     name: "chart_render",
     description:
-      "Vẽ biểu đồ dạng text từ dữ liệu đã có. kind: candlestick (bars OHLC ≥5), line/sparkline/area (series), bar (series+labels), histogram (series phân phối), heatmap (matrix), gauge/donut (value+max), winloss (series âm/dương). Dùng sau khi đã gọi tool dữ liệu; không dùng khi chưa có dữ liệu.",
+      "Vẽ biểu đồ dạng text từ dữ liệu đã có. kind: candlestick (bars OHLC ≥5), line/sparkline/sparkcolumn/area/linebox (series), bar (series+labels), histogram (series phân phối), heatmap (matrix), multiline (matrix, mỗi dòng 1 series), stacked (matrix+labels: hàng nhóm, cột thành phần), pie (series+labels, tỷ trọng), waterfall (start+series deltas), boxplot (matrix, mỗi dòng 1 nhóm), scatter (points x,y), gauge/donut (value+max), winloss (series âm/dương). Dùng sau khi đã gọi tool dữ liệu; không dùng khi chưa có dữ liệu.",
     input: z.object({
       kind: z.enum(KINDS).describe("Loại biểu đồ"),
       symbol: z.string().optional().describe("Mã hoặc tiêu đề, ví dụ VCB"),
       bars: z.array(BarSchema).max(500).optional().describe("Nến OHLC cho kind=candlestick (tối thiểu 5)"),
-      series: z.array(z.number()).max(2000).optional().describe("Chuỗi số cho line/sparkline/area/bar/histogram/winloss"),
-      labels: z.array(z.string()).max(200).optional().describe("Nhãn cho bar (mỗi cột) và heatmap (nhãn hàng rồi nhãn cột)"),
-      matrix: z.array(z.array(z.number()).max(30)).max(30).optional().describe("Ma trận cho kind=heatmap"),
+      series: z
+        .array(z.number())
+        .max(2000)
+        .optional()
+        .describe("Chuỗi số cho line/sparkline/sparkcolumn/area/bar/histogram/winloss; deltas cho waterfall"),
+      dirs: z.array(z.boolean()).max(2000).optional().describe("Hướng từng cột sparkcolumn (màu xanh/đỏ theo giá, vd volume kèm close so phiên trước)"),
+      labels: z.array(z.string()).max(200).optional().describe("Nhãn: bar/pie (mỗi cột), waterfall (mỗi bước), multiline/stacked/boxplot/heatmap (nhãn hàng rồi nhãn cột)"),
+      matrix: z
+        .array(z.array(z.number()).max(30))
+        .max(30)
+        .optional()
+        .describe("Ma trận cho kind=heatmap; multiline/boxplot (mỗi dòng 1 series); stacked (mỗi hàng 1 nhóm)"),
+      points: z.array(z.object({ x: z.number(), y: z.number() })).max(500).optional().describe("Điểm (x,y) cho kind=scatter (ít nhất 3)"),
+      groups: z.array(z.number().int().nonnegative()).max(500).optional().describe("Nhóm từng điểm scatter (mỗi nhóm 1 màu + legend)"),
+      times: z.array(z.string()).max(2000).optional().describe("Nhãn trục X theo thời gian (nến/line/area/multiline/spark, vd 09-01)"),
+      start: z.number().optional().describe("Giá trị đầu cho kind=waterfall"),
       value: z.number().optional().describe("Giá trị cho kind=gauge/donut"),
       max: z.number().positive().optional().describe("Thang tối đa cho gauge/donut"),
       unit: z.string().max(10).optional().describe("Đơn vị hiển thị, ví dụ %"),
-      width: z.number().int().min(20).max(MAX_CHART_WIDTH).optional().describe("Rộng (ký tự, mặc định 64)"),
+      width: z.number().int().min(20).max(MAX_CHART_WIDTH).optional().describe("Rộng (ký tự, mặc định theo kind)"),
       height: z.number().int().min(3).max(40).optional().describe("Cao (dòng, mặc định theo kind)"),
     }),
     readOnly: true,
@@ -54,8 +97,56 @@ export function chartRenderTool(): ToolDef<ChartRenderInput> {
     source: LOCAL_SOURCE,
     summarize: (input) => `chart_render ${input.kind}${input.symbol ? ` ${input.symbol}` : ""}`,
     async execute(input) {
-      return stripAnsi(await render(input))
+      const output = stripAnsi(await render(input))
+      const chart = chartDataOf(input)
+      return { output, ...(chart ? { chart } : {}) }
     },
+  }
+}
+
+/**
+ * Structured twin of the text output: what the TUI paints as a coloured chart.
+ * Mirrors the validated input; every field is already range-checked by the schema.
+ */
+export function chartDataOf(input: ChartRenderInput): ChartData {
+  const { kind, symbol } = input
+  const unit = input.unit ? { unit: input.unit } : {}
+  switch (kind) {
+    case "candlestick":
+      return { kind, symbol, bars: input.bars ?? [], ...(input.times ? { times: input.times } : {}), ...unit }
+    case "line":
+    case "area":
+      return { kind, symbol, series: input.series ?? [], ...(input.times ? { times: input.times } : {}), ...unit }
+    case "sparkline":
+    case "linebox":
+      return { kind, symbol, series: input.series ?? [], ...(input.times ? { times: input.times } : {}), ...unit }
+    case "sparkcolumn":
+      return { kind, symbol, series: input.series ?? [], ...unit }
+    case "bar":
+    case "pie":
+    case "winloss":
+    case "histogram":
+      return { kind, symbol, series: input.series ?? [], ...(input.labels ? { labels: input.labels } : {}), ...unit }
+    case "heatmap":
+    case "stacked":
+    case "boxplot":
+      return { kind, symbol, matrix: input.matrix ?? [], ...(input.labels ? { labels: input.labels } : {}), ...unit }
+    case "multiline":
+      return { kind, symbol, matrix: input.matrix ?? [], ...(input.labels ? { labels: input.labels } : {}), ...(input.times ? { times: input.times } : {}), ...unit }
+    case "waterfall":
+      return { kind, symbol, start: input.start ?? 0, series: input.series ?? [], ...(input.labels ? { labels: input.labels } : {}), ...unit }
+    case "scatter":
+      return {
+        kind,
+        symbol,
+        points: input.points ?? [],
+        ...(input.groups ? { groups: input.groups } : {}),
+        ...(input.labels ? { labels: input.labels } : {}),
+        ...unit,
+      }
+    case "gauge":
+    case "donut":
+      return { kind, symbol, value: input.value ?? 0, max: input.max ?? 1, ...unit }
   }
 }
 
@@ -74,14 +165,19 @@ async function render(input: ChartRenderInput): Promise<string> {
     return { value: input.value, max: input.max }
   }
   const withUnit = (out: string) => (input.unit && !out.trimEnd().endsWith(input.unit) ? `${out} ${input.unit}` : out)
+  /** Spark marks scale by absMax (shapeless for price levels like 57→60): shift so min → 0. */
+  const byRange = (s: number[]) => {
+    const min = Math.min(...s)
+    return s.map((v) => v - min)
+  }
 
   switch (input.kind) {
     case "sparkline":
       needSeries(2, "điểm")
-      return head(lib.sparkline(series), `sparkline (${series.length} điểm)`)
+      return head(lib.sparkline(byRange(series)), `sparkline (${series.length} điểm)`)
     case "area":
       needSeries(2, "điểm")
-      return head(lib.sparkArea(series, { width: W(64), height: H(10) }), `area (${series.length} điểm)`)
+      return head(lib.sparkArea(byRange(series), { width: W(64), height: H(10) }), `area (${series.length} điểm)`)
     case "line": {
       needSeries(2, "điểm")
       const rows = series.map((c, t) => ({ t, c }))
@@ -131,7 +227,46 @@ async function render(input: ChartRenderInput): Promise<string> {
     }
     case "winloss":
       needSeries(2, "phiên")
-      return head(series.map((v) => (v >= 0 ? "▲" : "▼")).join(""), `thắng/thua (${series.length} phiên; ▲ tăng, ▼ giảm)`)
+      return head(
+        series.map((v) => `${v >= 0 ? "▲" : "▼"}${v >= 0 ? "+" : ""}${Number(v.toFixed(2))}`).join(" "),
+        `thắng/thua (${series.length} phiên; ▲ tăng, ▼ giảm)`,
+      )
+    case "pie": {
+      const r = renderPie(input)
+      return head(r.body, r.subtitle)
+    }
+    case "waterfall": {
+      const r = renderWaterfall(input)
+      return head(r.body, r.subtitle)
+    }
+    case "multiline": {
+      const r = renderMultiline(input)
+      return head(r.body, r.subtitle)
+    }
+    case "stacked": {
+      const r = renderStacked(input)
+      return head(r.body, r.subtitle)
+    }
+    case "boxplot": {
+      const r = renderBoxplot(input)
+      return head(r.body, r.subtitle)
+    }
+    case "scatter": {
+      const points = input.points ?? []
+      if (points.length < 3) throw new Error(`scatter cần ít nhất 3 điểm (x,y), đang có ${points.length}.`)
+      const rows = points.map((p) => ({ x: p.x, y: p.y }))
+      const builder = lib.chart({ width: W(56), height: H(10) }).data(rows, { xKey: "x" }).scatter({ key: "y" }).xAxis().yAxis()
+      return head(lib.renderToString(builder), `scatter (${points.length} điểm)`)
+    }
+    case "sparkcolumn":
+      needSeries(2, "điểm")
+      return head(lib.sparkColumn(byRange(series)), `sparkcolumn (${series.length} điểm)`)
+    case "linebox": {
+      needSeries(2, "điểm")
+      const rows = series.map((c, t) => ({ t, c }))
+      const builder = lib.chart({ width: W(56), height: H(10), charset: "box" }).data(rows, { xKey: "t" }).line({ key: "c" }).yAxis()
+      return head(lib.renderToString(builder), `linebox (${series.length} điểm)`)
+    }
   }
 }
 
@@ -140,6 +275,7 @@ export type ChartDepthInput = {
   bids: { price: number; volume: number }[]
   asks: { price: number; volume: number }[]
   depth?: number
+  unit?: string
 }
 
 const LevelSchema = z.object({ price: z.number(), volume: z.number().nonnegative() })
@@ -155,6 +291,7 @@ export function chartDepthTool(): ToolDef<ChartDepthInput> {
       bids: z.array(LevelSchema).max(200).describe("Các mức mua (giá + khối lượng)"),
       asks: z.array(LevelSchema).max(200).describe("Các mức bán (giá + khối lượng)"),
       depth: z.number().int().min(1).max(20).optional().describe("Số mức mỗi bên (mặc định 5)"),
+      unit: z.string().max(10).optional().describe("Đơn vị hiển thị, ví dụ kVND"),
     }),
     readOnly: true,
     deferrable: true,
@@ -167,12 +304,21 @@ export function chartDepthTool(): ToolDef<ChartDepthInput> {
       if (bids.length === 0 && asks.length === 0) throw new Error("Sổ lệnh rỗng cả hai bên (ngoài giờ giao dịch thì đúng là vậy); báo trung thực.")
       const maxVol = Math.max(1, ...bids.map((b) => b.volume), ...asks.map((a) => a.volume))
       const bar = (vol: number) => "█".repeat(Math.max(1, Math.round((vol / maxVol) * 16)))
-      return [
+      const output = [
         `${input.symbol ? `${input.symbol} · ` : ""}sổ lệnh (top ${depth}):`,
         ...[...asks].reverse().map((a) => `ASK ${a.price.toFixed(2).padStart(10)} ${bar(a.volume)} ${a.volume}`),
         "──────────── giữa ────────────",
         ...bids.map((b) => `BID ${b.price.toFixed(2).padStart(10)} ${bar(b.volume)} ${b.volume}`),
       ].join("\n")
+      const chart: ChartData = {
+        kind: "depth",
+        ...(input.symbol ? { symbol: input.symbol } : {}),
+        bids: input.bids,
+        asks: input.asks,
+        depth,
+        ...(input.unit ? { unit: input.unit } : {}),
+      }
+      return { output, chart }
     },
   }
 }

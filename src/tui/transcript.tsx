@@ -2,6 +2,7 @@ import { useTerminalDimensions } from "@opentui/solid"
 import { createSignal, For, Match, onCleanup, Show, Switch } from "solid-js"
 import { state, type Line } from "./state"
 import { color, markdownStyle } from "./theme"
+import { ChartBox } from "./ui/chart-box"
 import { truncate } from "./ui/text"
 import { TODO_PREFIX } from "../core/tools/todos"
 import { isSpawn, SubagentRow } from "./subagent-row"
@@ -185,6 +186,9 @@ function Row(props: { line: Line; prev?: Line; index: number; width: number }) {
       <Match when={props.line.kind === "tool" && props.line}>
         {/* Consecutive tool calls sit together; a new group gets a blank line above. */}
         {(line) => <ToolRow line={line() as ToolLine} first={props.prev?.kind !== "tool" || isSpawn(props.prev)} width={props.width} />}
+      </Match>
+      <Match when={props.line.kind === "chart" && props.line}>
+        {(line) => <ChartBox data={(line() as Extract<Line, { kind: "chart" }>).data} width={props.width} />}
       </Match>
       <Match when={props.line.kind === "info"}>
         <Hanging glyph="✻" glyphColor={color.tx3} text={(props.line as Extract<Line, { kind: "info" }>).text} fg={color.tx3} />

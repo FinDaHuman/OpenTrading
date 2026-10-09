@@ -47,3 +47,7 @@ Trình bày kết luận đúng cấu trúc sau:
 **Ví dụ 1:**
 Hỏi: Polymarket đang nóng gì về kinh tế
 Trả lời: Fed T10/<số> no-change <số> (vol <số>M) · Brazil presidential detail OK · sort vol24h hoạt động → ≥5 events + cờ tin-cậy trên từng dòng.
+
+## Trực quan hóa
+
+Dữ liệu skill này nhận: prob_pct per outcome. Sau khi MCP trả data, nếu có thể trực quan hóa: nạp skill `ve-bieu-do`, đối chiếu shape data với bảng chọn hình trong đó (bar odds % per outcome), chọn và vẽ biểu đồ phù hợp — không vẽ khi thiếu điểm tối thiểu, không bịa số minh họa.

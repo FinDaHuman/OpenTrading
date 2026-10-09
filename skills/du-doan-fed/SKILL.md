@@ -53,3 +53,7 @@ Trình bày kết luận đúng cấu trúc sau:
 **Ví dụ 1:**
 Hỏi: Fed tháng tới
 Trả lời: "Fed Decision in October <số>": Yes(no change) <số> / No <số>, volume24h <số>M · curve US10Y <số> không đảo → prob ≥2 kịch bản + lịch họp + 1 dòng hàm ý VN.
+
+## Trực quan hóa
+
+Dữ liệu skill này nhận: odds % per scenario, US10Y/2Y, curve. Sau khi MCP trả data, nếu có thể trực quan hóa: nạp skill `ve-bieu-do`, đối chiếu shape data với bảng chọn hình trong đó (bar odds per scenario, multiline 10Y/2Y, line yield curve), chọn và vẽ biểu đồ phù hợp — không vẽ khi thiếu điểm tối thiểu, không bịa số minh họa.

@@ -40,3 +40,7 @@ Trình bày kết luận đúng cấu trúc sau: 5 headline, mỗi tin gồm **t
 **Ví dụ 1:**
 Hỏi: Tin thế giới
 Trả lời: mega_flows AAPL/MSFT/NVDA OK · fear/greed <số> Greed 7 ngày → ≥5 headline + ≥2 mục reaction định lượng, ≤8 calls. Thiếu reaction số mà không ghi "thị trường chưa phản ánh" → chưa đạt.
+
+## Trực quan hóa
+
+Dữ liệu skill này nhận: bảng tin + sentiment score (nếu có). Chỉ vẽ gauge khi có sentiment score; tin tức trình bày bảng, không ép chart. Nạp skill `ve-bieu-do` khi vẽ.

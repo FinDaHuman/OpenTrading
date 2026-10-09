@@ -48,3 +48,7 @@ Trình bày kết luận đúng cấu trúc sau:
 **Ví dụ 1:**
 Hỏi: Kinh tế Mỹ hiện tại
 Trả lời: US10Y <số> / 2Y <số>, không đảo chiều · WorldBank GDP VN <số> · fear/greed crypto <số> (tham lam) → verdict đủ 5 mục, curve + ≥2 series FRED có số.
+
+## Trực quan hóa
+
+Dữ liệu skill này nhận: 10Y/2Y, CPI, fear/greed, curve. Sau khi MCP trả data, nếu có thể trực quan hóa: nạp skill `ve-bieu-do`, đối chiếu shape data với bảng chọn hình trong đó (multiline 10Y/2Y, line CPI/curve, gauge fear/greed), chọn và vẽ biểu đồ phù hợp — không vẽ khi thiếu điểm tối thiểu, không bịa số minh họa.
