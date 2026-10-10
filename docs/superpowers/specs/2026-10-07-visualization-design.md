@@ -1,5 +1,9 @@
 # Visualization — chart nâng cao trên TUI (design)
 
+> **Lịch sử, đã thay đổi (11/10/2026):** chart giờ vẽ màu trong TUI (ChartBox), model chỉ nhận
+> một dòng tóm tắt và vẽ bằng `from_call` (tham chiếu `[ref rN]` của kết quả tool); một skill
+> `ve-bieu-do` thay cho hai skill dưới đây, và model không chép hình vào câu trả lời.
+
 Ngày: 2026-10-07 · Nhánh: `visualization` · Cơ sở: `main` (f5d62cb)
 
 ## Mục tiêu

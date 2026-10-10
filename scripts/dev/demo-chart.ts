@@ -1,17 +1,18 @@
+import { authFile } from "../../src/core/paths"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js"
-import { chartRenderTool, type ChartRenderInput } from "../src/core/tools/chart/render"
+import { chartRenderTool, type ChartRenderInput } from "../../src/core/tools/chart/render"
 
 /**
  * Demo chart mới: lấy data thật từ OpenTrading MCP rồi chạy qua chart_render.
- * Cách chạy: bun scripts/demo-chart.ts [kind] [symbol]
+ * Cách chạy: bun scripts/dev/demo-chart.ts [kind] [symbol]
  * Không kind = vẽ tất cả kinds mới.
  */
 
 type OhlcvBar = { time: string; open: number; high: number; low: number; close: number; volume: number }
 type Candles = { t: string; o: number; h: number; l: number; c: number; v: number }
 
-const auth = (await Bun.file(`${process.env.HOME}/.opentrading/auth.json`).json()) as Record<string, { key: string }>
+const auth = (await Bun.file(authFile()).json()) as Record<string, { key: string }>
 const token = auth._env_OPENTRADING_MCP_TOKEN?.key
 if (!token) throw new Error("Không thấy token MCP trong ~/.opentrading/auth.json")
 

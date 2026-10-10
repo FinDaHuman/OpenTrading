@@ -1,5 +1,17 @@
 import { deniedMessage, type PermissionGate } from "../permission"
+import { hasDataArray, parseResult, REF_PREFIX, rememberResult } from "./refs"
 import { DEFAULT_MAX_OUTPUT_CHARS, DEFAULT_TIMEOUT_MS, type ToolContext, type ToolDef, type ToolResult } from "./types"
+
+/**
+ * An MCP result holding a data array gets `[ref rN]` up front, and its full text is kept
+ * (refs.ts) before the output cap: charts read the numbers by ref, the model never re-types them.
+ */
+function stampRef(def: ToolDef, output: string) {
+  if (!def.source?.startsWith("mcp:") || output.length > 5_000_000) return output
+  const parsed = parseResult(output)
+  if (parsed === undefined || !hasDataArray(parsed)) return output
+  return `${REF_PREFIX}${rememberResult(def.name, output)}] ${output}`
+}
 
 /**
  * Read/write lock: read-only tools share it, everything else takes it exclusively.
@@ -94,7 +106,7 @@ export async function runTool(def: ToolDef, input: unknown, ctx: ToolContext, lo
       else ctx.signal.addEventListener("abort", onAbort, { once: true })
     })
     const result = await Promise.race([def.execute(input, { ...ctx, signal }), expired, aborted])
-    const output = typeof result === "string" ? result : result.output
+    const output = stampRef(def, typeof result === "string" ? result : result.output)
     const images = typeof result === "string" ? undefined : result.images
     const chart = typeof result === "string" ? undefined : result.chart
     return {

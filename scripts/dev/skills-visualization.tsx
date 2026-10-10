@@ -1,13 +1,14 @@
+import { authFile } from "../../src/core/paths"
 import { render, useKeyboard } from "@opentui/solid"
 import { createSignal } from "solid-js"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js"
-import type { ChartData } from "../src/core/tools/chart/data"
-import type { ToolResult } from "../src/core/tools/types"
-import { chartCompareTool, type ChartCompareInput } from "../src/core/tools/chart/compare"
-import { chartDepthTool, chartRenderTool, type ChartRenderInput } from "../src/core/tools/chart/render"
-import { color } from "../src/tui/theme"
-import { ChartBox } from "../src/tui/ui/chart-box"
+import type { ChartData } from "../../src/core/tools/chart/data"
+import type { ToolResult } from "../../src/core/tools/types"
+import { chartCompareTool, type ChartCompareInput } from "../../src/core/tools/chart/compare"
+import { chartDepthTool, chartRenderTool, type ChartRenderInput } from "../../src/core/tools/chart/render"
+import { color } from "../../src/tui/theme"
+import { ChartBox } from "../../src/tui/ui/chart-box"
 
 /**
  * Data THẬT từng skill có hook Trực quan hóa: fetch MCP → vẽ mọi case + diễn giải.
@@ -28,7 +29,7 @@ type SkillSec = { skill: string; hook: string; load: () => Promise<Page[]> }
 let mcp: Client | undefined
 let mcpError = ""
 try {
-  const auth = (await Bun.file(`${process.env.HOME}/.opentrading/auth.json`).json()) as Record<string, { key: string }>
+  const auth = (await Bun.file(authFile()).json()) as Record<string, { key: string }>
   mcp = new Client({ name: "skills-demo", version: "0.1.0" })
   await mcp.connect(
     new StreamableHTTPClientTransport(new URL("https://opentrading-mcp-web.onrender.com/mcp"), {

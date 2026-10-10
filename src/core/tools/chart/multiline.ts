@@ -6,9 +6,9 @@ const MULTI_CHARS = ["●", "◆", "▲", "■", "★"]
 const fmt = (v: number) => `${Number(v.toFixed(1))}`
 
 /**
- * Several series on ONE axes: each series a different marker char (colour cannot
- * tell lines apart in the TUI, and the lib's multi-line uses the same braille char
- * for every series), segments filled between consecutive points, legend after.
+ * Text twin of the TUI's coloured multiline (headless/tests): several series on one axes,
+ * each a different marker char (no colour in plain text), segments filled between
+ * consecutive points, legend after.
  * Input convention: matrix rows = series, labels = series names.
  */
 export function renderMultiline(input: ChartRenderInput): { subtitle: string; body: string } {

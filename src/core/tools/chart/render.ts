@@ -2,23 +2,29 @@ import { z } from "zod"
 import { LOCAL_SOURCE, type ToolDef } from "../types"
 import { renderBoxplot } from "./boxplot"
 import type { ChartData } from "./data"
+import { extractFromRef } from "./extract"
+import { summarizeChart } from "./summary"
 import { renderMultiline } from "./multiline"
 import { renderPie } from "./pie"
 import { renderStacked } from "./stacked"
 import { renderWaterfall } from "./waterfall"
 
 /**
- * Chart output is plain text. The model reads it and may copy it into its answer, which
- * the TUI renders as markdown; ANSI colour codes would show up there as garbage and
- * roughly double the tokens. Some library marks (gauge, donut) colour unconditionally,
- * so every result is stripped.
+ * The text renderers below validate the input (minimum points) and back the headless tests;
+ * the model gets `summarizeChart` instead of the ASCII art, and the TUI paints the coloured
+ * chart from `chartDataOf`. Some library marks colour unconditionally, so text is stripped.
  */
 export const stripAnsi = (text: string) => text.replace(/\x1b\[[0-9;]*[A-Za-z]/g, "")
 
 /** Widths above this wrap in the transcript's tool output. */
 export const MAX_CHART_WIDTH = 120
 
-const BarSchema = z.object({ o: z.number(), h: z.number(), l: z.number(), c: z.number(), v: z.number().nonnegative().optional() })
+const BarSchema = z
+  .object({ o: z.number(), h: z.number(), l: z.number(), c: z.number(), v: z.number().nonnegative().optional() })
+  .refine((b) => b.h >= Math.max(b.o, b.c) && b.l <= Math.min(b.o, b.c), "Nến sai: cần thấp ≤ mở/đóng ≤ cao")
+
+/** Kinds `from_call` can fill from a stored result; the rest need their numbers passed. */
+const FROM_CALL_KINDS = new Set(["candlestick", "line", "area", "sparkline", "linebox", "sparkcolumn", "histogram", "winloss", "bar", "pie"])
 
 const KINDS = [
   "candlestick",
@@ -43,6 +49,14 @@ const KINDS = [
 
 export type ChartRenderInput = {
   kind: (typeof KINDS)[number]
+  /** `rN` from a tool result's `[ref rN]`: the harness reads the numbers itself. */
+  from_call?: string
+  /** Numeric field to plot (default: close/price/value). */
+  field?: string
+  /** Text field naming each row (bar/pie). */
+  label_field?: string
+  /** Dotted path of the array when the result holds several. */
+  path?: string
   symbol?: string
   bars?: { o: number; h: number; l: number; c: number; v?: number }[]
   series?: number[]
@@ -65,9 +79,13 @@ export function chartRenderTool(): ToolDef<ChartRenderInput> {
   return {
     name: "chart_render",
     description:
-      "Vẽ biểu đồ dạng text từ dữ liệu đã có. kind: candlestick (bars OHLC ≥5), line/sparkline/sparkcolumn/area/linebox (series), bar (series+labels), histogram (series phân phối), heatmap (matrix), multiline (matrix, mỗi dòng 1 series), stacked (matrix+labels: hàng nhóm, cột thành phần), pie (series+labels, tỷ trọng), waterfall (start+series deltas), boxplot (matrix, mỗi dòng 1 nhóm), scatter (points x,y), gauge/donut (value+max), winloss (series âm/dương). Dùng sau khi đã gọi tool dữ liệu; không dùng khi chưa có dữ liệu.",
+      "Vẽ biểu đồ màu trong TUI từ dữ liệu đã có. Ưu tiên from_call: mã rN trong [ref rN] ở đầu kết quả tool dữ liệu — harness tự lấy số, không gõ lại (candlestick, line/area/sparkline/linebox/sparkcolumn/histogram/winloss, bar/pie). Chỉ truyền số tay khi dữ liệu không đến từ tool: candlestick (bars ≥5), line… (series), bar/pie (series+labels), heatmap/multiline/stacked/boxplot (matrix), waterfall (start+series), scatter (points), gauge/donut (value+max). Trả về tóm tắt số để nhận xét; hình tự hiện cho người dùng.",
     input: z.object({
       kind: z.enum(KINDS).describe("Loại biểu đồ"),
+      from_call: z.string().regex(/^r\d+$/, "dạng r12").optional().describe("Mã rN từ [ref rN] của kết quả tool dữ liệu"),
+      field: z.string().max(40).optional().describe("Trường số cần vẽ khi dùng from_call (mặc định giá đóng cửa/giá trị), ví dụ volume"),
+      label_field: z.string().max(40).optional().describe("Trường tên cho bar/pie khi dùng from_call, ví dụ symbol"),
+      path: z.string().max(80).optional().describe("Đường dẫn mảng trong kết quả khi có nhiều mảng, ví dụ data.candles"),
       symbol: z.string().optional().describe("Mã hoặc tiêu đề, ví dụ VCB"),
       bars: z.array(BarSchema).max(500).optional().describe("Nến OHLC cho kind=candlestick (tối thiểu 5)"),
       series: z
@@ -78,8 +96,9 @@ export function chartRenderTool(): ToolDef<ChartRenderInput> {
       dirs: z.array(z.boolean()).max(2000).optional().describe("Hướng từng cột sparkcolumn (màu xanh/đỏ theo giá, vd volume kèm close so phiên trước)"),
       labels: z.array(z.string()).max(200).optional().describe("Nhãn: bar/pie (mỗi cột), waterfall (mỗi bước), multiline/stacked/boxplot/heatmap (nhãn hàng rồi nhãn cột)"),
       matrix: z
-        .array(z.array(z.number()).max(30))
+        .array(z.array(z.number()).max(500))
         .max(30)
+        .refine((m) => m.reduce((a, r) => a + r.length, 0) <= 5000, "matrix tối đa 5000 số")
         .optional()
         .describe("Ma trận cho kind=heatmap; multiline/boxplot (mỗi dòng 1 series); stacked (mỗi hàng 1 nhóm)"),
       points: z.array(z.object({ x: z.number(), y: z.number() })).max(500).optional().describe("Điểm (x,y) cho kind=scatter (ít nhất 3)"),
@@ -95,12 +114,53 @@ export function chartRenderTool(): ToolDef<ChartRenderInput> {
     readOnly: true,
     deferrable: true,
     source: LOCAL_SOURCE,
-    summarize: (input) => `chart_render ${input.kind}${input.symbol ? ` ${input.symbol}` : ""}`,
-    async execute(input) {
-      const output = stripAnsi(await render(input))
+    summarize: (input) => `chart_render ${input.kind}${input.symbol ? ` ${input.symbol}` : ""}${input.from_call ? ` ← ${input.from_call}` : ""}`,
+    async execute(raw) {
+      const input = raw.from_call ? fromCall(raw) : raw
+      checkLengths(input)
+      await render(input) // validates minimum points; the text itself is not sent
       const chart = chartDataOf(input)
-      return { output, ...(chart ? { chart } : {}) }
+      return { output: summarizeChart(chart, raw.from_call ? `${raw.from_call}` : undefined), chart }
     },
+  }
+}
+
+/** Fill a render input from a stored tool result (refs.ts). Explicit numbers are ignored. */
+export function fromCall(input: ChartRenderInput): ChartRenderInput {
+  if (!FROM_CALL_KINDS.has(input.kind)) {
+    throw new Error(`kind ${input.kind} chưa hỗ trợ from_call; truyền số tay (matrix/points/value…).`)
+  }
+  const got = extractFromRef(input.from_call!, {
+    ohlc: input.kind === "candlestick",
+    field: input.field,
+    labelField: input.label_field,
+    path: input.path,
+  })
+  const base = { kind: input.kind, symbol: input.symbol ?? got.symbol, unit: input.unit, width: input.width, height: input.height, from_call: input.from_call }
+  const tail = <T,>(xs: T[] | undefined, max: number) => (xs && xs.length > max ? xs.slice(-max) : xs)
+  if (input.kind === "candlestick") {
+    if (!got.bars?.length) throw new Error(`${input.from_call} không có nến hợp lệ.`)
+    return { ...base, bars: tail(got.bars, 500), times: tail(got.times, 500) }
+  }
+  const series = tail(got.series, 2000) ?? []
+  return {
+    ...base,
+    series,
+    times: tail(got.times, 2000),
+    labels: input.kind === "bar" || input.kind === "pie" ? tail(got.labels, 200) : undefined,
+    dirs: input.kind === "sparkcolumn" ? tail(got.dirs, 2000) : undefined,
+  }
+}
+
+/** `times` and `dirs` describe the data points one to one; a mismatch draws the wrong dates. */
+function checkLengths(input: ChartRenderInput) {
+  const points = input.bars?.length ?? input.series?.length ?? input.matrix?.[0]?.length
+  if (points === undefined) return
+  if (input.times && input.times.length !== points) {
+    throw new Error(`times có ${input.times.length} nhãn nhưng dữ liệu có ${points} điểm; cần bằng nhau (hoặc bỏ times).`)
+  }
+  if (input.dirs && input.series && input.dirs.length !== input.series.length) {
+    throw new Error(`dirs có ${input.dirs.length} phần tử nhưng series có ${input.series.length}.`)
   }
 }
 
@@ -121,7 +181,7 @@ export function chartDataOf(input: ChartRenderInput): ChartData {
     case "linebox":
       return { kind, symbol, series: input.series ?? [], ...(input.times ? { times: input.times } : {}), ...unit }
     case "sparkcolumn":
-      return { kind, symbol, series: input.series ?? [], ...unit }
+      return { kind, symbol, series: input.series ?? [], ...(input.dirs ? { dirs: input.dirs } : {}), ...unit }
     case "bar":
     case "pie":
     case "winloss":
@@ -148,6 +208,11 @@ export function chartDataOf(input: ChartRenderInput): ChartData {
     case "donut":
       return { kind, symbol, value: input.value ?? 0, max: input.max ?? 1, ...unit }
   }
+}
+
+/** Plain-text rendering (headless debugging, tests); throws on too few points. */
+export async function chartText(input: ChartRenderInput) {
+  return stripAnsi(await render(input))
 }
 
 async function render(input: ChartRenderInput): Promise<string> {

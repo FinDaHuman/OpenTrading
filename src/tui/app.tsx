@@ -279,7 +279,10 @@ async function sendTurn(runtime: Runtime, msg: Outgoing): Promise<boolean> {
             lineIndex((l) => l.kind === "tool" && l.callId === event.callId),
             (l) => Object.assign(l, { status: event.ok ? "ok" : "error", output: event.output, durationMs: event.durationMs }),
           )
-          if (event.ok && event.chart) pushLine({ kind: "chart", data: event.chart })
+          if (event.ok && event.chart) {
+            pushLine({ kind: "chart", data: event.chart })
+            currentSession().noteChart(event.callId, event.chart)
+          }
           if (event.ok && todoCalls.has(event.callId)) {
             const parsed = TodoWriteInput.safeParse(todoCalls.get(event.callId))
             if (parsed.success) setState("liveTodos", parsed.data.todos)
@@ -414,6 +417,11 @@ export function App(props: {
     if (view.sessionId === currentSession().id) setState("agents", view.id, reconcile(view))
   })
   const offSlots = subagents.limiter.onChange(() => setState("agentSlots", subagents.limiter.stats()))
+  const offCharts = subagents.onChart((chart, view, callId) => {
+    if (view.sessionId !== currentSession().id) return
+    pushLine({ kind: "chart", data: chart })
+    currentSession().noteChart(callId, chart)
+  })
   // A background subagent finished: a line now, its result to the model when idle.
   const offFinished = subagents.onFinished((view) => {
     if (view.sessionId !== currentSession().id) return
@@ -429,6 +437,7 @@ export function App(props: {
     offPending()
     offAgents()
     offSlots()
+    offCharts()
     offFinished()
   })
   const offApproval = props.runtime.permissions.onChange((head) => {

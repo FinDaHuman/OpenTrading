@@ -1,4 +1,4 @@
-import { For } from "solid-js"
+import { createMemo, For } from "solid-js"
 import { chart, renderToString } from "@crafter/charts"
 import type { RGBA } from "@opentui/core"
 import type { ChartBar, ChartData, ChartPoint } from "../../core/tools/chart/data"
@@ -9,15 +9,24 @@ import { color, mix } from "../theme"
  * the markdown transcript): up candles/bars are bảng-giá green (tăng), down ones
  * red (giảm) — the Vietnamese price-board convention.
  */
-type Cell = { ch: string; fg: string; bg?: string | RGBA; owner?: number }
+type Cell = { ch: string; fg: string; bg?: string | RGBA }
 type TitleRun = { text: string; fg?: string }
 type Grid = Cell[][]
 
 const AXIS = color.tx3
 const UP = color.tang
 const DOWN = color.giam
-/** One colour per series, cycled — the bảng-giá palette. */
-const SERIES_COLORS = [color.tang, color.giam, color.tham, color.san, color.tran]
+/**
+ * Categorical colours for series, cycled. Not the price-board green/red: two tickers drawn
+ * in tăng/giảm colours read as "one up, one down".
+ */
+const SERIES_COLORS = [color.san, color.tham, color.tran, "#6FA8FF", "#F59E5B", "#9AE6B4", color.tx2]
+
+/** Labels from other sources may be NFD (decomposed accents): one glyph must be one cell. */
+const nfc = (text: string | undefined) => text?.normalize("NFC")
+
+/** At most this many legend / list rows per chart; the rest is summed into one row. */
+const MAX_ROWS_LIST = 12
 
 /**
  * Chuẩn khớp trục X giữa mọi chart time-series (antvis skill: line/area format
@@ -36,14 +45,6 @@ function sample<T>(values: T[], width: number): T[] {
 const fmt1 = (v: number) => `${Number(v.toFixed(1))}`
 const fmt2 = (v: number) => `${Number(v.toFixed(2))}`
 const fmt = fmt2
-
-function withAxis(grid: Grid, hi: string, lo: string): Grid {
-  const lw = Math.max(hi.length, lo.length) + 1
-  return grid.map((cells, r) => {
-    const edge = r === 0 ? `${hi}┤` : r === grid.length - 1 ? `${lo}┤` : " │"
-    return [...[...edge.padStart(lw + 1)].map((ch) => ({ ch, fg: AXIS })), ...cells]
-  })
-}
 
 /** Trục Y cố định: ┤/│ luôn ở cột AXIS_COL để mọi chart thẳng hàng. */
 function fixedAxis(grid: Grid, hi: string, lo: string): Grid {
@@ -111,10 +112,6 @@ function alignGrid(cells: Cell[][], markerCol: number, totalCols: number): Grid 
   })
 }
 
-function empty(H: number): Grid {
-  return Array.from({ length: H }, () => [])
-}
-
 type Dataset = { rows: Record<string, number>[]; xKey: string; key: string; mark: "line" | "scatter" }
 
 /**
@@ -151,7 +148,7 @@ function smoothMarks(datasets: Dataset[], colors: string[], plotCols: number, H:
           owner = s
         }
       }
-      row.push({ ch, fg: owner < 0 ? color.tx : (colors[owner % colors.length] ?? color.tx), owner })
+      row.push({ ch, fg: owner < 0 ? color.tx : (colors[owner % colors.length] ?? color.tx) })
     }
     grid.push(row)
   }
@@ -168,6 +165,29 @@ function xLabels(dates: (string | undefined)[], cols: number[], plotCols: number
   return xAxis(dates[0] ?? "1", dates[dates.length - 1] ?? `${dates.length}`, plotCols, cols)
 }
 
+/**
+ * Fit `bars` into `slots` columns by merging neighbours like a longer timeframe would
+ * (open of the first, highest high, lowest low, close of the last, summed volume).
+ * Picking every n-th bar instead dropped the highs and lows of the skipped ones.
+ */
+export function resampleBars(bars: ChartBar[], times: (string | undefined)[], slots: number) {
+  if (bars.length <= slots) return bars.map((b, i) => ({ b, t: times[i] }))
+  return Array.from({ length: slots }, (_, k) => {
+    const from = Math.floor((k * bars.length) / slots)
+    const to = Math.floor(((k + 1) * bars.length) / slots)
+    const group = bars.slice(from, Math.max(to, from + 1))
+    const vols = group.map((g) => g.v).filter((v): v is number => v !== undefined)
+    const b: ChartBar = {
+      o: group[0]!.o,
+      h: Math.max(...group.map((g) => g.h)),
+      l: Math.min(...group.map((g) => g.l)),
+      c: group[group.length - 1]!.c,
+      ...(vols.length > 0 ? { v: vols.reduce((a, v) => a + v, 0) } : {}),
+    }
+    return { b, t: times[Math.max(to, from + 1) - 1] }
+  })
+}
+
 function candles(bars: ChartBar[], symbol: string | undefined, width: number, times?: string[]): Built {
   const H = 12
   const all = bars.flatMap((b) => [b.o, b.h, b.l, b.c])
@@ -179,10 +199,7 @@ function candles(bars: ChartBar[], symbol: string | undefined, width: number, ti
   const hi = dhi + 0.2 * dspan
   const span = hi - lo || 1
   const PW = plotW(width)
-  const zipped = sample(
-    bars.map((b, i) => ({ b, t: times?.[i] })),
-    Math.max(2, Math.floor(PW / 2)),
-  )
+  const zipped = resampleBars(bars, times ?? [], Math.max(2, Math.floor(PW / 2)))
   const cs = zipped.map((z) => z.b)
   const n = cs.length
   // Nến compact dính liền: mỗi nến 2 cột (thân + khoảng) — trục X khớp theo cột nến.
@@ -201,11 +218,12 @@ function candles(bars: ChartBar[], symbol: string | undefined, width: number, ti
       if (ch !== " ") grid[r]![c] = { ch, fg }
     }
   })
-  const first = cs[0]!
-  const last = cs[n - 1]!
+  const first = bars[0]!
+  const last = bars[bars.length - 1]!
   const pct = ((last.c - first.o) / Math.abs(first.o || 1)) * 100
   const dir = last.c >= first.o ? UP : DOWN
-  const axised = fixedAxis(grid, fmt1(dhi), fmt1(dlo))
+  // Row 0 is `hi` and the last row `lo` (the padded range), so those are the labels.
+  const axised = fixedAxis(grid, fmt1(hi), fmt1(lo))
   // Volume pane riêng dưới giá (chuẩn TV): nhỏ, cùng cột nến, màu theo hướng nến.
   const vols = cs.map((b) => b.v ?? 0)
   const hasVol = vols.some((v) => v > 0)
@@ -228,10 +246,10 @@ function candles(bars: ChartBar[], symbol: string | undefined, width: number, ti
   // Trục X khớp cột nến: ngày đầu dưới nến đầu, ngày cuối dưới nến cuối; dài thì quay dọc.
   axised.push(...xLabels(zipped.map((z) => z.t), cs.map((_, i) => colOf(i)), PW))
   const title: TitleRun[] = [
-    { text: `${symbol ? `${symbol} · ` : ""}nến ${n} phiên · ${fmt2(last.c)} ` },
+    { text: `${symbol ? `${symbol} · ` : ""}nến ${bars.length} phiên${n < bars.length ? ` (gộp ${n} cột)` : ""} · ${fmt2(last.c)} ` },
     { text: `${pct >= 0 ? "+" : ""}${pct.toFixed(1)}%`, fg: dir },
   ]
-  if (hasVol) title.push({ text: ` · Vol ${fmtCompact(vols.reduce((s, v) => s + v, 0))}` })
+  if (hasVol) title.push({ text: ` · Vol ${fmtCompact(bars.reduce((s, b) => s + (b.v ?? 0), 0))}` })
   return { title, grid: axised }
 }
 
@@ -599,10 +617,14 @@ function sparkColumn(series: number[], symbol: string | undefined, dirs?: boolea
  * segment theo %, mỗi lát 1 màu + legend đầy đủ.
  */
 function pieBar(series: number[], labels: string[] | undefined, symbol: string | undefined, width: number, sortDesc = true, grayFrom = -1): Built {
-  const rows = series
-    .map((v, i) => ({ label: labels?.[i] ?? `#${i + 1}`, value: v, fg: i >= grayFrom && grayFrom >= 0 ? AXIS : SERIES_COLORS[i % SERIES_COLORS.length]! }))
+  let rows = series
+    .map((v, i) => ({ label: nfc(labels?.[i]) ?? `#${i + 1}`, value: v, fg: i >= grayFrom && grayFrom >= 0 ? AXIS : SERIES_COLORS[i % SERIES_COLORS.length]! }))
     .filter((s) => s.value > 0)
   if (sortDesc) rows.sort((a, b) => b.value - a.value)
+  if (rows.length > MAX_ROWS_LIST) {
+    const rest = rows.slice(MAX_ROWS_LIST - 1)
+    rows = [...rows.slice(0, MAX_ROWS_LIST - 1), { label: `${rest.length} mục khác`, value: rest.reduce((a, r) => a + r.value, 0), fg: AXIS }]
+  }
   const total = rows.reduce((s, r) => s + r.value, 0)
   const barW = Math.min(48, Math.max(20, width - 12))
   const lens = rows.map((s) => Math.max(1, Math.round((s.value / total) * barW)))
@@ -800,6 +822,8 @@ function heatmap(matrix: number[][], labels: string[] | undefined, symbol: strin
   const lo = Math.min(...all)
   const hi = Math.max(...all)
   const span = hi - lo || 1
+  const diverging = lo < 0 && hi > 0
+  const maxAbs = Math.max(Math.abs(lo), Math.abs(hi)) || 1
   const cellW = Math.max(6, ...all.map((v) => fmt(v).length)) + 2
   const grid: Grid = []
   const rowLabelW = Math.max(4, ...(rows ?? []).map((l) => l.length))
@@ -815,8 +839,10 @@ function heatmap(matrix: number[][], labels: string[] | undefined, symbol: strin
     const cells: Cell[] = [...(rows?.[i] ?? `#${i + 1}`).padEnd(rowLabelW)].map((ch) => ({ ch, fg: color.tx }))
     cells.push({ ch: " ", fg: color.tx })
     for (const v of row) {
-      const t = (v - lo) / span
-      const bg = mix(color.san, color.giam, t)
+      // Values on both sides of 0 (a correlation matrix): neutral at 0, red below, green
+      // above. One-signed data keeps the low→high ramp.
+      const t = diverging ? Math.abs(v) / maxAbs : (v - lo) / span
+      const bg = diverging ? mix(color.panel2, v < 0 ? color.giam : color.tang, t) : mix(color.san, color.giam, t)
       const fg = t > 0.55 ? color.bg : color.tx
       const text = fmt(v).padStart(cellW)
       for (const ch of text) cells.push({ ch, fg, bg })
@@ -845,8 +871,17 @@ function gauge(value: number, max: number, unit: string | undefined, symbol: str
   }
 }
 
-function winloss(series: number[], symbol: string | undefined): Built {
+function winloss(series: number[], symbol: string | undefined, width = 80): Built {
   const up = series.filter((v) => v >= 0).length
+  if (series.length > MAX_ROWS_LIST) {
+    // Long runs: one ▲/▼ per session, wrapped to the width, instead of one row each.
+    const per = Math.max(10, width - 4)
+    const grid: Grid = []
+    for (let i = 0; i < series.length; i += per) {
+      grid.push(series.slice(i, i + per).map((v) => ({ ch: v >= 0 ? "▲" : "▼", fg: v >= 0 ? UP : DOWN })))
+    }
+    return { title: [{ text: `${symbol ? `${symbol} · ` : ""}thắng/thua (${up} thắng, ${series.length - up} thua)` }], grid }
+  }
   const grid: Grid = series.map((v, i) => {
     const win = v >= 0
     const cells: Cell[] = [...`Phiên ${i + 1}  `].map((ch) => ({ ch, fg: color.tx }))
@@ -896,6 +931,7 @@ function histogram(series: number[], symbol: string | undefined, width: number):
 
 function compare(series: { label: string; values: number[] }[], title: string | undefined, width: number, domain?: [number, number], times?: string[]): Built {
   const changes = series.map((s) => s.values.map((v) => ((v - s.values[0]!) / Math.abs(s.values[0]!)) * 100))
+  const longest = Math.max(...changes.map((c) => c.length))
   const lo = domain?.[0] ?? Math.min(...changes.flat())
   const hi = domain?.[1] ?? Math.max(...changes.flat())
   // Dải rộng hơn cho đỡ xẹp + dòng trống giữa các mã.
@@ -910,13 +946,17 @@ function compare(series: { label: string; values: number[] }[], title: string | 
     const vals = changes[i]!
     // Mỗi mã cao 9 dòng braille (trục y gấp 3) + GIỮ trục Y riêng của từng chart.
     const SH = 9
-    const mini = smoothMarks(
+    // A shorter series covers only the right part of the plot, so the last points line up
+    // (as the tool description and the text twin promise).
+    const own = Math.max(2, Math.round((cols * vals.length) / longest))
+    const raw = smoothMarks(
       [{ rows: vals.map((c, t) => ({ t, c })), xKey: "t", key: "c", mark: "line" }],
       [fg],
-      cols,
+      own,
       SH,
       [lo, hi],
     )
+    const mini = raw.map((row) => [...row.slice(0, AXIS_COL + 1), ...padL(cols - own), ...row.slice(AXIS_COL + 1)])
     const last = vals[vals.length - 1]!
     const head: Cell[] = [{ ch: "●", fg }, { ch: " ", fg: color.tx }]
     for (const ch of `${s.label} ${last >= 0 ? "+" : ""}${last.toFixed(1)}%`) head.push({ ch, fg })
@@ -1027,7 +1067,7 @@ function buildChartInner(data: ChartData, width: number): Built {
     case "donut":
       return donutBar(data.value, data.max, data.symbol, width)
     case "winloss":
-      return winloss(data.series, data.symbol)
+      return winloss(data.series, data.symbol, width)
     case "histogram": {
       const h = histogram(data.series, data.symbol, width)
       return { title: h.title, grid: h.grid }
@@ -1050,7 +1090,8 @@ function buildChartInner(data: ChartData, width: number): Built {
 }
 
 export function ChartBox(props: { data: ChartData; width: number }) {
-  const built = () => buildChart(props.data, props.width)
+  // Built once per data/width change (it was rebuilt twice per render, for every chart on resize).
+  const built = createMemo(() => buildChart(props.data, props.width))
   return (
     <box flexDirection="column" marginTop={1} flexShrink={0}>
       <text wrapMode="none">
