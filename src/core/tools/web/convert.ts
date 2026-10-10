@@ -32,6 +32,8 @@ function markdowner() {
     turndown.use(gfm)
     turndown.remove(["script", "style", "noscript", "iframe", "form", "button"])
     turndown.remove((node) => node.nodeName.toLowerCase() === "svg")
+    // Images cost tokens and the model cannot see them here.
+    turndown.addRule("no-images", { filter: "img", replacement: () => "" })
   }
   return turndown
 }
@@ -61,10 +63,20 @@ export function htmlToMarkdown(html: string, baseUrl: string): { title?: string;
     return { title: article.title?.trim() || title, markdown: tidy(markdowner().turndown(article.content)), extracted: true }
   }
   for (const el of document.querySelectorAll("nav, header, footer, aside, script, style, noscript, svg, form")) el.remove()
+  // Menus, sidebars and ad slots that are plain divs on many VN news sites.
+  for (const el of document.querySelectorAll("[class], [id]")) {
+    const tag = `${el.getAttribute("class") ?? ""} ${el.getAttribute("id") ?? ""}`.toLowerCase()
+    if (/(^|[\s_-])(menu|nav|navbar|breadcrumb|sidebar|footer|header|banner|ads?|advert|social|share|popup|modal|cookie)([\s_-]|$)/.test(tag)) el.remove()
+  }
   return { title, markdown: tidy(markdowner().turndown(document.body?.innerHTML ?? html)), extracted: false }
 }
 
-const tidy = (md: string) => md.replace(/\n{3,}/g, "\n\n").trim()
+const tidy = (md: string) =>
+  md
+    .replace(/\[\s*\]\([^)]*\)/g, "") // links left empty once images are gone
+    .replace(/^\s*[-*]\s*$/gm, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
 
 /** Text of a PDF (disclosures, broker reports). Scanned PDFs have no text layer: says so. */
 export async function pdfToText(bytes: Uint8Array): Promise<{ text: string; pages: number }> {
