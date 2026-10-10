@@ -23,6 +23,8 @@ import { webFetchTool } from "./tools/web/fetch"
 import { webSearchTool } from "./tools/web/search"
 import { localWatchlistTools } from "./tools/watchlist/local"
 import { ToolRegistry } from "./tools/registry"
+import { matchToolPattern } from "./tools/patterns"
+import { connectedProviders } from "./auth"
 
 export interface Runtime {
   registry: ToolRegistry
@@ -89,6 +91,15 @@ export function initRuntime(opts: { cwd?: string; home?: string; skills: () => S
       mcpStatus: () => mcp.status().map((s) => ({ name: s.name, state: s.state, tools: s.tools })),
       model: async () => (await loadConfig()).model,
       home,
+      providers: () => connectedProviders(),
+      hiddenSkills: () => {
+        const names = new Set(registry.list().map((t) => t.name))
+        return opts
+          .skills()
+          .filter((s) => s.activation !== "manual")
+          .map((s) => ({ name: s.name, missing: (s.requires_tools ?? []).filter((t) => !names.has(t) && matchToolPattern(t, names).length === 0) }))
+          .filter((s) => s.missing.length > 0)
+      },
     }),
   )
   registry.register(toolSearchTool(registry, () => mcp.status().filter((s) => s.state === "connecting").map((s) => s.name)))
