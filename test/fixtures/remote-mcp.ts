@@ -37,7 +37,8 @@ function mcpServer(stats?: CallStats) {
         return { content: [{ type: "text", text: `waited ${ms}` }] }
       },
     )
-    server.registerTool("note", { description: "Write a note.", inputSchema: { text: z.string() } }, async ({ text }) => {
+    server.registerTool("note", { description: "Write a note.", inputSchema: { text: z.string(), ms: z.number().optional() } }, async ({ text, ms }) => {
+      if (ms) await Bun.sleep(ms)
       stats.notes++
       return { content: [{ type: "text", text: `saved ${text}` }] }
     })
@@ -114,6 +115,13 @@ export function startHttpServer(opts: HttpServerOptions = {}) {
   let failuresLeft = opts.failFirst?.count ?? 0
   /** Answer the next N tools/call POSTs like a PaaS proxy whose app is restarting. */
   const failCalls = { count: 0, status: 502 }
+  /** While `status` is set, every /mcp request gets that status and an HTML page (the app is down). */
+  const down = { status: 0 }
+  const page = (status: number) =>
+    new Response(`<!DOCTYPE html><html><head><title>${status} Bad Gateway</title></head><body>${"x".repeat(5000)}</body></html>`, {
+      status,
+      headers: { "content-type": "text/html" },
+    })
   let base = ""
 
   const issue = () => {
@@ -189,14 +197,12 @@ export function startHttpServer(opts: HttpServerOptions = {}) {
       }
       if (opts.token && auth !== `Bearer ${opts.token}`) return new Response("unauthorized", { status: 401 })
 
+      if (down.status) return page(down.status)
       if (req.method === "POST" && failCalls.count > 0) {
         const body = (await req.clone().json().catch(() => ({}))) as { method?: string }
         if (body.method === "tools/call") {
           failCalls.count--
-          return new Response(`<!DOCTYPE html><html><head><title>${failCalls.status} Bad Gateway</title></head><body>${"x".repeat(5000)}</body></html>`, {
-            status: failCalls.status,
-            headers: { "content-type": "text/html" },
-          })
+          return page(failCalls.status)
         }
       }
       const sid = req.headers.get("mcp-session-id")
@@ -228,6 +234,7 @@ export function startHttpServer(opts: HttpServerOptions = {}) {
     validTokens,
     registrations,
     failCalls,
+    down,
     stop: () => server.stop(true),
   }
 }

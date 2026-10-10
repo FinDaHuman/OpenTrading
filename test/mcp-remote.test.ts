@@ -491,6 +491,46 @@ test("a read-only call is retried after a 502 page; a write call is not, and the
   expect(typeof saved === "string" ? saved : saved.output).toContain("saved b")
 }, 20_000)
 
+test("the server dies with calls in flight: read-only calls finish after it is back, a write fails fast", async () => {
+  const stats = newStats()
+  const first = startHttpServer({ stats })
+  const { manager, registry } = await managerWith({ data: { type: "http", url: first.url } })
+  ;(manager as unknown as { opts: { callRetryDelaysMs: number[] } }).opts.callRetryDelaysMs = [20, 20]
+  await manager.start()
+  const slow = registry.get("mcp__data__slow")!
+  const note = registry.get("mcp__data__note")!
+  const reads = Array.from({ length: 3 }, () => slow.execute({ ms: 500 }, ctx))
+  const write = errorOf(Promise.resolve(note.execute({ text: "a", ms: 500 }, ctx)))
+  await Bun.sleep(100)
+  first.stop()
+  const writeError = await Promise.race([write, Bun.sleep(3000).then(() => "(hang)")])
+  expect(writeError).toContain("lỗi tạm thời")
+  expect(writeError).toContain("không tự thử lại")
+  const again = startHttpServer({ port: first.port, stats })
+  cleanups.push(again.stop)
+  const results = await Promise.all(reads)
+  for (const r of results) expect(typeof r === "string" ? r : r.output).toContain("waited 500")
+}, 20_000)
+
+test("a host answering 502 to everything while it restarts: calls wait for one reconnect, then succeed", async () => {
+  const stats = newStats()
+  const remote = startHttpServer({ stats })
+  cleanups.push(remote.stop)
+  const { manager, registry } = await managerWith({ data: { type: "http", url: remote.url } })
+  ;(manager as unknown as { opts: { callRetryDelaysMs: number[] } }).opts.callRetryDelaysMs = [20, 20]
+  await manager.start()
+  const slow = registry.get("mcp__data__slow")!
+  remote.down.status = 502
+  const calls = Array.from({ length: 3 }, () => slow.execute({ ms: 1 }, ctx))
+  await Bun.sleep(800)
+  // Retries alone (20ms + 20ms) are long over: the calls are waiting on the reconnect.
+  expect(state(manager, "data").state).not.toBe("connected")
+  remote.down.status = 0
+  const results = await Promise.all(calls)
+  for (const r of results) expect(typeof r === "string" ? r : r.output).toContain("waited 1")
+  expect(stats.calls).toBe(3)
+}, 20_000)
+
 test("tool calls to one server are capped at maxConcurrent (default 4), the rest queue", async () => {
   const stats = newStats()
   const remote = startHttpServer({ stats })

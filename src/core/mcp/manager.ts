@@ -326,6 +326,10 @@ export class McpManager {
   private limiters = new Map<string, Limiter>()
   /** Servers with a reconnect loop running, so a waiting call does not start a second one. */
   private reconnecting = new Set<string>()
+  /** Cuts the reconnect loop's current back-off short: a call is waiting, try now. */
+  private wakers = new Map<string, () => void>()
+  /** One health probe per connection after a 5xx, shared by every call that saw it. */
+  private probes = new WeakMap<Live, Promise<void>>()
   private stopping = false
   private trustStore: TrustStore
 
@@ -639,7 +643,14 @@ export class McpManager {
         if (!this.current(entry.name, gen)) return
         const last = i > 0 ? this.statuses.get(entry.name)?.error : undefined
         this.set(entry.name, { state: "connecting", error: `Mất kết nối — đang thử lại lần ${i + 1}${last ? ` (${last.slice(0, 120)})` : ""}…` })
-        await sleep(delays[Math.min(i, delays.length - 1)] ?? 1000)
+        await new Promise<void>((resolve) => {
+          const timer = setTimeout(resolve, delays[Math.min(i, delays.length - 1)] ?? 1000)
+          this.wakers.set(entry.name, () => {
+            clearTimeout(timer)
+            resolve()
+          })
+        })
+        this.wakers.delete(entry.name)
         if (!this.current(entry.name, gen)) return
         await this.connect(entry)
         if (this.statuses.get(entry.name)?.state !== "failed") return
@@ -666,6 +677,8 @@ export class McpManager {
     if (!entry?.config || !isRemote(entry.config) || stuck(status)) throw notConnected(status)
     // Failed for good (e.g. it was still down when the app started): start trying again.
     if (status?.state === "failed" && !this.reconnecting.has(name)) void this.reconnectLoop(entry, this.generation.get(name) ?? 0)
+    // Someone is waiting: don't let a 30s back-off outlast the wait.
+    else this.wakers.get(name)?.()
     return new Promise<Live>((resolve, reject) => {
       let off = () => {}
       let timer: ReturnType<typeof setTimeout> | undefined
@@ -698,6 +711,24 @@ export class McpManager {
       off = this.onChange(check)
       check()
     })
+  }
+
+  /**
+   * A call got 502/503/504. A PaaS proxy answers like that while the app behind it
+   * restarts, but so does one overloaded request. Ping once (shared by every call that
+   * saw it): if the server does not answer either, treat the connection as dead so
+   * callers wait for one reconnect instead of each retrying on their own.
+   */
+  private probe(live: Live) {
+    let pending = this.probes.get(live)
+    if (!pending) {
+      pending = live.client
+        .ping({ timeout: 5_000 })
+        .then(() => {}, () => live.drop?.())
+        .finally(() => this.probes.delete(live))
+      this.probes.set(live, pending)
+    }
+    return pending
   }
 
   private limiter(name: string) {
@@ -901,7 +932,7 @@ export class McpManager {
         },
         permissionScope,
         // The wrapper's own timer is a backstop; the SDK enforces the real per-call timeout.
-        // Room for waiting on a reconnect, the server's queue and one retry of a read-only call.
+        // Room for waiting on a reconnect and the server's queue, and for retries of a read-only call.
         timeoutMs: (tool.annotations?.readOnlyHint ? 2 : 1) * toolTimeoutMs + startupTimeoutMs + 5_000,
         maxOutputChars: config.maxOutputChars,
         summarize: (input) => `${name} · ${tool.name}(${compactArgs(input)})`,
@@ -923,6 +954,8 @@ export class McpManager {
           // At most `maxConcurrent` calls hit the server at once; queueing is not call time
           // (the SDK timeout starts with the request).
           const limited = async (live: Live) => {
+            // Local (stdio) servers are not capped: they share our machine, not a tiny host.
+            if (!isRemote(config)) return call(live)
             const release = await this.limiter(name).acquire(ctx.signal)
             try {
               return await call(live)
@@ -954,6 +987,7 @@ export class McpManager {
               // The connection itself died: reconnect in the background; the next attempt
               // (or the model's next call) waits for it in `ready`.
               if (isConnectionLost(error)) live.drop?.()
+              else if ([502, 503, 504].includes(httpStatus(error) ?? 0)) await this.probe(live)
               if (attempt >= retries) {
                 const status = httpStatus(error)
                 const why = status ? `HTTP ${status}` : errorText(error)
