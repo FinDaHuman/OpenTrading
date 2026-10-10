@@ -34,7 +34,11 @@ Chạy `vn_company` · `vs_company_info` · `vs_industry_tree`. Lấy ngành GIC
 
 **Bước 2b: Chart giá (tool local, không tốn budget remote).**
 
-Dùng lại nến đã có trong context (từ Bước 1 `vn_quote_history` hoặc sub-skill kỹ thuật) → gọi `chart_render` (local, kind=`candlestick` ≥5 nến) rồi chép hình vào verdict cuối, trong khối code ```. Không fetch lại nến chỉ để vẽ; chưa có nến thì bỏ qua chart, không thêm call data. Chi tiết các loại biểu đồ xem `ve-bieu-do-ky-thuat`.
+Dùng lại nến đã có trong context (từ Bước 1 `vn_quote_history` hoặc sub-skill kỹ thuật) → nạp skill `ve-bieu-do`, đối chiếu shape và vẽ (chart màu tự hiện trong TUI, chỉ verdict không chép hình). Không fetch lại nến chỉ để vẽ; chưa có nến thì bỏ qua chart, không thêm call data.
+
+## Trực quan hóa
+
+Dữ liệu skill này nhận: chuỗi OHLC/giá (nến 30–90 phiên), P&L 4 quý (DT/LN theo quý). Sau khi MCP trả data, nếu có thể trực quan hóa: nạp skill `ve-bieu-do`, đối chiếu shape data với bảng chọn hình trong đó (nến+volume, stacked P&L), chọn và vẽ biểu đồ phù hợp — không vẽ khi thiếu điểm tối thiểu, không bịa số minh họa.
 
 **Bước 3-4: Dispatch kỹ thuật + định giá (không gọi tool gốc).**
 

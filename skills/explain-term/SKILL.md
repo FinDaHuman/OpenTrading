@@ -14,7 +14,7 @@ Trả lời đúng 5 bước, gọn nhẹ, không lan sang phân tích mã hay k
 ## Khi nào dùng
 
 - Dùng khi: user hỏi một thuật ngữ, chỉ số hoặc khái niệm là gì (P/E, EPS, ROE, margin, ATO/ATC, room ngoại, T+2...).
-- Khi KHÔNG dùng (dùng skill khác thay thế): phản biện luận điểm mua/giữ (dùng `devil-advocate`); phân tích mã cụ thể (dùng `phan-tich-chuyen-sau-1-ma`); vẽ chart (dùng `ve-bieu-do-ky-thuat`).
+- Khi KHÔNG dùng (dùng skill khác thay thế): phản biện luận điểm mua/giữ (dùng `devil-advocate`); phân tích mã cụ thể (dùng `phan-tich-chuyen-sau-1-ma`); vẽ chart (dùng `ve-bieu-do`).
 
 ## Các bước
 

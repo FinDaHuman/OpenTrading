@@ -51,3 +51,7 @@ Trình bày kết luận đúng cấu trúc sau, mỗi mục ghi số + provenan
 **Ví dụ 1:**
 Hỏi: So sánh bank
 Trả lời: compare_equities VCB-vs-HPG <số>s · peer_compare cap 6 · vs_gics_index 3 nhóm live · quote_batch 1 request VN30 · HOSE universe <số> mã → peer list ≤6 + sub-skill calls có giới hạn + bảng xếp hạng, ≤8 calls nhà.
+
+## Trực quan hóa
+
+Dữ liệu skill này nhận: PE/ROE/momentum theo peers, correlation. Sau khi MCP trả data, nếu có thể trực quan hóa: nạp skill `ve-bieu-do`, đối chiếu shape data với bảng chọn hình trong đó (bar so 1 metric, multiline PE series cùng đơn vị, heatmap correlation), chọn và vẽ biểu đồ phù hợp — không vẽ khi thiếu điểm tối thiểu, không bịa số minh họa.

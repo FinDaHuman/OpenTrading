@@ -9,19 +9,12 @@
 5. Open a small pull request that explains the trigger, resulting behavior, and validation.
 
 ```shell
-uv sync --extra dev
-uv run ruff check .
-uv run ruff format --check .
-uv run mypy
-uv run pytest --cov
-uv run python scripts/check_docs.py
-uv run python scripts/check_secrets.py
-uv build
-uv run python scripts/smoke_wheel.py
+bun install --frozen-lockfile
+bun run typecheck
+bun test
 ```
 
-Install local hooks only if desired: `uv run pre-commit install`. Hooks are a convenience;
-CI is the source of truth.
+CI runs the same commands and is the source of truth.
 
 ## Review rules
 

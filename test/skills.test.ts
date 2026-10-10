@@ -69,6 +69,8 @@ test("the bundled skills all load cleanly", async () => {
   expect(problems).toEqual([])
   expect(skills.map((s) => s.name)).toEqual([
     "bat-on-quoc-gia",
+    "chu-ky-tai-san-the-gioi",
+    "chu-ky-tai-san-vn",
     "co-ban-chuyen-sau",
     "danh-gia-tinh-hinh-chinh-tri-toan-cau",
     "danh-gia-tinh-hinh-xung-dot",
@@ -77,6 +79,7 @@ test("the bundled skills all load cleanly", async () => {
     "danh-gia-vi-mo-viet-nam",
     "devil-advocate",
     "dinh-gia-chuyen-sau",
+    "dinh-vi-chu-ky-vn",
     "du-doan-fed",
     "du-doan-polymarket",
     "explain-term",
@@ -92,9 +95,20 @@ test("the bundled skills all load cleanly", async () => {
     "tim-kiem-tin-tuc",
     "tin-tuc-nong-quoc-te",
     "tin-tuc-nong-viet-nam",
-    "ve-bieu-do-ky-thuat",
+    "ve-bieu-do",
     "vn-market-basics",
   ])
+})
+
+test("ve-bieu-do references đọc được qua load_skill file=", async () => {
+  const { skills } = await loadSkills(skillRoots(await root()).filter((r) => r.source === "bundled"))
+  const viz = skills.find((s) => s.name === "ve-bieu-do")!
+  expect(viz.requires_tools).toEqual(["chart_render", "chart_compare", "chart_depth"])
+  for (const f of ["references/choosing-a-form.md", "references/time-series.md", "references/comparison.md", "references/part-to-whole.md", "references/relationship.md", "references/anti-patterns.md"]) {
+    const body = await readSkillFile(viz, f)
+    expect(body.length).toBeGreaterThan(100)
+  }
+  await expect(readSkillFile(viz, "../SKILL.md")).rejects.toThrow("nằm ngoài thư mục")
 })
 
 test("supporting files are readable only inside the skill directory", async () => {
@@ -156,4 +170,64 @@ test("trigger keywords match without Vietnamese diacritics, on word boundaries",
   expect(matchTriggers("hãy phan bien luận điểm FPT", skills).map((s) => s.name)).toEqual(["devil"])
   expect(matchTriggers("NIM của VCB?", skills).map((s) => s.name)).toEqual(["bank"])
   expect(matchTriggers("animation", skills)).toEqual([]) // "nim" inside a word does not count
+})
+
+test("analysis skills có hook Trực quan hóa trỏ về ve-bieu-do", async () => {
+  const { skills } = await loadSkills(skillRoots(await root()).filter((r) => r.source === "bundled"))
+  const withHook = [
+    "bat-on-quoc-gia", "co-ban-chuyen-sau", "danh-gia-tinh-hinh-chinh-tri-toan-cau", "danh-gia-tinh-hinh-xung-dot",
+    "danh-gia-truoc-bctc", "danh-gia-vi-mo-quoc-te", "danh-gia-vi-mo-viet-nam", "dinh-gia-chuyen-sau",
+    "du-doan-fed", "du-doan-polymarket", "kiem-chien-luoc-backtest", "ky-thuat-chuyen-sau",
+    "nhip-dap-crypto", "phan-tich-chuyen-sau-1-ma", "phan-tich-sentiment", "phan-tich-vang-ty-gia",
+    "so-sanh-cung-nganh", "tim-co-hoi-bao-cao-ctck", "tim-kiem-tin-tuc", "tin-tuc-nong-quoc-te", "tin-tuc-nong-viet-nam",
+  ]
+  for (const name of withHook) {
+    const s = skills.find((x) => x.name === name)!
+    expect(s, name).toBeDefined()
+    expect(s.body).toContain("## Trực quan hóa")
+    expect(s.body).toContain("ve-bieu-do")
+  }
+  // Skill thuần lý luận không ép chart.
+  for (const name of ["devil-advocate", "explain-term", "vn-market-basics", "kiem-tra-nguon-du-lieu"]) {
+    expect(skills.find((x) => x.name === name)!.body).not.toContain("## Trực quan hóa")
+  }
+})
+
+test("ve-bieu-do được gợi ý khi hỏi vẽ chart + có trong catalog", async () => {
+  const { skills } = await loadSkills(skillRoots(await root()).filter((r) => r.source === "bundled"))
+  expect(matchTriggers("vẽ biểu đồ nến VCB", skills).map((s) => s.name)).toContain("ve-bieu-do")
+  expect(matchTriggers("ve bieu do tron", skills).map((s) => s.name)).toContain("ve-bieu-do")
+  const catalog = renderCatalog(skills, 10_000)!
+  expect(catalog.text).toContain("- ve-bieu-do:")
+  expect(catalog.text).toContain("trực quan hóa")
+})
+
+test("cây quyết định choosing-a-form bao phủ đủ kinds + có lưới an toàn", async () => {
+  const { skills } = await loadSkills(skillRoots(await root()).filter((r) => r.source === "bundled"))
+  const viz = skills.find((s) => s.name === "ve-bieu-do")!
+  const tree = await readSkillFile(viz, "references/choosing-a-form.md")
+  // Đủ 9 nút Q0–Q8 theo đúng thứ tự duyệt.
+  for (const q of ["Q0.", "Q1.", "Q2.", "Q3.", "Q3b.", "Q4.", "Q5.", "Q6.", "Q7.", "Q8."]) {
+    expect(tree, `thiếu nút ${q}`).toContain(q)
+  }
+  // Mọi kind tool hỗ trợ đều xuất hiện trong cây (không chart mồ côi).
+  for (const kind of ["candlestick", "line", "area", "sparkline", "sparkcolumn", "linebox", "multiline", "chart_compare", "bar", "pie", "donut", "waterfall", "stacked", "histogram", "boxplot", "scatter", "heatmap", "gauge", "chart_depth", "winloss"]) {
+    expect(tree, `kind ${kind} không có trong cây`).toContain(kind)
+  }
+  // Quy tắc dừng ở node cha + lưới an toàn + cấm bịa.
+  expect(tree).toContain("DỪNG ở node ★")
+  expect(tree).toContain("KHÔNG VẼ")
+  expect(tree).toContain("Không bao giờ bịa data")
+  // Ngưỡng khớp đúng validation trong code (render.ts / pie.ts / waterfall.ts / boxplot.ts / multiline.ts / compare.ts).
+  for (const t of ["≥5 nến", "≥2 điểm", "≥2 lát", "≥1 delta", "Mỗi nhóm ≥4 điểm", "≥3 điểm", "value + max", "2–5 chuỗi"]) {
+    expect(tree, `thiếu ngưỡng ${t}`).toContain(t)
+  }
+})
+
+test("SKILL.md trỏ sang cây thay vì bảng phẳng", async () => {
+  const { skills } = await loadSkills(skillRoots(await root()).filter((r) => r.source === "bundled"))
+  const viz = skills.find((s) => s.name === "ve-bieu-do")!
+  expect(viz.body).not.toContain("## Bảng chọn hình")
+  expect(viz.body).toContain("choosing-a-form.md")
+  expect(viz.body).toContain("DỪNG ở node")
 })

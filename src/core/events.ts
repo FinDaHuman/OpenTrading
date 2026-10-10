@@ -1,5 +1,6 @@
 import type { ModelMessage } from "ai"
 import type { ClockSnapshot } from "./prompt/market-clock"
+import type { ChartData } from "./tools/chart/data"
 
 /**
  * Everything the agent loop tells a UI. Tool events are correlated by `callId`.
@@ -9,7 +10,7 @@ export type AgentEvent =
   | { type: "text-delta"; text: string }
   /** `step`: the model request (1, 2, …) that made the call; calls of one step run together. */
   | { type: "tool-start"; callId: string; name: string; label: string; input: unknown; step: number }
-  | { type: "tool-end"; callId: string; ok: boolean; output: string; durationMs: number }
+  | { type: "tool-end"; callId: string; ok: boolean; output: string; chart?: ChartData; durationMs: number }
   /** Informational: step limit reached, model without tool support… */
   | { type: "notice"; text: string }
   /** The turn failed; `done` still follows. */

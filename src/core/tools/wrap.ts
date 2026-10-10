@@ -96,7 +96,12 @@ export async function runTool(def: ToolDef, input: unknown, ctx: ToolContext, lo
     const result = await Promise.race([def.execute(input, { ...ctx, signal }), expired, aborted])
     const output = typeof result === "string" ? result : result.output
     const images = typeof result === "string" ? undefined : result.images
-    return { output: truncate(output, def.maxOutputChars ?? DEFAULT_MAX_OUTPUT_CHARS), ...(images?.length ? { images } : {}) }
+    const chart = typeof result === "string" ? undefined : result.chart
+    return {
+      output: truncate(output, def.maxOutputChars ?? DEFAULT_MAX_OUTPUT_CHARS),
+      ...(images?.length ? { images } : {}),
+      ...(chart ? { chart } : {}),
+    }
   } catch (error) {
     // Errors go back to the model too: an HTML 502 page or a stack trace must not fill
     // the context. Keep the head and tail.

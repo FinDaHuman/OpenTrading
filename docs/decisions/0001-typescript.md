@@ -22,7 +22,7 @@ HarnessPlan §12 khuyến nghị dùng Rust cho lõi và ratatui cho TUI. Đội
 3. **Python chỉ là sidecar, và chỉ thêm từ P2 trở đi.**
    - Sidecar là một tiến trình con chạy MCP server qua stdio: pandas, statsmodels, backtest, thư viện dữ liệu VN.
    - Lõi TS gọi sidecar như một tool. Đường nóng (UI, agent loop, provider) vẫn nằm ở TS.
-   - Code Python cũ được giữ trong `legacy-python/` làm điểm xuất phát.
+   - Scaffold Python cũ (`legacy-python/`) đã bị xoá khỏi repo; xem lịch sử git nếu cần.
 4. **Không dùng TUI Rust kết hợp lõi TS.** Hai ngôn ngữ cho phần giao diện làm tăng gấp đôi độ phức tạp, trong khi không mang lại gì mà OpenTUI chưa có.
 
 ## Hệ quả

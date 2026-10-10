@@ -21,6 +21,6 @@ body:
     id: environment
     attributes:
       label: Environment
-      description: OS, Python version, package version, and provider/data adapter if relevant. Never include secrets.
+      description: OS, Bun version, package version, and provider/data adapter if relevant. Never include secrets.
     validations:
       required: true

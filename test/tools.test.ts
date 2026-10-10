@@ -43,6 +43,12 @@ test("errors are rethrown as Error with the tool's message", async () => {
   ).rejects.toThrow("nguồn lỗi")
 })
 
+test("structured chart payloads survive runTool for the TUI", async () => {
+  const chart = { kind: "line" as const, series: [1, 2, 3] }
+  const res = await runTool(def({ execute: async () => ({ output: "line (3 điểm)", chart }) }), {}, ctx(), new RwLock())
+  expect(res).toEqual({ output: "line (3 điểm)", chart })
+})
+
 test("read-only tools overlap, write tools run one at a time", async () => {
   const lock = new RwLock()
   let active = 0
