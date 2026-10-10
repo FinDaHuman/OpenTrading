@@ -378,7 +378,7 @@ test("enter on a partial command runs the highlighted suggestion", async () => {
 test("/connect saves a masked key and lists that provider's chat models", async () => {
   await connect("groq", "gsk_test_1234567890abcd")
   const auth = await readJson<Record<string, unknown>>(path.join(home, "auth.json"), {})
-  expect(auth.groq).toEqual({ type: "api", key: "gsk_test_1234567890abcd" })
+  expect(auth.groq).toEqual({ type: "api", key: "gsk_test_1234567890abcd" }) // gitleaks:allow (fake key)
   const list = await setup.waitForFrame((f) => f.includes("Test Model"))
   expect(list).not.toContain("Whisper X") // audio-only models are filtered out
   setup.mockInput.pressEnter()

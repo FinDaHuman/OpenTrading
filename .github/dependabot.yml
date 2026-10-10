@@ -1,6 +1,7 @@
 version: 2
 updates:
-  - package-ecosystem: pip
+  # The app is TypeScript on Bun (bun.lock); the old pip entry pointed at nothing.
+  - package-ecosystem: bun
     directory: /
     schedule:
       interval: weekly
