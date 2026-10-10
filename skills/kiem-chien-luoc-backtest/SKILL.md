@@ -51,8 +51,8 @@ Trình bày kết luận đúng cấu trúc sau: baseline buy-hold → từng đ
 
 **Ví dụ 1:**
 Hỏi: Backtest mua RSI<30 FPT + backtest sau Tết
-Trả lời: VCB buy-hold <số> gross · sma_cross 7 trades <số> · sweep best **<số>** · seasonality tháng 1 mean <số> · rsi_meanrev VCB 1 trade · months=[1] trên nến tháng 3 → 0 trades + warning · event_study VCB <số>-<số>: CAR <số> → bảng từng điều kiện (trades/net/win) + best/worst + kết luận, kèm caveat T+2/cost.
+Đạt khi: bảng từng điều kiện (trades/net/win) + best/worst + kết luận, kèm caveat T+2/cost.
 
 ## Trực quan hóa
 
-Dữ liệu skill này nhận: net return best/worst vs benchmark, CAR ±N quanh sự kiện, seasonality 12 tháng, ma trận tương quan. Sau khi MCP trả data, nếu có thể trực quan hóa: nạp skill `ve-bieu-do`, đối chiếu shape data với bảng chọn hình trong đó (bar diverging best/worst, line CAR path, bar/heatmap seasonality, heatmap correlation), chọn và vẽ biểu đồ phù hợp — không vẽ khi thiếu điểm tối thiểu, không bịa số minh họa.
+Chỉ vẽ khi người dùng muốn xem hình, hoặc khi có chuỗi thời gian / so sánh mà bảng khó đọc; tối đa 1 biểu đồ mỗi câu trả lời. Vẽ bằng `chart_render` với `from_call` (mã `[ref …]` ở đầu kết quả tool) để không phải gõ lại số; cần chọn loại hình thì nạp `ve-bieu-do`. Hình hợp với dữ liệu skill này: bar diverging best/worst, line CAR path, bar/heatmap seasonality, heatmap correlation.

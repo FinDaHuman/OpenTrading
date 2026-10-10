@@ -56,8 +56,8 @@ Trình bày kết luận đúng cấu trúc sau:
 
 **Ví dụ 1:**
 Hỏi: Xung đột ảnh hưởng dầu/vàng
-Trả lời: `geo_intel("Vietnam")` trả articles · `event_stats("vietnam")` articles >0 · gold <số> USD/oz cùng phiên → verdict đủ 5 mục, có số dầu/vàng phiên gần nhất.
+Đạt khi: verdict đủ 5 mục, có số dầu/vàng phiên gần nhất.
 
 ## Trực quan hóa
 
-Dữ liệu skill này nhận: oil/gold vs baseline, escalation odds %. Sau khi MCP trả data, nếu có thể trực quan hóa: nạp skill `ve-bieu-do`, đối chiếu shape data với bảng chọn hình trong đó (line oil/gold, bar odds), chọn và vẽ biểu đồ phù hợp — không vẽ khi thiếu điểm tối thiểu, không bịa số minh họa.
+Chỉ vẽ khi người dùng muốn xem hình, hoặc khi có chuỗi thời gian / so sánh mà bảng khó đọc; tối đa 1 biểu đồ mỗi câu trả lời. Vẽ bằng `chart_render` với `from_call` (mã `[ref …]` ở đầu kết quả tool) để không phải gõ lại số; cần chọn loại hình thì nạp `ve-bieu-do`. Hình hợp với dữ liệu skill này: line oil/gold, bar odds.

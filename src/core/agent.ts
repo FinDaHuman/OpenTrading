@@ -621,7 +621,8 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
 
   const prepared = await prepare(opts, extras)
   const { target, tools, built, assembled, supportsTools } = prepared
-  const maxSteps = opts.maxSteps ?? DEFAULT_MAX_STEPS
+  const configured = (await loadConfig()).maxSteps
+  const maxSteps = opts.maxSteps ?? (Number.isInteger(configured) && configured! >= 2 ? configured! : DEFAULT_MAX_STEPS)
   if (!supportsTools && opts.registry.list().length > 0) {
     yield { type: "notice", text: "Model này không hỗ trợ tool; trả lời không dùng tool." }
   }

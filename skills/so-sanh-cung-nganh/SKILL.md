@@ -50,8 +50,8 @@ Trình bày kết luận đúng cấu trúc sau, mỗi mục ghi số + provenan
 
 **Ví dụ 1:**
 Hỏi: So sánh bank
-Trả lời: compare_equities VCB-vs-HPG <số>s · peer_compare cap 6 · vs_gics_index 3 nhóm live · quote_batch 1 request VN30 · HOSE universe <số> mã → peer list ≤6 + sub-skill calls có giới hạn + bảng xếp hạng, ≤8 calls nhà.
+Đạt khi: peer list ≤6 + sub-skill calls có giới hạn + bảng xếp hạng, ≤8 calls nhà.
 
 ## Trực quan hóa
 
-Dữ liệu skill này nhận: PE/ROE/momentum theo peers, correlation. Sau khi MCP trả data, nếu có thể trực quan hóa: nạp skill `ve-bieu-do`, đối chiếu shape data với bảng chọn hình trong đó (bar so 1 metric, multiline PE series cùng đơn vị, heatmap correlation), chọn và vẽ biểu đồ phù hợp — không vẽ khi thiếu điểm tối thiểu, không bịa số minh họa.
+Chỉ vẽ khi người dùng muốn xem hình, hoặc khi có chuỗi thời gian / so sánh mà bảng khó đọc; tối đa 1 biểu đồ mỗi câu trả lời. Vẽ bằng `chart_render` với `from_call` (mã `[ref …]` ở đầu kết quả tool) để không phải gõ lại số; cần chọn loại hình thì nạp `ve-bieu-do`. Hình hợp với dữ liệu skill này: bar so 1 metric, multiline PE series cùng đơn vị, heatmap correlation.

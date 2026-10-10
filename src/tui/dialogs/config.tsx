@@ -5,12 +5,13 @@ import { configFile } from "../../core/paths"
 import { chatModels } from "../../core/providers"
 import { createMemory, switchMemory, type Runtime } from "../../core/runtime"
 import { DEFAULT_MAX_CONCURRENT } from "../../core/subagents/manager"
+import { DEFAULT_MAX_STEPS } from "../../core/agent"
 import { blocked, closeDialog, providerName, pushLine, setState, state } from "../state"
 import { color } from "../theme"
 import { DialogFrame } from "./frame"
 import { Picker } from "./picker"
 
-type Setting = "memory" | "toolSearch" | "autoCompact" | "subagentMax" | "subagentModel"
+type Setting = "memory" | "toolSearch" | "autoCompact" | "maxSteps" | "subagentMax" | "subagentModel"
 type SubagentModel = { provider: string; model: string } | "inherit"
 
 const TOOL_SEARCH_NEXT = { auto: "on", on: "off", off: "auto" } as const
@@ -24,7 +25,7 @@ const TOOL_SEARCH_HINT = {
 export function ConfigDialog(props: { runtime: Runtime }) {
   const [config, { refetch }] = createResource(loadConfig)
   /** A setting with its own sub-view (number entry, model list); undefined = the list. */
-  const [editing, setEditing] = createSignal<"subagentMax" | "subagentModel">()
+  const [editing, setEditing] = createSignal<"maxSteps" | "subagentMax" | "subagentModel">()
   const [error, setError] = createSignal("")
 
   useKeys((evt) => {
@@ -32,6 +33,7 @@ export function ConfigDialog(props: { runtime: Runtime }) {
   })
 
   const maxConcurrent = () => config()?.subagents?.maxConcurrent ?? DEFAULT_MAX_CONCURRENT
+  const maxSteps = () => config()?.maxSteps ?? DEFAULT_MAX_STEPS
   const subagentModel = () => {
     const s = config()?.subagents
     return s?.model ? `${providerName(s.provider ?? state.provider)} · ${s.model}` : undefined
@@ -65,6 +67,15 @@ export function ConfigDialog(props: { runtime: Runtime }) {
     await refetch()
   }
 
+  async function saveSteps(text: string) {
+    const n = Number(text.trim())
+    if (!Number.isInteger(n) || n < 2 || n > 50) return setError("Nhập một số nguyên từ 2 đến 50.")
+    await saveConfig({ maxSteps: n })
+    setError("")
+    setEditing(undefined)
+    await refetch()
+  }
+
   async function saveModel(choice: SubagentModel) {
     const current = await loadConfig()
     const { provider: _p, model: _m, ...rest } = current.subagents ?? {}
@@ -74,7 +85,7 @@ export function ConfigDialog(props: { runtime: Runtime }) {
   }
 
   async function toggle(setting: Setting) {
-    if (setting === "subagentMax" || setting === "subagentModel") return setEditing(setting)
+    if (setting === "maxSteps" || setting === "subagentMax" || setting === "subagentModel") return setEditing(setting)
     if (setting === "autoCompact") {
       await saveConfig({ autoCompact: config()?.autoCompact === "off" ? "auto" : "off" })
       await refetch()
@@ -113,6 +124,22 @@ export function ConfigDialog(props: { runtime: Runtime }) {
             backgroundColor={color.panel2}
             focusedBackgroundColor={color.panel2}
             onSubmit={(v: unknown) => typeof v === "string" && void saveMax(v)}
+          />
+          <text fg={color.giam}>{error()}</text>
+        </DialogFrame>
+      </Match>
+      <Match when={editing() === "maxSteps"}>
+        <DialogFrame title="Số bước mỗi lượt" hint="enter lưu · esc quay lại">
+          <text fg={color.tx3}>{`Số lần model được gọi trong một lượt hỏi (mỗi lần có thể chạy nhiều tool song song), hiện tại ${maxSteps()}. Bước cuối luôn phải trả lời.`}</text>
+          <text fg={color.tx3}>Tăng khi câu hỏi nghiên cứu dài bị dừng giữa chừng; mỗi bước là một request tới model.</text>
+          <input
+            focused={!blocked()}
+            placeholder={String(maxSteps())}
+            textColor={color.tx}
+            focusedTextColor={color.tx}
+            backgroundColor={color.panel2}
+            focusedBackgroundColor={color.panel2}
+            onSubmit={(v: unknown) => typeof v === "string" && void saveSteps(v)}
           />
           <text fg={color.giam}>{error()}</text>
         </DialogFrame>
@@ -159,6 +186,12 @@ export function ConfigDialog(props: { runtime: Runtime }) {
                 value: "autoCompact" as Setting,
               },
               {
+                label: "Số bước mỗi lượt",
+                hint: `${maxSteps()} bước gọi model · enter để đổi`,
+                mark: "●",
+                value: "maxSteps" as Setting,
+              },
+              {
                 label: "Subagent chạy song song",
                 hint: `${maxConcurrent()} cùng lúc (cả chạy nền) · vượt thì xếp hàng · enter để đổi`,
                 mark: "●",
@@ -172,7 +205,7 @@ export function ConfigDialog(props: { runtime: Runtime }) {
               },
             ]}
             onPick={(s) => void toggle(s)}
-            rows={7}
+            rows={8}
           />
           <text fg={color.tx3} marginTop={1}>{`File cấu hình: ${configFile()}`}</text>
         </DialogFrame>

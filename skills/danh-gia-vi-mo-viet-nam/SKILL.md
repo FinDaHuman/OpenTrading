@@ -58,8 +58,8 @@ Trình bày kết luận đúng cấu trúc sau:
 
 **Ví dụ 1:**
 Hỏi: Vĩ mô VN
-Trả lời: GDP <số> rows tới Q2/<số> · CPI <số> · XK <số> · XNK-country <số> · SBV tái cấp vốn <số> / tái chiết khấu <số> · USDVND <số> · NSO lịch CPI tháng 8 → verdict đủ 6 mục + câu chuyện dẫn dắt có lịch sự kiện, ≤12 calls.
+Đạt khi: verdict đủ 6 mục + câu chuyện dẫn dắt có lịch sự kiện, ≤12 calls.
 
 ## Trực quan hóa
 
-Dữ liệu skill này nhận: GDP/CPI yoy series, XNK, rates. Sau khi MCP trả data, nếu có thể trực quan hóa: nạp skill `ve-bieu-do`, đối chiếu shape data với bảng chọn hình trong đó (line GDP/CPI + times, bar diverging XNK, bar rates), chọn và vẽ biểu đồ phù hợp — không vẽ khi thiếu điểm tối thiểu, không bịa số minh họa.
+Chỉ vẽ khi người dùng muốn xem hình, hoặc khi có chuỗi thời gian / so sánh mà bảng khó đọc; tối đa 1 biểu đồ mỗi câu trả lời. Vẽ bằng `chart_render` với `from_call` (mã `[ref …]` ở đầu kết quả tool) để không phải gõ lại số; cần chọn loại hình thì nạp `ve-bieu-do`. Hình hợp với dữ liệu skill này: line GDP/CPI + times, bar diverging XNK, bar rates.

@@ -88,7 +88,7 @@ export async function lintSkills(root: string) {
     if (line.length > 250) report.catalogLength!.push(`${skill.name}: ${line.length}`)
     for (const m of skill.body.matchAll(/^#{1,4} +(.+)$/gm)) {
       const h = m[1]!.trim()
-      if (/^[\x20-\x7e]+$/.test(h) && !/`/.test(h) && /\b(procedure|workflow|when|use|example|template|non-negotiable|step|output|notes?)\b/i.test(h)) {
+      if (/\b(procedure|workflow|when to use|examples?|templates?|non-negotiables?|reference files?|output format|steps?)\b/i.test(h)) {
         report.englishHeadings!.push(`${skill.name}: ${h}`)
       }
     }

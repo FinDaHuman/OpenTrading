@@ -54,8 +54,8 @@ Trình bày kết luận đúng cấu trúc sau:
 
 **Ví dụ 1:**
 Hỏi: Nghe đồn HPG ... thật không
-Trả lời: `news_symbol("VCB")` → lãi suất VCB <số><số> posts · GDELT "dầu" live · corporate VCB <số> docs · `fireant_thread` (post PNJ <số>) → root + 2 replies thật → verdict 4 cột + phân tích chi tiết + nhãn xác nhận, ≤10 calls. Thiếu 1 trong 4 cột verdict → chưa đạt; thiếu nhãn `CHƯA XÁC NHẬN` cho rumor → chưa đạt.
+Đạt khi: kết luận đủ 4 cột + phân tích chi tiết + nhãn xác nhận, ≤10 calls. Thiếu 1 trong 4 cột → chưa đạt; tin đồn thiếu nhãn `CHƯA XÁC NHẬN` → chưa đạt.
 
 ## Trực quan hóa
 
-Dữ liệu skill này nhận: bảng tin + sentiment score (nếu có). Chỉ vẽ gauge khi có sentiment score; tin tức trình bày bảng, không ép chart. Nạp skill `ve-bieu-do` khi vẽ.
+Chỉ vẽ khi người dùng muốn xem hình, hoặc khi có chuỗi thời gian / so sánh mà bảng khó đọc; tối đa 1 biểu đồ mỗi câu trả lời. Vẽ bằng `chart_render` với `from_call` (mã `[ref …]` ở đầu kết quả tool) để không phải gõ lại số; cần chọn loại hình thì nạp `ve-bieu-do`.

@@ -43,4 +43,4 @@ Trình bày kết luận đúng cấu trúc sau: bảng {Nguồn · Trạng thá
 
 **Ví dụ 1:**
 Hỏi: check nguồn trước phiên
-Trả lời: sự cố JWT hết hạn <số> bắt được ở Bước 1 (`vs_auth_status` false) trước khi skills khác fail hàng loạt; HAR-session sống độc lập (macro vẫn available khi JWT chết) → bảng đủ 9 nguồn + khuyến nghị, ≤12 calls, ≤3 phút.
+Đạt khi: bảng đủ 9 nguồn + khuyến nghị, ≤12 calls, ≤3 phút.

@@ -2,15 +2,16 @@
 name: phan-tich-chuyen-sau-1-ma
 description: "Điều phối phân tích toàn diện một mã: mã, ngành, tin, sự kiện, rồi kỹ thuật và định giá, gộp thành bảng tích cực/tiêu cực/động lực. Dùng khi hỏi \"phân tích FPT\", \"VCB thế nào\"."
 activation: auto
-requires_tools: [mcp__opentrading__stock_overview]
+requires_tools: [symbol_lookup, financial_detail]
+uses_tools: [symbol_lookup, symbol_resolve, vn_company, vs_company_info, vs_industry_tree, financial_detail, news_symbol, company_events, event_calendar_vn, evidence_bundle]
 triggers:
   keywords: [phân tích cổ phiếu, phân tích mã, phân tích toàn diện, chi tiết mã, mã này sao]
-version: 1.3.0
+version: 1.4.0
 ---
 
 # Phân tích toàn diện một mã
 
-Skill điều phối 8 bước: tự làm nhận diện mã + ngành + tin + sự kiện, dispatch kỹ thuật/định giá sang sub-skill, rồi gộp verdict. Budget 8 chỉ đếm tool nhà của skill này; tool của sub-skill nằm trong budget của sub-skill, không cộng dồn.
+Skill điều phối: tự làm nhận diện mã + ngành + tin + sự kiện, giao kỹ thuật và định giá cho 2 subagent chạy song song, rồi gộp kết luận.
 
 ## Khi nào dùng
 
@@ -24,33 +25,31 @@ Skill điều phối 8 bước: tự làm nhận diện mã + ngành + tin + s�
 
 ## Các bước
 
-**Bước 1: Xác định mã (gọi trực tiếp).**
+Khoảng 7 bước model: nạp skill, 5 lượt gọi tool (mỗi lượt gọi song song), trả lời. Kỹ thuật và định giá chạy trong subagent nên không tốn bước của lượt chính.
 
-Chạy `symbol_lookup` (tên công ty) · `symbol_resolve` (mã đa loại, có fallback xếp hạng). Mã nhập nhằng (vàng/BTC/USD) thì bắt buộc `symbol_resolve` trước. `symbol_resolve` trả nhiều ứng viên → chọn hạng cao nhất + ghi rõ đã resolve từ tên nào sang mã nào; thiếu mã thì dừng và hỏi lại, không đoán mã. Sau khi có mã: cổ phiếu VN → nến/tools `vn_*`/`vs_*`; crypto → `crypto_spot` (USD, không dùng `vn_crypto_ohlcv` trừ khi hỏi giá VND).
+**Bước 1: Xác định mã.**
 
-**Bước 2: Ngành + kiếm tiền nhờ đâu (gọi trực tiếp).**
+Chạy `symbol_lookup` (tên công ty) hoặc `symbol_resolve` (mã đa loại, có xếp hạng). Mã nhập nhằng (vàng/BTC/USD) thì bắt buộc `symbol_resolve` trước. `symbol_resolve` trả nhiều ứng viên → chọn hạng cao nhất và ghi rõ đã resolve từ tên nào sang mã nào; thiếu mã thì dừng và hỏi lại, không đoán mã. Cổ phiếu VN → tools `vn_*`/`vs_*`; crypto → `crypto_spot`.
 
-Chạy `vn_company` · `vs_company_info` · `vs_industry_tree`. Lấy ngành GICS, mô hình kinh doanh, nguồn thu chính. Mã mới chưa phân loại ngành (`vs_industry_tree` không match) → ghi "chưa phân loại", vẫn chạy các bước còn lại.
+**Bước 2: Ngành + kiếm tiền nhờ đâu (song song).**
 
-**Bước 2b: Chart giá (tool local, không tốn budget remote).**
+Chạy `vn_company` · `vs_company_info` · `vs_industry_tree`. Lấy ngành GICS, mô hình kinh doanh, nguồn thu chính. Mã chưa phân loại ngành (`vs_industry_tree` không match) → ghi "chưa phân loại", vẫn làm các bước còn lại.
 
-Dùng lại nến đã có trong context (từ Bước 1 `vn_quote_history` hoặc sub-skill kỹ thuật) → nạp skill `ve-bieu-do`, đối chiếu shape và vẽ (chart màu tự hiện trong TUI, chỉ verdict không chép hình). Không fetch lại nến chỉ để vẽ; chưa có nến thì bỏ qua chart, không thêm call data.
+**Bước 3: Kỹ thuật + định giá bằng 2 subagent chạy song song.**
+
+Gọi `spawn_subagent` hai lần trong cùng một lượt (loại `nghien-cuu`): một subagent nạp `ky-thuat-chuyen-sau`, một subagent nạp `dinh-gia-chuyen-sau`, cùng mã ở Bước 1. Yêu cầu mỗi subagent trả về 5–8 dòng có số, khung thời gian và tên tool nguồn. Không gọi trực tiếp `signals_technical` / `valuation_run` / `stock_forensic` ở lượt chính.
+
+**Bước 4: Lợi nhuận quý + tin + sự kiện (song song, cùng lượt với Bước 3 nếu được).**
+
+Chạy `financial_detail` (KQKD 4 quý + so QoQ/YoY/biên — không đào sâu M-Score/F-score, đó là việc của `co-ban-chuyen-sau`), `news_symbol` + `company_events` (tin + công bố), `event_calendar_vn` (lịch 30–90 ngày: BCTC/ĐHĐCĐ/cổ tức).
+
+**Bước 5: Tổng hợp + kiểm chứng.**
+
+Chạy `evidence_bundle` để khóa kết luận thành bảng Tích cực / Tiêu cực / Động lực tương lai. Một subagent lỗi thì vẫn ra kết luận với phần còn lại và ghi rõ phần thiếu, không bù số. User hỏi một chiều (`RSI FPT`) thì dùng thẳng sub-skill tương ứng, không chạy đủ các bước. Đủ dữ liệu ra bảng 3 cột thì dừng, không gọi thêm vòng tin/sự kiện thứ hai.
 
 ## Trực quan hóa
 
-Dữ liệu skill này nhận: chuỗi OHLC/giá (nến 30–90 phiên), P&L 4 quý (DT/LN theo quý). Sau khi MCP trả data, nếu có thể trực quan hóa: nạp skill `ve-bieu-do`, đối chiếu shape data với bảng chọn hình trong đó (nến+volume, stacked P&L), chọn và vẽ biểu đồ phù hợp — không vẽ khi thiếu điểm tối thiểu, không bịa số minh họa.
-
-**Bước 3-4: Dispatch kỹ thuật + định giá (không gọi tool gốc).**
-
-Dispatch `ky-thuat-chuyen-sau` (trạng thái kỹ thuật) và `dinh-gia-chuyen-sau` (định giá). Không bao giờ gọi trực tiếp `signals_technical` / `valuation_run` / `stock_forensic` ở đây để thay thế — ai cần kỹ thuật/định giá thì đi qua sub-skill.
-
-**Bước 5-7: Lợi nhuận quý + tin + sự kiện (gọi trực tiếp).**
-
-Chạy `financial_detail` (chỉ lấy số nhanh KQKD 4 quý + so QoQ/YoY/biên — không đào sâu BCTC/M-Score/F-score, đó là việc của `co-ban-chuyen-sau`), `news_symbol` + `company_events` (tin + công bố), `event_calendar_vn` (lịch 30–90 ngày: BCTC/ĐHĐCĐ/cổ tức).
-
-**Bước 8: Tổng hợp + validate.**
-
-Chạy `evidence_bundle` để khóa verdict thành bảng Tích cực / Tiêu cực / Động lực tương lai. Sub-skill chết 1 chân thì vẫn ra verdict với leg còn sống + ghi rõ leg thiếu, không bù số. User hỏi 1 chiều (`RSI FPT`) thì bắt buộc trả lời bằng sub-skill tương ứng, không chạy đủ 8 bước. Đủ 8 bước hoặc đủ dữ liệu ra bảng 3 cột thì dừng, không gọi thêm vòng tin/sự kiện thứ hai.
+Chỉ vẽ khi người dùng muốn xem hình; tối đa 1 biểu đồ. Vẽ bằng `chart_render` với `from_call` trỏ vào kết quả nến hoặc `financial_detail` đã có (mã `[ref …]`), không lấy thêm dữ liệu chỉ để vẽ; cần chọn loại hình thì nạp `ve-bieu-do`. Hình hợp với dữ liệu skill này: nến + khối lượng, stacked DT/LN theo quý.
 
 ## Cấu trúc câu trả lời
 
@@ -58,16 +57,15 @@ Trình bày kết luận đúng cấu trúc sau, mỗi mục ghi số + trend + 
 
 1. Nhận định 1 câu (khuyến nghị/tone chính).
 2. Ngành + cách kiếm tiền (2 dòng, từ Bước 2).
-3. Kỹ thuật (`provenance: ky-thuat-chuyen-sau`, kèm khung 1D/1W).
-4. Định giá (`provenance: dinh-gia-chuyen-sau`, kèm UPSIDE/DOWNSIDE % nếu có).
-5. Lợi nhuận quý (số DT/LN 4 quý + trend QoQ/YoY + biên, từ `financial_detail` Bước 5).
+3. Kỹ thuật (`provenance: ky-thuat-chuyen-sau`, từ subagent, kèm khung 1D/1W).
+4. Định giá (`provenance: dinh-gia-chuyen-sau`, từ subagent, kèm UPSIDE/DOWNSIDE % nếu có).
+5. Lợi nhuận quý (số DT/LN 4 quý + trend QoQ/YoY + biên, từ `financial_detail` Bước 4).
 6. Tin + sự kiện sắp tới (từ `news_symbol` / `company_events` / `event_calendar_vn`).
 7. Bảng Tích cực / Tiêu cực / Động lực tương lai (3 cột, khóa bằng `evidence_bundle`).
-8. Chart nến đính kèm (từ Bước 2b, nếu có).
-9. Kết luận 1 câu chốt lại toàn mã.
+8. Kết luận 1 câu chốt lại toàn mã.
 
 ## Ví dụ
 
 **Ví dụ 1:**
 Hỏi: Phân tích FPT
-Trả lời: đủ 8 bước, có bảng 3 cột tích cực/tiêu cực/động lực, ≤8 calls nhà (chưa tính calls trong sub-skill). Số liệu live nằm ở sub-skill `ky-thuat-chuyen-sau` và `dinh-gia-chuyen-sau` — không bịa số tại skill này.
+Đạt khi: đủ các mục ở trên, có bảng 3 cột tích cực/tiêu cực/động lực; số kỹ thuật và định giá lấy từ 2 subagent, không bịa số tại skill này.
