@@ -31,7 +31,7 @@
     "@mozilla/readability": "0.6.0",
     "@openrouter/ai-sdk-provider": "2.9.0",
     "@opentui/core": "0.4.5",
-    "@opentui/solid": "0.4.5",
+    "@opentui/solid": "0.5.16",
     "ai": "6.0.168",
     "linkedom": "0.18.13",
     "lru-cache": "11.5.3",
