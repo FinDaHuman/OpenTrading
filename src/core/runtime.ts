@@ -21,6 +21,7 @@ import { toolSearchTool } from "./tools/builtin/tool-search"
 import { todoWriteTool } from "./tools/builtin/todo-write"
 import { webFetchTool } from "./tools/web/fetch"
 import { webSearchTool } from "./tools/web/search"
+import { cycleStatsTools } from "./tools/cycle-stats/cycle-stats"
 import { localWatchlistTools } from "./tools/watchlist/local"
 import { ToolRegistry } from "./tools/registry"
 
@@ -74,6 +75,7 @@ export function initRuntime(opts: { cwd?: string; home?: string; skills: () => S
   registry.register(chartDepthTool())
   for (const tool of sessionHistoryTools()) registry.register(tool)
   for (const tool of localWatchlistTools(home)) registry.register(tool)
+  for (const tool of cycleStatsTools(home)) registry.register(tool)
   registry.register(webFetchTool())
   registry.register(webSearchTool())
 
