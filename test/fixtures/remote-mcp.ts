@@ -37,6 +37,10 @@ function mcpServer(stats?: CallStats) {
         return { content: [{ type: "text", text: `waited ${ms}` }] }
       },
     )
+    server.registerTool("upstream_down", { description: "Report an upstream failure.", annotations: { readOnlyHint: true } }, async () => {
+      stats.calls++
+      return { isError: true, content: [{ type: "text", text: "upstream fetch failed: ECONNRESET" }] }
+    })
     server.registerTool("note", { description: "Write a note.", inputSchema: { text: z.string(), ms: z.number().optional() } }, async ({ text, ms }) => {
       if (ms) await Bun.sleep(ms)
       stats.notes++

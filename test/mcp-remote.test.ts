@@ -531,6 +531,22 @@ test("a host answering 502 to everything while it restarts: calls wait for one r
   expect(stats.calls).toBe(3)
 }, 20_000)
 
+test("an error the tool reports itself is returned once, even when its text looks like a network error", async () => {
+  const stats = newStats()
+  const remote = startHttpServer({ stats })
+  cleanups.push(remote.stop)
+  const { manager, registry } = await managerWith({ data: { type: "http", url: remote.url } })
+  ;(manager as unknown as { opts: { callRetryDelaysMs: number[] } }).opts.callRetryDelaysMs = [20, 20]
+  await manager.start()
+  const seen: string[] = []
+  manager.onChange((all) => seen.push(all.find((s) => s.name === "data")!.state))
+  const error = await errorOf(Promise.resolve(registry.get("mcp__data__upstream_down")!.execute({}, ctx)))
+  expect(error).toContain("ECONNRESET")
+  expect(stats.calls).toBe(1)
+  expect(seen).not.toContain("connecting")
+  expect(state(manager, "data").state).toBe("connected")
+})
+
 test("tool calls to one server are capped at maxConcurrent (default 4), the rest queue", async () => {
   const stats = newStats()
   const remote = startHttpServer({ stats })

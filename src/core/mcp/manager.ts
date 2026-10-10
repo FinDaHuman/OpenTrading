@@ -968,8 +968,9 @@ export class McpManager {
           const retries = isRemote(config) && tool.annotations?.readOnlyHint ? retryDelays.length : 0
           for (let attempt = 0; ; attempt++) {
             const live = await this.ready(name, startupTimeoutMs, ctx.signal)
+            let result: Awaited<ReturnType<typeof call>>
             try {
-              return resultToOutput(await limited(live))
+              result = await limited(live)
             } catch (error) {
               if (ctx.signal.aborted) throw error
               if (isRemote(config) && isAuthError(error)) {
@@ -996,7 +997,11 @@ export class McpManager {
                 )
               }
               await pause(retryDelays[attempt]!, ctx.signal)
+              continue
             }
+            // Outside the try: an error the tool itself reports (isError) is an answer, not a
+            // dead connection, even when its text says "ECONNRESET".
+            return resultToOutput(result)
           }
         },
       })
