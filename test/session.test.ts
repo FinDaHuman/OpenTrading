@@ -172,3 +172,22 @@ test("a compaction replaces the model's history on resume; the transcript still 
   expect(pruned.display).toEqual(turn1)
   expect(pruned.contextTokens).toBe(4_000)
 })
+
+test("a chart drawn during a turn is written with the turn and comes back on resume, keyed by its tool call", async () => {
+  const session = Session.create()
+  // Drawn mid-turn, before the session file exists.
+  session.noteChart("call_7", { kind: "line", symbol: "FPT", series: [1, 2, 3] })
+  await session.appendTurn(
+    [
+      { role: "user", content: "vẽ FPT" },
+      { role: "assistant", content: [{ type: "tool-call", toolCallId: "call_7", toolName: "chart_render", input: { kind: "line", from_call: "r1" } }] },
+      { role: "tool", content: [{ type: "tool-result", toolCallId: "call_7", toolName: "chart_render", output: { type: "text", value: "Đã vẽ line FPT 3 điểm" } }] },
+    ],
+    { cwd: home },
+  )
+  const loaded = await loadSession(session.id)
+  expect(loaded.charts.get("call_7")).toEqual({ kind: "line", symbol: "FPT", series: [1, 2, 3] })
+  // Written once: the next turn does not repeat it.
+  await session.appendTurn([{ role: "user", content: "tiếp" }], { cwd: home })
+  expect((await loadSession(session.id)).charts.size).toBe(1)
+})
