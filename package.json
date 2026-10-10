@@ -12,7 +12,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@ai-sdk/alibaba": "1.0.17",
+    "@ai-sdk/alibaba": "2.0.63",
     "@ai-sdk/anthropic": "3.0.111",
     "@ai-sdk/cerebras": "2.0.60",
     "@ai-sdk/cohere": "3.0.27",
