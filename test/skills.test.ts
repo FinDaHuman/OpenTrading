@@ -69,6 +69,8 @@ test("the bundled skills all load cleanly", async () => {
   expect(problems).toEqual([])
   expect(skills.map((s) => s.name)).toEqual([
     "bat-on-quoc-gia",
+    "chu-ky-tai-san-the-gioi",
+    "chu-ky-tai-san-vn",
     "co-ban-chuyen-sau",
     "danh-gia-tinh-hinh-chinh-tri-toan-cau",
     "danh-gia-tinh-hinh-xung-dot",
@@ -77,6 +79,7 @@ test("the bundled skills all load cleanly", async () => {
     "danh-gia-vi-mo-viet-nam",
     "devil-advocate",
     "dinh-gia-chuyen-sau",
+    "dinh-vi-chu-ky-vn",
     "du-doan-fed",
     "du-doan-polymarket",
     "explain-term",
