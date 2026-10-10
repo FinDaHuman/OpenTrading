@@ -2,7 +2,7 @@
 
 1. `vn_asset_check()` → stale (>90 ngày) + user đồng ý mới chạy.
 2. `vn_asset_refresh()` → fetch incremental 6 assets (VCI/yfinance/petrol-API) + recompute monthly. Anchors KHÔNG auto (báo cáo kỳ) — cập nhật thủ công mỗi quý từ VBMA/TCBS/báo chí, giữ nguyên tắc provenance.
-3. Tự rà soát định nghĩa như skill luân chuyển ngành (cứ sai là cập nhật) + changelog dưới đây.
+3. Không sửa file skill sau refresh (xem `dinh-vi-chu-ky-vn/references/refresh.md` mục 6): số mới phủ định quy tắc nào thì nêu trong câu trả lời.
 
 ## Changelog
 

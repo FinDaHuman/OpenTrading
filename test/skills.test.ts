@@ -103,7 +103,8 @@ test("the bundled skills all load cleanly", async () => {
 test("ve-bieu-do references đọc được qua load_skill file=", async () => {
   const { skills } = await loadSkills(skillRoots(await root()).filter((r) => r.source === "bundled"))
   const viz = skills.find((s) => s.name === "ve-bieu-do")!
-  expect(viz.requires_tools).toEqual(["chart_render", "chart_compare", "chart_depth"])
+  expect(viz.requires_tools).toEqual(["chart_render"])
+  expect(viz.uses_tools).toEqual(["chart_render", "chart_compare", "chart_depth"])
   for (const f of ["references/choosing-a-form.md", "references/time-series.md", "references/comparison.md", "references/part-to-whole.md", "references/relationship.md", "references/anti-patterns.md"]) {
     const body = await readSkillFile(viz, f)
     expect(body.length).toBeGreaterThan(100)

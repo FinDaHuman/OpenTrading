@@ -1,17 +1,17 @@
 ---
 name: chu-ky-tai-san-vn
-description: "Xác định pha chu kỳ đa tài sản VN (cổ phiếu, TPCP/TPDN, tiết kiệm, vàng, USD, xăng dầu, phái sinh, crypto) từ dòng tiền liên thị trường + mùa vụ + SBV, rồi suy ra lớp tài sản dẫn dắt tiếp theo."
-when_to_use: Câu hỏi về luân chuyển tiền giữa các lớp tài sản VN (chứng khoán–tiết kiệm–vàng–USD–trái phiếu–xăng dầu), pha tiền rẻ/căng thẳng, spread SJC, wall đáo hạn TPDN, basis phái sinh.
+description: "Định vị pha chu kỳ đa tài sản VN (cổ phiếu, trái phiếu, tiết kiệm, vàng, USD, phái sinh) từ dòng tiền liên thị trường, mùa vụ và lãi suất SBV. Dùng khi hỏi tiền đang chảy giữa các lớp tài sản VN thế nào."
 activation: auto
 triggers:
-  keywords: [tài sản việt nam, luân chuyển tiền, dòng tiền liên thị trường, vàng sjc, tỷ giá usd, lãi suất tiết kiệm, trái phiếu doanh nghiệp, maturity wall, basis phái sinh, tiền rẻ, stagflation việt nam]
-requires_tools: [vn_asset_check, vn_asset_seasonality, vn_asset_anchors, vn_asset_chains, vn_asset_refresh, vn_index_ohlcv, sbv_rates, market_movers, breadth_scan]
-version: 1.0.0
+  keywords: [tài sản việt nam, luân chuyển tiền, dòng tiền liên thị trường, lãi suất tiết kiệm, trái phiếu doanh nghiệp, maturity wall, basis phái sinh, tiền rẻ, stagflation việt nam]
+requires_tools: [vn_asset_check]
+uses_tools: [vn_asset_check, vn_asset_seasonality, vn_asset_anchors, vn_asset_chains, vn_index_ohlcv, vn_futures_ohlcv, sbv_rates, breadth_scan]
+version: 1.1.0
 ---
 
 # Chu kỳ tài sản Việt Nam (multi-asset)
 
-Skill suy luận pha tiền tệ/tài sản VN từ 9 lớp tài sản + 2 tín hiệu dòng tiền. Số liệu sống trong PG (`vn_asset_*`), tra bằng tools — file này chỉ giữ logic. Chi tiết mảng cổ phiếu → cross-ref skill `dinh-vi-chu-ky-vn`.
+Skill suy luận pha tiền tệ/tài sản VN từ 6 chuỗi giá (VNINDEX, vàng, USDVND, xăng RON95, BTC, Brent) + các mốc báo cáo kỳ (lãi gửi, lợi suất TPCP, đáo hạn TPDN, chênh lệch SJC, khối ngoại). Số liệu sống trong PG (`vn_asset_*`), tra bằng tools — file này chỉ giữ logic. Chi tiết mảng cổ phiếu → cross-ref skill `dinh-vi-chu-ky-vn`.
 
 ## Khi nào dùng
 
@@ -26,7 +26,9 @@ Skill suy luận pha tiền tệ/tài sản VN từ 9 lớp tài sản + 2 tín 
 
 **Bước 0: Kiểm tra độ tươi.**
 
-Gọi `vn_asset_check`. Stale (>90 ngày) → cảnh báo + đề xuất `vn_asset_refresh` (user đồng ý mới chạy). Không kết luận chắc chắn khi bảng cũ.
+Gọi `vn_asset_check`.
+- `as_of` rỗng hoặc bảng không có dòng nào → **chưa có dữ liệu**: dừng, báo "chưa có dữ liệu chu kỳ trên server", không kết luận pha, không dùng con số nào trong `references/` thay thế.
+- Stale (>90 ngày) → cảnh báo + đề xuất refresh theo `references/refresh.md` (tool ghi, tìm bằng `tool_search`; user đồng ý mới chạy). Không kết luận chắc chắn khi bảng cũ.
 
 **Bước 1: Đọc dòng tiền liên thị trường (song song).**
 
@@ -34,11 +36,11 @@ Tra `vn_asset_seasonality` tháng hiện tại cho VNINDEX/GOLD_W/USDVND/RON95/B
 
 **Bước 2: Tín hiệu dẫn dắt (tuần tự).**
 
-Tra `vn_asset_chains`: BTC tháng mạnh và Brent tăng là 2 tín hiệu dẫn đã verify nhân quả (Granger). USD/vàng KHÔNG predictive — chỉ đọc contemporaneous (đồng mất giá + khối ngoại bán = giảm tỷ trọng CK).
+Tra `vn_asset_chains`: BTC tháng mạnh và Brent tăng là 2 tín hiệu dẫn trong bảng (kiểm hit-rate và số mẫu trong kết quả tool trước khi dùng). USD/vàng chỉ đọc cùng thời điểm, không dùng để dự báo (đồng mất giá + khối ngoại bán = giảm tỷ trọng CK).
 
 **Bước 3: Mùa vụ + sự kiện (song song).**
 
-Tháng hiện tại tra seasonality (vàng T1/T12, BTC T10, xăng T1/T6/T12-âm). Quanh Tết: BTC/vàng pre-Tết mạnh, USD đi ngang (SBV giữ). Basis VN30F1M (tự tính từ `vn_index_ohlcv` VN30 vs VN30F1M nếu cần): discount sâu + thanh khoản lớn = vùng đáy.
+Tháng hiện tại tra `vn_asset_seasonality` (số lấy từ bảng, không dùng tháng nhớ sẵn). Basis VN30F1M nếu cần: `vn_futures_ohlcv` (VN30F1M) trừ `vn_index_ohlcv` (VN30) cùng phiên; discount sâu + thanh khoản lớn = vùng đáy.
 
 **Bước 4: Kết luận pha + gợi ý lớp tài sản.**
 
@@ -48,7 +50,7 @@ Verdict 1 dòng + độ tin cậy + bằng chứng (mỗi số kèm provenance t
 
 Độ tươi bảng · verdict pha · bằng chứng dòng tiền (anchors kèm nguồn) · lớp gợi ý · caveat (anchors là báo cáo kỳ, không daily; margin aggregate không tồn tại công khai).
 
-## Reference files
+## File tham khảo
 
 | File | Trả lời câu hỏi |
 |---|---|

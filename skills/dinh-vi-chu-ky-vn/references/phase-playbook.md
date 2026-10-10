@@ -16,8 +16,8 @@
 | Pha hiện tại | Mảng gợi ý tiếp theo | Cơ sở |
 |---|---|---|
 | P1 (bank RS 3M dương) | **Chứng khoán** · **Thép** · BĐS | Chuỗi bankRS3m→CK/thép/BĐS (top chuỗi) |
-| P1 sau Tết | Thép · Hóa chất · Vận tải · Dầu khí | `cycle_tet` post (hit 75–88%) |
-| P2 (CK mạnh tuần này) | **BĐS tuần sau** · VNI tuần sau · CNTT | Lead weekly + chuỗi CK→tech/BĐS |
+| P1 sau Tết | Thép · Hóa chất · Vận tải · Dầu khí | `cycle_tet` post (hit-rate tra tool) |
+| P2 (CK mạnh) | CNTT · BĐS | Chuỗi CK→CNTT/BĐS trong `cycle_chains` |
 | P2 tháng 8 / tháng 11 | CK | Bias T8/T11 vượt trội |
 | P3 | Giảm dần BĐS/utilities "last leg"; TRÁNH mua đuổi khi VNFIN đỉnh > 3 tháng | Quy tắc timing rotation-chains mục 4 |
 | P4 (đang rơi) | Trú: **consumer + utilities** · TRÁNH: thép/CK/BĐS | Tra `cycle_yearly` năm bear gần nhất |

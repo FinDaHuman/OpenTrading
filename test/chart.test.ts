@@ -1,14 +1,14 @@
 import { expect, test } from "bun:test"
-import { chartCompareTool } from "../src/core/tools/chart/compare"
-import { chartDepthTool, chartRenderTool, type ChartRenderInput } from "../src/core/tools/chart/render"
+import { chartCompareTool, compareText } from "../src/core/tools/chart/compare"
+import { chartDepthTool, chartRenderTool, chartText, type ChartRenderInput } from "../src/core/tools/chart/render"
 import { modelOutput } from "../src/core/tools/registry"
 import type { ToolResult } from "../src/core/tools/types"
 
 const ctx = () => ({ signal: new AbortController().signal, callId: "c1" })
 const ESC = String.fromCharCode(27)
 
-/** The text the model sees: chart_render now returns a ToolResult (output + chart). */
-const text = async (input: ChartRenderInput) => ((await chartRenderTool().execute(input, ctx())) as ToolResult).output as string
+/** The plain-text rendering (headless/debug); the model now gets a short summary instead. */
+const text = (input: ChartRenderInput) => chartText(input)
 
 const bars = [
   { o: 57.3, h: 58.5, l: 57.2, c: 58.1 },
@@ -77,7 +77,10 @@ test("chart_render returns structured chart data for the TUI, text only for the 
   const tool = chartRenderTool()
   const res = (await tool.execute({ kind: "candlestick", bars, symbol: "VCB" }, ctx())) as ToolResult
   expect(res.chart).toEqual({ kind: "candlestick", symbol: "VCB", bars })
-  expect(res.output).toContain("VCB")
+  expect(res.output).toContain("Đã vẽ nến VCB 5 phiên")
+  expect(res.output).toContain("đóng cửa cuối 58,4")
+  // No ASCII art for the model: it cost 1-3k tokens and differed from the TUI picture.
+  expect(res.output).not.toMatch(/[│┤╭╮╰╯]/)
   // The model sees the text only: chart data costs zero tokens.
   const forModel = modelOutput(res, false)
   expect(forModel).toEqual({ type: "text", value: res.output })
@@ -88,11 +91,10 @@ test("chart_render returns structured chart data for the TUI, text only for the 
 
 test("chart_compare puts each series on its own row, on one shared % scale", async () => {
   const tool = chartCompareTool()
-  const res = (await tool.execute(
-    { title: "VCB vs HPG", series: [{ label: "VCB", values: [50, 55] }, { label: "HPG", values: [20, 19, 18] }] },
-    ctx(),
-  )) as ToolResult
-  const out = res.output as string
+  const input = { title: "VCB vs HPG", series: [{ label: "VCB", values: [50, 55] }, { label: "HPG", values: [20, 19, 18] }] }
+  const res = (await tool.execute(input, ctx())) as ToolResult
+  expect(res.output).toContain("VCB +10% , HPG -10%".replace(" ,", ","))
+  const out = compareText(input)
   const lines = out.split("\n")
   expect(lines[0]).toBe("VCB vs HPG · % thay đổi từ điểm đầu, cùng thang -10.0% … +10.0%:")
   expect(lines[1]).toMatch(/^VCB .+ \+10\.0%$/)

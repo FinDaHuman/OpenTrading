@@ -61,13 +61,13 @@ export async function resumeSession(runtime: Runtime, id: string) {
   setState("agents", reconcile({}))
   setState({ notices: [], noticeHold: false })
 
-  const lines: Line[] = transcriptFromMessages(loaded.display).map((item): Line => {
-    if (item.kind === "compact") return { kind: "compact", summary: item.text }
+  const lines: Line[] = transcriptFromMessages(loaded.display).flatMap((item): Line[] => {
+    if (item.kind === "compact") return [{ kind: "compact", summary: item.text }]
     if (item.kind === "agent-notice") {
-      return { kind: "agent-notice", agentId: item.agentId, status: item.status, text: `Subagent nền ${item.type} (${item.description}) · ${item.status} · ${item.stats}` }
+      return [{ kind: "agent-notice", agentId: item.agentId, status: item.status, text: `Subagent nền ${item.type} (${item.description}) · ${item.status} · ${item.stats}` }]
     }
     if (item.kind === "tool") {
-      return {
+      const row: Line = {
         kind: "tool",
         callId: item.callId,
         name: item.name,
@@ -75,8 +75,11 @@ export async function resumeSession(runtime: Runtime, id: string) {
         status: item.ok ? "ok" : "error",
         output: item.output,
       }
+      // The chart the user saw for this call (stored with the turn), right after its row.
+      const chart = loaded.charts.get(item.callId)
+      return chart ? [row, { kind: "chart", data: chart }] : [row]
     }
-    return item.kind === "user" ? { kind: "user", text: item.text } : { kind: "assistant", text: item.text, done: true }
+    return [item.kind === "user" ? { kind: "user", text: item.text } : { kind: "assistant", text: item.text, done: true }]
   })
   const notes: Line[] = [{ kind: "info", text: `Mở lại phiên "${loaded.summary.title}" · ${loaded.summary.turns} lượt` }]
   if (loaded.patched > 0) notes.push({ kind: "info", text: `${loaded.patched} lần gọi tool bị ngắt ở phiên trước đã được đánh dấu là lỗi.` })

@@ -19,8 +19,16 @@ export const SkillFrontmatter = z.object({
   activation: z.enum(["auto", "always", "manual"]).default("auto"),
   /** Deterministic pre-routing (HarnessPlan §5.3 L1): keywords suggest the skill for a turn. */
   triggers: z.object({ keywords: z.array(z.string()).default([]) }).optional(),
-  /** Hide the skill unless all these tools are available (e.g. an MCP data tool). */
+  /**
+   * Gate: hide the skill unless all these tools are available. Keep it to the one to three
+   * tools the skill cannot work without — every extra entry is another way to hide it.
+   */
   requires_tools: z.array(z.string()).optional(),
+  /**
+   * Tools loaded with the skill (deferred ones become callable without a tool_search).
+   * Read tools only; write tools stay behind tool_search. Unset: the requires_tools.
+   */
+  uses_tools: z.array(z.string()).optional(),
   version: z.union([z.string(), z.number()]).transform(String).optional(),
 })
 

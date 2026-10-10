@@ -1,10 +1,10 @@
 import { render, useKeyboard } from "@opentui/solid"
 import { createSignal } from "solid-js"
-import type { ChartData } from "../src/core/tools/chart/data"
-import type { ToolResult } from "../src/core/tools/types"
-import { chartRenderTool, type ChartRenderInput } from "../src/core/tools/chart/render"
-import { color } from "../src/tui/theme"
-import { ChartBox } from "../src/tui/ui/chart-box"
+import type { ChartData } from "../../src/core/tools/chart/data"
+import type { ToolResult } from "../../src/core/tools/types"
+import { chartRenderTool, type ChartRenderInput } from "../../src/core/tools/chart/render"
+import { color } from "../../src/tui/theme"
+import { ChartBox } from "../../src/tui/ui/chart-box"
 
 /**
  * Toàn bộ biểu đồ vẽ được, xem MÀU trực tiếp trong terminal (component ChartBox thật).

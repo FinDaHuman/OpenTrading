@@ -31,6 +31,17 @@ export interface Config {
    * `model`: their model; unset = the session's.
    */
   subagents?: { maxConcurrent?: number; provider?: string; model?: string }
+  /**
+   * Model for web side calls: provider-native search (web_search) and reading a page against
+   * a prompt (web_fetch). Unset: the session's model. A cheap model saves quota.
+   */
+  webModel?: { provider?: string; model?: string }
+  /**
+   * Model steps per turn (each step = one model call that may run several tools in
+   * parallel; the last one is forced to answer). Default 10. Orchestrating skills that
+   * dispatch subagents still fit in 10; raise it for long research turns.
+   */
+  maxSteps?: number
 }
 
 export const loadConfig = () => readJson<Config>(configFile(), {})

@@ -210,6 +210,19 @@ test("hitting the step limit forces a final answer without tools", async () => {
   expect(events.some((e) => e.type === "text-delta")).toBe(true)
 })
 
+test("the step limit comes from config.maxSteps when the caller does not set one", async () => {
+  plan = { tool: "current_time", args: {}, always: true }
+  await saveConfig({ provider: "groq", model: "tooly", maxSteps: 5 })
+  try {
+    const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: registry() }))
+    expect(bodies).toHaveLength(5)
+    expect(bodies[4]!.tool_choice).toBe("none")
+    expect(events.some((e) => e.type === "notice" && e.text.includes("5 bước"))).toBe(true)
+  } finally {
+    await saveConfig({ maxSteps: undefined })
+  }
+})
+
 test("each round of tool results gets one unstored nudge; the last step gets only the summary prompt", async () => {
   plan = { tool: "current_time", args: {}, always: true }
   const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: registry(), maxSteps: 4 }))

@@ -39,6 +39,8 @@ import { ModelDialog } from "./dialogs/model"
 import { SkillsDialog, toggleSkill } from "./dialogs/skills"
 import { AgentsDialog, reloadAgents } from "./dialogs/agents"
 import { TasksDialog } from "./dialogs/tasks"
+import { focusWatchlist, WatchlistDialog } from "./dialogs/watchlist"
+import { watchlistOps } from "../core/tools/watchlist/local"
 import { noticesMessage, notificationText } from "../core/subagents/notification"
 import { fmtSeconds, fmtTokens } from "../core/subagents/result"
 import { ToolsDialog } from "./dialogs/tools"
@@ -277,7 +279,10 @@ async function sendTurn(runtime: Runtime, msg: Outgoing): Promise<boolean> {
             lineIndex((l) => l.kind === "tool" && l.callId === event.callId),
             (l) => Object.assign(l, { status: event.ok ? "ok" : "error", output: event.output, durationMs: event.durationMs }),
           )
-          if (event.ok && event.chart) pushLine({ kind: "chart", data: event.chart })
+          if (event.ok && event.chart) {
+            pushLine({ kind: "chart", data: event.chart })
+            currentSession().noteChart(event.callId, event.chart)
+          }
           if (event.ok && todoCalls.has(event.callId)) {
             const parsed = TodoWriteInput.safeParse(todoCalls.get(event.callId))
             if (parsed.success) setState("liveTodos", parsed.data.todos)
@@ -412,6 +417,11 @@ export function App(props: {
     if (view.sessionId === currentSession().id) setState("agents", view.id, reconcile(view))
   })
   const offSlots = subagents.limiter.onChange(() => setState("agentSlots", subagents.limiter.stats()))
+  const offCharts = subagents.onChart((chart, view, callId) => {
+    if (view.sessionId !== currentSession().id) return
+    pushLine({ kind: "chart", data: chart })
+    currentSession().noteChart(callId, chart)
+  })
   // A background subagent finished: a line now, its result to the model when idle.
   const offFinished = subagents.onFinished((view) => {
     if (view.sessionId !== currentSession().id) return
@@ -427,6 +437,7 @@ export function App(props: {
     offPending()
     offAgents()
     offSlots()
+    offCharts()
     offFinished()
   })
   const offApproval = props.runtime.permissions.onChange((head) => {
@@ -508,6 +519,38 @@ export function App(props: {
   })
 
   /** `/mcp enable|disable|reconnect <name>` without opening the panel (as in Claude Code). */
+  /** `/watchlist [tên]` opens the panel; `new|add|rm|rename|del …` edit the personal lists. */
+  async function watchlistCommand(args: string) {
+    const [sub = "", ...rest] = args.split(/\s+/).filter(Boolean)
+    const home = props.runtime.home
+    const usage = "Dùng: /watchlist new <tên> · add <tên> <mã…> · rm <tên> <mã…> · rename <tên> <tên mới> · del <tên>"
+    try {
+      switch (sub.toLowerCase()) {
+        case "new":
+          if (!rest[0]) return pushLine({ kind: "error", text: usage })
+          return pushLine({ kind: "info", text: await watchlistOps.create(home, rest[0]) })
+        case "add":
+        case "rm":
+          if (!rest[0] || rest.length < 2) return pushLine({ kind: "error", text: usage })
+          return pushLine({
+            kind: "info",
+            text: await (sub.toLowerCase() === "add" ? watchlistOps.add : watchlistOps.remove)(home, rest[0], rest.slice(1)),
+          })
+        case "rename":
+          if (rest.length < 2) return pushLine({ kind: "error", text: usage })
+          return pushLine({ kind: "info", text: await watchlistOps.rename(home, rest[0]!, rest[1]!) })
+        case "del":
+          if (!rest[0]) return pushLine({ kind: "error", text: usage })
+          return pushLine({ kind: "info", text: await watchlistOps.delete(home, rest[0]) })
+        default:
+          focusWatchlist(sub || undefined)
+          return setState("dialog", "watchlist")
+      }
+    } catch (error) {
+      pushLine({ kind: "error", text: error instanceof Error ? error.message : String(error) })
+    }
+  }
+
   async function mcpCommand(args: string) {
     const [action, name] = args.split(/\s+/)
     const known = state.mcp.some((s) => s.name === name)
@@ -863,6 +906,8 @@ export function App(props: {
         return cmd.args ? toggleSkill(cmd.args) : setState("dialog", "skills")
       case "mcp":
         return cmd.args ? void mcpCommand(cmd.args) : setState("dialog", "mcp")
+      case "watchlist":
+        return void watchlistCommand(cmd.args)
       case "clear":
       case "new":
         return void clearTranscript(props.runtime)
@@ -1033,6 +1078,9 @@ export function App(props: {
             </Match>
             <Match when={state.dialog === "tasks"}>
               <TasksDialog runtime={props.runtime} />
+            </Match>
+            <Match when={state.dialog === "watchlist"}>
+              <WatchlistDialog runtime={props.runtime} />
             </Match>
             <Match when={state.dialog === "help"}>
               <HelpDialog onRun={(command) => run(command)} />

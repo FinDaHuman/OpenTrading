@@ -5,7 +5,7 @@ const SHADES = ["█", "▓", "▒", "░"]
 
 /**
  * Stacked bars: matrix rows = groups (one row each), columns = components summed
- * into the bar; shades tell the components apart (colour cannot). Input convention
+ * into the bar; in this text twin shades tell the components apart. Input convention
  * matches kind=heatmap: labels = row names then column names.
  */
 export function renderStacked(input: ChartRenderInput): { subtitle: string; body: string } {

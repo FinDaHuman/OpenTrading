@@ -34,39 +34,21 @@ async function frameWith(text: string) {
   return frame
 }
 
-test("charts show intact in the tool row (ctrl+o) and when the answer quotes them in a code block", async () => {
-  const candles = ((await chartRenderTool().execute({ kind: "candlestick", bars, symbol: "VCB" }, ctx())) as ToolResult).output as string
-  const compare = ((await chartCompareTool().execute(
-    { series: [{ label: "VCB", values: closes }, { label: "HPG", values: closes.map((v) => 80 - v) }] },
-    ctx(),
-  )) as ToolResult).output as string
-  const multi = ((await chartRenderTool().execute(
-    { kind: "multiline", matrix: [closes, closes.map((v) => 80 - v)], labels: ["VCB", "HPG"] },
-    ctx(),
-  )) as ToolResult).output as string
-  const axis = candles.split("\n").find((l) => l.includes("┤"))!.trim()
-  const compareRow = compare.split("\n")[1]!
-  const multiLegend = multi.split("\n").find((l) => l.includes("●"))!.trim()
-
+test("the tool row shows a one-line summary and the coloured chart is drawn once, no ASCII art", async () => {
+  const res = (await chartRenderTool().execute({ kind: "candlestick", bars, symbol: "VCB" }, ctx())) as ToolResult
   setState("expandTools", true)
   setState("lines", [
     { kind: "user", text: "vẽ nến VCB" },
-    { kind: "tool", callId: "c1", name: "chart_render", label: "chart_render candlestick VCB", status: "ok", output: candles },
-    {
-      kind: "assistant",
-      text: ["Nến VCB:", "", "```", candles, "```", "", "So với HPG:", "", "```", compare, "```", "", "```", multi, "```", "", "Xu hướng tăng nhẹ."].join("\n"),
-      done: true,
-    },
+    { kind: "tool", callId: "c1", name: "chart_render", label: "chart_render candlestick VCB", status: "ok", output: res.output },
+    { kind: "chart", data: res.chart! },
+    { kind: "assistant", text: "Xu hướng tăng nhẹ.", done: true },
   ])
-  setup = await testRender(() => <Transcript />, { width: 100, height: 120 })
+  setup = await testRender(() => <Transcript />, { width: 100, height: 60 })
   const frame = await frameWith("Xu hướng tăng nhẹ.")
-
   expect(frame).not.toContain(String.fromCharCode(27))
-  expect(frame).not.toMatch(/\[\d+(;\d+)*m/) // no stray colour codes printed as text
-  // A full, column-aligned chart row twice: in the expanded tool row and in the answer's code block.
-  expect(frame.split(axis).length - 1).toBe(2)
-  expect(frame).toContain(compareRow)
-  expect(frame).toContain(multiLegend)
+  expect(frame).toContain("Đã vẽ nến VCB")
+  // The model's text never carries the picture, so the transcript shows it once (the chart line).
+  expect(frame.split("Đã vẽ nến VCB").length - 1).toBe(1)
   expect(frame).toContain("Xu hướng tăng nhẹ.")
 })
 
@@ -117,11 +99,11 @@ test("a multiline chart paints each series in its own colour", async () => {
   const plot = setup!.captureSpans().lines.flatMap((l) => l.spans).filter((s) => isBraille(s.text))
   expect(plot.length).toBeGreaterThanOrEqual(2)
   const fgs = new Set(plot.map((s) => `${s.fg.r.toFixed(2)},${s.fg.g.toFixed(2)},${s.fg.b.toFixed(2)}`))
-  const tang = RGBA.fromHex(color.tang)
-  const giam = RGBA.fromHex(color.giam)
   const key = (c: RGBA) => `${c.r.toFixed(2)},${c.g.toFixed(2)},${c.b.toFixed(2)}`
-  expect(fgs.has(key(tang))).toBe(true)
-  expect(fgs.has(key(giam))).toBe(true)
+  // Categorical colours, not the up/down pair (two tickers in green/red read as up vs down).
+  expect(fgs.has(key(RGBA.fromHex(color.san)))).toBe(true)
+  expect(fgs.has(key(RGBA.fromHex(color.tham)))).toBe(true)
+  expect(fgs.has(key(RGBA.fromHex(color.giam)))).toBe(false)
 })
 
 const text = (data: ChartData, width = 80) => buildChart(data, width).grid.map((row) => row.map((c) => c.ch).join("")).join("\n")

@@ -25,7 +25,7 @@ Chạy `analyst_consensus` (limit=30) — feed chung không symbol, parse rating
 
 **Bước 2: Mã cụ thể + tài liệu gốc (tuần tự sau Bước 1).**
 
-Chạy `analyst_consensus` (symbol, limit=15) + `vs_documents` (symbol, chỉ lấy 1 mã đáng giá nhất) + `web_fetch` (URL trang báo cáo dạng HTML; web_fetch không đọc được file PDF — khi chỉ có PDF thì đưa link cho người dùng và nói rõ chưa đọc nội dung). Hỏi mã cụ thể mà `analyst_consensus` (symbol) empty → đọc feed chung và lọc title chứa mã (title-scrape filter có thể sót), không retry đổi limit.
+Chạy `analyst_consensus` (symbol, limit=15) + `vs_documents` (symbol, chỉ lấy 1 mã đáng giá nhất) + `web_fetch` (URL báo cáo, HTML hoặc PDF; truyền `prompt` để chỉ lấy khuyến nghị, giá mục tiêu, luận điểm chính). PDF dạng scan thì web_fetch báo không có lớp chữ: đưa link cho người dùng và nói rõ chưa đọc nội dung. Hỏi mã cụ thể mà `analyst_consensus` (symbol) empty → đọc feed chung và lọc title chứa mã (title-scrape filter có thể sót), không retry đổi limit.
 
 **Bước 3: Kiểm chứng upside (tuần tự, 1–2 mã nổi bật nhất).**
 
@@ -45,8 +45,8 @@ Trình bày kết luận đúng cấu trúc sau:
 
 **Ví dụ 1:**
 Hỏi: CTCK khuyên mua gì tuần này
-Trả lời: Feed chung **7 reports** — MBB MUA <số> · **MSN MUA <số> (<số>)** · VPB KHẢ QUAN <số> · MSB GIẢM TỶ TRỌNG <số> · FRT THEO DÕI <số> · filter symbol=VCB/FPT từng empty đúng hiện tượng → bảng ≥5 dòng có upside %, kiểm chứng 2 mã top, ≤8 calls. Thiếu cột "đã kiểm chứng" hoặc thiếu disclaimer thì chưa đạt; bịa target khi feed rỗng thì chưa đạt.
+Đạt khi: bảng ≥5 dòng có upside %, kiểm chứng 2 mã top, ≤8 calls. Thiếu cột "đã kiểm chứng" hoặc thiếu disclaimer thì chưa đạt; bịa target khi feed rỗng thì chưa đạt.
 
 ## Trực quan hóa
 
-Dữ liệu skill này nhận: upside % theo ticker. Sau khi MCP trả data, nếu có thể trực quan hóa: nạp skill `ve-bieu-do`, đối chiếu shape data với bảng chọn hình trong đó (bar diverging upside), chọn và vẽ biểu đồ phù hợp — không vẽ khi thiếu điểm tối thiểu, không bịa số minh họa.
+Chỉ vẽ khi người dùng muốn xem hình, hoặc khi có chuỗi thời gian / so sánh mà bảng khó đọc; tối đa 1 biểu đồ mỗi câu trả lời. Vẽ bằng `chart_render` với `from_call` (mã `[ref …]` ở đầu kết quả tool) để không phải gõ lại số; cần chọn loại hình thì nạp `ve-bieu-do`. Hình hợp với dữ liệu skill này: bar diverging upside.

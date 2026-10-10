@@ -5,6 +5,7 @@ import { appendFile, mkdir, readFile } from "node:fs/promises"
 import path from "node:path"
 import type { ModelMessage } from "ai"
 import { dataDir } from "../paths"
+import type { ChartData } from "../tools/chart/data"
 
 /**
  * Session transcripts as append-only JSONL, one file per session (the Claude Code / Codex
@@ -35,6 +36,11 @@ export type SessionEntry =
    * earlier `message` entries stay in the file, so the transcript can still show them.
    */
   | { type: "compact"; ts: string; trigger: "auto" | "manual"; before: number; after: number; messages: ModelMessage[] }
+  /**
+   * A chart drawn for a tool call: the model only got a summary (and a `from_call` chart's
+   * input holds just a ref), so the picture is kept here for the transcript on resume.
+   */
+  | { type: "chart"; ts: string; callId: string; data: ChartData }
 
 export interface SessionSummary {
   id: string
@@ -109,6 +115,13 @@ export class Session {
     return path.join(sessionsDir(), this.createdAt.slice(0, 4), this.createdAt.slice(5, 7), this.id)
   }
 
+  private pendingCharts: { callId: string; data: ChartData }[] = []
+
+  /** A chart drawn during the current turn; written with the turn. */
+  noteChart(callId: string, data: ChartData) {
+    this.pendingCharts.push({ callId, data })
+  }
+
   /** Record a compaction. Nothing to do before the first turn created the file. */
   appendCompact(entry: Omit<Extract<SessionEntry, { type: "compact" }>, "type" | "ts">) {
     this.writing = this.writing.then(async () => {
@@ -144,6 +157,7 @@ export class Session {
     }
     // Screenshots would bloat the file by megabytes per turn; keep a text placeholder.
     for (const message of stripImages(messages)) lines.push({ type: "message", ts, message })
+    for (const chart of this.pendingCharts.splice(0)) lines.push({ type: "chart", ts, ...chart })
     lines.push({ type: "turn_end", ts, provider: info.provider, model: info.model, contextTokens: info.contextTokens })
     await appendFile(this.path!, lines.map((l) => JSON.stringify(l)).join("\n") + "\n", "utf8")
 
@@ -192,6 +206,8 @@ export interface LoadedSession {
   messages: ModelMessage[]
   /** Everything for the transcript, with each compaction's marker and summary where it happened. */
   display: ModelMessage[]
+  /** Charts drawn per tool call id. */
+  charts: Map<string, ChartData>
   /** Context size after the last turn or compaction, if recorded. */
   contextTokens?: number
   /** Tool calls that had no result and were closed with an "interrupted" result. */
@@ -207,6 +223,7 @@ export async function loadSession(id: string): Promise<LoadedSession> {
   let raw: ModelMessage[] = []
   const shown: ModelMessage[] = []
   let contextTokens: number | undefined
+  const charts = new Map<string, ChartData>()
   for (const line of text.split("\n")) {
     if (!line.trim()) continue
     try {
@@ -221,12 +238,13 @@ export async function loadSession(id: string): Promise<LoadedSession> {
         if (entry.messages[0] && isCompactMarker(entry.messages[0])) shown.push(...entry.messages.slice(0, 2))
         contextTokens = entry.after
       } else if (entry.type === "turn_end" && entry.contextTokens !== undefined) contextTokens = entry.contextTokens
+      else if (entry.type === "chart" && entry.callId && entry.data) charts.set(entry.callId, entry.data)
     } catch {
       // skip
     }
   }
   const { messages, patched } = closeDanglingToolCalls(raw)
-  return { summary, meta, messages, display: closeDanglingToolCalls(shown).messages, contextTokens, patched }
+  return { summary, meta, messages, display: closeDanglingToolCalls(shown).messages, contextTokens, patched, charts }
 }
 
 /**

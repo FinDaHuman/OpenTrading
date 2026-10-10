@@ -1,43 +1,39 @@
 ---
 name: ve-bieu-do
-description: "Vẽ biểu đồ màu trong terminal từ dữ liệu MCP đã có (nến+volume, đường giá, chỉ số, bar, pie, waterfall, stacked, boxplot, scatter, heatmap, gauge, sổ lệnh). Dùng khi người dùng muốn XEM biểu đồ, hoặc khi data phân tích có thể trực quan hóa."
+description: "Vẽ biểu đồ màu trong terminal từ dữ liệu tool đã có (nến + khối lượng, đường giá, bar, pie, waterfall, heatmap, sổ lệnh…). Dùng khi người dùng muốn xem biểu đồ, hoặc khi chuỗi số khó đọc dạng bảng và cần trực quan hóa."
 activation: auto
-requires_tools: [chart_render, chart_compare, chart_depth]
+requires_tools: [chart_render]
+uses_tools: [chart_render, chart_compare, chart_depth]
 triggers:
-  keywords: [vẽ biểu đồ, vẽ chart, vẽ nến, biểu đồ, đồ thị, chart, candlestick, sparkline, heatmap, gauge, donut, histogram, pie, waterfall, multiline, boxplot, scatter, nến, cột, tỷ trọng, dòng tiền, sổ lệnh, orderbook]
-version: 1.0.0
+  keywords: [vẽ biểu đồ, vẽ chart, vẽ nến, biểu đồ nến, biểu đồ, đồ thị, candlestick, sparkline, heatmap, gauge, donut, histogram, waterfall, multiline, boxplot, scatter, vẽ sổ lệnh]
+version: 1.1.0
 ---
 
 # Vẽ biểu đồ màu trong terminal
 
-Skill thuần hiển thị: số liệu lấy từ tool dữ liệu mỗi lần gọi, không có số live cố định — không bịa số minh họa thành số thật. Dùng lại dữ liệu đã có trong context, không fetch lại.
+Skill hiển thị: số liệu luôn lấy từ kết quả tool trong phiên, không bao giờ bịa số minh họa.
 
-## Procedure — làm theo thứ tự
+## Các bước
 
-1. **Nhìn shape data trước khi vẽ.** Đếm số cột, kiểu cột (time / giá / ±số / % / ma trận 2D), số điểm, đơn vị có đồng nhất không.
-2. **Duyệt cây quyết định** `references/choosing-a-form.md`: trả lời từng nút yes/no → **DỪNG ở node ★ đầu tiên khớp** → lấy danh sách candidates → **chọn 1 theo context câu hỏi user** (gợi ý chọn ghi dưới mỗi node ★). Chưa chắc tham số vẽ → đọc reference kind đó, CHỈ đọc file cần.
-3. **Lấy đủ data tối thiểu** (ngưỡng ghi trong từng node cây) rồi chạy `chart_render` (+symbol, +times trục X) / `chart_compare` / `chart_depth`.
-4. Đối chiếu `references/anti-patterns.md` trước khi trả lời.
-5. **Verdict 2–3 câu** đọc từ hình + số (trend, HH/LL, vị trí trong biên độ, đơn vị kVND: 57.3 = 57,300đ). Chart màu tự hiện trong TUI — KHÔNG chép hình vào câu trả lời.
+1. **Vẽ theo tham chiếu.** Mỗi kết quả tool có dữ liệu dạng mảng mở đầu bằng mã `[ref rN]`. Gọi `chart_render({from_call: "rN", kind})` (so sánh nhiều mã: `chart_compare({from_calls: ["r1", "r2"]})`) để harness tự lấy số — không gõ lại từng con số. Chỉ truyền số tay khi dữ liệu không đến từ tool.
+2. **Chưa chắc chọn hình nào** thì đọc `references/choosing-a-form.md`, đi theo cây yes/no và DỪNG ở node ★ đầu tiên khớp. Chỉ đọc thêm file reference của đúng loại hình đó.
+3. **Thiếu điểm tối thiểu** (ngưỡng ghi trong cây) thì báo thiếu dữ liệu, không vẽ.
+4. **Nhận xét 2–3 câu** từ hình và số (xu hướng, đỉnh/đáy, vị trí trong biên độ, đơn vị). Hình tự hiện trong TUI: không chép hình vào câu trả lời.
 
-## Non-negotiables
+## Lưu ý
 
-- **Nhìn shape trước, không map theo tên tool.** Cùng tool có thể ra nhiều shape (vd `money_flow` vừa có sign → winloss, vừa có BuyVal−SellVal → waterfall).
-- **Multiline cấm vẽ giá nhiều mã** (lệch magnitude → xẹp hình) — giá nhiều mã dùng `chart_compare`.
-- **Pie >7 lát → bar.** 1 value/max → donut, không pie 2 lát.
-- **Trục X khớp mọi chart time-series**: `┤` cố định cột 7, plot rộng cố định, ngày đầu trái — ngày cuối phải, dài thì quay dọc.
-- **Màu theo bảng giá VN**: tăng xanh lá, giảm đỏ — không tự phối màu.
-- **Mọi chart có đơn vị**: luôn truyền `unit` khi biết (kVND, %, tỷ, triệu cp...) — hiện ở tiêu đề `[unit]`.
-- **Trục X có đường ngang + chấm từng điểm**; trục Y riêng từng chart con (compare).
-- **Không vẽ chay**: thiếu điểm tối thiểu thì báo, không bịa.
+- Giá nhiều mã dùng `chart_compare` (% thay đổi), không vẽ chung một `multiline`.
+- Pie quá 7 lát thì dùng bar; một giá trị trên tổng thì dùng donut/gauge.
+- Luôn truyền `unit` khi biết (kVND, %, tỷ, triệu cp).
+- Mỗi câu trả lời tối đa 1 biểu đồ, trừ khi người dùng yêu cầu thêm.
 
-## Reference files
+## File tham khảo
 
-| File | Trả lời câu hỏi |
+| File | Dùng khi |
 |---|---|
-| `references/choosing-a-form.md` | Shape nào → chart nào, và TRÁNH chart nào |
-| `references/time-series.md` | Nến+volume chuẩn TV, line/area/spark, trục X khớp |
-| `references/comparison.md` | Bar diverging gốc 0, boxplot, histogram, compare % |
-| `references/part-to-whole.md` | Pie/donut thanh tỷ lệ, stacked, waterfall |
-| `references/relationship.md` | Scatter groups, multiline chỉ số, heatmap gradient |
-| `references/anti-patterns.md` | Những gì KHÔNG được vẽ |
+| `references/choosing-a-form.md` | Chọn loại hình theo dạng dữ liệu, và hình nên tránh |
+| `references/time-series.md` | Nến + khối lượng, đường giá, area, sparkline |
+| `references/comparison.md` | Bar, boxplot, histogram, so sánh % |
+| `references/part-to-whole.md` | Pie/donut, stacked, waterfall |
+| `references/relationship.md` | Scatter, multiline chỉ số, heatmap |
+| `references/anti-patterns.md` | Những gì không nên vẽ |

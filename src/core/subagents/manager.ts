@@ -7,6 +7,7 @@ import type { Skill } from "../skills/schema"
 import { loadSkillTool } from "../tools/builtin/load-skill"
 import { toolSearchTool } from "../tools/builtin/tool-search"
 import { ToolRegistry } from "../tools/registry"
+import type { ChartData } from "../tools/chart/data"
 import type { AgentOrigin, ToolDef } from "../tools/types"
 import { Limiter } from "./limiter"
 import { lastAssistantText } from "./result"
@@ -149,6 +150,14 @@ export class SubagentManager {
   onChange(listener: Listener) {
     this.listeners.add(listener)
     return () => this.listeners.delete(listener)
+  }
+
+  private chartListeners = new Set<(chart: ChartData, view: SubagentView, callId: string) => void>()
+
+  /** A subagent's tool drew a chart: the parent UI shows it (the child has no transcript of its own). */
+  onChart(listener: (chart: ChartData, view: SubagentView, callId: string) => void) {
+    this.chartListeners.add(listener)
+    return () => this.chartListeners.delete(listener)
   }
 
   /** A background run finished a turn (completed, failed or stopped): its result is ready. */
@@ -411,6 +420,7 @@ export class SubagentManager {
               const call = run.tools.find((t) => t.callId === event.callId)
               if (call) Object.assign(call, { status: event.ok ? "ok" : "error", durationMs: event.durationMs })
               this.emit(run)
+              if (event.ok && event.chart) for (const listener of this.chartListeners) listener(event.chart, viewOf(run), event.callId)
               break
             }
             case "step-usage":

@@ -7,8 +7,8 @@ Tiền rẻ/SBV nới (Reflation) → TPCP (lợi suất giảm) + tiết kiệm
 → suy thoái → tiết kiệm/USD/vàng (trú)
 
 Trigger định lượng (verify lại bằng tools mỗi lần dùng):
-- USD tăng nóng tháng + khối ngoại bán ròng = giảm tỷ trọng CK (corr VNI–USD −30%).
+- USD tăng nóng tháng + khối ngoại bán ròng = giảm tỷ trọng CK (tương quan VNI–USD: tra tool, không dùng số nhớ).
 - Spread SJC > 10% = đầu cơ/can thiệp sắp tới (timeline trong anchors).
 - Basis discount sâu + thanh khoản lớn = vùng đáy; premium + hưng phấn = cuối sóng.
-- BTC tháng mạnh = risk-on sớm cho VNI (Granger 1 chiều); vàng/USD không predictive.
+- BTC tháng mạnh = tín hiệu risk-on sớm cho VNI (kiểm trong `vn_asset_chains`); vàng/USD không dùng để dự báo.
 - TPDN BĐS lãi > 10% + wall đáo hạn Q4 = rủi ro hệ thống treo trên BĐS/bank.

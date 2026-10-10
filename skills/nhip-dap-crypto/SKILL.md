@@ -41,8 +41,8 @@ Trình bày kết luận đúng cấu trúc sau (đúng 3 câu):
 
 **Ví dụ 1:**
 Hỏi: BTC sao rồi
-Trả lời: BTC <số> (<số>) · funding <số>e-05 (trung tính) · OI <số>k · fear/greed <số> → 3 câu trả lời + 0 jargon không giải thích, ≤6 calls.
+Đạt khi: 3 câu trả lời + 0 jargon không giải thích, ≤6 calls.
 
 ## Trực quan hóa
 
-Dữ liệu skill này nhận: %24h các coin, funding, fear/greed. Sau khi MCP trả data, nếu có thể trực quan hóa: nạp skill `ve-bieu-do`, đối chiếu shape data với bảng chọn hình trong đó (bar diverging %24h, bar funding, gauge fear/greed), chọn và vẽ biểu đồ phù hợp — không vẽ khi thiếu điểm tối thiểu, không bịa số minh họa.
+Chỉ vẽ khi người dùng muốn xem hình, hoặc khi có chuỗi thời gian / so sánh mà bảng khó đọc; tối đa 1 biểu đồ mỗi câu trả lời. Vẽ bằng `chart_render` với `from_call` (mã `[ref …]` ở đầu kết quả tool) để không phải gõ lại số; cần chọn loại hình thì nạp `ve-bieu-do`. Hình hợp với dữ liệu skill này: bar diverging %24h, bar funding, gauge fear/greed.

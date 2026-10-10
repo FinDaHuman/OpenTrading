@@ -9,10 +9,10 @@
 - Chiều ngược cũng có ý nghĩa (CK→Bank, thép→CK, hóa chất→Bank): sóng VN thường đi 2 chiều bank↔CK↔BĐS.
 - Dầu khí không nối đuôi BĐS — trade dầu khí theo giá dầu + mùa, không theo flow NH→BĐS→DK.
 
-## 2. Lead-lag tuần
+## 2. Lead-lag
 
-- CK tuần này mạnh là leading indicator tốt nhất cho BĐS và VNI tuần sau; bank yếu hơn. Lead-lag tháng hầu hết âm nhẹ (mean-reversion) — không bắt lead tuyến tính ở horizon tháng, chỉ dùng chuỗi relative mục 1.
-- Không có tool lead-lag riêng: khi cần số mới, đọc từ lần `cycle_stats_finalize` gần nhất; vận hành hàng ngày dùng chuỗi mục 1.
+- Không có tool nào trả lead-lag tuần: không dùng nhận định "CK tuần này → BĐS/VNI tuần sau" làm bằng chứng.
+- Lead-lag tháng hầu hết âm nhẹ (mean-reversion): không bắt lead tuyến tính ở horizon tháng, chỉ dùng chuỗi relative mục 1.
 
 ## 3. Đọc RS 3M (tự tính từ `vn_index_ohlcv` 126 nến)
 
@@ -23,7 +23,7 @@
 
 ## 4. Quy tắc timing đỉnh (verify bằng `cycle_turning(year=...)`)
 
-1. **VNFIN đỉnh trước VNI 3–6 tháng = dấu hiệu cuối sóng** (mẫu textbook 2021: VNFIN 05/07 vs VNI 25/11, sớm ~5 tháng; lặp lại 2025–26).
+1. **VNFIN đỉnh trước VNI 3–6 tháng = dấu hiệu cuối sóng** (mẫu thường nhắc: năm 2021 — kiểm ngày đỉnh bằng `cycle_turning(year=2021)` trước khi trích).
 2. **VNREAL/VNUTI rướn sau đỉnh VNI 1–4 tháng = "last leg"** → thoát dần, không mua đuổi BĐS/utilities lúc này.
-3. Đáy panic: mọi chỉ số cùng đáy một ngày (mẫu 15/11/2022) trừ VNREAL đáy muộn ~1 tháng — BĐS luôn "chết cuối cùng" và hồi yếu nhất sau đáy.
+3. Đáy panic: các chỉ số thường đáy gần cùng lúc (mẫu cuối 2022 — kiểm bằng `cycle_turning`/`cycle_trough_events`), riêng BĐS hay đáy muộn hơn và hồi yếu nhất sau đáy.
 4. Ngoại lệ đã biết: khi VNI đỉnh sớm do trụ phi-tài-chính (VIC/VHM) kéo mà VNFIN rướn thêm (mẫu 2024) → luôn kiểm tra breadth (`breadth_scan`) kèm theo.
