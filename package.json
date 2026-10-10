@@ -22,7 +22,7 @@
     "@ai-sdk/mistral": "3.0.51",
     "@ai-sdk/openai": "3.0.88",
     "@ai-sdk/openai-compatible": "2.0.41",
-    "@ai-sdk/perplexity": "3.0.26",
+    "@ai-sdk/perplexity": "5.0.8",
     "@ai-sdk/togetherai": "2.0.41",
     "@ai-sdk/vercel": "2.0.39",
     "@ai-sdk/xai": "3.0.102",
