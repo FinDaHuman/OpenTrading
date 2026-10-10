@@ -38,6 +38,8 @@ export interface Runtime {
   detachMemory?: () => void
   /** Subagents started by spawn_subagent: progress, limits, stop. */
   subagents: SubagentManager
+  /** Data directory this runtime reads and writes (OPENTRADING_HOME or the test's temp dir). */
+  home: string
 }
 
 export type MemoryChoice = "none" | "file"
@@ -94,7 +96,7 @@ export function initRuntime(opts: { cwd?: string; home?: string; skills: () => S
   registry.register(spawnSubagentTool(subagents))
   registry.register(sendMessageTool(subagents))
   registry.register(stopAgentTool(subagents))
-  const runtime: Runtime = { registry, permissions, questions, mcp, hooks: new HookBus(), memory: new NoopMemory(), subagents }
+  const runtime: Runtime = { registry, permissions, questions, mcp, hooks: new HookBus(), memory: new NoopMemory(), subagents, home }
   switchMemory(runtime, opts.memory ?? new NoopMemory())
   return runtime
 }

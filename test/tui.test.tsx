@@ -658,9 +658,9 @@ test("/tools lists built-in and MCP tools", async () => {
     await setup.mockInput.typeText("/tools")
     setup.mockInput.pressEnter()
     // 5 core built-ins (current_time, load_skill, ask_user, todo_write, tool_search)
-    // + 16 local tools (chart, session, watchlist, web, spawn_subagent, send_message, stop_agent, doctor_local)
+    // + 18 local tools (chart, session, watchlist, web, spawn_subagent, send_message, stop_agent, doctor_local)
     // + propose_memory + 4 from the demo MCP server
-    frame = await setup.waitForFrame((f) => f.includes("Tool · 26") && f.includes("16 tool hoãn"))
+    frame = await setup.waitForFrame((f) => f.includes("Tool · 28") && f.includes("18 tool hoãn"))
     show(frame)
     // Regression for the 01/10 screenshot: every tool is exactly one line, long descriptions
     // end in "…" instead of wrapping mid-word, and the mark column is straight.
@@ -673,20 +673,20 @@ test("/tools lists built-in and MCP tools", async () => {
     expect(timeRow).toMatch(/…\s+\[chỉ đọc\]\s*$/)
     expect(frame).not.toMatch(/^\s+Asia\/H/m)
     expect(frame).toContain("Có sẵn")
-    // 3 demo tools (add is alwaysLoad) + 13 optional local tools (chart, session, watchlist, doctor, send_message, stop_agent)
-    expect(frame).toContain("16 tool hoãn: model chỉ thấy tên")
+    // 3 demo tools (add is alwaysLoad) + 15 optional local tools (chart, session, watchlist, doctor, send_message, stop_agent)
+    expect(frame).toContain("18 tool hoãn: model chỉ thấy tên")
     expect(timeRow).not.toContain("hoãn · ")
     expect(rows.find((r) => r.includes(" spawn_subagent "))).not.toContain("hoãn · ")
     expect(rows.find((r) => r.includes(" chart_render "))).toContain("hoãn · ")
     // ↑ from the first row wraps to the last: the Memory and MCP groups sit below the fold.
     setup.mockInput.pressArrow("up")
-    frame = await setup.waitForFrame((f) => f.includes("MCP · demo") && f.includes("26/26"))
+    frame = await setup.waitForFrame((f) => f.includes("MCP · demo") && f.includes("28/28"))
     show(frame)
     expect(frame).toContain("Memory")
     const tail = frame.split("\n").filter((l) => /^ {2}(❯ |  )[◇◆] \S/.test(l))
     expect(tail.find((r) => r.includes(" echo "))).toContain("hoãn · ")
     setup.mockInput.pressArrow("down")
-    await setup.waitForFrame((f) => f.includes("1/26"))
+    await setup.waitForFrame((f) => f.includes("1/28"))
   } finally {
     await saveConfig({ toolSearch: undefined })
   }
@@ -697,7 +697,7 @@ test("/tools lists built-in and MCP tools", async () => {
   expect(frame).toContain("ask_user")
   expect(frame).toMatch(/• questions \(bắt buộc\): array/)
   setup.mockInput.pressEscape()
-  await setup.waitForFrame((f) => f.includes("Tool · 26"))
+  await setup.waitForFrame((f) => f.includes("Tool · 28"))
   setup.mockInput.pressEscape()
   await setup.waitFor(() => state.dialog === undefined)
 })
@@ -2025,3 +2025,45 @@ test("background subagent: /clear stops it and its result never reaches the new 
     childGate = undefined
   }
 }, 30_000)
+
+test("/watchlist: edits by command, opens a list and shows live quotes from the MCP quote tool", async () => {
+  const asked: string[][] = []
+  runtime.registry.register({
+    name: "mcp__fakewl__vn_equity_quote_batch",
+    source: "mcp:fakewl",
+    description: "quotes",
+    input: z.object({ symbols: z.array(z.string()) }),
+    readOnly: true,
+    deferrable: true,
+    execute: async (input) => {
+      asked.push((input as { symbols: string[] }).symbols)
+      return JSON.stringify({
+        data: { quotes: [{ symbol: "VCB", close_price: 57300, percent_change: 1.2, volume_accumulated: 2_100_000 }, { symbol: "HPG", close_price: 26900, percent_change: -0.4 }] },
+        provenance: { source: "vnstock", as_of: "2026-10-10T14:30:00+07:00" },
+      })
+    },
+  })
+  try {
+    for (const command of ["/watchlist new dai-han", "/watchlist add dai-han vcb, hpg FPT"]) {
+      await setup.mockInput.typeText(command)
+      setup.mockInput.pressEnter()
+    }
+    await setup.waitForFrame((f) => f.includes('"DAI-HAN": FPT, HPG, VCB'))
+    await setup.mockInput.typeText("/watchlist")
+    setup.mockInput.pressEnter()
+    let frame = await setup.waitForFrame((f) => f.includes("Watchlist cá nhân · 1") && f.includes("DAI-HAN"))
+    setup.mockInput.pressEnter()
+    frame = await setup.waitForFrame((f) => f.includes("Watchlist DAI-HAN · 3 mã") && f.includes("57.300") && f.includes("Không có giá: FPT"))
+    show(frame)
+    expect(frame).toContain("+1,2%")
+    expect(frame).toContain("KL 2,1M")
+    expect(frame).toContain("nguồn: vnstock")
+    expect(asked).toEqual([["FPT", "HPG", "VCB"]])
+    setup.mockInput.pressEscape()
+    await setup.waitForFrame((f) => f.includes("Watchlist cá nhân · 1"))
+    setup.mockInput.pressEscape()
+    await setup.waitFor(() => state.dialog === undefined)
+  } finally {
+    runtime.registry.unregister("mcp__fakewl__")
+  }
+})

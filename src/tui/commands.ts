@@ -13,6 +13,7 @@ export const COMMANDS: CommandInfo[] = [
   { name: "agents", description: "Các loại subagent (có sẵn, người dùng, dự án) và tool của từng loại" },
   { name: "tasks", description: "Subagent của phiên này: đang chạy, đã xong; xem kết quả, dừng" },
   { name: "skill", args: "<tên>", description: "Bật / tắt một skill cho cả phiên" },
+  { name: "watchlist", args: "[tên]", description: "Watchlist cá nhân: xem giá; new|add|rm|rename|del để sửa" },
   { name: "profile", description: "Mở hồ sơ nhà đầu tư (INVESTOR.md)" },
   { name: "context", description: "Xem các tầng ngữ cảnh gửi cho model và số token" },
   { name: "mcp", description: "Trạng thái MCP server, cho phép / kết nối lại" },
