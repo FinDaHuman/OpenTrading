@@ -33,7 +33,7 @@ Gọi `cycle_stats_check`.
 
 **Bước 1: RS mảng live (song song).**
 
-Chạy `vn_index_ohlcv` cho VNINDEX + VN30 + VNFIN + VNREAL + VNUTI + VNMAT (count=126, interval=1D, `summary=true` nếu tool hỗ trợ), mỗi lượt tối đa 3 chỉ số để không dồn tải lên server. Tính RS 3 tháng (≈63 nến) từng chỉ số ngành vs VNINDEX = % thay đổi chỉ số ngành − % thay đổi VNINDEX; ghi rõ ngày đầu/cuối dùng để tính. Đối chiếu quy tắc đọc RS trong `references/rotation-chains.md` + tra `cycle_trough_events` so mẫu hồi sau đáy. Song song chạy `market_movers` + `breadth_scan` (sóng thật cần breadth > 50%).
+Chạy `vn_index_ohlcv` cho VNINDEX + VN30 + VNFIN + VNREAL + VNUTI + VNMAT (count=126, interval=1D; cần đủ nến để có giá 63 phiên trước, không dùng summary), mỗi lượt tối đa 3 chỉ số để không dồn tải lên server. Tính RS 3 tháng (≈63 nến) từng chỉ số ngành vs VNINDEX = % thay đổi chỉ số ngành − % thay đổi VNINDEX; ghi rõ ngày đầu/cuối dùng để tính. Đối chiếu quy tắc đọc RS trong `references/rotation-chains.md` + tra `cycle_trough_events` so mẫu hồi sau đáy. Song song chạy `market_movers` + `breadth_scan` (sóng thật cần breadth > 50%).
 
 **Bước 2: Timing đỉnh (tuần tự sau Bước 1).**
 

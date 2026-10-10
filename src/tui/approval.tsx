@@ -61,6 +61,14 @@ export function ApprovalPrompt(props: { gate: PermissionGate; request: ApprovalR
   let note = ""
   const req = () => props.request
   const destructive = () => req().annotations?.destructive === true
+  /** web_fetch asks per domain: a read, not a write. */
+  const domain = () => (req().scope?.startsWith("domain:") ? req().scope!.slice("domain:".length) : undefined)
+  const hintOf = (option: (typeof OPTIONS)[number]) =>
+    domain() && option.choice === "session"
+      ? "không hỏi lại domain này tới khi thoát"
+      : domain() && option.choice === "always"
+        ? "lưu vào cấu hình, cho domain này"
+        : option.hint
   const args = () => argLines(req().input)
   const description = () => req().description.split("\n").filter(Boolean).slice(0, 2)
 
@@ -122,7 +130,7 @@ export function ApprovalPrompt(props: { gate: PermissionGate; request: ApprovalR
   return (
     <DialogFrame
       title={
-        (destructive() ? "Cần xác nhận · thay đổi không hoàn tác được" : "Cần xác nhận · tool ghi") +
+        (destructive() ? "Cần xác nhận · thay đổi không hoàn tác được" : domain() ? `Cần xác nhận · đọc trang từ domain mới: ${domain()}` : "Cần xác nhận · tool ghi") +
         (req().agent ? ` · subagent ${req().agent!.type} (${truncate(req().agent!.description, 30)})` : "")
       }
       accent={destructive() ? color.giam : color.tham}
@@ -175,7 +183,7 @@ export function ApprovalPrompt(props: { gate: PermissionGate; request: ApprovalR
                 {option.label}
               </text>
               <text fg={color.tx3} wrapMode="none">
-                {option.hint}
+                {hintOf(option)}
               </text>
             </box>
           )

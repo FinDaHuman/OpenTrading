@@ -30,7 +30,8 @@ export interface Hit {
   date?: string
 }
 
-const TIMEOUT_MS = 30_000
+const TIMEOUT_MS = 45_000
+const NATIVE_TIMEOUT_MS = 15_000
 const cache = new LRUCache<string, string>({ max: 100, ttl: 5 * 60_000 })
 
 const hostOf = (url: string) => {
@@ -275,7 +276,9 @@ export async function runSearch(input: WebSearchInput, signal: AbortSignal, deps
   const cached = cache.get(key)
   if (cached) return `${cached}\n(kết quả lưu trong 5 phút)`
   const failures: string[] = []
-  const native = await (deps.native ?? defaultNative)(plan.query, plan, signal).catch((error: unknown) => {
+  // Its own budget: a slow or throttled provider search must leave time for the fallbacks.
+  const nativeSignal = AbortSignal.any([signal, AbortSignal.timeout(NATIVE_TIMEOUT_MS)])
+  const native = await (deps.native ?? defaultNative)(plan.query, plan, nativeSignal).catch((error: unknown) => {
     failures.push(`tìm kiếm của model: ${error instanceof Error ? error.message.slice(0, 120) : String(error)}`)
     return undefined
   })

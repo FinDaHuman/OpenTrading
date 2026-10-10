@@ -34,6 +34,8 @@ export interface ApprovalRequest {
   annotations?: ToolDef["annotations"]
   /** The subagent asking (its call is not a row of the main transcript). */
   agent?: AgentOrigin
+  /** What a per-call approval is about (`domain:example.com` for web_fetch). */
+  scope?: string
 }
 
 export interface Decision {
@@ -158,6 +160,7 @@ export class PermissionGate {
         input,
         annotations: def.annotations,
         ...(agent ? { agent } : {}),
+        ...(def.askFor ? { scope: def.askFor(input) } : {}),
       }
       const onAbort = () => {
         this.queue = this.queue.filter((p) => p.request.id !== request.id)
