@@ -13,6 +13,8 @@ const Common = {
   startupTimeoutMs: z.number().int().positive().optional(),
   /** Per tool call timeout. Default 60s. */
   toolTimeoutMs: z.number().int().positive().optional(),
+  /** Tool calls in flight at once to this server (main agent and subagents together); the rest queue. Default 4. */
+  maxConcurrent: z.number().int().positive().optional(),
   /** Only these tools are exposed (wildcard `*` allowed). Unset = all. */
   enabledTools: z.array(z.string()).optional(),
   /** These tools are hidden (wildcard `*` allowed); applied after `enabledTools`. */
@@ -78,6 +80,7 @@ export interface ServerEntry {
 
 export const DEFAULT_STARTUP_TIMEOUT_MS = 30_000
 export const DEFAULT_TOOL_TIMEOUT_MS = 60_000
+export const DEFAULT_MAX_CONCURRENT = 4
 
 /** Server names become part of tool names and config keys. */
 export const SERVER_NAME = /^[A-Za-z0-9_-]{1,48}$/

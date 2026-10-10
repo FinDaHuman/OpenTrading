@@ -40,7 +40,7 @@ export const STATUS: Record<McpState, { glyph: string; fg: string; text: string 
 const home = (file: string) => file.replace(/\\/g, "/").replace(/^.*\/\.opentrading\//, "~/.opentrading/")
 
 function statusText(s: McpServerStatus) {
-  if (s.state === "connecting" && s.error) return s.error // "Mất kết nối — thử lại lần 2/5…"
+  if (s.state === "connecting" && s.error) return s.error // "Mất kết nối — đang thử lại lần 2…"
   if (s.state === "connected") return `${STATUS.connected.text} · ${s.tools.length} tool${s.hiddenTools ? ` (ẩn ${s.hiddenTools})` : ""}`
   return STATUS[s.state].text
 }
