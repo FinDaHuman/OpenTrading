@@ -4,7 +4,7 @@ description: "Điều phối phân tích toàn diện một mã: mã, ngành, ti
 activation: auto
 requires_tools: [mcp__opentrading__stock_overview]
 triggers:
-  keywords: [phân tích, phân tích cổ phiếu, phân tích mã, toàn diện, chi tiết mã, mã này sao]
+  keywords: [phân tích cổ phiếu, phân tích mã, phân tích toàn diện, chi tiết mã, mã này sao]
 version: 1.3.0
 ---
 

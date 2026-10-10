@@ -4,7 +4,7 @@ description: "Vẽ biểu đồ màu trong terminal từ dữ liệu MCP đã c�
 activation: auto
 requires_tools: [chart_render, chart_compare, chart_depth]
 triggers:
-  keywords: [vẽ biểu đồ, vẽ chart, vẽ nến, biểu đồ, đồ thị, chart, candlestick, sparkline, heatmap, gauge, donut, histogram, pie, waterfall, multiline, boxplot, scatter, nến, cột, tỷ trọng, dòng tiền, sổ lệnh, orderbook]
+  keywords: [vẽ biểu đồ, vẽ chart, vẽ nến, biểu đồ nến, biểu đồ, đồ thị, candlestick, sparkline, heatmap, gauge, donut, histogram, waterfall, multiline, boxplot, scatter, vẽ sổ lệnh]
 version: 1.0.0
 ---
 

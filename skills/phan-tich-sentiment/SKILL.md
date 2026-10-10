@@ -4,7 +4,7 @@ description: "Đo dư luận về một mã trên Fireant: điểm sentiment, tr
 activation: auto
 requires_tools: [mcp__opentrading__sentiment_score]
 triggers:
-  keywords: [sentiment, dư luận, phố nói gì, crowd, fomo, tâm lý nhà đầu tư, comment]
+  keywords: [sentiment, dư luận, phố nói gì, crowd, fomo, tâm lý nhà đầu tư]
 version: 1.3.0
 ---
 

@@ -4,7 +4,7 @@ description: "Đọc chu kỳ kinh tế Mỹ và trạng thái rủi ro toàn c�
 activation: auto
 requires_tools: [mcp__opentrading__fred_series]
 triggers:
-  keywords: [kinh tế mỹ, recession, suy thoái, đường cong lợi suất, yield curve, risk-on, risk-off, fed bối cảnh, kinh tế toàn cầu]
+  keywords: [kinh tế mỹ, recession, suy thoái kinh tế mỹ, đường cong lợi suất, yield curve, risk-on, risk-off, fed bối cảnh, kinh tế toàn cầu]
 version: 1.3.0
 ---
 

@@ -66,11 +66,14 @@ export function initRuntime(opts: { cwd?: string; home?: string; skills: () => S
   registry.register(askUserTool(questions))
   registry.register(todoWriteTool())
   registry.register(
-    loadSkillTool(opts.skills, () =>
-      registry
-        .list()
-        .filter((d) => d.deferrable)
-        .map((d) => d.name),
+    loadSkillTool(
+      opts.skills,
+      () =>
+        registry
+          .list()
+          .filter((d) => d.deferrable)
+          .map((d) => d.name),
+      () => new Set(registry.list().map((d) => d.name)),
     ),
   )
   registry.register(chartRenderTool())

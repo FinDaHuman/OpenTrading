@@ -4,7 +4,7 @@ description: "Xếp hạng 2–6 mã cùng ngành theo chất lượng và đà 
 activation: auto
 requires_tools: [mcp__opentrading__compare_equities]
 triggers:
-  keywords: [so sánh, vs, so với, cùng ngành, mạnh nhất, leader, hơn kém, xếp hạng mã]
+  keywords: [so sánh, so sánh với, cùng ngành, mạnh nhất, leader, hơn kém, xếp hạng mã]
 version: 1.3.0
 ---
 

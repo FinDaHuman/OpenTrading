@@ -1,11 +1,11 @@
 ---
 name: chu-ky-tai-san-vn
-description: "Xác định pha chu kỳ đa tài sản VN (cổ phiếu, TPCP/TPDN, tiết kiệm, vàng, USD, xăng dầu, phái sinh, crypto) từ dòng tiền liên thị trường + mùa vụ + SBV, rồi suy ra lớp tài sản dẫn dắt tiếp theo."
-when_to_use: Câu hỏi về luân chuyển tiền giữa các lớp tài sản VN (chứng khoán–tiết kiệm–vàng–USD–trái phiếu–xăng dầu), pha tiền rẻ/căng thẳng, spread SJC, wall đáo hạn TPDN, basis phái sinh.
+description: "Định vị pha chu kỳ đa tài sản VN (cổ phiếu, trái phiếu, tiết kiệm, vàng, USD, phái sinh) từ dòng tiền liên thị trường, mùa vụ và lãi suất SBV. Dùng khi hỏi tiền đang chảy giữa các lớp tài sản VN thế nào."
 activation: auto
 triggers:
-  keywords: [tài sản việt nam, luân chuyển tiền, dòng tiền liên thị trường, vàng sjc, tỷ giá usd, lãi suất tiết kiệm, trái phiếu doanh nghiệp, maturity wall, basis phái sinh, tiền rẻ, stagflation việt nam]
-requires_tools: [vn_asset_check, vn_asset_seasonality, vn_asset_anchors, vn_asset_chains, vn_asset_refresh, vn_index_ohlcv, sbv_rates, market_movers, breadth_scan]
+  keywords: [tài sản việt nam, luân chuyển tiền, dòng tiền liên thị trường, lãi suất tiết kiệm, trái phiếu doanh nghiệp, maturity wall, basis phái sinh, tiền rẻ, stagflation việt nam]
+requires_tools: [vn_asset_check]
+uses_tools: [vn_asset_check, vn_asset_seasonality, vn_asset_anchors, vn_asset_chains, vn_index_ohlcv, vn_futures_ohlcv, sbv_rates, breadth_scan]
 version: 1.0.0
 ---
 

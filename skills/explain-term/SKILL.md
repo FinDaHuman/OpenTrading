@@ -3,7 +3,7 @@ name: explain-term
 description: "Giải thích một thuật ngữ chứng khoán (P/E, EPS, ROE, margin, ATO/ATC, room ngoại, T+2) bằng tiếng Việt đơn giản, ví dụ giả định và bẫy hay gặp. Dùng khi hỏi X là gì."
 activation: auto
 triggers:
-  keywords: [là gì, nghĩa là gì, giải thích, khái niệm, thuật ngữ]
+  keywords: [nghĩa là gì, khái niệm, thuật ngữ, giải thích thuật ngữ]
 version: 1.3.0
 ---
 

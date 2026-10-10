@@ -1,11 +1,11 @@
 ---
 name: chu-ky-tai-san-the-gioi
-description: "Xác định pha chu kỳ tài sản toàn cầu (ML Clock + NBER) trên 14 nhóm (cổ phiếu/bonds/credit/commodities/vàng/REITs/infra/USD/BTC) từ returns theo pha + regime tương quan + outlook banks, rồi suy ra tilt phân bổ."
-when_to_use: Câu hỏi về chu kỳ tài sản thế giới, phân bổ global (US/EM/bonds/vàng/BTC), stock-bond correlation regime, outlook các nhà băng/quỹ lớn, NBER-phase returns.
+description: "Định vị pha chu kỳ tài sản toàn cầu (cổ phiếu, trái phiếu, hàng hoá, vàng, USD, BTC) từ lợi suất theo pha, tương quan cổ phiếu–trái phiếu và outlook các quỹ lớn. Dùng khi hỏi phân bổ tài sản toàn cầu."
 activation: auto
 triggers:
-  keywords: [tài sản toàn cầu, global allocation, investment clock, stock bond correlation, suy thoái mỹ, recession mỹ, nber, ally weather, risk parity, outlook jpmorgan blackrock, overweight underweight]
-requires_tools: [g_asset_check, g_asset_seasonality, g_asset_phase, g_asset_corr, g_asset_outlook, g_asset_refresh]
+  keywords: [tài sản toàn cầu, global allocation, investment clock, stock bond correlation, suy thoái mỹ, recession mỹ, nber, all weather, risk parity, outlook jpmorgan blackrock, overweight underweight]
+requires_tools: [g_asset_check]
+uses_tools: [g_asset_check, g_asset_seasonality, g_asset_phase, g_asset_corr, g_asset_outlook]
 version: 1.0.0
 ---
 

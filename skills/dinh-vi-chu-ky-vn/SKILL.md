@@ -1,11 +1,11 @@
 ---
 name: dinh-vi-chu-ky-vn
-description: "Xác định pha thị trường VN (đầu phục hồi, giữa sóng, cuối sóng, suy thoái) từ RS mảng 3M + timing đỉnh VNFIN/VNREAL + mùa vụ tháng + SBV, rồi suy ra 1-2 mảng dẫn dắt tiếp theo theo thống kê rotation trong PG."
-when_to_use: Câu hỏi về giai đoạn/pha hiện tại của thị trường VN, sóng ngành tiếp theo, đỉnh/đáy chu kỳ, luân chuyển dòng tiền giữa Bank–Chứng–BĐS–Thép–Dầu khí.
+description: "Định vị pha thị trường VN (phục hồi, giữa sóng, cuối sóng, suy yếu) từ sức mạnh tương đối các nhóm ngành, mùa vụ và lãi suất SBV, rồi gợi ý 1–2 nhóm có thể dẫn dắt tiếp. Dùng khi hỏi thị trường đang ở giai đoạn nào, sóng ngành tiếp theo."
 activation: auto
 triggers:
-  keywords: [chu kỳ, giai đoạn thị trường, pha thị trường, luân chuyển, rotation, sóng ngành, đỉnh chu kỳ, tạo đỉnh, phân phối, đầu phục hồi, suy thoái, bank dẫn, chứng dẫn, dòng tiền ngành, cuối sóng, giữa sóng, mùa vụ ngành]
-requires_tools: [vn_index_ohlcv, seasonality, event_study, market_movers, breadth_scan, sbv_rates, cycle_stats_check, cycle_seasonality, cycle_chains, cycle_turning, cycle_tet, cycle_yearly, cycle_trough_events, cycle_stats_refresh, cycle_stats_finalize]
+  keywords: [chu kỳ thị trường, giai đoạn thị trường, pha thị trường, luân chuyển ngành, rotation, sóng ngành, đỉnh chu kỳ, giai đoạn phân phối, đầu phục hồi, bank dẫn, chứng dẫn, dòng tiền ngành, cuối sóng, giữa sóng, mùa vụ ngành]
+requires_tools: [cycle_stats_check, vn_index_ohlcv]
+uses_tools: [cycle_stats_check, cycle_seasonality, cycle_chains, cycle_turning, cycle_tet, cycle_yearly, cycle_trough_events, vn_index_ohlcv, seasonality, sbv_rates, breadth_scan, market_movers]
 version: 1.4.0
 ---
 

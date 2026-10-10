@@ -4,7 +4,7 @@ description: "Đọc vĩ mô Việt Nam: GDP, CPI, XNK, tỷ giá, lãi suất S
 activation: auto
 requires_tools: [mcp__opentrading__vs_indicator_data]
 triggers:
-  keywords: [vĩ mô, GDP, CPI, lạm phát, xuất khẩu, nhập khẩu, lãi suất điều hành, sbv, xnk, cán cân, câu chuyện thị trường, dẫn dắt]
+  keywords: [vĩ mô, GDP, CPI, lạm phát, xuất khẩu, nhập khẩu, lãi suất điều hành, sbv, xnk, cán cân, câu chuyện thị trường]
 version: 1.3.0
 ---
 

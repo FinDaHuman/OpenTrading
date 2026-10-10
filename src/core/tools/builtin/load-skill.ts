@@ -12,8 +12,10 @@ import type { ToolDef } from "../types"
  */
 export function loadSkillTool(
   skills: () => Skill[],
-  /** Deferred (tool-search) tools; those a skill requires are loaded with it. */
+  /** Deferred (tool-search) tools; those a skill uses are loaded with it. */
   deferrable: () => string[] = () => [],
+  /** Every registered tool name: a skill whose requires_tools are missing is hidden, and stays so here. */
+  available?: () => ReadonlySet<string>,
 ): ToolDef<{ name: string; file?: string }> {
   return {
     name: "load_skill",
@@ -35,13 +37,21 @@ export function loadSkillTool(
         throw new Error(`Không có skill "${name}". Các skill hiện có: ${names || "không có"}.`)
       }
       if (skill.activation === "manual") throw new Error(`Skill "${name}" chỉ người dùng bật được (/skill ${name}).`)
+      // The catalog hides such a skill; naming it anyway must not load instructions whose
+      // tools are not there.
+      const tools = available?.()
+      const missing = tools ? (skill.requires_tools ?? []).filter((t) => !tools.has(t) && matchToolPattern(t, tools).length === 0) : []
+      if (missing.length > 0) {
+        throw new Error(`Skill "${name}" đang tắt vì thiếu tool: ${missing.join(", ")} (MCP server chưa kết nối hoặc không có tool này; xem /mcp).`)
+      }
       if (file) return readSkillFile(skill, file)
       // A skill is a bundle of instructions + the tools they use: load those tools too, so
       // the model can follow the skill without a tool_search first. First line, so the
       // agent loop still sees it when a long body is cut.
       const pool = deferrable()
-      const tools = [...new Set((skill.requires_tools ?? []).flatMap((p) => matchToolPattern(p, pool)))]
-      const loaded = tools.length > 0 ? `${LOADED_PREFIX}${tools.join(", ")}\n` : ""
+      const wanted = skill.uses_tools ?? skill.requires_tools ?? []
+      const preload = [...new Set(wanted.flatMap((p) => matchToolPattern(p, pool)))]
+      const loaded = preload.length > 0 ? `${LOADED_PREFIX}${preload.join(", ")}\n` : ""
       return `${loaded}Thư mục skill: ${skill.dir}\n\n${skill.body}`
     },
   }
