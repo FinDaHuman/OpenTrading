@@ -660,7 +660,7 @@ test("/tools lists built-in and MCP tools", async () => {
     // 5 core built-ins (current_time, load_skill, ask_user, todo_write, tool_search)
     // + 18 local tools (chart, session, watchlist, web, spawn_subagent, send_message, stop_agent, doctor_local)
     // + propose_memory + 4 from the demo MCP server
-    frame = await setup.waitForFrame((f) => f.includes("Tool · 28") && f.includes("18 tool hoãn"))
+    frame = await setup.waitForFrame((f) => f.includes("Tool · 28") && f.includes("20 tool hoãn"))
     show(frame)
     // Regression for the 01/10 screenshot: every tool is exactly one line, long descriptions
     // end in "…" instead of wrapping mid-word, and the mark column is straight.
@@ -673,8 +673,8 @@ test("/tools lists built-in and MCP tools", async () => {
     expect(timeRow).toMatch(/…\s+\[chỉ đọc\]\s*$/)
     expect(frame).not.toMatch(/^\s+Asia\/H/m)
     expect(frame).toContain("Có sẵn")
-    // 3 demo tools (add is alwaysLoad) + 15 optional local tools (chart, session, watchlist, doctor, send_message, stop_agent)
-    expect(frame).toContain("18 tool hoãn: model chỉ thấy tên")
+    // 3 demo tools (add is alwaysLoad) + 17 optional local tools (incl. web_search/web_fetch) (chart, session, watchlist, doctor, send_message, stop_agent)
+    expect(frame).toContain("20 tool hoãn: model chỉ thấy tên")
     expect(timeRow).not.toContain("hoãn · ")
     expect(rows.find((r) => r.includes(" spawn_subagent "))).not.toContain("hoãn · ")
     expect(rows.find((r) => r.includes(" chart_render "))).toContain("hoãn · ")
@@ -1235,7 +1235,7 @@ test("/config: subagent limit is a number ≥ 1 applied live; subagent model lis
   expect((await Bun.file(path.join(home, "config.json")).json()).subagents).toEqual({ maxConcurrent: 3 })
   expect(runtime.subagents.limiter.stats().max).toBe(3)
 
-  await setup.mockInput.typeText("model cho")
+  await setup.mockInput.typeText("model cho subagent")
   setup.mockInput.pressEnter()
   frame = await setup.waitForFrame((f) => f.includes("Theo model của phiên (mặc định)"))
   show(frame)
@@ -1248,7 +1248,7 @@ test("/config: subagent limit is a number ≥ 1 applied live; subagent model lis
   expect(saved.maxConcurrent).toBe(3)
   expect(state.catalog[saved.provider]?.models[saved.model]?.tool_call).not.toBe(false)
   await setup.waitForFrame((f) => f.includes("Cài đặt"))
-  await setup.mockInput.typeText("model cho")
+  await setup.mockInput.typeText("model cho subagent")
   setup.mockInput.pressEnter()
   await setup.waitForFrame((f) => f.includes("Theo model của phiên (mặc định)"))
   setup.mockInput.pressEnter()

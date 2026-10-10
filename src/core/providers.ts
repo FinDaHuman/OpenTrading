@@ -95,6 +95,12 @@ function route(provider: CatalogProvider, model?: CatalogModel): { factory: Fact
 
 export const isSupported = (provider: CatalogProvider) => route(provider) !== undefined
 
+/** Which SDK package and base URL a provider/model pair uses (for provider-specific tools). */
+export function sdkOf(provider: CatalogProvider, modelId: string): { npm?: string; baseURL?: string } {
+  const model = provider.models[modelId]
+  return { npm: model?.provider?.npm ?? provider.npm, baseURL: model?.provider?.api ?? provider.api }
+}
+
 export function sortedProviders(catalog: Catalog): CatalogProvider[] {
   const rank = (id: string) => (PRIORITY.includes(id) ? PRIORITY.indexOf(id) : PRIORITY.length)
   return Object.values(catalog).sort((a, b) => rank(a.id) - rank(b.id) || a.name.localeCompare(b.name))

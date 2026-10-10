@@ -25,7 +25,7 @@ Chạy `analyst_consensus` (limit=30) — feed chung không symbol, parse rating
 
 **Bước 2: Mã cụ thể + tài liệu gốc (tuần tự sau Bước 1).**
 
-Chạy `analyst_consensus` (symbol, limit=15) + `vs_documents` (symbol, chỉ lấy 1 mã đáng giá nhất) + `web_fetch` (URL trang báo cáo dạng HTML; web_fetch không đọc được file PDF — khi chỉ có PDF thì đưa link cho người dùng và nói rõ chưa đọc nội dung). Hỏi mã cụ thể mà `analyst_consensus` (symbol) empty → đọc feed chung và lọc title chứa mã (title-scrape filter có thể sót), không retry đổi limit.
+Chạy `analyst_consensus` (symbol, limit=15) + `vs_documents` (symbol, chỉ lấy 1 mã đáng giá nhất) + `web_fetch` (URL báo cáo, HTML hoặc PDF; truyền `prompt` để chỉ lấy khuyến nghị, giá mục tiêu, luận điểm chính). PDF dạng scan thì web_fetch báo không có lớp chữ: đưa link cho người dùng và nói rõ chưa đọc nội dung. Hỏi mã cụ thể mà `analyst_consensus` (symbol) empty → đọc feed chung và lọc title chứa mã (title-scrape filter có thể sót), không retry đổi limit.
 
 **Bước 3: Kiểm chứng upside (tuần tự, 1–2 mã nổi bật nhất).**
 

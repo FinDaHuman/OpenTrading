@@ -80,6 +80,12 @@ export interface ToolDef<I = any> {
    */
   approval?: "never"
   /**
+   * Per-call approval for a tool that is otherwise free to run (web_fetch: per domain).
+   * Returns the scope to ask about (`domain:example.com`), or undefined when no prompt is
+   * needed. "Always allow" rules are stored per tool and scope.
+   */
+  askFor?: (input: unknown) => string | undefined
+  /**
    * Identity used for "always allow" rules: the MCP server's fingerprint (URL or command),
    * so a project server that reuses a trusted name does not inherit its permissions.
    */

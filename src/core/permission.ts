@@ -54,8 +54,16 @@ interface Pending {
 
 const NATIVE_SCOPE = "native"
 
-export function needsApproval(def: ToolDef) {
+export function needsApproval(def: ToolDef, input?: unknown) {
+  if (def.askFor) return def.askFor(input) !== undefined
   return !def.readOnly && def.approval !== "never"
+}
+
+/** The "always allow" scope: the tool's identity, plus the per-call part (`#domain:x`) when it asks per call. */
+function scopeOf(def: ToolDef, input: unknown) {
+  const base = def.permissionScope ?? NATIVE_SCOPE
+  const part = def.askFor?.(input)
+  return part ? `${base}#${part}` : base
 }
 
 function wildcard(pattern: string, value: string) {
@@ -123,20 +131,20 @@ export class PermissionGate {
     for (const listener of this.pendingListeners) listener(pending)
   }
 
-  private keyOf(def: ToolDef) {
-    return `${def.permissionScope ?? NATIVE_SCOPE}|${def.name}`
+  private keyOf(def: ToolDef, input: unknown) {
+    return `${scopeOf(def, input)}|${def.name}`
   }
 
-  private async allowedAlways(def: ToolDef) {
-    const scope = def.permissionScope ?? NATIVE_SCOPE
+  private async allowedAlways(def: ToolDef, input: unknown) {
+    const scope = scopeOf(def, input)
     return (await this.rules.load()).some((r) => r.scope === scope && wildcard(r.tool, def.name))
   }
 
   /** Resolve before the tool runs. Waiting here never counts against the tool's timeout. */
   async check(def: ToolDef, input: unknown, signal: AbortSignal, label = def.name, callId?: string, agent?: AgentOrigin): Promise<Decision> {
-    if (!needsApproval(def)) return { allow: true }
-    const key = this.keyOf(def)
-    if (this.session.has(key) || (await this.allowedAlways(def))) return { allow: true }
+    if (!needsApproval(def, input)) return { allow: true }
+    const key = this.keyOf(def, input)
+    if (this.session.has(key) || (await this.allowedAlways(def, input))) return { allow: true }
     if (!this.interactive) return { allow: false, reason: "headless" }
     if (signal.aborted) return { allow: false, reason: "cancelled" }
 
@@ -175,7 +183,7 @@ export class PermissionGate {
       if (choice === "session" || choice === "always") this.session.add(pending!.key)
       if (choice === "always") {
         const rules = await this.rules.load()
-        const rule = { tool: pending!.def.name, scope: pending!.def.permissionScope ?? NATIVE_SCOPE }
+        const rule = { tool: pending!.def.name, scope: scopeOf(pending!.def, pending!.request.input) }
         if (!rules.some((r) => r.tool === rule.tool && r.scope === rule.scope)) await this.rules.save([...rules, rule])
       }
       pending!.resolve({ allow: true })
@@ -206,7 +214,7 @@ export class PermissionGate {
 /** The error the model reads when the user says no. */
 export function deniedMessage(decision: Decision) {
   if (decision.reason === "cancelled") return "Lời gọi tool đã bị huỷ."
-  if (decision.reason === "headless") return "Tool này có tác dụng ghi và cần người dùng xác nhận, nhưng không có giao diện để hỏi. Không chạy."
+  if (decision.reason === "headless") return "Lời gọi này cần người dùng xác nhận (tool ghi, hoặc đọc domain chưa được cho phép), nhưng không có giao diện để hỏi. Không chạy."
   return decision.message
     ? `Người dùng từ chối chạy tool này. Lời nhắn của người dùng: ${decision.message}`
     : "Người dùng từ chối chạy tool này. Đừng thử lại cùng lời gọi; hỏi người dùng muốn làm gì khác."

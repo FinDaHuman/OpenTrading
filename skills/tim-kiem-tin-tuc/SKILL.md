@@ -40,7 +40,7 @@ Chọn ĐÚNG 1 mode dưới đây.
 
 **Validate chung.**
 
-`web_search` ẩn khi thiếu key → chỉ dùng Fireant+GDELT + ghi rõ "chưa quét web". Cả 2 nguồn news chết → đọc `snapshot_history` (kind=news_feed), bắt buộc ghi rõ "cache <ngày>".
+`web_search` báo không tìm được kết quả (bị chặn, không có key) → chỉ dùng Fireant+GDELT + ghi rõ "chưa quét web". Cả 2 nguồn news chết → đọc `snapshot_history` (kind=news_feed), bắt buộc ghi rõ "cache <ngày>".
 
 ## Cấu trúc câu trả lời
 

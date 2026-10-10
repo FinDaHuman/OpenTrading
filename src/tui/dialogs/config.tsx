@@ -11,7 +11,7 @@ import { color } from "../theme"
 import { DialogFrame } from "./frame"
 import { Picker } from "./picker"
 
-type Setting = "memory" | "toolSearch" | "autoCompact" | "maxSteps" | "subagentMax" | "subagentModel"
+type Setting = "memory" | "toolSearch" | "autoCompact" | "maxSteps" | "subagentMax" | "subagentModel" | "webModel"
 type SubagentModel = { provider: string; model: string } | "inherit"
 
 const TOOL_SEARCH_NEXT = { auto: "on", on: "off", off: "auto" } as const
@@ -25,7 +25,7 @@ const TOOL_SEARCH_HINT = {
 export function ConfigDialog(props: { runtime: Runtime }) {
   const [config, { refetch }] = createResource(loadConfig)
   /** A setting with its own sub-view (number entry, model list); undefined = the list. */
-  const [editing, setEditing] = createSignal<"maxSteps" | "subagentMax" | "subagentModel">()
+  const [editing, setEditing] = createSignal<"maxSteps" | "subagentMax" | "subagentModel" | "webModel">()
   const [error, setError] = createSignal("")
 
   useKeys((evt) => {
@@ -34,6 +34,10 @@ export function ConfigDialog(props: { runtime: Runtime }) {
 
   const maxConcurrent = () => config()?.subagents?.maxConcurrent ?? DEFAULT_MAX_CONCURRENT
   const maxSteps = () => config()?.maxSteps ?? DEFAULT_MAX_STEPS
+  const webModel = () => {
+    const w = config()?.webModel
+    return w?.model ? `${providerName(w.provider ?? state.provider)} · ${w.model}` : undefined
+  }
   const subagentModel = () => {
     const s = config()?.subagents
     return s?.model ? `${providerName(s.provider ?? state.provider)} · ${s.model}` : undefined
@@ -76,6 +80,12 @@ export function ConfigDialog(props: { runtime: Runtime }) {
     await refetch()
   }
 
+  async function saveWebModel(choice: SubagentModel) {
+    await saveConfig({ webModel: choice === "inherit" ? undefined : choice })
+    setEditing(undefined)
+    await refetch()
+  }
+
   async function saveModel(choice: SubagentModel) {
     const current = await loadConfig()
     const { provider: _p, model: _m, ...rest } = current.subagents ?? {}
@@ -85,7 +95,7 @@ export function ConfigDialog(props: { runtime: Runtime }) {
   }
 
   async function toggle(setting: Setting) {
-    if (setting === "maxSteps" || setting === "subagentMax" || setting === "subagentModel") return setEditing(setting)
+    if (setting === "maxSteps" || setting === "subagentMax" || setting === "subagentModel" || setting === "webModel") return setEditing(setting)
     if (setting === "autoCompact") {
       await saveConfig({ autoCompact: config()?.autoCompact === "off" ? "auto" : "off" })
       await refetch()
@@ -142,6 +152,23 @@ export function ConfigDialog(props: { runtime: Runtime }) {
             onSubmit={(v: unknown) => typeof v === "string" && void saveSteps(v)}
           />
           <text fg={color.giam}>{error()}</text>
+        </DialogFrame>
+      </Match>
+      <Match when={editing() === "webModel"}>
+        <DialogFrame title="Model cho tìm kiếm / đọc web" hint="enter chọn · esc quay lại">
+          <text fg={color.tx3}>Dùng cho web_search (tìm kiếm của chính provider: Gemini, Anthropic, OpenAI) và web_fetch có prompt. Model rẻ giúp tiết kiệm quota.</text>
+          <Picker
+            items={[
+              { label: "Theo model của phiên (mặc định)", mark: webModel() ? " " : "●", value: "inherit" as SubagentModel },
+              ...toolModels().map((m) => ({
+                ...m,
+                mark: config()?.webModel?.provider === (m.value as { provider: string }).provider && config()?.webModel?.model === (m.value as { model: string }).model ? "●" : " ",
+              })),
+            ]}
+            onPick={(c) => void saveWebModel(c)}
+            rows={12}
+            placeholder="gõ tên model để lọc…"
+          />
         </DialogFrame>
       </Match>
       <Match when={editing() === "subagentModel"}>
@@ -203,9 +230,15 @@ export function ConfigDialog(props: { runtime: Runtime }) {
                 mark: subagentModel() ? "●" : "○",
                 value: "subagentModel" as Setting,
               },
+              {
+                label: "Model cho tìm kiếm / đọc web",
+                hint: webModel() ?? "Mặc định: model của phiên · enter để chọn model rẻ hơn",
+                mark: webModel() ? "●" : "○",
+                value: "webModel" as Setting,
+              },
             ]}
             onPick={(s) => void toggle(s)}
-            rows={8}
+            rows={9}
           />
           <text fg={color.tx3} marginTop={1}>{`File cấu hình: ${configFile()}`}</text>
         </DialogFrame>

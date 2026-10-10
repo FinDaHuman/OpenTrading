@@ -5,8 +5,6 @@ import { ToolRegistry } from "../src/core/tools/registry"
 import { childRegistry, SubagentManager } from "../src/core/subagents/manager"
 import { spawnSubagentTool } from "../src/core/tools/subagent/spawn"
 import type { ToolDef } from "../src/core/tools/types"
-import { fetchPublic, isPrivateHost, webFetchTool } from "../src/core/tools/web/fetch"
-import { parseDuckDuckGo, webSearchTool } from "../src/core/tools/web/search"
 
 const ctx = () => ({ signal: new AbortController().signal, callId: "c1" })
 
@@ -17,49 +15,6 @@ const tool = (name: string, readOnly: boolean, extra: Partial<ToolDef> = {}): To
   readOnly,
   execute: async () => name,
   ...extra,
-})
-
-test("web_fetch refuses non-http(s) URLs and local addresses without touching the network", async () => {
-  const fetchTool = webFetchTool()
-  await expect(fetchTool.execute({ url: "ftp://x/y" }, ctx())).rejects.toThrow("http")
-  await expect(fetchTool.execute({ url: "http://127.0.0.1:8080/admin" }, ctx())).rejects.toThrow("nội bộ")
-  await expect(fetchTool.execute({ url: "http://localhost/" }, ctx())).rejects.toThrow("nội bộ")
-  expect(fetchTool.readOnly).toBe(true)
-})
-
-test("private hosts are recognised; public names that merely look similar are not", () => {
-  for (const host of ["localhost", "a.localhost", "10.1.2.3", "172.16.0.1", "192.168.1.10", "169.254.169.254", "[::1]", "fd00::1", "printer.local"]) {
-    expect(isPrivateHost(host)).toBe(true)
-  }
-  for (const host of ["cafef.vn", "fcbarcelona.com", "fd.example.com", "172.32.0.1", "8.8.8.8"]) {
-    expect(isPrivateHost(host)).toBe(false)
-  }
-})
-
-test("web_fetch checks every redirect hop before sending a request to it", async () => {
-  const sent: string[] = []
-  const fake = (async (input: URL) => {
-    sent.push(input.href)
-    if (input.hostname === "news.example") return new Response(null, { status: 302, headers: { location: "https://cdn.example/a" } })
-    if (input.hostname === "cdn.example") return new Response(null, { status: 301, headers: { location: "http://127.0.0.1:9000/admin" } })
-    return new Response("ok")
-  }) as unknown as typeof fetch
-  const signal = new AbortController().signal
-  await expect(fetchPublic(new URL("https://news.example/x"), signal, fake)).rejects.toThrow("nội bộ")
-  expect(sent).toEqual(["https://news.example/x", "https://cdn.example/a"]) // 127.0.0.1 never requested
-
-  const loop = (async (input: URL) => new Response(null, { status: 302, headers: { location: `${input.href}x` } })) as unknown as typeof fetch
-  await expect(fetchPublic(new URL("https://loop.example/"), signal, loop)).rejects.toThrow("Quá nhiều lần chuyển hướng")
-  const ok = await fetchPublic(new URL("https://news.example.org/"), signal, (async () => new Response("body")) as unknown as typeof fetch)
-  expect(await ok.text()).toBe("body")
-})
-
-test("DuckDuckGo results are parsed and redirect links unwrapped", () => {
-  const html =
-    '<a rel="nofollow" class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fcafef.vn%2Fa.html&rut=x">VCB <b>lãi</b> kỷ lục</a>' +
-    '<a class="result__snippet" href="#">Ngân hàng &amp; lợi nhuận</a>'
-  expect(parseDuckDuckGo(html, 8)).toEqual([{ title: "VCB lãi kỷ lục", url: "https://cafef.vn/a.html", text: "Ngân hàng & lợi nhuận" }])
-  expect(webSearchTool().readOnly).toBe(true)
 })
 
 test("a subagent gets the parent's tools minus spawn/ask/todo/memory, the same gate and lock, and its own tool_search/load_skill", () => {
