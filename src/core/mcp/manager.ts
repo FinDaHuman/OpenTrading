@@ -7,18 +7,22 @@ import { StreamableHTTPClientTransport, StreamableHTTPError } from "@modelcontex
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js"
 import {
   CallToolResultSchema,
+  ErrorCode,
+  McpError,
   PromptListChangedNotificationSchema,
   ResourceListChangedNotificationSchema,
   ToolListChangedNotificationSchema,
 } from "@modelcontextprotocol/sdk/types.js"
 import { z } from "zod"
 import type { JSONSchema7 } from "@ai-sdk/provider"
+import { Limiter } from "../subagents/limiter"
 import type { ToolRegistry } from "../tools/registry"
 import {
   configFiles,
   deleteServer,
   putServer,
   setServerEnabled,
+  DEFAULT_MAX_CONCURRENT,
   DEFAULT_STARTUP_TIMEOUT_MS,
   DEFAULT_TOOL_TIMEOUT_MS,
   expandConfig,
@@ -150,14 +154,18 @@ interface Live {
   client: Client
   transport: Transport
   kind: McpTransportKind
+  /** Treat this connection as dead: forget it and start reconnecting. */
+  drop?: () => void
 }
 
 export interface McpManagerOptions {
   home: string
   cwd: string
   trustFile: string
-  /** Delays between reconnect attempts after a remote server drops. */
+  /** Delays between reconnect attempts after a remote server drops; the last one repeats until it is back. */
   reconnectDelaysMs?: number[]
+  /** Delays between retries of a read-only tool call that failed on a dropped or overloaded server. */
+  callRetryDelaysMs?: number[]
   /** Delays between initialize retries on transient errors (network, 429, 5xx). */
   retryDelaysMs?: number[]
   /** Opens the OAuth URL; tests replace it. */
@@ -236,8 +244,39 @@ function isTransient(error: unknown) {
 /** The connection itself is gone (server down, network cut) — not a protocol-level error. */
 function isConnectionLost(error: unknown) {
   if (error instanceof SseError) return true
+  // A JSON-RPC error is the server answering, whatever its text says.
+  if (error instanceof McpError) return error.code === ErrorCode.ConnectionClosed
   const text = errorText(error)
-  return error instanceof TypeError || /ECONNREFUSED|ECONNRESET|fetch failed|socket|Unable to connect|Maximum reconnection attempts/i.test(text)
+  return (
+    error instanceof TypeError ||
+    /ECONNREFUSED|ECONNRESET|fetch failed|socket|Unable to connect|Maximum reconnection attempts|SSE stream disconnected|other side closed|terminated/i.test(text)
+  )
+}
+
+/**
+ * A remote call that died because the server went away or answered 502/503 (a PaaS host
+ * restarting it). Our own timeouts are not here: retrying those would only double the wait.
+ */
+function isRetryable(error: unknown) {
+  if (error instanceof TimeoutError) return false
+  if (error instanceof McpError) return error.code === ErrorCode.ConnectionClosed
+  return isConnectionLost(error) || isTransient(error)
+}
+
+/** Resolves after `ms`, or rejects as soon as `signal` aborts. */
+function pause(ms: number, signal: AbortSignal) {
+  return new Promise<void>((resolve, reject) => {
+    if (signal.aborted) return reject(new Error("Đã huỷ."))
+    const onAbort = () => {
+      clearTimeout(timer)
+      reject(new Error("Đã huỷ."))
+    }
+    const timer = setTimeout(() => {
+      signal.removeEventListener("abort", onAbort)
+      resolve()
+    }, ms)
+    signal.addEventListener("abort", onAbort, { once: true })
+  })
 }
 
 /** The server forgot our session (restart, idle expiry): a fresh initialize fixes it. */
@@ -283,6 +322,14 @@ export class McpManager {
   /** Bumped on every (re)connect/disconnect so stale attempts and reconnect loops stop. */
   private generation = new Map<string, number>()
   private listeners = new Set<(status: McpServerStatus[]) => void>()
+  /** Per-server cap on tool calls in flight, shared by the main agent and subagents. */
+  private limiters = new Map<string, Limiter>()
+  /** Servers with a reconnect loop running, so a waiting call does not start a second one. */
+  private reconnecting = new Set<string>()
+  /** Cuts the reconnect loop's current back-off short: a call is waiting, try now. */
+  private wakers = new Map<string, () => void>()
+  /** One health probe per connection after a 5xx, shared by every call that saw it. */
+  private probes = new WeakMap<Live, Promise<void>>()
   private stopping = false
   private trustStore: TrustStore
 
@@ -540,12 +587,17 @@ export class McpManager {
     const dropped = () => {
       if (!this.current(name, gen) || this.live.get(name)?.client !== client) return
       this.live.delete(name)
-      this.registry.unregister(serverPrefix(name))
       if (isRemote(config)) {
+        // Tools stay registered: a call made while we reconnect waits for the new
+        // connection (see `ready`) instead of failing — or vanishing from the model.
         void client.close().catch(() => {})
         void this.reconnectLoop(entry, gen)
-      } else this.set(name, { state: "failed", error: "Mất kết nối tới server.", tools: [] })
+      } else {
+        this.registry.unregister(serverPrefix(name))
+        this.set(name, { state: "failed", error: "Mất kết nối tới server.", tools: [] })
+      }
     }
+    live.drop = dropped
     client.onclose = dropped
     // Remote transports report a dead connection through onerror, not onclose: a broken
     // SSE stream, or the HTTP transport giving up on its GET stream.
@@ -577,18 +629,115 @@ export class McpManager {
     }
   }
 
-  /** Remote server dropped: back off and try again, a few times, unless something newer took over. */
+  /**
+   * Remote server gone: back off (capped at 30s) and try again until it is back, or until
+   * something newer took over (restart, disable, removal, stop). A free PaaS host can take
+   * a minute or more to come back, so a fixed number of tries is not enough.
+   */
   private async reconnectLoop(entry: ServerEntry, gen: number) {
-    const delays = this.opts.reconnectDelaysMs ?? [1000, 2000, 4000, 8000, 16000]
-    for (const [i, delay] of delays.entries()) {
-      if (!this.current(entry.name, gen)) return
-      this.set(entry.name, { state: "connecting", error: `Mất kết nối — thử lại lần ${i + 1}/${delays.length}…`, tools: [] })
-      await sleep(delay)
-      if (!this.current(entry.name, gen)) return
-      await this.connect(entry)
-      if (this.statuses.get(entry.name)?.state !== "failed") return
-      gen = this.generation.get(entry.name)!
+    if (this.reconnecting.has(entry.name)) return
+    this.reconnecting.add(entry.name)
+    try {
+      const delays = this.opts.reconnectDelaysMs ?? [1000, 2000, 4000, 8000, 16000, 30000]
+      for (let i = 0; ; i++) {
+        if (!this.current(entry.name, gen)) return
+        const last = i > 0 ? this.statuses.get(entry.name)?.error : undefined
+        this.set(entry.name, { state: "connecting", error: `Mất kết nối — đang thử lại lần ${i + 1}${last ? ` (${last.slice(0, 120)})` : ""}…` })
+        await new Promise<void>((resolve) => {
+          const timer = setTimeout(resolve, delays[Math.min(i, delays.length - 1)] ?? 1000)
+          this.wakers.set(entry.name, () => {
+            clearTimeout(timer)
+            resolve()
+          })
+        })
+        this.wakers.delete(entry.name)
+        if (!this.current(entry.name, gen)) return
+        await this.connect(entry)
+        if (this.statuses.get(entry.name)?.state !== "failed") return
+        gen = this.generation.get(entry.name)!
+      }
+    } finally {
+      this.reconnecting.delete(entry.name)
     }
+  }
+
+  /**
+   * The live connection for a tool call. While a remote server reconnects (or after it
+   * failed to come back), wait up to `waitMs` for it instead of failing at once: with
+   * subagents calling in parallel, instant failures just make the model retry dozens of
+   * times. Stops early when the server needs the user (auth, approval, disabled).
+   */
+  private async ready(name: string, waitMs: number, signal: AbortSignal): Promise<Live> {
+    const now = this.live.get(name)
+    if (now && this.statuses.get(name)?.state === "connected") return now
+    const entry = this.entries.get(name)
+    const stuck = (s?: McpServerStatus) => !s || s.state === "disabled" || s.state === "needs-auth" || s.state === "untrusted"
+    const notConnected = (s?: McpServerStatus) => new Error(`MCP server "${name}" chưa kết nối${s?.error ? `: ${s.error}` : ""}. Xem /mcp.`)
+    const status = this.statuses.get(name)
+    if (!entry?.config || !isRemote(entry.config) || stuck(status)) throw notConnected(status)
+    // Failed for good (e.g. it was still down when the app started): start trying again.
+    if (status?.state === "failed" && !this.reconnecting.has(name)) void this.reconnectLoop(entry, this.generation.get(name) ?? 0)
+    // Someone is waiting: don't let a 30s back-off outlast the wait.
+    else this.wakers.get(name)?.()
+    return new Promise<Live>((resolve, reject) => {
+      let off = () => {}
+      let timer: ReturnType<typeof setTimeout> | undefined
+      const finish = (fn: () => void) => {
+        off()
+        clearTimeout(timer)
+        signal.removeEventListener("abort", onAbort)
+        fn()
+      }
+      const check = () => {
+        const s = this.statuses.get(name)
+        const live = this.live.get(name)
+        if (live && s?.state === "connected") finish(() => resolve(live))
+        else if (stuck(s)) finish(() => reject(notConnected(s)))
+      }
+      const onAbort = () => finish(() => reject(new Error("Đã huỷ.")))
+      if (signal.aborted) return onAbort()
+      timer = setTimeout(
+        () =>
+          finish(() =>
+            reject(
+              new Error(
+                `MCP server "${name}" đang khởi động lại, chưa kết nối lại được sau ${Math.round(waitMs / 1000)}s. Đợi thêm một lúc rồi thử lại, đừng gọi lặp liên tục.`,
+              ),
+            ),
+          ),
+        waitMs,
+      )
+      signal.addEventListener("abort", onAbort, { once: true })
+      off = this.onChange(check)
+      check()
+    })
+  }
+
+  /**
+   * A call got 502/503/504. A PaaS proxy answers like that while the app behind it
+   * restarts, but so does one overloaded request. Ping once (shared by every call that
+   * saw it): if the server does not answer either, treat the connection as dead so
+   * callers wait for one reconnect instead of each retrying on their own.
+   */
+  private probe(live: Live) {
+    let pending = this.probes.get(live)
+    if (!pending) {
+      pending = live.client
+        .ping({ timeout: 5_000 })
+        .then(() => {}, () => live.drop?.())
+        .finally(() => this.probes.delete(live))
+      this.probes.set(live, pending)
+    }
+    return pending
+  }
+
+  private limiter(name: string) {
+    let limiter = this.limiters.get(name)
+    if (!limiter) {
+      limiter = new Limiter(() => this.entries.get(name)?.config?.maxConcurrent ?? DEFAULT_MAX_CONCURRENT)
+      this.limiters.set(name, limiter)
+    }
+    return limiter
   }
 
   /** Connect with retries on transient errors; Streamable HTTP falls back to SSE for older servers. */
@@ -744,6 +893,7 @@ export class McpManager {
     this.registry.unregister(serverPrefix(name))
     const taken = new Set(this.registry.list().map((t) => t.name))
     const toolTimeoutMs = config.toolTimeoutMs ?? DEFAULT_TOOL_TIMEOUT_MS
+    const startupTimeoutMs = config.startupTimeoutMs ?? DEFAULT_STARTUP_TIMEOUT_MS
     const priority = Math.max(0, [...this.entries.keys()].indexOf(name))
     // "Always allow" rules bind to what the server is (URL or command), not just its name.
     // Scope and the project's folder count too: identical raw config can run different code
@@ -782,7 +932,8 @@ export class McpManager {
         },
         permissionScope,
         // The wrapper's own timer is a backstop; the SDK enforces the real per-call timeout.
-        timeoutMs: toolTimeoutMs + 5_000,
+        // Room for waiting on a reconnect and the server's queue, and for retries of a read-only call.
+        timeoutMs: (tool.annotations?.readOnlyHint ? 2 : 1) * toolTimeoutMs + startupTimeoutMs + 5_000,
         maxOutputChars: config.maxOutputChars,
         summarize: (input) => `${name} · ${tool.name}(${compactArgs(input)})`,
         execute: async (input, ctx) => {
@@ -800,23 +951,57 @@ export class McpManager {
               // could never be reset by a long-running tool reporting progress.
               onprogress: () => {},
             })
-          const live = this.live.get(name)
-          if (!live) throw new Error(`MCP server "${name}" chưa kết nối. Xem /mcp.`)
-          try {
-            return resultToOutput(await call(live))
-          } catch (error) {
-            if (isRemote(config) && isAuthError(error)) {
-              this.set(name, { state: "needs-auth", error: authHint(name, config, error) })
-              throw new Error(authHint(name, config, error))
+          // At most `maxConcurrent` calls hit the server at once; queueing is not call time
+          // (the SDK timeout starts with the request).
+          const limited = async (live: Live) => {
+            // Local (stdio) servers are not capped: they share our machine, not a tiny host.
+            if (!isRemote(config)) return call(live)
+            const release = await this.limiter(name).acquire(ctx.signal)
+            try {
+              return await call(live)
+            } finally {
+              release()
             }
-            if (!isRemote(config) || !isSessionExpired(error) || ctx.signal.aborted) throw error
-            // Session expired on the server: initialize again and retry exactly once.
-            // Parallel calls that all hit the 404 share one restart instead of killing
-            // each other's fresh session.
-            await this.restartShared(name)
-            const fresh = this.live.get(name)
-            if (!fresh) throw error
-            return resultToOutput(await call(fresh))
+          }
+          const retryDelays = this.opts.callRetryDelaysMs ?? [1000, 3000]
+          // Only read-only calls are retried: a write may already have run on the server.
+          const retries = isRemote(config) && tool.annotations?.readOnlyHint ? retryDelays.length : 0
+          for (let attempt = 0; ; attempt++) {
+            const live = await this.ready(name, startupTimeoutMs, ctx.signal)
+            let result: Awaited<ReturnType<typeof call>>
+            try {
+              result = await limited(live)
+            } catch (error) {
+              if (ctx.signal.aborted) throw error
+              if (isRemote(config) && isAuthError(error)) {
+                this.set(name, { state: "needs-auth", error: authHint(name, config, error) })
+                throw new Error(authHint(name, config, error))
+              }
+              if (isRemote(config) && isSessionExpired(error) && attempt === 0) {
+                // Session expired on the server: initialize again and retry exactly once.
+                // Parallel calls that all hit the 404 share one restart instead of killing
+                // each other's fresh session.
+                await this.restartShared(name)
+                continue
+              }
+              if (!isRemote(config) || !isRetryable(error)) throw error
+              // The connection itself died: reconnect in the background; the next attempt
+              // (or the model's next call) waits for it in `ready`.
+              if (isConnectionLost(error)) live.drop?.()
+              else if ([502, 503, 504].includes(httpStatus(error) ?? 0)) await this.probe(live)
+              if (attempt >= retries) {
+                const status = httpStatus(error)
+                const why = status ? `HTTP ${status}` : errorText(error)
+                throw new Error(
+                  `MCP server "${name}" lỗi tạm thời (${why}) — có thể đang khởi động lại hoặc quá tải.${retries > 0 ? ` Đã thử lại ${retries} lần.` : tool.annotations?.readOnlyHint ? "" : " Tool này có thể ghi dữ liệu nên không tự thử lại; kiểm tra kết quả trước khi gọi lại."}`,
+                )
+              }
+              await pause(retryDelays[attempt]!, ctx.signal)
+              continue
+            }
+            // Outside the try: an error the tool itself reports (isError) is an answer, not a
+            // dead connection, even when its text says "ECONNRESET".
+            return resultToOutput(result)
           }
         },
       })

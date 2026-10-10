@@ -80,6 +80,7 @@ Nếu hai file có server trùng tên, cấu hình của project được dùng.
       "url": "https://data.example.com/mcp",
       "headers": { "Authorization": "Bearer ${DATA_TOKEN}" },
       "startupTimeoutMs": 15000,         // mặc định 30000
+      "maxConcurrent": 2,                // số lệnh gọi cùng lúc tới server này, mặc định 4
       "enabledTools": ["get_*", "search"],   // chỉ hiện các tool này (có thể dùng *)
       "disabledTools": ["get_raw_*"],        // ẩn các tool này
       "maxOutputChars": 12000                // cắt kết quả dài (giữ đầu + cuối)
@@ -142,6 +143,7 @@ Notion, Linear, Sentry, Atlassian… dùng OAuth: không cần token, chỉ cầ
   - Tên tham số không bao giờ bị đổi. Viết schema gọn, phẳng sẽ tốn ít token hơn.
 - **Không in gì ra stdout** ngoài giao thức, vì stdout là kênh MCP. Log thì ghi ra stderr. Khi server không khởi động được, 3 dòng stderr cuối cùng hiện trong `/mcp`.
 - **Timeout:** mặc định 30s để khởi động và 60s cho mỗi lần gọi tool. Đổi bằng `startupTimeoutMs` và `toolTimeoutMs`.
+- **Số lệnh gọi cùng lúc:** mỗi server nhận tối đa 4 lệnh gọi tool cùng lúc, tính chung cho agent chính và mọi subagent. Các lệnh còn lại xếp hàng; thời gian xếp hàng không tính vào `toolTimeoutMs` (nhưng vẫn nằm trong giới hạn tổng của một lần gọi, khoảng 2×`toolTimeoutMs` + `startupTimeoutMs`). Đổi bằng `maxConcurrent`. Chỉ áp dụng cho server remote. Server chạy trên gói hosting nhỏ (ví dụ Render free, 0.1 CPU) nên để 2–4.
 
 ## 6. Windows
 
@@ -234,6 +236,13 @@ Lệnh nhanh không mở panel: `/mcp enable <tên>`, `/mcp disable <tên>`, `/m
 - `ctrl+o` trong khung chat: mở rộng hoặc thu gọn toàn bộ kết quả tool.
 - Có thể thử mà không cần TUI: `bun src/core/chat.ts "mấy giờ rồi?"`. Lệnh này chỉ dùng các tool có sẵn.
 
-**Tự phục hồi.** Lỗi mạng hoặc server quá tải (429/5xx) lúc kết nối được thử lại 2 lần. Server remote bị rớt kết nối thì tự kết nối lại (tối đa 5 lần, chờ tăng dần). Server quên phiên (HTTP 404) thì gọi tool lại một lần sau khi khởi tạo phiên mới.
+**Tự phục hồi.**
+- Lỗi mạng hoặc server quá tải (429/5xx) lúc kết nối: thử lại 2 lần.
+- Server remote bị rớt kết nối: tự kết nối lại, chờ tăng dần 1s, 2s, 4s… tới tối đa 30s một lần, và thử mãi cho tới khi server sống lại (hoặc bị tắt / xoá / kết nối lại thủ công). Tool của server vẫn hiện cho model trong lúc này.
+- Gọi tool lúc server đang kết nối lại: lệnh gọi chờ tối đa `startupTimeoutMs` thay vì báo lỗi ngay. Server đã `failed` (ví dụ chưa dậy lúc mở app) thì lệnh gọi sẽ khởi động lại việc kết nối.
+- Gặp HTTP 502/503/504: ping server một lần (dùng chung cho mọi lệnh gọi). Ping cũng lỗi thì coi như server đang khởi động lại: các lệnh gọi chờ một lần kết nối lại chung.
+- Tool chỉ đọc (`readOnlyHint`) gặp mất kết nối hoặc HTTP 502/503/504 lúc đang gọi: tự gọi lại tối đa 2 lần (sau 1s, 3s, mỗi lần đều chờ kết nối lại nếu cần). Tool có thể ghi thì không tự gọi lại, vì có thể server đã chạy xong.
+- Lỗi HTML (trang 502 của Render, Cloudflare) được rút gọn thành một dòng trước khi đưa cho model.
+- Server quên phiên (HTTP 404): gọi tool lại một lần sau khi khởi tạo phiên mới.
 
 Chưa hỗ trợ trong bản này: transport WebSocket, `headersHelper`, elicitation, roots, đăng ký theo dõi resource.

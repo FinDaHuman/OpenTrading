@@ -9,7 +9,7 @@ import { startCallbackServer } from "../src/core/mcp/oauth"
 import { mcpAuthFile, readOAuth, oauthKey, setSecretEnv } from "../src/core/mcp/secrets"
 import { trustKey } from "../src/core/mcp/trust"
 import { ToolRegistry } from "../src/core/tools/registry"
-import { startHttpServer, startSseServer } from "./fixtures/remote-mcp"
+import { type CallStats, startHttpServer, startSseServer } from "./fixtures/remote-mcp"
 
 const cleanups: (() => unknown)[] = []
 
@@ -413,3 +413,172 @@ test("manager add / setEnabled / remove edit mcp.json and reload only what chang
   expect(registry.get("mcp__first__screenshot")).toMatchObject({ readOnly: true, displayName: "first · screenshot" })
   expect(registry.get("mcp__first__echo")!.permissionScope).toMatch(/^global:first@[0-9a-f]{16}$/)
 })
+
+// --- Server restarts under load (Render free tier killing the instance mid-call) ---
+
+const newStats = (): CallStats => ({ calls: 0, inFlight: 0, maxInFlight: 0, notes: 0 })
+
+test("calls made while a dropped server restarts wait for it instead of failing at once", async () => {
+  const first = startHttpServer()
+  const { manager, registry } = await managerWith({ data: { type: "http", url: first.url } })
+  await manager.start()
+  expect(state(manager, "data").state).toBe("connected")
+  // A subagent holds this definition from before the drop.
+  const echo = registry.get("mcp__data__echo")!
+  first.stop()
+
+  const started = Date.now()
+  const pending = echo.execute({ text: "vẫn chạy" }, ctx)
+  await Bun.sleep(400)
+  // Tools stay registered while reconnecting: the model can still call them.
+  expect(registry.get("mcp__data__echo")).toBeDefined()
+  const again = startHttpServer({ port: first.port })
+  cleanups.push(again.stop)
+
+  const result = await pending
+  expect(typeof result === "string" ? result : result.output).toContain("vẫn chạy")
+  expect(Date.now() - started).toBeGreaterThanOrEqual(400)
+  expect(state(manager, "data").state).toBe("connected")
+}, 20_000)
+
+test("reconnect keeps trying past the old five-attempt budget", async () => {
+  const first = startHttpServer()
+  const { manager } = await managerWith({ data: { type: "http", url: first.url } })
+  ;(manager as unknown as { opts: { reconnectDelaysMs: number[] } }).opts.reconnectDelaysMs = [30]
+  await manager.start()
+  const states: string[] = []
+  manager.onChange((all) => states.push(all.find((s) => s.name === "data")!.error ?? ""))
+  // Force the drop to be noticed: the dead connection fails the next call.
+  first.stop()
+  void manager.toolsOf("data")[0]!.execute({ text: "x" }, ctx).catch(() => {})
+  await Bun.sleep(600)
+  expect(states.some((e) => /thử lại lần ([6-9]|\d\d)/.test(e))).toBe(true)
+  const again = startHttpServer({ port: first.port })
+  cleanups.push(again.stop)
+  for (let i = 0; i < 100 && state(manager, "data").state !== "connected"; i++) await Bun.sleep(50)
+  expect(state(manager, "data").state).toBe("connected")
+}, 20_000)
+
+test("a read-only call is retried after a 502 page; a write call is not, and the model never sees the HTML", async () => {
+  const stats = newStats()
+  const remote = startHttpServer({ stats })
+  cleanups.push(remote.stop)
+  const { manager, registry } = await managerWith({ data: { type: "http", url: remote.url } })
+  ;(manager as unknown as { opts: { callRetryDelaysMs: number[] } }).opts.callRetryDelaysMs = [20, 20]
+  await manager.start()
+
+  remote.failCalls.count = 1
+  const ok = await registry.get("mcp__data__slow")!.execute({ ms: 1 }, ctx)
+  expect(typeof ok === "string" ? ok : ok.output).toContain("waited 1")
+  expect(stats.calls).toBe(1)
+
+  remote.failCalls.count = 3
+  const failed = await errorOf(Promise.resolve(registry.get("mcp__data__slow")!.execute({ ms: 1 }, ctx)))
+  expect(failed).toContain("HTTP 502")
+  expect(failed).toContain("Đã thử lại 2 lần")
+  remote.failCalls.count = 0
+
+  remote.failCalls.count = 1
+  const write = await errorOf(Promise.resolve(registry.get("mcp__data__note")!.execute({ text: "a" }, ctx)))
+  expect(write).toContain("HTTP 502")
+  expect(write).toContain("không tự thử lại")
+  expect(write).not.toContain("<html")
+  expect(write.length).toBeLessThan(400)
+  expect(remote.failCalls.count).toBe(0)
+  expect(stats.notes).toBe(0)
+  // The connection itself is fine after a 502: the next write goes through.
+  const saved = await registry.get("mcp__data__note")!.execute({ text: "b" }, ctx)
+  expect(typeof saved === "string" ? saved : saved.output).toContain("saved b")
+}, 20_000)
+
+test("the server dies with calls in flight: read-only calls finish after it is back, a write fails fast", async () => {
+  const stats = newStats()
+  const first = startHttpServer({ stats })
+  const { manager, registry } = await managerWith({ data: { type: "http", url: first.url } })
+  ;(manager as unknown as { opts: { callRetryDelaysMs: number[] } }).opts.callRetryDelaysMs = [20, 20]
+  await manager.start()
+  const slow = registry.get("mcp__data__slow")!
+  const note = registry.get("mcp__data__note")!
+  const reads = Array.from({ length: 3 }, () => slow.execute({ ms: 500 }, ctx))
+  const write = errorOf(Promise.resolve(note.execute({ text: "a", ms: 500 }, ctx)))
+  await Bun.sleep(100)
+  first.stop()
+  const writeError = await Promise.race([write, Bun.sleep(3000).then(() => "(hang)")])
+  expect(writeError).toContain("lỗi tạm thời")
+  expect(writeError).toContain("không tự thử lại")
+  const again = startHttpServer({ port: first.port, stats })
+  cleanups.push(again.stop)
+  const results = await Promise.all(reads)
+  for (const r of results) expect(typeof r === "string" ? r : r.output).toContain("waited 500")
+}, 20_000)
+
+test("a host answering 502 to everything while it restarts: calls wait for one reconnect, then succeed", async () => {
+  const stats = newStats()
+  const remote = startHttpServer({ stats })
+  cleanups.push(remote.stop)
+  const { manager, registry } = await managerWith({ data: { type: "http", url: remote.url } })
+  ;(manager as unknown as { opts: { callRetryDelaysMs: number[] } }).opts.callRetryDelaysMs = [20, 20]
+  await manager.start()
+  const slow = registry.get("mcp__data__slow")!
+  remote.down.status = 502
+  const calls = Array.from({ length: 3 }, () => slow.execute({ ms: 1 }, ctx))
+  await Bun.sleep(800)
+  // Retries alone (20ms + 20ms) are long over: the calls are waiting on the reconnect.
+  expect(state(manager, "data").state).not.toBe("connected")
+  remote.down.status = 0
+  const results = await Promise.all(calls)
+  for (const r of results) expect(typeof r === "string" ? r : r.output).toContain("waited 1")
+  expect(stats.calls).toBe(3)
+}, 20_000)
+
+test("an error the tool reports itself is returned once, even when its text looks like a network error", async () => {
+  const stats = newStats()
+  const remote = startHttpServer({ stats })
+  cleanups.push(remote.stop)
+  const { manager, registry } = await managerWith({ data: { type: "http", url: remote.url } })
+  ;(manager as unknown as { opts: { callRetryDelaysMs: number[] } }).opts.callRetryDelaysMs = [20, 20]
+  await manager.start()
+  const seen: string[] = []
+  manager.onChange((all) => seen.push(all.find((s) => s.name === "data")!.state))
+  const error = await errorOf(Promise.resolve(registry.get("mcp__data__upstream_down")!.execute({}, ctx)))
+  expect(error).toContain("ECONNRESET")
+  expect(stats.calls).toBe(1)
+  expect(seen).not.toContain("connecting")
+  expect(state(manager, "data").state).toBe("connected")
+})
+
+test("tool calls to one server are capped at maxConcurrent (default 4), the rest queue", async () => {
+  const stats = newStats()
+  const remote = startHttpServer({ stats })
+  cleanups.push(remote.stop)
+  const { manager, registry, home } = await managerWith({ data: { type: "http", url: remote.url } })
+  await manager.start()
+  const slow = registry.get("mcp__data__slow")!
+  await Promise.all(Array.from({ length: 7 }, () => slow.execute({ ms: 80 }, ctx)))
+  expect(stats.calls).toBe(7)
+  expect(stats.maxInFlight).toBe(4)
+
+  await writeFile(path.join(home, "mcp.json"), JSON.stringify({ mcpServers: { data: { type: "http", url: remote.url, maxConcurrent: 2 } } }))
+  await manager.reload()
+  stats.maxInFlight = 0
+  const slow2 = registry.get("mcp__data__slow")!
+  await Promise.all(Array.from({ length: 5 }, () => slow2.execute({ ms: 80 }, ctx)))
+  expect(stats.maxInFlight).toBe(2)
+}, 20_000)
+
+test("a queued call can be cancelled before it reaches the server", async () => {
+  const stats = newStats()
+  const remote = startHttpServer({ stats })
+  cleanups.push(remote.stop)
+  const { manager, registry } = await managerWith({ data: { type: "http", url: remote.url, maxConcurrent: 1 } })
+  await manager.start()
+  const slow = registry.get("mcp__data__slow")!
+  const running = slow.execute({ ms: 300 }, ctx)
+  const abort = new AbortController()
+  const queued = errorOf(Promise.resolve(slow.execute({ ms: 1 }, { signal: abort.signal, callId: "c2" })))
+  await Bun.sleep(50)
+  abort.abort()
+  expect(await queued).toContain("Đã huỷ")
+  await running
+  expect(stats.calls).toBe(1)
+}, 20_000)

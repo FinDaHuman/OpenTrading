@@ -14,8 +14,39 @@ import { z } from "zod"
  * Nothing here touches the network beyond 127.0.0.1.
  */
 
-function mcpServer() {
+/** Load counters for the extra tools: calls seen and the most running at once. */
+export interface CallStats {
+  calls: number
+  inFlight: number
+  maxInFlight: number
+  notes: number
+}
+
+function mcpServer(stats?: CallStats) {
   const server = new McpServer({ name: "remote-test", version: "0.1.0" })
+  if (stats) {
+    server.registerTool(
+      "slow",
+      { description: "Wait, then answer.", inputSchema: { ms: z.number() }, annotations: { readOnlyHint: true } },
+      async ({ ms }) => {
+        stats.calls++
+        stats.inFlight++
+        stats.maxInFlight = Math.max(stats.maxInFlight, stats.inFlight)
+        await Bun.sleep(ms)
+        stats.inFlight--
+        return { content: [{ type: "text", text: `waited ${ms}` }] }
+      },
+    )
+    server.registerTool("upstream_down", { description: "Report an upstream failure.", annotations: { readOnlyHint: true } }, async () => {
+      stats.calls++
+      return { isError: true, content: [{ type: "text", text: "upstream fetch failed: ECONNRESET" }] }
+    })
+    server.registerTool("note", { description: "Write a note.", inputSchema: { text: z.string(), ms: z.number().optional() } }, async ({ text, ms }) => {
+      if (ms) await Bun.sleep(ms)
+      stats.notes++
+      return { content: [{ type: "text", text: `saved ${text}` }] }
+    })
+  }
   server.registerTool(
     "echo",
     { description: "Echo back the text.", inputSchema: { text: z.string() }, annotations: { readOnlyHint: true } },
@@ -73,6 +104,10 @@ export interface HttpServerOptions {
   sloppy?: boolean
   /** Fail the first N initialize POSTs with this status (transient-error tests). */
   failFirst?: { count: number; status: number; body?: string }
+  /** Listen on this port (a restarted server comes back on the same URL). */
+  port?: number
+  /** Add the `slow` (read-only) and `note` (write) tools and count their calls here. */
+  stats?: CallStats
 }
 
 export function startHttpServer(opts: HttpServerOptions = {}) {
@@ -82,6 +117,15 @@ export function startHttpServer(opts: HttpServerOptions = {}) {
   const codes = new Map<string, { challenge: string; redirect: string }>()
   let tokenCounter = 0
   let failuresLeft = opts.failFirst?.count ?? 0
+  /** Answer the next N tools/call POSTs like a PaaS proxy whose app is restarting. */
+  const failCalls = { count: 0, status: 502 }
+  /** While `status` is set, every /mcp request gets that status and an HTML page (the app is down). */
+  const down = { status: 0 }
+  const page = (status: number) =>
+    new Response(`<!DOCTYPE html><html><head><title>${status} Bad Gateway</title></head><body>${"x".repeat(5000)}</body></html>`, {
+      status,
+      headers: { "content-type": "text/html" },
+    })
   let base = ""
 
   const issue = () => {
@@ -92,7 +136,7 @@ export function startHttpServer(opts: HttpServerOptions = {}) {
 
   const server = Bun.serve({
     hostname: "127.0.0.1",
-    port: 0,
+    port: opts.port ?? 0,
     async fetch(req) {
       const url = new URL(req.url)
       const json = (body: unknown, status = 200) => Response.json(body, { status })
@@ -157,6 +201,14 @@ export function startHttpServer(opts: HttpServerOptions = {}) {
       }
       if (opts.token && auth !== `Bearer ${opts.token}`) return new Response("unauthorized", { status: 401 })
 
+      if (down.status) return page(down.status)
+      if (req.method === "POST" && failCalls.count > 0) {
+        const body = (await req.clone().json().catch(() => ({}))) as { method?: string }
+        if (body.method === "tools/call") {
+          failCalls.count--
+          return page(failCalls.status)
+        }
+      }
       const sid = req.headers.get("mcp-session-id")
       if (sid) {
         const transport = sessions.get(sid)
@@ -173,7 +225,7 @@ export function startHttpServer(opts: HttpServerOptions = {}) {
           sessions.set(id, transport)
         },
       })
-      await (opts.sloppy ? sloppyServer() : mcpServer()).connect(transport)
+      await (opts.sloppy ? sloppyServer() : mcpServer(opts.stats)).connect(transport)
       return transport.handleRequest(req)
     },
   })
@@ -181,9 +233,12 @@ export function startHttpServer(opts: HttpServerOptions = {}) {
 
   return {
     url: `${base}/mcp`,
+    port: server.port,
     sessions,
     validTokens,
     registrations,
+    failCalls,
+    down,
     stop: () => server.stop(true),
   }
 }
