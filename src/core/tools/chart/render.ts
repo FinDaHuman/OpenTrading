@@ -57,6 +57,8 @@ export type ChartRenderInput = {
   label_field?: string
   /** Dotted path of the array when the result holds several. */
   path?: string
+  /** Symbol to draw from a result holding several (a batch call). */
+  from_symbol?: string
   symbol?: string
   bars?: { o: number; h: number; l: number; c: number; v?: number }[]
   series?: number[]
@@ -79,14 +81,15 @@ export function chartRenderTool(): ToolDef<ChartRenderInput> {
   return {
     name: "chart_render",
     description:
-      "Vẽ biểu đồ màu trong TUI từ dữ liệu đã có. Ưu tiên from_call: mã rN trong [ref rN] ở đầu kết quả tool dữ liệu — harness tự lấy số, không gõ lại (candlestick, line/area/sparkline/linebox/sparkcolumn/histogram/winloss, bar/pie). Chỉ truyền số tay khi dữ liệu không đến từ tool: candlestick (bars ≥5), line… (series), bar/pie (series+labels), heatmap/multiline/stacked/boxplot (matrix), waterfall (start+series), scatter (points), gauge/donut (value+max). Trả về tóm tắt số để nhận xét; hình tự hiện cho người dùng.",
+      "Vẽ biểu đồ màu trong TUI từ dữ liệu đã có. Ưu tiên from_call: mã rN trong [ref rN] ở đầu kết quả tool dữ liệu — harness tự lấy số, không gõ lại (candlestick, line/area/sparkline/linebox/sparkcolumn/histogram/winloss, bar/pie). Kết quả gọi gộp nhiều mã: chọn mã bằng from_symbol. Chỉ truyền số tay khi dữ liệu không đến từ tool: candlestick (bars ≥5), line… (series), bar/pie (series+labels), heatmap/multiline/stacked/boxplot (matrix), waterfall (start+series), scatter (points), gauge/donut (value+max). Trả về tóm tắt số để nhận xét; hình tự hiện cho người dùng.",
     input: z.object({
       kind: z.enum(KINDS).describe("Loại biểu đồ"),
       from_call: z.string().regex(/^r\d+$/, "dạng r12").optional().describe("Mã rN từ [ref rN] của kết quả tool dữ liệu"),
       field: z.string().max(40).optional().describe("Trường số cần vẽ khi dùng from_call (mặc định giá đóng cửa/giá trị), ví dụ volume"),
       label_field: z.string().max(40).optional().describe("Trường tên cho bar/pie khi dùng from_call, ví dụ symbol"),
       path: z.string().max(80).optional().describe("Đường dẫn mảng trong kết quả khi có nhiều mảng, ví dụ data.candles"),
-      symbol: z.string().optional().describe("Mã hoặc tiêu đề, ví dụ VCB"),
+      from_symbol: z.string().max(20).optional().describe("Mã cần vẽ khi kết quả from_call chứa nhiều mã (gọi gộp), ví dụ SHB"),
+      symbol: z.string().optional().describe("Mã hoặc tiêu đề, ví dụ VCB; bắt đầu bằng mã thì mã đó phải khớp dữ liệu"),
       bars: z.array(BarSchema).max(500).optional().describe("Nến OHLC cho kind=candlestick (tối thiểu 5)"),
       series: z
         .array(z.number())
@@ -100,7 +103,7 @@ export function chartRenderTool(): ToolDef<ChartRenderInput> {
         .max(30)
         .refine((m) => m.reduce((a, r) => a + r.length, 0) <= 5000, "matrix tối đa 5000 số")
         .optional()
-        .describe("Ma trận cho kind=heatmap; multiline/boxplot (mỗi dòng 1 series); stacked (mỗi hàng 1 nhóm)"),
+        .describe("Ma trận, chỉ cho kind=heatmap; multiline/boxplot (mỗi dòng 1 series); stacked (mỗi hàng 1 nhóm). bar/line… nhận series, không nhận matrix"),
       points: z.array(z.object({ x: z.number(), y: z.number() })).max(500).optional().describe("Điểm (x,y) cho kind=scatter (ít nhất 3)"),
       groups: z.array(z.number().int().nonnegative()).max(500).optional().describe("Nhóm từng điểm scatter (mỗi nhóm 1 màu + legend)"),
       times: z.array(z.string()).max(2000).optional().describe("Nhãn trục X theo thời gian (nến/line/area/multiline/spark, vd 09-01)"),
@@ -135,6 +138,8 @@ export function fromCall(input: ChartRenderInput): ChartRenderInput {
     field: input.field,
     labelField: input.label_field,
     path: input.path,
+    symbol: input.from_symbol,
+    hint: input.symbol,
   })
   const base = { kind: input.kind, symbol: input.symbol ?? got.symbol, unit: input.unit, width: input.width, height: input.height, from_call: input.from_call }
   const tail = <T,>(xs: T[] | undefined, max: number) => (xs && xs.length > max ? xs.slice(-max) : xs)
@@ -223,6 +228,12 @@ async function render(input: ChartRenderInput): Promise<string> {
   const H = (d: number) => Math.min(Math.max(input.height ?? d, 3), 40)
   const series = input.series ?? []
   const needSeries = (min: number, what: string) => {
+    // Several series as a matrix (grouped bars, several tickers): name the kinds that take one.
+    if (series.length === 0 && input.matrix?.length) {
+      throw new Error(
+        `${input.kind} vẽ một chuỗi (series${input.kind === "bar" || input.kind === "pie" ? " + labels" : ""}), không nhận matrix. Nhiều mã theo thời gian: kind=multiline (cùng đơn vị) hoặc chart_compare (so % thay đổi). Nhóm × thành phần: kind=stacked.`,
+      )
+    }
     if (series.length < min) throw new Error(`${input.kind} cần series ít nhất ${min} ${what}.`)
   }
   const needValue = (example: string) => {

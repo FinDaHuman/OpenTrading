@@ -39,29 +39,47 @@ function keyOf(row: Row, names: string[], wanted?: string) {
 interface Candidate {
   path: string
   rows: Row[] | number[]
+  /** Symbol of the object holding the array or of an ancestor (`series[i].symbol`, `data.symbol`). */
+  symbol?: string
 }
 
-/** Every array of objects (with a number) or of numbers, with its dotted path. */
-function candidates(value: unknown, path = "", out: Candidate[] = [], depth = 0): Candidate[] {
-  if (depth > 6 || value === null || typeof value !== "object") return out
+/** Objects that can name the arrays under them; checked in this order. */
+const OWNER_KEYS = ["symbol", "ticker", "code"]
+/** Nodes visited per result: deep, wide results stop here instead of exploding. */
+const VISIT_BUDGET = 5000
+/** Elements of one array walked into (a batch of up to this many symbols is fully seen). */
+const WALK_ELEMENTS = 50
+
+function ownerSymbol(value: Row, inherited: string | undefined) {
+  const k = keyOf(value, OWNER_KEYS)
+  const v = k ? value[k] : undefined
+  return typeof v === "string" && v.trim() !== "" ? v.trim().toUpperCase() : inherited
+}
+
+/** Every array of objects (with a number) or of numbers, with its path and owning symbol. */
+function candidates(value: unknown, path = "", out: Candidate[] = [], depth = 0, symbol?: string, budget = { left: VISIT_BUDGET }): Candidate[] {
+  if (depth > 6 || value === null || typeof value !== "object" || budget.left <= 0) return out
+  budget.left--
   if (Array.isArray(value)) {
-    if (value.length >= 2 && value.every((v) => typeof v === "number")) out.push({ path, rows: value as number[] })
+    if (value.length >= 2 && value.every((v) => typeof v === "number")) out.push({ path, rows: value as number[], symbol })
     else {
       const rows = value.filter((v): v is Row => !!v && typeof v === "object" && !Array.isArray(v))
-      if (rows.length >= 2 && rows.some((r) => Object.values(r).some((x) => num(x) !== undefined))) out.push({ path, rows })
-      value.slice(0, 5).forEach((v, i) => candidates(v, `${path}[${i}]`, out, depth + 1))
+      if (rows.length >= 2 && rows.some((r) => Object.values(r).some((x) => num(x) !== undefined))) out.push({ path, rows, symbol })
+      value.slice(0, WALK_ELEMENTS).forEach((v, i) => candidates(v, `${path}[${i}]`, out, depth + 1, symbol, budget))
     }
     return out
   }
-  for (const [k, v] of Object.entries(value)) candidates(v, path ? `${path}.${k}` : k, out, depth + 1)
+  const own = ownerSymbol(value as Row, symbol)
+  for (const [k, v] of Object.entries(value)) candidates(v, path ? `${path}.${k}` : k, out, depth + 1, own, budget)
   return out
 }
 
+/** `a.b[1].c` style paths. */
 function at(value: unknown, path: string): unknown {
   let cur = value
-  for (const part of path.split(".").filter(Boolean)) {
+  for (const part of path.match(/[^.[\]]+/g) ?? []) {
     if (cur === null || typeof cur !== "object") return undefined
-    cur = (cur as Record<string, unknown>)[part]
+    cur = Array.isArray(cur) && /^\d+$/.test(part) ? cur[Number(part)] : (cur as Record<string, unknown>)[part]
   }
   return cur
 }
@@ -100,6 +118,13 @@ export interface ExtractOptions {
   labelField?: string
   /** Need OHLC (candlestick). */
   ohlc?: boolean
+  /** Symbol to read from a result holding several (a batch); checked against the data. */
+  symbol?: string
+  /**
+   * Display name the model gave the chart ("SHB — 90 ngày"). A leading ticker picks that
+   * symbol from a batch, and must not name another symbol than the data's.
+   */
+  hint?: string
 }
 
 function symbolOf(value: unknown, rows: Row[]) {
@@ -111,26 +136,66 @@ function symbolOf(value: unknown, rows: Row[]) {
   return typeof first === "string" && rows.every((r) => r[k!] === first) ? first.toUpperCase() : undefined
 }
 
-/** Resolve `ref` and read the array the chart needs. Throws a readable error otherwise. */
-export function extractFromRef(ref: string, opts: ExtractOptions = {}): Extracted {
+/** A ticker-shaped first word of a display name ("SHB — 90 ngày" → SHB). */
+export function leadingTicker(hint: string | undefined) {
+  const m = /^\s*((?=[A-Z0-9]*[A-Z])[A-Z0-9]{3,10})(?![\p{L}\p{N}])/u.exec(hint ?? "")
+  return m?.[1]
+}
+
+interface Located {
+  stored: { tool: string; text: string }
+  value: unknown
+  all: Candidate[]
+  /** Arrays fit for the chart, longest first. */
+  pool: Candidate[]
+}
+
+function locate(ref: string, ohlc: boolean | undefined): Located {
   const stored = recallResult(ref)
   if (!stored) throw new Error(`Không còn kết quả "${ref}" (chỉ giữ ~40 kết quả gần nhất trong phiên). Gọi lại tool dữ liệu rồi dùng ref mới.`)
   const value = parseResult(stored.text)
   if (value === undefined) throw new Error(`Kết quả ${ref} (${stored.tool}) không phải JSON, không trích được số.`)
   const all = candidates(value)
+  const objectArrays = all.filter((c) => typeof c.rows[0] === "object")
+  const withOhlc = objectArrays.filter((c) => {
+    const r = c.rows[0] as Row
+    return keyOf(r, ALIASES.open) && keyOf(r, ALIASES.high) && keyOf(r, ALIASES.low) && keyOf(r, ALIASES.close)
+  })
+  const pool = (ohlc ? withOhlc : withOhlc.length > 0 ? withOhlc : all).slice().sort((a, b) => b.rows.length - a.rows.length)
+  return { stored, value, all, pool }
+}
+
+/** Distinct symbols owning the candidate arrays, in result order. */
+function symbolsIn(pool: Candidate[]) {
+  return [...new Set(pool.map((c) => c.symbol).filter((s): s is string => !!s))]
+}
+
+/** Symbols a stored result holds data for (several = a batch). */
+export function refSymbols(ref: string, opts: { ohlc?: boolean } = {}): string[] {
+  const { pool } = locate(ref, opts.ohlc)
+  return symbolsIn(pool.slice().sort((a, b) => a.path.localeCompare(b.path, undefined, { numeric: true })))
+}
+
+/** Resolve `ref` and read the array the chart needs. Throws a readable error otherwise. */
+export function extractFromRef(ref: string, opts: ExtractOptions = {}): Extracted {
+  const { stored, value, all, pool } = locate(ref, opts.ohlc)
   let chosen: Candidate | undefined
   if (opts.path) {
     const picked = at(value, opts.path)
     chosen = all.find((c) => c.path === opts.path) ?? (Array.isArray(picked) ? candidates(picked, opts.path)[0] : undefined)
     if (!chosen) throw new Error(`Không có mảng dữ liệu ở "${opts.path}" trong ${ref}. Có: ${all.map((c) => `${c.path || "(gốc)"} (${c.rows.length})`).join(", ") || "không có"}.`)
   } else {
-    const objectArrays = all.filter((c) => typeof c.rows[0] === "object")
-    const withOhlc = objectArrays.filter((c) => {
-      const r = c.rows[0] as Row
-      return keyOf(r, ALIASES.open) && keyOf(r, ALIASES.high) && keyOf(r, ALIASES.low) && keyOf(r, ALIASES.close)
-    })
-    const pool = opts.ohlc ? withOhlc : withOhlc.length > 0 ? withOhlc : all
-    chosen = pool.sort((a, b) => b.rows.length - a.rows.length)[0]
+    const known = symbolsIn(pool)
+    const wanted = opts.symbol?.trim().toUpperCase() || (known.length > 1 ? leadingTicker(opts.hint) : undefined)
+    if (wanted && known.length > 0) {
+      chosen = pool.find((c) => c.symbol === wanted)
+      if (!chosen) {
+        throw new Error(`Kết quả ${ref} không có dữ liệu mã ${wanted}. Mã có trong kết quả: ${known.join(", ")} — chọn bằng from_symbol.`)
+      }
+    } else if (known.length > 1) {
+      // A batch: taking the longest array would silently draw the first symbol.
+      throw new Error(`Kết quả ${ref} có dữ liệu nhiều mã: ${known.join(", ")}. Chọn một mã bằng from_symbol (ví dụ from_symbol: "${known[0]}").`)
+    } else chosen = pool[0]
   }
   if (!chosen) {
     throw new Error(
@@ -148,7 +213,8 @@ export function extractFromRef(ref: string, opts: ExtractOptions = {}): Extracte
   // Some sources list newest first: charts read left (old) to right (new).
   if (timeKey && rows.length > 1 && String(rows[0]![timeKey]) > String(rows[rows.length - 1]![timeKey])) rows = [...rows].reverse()
   const times = timeKey ? rows.map((r) => isoDay(r[timeKey])) : undefined
-  const symbol = symbolOf(value, rows)
+  const symbol = chosen.symbol ?? symbolOf(value, rows)
+  checkSymbol(ref, symbol, opts)
 
   if (opts.ohlc) {
     const [o, h, l, c] = [ALIASES.open, ALIASES.high, ALIASES.low, ALIASES.close].map((a) => keyOf(sample, a)!)
@@ -194,4 +260,43 @@ export function extractFromRef(ref: string, opts: ExtractOptions = {}): Extracte
     ...(labelKey ? { labels } : {}),
     ...(dirs ? { dirs } : {}),
   }
+}
+
+/**
+ * The data's symbol must be the one the model named: `from_symbol`, or a ticker leading the
+ * display name. A mismatch means the chart would show one symbol's numbers under another's name.
+ */
+function checkSymbol(ref: string, symbol: string | undefined, opts: ExtractOptions) {
+  if (!symbol) return
+  const named = opts.symbol?.trim().toUpperCase()
+  if (named) {
+    if (named !== symbol) throw new Error(`Kết quả ${ref} là dữ liệu mã ${symbol}, không phải ${named}. Dùng ref của lần gọi lấy dữ liệu ${named}.`)
+    return
+  }
+  const lead = leadingTicker(opts.hint)
+  if (lead && lead !== symbol) {
+    throw new Error(
+      `Tên biểu đồ bắt đầu bằng "${lead}" nhưng ${ref} là dữ liệu mã ${symbol}. Dùng ref của mã ${lead}, hoặc nếu "${lead}" không phải mã thì truyền from_symbol: "${symbol}".`,
+    )
+  }
+}
+
+/**
+ * Every series a result holds, one per symbol (a batch gives several), for comparisons.
+ * `symbols` keeps only those; a result without symbols gives its one series.
+ */
+export function extractAllFromRef(ref: string, opts: { field?: string; symbols?: string[] } = {}): Extracted[] {
+  const known = refSymbols(ref)
+  const wanted = opts.symbols?.map((s) => s.trim().toUpperCase()).filter(Boolean)
+  if (known.length <= 1) {
+    const one = extractFromRef(ref, { field: opts.field })
+    if (wanted?.length && one.symbol && !wanted.includes(one.symbol)) {
+      throw new Error(`Kết quả ${ref} là dữ liệu mã ${one.symbol}, không có ${wanted.join(", ")}.`)
+    }
+    return [one]
+  }
+  const picked = wanted?.length ? known.filter((s) => wanted.includes(s)) : known
+  const missing = wanted?.filter((s) => !known.includes(s)) ?? []
+  if (missing.length > 0) throw new Error(`Kết quả ${ref} không có mã ${missing.join(", ")}. Mã có: ${known.join(", ")}.`)
+  return picked.map((symbol) => extractFromRef(ref, { field: opts.field, symbol }))
 }

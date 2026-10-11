@@ -1,14 +1,16 @@
 import { z } from "zod"
 import { LOCAL_SOURCE, type ToolDef } from "../types"
 import type { ChartData } from "./data"
-import { extractFromRef } from "./extract"
+import { extractAllFromRef } from "./extract"
 import { summarizeChart } from "./summary"
 
 export type ChartCompareInput = {
   title?: string
   series?: { label: string; values: number[] }[]
-  /** Refs (`rN`) of 2–5 price results: their close series are compared. */
+  /** Refs (`rN`) of price results: every symbol each holds becomes a series (2–5 in all). */
   from_calls?: string[]
+  /** Keep only these symbols from the from_calls results. */
+  symbols?: string[]
   /** Numeric field for from_calls (default close/price). */
   field?: string
   width?: number
@@ -36,7 +38,7 @@ export function chartCompareTool(): ToolDef<ChartCompareInput> {
   return {
     name: "chart_compare",
     description:
-      "So sánh 2–5 chuỗi giá (mã với mã, mã với chỉ số) theo % thay đổi từ điểm đầu, cùng một thang. Ưu tiên from_calls: các mã rN trong [ref rN] của kết quả giá — harness tự lấy số. Chuỗi dài ngắn khác nhau được căn theo điểm cuối. Một chuỗi thì dùng chart_render kind=line.",
+      "So sánh 2–5 chuỗi giá (mã với mã, mã với chỉ số) theo % thay đổi từ điểm đầu, cùng một thang. Ưu tiên from_calls: các mã rN trong [ref rN] của kết quả giá — harness tự lấy số; một kết quả gọi gộp nhiều mã tự tách thành từng chuỗi (lọc bằng symbols). Chuỗi dài ngắn khác nhau được căn theo điểm cuối. Một chuỗi thì dùng chart_render kind=line.",
     input: z.object({
       title: z.string().optional().describe("Tiêu đề, ví dụ VCB vs HPG"),
       series: z
@@ -45,7 +47,13 @@ export function chartCompareTool(): ToolDef<ChartCompareInput> {
         .max(5)
         .optional()
         .describe("2–5 chuỗi cần so (khi không dùng from_calls)"),
-      from_calls: z.array(z.string().regex(/^r\d+$/)).min(2).max(5).optional().describe("2–5 mã rN của kết quả giá"),
+      from_calls: z
+        .array(z.string().regex(/^r\d+$/))
+        .min(1)
+        .max(5)
+        .optional()
+        .describe("Mã rN của kết quả giá; tổng cộng 2–5 chuỗi (một kết quả gộp nhiều mã cũng được)"),
+      symbols: z.array(z.string().max(20)).max(5).optional().describe("Chỉ lấy các mã này từ kết quả from_calls, ví dụ [\"FPT\",\"SHB\"]"),
       field: z.string().max(40).optional().describe("Trường số khi dùng from_calls (mặc định giá đóng cửa)"),
       width: z.number().int().min(10).max(80).optional().describe("Số điểm mỗi dòng (mặc định 40)"),
       ymin: z.number().optional().describe("Trục y dưới tùy biến (%); bỏ qua nếu để trống"),
@@ -62,11 +70,19 @@ export function chartCompareTool(): ToolDef<ChartCompareInput> {
       if ((raw.ymin === undefined) !== (raw.ymax === undefined)) throw new Error("ymin và ymax phải đi cùng nhau.")
       let input = raw as ChartCompareInput & { series: { label: string; values: number[] }[] }
       if (raw.from_calls) {
-        const got = raw.from_calls.map((ref) => extractFromRef(ref, { field: raw.field }))
+        // A batch result gives one series per symbol it holds.
+        const got = raw.from_calls.flatMap((ref) => extractAllFromRef(ref, { field: raw.field, symbols: raw.symbols }))
+        if (got.length < 2) {
+          throw new Error(`Chỉ có ${got.length} chuỗi (${got.map((g) => g.symbol ?? g.ref).join(", ")}); cần 2–5. Thêm kết quả giá của mã khác vào from_calls, hoặc vẽ một mã bằng chart_render kind=line.`)
+        }
+        if (got.length > 5) {
+          throw new Error(`Có ${got.length} chuỗi (${got.map((g) => g.symbol ?? g.ref).join(", ")}); tối đa 5. Chọn mã bằng symbols.`)
+        }
+        const labels = got.map((g) => g.symbol ?? g.ref)
         const longest = got.reduce((a, b) => ((b.series?.length ?? 0) > (a.series?.length ?? 0) ? b : a))
         input = {
           ...raw,
-          series: got.map((g) => ({ label: (g.symbol ?? g.ref).slice(0, 20), values: (g.series ?? []).slice(-2000) })),
+          series: got.map((g, i) => ({ label: labels[i]!.slice(0, 20), values: (g.series ?? []).slice(-2000) })),
           times: longest.times?.slice(-2000),
         }
         const short = input.series.find((s) => s.values.length < 2)
