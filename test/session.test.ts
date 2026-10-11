@@ -1,5 +1,5 @@
 import { afterAll, expect, test } from "bun:test"
-import { appendFile, mkdtemp, rm } from "node:fs/promises"
+import { appendFile, mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import type { ModelMessage } from "ai"
@@ -190,4 +190,24 @@ test("a chart drawn during a turn is written with the turn and comes back on res
   // Written once: the next turn does not repeat it.
   await session.appendTurn([{ role: "user", content: "tiếp" }], { cwd: home })
   expect((await loadSession(session.id)).charts.size).toBe(1)
+})
+
+test("sessions updated in the same millisecond list the one written last first", async () => {
+  const a = Session.create()
+  await a.appendTurn(turn2, info)
+  const b = Session.create()
+  await b.appendTurn(turn2, info)
+  // Same updatedAt on every line, as two writes in one millisecond produce.
+  const same = (text: string) =>
+    text
+      .split("\n")
+      .filter(Boolean)
+      .map((l) => JSON.stringify({ ...JSON.parse(l), updatedAt: "2026-10-11T14:46:23.358Z" }))
+      .join("\n") + "\n"
+  const index = path.join(sessionsDir(), "index.jsonl")
+  await writeFile(index, same(await readFile(index, "utf8")))
+  expect((await listSessions())[0]!.id).toBe(b.id)
+  const lineOfA = (await readFile(index, "utf8")).split("\n").find((l) => l.includes(a.id))!
+  await appendFile(index, lineOfA + "\n")
+  expect((await listSessions())[0]!.id).toBe(a.id)
 })
