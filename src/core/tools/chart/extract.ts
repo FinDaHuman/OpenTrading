@@ -1,4 +1,4 @@
-import { parseResult, recallResult } from "../refs"
+import { parseResult, recallResult, storedResults } from "../refs"
 import type { ChartBar } from "./data"
 
 /**
@@ -50,10 +50,13 @@ const VISIT_BUDGET = 5000
 /** Elements of one array walked into (a batch of up to this many symbols is fully seen). */
 const WALK_ELEMENTS = 50
 
+/** Ticker-shaped (FPT, VN30, BTC-USD), so a numeric ICB `code` or a status string never names data. */
+const TICKER = /^(?=.*[A-Z])[A-Z0-9._-]{2,15}$/i
+
 function ownerSymbol(value: Row, inherited: string | undefined) {
   const k = keyOf(value, OWNER_KEYS)
   const v = k ? value[k] : undefined
-  return typeof v === "string" && v.trim() !== "" ? v.trim().toUpperCase() : inherited
+  return typeof v === "string" && TICKER.test(v.trim()) ? v.trim().toUpperCase() : inherited
 }
 
 /** Every array of objects (with a number) or of numbers, with its path and owning symbol. */
@@ -186,7 +189,9 @@ export function extractFromRef(ref: string, opts: ExtractOptions = {}): Extracte
     if (!chosen) throw new Error(`Không có mảng dữ liệu ở "${opts.path}" trong ${ref}. Có: ${all.map((c) => `${c.path || "(gốc)"} (${c.rows.length})`).join(", ") || "không có"}.`)
   } else {
     const known = symbolsIn(pool)
-    const wanted = opts.symbol?.trim().toUpperCase() || (known.length > 1 ? leadingTicker(opts.hint) : undefined)
+    // In a batch, a display name starting with one of its symbols picks it ("SHB — 90 ngày").
+    const lead = leadingTicker(opts.hint)
+    const wanted = opts.symbol?.trim().toUpperCase() || (known.length > 1 && lead && known.includes(lead) ? lead : undefined)
     if (wanted && known.length > 0) {
       chosen = pool.find((c) => c.symbol === wanted)
       if (!chosen) {
@@ -273,8 +278,10 @@ function checkSymbol(ref: string, symbol: string | undefined, opts: ExtractOptio
     if (named !== symbol) throw new Error(`Kết quả ${ref} là dữ liệu mã ${symbol}, không phải ${named}. Dùng ref của lần gọi lấy dữ liệu ${named}.`)
     return
   }
+  // Only a token that is another stored result's symbol counts: chart titles often start
+  // with KLGD, LNST, ROE, EPS…, which are not tickers.
   const lead = leadingTicker(opts.hint)
-  if (lead && lead !== symbol) {
+  if (lead && lead !== symbol && otherRefHolds(lead, ref)) {
     throw new Error(
       `Tên biểu đồ bắt đầu bằng "${lead}" nhưng ${ref} là dữ liệu mã ${symbol}. Dùng ref của mã ${lead}, hoặc nếu "${lead}" không phải mã thì truyền from_symbol: "${symbol}".`,
     )
@@ -299,4 +306,24 @@ export function extractAllFromRef(ref: string, opts: { field?: string; symbols?:
   const missing = wanted?.filter((s) => !known.includes(s)) ?? []
   if (missing.length > 0) throw new Error(`Kết quả ${ref} không có mã ${missing.join(", ")}. Mã có: ${known.join(", ")}.`)
   return picked.map((symbol) => extractFromRef(ref, { field: opts.field, symbol }))
+}
+
+/** Symbols of each stored result, parsed once per result. */
+const symbolCache = new Map<string, string[]>()
+
+/** Whether a stored result other than `ref` holds data for `symbol`. */
+function otherRefHolds(symbol: string, ref: string) {
+  for (const stored of storedResults()) {
+    if (stored.ref === ref) continue
+    const key = `${stored.ref}@${stored.at}:${stored.text.length}`
+    let symbols = symbolCache.get(key)
+    if (!symbols) {
+      const value = parseResult(stored.text)
+      symbols = value === undefined ? [] : symbolsIn(candidates(value))
+      if (symbolCache.size > 200) symbolCache.clear()
+      symbolCache.set(key, symbols)
+    }
+    if (symbols.includes(symbol)) return true
+  }
+  return false
 }

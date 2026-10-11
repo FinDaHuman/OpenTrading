@@ -155,17 +155,21 @@ test("batch ref: chart_render never draws the first symbol by default; from_symb
   await expect(render({ kind: "line", from_call: ref, from_symbol: "VCB" })).rejects.toThrow("Mã có trong kết quả: FPT, SHB, NVL")
 })
 
-test("a single-symbol ref refuses a display name or from_symbol naming another symbol", async () => {
+test("a single-symbol ref refuses a display name naming another stored result's symbol, or another from_symbol", async () => {
   const ref = refOf(await callTool(batchTool({ FPT: five(100, 1) })))!
-  await expect(render({ kind: "candlestick", from_call: ref, symbol: "SHB — 90 ngày" })).rejects.toThrow(`${ref} là dữ liệu mã FPT`)
+  // Titles that start with an abbreviation, not a ticker, draw.
+  for (const symbol of ["KLGD FPT 20 phiên", "LNST FPT theo quý", "ROE FPT", "SHB — 90 ngày", "Giá đóng cửa 2026"]) {
+    expect((await render({ kind: "line", from_call: ref, symbol })).chart).toMatchObject({ kind: "line" })
+  }
   await expect(render({ kind: "candlestick", from_call: ref, from_symbol: "SHB" })).rejects.toThrow("không có dữ liệu mã SHB")
-  // A title that is not a ticker, or one that matches, draws.
+  // Once SHB's data is stored, "SHB — …" on FPT's ref is the r38/r39 mix-up: refused.
+  refOf(await callTool(batchTool({ SHB: five(10, 1) })))
+  await expect(render({ kind: "candlestick", from_call: ref, symbol: "SHB — 90 ngày" })).rejects.toThrow(`${ref} là dữ liệu mã FPT`)
   expect((await render({ kind: "candlestick", from_call: ref, symbol: "FPT — 90 ngày" })).chart).toMatchObject({ kind: "candlestick" })
-  expect((await render({ kind: "line", from_call: ref, symbol: "Giá đóng cửa 2026" })).chart).toMatchObject({ kind: "line" })
-  expect((await render({ kind: "line", from_call: ref, symbol: "TOP mã", from_symbol: "FPT" })).chart).toMatchObject({ kind: "line" })
+  expect((await render({ kind: "line", from_call: ref, symbol: "SHB so với", from_symbol: "FPT" })).chart).toMatchObject({ kind: "line" })
 })
 
-test("a batch of more than five symbols is fully seen; a huge nested result stops walking instead of hanging", async () => {
+test("a batch of more than five symbols is fully seen; a large nested result is walked quickly", async () => {
   const many = Object.fromEntries(["AAA", "BBB", "CCC", "DDD", "EEE", "FFF"].map((s, i) => [s, five(10 + i, 1)]))
   const ref = refOf(await callTool(batchTool(many)))!
   expect((await render({ kind: "line", from_call: ref, from_symbol: "FFF" })).chart).toMatchObject({ series: five(15, 1) })

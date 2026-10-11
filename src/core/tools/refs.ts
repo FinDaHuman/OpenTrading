@@ -39,6 +39,11 @@ export function recallResult(ref: string): StoredResult | undefined {
   return store.get(ref.trim().replace(/^\[?ref\s+/i, "").replace(/\]$/, ""))
 }
 
+/** Refs still stored, oldest first. */
+export function storedResults(): StoredResult[] {
+  return [...store.values()]
+}
+
 /** Tests only. */
 export function clearResults() {
   store.clear()
