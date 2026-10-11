@@ -126,7 +126,7 @@ test("the registry passes its gate to every tool call", async () => {
   registry.gate = new PermissionGate(memoryStore())
   registry.register(write())
   const set = registry.toToolSet().tools
-  const out = await (set["mcp__gh__create_issue"] as { execute: (i: unknown, o: { toolCallId: string; messages: [] }) => Promise<unknown> })
+  const out = await (set["mcp__gh__create_issue"] as unknown as { execute: (i: unknown, o: { toolCallId: string; messages: [] }) => Promise<unknown> })
     .execute({}, { toolCallId: "t", messages: [] })
     .catch((e: Error) => e.message)
   expect(out).toContain("không có giao diện để hỏi")

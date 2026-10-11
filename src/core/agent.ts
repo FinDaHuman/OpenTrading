@@ -1,7 +1,7 @@
 import {
   generateText,
   NoSuchToolError,
-  stepCountIs,
+  isStepCount,
   streamText,
   type LanguageModelUsage,
   type ModelMessage,
@@ -211,7 +211,12 @@ async function repairCall<T extends { toolName: string }>(
   const deferring = built.deferred.length > 0
   if (NoSuchToolError.isInstance(error)) {
     const names = resolveToolName(registry, toolCall.toolName).filter((n) => n in built.tools)
-    if (names.length === 1) return { ...toolCall, toolName: names[0]! }
+    // Only the tools active at this step can run (AI SDK 7 parses the repaired call against
+    // them): a short name for a deferred tool that is not loaded yet points at tool_search.
+    if (names.length === 1 && (!active || active.includes(names[0]!))) return { ...toolCall, toolName: names[0]! }
+    if (names.length === 1 && deferring) {
+      throw new Error(`Tool "${names[0]}" chưa được nạp: gọi tool_search với query "select:${names[0]}" để nạp rồi gọi lại.`)
+    }
     if (!deferring) return null
     const many = names.length > 1 ? ` Tên này khớp nhiều tool: ${names.join(", ")}.` : ""
     throw new Error(`Không có tool "${toolCall.toolName}".${many} Gọi tool_search (query "select:<tên>" hoặc từ khoá) để nạp tool rồi gọi lại.`)
@@ -237,14 +242,14 @@ interface Outcome {
 
 /** Relay one streamText run as AgentEvents and report what happened. */
 async function* relay(
-  result: StreamTextResult<ToolSet, never>,
+  result: StreamTextResult<ToolSet, Record<string, unknown>, never>,
   registry: ToolRegistry,
   signal: AbortSignal | undefined,
   outcome: Outcome,
 ): AsyncGenerator<AgentEvent> {
   const started = new Map<string, number>()
   try {
-    for await (const part of result.fullStream) {
+    for await (const part of result.stream) {
       switch (part.type) {
         case "start-step":
           outcome.steps++
@@ -530,7 +535,7 @@ export async function summarizeConversation(
     try {
       const result = await generateText({
         model,
-        system,
+        instructions: system,
         messages: request,
         tools: prepared.tools,
         activeTools: active,
@@ -659,19 +664,22 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
   let active = activeFor(built, request)
   const result = streamText({
     model,
-    system,
+    instructions: system,
     messages: request,
     tools,
-    stopWhen: stepCountIs(maxSteps),
+    stopWhen: isStepCount(maxSteps),
     // Every step exposes what the conversation has loaded so far, so a tool found by
     // tool_search is callable at the very next step.
     // Last allowed step: keep tools declared (some providers reject tool history otherwise)
     // but forbid calling them, so the turn always ends with an answer.
-    prepareStep: ({ stepNumber, messages }) => {
+    // Message overrides carry forward to later steps, so every step rebuilds its messages from
+    // the request plus what the model and tools produced: a nudge stays a one-step addition.
+    prepareStep: ({ stepNumber, initialMessages, responseMessages }) => {
       if (!tools) return undefined
+      const messages: ModelMessage[] = [...initialMessages, ...responseMessages]
       active = activeFor(built, messages)
       if (stepNumber < maxSteps - 1) {
-        if (!nudge || messages.at(-1)?.role !== "tool") return active ? { activeTools: active } : undefined
+        if (!nudge || messages.at(-1)?.role !== "tool") return { ...(active ? { activeTools: active } : {}), messages }
         return { ...(active ? { activeTools: active } : {}), messages: [...messages, { role: "user", content: toolNudge(messages) }] }
       }
       summarized = true
@@ -691,7 +699,7 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
   let messages: ModelMessage[] | undefined
   if (!outcome.aborted && !outcome.failure) {
     try {
-      messages = (await result.response).messages
+      messages = await result.responseMessages
     } catch (error) {
       outcome.failure = error
     }
@@ -703,7 +711,7 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
     const kept = messages.filter((m) => !isEmptyAssistant(m))
     const retry = streamText({
       model,
-      system,
+      instructions: system,
       // The nudge is only for this request; it is not kept in history.
       messages: [...request, ...kept, { role: "user", content: NUDGE_PROMPT }],
       tools,
