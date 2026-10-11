@@ -435,7 +435,7 @@ test("tool search: many MCP tools go out by name only; a loaded tool is callable
   expect(toolNames(bodies[0]).some((n) => n.startsWith("mcp__big__"))).toBe(false)
   expect(systemText(bodies[0])).toContain("tool_hoan")
   expect(systemText(bodies[0])).toContain("big (130): t000, t001")
-  expect(events.some((e) => e.type === "notice" && e.text.includes("Đang hoãn 130 tool MCP"))).toBe(true)
+  expect(events.some((e) => e.type === "notice" && e.text.includes("Đang hoãn 130 tool (130 MCP của big)"))).toBe(true)
   // tool_search loaded two tools; the very next step declares exactly those.
   expect(ends(events)[0]!.output.split("\n")[0]).toBe("Đã nạp tool: mcp__big__t001, mcp__big__t002")
   expect(toolNames(bodies[1])).toEqual(expect.arrayContaining(["mcp__big__t001", "mcp__big__t002"]))
@@ -746,4 +746,12 @@ test("a loaded tool cut by the per-request cap is reported as such, not as 'load
   const events = await collect(runAgent({ history, input: "x", skills: [], registry: r }))
   expect(ends(events)[0]!.output).toContain("chạm trần 128 tool")
   expect(ends(events)[0]!.output).not.toContain("gọi lại đúng lệnh")
+})
+
+test("the deferral notice counts built-in tools apart from MCP ones", async () => {
+  const r = bigRegistry(60)
+  r.register({ name: "chart_render", source: "local", deferrable: true, description: "x", input: z.object({}), readOnly: true, execute: async () => "ok" })
+  const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: r }))
+  const notice = events.find((e) => e.type === "notice" && e.text.startsWith("Đang hoãn")) as { text: string } | undefined
+  expect(notice?.text).toStartWith("Đang hoãn 61 tool (60 MCP của big, 1 tool có sẵn);")
 })

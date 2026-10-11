@@ -29,7 +29,7 @@ import { MAX_TOOLS_PER_REQUEST, stripImages, type BuiltToolSet, type ToolRegistr
 import { describeTool, LOADED_PREFIX, resolveToolName } from "./tools/search"
 import { cleanToolErrors, toolErrorText } from "./tools/errors"
 import { TOOL_SEARCH } from "./tools/builtin/tool-search"
-import type { ToolResult } from "./tools/types"
+import { LOCAL_SOURCE, type ToolResult } from "./tools/types"
 import type { ChartData } from "./tools/chart/data"
 
 export const DEFAULT_MAX_STEPS = 10
@@ -377,8 +377,8 @@ export const DEFER_CONTEXT_SHARE = 0.1
 export const DEFAULT_DEFER_MIN_TOOLS = 40
 
 /**
- * Whether MCP tools go out by name only this request (tool search). "auto" defers once
- * the deferrable tools are many (tool choice degrades past ~30–50) or heavy for the context.
+ * Whether deferrable tools (MCP and the optional built-in ones) go out by name only this
+ * request (tool search). "auto" defers once the deferrable tools are many (tool choice degrades past ~30–50) or heavy for the context.
  */
 export function shouldDefer(
   config: Pick<Config, "toolSearch" | "toolSearchMinTools">,
@@ -651,12 +651,15 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
   if (hiddenKey !== opts.registry.lastHiddenNotice) {
     opts.registry.lastHiddenNotice = hiddenKey
     if (deferrable.length > 0) {
-      const servers = deferredByServer(opts.registry, deferrable)
-        .map((g) => `${g.tools.length} của ${g.server}`)
-        .join(", ")
+      // Built-in tools (charts, web, watchlist…) are deferrable too, but they are not MCP.
+      const groups = deferredByServer(opts.registry, deferrable)
+      const parts = [
+        ...groups.filter((g) => g.server !== LOCAL_SOURCE).map((g) => `${g.tools.length} MCP của ${g.server}`),
+        ...groups.filter((g) => g.server === LOCAL_SOURCE).map((g) => `${g.tools.length} tool có sẵn`),
+      ]
       yield {
         type: "notice",
-        text: `Đang hoãn ${deferrable.length} tool MCP (${servers}); model tự nạp bằng tool_search khi cần. Đổi trong /config.`,
+        text: `Đang hoãn ${deferrable.length} tool (${parts.join(", ")}); model tự nạp bằng tool_search khi cần. Đổi trong /config.`,
       }
     }
     if (built && built.hidden.length > 0) {

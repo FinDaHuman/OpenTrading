@@ -16,8 +16,8 @@ type SubagentModel = { provider: string; model: string } | "inherit"
 
 const TOOL_SEARCH_NEXT = { auto: "on", on: "off", off: "auto" } as const
 const TOOL_SEARCH_HINT = {
-  auto: "Tự động · hoãn tool MCP khi > 40 tool hoặc > 10% context; model nạp bằng tool_search",
-  on: "Luôn hoãn tool MCP · model nạp bằng tool_search",
+  auto: "Tự động · hoãn tool khi > 40 tool hoặc > 10% context; model nạp bằng tool_search",
+  on: "Luôn hoãn tool (MCP và tool có sẵn) · model nạp bằng tool_search",
   off: "Tắt · gửi mọi tool (tối đa 128)",
 } as const
 
