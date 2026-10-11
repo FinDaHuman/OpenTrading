@@ -189,12 +189,17 @@ export async function listSessions(): Promise<SessionSummary[]> {
     if (!line.trim()) continue
     try {
       const summary = JSON.parse(line) as SessionSummary
-      if (summary.id && summary.file) byId.set(summary.id, summary)
+      if (!summary.id || !summary.file) continue
+      // Re-insert so the map's order is the order of the last write.
+      byId.delete(summary.id)
+      byId.set(summary.id, summary)
     } catch {
       // a torn last line after a crash: ignore
     }
   }
-  const all = [...byId.values()].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+  // Two writes in the same millisecond tie on updatedAt: the one written later (later in the
+  // index) comes first, since the sort is stable over the reversed write order.
+  const all = [...byId.values()].reverse().sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
   const exists = await Promise.all(all.map((s) => Bun.file(path.join(sessionsDir(), s.file)).exists()))
   return all.filter((_, i) => exists[i])
 }
