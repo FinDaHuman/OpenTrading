@@ -272,6 +272,9 @@ test("a model that stays silent gets a visible notice, not a blank turn", async 
   expect(bodies).toHaveLength(3) // one retry only
   expect(events.some((e) => e.type === "notice" && e.text.includes("không trả lời sau khi gọi tool"))).toBe(true)
   expect(done(events).messages.map((m) => m.role)).toEqual(["user", "assistant", "tool", "assistant"])
+  // A plain stop has nothing to explain: no "Lý do" on the notice, the plain placeholder saved.
+  expect(events.some((e) => e.type === "notice" && e.text.includes("Lý do từ provider"))).toBe(false)
+  expect(done(events).messages.at(-1)).toMatchObject({ role: "assistant", content: "(không có câu trả lời)" })
 })
 
 test("rate-limit errors wrapped in RetryError still read as quota errors", async () => {
