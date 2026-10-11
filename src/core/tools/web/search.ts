@@ -2,7 +2,7 @@ import { LRUCache } from "lru-cache"
 import { z } from "zod"
 import { LOCAL_SOURCE, type ToolDef } from "../types"
 import { cleanDomains, hostMatches, PRESETS, type Preset } from "./domains"
-import { nativeSearch, webTarget, type NativeSearch } from "./side-model"
+import { guardedNative, nativeSearch, webTarget, type NativeSearch } from "./side-model"
 
 /**
  * web_search at the level of Claude Code's WebSearch and Codex's web.run:
@@ -267,7 +267,8 @@ const defaultNative: NonNullable<SearchDeps["native"]> = async (query, plan, sig
   // operators too, and the sources are filtered again afterwards.
   const base = plan.allowed.length || plan.blocked.length ? withSiteOperators(plan) : query
   const q = plan.since ? `${base} after:${plan.since}` : base
-  return nativeSearch(q, target, { allowed: plan.allowed, blocked: plan.blocked }, signal)
+  // Keyed by model: one that ran out of quota is skipped for a while, another is not.
+  return guardedNative(`${target.provider.id}/${target.model}`, () => nativeSearch(q, target, { allowed: plan.allowed, blocked: plan.blocked }, signal))
 }
 
 export async function runSearch(input: WebSearchInput, signal: AbortSignal, deps: SearchDeps = {}): Promise<string> {
