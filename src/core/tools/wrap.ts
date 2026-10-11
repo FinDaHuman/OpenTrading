@@ -1,13 +1,18 @@
 import { deniedMessage, type PermissionGate } from "../permission"
+import { normalizeNetDates } from "./net-dates"
 import { hasDataArray, parseResult, REF_PREFIX, rememberResult } from "./refs"
 import { DEFAULT_MAX_OUTPUT_CHARS, DEFAULT_TIMEOUT_MS, type ToolContext, type ToolDef, type ToolResult } from "./types"
 
 /**
  * An MCP result holding a data array gets `[ref rN]` up front, and its full text is kept
  * (refs.ts) before the output cap: charts read the numbers by ref, the model never re-types them.
+ * ASP.NET dates (/Date(ms)/) in MCP results become ISO first (net-dates.ts).
  */
-function stampRef(def: ToolDef, output: string) {
-  if (!def.source?.startsWith("mcp:") || output.length > 5_000_000) return output
+function stampRef(def: ToolDef, raw: string) {
+  if (!def.source?.startsWith("mcp:")) return raw
+  // Before the ref is kept, so charts read the same dates as the model.
+  const output = normalizeNetDates(raw)
+  if (output.length > 5_000_000) return output
   const parsed = parseResult(output)
   if (parsed === undefined || !hasDataArray(parsed)) return output
   return `${REF_PREFIX}${rememberResult(def.name, output)}] ${output}`
