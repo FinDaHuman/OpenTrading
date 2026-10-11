@@ -91,7 +91,7 @@ export async function nativeSearch(query: string, target: Target, opts: NativeOp
   const result = await generateText({
     model: setup.model,
     tools: setup.tools,
-    system: `Bạn thực hiện tìm kiếm web cho một trợ lý nghiên cứu chứng khoán Việt Nam. Hôm nay là ${today}. Tìm kiếm rồi tóm tắt ngắn các kết quả liên quan nhất, giữ nguyên số liệu, ngày tháng và mã cổ phiếu, ghi rõ nguồn của từng ý.`,
+    instructions: `Bạn thực hiện tìm kiếm web cho một trợ lý nghiên cứu chứng khoán Việt Nam. Hôm nay là ${today}. Tìm kiếm rồi tóm tắt ngắn các kết quả liên quan nhất, giữ nguyên số liệu, ngày tháng và mã cổ phiếu, ghi rõ nguồn của từng ý.`,
     prompt: `Tìm kiếm web cho truy vấn: ${query}`,
     abortSignal: signal,
     maxOutputTokens: 1500,

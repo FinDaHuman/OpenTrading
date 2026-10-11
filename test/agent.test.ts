@@ -460,14 +460,16 @@ test("tool search: keyword search finds tools by description, ignoring diacritic
   expect(toolNames(bodies[1])).toContain("mcp__big__t007")
 })
 
-test("tool search: a short name from <tool_hoan> is repaired to the full name and loads the tool", async () => {
+test("tool search: a short name from <tool_hoan> names the full tool and how to load it", async () => {
   const r = bigRegistry(60)
   script = [{ tool: "t005", args: { symbol: "HPG" } }]
   const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: r }))
-  expect(ends(events)[0]).toMatchObject({ ok: true, output: 'mcp__big__t005 {"symbol":"HPG"}' })
-  const call = done(events).messages.find((m) => m.role === "assistant" && JSON.stringify(m.content).includes("tool-call"))
-  expect(JSON.stringify(call)).toContain("mcp__big__t005")
-  expect(toolNames(bodies[1])).toContain("mcp__big__t005")
+  // Only tools active at the step can run, so the unloaded tool is not called; the model
+  // is told its full name and the exact tool_search query that loads it.
+  expect(ends(events)[0]!.ok).toBe(false)
+  expect(ends(events)[0]!.output).toContain('select:mcp__big__t005')
+  expect(JSON.stringify(bodies[1]!.messages)).toContain("select:mcp__big__t005")
+  expect(events.at(-1)!.type).toBe("done")
 })
 
 test("tool search: an unknown name tells the model to search first", async () => {
