@@ -74,7 +74,8 @@ function infoFor(line: ToolLine): AgentInfo {
       durationMs: view.endedAt !== undefined ? view.endedAt - (view.startedAt ?? view.createdAt) : undefined,
       error: view.error ?? (line.status === "error" ? line.output : undefined),
       notice: view.notice,
-      current: view.tools.findLast((t) => t.status === "running")?.label,
+      // The tool running now, else the last one (Claude Code and opencode keep it between calls).
+      current: (view.tools.findLast((t) => t.status === "running") ?? view.tools.at(-1))?.label,
       waitingApproval: state.approvals.some((r) => r.agent?.id === view.id),
       prompt: view.prompt,
       tools: view.tools,
@@ -118,7 +119,9 @@ function statusLine(info: AgentInfo): { text: string; fg: string } | undefined {
       return undefined
     case "running":
       if (info.waitingApproval) return { text: "Đang chờ bạn xác nhận…", fg: color.tham }
-      return { text: info.current ?? "Đang khởi động…", fg: color.tx3 }
+      if (info.current) return { text: info.current, fg: color.tx3 }
+      // "Starting" only before anything happened; after a model step it is thinking.
+      return { text: (info.tokens ?? 0) > 0 ? "Đang suy nghĩ…" : "Đang khởi động…", fg: color.tx3 }
     case "completed": {
       const parts = [
         info.toolCount !== undefined ? `${info.toolCount} tool` : undefined,
