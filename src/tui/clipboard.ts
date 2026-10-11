@@ -5,7 +5,7 @@
  * `clip.exe` mangles Vietnamese.
  */
 
-export type ClipboardSpawn = (command: string[], text: string) => Promise<boolean>
+export type ClipboardSpawn = (command: string[], text: string, timeoutMs?: number) => Promise<boolean>
 
 const WINDOWS = [
   "powershell.exe",
@@ -25,13 +25,13 @@ export function clipboardCommand(platform: NodeJS.Platform = process.platform, w
   return undefined
 }
 
-/** Run the command with the text on stdin; true when it exits 0 within 3 s. */
-export const spawnClipboard: ClipboardSpawn = async (command, text) => {
+/** Run the command with the text on stdin; true when it exits 0 in time (3 s by default). */
+export const spawnClipboard: ClipboardSpawn = async (command, text, timeoutMs = 3000) => {
   try {
     const proc = Bun.spawn(command, { stdin: "pipe", stdout: "ignore", stderr: "ignore" })
     proc.stdin.write(new TextEncoder().encode(text))
     await proc.stdin.end()
-    const code = await Promise.race([proc.exited, new Promise<number>((r) => setTimeout(() => r(-1), 3000))])
+    const code = await Promise.race([proc.exited, new Promise<number>((r) => setTimeout(() => r(-1), timeoutMs))])
     if (code === -1) proc.kill()
     return code === 0
   } catch {
@@ -49,11 +49,13 @@ export function setClipboardSpawn(fn: ClipboardSpawn | undefined) {
 /**
  * Write text to the clipboard. OSC52 goes out at once; the OS command runs in the
  * background (callers do not wait for it before telling the user).
+ * - `maxOsc52`: longer text skips OSC52 (megabytes of escape sequence can stall a terminal).
+ * - `timeoutMs`: how long the OS command may take (a whole conversation needs more than 3 s).
  */
-export function writeClipboard(text: string, osc52?: (text: string) => boolean) {
-  const sent = osc52?.(text) ?? false
+export function writeClipboard(text: string, osc52?: (text: string) => boolean, opts: { maxOsc52?: number; timeoutMs?: number } = {}) {
+  const sent = opts.maxOsc52 !== undefined && text.length > opts.maxOsc52 ? false : (osc52?.(text) ?? false)
   const command = clipboardCommand()
-  const native = command ? spawnImpl(command, text) : Promise.resolve(false)
+  const native = command ? spawnImpl(command, text, opts.timeoutMs) : Promise.resolve(false)
   return { osc52: sent, native }
 }
 

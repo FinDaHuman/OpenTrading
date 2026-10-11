@@ -24,6 +24,8 @@ Trong TUI:
 | `/tools` | Liệt kê mọi tool model đang gọi được |
 | `/sessions`, `/new` | Mở lại một phiên đã lưu; bắt đầu phiên mới |
 | `/compact [hướng dẫn]` | Nén hội thoại (dọn kết quả tool cũ, tóm tắt phần đầu) |
+| `/save` | Copy toàn bộ hội thoại (Markdown, kèm input/output tool) vào clipboard |
+| `/export [đường dẫn] [--force]` | Lưu hội thoại ra file `.md`; không có đường dẫn thì vào `~/.opentrading/exports/<id phiên>.md` |
 | `/agents` | Các loại subagent (có sẵn, cá nhân, dự án) và tool của từng loại |
 | `/tasks` | Subagent của phiên: đang chạy, đã xong; xem kết quả, dừng (ctrl+x) |
 | `/memory` | Xem, duyệt, xoá memory |

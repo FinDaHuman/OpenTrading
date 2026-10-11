@@ -21,6 +21,8 @@ export const COMMANDS: CommandInfo[] = [
   { name: "sessions", description: "Mở lại một phiên trước" },
   { name: "new", description: "Bắt đầu phiên mới" },
   { name: "compact", args: "[hướng dẫn]", description: "Nén hội thoại: dọn kết quả tool cũ và tóm tắt phần đầu" },
+  { name: "save", description: "Copy toàn bộ hội thoại (Markdown) vào clipboard" },
+  { name: "export", args: "[đường dẫn]", description: "Lưu hội thoại ra file .md (mặc định ~/.opentrading/exports)" },
   { name: "memory", description: "Xem, duyệt, xoá memory" },
   { name: "config", description: "Cài đặt: bật / tắt memory…" },
   { name: "clear", description: "Xoá màn hình và bắt đầu phiên mới" },

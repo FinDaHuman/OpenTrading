@@ -132,6 +132,11 @@ export class Session {
     return this.writing
   }
 
+  /** Resolves once every queued write has finished (a failed earlier write is not rethrown). */
+  flush(): Promise<void> {
+    return this.writing.catch(() => {})
+  }
+
   /** Append one completed turn. Writes are serialised so turns never interleave. */
   appendTurn(messages: ModelMessage[], info: SessionInfo & { provider?: string; model?: string; contextTokens?: number }) {
     this.writing = this.writing.then(() => this.write(messages, info))

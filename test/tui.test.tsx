@@ -351,6 +351,22 @@ test("an unknown /command is reported and kept for editing, never sent to the mo
   await setup.waitForFrame((f) => f.includes("Hỏi về thị trường"))
 })
 
+test("/save and /export before any turn say there is nothing to save", async () => {
+  const copiedBefore = copied.length
+  for (const cmd of ["/save", "/export"]) {
+    const before = state.lines.length
+    await setup.mockInput.typeText(cmd)
+    setup.mockInput.pressEnter()
+    await setup.waitFor(() => state.lines.length > before)
+    expect(state.lines.at(-1)).toMatchObject({ kind: "info", text: "Chưa có lượt nào để lưu." })
+  }
+  expect(copied.length).toBe(copiedBefore)
+  await readdir(path.join(home, "exports")).then(
+    () => expect.unreachable("no export folder yet"),
+    () => {},
+  )
+})
+
 test("chat before connecting shows a readable error instead of crashing", async () => {
   await setup.mockInput.typeText("Xin chào")
   setup.mockInput.pressEnter()
@@ -1193,6 +1209,51 @@ test("/new starts a fresh session; /sessions reopens the previous one with its t
   expect(state.history.length).toBeGreaterThan(0)
   expect(state.clock).toBeUndefined() // re-sent on the next turn
   show(frame)
+})
+
+test("/save copies the whole conversation as Markdown; /export writes it to a file, never replacing one unasked", async () => {
+  const lastLine = () => state.lines.at(-1) as { kind: string; text: string }
+  const run = async (cmd: string) => {
+    const before = state.lines.length
+    await setup.mockInput.typeText(cmd)
+    setup.mockInput.pressEnter()
+    await setup.waitFor(() => state.lines.length > before)
+    return lastLine()
+  }
+
+  // The OS command may not exist (CI without xclip): then OSC52 alone carries the copy.
+  const copiedBefore = copied.length
+  const oscBefore = osc52.length
+  const saved = await run("/save")
+  expect(saved.kind).toBe("info")
+  expect(saved.text).toMatch(/Đã copy toàn bộ hội thoại|OSC52/)
+  expect(copied.length + osc52.length).toBeGreaterThan(copiedBefore + oscBefore)
+  const md = copied.length > copiedBefore ? copied.at(-1)! : osc52.at(-1)!
+  expect(md).toContain("## Bạn\n\nMẤY-GIỜ rồi?")
+  expect(md).toContain("current_time")
+  expect(md).toContain("**Input**")
+  expect(md).toContain("HẾT-CÂU-TRẢ-LỜI")
+  expect(md).not.toContain("<nhac_nho>")
+  // UI-only lines (like the one /save just printed) are not part of the conversation.
+  expect(md).not.toContain("Đã copy toàn bộ")
+
+  // No path: the session's file under OPENTRADING_HOME/exports; again replaces it.
+  let line = await run("/export")
+  expect(line.kind).toBe("info")
+  const [defaultFile] = await readdir(path.join(home, "exports"))
+  expect(defaultFile).toMatch(/\.md$/)
+  expect(await Bun.file(path.join(home, "exports", defaultFile!)).text()).toBe(md)
+  expect((await run("/export")).kind).toBe("info")
+
+  // A path the user typed: ".md" added; an existing file is kept unless --force.
+  const target = path.join(cwd, "xuat", "phien")
+  line = await run(`/export ${target}`)
+  expect(line.text).toContain(`${target}.md`)
+  expect(await Bun.file(`${target}.md`).text()).toBe(md)
+  line = await run(`/export ${target}`)
+  expect(line.kind).toBe("error")
+  expect(line.text).toContain("--force")
+  expect((await run(`/export ${target} --force`)).kind).toBe("info")
 })
 
 test("/memory: a model proposal is pending until approved with 'a'", async () => {
