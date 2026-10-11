@@ -17,6 +17,25 @@ test("clipboard command per OS: PowerShell (UTF-8 stdin, never clip.exe), pbcopy
   expect(clipboardCommand("linux", () => null)).toBeUndefined()
 })
 
+test("writeClipboard: text over maxOsc52 skips OSC52 but still reaches the OS command, with its timeout", async () => {
+  const seen: { text: string; timeoutMs?: number }[] = []
+  setClipboardSpawn(async (_command, text, timeoutMs) => {
+    seen.push({ text, timeoutMs })
+    return true
+  })
+  const osc: string[] = []
+  const big = "x".repeat(101)
+  const result = writeClipboard(big, (t) => (osc.push(t), true), { maxOsc52: 100, timeoutMs: 15_000 })
+  expect(result.osc52).toBe(false)
+  expect(osc).toEqual([])
+  if (clipboardCommand()) {
+    expect(await result.native).toBe(true)
+    expect(seen).toEqual([{ text: big, timeoutMs: 15_000 }])
+  }
+  // At or under the cap, OSC52 goes out as before.
+  expect(writeClipboard("x".repeat(100), (t) => (osc.push(t), true), { maxOsc52: 100 }).osc52).toBe(true)
+})
+
 test("writeClipboard sends OSC52 and hands the exact text (Vietnamese intact) to the OS command", async () => {
   const seen: { command: string[]; text: string }[] = []
   setClipboardSpawn(async (command, text) => {

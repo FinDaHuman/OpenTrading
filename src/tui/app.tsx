@@ -45,7 +45,8 @@ import { noticesMessage, notificationText } from "../core/subagents/notification
 import { fmtSeconds, fmtTokens } from "../core/subagents/result"
 import { ToolsDialog } from "./dialogs/tools"
 import { Home } from "./home"
-import { attachSubagents, currentSession, recordCompact, recordTurn, resumeFromArgs, startSession } from "./session"
+import { attachSubagents, currentSession, recordCompact, recordTurn, resumeFromArgs, startSession, transcriptOfCurrent } from "./session"
+import { resolveExportPath, writeExport } from "../core/session/export"
 import { armExit, type Queued, closeDialog, contextWindow, EXIT_WINDOW_MS, flash, onExitRequest, providerName, pushLine, setState, state, type Line } from "./state"
 import { color, promptStyle } from "./theme"
 import { cleanSelection, writeClipboard } from "./clipboard"
@@ -60,6 +61,8 @@ import { editInEditor } from "./prompt/editor"
 import { TODO_WRITE, TodoWriteInput } from "../core/tools/todos"
 
 let abort: AbortController | undefined
+/** /save skips OSC52 above this: megabytes of escape sequence can stall the terminal. */
+const MAX_OSC52_CHARS = 100_000
 /** Bumped by /clear so a stream that is still unwinding never touches the new transcript. */
 let epoch = 0
 
@@ -551,6 +554,43 @@ export function App(props: {
     }
   }
 
+  /** The conversation as Markdown, or undefined (with the reason shown) when there is none yet. */
+  async function transcriptOrSay() {
+    if (state.streaming) return void pushLine({ kind: "error", text: "Đang trả lời; chờ xong rồi lưu hội thoại." })
+    const transcript = await transcriptOfCurrent(props.runtime)
+    if (!transcript) pushLine({ kind: "info", text: "Chưa có lượt nào để lưu." })
+    return transcript
+  }
+
+  /** `/save`: the whole conversation to the clipboard, like selecting everything and copying. */
+  async function saveCommand() {
+    try {
+      const transcript = await transcriptOrSay()
+      if (!transcript) return
+      const { text } = transcript
+      const sent = writeClipboard(text, (t) => renderer.copyToClipboardOSC52(t), { maxOsc52: MAX_OSC52_CHARS, timeoutMs: 15_000 })
+      const size = `${transcript.turns} lượt, ${[...text].length} ký tự`
+      if (await sent.native) return pushLine({ kind: "info", text: `✓ Đã copy toàn bộ hội thoại vào clipboard (${size}).` })
+      if (sent.osc52) return pushLine({ kind: "info", text: `Đã gửi hội thoại cho terminal copy (OSC52, ${size}); nếu dán không ra, dùng /export.` })
+      pushLine({ kind: "error", text: "Không copy được vào clipboard. Dùng /export để lưu ra file." })
+    } catch (error) {
+      pushLine({ kind: "error", text: `Không lưu được hội thoại: ${error instanceof Error ? error.message : String(error)}` })
+    }
+  }
+
+  /** `/export [đường dẫn] [--force]`: the conversation as a Markdown file. */
+  async function exportCommand(args: string) {
+    try {
+      const transcript = await transcriptOrSay()
+      if (!transcript) return
+      const { file, overwrite } = resolveExportPath(args, { cwd: process.cwd(), id: transcript.id })
+      await writeExport(file, transcript.text, { overwrite })
+      pushLine({ kind: "info", text: `✓ Đã lưu hội thoại (${transcript.turns} lượt): ${file}` })
+    } catch (error) {
+      pushLine({ kind: "error", text: `Không xuất được hội thoại: ${error instanceof Error ? error.message : String(error)}` })
+    }
+  }
+
   async function mcpCommand(args: string) {
     const [action, name] = args.split(/\s+/)
     const known = state.mcp.some((s) => s.name === name)
@@ -915,6 +955,10 @@ export function App(props: {
         if (state.streaming) return pushLine({ kind: "error", text: "Đang trả lời; chờ xong rồi nén." })
         // Messages typed while it runs are queued: send them (or give them back) afterwards.
         return void compact(props.runtime, "manual", cmd.args || undefined).then((ok) => afterTurn(props.runtime, ok))
+      case "save":
+        return void saveCommand()
+      case "export":
+        return void exportCommand(cmd.args)
       case "exit":
       case "quit":
         return void exit()

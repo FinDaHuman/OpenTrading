@@ -3,6 +3,7 @@ import { label } from "../core/agent"
 import { promptVersion } from "../core/prompt/assemble"
 import type { Runtime } from "../core/runtime"
 import { listSessions, loadSession, Session } from "../core/session/store"
+import { formatTranscript } from "../core/session/export"
 import { transcriptFromMessages } from "../core/session/transcript"
 import { reconcile } from "solid-js/store"
 import { NO_COMPACTION, providerName, pushLine, setState, state, type Line } from "./state"
@@ -34,6 +35,21 @@ export function recordCompact(entry: { trigger: "auto" | "manual"; before: numbe
 
 const saveFailed = (error: unknown) =>
   pushLine({ kind: "error", text: `Không lưu được phiên: ${error instanceof Error ? error.message : String(error)}` })
+
+/**
+ * The current conversation as Markdown (/save, /export), read back from its session file so
+ * turns before a compaction are included. Undefined before the first turn is written.
+ */
+export async function transcriptOfCurrent(runtime: Runtime) {
+  await current.flush()
+  if (!current.file) return undefined
+  const loaded = await loadSession(current.id)
+  return {
+    id: current.id,
+    turns: loaded.summary.turns,
+    text: formatTranscript(loaded, { label: (name, input) => label(runtime.registry, name, input) }),
+  }
+}
 
 /** Subagent transcripts go next to the session being written. */
 export function attachSubagents(runtime: Runtime) {
