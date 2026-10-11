@@ -248,6 +248,23 @@ interface Outcome {
   steps: number
   /** Billed tokens summed over the steps that reported usage; undefined = none did. */
   usage?: { input: number; output: number }
+  /** How the last step ended, as the provider said it (STOP, UNEXPECTED_TOOL_CALL…). */
+  rawFinish?: string
+  /** The provider's note on that end (Gemini's finishMessage), clipped. */
+  finishMessage?: string
+  /** The model streamed reasoning (thoughts) in this run. */
+  reasoned?: boolean
+}
+
+/**
+ * Why a run ended without text, from what the provider reported, or undefined when it just
+ * stopped. An empty answer was only "(không có câu trả lời)" before: nothing told a
+ * Gemini UNEXPECTED_TOOL_CALL from a reply made of thoughts only.
+ */
+export function emptyReason(outcome: Pick<Outcome, "rawFinish" | "finishMessage" | "reasoned">): string | undefined {
+  const raw = outcome.rawFinish && !/^stop$/i.test(outcome.rawFinish) ? outcome.rawFinish : undefined
+  const parts = [raw, outcome.finishMessage, !raw && outcome.reasoned ? "chỉ có phần suy luận, không có câu trả lời" : undefined].filter(Boolean)
+  return parts.length > 0 ? parts.join(" — ") : undefined
 }
 
 /** Relay one streamText run as AgentEvents and report what happened. */
@@ -264,7 +281,13 @@ async function* relay(
         case "start-step":
           outcome.steps++
           break
+        case "reasoning-delta":
+          outcome.reasoned = true
+          break
         case "finish-step": {
+          outcome.rawFinish = part.rawFinishReason
+          const note = (part.providerMetadata?.google as { finishMessage?: unknown } | undefined)?.finishMessage
+          outcome.finishMessage = typeof note === "string" && note.trim() ? note.trim().slice(0, 300) : undefined
           const input = part.usage?.inputTokens
           const output = part.usage?.outputTokens
           if (input === undefined && output === undefined) break
@@ -752,13 +775,17 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
     if (!second.aborted && !second.failure) {
       if (second.text.trim()) messages = [...kept, { role: "assistant", content: second.text }]
       else {
+        // What the provider said, for both attempts: the first one is what went wrong.
+        const why = [emptyReason(outcome), emptyReason(second)].filter(Boolean)
+        const reason = why.length > 0 ? ` Lý do từ provider: ${[...new Set(why)].join("; lần thử lại: ")}.` : ""
         yield {
           type: "notice",
           text: usedTools
-            ? "Model không trả lời sau khi gọi tool (câu trả lời rỗng). Kết quả tool ở phía trên; thử hỏi lại hoặc đổi model."
-            : "Model trả về câu trả lời rỗng. Thử hỏi lại hoặc đổi model.",
+            ? `Model không trả lời sau khi gọi tool (câu trả lời rỗng).${reason} Kết quả tool ở phía trên; thử hỏi lại hoặc đổi model.`
+            : `Model trả về câu trả lời rỗng.${reason} Thử hỏi lại hoặc đổi model.`,
         }
-        messages = [...kept, { role: "assistant", content: "(không có câu trả lời)" }]
+        // Kept in the session file, so the cause can be read back later.
+        messages = [...kept, { role: "assistant", content: `(không có câu trả lời${why.length > 0 ? ` — ${why[0]}` : ""})` }]
       }
     }
   }
