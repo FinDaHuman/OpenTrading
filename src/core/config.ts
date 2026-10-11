@@ -10,12 +10,13 @@ export interface Config {
   /** Tools the user chose to always allow (see core/permission.ts). */
   permissions?: { allow?: { tool: string; scope: string }[] }
   /**
-   * Deferred tool loading. "auto" (default): MCP tools are sent by name only, and loaded with
+   * Deferred tool loading. "auto" (default): deferrable tools (MCP and the optional built-in
+   * ones: charts, web, watchlist…) are sent by name only, and loaded with
    * tool_search, once they would cost over 10% of the context or there are more than
    * `toolSearchMinTools` of them. "on": always defer. "off": send everything (capped at 128).
    */
   toolSearch?: "auto" | "on" | "off"
-  /** MCP tool count above which "auto" defers. Default 40. */
+  /** Deferrable tool count above which "auto" defers. Default 40. */
   toolSearchMinTools?: number
   /**
    * "auto" (default): before a turn that would pass 80% of the context window, prune old tool

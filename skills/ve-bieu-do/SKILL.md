@@ -6,7 +6,7 @@ requires_tools: [chart_render]
 uses_tools: [chart_render, chart_compare, chart_depth]
 triggers:
   keywords: [vẽ biểu đồ, vẽ chart, vẽ nến, biểu đồ nến, biểu đồ, đồ thị, candlestick, sparkline, heatmap, gauge, donut, histogram, waterfall, multiline, boxplot, scatter, vẽ sổ lệnh]
-version: 1.1.0
+version: 1.1.1
 ---
 
 # Vẽ biểu đồ màu trong terminal
@@ -15,7 +15,7 @@ Skill hiển thị: số liệu luôn lấy từ kết quả tool trong phiên, 
 
 ## Các bước
 
-1. **Vẽ theo tham chiếu.** Mỗi kết quả tool có dữ liệu dạng mảng mở đầu bằng mã `[ref rN]`. Gọi `chart_render({from_call: "rN", kind})` (so sánh nhiều mã: `chart_compare({from_calls: ["r1", "r2"]})`) để harness tự lấy số — không gõ lại từng con số. Chỉ truyền số tay khi dữ liệu không đến từ tool.
+1. **Vẽ theo tham chiếu.** Mỗi kết quả tool có dữ liệu dạng mảng mở đầu bằng mã `[ref rN]`. Gọi `chart_render({from_call: "rN", kind})` (so sánh nhiều mã: `chart_compare({from_calls: ["r1", "r2"]})`) để harness tự lấy số — không gõ lại từng con số. Kết quả gọi gộp nhiều mã (một `rN` chứa FPT, SHB, NVL): `chart_compare({from_calls: ["rN"]})` tự tách từng mã; vẽ một mã thì thêm `from_symbol: "SHB"`. Chỉ truyền số tay khi dữ liệu không đến từ tool.
 2. **Chưa chắc chọn hình nào** thì đọc `references/choosing-a-form.md`, đi theo cây yes/no và DỪNG ở node ★ đầu tiên khớp. Chỉ đọc thêm file reference của đúng loại hình đó.
 3. **Thiếu điểm tối thiểu** (ngưỡng ghi trong cây) thì báo thiếu dữ liệu, không vẽ.
 4. **Nhận xét 2–3 câu** từ hình và số (xu hướng, đỉnh/đáy, vị trí trong biên độ, đơn vị). Hình tự hiện trong TUI: không chép hình vào câu trả lời.

@@ -105,3 +105,95 @@ test("compare: a shorter series is right-aligned; heatmap with ± values is cent
   const neg = heat.grid[0]!.find((c) => c.ch === "-")!
   expect(String(zero.bg)).not.toBe(String(neg.bg))
 })
+
+/** A fake batch tool shaped like market_candles_batch: one entry per symbol under data.series. */
+function batchTool(series: Record<string, number[]>): ToolDef {
+  const entries = Object.entries(series).map(([symbol, closes]) => ({
+    symbol,
+    candles: closes.map((c, i) => ({ t: `2026-06-${String(i + 1).padStart(2, "0")}`, o: c + 1, h: c + 2, l: c - 2, c, v: 100 * (i + 1) })),
+  }))
+  return {
+    name: "mcp__ot__market_candles_batch",
+    source: "mcp:ot",
+    description: "batch",
+    input: z.object({}),
+    readOnly: true,
+    execute: async () => JSON.stringify({ data: { series: entries } }),
+  }
+}
+
+const five = (start: number, step: number) => Array.from({ length: 5 }, (_, i) => start + i * step)
+const render = (input: Parameters<ReturnType<typeof chartRenderTool>["execute"]>[0]) => chartRenderTool().execute(input, ctx()) as Promise<ToolResult>
+
+test("batch ref: chart_compare splits one result into one labelled series per symbol", async () => {
+  const ref = refOf(await callTool(batchTool({ FPT: [100, 110], SHB: [10, 8], NVL: [20, 25] })))!
+  const res = (await chartCompareTool().execute({ from_calls: [ref] }, ctx())) as ToolResult
+  expect(res.output).toContain("FPT +10%, SHB -20%, NVL +25%")
+  expect((res.chart as { series: { label: string }[] }).series.map((s) => s.label)).toEqual(["FPT", "SHB", "NVL"])
+  const two = (await chartCompareTool().execute({ from_calls: [ref], symbols: ["nvl", "FPT"] }, ctx())) as ToolResult
+  expect(two.output).toContain("FPT +10%, NVL +25%")
+  await expect(chartCompareTool().execute({ from_calls: [ref], symbols: ["VCB"] }, ctx())).rejects.toThrow("không có mã VCB")
+  await expect(chartCompareTool().execute({ from_calls: [ref], symbols: ["FPT"] }, ctx())).rejects.toThrow("cần 2–5")
+})
+
+test("single-symbol results in the batch shape are labelled by their symbol, not the ref", async () => {
+  const a = refOf(await callTool(batchTool({ FPT: [100, 110] })))!
+  const b = refOf(await callTool(batchTool({ SHB: [10, 8] })))!
+  const res = (await chartCompareTool().execute({ from_calls: [a, b] }, ctx())) as ToolResult
+  expect(res.output).toContain("FPT +10%, SHB -20%")
+  expect(res.output).not.toContain(`${a} +`)
+})
+
+test("batch ref: chart_render never draws the first symbol by default; from_symbol or a leading ticker picks one", async () => {
+  const ref = refOf(await callTool(batchTool({ FPT: five(100, 1), SHB: five(10, -1), NVL: five(20, 1) })))!
+  await expect(render({ kind: "candlestick", from_call: ref })).rejects.toThrow("nhiều mã: FPT, SHB, NVL")
+  const byName = await render({ kind: "candlestick", from_call: ref, symbol: "SHB — 90 ngày" })
+  expect((byName.chart as { bars: { c: number }[] }).bars.map((b) => b.c)).toEqual(five(10, -1))
+  expect(byName.output).toContain("Đã vẽ nến SHB — 90 ngày")
+  const explicit = await render({ kind: "line", from_call: ref, from_symbol: "nvl" })
+  expect(explicit.chart).toMatchObject({ symbol: "NVL", series: five(20, 1) })
+  await expect(render({ kind: "line", from_call: ref, from_symbol: "VCB" })).rejects.toThrow("Mã có trong kết quả: FPT, SHB, NVL")
+})
+
+test("a single-symbol ref refuses a display name naming another stored result's symbol, or another from_symbol", async () => {
+  const ref = refOf(await callTool(batchTool({ FPT: five(100, 1) })))!
+  // Titles that start with an abbreviation, not a ticker, draw.
+  for (const symbol of ["KLGD FPT 20 phiên", "LNST FPT theo quý", "ROE FPT", "SHB — 90 ngày", "Giá đóng cửa 2026"]) {
+    expect((await render({ kind: "line", from_call: ref, symbol })).chart).toMatchObject({ kind: "line" })
+  }
+  await expect(render({ kind: "candlestick", from_call: ref, from_symbol: "SHB" })).rejects.toThrow("không có dữ liệu mã SHB")
+  // Once SHB's data is stored, "SHB — …" on FPT's ref is the r38/r39 mix-up: refused.
+  refOf(await callTool(batchTool({ SHB: five(10, 1) })))
+  await expect(render({ kind: "candlestick", from_call: ref, symbol: "SHB — 90 ngày" })).rejects.toThrow(`${ref} là dữ liệu mã FPT`)
+  expect((await render({ kind: "candlestick", from_call: ref, symbol: "FPT — 90 ngày" })).chart).toMatchObject({ kind: "candlestick" })
+  expect((await render({ kind: "line", from_call: ref, symbol: "SHB so với", from_symbol: "FPT" })).chart).toMatchObject({ kind: "line" })
+})
+
+test("a batch of more than five symbols is fully seen; a large nested result is walked quickly", async () => {
+  const many = Object.fromEntries(["AAA", "BBB", "CCC", "DDD", "EEE", "FFF"].map((s, i) => [s, five(10 + i, 1)]))
+  const ref = refOf(await callTool(batchTool(many)))!
+  expect((await render({ kind: "line", from_call: ref, from_symbol: "FFF" })).chart).toMatchObject({ series: five(15, 1) })
+
+  const nest = (depth: number): unknown => (depth === 0 ? [1, 2, 3] : Array.from({ length: 30 }, () => ({ x: 1, child: nest(depth - 1) })))
+  const huge: ToolDef = { ...batchTool({}), execute: async () => JSON.stringify({ data: nest(3) }) }
+  const deep = refOf(await callTool(huge))!
+  const started = Date.now()
+  await render({ kind: "line", from_call: deep }).catch(() => undefined)
+  expect(Date.now() - started).toBeLessThan(3000)
+})
+
+test("% over the period is close to close everywhere: candle summary, candle header and chart_compare agree", async () => {
+  // First bar opens at 101 but closes at 100; the last close is 110 → +10%, not +8.91%.
+  const ref = refOf(await callTool(batchTool({ FPT: [100, 102, 104, 106, 110] })))!
+  const candle = await render({ kind: "candlestick", from_call: ref })
+  expect(candle.output).toContain("(+10% cả kỳ)")
+  const title = buildChart(candle.chart as Parameters<typeof buildChart>[0], 80).title.map((r) => r.text).join("")
+  expect(title).toContain("+10.0%")
+  const other = refOf(await callTool(batchTool({ SHB: [10, 10, 10, 10, 10] })))!
+  expect(((await chartCompareTool().execute({ from_calls: [ref, other] }, ctx())) as ToolResult).output).toContain("FPT +10%")
+})
+
+test("bar with a matrix (grouped bars) says which kinds draw several series", async () => {
+  await expect(render({ kind: "bar", labels: ["a", "b"], matrix: [[1, 2], [3, 4]] })).rejects.toThrow("không nhận matrix. Nhiều mã theo thời gian: kind=multiline")
+  await expect(render({ kind: "bar", series: [] })).rejects.toThrow("cần series ít nhất 1 cột")
+})

@@ -26,9 +26,10 @@ import { isContextOverflow } from "./compact"
 import { loadedTools } from "./tools/loaded"
 import { currentTodos, todoMark } from "./tools/todos"
 import { MAX_TOOLS_PER_REQUEST, stripImages, type BuiltToolSet, type ToolRegistry, type ToolSetOptions } from "./tools/registry"
-import { resolveToolName } from "./tools/search"
+import { describeTool, LOADED_PREFIX, resolveToolName } from "./tools/search"
+import { cleanToolErrors, toolErrorText } from "./tools/errors"
 import { TOOL_SEARCH } from "./tools/builtin/tool-search"
-import type { ToolResult } from "./tools/types"
+import { LOCAL_SOURCE, type ToolResult } from "./tools/types"
 import type { ChartData } from "./tools/chart/data"
 
 export const DEFAULT_MAX_STEPS = 10
@@ -196,38 +197,47 @@ export function visibleUserText(message: ModelMessage) {
 
 /**
  * Calls the SDK could not parse. A short name from <tool_hoan> (`vn_quote_history`,
- * `server/tool`) that matches one declared tool is rewritten to its full name; otherwise a
- * deferred tool the model has not loaded gets a hint to load it first. `null` = keep the
- * SDK's own error.
+ * `server/tool`) that matches one active tool is rewritten to its full name. A deferred tool
+ * the model called before loading it cannot run at this step (AI SDK 7 parses a repaired
+ * call against the step's active tools), but the call itself loads it: the error says so,
+ * with its parameters, and the model calls it again instead of spending a tool_search step.
+ * `null` = keep the SDK's own error.
  */
 async function repairCall<T extends { toolName: string }>(
   registry: ToolRegistry,
   built: BuiltToolSet | undefined,
   active: string[] | undefined,
+  loaded: readonly string[],
   toolCall: T,
   error: unknown,
 ): Promise<T | null> {
   if (!built) return null
-  const deferring = built.deferred.length > 0
-  if (NoSuchToolError.isInstance(error)) {
-    const names = resolveToolName(registry, toolCall.toolName).filter((n) => n in built.tools)
-    // Only the tools active at this step can run (AI SDK 7 parses the repaired call against
-    // them): a short name for a deferred tool that is not loaded yet points at tool_search.
-    if (names.length === 1 && (!active || active.includes(names[0]!))) return { ...toolCall, toolName: names[0]! }
-    if (names.length === 1 && deferring) {
-      throw new Error(`Tool "${names[0]}" chưa được nạp: gọi tool_search với query "select:${names[0]}" để nạp rồi gọi lại.`)
+  const deferring = built.deferring || built.deferred.length > 0
+  if (!NoSuchToolError.isInstance(error)) return null
+  const names = resolveToolName(registry, toolCall.toolName).filter((n) => n in built.tools)
+  if (names.length === 1 && (!active || active.includes(names[0]!))) return { ...toolCall, toolName: names[0]! }
+  if (names.length === 1 && deferring) {
+    const name = names[0]!
+    // Loaded already yet still not active: cut by the per-request cap. Saying "loaded,
+    // call again" here would loop.
+    if (loaded.includes(name)) {
+      throw new Error(
+        `Tool ${name} đã nạp nhưng không gửi kèm được trong bước này: đã chạm trần ${MAX_TOOLS_PER_REQUEST} tool mỗi lần gọi model. Dùng các tool đang có để trả lời.`,
+      )
     }
-    if (!deferring) return null
-    const many = names.length > 1 ? ` Tên này khớp nhiều tool: ${names.join(", ")}.` : ""
-    throw new Error(`Không có tool "${toolCall.toolName}".${many} Gọi tool_search (query "select:<tên>" hoặc từ khoá) để nạp tool rồi gọi lại.`)
-  }
-  // Wrong arguments for a tool the model never loaded: it guessed the schema.
-  if (deferring && active && !active.includes(toolCall.toolName) && built.deferred.includes(toolCall.toolName)) {
+    const def = registry.get(name)
+    // First line loads it (loadedTools reads it), also when the model used a short name.
     throw new Error(
-      `Tham số không hợp lệ. Tool "${toolCall.toolName}" chưa được nạp: gọi tool_search với query "select:${toolCall.toolName}" để xem tham số rồi gọi lại.`,
+      [
+        `${LOADED_PREFIX}${name}`,
+        `Tool ${name} chưa có trong bước này nên chưa chạy; đã nạp xong — gọi lại đúng lệnh với tên ${name}.`,
+        ...(def ? ["", describeTool(registry, def)] : []),
+      ].join("\n"),
     )
   }
-  return null
+  if (!deferring) return null
+  const many = names.length > 1 ? ` Tên này khớp nhiều tool: ${names.join(", ")}.` : ""
+  throw new Error(`Không có tool "${toolCall.toolName}".${many} Gọi tool_search (query "select:<tên>" hoặc từ khoá) để nạp tool rồi gọi lại.`)
 }
 
 interface Outcome {
@@ -284,7 +294,7 @@ async function* relay(
             type: "tool-end",
             callId: part.toolCallId,
             ok,
-            output: ok ? stringify(part.output) : describeError(part.error),
+            output: ok ? stringify(part.output) : toolErrorText(describeError(part.error)),
             chart: ok ? chartOf(part.output) : undefined,
             durationMs: Date.now() - (started.get(part.toolCallId) ?? Date.now()),
           }
@@ -367,8 +377,8 @@ export const DEFER_CONTEXT_SHARE = 0.1
 export const DEFAULT_DEFER_MIN_TOOLS = 40
 
 /**
- * Whether MCP tools go out by name only this request (tool search). "auto" defers once
- * the deferrable tools are many (tool choice degrades past ~30–50) or heavy for the context.
+ * Whether deferrable tools (MCP and the optional built-in ones) go out by name only this
+ * request (tool search). "auto" defers once the deferrable tools are many (tool choice degrades past ~30–50) or heavy for the context.
  */
 export function shouldDefer(
   config: Pick<Config, "toolSearch" | "toolSearchMinTools">,
@@ -404,7 +414,10 @@ export function deferredByServer(registry: ToolRegistry, names: string[]) {
  * loaded (tool_search results, load_skill, direct calls). Undefined = no narrowing.
  */
 export function activeFor(built: BuiltToolSet | undefined, messages: readonly ModelMessage[]): string[] | undefined {
-  if (!built || built.deferred.length === 0) return undefined
+  if (!built) return undefined
+  // Nothing deferred and nothing cut: every declared tool is callable. (With search on, a
+  // history that loaded more than the cap declares them all; the cap must still apply.)
+  if (built.deferred.length === 0 && built.names.length === Object.keys(built.tools).length) return undefined
   const visible = new Set(built.names)
   const extra = loadedTools(messages).filter((n) => !visible.has(n) && n in built.tools)
   return [...built.names, ...extra].slice(0, MAX_TOOLS_PER_REQUEST)
@@ -638,12 +651,15 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
   if (hiddenKey !== opts.registry.lastHiddenNotice) {
     opts.registry.lastHiddenNotice = hiddenKey
     if (deferrable.length > 0) {
-      const servers = deferredByServer(opts.registry, deferrable)
-        .map((g) => `${g.tools.length} của ${g.server}`)
-        .join(", ")
+      // Built-in tools (charts, web, watchlist…) are deferrable too, but they are not MCP.
+      const groups = deferredByServer(opts.registry, deferrable)
+      const parts = [
+        ...groups.filter((g) => g.server !== LOCAL_SOURCE).map((g) => `${g.tools.length} MCP của ${g.server}`),
+        ...groups.filter((g) => g.server === LOCAL_SOURCE).map((g) => `${g.tools.length} tool có sẵn`),
+      ]
       yield {
         type: "notice",
-        text: `Đang hoãn ${deferrable.length} tool MCP (${servers}); model tự nạp bằng tool_search khi cần. Đổi trong /config.`,
+        text: `Đang hoãn ${deferrable.length} tool (${parts.join(", ")}); model tự nạp bằng tool_search khi cần. Đổi trong /config.`,
       }
     }
     if (built && built.hidden.length > 0) {
@@ -662,6 +678,7 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
   const nudge = nudgeAfterTools(target)
   // Visible tools at the current step; deferred tools join once loaded (tool search).
   let active = activeFor(built, request)
+  let loaded = loadedTools(request)
   const result = streamText({
     model,
     instructions: system,
@@ -676,8 +693,10 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
     // the request plus what the model and tools produced: a nudge stays a one-step addition.
     prepareStep: ({ stepNumber, initialMessages, responseMessages }) => {
       if (!tools) return undefined
-      const messages: ModelMessage[] = [...initialMessages, ...responseMessages]
+      // Clean before activeFor reads them: the model never sees the SDK's raw error strings.
+      const messages = cleanToolErrors([...initialMessages, ...responseMessages])
       active = activeFor(built, messages)
+      loaded = loadedTools(messages)
       if (stepNumber < maxSteps - 1) {
         if (!nudge || messages.at(-1)?.role !== "tool") return { ...(active ? { activeTools: active } : {}), messages }
         return { ...(active ? { activeTools: active } : {}), messages: [...messages, { role: "user", content: toolNudge(messages) }] }
@@ -685,7 +704,7 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
       summarized = true
       return { toolChoice: "none", activeTools: active, messages: [...messages, { role: "user", content: SUMMARY_PROMPT }] }
     },
-    experimental_repairToolCall: async ({ toolCall, error }) => repairCall(opts.registry, built, active, toolCall, error),
+    experimental_repairToolCall: async ({ toolCall, error }) => repairCall(opts.registry, built, active, loaded, toolCall, error),
     abortSignal: opts.signal,
     maxRetries: 1,
     onError: () => {}, // errors are read from the stream
@@ -699,7 +718,7 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
   let messages: ModelMessage[] | undefined
   if (!outcome.aborted && !outcome.failure) {
     try {
-      messages = await result.responseMessages
+      messages = cleanToolErrors(await result.responseMessages)
     } catch (error) {
       outcome.failure = error
     }

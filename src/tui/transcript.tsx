@@ -5,6 +5,7 @@ import { color, markdownStyle } from "./theme"
 import { ChartBox } from "./ui/chart-box"
 import { truncate } from "./ui/text"
 import { TODO_PREFIX } from "../core/tools/todos"
+import { LOADED_PREFIX } from "../core/tools/search"
 import { isSpawn, SubagentRow } from "./subagent-row"
 
 /**
@@ -40,6 +41,11 @@ function summary(line: ToolLine): { tone: "ok" | "denied" | "answers"; lines: st
   const out = line.output ?? ""
   // The pinned panel shows the list; the transcript keeps one line (ctrl+o for the list).
   if (line.status === "ok" && out.startsWith(TODO_PREFIX) && !state.expandTools) return { tone: "ok", lines: [] }
+  // A deferred tool called before loading: the call loaded it. One sentence; ctrl+o shows the
+  // parameters the model got with it.
+  if (line.status === "error" && out.startsWith(LOADED_PREFIX) && !state.expandTools) {
+    return { tone: "ok", lines: [out.split("\n")[1] ?? out] }
+  }
   if (line.status === "error" && out.startsWith("Người dùng từ chối chạy tool này")) {
     const note = /Lời nhắn của người dùng: (.*)$/s.exec(out)?.[1]
     return { tone: "denied", lines: [`✘ Đã từ chối${note ? ` — "${note.trim()}"` : ""}`] }

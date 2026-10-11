@@ -80,6 +80,8 @@ let summaryGate: Promise<void> | undefined
 let callSlowTool = false
 /** Subagent requests wait for this before answering (their rows stay "running"). */
 let childGate: Promise<void> | undefined
+/** A "CON-DOC" subagent waits for this after its first tool (between two model steps). */
+let childAfterTool: Promise<void> | undefined
 globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   const url = String(input instanceof Request ? input.url : input)
   const auth = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined)).get("authorization")
@@ -115,6 +117,13 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
         new Promise<void>((_, reject) => init?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")))),
       ])
       const childHasResult = request.messages.some((m) => m.role === "tool")
+      if (JSON.stringify(request.messages).includes("CON-DOC")) {
+        if (!childHasResult) {
+          const call = { index: 0, id: "call_child_read", type: "function", function: { name: "current_time", arguments: "{}" } }
+          return sseOf(chunk({ role: "assistant", tool_calls: [call] }) + chunk({}, "tool_calls") + "data: [DONE]\n\n")
+        }
+        await childAfterTool
+      }
       if (JSON.stringify(request.messages).includes("CON-GHI") && !childHasResult) {
         const call = { index: 0, id: "call_child_write", type: "function", function: { name: "ghi_tam", arguments: '{"ma":"FPT"}' } }
         return sseOf(chunk({ role: "assistant", tool_calls: [call] }) + chunk({}, "tool_calls") + "data: [DONE]\n\n")
@@ -157,7 +166,7 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     }
     if (last.includes("SUBAGENT-") && !answeredThisTurn) {
       const background = last.includes("SUBAGENT-NEN")
-      const tasks = last.includes("SUBAGENT-GHI") ? [["Ghi FPT", "CON-GHI"]] : background ? [["Nền FPT", "FPT"]] : [["Định giá FPT", "FPT"], ["Định giá CMG", "CMG"]]
+      const tasks = last.includes("SUBAGENT-GHI") ? [["Ghi FPT", "CON-GHI"]] : last.includes("SUBAGENT-DOC") ? [["Đọc FPT", "CON-DOC"]] : background ? [["Nền FPT", "FPT"]] : [["Định giá FPT", "FPT"], ["Định giá CMG", "CMG"]]
       const calls = tasks.map(([description, prompt], index) => ({
         index,
         id: `call_sub_${index}_${chatBodies.length}`,
@@ -2002,6 +2011,24 @@ test("background subagent: the answer ends at once; /tasks and ⧗ show it runni
     release?.()
     childGate = undefined
     await waitMcp(() => !state.streaming)
+  }
+}, 30_000)
+
+test("subagent row: between two model steps it shows the last tool, not 'Đang khởi động…'", async () => {
+  let release!: () => void
+  childAfterTool = new Promise((r) => (release = r))
+  try {
+    await setup.mockInput.typeText("SUBAGENT-DOC")
+    setup.mockInput.pressEnter()
+    const frame = await setup.waitForFrame((f) => /nghien-cuu \(Đọc FPT\) · 1 tool/.test(f))
+    show(frame)
+    expect(frame).toMatch(/nghien-cuu \(Đọc FPT\) · 1 tool[^\n]*\n[^\n]*⎿\s+current_time/)
+    expect(frame).not.toContain("Đang khởi động…")
+  } finally {
+    // Even when an assertion fails, so the next test does not start mid-turn.
+    release()
+    await waitMcp(() => !state.streaming)
+    childAfterTool = undefined
   }
 }, 30_000)
 

@@ -1,5 +1,6 @@
 import type { ModelMessage } from "ai"
 import { compactCarry, isCompactMarker } from "../compact-marker"
+import { toolErrorText } from "./errors"
 import { LOADED_PREFIX } from "./search"
 
 /** Tools whose results may announce loaded tools on their first line. */
@@ -16,6 +17,11 @@ function firstText(output: unknown): string | undefined {
   return undefined
 }
 
+function errorText(output: unknown): string | undefined {
+  const o = output as { type?: string; value?: unknown } | undefined
+  return o?.type === "error-text" && typeof o.value === "string" ? toolErrorText(o.value) : undefined
+}
+
 /**
  * Deferred tools the conversation has made callable, in order of first appearance: tools
  * named in a `Đã nạp tool:` line of a tool_search / load_skill result, plus every tool the
@@ -30,8 +36,13 @@ export function loadedTools(messages: readonly ModelMessage[]): string[] {
     if (typeof message.content === "string") continue
     for (const part of message.content as { type: string; toolName?: string; output?: unknown }[]) {
       if (part.type === "tool-call" && part.toolName) seen.add(part.toolName)
-      if (part.type === "tool-result" && part.toolName && LOADERS.has(part.toolName)) {
-        const line = firstText(part.output)?.split("\n", 1)[0]
+      // A loader's result, or the error for a deferred tool called before it was loaded
+      // (agent.ts repairCall), which loads it — read through the SDK's prefixes, which
+      // sessions saved before errors were cleaned still carry.
+      const loads = part.type === "tool-result" && part.toolName && (LOADERS.has(part.toolName) || errorText(part.output) !== undefined)
+      if (loads) {
+        const text = firstText(part.output) ?? errorText(part.output)
+        const line = text?.split("\n", 1)[0]
         if (line?.startsWith(LOADED_PREFIX)) {
           for (const name of line.slice(LOADED_PREFIX.length).split(",")) if (name.trim()) seen.add(name.trim())
         }

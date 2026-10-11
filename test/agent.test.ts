@@ -4,6 +4,7 @@ import os from "node:os"
 import path from "node:path"
 import type { ModelMessage } from "ai"
 import { z } from "zod"
+import { loadedTools } from "../src/core/tools/loaded"
 
 // Isolated state dir before core modules read it.
 const home = await mkdtemp(path.join(os.tmpdir(), "ot-agent-"))
@@ -434,7 +435,7 @@ test("tool search: many MCP tools go out by name only; a loaded tool is callable
   expect(toolNames(bodies[0]).some((n) => n.startsWith("mcp__big__"))).toBe(false)
   expect(systemText(bodies[0])).toContain("tool_hoan")
   expect(systemText(bodies[0])).toContain("big (130): t000, t001")
-  expect(events.some((e) => e.type === "notice" && e.text.includes("Đang hoãn 130 tool MCP"))).toBe(true)
+  expect(events.some((e) => e.type === "notice" && e.text.includes("Đang hoãn 130 tool (130 MCP của big)"))).toBe(true)
   // tool_search loaded two tools; the very next step declares exactly those.
   expect(ends(events)[0]!.output.split("\n")[0]).toBe("Đã nạp tool: mcp__big__t001, mcp__big__t002")
   expect(toolNames(bodies[1])).toEqual(expect.arrayContaining(["mcp__big__t001", "mcp__big__t002"]))
@@ -460,16 +461,53 @@ test("tool search: keyword search finds tools by description, ignoring diacritic
   expect(toolNames(bodies[1])).toContain("mcp__big__t007")
 })
 
-test("tool search: a short name from <tool_hoan> names the full tool and how to load it", async () => {
+test("tool search: calling a deferred tool before loading it loads it — the error says call again, with its parameters", async () => {
   const r = bigRegistry(60)
+  // A short name from <tool_hoan>: it cannot run at this step (only active tools can), but
+  // the call loads the full tool, so the next step declares it and the model calls it again.
   script = [{ tool: "t005", args: { symbol: "HPG" } }]
   const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: r }))
-  // Only tools active at the step can run, so the unloaded tool is not called; the model
-  // is told its full name and the exact tool_search query that loads it.
-  expect(ends(events)[0]!.ok).toBe(false)
-  expect(ends(events)[0]!.output).toContain('select:mcp__big__t005')
-  expect(JSON.stringify(bodies[1]!.messages)).toContain("select:mcp__big__t005")
+  const end = ends(events)[0]!
+  expect(end.ok).toBe(false)
+  expect(end.output.startsWith("Đã nạp tool: mcp__big__t005\nTool mcp__big__t005 chưa có trong bước này")).toBe(true)
+  expect(end.output).toContain("## mcp__big__t005")
+  expect(end.output).not.toContain("AI_")
+  expect(toolNames(bodies[1])).toContain("mcp__big__t005")
+  const sent = JSON.stringify(bodies[1]!.messages)
+  expect(sent).toContain("gọi lại đúng lệnh")
+  expect(sent).not.toContain("AI_ToolCallRepairError")
+  expect(sent).not.toContain("Error repairing tool call")
   expect(events.at(-1)!.type).toBe("done")
+  // Saved history is clean too, and still loads the tool on the next turn.
+  const saved = done(events).messages
+  expect(JSON.stringify(saved)).not.toContain("AI_")
+  expect(loadedTools(saved)).toContain("mcp__big__t005")
+})
+
+test("tool search: the exact name of a deferred tool is loaded by the call itself", async () => {
+  const r = bigRegistry(60)
+  script = [{ tool: "mcp__big__t007", args: { symbol: "HPG" } }]
+  const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: r }))
+  expect(ends(events)[0]!.output).toContain("gọi lại đúng lệnh với tên mcp__big__t007")
+  expect(toolNames(bodies[1])).toContain("mcp__big__t007")
+})
+
+test("tool search: sessions saved with the SDK's raw error strings still load the tool", () => {
+  const old: ModelMessage[] = [
+    { role: "assistant", content: [{ type: "tool-call", toolCallId: "c1", toolName: "t005", input: {} }] },
+    {
+      role: "tool",
+      content: [
+        {
+          type: "tool-result",
+          toolCallId: "c1",
+          toolName: "t005",
+          output: { type: "error-text", value: "AI_ToolCallRepairError: Error repairing tool call: Error: Đã nạp tool: mcp__big__t005\nTool …" },
+        },
+      ],
+    },
+  ]
+  expect(loadedTools(old)).toContain("mcp__big__t005")
 })
 
 test("tool search: an unknown name tells the model to search first", async () => {
@@ -657,4 +695,63 @@ test("while todo items are open, the nudge after tool results lists them and ask
   expect(nudges.at(-1)).toContain("trước khi viết câu trả lời cuối")
   // Nothing open: the plain nudge.
   expect(toolNudge([])).toBe(TOOL_NUDGE)
+})
+
+test("tool errors reach the model without the SDK's prefixes: a wrong argument is one Vietnamese line, never the input echoed", async () => {
+  const r = registry()
+  r.register({
+    name: "pick",
+    description: "needs two refs",
+    input: z.object({ from_calls: z.array(z.string()).min(2), kind: z.enum(["a", "b"]) }),
+    readOnly: true,
+    execute: async () => "ok",
+  })
+  script = [{ tool: "pick", args: { from_calls: ["r1"], kind: "c" } }]
+  const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: r }))
+  const end = ends(events)[0]!
+  expect(end.output).toBe('Tham số không hợp lệ cho pick:\n- from_calls: cần ít nhất 2 phần tử\n- kind: phải là một trong: "a", "b"\nSửa tham số rồi gọi lại.')
+  const sent = JSON.stringify(bodies[1]!.messages)
+  expect(sent).toContain("cần ít nhất 2 phần tử")
+  expect(sent).not.toContain("AI_")
+  expect(sent).not.toContain("origin")
+})
+
+test("a thrown tool error reaches the model as its message, without 'Error: '", async () => {
+  script = [{ tool: "boom", args: {} }]
+  await collect(runAgent({ history: [], input: "x", skills: [], registry: registry() }))
+  const sent = JSON.stringify(bodies[1]!.messages)
+  expect(sent).toContain("nguồn dữ liệu sập")
+  expect(sent).not.toContain("Error: nguồn")
+})
+
+test("a deferred tool with wrong arguments, called before loading, is loaded (its arguments are never checked first)", async () => {
+  const r = bigRegistry(60)
+  r.register({ name: "mcp__big__strict", source: "mcp:big", deferrable: true, description: "x", input: z.object({ n: z.number() }), readOnly: true, execute: async () => "ok" })
+  script = [{ tool: "mcp__big__strict", args: { n: "x" } }]
+  const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: r }))
+  expect(ends(events)[0]!.output.startsWith("Đã nạp tool: mcp__big__strict")).toBe(true)
+})
+
+test("a loaded tool cut by the per-request cap is reported as such, not as 'loaded, call again' (no loop)", async () => {
+  const r = bigRegistry(140)
+  // History that loaded all 140: the cap keeps the first ones, so t139 stays out.
+  const calls = Array.from({ length: 140 }, (_, i) => `mcp__big__t${String(i).padStart(3, "0")}`)
+  const history: ModelMessage[] = [
+    { role: "user", content: "trước" },
+    { role: "assistant", content: calls.map((name, i) => ({ type: "tool-call" as const, toolCallId: `h${i}`, toolName: name, input: {} })) },
+    { role: "tool", content: calls.map((name, i) => ({ type: "tool-result" as const, toolCallId: `h${i}`, toolName: name, output: { type: "text" as const, value: "ok" } })) },
+    { role: "assistant", content: "xong" },
+  ]
+  script = [{ tool: "mcp__big__t139", args: {} }]
+  const events = await collect(runAgent({ history, input: "x", skills: [], registry: r }))
+  expect(ends(events)[0]!.output).toContain("chạm trần 128 tool")
+  expect(ends(events)[0]!.output).not.toContain("gọi lại đúng lệnh")
+})
+
+test("the deferral notice counts built-in tools apart from MCP ones", async () => {
+  const r = bigRegistry(60)
+  r.register({ name: "chart_render", source: "local", deferrable: true, description: "x", input: z.object({}), readOnly: true, execute: async () => "ok" })
+  const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: r }))
+  const notice = events.find((e) => e.type === "notice" && e.text.startsWith("Đang hoãn")) as { text: string } | undefined
+  expect(notice?.text).toStartWith("Đang hoãn 61 tool (60 MCP của big, 1 tool có sẵn);")
 })
