@@ -1,7 +1,7 @@
 import { createMemo, For } from "solid-js"
 import { chart, renderToString } from "@crafter/charts"
 import type { RGBA } from "@opentui/core"
-import type { ChartBar, ChartData, ChartPoint } from "../../core/tools/chart/data"
+import { periodChange, type ChartBar, type ChartData, type ChartPoint } from "../../core/tools/chart/data"
 import { color, mix } from "../theme"
 
 /**
@@ -220,8 +220,9 @@ function candles(bars: ChartBar[], symbol: string | undefined, width: number, ti
   })
   const first = bars[0]!
   const last = bars[bars.length - 1]!
-  const pct = ((last.c - first.o) / Math.abs(first.o || 1)) * 100
-  const dir = last.c >= first.o ? UP : DOWN
+  // Close to close, the same base as the model's summary and chart_compare.
+  const pct = periodChange(first.c, last.c)
+  const dir = last.c >= first.c ? UP : DOWN
   // Row 0 is `hi` and the last row `lo` (the padded range), so those are the labels.
   const axised = fixedAxis(grid, fmt1(hi), fmt1(lo))
   // Volume pane riêng dưới giá (chuẩn TV): nhỏ, cùng cột nến, màu theo hướng nến.
@@ -247,8 +248,8 @@ function candles(bars: ChartBar[], symbol: string | undefined, width: number, ti
   axised.push(...xLabels(zipped.map((z) => z.t), cs.map((_, i) => colOf(i)), PW))
   const title: TitleRun[] = [
     { text: `${symbol ? `${symbol} · ` : ""}nến ${bars.length} phiên${n < bars.length ? ` (gộp ${n} cột)` : ""} · ${fmt2(last.c)} ` },
-    { text: `${pct >= 0 ? "+" : ""}${pct.toFixed(1)}%`, fg: dir },
   ]
+  if (pct !== undefined) title.push({ text: `${pct >= 0 ? "+" : ""}${pct.toFixed(1)}%`, fg: dir })
   if (hasVol) title.push({ text: ` · Vol ${fmtCompact(bars.reduce((s, b) => s + (b.v ?? 0), 0))}` })
   return { title, grid: axised }
 }

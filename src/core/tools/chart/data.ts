@@ -20,3 +20,11 @@ export type ChartData =
   | { kind: "gauge" | "donut"; symbol?: string; value: number; max: number; unit?: string }
   | { kind: "compare"; title?: string; series: { label: string; values: number[] }[]; domain?: [number, number]; times?: string[]; unit?: string }
   | { kind: "depth"; symbol?: string; bids: ChartLevel[]; asks: ChartLevel[]; depth?: number; unit?: string }
+
+/**
+ * Change over a chart's period, in %: first close to last close, the same base for the
+ * candle summary, the candle header and chart_compare. Undefined when the base is 0.
+ */
+export function periodChange(from: number, to: number): number | undefined {
+  return from === 0 ? undefined : ((to - from) / Math.abs(from)) * 100
+}

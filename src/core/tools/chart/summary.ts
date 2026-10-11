@@ -1,8 +1,12 @@
-import type { ChartData } from "./data"
+import { periodChange, type ChartData } from "./data"
 
 const fmt = new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 2 })
 const n = (v: number) => fmt.format(v)
-const pct = (from: number, to: number) => (from === 0 ? "" : ` (${to >= from ? "+" : ""}${n(((to - from) / Math.abs(from)) * 100)}% cả kỳ)`)
+const signed = (p: number) => `${p >= 0 ? "+" : ""}${n(p)}%`
+const pct = (from: number, to: number) => {
+  const p = periodChange(from, to)
+  return p === undefined ? "" : ` (${signed(p)} cả kỳ)`
+}
 const span = (times?: string[]) => (times && times.length > 1 ? ` ${times[0]}→${times[times.length - 1]}` : "")
 const compact = (v: number) => (Math.abs(v) >= 1e9 ? `${n(v / 1e9)} tỷ` : Math.abs(v) >= 1e6 ? `${n(v / 1e6)}M` : Math.abs(v) >= 1e3 ? `${n(v / 1e3)}K` : n(v))
 
@@ -24,7 +28,8 @@ export function summarizeChart(data: ChartData, from?: string): string {
     case "candlestick": {
       const b = data.bars
       if (b.length === 0) return `Không có nến để vẽ.${src}`
-      const first = b[0]!.o
+      // Close to close, like chart_compare: the same data must never show two different %.
+      const first = b[0]!.c
       const last = b[b.length - 1]!.c
       const hi = Math.max(...b.map((x) => x.h))
       const lo = Math.min(...b.map((x) => x.l))
@@ -53,9 +58,8 @@ export function summarizeChart(data: ChartData, from?: string): string {
     }
     case "compare": {
       const change = (v: number[]) => {
-        const from = v[0]!
-        const to = v[v.length - 1]!
-        return from === 0 ? "?" : `${to >= from ? "+" : ""}${n(((to - from) / Math.abs(from)) * 100)}%`
+        const p = periodChange(v[0]!, v[v.length - 1]!)
+        return p === undefined ? "?" : signed(p)
       }
       const parts = data.series.map((s) => `${s.label} ${change(s.values)}`)
       return `Đã vẽ so sánh % thay đổi${span(data.times)}${src}: ${parts.join(", ")}.${tail}`
