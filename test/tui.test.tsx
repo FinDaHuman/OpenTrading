@@ -2022,11 +2022,12 @@ test("subagent row: between two model steps it shows the last tool, not 'Đang k
     setup.mockInput.pressEnter()
     const frame = await setup.waitForFrame((f) => /nghien-cuu \(Đọc FPT\) · 1 tool/.test(f))
     show(frame)
-    expect(frame).toMatch(/nghien-cuu \(Đọc FPT\) · 1 tool[^\n]*\n\s*⎿\s+current_time/)
+    expect(frame).toMatch(/nghien-cuu \(Đọc FPT\) · 1 tool[^\n]*\n[^\n]*⎿\s+current_time/)
     expect(frame).not.toContain("Đang khởi động…")
+  } finally {
+    // Even when an assertion fails, so the next test does not start mid-turn.
     release()
     await waitMcp(() => !state.streaming)
-  } finally {
     childAfterTool = undefined
   }
 }, 30_000)
