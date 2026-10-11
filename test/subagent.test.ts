@@ -489,3 +489,28 @@ test("stop_agent stops a running background agent; its partial result still noti
   expect(await stop.execute({ id: run.id }, ctxOf())).toContain("không còn chạy")
   await expect(stop.execute({ id: "ag-nope00" }, ctxOf())).rejects.toThrow("Không có subagent")
 })
+
+test("a subagent's sidechain holds tool errors cleaned, like the main history", async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "ot-sub-errors-"))
+  const { manager } = setup((r) =>
+    r.register({
+      name: "boom",
+      description: "fails",
+      input: z.object({}),
+      readOnly: true,
+      async execute() {
+        throw new Error("nguồn dữ liệu sập")
+      },
+    }),
+  )
+  manager.attachSession({ id: "s-err", dir })
+  childCall = { name: "boom", args: {} }
+  const run = manager.start({ description: "FPT", prompt: "Phân tích FPT", background: true })
+  await run.done
+  await manager.flush()
+  const files = await readdir(path.join(dir, "subagents"))
+  const text = await readFile(path.join(dir, "subagents", files.find((f) => f.endsWith(".jsonl"))!), "utf8")
+  expect(text).toContain("nguồn dữ liệu sập")
+  expect(text).not.toContain("Error: nguồn")
+  expect(JSON.stringify(childBodies[1]!.messages)).not.toContain("Error: nguồn")
+})

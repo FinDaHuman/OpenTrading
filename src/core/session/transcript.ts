@@ -1,5 +1,6 @@
 import type { ModelMessage } from "ai"
 import { isCompactMarker } from "../compact-marker"
+import { toolErrorText } from "../tools/errors"
 import { splitNotices, type ParsedNotice } from "../subagents/notification"
 
 /**
@@ -24,7 +25,9 @@ function outputText(output: unknown): { ok: boolean; text: string } {
       : o?.type === "content" && Array.isArray(o.value)
         ? (o.value as { type: string; text?: string }[]).map((p) => (p.type === "text" ? p.text : "[ảnh]")).join("\n")
         : JSON.stringify(o?.value ?? output, null, 2)
-  return { ok: !String(o?.type ?? "").startsWith("error"), text }
+  const ok = !String(o?.type ?? "").startsWith("error")
+  // Sessions saved before errors were cleaned carry the SDK's "AI_…Error: Error: …" prefixes.
+  return { ok, text: ok ? text : toolErrorText(text) }
 }
 
 export function transcriptFromMessages(messages: ModelMessage[]): TranscriptItem[] {
