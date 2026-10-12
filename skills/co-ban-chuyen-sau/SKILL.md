@@ -5,7 +5,7 @@ activation: auto
 requires_tools: [mcp__opentrading__financial_detail]
 triggers:
   keywords: [bctc, báo cáo tài chính, phân tích cơ bản, lợi nhuận gộp, nợ phải trả, vốn chủ, m-score, thao túng, cổ đông lớn, cổ tức, kế hoạch kinh doanh]
-version: 1.3.0
+version: 1.4.0
 ---
 
 # Phân tích cơ bản một mã
@@ -55,10 +55,7 @@ Trình bày kết luận đúng cấu trúc sau, mỗi mục ghi số + trend + 
 6. Chính sách cổ tức (`provenance: dividends_splits`).
 7. Kết luận 1 câu: CƠ BẢN TỐT/TRUNG BÌNH/YẾU + 3 rủi ro lớn nhất.
 
-**Giải thích con số forensic (bắt buộc khi có leg 3):** không chỉ liệt kê số — giải thích nghĩa từng biến và vì sao dẫn tới kết luận:
-- M-Score từng biến: DSRI (chất lượng doanh thu — >1.03 nghi kê khớp doanh thu), GMI (biên gộp xấu đi), AQI (chất lượng tài sản), SGI (tăng trưởng), SGAI (chi phí bán hàng), LVGI (đòn bẩy), TATA (accruals). M < −1.78 = ít dấu thao túng; M > −1.78 = nghi ngờ.
-- F-score từng điểm mất/giữ (ROA, CF>ROA, dROA, leverage, margin, turnover) — điểm mất vì sao (kỳ nào, dòng nào).
-- Kết luận "sạch/đỏ" bắt buộc dẫn từng con số làm căn cứ, không kết luận chay.
+**Giải thích con số forensic (bắt buộc khi có leg 3):** không chỉ liệt kê số — đọc `references/forensic-guide.md` rồi giải thích từng biến M-Score (DSRI/GMI/AQI/SGI/SGAI/LVGI/TATA, ngưỡng −1.78) và từng điểm F-score mất/giữ (kỳ nào, dòng nào). Bank M partial thì ghi "M không kết luận" theo file.
 
 ## Ví dụ
 
@@ -69,6 +66,12 @@ Trả lời (Wave 1 đủ, 2 calls): M-Score/F-score + 4 quý DT/LN + verdict 7 
 **Ví dụ 2:**
 Hỏi: cơ bản FPT
 Đạt khi: có M-Score/F-score, 4 quý doanh thu/lợi nhuận, cổ đông lớn và cổ tức lấy từ tool; mục nào tool trả rỗng (ví dụ insider) thì ghi rõ là dữ liệu trống.
+
+## File tham khảo
+
+| File | Dùng khi |
+|---|---|
+| `references/forensic-guide.md` | Giải thích từng biến M-Score / điểm F-score + ngoại lệ ngân hàng (chỉ khi chạy leg forensic) |
 
 ## Trực quan hóa
 

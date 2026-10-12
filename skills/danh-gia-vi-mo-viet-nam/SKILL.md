@@ -5,12 +5,12 @@ activation: auto
 requires_tools: [mcp__opentrading__vs_indicator_data]
 triggers:
   keywords: [vĩ mô, GDP, CPI, lạm phát, xuất khẩu, nhập khẩu, lãi suất điều hành, sbv, xnk, cán cân, câu chuyện thị trường]
-version: 1.3.0
+version: 1.4.0
 ---
 
 # Vĩ mô Việt Nam
 
-Mở đầu bắt buộc bằng pre-flight 2 calls (source_status + vs_auth_status) vì macro VN phụ thuộc JWT và HAR-session dễ chết. Cặp category/termType phải đúng tuyệt đối (sai là rows rỗng): GDP 73/tt3, CPI 15/tt7/sub2, XK 38/tt2.
+Mở đầu bắt buộc bằng pre-flight 2 calls (source_status + vs_auth_status) vì macro VN phụ thuộc JWT và HAR-session dễ chết. Cặp category/termType phải đúng tuyệt đối (sai là rows rỗng): tra bảng `assets/indicator-ids.md` trước khi gọi tool.
 
 ## Khi nào dùng
 
@@ -28,7 +28,7 @@ Chạy `source_status` + `vs_auth_status` trước mọi wave.
 
 **Bước 1: Data VN bắt buộc.**
 
-Chạy `vs_categories` trước (tra id nếu chưa chắc), rồi song song `vs_indicator_data` GDP + CPI + XK và `vs_xnk_detail` (chỉ 1 direction xk hoặc nk theo câu hỏi). Rows rỗng → kiểm tra lại cặp id, retry tối đa 1 lần → vẫn rỗng thì ghi "không có số liệu kỳ này".
+Chạy `vs_categories` trước nếu id chưa chắc (bảng `assets/indicator-ids.md` không có chỉ tiêu cần), rồi song song `vs_indicator_data` GDP + CPI + XK và `vs_xnk_detail` (chỉ 1 direction xk hoặc nk theo câu hỏi). Rows rỗng → kiểm tra lại cặp id, retry tối đa 1 lần → vẫn rỗng thì ghi "không có số liệu kỳ này".
 
 **Bước 2: Tin vĩ mô (song song).**
 
