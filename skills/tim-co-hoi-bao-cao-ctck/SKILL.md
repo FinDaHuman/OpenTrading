@@ -5,7 +5,7 @@ activation: auto
 requires_tools: [mcp__opentrading__analyst_consensus]
 triggers:
   keywords: [ctck, khuyên mua, giá mục tiêu, target, báo cáo phân tích, khuyến nghị, rating]
-version: 1.3.0
+version: 1.4.0
 ---
 
 # Cơ hội từ báo cáo CTCK
@@ -21,11 +21,13 @@ Khuyến nghị CTCK là INPUT, không phải chân lý — bắt buộc kiểm 
 
 **Bước 1: Feed chung (1 call duy nhất).**
 
-Chạy `analyst_consensus` (limit=30) — feed chung không symbol, parse rating + giá mục tiêu từ titles. Báo cáo vĩ mô thì thêm `analyst_consensus` (report_type=macro): lọc báo cáo vĩ mô CTCK (entry section/report); không có dated reports thì dùng số liệu gốc. Feed rỗng thật (cuối tuần) → empty hợp lệ, nới `days` 1 lần duy nhất rồi kết luận.
+Chạy `analyst_consensus` (limit=30, days=7) — feed chung không symbol, parse rating + giá mục tiêu từ titles. Tool hỗ trợ `page` (mặc định 1; listing public không có phân trang nên `page>1` trả rỗng kèm warning — không retry đổi page) và `days` (lọc N ngày gần nhất theo ngày parse được; dòng không parse được ngày giữ lại với `date_uncertain:true`). Báo cáo vĩ mô thì thêm `analyst_consensus` (report_type=macro): lọc báo cáo vĩ mô CTCK (entry section/report); không có dated reports thì dùng số liệu gốc. Feed rỗng thật (cuối tuần) → empty hợp lệ, nới `days` 1 lần duy nhất rồi kết luận.
 
 **Bước 2: Mã cụ thể + tài liệu gốc (tuần tự sau Bước 1).**
 
-Chạy `analyst_consensus` (symbol, limit=15) + `vs_documents` (symbol, chỉ lấy 1 mã đáng giá nhất) + `web_fetch` (URL báo cáo, HTML hoặc PDF; truyền `prompt` để chỉ lấy khuyến nghị, giá mục tiêu, luận điểm chính). PDF dạng scan thì web_fetch báo không có lớp chữ: đưa link cho người dùng và nói rõ chưa đọc nội dung. Hỏi mã cụ thể mà `analyst_consensus` (symbol) empty → đọc feed chung và lọc title chứa mã (title-scrape filter có thể sót), không retry đổi limit.
+Chạy `analyst_consensus` (symbol, limit=15) + `vs_documents` (symbol, chỉ lấy 1 mã đáng giá nhất).
+
+**Quy tắc tiết kiệm `web_fetch` (bắt buộc):** feed titles là đáp án mặc định — KHÔNG tự ý `web_fetch` để "cho chắc". Chỉ `web_fetch` URL báo cáo (HTML hoặc PDF) khi user yêu cầu rõ chi tiết/bản gốc (trigger: "chi tiết", "đọc báo cáo", "bản gốc", "vì sao target", "luận điểm"), tối đa 3 URL/query, ưu tiên MUA + mới nhất. Khi fetch, chỉ trích gọn: khuyến nghị, giá mục tiêu, luận điểm chính — trang HTML thì tìm `Nguồn:` (tên CTCK), đoạn sau `Tải về` (~500-700 chars: upside/DT/LN/EPS/P-E/P-B/cổ tức) và link `edocs/...pdf` (đưa link cho user). PDF dạng scan / không có lớp chữ (web_fetch báo lỗi hoặc trích vỡ font) thì đưa link cho người dùng và nói rõ chưa đọc nội dung. Mỗi dòng ghi rõ "đã đọc body" vs "chưa đọc body". Hỏi mã cụ thể mà `analyst_consensus` (symbol) empty → đọc feed chung và lọc title chứa mã (title-scrape filter có thể sót), không retry đổi limit.
 
 **Bước 3: Kiểm chứng upside (tuần tự, 1–2 mã nổi bật nhất).**
 
@@ -37,7 +39,7 @@ Trình bày kết luận đúng cấu trúc sau:
 
 - Bảng {mã · CTCK · rating · giá mục tiêu · ngày · upside % so giá hiện tại}, lọc trong `days` (default 7).
 - Top 3 cơ hội (upside lớn + rating MUA + còn hiệu lực).
-- Cột **"đã kiểm chứng"** bắt buộc = Bước 3 chạy cho 1–2 mã nổi bật nhất (có `stock_overview`); mã chưa kiểm chứng ghi rõ "chưa kiểm chứng giá hiện tại".
+- Cột **"đã kiểm chứng"** bắt buộc = Bước 3 chạy cho 1–2 mã nổi bật nhất (có `stock_overview`); mã chưa kiểm chứng ghi rõ "chưa kiểm chứng giá hiện tại". Nếu có `web_fetch` chi tiết thì thêm trạng thái "đã đọc body / chưa đọc body" từng dòng.
 - Disclaimer bắt buộc: khuyến nghị CTCK là INPUT, không phải chân lý — không suy diễn thành "nên mua".
 - Provenance: nguồn ngày từ URL/title; nếu `source/date null` (đặc trưng parse titles) → suy ngày từ URL/title + ghi rõ nguồn ngày "không chắc chắn". Đủ bảng ≥5 dòng + kiểm chứng 2 mã top thì dừng, không đào thêm mã ngoài top.
 
