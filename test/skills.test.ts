@@ -112,6 +112,17 @@ test("ve-bieu-do references đọc được qua load_skill file=", async () => {
   await expect(readSkillFile(viz, "../SKILL.md")).rejects.toThrow("nằm ngoài thư mục")
 })
 
+test("co-ban forensic guide + vi-mo indicator ids are readable in-dir", async () => {
+  const { skills } = await loadSkills(skillRoots(await root()).filter((r) => r.source === "bundled"))
+  const coban = skills.find((s) => s.name === "co-ban-chuyen-sau")!
+  const fg = await readSkillFile(coban, "references/forensic-guide.md")
+  for (const k of ["DSRI", "TATA", "1.78", "SGAI"]) expect(fg).toContain(k)
+  const vimo = skills.find((s) => s.name === "danh-gia-vi-mo-viet-nam")!
+  const ids = await readSkillFile(vimo, "assets/indicator-ids.md")
+  for (const k of ["73", "15", "38", "vs_categories"]) expect(ids).toContain(k)
+  await expect(readSkillFile(coban, "../forensic-guide.md")).rejects.toThrow("nằm ngoài thư mục")
+})
+
 test("supporting files are readable only inside the skill directory", async () => {
   const dir = await root()
   await skill(dir, "bank", "name: bank\ndescription: b")
