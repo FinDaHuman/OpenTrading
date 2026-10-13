@@ -10,7 +10,7 @@ import { catalogRegistry, evalRouting, loadCases } from "./helpers/routing-eval"
  */
 const FLOOR = {
   /** Cases whose expected MCP tool a keyword tool_search on the question loads. */
-  toolHits: 34, // of 58
+  toolHits: 39, // of 58
   /** Cases whose expected skill is suggested. */
   skillHits: 39, // of 43
   /** Suggested skills that are not expected (on scored cases). */

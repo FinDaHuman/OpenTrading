@@ -2,8 +2,8 @@
  "source": "captured",
  "capturedAt": "2026-10-13",
  "server": "opentrading",
- "commit": "4efbee5",
- "note": "tools/list of opentrading-mcp main (the commit live on Render on 13/10). Regenerate from the opentrading-mcp checkout: uv run python ../OpenTrading/scripts/dev/dump-mcp-catalog.py ../OpenTrading/test/fixtures/mcp-catalog/opentrading.json <commit>",
+ "commit": "1362799",
+ "note": "tools/list of opentrading-mcp at this commit. Regenerate from the opentrading-mcp checkout: uv run python ../OpenTrading/scripts/dev/dump-mcp-catalog.py ../OpenTrading/test/fixtures/mcp-catalog/opentrading.json <commit>",
  "tools": [
   {
    "name": "market_snapshot",
@@ -508,12 +508,20 @@
   },
   {
    "name": "vs_indicator_data",
-   "description": "Macro series (GDP/CPI/FX/trade) via browser-session replay. Use for macro reads.\n\nterm_type_id: 1 daily, 2 monthly, 3 quarterly, 4 yearly, 5 YTD, 6 MoM,\n7 YoY, 8 QoQ — pairs must match each category's ListTermType metadata\n(e.g. GDP 73 tt=3, CPI 15 tt=7 sub=2). from_date default 2022-01-01.\nUses the full browser cookie jar (HAR/env seed); Standard pack serves it.\nRows: {name, group, period, year, value, unit, timeorder}.\nExample: {\"category_id\": 73, \"term_type_id\": 3} (GDP quarterly);\n{\"category_id\": 15, \"term_type_id\": 7, \"sub_term_type_id\": \"2\"} (CPI YoY).\nNumbers accepted as strings and coerced (e.g. \"3\" → 3).\n",
+   "description": "Macro series (GDP/CPI/FX/trade) via browser-session replay. Use for macro reads.\n\nindicator: 'GDP' (quarterly), 'CPI' (YoY) or 'XK' (exports, monthly) — the\nserver fills the id pair, so prefer it for these. Other series: pass\ncategory_id from vs_categories plus term_type_id: 1 daily, 2 monthly,\n3 quarterly, 4 yearly, 5 YTD, 6 MoM, 7 YoY, 8 QoQ — pairs must match each\ncategory's ListTermType metadata or rows come back empty.\nfrom_date default 2022-01-01. Uses the full browser cookie jar (HAR/env\nseed); Standard pack serves it.\nRows: {name, group, period, year, value, unit, timeorder}.\nExample: {\"indicator\": \"CPI\"}; {\"category_id\": 76, \"term_type_id\": 2}.\nNumbers accepted as strings and coerced (e.g. \"3\" → 3).\n",
    "inputSchema": {
     "properties": {
      "category_id": {
-      "title": "Category Id",
-      "type": "integer"
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Category Id"
      },
      "term_type_id": {
       "anyOf": [
@@ -558,11 +566,20 @@
       ],
       "default": null,
       "title": "To Date"
+     },
+     "indicator": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Indicator"
      }
     },
-    "required": [
-     "category_id"
-    ],
     "title": "vs_indicator_dataArguments",
     "type": "object"
    },
@@ -1033,7 +1050,7 @@
   },
   {
    "name": "vn_global_index",
-   "description": "Global index bars. Use as yfinance fallback.\n\nSymbol spellings are aliased: S&P 500 = INX (SPX/GSPC/SP500 work),\nDow Jones = USA30 (DJI/Dow), Nasdaq Composite = COMP (IXIC/NASDAQ),\nCAC 40 = PX1 (CAC/CAC40), FTSE 100 = UKX (FTSE/FTSE100), plus DAX,\nN225 (Nikkei), HSI (Hang Seng), 000001 (Shanghai), SENSEX, VNI.\nNasdaq-100 (NDX) is NOT in this source — use yf_global_indices.\nsummary/columns: summary returns {count,last,high,low} only; columns keeps named fields.\n",
+   "description": "Global index bars. Use as yfinance fallback.\n\nSymbol spellings are aliased (Yahoo codes and names with spaces work too):\nS&P 500 = INX (SPX/GSPC/SP500), Dow Jones = USA30 (DJI/Dow),\nNasdaq Composite = COMP (IXIC/NASDAQ),\nCAC 40 = PX1 (CAC/CAC40), FTSE 100 = UKX (FTSE/FTSE100), plus DAX,\nN225 (Nikkei), HSI (Hang Seng), 000001 (Shanghai), SENSEX, VNI.\nNasdaq-100 (NDX) is NOT in this source — use yf_global_indices.\nsummary/columns: summary returns {count,last,high,low} only; columns keeps named fields.\n",
    "inputSchema": {
     "properties": {
      "symbol": {
@@ -2009,7 +2026,7 @@
   },
   {
    "name": "stock_forensic",
-   "description": "Beneish M-Score + Piotroski F-Score from FULL detailed statements (P15).\n\nSources: KQKD/CDKT/LCTT detail (real per-quarter lines incl. receivables,\ncash, CFO). M-Score is 7-index (DEPI excluded — not exposed); full\nformula only when every input exists, else partial with missing list.\nF-Score: 6 of 9 items on Standard pack (CFO from LCTT is empty upstream;\nshare-count item unavailable); 8 of 9 when BCTC paid unlocks LCTT.\ndetail=true adds raw input series.\n",
+   "description": "Beneish M-Score + Piotroski F-Score from FULL detailed statements (P15).\n\nSources: KQKD/CDKT/LCTT detail (real per-quarter lines incl. receivables,\ncash, CFO). M-Score is 7-index (DEPI excluded — not exposed, so the\n-1.78 cut-off is approximate); full formula only when every input\nexists, else partial with missing list.\nF-Score: 6 of 9 items on Standard pack (CFO from LCTT is empty upstream;\nshare-count item unavailable); 8 of 9 when BCTC paid unlocks LCTT.\ndetail=true adds raw input series.\n",
    "inputSchema": {
     "properties": {
      "symbol": {
@@ -2724,7 +2741,7 @@
   },
   {
    "name": "analyst_consensus",
-   "description": "Analyst ratings and price targets parsed from report titles. Use for street views.\n\nThere is no tool named analyst_targets — this tool is the targets source.\nsymbol: filter one ticker (omit for latest across market). Ratings come\nfrom title text (MUA/BÁN/NẮM GIỮ...), not a consensus feed; history per\nsymbol shows upgrades/downgrades by history. report_type: 'equity'\n(ticker reports) or 'macro' (CTCK macro outlooks: GDP/CPI/rates/FX/Fed;\nsymbol filter does not apply, macro_topic set per report).\npage: listing page (1-based, default 1). The public listing has no\nworking pagination (verified: ?page=N is ignored server-side), so only\npage=1 returns data; page>1 returns an empty list with a warning.\ndays: keep reports from the last N days by parsed dd/mm/yyyy date\n(default None = no date filter). Rows without a parsed date are kept\nand marked date_uncertain:true — treat their dates as uncertain.\nTitles only — no body. To read detail ONLY when the user explicitly\nasks for it: call web_fetch on the report url (markdown), then locate\n'Nguồn:' (CTCK name), the text after 'Tải về' (~500-700 chars summary\nwith upside/revenue/profit/EPS/P-E/P-B/dividend), and the\n'edocs/...pdf' link (give the user the link; PDF text extraction\nusually fails on Vietstock fonts — use the HTML summary). Max 3\ndetail fetches per query (each page is ~79k chars of nav noise);\nprefer MUA ratings and newest dates.\n",
+   "description": "Analyst ratings and price targets parsed from report titles. Use for street views.\n\nThere is no tool named analyst_targets — this tool is the targets source.\nsymbol: filter one ticker (omit for latest across market). Ratings come\nfrom title text (MUA/BÁN/NẮM GIỮ...), not a consensus feed; history per\nsymbol shows upgrades/downgrades by history. report_type: 'equity'\n(ticker reports) or 'macro' (CTCK macro outlooks: GDP/CPI/rates/FX/Fed;\nsymbol filter does not apply, macro_topic set per report).\ndays: keep reports from the last N days by parsed dd/mm/yyyy date\n(default None = no date filter). Rows without a parsed date are kept\nand marked date_uncertain:true — treat their dates as uncertain.\nOnly the latest listing page is available (no pagination upstream).\nTitles only — no report body. Each row's url is the report page: its\nHTML summary after 'Tải về' (~500-700 chars) carries upside, revenue,\nprofit, EPS, P/E, P/B, dividend; 'Nguồn:' names the broker. The\n'edocs/...pdf' file often fails text extraction (Vietstock fonts).\n",
    "inputSchema": {
     "properties": {
      "symbol": {
@@ -2748,11 +2765,6 @@
       "default": "equity",
       "title": "Report Type",
       "type": "string"
-     },
-     "page": {
-      "default": 1,
-      "title": "Page",
-      "type": "integer"
      },
      "days": {
       "anyOf": [
@@ -4007,7 +4019,7 @@
     "type": "object"
    },
    "_meta": {
-    "anthropic/searchHint": "do tuoi bang chu ky thi truong | cycle tables freshness"
+    "anthropic/searchHint": "do tuoi bang thong ke chu ky nhom nganh | sector cycle tables freshness"
    }
   },
   {
@@ -4044,7 +4056,7 @@
     "type": "object"
    },
    "_meta": {
-    "anthropic/searchHint": "mua vu nganh theo thang bang chu ky | basket monthly seasonality"
+    "anthropic/searchHint": "mua vu nhom nganh theo thang thong ke chu ky | sector monthly seasonal"
    }
   },
   {
@@ -4069,7 +4081,7 @@
     "type": "object"
    },
    "_meta": {
-    "anthropic/searchHint": "luan chuyen dong tien nganh chuoi | sector rotation chains"
+    "anthropic/searchHint": "luan chuyen nganh nhom nay manh nhom kia tang theo | sector rotation lead lag"
    }
   },
   {
@@ -4124,7 +4136,7 @@
   },
   {
    "name": "cycle_yearly",
-   "description": "Yearly return % per basket. Omit args for full table.",
+   "description": "Yearly return % per VN sector basket (bank, securities, realestate, steel, tech...); ranks sectors by year. Omit args for full table.",
    "inputSchema": {
     "properties": {
      "basket": {
@@ -4156,19 +4168,19 @@
     "type": "object"
    },
    "_meta": {
-    "anthropic/searchHint": "loi suat nganh theo nam | basket yearly returns"
+    "anthropic/searchHint": "lai lo nhom nganh theo nam xep hang thong ke chu ky | sector yearly returns"
    }
   },
   {
    "name": "cycle_trough_events",
-   "description": "3M forward returns per basket after major troughs (who leads recoveries).",
+   "description": "3M forward returns per VN sector basket after major market troughs (which sectors lead recoveries).",
    "inputSchema": {
     "properties": {},
     "title": "cycle_trough_eventsArguments",
     "type": "object"
    },
    "_meta": {
-    "anthropic/searchHint": "nganh dan dat sau day thi truong | leaders after troughs"
+    "anthropic/searchHint": "nhom nganh dan dat chay truoc sau day thi truong | sector leads"
    }
   },
   {
@@ -4231,7 +4243,7 @@
     "type": "object"
    },
    "_meta": {
-    "anthropic/searchHint": "do tuoi bang tai san viet nam | vn asset tables freshness"
+    "anthropic/searchHint": "do tuoi bang chu ky tai san viet nam | vn asset cycle tables freshness"
    }
   },
   {
@@ -4268,7 +4280,7 @@
     "type": "object"
    },
    "_meta": {
-    "anthropic/searchHint": "mua vu vang usd xang btc vnindex | vn assets monthly"
+    "anthropic/searchHint": "chu ky mua vu tai san viet nam vang usd btc | vn assets monthly"
    }
   },
   {
@@ -4317,7 +4329,7 @@
     "type": "object"
    },
    "_meta": {
-    "anthropic/searchHint": "do tuoi bang tai san toan cau | global asset freshness"
+    "anthropic/searchHint": "do tuoi bang chu ky tai san toan cau | global asset cycle freshness"
    }
   },
   {
@@ -4379,7 +4391,7 @@
     "type": "object"
    },
    "_meta": {
-    "anthropic/searchHint": "chu ky kinh te suy thoai nber | nber phase returns"
+    "anthropic/searchHint": "pha chu ky kinh te toan cau suy thoai lop tai san | nber phase returns"
    }
   },
   {

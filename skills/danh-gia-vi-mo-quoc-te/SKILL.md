@@ -5,7 +5,7 @@ activation: auto
 requires_tools: [mcp__opentrading__fred_series]
 triggers:
   keywords: [kinh tế mỹ, recession, suy thoái kinh tế mỹ, đường cong lợi suất, yield curve, risk-on, risk-off, fed bối cảnh, kinh tế toàn cầu]
-version: 1.5.0
+version: 1.6.0
 ---
 
 # Vĩ mô Mỹ và toàn cầu
@@ -31,7 +31,7 @@ Chạy `yf_regime_assets` + `assets_rotation` + `world_macro_country` (VN/CHINA 
 
 **Bước 3: Xác nhận toàn cầu (song song, tuần tự sau Bước 2).**
 
-Chạy `yf_global_indices` + `yf_commodities` + `world_fear_greed`. Cần chuỗi lịch sử chỉ số TG thì `vn_global_index` nhận cả mã Yahoo và tên thường gặp (SPX, ^GSPC, Dow, Nasdaq…); Nasdaq-100 không có ở nguồn này, dùng `yf_global_indices`. Đủ DGS10 + CPI + curve ở Bước 1 mới sang Bước 2; gọi ≥3 FRED series cùng lúc là dấu hiệu tràn lan → dừng.
+Chạy `yf_global_indices` + `yf_commodities` + `world_fear_greed`. Cần chuỗi lịch sử chỉ số TG thì `vn_global_index` nhận cả mã Yahoo và tên thường gặp (SPX, ^GSPC, S&P 500, Dow, Nasdaq, DAX, CAC 40…); Nasdaq-100 không có ở nguồn này, dùng `yf_global_indices`. Đủ DGS10 + CPI + curve ở Bước 1 mới sang Bước 2; gọi ≥3 FRED series cùng lúc là dấu hiệu tràn lan → dừng.
 
 ## Cấu trúc câu trả lời
 

@@ -138,12 +138,12 @@ test("Vietnamese market terms also match English descriptions", async () => {
   expect(firstLine(await search(r, "lịch sử giá FPT", 1))).toBe(`${LOADED_PREFIX}mcp__ot__vn_quote_history`)
 })
 
-test("chu ky / lai lo / xep hang expand to cycle-yearly English terms", () => {
-  // Q98 class: "lãi lỗ nhóm ngành ... xếp hạng ... bảng thống kê chu kỳ"
-  // must surface yearly/cycle/rank-flavoured tools, not silently miss them.
-  expect(expandQuery(["chu", "ky"])).toEqual(expect.arrayContaining(["cycle", "yearly", "annual"]))
-  expect(expandQuery(["lai", "lo"])).toEqual(expect.arrayContaining(["return", "ret", "profit"]))
+test("only domain-neutral phrases expand; tool vocabulary lives in the tools' own hints", () => {
   expect(expandQuery(["xep", "hang"])).toEqual(expect.arrayContaining(["rank", "ranking", "top"]))
+  // "chu ky" spans cycle_*, vn_asset_* and g_asset_*; a global synonym pulled every
+  // question toward cycle_* (Q138, Q191). The cycle tools' searchHints cover Q98 instead.
+  expect(expandQuery(["chu", "ky"])).toEqual([])
+  expect(expandQuery(["lai", "lo"])).toEqual([])
 })
 
 test("keyword search loads only hits close to the best one (loading is permanent)", async () => {
