@@ -980,7 +980,7 @@ test("ask_user: esc declines without stopping the turn; 'Khác' takes a typed an
   await setup.waitForFrame((f) => f.includes("Câu hỏi cho bạn"))
   setup.mockInput.pressEscape()
   await waitMcp(() => !state.streaming)
-  expect(lastTool()).toContain("Người dùng không trả lời")
+  expect(lastTool()).toContain("Người dùng bỏ qua các câu hỏi")
   expect(JSON.stringify(state.history.at(-1)?.content)).toContain("HẾT-CÂU-TRẢ-LỜI")
   expect(JSON.stringify(state.history.at(-1)?.content)).not.toContain("đã dừng")
 

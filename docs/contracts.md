@@ -99,7 +99,7 @@ version: 1.0.0
 
 - **`triggers.keywords`** (tầng L1 preroute trong HarnessPlan §5.3): nếu câu hỏi chứa từ khoá (không phân biệt hoa thường, bỏ dấu, khớp theo từ), harness nhắc model "có thể liên quan tới skill X". Đây chỉ là gợi ý; model vẫn quyết định có gọi hay không.
 - **Viết `description` và `when_to_use` cụ thể.** Kinh nghiệm của Cursor: mô tả mơ hồ thì model không bao giờ chọn. Trong danh sách, mỗi skill tối đa 250 ký tự.
-- **File phụ** (bảng chỉ tiêu, checklist) để cùng thư mục. Model đọc bằng `load_skill` với tham số `file`; không đọc được file nằm ngoài thư mục skill. Quy ước: bảng tra cứu cố định (id chỉ tiêu, mã...) để `assets/`, file diễn giải cách đọc (cây quyết định, checklist, cẩm nang) để `references/`.
+- **File phụ** (bảng chỉ tiêu, checklist) để cùng thư mục. Model đọc bằng `load_skill` với tham số `file`; không đọc được file nằm ngoài thư mục skill. Mỗi file phụ tốn thêm một lượt gọi tool, nên chỉ tách khi nội dung dài và chỉ dùng ở nhánh hiếm; vài dòng mà bước chính luôn cần thì để thẳng trong SKILL.md. Bảng tra cứu (mã, id) mà tool tự hiểu được thì sửa ở tool, không chép vào skill. Khi tách: bảng tra cứu để `assets/`, file diễn giải cách đọc để `references/`.
 - Frontmatter sai: skill không được nạp và lỗi hiện trong `/skills`. App không crash.
 - Không viết số liệu thị trường cụ thể vào skill (giá, P/E hiện tại), vì chúng sẽ cũ. Skill mô tả **cách** phân tích; số liệu lấy từ tool.
 

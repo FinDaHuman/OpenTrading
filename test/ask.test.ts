@@ -33,7 +33,7 @@ test("without a UI the model is told to ask in plain text", async () => {
   expect(out.output).toContain("hỏi bằng một câu hỏi ngắn")
 })
 
-test("answers come back in Claude Code's format; declining tells the model to stop", async () => {
+test("answers come back in Claude Code's format; skipping tells the model to assume and go on", async () => {
   const broker = new AskBroker()
   broker.interactive = true
   const tool = askUserTool(broker)
@@ -48,7 +48,7 @@ test("answers come back in Claude Code's format; declining tells the model to st
   const declined = runTool(tool, q, ctx(), new RwLock())
   await tick()
   broker.respond(broker.head()!.id, undefined)
-  expect((await declined).output).toContain("Dừng lại và chờ")
+  expect((await declined).output).toContain("nêu giả định ở đầu câu trả lời rồi làm tiếp")
 })
 
 test("waiting for an answer neither times the tool out nor blocks a write tool", async () => {
