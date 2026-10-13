@@ -123,6 +123,13 @@ test("co-ban forensic guide + vi-mo indicator ids are readable in-dir", async ()
   await expect(readSkillFile(coban, "../forensic-guide.md")).rejects.toThrow("nằm ngoài thư mục")
 })
 
+test("vi-mo-quoc-te global symbols asset is readable in-dir", async () => {
+  const { skills } = await loadSkills(skillRoots(await root()).filter((r) => r.source === "bundled"))
+  const vimoqt = skills.find((s) => s.name === "danh-gia-vi-mo-quoc-te")!
+  const syms = await readSkillFile(vimoqt, "assets/global-symbols.md")
+  for (const k of ["INX", "COMP", "USA30", "vn_global_index"]) expect(syms).toContain(k)
+})
+
 test("supporting files are readable only inside the skill directory", async () => {
   const dir = await root()
   await skill(dir, "bank", "name: bank\ndescription: b")

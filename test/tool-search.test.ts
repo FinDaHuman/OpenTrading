@@ -5,7 +5,7 @@ import { renderDeferred } from "../src/core/prompt/assemble"
 import { toolSearchTool } from "../src/core/tools/builtin/tool-search"
 import { loadedTools } from "../src/core/tools/loaded"
 import { ToolRegistry } from "../src/core/tools/registry"
-import { LOADED_PREFIX, resolveToolName } from "../src/core/tools/search"
+import { LOADED_PREFIX, expandQuery, resolveToolName } from "../src/core/tools/search"
 import type { ToolDef } from "../src/core/tools/types"
 import { RwLock, runTool } from "../src/core/tools/wrap"
 
@@ -136,6 +136,14 @@ test("deferred local tools keep their names: they have no mcp__ prefix to search
 test("Vietnamese market terms also match English descriptions", async () => {
   const r = registry()
   expect(firstLine(await search(r, "lịch sử giá FPT", 1))).toBe(`${LOADED_PREFIX}mcp__ot__vn_quote_history`)
+})
+
+test("chu ky / lai lo / xep hang expand to cycle-yearly English terms", () => {
+  // Q98 class: "lãi lỗ nhóm ngành ... xếp hạng ... bảng thống kê chu kỳ"
+  // must surface yearly/cycle/rank-flavoured tools, not silently miss them.
+  expect(expandQuery(["chu", "ky"])).toEqual(expect.arrayContaining(["cycle", "yearly", "annual"]))
+  expect(expandQuery(["lai", "lo"])).toEqual(expect.arrayContaining(["return", "ret", "profit"]))
+  expect(expandQuery(["xep", "hang"])).toEqual(expect.arrayContaining(["rank", "ranking", "top"]))
 })
 
 test("keyword search loads only hits close to the best one (loading is permanent)", async () => {
