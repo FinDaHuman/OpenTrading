@@ -38,7 +38,10 @@ export function chartCompareTool(): ToolDef<ChartCompareInput> {
   return {
     name: "chart_compare",
     description:
-      "So sánh 2–5 chuỗi giá (mã với mã, mã với chỉ số) theo % thay đổi từ điểm đầu, cùng một thang. Ưu tiên from_calls: các mã rN trong [ref rN] của kết quả giá — harness tự lấy số; một kết quả gọi gộp nhiều mã tự tách thành từng chuỗi (lọc bằng symbols). Chuỗi dài ngắn khác nhau được căn theo điểm cuối. Một chuỗi thì dùng chart_render kind=line.",
+      "So sánh 2–5 chuỗi giá (mã với mã, mã với chỉ số) theo % thay đổi từ điểm đầu, cùng một thang. " +
+      "Dùng khi: so VCB với HPG với VNINDEX, so cổ phiếu với vàng. " +
+      "Không dùng khi: chỉ 1 chuỗi (dùng chart_render kind=line). " +
+      "Ưu tiên from_calls: các mã rN trong [ref rN] của kết quả giá — harness tự lấy số, ví dụ from_calls: [\"r1\",\"r3\"]. Một kết quả gọi gộp nhiều mã tự tách thành từng chuỗi (lọc bằng symbols). Chuỗi dài ngắn khác nhau được căn theo điểm cuối.",
     input: z.object({
       title: z.string().optional().describe("Tiêu đề, ví dụ VCB vs HPG"),
       series: z

@@ -11,9 +11,9 @@ export function todoWriteTool(): ToolDef<TodoWriteInput> {
     name: TODO_WRITE,
     description: [
       "Ghi danh sách việc cần làm cho câu hỏi đang trả lời; giao diện ghim danh sách cho người dùng thấy tiến độ.",
-      "Dùng khi việc cần từ 3 bước trở lên (phân tích nhiều mã, so sánh với ngành, đọc nhiều kỳ BCTC) hoặc khi người dùng đưa một danh sách việc. Không dùng cho câu hỏi trả lời được trong một hai bước, và không lập danh sách chỉ có một việc.",
-      "Nội dung mỗi việc viết cho người dùng đọc, theo việc cần làm (\"Lấy BCTC 4 quý của FPT\"), không ghi tên tool.",
-      "Mỗi lần gọi gửi toàn bộ danh sách. Đánh dấu in_progress trước khi bắt đầu một việc (chỉ một việc in_progress), completed ngay khi xong việc đó, cancelled nếu không làm nữa. Có thể gọi cùng lượt với các tool lấy dữ liệu.",
+      "Dùng khi: việc cần từ 3 bước trở lên (phân tích nhiều mã, so sánh với ngành, đọc nhiều kỳ BCTC), hoặc người dùng đưa một danh sách việc. Ví dụ: so sánh VCB với TCB — tạo danh sách (lấy BCTC 4 quý VCB) → (lấy BCTC 4 quý TCB) → (so sánh NIM, CIR, CASA) → (viết kết luận), làm tới đâu đánh dấu tới đó.",
+      "Không dùng khi: câu hỏi trả lời được trong một hai bước; danh sách chỉ có một việc (làm thẳng còn hơn).",
+      "Nội dung mỗi việc viết cho người dùng đọc, theo việc cần làm (\"Lấy BCTC 4 quý của FPT\"), không ghi tên tool. Mỗi lần gọi gửi TOÀN BỘ danh sách. Đánh dấu in_progress trước khi bắt đầu một việc (chỉ MỘT việc in_progress tại một thời điểm), completed NGAY khi xong việc đó (không gom), cancelled nếu không làm nữa. CHỈ đánh completed khi việc xong triệt để: còn thiếu dữ liệu, tool còn lỗi hay kết quả chưa kiểm chứng thì giữ in_progress. Có thể gọi cùng lượt với các tool lấy dữ liệu.",
       "Không kể lại danh sách trong câu trả lời vì giao diện đã hiện. Nếu kết thúc lượt mà còn việc pending, nói rõ vì sao.",
     ].join(" "),
     input: TodoWriteInput,

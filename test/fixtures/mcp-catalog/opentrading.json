@@ -1,13 +1,13 @@
 {
  "source": "captured",
- "capturedAt": "2026-10-13",
+ "capturedAt": "2026-10-14",
  "server": "opentrading",
- "commit": "1362799",
+ "commit": "2c13b1a",
  "note": "tools/list of opentrading-mcp at this commit. Regenerate from the opentrading-mcp checkout: uv run python ../OpenTrading/scripts/dev/dump-mcp-catalog.py ../OpenTrading/test/fixtures/mcp-catalog/opentrading.json <commit>",
  "tools": [
   {
    "name": "market_snapshot",
-   "description": "Snapshot of VN market with provenance. Use when a broad market picture is needed.\n\nsymbols: tickers to quote — default the full VN30 basket (P14).\nas_of: requested timestamp label, recorded as requested_as_of\n(data is always latest).\n",
+   "description": "Toàn cảnh thị trường VN: bảng giá VN30 kèm nguồn gốc dữ liệu. Dùng khi cần bức tranh thị\n            trường rộng trong một lần gọi.\n\n        Dùng khi: hỏi \"thị trường hôm nay sao\", cần giá nhiều mã cùng lúc.\n        Không dùng khi: chỉ cần 1 mã (dùng vn_equity_quote_batch với đúng mã đó); cần top tăng/giảm\n            (dùng market_movers); cần bản tin soạn sẵn (dùng brief_build).\n\n        symbols: các mã cần báo giá — mặc định cả rổ VN30. as_of: nhãn thời điểm yêu cầu, ghi vào\n            requested_as_of (dữ liệu luôn là mới nhất).\n        ",
    "inputSchema": {
     "properties": {
      "symbols": {
@@ -47,7 +47,7 @@
   },
   {
    "name": "source_status",
-   "description": "Health of every upstream plus TTL state. Use to debug stale data.",
+   "description": "Sức khỏe từng nguồn dữ liệu + trạng thái TTL. Dùng khi nghi ngờ dữ liệu cũ hoặc tool báo\n            lỗi nguồn.\n\n        Không dùng khi: cần dữ liệu thị trường (gọi tool dữ liệu tương ứng); đây là tool chẩn đoán,\n            không trả giá.\n        ",
    "inputSchema": {
     "properties": {},
     "title": "source_statusArguments",
@@ -59,7 +59,7 @@
   },
   {
    "name": "market_candles_batch",
-   "description": "Batch OHLCV for symbols, one request per symbol. Use for multi-chart context.\n\ndays: daily bars per symbol (max 100 symbols). summary/columns: summary\nreturns {count,last,high,low} only; columns keeps named fields.\n",
+   "description": "Nến OHLCV theo ngày cho NHIỀU mã, mỗi mã một request. Dùng khi cần dữ liệu vẽ nhiều đồ\n            thị cùng lúc.\n\n        Dùng khi: so sánh nhiều mã, chuẩn bị context nhiều chart.\n        Không dùng khi: chỉ 1 mã (dùng vn_quote_history — sâu hơn, tới 365 nến, có 1W/1M); cần nến\n            phút/intraday (dùng vn_equity_ohlcv).\n\n        days: số nến ngày mỗi mã (tối đa 100 mã). summary/columns: summary chỉ trả\n            {count,last,high,low}; columns giữ lại trường nêu tên.\n        ",
    "inputSchema": {
     "properties": {
      "symbols": {
@@ -107,7 +107,7 @@
   },
   {
    "name": "symbol_lookup",
-   "description": "Resolve company name to symbol, venue and sector. Use before any symbol-scoped call.\n\nlimit/offset: paginate hits (matched by symbol or company name,\ncase- and accent-insensitive).\n",
+   "description": "Tra tên công ty ra mã, sàn và ngành. Dùng TRƯỚC mọi lệnh theo mã khi chưa chắc mã chính\n            xác.\n\n        Dùng khi: user nêu tên công ty (\"Hòa Phát\") mà chưa rõ mã.\n        Không dùng khi: đã biết mã (gọi thẳng tool cần); mã không phải cổ phiếu VN như vàng, USD,\n            BTC hay chỉ số thế giới (dùng symbol_resolve).\n\n        limit/offset: phân trang kết quả (khớp theo mã hoặc tên công ty, không phân biệt hoa\n            thường/dấu).\n        ",
    "inputSchema": {
     "properties": {
      "query": {
@@ -137,7 +137,7 @@
   },
   {
    "name": "symbol_resolve",
-   "description": "Resolve ANY asset code to symbol + class + next tool. Use FIRST when unsure.\n\nCovers VN stocks, crypto, forex, indices, futures, gold/oil. Returns ranked\ncandidates with fallback order; ambiguous=true means ask the user or try #1 then #2.\n",
+   "description": "Giải mã BẤT KỲ mã tài sản nào ra symbol + loại tài sản + tool tiếp theo. Dùng ĐẦU TIÊN\n            khi không chắc mã thuộc loại nào.\n\n        Dùng khi: mã lạ (\"BTC\", \"USD\", \"VNI\", \"vàng SJC\") — gồm cổ phiếu VN, crypto, forex, chỉ số,\n            phái sinh, vàng/dầu. Trả ứng viên xếp hạng kèm thứ tự fallback; ambiguous=true nghĩa là\n            hỏi user hoặc thử #1 rồi #2.\n        Không dùng khi: đã rõ là cổ phiếu VN (dùng symbol_lookup nhanh hơn).\n        ",
    "inputSchema": {
     "properties": {
      "query": {
@@ -162,7 +162,7 @@
   },
   {
    "name": "market_movers",
-   "description": "Top gainers, losers and volume leaders. Use for session pulse checks.\n\ntop_n: rows per list. universe: 'vn30' (default, 30 liquid bluechips —\nfast and stable) or 'hose' (full HOSE ref ≤60, slow; illiquid symbols\nmay hang vnstock and trip the batch timeout → partial with missing).\n",
+   "description": "Top tăng/giảm mạnh và dẫn đầu thanh khoản. Dùng khi kiểm tra nhịp phiên (mã nào đang\n            chạy, dòng tiền ở đâu).\n\n        Dùng khi: hỏi \"mã nào tăng mạnh hôm nay\", \"dòng tiền đang ở đâu\".\n        Không dùng khi: cần đếm mã tăng/giảm toàn sàn (dùng breadth_scan); cần context gộp nhiều\n            chân cho bản tin (dùng market_overview).\n\n        top_n: số dòng mỗi bảng. universe: 'vn30' (mặc định, 30 bluechip — nhanh, ổn định) hoặc\n            'hose' (cả sàn ≤60 mã, chậm; mã kém thanh khoản có thể treo → trả partial kèm missing).\n        ",
    "inputSchema": {
     "properties": {
      "top_n": {
@@ -185,7 +185,7 @@
   },
   {
    "name": "breadth_scan",
-   "description": "Advancers, decliners, ceiling and floor counts. Use to judge rally health.\n\nexchange: filter rows carrying venue info (HOSE/HNX/UPCOM); ignored\nwith a warning when rows carry no venue info.\n",
+   "description": "Đếm mã tăng/giảm/trần/sàn toàn bảng. Dùng khi đánh giá sức khỏe đợt tăng (tăng có lan tỏa\n            hay chỉ vài trụ kéo).\n\n        Dùng khi: hỏi \"độ rộng thị trường\", \"đợt tăng này có chắc không\".\n        Không dùng khi: chỉ cần top 3-5 mã tăng/giảm (dùng market_movers — nhẹ hơn); cần context gộp\n            cho bản tin (dùng market_overview).\n\n        exchange: lọc theo sàn (HOSE/HNX/UPCOM); bị bỏ qua kèm cảnh báo khi dòng dữ liệu không mang\n            thông tin sàn.\n        ",
    "inputSchema": {
     "properties": {
      "exchange": {
@@ -210,7 +210,7 @@
   },
   {
    "name": "market_overview",
-   "description": "One-call market context: bluechip quotes, movers, breadth, session. Use for briefs.\n\ntop_n: gainers/losers rows each. Breadth counts the bluechip board\n(breadth_scan covers the full Vietstock board). Legs degrade\nindependently: a dead leg becomes null plus a warning.\n",
+   "description": "Context thị trường một lần gọi: giá bluechip, movers, độ rộng, phiên. Dùng cho bản tin và\n            câu hỏi tổng quan.\n\n        Dùng khi: hỏi \"thị trường hôm nay sao\", cần mọi thứ trong một gọi.\n        Không dùng khi: cần độ rộng TOÀN sàn Vietstock (dùng breadth_scan — overview chỉ đếm rổ\n            bluechip); cần rổ VN30 đầy đủ (dùng market_snapshot); cần nến lịch sử (dùng\n            market_candles_batch).\n\n        top_n: số dòng tăng/giảm mỗi bảng. Các chân suy yếu độc lập: chân chết trả null kèm cảnh\n            báo.\n        ",
    "inputSchema": {
     "properties": {
      "top_n": {
@@ -228,7 +228,7 @@
   },
   {
    "name": "dnse_market_status",
-   "description": "DNSE session state plus latest index snapshot. Use for open/close checks.",
+   "description": "Trạng thái phiên DNSE kèm snapshot chỉ số mới nhất. Dùng khi kiểm tra phiên đang mở hay\n            đóng.\n\n        Không dùng khi: cần giá VN30 đầy đủ (dùng market_snapshot); cần context gộp cho bản tin\n            (dùng market_overview).\n        ",
    "inputSchema": {
     "properties": {},
     "title": "dnse_market_statusArguments",
@@ -240,7 +240,7 @@
   },
   {
    "name": "vn_quote_history",
-   "description": "Candles for a VN symbol (1D/1W/1M), VCI then KBS fallback. Use for any price history.\n\nThere is no tool named stock_history — use this tool.\ndays: bars requested (max 365 nến; weekly/monthly span nhân hệ số).\ninterval: '1D' (mặc định), '1W', '1M'. summary/columns: summary returns\n{count,last,high,low} only; columns keeps named fields.\n",
+   "description": "Nến 1 mã VN (1D/1W/1M), VCI trước KBS dự phòng. Dùng cho MỌI lịch sử giá của một mã.\n\n        Dùng khi: \"lịch sử giá FPT\", \"HPG có vượt đỉnh 20 phiên không\", mọi tính toán cần chuỗi giá\n            1 mã.\n        Không dùng khi: cần nhiều mã cùng lúc (dùng market_candles_batch); cần nến phút/intraday\n            (dùng vn_equity_ohlcv); cần giá khớp hiện tại (dùng vn_equity_quote_batch). Không có\n            tool nào tên stock_history — chính là tool này.\n\n        days: số nến yêu cầu (tối đa 365 nến; nến tuần/tháng bao phủ dài hơn theo hệ số).\n        interval: '1D' (mặc định), '1W', '1M'. summary/columns: summary chỉ trả\n        {count,last,high,low}; columns giữ trường nêu tên.\n        ",
    "inputSchema": {
     "properties": {
      "symbol": {
@@ -290,7 +290,7 @@
   },
   {
    "name": "vn_equity_quote_batch",
-   "description": "One-request price board for many symbols. Use for snapshots and movers.\n\nsummary/columns: summary returns {count,symbols} only; columns keeps\nnamed fields per quote.\n",
+   "description": "Bảng giá một lần cho NHIỀU mã. Dùng khi chụp nhanh giá khớp nhiều mã hoặc làm movers thủ\n            công.\n\n        Dùng khi: \"giá 5 mã FPT HPG VCB MBB SSI\", snapshot danh mục.\n        Không dùng khi: cần lịch sử nến (dùng vn_quote_history cho 1 mã, market_candles_batch cho\n            nhiều mã); cần top tăng/giảm đã xếp (dùng market_movers).\n\n        summary/columns: summary chỉ trả {count,symbols}; columns giữ\n        trường nêu tên từng báo giá.\n        ",
    "inputSchema": {
     "properties": {
      "symbols": {
@@ -333,7 +333,7 @@
   },
   {
    "name": "vn_listing",
-   "description": "Full symbol list with company names. Use for universe and lookup.\n\nlimit: max symbols returned (universe ~1500).\n",
+   "description": "Full symbol list with company names. Use for universe and lookup.\n\n        limit: max symbols returned (universe ~1500).\n        ",
    "inputSchema": {
     "properties": {
      "limit": {
@@ -351,7 +351,7 @@
   },
   {
    "name": "vn_fundamentals",
-   "description": "Ratios and statements via vnstock Fundamental and Finance. Use for quick valuation.\n\nperiod: 'year' or 'quarter'. report_type: 'ttm' (trailing twelve months) or 'latest'.\n",
+   "description": "Chỉ số và BCTC qua vnstock Fundamental và Finance. Dùng khi định giá nhanh 1 mã.\n\n        Dùng khi: \"PE/PB/ROE của FPT\", snapshot định giá nhanh.\n        Không dùng khi: cần vùng giá trị hợp lý theo ensemble PER/PB (dùng valuation_run); cần đọc\n            từng dòng BCTC (dùng financial_detail); cần BCTC không cần JWT (dùng\n            financial_statements hoặc vs_financeinfo).\n\n        period: 'year' hoặc 'quarter'. report_type: 'ttm' (12 tháng gần nhất) hoặc 'latest'.\n        ",
    "inputSchema": {
     "properties": {
      "symbol": {
@@ -381,7 +381,7 @@
   },
   {
    "name": "vn_retail_gold",
-   "description": "SJC and ring gold buy/sell from BTMC retail. Use for local gold premium.\n\nsource: retail source id (default 'btmc'). Direct BTMC https fetch\nfirst (15s); vnstock lib fallback (its http URL hangs without timeout).\n",
+   "description": "SJC and ring gold buy/sell from BTMC retail. Use for local gold premium.\n\n        source: retail source id (default 'btmc'). Direct BTMC https fetch\n        first (15s); vnstock lib fallback (its http URL hangs without timeout).\n        ",
    "inputSchema": {
     "properties": {
      "source": {
@@ -423,7 +423,7 @@
   },
   {
    "name": "vs_financeinfo",
-   "description": "Free-mirror statements, 12 quarters or years. Use when JWT is absent.\n\nperiod: 'quarter' (12 quarters) or 'year' (annual).\n",
+   "description": "BCTC mirror miễn phí, 12 quý hoặc năm. Dùng khi KHÔNG có JWT Vietstock.\n\n        Dùng khi: đọc BCTC mà chưa đăng nhập Vietstock.\n        Không dùng khi: đã có JWT (dùng financial_detail — đầy đủ từng dòng); chỉ cần đọc nhanh gọn\n            (dùng financial_statements — cùng nguồn mirror, gọn hơn).\n\n        period: 'quarter' (12 quý) hoặc 'year' (năm).\n        ",
    "inputSchema": {
     "properties": {
      "symbol": {
@@ -448,7 +448,7 @@
   },
   {
    "name": "vs_market_price",
-   "description": "Live board snapshot from Vietstock. Use as secondary quote source.\n\ntype: board id (2 = main board).\n",
+   "description": "Live board snapshot from Vietstock. Use as secondary quote source.\n\n        type: board id (2 = main board).\n        ",
    "inputSchema": {
     "properties": {
      "type": {
@@ -478,7 +478,7 @@
   },
   {
    "name": "vs_nn_flow",
-   "description": "Foreign investor buy/sell chart. Use to cross-check DNSE WS flows.\n\ndays: keep only the most recent N chart points.\n",
+   "description": "Biểu đồ mua/bán khối ngoại. Dùng khi đối chiếu chéo dòng tiền với DNSE WS.\n\n        Dùng khi: kiểm tra lại số liệu money_flow/dnse_foreign_flow bằng nguồn thứ hai.\n        Không dùng khi: cần đọc smart-money chính trong phiên (dùng money_flow trước; tool này là\n            nguồn đối chiếu, days mặc định 90 điểm).\n\n        days: chỉ giữ N điểm biểu đồ gần nhất.\n        ",
    "inputSchema": {
     "properties": {
      "days": {
@@ -508,7 +508,7 @@
   },
   {
    "name": "vs_indicator_data",
-   "description": "Macro series (GDP/CPI/FX/trade) via browser-session replay. Use for macro reads.\n\nindicator: 'GDP' (quarterly), 'CPI' (YoY) or 'XK' (exports, monthly) — the\nserver fills the id pair, so prefer it for these. Other series: pass\ncategory_id from vs_categories plus term_type_id: 1 daily, 2 monthly,\n3 quarterly, 4 yearly, 5 YTD, 6 MoM, 7 YoY, 8 QoQ — pairs must match each\ncategory's ListTermType metadata or rows come back empty.\nfrom_date default 2022-01-01. Uses the full browser cookie jar (HAR/env\nseed); Standard pack serves it.\nRows: {name, group, period, year, value, unit, timeorder}.\nExample: {\"indicator\": \"CPI\"}; {\"category_id\": 76, \"term_type_id\": 2}.\nNumbers accepted as strings and coerced (e.g. \"3\" → 3).\n",
+   "description": "Macro series (GDP/CPI/FX/trade) via browser-session replay. Use for macro reads.\n\n        indicator: 'GDP' (quarterly), 'CPI' (YoY) or 'XK' (exports, monthly) — the\n        server fills the id pair, so prefer it for these. Other series: pass\n        category_id from vs_categories plus term_type_id: 1 daily, 2 monthly,\n        3 quarterly, 4 yearly, 5 YTD, 6 MoM, 7 YoY, 8 QoQ — pairs must match each\n        category's ListTermType metadata or rows come back empty.\n        from_date default 2022-01-01. Uses the full browser cookie jar (HAR/env\n        seed); Standard pack serves it.\n        Rows: {name, group, period, year, value, unit, timeorder}.\n        Example: {\"indicator\": \"CPI\"}; {\"category_id\": 76, \"term_type_id\": 2}.\n        Numbers accepted as strings and coerced (e.g. \"3\" → 3).\n        ",
    "inputSchema": {
     "properties": {
      "category_id": {
@@ -589,7 +589,7 @@
   },
   {
    "name": "vs_trading_info",
-   "description": "Ceiling, floor, room, EPS, BVPS, PE, PB per symbol. Use for reference snapshot.\n\nThere is no tool named vs_prices or vs_financial_ratios — use this tool\n(snapshot) or financial_ratios (sets) instead.",
+   "description": "Ceiling, floor, room, EPS, BVPS, PE, PB per symbol. Use for reference snapshot.\n\n        There is no tool named vs_prices or vs_financial_ratios — use this tool\n        (snapshot) or financial_ratios (sets) instead.",
    "inputSchema": {
     "properties": {
      "symbol": {
@@ -621,7 +621,7 @@
   },
   {
    "name": "vs_financial_norms",
-   "description": "190+ BCTC line items for a business type. Use to resolve norm ids.\n\nbtype: 1 CTCP (general), 2 securities, 3 bank, 5 insurance.\n",
+   "description": "190+ BCTC line items for a business type. Use to resolve norm ids.\n\n        btype: 1 CTCP (general), 2 securities, 3 bank, 5 insurance.\n        ",
    "inputSchema": {
     "properties": {
      "btype": {
@@ -639,7 +639,7 @@
   },
   {
    "name": "vs_company_info",
-   "description": "Company names, exchange and description. Use for profiles.",
+   "description": "Tên công ty, sàn và mô tả. Dùng khi cần hồ sơ ngắn gọn.\n\n        Dùng khi: \"FPT là công ty gì, niêm yết ở đâu\".\n        Không dùng khi: cần cổ đông/lãnh đạo (dùng vn_company với detail=true); cần dossier giá + hồ\n            sơ (dùng stock_overview).\n\n        Ví dụ: {\"symbol\": \"FPT\"}.\n        ",
    "inputSchema": {
     "properties": {
      "symbol": {
@@ -659,7 +659,7 @@
   },
   {
    "name": "vs_overview_trading",
-   "description": "EPS, BVPS, PE, PB, ROEA/ROAA snapshot. Use for valuation inputs.",
+   "description": "Snapshot EPS, BVPS, PE, PB, ROEA/ROAA. Dùng làm input định giá nhanh.\n\n        Dùng khi: cần bội số hiện tại của 1 mã để so sánh.\n        Không dùng khi: cần vùng giá trị hợp lý (dùng valuation_run); cần so nhiều mã cùng lúc (dùng\n            peer_compare hoặc financial_ratios với peers).\n        ",
    "inputSchema": {
     "properties": {
      "symbol": {
@@ -679,7 +679,7 @@
   },
   {
    "name": "vs_documents",
-   "description": "Filings and disclosures with links. Use for corporate actions.\n\npage_size: max documents returned (default 60).\n",
+   "description": "Filings and disclosures with links. Use for corporate actions.\n\n        page_size: max documents returned (default 60).\n        ",
    "inputSchema": {
     "properties": {
      "symbol": {
@@ -740,7 +740,7 @@
   },
   {
    "name": "vs_gics_index",
-   "description": "GICS index closes with foreign flow. Use for sector context.\n\ngroup: index set (1, 2 or 3 return different groups).\n",
+   "description": "GICS index closes with foreign flow. Use for sector context.\n\n        group: index set (1, 2 or 3 return different groups).\n        ",
    "inputSchema": {
     "properties": {
      "group": {
@@ -770,7 +770,7 @@
   },
   {
    "name": "vs_market_info",
-   "description": "Per-exchange board row: index, breadth, put-through. Use for 5s snapshots in hours.\n\nexchange: HOSE, HNX or UPCOM (endpoint is per-exchange, not per-symbol).\n",
+   "description": "Per-exchange board row: index, breadth, put-through. Use for 5s snapshots in hours.\n\n        exchange: HOSE, HNX or UPCOM (endpoint is per-exchange, not per-symbol).\n        ",
    "inputSchema": {
     "properties": {
      "exchange": {
@@ -788,7 +788,7 @@
   },
   {
    "name": "vs_xnk_detail",
-   "description": "Import/export by country via browser-session replay. Use for trade structure.\n\ndirection: 'xk' exports (cat 64), 'nk' imports (65). termType monthly,\nfrom_date default current year (ISO). Standard pack serves it; rows\n{name=country, group, period, year, value 'Triệu USD', timeorder}.\n",
+   "description": "Import/export by country via browser-session replay. Use for trade structure.\n\n        direction: 'xk' exports (cat 64), 'nk' imports (65). termType monthly,\n        from_date default current year (ISO). Standard pack serves it; rows\n        {name=country, group, period, year, value 'Triệu USD', timeorder}.\n        ",
    "inputSchema": {
     "properties": {
      "direction": {
@@ -818,7 +818,7 @@
   },
   {
    "name": "vn_index_ohlcv",
-   "description": "Index bars for VN tickers. Use for index history and breadth.\n\ninterval: bar size ('1D' daily; intraday like '1m'/'15m' where supported).\nsummary/columns: summary returns {count,last,high,low} only; columns keeps named fields.\n",
+   "description": "Index bars for VN tickers. Use for index history and breadth.\n\n        interval: bar size ('1D' daily; intraday like '1m'/'15m' where supported).\n        summary/columns: summary returns {count,last,high,low} only; columns keeps named fields.\n        ",
    "inputSchema": {
     "properties": {
      "symbol": {
@@ -866,7 +866,7 @@
   },
   {
    "name": "vn_equity_ohlcv",
-   "description": "Equity bars via Market API. Use as OHLCV alternative to quotes.\n\ninterval: bar size ('1D' daily; intraday like '1m'/'15m' where supported).\nsummary/columns: summary returns {count,last,high,low} only; columns keeps named fields.\n",
+   "description": "Nến qua Market API, thay thế quotes khi cần OHLCV. Dùng khi cần nến phút/intraday hoặc\n            nguồn nến thứ hai để đối chiếu.\n\n        Dùng khi: nến '15m'/'1m', đối chiếu chéo với vn_quote_history.\n        Không dùng khi: nến ngày/tuần/tháng thông thường (ưu tiên vn_quote_history — có fallback\n            VCI→KBS); cần nhiều mã (dùng market_candles_batch).\n\n        interval: cỡ nến ('1D' ngày; intraday như '1m'/'15m' nếu nguồn hỗ trợ).\n        summary/columns: summary chỉ trả {count,last,high,low}; columns giữ trường nêu tên.\n        ",
    "inputSchema": {
     "properties": {
      "symbol": {
@@ -916,7 +916,7 @@
   },
   {
    "name": "vn_futures_ohlcv",
-   "description": "Futures bars. Use for derivatives backtest input.\n\ninterval: bar size ('1D' daily; intraday like '1m'/'15m' where supported).\nsummary/columns: summary returns {count,last,high,low} only; columns keeps named fields.\n",
+   "description": "Futures bars. Use for derivatives backtest input.\n\n        interval: bar size ('1D' daily; intraday like '1m'/'15m' where supported).\n        summary/columns: summary returns {count,last,high,low} only; columns keeps named fields.\n        ",
    "inputSchema": {
     "properties": {
      "symbol": {
@@ -964,7 +964,7 @@
   },
   {
    "name": "vn_forex_ohlcv",
-   "description": "FX bars. Use for currency context.\n\npair like 'USDVND'. summary/columns: summary returns {count,last,high,low}\nonly; columns keeps named fields.\n",
+   "description": "FX bars. Use for currency context.\n\n        pair like 'USDVND'. summary/columns: summary returns {count,last,high,low}\n        only; columns keeps named fields.\n        ",
    "inputSchema": {
     "properties": {
      "pair": {
@@ -1007,7 +1007,7 @@
   },
   {
    "name": "vn_crypto_ohlcv",
-   "description": "Crypto bars. Use for digital-asset regime reads.\n\nsummary/columns: summary returns {count,last,high,low} only; columns keeps named fields.\n",
+   "description": "Crypto bars. Use for digital-asset regime reads.\n\n        summary/columns: summary returns {count,last,high,low} only; columns keeps named fields.\n        ",
    "inputSchema": {
     "properties": {
      "symbol": {
@@ -1050,7 +1050,7 @@
   },
   {
    "name": "vn_global_index",
-   "description": "Global index bars. Use as yfinance fallback.\n\nSymbol spellings are aliased (Yahoo codes and names with spaces work too):\nS&P 500 = INX (SPX/GSPC/SP500), Dow Jones = USA30 (DJI/Dow),\nNasdaq Composite = COMP (IXIC/NASDAQ),\nCAC 40 = PX1 (CAC/CAC40), FTSE 100 = UKX (FTSE/FTSE100), plus DAX,\nN225 (Nikkei), HSI (Hang Seng), 000001 (Shanghai), SENSEX, VNI.\nNasdaq-100 (NDX) is NOT in this source — use yf_global_indices.\nsummary/columns: summary returns {count,last,high,low} only; columns keeps named fields.\n",
+   "description": "Global index bars. Use as yfinance fallback.\n\n        Symbol spellings are aliased (Yahoo codes and names with spaces work too):\n        S&P 500 = INX (SPX/GSPC/SP500), Dow Jones = USA30 (DJI/Dow),\n        Nasdaq Composite = COMP (IXIC/NASDAQ),\n        CAC 40 = PX1 (CAC/CAC40), FTSE 100 = UKX (FTSE/FTSE100), plus DAX,\n        N225 (Nikkei), HSI (Hang Seng), 000001 (Shanghai), SENSEX, VNI.\n        Nasdaq-100 (NDX) is NOT in this source — use yf_global_indices.\n        summary/columns: summary returns {count,last,high,low} only; columns keeps named fields.\n        ",
    "inputSchema": {
     "properties": {
      "symbol": {
@@ -1093,7 +1093,7 @@
   },
   {
    "name": "vn_reference",
-   "description": "ICB reference by exchange, group or industry. Use for universe construction.\n\nby: 'exchange' (use exchange=HOSE/HNX/UPCOM), 'group' or 'industry'\n(use key=group/industry name).\n",
+   "description": "ICB reference by exchange, group or industry. Use for universe construction.\n\n        by: 'exchange' (use exchange=HOSE/HNX/UPCOM), 'group' or 'industry'\n        (use key=group/industry name).\n        ",
    "inputSchema": {
     "properties": {
      "exchange": {
@@ -1128,7 +1128,7 @@
   },
   {
    "name": "vn_company",
-   "description": "Profile, holders and officers. Use for company research.\n\ndetail: false returns profile only; true adds holders and officers (heavier).\n",
+   "description": "Hồ sơ, cổ đông và ban lãnh đạo công ty. Dùng khi nghiên cứu doanh nghiệp.\n\n        Dùng khi: \"FPT làm gì, ai là cổ đông lớn\".\n        Không dùng khi: chỉ cần giá và bội số nhanh (dùng stock_overview — dossier gọn); cần\n            tên/sàn/mô tả ngắn (dùng vs_company_info).\n\n        detail: false chỉ trả hồ sơ; true thêm cổ đông và lãnh đạo (nặng hơn).\n        ",
    "inputSchema": {
     "properties": {
      "symbol": {
@@ -1153,7 +1153,7 @@
   },
   {
    "name": "vn_msn_fx_gold",
-   "description": "USDVND and XAUUSD via MSN. Use for gold-basis math.\n\nsymbols: subset to fetch (default both); days: history depth.\n",
+   "description": "USDVND and XAUUSD via MSN. Use for gold-basis math.\n\n        symbols: subset to fetch (default both); days: history depth.\n        ",
    "inputSchema": {
     "properties": {
      "symbols": {
@@ -1186,7 +1186,7 @@
   },
   {
    "name": "vn_trades",
-   "description": "Tick-level matched trades. Use for microstructure reads.\n\nboard: board filter (default all boards). from_date/to_date: ISO dates\nbounding the trade window.\n",
+   "description": "Tick-level matched trades. Use for microstructure reads.\n\n        board: board filter (default all boards). from_date/to_date: ISO dates\n        bounding the trade window.\n        ",
    "inputSchema": {
     "properties": {
      "symbol": {
@@ -1247,7 +1247,7 @@
   },
   {
    "name": "vn_crypto_ohlv",
-   "description": "Crypto bars. Use for digital-asset regime reads.\n\nsummary/columns: summary returns {count,last,high,low} only; columns keeps named fields.\n",
+   "description": "Crypto bars. Use for digital-asset regime reads.\n\n        summary/columns: summary returns {count,last,high,low} only; columns keeps named fields.\n        ",
    "inputSchema": {
     "properties": {
      "symbol": {
@@ -1290,7 +1290,7 @@
   },
   {
    "name": "yf_global_indices",
-   "description": "9 global benchmarks. Use for overnight context.\n\ntickers: subset override (default GLOBAL 9). period/interval: yfinance\nspellings ('2d', '1wk', '1mo'... x '1d'/'1wk').\n",
+   "description": "9 global benchmarks. Use for overnight context.\n\n        tickers: subset override (default GLOBAL 9). period/interval: yfinance\n        spellings ('2d', '1wk', '1mo'... x '1d'/'1wk').\n        ",
    "inputSchema": {
     "properties": {
      "tickers": {
@@ -1328,7 +1328,7 @@
   },
   {
    "name": "yf_commodities",
-   "description": "Gold, oil, metals, BTC, VND and dollar index. Use for input-cost context.\n\ntickers: subset override (default COMMO 13). period/interval: yfinance\nspellings.\n",
+   "description": "Gold, oil, metals, BTC, VND and dollar index. Use for input-cost context.\n\n        tickers: subset override (default COMMO 13). period/interval: yfinance\n        spellings.\n        ",
    "inputSchema": {
     "properties": {
      "tickers": {
@@ -1366,7 +1366,7 @@
   },
   {
    "name": "yf_yield_curve",
-   "description": "US 2Y/10Y and inversion flag. Use for rates and regime context.\n\nFalls back to FRED DGS10/DGS2 when yfinance is blocked (datacenter IPs).\n",
+   "description": "US 2Y/10Y and inversion flag. Use for rates and regime context.\n\n        Falls back to FRED DGS10/DGS2 when yfinance is blocked (datacenter IPs).\n        ",
    "inputSchema": {
     "properties": {},
     "title": "yf_yield_curveArguments",
@@ -1378,7 +1378,7 @@
   },
   {
    "name": "yf_world_indices",
-   "description": "24 world benchmarks. Use for global breadth.\n\ntickers: subset override (default WORLD 24).\n",
+   "description": "24 world benchmarks. Use for global breadth.\n\n        tickers: subset override (default WORLD 24).\n        ",
    "inputSchema": {
     "properties": {
      "tickers": {
@@ -1406,7 +1406,7 @@
   },
   {
    "name": "yf_oracle_markets",
-   "description": "40 markets in 6 groups with 30d stats. Use for cross-asset state.\n\ngroups: keep only named groups (crypto/metals/energy/agri/bonds_fx/index).\n",
+   "description": "40 markets in 6 groups with 30d stats. Use for cross-asset state.\n\n        groups: keep only named groups (crypto/metals/energy/agri/bonds_fx/index).\n        ",
    "inputSchema": {
     "properties": {
      "groups": {
@@ -1446,7 +1446,7 @@
   },
   {
    "name": "yf_mega_flows",
-   "description": "Mega-cap leader flows. Use to follow global smart money.\n\ntop_n: leaders evaluated (default 15 of the ~20-name universe).\n",
+   "description": "Mega-cap leader flows. Use to follow global smart money.\n\n        top_n: leaders evaluated (default 15 of the ~20-name universe).\n        ",
    "inputSchema": {
     "properties": {
      "top_n": {
@@ -1464,7 +1464,7 @@
   },
   {
    "name": "yf_alloc_history",
-   "description": "Long allocation history per asset. Use for regime backtests.\n\nasset: GC/VND/BTC/OIL/SILVER/COFFEE (unknown falls back to GC).\ntimeframe: '1d' or '1wk'; returns last 60 closes over 5y.\n",
+   "description": "Long allocation history per asset. Use for regime backtests.\n\n        asset: GC/VND/BTC/OIL/SILVER/COFFEE (unknown falls back to GC).\n        timeframe: '1d' or '1wk'; returns last 60 closes over 5y.\n        ",
    "inputSchema": {
     "properties": {
      "asset": {
@@ -1499,7 +1499,7 @@
   },
   {
    "name": "dnse_ohlc_history",
-   "description": "Paginated futures/index bars via cursor. Use for VN30F1M backtest input.\n\nsymbol: futures code (VN30F1M) or index (VN30). resolution: bar size in\nminutes (1/5/15/30/60). bar_type: 'derivative' for futures, 'index' for\nindices. from_date/to_date: ISO dates (YYYY-MM-DD). summary: return only\n{symbol, count, last, high, low} instead of full bars. columns: keep only\nnamed fields per bar (t/o/h/l/c/v).\n",
+   "description": "Paginated futures/index bars via cursor. Use for VN30F1M backtest input.\n\n        symbol: futures code (VN30F1M) or index (VN30). resolution: bar size in\n        minutes (1/5/15/30/60). bar_type: 'derivative' for futures, 'index' for\n        indices. from_date/to_date: ISO dates (YYYY-MM-DD). summary: return only\n        {symbol, count, last, high, low} instead of full bars. columns: keep only\n        named fields per bar (t/o/h/l/c/v).\n        ",
    "inputSchema": {
     "properties": {
      "symbol": {
@@ -1569,7 +1569,7 @@
   },
   {
    "name": "dnse_latest_trade",
-   "description": "Latest match price and totals per symbol. Use for realtime fallback.\n\nsymbols: REQUIRED non-empty list (e.g. {\"symbols\": [\"VN30F1M\"]}).\nsummary/columns: summary returns {count,symbols} only; columns keeps\nnamed fields per trade.\n",
+   "description": "Latest match price and totals per symbol. Use for realtime fallback.\n\n        symbols: REQUIRED non-empty list (e.g. {\"symbols\": [\"VN30F1M\"]}).\n        summary/columns: summary returns {count,symbols} only; columns keeps\n        named fields per trade.\n        ",
    "inputSchema": {
     "properties": {
      "symbols": {
@@ -1612,7 +1612,7 @@
   },
   {
    "name": "dnse_foreign_flow",
-   "description": "Net foreign flow from WS cache. Use as primary smart-money read.",
+   "description": "Mua/bán ròng khối ngoại từ cache WS. Dùng làm nguồn đọc smart-money chính, theo thời gian\n            thực.\n\n        Dùng khi: trong phiên, cần con số khối ngoại mới nhất.\n        Không dùng khi: cần chuỗi theo ngày để đối chiếu (dùng vs_nn_flow); cần tổng hợp nhiều nguồn\n            (dùng money_flow — fallback có sẵn).\n        ",
    "inputSchema": {
     "properties": {},
     "title": "dnse_foreign_flowArguments",
@@ -1624,7 +1624,7 @@
   },
   {
    "name": "dnse_ws_snapshot",
-   "description": "Raw worker snapshot for symbols. Use to debug realtime staleness.\n\nsymbols: channels to read (None reads VN30F1M+VNINDEX+VN30).\n",
+   "description": "Raw worker snapshot for symbols. Use to debug realtime staleness.\n\n        symbols: channels to read (None reads VN30F1M+VNINDEX+VN30).\n        ",
    "inputSchema": {
     "properties": {
      "symbols": {
@@ -1652,7 +1652,7 @@
   },
   {
    "name": "dnse_orderbook",
-   "description": "Bid/ask depth. Use for microstructure reads.\n\ndepth: levels per side (default 3). Equity symbols return live depth;\nVN30F1M futures book is usually empty upstream — use vn_trades tape.\n",
+   "description": "Bid/ask depth. Use for microstructure reads.\n\n        depth: levels per side (default 3). Equity symbols return live depth;\n        VN30F1M futures book is usually empty upstream — use vn_trades tape.\n        ",
    "inputSchema": {
     "properties": {
      "symbol": {
@@ -1677,7 +1677,7 @@
   },
   {
    "name": "dnse_indices",
-   "description": "Index snapshots from WS cache. Use for live index reads.\n\nsymbols: index channels to read (default VNINDEX+VN30).\n",
+   "description": "Index snapshots from WS cache. Use for live index reads.\n\n        symbols: index channels to read (default VNINDEX+VN30).\n        ",
    "inputSchema": {
     "properties": {
      "symbols": {
@@ -1705,7 +1705,7 @@
   },
   {
    "name": "dnse_vn30f1m_live",
-   "description": "VN30F1M 1m bars aggregated to 15m with session remap. Use for intraday.\n\nbars: keep only the most recent N aggregated 15m bars.\n",
+   "description": "VN30F1M 1m bars aggregated to 15m with session remap. Use for intraday.\n\n        bars: keep only the most recent N aggregated 15m bars.\n        ",
    "inputSchema": {
     "properties": {
      "bars": {
@@ -1723,7 +1723,7 @@
   },
   {
    "name": "dnse_working_dates",
-   "description": "Trading calendar. Use for session planning.\n\nyear: keep only dates starting with this year (e.g. 2026). Actual\ntrading dates; exchange_calendar holds static session mechanics.\n",
+   "description": "Lịch ngày giao dịch thực tế. Dùng khi lập kế hoạch phiên (ngày nào được giao dịch).\n\n        Dùng khi: \"thứ bảy có giao dịch không\", \"tháng này bao nhiêu phiên\", kiểm tra ngày nghỉ lễ.\n        Không dùng khi: giờ ATO/ATC/thanh toán T+ (dùng exchange_calendar — cơ chế tĩnh); lịch sự\n            kiện doanh nghiệp (dùng event_calendar_vn).\n\n        year: chỉ giữ ngày bắt đầu bằng năm này (ví dụ 2026). Là ngày giao dịch\n        thật; exchange_calendar chứa cơ chế phiên tĩnh.\n        ",
    "inputSchema": {
     "properties": {
      "year": {
@@ -1748,7 +1748,7 @@
   },
   {
    "name": "exchange_calendar",
-   "description": "HOSE/HNX/UPCOM hours, ATO/ATC, T+ settlement. Use for mechanics.",
+   "description": "Giờ HOSE/HNX/UPCoM, ATO/ATC, thanh toán T+2. Dùng khi hỏi cơ chế phiên.\n\n        Dùng khi: \"ATO là gì\", \"mấy giờ đóng cửa\", \"tỷ lệ ký quỹ bao lâu mới nhận tiền\".\n        Không dùng khi: cần ngày giao dịch thật theo năm (dùng dnse_working_dates — dữ liệu động);\n            trạng thái phiên hiện tại (dùng dnse_market_status). Dữ liệu tĩnh.\n        ",
    "inputSchema": {
     "properties": {},
     "title": "exchange_calendarArguments",
@@ -1760,7 +1760,7 @@
   },
   {
    "name": "crypto_spot",
-   "description": "Binance spot 24h tickers. Use for crypto price and volume reads.\n\nsymbols: up to 10, any of BTCUSDT / BTC/USDT / btc-usdt spellings.\n",
+   "description": "Binance spot 24h tickers. Use for crypto price and volume reads.\n\n        symbols: up to 10, any of BTCUSDT / BTC/USDT / btc-usdt spellings.\n        ",
    "inputSchema": {
     "properties": {
      "symbols": {
@@ -1783,7 +1783,7 @@
   },
   {
    "name": "crypto_derivs",
-   "description": "Binance futures funding, OI and long/short ratios. Use for leverage reads.\n\nsymbols: up to 5 perpetual symbols (BTCUSDT ...). Rows carry per-symbol\nerror instead of failing the batch when one symbol is delisted.\n",
+   "description": "Binance futures funding, OI and long/short ratios. Use for leverage reads.\n\n        symbols: up to 5 perpetual symbols (BTCUSDT ...). Rows carry per-symbol\n        error instead of failing the batch when one symbol is delisted.\n        ",
    "inputSchema": {
     "properties": {
      "symbols": {
@@ -1806,7 +1806,7 @@
   },
   {
    "name": "stock_screener",
-   "description": "Screen universe by valuation and quality. Use when hunting candidates.\n\nfilters: {field: [min, max]} ranges (None side unbounded) or plain\nstrings for symbol/exchange equality; use signals_screener_columns\nto discover valid fields. max_pe/min_roe are shortcuts for the same.\ntechnical: optional stage-3 timing filter on post-filter candidates\n({rsi_lt, rsi_gt, above_sma20: true, below_sma20: true}).\n",
+   "description": "Sàng lọc toàn thị trường theo định giá và chất lượng. Dùng khi săn ứng viên theo tiêu\n            chí.\n\n        Dùng khi: \"lọc cổ phiếu PE<10 ROE>15%\", tìm mã theo điều kiện.\n        Không dùng khi: đã biết mã cần phân tích (đi thẳng tool của mã đó); cần so vài mã cụ thể\n            (dùng peer_compare); cần full chỉ báo kỹ thuật 1 mã (dùng signals_technical).\n\n        filters: {trường: [min, max]} (None là không chặn) hoặc chuỗi cho khớp mã/sàn;\n        dùng signals_screener_columns để biết trường hợp lệ. max_pe/min_roe là phím tắt.\n        technical: lọc thời điểm vòng 3 trên ứng viên đã lọc\n        ({rsi_lt, rsi_gt, above_sma20: true, below_sma20: true}).\n        ",
    "inputSchema": {
     "properties": {
      "filters": {
@@ -1874,7 +1874,7 @@
   },
   {
    "name": "signals_screener_columns",
-   "description": "Screener column catalog (valuation/quality/universe/price). Use to build filters.\n\ngroup: keep only that column group; search: keep columns whose\nkey or label contains this substring (case-insensitive).\n",
+   "description": "Screener column catalog (valuation/quality/universe/price). Use to build filters.\n\n        group: keep only that column group; search: keep columns whose\n        key or label contains this substring (case-insensitive).\n        ",
    "inputSchema": {
     "properties": {
      "group": {
@@ -1911,7 +1911,7 @@
   },
   {
    "name": "signals_technical",
-   "description": "Full technicals rating from local candles on 1D/1W/1M. Use for timing entries.\n\nindicators: keep only named outputs (e.g. rsi14, macd, sma20, recommend,\npatterns, support, resistance, rs_vs_bench, pos_52w, sma150, ichimoku,\nswings, swing_trend, fib); omit for the full set. interval: 1D (250 bars),\n1W (long history, min 30 bars) or 1M (min 24 bars); long-MA fields are\nnull when history is short.\n",
+   "description": "Chấm kỹ thuật đầy đủ từ nến local trên 1D/1W/1M. Dùng khi chọn thời điểm vào lệnh cho 1\n            mã.\n\n        Dùng khi: \"FPT có nên mua lúc này\", RSI/MACD/MA, hỗ trợ/kháng cự, vị trí 52 tuần.\n        Không dùng khi: sàng nhiều mã (dùng stock_screener với technical); chỉ cần nến thô (dùng\n            vn_quote_history); backtest quy tắc (dùng backtest_strategies).\n\n        indicators: chỉ giữ output nêu tên (vd rsi14, macd, sma20, recommend,\n        patterns, support, resistance, rs_vs_bench, pos_52w, sma150, ichimoku,\n        swings, swing_trend, fib); bỏ qua để lấy full. interval: 1D (250 nến),\n        1W (dài, tối thiểu 30 nến) hoặc 1M (tối thiểu 24 nến); trường MA dài\n        null khi lịch sử ngắn.\n        ",
    "inputSchema": {
     "properties": {
      "symbol": {
@@ -1951,7 +1951,7 @@
   },
   {
    "name": "sector_performance",
-   "description": "GICS heatmap rows. Use for sector rotation reads.\n\nlevel: GICS tree depth. top_n: rows returned.\n",
+   "description": "Dòng heatmap GICS. Dùng khi đọc luân chuyển ngành (ngành nào đang khỏe).\n\n        Dùng khi: \"ngành nào đang khỏe\", so hiệu suất các ngành.\n        Không dùng khi: cần độ rộng toàn sàn (dùng breadth_scan); cần giá trị một ngành theo thời\n            gian (dùng vn_global_index hoặc chỉ số ngành tương ứng).\n\n        level: độ sâu cây GICS. top_n: số dòng trả về.\n        ",
    "inputSchema": {
     "properties": {
      "level": {
@@ -1974,7 +1974,7 @@
   },
   {
    "name": "money_flow",
-   "description": "Compose foreign flow: DNSE WS then Vietstock cross-check. Use for smart money.\n\nsymbols: WS channels to read (default [\"VNINDEX\"]); falls back to\nVietstock NN chart when cache is cold. Pair with block_trades for\nper-symbol negotiated put-through prints (different granularity).\n",
+   "description": "Tổng hợp dòng ngoại: DNSE WS trước, Vietstock đối chiếu sau. Dùng khi đọc smart money\n            tổng hợp.\n\n        Dùng khi: \"khối ngoại đang mua hay bán\", dòng tiền thông minh hôm nay.\n        Không dùng khi: cần mua/bán ròng theo ngày để đối chiếu (dùng vs_nn_flow); cần dòng tiền\n            live từng mã (dùng dnse_foreign_flow); cần thỏa thuận từng mã (ghép với block_trades —\n            độ chi tiết khác nhau: tổng hợp vs từng lệnh).\n\n        symbols: kênh WS cần đọc (mặc định [\"VNINDEX\"]); cache lạnh thì rơi về\n        biểu đồ NN của Vietstock.\n        ",
    "inputSchema": {
     "properties": {
      "symbols": {
@@ -2002,7 +2002,7 @@
   },
   {
    "name": "alert_check",
-   "description": "Evaluate price/RSI rules against live quotes. Use for live watch.\n\nEach rule: {symbol, threshold, metric ('price'|'rsi14'), op ('>'|'gt'|'>='|'gte'|\n'<'|'lt'|'<='|'lte'|'cross_up'|'cross_down')}.\n",
+   "description": "Evaluate price/RSI rules against live quotes. Use for live watch.\n\n        Each rule: {symbol, threshold, metric ('price'|'rsi14'), op ('>'|'gt'|'>='|'gte'|\n        '<'|'lt'|'<='|'lte'|'cross_up'|'cross_down')}.\n        ",
    "inputSchema": {
     "properties": {
      "rules": {
@@ -2026,7 +2026,7 @@
   },
   {
    "name": "stock_forensic",
-   "description": "Beneish M-Score + Piotroski F-Score from FULL detailed statements (P15).\n\nSources: KQKD/CDKT/LCTT detail (real per-quarter lines incl. receivables,\ncash, CFO). M-Score is 7-index (DEPI excluded — not exposed, so the\n-1.78 cut-off is approximate); full formula only when every input\nexists, else partial with missing list.\nF-Score: 6 of 9 items on Standard pack (CFO from LCTT is empty upstream;\nshare-count item unavailable); 8 of 9 when BCTC paid unlocks LCTT.\ndetail=true adds raw input series.\n",
+   "description": "Điểm gian lận Beneish M-Score + chất lượng lợi nhuận Piotroski F-Score từ BCTC chi tiết\n            đầy đủ. Dùng khi kiểm tra chất lượng lợi nhuận trước khi định giá.\n\n        Dùng khi: \"lợi nhuận FPT có ảo không\", chấm điểm trước BCTC.\n        Không dùng khi: chỉ cần đọc BCTC (dùng financial_detail); chỉ cần bội số nhanh (dùng\n            vn_fundamentals).\n\n        Nguồn: chi tiết KQKD/CDKT/LCTT (dòng thật theo quý: phải thu,\n        tiền, CFO). M-Score 7 chỉ số (thiếu DEPI — nguồn không có, nên\n        ngưỡng -1.78 chỉ là gần đúng); chỉ đủ công thức khi đủ input,\n        thiếu thì trả partial kèm danh sách thiếu.\n        F-Score: 6/9 mục trên gói Standard (CFO từ LCTT trống phía nguồn;\n        mục số cổ phiếu không có); 8/9 khi BCTC trả phí mở LCTT.\n        detail=true thêm chuỗi input thô.\n        ",
    "inputSchema": {
     "properties": {
      "symbol": {
@@ -2056,7 +2056,7 @@
   },
   {
    "name": "valuation_run",
-   "description": "PER/PB ensemble. Use for fair-value ranges.\n\nbtype→method reference (method is ALWAYS set, never null):\n1 general → per_pb · 2 securities → pb_bank_broker · 3 bank → pb_bank_broker\n5 insurance → per_pb. Unknown btype → warnings + method auto.\nmethod: 'auto' (default, picks by btype above) or force 'per'/'pb'/'ensemble'.\nDCF/EV are NOT implemented. There is no tool named valuation_band —\nuse this tool's per_pb/pb range output instead.\n",
+   "description": "Ensemble PER/PB. Dùng khi cần vùng giá trị hợp lý của 1 mã.\n\n        Dùng khi: \"FPT đáng giá bao nhiêu\", vùng mua an toàn.\n        Không dùng khi: chỉ cần bội số hiện tại (dùng vs_overview_trading — nhẹ hơn); cần đọc BCTC\n            chi tiết (dùng financial_detail). Không có tool nào tên valuation_band — dùng output\n            vùng per_pb/pb của tool này. DCF/EV CHƯA có.\n\n        btype→method (method LUÔN có giá trị, không bao giờ null):\n        1 thường → per_pb · 2 chứng khoán → pb_bank_broker · 3 ngân hàng → pb_bank_broker\n        5 bảo hiểm → per_pb. btype lạ → cảnh báo + method auto.\n        method: 'auto' (mặc định, chọn theo btype) hoặc ép 'per'/'pb'/'ensemble'.\n        ",
    "inputSchema": {
     "properties": {
      "symbol": {
@@ -2086,7 +2086,7 @@
   },
   {
    "name": "financial_statements",
-   "description": "Mirror statements alias (v3 compat). Use for statement reads.\n\nWraps vs_financeinfo (no JWT needed). statement: which statement\nsection to return ('all', or a section key like 'KQKD'/'CDKT');\nperiods_n caps returned periods.\n",
+   "description": "Alias đọc BCTC (tương thích v3). Dùng khi đọc BCTC nhanh gọn, không cần JWT.\n\n        Dùng khi: \"báo cáo KQKD 4 quý gần nhất của FPT\", đọc statement nhanh.\n        Không dùng khi: cần từng dòng chi tiết/forensic (dùng financial_detail — nặng hơn); nguồn\n            gốc mirror khi thiếu JWT (dùng vs_financeinfo).\n\n        Bọc vs_financeinfo (không cần JWT). statement: mục BCTC cần đọc\n        ('all', hoặc khóa như 'KQKD'/'CDKT'); periods_n giới hạn số kỳ trả về.\n        ",
    "inputSchema": {
     "properties": {
      "symbol": {
@@ -2121,7 +2121,7 @@
   },
   {
    "name": "financial_ratios",
-   "description": "Overview plus vnstock ratios merged. Use for ratio screens.\n\nset: keep only ratio keys containing this substring ('all' keeps all).\nperiod: statement period ('year'); peers: extra symbols merged as list.\nFalls back to vnstock fundamentals when Vietstock overview is empty.\n",
+   "description": "Overview gộp ratios của vnstock. Dùng khi lọc/soi chỉ số tài chính của 1 mã (kèm peers\n            tuỳ chọn).\n\n        Dùng khi: \"ROE các năm của VCB\", so chỉ số 1 mã với vài peers.\n        Không dùng khi: so dạng bảng head-to-head nhiều mã (dùng peer_compare — gọn hơn); cần bội số\n            snapshot (dùng vs_overview_trading); cần vùng giá trị (dùng valuation_run).\n\n        set: chỉ giữ key ratios chứa chuỗi này ('all' giữ hết).\n        period: kỳ BCTC ('year'); peers: thêm mã vào danh sách.\n        Rơi về vnstock fundamentals khi overview Vietstock trống.\n        ",
    "inputSchema": {
     "properties": {
      "symbol": {
@@ -2166,7 +2166,7 @@
   },
   {
    "name": "peer_compare",
-   "description": "Head-to-head overview rows. Use when picking tickers.\n\npeers: up to 5 extra symbols. metrics: keep only matching ratio keys\n(symbol column always kept).\n",
+   "description": "So sánh head-to-head các dòng overview giữa các mã. Dùng khi chọn giữa vài ticker cùng\n            ngành.\n\n        Dùng khi: \"so VCB với TCB với MBB\", bảng so sánh trực diện.\n        Không dùng khi: sàng cả thị trường theo điều kiện (dùng stock_screener); cần chuỗi thời gian\n            của 1 mã (dùng financial_ratios period).\n\n        peers: tối đa 5 mã khác. metrics: chỉ giữ key ratios khớp\n        (cột symbol luôn giữ).\n        Ví dụ: {\"symbol\": \"VCB\", \"peers\": [\"TCB\", \"MBB\"], \"metrics\": [\"pe\", \"roe\"]}.\n        ",
    "inputSchema": {
     "properties": {
      "symbol": {
@@ -2209,7 +2209,7 @@
   },
   {
    "name": "stock_overview",
-   "description": "Trading info plus company profile. Use for quick dossiers.",
+   "description": "Thông tin giao dịch + hồ sơ công ty gộp một lần. Dùng khi cần dossier nhanh về 1 mã.\n\n        Dùng khi: lần đầu xem 1 mã (giá + công ty làm gì).\n        Không dùng khi: cần cổ đông/lãnh đạo chi tiết (dùng vn_company detail=true); chỉ cần giá\n            (dùng vn_equity_quote_batch).\n\n        Ví dụ: {\"symbol\": \"FPT\"}.\n        ",
    "inputSchema": {
     "properties": {
      "symbol": {
@@ -2229,7 +2229,7 @@
   },
   {
    "name": "company_events",
-   "description": "Classified disclosures and corporate actions. Use for event calendars.\n\ntypes: comma-separated kinds to keep, matched against kind/type\nfields (e.g. 'bctc,nghi_quyet'). corporate_calendar is the raw\nunfiltered feed; company_events classifies it per symbol.\n",
+   "description": "Classified disclosures and corporate actions. Use for event calendars.\n\n        types: comma-separated kinds to keep, matched against kind/type\n        fields (e.g. 'bctc,nghi_quyet'). corporate_calendar is the raw\n        unfiltered feed; company_events classifies it per symbol.\n        ",
    "inputSchema": {
     "properties": {
      "symbol": {
@@ -2261,7 +2261,7 @@
   },
   {
    "name": "fred_series",
-   "description": "FRED observations. Use for US macro context.\n\nseries_id like 'DGS10'; spark adds a value-only sparkline list.\n",
+   "description": "FRED observations. Use for US macro context.\n\n        series_id like 'DGS10'; spark adds a value-only sparkline list.\n        ",
    "inputSchema": {
     "properties": {
      "series_id": {
@@ -2291,7 +2291,7 @@
   },
   {
    "name": "world_macro_country",
-   "description": "WorldBank series per country. Use for global GDP/CPI/debt context.\n\niso3: 3-letter country code (VNM/USA); indicator like 'NY.GDP.MKTP.KD.ZG'.\nlimit caps returned points.\n",
+   "description": "WorldBank series per country. Use for global GDP/CPI/debt context.\n\n        iso3: 3-letter country code (VNM/USA); indicator like 'NY.GDP.MKTP.KD.ZG'.\n        limit caps returned points.\n        ",
    "inputSchema": {
     "properties": {
      "iso3": {
@@ -2321,7 +2321,7 @@
   },
   {
    "name": "world_fear_greed",
-   "description": "Crypto fear/greed index. Use for risk-appetite reads.\n\nlimit: number of recent daily readings returned.\n",
+   "description": "Crypto fear/greed index. Use for risk-appetite reads.\n\n        limit: number of recent daily readings returned.\n        ",
    "inputSchema": {
     "properties": {
      "limit": {
@@ -2339,7 +2339,7 @@
   },
   {
    "name": "sentiment_score",
-   "description": "Crowd sentiment from Fireant posts, Groq-scored. Use for hype risk.\n\nlimit: max posts scored; without Groq key falls back to likes heuristic.\n",
+   "description": "Điểm tâm lý đám đông từ bài Fireant, chấm bằng Groq. Dùng khi đo rủi ro hype quanh 1 mã.\n\n        Dùng khi: \"cổ phiếu này có đang bị thổi phồng không\", độ nóng cộng đồng.\n        Không dùng khi: cần đọc nội dung bình luận (dùng fireant_thread); tin tức báo chí (dùng\n            news_symbol).\n\n        limit: số bài chấm tối đa; không có key Groq thì rơi về heuristic lượt thích.\n        ",
    "inputSchema": {
     "properties": {
      "symbol": {
@@ -2364,7 +2364,7 @@
   },
   {
    "name": "event_stats",
-   "description": "GDELT event aggregates for a query. Use for base-rate checks.\n\nReturns {query, count, by_day, top_sources, date_range} + up to 5 sample\narticles — distinct from geo_intel (politics-filtered article list).\nlimit: max articles fetched from GDELT before aggregating.\n",
+   "description": "GDELT event aggregates for a query. Use for base-rate checks.\n\n        Returns {query, count, by_day, top_sources, date_range} + up to 5 sample\n        articles — distinct from geo_intel (politics-filtered article list).\n        limit: max articles fetched from GDELT before aggregating.\n        ",
    "inputSchema": {
     "properties": {
      "query": {
@@ -2387,7 +2387,7 @@
   },
   {
    "name": "compare_assets",
-   "description": "Cross-asset last prices via yfinance. Use for allocation reads.\n\nassets: yfinance tickers (max 10). timeframe: '1d' (2d/1d),\n'1wk' (3mo/1wk), '1mo' (1y/1d) download window.\n",
+   "description": "Cross-asset last prices via yfinance. Use for allocation reads.\n\n        assets: yfinance tickers (max 10). timeframe: '1d' (2d/1d),\n        '1wk' (3mo/1wk), '1mo' (1y/1d) download window.\n        ",
    "inputSchema": {
     "properties": {
      "assets": {
@@ -2415,7 +2415,7 @@
   },
   {
    "name": "insider_trading",
-   "description": "Insider deals via vnstock Company. Use for informed-flow reads.\n\nlimit: max deals returned.\n",
+   "description": "Giao dịch nội bộ qua vnstock Company. Dùng khi đọc dòng tiền người trong cuộc.\n\n        Dùng khi: \"ban lãnh đạo có mua/bán cổ phiếu không\", kiểm tra informed flow.\n        Không dùng khi: khối ngoại (dùng money_flow); thỏa thuận (dùng block_trades).\n\n        limit: số giao dịch tối đa.\n        ",
    "inputSchema": {
     "properties": {
      "symbol": {
@@ -2440,7 +2440,7 @@
   },
   {
    "name": "signals_scan",
-   "description": "Donchian-20d breakout scan. Use to hunt momentum across the market.\n\nDefault universe: 10 bluechips. exchange='HOSE' scans the exchange\nlist capped at max_symbols (P14: up to 300, semaphore 5, progress +\ntruncated honest). Scanning hundreds takes minutes — cache the call.\n",
+   "description": "Donchian-20d breakout scan. Use to hunt momentum across the market.\n\n        Default universe: 10 bluechips. exchange='HOSE' scans the exchange\n        list capped at max_symbols (P14: up to 300, semaphore 5, progress +\n        truncated honest). Scanning hundreds takes minutes — cache the call.\n        ",
    "inputSchema": {
     "properties": {
      "universe": {
@@ -2485,7 +2485,7 @@
   },
   {
    "name": "pattern_match",
-   "description": "Self-similarity of return windows by correlation. Use for analogies.\n\nlookback: daily closes fetched (window is last 20 bars). limit: top-N\nmatches by correlation (best_* fields describe rank 1).\n",
+   "description": "Self-similarity of return windows by correlation. Use for analogies.\n\n        lookback: daily closes fetched (window is last 20 bars). limit: top-N\n        matches by correlation (best_* fields describe rank 1).\n        ",
    "inputSchema": {
     "properties": {
      "symbol": {
@@ -2515,7 +2515,7 @@
   },
   {
    "name": "snapshot_history",
-   "description": "Daily-snapshot history saved by the worker. Use for data that vanishes.\n\nkind: market_board, breadth_3ex, flows_charts (NN/prop 30d rolling),\nheatmap_gics, gold_btmc, sbv_rates, nso_releases, analyst_titles,\nmacro_curated, vn30_quotes, futures_basis, documents_feed, events_feed.\ndays: history depth (newest first).\n",
+   "description": "Daily-snapshot history saved by the worker. Use for data that vanishes.\n\n        kind: market_board, breadth_3ex, flows_charts (NN/prop 30d rolling),\n        heatmap_gics, gold_btmc, sbv_rates, nso_releases, analyst_titles,\n        macro_curated, vn30_quotes, futures_basis, documents_feed, events_feed.\n        days: history depth (newest first).\n        ",
    "inputSchema": {
     "properties": {
      "kind": {
@@ -2540,7 +2540,7 @@
   },
   {
    "name": "runs_list",
-   "description": "Local run registry. Use to resume analysis sessions.\n\nid: filter by run id substring; use run_get for one full run.\n",
+   "description": "Local run registry. Use to resume analysis sessions.\n\n        id: filter by run id substring; use run_get for one full run.\n        ",
    "inputSchema": {
     "properties": {
      "id": {
@@ -2565,7 +2565,7 @@
   },
   {
    "name": "run_get",
-   "description": "Local run registry fetch. Use to inspect past outputs.\n\nrun_id: exact id from runs_list output.\n",
+   "description": "Local run registry fetch. Use to inspect past outputs.\n\n        run_id: exact id from runs_list output.\n        ",
    "inputSchema": {
     "properties": {
      "run_id": {
@@ -2597,7 +2597,7 @@
   },
   {
    "name": "dividends_splits",
-   "description": "Cash dividends and share issues/splits. Use for payout history.\n\nregion: 'vn' (vnstock Company events: DIV cash, ISS bonus/private) or\n'world' (yfinance actions). limit: max events returned.\n",
+   "description": "Cổ tức tiền mặt và phát hành/tách cổ phiếu. Dùng khi xem lịch sử trả thưởng của 1 mã.\n\n        Dùng khi: \"FPT đã chia cổ tức những năm nào\".\n        Không dùng khi: cần lịch cổ tức/niêm yết/họp toàn thị trường theo ngày (dùng\n            event_calendar_vn); cần feed công bố gốc (dùng corporate_calendar).\n\n        region: 'vn' (sự kiện Company của vnstock: DIV tiền mặt, ISS thưởng/phát hành riêng lẻ) hoặc\n        'world' (actions của yfinance). limit: số sự kiện tối đa.\n        ",
    "inputSchema": {
     "properties": {
      "symbol": {
@@ -2627,7 +2627,7 @@
   },
   {
    "name": "holders",
-   "description": "Shareholder and institutional holder tables. Use for ownership reads.\n\nregion: 'vn' (vnstock shareholders) or 'world' (yfinance).\nkind: 'major'|'institutional'|'mutualfund'|'all' (world only;\nvn returns shareholders for any kind).\n",
+   "description": "Shareholder and institutional holder tables. Use for ownership reads.\n\n        region: 'vn' (vnstock shareholders) or 'world' (yfinance).\n        kind: 'major'|'institutional'|'mutualfund'|'all' (world only;\n        vn returns shareholders for any kind).\n        ",
    "inputSchema": {
     "properties": {
      "symbol": {
@@ -2657,7 +2657,7 @@
   },
   {
    "name": "event_calendar_vn",
-   "description": "Vietstock corporate-action calendar. Use for dividend/meeting/listing dates.\n\nevent: 'dividends' (payouts, bonus, issues), 'listings', 'meetings'.\nsymbol: filter one ticker (omit for market-wide). No earnings-report\ndates exist upstream; KQKD dates come from company_events instead.\n",
+   "description": "Lịch sự kiện doanh nghiệp của Vietstock. Dùng khi cần ngày cổ tức/niêm yết/họp theo lịch.\n\n        Dùng khi: \"khi nào FPT chia cổ tức\", \"lịch họp ĐHĐCĐ\".\n        Không dùng khi: cần feed công bố thô (dùng corporate_calendar); cần sự kiện đã phân loại\n            theo loại (dùng company_events); cần ngày BÁO CÁO KQKD — nguồn không có ngày này, dùng\n            company_events thay thế.\n\n        event: 'dividends' (trả cổ tức, thưởng, phát hành), 'listings', 'meetings'.\n        symbol: lọc 1 mã (bỏ qua để xem toàn thị trường).\n        ",
    "inputSchema": {
     "properties": {
      "event": {
@@ -2692,7 +2692,7 @@
   },
   {
    "name": "block_trades",
-   "description": "Matched vs negotiated put-through splits per day. Use for dark-pool-style reads.\n\nfrom_date/to_date: ISO dates (default last 30d). pt_vol/pt_val are the\nthỏa thuận leg; pt_pct is its share of daily value.\n",
+   "description": "Tách khớp lệnh và thỏa thuận theo ngày. Dùng khi đọc dòng tiền thỏa thuận (dark-pool) của\n            1 mã.\n\n        Dùng khi: \"thỏa thuận HPG tuần này\", kiểm tra tay to gom qua put-through.\n        Không dùng khi: cần dòng tiền khối ngoại tổng hợp (dùng money_flow); cần mua/bán ròng khối\n            ngoại theo ngày (dùng vs_nn_flow).\n\n        from_date/to_date: ngày ISO (mặc định 30 ngày gần nhất). pt_vol/pt_val là\n        chân thỏa thuận; pt_pct là tỷ trọng giá trị thỏa thuận trong ngày.\n        ",
    "inputSchema": {
     "properties": {
      "symbol": {
@@ -2741,7 +2741,7 @@
   },
   {
    "name": "analyst_consensus",
-   "description": "Analyst ratings and price targets parsed from report titles. Use for street views.\n\nThere is no tool named analyst_targets — this tool is the targets source.\nsymbol: filter one ticker (omit for latest across market). Ratings come\nfrom title text (MUA/BÁN/NẮM GIỮ...), not a consensus feed; history per\nsymbol shows upgrades/downgrades by history. report_type: 'equity'\n(ticker reports) or 'macro' (CTCK macro outlooks: GDP/CPI/rates/FX/Fed;\nsymbol filter does not apply, macro_topic set per report).\ndays: keep reports from the last N days by parsed dd/mm/yyyy date\n(default None = no date filter). Rows without a parsed date are kept\nand marked date_uncertain:true — treat their dates as uncertain.\nOnly the latest listing page is available (no pagination upstream).\nTitles only — no report body. Each row's url is the report page: its\nHTML summary after 'Tải về' (~500-700 chars) carries upside, revenue,\nprofit, EPS, P/E, P/B, dividend; 'Nguồn:' names the broker. The\n'edocs/...pdf' file often fails text extraction (Vietstock fonts).\n",
+   "description": "Khuyến nghị và giá mục tiêu của CTCK, tách từ tiêu đề báo cáo. Dùng khi xem quan điểm phố\n            (street views) về 1 mã hoặc toàn thị trường.\n\n        Dùng khi: \"CTCK nói gì về FPT\", \"giá mục tiêu HPG\", triển vọng vĩ mô của CTCK\n            (report_type='macro').\n        Không dùng khi: cần số liệu BCTC (dùng financial_detail); cần tin tức (dùng news_symbol).\n            Không có tool nào tên analyst_targets — chính là tool này.\n        symbol: lọc 1 mã (bỏ qua để xem mới nhất toàn thị trường). Ratings lấy từ chữ tiêu đề\n            (MUA/BÁN/NẮM GIỮ...), không phải feed consensus; lịch sử mỗi mã cho thấy nâng/hạ\n            khuyến nghị. report_type: 'equity'\n        (báo cáo theo mã) hoặc 'macro' (triển vọng vĩ mô của CTCK: GDP/CPI/lãi suất/FX/Fed;\n        bộ lọc symbol không áp dụng).\n        days: giữ báo cáo N ngày gần nhất theo ngày dd/mm/yyyy tách được\n        (mặc định không lọc). Dòng không tách được ngày vẫn giữ và đánh\n        date_uncertain:true — coi ngày của chúng là không chắc.\n        Chỉ có trang danh sách mới nhất (nguồn không phân trang).\n        Chỉ tiêu đề — không thân bài. url mỗi dòng là trang báo cáo: tóm tắt HTML sau\n        'Tải về' (~500-700 ký tự) mang upside, doanh thu, lợi nhuận, EPS, P/E, P/B, cổ tức;\n        'Nguồn:' cho biết tên CTCK. File 'edocs/...pdf' thường lỗi khi trích text (font\n        Vietstock) — dùng tóm tắt HTML.\n        ",
    "inputSchema": {
     "properties": {
      "symbol": {
@@ -2788,7 +2788,7 @@
   },
   {
    "name": "ipo_calendar_vn",
-   "description": "HNX auction calendar plus announcement fallback. Use for upcoming supply.\n\nCalendar is often empty (no scheduled auctions); announcements carry\nthe latest auction news with dates.\n",
+   "description": "HNX auction calendar plus announcement fallback. Use for upcoming supply.\n\n        Calendar is often empty (no scheduled auctions); announcements carry\n        the latest auction news with dates.\n        ",
    "inputSchema": {
     "properties": {},
     "title": "ipo_calendar_vnArguments",
@@ -2800,7 +2800,7 @@
   },
   {
    "name": "futures_basis",
-   "description": "VN30F1M price minus VN30 spot. Use for premium/discount reads.\n\nDNSE exposes no open-interest field, so no OI is reported; basis_bps\nis (futures-spot)/spot in basis points. Futures leg prefers the latest\ntrade, falling back to the last 15m ohlc bar (trades/latest is often\nempty); spot accepts raw or normalized candle keys.\n",
+   "description": "VN30F1M price minus VN30 spot. Use for premium/discount reads.\n\n        DNSE exposes no open-interest field, so no OI is reported; basis_bps\n        is (futures-spot)/spot in basis points. Futures leg prefers the latest\n        trade, falling back to the last 15m ohlc bar (trades/latest is often\n        empty); spot accepts raw or normalized candle keys.\n        ",
    "inputSchema": {
     "properties": {},
     "title": "futures_basisArguments",
@@ -2812,7 +2812,7 @@
   },
   {
    "name": "planned_targets",
-   "description": "Business-plan targets (CTKH: planned revenue/profit by year). Use as expectation anchor.\n\nyears: latest N plan years (unit VND billions). Browser-session replay\n(HAR/env seed); reports unavailable while the gate rejects — mirror +\nanalyst_consensus cover expectations meanwhile.\n",
+   "description": "Business-plan targets (CTKH: planned revenue/profit by year). Use as expectation anchor.\n\n        years: latest N plan years (unit VND billions). Browser-session replay\n        (HAR/env seed); reports unavailable while the gate rejects — mirror +\n        analyst_consensus cover expectations meanwhile.\n        ",
    "inputSchema": {
     "properties": {
      "symbol": {
@@ -2837,7 +2837,7 @@
   },
   {
    "name": "financial_detail",
-   "description": "FULL detailed statements, every line item per period. Use for deep BCTC reads.\n\nstatement: KQKD (income), CDKT (balance), LCTT (cashflow via vnstock\nfallback — Vietstock LCTT norms empty upstream), TM (notes),\nBCTT. periods_n: recent permitted periods (unit VND billions; only\nIsShowData_Permission=True periods). Real values on the Standard pack\nvia browser-session replay (HAR/env seed) — rows {norm_id, name,\nvalues[...]}; report unavailable when the session gate rejects.\n",
+   "description": "BCTC chi tiết đầy đủ, từng dòng mỗi kỳ. Dùng khi đọc sâu BCTC (soi từng chỉ tiêu).\n\n        Dùng khi: phân tích forensic, kiểm tra dòng tiền/thuế/phải thu chi tiết.\n        Không dùng khi: chỉ cần đọc nhanh (dùng financial_statements — nhẹ hơn, không cần JWT); cần\n            BCTC mirror khi thiếu JWT (dùng vs_financeinfo); cần điểm số gian lận/chất lượng lợi\n            nhuận (dùng stock_forensic thay vì tự tính).\n\n        statement: KQKD (kết quả kinh doanh), CDKT (cân đối), LCTT (lưu chuyển tiền —\n        Vietstock trống norms phía nguồn nên rơi về vnstock), TM (thuyết minh),\n        BCTT. periods_n: các kỳ gần nhất được phép (đơn vị tỷ đồng; chỉ kỳ\n        IsShowData_Permission=True). Giá trị thật trên gói Standard qua phát lại\n        phiên trình duyệt — dòng {norm_id, name, values[...]}; báo cáo không khả dụng\n        khi cổng phiên từ chối.\n        ",
    "inputSchema": {
     "properties": {
      "symbol": {
@@ -3020,7 +3020,7 @@
   },
   {
    "name": "alert_create",
-   "description": "Create a stored alert rule (input to alert_check). Use for live watch.\n\nmetric: 'price' or 'rsi14'. op: '>'/'>='/<'/'<=' (aliases 'gt'/'gte'/\n'lt'/'lte' accepted). threshold: comparison value for the metric.\n",
+   "description": "Create a stored alert rule (input to alert_check). Use for live watch.\n\n        metric: 'price' or 'rsi14'. op: '>'/'>='/<'/'<=' (aliases 'gt'/'gte'/\n        'lt'/'lte' accepted). threshold: comparison value for the metric.\n        ",
    "inputSchema": {
     "properties": {
      "symbol": {
@@ -3127,7 +3127,7 @@
   },
   {
    "name": "quant_backtest",
-   "description": "Buy-and-hold backtest with costs over available history. Use for baseline stats.\n\nDeprecated for strategies: use backtest_strategies (real SMA/momentum/RSI\nengine) for anything beyond buy-and-hold baseline.\nstrategy: recorded label only (engine is buy-and-hold). cost_bps/slippage_bps:\nround-trip bps each deducted twice from gross. benchmark: reference index label.\n",
+   "description": "Backtest mua-giữ kèm chi phí trên lịch sử có sẵn. Dùng khi cần baseline so sánh.\n\n        Dùng khi: baseline \"nếu mua giữ 1 năm thì bao nhiêu\".\n        Không dùng khi: cần chiến lược có quy tắc (SMA/momentum/RSI — dùng backtest_strategies,\n            engine thật); cần rủi ro từ chuỗi return (dùng quant_risk).\n\n        Deprecated cho chiến lược: dùng backtest_strategies cho mọi thứ ngoài buy-and-hold.\n        strategy: chỉ là nhãn ghi lại (engine là buy-and-hold). cost_bps/slippage_bps:\n        bps khứ hồi, mỗi loại trừ 2 lần từ gross. benchmark: nhãn chỉ số tham chiếu.\n        ",
    "inputSchema": {
     "properties": {
      "symbol": {
@@ -3167,7 +3167,7 @@
   },
   {
    "name": "scenario_simulate",
-   "description": "Apply a price shock to latest close and report P/L per 1000 shares. Use for sizing.\n\nshock_pct: percent shock, negative for drops (e.g. -5.0).\n",
+   "description": "Đặt cú sốc giá lên giá đóng gần nhất rồi tính L/L mỗi 1000 cổ phiếu. Dùng khi đo khẩu vị\n            rủi ro (sizing).\n\n        Dùng khi: \"nếu HPG xấu -5% thì mất bao nhiêu\".\n        Không dùng khi: backtest lịch sử (dùng quant_backtest/backtest_strategies); rủi ro thống kê\n            (dùng quant_risk).\n\n        shock_pct: % cú sốc, âm là giảm (ví dụ -5.0).\n        ",
    "inputSchema": {
     "properties": {
      "scenario": {
@@ -3197,7 +3197,7 @@
   },
   {
    "name": "backtest_strategies",
-   "description": "Rule-based backtests beyond buy-and-hold. Use to compare timing rules.\n\nstrategy: 'sma_cross' (fast SMA over slow), 'momentum' (close over\nclose[slow] ago), 'rsi_meanrev' (long when RSI14 < rsi_low, flat when\nRSI14 > rsi_high), 'buy_hold'. fast/slow: lookback bars. cost_bps:\nin+out bps deducted per position flip. months/quarters: entries only on\nmatching calendar months (1-12) / quarters (1-4); exits always allowed.\ncondition_symbol: gate entries on another asset (oil/gold/FX: BZ=F, GC=F,\nUSDVND...); condition_rule 'above_sma' (over its SMA) or 'rising'\n(up over condition_lookback bars). VN symbols via vnstock, others via\nyfinance daily history.\n",
+   "description": "Backtest theo quy tắc ngoài mua-giữ. Dùng khi so các quy tắc canh thời điểm trên 1 mã.\n\n        Dùng khi: \"nếu cắt MA50 có tốt hơn mua giữ không\", kiểm định chiến lược giao\n            cắt/seasonality.\n        Không dùng khi: chỉ cần baseline mua-giữ (dùng quant_backtest — gọn hơn); kỹ thuật hiện tại\n            không backtest (dùng signals_technical).\n\n        strategy: 'sma_cross' (SMA nhanh vượt SMA chậm), 'momentum' (giá trên\n        giá[slow] phiên trước), 'rsi_meanrev' (long khi RSI14 < rsi_low, flat khi\n        RSI14 > rsi_high), 'buy_hold'. fast/slow: số nến nhìn lại. cost_bps:\n        bps vào+ra trừ mỗi lần đảo vị thế. months/quarters: chỉ vào lệnh theo\n        tháng (1-12) / quý (1-4); thoát lệnh luôn cho phép.\n        condition_symbol: chặn vào lệnh theo tài sản khác (dầu/vàng/FX: BZ=F, GC=F,\n        USDVND...); condition_rule 'above_sma' (trên SMA của nó) hoặc 'rising'\n        (đang tăng trong condition_lookback nến). Mã VN qua vnstock, khác qua\n        lịch ngày yfinance.\n        ",
    "inputSchema": {
     "properties": {
      "symbol": {
@@ -3299,7 +3299,7 @@
   },
   {
    "name": "param_sweep",
-   "description": "Grid-search strategy lookbacks, ranked by net return. Use to avoid overfit picks.\n\nfast_range/slow_range: candidate bars (product capped at 30 combos).\nrsi_meanrev allowed (fixed 30/70 thresholds). months/quarters passthrough.\n",
+   "description": "Grid-search strategy lookbacks, ranked by net return. Use to avoid overfit picks.\n\n        fast_range/slow_range: candidate bars (product capped at 30 combos).\n        rsi_meanrev allowed (fixed 30/70 thresholds). months/quarters passthrough.\n        ",
    "inputSchema": {
     "properties": {
      "symbol": {
@@ -3389,7 +3389,7 @@
   },
   {
    "name": "quant_risk",
-   "description": "Sharpe, max drawdown and win rate from a return series. Use to gate models.\n\nreturns: per-period simple returns (REQUIRED — build it first, e.g. from\nvn_quote_history columns=close as pct changes, or vn_equity_ohlcv closes).\nDo NOT call without returns. There is no tool named risk_metrics —\nuse this tool. periods_per_year: annualization\nfactor for Sharpe (252 daily, 52 weekly, 12 monthly).\nExample: {\"returns\": [0.01, -0.005, 0.02], \"periods_per_year\": 252}.\n",
+   "description": "Sharpe, sụt giảm tối đa và tỷ lệ thắng từ chuỗi lợi nhuận. Dùng khi chấm rủi ro một chiến\n            lược/mô hình.\n\n        Dùng khi: đánh giá backtest xong, \"chiến lược này rủi ro thế nào\".\n        Không dùng khi: chưa có chuỗi return (lấy nến từ vn_quote_history/vn_equity_ohlcv rồi tự\n            tính % thay đổi trước — KHÔNG gọi khi thiếu returns); cần thực hiện giao dịch thật (tool\n            này chỉ tính số).\n\n        returns: lợi nhuận đơn giản mỗi kỳ (BẮT BUỘC — tự dựng trước, ví dụ từ\n        cột close của vn_quote_history lấy % thay đổi, hoặc closes của vn_equity_ohlcv).\n        Không có tool nào tên risk_metrics — chính là tool này. periods_per_year: hệ số\n        năm hóa cho Sharpe (252 ngày, 52 tuần, 12 tháng).\n        Ví dụ: {\"returns\": [0.01, -0.005, 0.02], \"periods_per_year\": 252}.\n        ",
    "inputSchema": {
     "properties": {
      "returns": {
@@ -3417,7 +3417,7 @@
   },
   {
    "name": "quant_factors",
-   "description": "Momentum, volatility and drawdown factors from candles. Use to expand features.\n\nlookback: daily closes fetched (20d factor windows fixed); also adds\nmax_dd_full_pct over the full window.\n",
+   "description": "Momentum, volatility and drawdown factors from candles. Use to expand features.\n\n        lookback: daily closes fetched (20d factor windows fixed); also adds\n        max_dd_full_pct over the full window.\n        ",
    "inputSchema": {
     "properties": {
      "symbol": {
@@ -3440,7 +3440,7 @@
   },
   {
    "name": "correlation_matrix",
-   "description": "Pairwise Pearson correlation of daily returns. Use for diversification reads.\n\nsymbols: up to 8 tickers (same market). days: daily bars each.\nDates inner-join; vnstock day-only labels fall back to business-day\nwalkback (see date_note).\n",
+   "description": "Pairwise Pearson correlation of daily returns. Use for diversification reads.\n\n        symbols: up to 8 tickers (same market). days: daily bars each.\n        Dates inner-join; vnstock day-only labels fall back to business-day\n        walkback (see date_note).\n        ",
    "inputSchema": {
     "properties": {
      "symbols": {
@@ -3468,7 +3468,7 @@
   },
   {
    "name": "seasonality",
-   "description": "Rolling-window return stats per calendar month. Use for seasonal bias.\n\nwindow: trading days per window, 5-63 (21 ~= month). Buckets by window\nend month; vnstock day-only labels use business-day walkback.\n",
+   "description": "Rolling-window return stats per calendar month. Use for seasonal bias.\n\n        window: trading days per window, 5-63 (21 ~= month). Buckets by window\n        end month; vnstock day-only labels use business-day walkback.\n        ",
    "inputSchema": {
     "properties": {
      "symbol": {
@@ -3493,7 +3493,7 @@
   },
   {
    "name": "portfolio_optimize",
-   "description": "Long-only weights by rule. Use for allocation starting points.\n\nobjective: 'equal', 'inv_vol' (1/sigma), 'max_sharpe' (closed-form\nlong-only heuristic, no scipy). days: daily bars each (max 8 symbols).\n",
+   "description": "Long-only weights by rule. Use for allocation starting points.\n\n        objective: 'equal', 'inv_vol' (1/sigma), 'max_sharpe' (closed-form\n        long-only heuristic, no scipy). days: daily bars each (max 8 symbols).\n        ",
    "inputSchema": {
     "properties": {
      "symbols": {
@@ -3526,7 +3526,7 @@
   },
   {
    "name": "event_study",
-   "description": "Abnormal returns around event dates vs benchmark. Use for event effects.\n\ndates: ISO event dates (pre-Tet, dividends, meetings); each needs\nwindow_before+window_after trading bars around it (nearest trading day\nwithin 3 days is used when the exact date is missing). CAR = cumulative\n(stock - benchmark) daily returns in %.\n",
+   "description": "Abnormal returns around event dates vs benchmark. Use for event effects.\n\n        dates: ISO event dates (pre-Tet, dividends, meetings); each needs\n        window_before+window_after trading bars around it (nearest trading day\n        within 3 days is used when the exact date is missing). CAR = cumulative\n        (stock - benchmark) daily returns in %.\n        ",
    "inputSchema": {
     "properties": {
      "symbol": {
@@ -3569,7 +3569,7 @@
   },
   {
    "name": "brief_build",
-   "description": "Compose morning brief from news, sentiment pins and calendars. Use at session start.\n\nscope: 'vn' or 'world'. date: ISO date the brief is for (recorded as-is).\ncalendars: also attach IPO/macro/SBV sections (sbv_rates, macro_events_vn,\nipo_calendar_vn); off by default to keep the brief fast.\n",
+   "description": "Soạn bản tin sáng từ tin tức, chốt tâm lý và lịch. Dùng lúc mở đầu phiên hoặc khi user\n            xin bản tin tổng hợp.\n\n        Dùng khi: \"bản tin sáng\", \"tóm tắt thị trường hôm nay\".\n        Không dùng khi: chỉ cần giá hiện tại (dùng market_snapshot/market_overview — nhẹ hơn nhiều);\n            chỉ cần tin 1 mã (dùng news_symbol).\n\n        scope: 'vn' hoặc 'world'. date: ngày ISO của bản tin (ghi nguyên văn).\n        calendars: kèm thêm mục IPO/vĩ mô/SBV (sbv_rates, macro_events_vn,\n        ipo_calendar_vn); tắt mặc định để bản tin nhanh.\n        ",
    "inputSchema": {
     "properties": {
      "scope": {
@@ -3604,7 +3604,7 @@
   },
   {
    "name": "news_market",
-   "description": "Market news: Fireant posts first, GDELT fallback. Use for catalyst checks.\n\nsources: 'gdelt' routes straight to GDELT. Default reads the Fireant\ncrowd feed (token from env) and falls back to GDELT when empty.\n",
+   "description": "Tin thị trường: đọc Fireant trước, GDELT dự phòng. Dùng khi kiểm tra chất xúc tác chung\n            của thị trường.\n\n        Dùng khi: \"có tin gì mới\", \"vì sao thị trường tăng/giảm\".\n        Không dùng khi: tin về 1 mã cụ thể (dùng news_symbol); cần đọc bình luận đằng sau bài nóng\n            (lấy post_id từ news_symbol rồi dùng fireant_thread); tìm kiếm web tổng quát (dùng\n            web_search).\n\n        sources: 'gdelt' đi thẳng GDELT. Mặc định đọc feed đám đông Fireant\n        (token từ env), rỗng thì rơi về GDELT khi trống.\n        ",
    "inputSchema": {
     "properties": {
      "limit": {
@@ -3634,7 +3634,7 @@
   },
   {
    "name": "news_symbol",
-   "description": "Symbol news: Fireant posts about the ticker, GDELT fallback. Use to verify rumors.\n\nsources: 'gdelt' routes straight to GDELT. Default reads Fireant posts\ntagged with the symbol and falls back to GDELT when empty.\n",
+   "description": "Tin về 1 mã: bài Fireant gắn mã đó, GDELT dự phòng. Dùng khi xác minh tin đồn về cổ phiếu\n            cụ thể.\n\n        Dùng khi: \"FPT có tin gì\", \"tin đồn về mã X có thật không\".\n        Không dùng khi: tin chung thị trường (dùng news_market); đã có post_id muốn đọc replies\n            (dùng fireant_thread).\n\n        sources: 'gdelt' đi thẳng GDELT. Mặc định đọc bài Fireant gắn\n        symbol, rỗng thì rơi về GDELT khi trống.\n        Ví dụ: {\"symbol\": \"FPT\", \"limit\": 10}.\n        ",
    "inputSchema": {
     "properties": {
      "symbol": {
@@ -3671,7 +3671,7 @@
   },
   {
    "name": "fireant_thread",
-   "description": "One Fireant post plus its replies. Use to read comment threads behind a hot post.\n\npost_id: Fireant postID (from news_symbol posts). limit: max replies.\nRumor threads live in replies; root post may be thin.\n",
+   "description": "Một bài Fireant kèm replies. Dùng khi đọc luồng bình luận đằng sau bài nóng.\n\n        Dùng khi: \"dân Fireant đang bàn gì về FPT\", cần tâm lý đám đông chi tiết.\n        Không dùng khi: chỉ cần điểm số tâm lý gọn (dùng sentiment_score); chưa có post_id (lấy từ\n            news_symbol trước).\n\n        post_id: postID của Fireant (lấy từ bài trong news_symbol). limit: số replies tối đa.\n        Tin đồn nằm ở replies; bài gốc có thể mỏng.\n        ",
    "inputSchema": {
     "properties": {
      "post_id": {
@@ -3696,7 +3696,7 @@
   },
   {
    "name": "economic_calendar",
-   "description": "Macro series catalogue as event proxy. Use for data-availability checks.\n\nscope: 'vn' only (others return empty with a warning). limit: max series.\nNot a real calendar; for trading dates use dnse_working_dates instead.\n",
+   "description": "Danh mục series vĩ mô dùng thay lịch sự kiện. Dùng khi kiểm tra khả năng có dữ liệu (có\n            series CPI/GDP nào không).\n\n        Không dùng khi: cần ngày công bố cụ thể (nguồn không có lịch thật); cần ngày giao\n            dịch (dùng dnse_working_dates); cần lịch cổ tức/ĐHĐCĐ (dùng event_calendar_vn).\n\n        scope: chỉ 'vn' (scope khác trả rỗng kèm cảnh báo). limit: số series tối đa.\n        ",
    "inputSchema": {
     "properties": {
      "scope": {
@@ -3719,7 +3719,7 @@
   },
   {
    "name": "sbv_rates",
-   "description": "SBV policy and interbank rates, scraped static page. Use for rate regime.\n\nValues change rarely; upstream has no API.\n",
+   "description": "Nguồn lãi suất điều hành và liên ngân hàng SBV, trang tĩnh scrape. Dùng khi xem chế độ\n            lãi suất.\n\n        Không dùng khi: cần lịch công bố số liệu (dùng macro_events_vn); cần ngày giao dịch (dùng\n            dnse_working_dates).\n\n        Giá trị đổi hiếm; nguồn không có API.\n        ",
    "inputSchema": {
     "properties": {},
     "title": "sbv_ratesArguments",
@@ -3731,7 +3731,7 @@
   },
   {
    "name": "macro_events_vn",
-   "description": "NSO release listings with reference and next dates. Use for data calendar.\n\nCovers CPI schedule and releases; full year schedule lives in an NSO PDF.\n",
+   "description": "Danh sách công bố của Tổng cục Thống kê kèm ngày tham chiếu và ngày tới. Dùng khi lập\n            lịch dữ liệu vĩ mô.\n\n        Dùng khi: \"khi nào công bố CPI\", lịch ra số liệu vĩ mô.\n        Không dùng khi: cần lãi suất hiện hành (dùng sbv_rates); cần ngày giao dịch chứng khoán\n            (dùng dnse_working_dates).\n\n        Gồm lịch CPI và các đợt công bố; lịch cả năm đầy đủ nằm trong PDF của NSO.\n        ",
    "inputSchema": {
     "properties": {},
     "title": "macro_events_vnArguments",
@@ -3743,7 +3743,7 @@
   },
   {
    "name": "corporate_calendar",
-   "description": "Disclosures feed as corporate actions. Use for dividend/meeting scans.\n\nsymbol: omit for VN overview (defaults to VCB as sample feed); limit:\nmax disclosures. Raw feed; company_events classifies the same\ndisclosures into kinds; event_calendar_vn is the calendar view.\n",
+   "description": "Feed công bố thông tin thô dùng như sự kiện doanh nghiệp. Dùng khi quét cổ tức/họp cổ\n            đông dạng feed thô.\n\n        Dùng khi: cần feed disclosure nguyên bản.\n        Không dùng khi: cần lịch cổ tức/niêm yết/họp đã phân loại theo ngày (dùng event_calendar_vn\n            — dạng calendar); cần sự kiện đã phân loại theo loại (dùng company_events).\n\n        symbol: bỏ qua để xem toàn VN (mặc định lấy VCB làm feed mẫu); limit:\n        số công bố tối đa. Feed thô; company_events phân loại các công bố\n        giống vậy theo loại; event_calendar_vn là dạng xem calendar.\n        ",
    "inputSchema": {
     "properties": {
      "symbol": {
@@ -3773,7 +3773,7 @@
   },
   {
    "name": "world_prediction_odds",
-   "description": "Polymarket odds via jina proxy to Gamma, then direct. Use for Fed/macro odds.\n\nquery: substring in title/slug/description. tag: Polymarket tag\n(e.g. 'economics', 'fed', 'crypto'). Rows carry outcomes + prob_pct,\nsorted by 24h volume.\n",
+   "description": "Polymarket odds via jina proxy to Gamma, then direct. Use for Fed/macro odds.\n\n        query: substring in title/slug/description. tag: Polymarket tag\n        (e.g. 'economics', 'fed', 'crypto'). Rows carry outcomes + prob_pct,\n        sorted by 24h volume.\n        ",
    "inputSchema": {
     "properties": {
      "query": {
@@ -3815,7 +3815,7 @@
   },
   {
    "name": "polymarket_event",
-   "description": "One Polymarket event detail by slug (every market + odds). Use to drill in.\n\nslug: from world_prediction_odds rows. Returns description, markets\nwith outcome probs, volumes and end dates.\n",
+   "description": "One Polymarket event detail by slug (every market + odds). Use to drill in.\n\n        slug: from world_prediction_odds rows. Returns description, markets\n        with outcome probs, volumes and end dates.\n        ",
    "inputSchema": {
     "properties": {
      "slug": {
@@ -3835,7 +3835,7 @@
   },
   {
    "name": "geo_intel",
-   "description": "Geopolitical coverage via GDELT (politics-filtered) or military ADS-B flights.\n\nDefault: political articles only (sports/noise dropped) + aggregate\n{top_sources, by_day, date_range}. military=true: live military flights from\nadsb.lol with nearest conflict-zone distance and signal-loss diff\n{count, by_country, by_type, near_zone, lost_near_zone} — use for\nmilitary-activity reads around conflicts. limit: max articles. days: keep\narticles from the last N days (undated articles are kept).\n",
+   "description": "Geopolitical coverage via GDELT (politics-filtered) or military ADS-B flights.\n\n        Default: political articles only (sports/noise dropped) + aggregate\n        {top_sources, by_day, date_range}. military=true: live military flights from\n        adsb.lol with nearest conflict-zone distance and signal-loss diff\n        {count, by_country, by_type, near_zone, lost_near_zone} — use for\n        military-activity reads around conflicts. limit: max articles. days: keep\n        articles from the last N days (undated articles are kept).\n        ",
    "inputSchema": {
     "properties": {
      "topic": {
@@ -3894,7 +3894,7 @@
   },
   {
    "name": "compare_equities",
-   "description": "Head-to-head overview rows and momentum. Use when picking tickers.\n\nmetrics: keep only matching row keys (symbol column always kept).\n",
+   "description": "Head-to-head overview rows and momentum. Use when picking tickers.\n\n        metrics: keep only matching row keys (symbol column always kept).\n        ",
    "inputSchema": {
     "properties": {
      "symbols": {
@@ -3932,7 +3932,7 @@
   },
   {
    "name": "evidence_bundle",
-   "description": "Lock weighted conclusion by evidence bundle. Use last for final verdict.\n\nclaim_ids: claim ids to lock; calc_ids: supporting calculation ids\n(pass [] when none).\n",
+   "description": "Lock weighted conclusion by evidence bundle. Use last for final verdict.\n\n        claim_ids: claim ids to lock; calc_ids: supporting calculation ids\n        (pass [] when none).\n        ",
    "inputSchema": {
     "properties": {
      "claim_ids": {
@@ -3982,7 +3982,7 @@
   },
   {
    "name": "web_fetch",
-   "description": "Fetch a URL and convert to markdown, text, html or pdf-text. Use for reading web content.\n\nformat: 'markdown' (default), 'text', 'html' or 'pdf' (PDF text extraction,\nbest-effort stdlib-only; scanned PDFs report honestly). timeout_seconds: max\nfetch time (default 30).\n",
+   "description": "Đọc một URL và chuyển thành markdown, text, html hoặc text PDF. Dùng khi đọc nội dung\n            trang web cụ thể.\n\n        Dùng khi: đọc bài báo/công bố/báo cáo mà user đưa link; đọc chi tiết báo cáo CTCK (url từ\n            analyst_consensus).\n        Không dùng khi: cần TÌM thông tin mà chưa có link (dùng web_search); trang cần đăng nhập hay\n            chỉ render bằng JS (báo không đọc được).\n\n        format: 'markdown' (mặc định), 'text', 'html' hoặc 'pdf' (trích text PDF,\n        best-effort thuần stdlib; PDF scan báo thẳng là không trích được). timeout_seconds: thời\n            gian chờ\n        tối đa (mặc định 30).\n        ",
    "inputSchema": {
     "properties": {
      "url": {
@@ -4024,7 +4024,7 @@
   },
   {
    "name": "cycle_seasonality",
-   "description": "Month seasonality per basket from the stored table (mean/hit/relative vs VNINDEX). Omit args for full table.\n\nDiffers from `seasonality` (one symbol, computed live from candles): this is the\nlong-run basket table; quote which one a number came from.\n",
+   "description": "Month seasonality per basket from the stored table (mean/hit/relative vs VNINDEX). Omit args for full table.\n\n        Differs from `seasonality` (one symbol, computed live from candles): this is the\n        long-run basket table; quote which one a number came from.\n        ",
    "inputSchema": {
     "properties": {
      "basket": {
@@ -4185,7 +4185,7 @@
   },
   {
    "name": "cycle_stats_refresh",
-   "description": "Incremental refresh a batch (max 15/call, recommend 12) of the tracked symbols.\n\nFetch [watermark+1, today] + 10-session overlap via VCI; overlap close\ndeviation >0.5% triggers full re-fetch of that symbol. Each symbol is written in\nits own transaction. One refresh at a time.\n",
+   "description": "Incremental refresh a batch (max 15/call, recommend 12) of the tracked symbols.\n\n        Fetch [watermark+1, today] + 10-session overlap via VCI; overlap close\n        deviation >0.5% triggers full re-fetch of that symbol. Each symbol is written in\n        its own transaction. One refresh at a time.\n        ",
    "inputSchema": {
     "properties": {
      "symbols": {

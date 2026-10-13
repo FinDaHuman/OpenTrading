@@ -20,7 +20,10 @@ export function loadSkillTool(
   return {
     name: "load_skill",
     description:
-      "Nạp hướng dẫn chi tiết của một skill trong danh sách <skill_catalog> rồi làm theo. Tham số file (tuỳ chọn) đọc một file phụ nằm trong thư mục của skill, khi hướng dẫn của skill nhắc tới file đó.",
+      "Nạp hướng dẫn chi tiết của một skill trong danh sách <skill_catalog> rồi làm theo. " +
+      "Dùng khi: gợi ý skill khớp câu hỏi, hoặc bạn nhận ra việc này cần quy trình của một skill. " +
+      "Không nạp skill có sẵn toàn văn trong hệ thống (nhóm always) hay skill chưa được người dùng bật (nhóm manual) — gọi sẽ báo lỗi. " +
+      "Tham số file (tuỳ chọn) đọc một file phụ nằm trong thư mục của skill, khi hướng dẫn của skill nhắc tới file đó.",
     input: z.object({
       name: z.string().describe("Tên skill trong danh sách, ví dụ devil-advocate"),
       file: z.string().optional().describe("Đường dẫn tương đối của file phụ trong thư mục skill"),
