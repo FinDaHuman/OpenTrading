@@ -5,7 +5,7 @@ activation: auto
 requires_tools: [mcp__opentrading__compare_equities]
 triggers:
   keywords: [so sánh, so sánh với, cùng ngành, mạnh nhất, leader, hơn kém, xếp hạng mã]
-version: 1.3.0
+version: 1.4.0
 ---
 
 # So sánh mã cùng ngành
@@ -23,7 +23,7 @@ Skill điều phối thứ hai (cùng họ `phan-tich-chuyen-sau-1-ma`): xác đ
 
 **Bước 0: Xác định mã cùng ngành (gọi trực tiếp).**
 
-Chạy `vn_reference` (industry) hoặc `vs_industry_tree` (tra GICS) → chọn tối đa 6 mã; chỉ cho tên ngành thì dùng `stock_screener` (filter ngành, pool hẹp). Trên 6 mã thì yêu cầu thu hẹp, không tự mở rộng. `vn_reference` industry không match → thử `vs_industry_tree` 1 lần, vẫn không ra thì hỏi lại ngành, không đoán mã.
+Chạy `vn_reference` (industry) hoặc `vs_industry_tree` (tra GICS) → chọn tối đa 6 mã; chỉ cho tên ngành thì dùng `stock_screener` (filter ngành, pool hẹp) rồi tự chọn top thanh khoản, ghi rõ giả định chọn ở đầu câu trả lời — không gọi `ask_user` để hỏi chọn mã nào. Trên 6 mã thì yêu cầu thu hẹp, không tự mở rộng. `vn_reference` industry không match → thử `vs_industry_tree` 1 lần, vẫn không ra thì hỏi lại ngành, không đoán mã.
 
 **Bước 1: Bảng nhanh (gọi trực tiếp).**
 

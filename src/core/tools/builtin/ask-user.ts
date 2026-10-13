@@ -37,7 +37,7 @@ export function askUserTool(broker: AskBroker): ToolDef<Input> {
   return {
     name: "ask_user",
     description:
-      "Hỏi người dùng 1–4 câu trắc nghiệm khi thiếu thông tin để làm đúng việc (ví dụ: khung thời gian đầu tư, mức chấp nhận rủi ro, mã nào trong danh sách). Mỗi câu 2–4 lựa chọn ngắn, rõ ràng; người dùng luôn có thể tự nhập câu trả lời khác. Không hỏi lại điều đã có trong hồ sơ nhà đầu tư hoặc đã nói trong cuộc trò chuyện. Không dùng để xin phép chạy tool (harness tự hỏi).",
+      "Hỏi người dùng 1–4 câu trắc nghiệm khi thiếu thông tin để làm đúng việc (ví dụ: khung thời gian đầu tư, mức chấp nhận rủi ro, mã nào trong danh sách). Mỗi câu 2–4 lựa chọn ngắn, rõ ràng (ĐÚNG: 2–4 options; SAI: 1 lựa chọn duy nhất); người dùng luôn có thể tự nhập câu trả lời khác. Thông tin mang tính thủ tục/kỹ thuật (chọn mã mẫu để so sánh, thu hẹp danh sách, khung dữ liệu) thì KHÔNG hỏi — tự chọn phương án hợp lý nhất, ghi rõ giả định ở đầu câu trả lời rồi làm tiếp. Chỉ hỏi khi lựa chọn làm đổi ý nghĩa kết quả với người dùng. Không hỏi lại điều đã có trong hồ sơ nhà đầu tư hoặc đã nói trong cuộc trò chuyện. Không dùng để xin phép chạy tool (harness tự hỏi).",
     input: AskUserInput,
     readOnly: true,
     summarize: (input) => `Hỏi bạn ${input.questions.length} câu`,
