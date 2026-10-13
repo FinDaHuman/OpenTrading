@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { loadSkills, skillRoots } from "../src/core/skills/loader"
-import { matchTriggers } from "../src/core/skills/catalog"
+import { suggestSkills } from "../src/core/skills/catalog"
 import { loadSkillTool } from "../src/core/tools/builtin/load-skill"
 import type { Skill } from "../src/core/skills/schema"
 import { lintSkills } from "./helpers/skill-lint"
@@ -31,9 +31,9 @@ test("catalog lines fit 250 characters, headings are Vietnamese, write tools are
 test("an everyday question does not pull in the chart skill", async () => {
   const { skills } = await loadSkills(skillRoots(root).filter((r) => r.source === "bundled"))
   for (const q of ["VCB có nên mua không?", "đồng tiền nào mạnh nhất", "cốt lõi của FPT là gì"]) {
-    expect(matchTriggers(q, skills).map((s) => s.name)).not.toContain("ve-bieu-do")
+    expect(suggestSkills(q, skills).map((s) => s.name)).not.toContain("ve-bieu-do")
   }
-  expect(matchTriggers("vẽ biểu đồ nến VCB", skills).map((s) => s.name)).toContain("ve-bieu-do")
+  expect(suggestSkills("vẽ biểu đồ nến VCB", skills).map((s) => s.name)).toContain("ve-bieu-do")
 })
 
 async function skillDir(name: string) {

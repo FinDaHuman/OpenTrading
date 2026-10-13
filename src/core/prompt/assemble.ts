@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto"
 import { existsSync, readdirSync, readFileSync } from "node:fs"
 import path from "node:path"
-import { availableSkills, matchTriggers, renderCatalog } from "../skills/catalog"
+import { availableSkills, renderCatalog, suggestSkills } from "../skills/catalog"
 import type { Skill } from "../skills/schema"
 import { TODO_WRITE, hasOpenTodos, renderTodos, type Todo } from "../tools/todos"
 import { LOCAL_SOURCE } from "../tools/types"
@@ -213,7 +213,7 @@ ${m.text}
   }
   for (const context of input.hookContext ?? []) add(reminders, "hook_context", 4, "reminder", context)
   if (input.tools.includes("load_skill")) {
-    const hits = matchTriggers(input.input, visible).filter((s) => !input.sticky.includes(s.name) && s.activation === "auto")
+    const hits = suggestSkills(input.input, visible).filter((s) => !input.sticky.includes(s.name) && s.activation === "auto")
     if (hits.length > 0) {
       add(
         reminders,

@@ -10,13 +10,13 @@ import { catalogRegistry, evalRouting, loadCases } from "./helpers/routing-eval"
  */
 const FLOOR = {
   /** Cases whose expected MCP tool a keyword tool_search on the question loads. */
-  toolHits: 45, // of 68 (2026-10-14: cluster descriptions rewritten Claude-style)
+  toolHits: 39, // of 58
   /** Cases whose expected skill is suggested. */
-  skillHits: 32, // of 46
+  skillHits: 39, // of 43
   /** Suggested skills that are not expected (on scored cases). */
-  maxWrongSuggestions: 15, // of 47 (2026-10-14: "băng giá" trigger → "đọc băng", Q232 fixed)
+  maxWrongSuggestions: 18, // of 57
   /** "No skill" cases that still get a suggestion. */
-  maxNegativesSuggested: 3, // of 25
+  maxNegativesSuggested: 4, // of 18
 }
 
 const root = path.resolve(import.meta.dir, "..")
