@@ -184,6 +184,26 @@ export const MAX_INSTRUCTIONS = 2048
 const SEARCH_HINT_META = "anthropic/searchHint"
 const ALWAYS_LOAD_META = "anthropic/alwaysLoad"
 
+/**
+ * What tool search reads from an MCP tool: its description, the server's search hint and
+ * whether it may be deferred. Shared with the offline routing eval, so it scores the
+ * catalog exactly as a live session would.
+ */
+export function mcpToolFields(
+  server: string,
+  tool: { name: string; description?: string; _meta?: Record<string, unknown> },
+  alwaysLoad?: boolean,
+) {
+  const meta = tool._meta ?? {}
+  const hint = typeof meta[SEARCH_HINT_META] === "string" ? (meta[SEARCH_HINT_META] as string).replace(/\s+/g, " ").trim().slice(0, 200) : undefined
+  return {
+    // Claude Code's convention: a server marks its core tools to skip deferral.
+    deferrable: !alwaysLoad && meta[ALWAYS_LOAD_META] !== true,
+    searchHint: hint || undefined,
+    description: (tool.description ?? `Tool ${tool.name} của MCP server ${server}.`).slice(0, MAX_DESCRIPTION),
+  }
+}
+
 function capInstructions(text: string | undefined) {
   const trimmed = text?.trim()
   if (!trimmed) return undefined
@@ -904,8 +924,7 @@ export class McpManager {
     const registered: string[] = []
     let hidden = 0
     for (const tool of tools) {
-      const meta = (tool as { _meta?: Record<string, unknown> })._meta ?? {}
-      const hint = typeof meta[SEARCH_HINT_META] === "string" ? (meta[SEARCH_HINT_META] as string).replace(/\s+/g, " ").trim().slice(0, 200) : undefined
+      const fields = mcpToolFields(name, tool, config.alwaysLoad)
       if (!toolAllowed(config, tool.name)) {
         hidden++
         continue
@@ -917,10 +936,7 @@ export class McpManager {
         name: modelName,
         source: `mcp:${name}`,
         priority,
-        // Claude Code's convention: a server marks its core tools to skip deferral.
-        deferrable: !config.alwaysLoad && meta[ALWAYS_LOAD_META] !== true,
-        searchHint: hint || undefined,
-        description: (tool.description ?? `Tool ${tool.name} của MCP server ${name}.`).slice(0, MAX_DESCRIPTION),
+        ...fields,
         // Raw schema; the registry sanitizes it per provider when building a request.
         input: (tool.inputSchema ?? { type: "object", properties: {} }) as JSONSchema7,
         readOnly: tool.annotations?.readOnlyHint ?? false,

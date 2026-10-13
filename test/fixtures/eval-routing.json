@@ -1,0 +1,708 @@
+{
+ "about": "Hand-labelled routing cases from the 236-question eval of 12/10/2026 (question text only). skills: any listed skill counts as a hit; [] means no skill should be suggested; absent = not scored. tools: opentrading MCP tools (bare names), any loaded one counts. split is frozen: tune on dev, report heldout.",
+ "cases": [
+  {
+   "id": 1,
+   "split": "dev",
+   "q": "Tôi đang muốn hiểu rõ FPT lúc này, bạn phân tích giúp tôi từ mảng kinh doanh, kỹ thuật, định giá tới kết quả 4 quý gần nhất và tin tức sắp tới nhé?",
+   "skills": [
+    "phan-tich-chuyen-sau-1-ma"
+   ],
+   "tools": [
+    "stock_overview",
+    "financial_detail",
+    "valuation_run"
+   ]
+  },
+  {
+   "id": 2,
+   "split": "dev",
+   "q": "HPG khung ngày với khung tuần đang xu hướng ra sao bạn? Nhờ bạn xem giúp RSI, MACD, hỗ trợ kháng cự với cấu trúc đỉnh đáy nhé.",
+   "skills": [
+    "ky-thuat-chuyen-sau"
+   ],
+   "tools": [
+    "signals_technical"
+   ]
+  },
+  {
+   "id": 3,
+   "split": "heldout",
+   "q": "Lợi nhuận 4 quý gần nhất của FPT có đáng lo không bạn? Tăng trưởng doanh thu với lợi nhuận có thật chất không?",
+   "skills": [
+    "co-ban-chuyen-sau"
+   ],
+   "tools": [
+    "financial_statements",
+    "financial_ratios",
+    "financial_detail"
+   ]
+  },
+  {
+   "id": 4,
+   "split": "dev",
+   "q": "VCB giờ đắt hay rẻ vậy bạn? Bạn ước giúp tôi vùng giá hợp lý với dư địa tăng giảm so với giá hiện tại nhé.",
+   "skills": [
+    "dinh-gia-chuyen-sau"
+   ],
+   "tools": [
+    "valuation_run"
+   ]
+  },
+  {
+   "id": 5,
+   "split": "dev",
+   "q": "Tôi đang cân nhắc giữ HPG qua kỳ báo cáo sắp tới, bạn đánh giá giúp tôi mức chuẩn bị A/B/C có nên giữ tiếp không? Nếu giá giảm 5% thì rủi ro ra sao?",
+   "skills": [
+    "danh-gia-truoc-bctc"
+   ]
+  },
+  {
+   "id": 6,
+   "split": "heldout",
+   "q": "Trong 3 mã VCB, BID, CTG thì mã nào định giá hấp dẫn hơn bạn? Bạn làm giúp tôi bảng giá, P/E, ROE với động lượng nhé.",
+   "skills": [
+    "so-sanh-cung-nganh",
+    "dinh-gia-chuyen-sau"
+   ],
+   "tools": [
+    "financial_ratios",
+    "compare_equities",
+    "peer_compare"
+   ]
+  },
+  {
+   "id": 7,
+   "split": "dev",
+   "q": "Kinh tế Việt Nam dạo này sao rồi bạn? GDP, lạm phát, xuất nhập khẩu, tỷ giá với lãi suất thế nào?",
+   "skills": [
+    "danh-gia-vi-mo-viet-nam"
+   ],
+   "tools": [
+    "vs_indicator_data",
+    "sbv_rates"
+   ]
+  },
+  {
+   "id": 8,
+   "split": "dev",
+   "q": "Kinh tế Mỹ lúc này nghiêng về hạ cánh mềm hay suy thoái bạn? Bạn xem giúp lạm phát, lợi suất 10 năm với diễn biến các lớp tài sản nhé.",
+   "skills": [
+    "danh-gia-vi-mo-quoc-te"
+   ],
+   "tools": [
+    "fred_series",
+    "yf_yield_curve"
+   ]
+  },
+  {
+   "id": 9,
+   "split": "heldout",
+   "q": "Thị trường đang cược Fed cắt, giữ hay tăng lãi suất ở cuộc họp kế tiếp thế nào bạn? Việc đó ảnh hưởng gì tới tỷ giá Việt Nam?",
+   "skills": [
+    "du-doan-fed"
+   ],
+   "tools": [
+    "world_prediction_odds",
+    "fred_series"
+   ]
+  },
+  {
+   "id": 10,
+   "split": "dev",
+   "q": "Hiện có 4-6 rủi ro chính trị toàn cầu nào đáng chú ý bạn? Mỗi sự kiện ảnh hưởng thế nào tới tài sản đầu tư?",
+   "skills": [
+    "danh-gia-tinh-hinh-chinh-tri-toan-cau"
+   ],
+   "tools": [
+    "geo_intel",
+    "world_prediction_odds"
+   ]
+  },
+  {
+   "id": 11,
+   "split": "dev",
+   "q": "Xung đột Trung Đông 7 ngày gần nhất căng thẳng ra sao bạn? Giá dầu, vàng với lạm phát bị ảnh hưởng thế nào?",
+   "skills": [
+    "danh-gia-tinh-hinh-xung-dot"
+   ],
+   "tools": [
+    "geo_intel",
+    "yf_commodities"
+   ]
+  },
+  {
+   "id": 12,
+   "split": "heldout",
+   "q": "Thái Lan dạo này có bất ổn chính trị gì đáng kể không bạn? Tình hình có đáng lo không?",
+   "skills": [
+    "bat-on-quoc-gia"
+   ],
+   "tools": [
+    "geo_intel"
+   ]
+  },
+  {
+   "id": 13,
+   "split": "dev",
+   "q": "Hôm nay có 5-7 tin chứng khoán với doanh nghiệp Việt Nam nào đáng chú ý bạn? Bạn tóm tắt giúp tôi nhé.",
+   "skills": [
+    "tin-tuc-nong-viet-nam"
+   ],
+   "tools": [
+    "news_market"
+   ]
+  },
+  {
+   "id": 14,
+   "split": "dev",
+   "q": "Hôm nay có 5 tin quốc tế nào đáng chú ý cho nhà đầu tư bạn? Mỗi tin thị trường phản ứng ra sao?",
+   "skills": [
+    "tin-tuc-nong-quoc-te"
+   ],
+   "tools": [
+    "news_market"
+   ]
+  },
+  {
+   "id": 15,
+   "split": "heldout",
+   "q": "Dạo này có tin hay tin đồn gì về HPG bạn? Tin nào quan trọng nhất và ảnh hưởng ra sao tới giá?",
+   "skills": [
+    "tim-kiem-tin-tuc"
+   ],
+   "tools": [
+    "news_symbol"
+   ]
+  },
+  {
+   "id": 16,
+   "split": "dev",
+   "q": "Nhà đầu tư trên Fireant đang nói gì về FPT bạn? Mọi người đang FOMO hay lo ngại?",
+   "skills": [
+    "phan-tich-sentiment"
+   ],
+   "tools": [
+    "sentiment_score",
+    "fireant_thread"
+   ]
+  },
+  {
+   "id": 17,
+   "split": "dev",
+   "q": "7 ngày gần nhất các công ty chứng khoán đang khuyến nghị những mã nào bạn? Mã nào còn dư địa đáng chú ý?",
+   "skills": [
+    "tim-co-hoi-bao-cao-ctck"
+   ],
+   "tools": [
+    "analyst_consensus"
+   ]
+  },
+  {
+   "id": 18,
+   "split": "heldout",
+   "q": "BTC, ETH với SOL hôm nay thế nào bạn? Biến động 24 giờ qua có nóng không, giá BTC quy ra VND bao nhiêu?",
+   "skills": [
+    "nhip-dap-crypto"
+   ],
+   "tools": [
+    "crypto_spot"
+   ]
+  },
+  {
+   "id": 19,
+   "split": "dev",
+   "q": "Giá vàng SJC mua vào đang cao hơn vàng thế giới quy đổi bao nhiêu % bạn? Vì sao chênh lệch vậy?",
+   "skills": [
+    "phan-tich-vang-ty-gia"
+   ],
+   "tools": [
+    "vn_retail_gold",
+    "vn_msn_fx_gold"
+   ]
+  },
+  {
+   "id": 20,
+   "split": "dev",
+   "q": "Chiến lược mua FPT khi RSI dưới 30 rồi bán khi trên 70 có hiệu quả không bạn? So với mua rồi giữ thì sao?",
+   "skills": [
+    "kiem-chien-luoc-backtest"
+   ],
+   "tools": [
+    "backtest_strategies"
+   ]
+  },
+  {
+   "id": 21,
+   "split": "heldout",
+   "q": "Thị trường chứng khoán Việt Nam đang ở pha nào bạn? 1-2 nhóm ngành nào có thể dẫn tiếp?",
+   "skills": [
+    "dinh-vi-chu-ky-vn"
+   ],
+   "tools": [
+    "cycle_stats_check",
+    "sector_performance",
+    "cycle_chains"
+   ]
+  },
+  {
+   "id": 22,
+   "split": "dev",
+   "q": "Dòng tiền ở Việt Nam đang luân chuyển giữa cổ phiếu, vàng, USD, tiết kiệm với trái phiếu ra sao bạn?",
+   "skills": [
+    "chu-ky-tai-san-vn"
+   ],
+   "tools": [
+    "vn_asset_check",
+    "vn_asset_chains"
+   ]
+  },
+  {
+   "id": 23,
+   "split": "dev",
+   "q": "Nếu phân bổ giữa cổ phiếu, trái phiếu, hàng hóa, vàng với tiền mặt toàn cầu lúc này thì nên chú ý pha chu kỳ nào bạn?",
+   "skills": [
+    "chu-ky-tai-san-the-gioi"
+   ],
+   "tools": [
+    "g_asset_phase",
+    "g_asset_check"
+   ]
+  },
+  {
+   "id": 24,
+   "split": "heldout",
+   "q": "Trên Polymarket đang có những sự kiện kinh tế nào được quan tâm bạn? Cho tôi tối đa 5 sự kiện còn nóng nhé.",
+   "skills": [
+    "du-doan-polymarket"
+   ],
+   "tools": [
+    "world_prediction_odds"
+   ]
+  },
+  {
+   "id": 25,
+   "split": "dev",
+   "q": "P/E là gì vậy bạn? Bạn giải thích dễ hiểu kèm ví dụ số giúp tôi nhé.",
+   "skills": [
+    "explain-term"
+   ]
+  },
+  {
+   "id": 26,
+   "split": "dev",
+   "q": "Người mới như tôi cần hiểu HOSE, HNX với UPCoM khác nhau thế nào về biên độ, bước giá, lô giao dịch với phiên ATO/ATC bạn? Khi nào chứng khoán về tài khoản?",
+   "skills": [
+    "vn-market-basics"
+   ]
+  },
+  {
+   "id": 27,
+   "split": "heldout",
+   "q": "Tôi đang giữ HPG vì tin đầu tư công với nhu cầu thép sẽ tăng, bạn thấy luận điểm này có lỗ hổng gì không?",
+   "skills": [
+    "devil-advocate"
+   ]
+  },
+  {
+   "id": 28,
+   "split": "dev",
+   "q": "Bạn vẽ giúp tôi biểu đồ nến kèm khối lượng của FPT 30 phiên gần nhất nhé, xu hướng trông ra sao?",
+   "skills": [
+    "ve-bieu-do"
+   ],
+   "tools": [
+    "vn_equity_ohlcv",
+    "vn_quote_history"
+   ]
+  },
+  {
+   "id": 29,
+   "split": "dev",
+   "q": "Trước khi phân tích, tình trạng các nguồn giá, BCTC, tin tức, vĩ mô với dữ liệu quốc tế của nhóm ra sao bạn? Nguồn nào còn dùng được?",
+   "skills": [],
+   "tools": [
+    "source_status"
+   ],
+   "note": "kiem-tra-nguon-du-lieu is manual: never suggested"
+  },
+  {
+   "id": 36,
+   "split": "heldout",
+   "q": "FPT đang làm những mảng nào vậy bạn? Ban lãnh đạo với cổ đông chính gồm những ai?",
+   "skills": [],
+   "tools": [
+    "vn_company",
+    "stock_overview"
+   ]
+  },
+  {
+   "id": 39,
+   "split": "heldout",
+   "q": "Bạn tra giúp tôi danh sách mã niêm yết kèm tên doanh nghiệp trên thị trường Việt Nam nhé, lấy tối đa 30 mã làm mẫu thôi?",
+   "skills": [],
+   "tools": [
+    "vn_listing"
+   ]
+  },
+  {
+   "id": 44,
+   "split": "dev",
+   "q": "Bạn tóm tắt giúp tôi phiên gần nhất của thị trường Việt Nam nhé: phiên ra sao, các chỉ số với cổ phiếu lớn thế nào, độ rộng và mấy mã biến động mạnh. Có phần nào lỗi thì bạn cứ làm phần còn lại giúp tôi.",
+   "skills": [],
+   "tools": [
+    "market_snapshot",
+    "market_movers",
+    "breadth_scan"
+   ]
+  },
+  {
+   "id": 53,
+   "split": "dev",
+   "q": "Khối ngoại với tự doanh mua bán ra sao trong 20 phiên gần nhất vậy bạn? Bạn xem giúp tôi số liệu khối ngoại bên DNSE với Vietstock, tách riêng tự doanh, cả toàn thị trường lẫn từng mã luôn.",
+   "skills": [],
+   "tools": [
+    "dnse_foreign_flow",
+    "vs_nn_flow",
+    "vs_selftrading"
+   ]
+  },
+  {
+   "id": 54,
+   "split": "heldout",
+   "q": "Trong 30 ngày gần nhất, giao dịch thỏa thuận của HPG chiếm bao nhiêu % so với tổng giao dịch vậy bạn? Bạn tách giúp tôi khối lượng với giá trị khớp lệnh riêng khỏi thỏa thuận, ngày nào bất thường thì lưu ý giúp tôi.",
+   "skills": [],
+   "tools": [
+    "block_trades"
+   ]
+  },
+  {
+   "id": 59,
+   "split": "dev",
+   "q": "VN30F1M phiên gần nhất chạy ra sao trên nến 15 phút vậy bạn? Lấy giúp tôi tối đa 16 nến gộp từ dữ liệu 1 phút, tôi muốn xem cả phiên sáng với chiều luôn.",
+   "skills": [],
+   "tools": [
+    "vn_futures_ohlcv",
+    "dnse_vn30f1m_live"
+   ]
+  },
+  {
+   "id": 61,
+   "split": "dev",
+   "q": "Basis của VN30F1M so với VN30 ở lần cập nhật gần nhất bao nhiêu điểm với bao nhiêu điểm cơ bản vậy bạn? Premium hay discount thì có ý nghĩa gì vậy?",
+   "skills": [],
+   "tools": [
+    "futures_basis"
+   ]
+  },
+  {
+   "id": 69,
+   "split": "heldout",
+   "q": "Tôi muốn chuỗi 30 phiên gần nhất của S&P 500, bạn lấy giúp tôi chuỗi đang có rồi xem với bên Yahoo có khớp không nhé. Mã bạn dùng là mã nào, ngày giao dịch 2 bên thế nào vậy?",
+   "skills": [],
+   "tools": [
+    "vn_global_index",
+    "yf_global_indices"
+   ],
+   "note": "eval Q69: wrong S&P 500 symbol"
+  },
+  {
+   "id": 74,
+   "split": "dev",
+   "q": "Dòng tiền ở mấy cổ phiếu vốn hóa lớn toàn cầu đang tập trung vào những tên nào vậy bạn? Cho tôi top 10 dẫn đầu với số liệu này đo điều gì nhé.",
+   "skills": [],
+   "tools": [
+    "yf_mega_flows"
+   ]
+  },
+  {
+   "id": 80,
+   "split": "dev",
+   "q": "Bạn tính giúp tôi ma trận tương quan lợi suất ngày của FPT, HPG, VCB với MBB trong 120 phiên nhé. Cặp nào ít hỗ trợ đa dạng hóa nhất vậy?",
+   "skills": [],
+   "tools": [
+    "correlation_matrix"
+   ]
+  },
+  {
+   "id": 88,
+   "split": "dev",
+   "q": "Cho tôi GDP quý gần nhất, lạm phát so cùng kỳ năm và xuất khẩu tháng rồi của Việt Nam với.",
+   "skills": [
+    "danh-gia-vi-mo-viet-nam"
+   ],
+   "tools": [
+    "vs_indicator_data"
+   ]
+  },
+  {
+   "id": 93,
+   "split": "heldout",
+   "q": "Sắp tới Việt Nam có đợt đấu giá IPO hay niêm yết mới nào không bạn?",
+   "skills": [],
+   "tools": [
+    "ipo_calendar_vn"
+   ]
+  },
+  {
+   "id": 95,
+   "split": "dev",
+   "q": "Tìm giúp tôi 5 tài liệu công bố mới nhất của FPT trên Vietstock nhé, cho tôi tiêu đề, ngày và link gốc.",
+   "skills": [],
+   "tools": [
+    "vs_documents"
+   ]
+  },
+  {
+   "id": 98,
+   "split": "dev",
+   "q": "Các nhóm ngành lãi lỗ thế nào trong 2021, 2022 và 2023 vậy? Xếp hạng giúp tôi theo bảng thống kê chu kỳ nhé.",
+   "tools": [
+    "cycle_yearly"
+   ],
+   "note": "eval Q98: a single table lookup, answered from memory"
+  },
+  {
+   "id": 99,
+   "split": "heldout",
+   "q": "Mấy nhóm ngân hàng, bán lẻ, thép với dầu khí thường chạy ra sao trước và sau Tết vậy bạn?",
+   "tools": [
+    "cycle_tet"
+   ]
+  },
+  {
+   "id": 100,
+   "split": "dev",
+   "q": "Nghe nói ngân hàng hay chạy trước các ngành khác quanh đỉnh với đáy, có đúng vậy không bạn?",
+   "tools": [
+    "cycle_trough_events",
+    "cycle_chains"
+   ],
+   "note": "eval Q100: answered from memory, no tool"
+  },
+  {
+   "id": 135,
+   "split": "heldout",
+   "q": "Bạn xem ngay giúp tôi RSI hiện tại của FPT với HPG thế nào nhé, FPT có từ 70 trở lên không, HPG có từ 30 trở xuống không. Cho tôi biết con số với thời điểm dữ liệu của từng mã nhé.",
+   "tools": [
+    "signals_technical"
+   ]
+  },
+  {
+   "id": 146,
+   "split": "dev",
+   "q": "Tôi có giá đóng cửa giả định 6 phiên là 10; 12; 11; 14; 13; 15 nghìn đồng. Bạn vẽ giúp tôi biểu đồ đường có nhãn phiên với đơn vị, kèm nhận xét đầu cuối với đỉnh đáy nhé.",
+   "skills": [
+    "ve-bieu-do"
+   ],
+   "note": "user-supplied numbers"
+  },
+  {
+   "id": 176,
+   "split": "dev",
+   "q": "Giả sử doanh nghiệp X có giá 20.000 đồng, EPS âm 1.000 đồng và BVPS 15.000 đồng, đây chỉ là số giả định. Có thể kết luận X rẻ bằng P/E không? Giải thích phương pháp nào còn có ý nghĩa và những dữ liệu cần thêm trước khi đưa vùng giá hợp lý.",
+   "skills": [
+    "explain-term"
+   ]
+  },
+  {
+   "id": 186,
+   "split": "heldout",
+   "q": "Cho tôi GDP với CPI mới nhất của Việt Nam nhé.",
+   "skills": [
+    "danh-gia-vi-mo-viet-nam"
+   ],
+   "tools": [
+    "vs_indicator_data"
+   ]
+  },
+  {
+   "id": 189,
+   "split": "heldout",
+   "q": "Tôi nghe nói “tháng 5 luôn xấu cho chứng khoán Việt Nam” và “ngân hàng mạnh thì dầu khí chắc chắn tăng sau”. Bạn dùng thống kê mùa vụ và chuỗi luân chuyển đang có để xem giúp tôi hai câu đó đúng không nhé.",
+   "tools": [
+    "cycle_seasonality",
+    "cycle_chains"
+   ]
+  },
+  {
+   "id": 191,
+   "split": "dev",
+   "q": "Bảng lợi suất theo pha kinh tế toàn cầu có đủ số chu kỳ để nói chắc nên mua một lớp tài sản không bạn? Bạn xem giúp tôi số mẫu thực tế, tương quan cổ phiếu-trái phiếu trước và sau 2022, rồi xem nhận định quý gần nhất của các quỹ thế nào.",
+   "skills": [
+    "chu-ky-tai-san-the-gioi"
+   ],
+   "tools": [
+    "g_asset_phase",
+    "g_asset_corr"
+   ]
+  },
+  {
+   "id": 201,
+   "split": "heldout",
+   "q": "Tôi mới nghe tới Hòa Phát, bạn giới thiệu nhanh giúp tôi công ty này làm ăn ra sao, giá hiện tại bao nhiêu được không?",
+   "skills": [],
+   "tools": [
+    "stock_overview",
+    "vn_company"
+   ],
+   "note": "quick intro: the full one-ticker workflow would over-answer"
+  },
+  {
+   "id": 203,
+   "split": "dev",
+   "q": "Lạm phát Mỹ tháng rồi bao nhiêu vậy? Cho tôi mỗi con số thôi, khỏi phân tích sâu.",
+   "skills": [],
+   "tools": [
+    "fred_series"
+   ],
+   "note": "one number only: the macro skill would over-answer"
+  },
+  {
+   "id": 206,
+   "split": "dev",
+   "q": "Thái Lan dạo này có biểu tình gì lớn không bạn? Tôi sắp đi du lịch nên hơi lo.",
+   "skills": [
+    "bat-on-quoc-gia"
+   ],
+   "tools": [
+    "geo_intel"
+   ]
+  },
+  {
+   "id": 211,
+   "split": "dev",
+   "q": "Giá vàng SJC hôm nay mua vào bán ra bao nhiêu rồi? Với giá thế giới quy ra tiền Việt là bao nhiêu vậy bạn?",
+   "skills": [
+    "phan-tich-vang-ty-gia"
+   ],
+   "tools": [
+    "vn_retail_gold"
+   ]
+  },
+  {
+   "id": 212,
+   "split": "dev",
+   "q": "Thị trường mình đang ở pha nào vậy — tăng, giảm hay đi ngang? Ngành nào đang khỏe nhất hiện nay?",
+   "skills": [
+    "dinh-vi-chu-ky-vn"
+   ],
+   "tools": [
+    "sector_performance",
+    "cycle_stats_check"
+   ]
+  },
+  {
+   "id": 213,
+   "split": "heldout",
+   "q": "Tiền giờ dân mình hay để ở đâu — cổ phiếu, vàng, đô hay gửi tiết kiệm? Xu hướng chung hiện nay là gì vậy?",
+   "skills": [
+    "chu-ky-tai-san-vn"
+   ],
+   "tools": [
+    "vn_asset_check",
+    "vn_asset_anchors"
+   ]
+  },
+  {
+   "id": 214,
+   "split": "dev",
+   "q": "Tôi đang ngắm VCB mà không rành định giá ngân hàng. Bạn tính giúp vùng giá hợp lý bằng P/E, P/B so với lịch sử xem giờ đắt hay rẻ nhé?",
+   "skills": [
+    "dinh-gia-chuyen-sau"
+   ],
+   "tools": [
+    "valuation_run"
+   ]
+  },
+  {
+   "id": 218,
+   "split": "dev",
+   "q": "Dân trên Fireant đang bàn gì về FPT vậy? Bạn đọc giúp cả bài lẫn bình luận xem mọi người đang hưng phấn hay lo lắng nhé.",
+   "skills": [
+    "phan-tich-sentiment"
+   ],
+   "tools": [
+    "fireant_thread",
+    "sentiment_score"
+   ]
+  },
+  {
+   "id": 220,
+   "split": "dev",
+   "q": "ROE với ROA khác nhau chỗ nào vậy? Lấy ví dụ một công ty Việt Nam cho tôi dễ hình dung, với nói luôn bẫy hay gặp khi nhìn ROE cao.",
+   "skills": [
+    "explain-term"
+   ]
+  },
+  {
+   "id": 221,
+   "split": "dev",
+   "q": "Tôi tính mua HPG vì kỳ vọng đầu tư công đẩy nhu cầu thép. Bạn phản biện giúp tôi vài kịch bản tôi có thể sai được không?",
+   "skills": [
+    "devil-advocate"
+   ]
+  },
+  {
+   "id": 222,
+   "split": "heldout",
+   "q": "Tôi muốn so sánh mấy cổ phiếu ngân hàng để chọn con rẻ nhất, bạn làm giúp tôi nhé.",
+   "skills": [
+    "so-sanh-cung-nganh"
+   ],
+   "tools": [
+    "compare_equities",
+    "peer_compare",
+    "financial_ratios"
+   ],
+   "note": "eval Q222: asked instead of choosing peers"
+  },
+  {
+   "id": 224,
+   "split": "dev",
+   "q": "Nguồn số liệu của bạn giờ nào còn mới, nguồn nào đang chậm vậy? Check giúp tôi trước khi phân tích nhé.",
+   "skills": [],
+   "tools": [
+    "source_status"
+   ]
+  },
+  {
+   "id": 226,
+   "split": "dev",
+   "q": "HPG vừa vượt đỉnh 20 phiên phải không? Check giúp đúng 5 mã FPT, HPG, VCB, MBB, SSI xem con nào vượt thật kèm ngày tín hiệu, con nào chưa đủ điều kiện nhé.",
+   "skills": [],
+   "tools": [
+    "vn_quote_history",
+    "vn_equity_ohlcv",
+    "market_candles_batch"
+   ]
+  },
+  {
+   "id": 229,
+   "split": "dev",
+   "q": "P/E thấp có phải lúc nào cũng rẻ không? Lấy ví dụ một case ở Việt Nam mà P/E thấp vẫn lừa được nhà đầu tư cho tôi hiểu.",
+   "skills": [
+    "explain-term"
+   ]
+  },
+  {
+   "id": 230,
+   "split": "dev",
+   "q": "Bạn tôi bảo ngân hàng mạnh thì dầu khí chắc chắn tăng theo sau. Check giúp bằng thống kê luân chuyển thực tế xem đúng không nhé.",
+   "tools": [
+    "cycle_chains"
+   ]
+  },
+  {
+   "id": 231,
+   "split": "heldout",
+   "q": "Giờ ở Việt Nam là mấy giờ thứ mấy rồi? Với cho tôi giá VCB mới nhất kèm thời điểm thật của giá đó theo giờ Việt Nam nhé.",
+   "skills": [],
+   "tools": [
+    "vn_quote_history",
+    "dnse_latest_trade",
+    "market_snapshot"
+   ]
+  }
+ ]
+}
