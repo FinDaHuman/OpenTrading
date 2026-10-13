@@ -105,5 +105,5 @@ export function formatAskResult(result: AskResult) {
     return "Không có giao diện để hỏi người dùng bằng lựa chọn. Hãy hỏi bằng một câu hỏi ngắn trong câu trả lời rồi dừng lại."
   }
   if (result.reason === "cancelled") return "Lượt hỏi đã bị huỷ."
-  return "Người dùng không trả lời các câu hỏi. Dừng lại và chờ người dùng hướng dẫn tiếp."
+  return "Người dùng bỏ qua các câu hỏi. Tự chọn phương án hợp lý nhất, nêu giả định ở đầu câu trả lời rồi làm tiếp; nếu thật sự không làm tiếp được khi thiếu câu trả lời thì nói cần thông tin gì rồi dừng."
 }

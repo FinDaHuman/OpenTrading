@@ -13,7 +13,7 @@ import { useTerminalDimensions } from "@opentui/solid"
  * AskUserQuestion: a tab per question header plus "Gửi" when there is more than one
  * question (or a multi-select), numbered options with descriptions, a last option to type
  * your own answer, a review screen before sending. One single-choice question sends on
- * pick. Esc declines (the model is told to stop and wait).
+ * pick. Esc skips the questions (the model states its assumptions and carries on).
  */
 
 const OTHER = "Khác (tự nhập)"
