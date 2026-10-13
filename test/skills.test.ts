@@ -2,7 +2,7 @@ import { afterEach, expect, test } from "bun:test"
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
-import { availableSkills, fold, matchTriggers, renderCatalog } from "../src/core/skills/catalog"
+import { availableSkills, fold, matchSoft, matchTriggers, renderCatalog, suggestSkills } from "../src/core/skills/catalog"
 import { matchToolPattern } from "../src/core/tools/patterns"
 import { loadSkills, readSkillFile, skillRoots } from "../src/core/skills/loader"
 import { parseSkill, type Skill } from "../src/core/skills/schema"
@@ -189,6 +189,22 @@ test("trigger keywords match without Vietnamese diacritics, on word boundaries",
   expect(matchTriggers("hãy phan bien luận điểm FPT", skills).map((s) => s.name)).toEqual(["devil"])
   expect(matchTriggers("NIM của VCB?", skills).map((s) => s.name)).toEqual(["bank"])
   expect(matchTriggers("animation", skills)).toEqual([]) // "nim" inside a word does not count
+})
+
+test("soft routing names one bundled skill only when it clearly beats the others", async () => {
+  const { skills } = await loadSkills(skillRoots(await root()).filter((r) => r.source === "bundled"))
+  const soft = (q: string) => matchSoft(q, skills)?.name
+  // No keyword matches these phrasings (eval Q22, Q25); the soft layer does.
+  const money = "Dòng tiền ở Việt Nam đang luân chuyển giữa cổ phiếu, vàng, USD, tiết kiệm với trái phiếu ra sao?"
+  expect(matchTriggers(money, skills)).toEqual([])
+  expect(soft(money)).toBe("chu-ky-tai-san-vn")
+  expect(soft("P/E là gì vậy bạn? Bạn giải thích dễ hiểu kèm ví dụ số giúp tôi nhé.")).toBe("explain-term")
+  // Too little in common: no guess. Manual skills are never suggested.
+  expect(soft("xin chào")).toBeUndefined()
+  expect(soft("Nguồn dữ liệu nào còn sống, nhiều tool báo lỗi quá")).not.toBe("kiem-tra-nguon-du-lieu")
+  // Keyword hits and the soft match are merged without duplicates.
+  const both = suggestSkills("chu kỳ thị trường đang ở pha nào, nhóm ngành nào dẫn dắt", skills).map((s) => s.name)
+  expect(both.filter((n) => n === "dinh-vi-chu-ky-vn")).toHaveLength(1)
 })
 
 test("analysis skills có hook Trực quan hóa trỏ về ve-bieu-do", async () => {

@@ -97,7 +97,7 @@ version: 1.0.0
 | `always` | Toàn bộ nội dung trong system prompt, ở mọi lượt | Chính sách ngắn, luôn đúng. Nên ít và ngắn |
 | `manual` | Không có trong danh sách; chỉ người dùng bật bằng `/skill <tên>` (giữ cho cả phiên) | Quy trình nặng hoặc cần người dùng chủ động |
 
-- **`triggers.keywords`** (tầng L1 preroute trong HarnessPlan §5.3): nếu câu hỏi chứa từ khoá (không phân biệt hoa thường, bỏ dấu, khớp theo từ), harness nhắc model "có thể liên quan tới skill X". Đây chỉ là gợi ý; model vẫn quyết định có gọi hay không.
+- **`triggers.keywords`** (tầng L1 preroute trong HarnessPlan §5.3): nếu câu hỏi chứa từ khoá (không phân biệt hoa thường, bỏ dấu, khớp theo từ), harness nhắc model "có thể liên quan tới skill X". Đây chỉ là gợi ý; model vẫn quyết định có gọi hay không. Tầng thứ hai khớp mềm: so từ và cặp từ (trọng số IDF) giữa câu hỏi với tên, `description`, `when_to_use` và từ khoá; chỉ gợi ý thêm một skill khi điểm đủ cao và gấp 1,5 lần skill đứng sau. Vì vậy `description`/`when_to_use` viết bằng chữ người dùng hay nói cũng giúp định tuyến. Đo bằng `test/routing-eval.test.ts`.
 - **Viết `description` và `when_to_use` cụ thể.** Kinh nghiệm của Cursor: mô tả mơ hồ thì model không bao giờ chọn. Trong danh sách, mỗi skill tối đa 250 ký tự.
 - **File phụ** (bảng chỉ tiêu, checklist) để cùng thư mục. Model đọc bằng `load_skill` với tham số `file`; không đọc được file nằm ngoài thư mục skill. Quy ước: bảng tra cứu cố định (id chỉ tiêu, mã...) để `assets/`, file diễn giải cách đọc (cây quyết định, checklist, cẩm nang) để `references/`.
 - Frontmatter sai: skill không được nạp và lỗi hiện trong `/skills`. App không crash.
