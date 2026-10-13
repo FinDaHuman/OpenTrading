@@ -1,0 +1,4460 @@
+{
+ "source": "captured",
+ "capturedAt": "2026-10-13",
+ "server": "opentrading",
+ "commit": "4efbee5",
+ "note": "tools/list of opentrading-mcp main (the commit live on Render on 13/10). Regenerate from the opentrading-mcp checkout: uv run python ../OpenTrading/scripts/dev/dump-mcp-catalog.py ../OpenTrading/test/fixtures/mcp-catalog/opentrading.json <commit>",
+ "tools": [
+  {
+   "name": "market_snapshot",
+   "description": "Snapshot of VN market with provenance. Use when a broad market picture is needed.\n\nsymbols: tickers to quote — default the full VN30 basket (P14).\nas_of: requested timestamp label, recorded as requested_as_of\n(data is always latest).\n",
+   "inputSchema": {
+    "properties": {
+     "symbols": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Symbols"
+     },
+     "as_of": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "As Of"
+     }
+    },
+    "title": "market_snapshotArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "bang gia VN30 gia hien tai realtime | price board quotes now"
+   }
+  },
+  {
+   "name": "source_status",
+   "description": "Health of every upstream plus TTL state. Use to debug stale data.",
+   "inputSchema": {
+    "properties": {},
+    "title": "source_statusArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "tinh trang nguon du lieu loi cham | data source health stale"
+   }
+  },
+  {
+   "name": "market_candles_batch",
+   "description": "Batch OHLCV for symbols, one request per symbol. Use for multi-chart context.\n\ndays: daily bars per symbol (max 100 symbols). summary/columns: summary\nreturns {count,last,high,low} only; columns keeps named fields.\n",
+   "inputSchema": {
+    "properties": {
+     "symbols": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Symbols",
+      "type": "array"
+     },
+     "days": {
+      "default": 30,
+      "title": "Days",
+      "type": "integer"
+     },
+     "summary": {
+      "default": false,
+      "title": "Summary",
+      "type": "boolean"
+     },
+     "columns": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Columns"
+     }
+    },
+    "required": [
+     "symbols"
+    ],
+    "title": "market_candles_batchArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "nen nhieu ma cung luc lich su gia | multi symbol candles prices"
+   }
+  },
+  {
+   "name": "symbol_lookup",
+   "description": "Resolve company name to symbol, venue and sector. Use before any symbol-scoped call.\n\nlimit/offset: paginate hits (matched by symbol or company name,\ncase- and accent-insensitive).\n",
+   "inputSchema": {
+    "properties": {
+     "query": {
+      "title": "Query",
+      "type": "string"
+     },
+     "limit": {
+      "default": 10,
+      "title": "Limit",
+      "type": "integer"
+     },
+     "offset": {
+      "default": 0,
+      "title": "Offset",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "query"
+    ],
+    "title": "symbol_lookupArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "tim ma co phieu theo ten cong ty | ticker search company name"
+   }
+  },
+  {
+   "name": "symbol_resolve",
+   "description": "Resolve ANY asset code to symbol + class + next tool. Use FIRST when unsure.\n\nCovers VN stocks, crypto, forex, indices, futures, gold/oil. Returns ranked\ncandidates with fallback order; ambiguous=true means ask the user or try #1 then #2.\n",
+   "inputSchema": {
+    "properties": {
+     "query": {
+      "title": "Query",
+      "type": "string"
+     },
+     "limit": {
+      "default": 5,
+      "title": "Limit",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "query"
+    ],
+    "title": "symbol_resolveArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "ma tai san vang usd bitcoin la gi | resolve any asset code"
+   }
+  },
+  {
+   "name": "market_movers",
+   "description": "Top gainers, losers and volume leaders. Use for session pulse checks.\n\ntop_n: rows per list. universe: 'vn30' (default, 30 liquid bluechips —\nfast and stable) or 'hose' (full HOSE ref ≤60, slow; illiquid symbols\nmay hang vnstock and trip the batch timeout → partial with missing).\n",
+   "inputSchema": {
+    "properties": {
+     "top_n": {
+      "default": 10,
+      "title": "Top N",
+      "type": "integer"
+     },
+     "universe": {
+      "default": "vn30",
+      "title": "Universe",
+      "type": "string"
+     }
+    },
+    "title": "market_moversArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "top tang giam manh khoi luong | gainers losers active"
+   }
+  },
+  {
+   "name": "breadth_scan",
+   "description": "Advancers, decliners, ceiling and floor counts. Use to judge rally health.\n\nexchange: filter rows carrying venue info (HOSE/HNX/UPCOM); ignored\nwith a warning when rows carry no venue info.\n",
+   "inputSchema": {
+    "properties": {
+     "exchange": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Exchange"
+     }
+    },
+    "title": "breadth_scanArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "do rong thi truong ma tang giam tran san | breadth advance decline"
+   }
+  },
+  {
+   "name": "market_overview",
+   "description": "One-call market context: bluechip quotes, movers, breadth, session. Use for briefs.\n\ntop_n: gainers/losers rows each. Breadth counts the bluechip board\n(breadth_scan covers the full Vietstock board). Legs degrade\nindependently: a dead leg becomes null plus a warning.\n",
+   "inputSchema": {
+    "properties": {
+     "top_n": {
+      "default": 3,
+      "title": "Top N",
+      "type": "integer"
+     }
+    },
+    "title": "market_overviewArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "tong quan thi truong hom nay | market summary today pulse"
+   }
+  },
+  {
+   "name": "dnse_market_status",
+   "description": "DNSE session state plus latest index snapshot. Use for open/close checks.",
+   "inputSchema": {
+    "properties": {},
+    "title": "dnse_market_statusArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "phien giao dich mo dong cua | session open closed status"
+   }
+  },
+  {
+   "name": "vn_quote_history",
+   "description": "Candles for a VN symbol (1D/1W/1M), VCI then KBS fallback. Use for any price history.\n\nThere is no tool named stock_history — use this tool.\ndays: bars requested (max 365 nến; weekly/monthly span nhân hệ số).\ninterval: '1D' (mặc định), '1W', '1M'. summary/columns: summary returns\n{count,last,high,low} only; columns keeps named fields.\n",
+   "inputSchema": {
+    "properties": {
+     "symbol": {
+      "title": "Symbol",
+      "type": "string"
+     },
+     "days": {
+      "default": 365,
+      "title": "Days",
+      "type": "integer"
+     },
+     "summary": {
+      "default": false,
+      "title": "Summary",
+      "type": "boolean"
+     },
+     "columns": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Columns"
+     },
+     "interval": {
+      "default": "1D",
+      "title": "Interval",
+      "type": "string"
+     }
+    },
+    "required": [
+     "symbol"
+    ],
+    "title": "vn_quote_historyArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "lich su gia nen ngay tuan thang co phieu | price history daily candles"
+   }
+  },
+  {
+   "name": "vn_equity_quote_batch",
+   "description": "One-request price board for many symbols. Use for snapshots and movers.\n\nsummary/columns: summary returns {count,symbols} only; columns keeps\nnamed fields per quote.\n",
+   "inputSchema": {
+    "properties": {
+     "symbols": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Symbols",
+      "type": "array"
+     },
+     "summary": {
+      "default": false,
+      "title": "Summary",
+      "type": "boolean"
+     },
+     "columns": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Columns"
+     }
+    },
+    "required": [
+     "symbols"
+    ],
+    "title": "vn_equity_quote_batchArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "bang gia nhieu ma gia khop | quotes many tickers board"
+   }
+  },
+  {
+   "name": "vn_listing",
+   "description": "Full symbol list with company names. Use for universe and lookup.\n\nlimit: max symbols returned (universe ~1500).\n",
+   "inputSchema": {
+    "properties": {
+     "limit": {
+      "default": 500,
+      "title": "Limit",
+      "type": "integer"
+     }
+    },
+    "title": "vn_listingArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "danh sach ma niem yet toan thi truong | all listed tickers universe"
+   }
+  },
+  {
+   "name": "vn_fundamentals",
+   "description": "Ratios and statements via vnstock Fundamental and Finance. Use for quick valuation.\n\nperiod: 'year' or 'quarter'. report_type: 'ttm' (trailing twelve months) or 'latest'.\n",
+   "inputSchema": {
+    "properties": {
+     "symbol": {
+      "title": "Symbol",
+      "type": "string"
+     },
+     "period": {
+      "default": "year",
+      "title": "Period",
+      "type": "string"
+     },
+     "report_type": {
+      "default": "ttm",
+      "title": "Report Type",
+      "type": "string"
+     }
+    },
+    "required": [
+     "symbol"
+    ],
+    "title": "vn_fundamentalsArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "chi so tai chinh bctc nhanh | ratios statements quick valuation"
+   }
+  },
+  {
+   "name": "vn_retail_gold",
+   "description": "SJC and ring gold buy/sell from BTMC retail. Use for local gold premium.\n\nsource: retail source id (default 'btmc'). Direct BTMC https fetch\nfirst (15s); vnstock lib fallback (its http URL hangs without timeout).\n",
+   "inputSchema": {
+    "properties": {
+     "source": {
+      "default": "btmc",
+      "title": "Source",
+      "type": "string"
+     }
+    },
+    "title": "vn_retail_goldArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "gia vang SJC nhan mua ban | gold price retail"
+   }
+  },
+  {
+   "name": "vn_retail_fx",
+   "description": "VCB USD buy/sell rates. Use for currency conversion context.",
+   "inputSchema": {
+    "properties": {},
+    "title": "vn_retail_fxArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "ty gia USD Vietcombank mua ban | exchange rate dollar"
+   }
+  },
+  {
+   "name": "vs_auth_status",
+   "description": "Vietstock JWT state and expiry. Use before any paid BCTC call.",
+   "inputSchema": {
+    "properties": {},
+    "title": "vs_auth_statusArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "dang nhap Vietstock token het han | login token expiry"
+   }
+  },
+  {
+   "name": "vs_financeinfo",
+   "description": "Free-mirror statements, 12 quarters or years. Use when JWT is absent.\n\nperiod: 'quarter' (12 quarters) or 'year' (annual).\n",
+   "inputSchema": {
+    "properties": {
+     "symbol": {
+      "title": "Symbol",
+      "type": "string"
+     },
+     "period": {
+      "default": "quarter",
+      "title": "Period",
+      "type": "string"
+     }
+    },
+    "required": [
+     "symbol"
+    ],
+    "title": "vs_financeinfoArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "bao cao tai chinh quy nam | financial statements quarterly annual"
+   }
+  },
+  {
+   "name": "vs_market_price",
+   "description": "Live board snapshot from Vietstock. Use as secondary quote source.\n\ntype: board id (2 = main board).\n",
+   "inputSchema": {
+    "properties": {
+     "type": {
+      "default": 2,
+      "title": "Type",
+      "type": "integer"
+     }
+    },
+    "title": "vs_market_priceArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "bang gia Vietstock gia khop | quotes board secondary"
+   }
+  },
+  {
+   "name": "vs_market_index",
+   "description": "Index closes with 1M and YTD change. Use for index context.",
+   "inputSchema": {
+    "properties": {},
+    "title": "vs_market_indexArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "chi so VNINDEX HNX tang truong | index performance ytd"
+   }
+  },
+  {
+   "name": "vs_nn_flow",
+   "description": "Foreign investor buy/sell chart. Use to cross-check DNSE WS flows.\n\ndays: keep only the most recent N chart points.\n",
+   "inputSchema": {
+    "properties": {
+     "days": {
+      "default": 90,
+      "title": "Days",
+      "type": "integer"
+     }
+    },
+    "title": "vs_nn_flowArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "khoi ngoai mua ban rong theo ngay | foreign net buy sell daily"
+   }
+  },
+  {
+   "name": "vs_categories",
+   "description": "Macro indicator catalogue (~60 categories). Use before indicator queries.",
+   "inputSchema": {
+    "properties": {},
+    "title": "vs_categoriesArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "danh muc chi so vi mo GDP CPI | macro indicator list"
+   }
+  },
+  {
+   "name": "vs_indicator_data",
+   "description": "Macro series (GDP/CPI/FX/trade) via browser-session replay. Use for macro reads.\n\nterm_type_id: 1 daily, 2 monthly, 3 quarterly, 4 yearly, 5 YTD, 6 MoM,\n7 YoY, 8 QoQ — pairs must match each category's ListTermType metadata\n(e.g. GDP 73 tt=3, CPI 15 tt=7 sub=2). from_date default 2022-01-01.\nUses the full browser cookie jar (HAR/env seed); Standard pack serves it.\nRows: {name, group, period, year, value, unit, timeorder}.\nExample: {\"category_id\": 73, \"term_type_id\": 3} (GDP quarterly);\n{\"category_id\": 15, \"term_type_id\": 7, \"sub_term_type_id\": \"2\"} (CPI YoY).\nNumbers accepted as strings and coerced (e.g. \"3\" → 3).\n",
+   "inputSchema": {
+    "properties": {
+     "category_id": {
+      "title": "Category Id",
+      "type": "integer"
+     },
+     "term_type_id": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "string"
+       }
+      ],
+      "default": 3,
+      "title": "Term Type Id"
+     },
+     "sub_term_type_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Sub Term Type Id"
+     },
+     "from_date": {
+      "default": "2022-01-01",
+      "title": "From Date",
+      "type": "string"
+     },
+     "to_date": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "To Date"
+     }
+    },
+    "required": [
+     "category_id"
+    ],
+    "title": "vs_indicator_dataArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "du lieu vi mo GDP CPI lam phat ty gia | macro data inflation"
+   }
+  },
+  {
+   "name": "vs_trading_info",
+   "description": "Ceiling, floor, room, EPS, BVPS, PE, PB per symbol. Use for reference snapshot.\n\nThere is no tool named vs_prices or vs_financial_ratios — use this tool\n(snapshot) or financial_ratios (sets) instead.",
+   "inputSchema": {
+    "properties": {
+     "symbol": {
+      "title": "Symbol",
+      "type": "string"
+     }
+    },
+    "required": [
+     "symbol"
+    ],
+    "title": "vs_trading_infoArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "gia tran san room ngoai EPS PE | ceiling floor foreign room"
+   }
+  },
+  {
+   "name": "vs_financial_terms",
+   "description": "Report term catalogue (annual, Q1-Q4, H1, 9M). Use before BCTC value queries.",
+   "inputSchema": {
+    "properties": {},
+    "title": "vs_financial_termsArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "ky bao cao quy nam | report periods"
+   }
+  },
+  {
+   "name": "vs_financial_norms",
+   "description": "190+ BCTC line items for a business type. Use to resolve norm ids.\n\nbtype: 1 CTCP (general), 2 securities, 3 bank, 5 insurance.\n",
+   "inputSchema": {
+    "properties": {
+     "btype": {
+      "default": 1,
+      "title": "Btype",
+      "type": "integer"
+     }
+    },
+    "title": "vs_financial_normsArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "chi tieu bctc ma so | statement line items ids"
+   }
+  },
+  {
+   "name": "vs_company_info",
+   "description": "Company names, exchange and description. Use for profiles.",
+   "inputSchema": {
+    "properties": {
+     "symbol": {
+      "title": "Symbol",
+      "type": "string"
+     }
+    },
+    "required": [
+     "symbol"
+    ],
+    "title": "vs_company_infoArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "thong tin doanh nghiep gioi thieu | company profile about"
+   }
+  },
+  {
+   "name": "vs_overview_trading",
+   "description": "EPS, BVPS, PE, PB, ROEA/ROAA snapshot. Use for valuation inputs.",
+   "inputSchema": {
+    "properties": {
+     "symbol": {
+      "title": "Symbol",
+      "type": "string"
+     }
+    },
+    "required": [
+     "symbol"
+    ],
+    "title": "vs_overview_tradingArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "dinh gia PE PB ROE EPS | valuation multiples snapshot"
+   }
+  },
+  {
+   "name": "vs_documents",
+   "description": "Filings and disclosures with links. Use for corporate actions.\n\npage_size: max documents returned (default 60).\n",
+   "inputSchema": {
+    "properties": {
+     "symbol": {
+      "title": "Symbol",
+      "type": "string"
+     },
+     "page_size": {
+      "default": 60,
+      "title": "Page Size",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "symbol"
+    ],
+    "title": "vs_documentsArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "cong bo thong tin tai lieu | disclosures filings documents"
+   }
+  },
+  {
+   "name": "vs_industry_tree",
+   "description": "GICS industry tree. Use before sector mapping.",
+   "inputSchema": {
+    "properties": {},
+    "title": "vs_industry_treeArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "cay nganh phan loai GICS | industry classification"
+   }
+  },
+  {
+   "name": "vs_industry_heatmap",
+   "description": "Live sector heatmap. Use for intraday rotation.",
+   "inputSchema": {
+    "properties": {},
+    "title": "vs_industry_heatmapArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "ban do nhiet nganh trong phien | sector heatmap intraday"
+   }
+  },
+  {
+   "name": "vs_selftrading",
+   "description": "Prop-desk flow chart. Use alongside foreign flows.",
+   "inputSchema": {
+    "properties": {},
+    "title": "vs_selftradingArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "tu doanh cong ty chung khoan mua ban | proprietary trading flow"
+   }
+  },
+  {
+   "name": "vs_gics_index",
+   "description": "GICS index closes with foreign flow. Use for sector context.\n\ngroup: index set (1, 2 or 3 return different groups).\n",
+   "inputSchema": {
+    "properties": {
+     "group": {
+      "default": 1,
+      "title": "Group",
+      "type": "integer"
+     }
+    },
+    "title": "vs_gics_indexArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "chi so nganh dong tien ngoai | sector index foreign flow"
+   }
+  },
+  {
+   "name": "vs_currency",
+   "description": "Reference FX table. Use as fallback FX source.",
+   "inputSchema": {
+    "properties": {},
+    "title": "vs_currencyArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "bang ty gia tham chieu | fx rates table"
+   }
+  },
+  {
+   "name": "vs_market_info",
+   "description": "Per-exchange board row: index, breadth, put-through. Use for 5s snapshots in hours.\n\nexchange: HOSE, HNX or UPCOM (endpoint is per-exchange, not per-symbol).\n",
+   "inputSchema": {
+    "properties": {
+     "exchange": {
+      "default": "HOSE",
+      "title": "Exchange",
+      "type": "string"
+     }
+    },
+    "title": "vs_market_infoArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "thong tin san HOSE HNX thoa thuan | exchange board putthrough"
+   }
+  },
+  {
+   "name": "vs_xnk_detail",
+   "description": "Import/export by country via browser-session replay. Use for trade structure.\n\ndirection: 'xk' exports (cat 64), 'nk' imports (65). termType monthly,\nfrom_date default current year (ISO). Standard pack serves it; rows\n{name=country, group, period, year, value 'Triệu USD', timeorder}.\n",
+   "inputSchema": {
+    "properties": {
+     "direction": {
+      "default": "xk",
+      "title": "Direction",
+      "type": "string"
+     },
+     "from_date": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "From Date"
+     }
+    },
+    "title": "vs_xnk_detailArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "xuat nhap khau theo quoc gia | trade exports imports"
+   }
+  },
+  {
+   "name": "vn_index_ohlcv",
+   "description": "Index bars for VN tickers. Use for index history and breadth.\n\ninterval: bar size ('1D' daily; intraday like '1m'/'15m' where supported).\nsummary/columns: summary returns {count,last,high,low} only; columns keeps named fields.\n",
+   "inputSchema": {
+    "properties": {
+     "symbol": {
+      "default": "VNINDEX",
+      "title": "Symbol",
+      "type": "string"
+     },
+     "count": {
+      "default": 100,
+      "title": "Count",
+      "type": "integer"
+     },
+     "summary": {
+      "default": false,
+      "title": "Summary",
+      "type": "boolean"
+     },
+     "columns": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Columns"
+     },
+     "interval": {
+      "default": "1D",
+      "title": "Interval",
+      "type": "string"
+     }
+    },
+    "title": "vn_index_ohlcvArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "lich su chi so VNINDEX VN30 nen | index history candles"
+   }
+  },
+  {
+   "name": "vn_equity_ohlcv",
+   "description": "Equity bars via Market API. Use as OHLCV alternative to quotes.\n\ninterval: bar size ('1D' daily; intraday like '1m'/'15m' where supported).\nsummary/columns: summary returns {count,last,high,low} only; columns keeps named fields.\n",
+   "inputSchema": {
+    "properties": {
+     "symbol": {
+      "title": "Symbol",
+      "type": "string"
+     },
+     "count": {
+      "default": 100,
+      "title": "Count",
+      "type": "integer"
+     },
+     "summary": {
+      "default": false,
+      "title": "Summary",
+      "type": "boolean"
+     },
+     "columns": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Columns"
+     },
+     "interval": {
+      "default": "1D",
+      "title": "Interval",
+      "type": "string"
+     }
+    },
+    "required": [
+     "symbol"
+    ],
+    "title": "vn_equity_ohlcvArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "lich su gia co phieu nen phut | stock bars intraday"
+   }
+  },
+  {
+   "name": "vn_futures_ohlcv",
+   "description": "Futures bars. Use for derivatives backtest input.\n\ninterval: bar size ('1D' daily; intraday like '1m'/'15m' where supported).\nsummary/columns: summary returns {count,last,high,low} only; columns keeps named fields.\n",
+   "inputSchema": {
+    "properties": {
+     "symbol": {
+      "default": "VN30F1M",
+      "title": "Symbol",
+      "type": "string"
+     },
+     "count": {
+      "default": 100,
+      "title": "Count",
+      "type": "integer"
+     },
+     "summary": {
+      "default": false,
+      "title": "Summary",
+      "type": "boolean"
+     },
+     "columns": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Columns"
+     },
+     "interval": {
+      "default": "1D",
+      "title": "Interval",
+      "type": "string"
+     }
+    },
+    "title": "vn_futures_ohlcvArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "phai sinh hop dong tuong lai nen | derivatives futures bars"
+   }
+  },
+  {
+   "name": "vn_forex_ohlcv",
+   "description": "FX bars. Use for currency context.\n\npair like 'USDVND'. summary/columns: summary returns {count,last,high,low}\nonly; columns keeps named fields.\n",
+   "inputSchema": {
+    "properties": {
+     "pair": {
+      "default": "USDVND",
+      "title": "Pair",
+      "type": "string"
+     },
+     "count": {
+      "default": 30,
+      "title": "Count",
+      "type": "integer"
+     },
+     "summary": {
+      "default": false,
+      "title": "Summary",
+      "type": "boolean"
+     },
+     "columns": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Columns"
+     }
+    },
+    "title": "vn_forex_ohlcvArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "lich su ty gia ngoai te | currency history"
+   }
+  },
+  {
+   "name": "vn_crypto_ohlcv",
+   "description": "Crypto bars. Use for digital-asset regime reads.\n\nsummary/columns: summary returns {count,last,high,low} only; columns keeps named fields.\n",
+   "inputSchema": {
+    "properties": {
+     "symbol": {
+      "default": "BTCUSDT",
+      "title": "Symbol",
+      "type": "string"
+     },
+     "count": {
+      "default": 30,
+      "title": "Count",
+      "type": "integer"
+     },
+     "summary": {
+      "default": false,
+      "title": "Summary",
+      "type": "boolean"
+     },
+     "columns": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Columns"
+     }
+    },
+    "title": "vn_crypto_ohlcvArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "tien so bitcoin nen lich su gia | crypto candles history"
+   }
+  },
+  {
+   "name": "vn_global_index",
+   "description": "Global index bars. Use as yfinance fallback.\n\nSymbol spellings are aliased: S&P 500 = INX (SPX/GSPC/SP500 work),\nDow Jones = USA30 (DJI/Dow), Nasdaq Composite = COMP (IXIC/NASDAQ),\nCAC 40 = PX1 (CAC/CAC40), FTSE 100 = UKX (FTSE/FTSE100), plus DAX,\nN225 (Nikkei), HSI (Hang Seng), 000001 (Shanghai), SENSEX, VNI.\nNasdaq-100 (NDX) is NOT in this source — use yf_global_indices.\nsummary/columns: summary returns {count,last,high,low} only; columns keeps named fields.\n",
+   "inputSchema": {
+    "properties": {
+     "symbol": {
+      "default": "USA30",
+      "title": "Symbol",
+      "type": "string"
+     },
+     "count": {
+      "default": 30,
+      "title": "Count",
+      "type": "integer"
+     },
+     "summary": {
+      "default": false,
+      "title": "Summary",
+      "type": "boolean"
+     },
+     "columns": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Columns"
+     }
+    },
+    "title": "vn_global_indexArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "chi so the gioi INX COMP USA30 Dow | world index history symbols"
+   }
+  },
+  {
+   "name": "vn_reference",
+   "description": "ICB reference by exchange, group or industry. Use for universe construction.\n\nby: 'exchange' (use exchange=HOSE/HNX/UPCOM), 'group' or 'industry'\n(use key=group/industry name).\n",
+   "inputSchema": {
+    "properties": {
+     "exchange": {
+      "default": "HOSE",
+      "title": "Exchange",
+      "type": "string"
+     },
+     "by": {
+      "default": "exchange",
+      "title": "By",
+      "type": "string"
+     },
+     "key": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Key"
+     }
+    },
+    "title": "vn_referenceArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "danh sach ma theo san nhom nganh | tickers by exchange group"
+   }
+  },
+  {
+   "name": "vn_company",
+   "description": "Profile, holders and officers. Use for company research.\n\ndetail: false returns profile only; true adds holders and officers (heavier).\n",
+   "inputSchema": {
+    "properties": {
+     "symbol": {
+      "title": "Symbol",
+      "type": "string"
+     },
+     "detail": {
+      "default": false,
+      "title": "Detail",
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "symbol"
+    ],
+    "title": "vn_companyArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "ho so cong ty co dong ban lanh dao | profile shareholders officers"
+   }
+  },
+  {
+   "name": "vn_msn_fx_gold",
+   "description": "USDVND and XAUUSD via MSN. Use for gold-basis math.\n\nsymbols: subset to fetch (default both); days: history depth.\n",
+   "inputSchema": {
+    "properties": {
+     "symbols": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Symbols"
+     },
+     "days": {
+      "default": 35,
+      "title": "Days",
+      "type": "integer"
+     }
+    },
+    "title": "vn_msn_fx_goldArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "ty gia USDVND vang the gioi | usd vnd gold xau"
+   }
+  },
+  {
+   "name": "vn_trades",
+   "description": "Tick-level matched trades. Use for microstructure reads.\n\nboard: board filter (default all boards). from_date/to_date: ISO dates\nbounding the trade window.\n",
+   "inputSchema": {
+    "properties": {
+     "symbol": {
+      "title": "Symbol",
+      "type": "string"
+     },
+     "limit": {
+      "default": 20,
+      "title": "Limit",
+      "type": "integer"
+     },
+     "board": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Board"
+     },
+     "from_date": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "From Date"
+     },
+     "to_date": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "To Date"
+     }
+    },
+    "required": [
+     "symbol"
+    ],
+    "title": "vn_tradesArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "khop lenh tung giao dich tick | tick trades matched"
+   }
+  },
+  {
+   "name": "vn_crypto_ohlv",
+   "description": "Crypto bars. Use for digital-asset regime reads.\n\nsummary/columns: summary returns {count,last,high,low} only; columns keeps named fields.\n",
+   "inputSchema": {
+    "properties": {
+     "symbol": {
+      "default": "BTCUSDT",
+      "title": "Symbol",
+      "type": "string"
+     },
+     "count": {
+      "default": 30,
+      "title": "Count",
+      "type": "integer"
+     },
+     "summary": {
+      "default": false,
+      "title": "Summary",
+      "type": "boolean"
+     },
+     "columns": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Columns"
+     }
+    },
+    "title": "vn_crypto_ohlcvArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "tien so bitcoin lich su gia | crypto price history"
+   }
+  },
+  {
+   "name": "yf_global_indices",
+   "description": "9 global benchmarks. Use for overnight context.\n\ntickers: subset override (default GLOBAL 9). period/interval: yfinance\nspellings ('2d', '1wk', '1mo'... x '1d'/'1wk').\n",
+   "inputSchema": {
+    "properties": {
+     "tickers": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Tickers"
+     },
+     "period": {
+      "default": "2d",
+      "title": "Period",
+      "type": "string"
+     },
+     "interval": {
+      "default": "1d",
+      "title": "Interval",
+      "type": "string"
+     }
+    },
+    "title": "yf_global_indicesArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "chi so the gioi My chau A qua dem | world indices overnight"
+   }
+  },
+  {
+   "name": "yf_commodities",
+   "description": "Gold, oil, metals, BTC, VND and dollar index. Use for input-cost context.\n\ntickers: subset override (default COMMO 13). period/interval: yfinance\nspellings.\n",
+   "inputSchema": {
+    "properties": {
+     "tickers": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Tickers"
+     },
+     "period": {
+      "default": "2d",
+      "title": "Period",
+      "type": "string"
+     },
+     "interval": {
+      "default": "1d",
+      "title": "Interval",
+      "type": "string"
+     }
+    },
+    "title": "yf_commoditiesArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "hang hoa dau vang kim loai | commodities oil metals"
+   }
+  },
+  {
+   "name": "yf_yield_curve",
+   "description": "US 2Y/10Y and inversion flag. Use for rates and regime context.\n\nFalls back to FRED DGS10/DGS2 when yfinance is blocked (datacenter IPs).\n",
+   "inputSchema": {
+    "properties": {},
+    "title": "yf_yield_curveArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "loi suat trai phieu My dao nguoc | treasury yields inversion"
+   }
+  },
+  {
+   "name": "yf_world_indices",
+   "description": "24 world benchmarks. Use for global breadth.\n\ntickers: subset override (default WORLD 24).\n",
+   "inputSchema": {
+    "properties": {
+     "tickers": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Tickers"
+     }
+    },
+    "title": "yf_world_indicesArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "24 chi so toan cau | global indices breadth"
+   }
+  },
+  {
+   "name": "yf_oracle_markets",
+   "description": "40 markets in 6 groups with 30d stats. Use for cross-asset state.\n\ngroups: keep only named groups (crypto/metals/energy/agri/bonds_fx/index).\n",
+   "inputSchema": {
+    "properties": {
+     "groups": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Groups"
+     }
+    },
+    "title": "yf_oracle_marketsArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "tai san lien thi truong 30 ngay | cross asset markets stats"
+   }
+  },
+  {
+   "name": "yf_regime_assets",
+   "description": "7 regime drivers with 2y history. Use for RISK-ON/OFF calls.",
+   "inputSchema": {
+    "properties": {},
+    "title": "yf_regime_assetsArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "rui ro risk on off tai san dan dat | regime drivers"
+   }
+  },
+  {
+   "name": "yf_mega_flows",
+   "description": "Mega-cap leader flows. Use to follow global smart money.\n\ntop_n: leaders evaluated (default 15 of the ~20-name universe).\n",
+   "inputSchema": {
+    "properties": {
+     "top_n": {
+      "default": 15,
+      "title": "Top N",
+      "type": "integer"
+     }
+    },
+    "title": "yf_mega_flowsArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "co phieu von hoa lon My dong tien | megacap leaders flows"
+   }
+  },
+  {
+   "name": "yf_alloc_history",
+   "description": "Long allocation history per asset. Use for regime backtests.\n\nasset: GC/VND/BTC/OIL/SILVER/COFFEE (unknown falls back to GC).\ntimeframe: '1d' or '1wk'; returns last 60 closes over 5y.\n",
+   "inputSchema": {
+    "properties": {
+     "asset": {
+      "default": "GC",
+      "title": "Asset",
+      "type": "string"
+     },
+     "timeframe": {
+      "default": "1d",
+      "title": "Timeframe",
+      "type": "string"
+     }
+    },
+    "title": "yf_alloc_historyArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "lich su dai han vang dau BTC | long history allocation"
+   }
+  },
+  {
+   "name": "yf_market_pins",
+   "description": "5-day pins for world majors plus VN watchlist. Use for brief headers.",
+   "inputSchema": {
+    "properties": {},
+    "title": "yf_market_pinsArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "bien dong 5 ngay chi so lon | five day moves majors"
+   }
+  },
+  {
+   "name": "dnse_ohlc_history",
+   "description": "Paginated futures/index bars via cursor. Use for VN30F1M backtest input.\n\nsymbol: futures code (VN30F1M) or index (VN30). resolution: bar size in\nminutes (1/5/15/30/60). bar_type: 'derivative' for futures, 'index' for\nindices. from_date/to_date: ISO dates (YYYY-MM-DD). summary: return only\n{symbol, count, last, high, low} instead of full bars. columns: keep only\nnamed fields per bar (t/o/h/l/c/v).\n",
+   "inputSchema": {
+    "properties": {
+     "symbol": {
+      "default": "VN30F1M",
+      "title": "Symbol",
+      "type": "string"
+     },
+     "resolution": {
+      "default": 15,
+      "title": "Resolution",
+      "type": "integer"
+     },
+     "bar_type": {
+      "default": "derivative",
+      "title": "Bar Type",
+      "type": "string"
+     },
+     "from_date": {
+      "default": "2018-08-01",
+      "title": "From Date",
+      "type": "string"
+     },
+     "summary": {
+      "default": false,
+      "title": "Summary",
+      "type": "boolean"
+     },
+     "columns": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Columns"
+     },
+     "to_date": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "To Date"
+     },
+     "page_size": {
+      "default": 10000,
+      "title": "Page Size",
+      "type": "integer"
+     }
+    },
+    "title": "dnse_ohlc_historyArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "lich su nen phai sinh VN30F1M chi so | futures index bars"
+   }
+  },
+  {
+   "name": "dnse_latest_trade",
+   "description": "Latest match price and totals per symbol. Use for realtime fallback.\n\nsymbols: REQUIRED non-empty list (e.g. {\"symbols\": [\"VN30F1M\"]}).\nsummary/columns: summary returns {count,symbols} only; columns keeps\nnamed fields per trade.\n",
+   "inputSchema": {
+    "properties": {
+     "symbols": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Symbols",
+      "type": "array"
+     },
+     "summary": {
+      "default": false,
+      "title": "Summary",
+      "type": "boolean"
+     },
+     "columns": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Columns"
+     }
+    },
+    "required": [
+     "symbols"
+    ],
+    "title": "dnse_latest_tradeArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "gia khop moi nhat realtime | last trade price"
+   }
+  },
+  {
+   "name": "dnse_foreign_flow",
+   "description": "Net foreign flow from WS cache. Use as primary smart-money read.",
+   "inputSchema": {
+    "properties": {},
+    "title": "dnse_foreign_flowArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "khoi ngoai mua ban rong trong phien | foreign net flow live"
+   }
+  },
+  {
+   "name": "dnse_ws_snapshot",
+   "description": "Raw worker snapshot for symbols. Use to debug realtime staleness.\n\nsymbols: channels to read (None reads VN30F1M+VNINDEX+VN30).\n",
+   "inputSchema": {
+    "properties": {
+     "symbols": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Symbols"
+     }
+    },
+    "title": "dnse_ws_snapshotArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "du lieu thoi gian thuc tho kiem tra | realtime raw debug"
+   }
+  },
+  {
+   "name": "dnse_orderbook",
+   "description": "Bid/ask depth. Use for microstructure reads.\n\ndepth: levels per side (default 3). Equity symbols return live depth;\nVN30F1M futures book is usually empty upstream — use vn_trades tape.\n",
+   "inputSchema": {
+    "properties": {
+     "symbol": {
+      "title": "Symbol",
+      "type": "string"
+     },
+     "depth": {
+      "default": 3,
+      "title": "Depth",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "symbol"
+    ],
+    "title": "dnse_orderbookArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "so lenh du mua du ban | order book depth bid ask"
+   }
+  },
+  {
+   "name": "dnse_indices",
+   "description": "Index snapshots from WS cache. Use for live index reads.\n\nsymbols: index channels to read (default VNINDEX+VN30).\n",
+   "inputSchema": {
+    "properties": {
+     "symbols": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Symbols"
+     }
+    },
+    "title": "dnse_indicesArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "chi so trong phien VNINDEX VN30 | live index levels"
+   }
+  },
+  {
+   "name": "dnse_vn30f1m_live",
+   "description": "VN30F1M 1m bars aggregated to 15m with session remap. Use for intraday.\n\nbars: keep only the most recent N aggregated 15m bars.\n",
+   "inputSchema": {
+    "properties": {
+     "bars": {
+      "default": 60,
+      "title": "Bars",
+      "type": "integer"
+     }
+    },
+    "title": "dnse_vn30f1m_liveArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "phai sinh VN30F1M trong phien 15 phut | futures intraday"
+   }
+  },
+  {
+   "name": "dnse_working_dates",
+   "description": "Trading calendar. Use for session planning.\n\nyear: keep only dates starting with this year (e.g. 2026). Actual\ntrading dates; exchange_calendar holds static session mechanics.\n",
+   "inputSchema": {
+    "properties": {
+     "year": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Year"
+     }
+    },
+    "title": "dnse_working_datesArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "lich ngay giao dich ngay nghi | trading days holidays"
+   }
+  },
+  {
+   "name": "exchange_calendar",
+   "description": "HOSE/HNX/UPCOM hours, ATO/ATC, T+ settlement. Use for mechanics.",
+   "inputSchema": {
+    "properties": {},
+    "title": "exchange_calendarArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "gio giao dich ATO ATC thanh toan T+2 | trading hours rules"
+   }
+  },
+  {
+   "name": "crypto_spot",
+   "description": "Binance spot 24h tickers. Use for crypto price and volume reads.\n\nsymbols: up to 10, any of BTCUSDT / BTC/USDT / btc-usdt spellings.\n",
+   "inputSchema": {
+    "properties": {
+     "symbols": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Symbols",
+      "type": "array"
+     }
+    },
+    "required": [
+     "symbols"
+    ],
+    "title": "crypto_spotArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "tien so gia bitcoin binance | crypto spot prices"
+   }
+  },
+  {
+   "name": "crypto_derivs",
+   "description": "Binance futures funding, OI and long/short ratios. Use for leverage reads.\n\nsymbols: up to 5 perpetual symbols (BTCUSDT ...). Rows carry per-symbol\nerror instead of failing the batch when one symbol is delisted.\n",
+   "inputSchema": {
+    "properties": {
+     "symbols": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Symbols",
+      "type": "array"
+     }
+    },
+    "required": [
+     "symbols"
+    ],
+    "title": "crypto_derivsArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "funding open interest don bay tien so | crypto futures leverage"
+   }
+  },
+  {
+   "name": "stock_screener",
+   "description": "Screen universe by valuation and quality. Use when hunting candidates.\n\nfilters: {field: [min, max]} ranges (None side unbounded) or plain\nstrings for symbol/exchange equality; use signals_screener_columns\nto discover valid fields. max_pe/min_roe are shortcuts for the same.\ntechnical: optional stage-3 timing filter on post-filter candidates\n({rsi_lt, rsi_gt, above_sma20: true, below_sma20: true}).\n",
+   "inputSchema": {
+    "properties": {
+     "filters": {
+      "anyOf": [
+       {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Filters"
+     },
+     "max_pe": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Max Pe"
+     },
+     "min_roe": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Min Roe"
+     },
+     "limit": {
+      "default": 20,
+      "title": "Limit",
+      "type": "integer"
+     },
+     "technical": {
+      "anyOf": [
+       {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Technical"
+     }
+    },
+    "title": "stock_screenerArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "loc co phieu theo PE ROE tieu chi | stock screen filter"
+   }
+  },
+  {
+   "name": "signals_screener_columns",
+   "description": "Screener column catalog (valuation/quality/universe/price). Use to build filters.\n\ngroup: keep only that column group; search: keep columns whose\nkey or label contains this substring (case-insensitive).\n",
+   "inputSchema": {
+    "properties": {
+     "group": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Group"
+     },
+     "search": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Search"
+     }
+    },
+    "title": "signals_screener_columnsArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "cot tieu chi bo loc | screener fields list"
+   }
+  },
+  {
+   "name": "signals_technical",
+   "description": "Full technicals rating from local candles on 1D/1W/1M. Use for timing entries.\n\nindicators: keep only named outputs (e.g. rsi14, macd, sma20, recommend,\npatterns, support, resistance, rs_vs_bench, pos_52w, sma150, ichimoku,\nswings, swing_trend, fib); omit for the full set. interval: 1D (250 bars),\n1W (long history, min 30 bars) or 1M (min 24 bars); long-MA fields are\nnull when history is short.\n",
+   "inputSchema": {
+    "properties": {
+     "symbol": {
+      "title": "Symbol",
+      "type": "string"
+     },
+     "interval": {
+      "default": "1D",
+      "title": "Interval",
+      "type": "string"
+     },
+     "indicators": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Indicators"
+     }
+    },
+    "required": [
+     "symbol"
+    ],
+    "title": "signals_technicalArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "phan tich ky thuat RSI MACD MA | technical indicators"
+   }
+  },
+  {
+   "name": "sector_performance",
+   "description": "GICS heatmap rows. Use for sector rotation reads.\n\nlevel: GICS tree depth. top_n: rows returned.\n",
+   "inputSchema": {
+    "properties": {
+     "level": {
+      "default": 1,
+      "title": "Level",
+      "type": "integer"
+     },
+     "top_n": {
+      "default": 50,
+      "title": "Top N",
+      "type": "integer"
+     }
+    },
+    "title": "sector_performanceArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "hieu suat nganh xoay vong | sector rotation performance"
+   }
+  },
+  {
+   "name": "money_flow",
+   "description": "Compose foreign flow: DNSE WS then Vietstock cross-check. Use for smart money.\n\nsymbols: WS channels to read (default [\"VNINDEX\"]); falls back to\nVietstock NN chart when cache is cold. Pair with block_trades for\nper-symbol negotiated put-through prints (different granularity).\n",
+   "inputSchema": {
+    "properties": {
+     "symbols": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Symbols"
+     }
+    },
+    "title": "money_flowArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "dong tien khoi ngoai tong hop | foreign flow composite smart money"
+   }
+  },
+  {
+   "name": "alert_check",
+   "description": "Evaluate price/RSI rules against live quotes. Use for live watch.\n\nEach rule: {symbol, threshold, metric ('price'|'rsi14'), op ('>'|'gt'|'>='|'gte'|\n'<'|'lt'|'<='|'lte'|'cross_up'|'cross_down')}.\n",
+   "inputSchema": {
+    "properties": {
+     "rules": {
+      "items": {
+       "additionalProperties": true,
+       "type": "object"
+      },
+      "title": "Rules",
+      "type": "array"
+     }
+    },
+    "required": [
+     "rules"
+    ],
+    "title": "alert_checkArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "kiem tra canh bao gia RSI | check price alerts"
+   }
+  },
+  {
+   "name": "stock_forensic",
+   "description": "Beneish M-Score + Piotroski F-Score from FULL detailed statements (P15).\n\nSources: KQKD/CDKT/LCTT detail (real per-quarter lines incl. receivables,\ncash, CFO). M-Score is 7-index (DEPI excluded — not exposed); full\nformula only when every input exists, else partial with missing list.\nF-Score: 6 of 9 items on Standard pack (CFO from LCTT is empty upstream;\nshare-count item unavailable); 8 of 9 when BCTC paid unlocks LCTT.\ndetail=true adds raw input series.\n",
+   "inputSchema": {
+    "properties": {
+     "symbol": {
+      "title": "Symbol",
+      "type": "string"
+     },
+     "detail": {
+      "default": false,
+      "title": "Detail",
+      "type": "boolean"
+     },
+     "periods_n": {
+      "default": 4,
+      "title": "Periods N",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "symbol"
+    ],
+    "title": "stock_forensicArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "gian lan bctc chat luong loi nhuan | accounting fraud quality score"
+   }
+  },
+  {
+   "name": "valuation_run",
+   "description": "PER/PB ensemble. Use for fair-value ranges.\n\nbtype→method reference (method is ALWAYS set, never null):\n1 general → per_pb · 2 securities → pb_bank_broker · 3 bank → pb_bank_broker\n5 insurance → per_pb. Unknown btype → warnings + method auto.\nmethod: 'auto' (default, picks by btype above) or force 'per'/'pb'/'ensemble'.\nDCF/EV are NOT implemented. There is no tool named valuation_band —\nuse this tool's per_pb/pb range output instead.\n",
+   "inputSchema": {
+    "properties": {
+     "symbol": {
+      "title": "Symbol",
+      "type": "string"
+     },
+     "btype": {
+      "default": 1,
+      "title": "Btype",
+      "type": "integer"
+     },
+     "method": {
+      "default": "auto",
+      "title": "Method",
+      "type": "string"
+     }
+    },
+    "required": [
+     "symbol"
+    ],
+    "title": "valuation_runArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "dinh gia gia tri hop ly DCF | fair value intrinsic"
+   }
+  },
+  {
+   "name": "financial_statements",
+   "description": "Mirror statements alias (v3 compat). Use for statement reads.\n\nWraps vs_financeinfo (no JWT needed). statement: which statement\nsection to return ('all', or a section key like 'KQKD'/'CDKT');\nperiods_n caps returned periods.\n",
+   "inputSchema": {
+    "properties": {
+     "symbol": {
+      "title": "Symbol",
+      "type": "string"
+     },
+     "period": {
+      "default": "quarter",
+      "title": "Period",
+      "type": "string"
+     },
+     "statement": {
+      "default": "all",
+      "title": "Statement",
+      "type": "string"
+     },
+     "periods_n": {
+      "default": 15,
+      "title": "Periods N",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "symbol"
+    ],
+    "title": "financial_statementsArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "bao cao tai chinh can doi ket qua kinh doanh | income balance cash"
+   }
+  },
+  {
+   "name": "financial_ratios",
+   "description": "Overview plus vnstock ratios merged. Use for ratio screens.\n\nset: keep only ratio keys containing this substring ('all' keeps all).\nperiod: statement period ('year'); peers: extra symbols merged as list.\nFalls back to vnstock fundamentals when Vietstock overview is empty.\n",
+   "inputSchema": {
+    "properties": {
+     "symbol": {
+      "title": "Symbol",
+      "type": "string"
+     },
+     "set": {
+      "default": "all",
+      "title": "Set",
+      "type": "string"
+     },
+     "period": {
+      "default": "year",
+      "title": "Period",
+      "type": "string"
+     },
+     "peers": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Peers"
+     }
+    },
+    "required": [
+     "symbol"
+    ],
+    "title": "financial_ratiosArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "chi so tai chinh ROE bien loi nhuan | financial ratios margins"
+   }
+  },
+  {
+   "name": "peer_compare",
+   "description": "Head-to-head overview rows. Use when picking tickers.\n\npeers: up to 5 extra symbols. metrics: keep only matching ratio keys\n(symbol column always kept).\n",
+   "inputSchema": {
+    "properties": {
+     "symbol": {
+      "title": "Symbol",
+      "type": "string"
+     },
+     "peers": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Peers",
+      "type": "array"
+     },
+     "metrics": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Metrics"
+     }
+    },
+    "required": [
+     "symbol",
+     "peers"
+    ],
+    "title": "peer_compareArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "so sanh cung nganh doi thu | peers comparison"
+   }
+  },
+  {
+   "name": "stock_overview",
+   "description": "Trading info plus company profile. Use for quick dossiers.",
+   "inputSchema": {
+    "properties": {
+     "symbol": {
+      "title": "Symbol",
+      "type": "string"
+     }
+    },
+    "required": [
+     "symbol"
+    ],
+    "title": "stock_overviewArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "tong quan co phieu ho so nhanh | stock summary profile"
+   }
+  },
+  {
+   "name": "company_events",
+   "description": "Classified disclosures and corporate actions. Use for event calendars.\n\ntypes: comma-separated kinds to keep, matched against kind/type\nfields (e.g. 'bctc,nghi_quyet'). corporate_calendar is the raw\nunfiltered feed; company_events classifies it per symbol.\n",
+   "inputSchema": {
+    "properties": {
+     "symbol": {
+      "title": "Symbol",
+      "type": "string"
+     },
+     "types": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Types"
+     }
+    },
+    "required": [
+     "symbol"
+    ],
+    "title": "company_eventsArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "su kien doanh nghiep co tuc hop DHCD | corporate events"
+   }
+  },
+  {
+   "name": "fred_series",
+   "description": "FRED observations. Use for US macro context.\n\nseries_id like 'DGS10'; spark adds a value-only sparkline list.\n",
+   "inputSchema": {
+    "properties": {
+     "series_id": {
+      "title": "Series Id",
+      "type": "string"
+     },
+     "limit": {
+      "default": 60,
+      "title": "Limit",
+      "type": "integer"
+     },
+     "spark": {
+      "default": false,
+      "title": "Spark",
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "series_id"
+    ],
+    "title": "fred_seriesArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "vi mo My lai suat FED | us macro rates"
+   }
+  },
+  {
+   "name": "world_macro_country",
+   "description": "WorldBank series per country. Use for global GDP/CPI/debt context.\n\niso3: 3-letter country code (VNM/USA); indicator like 'NY.GDP.MKTP.KD.ZG'.\nlimit caps returned points.\n",
+   "inputSchema": {
+    "properties": {
+     "iso3": {
+      "title": "Iso3",
+      "type": "string"
+     },
+     "indicator": {
+      "title": "Indicator",
+      "type": "string"
+     },
+     "limit": {
+      "default": 60,
+      "title": "Limit",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "iso3",
+     "indicator"
+    ],
+    "title": "world_macro_countryArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "vi mo quoc gia GDP no cong | country macro worldbank"
+   }
+  },
+  {
+   "name": "world_fear_greed",
+   "description": "Crypto fear/greed index. Use for risk-appetite reads.\n\nlimit: number of recent daily readings returned.\n",
+   "inputSchema": {
+    "properties": {
+     "limit": {
+      "default": 7,
+      "title": "Limit",
+      "type": "integer"
+     }
+    },
+    "title": "world_fear_greedArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "tam ly so hai tham lam | fear greed sentiment"
+   }
+  },
+  {
+   "name": "sentiment_score",
+   "description": "Crowd sentiment from Fireant posts, Groq-scored. Use for hype risk.\n\nlimit: max posts scored; without Groq key falls back to likes heuristic.\n",
+   "inputSchema": {
+    "properties": {
+     "symbol": {
+      "title": "Symbol",
+      "type": "string"
+     },
+     "limit": {
+      "default": 20,
+      "title": "Limit",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "symbol"
+    ],
+    "title": "sentiment_scoreArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "tam ly dam dong mang xa hoi | crowd social sentiment"
+   }
+  },
+  {
+   "name": "event_stats",
+   "description": "GDELT event aggregates for a query. Use for base-rate checks.\n\nReturns {query, count, by_day, top_sources, date_range} + up to 5 sample\narticles — distinct from geo_intel (politics-filtered article list).\nlimit: max articles fetched from GDELT before aggregating.\n",
+   "inputSchema": {
+    "properties": {
+     "query": {
+      "default": "stock market",
+      "title": "Query",
+      "type": "string"
+     },
+     "limit": {
+      "default": 20,
+      "title": "Limit",
+      "type": "integer"
+     }
+    },
+    "title": "event_statsArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "thong ke su kien tin tuc | news event counts"
+   }
+  },
+  {
+   "name": "compare_assets",
+   "description": "Cross-asset last prices via yfinance. Use for allocation reads.\n\nassets: yfinance tickers (max 10). timeframe: '1d' (2d/1d),\n'1wk' (3mo/1wk), '1mo' (1y/1d) download window.\n",
+   "inputSchema": {
+    "properties": {
+     "assets": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Assets",
+      "type": "array"
+     },
+     "timeframe": {
+      "default": "1d",
+      "title": "Timeframe",
+      "type": "string"
+     }
+    },
+    "required": [
+     "assets"
+    ],
+    "title": "compare_assetsArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "so sanh tai san gia | compare assets prices"
+   }
+  },
+  {
+   "name": "insider_trading",
+   "description": "Insider deals via vnstock Company. Use for informed-flow reads.\n\nlimit: max deals returned.\n",
+   "inputSchema": {
+    "properties": {
+     "symbol": {
+      "title": "Symbol",
+      "type": "string"
+     },
+     "limit": {
+      "default": 10,
+      "title": "Limit",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "symbol"
+    ],
+    "title": "insider_tradingArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "giao dich noi bo lanh dao | insider deals"
+   }
+  },
+  {
+   "name": "signals_scan",
+   "description": "Donchian-20d breakout scan. Use to hunt momentum across the market.\n\nDefault universe: 10 bluechips. exchange='HOSE' scans the exchange\nlist capped at max_symbols (P14: up to 300, semaphore 5, progress +\ntruncated honest). Scanning hundreds takes minutes — cache the call.\n",
+   "inputSchema": {
+    "properties": {
+     "universe": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Universe"
+     },
+     "exchange": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Exchange"
+     },
+     "max_symbols": {
+      "default": 10,
+      "title": "Max Symbols",
+      "type": "integer"
+     }
+    },
+    "title": "signals_scanArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "co phieu breakout dot pha | momentum breakout scan"
+   }
+  },
+  {
+   "name": "pattern_match",
+   "description": "Self-similarity of return windows by correlation. Use for analogies.\n\nlookback: daily closes fetched (window is last 20 bars). limit: top-N\nmatches by correlation (best_* fields describe rank 1).\n",
+   "inputSchema": {
+    "properties": {
+     "symbol": {
+      "title": "Symbol",
+      "type": "string"
+     },
+     "lookback": {
+      "default": 60,
+      "title": "Lookback",
+      "type": "integer"
+     },
+     "limit": {
+      "default": 5,
+      "title": "Limit",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "symbol"
+    ],
+    "title": "pattern_matchArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "mau hinh tuong tu lich su | similar pattern analog"
+   }
+  },
+  {
+   "name": "snapshot_history",
+   "description": "Daily-snapshot history saved by the worker. Use for data that vanishes.\n\nkind: market_board, breadth_3ex, flows_charts (NN/prop 30d rolling),\nheatmap_gics, gold_btmc, sbv_rates, nso_releases, analyst_titles,\nmacro_curated, vn30_quotes, futures_basis, documents_feed, events_feed.\ndays: history depth (newest first).\n",
+   "inputSchema": {
+    "properties": {
+     "kind": {
+      "title": "Kind",
+      "type": "string"
+     },
+     "days": {
+      "default": 90,
+      "title": "Days",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "kind"
+    ],
+    "title": "snapshot_historyArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "du lieu da luu theo ngay | stored daily snapshots"
+   }
+  },
+  {
+   "name": "runs_list",
+   "description": "Local run registry. Use to resume analysis sessions.\n\nid: filter by run id substring; use run_get for one full run.\n",
+   "inputSchema": {
+    "properties": {
+     "id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Id"
+     }
+    },
+    "title": "runs_listArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "lich su phan tich da chay | saved runs"
+   }
+  },
+  {
+   "name": "run_get",
+   "description": "Local run registry fetch. Use to inspect past outputs.\n\nrun_id: exact id from runs_list output.\n",
+   "inputSchema": {
+    "properties": {
+     "run_id": {
+      "title": "Run Id",
+      "type": "string"
+     }
+    },
+    "required": [
+     "run_id"
+    ],
+    "title": "run_getArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "xem lai ket qua phan tich | saved run detail"
+   }
+  },
+  {
+   "name": "doctor",
+   "description": "Local self-check: env keys present, package versions. Use before handoff.",
+   "inputSchema": {
+    "properties": {},
+    "title": "doctorArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "kiem tra cau hinh may chu | server self check config"
+   }
+  },
+  {
+   "name": "dividends_splits",
+   "description": "Cash dividends and share issues/splits. Use for payout history.\n\nregion: 'vn' (vnstock Company events: DIV cash, ISS bonus/private) or\n'world' (yfinance actions). limit: max events returned.\n",
+   "inputSchema": {
+    "properties": {
+     "symbol": {
+      "title": "Symbol",
+      "type": "string"
+     },
+     "region": {
+      "default": "vn",
+      "title": "Region",
+      "type": "string"
+     },
+     "limit": {
+      "default": 20,
+      "title": "Limit",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "symbol"
+    ],
+    "title": "dividends_splitsArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "co tuc chia tach co phieu | dividend history split"
+   }
+  },
+  {
+   "name": "holders",
+   "description": "Shareholder and institutional holder tables. Use for ownership reads.\n\nregion: 'vn' (vnstock shareholders) or 'world' (yfinance).\nkind: 'major'|'institutional'|'mutualfund'|'all' (world only;\nvn returns shareholders for any kind).\n",
+   "inputSchema": {
+    "properties": {
+     "symbol": {
+      "title": "Symbol",
+      "type": "string"
+     },
+     "region": {
+      "default": "vn",
+      "title": "Region",
+      "type": "string"
+     },
+     "kind": {
+      "default": "all",
+      "title": "Kind",
+      "type": "string"
+     }
+    },
+    "required": [
+     "symbol"
+    ],
+    "title": "holdersArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "co dong lon to chuc so huu | shareholders ownership"
+   }
+  },
+  {
+   "name": "event_calendar_vn",
+   "description": "Vietstock corporate-action calendar. Use for dividend/meeting/listing dates.\n\nevent: 'dividends' (payouts, bonus, issues), 'listings', 'meetings'.\nsymbol: filter one ticker (omit for market-wide). No earnings-report\ndates exist upstream; KQKD dates come from company_events instead.\n",
+   "inputSchema": {
+    "properties": {
+     "event": {
+      "default": "dividends",
+      "title": "Event",
+      "type": "string"
+     },
+     "symbol": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Symbol"
+     },
+     "limit": {
+      "default": 20,
+      "title": "Limit",
+      "type": "integer"
+     }
+    },
+    "title": "event_calendar_vnArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "lich co tuc DHCD niem yet | dividend meeting calendar"
+   }
+  },
+  {
+   "name": "block_trades",
+   "description": "Matched vs negotiated put-through splits per day. Use for dark-pool-style reads.\n\nfrom_date/to_date: ISO dates (default last 30d). pt_vol/pt_val are the\nthỏa thuận leg; pt_pct is its share of daily value.\n",
+   "inputSchema": {
+    "properties": {
+     "symbol": {
+      "title": "Symbol",
+      "type": "string"
+     },
+     "from_date": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "From Date"
+     },
+     "to_date": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "To Date"
+     },
+     "limit": {
+      "default": 30,
+      "title": "Limit",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "symbol"
+    ],
+    "title": "block_tradesArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "giao dich thoa thuan lo lon | block trades putthrough"
+   }
+  },
+  {
+   "name": "analyst_consensus",
+   "description": "Analyst ratings and price targets parsed from report titles. Use for street views.\n\nThere is no tool named analyst_targets — this tool is the targets source.\nsymbol: filter one ticker (omit for latest across market). Ratings come\nfrom title text (MUA/BÁN/NẮM GIỮ...), not a consensus feed; history per\nsymbol shows upgrades/downgrades by history. report_type: 'equity'\n(ticker reports) or 'macro' (CTCK macro outlooks: GDP/CPI/rates/FX/Fed;\nsymbol filter does not apply, macro_topic set per report).\npage: listing page (1-based, default 1). The public listing has no\nworking pagination (verified: ?page=N is ignored server-side), so only\npage=1 returns data; page>1 returns an empty list with a warning.\ndays: keep reports from the last N days by parsed dd/mm/yyyy date\n(default None = no date filter). Rows without a parsed date are kept\nand marked date_uncertain:true — treat their dates as uncertain.\nTitles only — no body. To read detail ONLY when the user explicitly\nasks for it: call web_fetch on the report url (markdown), then locate\n'Nguồn:' (CTCK name), the text after 'Tải về' (~500-700 chars summary\nwith upside/revenue/profit/EPS/P-E/P-B/dividend), and the\n'edocs/...pdf' link (give the user the link; PDF text extraction\nusually fails on Vietstock fonts — use the HTML summary). Max 3\ndetail fetches per query (each page is ~79k chars of nav noise);\nprefer MUA ratings and newest dates.\n",
+   "inputSchema": {
+    "properties": {
+     "symbol": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Symbol"
+     },
+     "limit": {
+      "default": 30,
+      "title": "Limit",
+      "type": "integer"
+     },
+     "report_type": {
+      "default": "equity",
+      "title": "Report Type",
+      "type": "string"
+     },
+     "page": {
+      "default": 1,
+      "title": "Page",
+      "type": "integer"
+     },
+     "days": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Days"
+     }
+    },
+    "title": "analyst_consensusArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "khuyen nghi gia muc tieu cong ty chung khoan | analyst target price"
+   }
+  },
+  {
+   "name": "ipo_calendar_vn",
+   "description": "HNX auction calendar plus announcement fallback. Use for upcoming supply.\n\nCalendar is often empty (no scheduled auctions); announcements carry\nthe latest auction news with dates.\n",
+   "inputSchema": {
+    "properties": {},
+    "title": "ipo_calendar_vnArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "lich IPO dau gia phat hanh | ipo auctions"
+   }
+  },
+  {
+   "name": "futures_basis",
+   "description": "VN30F1M price minus VN30 spot. Use for premium/discount reads.\n\nDNSE exposes no open-interest field, so no OI is reported; basis_bps\nis (futures-spot)/spot in basis points. Futures leg prefers the latest\ntrade, falling back to the last 15m ohlc bar (trades/latest is often\nempty); spot accepts raw or normalized candle keys.\n",
+   "inputSchema": {
+    "properties": {},
+    "title": "futures_basisArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "chenh lech phai sinh co so | futures basis premium"
+   }
+  },
+  {
+   "name": "planned_targets",
+   "description": "Business-plan targets (CTKH: planned revenue/profit by year). Use as expectation anchor.\n\nyears: latest N plan years (unit VND billions). Browser-session replay\n(HAR/env seed); reports unavailable while the gate rejects — mirror +\nanalyst_consensus cover expectations meanwhile.\n",
+   "inputSchema": {
+    "properties": {
+     "symbol": {
+      "title": "Symbol",
+      "type": "string"
+     },
+     "years": {
+      "default": 3,
+      "title": "Years",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "symbol"
+    ],
+    "title": "planned_targetsArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "ke hoach kinh doanh doanh thu loi nhuan | business plan targets"
+   }
+  },
+  {
+   "name": "financial_detail",
+   "description": "FULL detailed statements, every line item per period. Use for deep BCTC reads.\n\nstatement: KQKD (income), CDKT (balance), LCTT (cashflow via vnstock\nfallback — Vietstock LCTT norms empty upstream), TM (notes),\nBCTT. periods_n: recent permitted periods (unit VND billions; only\nIsShowData_Permission=True periods). Real values on the Standard pack\nvia browser-session replay (HAR/env seed) — rows {norm_id, name,\nvalues[...]}; report unavailable when the session gate rejects.\n",
+   "inputSchema": {
+    "properties": {
+     "symbol": {
+      "title": "Symbol",
+      "type": "string"
+     },
+     "statement": {
+      "default": "KQKD",
+      "title": "Statement",
+      "type": "string"
+     },
+     "periods_n": {
+      "default": 4,
+      "title": "Periods N",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "symbol"
+    ],
+    "title": "financial_detailArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "bctc chi tiet tung chi tieu | detailed statements line items"
+   }
+  },
+  {
+   "name": "watchlist_create",
+   "description": "Create a named watchlist. Use to start tracking a symbol group.",
+   "inputSchema": {
+    "properties": {
+     "name": {
+      "title": "Name",
+      "type": "string"
+     }
+    },
+    "required": [
+     "name"
+    ],
+    "title": "watchlist_createArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "tao danh muc theo doi | new watchlist"
+   }
+  },
+  {
+   "name": "watchlist_list",
+   "description": "List all watchlists with their symbols. Use to recall tracking state.",
+   "inputSchema": {
+    "properties": {},
+    "title": "watchlist_listArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "danh sach danh muc theo doi | list watchlists"
+   }
+  },
+  {
+   "name": "watchlist_get",
+   "description": "Get one watchlist's symbols by id. Use before quoting a saved set.",
+   "inputSchema": {
+    "properties": {
+     "list_id": {
+      "title": "List Id",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "list_id"
+    ],
+    "title": "watchlist_getArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "xem danh muc theo doi | show watchlist"
+   }
+  },
+  {
+   "name": "watchlist_add",
+   "description": "Add symbols (deduped, uppercase) to a watchlist. Use to track more.",
+   "inputSchema": {
+    "properties": {
+     "list_id": {
+      "title": "List Id",
+      "type": "integer"
+     },
+     "symbols": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Symbols",
+      "type": "array"
+     }
+    },
+    "required": [
+     "list_id",
+     "symbols"
+    ],
+    "title": "watchlist_addArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "them ma vao danh muc | add to watchlist"
+   }
+  },
+  {
+   "name": "watchlist_remove",
+   "description": "Remove symbols from a watchlist. Use to trim tracking.",
+   "inputSchema": {
+    "properties": {
+     "list_id": {
+      "title": "List Id",
+      "type": "integer"
+     },
+     "symbols": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Symbols",
+      "type": "array"
+     }
+    },
+    "required": [
+     "list_id",
+     "symbols"
+    ],
+    "title": "watchlist_removeArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "bo ma khoi danh muc | remove from watchlist"
+   }
+  },
+  {
+   "name": "watchlist_delete",
+   "description": "Delete a watchlist and its items (cascade). Use to clean up.",
+   "inputSchema": {
+    "properties": {
+     "list_id": {
+      "title": "List Id",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "list_id"
+    ],
+    "title": "watchlist_deleteArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "xoa danh muc theo doi | delete watchlist"
+   }
+  },
+  {
+   "name": "watchlist_update",
+   "description": "Rename a watchlist. Use sparingly; names are unique labels.",
+   "inputSchema": {
+    "properties": {
+     "list_id": {
+      "title": "List Id",
+      "type": "integer"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     }
+    },
+    "required": [
+     "list_id",
+     "name"
+    ],
+    "title": "watchlist_updateArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "doi ten danh muc | rename watchlist"
+   }
+  },
+  {
+   "name": "alert_create",
+   "description": "Create a stored alert rule (input to alert_check). Use for live watch.\n\nmetric: 'price' or 'rsi14'. op: '>'/'>='/<'/'<=' (aliases 'gt'/'gte'/\n'lt'/'lte' accepted). threshold: comparison value for the metric.\n",
+   "inputSchema": {
+    "properties": {
+     "symbol": {
+      "title": "Symbol",
+      "type": "string"
+     },
+     "op": {
+      "default": ">",
+      "title": "Op",
+      "type": "string"
+     },
+     "threshold": {
+      "default": 0.0,
+      "title": "Threshold",
+      "type": "number"
+     },
+     "metric": {
+      "default": "price",
+      "title": "Metric",
+      "type": "string"
+     }
+    },
+    "required": [
+     "symbol"
+    ],
+    "title": "alert_createArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "tao canh bao gia | new price alert"
+   }
+  },
+  {
+   "name": "alert_list",
+   "description": "List stored alert rules (active and paused). Use before alert_check.",
+   "inputSchema": {
+    "properties": {},
+    "title": "alert_listArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "danh sach canh bao | list alerts"
+   }
+  },
+  {
+   "name": "alert_delete",
+   "description": "Delete a stored alert rule by id. Use to clean up alerts.",
+   "inputSchema": {
+    "properties": {
+     "rule_id": {
+      "title": "Rule Id",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "rule_id"
+    ],
+    "title": "alert_deleteArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "xoa canh bao | delete alert"
+   }
+  },
+  {
+   "name": "alert_pause",
+   "description": "Pause a stored alert rule (active=false). Use to silence alerts.",
+   "inputSchema": {
+    "properties": {
+     "rule_id": {
+      "title": "Rule Id",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "rule_id"
+    ],
+    "title": "alert_pauseArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "tam dung canh bao | pause alert"
+   }
+  },
+  {
+   "name": "alert_resume",
+   "description": "Resume a paused alert rule (active=true). Use to re-enable alerts.",
+   "inputSchema": {
+    "properties": {
+     "rule_id": {
+      "title": "Rule Id",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "rule_id"
+    ],
+    "title": "alert_resumeArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "bat lai canh bao | resume alert"
+   }
+  },
+  {
+   "name": "quant_backtest",
+   "description": "Buy-and-hold backtest with costs over available history. Use for baseline stats.\n\nDeprecated for strategies: use backtest_strategies (real SMA/momentum/RSI\nengine) for anything beyond buy-and-hold baseline.\nstrategy: recorded label only (engine is buy-and-hold). cost_bps/slippage_bps:\nround-trip bps each deducted twice from gross. benchmark: reference index label.\n",
+   "inputSchema": {
+    "properties": {
+     "symbol": {
+      "title": "Symbol",
+      "type": "string"
+     },
+     "cost_bps": {
+      "default": 10.0,
+      "title": "Cost Bps",
+      "type": "number"
+     },
+     "strategy": {
+      "default": "buy_hold",
+      "title": "Strategy",
+      "type": "string"
+     },
+     "slippage_bps": {
+      "default": 5.0,
+      "title": "Slippage Bps",
+      "type": "number"
+     },
+     "benchmark": {
+      "default": "VNINDEX",
+      "title": "Benchmark",
+      "type": "string"
+     }
+    },
+    "required": [
+     "symbol"
+    ],
+    "title": "quant_backtestArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "kiem dinh chien luoc mua giu | backtest buy hold"
+   }
+  },
+  {
+   "name": "scenario_simulate",
+   "description": "Apply a price shock to latest close and report P/L per 1000 shares. Use for sizing.\n\nshock_pct: percent shock, negative for drops (e.g. -5.0).\n",
+   "inputSchema": {
+    "properties": {
+     "scenario": {
+      "title": "Scenario",
+      "type": "string"
+     },
+     "symbol": {
+      "default": "VCB",
+      "title": "Symbol",
+      "type": "string"
+     },
+     "shock_pct": {
+      "default": -5.0,
+      "title": "Shock Pct",
+      "type": "number"
+     }
+    },
+    "required": [
+     "scenario"
+    ],
+    "title": "scenario_simulateArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "kich ban gia giam lai lo | shock scenario pnl"
+   }
+  },
+  {
+   "name": "backtest_strategies",
+   "description": "Rule-based backtests beyond buy-and-hold. Use to compare timing rules.\n\nstrategy: 'sma_cross' (fast SMA over slow), 'momentum' (close over\nclose[slow] ago), 'rsi_meanrev' (long when RSI14 < rsi_low, flat when\nRSI14 > rsi_high), 'buy_hold'. fast/slow: lookback bars. cost_bps:\nin+out bps deducted per position flip. months/quarters: entries only on\nmatching calendar months (1-12) / quarters (1-4); exits always allowed.\ncondition_symbol: gate entries on another asset (oil/gold/FX: BZ=F, GC=F,\nUSDVND...); condition_rule 'above_sma' (over its SMA) or 'rising'\n(up over condition_lookback bars). VN symbols via vnstock, others via\nyfinance daily history.\n",
+   "inputSchema": {
+    "properties": {
+     "symbol": {
+      "title": "Symbol",
+      "type": "string"
+     },
+     "strategy": {
+      "default": "sma_cross",
+      "title": "Strategy",
+      "type": "string"
+     },
+     "fast": {
+      "default": 10,
+      "title": "Fast",
+      "type": "integer"
+     },
+     "slow": {
+      "default": 30,
+      "title": "Slow",
+      "type": "integer"
+     },
+     "cost_bps": {
+      "default": 10.0,
+      "title": "Cost Bps",
+      "type": "number"
+     },
+     "rsi_low": {
+      "default": 30.0,
+      "title": "Rsi Low",
+      "type": "number"
+     },
+     "rsi_high": {
+      "default": 70.0,
+      "title": "Rsi High",
+      "type": "number"
+     },
+     "months": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "integer"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Months"
+     },
+     "quarters": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "integer"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Quarters"
+     },
+     "condition_symbol": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Condition Symbol"
+     },
+     "condition_rule": {
+      "default": "above_sma",
+      "title": "Condition Rule",
+      "type": "string"
+     },
+     "condition_lookback": {
+      "default": 20,
+      "title": "Condition Lookback",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "symbol"
+    ],
+    "title": "backtest_strategiesArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "kiem dinh chien luoc giao cat MA | strategy backtest sma"
+   }
+  },
+  {
+   "name": "param_sweep",
+   "description": "Grid-search strategy lookbacks, ranked by net return. Use to avoid overfit picks.\n\nfast_range/slow_range: candidate bars (product capped at 30 combos).\nrsi_meanrev allowed (fixed 30/70 thresholds). months/quarters passthrough.\n",
+   "inputSchema": {
+    "properties": {
+     "symbol": {
+      "title": "Symbol",
+      "type": "string"
+     },
+     "strategy": {
+      "default": "sma_cross",
+      "title": "Strategy",
+      "type": "string"
+     },
+     "fast_range": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "integer"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Fast Range"
+     },
+     "slow_range": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "integer"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Slow Range"
+     },
+     "cost_bps": {
+      "default": 10.0,
+      "title": "Cost Bps",
+      "type": "number"
+     },
+     "months": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "integer"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Months"
+     },
+     "quarters": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "integer"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Quarters"
+     }
+    },
+    "required": [
+     "symbol"
+    ],
+    "title": "param_sweepArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "toi uu tham so chien luoc | parameter grid search"
+   }
+  },
+  {
+   "name": "quant_risk",
+   "description": "Sharpe, max drawdown and win rate from a return series. Use to gate models.\n\nreturns: per-period simple returns (REQUIRED — build it first, e.g. from\nvn_quote_history columns=close as pct changes, or vn_equity_ohlcv closes).\nDo NOT call without returns. There is no tool named risk_metrics —\nuse this tool. periods_per_year: annualization\nfactor for Sharpe (252 daily, 52 weekly, 12 monthly).\nExample: {\"returns\": [0.01, -0.005, 0.02], \"periods_per_year\": 252}.\n",
+   "inputSchema": {
+    "properties": {
+     "returns": {
+      "items": {
+       "type": "number"
+      },
+      "title": "Returns",
+      "type": "array"
+     },
+     "periods_per_year": {
+      "default": 252,
+      "title": "Periods Per Year",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "returns"
+    ],
+    "title": "quant_riskArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "rui ro sharpe sut giam toi da | risk metrics drawdown"
+   }
+  },
+  {
+   "name": "quant_factors",
+   "description": "Momentum, volatility and drawdown factors from candles. Use to expand features.\n\nlookback: daily closes fetched (20d factor windows fixed); also adds\nmax_dd_full_pct over the full window.\n",
+   "inputSchema": {
+    "properties": {
+     "symbol": {
+      "default": "VCB",
+      "title": "Symbol",
+      "type": "string"
+     },
+     "lookback": {
+      "default": 60,
+      "title": "Lookback",
+      "type": "integer"
+     }
+    },
+    "title": "quant_factorsArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "nhan to dong luong bien dong | momentum volatility factors"
+   }
+  },
+  {
+   "name": "correlation_matrix",
+   "description": "Pairwise Pearson correlation of daily returns. Use for diversification reads.\n\nsymbols: up to 8 tickers (same market). days: daily bars each.\nDates inner-join; vnstock day-only labels fall back to business-day\nwalkback (see date_note).\n",
+   "inputSchema": {
+    "properties": {
+     "symbols": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Symbols",
+      "type": "array"
+     },
+     "days": {
+      "default": 90,
+      "title": "Days",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "symbols"
+    ],
+    "title": "correlation_matrixArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "tuong quan giua cac ma | correlation diversification"
+   }
+  },
+  {
+   "name": "seasonality",
+   "description": "Rolling-window return stats per calendar month. Use for seasonal bias.\n\nwindow: trading days per window, 5-63 (21 ~= month). Buckets by window\nend month; vnstock day-only labels use business-day walkback.\n",
+   "inputSchema": {
+    "properties": {
+     "symbol": {
+      "title": "Symbol",
+      "type": "string"
+     },
+     "window": {
+      "default": 21,
+      "title": "Window",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "symbol"
+    ],
+    "title": "seasonalityArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "tinh mua vu theo thang | seasonal monthly returns"
+   }
+  },
+  {
+   "name": "portfolio_optimize",
+   "description": "Long-only weights by rule. Use for allocation starting points.\n\nobjective: 'equal', 'inv_vol' (1/sigma), 'max_sharpe' (closed-form\nlong-only heuristic, no scipy). days: daily bars each (max 8 symbols).\n",
+   "inputSchema": {
+    "properties": {
+     "symbols": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Symbols",
+      "type": "array"
+     },
+     "objective": {
+      "default": "max_sharpe",
+      "title": "Objective",
+      "type": "string"
+     },
+     "days": {
+      "default": 180,
+      "title": "Days",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "symbols"
+    ],
+    "title": "portfolio_optimizeArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "toi uu danh muc phan bo ty trong | portfolio weights allocation"
+   }
+  },
+  {
+   "name": "event_study",
+   "description": "Abnormal returns around event dates vs benchmark. Use for event effects.\n\ndates: ISO event dates (pre-Tet, dividends, meetings); each needs\nwindow_before+window_after trading bars around it (nearest trading day\nwithin 3 days is used when the exact date is missing). CAR = cumulative\n(stock - benchmark) daily returns in %.\n",
+   "inputSchema": {
+    "properties": {
+     "symbol": {
+      "title": "Symbol",
+      "type": "string"
+     },
+     "dates": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Dates",
+      "type": "array"
+     },
+     "window_before": {
+      "default": 10,
+      "title": "Window Before",
+      "type": "integer"
+     },
+     "window_after": {
+      "default": 10,
+      "title": "Window After",
+      "type": "integer"
+     },
+     "benchmark": {
+      "default": "VNINDEX",
+      "title": "Benchmark",
+      "type": "string"
+     }
+    },
+    "required": [
+     "symbol",
+     "dates"
+    ],
+    "title": "event_studyArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "phan ung gia quanh su kien tin | abnormal return event window"
+   }
+  },
+  {
+   "name": "brief_build",
+   "description": "Compose morning brief from news, sentiment pins and calendars. Use at session start.\n\nscope: 'vn' or 'world'. date: ISO date the brief is for (recorded as-is).\ncalendars: also attach IPO/macro/SBV sections (sbv_rates, macro_events_vn,\nipo_calendar_vn); off by default to keep the brief fast.\n",
+   "inputSchema": {
+    "properties": {
+     "scope": {
+      "default": "vn",
+      "title": "Scope",
+      "type": "string"
+     },
+     "date": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Date"
+     },
+     "calendars": {
+      "default": false,
+      "title": "Calendars",
+      "type": "boolean"
+     }
+    },
+    "title": "brief_buildArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "ban tin sang tom tat thi truong | morning brief"
+   }
+  },
+  {
+   "name": "news_market",
+   "description": "Market news: Fireant posts first, GDELT fallback. Use for catalyst checks.\n\nsources: 'gdelt' routes straight to GDELT. Default reads the Fireant\ncrowd feed (token from env) and falls back to GDELT when empty.\n",
+   "inputSchema": {
+    "properties": {
+     "limit": {
+      "default": 10,
+      "title": "Limit",
+      "type": "integer"
+     },
+     "sources": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Sources"
+     }
+    },
+    "title": "news_marketArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "tin tuc thi truong chung khoan | market news"
+   }
+  },
+  {
+   "name": "news_symbol",
+   "description": "Symbol news: Fireant posts about the ticker, GDELT fallback. Use to verify rumors.\n\nsources: 'gdelt' routes straight to GDELT. Default reads Fireant posts\ntagged with the symbol and falls back to GDELT when empty.\n",
+   "inputSchema": {
+    "properties": {
+     "symbol": {
+      "title": "Symbol",
+      "type": "string"
+     },
+     "limit": {
+      "default": 10,
+      "title": "Limit",
+      "type": "integer"
+     },
+     "sources": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Sources"
+     }
+    },
+    "required": [
+     "symbol"
+    ],
+    "title": "news_symbolArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "tin tuc ve ma co phieu tin don | stock news rumors"
+   }
+  },
+  {
+   "name": "fireant_thread",
+   "description": "One Fireant post plus its replies. Use to read comment threads behind a hot post.\n\npost_id: Fireant postID (from news_symbol posts). limit: max replies.\nRumor threads live in replies; root post may be thin.\n",
+   "inputSchema": {
+    "properties": {
+     "post_id": {
+      "title": "Post Id",
+      "type": "integer"
+     },
+     "limit": {
+      "default": 20,
+      "title": "Limit",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "post_id"
+    ],
+    "title": "fireant_threadArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "binh luan bai viet fireant nha dau tu | social post replies"
+   }
+  },
+  {
+   "name": "economic_calendar",
+   "description": "Macro series catalogue as event proxy. Use for data-availability checks.\n\nscope: 'vn' only (others return empty with a warning). limit: max series.\nNot a real calendar; for trading dates use dnse_working_dates instead.\n",
+   "inputSchema": {
+    "properties": {
+     "scope": {
+      "default": "vn",
+      "title": "Scope",
+      "type": "string"
+     },
+     "limit": {
+      "default": 20,
+      "title": "Limit",
+      "type": "integer"
+     }
+    },
+    "title": "economic_calendarArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "danh muc chi so vi mo | macro series catalogue"
+   }
+  },
+  {
+   "name": "sbv_rates",
+   "description": "SBV policy and interbank rates, scraped static page. Use for rate regime.\n\nValues change rarely; upstream has no API.\n",
+   "inputSchema": {
+    "properties": {},
+    "title": "sbv_ratesArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "lai suat ngan hang nha nuoc lien ngan hang | central bank rates"
+   }
+  },
+  {
+   "name": "macro_events_vn",
+   "description": "NSO release listings with reference and next dates. Use for data calendar.\n\nCovers CPI schedule and releases; full year schedule lives in an NSO PDF.\n",
+   "inputSchema": {
+    "properties": {},
+    "title": "macro_events_vnArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "lich cong bo so lieu vi mo CPI | macro release dates"
+   }
+  },
+  {
+   "name": "corporate_calendar",
+   "description": "Disclosures feed as corporate actions. Use for dividend/meeting scans.\n\nsymbol: omit for VN overview (defaults to VCB as sample feed); limit:\nmax disclosures. Raw feed; company_events classifies the same\ndisclosures into kinds; event_calendar_vn is the calendar view.\n",
+   "inputSchema": {
+    "properties": {
+     "symbol": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Symbol"
+     },
+     "limit": {
+      "default": 20,
+      "title": "Limit",
+      "type": "integer"
+     }
+    },
+    "title": "corporate_calendarArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "cong bo thong tin doanh nghiep | company disclosures feed"
+   }
+  },
+  {
+   "name": "world_prediction_odds",
+   "description": "Polymarket odds via jina proxy to Gamma, then direct. Use for Fed/macro odds.\n\nquery: substring in title/slug/description. tag: Polymarket tag\n(e.g. 'economics', 'fed', 'crypto'). Rows carry outcomes + prob_pct,\nsorted by 24h volume.\n",
+   "inputSchema": {
+    "properties": {
+     "query": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Query"
+     },
+     "limit": {
+      "default": 20,
+      "title": "Limit",
+      "type": "integer"
+     },
+     "tag": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Tag"
+     }
+    },
+    "title": "world_prediction_oddsArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "xac suat thi truong du doan Fed | prediction market odds"
+   }
+  },
+  {
+   "name": "polymarket_event",
+   "description": "One Polymarket event detail by slug (every market + odds). Use to drill in.\n\nslug: from world_prediction_odds rows. Returns description, markets\nwith outcome probs, volumes and end dates.\n",
+   "inputSchema": {
+    "properties": {
+     "slug": {
+      "title": "Slug",
+      "type": "string"
+     }
+    },
+    "required": [
+     "slug"
+    ],
+    "title": "polymarket_eventArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "chi tiet su kien du doan | prediction event detail"
+   }
+  },
+  {
+   "name": "geo_intel",
+   "description": "Geopolitical coverage via GDELT (politics-filtered) or military ADS-B flights.\n\nDefault: political articles only (sports/noise dropped) + aggregate\n{top_sources, by_day, date_range}. military=true: live military flights from\nadsb.lol with nearest conflict-zone distance and signal-loss diff\n{count, by_country, by_type, near_zone, lost_near_zone} — use for\nmilitary-activity reads around conflicts. limit: max articles. days: keep\narticles from the last N days (undated articles are kept).\n",
+   "inputSchema": {
+    "properties": {
+     "topic": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Topic"
+     },
+     "limit": {
+      "default": 20,
+      "title": "Limit",
+      "type": "integer"
+     },
+     "days": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Days"
+     },
+     "military": {
+      "default": false,
+      "title": "Military",
+      "type": "boolean"
+     }
+    },
+    "title": "geo_intelArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "dia chinh tri chien tranh xung dot | geopolitics conflict"
+   }
+  },
+  {
+   "name": "assets_rotation",
+   "description": "Cross-asset 1y momentum classes into RISK-ON/OFF. Use for allocation reads.",
+   "inputSchema": {
+    "properties": {},
+    "title": "assets_rotationArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "xoay vong tai san risk on off | asset rotation regime"
+   }
+  },
+  {
+   "name": "compare_equities",
+   "description": "Head-to-head overview rows and momentum. Use when picking tickers.\n\nmetrics: keep only matching row keys (symbol column always kept).\n",
+   "inputSchema": {
+    "properties": {
+     "symbols": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Symbols",
+      "type": "array"
+     },
+     "metrics": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Metrics"
+     }
+    },
+    "required": [
+     "symbols"
+    ],
+    "title": "compare_equitiesArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "so sanh co phieu dong luong | compare stocks momentum"
+   }
+  },
+  {
+   "name": "evidence_bundle",
+   "description": "Lock weighted conclusion by evidence bundle. Use last for final verdict.\n\nclaim_ids: claim ids to lock; calc_ids: supporting calculation ids\n(pass [] when none).\n",
+   "inputSchema": {
+    "properties": {
+     "claim_ids": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Claim Ids",
+      "type": "array"
+     },
+     "calc_ids": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Calc Ids"
+     }
+    },
+    "required": [
+     "claim_ids"
+    ],
+    "title": "evidence_bundleArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "chot ket luan bang chung | evidence verdict"
+   }
+  },
+  {
+   "name": "oracle_meta",
+   "description": "Aggregator snapshot plus source health. Use for dashboard meta.",
+   "inputSchema": {
+    "properties": {},
+    "title": "oracle_metaArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "tong hop trang thai nguon | aggregator status"
+   }
+  },
+  {
+   "name": "web_fetch",
+   "description": "Fetch a URL and convert to markdown, text, html or pdf-text. Use for reading web content.\n\nformat: 'markdown' (default), 'text', 'html' or 'pdf' (PDF text extraction,\nbest-effort stdlib-only; scanned PDFs report honestly). timeout_seconds: max\nfetch time (default 30).\n",
+   "inputSchema": {
+    "properties": {
+     "url": {
+      "title": "Url",
+      "type": "string"
+     },
+     "format": {
+      "default": "markdown",
+      "title": "Format",
+      "type": "string"
+     },
+     "timeout_seconds": {
+      "default": 30,
+      "title": "Timeout Seconds",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "url"
+    ],
+    "title": "web_fetchArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "doc trang web lien ket | read url page"
+   }
+  },
+  {
+   "name": "cycle_stats_check",
+   "description": "Staleness of cycle-stats tables. No fetch. Use first when locating market phase.",
+   "inputSchema": {
+    "properties": {},
+    "title": "cycle_stats_checkArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "do tuoi bang chu ky thi truong | cycle tables freshness"
+   }
+  },
+  {
+   "name": "cycle_seasonality",
+   "description": "Month seasonality per basket from the stored table (mean/hit/relative vs VNINDEX). Omit args for full table.\n\nDiffers from `seasonality` (one symbol, computed live from candles): this is the\nlong-run basket table; quote which one a number came from.\n",
+   "inputSchema": {
+    "properties": {
+     "basket": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Basket"
+     },
+     "month": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Month"
+     }
+    },
+    "title": "cycle_seasonalityArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "mua vu nganh theo thang bang chu ky | basket monthly seasonality"
+   }
+  },
+  {
+   "name": "cycle_chains",
+   "description": "Relative rotation chains (A strong -> B vs VNINDEX next month). Omit pair for full table.",
+   "inputSchema": {
+    "properties": {
+     "pair": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Pair"
+     }
+    },
+    "title": "cycle_chainsArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "luan chuyen dong tien nganh chuoi | sector rotation chains"
+   }
+  },
+  {
+   "name": "cycle_turning",
+   "description": "Each calendar year's highest/lowest close date per index (year to date for the current year).",
+   "inputSchema": {
+    "properties": {
+     "year": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Year"
+     }
+    },
+    "title": "cycle_turningArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "dinh day chi so theo nam | yearly index peaks troughs"
+   }
+  },
+  {
+   "name": "cycle_tet",
+   "description": "Tet (Lunar New Year) effect per basket: compounded return over the 6 sessions before / 5 after.",
+   "inputSchema": {
+    "properties": {
+     "basket": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Basket"
+     }
+    },
+    "title": "cycle_tetArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "hieu ung tet nguyen dan truoc sau | lunar new year effect"
+   }
+  },
+  {
+   "name": "cycle_yearly",
+   "description": "Yearly return % per basket. Omit args for full table.",
+   "inputSchema": {
+    "properties": {
+     "basket": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Basket"
+     },
+     "year": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Year"
+     }
+    },
+    "title": "cycle_yearlyArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "loi suat nganh theo nam | basket yearly returns"
+   }
+  },
+  {
+   "name": "cycle_trough_events",
+   "description": "3M forward returns per basket after major troughs (who leads recoveries).",
+   "inputSchema": {
+    "properties": {},
+    "title": "cycle_trough_eventsArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "nganh dan dat sau day thi truong | leaders after troughs"
+   }
+  },
+  {
+   "name": "cycle_stats_refresh",
+   "description": "Incremental refresh a batch (max 15/call, recommend 12) of the tracked symbols.\n\nFetch [watermark+1, today] + 10-session overlap via VCI; overlap close\ndeviation >0.5% triggers full re-fetch of that symbol. Each symbol is written in\nits own transaction. One refresh at a time.\n",
+   "inputSchema": {
+    "properties": {
+     "symbols": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Symbols",
+      "type": "array"
+     }
+    },
+    "required": [
+     "symbols"
+    ],
+    "title": "cycle_stats_refreshArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "cap nhat du lieu bang chu ky | refresh cycle cache"
+   }
+  },
+  {
+   "name": "cycle_stats_finalize",
+   "description": "Recompute derived tables from cache in one transaction; bump meta. Run after all batches.",
+   "inputSchema": {
+    "properties": {
+     "extra_tet": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Extra Tet"
+     }
+    },
+    "title": "cycle_stats_finalizeArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "tinh lai bang chu ky | recompute cycle tables"
+   }
+  },
+  {
+   "name": "vn_asset_check",
+   "description": "Staleness of VN multi-asset tables. No fetch.",
+   "inputSchema": {
+    "properties": {},
+    "title": "vn_asset_checkArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "do tuoi bang tai san viet nam | vn asset tables freshness"
+   }
+  },
+  {
+   "name": "vn_asset_seasonality",
+   "description": "Monthly mean/hit per VN asset (VNINDEX, GOLD_W, USDVND, RON95, BTC, BRENT).",
+   "inputSchema": {
+    "properties": {
+     "asset": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Asset"
+     },
+     "month": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Month"
+     }
+    },
+    "title": "vn_asset_seasonalityArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "mua vu vang usd xang btc vnindex | vn assets monthly"
+   }
+  },
+  {
+   "name": "vn_asset_anchors",
+   "description": "Anchor data (yields/spreads/walls/flows) with provenance; curated by hand.",
+   "inputSchema": {
+    "properties": {
+     "asset": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Asset"
+     }
+    },
+    "title": "vn_asset_anchorsArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "lai tiet kiem trai phieu chenh sjc | deposit yields spreads"
+   }
+  },
+  {
+   "name": "vn_asset_chains",
+   "description": "Cross-asset lead-lag links (BTC->VNI, Brent->RON95); curated by hand.",
+   "inputSchema": {
+    "properties": {},
+    "title": "vn_asset_chainsArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "tai san dan dat btc dau brent | cross asset leads"
+   }
+  },
+  {
+   "name": "g_asset_check",
+   "description": "Staleness of global asset tables. No fetch.",
+   "inputSchema": {
+    "properties": {},
+    "title": "g_asset_checkArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "do tuoi bang tai san toan cau | global asset freshness"
+   }
+  },
+  {
+   "name": "g_asset_seasonality",
+   "description": "Monthly mean/hit per global asset (17 ETFs). Omit args for full table.",
+   "inputSchema": {
+    "properties": {
+     "asset": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Asset"
+     },
+     "month": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Month"
+     }
+    },
+    "title": "g_asset_seasonalityArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "mua vu tai san toan cau etf | global etf monthly"
+   }
+  },
+  {
+   "name": "g_asset_phase",
+   "description": "NBER-phase returns (Early/Late/Mid/Recession); Early/Late/Recession rest on few months.",
+   "inputSchema": {
+    "properties": {
+     "asset": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Asset"
+     }
+    },
+    "title": "g_asset_phaseArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "chu ky kinh te suy thoai nber | nber phase returns"
+   }
+  },
+  {
+   "name": "g_asset_corr",
+   "description": "Cross-asset monthly correlations. regime: full|pre22|post22.",
+   "inputSchema": {
+    "properties": {
+     "regime": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Regime"
+     }
+    },
+    "title": "g_asset_corrArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "tuong quan co phieu trai phieu | stock bond correlation"
+   }
+  },
+  {
+   "name": "g_asset_outlook",
+   "description": "Curated bank/fund allocation calls per quarter (with sources). Manually refreshed.",
+   "inputSchema": {
+    "properties": {
+     "house": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "House"
+     }
+    },
+    "title": "g_asset_outlookArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "nhan dinh quy lon phan bo | bank fund outlook"
+   }
+  },
+  {
+   "name": "vn_asset_refresh",
+   "description": "Refresh the 6 VN assets (incremental) + recompute monthly. One refresh at a time.",
+   "inputSchema": {
+    "properties": {},
+    "title": "vn_asset_refreshArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "cap nhat tai san viet nam | refresh vn assets"
+   }
+  },
+  {
+   "name": "g_asset_refresh",
+   "description": "Refresh 17 ETFs + USREC (incremental) + recompute monthly/phase/corr.",
+   "inputSchema": {
+    "properties": {},
+    "title": "g_asset_refreshArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "cap nhat tai san toan cau | refresh global assets"
+   }
+  }
+ ]
+}
