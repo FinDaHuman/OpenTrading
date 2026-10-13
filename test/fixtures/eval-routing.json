@@ -703,6 +703,107 @@
     "dnse_latest_trade",
     "market_snapshot"
    ]
+  },
+  {
+   "split": "dev",
+   "q": "Cho tôi xem bảng giá VN30 với giá hiện tại của từng mã được không?",
+   "skills": [],
+   "tools": [
+    "market_snapshot",
+    "vn_equity_quote_batch"
+   ],
+   "id": 232
+  },
+  {
+   "split": "dev",
+   "q": "Tổng quan thị trường hôm nay thế nào rồi — giá bluechip, mã tăng giảm mạnh, độ rộng, phiên luôn?",
+   "skills": [],
+   "tools": [
+    "market_overview"
+   ],
+   "id": 233
+  },
+  {
+   "split": "dev",
+   "q": "Nến ngày của VCB, HPG, MBB, ACB, STB 30 phiên gần nhất, lấy giúp tôi cả 5 mã một lần.",
+   "skills": [],
+   "tools": [
+    "market_candles_batch"
+   ],
+   "id": 234
+  },
+  {
+   "split": "dev",
+   "q": "Lịch sử giá FPT 100 nến ngày, tôi muốn tự soi cấu trúc.",
+   "skills": [],
+   "tools": [
+    "vn_quote_history"
+   ],
+   "id": 235
+  },
+  {
+   "split": "dev",
+   "q": "Thị trường có tin gì nóng hôm nay không bạn, có chất xúc tác gì đáng chú ý?",
+   "skills": [],
+   "tools": [
+    "news_market"
+   ],
+   "id": 236
+  },
+  {
+   "split": "dev",
+   "q": "Khi nào CTCK công bố báo cáo phân tích mới vậy, lịch phê duyệt của Vietstock đó.",
+   "skills": [
+    "tim-co-hoi-bao-cao-ctck"
+   ],
+   "tools": [
+    "event_calendar_vn",
+    "corporate_calendar"
+   ],
+   "id": 237
+  },
+  {
+   "split": "dev",
+   "q": "Tháng này có bao nhiêu phiên giao dịch, ngày nghỉ lễ nào không?",
+   "skills": [
+    "vn-market-basics"
+   ],
+   "tools": [
+    "dnse_working_dates"
+   ],
+   "id": 238
+  },
+  {
+   "split": "dev",
+   "q": "FPT đáng giá bao nhiêu tiền một cổ phiếu vậy bạn, tính vùng giá trị hợp lý giúp tôi.",
+   "skills": [],
+   "tools": [
+    "valuation_run"
+   ],
+   "id": 239
+  },
+  {
+   "split": "dev",
+   "q": "Khối ngoại đang mua hay bán ròng hôm nay vậy, smart money đang chạy thế nào?",
+   "skills": [],
+   "tools": [
+    "money_flow",
+    "dnse_foreign_flow",
+    "vs_nn_flow"
+   ],
+   "id": 240
+  },
+  {
+   "split": "heldout",
+   "q": "So sánh VCB với TCB với MBB giúp tôi xem ngân hàng nào đẹp hơn về chỉ số.",
+   "skills": [
+    "so-sanh-cung-nganh"
+   ],
+   "tools": [
+    "peer_compare",
+    "financial_ratios"
+   ],
+   "id": 241
   }
  ]
 }

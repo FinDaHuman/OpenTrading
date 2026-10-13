@@ -4,8 +4,8 @@ description: "Đọc kỹ thuật một mã đa khung 1D/1W/1M (RSI, MACD, Bolli
 activation: auto
 requires_tools: [mcp__opentrading__signals_technical]
 triggers:
-  keywords: [kỹ thuật, rsi, macd, bb, bollinger, ichimoku, elliott, wyckoff, vùng hỗ trợ, kháng cự, breakout, pattern, orderbook, băng giá, chỉ báo, adx, ema, sma, higher high, lower low, đa khung]
-version: 1.3.0
+  keywords: [kỹ thuật, rsi, macd, bb, bollinger, ichimoku, elliott, wyckoff, vùng hỗ trợ, kháng cự, breakout, pattern, orderbook, đọc băng, chỉ báo, adx, ema, sma, higher high, lower low, đa khung]
+version: 1.3.1
 ---
 
 # Phân tích kỹ thuật một mã

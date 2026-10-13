@@ -81,7 +81,8 @@ export function chartRenderTool(): ToolDef<ChartRenderInput> {
   return {
     name: "chart_render",
     description:
-      "Vẽ biểu đồ màu trong TUI từ dữ liệu đã có. Ưu tiên from_call: mã rN trong [ref rN] ở đầu kết quả tool dữ liệu — harness tự lấy số, không gõ lại (candlestick, line/area/sparkline/linebox/sparkcolumn/histogram/winloss, bar/pie). Kết quả gọi gộp nhiều mã: chọn mã bằng from_symbol. Chỉ truyền số tay khi dữ liệu không đến từ tool: candlestick (bars ≥5), line… (series), bar/pie (series+labels), heatmap/multiline/stacked/boxplot (matrix), waterfall (start+series), scatter (points), gauge/donut (value+max). Trả về tóm tắt số để nhận xét; hình tự hiện cho người dùng.",
+      "Vẽ biểu đồ màu trong TUI từ dữ liệu đã có. Dùng khi người dùng xin hình/nến/biểu đồ; muốn so sánh nhiều chuỗi thì dùng chart_compare. " +
+      "Ưu tiên from_call: mã rN trong [ref rN] ở đầu kết quả tool dữ liệu — harness tự lấy số, không gõ lại (candlestick, line/area/sparkline/linebox/sparkcolumn/histogram/winloss, bar/pie). Kết quả gọi gộp nhiều mã: chọn mã bằng from_symbol. Chỉ truyền số tay khi dữ liệu không đến từ tool: candlestick (bars ≥5), line… (series), bar/pie (series+labels), heatmap/multiline/stacked/boxplot (matrix), waterfall (start+series), scatter (points), gauge/donut (value+max). Trả về tóm tắt số để nhận xét; hình tự hiện cho người dùng.",
     input: z.object({
       kind: z.enum(KINDS).describe("Loại biểu đồ"),
       from_call: z.string().regex(/^r\d+$/, "dạng r12").optional().describe("Mã rN từ [ref rN] của kết quả tool dữ liệu"),
