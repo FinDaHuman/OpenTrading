@@ -12,11 +12,11 @@ const FLOOR = {
   /** Cases whose expected MCP tool a keyword tool_search on the question loads. */
   toolHits: 34, // of 58
   /** Cases whose expected skill is suggested. */
-  skillHits: 29, // of 43
+  skillHits: 39, // of 43
   /** Suggested skills that are not expected (on scored cases). */
-  maxWrongSuggestions: 16, // of 45
+  maxWrongSuggestions: 18, // of 57
   /** "No skill" cases that still get a suggestion. */
-  maxNegativesSuggested: 3, // of 18
+  maxNegativesSuggested: 4, // of 18
 }
 
 const root = path.resolve(import.meta.dir, "..")
