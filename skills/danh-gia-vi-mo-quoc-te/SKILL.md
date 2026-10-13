@@ -31,7 +31,7 @@ Chạy `yf_regime_assets` + `assets_rotation` + `world_macro_country` (VN/CHINA 
 
 **Bước 3: Xác nhận toàn cầu (song song, tuần tự sau Bước 2).**
 
-Chạy `yf_global_indices` + `yf_commodities` + `world_fear_greed`. Cần chuỗi lịch sử chỉ số TG thì `vn_global_index` nhận cả tên thường gặp (S&P 500, Dow Jones, Nasdaq…); Nasdaq-100 không có ở nguồn này, dùng `yf_global_indices`. Đủ DGS10 + CPI + curve ở Bước 1 mới sang Bước 2; gọi ≥3 FRED series cùng lúc là dấu hiệu tràn lan → dừng.
+Chạy `yf_global_indices` + `yf_commodities` + `world_fear_greed`. Cần chuỗi lịch sử chỉ số TG thì `vn_global_index` nhận cả mã Yahoo và tên thường gặp (SPX, ^GSPC, Dow, Nasdaq…); Nasdaq-100 không có ở nguồn này, dùng `yf_global_indices`. Đủ DGS10 + CPI + curve ở Bước 1 mới sang Bước 2; gọi ≥3 FRED series cùng lúc là dấu hiệu tràn lan → dừng.
 
 ## Cấu trúc câu trả lời
 
