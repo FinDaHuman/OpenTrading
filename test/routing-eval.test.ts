@@ -14,9 +14,9 @@ const FLOOR = {
   /** Cases whose expected skill is suggested. */
   skillHits: 42, // of 46
   /** Suggested skills that are not expected (on scored cases). */
-  maxWrongSuggestions: 19, // of 61 (soft routing suggests multiple per case; measured on the merged set)
+  maxWrongSuggestions: 18, // of 60 (2026-10-14: tim-co-hoi description de-duplicated "giá hiện tại" pair, Q232 fixed)
   /** "No skill" cases that still get a suggestion. */
-  maxNegativesSuggested: 6, // of 25 (Q232 now trips tim-co-hoi-bao-cao-ctck via soft routing — trigger tuning is a follow-up)
+  maxNegativesSuggested: 5, // of 27
 }
 
 const root = path.resolve(import.meta.dir, "..")
