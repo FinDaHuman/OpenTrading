@@ -59,7 +59,7 @@ test("the bundled agent types load cleanly", async () => {
   const roots = agentRoots(tmp).filter((r) => r.source === "bundled")
   const { agents, problems } = await loadAgents(roots)
   expect(problems).toEqual([])
-  expect(agents.map((a) => a.name)).toEqual(["nghien-cuu", "phan-bien", "tin-tuc", "tra-cuu"])
+  expect(agents.map((a) => a.name)).toEqual(["nghien-cuu", "phan-bien", "rui-ro-thi-truong", "tin-tuc", "tra-cuu"])
 })
 
 test("tool filter: @chi-doc keeps read-only tools, patterns narrow, disallowedTools subtracts; excluded tools never come back", () => {
@@ -102,5 +102,5 @@ test("spawn_subagent lists the types in its description and rejects an unknown t
   expect(spawn.summarize!({ description: "Giá FPT", prompt: "x", subagent_type: "tra-cuu" })).toBe("tra-cuu(Giá FPT)")
   await expect(
     spawn.execute({ description: "x", prompt: "x", subagent_type: "khong-co" }, { signal: new AbortController().signal, callId: "c" }),
-  ).rejects.toThrow('Không có loại subagent "khong-co". Các loại hiện có: nghien-cuu, phan-bien, tin-tuc, tra-cuu.')
+  ).rejects.toThrow('Không có loại subagent "khong-co". Các loại hiện có: nghien-cuu, phan-bien, rui-ro-thi-truong, tin-tuc, tra-cuu.')
 })

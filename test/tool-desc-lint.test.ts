@@ -52,6 +52,7 @@ const CLUSTERS: Record<string, string[]> = {
   quant: ["quant_backtest", "quant_risk", "backtest_strategies", "scenario_simulate", "stock_screener", "signals_technical"],
   "corp-facts": ["dividends_splits", "insider_trading", "analyst_consensus"],
   web: ["web_fetch"], // web_search đăng ký có điều kiện (cần key), nên không đứng trong fixture
+  timing: ["distribution_count"],
 }
 const clusterTools = new Map<string, string>()
 for (const [cluster, names] of Object.entries(CLUSTERS)) for (const n of names) clusterTools.set(n, cluster)
