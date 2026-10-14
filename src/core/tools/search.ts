@@ -93,6 +93,7 @@ const SYNONYMS: Record<string, string[]> = {
   "the gioi": ["world", "global"],
   "tien so": ["crypto"],
   "xep hang": ["rank", "ranking", "top"],
+  "phien phan phoi": ["distribution"],
 }
 const PHRASES = Object.keys(SYNONYMS).sort((a, b) => b.split(" ").length - a.split(" ").length)
 

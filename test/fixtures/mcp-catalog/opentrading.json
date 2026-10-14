@@ -1,8 +1,8 @@
 {
  "source": "captured",
- "capturedAt": "2026-10-14",
+ "capturedAt": "2026-10-15",
  "server": "opentrading",
- "commit": "2c13b1a",
+ "commit": "ce224f19e63b75ad9cb9e8a56ef552cc8b2a11dc",
  "note": "tools/list of opentrading-mcp at this commit. Regenerate from the opentrading-mcp checkout: uv run python ../OpenTrading/scripts/dev/dump-mcp-catalog.py ../OpenTrading/test/fixtures/mcp-catalog/opentrading.json <commit>",
  "tools": [
   {
@@ -4466,6 +4466,29 @@
    },
    "_meta": {
     "anthropic/searchHint": "cap nhat tai san toan cau | refresh global assets"
+   }
+  },
+  {
+   "name": "distribution_count",
+   "description": "Đếm phiên phân phối O'Neil + trạng thái follow-through. Dùng khi đánh giá\n        rủi ro thị trường (có nên giữ/mua hay thoát).\n\n        Dùng khi: \"thị trường có bao nhiêu phiên phân phối\", \"có nên thoát hàng không\",\n        kiểm tra sức khỏe xu hướng theo O'Neil.\n        Không dùng khi: rủi ro 1 mã cụ thể (dùng stock_forensic/insider_trading/sentiment_score);\n        cần độ rộng toàn sàn (dùng breadth_scan); backtest quy tắc (dùng backtest_strategies).\n\n        symbol: chỉ số VN (mặc định VNINDEX). days: số nến ngày lấy về (mặc định 40,\n        tối đa 90); đếm trong 25 phiên gần nhất.\n        Ngưỡng 1 tháng: 1-2 không vấn đề; 3 quan sát; 4 tìm dấu hiệu bán; 5 tìm mọi cơ hội\n        để thoát; trên 5 nguy hiểm nên thoát.\n        Có FTD xác nhận thì đếm lại phiên phân phối từ đầu (rally mới xóa đếm cũ).\n        Ví dụ: {\"symbol\": \"VNINDEX\", \"days\": 40}.\n        ",
+   "inputSchema": {
+    "properties": {
+     "symbol": {
+      "default": "VNINDEX",
+      "title": "Symbol",
+      "type": "string"
+     },
+     "days": {
+      "default": 40,
+      "title": "Days",
+      "type": "integer"
+     }
+    },
+    "title": "distribution_countArguments",
+    "type": "object"
+   },
+   "_meta": {
+    "anthropic/searchHint": "dem phien phan phoi oneil ftd | distribution days count follow through"
    }
   }
  ]

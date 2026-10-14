@@ -804,6 +804,24 @@
     "financial_ratios"
    ],
    "id": 241
+  },
+  {
+   "split": "dev",
+   "q": "Thị trường hiện có bao nhiêu phiên phân phối vậy, có nên thoát hàng không bạn?",
+   "skills": [],
+   "tools": [
+    "distribution_count"
+   ],
+   "id": 242
+  },
+  {
+   "split": "dev",
+   "q": "VNINDEX vừa rồi có phiên follow-through nào xác nhận sóng mới chưa?",
+   "skills": [],
+   "tools": [
+    "distribution_count"
+   ],
+   "id": 243
   }
  ]
 }

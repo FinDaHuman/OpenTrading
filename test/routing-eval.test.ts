@@ -10,7 +10,7 @@ import { catalogRegistry, evalRouting, loadCases } from "./helpers/routing-eval"
  */
 const FLOOR = {
   /** Cases whose expected MCP tool a keyword tool_search on the question loads. */
-  toolHits: 49, // of 68 (2026-10-14: cluster descriptions Claude-style + catalog 2c13b1a + soft routing)
+  toolHits: 51, // of 70 (2026-10-14: +distribution_count, 2/2 new cases hit)
   /** Cases whose expected skill is suggested. */
   skillHits: 42, // of 46
   /** Suggested skills that are not expected (on scored cases). */
