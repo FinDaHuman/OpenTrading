@@ -41,9 +41,11 @@ Có 4 loại sẵn trong thư mục `agents/`:
 | Loại | Tool | Bước tối đa | Dùng khi |
 | --- | --- | --- | --- |
 | `nghien-cuu` (mặc định) | tất cả (tool ghi phải duyệt) | 10 | nghiên cứu nhiều bước, trả tổng kết có nguồn |
-| `tra-cuu` | chỉ tool đọc | 6 | lấy nhanh vài số liệu cụ thể |
-| `phan-bien` | chỉ tool đọc | 8 | phản biện một luận điểm hay một kết quả định giá |
-| `tin-tuc` | `web_search`, `web_fetch`, `*news*`, `*sentiment*`, `current_time` | 8 | gom và tóm tắt tin theo khoảng thời gian |
+| `tra-cuu` | chỉ tool đọc + khối READ-ONLY | 6 | lấy nhanh vài số liệu cụ thể |
+| `phan-bien` | chỉ tool đọc + khối READ-ONLY | 8 | phản biện một luận điểm hay một kết quả định giá |
+| `tin-tuc` | `web_search`, `web_fetch`, `*news*`, `*sentiment*`, `current_time` + khối READ-ONLY | 8 | gom và tóm tắt tin theo khoảng thời gian |
+
+Ba loại chỉ đọc (`tra-cuu`, `phan-bien`, `tin-tuc`) mang khối READ-ONLY tường minh trong file định nghĩa: cấm tạo/sửa/xóa/di chuyển file (kể cả file tạm ở `/tmp`), cấm redirect/heredoc để ghi và lệnh đổi trạng thái hệ thống — khóa bằng lời thêm vào bộ lọc tool của harness. Mọi loại đều trả báo cáo bằng text trực tiếp; agent chính không đọc file subagent tạo.
 
 **Tự định nghĩa loại mới** (theo `.claude/agents/*.md` của Claude Code):
 - Dự án: `.opentrading/agents/<tên>.md`.

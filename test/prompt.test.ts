@@ -170,6 +170,8 @@ test("tool guidance lives in one place and the format example carries no real-lo
   const example = a.system.slice(a.system.indexOf("<vi_du>"), a.system.indexOf("</vi_du>"))
   expect(example.length).toBeGreaterThan(0)
   expect(example).not.toMatch(/\d/)
-  // Budget guard: the static prompt must not creep back up (≈1.0k tokens on 06/10/2026).
-  expect(Math.ceil(a.system.length / 4)).toBeLessThan(1_150)
+  // Budget guard: the static prompt must not creep back up (≈1.0k tokens on 06/10/2026,
+  // ≈1.2k after the identity forecast update, ≈1.3k after the tools restraint rule,
+  // ≈1.4k after citations/style/tool speech lines, ≈1.5k after the style.md redesign on 14/10/2026).
+  expect(Math.ceil(a.system.length / 4)).toBeLessThan(1_500)
 })
