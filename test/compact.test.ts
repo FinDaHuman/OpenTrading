@@ -8,6 +8,7 @@ import {
   isContextOverflow,
   MAX_AUTO_FAILURES,
   PRUNED_TEXT,
+  compactAnalysisPrompt,
   compactHistory,
   compactPrompt,
   pruneToolResults,
@@ -174,6 +175,19 @@ test("the summary prompt asks for verbatim sourced figures and carries the user'
   expect(prompt).toContain("không gọi tool")
   expect(prompt).toContain("tập trung vào ngân hàng")
   expect(compactPrompt()).not.toContain("Yêu cầu thêm")
+})
+
+test("analysis-first: the analysis prompt inventories structure; the summary reuses it; lean drops the analysis section", () => {
+  const analysis = compactAnalysisPrompt()
+  expect(analysis).toContain("<analysis>")
+  expect(analysis).toContain("không gọi tool")
+  const withAnalysis = compactPrompt(undefined, "tool: vn_quote_history x3")
+  expect(withAnalysis).toContain("<analysis>\ntool: vn_quote_history x3\n</analysis>")
+  expect(withAnalysis).toContain("## Phân tích và kết luận đã đưa ra")
+  const lean = compactPrompt(undefined, undefined, "lean")
+  expect(lean).toContain("## Số liệu đã xác minh")
+  expect(lean).not.toContain("## Phân tích và kết luận đã đưa ra")
+  expect(lean).not.toContain("## Ràng buộc và sở thích")
 })
 
 test("the effective window is capped (1M models compact around 160k by default)", () => {

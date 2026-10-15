@@ -91,6 +91,7 @@ test("the bundled skills all load cleanly", async () => {
     "phan-tich-sentiment",
     "phan-tich-vang-ty-gia",
     "so-sanh-cung-nganh",
+    "tao-ho-so",
     "tim-co-hoi-bao-cao-ctck",
     "tim-kiem-tin-tuc",
     "tin-tuc-nong-quoc-te",
