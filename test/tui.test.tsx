@@ -2011,7 +2011,10 @@ test("/agents lists the subagent types by source; ctrl+r picks up a new file; en
   // 17 or 18. ctrl+r reloads deterministically (17 bundled + 1 user file).
   let frame = await setup.waitForFrame((f) => /Subagent · 1[78] loại/.test(f) && f.includes("Có sẵn"))
   setup.mockInput.pressKey("r", { ctrl: true })
-  frame = await setup.waitForFrame((f) => f.includes("Subagent · 18 loại") && f.includes("Người dùng") && f.includes("Đã nạp lại 18 loại"), { maxPasses: 60 })
+  // NOTE: "Người dùng" group lives on page 2 now (18 items, 10 rows/page),
+  // so it cannot be asserted in the same frame as the note — the rieng flow
+  // below covers the user file end to end.
+  frame = await setup.waitForFrame((f) => f.includes("Subagent · 18 loại") && f.includes("Đã nạp lại 18 loại"), { maxPasses: 60 })
   // Picker shows 10 rows per page so tra-cuu sits on page 2: its presence
   // is asserted on the spawn description (full list, no pagination).
   show(frame)
