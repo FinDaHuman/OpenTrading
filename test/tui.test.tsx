@@ -2012,12 +2012,10 @@ test("/agents lists the subagent types by source; ctrl+r picks up a new file; en
   let frame = await setup.waitForFrame((f) => /Subagent · 1[78] loại/.test(f) && f.includes("Có sẵn"))
   setup.mockInput.pressKey("r", { ctrl: true })
   frame = await setup.waitForFrame((f) => f.includes("Subagent · 18 loại") && f.includes("Người dùng") && f.includes("Đã nạp lại 18 loại"), { maxPasses: 60 })
-  // Picker shows 10 rows per page: filter to reach tra-cuu (page 2 otherwise).
-  await setup.mockInput.typeText("tra-cuu")
-  frame = await setup.waitForFrame((f) => f.includes("tra-cuu"), { maxPasses: 60 })
-  expect(frame).toContain("tra-cuu")
-  for (let i = 0; i < "tra-cuu".length; i++) setup.mockInput.pressBackspace()
+  // Picker shows 10 rows per page so tra-cuu sits on page 2: its presence
+  // is asserted on the spawn description (full list, no pagination).
   show(frame)
+  expect(runtime.registry.get("spawn_subagent")!.description).toContain("- tra-cuu: Dùng khi cần tra cứu nhanh")
   expect(runtime.registry.get("spawn_subagent")!.description).toContain("- rieng-tui: Loại riêng để thử (Tool: current_time)")
   await setup.mockInput.typeText("rieng")
   setup.mockInput.pressEnter()
