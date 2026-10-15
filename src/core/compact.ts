@@ -51,21 +51,58 @@ export const PRUNED_TEXT = "(đã dọn kết quả cũ để tiết kiệm cont
 /** Their results are small and carry state the harness or the model still needs. */
 const PROTECTED = new Set(["todo_write", "load_skill", "ask_user"])
 
+/** Phase 1 of analysis-first compaction (Claude Code pattern): before summarizing,
+ * the model inventories the conversation structure into an <analysis> block —
+ * tool-call counts, data series fetched, questions asked — so the summary (phase 2)
+ * is built from the inventory instead of re-reading everything. Text only, no tools. */
+export function compactAnalysisPrompt() {
+  return [
+    "Phân tích cấu trúc cuộc hội thoại ở trên để chuẩn bị tóm tắt. Chỉ trả lời bằng chữ, không gọi tool. Trả về đúng một khối <analysis> với các dòng:",
+    "",
+    "- tool: mỗi tool đã gọi và số lần (ví dụ: vn_quote_history x3).",
+    "- du_lieu: chuỗi số liệu đã lấy (mã/kỳ/nguồn, ví dụ: HPG D 30 nến từ vn_quote_history).",
+    "- cau_hoi: từng câu hỏi của người dùng, giữ sát lời gốc.",
+    "- file_skill: file đã tạo/sửa, skill đã nạp.",
+    "Không tóm tắt, không nhận định — chỉ kiểm kê.",
+  ].join("\n")
+}
+
+/** Head this large gets the lean summary variant (drops the analysis section). */
+export const COMPACT_LEAN_TOKENS = 100_000
+
+export type CompactVariant = "full" | "lean"
+
 /** Sent after the head when summarizing; the summary must stand in for everything above it. */
-export function compactPrompt(instructions?: string) {
+export function compactPrompt(instructions?: string, analysis?: string, variant: CompactVariant = "full") {
+  const sections =
+    variant === "lean"
+      ? [
+          "## Yêu cầu của người dùng",
+          "Mục tiêu và từng yêu cầu, giữ sát lời gốc.",
+          "## Số liệu đã xác minh",
+          "Bảng: chỉ tiêu | giá trị | đơn vị | nguồn | thời điểm. Chép nguyên văn, không làm tròn. Số nào không có nguồn và thời điểm thì bỏ.",
+          "## Việc đang dở và bước tiếp theo",
+          "Việc chưa xong và việc nên làm tiếp.",
+        ]
+      : [
+          "## Yêu cầu của người dùng",
+          "Mục tiêu và từng yêu cầu của người dùng, giữ sát lời gốc.",
+          "## Ràng buộc và sở thích",
+          "Điều người dùng đã nói về khẩu vị rủi ro, khung thời gian, mã đang quan tâm, cách trình bày mong muốn.",
+          "## Số liệu đã xác minh",
+          "Bảng: chỉ tiêu | giá trị | đơn vị | nguồn | thời điểm. Chép nguyên văn từ kết quả tool, không làm tròn, không đổi đơn vị. Số nào không có nguồn và thời điểm thì bỏ.",
+          "## Phân tích và kết luận đã đưa ra",
+          "Các nhận định chính, giả định đi kèm, rủi ro đã nêu.",
+          "## Việc đang dở và bước tiếp theo",
+          "Việc chưa xong và việc nên làm tiếp nếu người dùng muốn.",
+        ]
   return [
     "Tóm tắt toàn bộ cuộc hội thoại ở trên để tiếp tục làm việc mà không cần đọc lại nó. Chỉ trả lời bằng chữ, không gọi tool. Viết bằng ngôn ngữ của cuộc hội thoại. Giữ đúng các mục sau, mục nào không có thì ghi \"(không có)\":",
     "",
-    "## Yêu cầu của người dùng",
-    "Mục tiêu và từng yêu cầu của người dùng, giữ sát lời gốc.",
-    "## Ràng buộc và sở thích",
-    "Điều người dùng đã nói về khẩu vị rủi ro, khung thời gian, mã đang quan tâm, cách trình bày mong muốn.",
-    "## Số liệu đã xác minh",
-    "Bảng: chỉ tiêu | giá trị | đơn vị | nguồn | thời điểm. Chép nguyên văn từ kết quả tool, không làm tròn, không đổi đơn vị. Số nào không có nguồn và thời điểm thì bỏ.",
-    "## Phân tích và kết luận đã đưa ra",
-    "Các nhận định chính, giả định đi kèm, rủi ro đã nêu.",
-    "## Việc đang dở và bước tiếp theo",
-    "Việc chưa xong và việc nên làm tiếp nếu người dùng muốn.",
+    ...(analysis?.trim()
+      ? ["Khung phân tích đã có (dùng làm sườn, không tóm tắt lại nó):", `<analysis>\n${analysis.trim()}\n</analysis>`, ""]
+      : []),
+    ...sections,
     ...(instructions?.trim() ? ["", `Yêu cầu thêm của người dùng cho bản tóm tắt: ${instructions.trim()}`] : []),
   ].join("\n")
 }

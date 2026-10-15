@@ -106,6 +106,11 @@ export class Session {
     return new Session(summary.id, summary.file, summary)
   }
 
+  /** Replace the fallback title with a generated one (persists on the next turn's append). */
+  setTitle(title: string) {
+    if (title.trim()) this.title = title.trim()
+  }
+
   get path() {
     return this.file ? path.join(sessionsDir(), this.file) : undefined
   }
