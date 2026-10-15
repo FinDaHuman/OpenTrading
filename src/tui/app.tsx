@@ -5,9 +5,11 @@ import { produce, reconcile } from "solid-js/store"
 import { runAgent, summarizeConversation } from "../core/agent"
 import {
   AUTO_COMPACT_SHARE,
+  COMPACT_LEAN_TOKENS,
   DEFAULT_COMPACT_WINDOW,
   IMAGE_TOKENS,
   MAX_AUTO_FAILURES,
+  compactAnalysisPrompt,
   compactHistory,
   compactPrompt,
   isContextOverflow,
@@ -101,15 +103,13 @@ export async function compact(runtime: Runtime, trigger: "auto" | "manual", inst
       onSummarize: () =>
         pushLine({
           kind: "info",
-          text: trigger === "auto" ? "Context gần đầy: đang tóm tắt phần đầu hội thoại (dùng 1 request)…" : "Đang tóm tắt hội thoại (dùng 1 request)…",
+          text: trigger === "auto" ? "Context gần đầy: đang tóm tắt phần đầu hội thoại (dùng 2 requests: phân tích rồi tóm tắt)…" : "Đang tóm tắt hội thoại (dùng 2 requests: phân tích rồi tóm tắt)…",
         }),
       window,
       manual: trigger === "manual",
       instructions,
-      summarize: (head, extra) =>
-        summarizeConversation({
-          head,
-          prompt: compactPrompt(extra),
+      summarize: async (head, extra) => {
+        const base = {
           skills: state.skills,
           sticky: state.activeSkills,
           registry: runtime.registry,
@@ -117,7 +117,15 @@ export async function compact(runtime: Runtime, trigger: "auto" | "manual", inst
           memory: runtime.memory,
           serverInstructions: () => runtime.mcp.instructions(),
           signal: controller.signal,
-        }),
+        }
+        // Phase 1 (analysis-first): inventory the head structure; phase 2 writes
+        // the summary from it. Lean variant when the head alone is huge.
+        const lean = tokensOf(head) > COMPACT_LEAN_TOKENS
+        const run = (prompt: string) =>
+          summarizeConversation({ ...base, head, prompt, signal: controller.signal })
+        const analysis = await run(compactAnalysisPrompt())
+        return run(compactPrompt(extra, analysis, lean ? "lean" : "full"))
+      },
     })
     if (epoch !== mine) return false
     if (controller.signal.aborted) {

@@ -16,6 +16,7 @@ export const currentSession = () => current
 /** Persist one finished turn (fire-and-forget: a disk error must not break the chat). */
 export function recordTurn(messages: ModelMessage[], contextTokens?: number) {
   if (messages.length === 0) return
+  const firstTurn = current.turns === 0
   current
     .appendTurn(messages, {
       cwd: process.cwd(),
@@ -26,6 +27,21 @@ export function recordTurn(messages: ModelMessage[], contextTokens?: number) {
       contextTokens,
     })
     .catch(saveFailed)
+  // After the first turn, replace the 60-char fallback title with a generated
+  // one (fire-and-forget; failures keep the fallback).
+  if (firstTurn) void retitleOnce()
+}
+
+/** One-shot title generation for a fresh session; never throws. */
+async function retitleOnce() {
+  try {
+    const { generateTitle } = await import("../core/session/title")
+    const first = state.history.map((m) => (m.role === "user" && typeof m.content === "string" ? m.content : "")).find((t) => t.trim())
+    const title = await generateTitle(first ?? "")
+    if (title) current.setTitle(title)
+  } catch {
+    // keep the fallback title
+  }
 }
 
 /** Persist a compaction, so --resume starts from the compacted history. */
