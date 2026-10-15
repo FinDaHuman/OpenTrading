@@ -76,7 +76,8 @@ test("trigger hits add a skill hint reminder; manual and sticky skills behave", 
   expect(hit.reminders.find((r) => r.startsWith("<goi_y_skill>"))).toContain("devil")
   expect(hit.system).toContain("BODY-rules") // always-on body in system
   expect(hit.system).not.toContain("- hand") // manual skills are not in the catalog
-  expect(hit.context).toBeUndefined()
+  expect(hit.context).toContain("<moi_truong>") // env block always present
+  expect(hit.context).not.toContain("BODY-hand")
 
   const pinned = assemble(base({ skills, sticky: ["hand"] }))
   expect(pinned.context).toContain('<skill name="hand">')
