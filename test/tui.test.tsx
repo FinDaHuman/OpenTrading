@@ -2007,20 +2007,27 @@ test("/agents lists the subagent types by source; ctrl+r picks up a new file; en
   await writeFile(path.join(dir, "rieng-tui.md"), "---\nname: rieng-tui\ndescription: Loại riêng để thử\ntools: [current_time]\nmaxSteps: 3\n---\nCHỈ-DẪN-RIÊNG\n")
   await setup.mockInput.typeText("/agents")
   setup.mockInput.pressEnter()
-  let frame = await setup.waitForFrame((f) => f.includes("Subagent · 5 loại") && f.includes("Có sẵn"))
-  expect(frame).toContain("tra-cuu")
+  // Startup agent load races the rieng-tui.md creation above: open shows
+  // 17 or 18. ctrl+r reloads deterministically (17 bundled + 1 user file).
+  let frame = await setup.waitForFrame((f) => /Subagent · 1[78] loại/.test(f) && f.includes("Có sẵn"))
   setup.mockInput.pressKey("r", { ctrl: true })
-  frame = await setup.waitForFrame((f) => f.includes("Subagent · 6 loại") && f.includes("Người dùng") && f.includes("Đã nạp lại 6 loại"))
+  // NOTE: "Người dùng" group lives on page 2 now (18 items, 10 rows/page),
+  // so it cannot be asserted in the same frame as the note — the rieng flow
+  // below covers the user file end to end.
+  frame = await setup.waitForFrame((f) => f.includes("Subagent · 18 loại") && f.includes("Đã nạp lại 18 loại"), { maxPasses: 60 })
+  // Picker shows 10 rows per page so tra-cuu sits on page 2: its presence
+  // is asserted on the spawn description (full list, no pagination).
   show(frame)
+  expect(runtime.registry.get("spawn_subagent")!.description).toContain("- tra-cuu: Dùng khi cần tra cứu nhanh")
   expect(runtime.registry.get("spawn_subagent")!.description).toContain("- rieng-tui: Loại riêng để thử (Tool: current_time)")
   await setup.mockInput.typeText("rieng")
   setup.mockInput.pressEnter()
-  frame = await setup.waitForFrame((f) => f.includes("Subagent · rieng-tui") && f.includes("Tool hiện có (1): current_time"))
+  frame = await setup.waitForFrame((f) => f.includes("Subagent · rieng-tui") && f.includes("Tool hiện có (1): current_time"), { maxPasses: 60 })
   show(frame)
   expect(frame).toContain("CHỈ-DẪN-RIÊNG")
   expect(frame).toContain("tối đa 3 bước")
   setup.mockInput.pressEscape()
-  await setup.waitForFrame((f) => f.includes("Subagent · 6 loại"))
+  await setup.waitForFrame((f) => f.includes("Subagent · 18 loại"))
   setup.mockInput.pressEscape()
   await setup.waitFor(() => state.dialog === undefined)
 })
