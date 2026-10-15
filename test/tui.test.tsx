@@ -2007,8 +2007,14 @@ test("/agents lists the subagent types by source; ctrl+r picks up a new file; en
   await writeFile(path.join(dir, "rieng-tui.md"), "---\nname: rieng-tui\ndescription: Loại riêng để thử\ntools: [current_time]\nmaxSteps: 3\n---\nCHỈ-DẪN-RIÊNG\n")
   await setup.mockInput.typeText("/agents")
   setup.mockInput.pressEnter()
-  let frame = await setup.waitForFrame((f) => f.includes("Subagent · 17 loại") && f.includes("Có sẵn"))
+  // Startup agent load races the rieng-tui.md creation above: open shows
+  // 17 or 18. ctrl+r reloads deterministically (17 bundled + 1 user file).
+  let frame = await setup.waitForFrame((f) => /Subagent · 1[78] loại/.test(f) && f.includes("Có sẵn"))
+  // Picker shows 10 rows per page: filter to reach tra-cuu (page 2 otherwise).
+  await setup.mockInput.typeText("tra-cuu")
+  frame = await setup.waitForFrame((f) => f.includes("tra-cuu"), { maxPasses: 60 })
   expect(frame).toContain("tra-cuu")
+  for (let i = 0; i < "tra-cuu".length; i++) setup.mockInput.pressBackspace()
   setup.mockInput.pressKey("r", { ctrl: true })
   frame = await setup.waitForFrame((f) => f.includes("Subagent · 18 loại") && f.includes("Người dùng") && f.includes("Đã nạp lại 18 loại"))
   show(frame)
