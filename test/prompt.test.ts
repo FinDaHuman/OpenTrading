@@ -83,15 +83,15 @@ test("trigger hits add a skill hint reminder; manual and sticky skills behave", 
   expect(pinned.context).toContain('<skill name="hand">')
 })
 
-test("investor profile goes to context, is capped per tier, and never into system", () => {
+test("investor profile rides the static system prefix, capped per tier, and never into context", () => {
   const profile = "# Hồ sơ\n" + "Luôn nêu bear case trước. ".repeat(600)
   const a = assemble(base({ tier: "A", investorProfile: profile }))
-  expect(a.system).not.toContain("Hồ sơ")
-  expect(a.context).toContain("<ho_so_nha_dau_tu>")
+  expect(a.system).toContain("<ho_so_nha_dau_tu>")
+  expect(a.context).not.toContain("ho_so_nha_dau_tu")
   const row = a.report.find((r) => r.id === "ho_so_nha_dau_tu")!
   expect(row.truncated).toBe(true)
   expect(row.tokens).toBeLessThanOrEqual(1_400)
-  expect(a.context).toContain("đã được cắt bớt")
+  expect(a.system).toContain("đã được cắt bớt")
 })
 
 test("tier C drops style first but keeps identity and the market clock", () => {

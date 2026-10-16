@@ -5,7 +5,8 @@ import { dataDir } from "./paths"
 
 /**
  * INVESTOR.md — the user's own, human-written profile (HarnessPlan §4.3), the OpenTrading
- * counterpart of CLAUDE.md / AGENTS.md. Kept separate from agent-written memory.
+ * counterpart of CLAUDE.md / AGENTS.md. Rides the static system prompt (cache-marked),
+ * re-read per request so edits apply next turn. Kept separate from agent-written memory.
  */
 export const profileFile = () => path.join(dataDir(), "INVESTOR.md")
 
