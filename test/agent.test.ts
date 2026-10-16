@@ -291,11 +291,15 @@ test("context rides on the first user message; reminders are kept in history, th
   try {
     const first = await collect(runAgent({ history: [], input: "câu 1", skills: [], registry: registry(), now: monday("10:00") }))
     const turn1 = done(first)
-    // Request 1: no two user messages in a row; profile is the first part of the first user message.
+    // Request 1: no two user messages in a row; the profile rides the static
+    // system prefix (cache-marked) instead of the first user message.
     const roles1 = bodies[0]!.messages.map((m) => m.role).filter((r) => r !== "system")
     expect(roles1).toEqual(["user"])
+    const systemMsg = JSON.stringify(bodies[0]!.messages.find((m) => m.role === "system"))
+    expect(systemMsg).toContain("HO-SO-DAU-TU-MARKER")
     const firstUser = JSON.stringify(bodies[0]!.messages.find((m) => m.role === "user"))
-    expect(firstUser.indexOf("ho_so_nha_dau_tu")).toBeLessThan(firstUser.indexOf("phien_giao_dich"))
+    expect(firstUser).not.toContain("ho_so_nha_dau_tu")
+    expect(firstUser.indexOf("moi_truong")).toBeLessThan(firstUser.indexOf("phien_giao_dich"))
     expect(firstUser).toContain("câu 1")
     // Stored history keeps the reminder (so turn 2 still sees the clock) but not the profile.
     const stored = JSON.stringify(turn1.messages)
@@ -313,9 +317,10 @@ test("context rides on the first user message; reminders are kept in history, th
     // Same phase: the clock from turn 1 is still in history, no second copy is added.
     expect(JSON.stringify(sent).split("<phien_giao_dich>").length - 1).toBe(1)
     expect(JSON.stringify(sent.at(-1))).not.toContain("phien_giao_dich")
-    // The profile is rebuilt every request, on the first user message only.
+    // The profile is rebuilt every request into the static system prefix, never into history.
     expect(JSON.stringify(sent).split("HO-SO-DAU-TU-MARKER").length - 1).toBe(1)
-    expect(JSON.stringify(sent[sent.findIndex((m) => m.role === "user")])).toContain("HO-SO-DAU-TU-MARKER")
+    expect(JSON.stringify(sent.find((m) => m.role === "system"))).toContain("HO-SO-DAU-TU-MARKER")
+    expect(sent.filter((m) => m.role === "user").every((m) => !JSON.stringify(m).includes("HO-SO-DAU-TU-MARKER"))).toBe(true)
   } finally {
     await rm(path.join(home, "INVESTOR.md"), { force: true })
   }

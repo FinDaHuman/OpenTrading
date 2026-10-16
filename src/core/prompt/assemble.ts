@@ -164,6 +164,10 @@ export function assemble(input: AssembleInput, promptsDir = PROMPTS_DIR): Assemb
   } else add(system, "identity", 1, "system", promptFile("identity", promptsDir))
   if (input.tools.length > 0) add(system, "tools", 7, "system", promptFile("tools", promptsDir))
   add(system, "citations", 1, "system", promptFile("citations", promptsDir))
+  // Investor profile rides the static system prefix (cache-marked on Anthropic) like
+  // CLAUDE.md at boot. Re-read per request but byte-identical while the file is unchanged,
+  // so it caches the same — while an edit still applies the very next request.
+  add(system, "ho_so_nha_dau_tu", 3, "system", input.investorProfile?.trim() || undefined, "investor_profile")
   if (subagent) add(system, "chi_dan_agent", 6, "system", input.agentPrompt?.trim() || undefined, "identity")
   else {
     add(system, "memory_policy", 4, "system", input.memoryInstructions?.trim() || undefined)
@@ -201,7 +205,6 @@ ${m.text}
 
   // ── context: user data, rebuilt every request ──────────────────────────
   add(context, "moi_truong", 4, "context", renderEnv(), "moi_truong")
-  add(context, "ho_so_nha_dau_tu", 4, "context", input.investorProfile?.trim() || undefined, "investor_profile")
   add(context, "memory", 4, "context", input.memoryIndex?.trim() || undefined)
   const sticky = input.sticky.flatMap((name) => visible.filter((s) => s.name === name && s.activation !== "always"))
   if (sticky.length > 0) {
