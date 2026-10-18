@@ -41,7 +41,7 @@ Contract cho đồng nghiệp: [docs/contracts.md](contracts.md).
 | **Tool hỏi người dùng** `ask_user` (`src/core/ask.ts`) | Xong. 1–4 câu trắc nghiệm, chọn nhiều, tự nhập, xem lại trước khi gửi; chờ trả lời không tính timeout |
 | `/connect`: 204 provider (models.dev), `/model` gộp model của mọi provider | Xong |
 | Chat stream, `esc` để dừng, lỗi hiển thị tiếng Việt, Tab hoàn thành lệnh | Xong |
-| **Agent loop** (`src/core/agent.ts`) | Xong. Gọi tool nhiều bước; giới hạn 10 bước, bước cuối bắt model tổng kết; lỗi tool được trả về cho model; khi huỷ hoặc lỗi, history không còn tool-call nào thiếu kết quả |
+| **Agent loop** (`src/core/agent.ts`) | Xong. Gọi tool nhiều bước; mặc định không chặn số bước (model tự dừng, `maxSteps` trong config để đặt trần — có trần thì bước cuối bắt model tổng kết); lỗi tool được trả về cho model; khi huỷ hoặc lỗi, history không còn tool-call nào thiếu kết quả |
 | **Tool registry** (`src/core/tools/`) | Xong. Tool có sẵn và tool MCP dùng chung một interface; tool chỉ đọc chạy song song, tool khác chạy lần lượt; có timeout; output bị cắt ở 30.000 ký tự |
 | Tool có sẵn: `current_time` (giờ VN), `load_skill` (nạp skill khi model cần) | Xong |
 | **MCP client** (`src/core/mcp/`) | Xong, ngang Claude Code/opencode: |
