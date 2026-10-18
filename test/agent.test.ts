@@ -224,6 +224,14 @@ test("the step limit comes from config.maxSteps when the caller does not set one
   }
 })
 
+test("without a configured cap the turn is not limited to 10 steps", async () => {
+  script = Array.from({ length: 12 }, () => ({ tool: "current_time", args: {} }))
+  const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: registry() }))
+  expect(bodies).toHaveLength(13)
+  expect(events.some((e) => e.type === "notice" && e.text.includes("bước gọi tool"))).toBe(false)
+  expect(done(events).outcome).toBe("completed")
+})
+
 test("each round of tool results gets one unstored nudge; the last step gets only the summary prompt", async () => {
   plan = { tool: "current_time", args: {}, always: true }
   const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: registry(), maxSteps: 4 }))

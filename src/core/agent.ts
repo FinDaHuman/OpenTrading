@@ -32,7 +32,9 @@ import { TOOL_SEARCH } from "./tools/builtin/tool-search"
 import { LOCAL_SOURCE, type ToolResult } from "./tools/types"
 import type { ChartData } from "./tools/chart/data"
 
-export const DEFAULT_MAX_STEPS = 10
+/** Unlimited: the turn ends when the model stops calling tools. A cap is opt-in via
+ *  config `maxSteps` or the caller's `opts.maxSteps`; when capped, the last step forces a summary. */
+export const DEFAULT_MAX_STEPS = Number.POSITIVE_INFINITY
 
 const SUMMARY_PROMPT =
   "Đã hết số lượt gọi tool cho câu hỏi này. Không gọi thêm tool. Hãy tổng kết câu trả lời dựa trên dữ liệu đã có, nói rõ phần nào còn thiếu."

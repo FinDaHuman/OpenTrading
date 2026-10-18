@@ -39,8 +39,9 @@ export interface Config {
   webModel?: { provider?: string; model?: string }
   /**
    * Model steps per turn (each step = one model call that may run several tools in
-   * parallel; the last one is forced to answer). Default 10. Orchestrating skills that
-   * dispatch subagents still fit in 10; raise it for long research turns.
+   * parallel). Default: unlimited — the turn ends when the model stops calling tools.
+   * Set a number to cap it; the last step is then forced to answer. Subagents keep
+   * their own per-type cap (`agents/*.md` maxSteps, default 8).
    */
   maxSteps?: number
 }
