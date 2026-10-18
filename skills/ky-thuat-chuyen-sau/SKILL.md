@@ -5,7 +5,7 @@ activation: auto
 requires_tools: [mcp__opentrading__signals_technical]
 triggers:
   keywords: [kỹ thuật, rsi, macd, bb, bollinger, ichimoku, elliott, wyckoff, vùng hỗ trợ, kháng cự, breakout, pattern, orderbook, đọc băng, chỉ báo, adx, ema, sma, higher high, lower low, đa khung]
-version: 1.3.1
+version: 1.4.0
 ---
 
 # Phân tích kỹ thuật một mã
@@ -45,11 +45,29 @@ Trình bày kết luận đúng cấu trúc sau, cho MỖI khung (1D/1W[/1M]), m
 
 1. Trend: SMA stack + ADX. 2. Momentum: RSI/MACD/stoch/CCI cụ thể từng chỉ báo. 3. S-R của khung đó. 4. Cấu trúc: HH/HL/LH/LL + Fibo + Elliott pattern/invalidation + Wyckoff phase + confidence. 5. Kết luận khung: higher-high hay lower-low. 6. Tổng hợp: đồng thuận đa khung hay phân kỳ + trigger giá → timing MUA/CHỜ/BÁN. 7. Kết luận 1 câu chốt toàn mã.
 
+## Ngôn ngữ trình bày
+
+Ký hiệu trong cấu trúc trên dùng để bạn đọc kết quả tool. Giữ nguyên 7 mục khi viết ra, nhưng chữ bên trong mục thì dịch sang lời thường:
+
+| Ký hiệu khi đọc tool | Viết cho người dùng |
+| --- | --- |
+| HH/HL/LH/LL, higher-high, lower-low | đỉnh cao dần / đáy cao dần / đỉnh thấp dần / đáy thấp dần |
+| S-R, support/resistance | vùng hỗ trợ – kháng cự |
+| SMA stack, SMA20 | cụm đường trung bình động, trung bình động 20 phiên (SMA20) |
+| ADX | sức mạnh xu hướng (ADX) |
+| BB, Bollinger band | dải Bollinger |
+| MACD line/signal/hist | đường MACD, đường tín hiệu, thanh lịch sử MACD |
+| Fibo, Elliott, Wyckoff, invalidation, confidence | nhịp theo số Fibonacci, sóng Elliott, tích lũy Wyckoff, điều kiện phủ định luận điểm, độ tin cậy |
+| momentum, sideway, trigger | động lượng, đi ngang, mức giá kích hoạt |
+| 1D/1W/1M | khung ngày/tuần/tháng |
+
+Tên chỉ báo viết tắt quen thuộc (RSI, MACD, ADX, SMA20) thì giữ nguyên, chú giải một câu ngắn lần đầu: "RSI (thang đo sức mua bán của 14 phiên gần nhất)". Tên mô hình lạ (Wyckoff, Elliott) chỉ nêu khi kèm một câu nói nó đang chỉ cái gì; không thì bỏ — kết luận đứng được mà không cần tên đó.
+
 ## Ví dụ
 
 **Ví dụ 1:**
 Hỏi: FPT kỹ thuật 1D+1W
-Đạt khi: verdict 2 khung + HH/LL + Ichimoku signal, ≤8 calls.
+Đạt khi: verdict 2 khung + HH/LL + Ichimoku signal, ≤8 calls, và trong câu trả lời không còn nhãn kỹ thuật tiếng Anh nào chưa dịch.
 
 ## Trực quan hóa
 

@@ -164,6 +164,9 @@ export function assemble(input: AssembleInput, promptsDir = PROMPTS_DIR): Assemb
   } else add(system, "identity", 1, "system", promptFile("identity", promptsDir))
   if (input.tools.length > 0) add(system, "tools", 7, "system", promptFile("tools", promptsDir))
   add(system, "citations", 1, "system", promptFile("citations", promptsDir))
+  // Which words to use, for whom — rides the static prefix so it applies to subagents too
+  // (their text is pasted by the main agent and keeps the wording it was written with).
+  add(system, "ngon_ngu", 8, "system", promptFile("ngon_ngu", promptsDir))
   // Investor profile rides the static system prefix (cache-marked on Anthropic) like
   // CLAUDE.md at boot. Re-read per request but byte-identical while the file is unchanged,
   // so it caches the same — while an edit still applies the very next request.

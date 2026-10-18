@@ -174,6 +174,8 @@ test("tool guidance lives in one place and the format example carries no real-lo
   // Budget guard: the static prompt must not creep back up (≈1.0k tokens on 06/10/2026,
   // ≈1.2k after the identity forecast update, ≈1.3k after the tools restraint rule,
   // ≈1.4k after citations/style/tool speech lines, ≈1.5k after the style.md redesign on 14/10/2026,
-  // ≈1.55k after the tools.md act-when-ready line on 15/10/2026).
-  expect(Math.ceil(a.system.length / 4)).toBeLessThan(1_550)
+  // ≈1.55k after the tools.md act-when-ready line on 15/10/2026,
+  // ≈2.1k after the <ngon_ngu> layer on 18/10/2026 — the glossary rules that stop jargon
+  // going unexplained, and they cost ~530 tokens; style.md stays short so they cannot be cut).
+  expect(Math.ceil(a.system.length / 4)).toBeLessThan(2_200)
 })

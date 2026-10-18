@@ -31,6 +31,10 @@ export const BUDGETS: Record<string, Record<Tier, number | undefined>> = {
   mcp_instructions: { A: 2_000, B: 1_200, C: 500 },
   tools: { A: undefined, B: undefined, C: undefined },
   citations: { A: undefined, B: undefined, C: undefined },
+  // `style` is deliberately short and gets dropped on the smallest tier; the language
+  // layer carries the glossary rules that fix "jargon without explanation", so it must
+  // survive truncation everywhere — tightening `style` cannot be allowed to cut it.
+  ngon_ngu: { A: undefined, B: undefined, C: 600 },
   style: { A: 400, B: 250, C: 0 },
   todos: { A: 600, B: 400, C: 300 },
 }
