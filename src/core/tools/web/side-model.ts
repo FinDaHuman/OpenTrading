@@ -5,6 +5,7 @@ import { generateText, type LanguageModel, type ToolSet } from "ai"
 import { describeError, resolveTarget, type Target } from "../../chat"
 import { loadConfig } from "../../config"
 import { languageModel, sdkOf } from "../../providers"
+import { classifyFailure } from "../../retry"
 
 /**
  * Side model calls for the web tools, the way Claude Code runs its WebSearch: a separate
@@ -132,11 +133,10 @@ export async function extractWithModel(content: string, prompt: string, url: str
   return result.text.trim() || "Model không trả lời."
 }
 
-/** A 429 / exhausted quota, also inside the SDK's RetryError. */
+/** A 429 / exhausted quota (daily or per-minute), by the same classifier as the turn's retries. */
 export function isQuotaError(error: unknown): boolean {
-  const e = error as { statusCode?: number; name?: string; lastError?: unknown; message?: string } | undefined
-  if (e?.name === "AI_RetryError" && e.lastError) return isQuotaError(e.lastError)
-  return e?.statusCode === 429 || /\b429\b|RESOURCE_EXHAUSTED|exceeded your current quota/i.test(e?.message ?? "")
+  const kind = classifyFailure(error).kind
+  return kind === "daily-quota" || kind === "rate-limit"
 }
 
 /** How long a model whose search hit its quota is skipped (the fallbacks run at once). */

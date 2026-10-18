@@ -1,6 +1,7 @@
 import { connectedProviders, getKey } from "./auth"
 import { loadConfig } from "./config"
 import { loadCatalog, type CatalogProvider } from "./catalog"
+import { describeFailure } from "./retry"
 
 export class ChatSetupError extends Error {}
 
@@ -34,7 +35,7 @@ export function describeError(error: unknown): string {
   if (status === 401 || status === 403)
     return `API key không hợp lệ hoặc không có quyền (${status}). Gõ /connect để nhập lại.`
   if (status === 404) return "Model không tồn tại với provider này (404). Gõ /model để chọn lại."
-  if (status === 429) return "Hết quota hoặc bị giới hạn tốc độ (429). Thử lại sau hoặc đổi model."
+  if (status === 429) return describeFailure(error) ?? "Hết quota hoặc bị giới hạn tốc độ (429). Thử lại sau hoặc đổi model."
   if (status === 400 && /tool/i.test(e?.message ?? "") && /support/i.test(e?.message ?? ""))
     return "Model này không hỗ trợ gọi tool (400). Gõ /model để chọn model khác."
   const message = e?.message ?? String(error)

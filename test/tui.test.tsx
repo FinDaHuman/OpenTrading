@@ -8,6 +8,8 @@ import { z } from "zod"
 // Isolate state from the real ~/.opentrading before any core module loads.
 const home = await mkdtemp(path.join(os.tmpdir(), "opentrading-test-"))
 process.env.OPENTRADING_HOME = home
+// Retries do not sleep in tests (retry.ts scales every wait).
+process.env.OPENTRADING_RETRY_SCALE = "0"
 for (const env of ["GROQ_API_KEY", "GOOGLE_GENERATIVE_AI_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY", "NVIDIA_API_KEY"])
   delete process.env[env]
 
@@ -78,6 +80,8 @@ const ASK_MANY = {
 let summaryGate: Promise<void> | undefined
 /** Set by the esc-while-streaming test: "CHẬM" makes the fake model call the slow tool. */
 let callSlowTool = false
+/** "QUÁ-TẢI" requests fail with 503 this many times before answering. */
+let overloaded = 0
 /** Subagent requests wait for this before answering (their rows stay "running"). */
 let childGate: Promise<void> | undefined
 /** A "CON-DOC" subagent waits for this after its first tool (between two model steps). */
@@ -174,6 +178,10 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
         function: { name: "spawn_subagent", arguments: JSON.stringify({ description, prompt, ...(background ? { run_in_background: true } : {}) }) },
       }))
       return sseOf(chunk({ role: "assistant", tool_calls: calls }) + chunk({}, "tool_calls") + "data: [DONE]\n\n")
+    }
+    if (last.includes("QUÁ-TẢI") && overloaded > 0) {
+      overloaded--
+      return Response.json({ error: { message: "overloaded" } }, { status: 503 })
     }
     if (last.includes("MẤY-GIỜ") && !request.messages.some((m) => m.role === "tool")) {
       const call = { index: 0, id: "call_1", type: "function", function: { name: "current_time", arguments: "{}" } }
@@ -779,6 +787,24 @@ test("/context shows each prompt layer with its token estimate", async () => {
   show(frame)
   setup.mockInput.pressEscape()
   await setup.waitFor(() => state.dialog === undefined)
+})
+
+test("a retried request shows one wait line, rewritten per retry, then the answer", async () => {
+  await setKey("nvidia", "nvapi-good-key")
+  overloaded = 2
+  const before = state.lines.length
+  await setup.mockInput.typeText("QUÁ-TẢI thử")
+  setup.mockInput.pressEnter()
+  await setup.waitFor(() => state.lines.slice(before).some((l) => l.kind === "user" && l.text === "QUÁ-TẢI thử"))
+  await setup.waitFor(() => !state.streaming)
+  const turn = state.lines.slice(before)
+  const waits = turn.filter((l) => l.kind === "info" && l.text.includes("thử lại sau"))
+  expect(waits).toHaveLength(1) // one line, rewritten by the second retry
+  expect(turn.some((l) => l.kind === "assistant" && l.text.includes("HẾT-CÂU-TRẢ-LỜI"))).toBe(true)
+  const frame = await setup.waitForFrame((f) => f.includes("(lần 2/4)"))
+  show(frame)
+  expect(frame).toContain("provider lỗi tạm thời (503): thử lại sau")
+  expect(frame).not.toContain("(lần 1/4)")
 })
 
 test("a tool call renders as a ● row with its result under ⎿, then the answer", async () => {

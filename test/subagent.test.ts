@@ -7,6 +7,8 @@ import { z } from "zod"
 // Isolated state dir before core modules read it.
 const home = await mkdtemp(path.join(os.tmpdir(), "ot-subagent-"))
 process.env.OPENTRADING_HOME = home
+// Retries do not sleep in tests (retry.ts scales every wait).
+process.env.OPENTRADING_RETRY_SCALE = "0"
 
 const text = { input: ["text"], output: ["text"] }
 const CATALOG = {
@@ -217,7 +219,7 @@ test("parallel spawns beyond subagents.maxConcurrent wait for a slot instead of 
 test("a child that fails with nothing to show fails the call; the error reaches the parent model", async () => {
   const { registry } = setup()
   parentCalls = [spawn("FPT")]
-  childStatus = 400 // non-retryable: lỗi 5xx giờ được SDK retry lũy kế 2 (tới ~30s), sẽ trôi qua timeout test
+  childStatus = 500 // retried (without sleeping in tests), then the child fails
   const events = await collect(runAgent({ history: [], input: "x", skills: [], registry }))
   const [end] = ends(events)
   expect(end!.ok).toBe(false)
