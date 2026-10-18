@@ -1,4 +1,4 @@
-import { useTerminalDimensions } from "@opentui/solid"
+import { useRenderer, useTerminalDimensions } from "@opentui/solid"
 import { createSignal, For, Match, onCleanup, Show, Switch } from "solid-js"
 import { state, type Line } from "./state"
 import { color, markdownStyle } from "./theme"
@@ -159,6 +159,7 @@ function Hanging(props: { glyph: string; glyphColor: string; text: string; fg: s
 }
 
 function Row(props: { line: Line; prev?: Line; index: number; width: number }) {
+  const scene = useRenderer().nativeScene
   return (
     <Switch>
       <Match when={props.line.kind === "user"}>
@@ -175,7 +176,7 @@ function Row(props: { line: Line; prev?: Line; index: number; width: number }) {
                 flexGrow={1}
                 flexShrink={1}
                 content={l.text.trim() + (l.done ? "" : " ▍")}
-                syntaxStyle={markdownStyle()}
+                syntaxStyle={markdownStyle(scene)}
                 streaming={!l.done}
                 conceal
                 fg={color.tx}
@@ -220,6 +221,7 @@ const kTokens = (n: number) => (n >= 1000 ? `${Math.round(n / 1000)}k` : String(
 
 /** "● Đã nén hội thoại (42k → 6k token)"; ctrl+o shows the summary that replaced the start. */
 function CompactRow(props: { line: Extract<Line, { kind: "compact" }> }) {
+  const scene = useRenderer().nativeScene
   const sizes = () =>
     props.line.before !== undefined && props.line.after !== undefined ? ` (~${kTokens(props.line.before)} → ~${kTokens(props.line.after)} token)` : ""
   const title = () =>
@@ -239,7 +241,7 @@ function CompactRow(props: { line: Extract<Line, { kind: "compact" }> }) {
           <text fg={color.tx3} width={RESULT.length} flexShrink={0} selectable={false}>
             {RESULT}
           </text>
-          <markdown flexGrow={1} flexShrink={1} content={props.line.summary!} syntaxStyle={markdownStyle()} conceal fg={color.tx3} bg={color.bg} />
+          <markdown flexGrow={1} flexShrink={1} content={props.line.summary!} syntaxStyle={markdownStyle(scene)} conceal fg={color.tx3} bg={color.bg} />
         </box>
       </Show>
     </box>
