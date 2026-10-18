@@ -2,6 +2,7 @@ import { generateText } from "ai"
 import { resolveTarget, type Target } from "../chat"
 import { promptFile } from "../prompt/assemble"
 import { languageModel } from "../providers"
+import { webTarget } from "../tools/web/side-model"
 
 /**
  * Session title generator (Claude Code pattern): one small request after the
@@ -33,7 +34,10 @@ export async function generateTitleText(target: Target, firstText: string): Prom
       model: languageModel(target.provider, target.model, target.apiKey),
       system: titlePrompt(),
       messages: [{ role: "user", content: input }],
-      maxOutputTokens: 30,
+      // Room for a thinking model's reasoning before the few words of the title
+      // (Gemini 2.5/3 count thoughts as output; 30 tokens came back empty).
+      maxOutputTokens: 256,
+      // A side request: a failure keeps the fallback title, never spends more quota.
       maxRetries: 0,
     })
     return cleanTitle(result.text) || undefined
@@ -42,10 +46,14 @@ export async function generateTitleText(target: Target, firstText: string): Prom
   }
 }
 
-/** Resolve the session target and generate a title; never throws. */
+/**
+ * Generate a title with the side model (`webModel`, the cheap one the user picked for side
+ * calls; Claude Code uses Haiku, opencode its small_model), else the session's; never throws.
+ */
 export async function generateTitle(firstText: string): Promise<string | undefined> {
   try {
-    return await generateTitleText(await resolveTarget(), firstText)
+    const target = (await webTarget()) ?? (await resolveTarget())
+    return await generateTitleText(target, firstText)
   } catch {
     return undefined
   }

@@ -9,9 +9,9 @@ import {
   DEFAULT_COMPACT_WINDOW,
   IMAGE_TOKENS,
   MAX_AUTO_FAILURES,
-  compactAnalysisPrompt,
   compactHistory,
   compactPrompt,
+  formatCompactSummary,
   isContextOverflow,
   shouldAutoCompact,
   tokensOf,
@@ -104,13 +104,17 @@ export async function compact(runtime: Runtime, trigger: "auto" | "manual", inst
       onSummarize: () =>
         pushLine({
           kind: "info",
-          text: trigger === "auto" ? "Context gần đầy: đang tóm tắt phần đầu hội thoại (dùng 2 requests: phân tích rồi tóm tắt)…" : "Đang tóm tắt hội thoại (dùng 2 requests: phân tích rồi tóm tắt)…",
+          text: trigger === "auto" ? "Context gần đầy: đang tóm tắt phần đầu hội thoại (dùng 1 request)…" : "Đang tóm tắt hội thoại (dùng 1 request)…",
         }),
       window,
       manual: trigger === "manual",
       instructions,
       summarize: async (head, extra) => {
-        const base = {
+        // One request: <analysis> scratchpad then <summary> (Claude Code); lean when the head is huge.
+        const lean = tokensOf(head) > COMPACT_LEAN_TOKENS
+        const text = await summarizeConversation({
+          head,
+          prompt: compactPrompt(extra, lean ? "lean" : "full"),
           skills: state.skills,
           sticky: state.activeSkills,
           registry: runtime.registry,
@@ -118,14 +122,10 @@ export async function compact(runtime: Runtime, trigger: "auto" | "manual", inst
           memory: runtime.memory,
           serverInstructions: () => runtime.mcp.instructions(),
           signal: controller.signal,
-        }
-        // Phase 1 (analysis-first): inventory the head structure; phase 2 writes
-        // the summary from it. Lean variant when the head alone is huge.
-        const lean = tokensOf(head) > COMPACT_LEAN_TOKENS
-        const run = (prompt: string) =>
-          summarizeConversation({ ...base, head, prompt, signal: controller.signal })
-        const analysis = await run(compactAnalysisPrompt())
-        return run(compactPrompt(extra, analysis, lean ? "lean" : "full"))
+        })
+        const summary = formatCompactSummary(text)
+        if (summary === undefined) throw new Error("Bản tóm tắt bị cắt giữa chừng; hội thoại giữ nguyên.")
+        return summary
       },
     })
     if (epoch !== mine) return false

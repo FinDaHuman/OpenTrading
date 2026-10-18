@@ -33,8 +33,8 @@ export interface Config {
    */
   subagents?: { maxConcurrent?: number; provider?: string; model?: string }
   /**
-   * Model for web side calls: provider-native search (web_search) and reading a page against
-   * a prompt (web_fetch). Unset: the session's model. A cheap model saves quota.
+   * Model for side calls: provider-native search (web_search), reading a page against a
+   * prompt (web_fetch) and the session title. Unset: the session's model. A cheap model saves quota.
    */
   webModel?: { provider?: string; model?: string }
   /**

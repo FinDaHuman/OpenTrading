@@ -51,29 +51,18 @@ export const PRUNED_TEXT = "(đã dọn kết quả cũ để tiết kiệm cont
 /** Their results are small and carry state the harness or the model still needs. */
 const PROTECTED = new Set(["todo_write", "load_skill", "ask_user"])
 
-/** Phase 1 of analysis-first compaction (Claude Code pattern): before summarizing,
- * the model inventories the conversation structure into an <analysis> block —
- * tool-call counts, data series fetched, questions asked — so the summary (phase 2)
- * is built from the inventory instead of re-reading everything. Text only, no tools. */
-export function compactAnalysisPrompt() {
-  return [
-    "Phân tích cấu trúc cuộc hội thoại ở trên để chuẩn bị tóm tắt. Chỉ trả lời bằng chữ, không gọi tool. Trả về đúng một khối <analysis> với các dòng:",
-    "",
-    "- tool: mỗi tool đã gọi và số lần (ví dụ: vn_quote_history x3).",
-    "- du_lieu: chuỗi số liệu đã lấy (mã/kỳ/nguồn, ví dụ: HPG D 30 nến từ vn_quote_history).",
-    "- cau_hoi: từng câu hỏi của người dùng, giữ sát lời gốc.",
-    "- file_skill: file đã tạo/sửa, skill đã nạp.",
-    "Không tóm tắt, không nhận định — chỉ kiểm kê.",
-  ].join("\n")
-}
-
 /** Head this large gets the lean summary variant (drops the analysis section). */
 export const COMPACT_LEAN_TOKENS = 100_000
 
 export type CompactVariant = "full" | "lean"
 
-/** Sent after the head when summarizing; the summary must stand in for everything above it. */
-export function compactPrompt(instructions?: string, analysis?: string, variant: CompactVariant = "full") {
+/**
+ * Sent after the head when summarizing; the summary must stand in for everything above it.
+ * One request, as Claude Code does (services/compact/prompt.ts): the model first inventories
+ * the conversation in an <analysis> scratchpad, then writes the <summary>;
+ * {@link formatCompactSummary} keeps only the summary.
+ */
+export function compactPrompt(instructions?: string, variant: CompactVariant = "full") {
   const sections =
     variant === "lean"
       ? [
@@ -97,14 +86,27 @@ export function compactPrompt(instructions?: string, analysis?: string, variant:
           "Việc chưa xong và việc nên làm tiếp nếu người dùng muốn.",
         ]
   return [
-    "Tóm tắt toàn bộ cuộc hội thoại ở trên để tiếp tục làm việc mà không cần đọc lại nó. Chỉ trả lời bằng chữ, không gọi tool. Viết bằng ngôn ngữ của cuộc hội thoại. Giữ đúng các mục sau, mục nào không có thì ghi \"(không có)\":",
+    "Tóm tắt toàn bộ cuộc hội thoại ở trên để tiếp tục làm việc mà không cần đọc lại nó. Chỉ trả lời bằng chữ, không gọi tool. Viết bằng ngôn ngữ của cuộc hội thoại.",
     "",
-    ...(analysis?.trim()
-      ? ["Khung phân tích đã có (dùng làm sườn, không tóm tắt lại nó):", `<analysis>\n${analysis.trim()}\n</analysis>`, ""]
-      : []),
+    "Trước hết viết một khối <analysis> ngắn để kiểm kê, không nhận định: mỗi tool đã gọi và số lần; chuỗi số liệu đã lấy (mã, kỳ, nguồn); từng câu hỏi của người dùng; skill đã nạp. Khối này chỉ là nháp và sẽ bị bỏ.",
+    "Sau đó viết bản tóm tắt trong khối <summary>, giữ đúng các mục sau, mục nào không có thì ghi \"(không có)\":",
+    "",
     ...sections,
     ...(instructions?.trim() ? ["", `Yêu cầu thêm của người dùng cho bản tóm tắt: ${instructions.trim()}`] : []),
   ].join("\n")
+}
+
+/**
+ * The summary without the <analysis> scratchpad. A reply without the tags is taken whole;
+ * an <analysis> that never closes means the reply was cut off (undefined).
+ */
+export function formatCompactSummary(text: string): string | undefined {
+  const opened = text.indexOf("<analysis>")
+  if (opened >= 0 && text.indexOf("</analysis>", opened) < 0) return undefined
+  const withoutAnalysis = text.replace(/<analysis>[\s\S]*?<\/analysis>/g, "")
+  const summary = /<summary>([\s\S]*?)(?:<\/summary>|$)/.exec(withoutAnalysis)
+  const body = (summary ? summary[1]! : withoutAnalysis).trim()
+  return body || undefined
 }
 
 const isRealUser = (m: ModelMessage) => m.role === "user"

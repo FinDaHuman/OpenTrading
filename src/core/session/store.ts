@@ -106,9 +106,18 @@ export class Session {
     return new Session(summary.id, summary.file, summary)
   }
 
-  /** Replace the fallback title with a generated one (persists on the next turn's append). */
-  setTitle(title: string) {
-    if (title.trim()) this.title = title.trim()
+  /** Replace the fallback title with a generated one, written to the index right away. */
+  setTitle(title: string): Promise<void> {
+    const clean = title.trim()
+    if (!clean) return Promise.resolve()
+    this.title = clean
+    this.writing = this.writing.then(async () => {
+      // Before the first turn is written there is no index line yet; that write uses this title.
+      if (!this.lastSummary) return
+      this.lastSummary = { ...this.lastSummary, title: clean }
+      await appendFile(indexFile(), JSON.stringify(this.lastSummary) + "\n", "utf8")
+    })
+    return this.writing
   }
 
   get path() {
@@ -121,6 +130,8 @@ export class Session {
   }
 
   private pendingCharts: { callId: string; data: ChartData }[] = []
+  /** The index line written last (a new title rewrites it). */
+  private lastSummary: SessionSummary | undefined
 
   /** A chart drawn during the current turn; written with the turn. */
   noteChart(callId: string, data: ChartData) {
@@ -188,6 +199,7 @@ export class Session {
     }
     await mkdir(sessionsDir(), { recursive: true })
     await appendFile(indexFile(), JSON.stringify(summary) + "\n", "utf8")
+    this.lastSummary = summary
   }
 }
 

@@ -211,3 +211,16 @@ test("sessions updated in the same millisecond list the one written last first",
   await appendFile(index, lineOfA + "\n")
   expect((await listSessions())[0]!.id).toBe(a.id)
 })
+
+test("a generated title reaches the session list at once, even after a single turn", async () => {
+  const session = Session.create()
+  await session.appendTurn(turn2, info)
+  expect((await listSessions()).find((s) => s.id === session.id)!.title).toBe("Cảm ơn")
+  await session.setTitle("  Lời cảm ơn  ")
+  const listed = (await listSessions()).find((s) => s.id === session.id)!
+  expect(listed.title).toBe("Lời cảm ơn")
+  expect(listed.turns).toBe(1)
+  // A blank title changes nothing.
+  await session.setTitle("   ")
+  expect((await listSessions()).find((s) => s.id === session.id)!.title).toBe("Lời cảm ơn")
+})
