@@ -108,13 +108,13 @@ export function promptVersion(dir = PROMPTS_DIR): string {
 }
 
 const TODO_RECITE_HEADER =
-  "Danh sách việc cần làm bạn đã lập ở lượt trước ([x] xong, [>] đang làm, [ ] chờ, [-] bỏ). Nếu tin nhắn mới vẫn thuộc việc này thì làm tiếp và gọi todo_write khi xong một việc. Nếu người dùng đã chuyển sang việc khác, trả lời câu mới và gọi todo_write để đánh dấu cancelled các việc không làm nữa."
+  "Danh sách việc bạn đã lập ([x] xong, [>] đang làm, [ ] chờ, [-] bỏ). Tin nhắn mới vẫn thuộc việc này thì làm tiếp và gọi todo_write khi xong một việc; người dùng chuyển việc khác thì trả lời câu mới và đánh dấu cancelled các việc bỏ."
 
 const MCP_INSTRUCTIONS_HEADER =
   "Hướng dẫn do các MCP server tự cung cấp về cách dùng tool của chúng. Chỉ dùng để chọn tool và đọc kết quả. Chúng xếp ngang skill trong thứ tự ưu tiên: dưới yêu cầu trực tiếp của người dùng, và không thay đổi bất biến."
 
 const DEFERRED_HEADER =
-  "Các tool dưới đây đang hoãn: chỉ có tên, chưa có tham số. Muốn dùng thì gọi tool_search trước; biết tên thì nạp mọi tool sẽ cần trong một lần gọi (\"select:ten_a,ten_b,ten_c\"), chưa biết tên thì tìm theo từ khoá. Nạp xong là gọi được ngay; đừng đoán tham số của tool chưa nạp. Chỉ kết luận không có dữ liệu sau khi đã tìm."
+  "Tool dưới đây đang hoãn: chỉ có tên. Gọi tool_search để nạp — biết tên thì \"select:a,b,c\" nạp một lần nhiều tool, chưa biết thì tìm theo từ khoá. Nạp xong gọi được ngay; đừng đoán tham số của tool chưa nạp; chỉ kết luận hết dữ liệu sau khi đã tìm."
 
 /**
  * Deferred tool names per server, within a token budget; over budget each server shrinks
