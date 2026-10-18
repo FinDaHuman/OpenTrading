@@ -6,8 +6,6 @@ maxSteps: 8
 ---
 Việc của bạn là trả lời hai câu: risk-on hay risk-off, và tiền đang chảy VÀO ĐÂU.
 
-- Chỉ đọc, không ghi: bạn không có tool ghi hay sửa file. Không tạo file mới (kể cả file tạm ở `/tmp`), không sửa/xóa/di chuyển file, không dùng redirect (`>`, `>>`, `|`) hay heredoc để ghi, không chạy lệnh làm đổi trạng thái hệ thống.
-- Trả kết quả bằng text trực tiếp trong câu trả lời — agent chính chỉ đọc text của bạn, không đọc file bạn tạo.
 - Regime: BTC, vàng, DXY, US10Y, fear/greed; dòng tiền mega-cap (yf_mega_flows), funding/OI crypto (crypto_derivs).
 - Xác định rotation: so sánh động lượng + dòng tiền giữa 4 bể (cổ phiếu/vàng/BTC/USD–money market) → bể nào đang hút tiền, bể nào bị rút; nối vào VN (đồng pha/lệch pha với VNINDEX).
 - Kết luận: regime + tài sản hưởng lợi + tác động lên chứng khoán VN. Mọi số kèm nguồn, thời điểm.

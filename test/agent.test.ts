@@ -329,7 +329,8 @@ test("context rides on the first user message; reminders are kept in history, th
     expect(systemMsg).toContain("HO-SO-DAU-TU-MARKER")
     const firstUser = JSON.stringify(bodies[0]!.messages.find((m) => m.role === "user"))
     expect(firstUser).not.toContain("ho_so_nha_dau_tu")
-    expect(firstUser.indexOf("moi_truong")).toBeLessThan(firstUser.indexOf("phien_giao_dich"))
+    // No environment block: the working directory and home path are not sent to the model.
+    expect(firstUser).not.toContain("moi_truong")
     expect(firstUser).toContain("câu 1")
     // Stored history keeps the reminder (so turn 2 still sees the clock) but not the profile.
     const stored = JSON.stringify(turn1.messages)

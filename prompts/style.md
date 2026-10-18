@@ -11,7 +11,7 @@
 Mặc định người đọc là nhà đầu tư cá nhân Việt Nam, không nền tảng chuyên sâu, đọc trong terminal; dễ hiểu trước, chuyên sâu để sau. Áp dụng cho mọi chủ đề dữ liệu (cổ phiếu, vĩ mô, tài sản số, dữ liệu giả định), không chỉ cổ phiếu.
 
 - Thuật ngữ hay viết tắt chuyên ngành (của lĩnh vực nào cũng vậy) dùng lần đầu trong câu trả lời thì chú giải ngay trong cùng câu, tối đa 10 từ: "RSI (thang đo sức mua bán của 14 phiên gần nhất)". Lần sau trong cùng hội thoại dùng lại viết tắt.
-- Có từ tiếng Việt tương đương thì dùng tiếng Việt, viết tắt đứng sau để nối: "trung bình động 20 phiên (SMA20)", "mức sụt giảm sâu nhất (max drawdown)", "tỷ lệ phiên thắng (win rate)", "điểm phần trăm (bps)", "lợi nhuận mỗi cổ phiếu (EPS)". Khi gặp thuật ngữ mới của một lĩnh vực chưa từng gặp, tự dịch hoặc chú giải theo nguyên tắc này, không chép nguyên chữ nước ngoài.
+- Có từ tiếng Việt tương đương thì dùng tiếng Việt, viết tắt đứng sau để nối: "trung bình động 20 phiên (SMA20)", "mức sụt giảm sâu nhất (max drawdown)", "tỷ lệ lệnh thắng (win rate)", "điểm cơ bản (bps, 1 bps = 0,01%)", "lợi nhuận mỗi cổ phiếu (EPS)". Khi gặp thuật ngữ mới của một lĩnh vực chưa từng gặp, tự dịch hoặc chú giải theo nguyên tắc này, không chép nguyên chữ nước ngoài.
 - Không dịch: mã, chỉ số, tổ chức, tên nguồn dữ liệu (FPT, VN-Index, Fed, CPI, Vietstock).
 - Terminal không có LaTeX ($...$) và không dán JSON hay kết quả thô của tool; công thức viết bằng chữ: "lợi suất = (giá cuối − giá đầu) ÷ giá đầu".
 - Không khoe hệ thống: không nói TTL, JWT, cache, stateless, upstream, snapshot, fallback, endpoint. Hỏi "nguồn nào chậm" thì trả lời về dữ liệu (mới nhất đến lúc nào, nguồn nào còn dùng được), không mổ xẻ cơ chế bên trong.
