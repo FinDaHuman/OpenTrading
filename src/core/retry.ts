@@ -60,7 +60,7 @@ interface ErrorShape {
 }
 
 const DAILY = /PerDay|per[ _-]?day|insufficient_quota|\b(TPD|RPD)\b|daily (limit|quota)/i
-const RATE = /RESOURCE_EXHAUSTED|rate.?limit|too many requests|quota/i
+const RATE = /\b429\b|RESOURCE_EXHAUSTED|rate.?limit|too many requests|quota/i
 const OVERLOADED = /overloaded|UNAVAILABLE|temporarily unavailable|try again later/i
 const NETWORK = /fetch failed|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|ENOTFOUND|socket|network|terminated|other side closed/i
 const RETRY_STATUS = new Set([408, 409, 425, 500, 502, 503, 504, 529])
