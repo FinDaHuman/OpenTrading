@@ -1,6 +1,7 @@
 # Playbook 4 pha + ma trận pha→mảng (số tra tool, file giữ logic)
 
 > Gợi ý ở đây là MẢNG (kèm hit-rate tra từ `cycle_chains`), không picking mã, không quy tắc mua/bán.
+> Trạng thái dữ liệu: basket v2 (2026-10-18) — 15 mảng, Vin tách riêng, viễn thông gộp vào CNTT.
 
 ## 1. Định nghĩa 4 pha
 
@@ -15,13 +16,16 @@
 
 | Pha hiện tại | Mảng gợi ý tiếp theo | Cơ sở |
 |---|---|---|
-| P1 (bank RS 3M dương) | **Chứng khoán** · **Thép** · BĐS | Chuỗi bankRS3m→CK/thép/BĐS (top chuỗi) |
+| P1 (bank RS 3M dương) | **Thép** · **Chứng khoán** · BĐS | Chuỗi NH→thép mạnh nhất, rồi NH→CK, NH→BĐS (tra `cycle_chains`) |
 | P1 sau Tết | Thép · Hóa chất · Vận tải · Dầu khí | `cycle_tet` post (hit-rate tra tool) |
-| P2 (CK mạnh) | CNTT · BĐS | Chuỗi CK→CNTT/BĐS trong `cycle_chains` |
-| P2 tháng 8 / tháng 11 | CK | Bias T8/T11 vượt trội |
+| P2 (CK mạnh) | CNTT · BĐS | Chuỗi CK→CNTT/CK→BĐS trong `cycle_chains` |
+| P2 (BĐS mạnh — chuỗi ngược) | **Chứng khoán** | Chuỗi BĐS→CK (một trong các cặp mạnh nhất bảng) |
+| P2 tháng 8 / tháng 11 | CK (+ vận tải, bán lẻ, hóa chất ở T8) | Bias T8/T11 vượt trội |
 | P3 | Giảm dần BĐS/utilities "last leg"; TRÁNH mua đuổi khi VNFIN đỉnh > 3 tháng | Quy tắc timing rotation-chains mục 4 |
 | P4 (đang rơi) | Trú: **consumer + utilities** · TRÁNH: thép/CK/BĐS | Tra `cycle_yearly` năm bear gần nhất |
-| P4 (vừa tạo đáy) | Hồi kỹ thuật: **thép** · **CK** · **CNTT** · TRÁNH BĐS | Tra `cycle_trough_events` (thép+CK+CNTT luôn top 3) |
+| P4 (vừa tạo đáy) | Hồi kỹ thuật: **thép** (top cả 2 đáy) · **CK** (top 3 cả 2 đáy) · CNTT (mạnh 2020, trung bình 2022) · TRÁNH kỳ vọng BĐS/Vin | Tra `cycle_trough_events` (mẫu nhỏ: chỉ 2 đáy đủ dữ liệu) |
+
+**Vin đứng ngoài ma trận chuỗi:** các cặp có Vin đều yếu/âm (tra `cycle_chains`). Vin chỉ dùng như thông tin riêng: mùa vụ T3/T4/T11, kết quả hồi sau đáy (rất khác nhau giữa 2 mẫu), sự kiện tập đoàn — không dùng Vin làm mắt xích "dẫn dắt tiếp theo".
 
 ## 3. Checklist chấm pha (dùng ở Bước 5 của SKILL.md)
 
@@ -36,5 +40,8 @@ Chấm mỗi trụ cột +1/0/-1 (ủng hộ/trung tính/chống) rồi cộng:
 
 - Chỉ gợi ý MẢNG + hit-rate tra từ tool. Picking mã cụ thể → skill phân tích mã. Quy tắc mua/bán, sizing, cắt lỗ → skill chiến lược/backtest.
 - Chuỗi "NH→Dầu khí" KHÔNG tồn tại (rel âm trong `cycle_chains`) — cấm gợi ý; dầu khí chỉ theo giá dầu + mùa.
-- Defensives (consumer/staples) ở VN gần như không dẫn sóng nào — chỉ gợi ý để TRÚ trong P4, không gợi ý để đón sóng.
+- Chuỗi "NH mạnh→tiêu dùng" âm (tiền rời defensives) và "CNTT mạnh→CK" yếu — không dùng làm tín hiệu.
+- Vin không nằm trong chuỗi luân chuyển — không gợi ý Vin như mảng "dẫn dắt tiếp theo" (xem mục 2).
+- Defensives (consumer/staples) ở VN gần như không dẫn sóng nào — chỉ gợi ý để TRÚ trong P4 (và khi tháng yếu như T10, consumer rơi ít nhất), không gợi ý để đón sóng.
+- food/bảo hiểm/xây dựng: chưa có mắt xích chuỗi đáng tin — chỉ đọc theo mùa vụ/Tết, không gợi ý "dẫn dắt".
 - CẤM bịa ngưỡng mới: mọi ngưỡng trong checklist (RS +15%, drawdown 20%, breadth 50%...) chỉ đổi khi có bằng chứng định lượng từ ≥2 chu kỳ trong dữ liệu mới.

@@ -1,8 +1,8 @@
 {
  "source": "captured",
- "capturedAt": "2026-10-15",
+ "capturedAt": "2026-10-19",
  "server": "opentrading",
- "commit": "ce224f19e63b75ad9cb9e8a56ef552cc8b2a11dc",
+ "commit": "78650540caeb7bf8f4287a6e4865c78f77dbc979",
  "note": "tools/list of opentrading-mcp at this commit. Regenerate from the opentrading-mcp checkout: uv run python ../OpenTrading/scripts/dev/dump-mcp-catalog.py ../OpenTrading/test/fixtures/mcp-catalog/opentrading.json <commit>",
  "tools": [
   {
@@ -4024,7 +4024,7 @@
   },
   {
    "name": "cycle_seasonality",
-   "description": "Month seasonality per basket from the stored table (mean/hit/relative vs VNINDEX). Omit args for full table.\n\n        Differs from `seasonality` (one symbol, computed live from candles): this is the\n        long-run basket table; quote which one a number came from.\n        ",
+   "description": "Month seasonality per basket from the stored table (mean/hit/relative vs VNINDEX). Omit args for full table.\n\n        Baskets: bank, securities, insurance, realestate, vin, construction, steel,\n        chemical, oilgas, utility, tech, retail, consumer, food, transport; Vietnamese\n        names without diacritics work too (\"bất động sản\", \"dầu khí\", \"CNTT\"...).\n\n        Differs from `seasonality` (one symbol, computed live from candles): this is the\n        long-run basket table; quote which one a number came from.\n        ",
    "inputSchema": {
     "properties": {
      "basket": {
@@ -4111,7 +4111,7 @@
   },
   {
    "name": "cycle_tet",
-   "description": "Tet (Lunar New Year) effect per basket: compounded return over the 6 sessions before / 5 after.",
+   "description": "Tet (Lunar New Year) effect per basket: compounded return over the 6 sessions before / 5 after.\n\n        Basket names as in cycle_seasonality (Vietnamese names without diacritics accepted).\n        ",
    "inputSchema": {
     "properties": {
      "basket": {
@@ -4136,7 +4136,7 @@
   },
   {
    "name": "cycle_yearly",
-   "description": "Yearly return % per VN sector basket (bank, securities, realestate, steel, tech...); ranks sectors by year. Omit args for full table.",
+   "description": "Yearly return % per VN sector basket (bank, securities, realestate, vin, steel, tech...); ranks sectors by year. Omit args for full table.\n\n        Basket names as in cycle_seasonality (Vietnamese names without diacritics accepted).\n        ",
    "inputSchema": {
     "properties": {
      "basket": {
