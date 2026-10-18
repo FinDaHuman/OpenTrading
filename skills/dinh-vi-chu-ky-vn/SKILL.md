@@ -6,7 +6,7 @@ triggers:
   keywords: [chu kỳ thị trường, giai đoạn thị trường, pha thị trường, luân chuyển ngành, rotation, sóng ngành, đỉnh chu kỳ, giai đoạn phân phối, đầu phục hồi, bank dẫn, chứng dẫn, dòng tiền ngành, cuối sóng, giữa sóng, mùa vụ ngành]
 requires_tools: [cycle_stats_check, vn_index_ohlcv]
 uses_tools: [cycle_stats_check, cycle_seasonality, cycle_chains, cycle_turning, cycle_tet, cycle_yearly, cycle_trough_events, vn_index_ohlcv, seasonality, sbv_rates, breadth_scan, market_movers]
-version: 1.5.0
+version: 1.6.0
 ---
 
 # Định vị pha chu kỳ thị trường Việt Nam
@@ -54,6 +54,20 @@ Chấm 4 trụ cột theo checklist trong `references/phase-playbook.md`, chọn
 ## Cấu trúc câu trả lời
 
 Trình bày đúng thứ tự: độ tươi bảng (`as_of` từ check) · verdict pha (1 dòng + độ tin cậy) · bằng chứng 4 trụ cột (mỗi số kèm provenance tool) · 1–2 mảng gợi ý kèm hit-rate live · pha lịch sử tương đồng nhất · thay đổi định nghĩa trong lần refresh này (nếu có, trích changelog) · caveat + đề xuất refresh nếu bảng cũ. Khoảng 12–16 lệnh gọi, gom song song trong từng bước.
+
+## Ngôn ngữ trình bày
+
+Viết tắt trong `references/` dùng để bạn làm việc, không viết ra cho người dùng:
+
+| Ký hiệu nội bộ | Viết cho người dùng |
+| --- | --- |
+| RS 3M, RS 1M, RS mảng | sức mạnh tương đối 3 tháng/1 tháng của nhóm ngành so với VN-Index (lần đầu nói rõ nghĩa của "sức mạnh tương đối") |
+| VNI, VNFIN, CK, BĐS, utilities, consumer | VN-Index, VN-Finindex, chứng khoán, bất động sản, tiện ích, tiêu dùng |
+| drawdown, bear, bull | mức sụt giảm sâu nhất, pha suy yếu, pha phục hồi |
+| bias tháng, hit-rate, breadth | xu hướng thường thấy của tháng đó, tỷ lệ đúng theo lịch sử, độ rộng thị trường |
+| pre-Tết, post-Tết, turning | trước Tết, sau Tết, đảo chiều |
+
+Tên chỉ số và mã giữ nguyên (VN-Index, VN30). Số liệu trong `references/` là dữ liệu để ra quyết định, không phải để chép lại cho người dùng: chốt pha bằng lời của bạn, kèm độ tin cậy và nguồn.
 
 ## Ví dụ
 

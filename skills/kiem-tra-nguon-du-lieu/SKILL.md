@@ -37,7 +37,9 @@ Chính skill này cũng có thể partial (1–2 nguồn chết) — verdict v�
 
 ## Cấu trúc câu trả lời
 
-Trình bày kết luận đúng cấu trúc sau: bảng {Nguồn · Trạng thái · Độ trễ · Skills ảnh hưởng nếu chết} cho đủ 9 nguồn: vnstock (ok/throttle/down) · Vietstock JWT (còn hạn tới.../HẾT) · Vietstock HAR-session (sống/chết) · DNSE (ok/lạnh) · yfinance/Binance/GDELT/Fireant/Gamma/FRED/SBV + 1 dòng khuyến nghị ("sáng nay đủ data chạy ..." hay "chỉ chạy legs không-Vietstock").
+Trình bày kết luận đúng cấu trúc sau: bảng {Nguồn · Trạng thái · Độ trễ · Skill nào ảnh hưởng nếu nguồn đó chết} cho đủ 9 nguồn: vnstock · Vietstock · DNSE · yfinance · Binance · GDELT · Fireant · Gamma · FRED + 1 dòng khuyến nghị ("sáng nay đủ data chạy ..." hay "chỉ chạy được phần không dùng Vietstock").
+
+Trạng thái viết bằng lời của người dùng hiểu được: "còn dùng được, dữ liệu mới nhất đến 12/10 14:02", "đang chậm, giới hạn số lượt gọi", "hết phiên đăng nhập". Không nói cơ chế bên trong (JWT, phiên đăng nhập HAR, TTL đệm, hạ tầng): hỏi "nguồn nào chậm" thì trả lời về dữ liệu, không về hạ tầng.
 
 ## Ví dụ
 

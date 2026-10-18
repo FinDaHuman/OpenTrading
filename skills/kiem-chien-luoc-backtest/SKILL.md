@@ -45,7 +45,9 @@ Chạy `param_sweep` (tối đa 30 combos có sẵn, không tự nới; passthro
 
 ## Cấu trúc câu trả lời
 
-Trình bày kết luận đúng cấu trúc sau: baseline buy-hold → từng điều kiện (số trades/net/win) → best param + worst param → seasonality/event bias → kết luận "đáng tin / đáng nghi + lý do" + caveat engine (numpy-only, cost mặc định, T+2 chưa model) + provenance (nguồn nến, benchmark, ngày sự kiện).
+Trình bày kết luận đúng cấu trúc sau: mua và nắm giữ làm chuẩn so sánh → từng điều kiện (số lệnh, lợi nhuận ròng, tỷ lệ lệnh thắng) → cấu hình tốt nhất + tệ nhất → ảnh hưởng mùa vụ/sự kiện → kết luận "đáng tin / đáng nghi + lý do" + giới hạn của phép thử (chưa mô hình hoá T+2, phí giao dịch giả định bao nhiêu) + nguồn (nguồn nến, mốc so sánh, ngày sự kiện).
+
+Nhãn trong bảng viết tiếng Việt: "số lệnh" (không "trades"), "lợi nhuận ròng" (không "net return"), "tỷ lệ lệnh thắng" (không "win rate"), "mức sụt giảm sâu nhất" (không "max drawdown"), "chiến lược mua và nắm giữ" (không "buy & hold"). Phí "10 bps" viết thành "10 điểm phần trăm". "Whipsaw" và "overfit" nói thẳng bằng lời: "đảo chiều liên tục trong giao địch", "học kỹ quá khứ".
 
 ## Ví dụ
 
