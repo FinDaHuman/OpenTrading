@@ -5,6 +5,7 @@ import type { PermissionGate } from "../permission"
 import { sanitizeSchema, type SchemaFlavor } from "../mcp/schema"
 import type { AgentOrigin, ToolDef, ToolResult } from "./types"
 import { RwLock, runTool } from "./wrap"
+import { LoopGuard } from "./loop-guard"
 
 type Listener = () => void
 
@@ -170,12 +171,14 @@ export class ToolRegistry {
     const set: ToolSet = {}
     // Keep the request's tool order stable (by name) for prompt caching.
     const declared = opts.defer ? ordered : kept
+    // One guard per tool set: a turn (or a subagent run) counts its own repeats.
+    const loop = new LoopGuard()
     for (const def of [...declared].sort((a, b) => a.name.localeCompare(b.name))) {
       const execute = (input: unknown, options: { abortSignal?: AbortSignal; toolCallId: string }) =>
         runTool(
           def,
           input,
-          { signal: options.abortSignal ?? new AbortController().signal, callId: options.toolCallId, agent: this.origin },
+          { signal: options.abortSignal ?? new AbortController().signal, callId: options.toolCallId, agent: this.origin, loop },
           this.lock,
           this.gate,
         )
