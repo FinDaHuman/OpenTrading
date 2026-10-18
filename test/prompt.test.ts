@@ -176,7 +176,9 @@ test("tool guidance lives in one place and the format example carries no real-lo
   // ≈1.2k after the identity forecast update, ≈1.3k after the tools restraint rule,
   // ≈1.4k after citations/style/tool speech lines, ≈1.5k after the style.md redesign on 14/10/2026,
   // ≈1.55k after the tools.md act-when-ready line on 15/10/2026, ≈2.1k after the reader-language
-  // rules joined style.md on 18/10/2026 — they were a separate <ngon_ngu> layer for a day;
-  // style's budget was raised (400/250/0 → 1000/900/800) so the rules survive every tier).
-  expect(Math.ceil(a.system.length / 4)).toBeLessThan(2_100)
+  // rules joined style.md on 18/10/2026, ≈1.9k after the 18/10/2026 wording pass — same rules,
+  // deduped: scenarios live in <bat_bien> only, the citations monster bullet split, the
+  // deferred-tools header shortened, and style's budget raised (400/250/0 → 1000/900/800) so
+  // the rules survive every tier).
+  expect(Math.ceil(a.system.length / 4)).toBeLessThan(2_000)
 })
