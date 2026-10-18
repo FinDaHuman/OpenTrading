@@ -106,12 +106,33 @@ export function sortedProviders(catalog: Catalog): CatalogProvider[] {
   return Object.values(catalog).sort((a, b) => rank(a.id) - rank(b.id) || a.name.localeCompare(b.name))
 }
 
-/** Chat-capable models: text in, text out, not deprecated. */
-export function chatModels(provider: CatalogProvider): CatalogModel[] {
+/**
+ * Ids of models that are not chat models even when the catalog lists text in and out:
+ * embeddings, speech, image/video/music generation, realtime/live, rerankers, guard and
+ * safety classifiers, deep-research and computer-use agents. Matched on whole id segments
+ * (`gemini-3.1-flash-live-preview`, `nvidia/nv-embedcode-7b-v1`), so a name merely
+ * containing the letters is kept. A backstop for catalog entries; `tool_call` does most.
+ */
+const NOT_CHAT =
+  /(^|[-/_.:])(embed\w*|embedding|tts|whisper|transcribe|image|imagen|veo|lyria|live|realtime|audio|rerank\w*|guard|safety|moderation|deep-research|computer-use|ocr)([-/_.:]|$)/i
+
+/**
+ * Models offered by /model and /config: chat models that can call tools — the agent loop
+ * is tool-driven, so a model without tools answers with no data. Like opencode, deprecated
+ * and alpha entries are hidden. A missing `tool_call` counts as yes, as in the agent loop.
+ * `keep` (the configured models) are always listed, whatever the filters say.
+ */
+export function chatModels(provider: CatalogProvider, keep: (string | undefined)[] = []): CatalogModel[] {
   return Object.values(provider.models)
-    .filter((m) => m.status !== "deprecated")
-    .filter((m) => !m.modalities || (m.modalities.input?.includes("text") && m.modalities.output?.includes("text")))
+    .filter((m) => keep.includes(m.id) || isChatModel(m))
     .sort((a, b) => a.name.localeCompare(b.name))
+}
+
+export function isChatModel(m: CatalogModel): boolean {
+  if (m.status === "deprecated" || m.status === "alpha") return false
+  if (m.modalities && !(m.modalities.input?.includes("text") && m.modalities.output?.includes("text"))) return false
+  if (m.tool_call === false) return false
+  return !NOT_CHAT.test(m.id)
 }
 
 export function languageModel(provider: CatalogProvider, modelId: string, apiKey: string): Exclude<LanguageModel, string> {

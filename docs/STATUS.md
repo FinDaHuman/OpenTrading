@@ -39,7 +39,7 @@ Contract cho đồng nghiệp: [docs/contracts.md](contracts.md).
 | ↳ panel và danh sách | mọi dialog là panel thay chỗ ô nhập; danh sách 1 dòng, cột thẳng, cắt `…` |
 | ↳ phần `/` | Enter chạy, Tab điền, Esc đóng tới khi gõ thêm |
 | **Tool hỏi người dùng** `ask_user` (`src/core/ask.ts`) | Xong. 1–4 câu trắc nghiệm, chọn nhiều, tự nhập, xem lại trước khi gửi; chờ trả lời không tính timeout |
-| `/connect`: 204 provider (models.dev), `/model` gộp model của mọi provider | Xong |
+| `/connect`: 204 provider (models.dev), `/model` gộp model của mọi provider | Xong. `/model` và `/config` chỉ liệt kê model chat gọi được tool (ẩn embedding, TTS, ảnh/video/nhạc, live/realtime, rerank, guard, deep-research, computer-use, bản deprecated/alpha); model đang cấu hình luôn hiện |
 | Chat stream, `esc` để dừng, lỗi hiển thị tiếng Việt, Tab hoàn thành lệnh | Xong |
 | **Agent loop** (`src/core/agent.ts`) | Xong. Gọi tool nhiều bước; mặc định không chặn số bước (model tự dừng, `maxSteps` trong config để đặt trần — có trần thì bước cuối bắt model tổng kết); lỗi tool được trả về cho model; khi huỷ hoặc lỗi, history không còn tool-call nào thiếu kết quả. Request lỗi được thử lại theo loại lỗi (`src/core/retry.ts`): hết quota ngày, key sai, request sai, context quá dài thì dừng ngay; 429 theo phút chờ đúng thời gian provider báo (tối đa 60 giây, 2 lần); quá tải/5xx/mạng chờ 2s→4s→8s→16s (tối đa 4 lần); giao diện hiện "thử lại sau Ns (lần n/m)", Esc để dừng |
 | **Tool registry** (`src/core/tools/`) | Xong. Tool có sẵn và tool MCP dùng chung một interface; tool chỉ đọc chạy song song, tool khác chạy lần lượt; có timeout; output bị cắt ở 30.000 ký tự |

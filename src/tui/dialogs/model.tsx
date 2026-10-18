@@ -25,7 +25,7 @@ export function ModelDialog() {
     return order.flatMap((id) => {
       const provider = state.catalog[id]
       if (!provider) return []
-      return chatModels(provider).map((m) => ({
+      return chatModels(provider, id === state.provider ? [state.model] : []).map((m) => ({
         label: m.name,
         hint: `${provider.name}${contextLabel(m.limit?.context)}`,
         mark: id === state.provider && m.id === state.model ? "●" : " ",
