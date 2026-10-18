@@ -578,7 +578,7 @@ export async function summarizeConversation(
         tools: prepared.tools,
         activeTools: active,
         toolChoice: prepared.tools ? "none" : undefined,
-        maxOutputTokens: COMPACT_MAX_OUTPUT_TOKENS,
+        maxOutputTokens: compactOutputTokens(prepared.target),
         abortSignal: opts.signal,
         // Each retry is a request off a free tier's daily quota: fail and let the user retry.
         maxRetries: 0,
@@ -597,7 +597,10 @@ export async function summarizeConversation(
   }
 }
 
-const COMPACT_MAX_OUTPUT_TOKENS = 8_000
+/** The summary plus its <analysis> scratchpad; never above what the model can write. */
+const COMPACT_MAX_OUTPUT_TOKENS = 12_000
+const compactOutputTokens = (target: Target) =>
+  Math.min(COMPACT_MAX_OUTPUT_TOKENS, target.provider.models[target.model]?.limit?.output ?? COMPACT_MAX_OUTPUT_TOKENS)
 
 class SummaryTruncated extends Error {
   constructor() {

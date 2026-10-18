@@ -1,5 +1,5 @@
 import type { ModelMessage } from "ai"
-import { label } from "../core/agent"
+import { label, visibleUserText } from "../core/agent"
 import { promptVersion } from "../core/prompt/assemble"
 import type { Runtime } from "../core/runtime"
 import { listSessions, loadSession, Session } from "../core/session/store"
@@ -29,16 +29,18 @@ export function recordTurn(messages: ModelMessage[], contextTokens?: number) {
     .catch(saveFailed)
   // After the first turn, replace the 60-char fallback title with a generated
   // one (fire-and-forget; failures keep the fallback).
-  if (firstTurn) void retitleOnce()
+  if (firstTurn) void retitleOnce(current, messages)
 }
 
 /** One-shot title generation for a fresh session; never throws. */
-async function retitleOnce() {
+async function retitleOnce(session: Session, messages: ModelMessage[]) {
   try {
     const { generateTitle } = await import("../core/session/title")
-    const first = state.history.map((m) => (m.role === "user" && typeof m.content === "string" ? m.content : "")).find((t) => t.trim())
+    // What the user typed (an image message is an array; reminders are left out).
+    const first = messages.map(visibleUserText).find((t) => t.trim())
     const title = await generateTitle(first ?? "")
-    if (title) current.setTitle(title)
+    // The session it was asked for, even if /new or /resume switched meanwhile.
+    if (title) await session.setTitle(title)
   } catch {
     // keep the fallback title
   }

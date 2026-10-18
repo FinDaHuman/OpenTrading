@@ -156,7 +156,7 @@ export function ConfigDialog(props: { runtime: Runtime }) {
       </Match>
       <Match when={editing() === "webModel"}>
         <DialogFrame title="Model cho tìm kiếm / đọc web" hint="enter chọn · esc quay lại">
-          <text fg={color.tx3}>Dùng cho web_search (tìm kiếm của chính provider: Gemini, Anthropic, OpenAI) và web_fetch có prompt. Model rẻ giúp tiết kiệm quota.</text>
+          <text fg={color.tx3}>Dùng cho web_search (tìm kiếm của chính provider: Gemini, Anthropic, OpenAI), web_fetch có prompt và đặt tiêu đề phiên. Model rẻ giúp tiết kiệm quota.</text>
           <Picker
             items={[
               { label: "Theo model của phiên (mặc định)", mark: webModel() ? " " : "●", value: "inherit" as SubagentModel },

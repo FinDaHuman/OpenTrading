@@ -442,10 +442,13 @@ test("switching to an OpenAI-compatible provider routes to its base URL", async 
   await setup.mockInput.typeText("NV Chat")
   setup.mockInput.pressEnter()
   await setup.waitFor(() => state.provider === "nvidia" && state.model === "nv/model")
+  const before = chatCalls.length
   await setup.mockInput.typeText("Chào NVIDIA")
   setup.mockInput.pressEnter()
-  await setup.waitFor(() => chatCalls.length === 2 && !state.streaming)
-  expect(chatCalls.at(-1)).toBe("https://integrate.api.nvidia.com/v1/chat/completions")
+  // The previous session's title request (fire-and-forget, Groq) may land in between.
+  const nvidia = "https://integrate.api.nvidia.com/v1/chat/completions"
+  await setup.waitFor(() => chatCalls.slice(before).includes(nvidia) && !state.streaming)
+  expect(chatCalls.slice(before)).toContain(nvidia)
 })
 
 test("an invalid key surfaces as a Vietnamese error line", async () => {

@@ -8,7 +8,7 @@ import {
   isContextOverflow,
   MAX_AUTO_FAILURES,
   PRUNED_TEXT,
-  compactAnalysisPrompt,
+  formatCompactSummary,
   compactHistory,
   compactPrompt,
   pruneToolResults,
@@ -177,17 +177,27 @@ test("the summary prompt asks for verbatim sourced figures and carries the user'
   expect(compactPrompt()).not.toContain("Yêu cầu thêm")
 })
 
-test("analysis-first: the analysis prompt inventories structure; the summary reuses it; lean drops the analysis section", () => {
-  const analysis = compactAnalysisPrompt()
-  expect(analysis).toContain("<analysis>")
-  expect(analysis).toContain("không gọi tool")
-  const withAnalysis = compactPrompt(undefined, "tool: vn_quote_history x3")
-  expect(withAnalysis).toContain("<analysis>\ntool: vn_quote_history x3\n</analysis>")
-  expect(withAnalysis).toContain("## Phân tích và kết luận đã đưa ra")
-  const lean = compactPrompt(undefined, undefined, "lean")
+test("one request: an <analysis> scratchpad then the <summary>; lean drops the analysis section", () => {
+  const full = compactPrompt()
+  expect(full).toContain("<analysis>")
+  expect(full).toContain("<summary>")
+  expect(full).toContain("không gọi tool")
+  expect(full).toContain("## Phân tích và kết luận đã đưa ra")
+  const lean = compactPrompt(undefined, "lean")
   expect(lean).toContain("## Số liệu đã xác minh")
   expect(lean).not.toContain("## Phân tích và kết luận đã đưa ra")
   expect(lean).not.toContain("## Ràng buộc và sở thích")
+})
+
+test("the stored summary drops the scratchpad; a cut-off analysis is no summary", () => {
+  const reply = "<analysis>\ntool: vn_quote_history x3\n</analysis>\n\n<summary>\n## Yêu cầu của người dùng\nĐịnh giá FPT\n</summary>"
+  expect(formatCompactSummary(reply)).toBe("## Yêu cầu của người dùng\nĐịnh giá FPT")
+  // Models that skip the tags: the reply is the summary.
+  expect(formatCompactSummary("## Yêu cầu của người dùng\nX")).toBe("## Yêu cầu của người dùng\nX")
+  // An unclosed </summary> (cut at the very end) still yields what was written.
+  expect(formatCompactSummary("<analysis>a</analysis><summary>## Mục\nY")).toBe("## Mục\nY")
+  expect(formatCompactSummary("<analysis>\ntool: x")).toBeUndefined()
+  expect(formatCompactSummary("<analysis>a</analysis>")).toBeUndefined()
 })
 
 test("the effective window is capped (1M models compact around 160k by default)", () => {
