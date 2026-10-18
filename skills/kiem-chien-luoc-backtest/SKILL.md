@@ -47,7 +47,7 @@ Chạy `param_sweep` (tối đa 30 combos có sẵn, không tự nới; passthro
 
 Trình bày kết luận đúng cấu trúc sau: mua và nắm giữ làm chuẩn so sánh → từng điều kiện (số lệnh, lợi nhuận ròng, tỷ lệ lệnh thắng) → cấu hình tốt nhất + tệ nhất → ảnh hưởng mùa vụ/sự kiện → kết luận "đáng tin / đáng nghi + lý do" + giới hạn của phép thử (chưa mô hình hoá T+2, phí giao dịch giả định bao nhiêu) + nguồn (nguồn nến, mốc so sánh, ngày sự kiện).
 
-Nhãn trong bảng viết tiếng Việt: "số lệnh" (không "trades"), "lợi nhuận ròng" (không "net return"), "tỷ lệ lệnh thắng" (không "win rate"), "mức sụt giảm sâu nhất" (không "max drawdown"), "chiến lược mua và nắm giữ" (không "buy & hold"). Phí "10 bps" viết thành "10 điểm phần trăm". "Whipsaw" và "overfit" nói thẳng bằng lời: "đảo chiều liên tục trong giao địch", "học kỹ quá khứ".
+Nhãn trong bảng viết tiếng Việt: "số lệnh" (không "trades"), "lợi nhuận ròng" (không "net return"), "tỷ lệ lệnh thắng" (không "win rate"), "mức sụt giảm sâu nhất" (không "max drawdown"), "chiến lược mua và nắm giữ" (không "buy & hold"). Phí "10 bps" viết thành "10 điểm cơ bản (0,1%)" — 1 bps là 0,01%, không phải 1 điểm phần trăm. "Whipsaw" và "overfit" nói thẳng bằng lời: "đảo chiều liên tục trong giao dịch", "học kỹ quá khứ".
 
 ## Ví dụ
 
