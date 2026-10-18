@@ -179,6 +179,12 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
       }))
       return sseOf(chunk({ role: "assistant", tool_calls: calls }) + chunk({}, "tool_calls") + "data: [DONE]\n\n")
     }
+    // "LẶP-LẠI" repeats the same current_time call until 3 results are in (the loop guard asks on the 3rd).
+    const loopAt = request.messages.findLastIndex((m) => m.role === "user" && JSON.stringify(m.content ?? "").includes("LẶP-LẠI"))
+    if (loopAt >= 0 && request.messages.slice(loopAt).filter((m) => m.role === "tool").length < 3) {
+      const call = { index: 0, id: `call_loop_${chatBodies.length}`, type: "function", function: { name: "current_time", arguments: "{}" } }
+      return sseOf(chunk({ role: "assistant", tool_calls: [call] }) + chunk({}, "tool_calls") + "data: [DONE]\n\n")
+    }
     if (last.includes("QUÁ-TẢI") && overloaded > 0) {
       overloaded--
       return Response.json({ error: { message: "overloaded" } }, { status: 503 })
@@ -2187,4 +2193,22 @@ test("/watchlist: edits by command, opens a list and shows live quotes from the 
   } finally {
     runtime.registry.unregister("mcp__fakewl__")
   }
+})
+
+// Last: its transcript (tool rows + the stock answer) would satisfy later tests' frame waits.
+test("the third identical call asks before it runs; esc stops the loop and the turn answers", async () => {
+  await setKey("nvidia", "nvapi-good-key")
+  const before = state.lines.length
+  await setup.mockInput.typeText("LẶP-LẠI giờ")
+  setup.mockInput.pressEnter()
+  const frame = await setup.waitForFrame((f) => f.includes("cùng tham số 3 lần liên tiếp"))
+  show(frame)
+  expect(frame).toContain("Cho phép chạy?")
+  setup.mockInput.pressEscape()
+  await setup.waitFor(() => !state.streaming)
+  const turn = state.lines.slice(before)
+  const rows = turn.filter((l) => l.kind === "tool")
+  expect(rows).toHaveLength(3)
+  expect(rows.map((l) => l.kind === "tool" && l.status)).toEqual(["ok", "ok", "error"])
+  expect(turn.some((l) => l.kind === "assistant" && l.text.includes("HẾT-CÂU-TRẢ-LỜI"))).toBe(true)
 })
