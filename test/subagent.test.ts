@@ -171,8 +171,15 @@ test("end to end: the child runs its own loop and the parent gets its report wit
   // The parent's system prompt is untouched by the subagent role.
   expect(parentBodies[0]!.messages[0]!.content as string).toContain("<identity>")
 
-  // Sidechain written next to the session (before the parent file even exists).
-  await new Promise((r) => setTimeout(r, 50))
+  // Sidechain written next to the session (before the parent file even exists). The write
+  // is fire-and-forget: wait until it has landed (a fixed 50ms was too short on Windows CI).
+  const sidechainDone = async () => {
+    const names = await readdir(path.join(sessionDir, "subagents")).catch(() => [] as string[])
+    const log = names.find((n) => n.endsWith(".jsonl"))
+    if (names.length < 2 || !log) return false
+    return (await readFile(path.join(sessionDir, "subagents", log), "utf8").catch(() => "")).includes('"agent_end"')
+  }
+  for (let i = 0; i < 500 && !(await sidechainDone()); i++) await new Promise((r) => setTimeout(r, 10))
   const files = (await readdir(path.join(sessionDir, "subagents"))).sort()
   expect(files).toEqual([`agent-${trailer.agentId}.jsonl`, `agent-${trailer.agentId}.meta.json`])
   const entries = (await readFile(path.join(sessionDir, "subagents", files[0]!), "utf8"))
@@ -250,7 +257,9 @@ test("stopping the parent stops the child and frees its slot", async () => {
   await running
   controller.abort()
   await turn
-  await new Promise((r) => setTimeout(r, 20))
+  // The child settles after the parent's turn returns: wait for it rather than a fixed 20ms.
+  for (let i = 0; i < 500 && (manager.list()[0]!.status !== "stopped" || manager.limiter.stats().running > 0); i++)
+    await new Promise((r) => setTimeout(r, 10))
   expect(manager.list()[0]!.status).toBe("stopped")
   expect(manager.limiter.stats().running).toBe(0)
 })
