@@ -43,12 +43,14 @@ Không tự dựng lại DCF (đã tính sẵn trong `valuation_run`). Không g�
 
 Trình bày kết luận đúng cấu trúc sau, mỗi mục ghi số + trend + provenance:
 
-1. Giá hiện tại vs vùng fair: method nào dẫn, chênh bao nhiêu % (`provenance: valuation_run` + `vs_overview_trading`).
-2. PER/PB hiện tại vs trung bình 2–3 năm tự tính (`provenance: financial_ratios` + `vn_quote_history`).
+1. Giá hiện tại so với vùng giá hợp lý: phương pháp nào dẫn dắt, chênh bao nhiêu % (`provenance: valuation_run` + `vs_overview_trading`).
+2. PER/PB hiện tại so với trung bình 2–3 năm tự tính (`provenance: financial_ratios` + `vn_quote_history`).
 3. Rẻ/đắt vì sao: tăng trưởng + chất lượng (cross-ref `co-ban-chuyen-sau`) + lãi suất.
-4. UPSIDE/DOWNSIDE % + độ tin (cao nếu 2 method đồng thuận).
-5. Dòng neo kỳ vọng: upside theo target CTCK (`provenance: tim-co-hoi-bao-cao-ctck` cross-ref, chỉ tham chiếu).
-6. Kết luận 1 câu: ĐẮT/HỢP LÝ/RẺ + UPSIDE/DOWNSIDE %.
+4. Dư địa tăng/giảm % + độ tin (cao nếu 2 phương pháp đồng thuận).
+5. Dòng neo kỳ vọng: mức giá mục tiêu của CTCK (`provenance: tim-co-hoi-bao-cao-ctck` cross-ref, chỉ tham chiếu).
+6. Kết luận 1 câu: ĐẮT/HỢP LÝ/RẺ + dư địa tăng/giảm %.
+
+Tiêu đề cột và kết luận viết tiếng Việt: "tỷ lệ giá trên lợi nhuận (P/E)" chứ không để trần "PER"; "vùng giá hợp lý" chứ không "fair"; "dư địa tăng/giảm" chứ không "upside/downside".
 
 ## Ví dụ
 

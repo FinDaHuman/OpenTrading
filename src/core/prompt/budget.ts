@@ -31,7 +31,11 @@ export const BUDGETS: Record<string, Record<Tier, number | undefined>> = {
   mcp_instructions: { A: 2_000, B: 1_200, C: 500 },
   tools: { A: undefined, B: undefined, C: undefined },
   citations: { A: undefined, B: undefined, C: undefined },
-  style: { A: 400, B: 250, C: 0 },
+  // Style now carries the reader-language rules (gloss jargon on first use, prefer
+  // Vietnamese, no internal plumbing) on top of structure, so it needs more room than
+  // the old 400/250/0 — and dropping it on the smallest tier would drop exactly the
+  // "write for a non-expert" rules, so tier C keeps a real budget instead of 0.
+  style: { A: 1000, B: 900, C: 800 },
   todos: { A: 600, B: 400, C: 300 },
 }
 

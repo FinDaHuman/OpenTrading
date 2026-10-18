@@ -94,10 +94,11 @@ test("investor profile rides the static system prefix, capped per tier, and neve
   expect(a.system).toContain("đã được cắt bớt")
 })
 
-test("tier C drops style first but keeps identity and the market clock", () => {
+test("tier C keeps style (reader-language rules cannot be dropped) and the market clock", () => {
   const c = assemble(base({ tier: "C" }))
-  expect(c.system).not.toContain("<style>")
-  expect(c.report.find((r) => r.id === "style")!.dropped).toBe(true)
+  expect(c.report.find((r) => r.id === "style")!.dropped).toBe(false)
+  expect(c.system).toContain("Ngôn ngữ cho người đọc")
+  expect(c.system).toContain("chú giải ngay trong cùng câu")
   expect(c.system).toContain("<identity>")
   expect(c.reminders.some((r) => r.startsWith("<phien_giao_dich>"))).toBe(true)
 })
@@ -174,6 +175,8 @@ test("tool guidance lives in one place and the format example carries no real-lo
   // Budget guard: the static prompt must not creep back up (≈1.0k tokens on 06/10/2026,
   // ≈1.2k after the identity forecast update, ≈1.3k after the tools restraint rule,
   // ≈1.4k after citations/style/tool speech lines, ≈1.5k after the style.md redesign on 14/10/2026,
-  // ≈1.55k after the tools.md act-when-ready line on 15/10/2026).
-  expect(Math.ceil(a.system.length / 4)).toBeLessThan(1_550)
+  // ≈1.55k after the tools.md act-when-ready line on 15/10/2026, ≈2.1k after the reader-language
+  // rules joined style.md on 18/10/2026 — they were a separate <ngon_ngu> layer for a day;
+  // style's budget was raised (400/250/0 → 1000/900/800) so the rules survive every tier).
+  expect(Math.ceil(a.system.length / 4)).toBeLessThan(2_100)
 })
