@@ -1,5 +1,5 @@
 import { decodePasteBytes, stripAnsiSequences, type KeyBinding, type PasteEvent, type TextareaRenderable } from "@opentui/core"
-import { useTerminalDimensions } from "@opentui/solid"
+import { useRenderer, useTerminalDimensions } from "@opentui/solid"
 import { color, promptStyle } from "../theme"
 
 /**
@@ -46,6 +46,7 @@ export function PromptInput(props: {
   onPaste: (text: string) => void
 }) {
   const dims = useTerminalDimensions()
+  const renderer = useRenderer()
   let input: TextareaRenderable | undefined
   return (
     <box
@@ -89,7 +90,7 @@ export function PromptInput(props: {
         cursorStyle={PROMPT_CURSOR}
         keyBindings={PROMPT_KEYS}
         // Styles the paste/image pills (extmark.paste).
-        syntaxStyle={promptStyle()}
+        syntaxStyle={promptStyle(renderer.nativeScene)}
         // The Solid typing says string, the core passes {}: read the text from the renderable.
         onContentChange={() => props.onChange(input?.plainText ?? "")}
         onSubmit={() => props.onSubmit()}

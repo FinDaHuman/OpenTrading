@@ -22,7 +22,7 @@ export function editorCommand(env = process.env, platform: NodeJS.Platform = pro
  */
 export async function editInEditor(
   text: string,
-  terminal: { suspend(): void; resume(): void },
+  terminal: { suspend(): Promise<void> | void; resume(): Promise<void> | void },
 ): Promise<{ text: string; returnedAtOnce: boolean } | { error: string }> {
   const file = path.join(os.tmpdir(), `opentrading-prompt-${process.pid}-${Date.now()}.md`)
   await writeFile(file, text, "utf8")
@@ -31,7 +31,14 @@ export async function editInEditor(
   let command = [resolved, ...args, file]
   // .cmd/.bat launchers (code.cmd) only run through cmd.exe.
   if (process.platform === "win32" && /\.(cmd|bat)$/i.test(resolved)) command = ["cmd.exe", "/d", "/c", resolved, ...args, file]
-  terminal.suspend()
+  // OpenTUI 0.6 suspends asynchronously and refuses when the terminal is not set up (a
+  // test renderer, a pending transition): a GUI editor still works, so go on without it.
+  const suspended = await Promise.resolve()
+    .then(() => terminal.suspend())
+    .then(
+      () => true,
+      () => false,
+    )
   try {
     const started = Date.now()
     const proc = Bun.spawn(command, { stdin: "inherit", stdout: "inherit", stderr: "inherit" })
@@ -46,7 +53,7 @@ export async function editInEditor(
     resolved = error instanceof Error ? error.message : String(error)
     return { error: `Không mở được trình soạn thảo ${program}: ${resolved}. Đặt biến EDITOR (ví dụ "code --wait").` }
   } finally {
-    terminal.resume()
+    if (suspended) await terminal.resume()
     await rm(file, { force: true })
   }
 }
