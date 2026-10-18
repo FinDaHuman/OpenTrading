@@ -87,6 +87,7 @@ Harness chưa lọc các model này khỏi `/model`, đã ghi vào việc cần 
 
 - **Tháng 09/2026**: key miễn phí hết quota sau khoảng 20 request trong ngày. Bảng trên giải thích lý do: `gemini-2.5-flash-lite` chỉ có 20 RPD, còn 3.1/3.5 Flash Lite có 500.
 - **Tháng 10/2026**: `/compact` từng gặp 503 từ Google; thử lại thì được. 503 là lỗi quá tải phía Google, không phải 429.
+- **Thử lại tự động** (`src/core/retry.ts`): 503/5xx được thử lại tới 4 lần. 429 thì đọc chi tiết lỗi của Google: `quotaId` có `PerDay` là hết quota ngày, không thử lại (thử lại chỉ tốn thêm request); 429 theo phút chờ đúng `retryDelay` Google báo rồi thử lại tối đa 2 lần.
 
 **Một câu hỏi tốn bao nhiêu request**, vì mỗi bước của agent loop là một request:
 - Câu hỏi thường: 1–4 request (gọi tool, `tool_search`, câu trả lời).

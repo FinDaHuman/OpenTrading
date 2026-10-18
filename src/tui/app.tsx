@@ -20,6 +20,7 @@ import { estimateTokens } from "../core/prompt/budget"
 import { acceptsImageInput } from "../core/agent"
 import { connectedProviders } from "../core/auth"
 import { describeError } from "../core/chat"
+import { retryText } from "../core/retry"
 import { loadConfig } from "../core/config"
 import { loadCatalog } from "../core/catalog"
 import type { Runtime } from "../core/runtime"
@@ -240,6 +241,8 @@ async function sendTurn(runtime: Runtime, msg: Outgoing): Promise<boolean> {
   let failed = false
   // Index of the assistant line currently receiving text; -1 after a tool call.
   let current = -1
+  // The "thử lại sau Ns" line of the request being retried.
+  let retryLine = -1
   const edit = (index: number, fn: (line: any) => void) => {
     if (live() && index >= 0) setState(produce((s) => fn(s.lines[index])))
   }
@@ -301,6 +304,13 @@ async function sendTurn(runtime: Runtime, msg: Outgoing): Promise<boolean> {
           break
         case "notice":
           pushLine({ kind: "info", text: event.text })
+          break
+        case "retry":
+          // One line per wait, rewritten by later retries of the same request.
+          if (retryLine < 0 || retryLine !== state.lines.length - 1) {
+            pushLine({ kind: "info", text: retryText(event) })
+            retryLine = state.lines.length - 1
+          } else edit(retryLine, (l) => (l.text = retryText(event)))
           break
         case "error":
           failed = true

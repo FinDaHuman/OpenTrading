@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises"
 import { runAgent } from "../agent"
 import { describeError, resolveTarget, type Target } from "../chat"
 import { loadConfig } from "../config"
+import { retryText } from "../retry"
 import { closeDanglingToolCalls } from "../session/store"
 import type { Skill } from "../skills/schema"
 import { loadSkillTool } from "../tools/builtin/load-skill"
@@ -430,6 +431,9 @@ export class SubagentManager {
               break
             case "notice":
               entries.push({ type: "notice", ts: new Date().toISOString(), text: event.text })
+              break
+            case "retry":
+              entries.push({ type: "notice", ts: new Date().toISOString(), text: retryText(event) })
               break
             case "error":
               run.error = event.message

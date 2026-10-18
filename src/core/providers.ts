@@ -49,7 +49,7 @@ const geminiFetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   }
   return globalThis.fetch(input, init)
 }) as typeof globalThis.fetch
-type Factory = (o: Options) => (modelId: string) => LanguageModel
+type Factory = (o: Options) => (modelId: string) => Exclude<LanguageModel, string>
 
 /** AI SDK packages bundled with OpenTrading, keyed by the npm name models.dev uses. */
 const SDK: Record<string, Factory> = {
@@ -114,7 +114,7 @@ export function chatModels(provider: CatalogProvider): CatalogModel[] {
     .sort((a, b) => a.name.localeCompare(b.name))
 }
 
-export function languageModel(provider: CatalogProvider, modelId: string, apiKey: string): LanguageModel {
+export function languageModel(provider: CatalogProvider, modelId: string, apiKey: string): Exclude<LanguageModel, string> {
   const target = route(provider, provider.models[modelId])
   if (!target) throw new Error(`Provider ${provider.name} chưa được hỗ trợ trong bản này.`)
   return target.factory({ apiKey, baseURL: target.baseURL, name: provider.id })(modelId)

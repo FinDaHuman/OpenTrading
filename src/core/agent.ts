@@ -8,6 +8,7 @@ import {
   type StreamTextResult,
   type SystemModelMessage,
   type ToolSet,
+  wrapLanguageModel,
 } from "ai"
 import { ChatSetupError, describeError, resolveTarget, type Target } from "./chat"
 import type { AgentEvent } from "./events"
@@ -23,6 +24,7 @@ import { loadConfig, type Config } from "./config"
 import { sanitize, serverPrefix } from "./mcp/naming"
 import type { SchemaFlavor } from "./mcp/schema"
 import { isContextOverflow } from "./compact"
+import { retryMiddleware, type RetryNotice, type RetryOptions } from "./retry"
 import { loadedTools } from "./tools/loaded"
 import { currentTodos, todoMark } from "./tools/todos"
 import { MAX_TOOLS_PER_REQUEST, stripImages, type BuiltToolSet, type ToolRegistry, type ToolSetOptions } from "./tools/registry"
@@ -270,15 +272,49 @@ export function emptyReason(outcome: Pick<Outcome, "rawFinish" | "finishMessage"
 }
 
 /** Relay one streamText run as AgentEvents and report what happened. */
+/** Retry notices raised inside the SDK's request, relayed between stream parts. */
+class RetryNotices {
+  private queue: RetryNotice[] = []
+  private wake: (() => void) | undefined
+  readonly options: RetryOptions = { onRetry: (notice) => this.push(notice) }
+  push(notice: RetryNotice) {
+    this.queue.push(notice)
+    this.wake?.()
+  }
+  /** Resolves once a notice is waiting. */
+  ready(): Promise<typeof RETRY> {
+    if (this.queue.length > 0) return Promise.resolve(RETRY)
+    return new Promise((resolve) => (this.wake = () => resolve(RETRY)))
+  }
+  drain(): RetryNotice[] {
+    const out = this.queue
+    this.queue = []
+    return out
+  }
+}
+const RETRY = Symbol("retry")
+
 async function* relay(
   result: StreamTextResult<ToolSet, Record<string, unknown>, never>,
   registry: ToolRegistry,
   signal: AbortSignal | undefined,
   outcome: Outcome,
+  notices?: RetryNotices,
 ): AsyncGenerator<AgentEvent> {
   const started = new Map<string, number>()
   try {
-    for await (const part of result.stream) {
+    const parts = result.stream[Symbol.asyncIterator]()
+    let pending = parts.next()
+    for (;;) {
+      // While a request waits to be retried no part arrives: show the wait meanwhile.
+      const next = notices ? await Promise.race([pending, notices.ready()]) : await pending
+      if (next === RETRY) {
+        for (const notice of notices!.drain()) yield { type: "retry", ...notice }
+        continue
+      }
+      if (next.done) break
+      pending = parts.next()
+      const part = next.value
       switch (part.type) {
         case "start-step":
           outcome.steps++
@@ -531,7 +567,7 @@ async function prepare(opts: TurnInput, extras: TurnExtras): Promise<Prepared> {
  * context on the first user message, the cache mark for Anthropic, and the tools visible
  * now (tool search). Turns and the compaction summary share it, so both send the same prefix.
  */
-function requestFor(p: Prepared, messages: ModelMessage[]) {
+function requestFor(p: Prepared, messages: ModelMessage[], retry: RetryOptions = {}) {
   // After /model to a model without vision, earlier screenshots become placeholders.
   const visible = p.images && p.userImages ? messages : stripImages(messages, { tool: !p.images, user: !p.userImages })
   const request = withContext(visible, p.assembled.context)
@@ -540,7 +576,8 @@ function requestFor(p: Prepared, messages: ModelMessage[]) {
     p.target.provider.npm === "@ai-sdk/anthropic"
       ? { role: "system", content: p.assembled.system, providerOptions: { anthropic: { cacheControl: { type: "ephemeral" } } } }
       : p.assembled.system
-  const model = languageModel(p.target.provider, p.target.model, p.target.apiKey)
+  // Requests are retried by kind of failure (retry.ts); the SDK's own retry stays off.
+  const model = wrapLanguageModel({ model: languageModel(p.target.provider, p.target.model, p.target.apiKey), middleware: retryMiddleware(retry) })
   return { system, request, model, active: activeFor(p.built, request) }
 }
 
@@ -580,7 +617,7 @@ export async function summarizeConversation(
         toolChoice: prepared.tools ? "none" : undefined,
         maxOutputTokens: COMPACT_MAX_OUTPUT_TOKENS,
         abortSignal: opts.signal,
-        // Each retry is a request off a free tier's daily quota: fail and let the user retry.
+        // retry.ts retries transient failures; never a daily-quota 429.
         maxRetries: 0,
       })
       // A cut-off summary loses its last section (what to do next): never use it.
@@ -698,7 +735,8 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
 
   const user = userMessage(opts.input, assembled.reminders, opts.images)
   // A vision model's screenshots stay in history; a model without vision gets placeholders.
-  const { system, request, model } = requestFor(prepared, [...opts.history, user])
+  const notices = new RetryNotices()
+  const { system, request, model } = requestFor(prepared, [...opts.history, user], notices.options)
   let summarized = false
   const nudge = nudgeAfterTools(target)
   // Visible tools at the current step; deferred tools join once loaded (tool search).
@@ -731,14 +769,14 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
     },
     experimental_repairToolCall: async ({ toolCall, error }) => repairCall(opts.registry, built, active, loaded, toolCall, error),
     abortSignal: opts.signal,
-    // Exponential backoff (2s → 4s → 8s → 16s) is the SDK's built-in retry for 429/5xx —
-    // same mechanism OpenCode relies on. Free-tier providers 429 often; 1 attempt is not enough.
-    maxRetries: 4,
+    // The model is wrapped with retry.ts (by kind of failure, shown to the user, Esc
+    // cancels the wait); the SDK's blind retry would repeat a daily-quota 429.
+    maxRetries: 0,
     onError: () => {}, // errors are read from the stream
   })
 
   const outcome: Outcome = { text: "", aborted: false, steps: 0 }
-  yield* relay(result, opts.registry, opts.signal, outcome)
+  yield* relay(result, opts.registry, opts.signal, outcome, notices)
   // The request whose usage measures the context (the empty-answer retry replaces it).
   let measured: { steps: PromiseLike<{ usage: LanguageModelUsage }[]> } = result
 
@@ -764,11 +802,11 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
       activeTools: activeFor(built, [...request, ...kept]),
       toolChoice: tools ? "none" : undefined,
       abortSignal: opts.signal,
-      maxRetries: 1,
+      maxRetries: 0,
       onError: () => {},
     })
     const second: Outcome = { text: "", aborted: false, steps: 0 }
-    yield* relay(retry, opts.registry, opts.signal, second)
+    yield* relay(retry, opts.registry, opts.signal, second, notices)
     measured = retry
     if (second.usage) {
       outcome.usage = { input: (outcome.usage?.input ?? 0) + second.usage.input, output: (outcome.usage?.output ?? 0) + second.usage.output }

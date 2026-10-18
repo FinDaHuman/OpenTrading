@@ -9,6 +9,8 @@ import { loadedTools } from "../src/core/tools/loaded"
 // Isolated state dir before core modules read it.
 const home = await mkdtemp(path.join(os.tmpdir(), "ot-agent-"))
 process.env.OPENTRADING_HOME = home
+// Retries do not sleep in tests (retry.ts scales every wait).
+process.env.OPENTRADING_RETRY_SCALE = "0"
 
 const text = { input: ["text"], output: ["text"] }
 const CATALOG = {
@@ -37,6 +39,10 @@ let summaryErrors: { status: number; message: string }[] = []
 let summaryFinish = "stop"
 /** First N streamed requests fail with 429 (retryable) to exercise the SDK retry. */
 let failFirst = 0
+/** Body of those 429s (default: a plain rate limit). */
+let failBody: object | undefined
+/** Streamed requests that already carry a tool result fail with 503 this many times. */
+let failAfterTool = 0
 /** Token usage reported on the answer's last chunk (Groq sends it as x_groq.usage). */
 let usage: { prompt_tokens: number; completion_tokens: number } | undefined
 const NUDGE = "Hãy trả lời câu hỏi của người dùng dựa trên kết quả tool"
@@ -63,7 +69,11 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   bodies.push(body)
   if (failFirst > 0 && body.stream) {
     failFirst--
-    return Response.json({ error: { message: "rate limited" } }, { status: 429 })
+    return Response.json(failBody ?? { error: { message: "rate limited" } }, { status: 429 })
+  }
+  if (failAfterTool > 0 && body.stream && body.messages.some((m) => m.role === "tool")) {
+    failAfterTool--
+    return Response.json({ error: { message: "overloaded" } }, { status: 503 })
   }
   // generateText (the compaction summary) does not stream.
   if (!body.stream) {
@@ -133,6 +143,8 @@ beforeEach(async () => {
   emptyAfterTool = undefined
   usage = undefined
   failFirst = 0
+  failBody = undefined
+  failAfterTool = 0
   summaryErrors = []
   summaryFinish = "stop"
   await saveConfig({ provider: "groq", model: "tooly", toolSearch: undefined, toolSearchMinTools: undefined })
@@ -170,6 +182,7 @@ async function collect(gen: AsyncGenerator<AgentEvent>, onEvent?: (e: AgentEvent
 }
 
 const done = (events: AgentEvent[]) => events.find((e) => e.type === "done") as Extract<AgentEvent, { type: "done" }>
+const tools = (events: AgentEvent[]) => events.flatMap((e) => (e.type === "tool-start" ? [e.name] : []))
 
 test("calls a tool, feeds the result back and answers", async () => {
   plan = { tool: "current_time", args: {} }
@@ -239,20 +252,38 @@ test("without a configured cap the turn is not limited to 10 steps", async () =>
   expect(done(events).outcome).toBe("completed")
 })
 
-test(
-  "a retryable 429 is retried until success when maxRetries allows several attempts",
-  async () => {
-    plan = { tool: "current_time", args: {} }
-    failFirst = 2 // hai 429 liên tiếp, lần thứ 3 thành công
-    const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: registry() }))
-    expect(events.some((e) => e.type === "error")).toBe(false)
-    expect(done(events).outcome).toBe("completed")
-    // ≥3 attempt ở bước đầu (2 lần 429 rồi mới thành công) — chỉ pass khi maxRetries >= 2.
-    expect(bodies.length).toBeGreaterThanOrEqual(3)
-  },
-  // backoff lũy kế 2 của SDK: 2s + 4s trước attempt thứ 3.
-  20000,
-)
+test("a per-minute 429 is retried until success, and every wait is shown", async () => {
+  plan = { tool: "current_time", args: {} }
+  failFirst = 2 // two 429s, the third attempt succeeds
+  const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: registry() }))
+  expect(events.some((e) => e.type === "error")).toBe(false)
+  expect(done(events).outcome).toBe("completed")
+  // 3 attempts for the first step, then the answer step: earlier steps never re-run.
+  expect(bodies).toHaveLength(4)
+  const retries = events.filter((e) => e.type === "retry")
+  expect(retries.map((e) => e.type === "retry" && `${e.attempt}/${e.max}`)).toEqual(["1/2", "2/2"])
+  expect(tools(events)).toEqual(["current_time"])
+})
+
+test("a daily-quota 429 is not retried and says so", async () => {
+  failFirst = 1
+  failBody = { error: { code: 429, message: "quota", status: "RESOURCE_EXHAUSTED", details: [{ violations: [{ quotaId: "GenerateRequestsPerDayPerProjectPerModel-FreeTier" }] }] } }
+  const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: registry() }))
+  expect(bodies).toHaveLength(1)
+  expect(events.some((e) => e.type === "retry")).toBe(false)
+  const error = events.find((e) => e.type === "error")
+  expect(error?.type === "error" && error.message).toContain("hết quota trong ngày")
+})
+
+test("a failure after a tool ran retries only the failed request", async () => {
+  plan = { tool: "current_time", args: {} }
+  failAfterTool = 1 // the answer step fails once with a 503
+  const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: registry() }))
+  expect(done(events).outcome).toBe("completed")
+  // tool step once, answer step twice; current_time ran once.
+  expect(bodies).toHaveLength(3)
+  expect(tools(events)).toEqual(["current_time"])
+})
 
 test("each round of tool results gets one unstored nudge; the last step gets only the summary prompt", async () => {
   plan = { tool: "current_time", args: {}, always: true }
@@ -697,22 +728,30 @@ test("a summary cut off at the output limit is rejected, not used", async () => 
   expect(bodies).toHaveLength(1)
 })
 
-test("a quota error that mentions tokens is not retried; a real overflow drops the oldest turn and retries", async () => {
+test("quota errors that mention tokens never trim the head; a real overflow drops the oldest turn and retries", async () => {
   const { summarizeConversation } = await import("../src/core/agent")
+  const users = (b: Body) => b.messages.filter((m) => m.role === "user").length
+  // Per-minute limit: retry.ts retries the same request, the head is kept whole.
   summaryErrors = [{ status: 429, message: "Resource exhausted: input token count per minute" }]
+  expect(await summarizeConversation({ head: threeTurns, prompt: "TÓM", skills: [], registry: registry() })).toBe("Kết quả: xong.")
+  expect(bodies).toHaveLength(2)
+  expect(users(bodies[1]!)).toBe(users(bodies[0]!))
+
+  // Daily quota: one request, no retry, no trimming.
+  bodies.length = 0
+  summaryErrors = [{ status: 429, message: "Rate limit reached for model on tokens per day (TPD)" }]
   const quota = await summarizeConversation({ head: threeTurns, prompt: "TÓM", skills: [], registry: registry() }).then(
     () => undefined,
     (e: Error) => e.message,
   )
-  expect(quota).toBeDefined()
-  expect(bodies).toHaveLength(1) // one request, no SDK retry, no head trimming
+  expect(quota).toContain("hết quota trong ngày")
+  expect(bodies).toHaveLength(1)
 
   bodies.length = 0
   summaryErrors = [{ status: 400, message: "This model's maximum context length is 8192 tokens" }]
   const text = await summarizeConversation({ head: threeTurns, prompt: "TÓM", skills: [], registry: registry() })
   expect(text).toBe("Kết quả: xong.")
   expect(bodies).toHaveLength(2)
-  const users = (b: Body) => b.messages.filter((m) => m.role === "user").length
   expect(users(bodies[1]!)).toBe(users(bodies[0]!) - 1)
 })
 
