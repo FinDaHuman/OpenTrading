@@ -48,8 +48,9 @@ export function ConfigDialog(props: { runtime: Runtime }) {
     state.connected.flatMap((id) => {
       const provider = state.catalog[id]
       if (!provider) return []
-      return chatModels(provider)
-        .filter((m) => m.tool_call !== false)
+      // The models already chosen stay listed even if the filters would hide them.
+      const keep = [config()?.subagents, config()?.webModel].map((c) => (c && (c.provider ?? state.provider) === id ? c.model : undefined))
+      return chatModels(provider, keep)
         .map((m) => ({
           label: m.name,
           hint: provider.name,
