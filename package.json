@@ -17,7 +17,7 @@
     "@ai-sdk/cerebras": "3.0.67",
     "@ai-sdk/cohere": "4.0.59",
     "@ai-sdk/deepinfra": "3.0.67",
-    "@ai-sdk/google": "4.0.93",
+    "@ai-sdk/google": "4.0.96",
     "@ai-sdk/groq": "4.0.59",
     "@ai-sdk/mistral": "4.0.62",
     "@ai-sdk/openai": "4.0.91",
