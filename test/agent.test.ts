@@ -35,6 +35,8 @@ let emptyAfterTool: "once" | "always" | undefined
 /** Non-streamed answers (the compaction summary): an error per request, then the finish reason. */
 let summaryErrors: { status: number; message: string }[] = []
 let summaryFinish = "stop"
+/** First N streamed requests fail with 429 (retryable) to exercise the SDK retry. */
+let failFirst = 0
 /** Token usage reported on the answer's last chunk (Groq sends it as x_groq.usage). */
 let usage: { prompt_tokens: number; completion_tokens: number } | undefined
 const NUDGE = "Hãy trả lời câu hỏi của người dùng dựa trên kết quả tool"
@@ -59,6 +61,10 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   if (!url.endsWith("/chat/completions")) throw new Error(`unexpected fetch ${url}`)
   const body = JSON.parse(String(init?.body)) as Body & { stream?: boolean }
   bodies.push(body)
+  if (failFirst > 0 && body.stream) {
+    failFirst--
+    return Response.json({ error: { message: "rate limited" } }, { status: 429 })
+  }
   // generateText (the compaction summary) does not stream.
   if (!body.stream) {
     const failure = summaryErrors.shift()
@@ -126,6 +132,7 @@ beforeEach(async () => {
   script = undefined
   emptyAfterTool = undefined
   usage = undefined
+  failFirst = 0
   summaryErrors = []
   summaryFinish = "stop"
   await saveConfig({ provider: "groq", model: "tooly", toolSearch: undefined, toolSearchMinTools: undefined })
@@ -231,6 +238,21 @@ test("without a configured cap the turn is not limited to 10 steps", async () =>
   expect(events.some((e) => e.type === "notice" && e.text.includes("bước gọi tool"))).toBe(false)
   expect(done(events).outcome).toBe("completed")
 })
+
+test(
+  "a retryable 429 is retried until success when maxRetries allows several attempts",
+  async () => {
+    plan = { tool: "current_time", args: {} }
+    failFirst = 2 // hai 429 liên tiếp, lần thứ 3 thành công
+    const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: registry() }))
+    expect(events.some((e) => e.type === "error")).toBe(false)
+    expect(done(events).outcome).toBe("completed")
+    // ≥3 attempt ở bước đầu (2 lần 429 rồi mới thành công) — chỉ pass khi maxRetries >= 2.
+    expect(bodies.length).toBeGreaterThanOrEqual(3)
+  },
+  // backoff lũy kế 2 của SDK: 2s + 4s trước attempt thứ 3.
+  20000,
+)
 
 test("each round of tool results gets one unstored nudge; the last step gets only the summary prompt", async () => {
   plan = { tool: "current_time", args: {}, always: true }

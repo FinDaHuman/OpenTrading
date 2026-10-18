@@ -217,7 +217,7 @@ test("parallel spawns beyond subagents.maxConcurrent wait for a slot instead of 
 test("a child that fails with nothing to show fails the call; the error reaches the parent model", async () => {
   const { registry } = setup()
   parentCalls = [spawn("FPT")]
-  childStatus = 500
+  childStatus = 400 // non-retryable: lỗi 5xx giờ được SDK retry lũy kế 2 (tới ~30s), sẽ trôi qua timeout test
   const events = await collect(runAgent({ history: [], input: "x", skills: [], registry }))
   const [end] = ends(events)
   expect(end!.ok).toBe(false)

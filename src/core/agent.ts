@@ -731,7 +731,9 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
     },
     experimental_repairToolCall: async ({ toolCall, error }) => repairCall(opts.registry, built, active, loaded, toolCall, error),
     abortSignal: opts.signal,
-    maxRetries: 1,
+    // Exponential backoff (2s → 4s → 8s → 16s) is the SDK's built-in retry for 429/5xx —
+    // same mechanism OpenCode relies on. Free-tier providers 429 often; 1 attempt is not enough.
+    maxRetries: 4,
     onError: () => {}, // errors are read from the stream
   })
 
