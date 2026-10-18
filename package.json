@@ -35,7 +35,7 @@
     "ai": "7.0.137",
     "linkedom": "0.18.13",
     "lru-cache": "11.5.3",
-    "solid-js": "1.9.12",
+    "solid-js": "1.9.17",
     "turndown": "7.2.4",
     "turndown-plugin-gfm": "1.0.2",
     "unpdf": "1.8.1",
