@@ -76,8 +76,7 @@ test("trigger hits add a skill hint reminder; manual and sticky skills behave", 
   expect(hit.reminders.find((r) => r.startsWith("<goi_y_skill>"))).toContain("devil")
   expect(hit.system).toContain("BODY-rules") // always-on body in system
   expect(hit.system).not.toContain("- hand") // manual skills are not in the catalog
-  expect(hit.context).toContain("<moi_truong>") // env block always present
-  expect(hit.context).not.toContain("BODY-hand")
+  expect(hit.context).toBeUndefined() // no pinned skill, profile or memory: no context block
 
   const pinned = assemble(base({ skills, sticky: ["hand"] }))
   expect(pinned.context).toContain('<skill name="hand">')
@@ -87,7 +86,7 @@ test("investor profile rides the static system prefix, capped per tier, and neve
   const profile = "# Hồ sơ\n" + "Luôn nêu bear case trước. ".repeat(600)
   const a = assemble(base({ tier: "A", investorProfile: profile }))
   expect(a.system).toContain("<ho_so_nha_dau_tu>")
-  expect(a.context).not.toContain("ho_so_nha_dau_tu")
+  expect(a.context ?? "").not.toContain("ho_so_nha_dau_tu")
   const row = a.report.find((r) => r.id === "ho_so_nha_dau_tu")!
   expect(row.truncated).toBe(true)
   expect(row.tokens).toBeLessThanOrEqual(1_400)

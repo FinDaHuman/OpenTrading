@@ -1,4 +1,5 @@
 import { deniedMessage, type PermissionGate } from "../permission"
+import { loopDef, loopDenied } from "./loop-guard"
 import { normalizeNetDates } from "./net-dates"
 import { hasDataArray, parseResult, REF_PREFIX, rememberResult } from "./refs"
 import { DEFAULT_MAX_OUTPUT_CHARS, DEFAULT_TIMEOUT_MS, type ToolContext, type ToolDef, type ToolResult } from "./types"
@@ -87,6 +88,12 @@ export async function runTool(def: ToolDef, input: unknown, ctx: ToolContext, lo
   // the lock meanwhile.
   if (def.prepare) ctx = { ...ctx, prepared: await def.prepare(input, ctx) }
   if (gate) {
+    const repeats = ctx.loop?.note(def.name, input)
+    if (repeats !== undefined) {
+      const decision = await gate.check(loopDef(def, repeats), input, ctx.signal, def.displayName, ctx.callId, ctx.agent)
+      // Headless runs stop the loop too: nobody can say "go on".
+      if (!decision.allow) throw new Error(decision.reason === "cancelled" ? deniedMessage(decision) : loopDenied(def, repeats, decision.message))
+    }
     const decision = await gate.check(def, input, ctx.signal, def.displayName, ctx.callId, ctx.agent)
     if (!decision.allow) throw new Error(deniedMessage(decision))
   }

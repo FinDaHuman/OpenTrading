@@ -1,6 +1,5 @@
 import { createHash } from "node:crypto"
 import { existsSync, readdirSync, readFileSync } from "node:fs"
-import { homedir, platform } from "node:os"
 import path from "node:path"
 import { availableSkills, renderCatalog, suggestSkills } from "../skills/catalog"
 import type { Skill } from "../skills/schema"
@@ -90,11 +89,6 @@ export function promptFile(id: string, dir = PROMPTS_DIR): string | undefined {
 }
 
 const tag = (id: string, text: string) => `<${id}>\n${text}\n</${id}>`
-
-/** Raw environment (cwd/platform/home) — what Claude/opencode env blocks carry that the domain clock does not. */
-export function renderEnv(cwd = process.cwd()): string {
-  return [`Thư mục làm việc: ${cwd}`, `Nền tảng: ${platform()}`, `Thư mục nhà: ${homedir()}`].join("\n")
-}
 
 /** One `<id>…</id>` block of a prompt file, tags included (the subagent reuses identity's invariants). */
 export function section(text: string | undefined, id: string): string | undefined {
@@ -204,7 +198,6 @@ ${m.text}
   }
 
   // ── context: user data, rebuilt every request ──────────────────────────
-  add(context, "moi_truong", 4, "context", renderEnv(), "moi_truong")
   add(context, "memory", 4, "context", input.memoryIndex?.trim() || undefined)
   const sticky = input.sticky.flatMap((name) => visible.filter((s) => s.name === name && s.activation !== "always"))
   if (sticky.length > 0) {

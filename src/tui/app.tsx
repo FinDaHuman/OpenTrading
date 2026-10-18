@@ -645,7 +645,7 @@ export function App(props: {
   /** Pasted pills in the prompt: `[Pasted text #1 +49 lines]`, `[Image #2]`. */
   const parts = new PromptParts(
     () => input,
-    () => promptStyle().getStyleId("extmark.paste") ?? undefined,
+    () => promptStyle(renderer.nativeScene).getStyleId("extmark.paste") ?? undefined,
   )
 
   /**

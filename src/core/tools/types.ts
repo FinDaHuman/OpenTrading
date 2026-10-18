@@ -1,6 +1,7 @@
 import type { JSONSchema7 } from "@ai-sdk/provider"
 import type { z } from "zod"
 import type { ChartData } from "./chart/data"
+import type { LoopGuard } from "./loop-guard"
 
 export interface ToolContext {
   signal: AbortSignal
@@ -9,6 +10,8 @@ export interface ToolContext {
   prepared?: unknown
   /** Set when a subagent makes the call: approval prompts name it. */
   agent?: AgentOrigin
+  /** Repeats of the same call in this turn (asks the user past the threshold). */
+  loop?: LoopGuard
 }
 
 /** The subagent behind a tool call (see core/subagents). */

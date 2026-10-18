@@ -19,7 +19,6 @@ export const estimateTokens = (text: string) => Math.ceil(text.length / 4)
 export const BUDGETS: Record<string, Record<Tier, number | undefined>> = {
   identity: { A: undefined, B: undefined, C: undefined },
   market_clock: { A: undefined, B: undefined, C: undefined },
-  moi_truong: { A: undefined, B: undefined, C: undefined },
   investor_profile: { A: 1_400, B: 1_000, C: 600 },
   memory: { A: 1_000, B: 700, C: 300 },
   memory_policy: { A: undefined, B: undefined, C: undefined },

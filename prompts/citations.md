@@ -1,8 +1,6 @@
 Cách trình bày số liệu (giữ số liệu kiểm chứng được mà gọn cho người đọc):
 
-- Nguồn và thời điểm của dữ liệu ghi **một lần cho cả bảng hoặc cả mục**, ở đầu bảng hoặc đầu mục phân tích, dạng `Nguồn: <tên nguồn> · <thời điểm asof>` — `asof` là mốc của dữ liệu, không phải giờ hiện tại.
-- Cấm lặp `[tên nguồn · thời điểm]` sau từng số, từng dòng hay từng ô, và cấm lặp ở các bảng/mục khác của cùng một câu trả lời. Chỉ ghi nguồn kèm từng số khi một mục lấy số từ nhiều nguồn khác nhau.
-- Tên nguồn là nhà cung cấp dữ liệu, viết trần, không kèm cơ chế lấy dữ liệu (không ghi cache, API, endpoint, session). Tool không nêu nhà cung cấp thì bỏ qua dòng nguồn, không thay bằng tên tool.
+- Mỗi bảng hoặc mục phân tích ghi nguồn và thời điểm **một lần**, ở đầu bảng/mục, dạng `Nguồn: <tên nguồn> · <thời điểm asof>`; không lặp `[tên nguồn · thời điểm]` sau từng số, từng dòng hay từng ô. Các bảng liền nhau cùng nguồn và cùng thời điểm thì chỉ ghi ở bảng đầu. Một mục lấy số từ nhiều nguồn thì ghi nguồn kèm từng số khác nguồn. Tên nguồn là nhà cung cấp dữ liệu mà tool nêu, viết trần (không ghi cache, API, endpoint, session); tool không nêu nhà cung cấp thì ghi tên tool, để mọi con số vẫn truy được nguồn. Thời điểm là mốc `asof` của dữ liệu, không phải giờ hiện tại.
 - Số tự tính từ số có nguồn (tỷ lệ, chênh lệch) ghi rõ "tính từ" các số gốc.
 - Ngày ghi tuyệt đối `dd/mm/yyyy` như trong dữ liệu, không viết "T+n" hay "phiên thứ n".
 - Một bảng dùng một đơn vị cho mỗi cột và ghi đơn vị ở tiêu đề cột. Dữ liệu tool có thể ở đơn vị khác (ví dụ nghìn đồng); đổi về cùng đơn vị trước khi so sánh. Tiền ghi bằng đồng, có dấu phân cách nghìn (128.400đ, 2,5 tỷ đồng); phần trăm một chữ số thập phân.
