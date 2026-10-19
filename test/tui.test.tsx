@@ -1451,15 +1451,29 @@ test("/config: subagent limit is a number ≥ 1 applied live; subagent model lis
 
   await setup.mockInput.typeText("model cho subagent")
   setup.mockInput.pressEnter()
-  frame = await setup.waitForFrame((f) => f.includes("Theo model của phiên (mặc định)"))
+  frame = await setup.waitForFrame((f) => f.includes("Theo model của phiên (mặc định)") && f.includes("Tự động (chọn model lite rẻ)"))
   show(frame)
+  // Row 2 is "auto": the harness picks a lite model per run.
   setup.mockInput.pressArrow("down")
   setup.mockInput.pressEnter()
   // Wait for the list to show the choice, then read the file once (reading while it is
   // being replaced is what Windows refuses).
-  await setup.waitForFrame((f) => f.includes("Cài đặt") && f.includes("Model cho subagent") && !f.includes("Theo model của phiên · enter"))
+  await setup.waitForFrame((f) => f.includes("Cài đặt") && /Model cho subagent\s+Tự động/.test(f))
+  expect((await Bun.file(path.join(home, "config.json")).json()).subagents).toEqual({ maxConcurrent: 3, model: "auto" })
+  // Row 3 onward are the tool-capable models of connected providers (groq, connected by the
+  // /connect test above); picking one replaces "auto".
+  await setup.mockInput.typeText("model cho subagent")
+  setup.mockInput.pressEnter()
+  frame = await setup.waitForFrame((f) => f.includes("Theo model của phiên (mặc định)") && f.includes("● Tự động"))
+  show(frame)
+  setup.mockInput.pressArrow("down")
+  setup.mockInput.pressArrow("down")
+  setup.mockInput.pressEnter()
+  await setup.waitForFrame((f) => f.includes("Cài đặt") && f.includes("Model cho subagent") && !f.includes("Theo model của phiên · enter") && !/Model cho subagent\s+Tự động/.test(f))
   const saved = (await Bun.file(path.join(home, "config.json")).json()).subagents
   expect(saved.maxConcurrent).toBe(3)
+  expect(saved.model).not.toBe("auto")
+  expect(state.catalog[saved.provider]?.models[saved.model]).toBeDefined()
   expect(state.catalog[saved.provider]?.models[saved.model]?.tool_call).not.toBe(false)
   await setup.waitForFrame((f) => f.includes("Cài đặt"))
   await setup.mockInput.typeText("model cho subagent")

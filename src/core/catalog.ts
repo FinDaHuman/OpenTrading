@@ -11,6 +11,8 @@ export interface CatalogModel {
   id: string
   name: string
   family?: string
+  /** models.dev release date (YYYY-MM-DD or YYYY-MM). */
+  release_date?: string
   reasoning?: boolean
   tool_call?: boolean
   status?: "alpha" | "beta" | "deprecated"

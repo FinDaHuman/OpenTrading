@@ -34,6 +34,10 @@ let plan: { tool: string; args: object; always?: boolean; text?: string } | unde
 let script: { tool: string; args: object }[] | undefined
 /** Mimic gemini-2.5-flash-lite: answer with nothing after a tool result. */
 let emptyAfterTool: "once" | "always" | undefined
+/** That empty answer still streams thoughts (a reasoning model that thinks, then says nothing). */
+let emptyWithThoughts = false
+/** Streamed requests answer only after this delay (stall timer tests). */
+let answerDelayMs = 0
 /** Non-streamed answers (the compaction summary): an error per request, then the finish reason. */
 let summaryErrors: { status: number; message: string }[] = []
 let summaryFinish = "stop"
@@ -67,6 +71,7 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   if (!url.endsWith("/chat/completions")) throw new Error(`unexpected fetch ${url}`)
   const body = JSON.parse(String(init?.body)) as Body & { stream?: boolean }
   bodies.push(body)
+  if (answerDelayMs > 0 && body.stream) await new Promise((r) => setTimeout(r, answerDelayMs))
   if (failFirst > 0 && body.stream) {
     failFirst--
     return Response.json(failBody ?? { error: { message: "rate limited" } }, { status: 429 })
@@ -113,13 +118,13 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   }
   const nudged = JSON.stringify(body.messages.at(-1)?.content ?? "").includes(NUDGE)
   if (emptyAfterTool && hasToolResult && (emptyAfterTool === "always" || !nudged)) {
-    return sse([chunk({ role: "assistant", content: "" }), chunk({}, "stop")])
+    return sse([...(emptyWithThoughts ? [chunk({ reasoning: "đang nghĩ" })] : []), chunk({ role: "assistant", content: "" }), chunk({}, "stop")])
   }
   const last = usage ? { ...chunk({}, "stop"), x_groq: { usage } } : chunk({}, "stop")
   return sse([chunk({ role: "assistant", content: "Kết quả: " }), chunk({ content: "xong." }), last])
 }) as typeof fetch
 
-const { runAgent } = await import("../src/core/agent")
+const { runAgent, thoughtOptions } = await import("../src/core/agent")
 const { ToolRegistry } = await import("../src/core/tools/registry")
 const { currentTimeTool } = await import("../src/core/tools/builtin/current-time")
 const { saveConfig } = await import("../src/core/config")
@@ -143,6 +148,8 @@ beforeEach(async () => {
   plan = undefined
   script = undefined
   emptyAfterTool = undefined
+  emptyWithThoughts = false
+  answerDelayMs = 0
   usage = undefined
   failFirst = 0
   failBody = undefined
@@ -863,6 +870,71 @@ test("an aborted turn keeps each step's text once", async () => {
   expect(JSON.stringify(messages).split("Đang kiểm tra.").length - 1).toBe(1)
   expect(messages.map((m) => m.role).join(",")).not.toContain("assistant,assistant")
   expect(closeDanglingToolCalls(messages).patched).toBe(0)
+})
+
+test("a turn that fails after a tool keeps the result as the model sees it: no chart payload, no base64", async () => {
+  plan = { tool: "pic", args: {} }
+  failAfterTool = 99
+  const r = registry()
+  r.register({
+    name: "pic",
+    description: "returns a chart and an image",
+    input: z.object({}),
+    readOnly: true,
+    async execute() {
+      return { output: "đã vẽ", chart: { secret: "CHART_PAYLOAD" } as never, images: [{ mediaType: "image/png", data: "BASE64DATA" }] }
+    },
+  })
+  const first = done(await collect(runAgent({ history: [], input: "x", skills: [], registry: r })))
+  expect(first.outcome).toBe("failed")
+  failAfterTool = 0
+  plan = undefined
+  bodies.length = 0
+  await collect(runAgent({ history: first.messages, input: "tiếp", skills: [], registry: r }))
+  const sent = JSON.stringify(bodies[0]!.messages.filter((m) => m.role === "tool"))
+  expect(sent).toContain("đã vẽ")
+  expect(sent).not.toContain("CHART_PAYLOAD")
+  expect(sent).not.toContain("BASE64DATA")
+})
+
+test("a turn cut after a failed tool keeps the cleaned error, not the SDK's raw text", async () => {
+  script = [{ tool: "boom", args: {} }, { tool: "hang", args: {} }]
+  const controller = new AbortController()
+  const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: registry(), signal: controller.signal }), (e) => {
+    if (e.type === "tool-start" && e.name === "hang") setTimeout(() => controller.abort(), 20)
+  })
+  const kept = JSON.stringify(done(events).messages)
+  expect(kept).toContain("nguồn dữ liệu sập")
+  expect(kept).not.toContain("Error: nguồn")
+})
+
+test("an invalid OPENTRADING_STALL_MS falls back to the default instead of cutting every request", async () => {
+  answerDelayMs = 50
+  for (const value of ["abc", "0", "-5"]) {
+    process.env.OPENTRADING_STALL_MS = value
+    try {
+      const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: registry() }))
+      expect(done(events).outcome).toBe("completed")
+    } finally {
+      delete process.env.OPENTRADING_STALL_MS
+    }
+  }
+})
+
+test("an empty answer made of thoughts only is dropped, so two model turns never sit side by side", async () => {
+  plan = { tool: "current_time", args: {} }
+  emptyAfterTool = "once"
+  emptyWithThoughts = true
+  const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: registry() }))
+  expect(events.some((e) => e.type === "progress")).toBe(true)
+  expect(done(events).messages.map((m) => m.role)).toEqual(["user", "assistant", "tool", "assistant"])
+})
+
+test("Gemini reasoning models are asked for their thoughts; other models are left alone", () => {
+  const google = (reasoning: boolean) => ({ npm: "@ai-sdk/google", models: { m: { reasoning } } })
+  expect(thoughtOptions({ provider: google(true), model: "m" })).toEqual({ google: { thinkingConfig: { includeThoughts: true } } })
+  expect(thoughtOptions({ provider: google(false), model: "m" })).toBeUndefined()
+  expect(thoughtOptions({ provider: { npm: "@ai-sdk/groq", models: { m: { reasoning: true } } }, model: "m" })).toBeUndefined()
 })
 
 test("<quyen_tep> names the workspace, goes out once and again when /add-dir changes it", async () => {

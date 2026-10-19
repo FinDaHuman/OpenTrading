@@ -12,17 +12,18 @@ const MIN_CONTEXT = 64_000
 
 /**
  * Preferred lite models, in order: provider, then patterns tried in sequence against
- * tool-capable models of that provider. The first match wins. Edit this data to change
- * the policy (the doc in docs/subagents.md mirrors it).
+ * tool-capable models of that provider. The first pattern with a match wins; among its
+ * matches the newest release does. Edit this data to change the policy (the doc in
+ * docs/subagents.md mirrors it).
  */
 export const LITE_SHORTLIST: ReadonlyArray<readonly [string, ...RegExp[]]> = [
   ["google", /^gemini-3\.5-flash-lite$/, /^gemini-3\.1-flash-lite$/, /flash-lite$/],
   ["opencode-go", /^claude-haiku-5-5$/, /^glm-5\.3-flash$/, /flash$/],
   ["alibaba", /^qwen3\.7-flash$/, /^qwen-flash$/, /flash$/],
-  ["anthropic", /haiku/],
-  ["openai", /gpt-.*-mini$/],
+  ["anthropic", /^claude-haiku-5-5$/, /haiku/],
+  ["openai", /^gpt-5\.4-mini$/, /^gpt-.*-mini$/],
   ["groq", /^llama-3\.1-8b-instant$/, /^qwen\//],
-  ["openrouter", /haiku/, /gemini-3\.5-flash-lite$/],
+  ["openrouter", /^anthropic\/claude-haiku-5\.5$/, /haiku/, /gemini-3\.5-flash-lite$/],
   ["nvidia", /^deepseek-ai\/deepseek-v4\.1-flash$/, /flash$/],
   ["ollama-cloud", /^deepseek-v4-flash$/, /flash$/],
 ]
@@ -38,7 +39,10 @@ export function pickAutoModel(catalog: Catalog, connected: readonly string[], re
     const provider = catalog[providerId]
     if (!provider || !isSupported(provider)) continue
     for (const pattern of patterns) {
-      const match = chatModels(provider).find((m) => pattern.test(m.id) && (m.limit?.context ?? 0) >= MIN_CONTEXT)
+      // chatModels sorts by name, which puts "Haiku 4.5" before "Haiku 5.5": newest first.
+      const match = chatModels(provider)
+        .filter((m) => pattern.test(m.id) && (m.limit?.context ?? 0) >= MIN_CONTEXT)
+        .sort((a, b) => (b.release_date ?? "").localeCompare(a.release_date ?? ""))[0]
       if (match) return { provider: providerId, model: match.id }
     }
   }

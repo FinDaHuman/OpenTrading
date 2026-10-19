@@ -588,14 +588,14 @@ test("a subagent's sidechain holds tool errors cleaned, like the main history", 
   expect(JSON.stringify(childBodies[1]!.messages)).not.toContain("Error: nguồn")
 })
 
-test("reasoning-delta phát event progress cho UI/watchdog", async () => {
+test("reasoning-delta emits a progress event for the watchdog", async () => {
   answerReasoning = ["nghĩ 1", "nghĩ 2"]
   const { registry } = setup()
   const events = await collect(runAgent({ history: [], input: "chào", skills: [], registry }))
   expect(events.some((e) => e.type === "progress")).toBe(true)
 })
 
-test("watchdog không giết run còn reasoning khi idleMs nhỏ", async () => {
+test("the watchdog spares a run that keeps streaming reasoning under a small idleMs", async () => {
   await saveConfig({ provider: "groq", model: "tooly", subagents: { idleMs: 1200, maxConcurrent: 5 } })
   childSlowReasoning = true
   const { registry, manager } = setup()
@@ -604,7 +604,7 @@ test("watchdog không giết run còn reasoning khi idleMs nhỏ", async () => {
   expect(manager.list()[0]).toMatchObject({ status: "completed" })
 })
 
-test("watchdog đọc idleMs: run im lặng bị dừng theo idleMs thay vì chờ 5 phút", async () => {
+test("the watchdog reads idleMs: a silent run stops after idleMs, not 5 minutes", async () => {
   await saveConfig({ provider: "groq", model: "tooly", subagents: { idleMs: 1200, maxConcurrent: 5 } })
   childGate = new Promise(() => {})
   const { registry, manager } = setup()
@@ -615,10 +615,10 @@ test("watchdog đọc idleMs: run im lặng bị dừng theo idleMs thay vì ch�
   expect(view.error).toContain("không có tiến triển trong 1.2 giây")
 })
 
-test("request treo trước part đầu bị cắt bằng lỗi stall", async () => {
+test("a request that hangs before its first part is cut with the stall error", async () => {
   process.env.OPENTRADING_STALL_MS = "300"
   try {
-    childGate = new Promise(() => {}) // treo hẳn, không trả gì
+    childGate = new Promise(() => {}) // hangs for good, never answers
     const { registry } = setup()
     parentCalls = [spawn("Kỹ thuật HPG")]
     const events = await collect(runAgent({ history: [], input: "phân tích HPG", skills: [], registry }))
@@ -630,7 +630,7 @@ test("request treo trước part đầu bị cắt bằng lỗi stall", async ()
   }
 })
 
-test("stream treo giữa chừng (sau 1 reasoning chunk) bị cắt bằng lỗi stall", async () => {
+test("a stream that hangs mid-way (after one reasoning chunk) is cut with the stall error", async () => {
   process.env.OPENTRADING_STALL_MS = "300"
   try {
     childDanglingStream = true
@@ -645,17 +645,17 @@ test("stream treo giữa chừng (sau 1 reasoning chunk) bị cắt bằng lỗi
   }
 })
 
-test("dừng giữa chừng vẫn giữ tool call/result đã hoàn thành trong sidechain", async () => {
+test("a run stopped mid-way keeps its finished tool calls and results in the sidechain", async () => {
   const { registry, manager } = setup()
   const sessionDir = path.join(home, "sessions", "2026", "10", "s-keep")
   manager.attachSession({ id: "s-keep", dir: sessionDir })
   parentCalls = [spawn("Kỹ thuật HPG")]
   childCall = { name: "current_time", args: {} }
   let release1!: () => void
-  childGate = new Promise<void>((r) => (release1 = r)) // giữ request 1 tới khi test cho chạy
+  childGate = new Promise<void>((r) => (release1 = r)) // hold request 1 until the test lets it go
   const running = collect(runAgent({ history: [], input: "phân tích HPG", skills: [], registry }))
   await waitFor(() => childBodies.length === 1)
-  childGate = new Promise(() => {}) // request 2 của con bị giữ hẳn (sau khi tool đã xong)
+  childGate = new Promise(() => {}) // the child's request 2 hangs for good (its tool already ran)
   release1()
   await waitFor(() => childBodies.some((b) => b.messages.some((m) => m.role === "tool")))
   const id = manager.list()[0]!.id
@@ -674,7 +674,7 @@ test("dừng giữa chừng vẫn giữ tool call/result đã hoàn thành trong
   expect(closeDanglingToolCalls(messages).patched).toBe(0)
 })
 
-test("subagents.model auto: con chạy model lite tự chọn và có notice", async () => {
+test("subagents.model auto: the child runs on the picked lite model, with a notice", async () => {
   await saveConfig({ provider: "groq", model: "tooly", subagents: { model: "auto", maxConcurrent: 5 } })
   const { registry, manager } = setup()
   parentCalls = [spawn("Kỹ thuật HPG")]
@@ -683,7 +683,7 @@ test("subagents.model auto: con chạy model lite tự chọn và có notice", a
   expect(manager.list()[0]!.notice).toContain("tự chọn model")
 })
 
-test("subagents.model auto: không có model khớp thì quay về model phiên + notice", async () => {
+test("subagents.model auto: no match falls back to the session's model, with a notice", async () => {
   await saveConfig({ provider: "groq", model: "tooly", subagents: { provider: "anthropic", model: "auto", maxConcurrent: 5 } })
   const { registry, manager } = setup()
   parentCalls = [spawn("Kỹ thuật HPG")]
@@ -692,7 +692,7 @@ test("subagents.model auto: không có model khớp thì quay về model phiên 
   expect(manager.list()[0]!.notice).toContain("Không tìm thấy model lite")
 })
 
-test("idleMs không hợp lệ (0) bị bỏ qua, dùng mặc định 5 phút", async () => {
+test("an invalid idleMs (0) is ignored and the 5-minute default applies", async () => {
   await saveConfig({ provider: "groq", model: "tooly", subagents: { idleMs: 0, maxConcurrent: 5 } })
   childSlowReasoning = true
   const { registry, manager } = setup()

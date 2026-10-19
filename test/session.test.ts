@@ -96,7 +96,7 @@ test("tool calls without results are closed with an interrupted error", () => {
   expect(JSON.stringify(messages)).not.toContain("ghost")
 })
 
-test("closeDanglingToolCalls nhận lý do vá tuỳ biến", () => {
+test("closeDanglingToolCalls takes a custom reason for the patch", () => {
   const messages: ModelMessage[] = [
     { role: "assistant", content: [{ type: "tool-call", toolCallId: "x", toolName: "t", input: {} }] },
   ]
