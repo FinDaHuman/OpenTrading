@@ -4,15 +4,15 @@ Agent đọc được file bạn đưa (PDF báo cáo, Excel, CSV, ghi chú, ả
 
 ## Ba chế độ (Shift+Tab, hoặc Alt+M)
 
-| Chế độ | Đọc file | Ghi / sửa file | Lệnh shell, tool ghi khác |
-| --- | --- | --- | --- |
-| `‖ chỉ đọc` (mặc định) | tự do | hỏi từng lần: **Có, lần này / Có, và chuyển sang ▸ / Không** | hỏi từng lần |
-| `▸ sửa có hỏi` | tự do | hỏi; "cả phiên này" cho cả thư mục (và thư mục con) | hỏi; "cả phiên"/"luôn" cho một **tiền tố lệnh chỉ đọc** như `git status …` |
-| `▸▸ tự động` | tự do | file **mới** hoặc file do phiên tạo: chạy luôn; file có sẵn: model duyệt | model duyệt |
+| Chế độ | Đọc file | Ghi / sửa file | Lệnh `shell` | Tool ghi khác (watchlist, tool MCP ghi, trang web domain mới) |
+| --- | --- | --- | --- | --- |
+| `‖ chỉ đọc` (mặc định) | tự do | hỏi từng lần: **Có, lần này / Có, và chuyển sang ▸ / Không** | hỏi từng lần (như ghi file) | hỏi như trước: lần này / cả phiên / luôn / không |
+| `▸ sửa có hỏi` | tự do | hỏi; "cả phiên này" cho cả thư mục (và thư mục con) | hỏi; "cả phiên"/"luôn" cho một **tiền tố lệnh chỉ đọc** như `git status …` | hỏi như trước |
+| `▸▸ tự động` | tự do | file **mới** hoặc file do phiên tạo: chạy luôn; file có sẵn: model duyệt | model duyệt | model duyệt |
 
 - Chế độ hiện ở thanh trạng thái. `/config → Chế độ quyền khi mở` để đổi chế độ lúc khởi động (lưu `permissions.defaultMode`).
-- Ở `‖`, các quyền "cả phiên" hay "luôn cho phép" không được dùng cho ghi file và chạy lệnh: lần nào cũng hỏi.
-- Ký hiệu là `‖ ▸ ▸▸` thay cho `⏸ ✎ ⏵⏵` của Claude Code. Lý do: Windows Terminal vẽ `✎` thành emoji màu rộng 2 ô (repo có test cấm), và `⏸` cũng có dạng emoji.
+- Ở `‖`, các quyền "cả phiên" hay "luôn cho phép" không được dùng cho ghi file và chạy lệnh: lần nào cũng hỏi. Tool ghi khác vẫn dùng được các quyền đã cho như trước.
+- Ký hiệu là `‖ ▸ ▸▸`, không phải `⏸ ✎ ⏵⏵` như trong plan. Lý do: Windows Terminal vẽ `✎` thành emoji màu rộng 2 ô (repo có test cấm), và `⏸` cũng có dạng emoji.
 - Model được báo chế độ hiện tại qua khối nhắc `<quyen_tep>`. Khối này gửi lại mỗi khi chế độ hoặc workspace đổi.
 
 ## Workspace
@@ -49,7 +49,7 @@ Agent đọc được file bạn đưa (PDF báo cáo, Excel, CSV, ghi chú, ả
 | `glob_files`, `grep_files` | tìm file theo tên, tìm chữ trong file | viết bằng TypeScript thuần, không cần `rg`; bỏ qua `.git`, `node_modules`, `.venv`, file nhị phân và file chứa khoá |
 | `write_file` | tạo file mới hoặc ghi đè cả file | ghi đè thì phải `read_file` toàn bộ file trước và file không đổi từ lúc đọc; giữ nguyên encoding, BOM, CRLF; hộp thoại có diff |
 | `edit_file` | thay một đoạn trong file | `old_string` phải khớp đúng và duy nhất (hoặc dùng `replace_all`); khớp được ngoặc cong của Word |
-| `shell` | chạy một lệnh | Windows dùng pwsh, không có thì Windows PowerShell 5.1 (ép UTF-8, lỗi in thành dòng `LỖI: …`); Linux/macOS dùng bash. Timeout mặc định 120s, tối đa 600s; khi timeout hoặc Esc thì giết cả cây tiến trình. Output dài hơn 30.000 ký tự được lưu vào `~/.opentrading/tool-output/` (xoá sau 7 ngày) để model đọc tiếp bằng `read_file`. Tiến trình con **không nhận** biến môi trường có tên kiểu `*_API_KEY`, `*TOKEN*`, `*SECRET*`, `*PASSWORD*`, `*CREDENTIALS*`, `OPENTRADING_*` |
+| `shell` | chạy một lệnh | Windows dùng pwsh, không có thì Windows PowerShell 5.1 (ép UTF-8, lỗi in thành dòng `LỖI: …`); Linux/macOS dùng bash. Timeout mặc định 120s, tối đa 600s; khi timeout hoặc Esc thì giết cả cây tiến trình. Output dài hơn 30.000 ký tự được lưu vào `~/.opentrading/tool-output/` (xoá sau 7 ngày) để model đọc tiếp bằng `read_file`. Tiến trình con **không nhận** biến môi trường có tên chứa `API_KEY`/`APIKEY`, `TOKEN`, `SECRET`, `PASSWORD`/`PASSWD`, `CREDENTIAL(S)` ở cuối tên hoặc ngay trước `_` (ví dụ `GITHUB_TOKEN`, `HF_TOKEN`, `AWS_SECRET_ACCESS_KEY`; còn `TOKENS` thì vẫn giữ), và `OPENTRADING_*`. Script cần các biến này sẽ không thấy chúng: đặt khoá trong file cấu hình riêng của script |
 
 - Ở `‖`, `write_file`, `edit_file` và `shell` chỉ gửi tên cho model (nạp bằng `tool_search` khi cần), nếu tool search đang hoãn tool. Ở `▸` và `▸▸` chúng được gửi đầy đủ: khoảng 850 token mỗi lượt.
 - **"Luôn cho phép" một lệnh** chỉ có với lệnh đơn và chỉ đọc (`git status`, `git log`, `Get-ChildItem`, `python --version`…). Quy tắc lưu dưới dạng tiền tố và **không bao giờ** khớp lệnh ghép (`git status; Remove-Item …`).
@@ -84,7 +84,7 @@ Bạn tự viết quy tắc trong `~/.opentrading/config.json`:
 ```
 
 - `tool` là tên tool, có thể dùng `*`. `pattern` so với đường dẫn (với tool file) hoặc với nội dung lệnh (với `shell`), cũng dùng được `*`; không có `pattern` thì áp cho mọi lời gọi tool đó.
-- `deny` chặn cả tool đọc. `ask` luôn hỏi kể cả khi đã có quy tắc cho phép, và ở `▸▸` cũng hỏi bạn thay vì hỏi model duyệt.
+- `deny` chặn cả tool đọc. `ask` luôn hỏi kể cả khi đã có quy tắc cho phép, và ở `▸▸` cũng hỏi bạn thay vì hỏi model duyệt; nhưng `ask` **không áp cho tool đọc** (đọc thường chạy ngay, không xét quy tắc hỏi), muốn chặn đọc một thư mục thì dùng `deny`.
 - Sửa tay xong thì **mở lại `/permissions`** (hoặc khởi động lại OpenTrading) để áp dụng.
 
 ## ▸▸ Tự động (auto mode)

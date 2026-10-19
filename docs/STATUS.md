@@ -62,7 +62,7 @@ Contract cho đồng nghiệp: [docs/contracts.md](contracts.md).
 | **Memory** (`src/core/memory/`): contract `MemoryProvider`, bản mẫu `FileMemory` (đề xuất → duyệt trong `/memory`, "Ghi nhớ: …"), mặc định tắt; bật trong `/config` | Xong |
 | **Session** (`src/core/session/`): JSONL ghi nối, `/sessions`, `/new`, `--continue`, `--resume <id>`, vá tool-call thiếu kết quả | Xong |
 | **Subagent** (`src/core/subagents/`, `src/core/agents/`, PR #32–#34) | Xong. `spawn_subagent` chạy song song, giới hạn trong `/config` (mặc định 10, xếp hàng); khối tiến độ kiểu Claude Code; tool ghi hỏi ở UI chính (chỉ Enter); 4 loại có sẵn + `.opentrading/agents/*.md`; chạy nền, `<thong_bao_subagent>`, `send_message`/`stop_agent`, `/agents`, `/tasks`; transcript riêng trong `sessions/…/subagents/` |
-| Test: typecheck + 296 test (tool, MCP qua stdio/HTTP/SSE/OAuth giả, schema thật, agent loop, subagent, TUI headless, quyền) | Xong |
+| Test: typecheck + bộ test (tool, MCP qua stdio/HTTP/SSE/OAuth giả, schema thật, agent loop, subagent, TUI headless, quyền, file, shell, auto mode) | Xong; số test hiện tại: `bun test` |
 
 **Chưa kiểm tra:**
 - Đã thử với key Gemini thật, gồm cả subagent (người dùng xác nhận ngày 07/10/2026). Anthropic và OpenAI chưa thử bằng key thật.
