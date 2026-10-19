@@ -1295,6 +1295,8 @@ test("/save copies the whole conversation as Markdown; /export writes it to a fi
 
 test("shift+tab cycles ‖ chỉ đọc ↔ ▸ sửa có hỏi; a write in read-only shows its diff and can switch the mode", async () => {
   expect(runtime.permissions.mode).toBe("read-only")
+  // A flash from the test before ("✓ Đã copy…") would hide the hint for 2s.
+  setState("flash", undefined)
   await setup.waitForFrame((f) => f.includes("‖ chỉ đọc") && f.includes("shift+tab đổi quyền"))
   setup.mockInput.pressTab({ shift: true })
   await setup.waitForFrame((f) => f.includes("▸ sửa có hỏi"))
