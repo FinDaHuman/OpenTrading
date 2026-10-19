@@ -6,7 +6,7 @@ triggers:
   keywords: [chu kỳ thị trường, giai đoạn thị trường, pha thị trường, luân chuyển ngành, rotation, sóng ngành, đỉnh chu kỳ, giai đoạn phân phối, đầu phục hồi, bank dẫn, chứng dẫn, dòng tiền ngành, cuối sóng, giữa sóng, mùa vụ ngành, mảng vin, họ vin]
 requires_tools: [cycle_stats_check, vn_index_ohlcv]
 uses_tools: [cycle_stats_check, cycle_seasonality, cycle_chains, cycle_turning, cycle_tet, cycle_yearly, cycle_trough_events, vn_index_ohlcv, seasonality, sbv_rates, breadth_scan, market_movers, market_candles_batch]
-version: 1.6.0
+version: 1.6.1
 ---
 
 # Định vị pha chu kỳ thị trường Việt Nam
@@ -51,7 +51,7 @@ Chạy `sbv_rates`. Nới lỏng = ủng hộ Pha 1–2; thắt chặt/giữ cao
 
 **Bước 5: Kết luận pha + gợi ý mảng.**
 
-Chấm 4 trụ cột theo checklist trong `references/phase-playbook.md`, chọn pha có nhiều điểm khớp nhất. Gợi ý 1–2 mảng tiếp theo: tra `cycle_chains` lấy hit-rate MỚI NHẤT (không dùng số trong file). Mảng Vin đứng ngoài chuỗi luân chuyển (các cặp có Vin yếu/âm) — chỉ nêu Vin khi mùa vụ (T3/T4/T11) hoặc hồi sau đáy ủng hộ, không gợi ý Vin theo chuỗi. CẤM picking mã cổ phiếu cụ thể, CẤM quy tắc mua/bán (đó là việc của skill khác).
+Chấm 4 trụ cột theo checklist trong `references/phase-playbook.md`, chọn pha có nhiều điểm khớp nhất. Gợi ý 1–2 mảng tiếp theo: tra `cycle_chains` lấy hit-rate MỚI NHẤT (không dùng số trong file). Mảng Vin: chỉ gợi ý theo chuỗi khi cặp có Vin trong `cycle_chains` có `rel_mean` dương; nếu không, chỉ nêu Vin khi hàng `vin` của `cycle_seasonality(month=<M>)` ở Bước 3 có bias (ngưỡng ở `references/seasonality-vn.md` mục 1) hoặc `cycle_trough_events` ở Bước 1 ủng hộ. CẤM picking mã cổ phiếu cụ thể, CẤM quy tắc mua/bán (đó là việc của skill khác).
 
 ## Cấu trúc câu trả lời
 
