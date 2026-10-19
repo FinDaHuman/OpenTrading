@@ -2,6 +2,7 @@ import type { JSONSchema7 } from "@ai-sdk/provider"
 import type { z } from "zod"
 import type { ChartData } from "./chart/data"
 import type { LoopGuard } from "./loop-guard"
+import type { DiffLine } from "../fs/diff"
 
 export interface ToolContext {
   signal: AbortSignal
@@ -94,6 +95,21 @@ export interface ToolDef<I = any> {
    */
   permissionScope?: string
   /**
+   * A local side effect the permission mode governs: `file` (write_file, edit_file) or
+   * `shell`. In ‖ read-only mode such a call asks with "switch to ▸" as an option.
+   */
+  effect?: "file" | "shell"
+  /** Never run this call, whatever the mode or rules (odd Windows path, deleting a drive root). Returns why. */
+  blockFor?(input: I): string | undefined
+  /** Checks that need no approval (old_string not found, file not read yet): an error goes to the model before anyone is asked. */
+  validate?(input: I): Promise<string | undefined>
+  /** What the user approves: a title line and, for writes, the diff. */
+  preview?(input: I): Promise<ApprovalPreview | undefined>
+  /** What deny/ask rules with a `pattern` match: the target path (file tools) or the command (shell). */
+  subject?(input: I): string | undefined
+  /** Session approvals are shared by tools of one group ("this folder, this session" covers write_file and edit_file). */
+  approvalGroup?: string
+  /**
    * Runs before approval, the timeout and the lock — for waiting on the user (ask_user),
    * which must neither count as runtime nor hold a lock. Its result reaches `execute` as
    * `ctx.prepared`.
@@ -102,6 +118,14 @@ export interface ToolDef<I = any> {
   /** Short label for the TUI, e.g. `current_time()` or `add 2 + 3`. */
   summarize?(input: I): string
   execute(input: I, ctx: ToolContext): Promise<string | ToolResult>
+}
+
+export interface ApprovalPreview {
+  /** e.g. `D:\Dau-tu\ke-hoach-FPT.md (mới, 42 dòng)`. */
+  title: string
+  diff?: DiffLine[]
+  added?: number
+  removed?: number
 }
 
 /** `source` of OpenTrading's optional local tools (charts, watchlist, sessions): deferrable, not MCP. */

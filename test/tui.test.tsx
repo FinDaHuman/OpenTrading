@@ -700,9 +700,9 @@ test("/tools lists built-in and MCP tools", async () => {
     await setup.mockInput.typeText("/tools")
     setup.mockInput.pressEnter()
     // 6 core built-ins (current_time, load_skill, ask_user, todo_write, tool_search, read_file)
-    // + 20 local tools (glob_files, grep_files, chart, session, watchlist, web, spawn_subagent, send_message, stop_agent, doctor_local)
+    // + 22 local tools (glob_files, grep_files, write_file, edit_file, chart, session, watchlist, web, spawn_subagent, send_message, stop_agent, doctor_local)
     // + propose_memory + 4 from the demo MCP server
-    frame = await setup.waitForFrame((f) => f.includes("Tool · 31") && f.includes("22 tool hoãn"))
+    frame = await setup.waitForFrame((f) => f.includes("Tool · 33") && f.includes("24 tool hoãn"))
     show(frame)
     // Regression for the 01/10 screenshot: every tool is exactly one line, long descriptions
     // end in "…" instead of wrapping mid-word, and the mark column is straight.
@@ -715,8 +715,8 @@ test("/tools lists built-in and MCP tools", async () => {
     expect(timeRow).toMatch(/…\s+\[chỉ đọc\]\s*$/)
     expect(frame).not.toMatch(/^\s+Asia\/H/m)
     expect(frame).toContain("Có sẵn")
-    // 3 demo tools (add is alwaysLoad) + 19 optional local tools (incl. glob_files/grep_files) (incl. web_search/web_fetch) (chart, session, watchlist, doctor, send_message, stop_agent)
-    expect(frame).toContain("22 tool hoãn: model chỉ thấy tên")
+    // 3 demo tools (add is alwaysLoad) + 21 optional local tools (incl. glob_files/grep_files/write_file/edit_file) (incl. web_search/web_fetch) (chart, session, watchlist, doctor, send_message, stop_agent)
+    expect(frame).toContain("24 tool hoãn: model chỉ thấy tên")
     expect(timeRow).not.toContain("hoãn · ")
     // read_file is core (a path from the user is read at once); spawn_subagent sits below the fold now.
     expect(rows.find((r) => r.includes(" read_file "))).not.toContain("hoãn · ")
@@ -724,13 +724,13 @@ test("/tools lists built-in and MCP tools", async () => {
     expect(rows.find((r) => r.includes(" chart_render "))).toContain("hoãn · ")
     // ↑ from the first row wraps to the last: the Memory and MCP groups sit below the fold.
     setup.mockInput.pressArrow("up")
-    frame = await setup.waitForFrame((f) => f.includes("MCP · demo") && f.includes("31/31"))
+    frame = await setup.waitForFrame((f) => f.includes("MCP · demo") && f.includes("33/33"))
     show(frame)
     expect(frame).toContain("Memory")
     const tail = frame.split("\n").filter((l) => /^ {2}(❯ |  )[◇◆] \S/.test(l))
     expect(tail.find((r) => r.includes(" echo "))).toContain("hoãn · ")
     setup.mockInput.pressArrow("down")
-    await setup.waitForFrame((f) => f.includes("1/31"))
+    await setup.waitForFrame((f) => f.includes("1/33"))
   } finally {
     await saveConfig({ toolSearch: undefined })
   }
@@ -741,7 +741,7 @@ test("/tools lists built-in and MCP tools", async () => {
   expect(frame).toContain("ask_user")
   expect(frame).toMatch(/• questions \(bắt buộc\): array/)
   setup.mockInput.pressEscape()
-  await setup.waitForFrame((f) => f.includes("Tool · 31"))
+  await setup.waitForFrame((f) => f.includes("Tool · 33"))
   setup.mockInput.pressEscape()
   await setup.waitFor(() => state.dialog === undefined)
 })
@@ -1291,6 +1291,75 @@ test("/save copies the whole conversation as Markdown; /export writes it to a fi
   expect(line.kind).toBe("error")
   expect(line.text).toContain("--force")
   expect((await run(`/export ${target} --force`)).kind).toBe("info")
+})
+
+test("shift+tab cycles ‖ chỉ đọc ↔ ▸ sửa có hỏi; a write in read-only shows its diff and can switch the mode", async () => {
+  expect(runtime.permissions.mode).toBe("read-only")
+  // A flash from the test before ("✓ Đã copy…") would hide the hint for 2s.
+  setState("flash", undefined)
+  await setup.waitForFrame((f) => f.includes("‖ chỉ đọc") && f.includes("shift+tab đổi quyền"))
+  setup.mockInput.pressTab({ shift: true })
+  await setup.waitForFrame((f) => f.includes("▸ sửa có hỏi"))
+  expect(runtime.permissions.mode).toBe("ask")
+  setup.mockInput.pressTab({ shift: true })
+  await setup.waitFor(() => runtime.permissions.mode === "read-only")
+
+  const write = runtime.registry.get("write_file")!
+  const decision = runtime.permissions.check(write, { path: "tui-ke-hoach.md", content: "# Kế hoạch\nTheo dõi FPT\n" }, new AbortController().signal, "write_file tui-ke-hoach.md", "c-tui")
+  const frame = await setup.waitForFrame((f) => f.includes("đang ở chế độ ‖ chỉ đọc") && f.includes("+ # Kế hoạch"))
+  show(frame)
+  expect(frame).toContain("Có, và chuyển sang ▸ sửa có hỏi")
+  expect(frame).toContain("(mới, 2 dòng)")
+  expect(frame).not.toContain("Luôn cho phép")
+  setup.mockInput.pressKey("2")
+  expect(await decision).toEqual({ allow: true })
+  expect(runtime.permissions.mode).toBe("ask")
+  runtime.permissions.setMode("read-only")
+})
+
+test("/undo lists and puts back the agent's file changes; /permissions lists rules and deletes one with d", async () => {
+  const run = async (cmd: string) => {
+    const before = state.lines.length
+    await setup.mockInput.typeText(cmd)
+    setup.mockInput.pressEnter()
+    await setup.waitFor(() => state.lines.length > before)
+    return state.lines.at(-1) as { kind: string; text: string }
+  }
+  const write = runtime.registry.get("write_file")!
+  await write.execute({ path: "undo-me.md", content: "x\n" }, { signal: new AbortController().signal, callId: "u1" })
+  const file = path.join(cwd, "undo-me.md")
+  expect(await Bun.file(file).exists()).toBe(true)
+  let line = await run("/undo")
+  expect(line.text).toContain("undo-me.md")
+  expect(line.text).toContain("tạo")
+  const n = runtime.history.list()[0]!.n
+  line = await run(`/undo ${n}`)
+  expect(line.text).toContain("Đã xoá")
+  expect(await Bun.file(file).exists()).toBe(false)
+  expect((await run(`/undo ${n}`)).kind).toBe("error")
+
+  await saveConfig({ permissions: { allow: [{ tool: "mcp__demo__echo", scope: "demo@x" }], deny: [{ tool: "write_file", pattern: "*bi-mat*" }] } })
+  try {
+    await setup.mockInput.typeText("/permissions")
+    setup.mockInput.pressEnter()
+    let frame = await setup.waitForFrame((f) => f.includes("Quyền · 2 quy tắc") && f.includes("mẫu *bi-mat*"))
+    show(frame)
+    expect(frame).toContain("Chế độ: ‖ chỉ đọc")
+    expect(frame).toContain(`Workspace: ${cwd}`)
+    setup.mockInput.pressEnter() // the deny rule comes first
+    frame = await setup.waitForFrame((f) => f.includes("d xoá"))
+    setup.mockInput.pressKey("d")
+    // The list shows 1 rule once the dialog has saved and read the config back; reading the
+    // file while it is being replaced would race with that save.
+    await setup.waitForFrame((f) => f.includes("Quyền · 1 quy tắc"))
+    const saved = (await loadConfig()).permissions
+    expect(saved?.deny ?? []).toHaveLength(0)
+    expect(saved?.allow).toHaveLength(1)
+    setup.mockInput.pressEscape()
+    await setup.waitFor(() => state.dialog === undefined)
+  } finally {
+    await saveConfig({ permissions: undefined })
+  }
 })
 
 test("/add-dir lists the workspace, adds a folder for the session or for good (--luu), refuses home", async () => {

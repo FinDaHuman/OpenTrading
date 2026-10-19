@@ -37,6 +37,7 @@ import { ConnectDialog } from "./dialogs/connect"
 import { ContextDialog } from "./dialogs/context"
 import { HelpDialog } from "./dialogs/help"
 import { MemoryDialog } from "./dialogs/memory"
+import { PermissionsDialog } from "./dialogs/permissions"
 import { SessionsDialog } from "./dialogs/sessions"
 import { ModelDialog } from "./dialogs/model"
 import { SkillsDialog, toggleSkill } from "./dialogs/skills"
@@ -50,6 +51,7 @@ import { ToolsDialog } from "./dialogs/tools"
 import { Home } from "./home"
 import { attachSubagents, currentSession, recordCompact, recordTurn, resumeFromArgs, startSession, transcriptOfCurrent } from "./session"
 import { resolveExportPath, writeExport } from "../core/session/export"
+import { cycleMode, MODE_LABEL } from "../core/permission/mode"
 import { armExit, type Queued, closeDialog, contextWindow, EXIT_WINDOW_MS, flash, onExitRequest, providerName, pushLine, setState, state, type Line } from "./state"
 import { color, promptStyle } from "./theme"
 import { cleanSelection, writeClipboard } from "./clipboard"
@@ -461,6 +463,9 @@ export function App(props: {
     offCharts()
     offFinished()
   })
+  setState("permissionMode", props.runtime.permissions.mode)
+  const offMode = props.runtime.permissions.onModeChange((mode) => setState("permissionMode", mode))
+  onCleanup(() => offMode())
   const offApproval = props.runtime.permissions.onChange((head) => {
     setState("approval", head)
     if (!head) queueMicrotask(() => deliverNotices(props.runtime))
@@ -632,6 +637,27 @@ export function App(props: {
       }
     }
     pushLine({ kind: "info", text: `✓ Đã thêm ${added.dir} vào workspace${keep ? " (đã lưu cho các phiên sau)" : " cho phiên này (thêm --luu để giữ cho các phiên sau)"}.` })
+  }
+
+  /** `/undo` lists this run's file changes; `/undo <n> [--force]` puts change n back. */
+  async function undoCommand(args: string) {
+    const history = props.runtime.history
+    const m = args.match(/^(\d+)(\s+--force)?$/)
+    if (!args.trim()) {
+      const changes = history.list()
+      if (changes.length === 0) return pushLine({ kind: "info", text: "Chưa có thay đổi file nào trong lần chạy này (chỉ write_file/edit_file mới hoàn tác được)." })
+      const rows = changes.slice(0, 15).map((c) => `${c.n}. ${c.at.slice(11, 19)} ${c.tool} ${c.created ? "tạo" : "sửa"} ${c.path}${c.undone ? " (đã hoàn tác)" : ""}`)
+      return pushLine({ kind: "info", text: ["Thay đổi file (mới nhất trước) — /undo <số> để hoàn tác:", ...rows].join("\n") })
+    }
+    if (!m) return pushLine({ kind: "error", text: "Dùng: /undo (xem danh sách) hoặc /undo <số> [--force]." })
+    try {
+      const result = await history.undo(Number(m[1]), !!m[2])
+      if ("error" in result) return pushLine({ kind: "error", text: result.error })
+      props.runtime.files.forget(history.list().find((c) => c.n === Number(m[1]))!.path)
+      pushLine({ kind: "info", text: `✓ ${result.ok}` })
+    } catch (error) {
+      pushLine({ kind: "error", text: `Không hoàn tác được: ${error instanceof Error ? error.message : String(error)}` })
+    }
   }
 
   async function mcpCommand(args: string) {
@@ -971,6 +997,10 @@ export function App(props: {
       case "tools":
       case "context":
       case "sessions":
+      case "permissions":
+        // Rules edited by hand in config.json take effect from here on.
+        void props.runtime.permissions.refreshRules()
+        return setState("dialog", cmd.name)
       case "memory":
       case "config":
       case "agents":
@@ -1004,6 +1034,8 @@ export function App(props: {
         return void exportCommand(cmd.args)
       case "add-dir":
         return void addDirCommand(cmd.args)
+      case "undo":
+        return void undoCommand(cmd.args)
       case "exit":
       case "quit":
         return void exit()
@@ -1047,6 +1079,14 @@ export function App(props: {
     if (evt.ctrl && evt.name === "g") {
       evt.preventDefault()
       return void openEditor()
+    }
+    // Permission mode: Shift+Tab, or Alt+M where the terminal does not send Shift+Tab
+    // (Claude Code defaultBindings.ts). Not while a prompt or dialog owns the keys (checked above).
+    if ((evt.name === "tab" && evt.shift) || (evt.meta && evt.name === "m")) {
+      evt.preventDefault()
+      const next = cycleMode(props.runtime.permissions.mode)
+      props.runtime.permissions.setMode(next)
+      return flash(next === "read-only" ? "‖ chỉ đọc: ghi file / chạy lệnh hỏi từng lần" : `${MODE_LABEL[next]}: mỗi lần ghi file hỏi bạn, cho phép được cả thư mục trong phiên`)
     }
     // Paste an image from the clipboard: Alt+V (Windows Terminal keeps Ctrl+V for its own
     // text paste, as in Claude Code), or Ctrl+V where the terminal passes the key through.
@@ -1186,6 +1226,9 @@ export function App(props: {
             <Match when={state.dialog === "config"}>
               <ConfigDialog runtime={props.runtime} />
             </Match>
+            <Match when={state.dialog === "permissions"}>
+              <PermissionsDialog mode={props.runtime.permissions.mode} workspace={props.runtime.workspace} onChanged={() => props.runtime.permissions.refreshRules()} />
+            </Match>
             <Match when={state.dialog === "memory"}>
               <MemoryDialog memory={props.runtime.memory} />
             </Match>
@@ -1255,6 +1298,9 @@ function StatusBar() {
           {` ✦ ${truncate(state.activeSkills.join(", "), 30)}`}
         </text>
       </Show>
+      <text fg={state.permissionMode === "read-only" ? color.tx3 : state.permissionMode === "ask" ? color.tham : color.tang} flexShrink={0} selectable={false}>
+        {` ${MODE_LABEL[state.permissionMode]} `}
+      </text>
       <box flexGrow={1} />
       <text fg={state.flash ? color.tang : state.streaming ? color.tham : color.tx3} flexShrink={0} selectable={false}>
         {state.exiting
@@ -1271,7 +1317,7 @@ function StatusBar() {
                     ? "● đang nén hội thoại · esc dừng"
                     : state.streaming
                     ? "● đang trả lời · esc dừng"
-                    : "/ lệnh · /help · ctrl+c ×2 thoát"}
+                    : "/ lệnh · shift+tab đổi quyền · ctrl+c ×2 thoát"}
       </text>
     </box>
   )
