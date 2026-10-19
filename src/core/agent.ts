@@ -348,11 +348,11 @@ async function* relay(
   // execution can take minutes (spawn_subagent, ask_user, MCP) and streams no parts.
   const pendingTools = new Set<string>()
   let stallTimer: ReturnType<typeof setTimeout> | undefined
-  const rearm = () => {
+  const rearm = (ms = stall?.ms ?? 0) => {
     if (!stall) return
     clearTimeout(stallTimer)
     if (pendingTools.size > 0) return
-    stallTimer = setTimeout(stall.onStall, stall.ms)
+    stallTimer = setTimeout(stall.onStall, ms)
     stallTimer.unref?.()
   }
   try {
@@ -363,7 +363,14 @@ async function* relay(
       // While a request waits to be retried no part arrives: show the wait meanwhile.
       const next = notices ? await Promise.race([pending, notices.ready()]) : await pending
       if (next === RETRY) {
-        for (const notice of notices!.drain()) yield { type: "retry", ...notice }
+        let wait = 0
+        for (const notice of notices!.drain()) {
+          wait = Math.max(wait, notice.delayMs)
+          yield { type: "retry", ...notice }
+        }
+        // A deliberate retry wait is not a stall: the next attempt gets a full window
+        // after the provider's requested delay.
+        rearm((stall?.ms ?? 0) + wait)
         continue
       }
       if (next.done) break
@@ -939,13 +946,18 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
   // as sent.
   const text = outcome.text
   const kept = closeDanglingToolCalls(outcome.progress, "Tool bị ngắt vì lượt bị dừng giữa chừng.").messages
+  // No square brackets: the markdown renderer read "[Đã dừng]" as a link. The closed steps
+  // already carry their text, so the trailing note appears only when nothing else closes the
+  // turn — a resumed session must not show a step's text twice.
+  const marker = outcome.aborted ? "(đã dừng)" : "(lỗi)"
+  const closing: ModelMessage[] =
+    kept.length === 0 ? [{ role: "assistant", content: text || marker }] : kept.at(-1)!.role === "tool" ? [{ role: "assistant", content: marker }] : []
   yield {
     type: "done",
-    // No square brackets: the markdown renderer read "[Đã dừng]" as a link.
-    messages: [user, ...kept, { role: "assistant", content: text || (outcome.aborted ? "(đã dừng)" : "(lỗi)") }],
+    messages: [user, ...kept, ...closing],
     clock: assembled.clock,
     usage: {
-      contextTokens: estimateRequest(system, [...request, { role: "assistant", content: text }], built?.tokens),
+      contextTokens: estimateRequest(system, [...request, ...kept, ...closing], built?.tokens),
       estimated: true,
       total: outcome.usage,
     },

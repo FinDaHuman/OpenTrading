@@ -29,7 +29,7 @@ const CATALOG = {
 type Body = { messages: { role: string; content?: unknown }[]; tools?: unknown[]; tool_choice?: unknown }
 const bodies: Body[] = []
 /** What the fake model does when the conversation has no tool results yet. */
-let plan: { tool: string; args: object; always?: boolean } | undefined
+let plan: { tool: string; args: object; always?: boolean; text?: string } | undefined
 /** Several tool calls in one turn: call `script[n]` after n tool results (this turn), then answer. */
 let script: { tool: string; args: object }[] | undefined
 /** Mimic gemini-2.5-flash-lite: answer with nothing after a tool result. */
@@ -105,6 +105,7 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   if (plan && body.tool_choice !== "none" && (plan.always || !hasToolResult)) {
     const id = `call_${bodies.length}`
     return sse([
+      ...(plan.text ? [chunk({ role: "assistant", content: plan.text })] : []),
       chunk({ role: "assistant", tool_calls: [{ index: 0, id, type: "function", function: { name: plan.tool, arguments: "" } }] }),
       chunk({ tool_calls: [{ index: 0, function: { arguments: JSON.stringify(plan.args) } }] }),
       chunk({}, "tool_calls"),
@@ -835,4 +836,31 @@ test("the deferral notice counts built-in tools apart from MCP ones", async () =
   const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: r }))
   const notice = events.find((e) => e.type === "notice" && e.text.startsWith("Đang hoãn")) as { text: string } | undefined
   expect(notice?.text).toStartWith("Đang hoãn 61 tool (60 MCP của big, 1 tool có sẵn);")
+})
+
+test("a request waiting on a 429 retry is not cut by the stall timer", async () => {
+  process.env.OPENTRADING_STALL_MS = "300"
+  process.env.OPENTRADING_RETRY_SCALE = "1"
+  try {
+    failFirst = 1
+    failBody = { error: { message: "rate limited, try again in 1s" } }
+    const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: registry() }))
+    expect(events.some((e) => e.type === "retry")).toBe(true)
+    expect(done(events).outcome).toBe("completed")
+  } finally {
+    delete process.env.OPENTRADING_STALL_MS
+    process.env.OPENTRADING_RETRY_SCALE = "0"
+  }
+})
+
+test("an aborted turn keeps each step's text once", async () => {
+  plan = { tool: "hang", args: {}, text: "Đang kiểm tra. " }
+  const controller = new AbortController()
+  const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: registry(), signal: controller.signal }), (e) => {
+    if (e.type === "tool-start") setTimeout(() => controller.abort(), 20)
+  })
+  const messages = done(events).messages
+  expect(JSON.stringify(messages).split("Đang kiểm tra.").length - 1).toBe(1)
+  expect(messages.map((m) => m.role).join(",")).not.toContain("assistant,assistant")
+  expect(closeDanglingToolCalls(messages).patched).toBe(0)
 })

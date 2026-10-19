@@ -347,7 +347,8 @@ export class SubagentManager {
       const prepared = this.setup.then(async () => {
         const config = await loadConfig()
         this.max = config.subagents?.maxConcurrent ?? this.max
-        this.idleMs = config.subagents?.idleMs ?? SUBAGENT_IDLE_MS
+        const idle = config.subagents?.idleMs
+        this.idleMs = typeof idle === "number" && Number.isFinite(idle) && idle >= 1_000 ? idle : SUBAGENT_IDLE_MS
         return this.targetFor(spec, config.subagents, fallback)
       })
       this.setup = prepared.catch(() => {})

@@ -596,7 +596,7 @@ test("reasoning-delta phát event progress cho UI/watchdog", async () => {
 })
 
 test("watchdog không giết run còn reasoning khi idleMs nhỏ", async () => {
-  await saveConfig({ provider: "groq", model: "tooly", subagents: { idleMs: 400, maxConcurrent: 5 } })
+  await saveConfig({ provider: "groq", model: "tooly", subagents: { idleMs: 1200, maxConcurrent: 5 } })
   childSlowReasoning = true
   const { registry, manager } = setup()
   parentCalls = [spawn("Kỹ thuật HPG")]
@@ -605,14 +605,14 @@ test("watchdog không giết run còn reasoning khi idleMs nhỏ", async () => {
 })
 
 test("watchdog đọc idleMs: run im lặng bị dừng theo idleMs thay vì chờ 5 phút", async () => {
-  await saveConfig({ provider: "groq", model: "tooly", subagents: { idleMs: 400, maxConcurrent: 5 } })
+  await saveConfig({ provider: "groq", model: "tooly", subagents: { idleMs: 1200, maxConcurrent: 5 } })
   childGate = new Promise(() => {})
   const { registry, manager } = setup()
   parentCalls = [spawn("Kỹ thuật HPG")]
   await collect(runAgent({ history: [], input: "phân tích HPG", skills: [], registry }))
   const view = manager.list()[0]!
   expect(view.status).toBe("stopped")
-  expect(view.error).toContain("không có tiến triển trong 0.4 giây")
+  expect(view.error).toContain("không có tiến triển trong 1.2 giây")
 })
 
 test("request treo trước part đầu bị cắt bằng lỗi stall", async () => {
@@ -690,4 +690,13 @@ test("subagents.model auto: không có model khớp thì quay về model phiên 
   await collect(runAgent({ history: [], input: "phân tích HPG", skills: [], registry }))
   expect(childBodies[0]!.model).toBe("tooly")
   expect(manager.list()[0]!.notice).toContain("Không tìm thấy model lite")
+})
+
+test("idleMs không hợp lệ (0) bị bỏ qua, dùng mặc định 5 phút", async () => {
+  await saveConfig({ provider: "groq", model: "tooly", subagents: { idleMs: 0, maxConcurrent: 5 } })
+  childSlowReasoning = true
+  const { registry, manager } = setup()
+  parentCalls = [spawn("Kỹ thuật HPG")]
+  await collect(runAgent({ history: [], input: "phân tích HPG", skills: [], registry }))
+  expect(manager.list()[0]).toMatchObject({ status: "completed" })
 })

@@ -29,7 +29,7 @@ Subagent là một agent riêng, bắt đầu với ngữ cảnh trống. Agent 
 | --- | --- | --- |
 | Subagent chạy song song | 10 | Không có trần. Tính chung cả agent nền. Vượt thì xếp hàng theo thứ tự spawn. Với key miễn phí nên đặt 1–2, xem [gemini-limits.md](gemini-limits.md) |
 | Model cho subagent | theo model của phiên | Chỉ liệt kê model gọi được tool. Model không dùng được thì tự quay về model của phiên và hiện `△` trên hàng của subagent |
-| Dừng khi không tiến triển | 5 phút | Subagent không có tiến triển (không gọi tool, không nhận gì từ model) trong `idleMs` thì bị dừng. Phần **suy luận (reasoning)** của model được tính là tiến triển, nên các pha "nghĩ" dài không còn bị dừng oan |
+| Dừng khi không tiến triển | 5 phút | Subagent không có tiến triển (không gọi tool, không nhận gì từ model) trong `idleMs` thì bị dừng. Phần **suy luận (reasoning)** của model được tính là tiến triển, nên các pha "nghĩ" dài không còn bị dừng oan. Giá trị `idleMs` dưới 1 giây bị bỏ qua (dùng mặc định) |
 
 Trong `~/.opentrading/config.json`: `"subagents": { "maxConcurrent": 2, "idleMs": 600000, "provider": "groq", "model": "…" }`.
 
