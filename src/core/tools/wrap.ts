@@ -87,6 +87,9 @@ export async function runTool(def: ToolDef, input: unknown, ctx: ToolContext, lo
   // Waiting on the user (a question, then approval) is not tool runtime, and nobody holds
   // the lock meanwhile.
   if (def.prepare) ctx = { ...ctx, prepared: await def.prepare(input, ctx) }
+  // A call that would fail anyway (edit before read, old_string not found) is not put to the user.
+  const invalid = await def.validate?.(input)
+  if (invalid) throw new Error(invalid)
   if (gate) {
     const repeats = ctx.loop?.note(def.name, input)
     if (repeats !== undefined) {

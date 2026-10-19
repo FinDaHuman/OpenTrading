@@ -172,4 +172,60 @@ export function readScope(abs: string, e?: SafetyEnv, real: (p: string) => strin
 }
 
 /** Scopes that must never be stored as "always allow" (approval asks per exact path). */
-export const isSensitiveScope = (scope: string | undefined) => !!scope && /^(secret|unc|odd):/.test(scope)
+export const isSensitiveScope = (scope: string | undefined) => !!scope && /^(secret|unc|odd|protected|outside):/.test(scope)
+
+/** File names that configure a shell, git, a package manager or a hook runner: writing one is persistence. */
+const PROTECTED_NAME =
+  /^(\.bashrc|\.bash_profile|\.bash_login|\.bash_logout|\.bash_aliases|\.profile|\.zshrc|\.zprofile|\.zshenv|\.zlogin|\.zlogout|\.envrc|\.gitconfig|\.gitmodules|\.npmrc|\.yarnrc|\.yarnrc\.yml|bunfig\.toml|\.bunfig\.toml|\.pre-commit-config\.yaml|lefthook\.ya?ml|\.mcp\.json|.*profile\.ps1)$/i
+/** Folder names whose content runs code or holds tool config, wherever they are. */
+const PROTECTED_DIR = new Set([".git", ".opentrading", ".vscode", ".idea", ".husky", ".github", ".devcontainer", ".ssh"])
+/** Folders under home where a file starts at login. */
+const AUTOSTART = ["AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Startup", ".config/autostart", "Library/LaunchAgents"]
+
+/**
+ * Why writing `abs` needs the user's own yes, or undefined: OpenTrading's data (config.json
+ * holds the permission rules; skills/agents run as instructions), tool config folders,
+ * shell/git/package-manager rc files, login autostart, key files (Claude Code protected paths).
+ * `<data>/workspace` is an ordinary workspace.
+ */
+export function protectedWriteReason(abs: string, e?: SafetyEnv): string | undefined {
+  const { home, data, platform } = env(e)
+  const flavor = pathFor(platform)
+  const secret = secretReason(abs, e)
+  if (secret) return secret
+  if (isInside(abs, data, platform)) {
+    // The fallback workspace sits in the data dir (named .opentrading); inside it, only file names count.
+    if (!isInside(abs, flavor.join(data, "workspace"), platform)) return "dữ liệu và cấu hình của OpenTrading"
+    return PROTECTED_NAME.test(flavor.basename(abs)) ? `file cấu hình (${flavor.basename(abs)})` : undefined
+  }
+  const name = flavor.basename(abs)
+  if (PROTECTED_NAME.test(name)) return `file cấu hình (${name})`
+  const segments = flavor.normalize(abs).split(/[\\/]+/)
+  const dir = segments.slice(0, -1).find((s) => PROTECTED_DIR.has(s.toLowerCase()))
+  if (dir) return `thư mục cấu hình ${dir}`
+  if (AUTOSTART.some((d) => isInside(abs, flavor.join(home, d), platform))) return "thư mục tự chạy khi đăng nhập"
+  return undefined
+}
+
+export type WriteCheck = { block: string } | { scope: string }
+
+/**
+ * The approval scope for writing `abs`: `block` (never: odd Windows spelling, network path),
+ * `protected:` / `outside:` (the user decides each time, nothing can pre-approve it), or
+ * `edit:<folder>` (an ordinary write in the workspace; "this session" covers the folder).
+ * `real` resolves symlinks; `inWorkspace` is Workspace.contains.
+ */
+export function writeCheck(abs: string, inWorkspace: (p: string) => boolean, e?: SafetyEnv, real: (p: string) => string = (p) => p): WriteCheck {
+  const platform = e?.platform ?? process.platform
+  if (isUncPath(abs)) return { block: "không ghi lên đường dẫn mạng (\\\\server\\share)" }
+  const odd = suspiciousWindowsPath(abs, platform, { shortNames: false })
+  if (odd) return { block: `đường dẫn dạng lạ: ${odd}` }
+  const resolved = real(abs)
+  const oddReal = resolved !== abs ? suspiciousWindowsPath(resolved, platform) : suspiciousWindowsPath(abs, platform)
+  if (oddReal) return { block: `đường dẫn dạng lạ: ${oddReal}` }
+  const { home, data } = env(e)
+  const realEnv: SafetyEnv = { home: real(home), data: real(data), platform }
+  if (protectedWriteReason(abs, e) || (resolved !== abs && (protectedWriteReason(resolved, e) || protectedWriteReason(resolved, realEnv)))) return { scope: `protected:${abs}` }
+  if (!inWorkspace(abs)) return { scope: `outside:${abs}` }
+  return { scope: `edit:${pathFor(platform).dirname(abs)}` }
+}

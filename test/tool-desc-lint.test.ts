@@ -12,6 +12,7 @@ import { chartRenderTool } from "../src/core/tools/chart/render"
 import { spawnSubagentTool } from "../src/core/tools/subagent/spawn"
 import { readFileTool } from "../src/core/tools/fs/read"
 import { globFilesTool, grepFilesTool } from "../src/core/tools/fs/search"
+import { editFileTool, writeFileTool } from "../src/core/tools/fs/write"
 import type { ToolDef } from "../src/core/tools/types"
 import type { ToolRegistry } from "../src/core/tools/registry"
 
@@ -146,6 +147,10 @@ function builtin(name: string): ToolDef<never> {
       return globFilesTool({} as never) as ToolDef<never>
     case "grep_files":
       return grepFilesTool({} as never) as ToolDef<never>
+    case "write_file":
+      return writeFileTool({} as never) as ToolDef<never>
+    case "edit_file":
+      return editFileTool({} as never) as ToolDef<never>
     default:
       throw new Error(`builtin không rõ: ${name}`)
   }
@@ -156,7 +161,7 @@ const NO_NOT_USE = new Set(["current_time", "tool_search", "load_skill", "chart_
 
 test("builtin tools follow the Claude standard: purpose + when + (when not) + bounded length", () => {
   const problems: string[] = []
-  for (const name of ["todo_write", "ask_user", "load_skill", "tool_search", "current_time", "chart_compare", "chart_render", "spawn_subagent", "read_file", "glob_files", "grep_files"]) {
+  for (const name of ["todo_write", "ask_user", "load_skill", "tool_search", "current_time", "chart_compare", "chart_render", "spawn_subagent", "read_file", "glob_files", "grep_files", "write_file", "edit_file"]) {
     const d = (builtin(name).description ?? "").replace(/\s+/g, " ").trim()
     if (!hasUse(d)) problems.push(`${name}: thiếu "Dùng khi/Khi nào"`)
     if (!NO_NOT_USE.has(name) && !hasNotUse(d)) problems.push(`${name}: thiếu "Không dùng khi"`)

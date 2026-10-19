@@ -14,22 +14,29 @@ import { BADGE } from "./ui/badges"
  * waits for the user. Layout after Claude Code's permission prompt (title on a top rule,
  * the call, a short description, "Do you want to proceed?"), options after Codex
  * (numbered, with a description column, digits pick directly, ≤3 argument previews).
+ * The gate decides which choices a request offers (`request.choices`); a write shows its diff.
  */
 
-const OPTIONS: { choice: Choice; label: string; hint: string }[] = [
-  { choice: "once", label: "Có", hint: "chạy lần này" },
-  { choice: "session", label: "Có, cả phiên này", hint: "không hỏi lại tool này tới khi thoát" },
-  { choice: "always", label: "Luôn cho phép", hint: "lưu vào cấu hình, cho đúng server này" },
-  { choice: "deny", label: "Không", hint: "model nhận thông báo bị từ chối · tab để kèm lời nhắn" },
-]
+const LABEL: Record<Choice, string> = {
+  once: "Có",
+  session: "Có, cả phiên này",
+  always: "Luôn cho phép",
+  mode: "Có, và chuyển sang ▸ sửa có hỏi",
+  deny: "Không",
+}
 
 const MAX_ARGS = 3
 const MAX_VALUE = 60
+/** Diff lines shown in the prompt at most (fewer on a short terminal); the rest is counted. */
+const MAX_DIFF = 16
 
 function preview(value: unknown) {
   const text = typeof value === "string" ? value.replace(/\s+/g, " ").trim() : JSON.stringify(value)
   return truncate(text ?? "", MAX_VALUE)
 }
+
+/** A long path loses its start, not the file name and the "(mới, 42 dòng)" after it. */
+export const keepEnd = (text: string, max: number) => (text.length <= max ? text : `…${text.slice(text.length - Math.max(1, max - 1))}`)
 
 export function argLines(input: unknown) {
   const entries = input && typeof input === "object" && !Array.isArray(input) ? Object.entries(input) : []
@@ -43,6 +50,7 @@ const RECORD: Record<Choice, string> = {
   once: "lần này",
   session: "cho cả phiên",
   always: "luôn luôn",
+  mode: "lần này, chuyển sang ▸ sửa có hỏi",
   deny: "",
 }
 
@@ -53,6 +61,42 @@ const RECORD: Record<Choice, string> = {
  */
 export const ANSWER_GUARD_MS = 400
 
+/** What the scope says the call is about, for the title. */
+function kindOf(req: ApprovalRequest): string {
+  const scope = req.scope ?? ""
+  if (scope.startsWith("secret:")) return req.effect ? "ghi vào file chứa khoá/mật khẩu" : "đọc file chứa khoá/mật khẩu"
+  if (scope.startsWith("unc:")) return "đọc đường dẫn mạng"
+  if (scope.startsWith("odd:")) return "đường dẫn Windows dạng lạ"
+  if (scope.startsWith("protected:")) return "ghi vào vùng được bảo vệ (cấu hình, dữ liệu OpenTrading)"
+  if (scope.startsWith("outside:")) return "ghi ngoài workspace"
+  if (scope === "lap-lai") return "model gọi lặp lại cùng một lời gọi"
+  if (req.mode === "read-only" && req.effect) return "đang ở chế độ ‖ chỉ đọc"
+  if (req.annotations?.destructive) return "thay đổi không hoàn tác được"
+  if (scope.startsWith("domain:")) return `đọc trang từ domain mới: ${scope.slice("domain:".length)}`
+  if (req.effect === "file") return "ghi file"
+  if (req.effect === "shell") return "chạy lệnh"
+  return "tool ghi"
+}
+
+function hintOf(choice: Choice, req: ApprovalRequest): string {
+  const scope = req.scope ?? ""
+  switch (choice) {
+    case "once":
+      return "chạy lần này"
+    case "session":
+      if (/^(secret|unc|odd):/.test(scope)) return "không hỏi lại đúng file này tới khi thoát"
+      if (scope.startsWith("domain:")) return "không hỏi lại domain này tới khi thoát"
+      if (scope.startsWith("edit:")) return `không hỏi lại khi ghi file trong ${truncate(scope.slice("edit:".length), 40)} tới khi thoát`
+      return "không hỏi lại tool này tới khi thoát"
+    case "always":
+      return scope.startsWith("domain:") ? "lưu vào cấu hình, cho domain này" : "lưu vào cấu hình, cho đúng server này"
+    case "mode":
+      return "các lần ghi sau vẫn hỏi; shift+tab để đổi lại"
+    case "deny":
+      return "model nhận thông báo bị từ chối · tab để kèm lời nhắn"
+  }
+}
+
 export function ApprovalPrompt(props: { gate: PermissionGate; request: ApprovalRequest; subagents?: SubagentManager }) {
   const [selected, setSelected] = createSignal(0)
   // The prompt is keyed on the request in app.tsx, so each request mounts afresh.
@@ -61,50 +105,31 @@ export function ApprovalPrompt(props: { gate: PermissionGate; request: ApprovalR
   let note = ""
   const req = () => props.request
   const destructive = () => req().annotations?.destructive === true
-  /** web_fetch asks per domain: a read, not a write. */
-  const domain = () => (req().scope?.startsWith("domain:") ? req().scope!.slice("domain:".length) : undefined)
-  const hintOf = (option: (typeof OPTIONS)[number]) =>
-    sensitive() && option.choice === "session"
-      ? "không hỏi lại đúng file này tới khi thoát"
-      : domain() && option.choice === "session"
-      ? "không hỏi lại domain này tới khi thoát"
-      : domain() && option.choice === "always"
-        ? "lưu vào cấu hình, cho domain này"
-        : option.hint
-  /** A key file or a network path: asked per exact path, never stored as "always". */
-  const sensitive = () => {
-    const scope = req().scope ?? ""
-    if (scope.startsWith("secret:")) return { kind: "đọc file chứa khoá/mật khẩu", path: scope.slice("secret:".length) }
-    if (scope.startsWith("unc:")) return { kind: "đọc đường dẫn mạng", path: scope.slice("unc:".length) }
-    if (scope.startsWith("odd:")) return { kind: "đường dẫn Windows dạng lạ", path: scope.slice("odd:".length) }
-    return undefined
-  }
-  const options = () => (sensitive() ? OPTIONS.filter((o) => o.choice !== "always") : OPTIONS)
+  const options = () => req().choices
   const denyIndex = () => options().length - 1
   const args = () => argLines(req().input)
-  const description = () => req().description.split("\n").filter(Boolean).slice(0, 2)
+  const description = () => req().description.split("\n").filter(Boolean).slice(0, req().preview ? 0 : 2)
+  const diff = () => req().preview?.diff ?? []
+  const warn = () => destructive() || /^(secret|unc|odd|protected|outside):/.test(req().scope ?? "")
 
   function choose(index: number, message?: string) {
-    const option = options()[index]
-    if (!option) return
+    const choice = options()[index]
+    if (!choice) return
     // The decision belongs under its tool call in the transcript (Claude Code); a denial
     // already shows there from the tool's error, so only "allowed" needs recording.
     const row = state.lines.findIndex((l) => l.kind === "tool" && l.callId === req().callId)
     const agent = req().agent
     if (agent && props.subagents) {
-      props.subagents.recordDecision(agent.id, req().callId, option.choice === "deny" ? `✘ Đã từ chối${message ? ` — "${message}"` : ""}` : `✓ Đã cho phép ${RECORD[option.choice]}`)
+      props.subagents.recordDecision(agent.id, req().callId, choice === "deny" ? `✘ Đã từ chối${message ? ` — "${message}"` : ""}` : `✓ Đã cho phép ${RECORD[choice]}`)
     } else if (row >= 0) {
-      if (option.choice !== "deny") setState("lines", row, (l) => ({ ...l, decision: `✓ Đã cho phép ${RECORD[option.choice]}` }))
+      if (choice !== "deny") setState("lines", row, (l) => ({ ...l, decision: `✓ Đã cho phép ${RECORD[choice]}` }))
     } else {
       pushLine({
         kind: "info",
-        text:
-          option.choice === "deny"
-            ? `Đã từ chối ${req().label}${message ? ` — "${message}"` : ""}`
-            : `Đã cho phép ${req().label} ${RECORD[option.choice]}`,
+        text: choice === "deny" ? `Đã từ chối ${req().label}${message ? ` — "${message}"` : ""}` : `Đã cho phép ${req().label} ${RECORD[choice]}`,
       })
     }
-    void props.gate.respond(req().id, option.choice, message)
+    void props.gate.respond(req().id, choice, message)
     setSelected(0)
     setNoting(false)
     note = ""
@@ -139,14 +164,13 @@ export function ApprovalPrompt(props: { gate: PermissionGate; request: ApprovalR
 
   const dims = useTerminalDimensions()
   const room = () => Math.max(20, dims().width - 10)
+  // Title, label, question, choices and hint take about 12 rows; the diff gets what is left.
+  const diffRows = () => Math.max(3, Math.min(MAX_DIFF, dims().height - 12 - options().length))
 
   return (
     <DialogFrame
-      title={
-        (sensitive() ? `Cần xác nhận · ${sensitive()!.kind}` : destructive() ? "Cần xác nhận · thay đổi không hoàn tác được" : domain() ? `Cần xác nhận · đọc trang từ domain mới: ${domain()}` : "Cần xác nhận · tool ghi") +
-        (req().agent ? ` · subagent ${req().agent!.type} (${truncate(req().agent!.description, 30)})` : "")
-      }
-      accent={destructive() ? color.giam : color.tham}
+      title={`Cần xác nhận · ${kindOf(req())}` + (req().agent ? ` · subagent ${req().agent!.type} (${truncate(req().agent!.description, 30)})` : "")}
+      accent={warn() ? color.giam : color.tham}
       hint={
         noting()
           ? "enter từ chối kèm lời nhắn · esc quay lại"
@@ -155,22 +179,42 @@ export function ApprovalPrompt(props: { gate: PermissionGate; request: ApprovalR
             : `↑↓ chọn · enter xác nhận · 1-${options().length} chọn nhanh · tab từ chối kèm lời nhắn · esc từ chối`
       }
     >
-      <box flexDirection="column" paddingLeft={2}>
-        <text>
+      <box flexDirection="column" paddingLeft={2} flexShrink={0}>
+        <text flexShrink={0}>
           {req().agent ? <span style={{ fg: color.tham }}>{`${req().agent!.type} › `}</span> : ""}
-          <span style={{ fg: color.tx, bold: true }}>{truncate(req().label, room() - 30)}</span>
+          <span style={{ fg: color.tx, bold: true }}>
+            {req().preview ? `${req().tool}  ${keepEnd(req().preview!.title, room() - req().tool.length - 4)}` : truncate(req().label, room() - 30)}
+          </span>
           {destructive() ? <span style={{ fg: BADGE.irreversible.fg }}>{`  ${BADGE.irreversible.text}`}</span> : ""}
           {req().annotations?.openWorld ? <span style={{ fg: BADGE.openWorld.fg }}>{`  ${BADGE.openWorld.text}`}</span> : ""}
         </text>
-        <For each={args().lines}>
-          {(line) => (
-            <text fg={color.tx2} wrapMode="none">
-              {truncate(line, room())}
-            </text>
-          )}
-        </For>
-        <Show when={args().more > 0}>
-          <text fg={color.tx3}>{`+${args().more} tham số khác`}</text>
+        <Show
+          when={req().preview}
+          fallback={
+            <>
+              <For each={args().lines}>
+                {(line) => (
+                  <text fg={color.tx2} wrapMode="none">
+                    {truncate(line, room())}
+                  </text>
+                )}
+              </For>
+              <Show when={args().more > 0}>
+                <text fg={color.tx3}>{`+${args().more} tham số khác`}</text>
+              </Show>
+            </>
+          }
+        >
+          <For each={diff().slice(0, diffRows())}>
+            {(line) => (
+              <text fg={line.kind === "+" ? color.tang : line.kind === "-" ? color.giam : color.tx3} wrapMode="none" flexShrink={0}>
+                {truncate(line.kind === "…" ? "  …" : `${line.kind} ${line.text}`, room())}
+              </text>
+            )}
+          </For>
+          <Show when={diff().length > diffRows()}>
+            <text fg={color.tx3} flexShrink={0}>{`… còn ${diff().length - diffRows()} dòng (+${req().preview!.added ?? 0} −${req().preview!.removed ?? 0})`}</text>
+          </Show>
         </Show>
         <For each={description()}>
           {(line) => (
@@ -184,7 +228,7 @@ export function ApprovalPrompt(props: { gate: PermissionGate; request: ApprovalR
         <span style={{ bold: true }}>Cho phép chạy?</span>
       </text>
       <For each={options()}>
-        {(option, i) => {
+        {(choice, i) => {
           const active = () => i() === selected()
           return (
             <box flexDirection="row" height={1} flexShrink={0}>
@@ -192,11 +236,11 @@ export function ApprovalPrompt(props: { gate: PermissionGate; request: ApprovalR
                 {active() ? "❯ " : "  "}
                 <span style={{ fg: color.tx3 }}>{`${i() + 1}.`}</span>
               </text>
-              <text fg={active() ? color.tang : color.tx} width={20} flexShrink={0}>
-                {option.label}
+              <text fg={active() ? color.tang : color.tx} width={choice === "mode" ? 34 : 20} flexShrink={0}>
+                {LABEL[choice]}
               </text>
               <text fg={color.tx3} wrapMode="none">
-                {hintOf(option)}
+                {hintOf(choice, req())}
               </text>
             </box>
           )

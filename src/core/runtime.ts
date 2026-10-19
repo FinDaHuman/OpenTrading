@@ -27,6 +27,8 @@ import { FileState } from "./fs/file-state"
 import { Workspace } from "./fs/workspace"
 import { readFileTool } from "./tools/fs/read"
 import { globFilesTool, grepFilesTool } from "./tools/fs/search"
+import { editFileTool, writeFileTool } from "./tools/fs/write"
+import { FileHistory, pruneHistory } from "./fs/history"
 import { matchToolPattern } from "./tools/patterns"
 import { connectedProviders } from "./auth"
 
@@ -50,6 +52,8 @@ export interface Runtime {
   workspace: Workspace
   /** Files read this session (the edit tools require a read first). */
   files: FileState
+  /** Copies taken before write_file/edit_file changed a file (/undo). */
+  history: FileHistory
 }
 
 export type MemoryChoice = "none" | "file"
@@ -72,6 +76,9 @@ export function initRuntime(opts: { cwd?: string; home?: string; skills: () => S
   const workspace = new Workspace(opts.cwd ?? process.cwd(), { data: home, dirs: opts.workspaceDirs })
   registry.workspace = workspace
   const files = new FileState()
+  const historyRoot = path.join(home, "file-history")
+  const history = new FileHistory(historyRoot)
+  void pruneHistory(historyRoot)
   const questions = new AskBroker()
   registry.register(currentTimeTool())
   registry.register(askUserTool(questions))
@@ -79,6 +86,8 @@ export function initRuntime(opts: { cwd?: string; home?: string; skills: () => S
   registry.register(readFileTool(workspace, files))
   registry.register(globFilesTool(workspace))
   registry.register(grepFilesTool(workspace))
+  registry.register(writeFileTool({ workspace, state: files, history }))
+  registry.register(editFileTool({ workspace, state: files, history }))
   registry.register(
     loadSkillTool(
       opts.skills,
@@ -124,7 +133,7 @@ export function initRuntime(opts: { cwd?: string; home?: string; skills: () => S
   registry.register(spawnSubagentTool(subagents))
   registry.register(sendMessageTool(subagents))
   registry.register(stopAgentTool(subagents))
-  const runtime: Runtime = { registry, permissions, questions, mcp, hooks: new HookBus(), memory: new NoopMemory(), subagents, home, workspace, files }
+  const runtime: Runtime = { registry, permissions, questions, mcp, hooks: new HookBus(), memory: new NoopMemory(), subagents, home, workspace, files, history }
   switchMemory(runtime, opts.memory ?? new NoopMemory())
   return runtime
 }

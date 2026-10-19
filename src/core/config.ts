@@ -7,8 +7,17 @@ export interface Config {
   model?: string
   /** Memory implementation: "none" (default) or "file" (reference FileMemory). */
   memory?: { provider?: "none" | "file" }
-  /** Tools the user chose to always allow (see core/permission.ts). */
-  permissions?: { allow?: { tool: string; scope: string }[] }
+  /**
+   * Permissions (core/permission): `allow` = "always allow" answers; `deny` / `ask` = rules the
+   * user writes by hand (tool name with `*`, optional `pattern` on the path or command);
+   * `defaultMode` = the mode a session starts in (default "read-only").
+   */
+  permissions?: {
+    allow?: { tool: string; scope: string; pattern?: string }[]
+    deny?: { tool: string; pattern?: string }[]
+    ask?: { tool: string; pattern?: string }[]
+    defaultMode?: "read-only" | "ask"
+  }
   /**
    * Deferred tool loading. "auto" (default): deferrable tools (MCP and the optional built-in
    * ones: charts, web, watchlist…) are sent by name only, and loaded with

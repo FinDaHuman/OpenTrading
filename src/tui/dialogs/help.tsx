@@ -20,6 +20,7 @@ const KEYS: [string, string][] = [
   ["enter khi đang trả lời", "xếp hàng tin, gửi khi câu trả lời xong · ↑ để lấy lại sửa · esc dừng thì tin quay về ô nhập"],
   ["alt+v · ctrl+v", "dán ảnh từ clipboard thành [Image #N] (hoặc kéo thả file ảnh vào) · đoạn dán dài thành [Pasted text #N]"],
   ["esc", "đóng danh sách / · đóng bảng · dừng câu trả lời đang chạy · bấm 2 lần để xoá ô nhập"],
+  ["shift+tab · alt+m", "đổi chế độ quyền: ‖ chỉ đọc (ghi file hỏi từng lần) ↔ ▸ sửa có hỏi (cho phép được cả thư mục trong phiên)"],
   ["ctrl+o", "mở rộng / thu gọn kết quả tool"],
   ["kéo chuột", "bôi đen để copy (tự copy khi thả chuột); trong ô nhập thì giữ vùng chọn để sửa · giữ shift để dùng chọn chữ của terminal"],
   ["ctrl+c", "copy phần đang bôi đen · xoá ô nhập / dừng câu trả lời · bấm 2 lần để thoát"],

@@ -6,6 +6,7 @@ import { createStore } from "solid-js/store"
 import type { Catalog } from "../core/catalog"
 import type { McpServerStatus } from "../core/mcp/manager"
 import type { AskRequest } from "../core/ask"
+import type { PermissionMode } from "../core/permission/mode"
 import type { ApprovalRequest } from "../core/permission"
 import type { ProviderId } from "../core/providers"
 import type { ClockSnapshot } from "../core/prompt/market-clock"
@@ -48,7 +49,7 @@ export type Line =
  */
 export type Queued = { text: string; display: string; images: PromptImage[]; saved: Omit<DraftSnapshot, "text"> }
 
-export type DialogName = "connect" | "model" | "skills" | "help" | "mcp" | "tools" | "context" | "sessions" | "memory" | "config" | "agents" | "tasks" | "watchlist"
+export type DialogName = "connect" | "model" | "skills" | "help" | "mcp" | "tools" | "context" | "sessions" | "memory" | "config" | "agents" | "tasks" | "watchlist" | "permissions"
 
 export const [state, setState] = createStore({
   lines: [] as Line[],
@@ -100,6 +101,8 @@ export const [state, setState] = createStore({
   agentSlots: { running: 0, waiting: 0, max: 10 },
   /** Every approval request waiting (the head is `approval`). */
   approvals: [] as ApprovalRequest[],
+  /** ‖ read-only / ▸ ask (Shift+Tab); mirrors PermissionGate.mode. */
+  permissionMode: "read-only" as PermissionMode,
   /** Subagent types (bundled, user, project) and files that failed to load. */
   agentDefs: [] as AgentDefinition[],
   agentProblems: [] as AgentProblem[],

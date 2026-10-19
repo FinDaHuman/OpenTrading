@@ -28,6 +28,7 @@ import type { SchemaFlavor } from "./mcp/schema"
 import { isContextOverflow } from "./compact"
 import { retryMiddleware, type RetryNotice, type RetryOptions } from "./retry"
 import { loadedTools } from "./tools/loaded"
+import { modeNote } from "./permission/mode"
 import { currentTodos, todoMark } from "./tools/todos"
 import { MAX_TOOLS_PER_REQUEST, stripImages, type BuiltToolSet, type ToolRegistry, type ToolSetOptions } from "./tools/registry"
 import { describeTool, LOADED_PREFIX, resolveToolName } from "./tools/search"
@@ -600,7 +601,10 @@ async function assembleFor(opts: TurnInput, target: Target | undefined, extras: 
   const tier = tierOf(info?.limit?.context)
   const setOptions = toolSetOptions(target)
   const defer = supportsTools && shouldDefer(await loadConfig(), opts.registry, info?.limit?.context, setOptions.flavor)
-  const loaded = new Set(loadedTools(opts.history ?? []))
+  // ‖ read-only sends the local write tools by name only; ▸ declares them in full.
+  const mode = opts.registry.gate?.mode ?? "read-only"
+  const modeTools = mode === "read-only" ? [] : opts.registry.list().filter((d) => d.effect).map((d) => d.name)
+  const loaded = new Set([...loadedTools(opts.history ?? []), ...modeTools])
   const built = supportsTools ? opts.registry.toToolSet({ ...setOptions, defer, loaded }) : undefined
   const toolNames = built?.names ?? []
   const assembled = assemble({
@@ -623,7 +627,7 @@ async function assembleFor(opts: TurnInput, target: Target | undefined, extras: 
     declaredTools: built ? Object.keys(built.tools) : undefined,
     mcpInstructions: opts.serverInstructions?.(),
     todos: currentTodos(opts.history ?? []),
-    fileAccess: toolNames.includes("read_file") ? opts.registry.workspace?.describe() : undefined,
+    fileAccess: toolNames.includes("read_file") && opts.registry.workspace ? `${opts.registry.workspace.describe()}\n${modeNote(mode)}` : undefined,
     prevFileAccess: lastReminder(opts.history ?? [], "quyen_tep"),
   })
   if (built && built.names.length > 0) {
