@@ -5,6 +5,7 @@ import { configFile } from "../../core/paths"
 import { chatModels } from "../../core/providers"
 import { createMemory, switchMemory, type Runtime } from "../../core/runtime"
 import { DEFAULT_MAX_CONCURRENT } from "../../core/subagents/manager"
+import { AUTO_MODEL } from "../../core/subagents/model-pick"
 import { DEFAULT_MAX_STEPS } from "../../core/agent"
 import { blocked, closeDialog, providerName, pushLine, setState, state } from "../state"
 import { color } from "../theme"
@@ -12,7 +13,7 @@ import { DialogFrame } from "./frame"
 import { Picker } from "./picker"
 
 type Setting = "memory" | "toolSearch" | "autoCompact" | "maxSteps" | "subagentMax" | "subagentModel" | "webModel"
-type SubagentModel = { provider: string; model: string } | "inherit"
+type SubagentModel = { provider: string; model: string } | "inherit" | "auto"
 
 const TOOL_SEARCH_NEXT = { auto: "on", on: "off", off: "auto" } as const
 const TOOL_SEARCH_HINT = {
@@ -40,6 +41,7 @@ export function ConfigDialog(props: { runtime: Runtime }) {
   }
   const subagentModel = () => {
     const s = config()?.subagents
+    if (s?.model === AUTO_MODEL) return "Tự động (chọn model lite rẻ)"
     return s?.model ? `${providerName(s.provider ?? state.provider)} · ${s.model}` : undefined
   }
 
@@ -81,7 +83,7 @@ export function ConfigDialog(props: { runtime: Runtime }) {
     await refetch()
   }
 
-  async function saveWebModel(choice: SubagentModel) {
+  async function saveWebModel(choice: Exclude<SubagentModel, "auto">) {
     await saveConfig({ webModel: choice === "inherit" ? undefined : choice })
     setEditing(undefined)
     await refetch()
@@ -90,7 +92,8 @@ export function ConfigDialog(props: { runtime: Runtime }) {
   async function saveModel(choice: SubagentModel) {
     const current = await loadConfig()
     const { provider: _p, model: _m, ...rest } = current.subagents ?? {}
-    await saveConfig({ subagents: choice === "inherit" ? rest : { ...rest, ...choice } })
+    const next = choice === "inherit" ? rest : choice === "auto" ? { ...rest, provider: undefined, model: AUTO_MODEL } : { ...rest, ...choice }
+    await saveConfig({ subagents: next })
     setEditing(undefined)
     await refetch()
   }
@@ -166,7 +169,7 @@ export function ConfigDialog(props: { runtime: Runtime }) {
                 mark: config()?.webModel?.provider === (m.value as { provider: string }).provider && config()?.webModel?.model === (m.value as { model: string }).model ? "●" : " ",
               })),
             ]}
-            onPick={(c) => void saveWebModel(c)}
+            onPick={(c) => void saveWebModel(c as Exclude<SubagentModel, "auto">)}
             rows={12}
             placeholder="gõ tên model để lọc…"
           />
@@ -177,6 +180,12 @@ export function ConfigDialog(props: { runtime: Runtime }) {
           <Picker
             items={[
               { label: "Theo model của phiên (mặc định)", mark: subagentModel() ? " " : "●", value: "inherit" as SubagentModel },
+              {
+                label: "Tự động (chọn model lite rẻ)",
+                hint: "tìm model nhỏ, gọi được tool từ các provider đã kết nối",
+                mark: config()?.subagents?.model === AUTO_MODEL ? "●" : " ",
+                value: "auto" as SubagentModel,
+              },
               ...toolModels(),
             ]}
             onPick={(c) => void saveModel(c)}

@@ -277,9 +277,10 @@ export async function loadSession(id: string): Promise<LoadedSession> {
 /**
  * Every tool call must have exactly one result or providers reject the next request.
  * Add an "interrupted" error result right after any call left without one (Codex
- * `ensure_call_outputs_present`), and drop results whose call is missing.
+ * `ensure_call_outputs_present`), and drop results whose call is missing. `reason`
+ * lets an aborted turn say so instead of blaming a finished session.
  */
-export function closeDanglingToolCalls(messages: ModelMessage[]): { messages: ModelMessage[]; patched: number } {
+export function closeDanglingToolCalls(messages: ModelMessage[], reason = "Tool bị ngắt vì phiên trước kết thúc giữa chừng."): { messages: ModelMessage[]; patched: number } {
   const results = new Set<string>()
   const calls = new Set<string>()
   for (const m of messages) {
@@ -308,7 +309,7 @@ export function closeDanglingToolCalls(messages: ModelMessage[]): { messages: Mo
           type: "tool-result" as const,
           toolCallId: call.toolCallId,
           toolName: call.toolName,
-          output: { type: "error-text" as const, value: "Tool bị ngắt vì phiên trước kết thúc giữa chừng." },
+          output: { type: "error-text" as const, value: reason },
         }
       }),
     })

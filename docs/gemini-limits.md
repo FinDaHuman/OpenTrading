@@ -101,5 +101,6 @@ Harness chưa lọc các model này khỏi `/model`, đã ghi vào việc cần 
 - `/model`: chọn **Gemini 3.5 Flash Lite** hoặc **3.1 Flash Lite** (500 RPD). Tránh các model 20 RPD (2.5 Flash-Lite, 2.5 Flash, 3.x Flash) cho việc dài.
 - `/config` → **Subagent chạy song song**: đặt 1–2. Mặc định là 10, vượt xa 15 RPM.
 - `/config` → **Model cho subagent**: dùng một model Flash Lite khác với model chính để mỗi bên có quota riêng (quota tính theo từng model), hoặc dùng một provider khác Gemini.
+- Khi cần chạy **5 subagent một lượt**: đặt "Subagent chạy song song" = 2–3 và dùng `gemini-3.5-flash-lite`. Xác nhận 19/10/2026: model còn sống, `tool_call=true`, `reasoning=true`; phần suy luận của model được tính là tiến triển nên không còn bị watchdog dừng oan (xem [subagents.md](subagents.md)).
 - Gặp 429 thì chờ sang phút sau (RPM/TPM), hoặc đợi RPD đặt lại lúc nửa đêm giờ Pacific (khoảng 14:00–15:00 giờ Việt Nam).
 - Theo dõi mức đã dùng ở AI Studio → Rate limit (xem được 28 ngày gần nhất).

@@ -96,6 +96,15 @@ test("tool calls without results are closed with an interrupted error", () => {
   expect(JSON.stringify(messages)).not.toContain("ghost")
 })
 
+test("closeDanglingToolCalls nhận lý do vá tuỳ biến", () => {
+  const messages: ModelMessage[] = [
+    { role: "assistant", content: [{ type: "tool-call", toolCallId: "x", toolName: "t", input: {} }] },
+  ]
+  const { messages: out, patched } = closeDanglingToolCalls(messages, "Tool bị ngắt vì lượt bị dừng giữa chừng.")
+  expect(patched).toBe(1)
+  expect(JSON.stringify(out)).toContain("Tool bị ngắt vì lượt bị dừng giữa chừng.")
+})
+
 test("the transcript is rebuilt without reminder blocks", () => {
   const items = transcriptFromMessages([...turn1, ...turn2])
   expect(items).toEqual([
