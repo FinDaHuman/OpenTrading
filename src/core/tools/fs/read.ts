@@ -6,6 +6,7 @@ import { readScope } from "../../fs/path-safety"
 import { decodeFile, isBinary, splitLines } from "../../fs/text"
 import { realish, type Workspace } from "../../fs/workspace"
 import type { ToolDef, ToolResult } from "../types"
+import { readDocx, readXlsx, toCsvRow } from "../../fs/office"
 
 /**
  * read_file: what the user hands over by path (a broker's PDF report, an Excel export saved
@@ -14,7 +15,7 @@ import type { ToolDef, ToolResult } from "../types"
  * a listing (opencode read.ts), PDFs page by page, images as images.
  */
 
-export type ReadFileInput = { path: string; offset?: number; limit?: number; pages?: string }
+export type ReadFileInput = { path: string; offset?: number; limit?: number; pages?: string; sheet?: string }
 
 export const MAX_LINES = 2000
 export const MAX_LINE_CHARS = 2000
@@ -128,6 +129,34 @@ export function numberLines(lines: string[], offset: number, limit: number): { b
   return { body: out.join("\n"), first: offset, last }
 }
 
+/** Numbered rows from `offset`, with the same paging note as text files. */
+function paged(label: string, lines: string[], input: Omit<ReadFileInput, "path">, unit: string) {
+  if (lines.length === 0) return `${label} · trống.`
+  const offset = Math.max(1, input.offset ?? 1)
+  if (offset > lines.length) throw new Error(`offset ${offset} vượt quá số ${unit} (${lines.length}).`)
+  const { body, first, last } = numberLines(lines, offset, Math.max(1, input.limit ?? MAX_LINES))
+  const footer = last < lines.length ? `\n\n(còn ${lines.length - last} ${unit}; đọc tiếp với offset=${last + 1})` : ""
+  return `${label} · ${lines.length} ${unit}${first === 1 && last === lines.length ? "" : ` · đang hiện ${unit} ${first}–${last}`}\n${body}${footer}`
+}
+
+/** One sheet of a workbook as CSV rows numbered like Excel rows; the other sheets are listed. */
+function readSheet(abs: string, bytes: Uint8Array, input: Omit<ReadFileInput, "path">) {
+  let book
+  try {
+    book = readXlsx(bytes, input.sheet)
+  } catch (error) {
+    throw new Error(`Không đọc được ${abs}: ${error instanceof Error ? error.message : String(error)}`)
+  }
+  if (book.sheets.length === 0) return `Excel ${abs} · không có sheet nào.`
+  const list =
+    book.sheets.length > 1 ? `\nCác sheet: ${book.sheets.map((s, i) => `${i + 1}. ${s.name} (${s.rows} dòng)${i === book.index ? " ← đang đọc" : ""}`).join(" · ")}; chọn sheet khác bằng tham số sheet.` : ""
+  const width = Math.max(0, ...book.rows.map((r) => r.length))
+  const head =
+    `Excel ${abs} · sheet "${book.sheets[book.index]!.name}" · ${width} cột (dạng CSV, số đầu dòng là số dòng Excel; giá trị là số gốc, không theo định dạng hiển thị: ô phần trăm là phân số, 0,12 = 12%; ngày có thể là số seri Excel, 45658 = 2025-01-01)` +
+    list
+  return paged(head, book.rows.map(toCsvRow), input, "dòng")
+}
+
 export async function readFileAt(abs: string, input: Omit<ReadFileInput, "path">, state?: FileState): Promise<string | ToolResult> {
   let info
   try {
@@ -151,7 +180,21 @@ export async function readFileAt(abs: string, input: Omit<ReadFileInput, "path">
     const bytes = new Uint8Array(await Bun.file(abs).arrayBuffer())
     return readPdf(abs, bytes, input.pages)
   }
-  if (ext === ".xlsx" || ext === ".docx") throw new Error(`Chưa đọc được ${ext} trực tiếp. Nhờ người dùng lưu thành ${ext === ".xlsx" ? ".csv" : ".pdf hoặc .txt"} rồi đọc file đó.`)
+  if (ext === ".xlsx" || ext === ".xlsm") {
+    if (info.size > MAX_TEXT_BYTES) throw new Error(`File Excel ${abs} quá lớn (${Math.round(info.size / 1024 / 1024)} MB).`)
+    return readSheet(abs, new Uint8Array(await Bun.file(abs).arrayBuffer()), input)
+  }
+  if (ext === ".docx") {
+    if (info.size > MAX_TEXT_BYTES) throw new Error(`File Word ${abs} quá lớn (${Math.round(info.size / 1024 / 1024)} MB).`)
+    let text: string
+    try {
+      text = readDocx(new Uint8Array(await Bun.file(abs).arrayBuffer()))
+    } catch (error) {
+      throw new Error(`Không đọc được ${abs}: ${error instanceof Error ? error.message : String(error)}`)
+    }
+    return paged(`Word ${abs}`, text.split("\n"), input, "dòng")
+  }
+  if (ext === ".xls" || ext === ".doc") throw new Error(`${ext} là định dạng Office cũ (nhị phân), chưa đọc được. Nhờ người dùng lưu lại thành ${ext === ".xls" ? ".xlsx hoặc .csv" : ".docx hoặc .pdf"}.`)
 
   if (info.size > MAX_TEXT_BYTES) throw new Error(`File ${abs} quá lớn (${Math.round(info.size / 1024 / 1024)} MB) để đọc cả: tìm phần cần đọc bằng grep_files rồi đọc theo offset/limit.`)
   const bytes = new Uint8Array(await Bun.file(abs).arrayBuffer())
@@ -178,7 +221,7 @@ export function readFileTool(workspace: Workspace, state?: FileState): ToolDef<R
     name: "read_file",
     description:
       "Đọc một file hoặc thư mục trên máy người dùng theo đường dẫn (tuyệt đối, hoặc tương đối tính từ workspace; ~ là thư mục home). " +
-      "Text/CSV/JSON/Markdown/HTML trả về từng dòng có số dòng (tối đa 2000 dòng mỗi lần, đọc tiếp bằng offset/limit); thư mục trả về danh sách file; PDF trả chữ theo trang (mặc định 10 trang đầu, chọn bằng pages, tối đa 20 trang/lần); ảnh png/jpg/gif/webp trả về ảnh. " +
+      "Text/CSV/JSON/Markdown/HTML trả về từng dòng có số dòng (tối đa 2000 dòng mỗi lần, đọc tiếp bằng offset/limit); thư mục trả về danh sách file; Excel .xlsx trả từng sheet dạng CSV (chọn bằng sheet); Word .docx trả markdown; PDF trả chữ theo trang (mặc định 10 trang đầu, chọn bằng pages, tối đa 20 trang/lần); ảnh png/jpg/gif/webp trả về ảnh. " +
       "Dùng khi người dùng đưa đường dẫn file/thư mục, nhắc tới một file trên máy, hoặc cần xem nội dung file trước khi trả lời. Gọi song song nhiều file cùng lúc được. " +
       "Không dùng khi cần tìm file theo tên (dùng glob_files) hay tìm chữ trong nhiều file (dùng grep_files); không dùng cho URL (dùng web_fetch). " +
       "File chứa khoá/mật khẩu (.env, auth.json, .ssh…) cần người dùng cho phép.",
@@ -187,6 +230,7 @@ export function readFileTool(workspace: Workspace, state?: FileState): ToolDef<R
       offset: z.number().int().min(1).optional().describe("Dòng bắt đầu (từ 1), cho file text dài"),
       limit: z.number().int().min(1).max(MAX_LINES).optional().describe(`Số dòng đọc (mặc định và tối đa ${MAX_LINES})`),
       pages: z.string().optional().describe('Trang PDF cần đọc, ví dụ "3", "1-5", "2,4-6"'),
+      sheet: z.string().optional().describe("Sheet Excel cần đọc: tên hoặc số thứ tự (mặc định sheet đầu)"),
     }),
     readOnly: true,
     timeoutMs: 60_000,
