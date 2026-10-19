@@ -29,23 +29,23 @@ Subagent là một agent riêng, bắt đầu với ngữ cảnh trống. Agent 
 | --- | --- | --- |
 | Subagent chạy song song | 10 | Không có trần. Tính chung cả agent nền. Vượt thì xếp hàng theo thứ tự spawn. Với key miễn phí nên đặt 1–2, xem [gemini-limits.md](gemini-limits.md) |
 | Model cho subagent | theo model của phiên | Chỉ liệt kê model gọi được tool. Model không dùng được thì tự quay về model của phiên và hiện `△` trên hàng của subagent |
-| Dừng khi không tiến triển | 5 phút | Subagent không có tiến triển (không gọi tool, không nhận gì từ model) trong `idleMs` thì bị dừng. Phần **suy luận (reasoning)** của model được tính là tiến triển, nên các pha "nghĩ" dài không còn bị dừng oan. Giá trị `idleMs` dưới 1 giây bị bỏ qua (dùng mặc định) |
+| Dừng khi không tiến triển | 5 phút | Subagent không có tiến triển (không gọi tool, không nhận gì từ model) trong `idleMs` thì bị dừng. Phần **suy luận (reasoning)** của model được tính là tiến triển, nên các pha "nghĩ" dài không còn bị dừng oan. Với Gemini, harness bật `includeThoughts` cho model có suy luận (giống opencode) để Gemini gửi phần suy luận về; phần này không hiển thị. Đặt `idleMs` thì đó cũng là thời gian tối đa một request của subagent được im lặng (agent chính: 5 phút, giống Codex/opencode). Giá trị `idleMs` dưới 1 giây bị bỏ qua (dùng mặc định) |
 
 Trong `~/.opentrading/config.json`: `"subagents": { "maxConcurrent": 2, "idleMs": 600000, "provider": "groq", "model": "…" }`.
 
 **Tự chọn model lite (`"model": "auto"`)**
 
-Harness tự tìm model nhỏ, rẻ, gọi được tool từ các provider đã kết nối — duyệt từ trên xuống, khớp đầu tiên thắng:
+Harness tự tìm model nhỏ, rẻ, gọi được tool từ các provider đã kết nối — duyệt từ trên xuống, pattern đầu tiên có model khớp thắng; nhiều model cùng khớp một pattern thì lấy bản phát hành mới nhất (`release_date` trong models.dev):
 
 | Ưu tiên | Provider | Model (theo thứ tự pattern) |
 | --- | --- | --- |
 | 1 | Google | `gemini-3.5-flash-lite`, `gemini-3.1-flash-lite`, rồi mọi `flash-lite` |
 | 2 | OpenCode Go | `claude-haiku-5-5`, `glm-5.3-flash`, rồi mọi `flash` |
 | 3 | Alibaba | `qwen3.7-flash`, `qwen-flash`, rồi mọi `flash` |
-| 4 | Anthropic | mọi model `haiku` |
-| 5 | OpenAI | mọi model `-mini` |
+| 4 | Anthropic | `claude-haiku-5-5`, rồi mọi `haiku` |
+| 5 | OpenAI | `gpt-5.4-mini`, rồi mọi `gpt-…-mini` |
 | 6 | Groq | `llama-3.1-8b-instant`, rồi `qwen/…` |
-| 7 | OpenRouter | `haiku`, `gemini-3.5-flash-lite` |
+| 7 | OpenRouter | `anthropic/claude-haiku-5.5`, rồi mọi `haiku`, rồi `gemini-3.5-flash-lite` |
 | 8 | NVIDIA | `deepseek-v4.1-flash`, rồi mọi `flash` |
 | 9 | Ollama Cloud | `deepseek-v4-flash`, rồi mọi `flash` |
 

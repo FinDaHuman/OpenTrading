@@ -3,11 +3,12 @@ import {
   NoSuchToolError,
   isStepCount,
   streamText,
-  type JSONValue,
   type LanguageModelUsage,
   type ModelMessage,
   type StreamTextResult,
   type SystemModelMessage,
+  type ToolCallPart,
+  type ToolResultPart,
   type ToolSet,
   wrapLanguageModel,
 } from "ai"
@@ -31,7 +32,7 @@ import { loadedTools } from "./tools/loaded"
 import { modeNote } from "./permission/mode"
 import { NOTE as NOTICE_NOTE } from "./subagents/notification"
 import { currentTodos, todoMark } from "./tools/todos"
-import { MAX_TOOLS_PER_REQUEST, stripImages, type BuiltToolSet, type ToolRegistry, type ToolSetOptions } from "./tools/registry"
+import { MAX_TOOLS_PER_REQUEST, modelOutput, stripImages, type BuiltToolSet, type ToolRegistry, type ToolSetOptions } from "./tools/registry"
 import { describeTool, LOADED_PREFIX, resolveToolName } from "./tools/search"
 import { cleanToolErrors, toolErrorText } from "./tools/errors"
 import { TOOL_SEARCH } from "./tools/builtin/tool-search"
@@ -52,8 +53,19 @@ const SUMMARY_PROMPT =
  */
 const NUDGE_PROMPT = "Hãy trả lời câu hỏi của người dùng dựa trên kết quả tool ở trên. Không gọi thêm tool."
 
-/** No stream part at all for this long: the request is stalled, not slow. */
-export const LLM_STALL_MS = 120_000
+/**
+ * No stream part at all for this long: the request is stalled, not slow. Codex and opencode
+ * use 5 minutes too; parts here are counted after the SDK, so provider keep-alives that reset
+ * their SSE-level timers do not count, and a model thinking without streaming its thoughts
+ * sends nothing meanwhile.
+ */
+export const LLM_STALL_MS = 300_000
+
+/** OPENTRADING_STALL_MS when it is a positive number (tests), else LLM_STALL_MS. */
+function stallWindow(): number {
+  const ms = Number(process.env.OPENTRADING_STALL_MS)
+  return Number.isFinite(ms) && ms > 0 ? ms : LLM_STALL_MS
+}
 
 /** What a stalled request reports; the turn fails instead of hanging. */
 const stallMessage = (ms: number) =>
@@ -115,6 +127,11 @@ export interface RunOptions {
   prevClock?: ClockSnapshot
   now?: Date
   signal?: AbortSignal
+  /**
+   * How long a request may stream nothing before it is cut (default LLM_STALL_MS). A subagent
+   * with `subagents.idleMs` set passes it, so a longer idle limit is not undercut by the stall.
+   */
+  stallMs?: number
   maxSteps?: number
   sessionId?: string
   hooks?: HookBus
@@ -156,17 +173,30 @@ function stringify(value: unknown) {
   }
 }
 
+/**
+ * A tool's result as the model sees it: what the tool set's toModelOutput produces for a
+ * ToolResult (registry.ts), plain text for anything else. Used where the SDK's response
+ * messages are not available (a turn cut mid-way keeps its finished tool results).
+ */
+function keptOutput(value: unknown, images: boolean): ToolResultPart["output"] {
+  if (value && typeof value === "object" && "output" in value && typeof (value as ToolResult).output === "string") return modelOutput(value as ToolResult, images)
+  return { type: "text", value: stringify(value) }
+}
+
 /** Structured chart payload a tool carried (TUI paints it coloured); absent for other tools. */
 function chartOf(value: unknown): ChartData | undefined {
   if (!value || typeof value !== "object" || !("chart" in value)) return undefined
   return (value as { chart?: ChartData }).chart
 }
 
-/** Assistant messages with no content at all (the empty answer itself) are dropped from history. */
+/**
+ * Assistant messages with no answer (the empty answer itself, thoughts at most) are dropped
+ * from history; the retried answer follows instead, so two model turns never sit side by side.
+ */
 function isEmptyAssistant(message: ModelMessage) {
   if (message.role !== "assistant") return false
   if (typeof message.content === "string") return message.content.trim() === ""
-  return message.content.every((part) => part.type === "text" && part.text.trim() === "")
+  return message.content.every((part) => part.type === "reasoning" || (part.type === "text" && part.text.trim() === ""))
 }
 
 /**
@@ -335,13 +365,18 @@ async function* relay(
   outcome: Outcome,
   notices?: RetryNotices,
   stall?: { ms: number; onStall: () => void },
+  /** Images in tool results reach the model (Prepared.images), as in the tool set. */
+  images = false,
 ): AsyncGenerator<AgentEvent> {
   const started = new Map<string, number>()
   // The turn's completed steps so far, kept so an abort or failure keeps work whose tools
-  // already ran (closeDanglingToolCalls patches calls left without a result).
+  // already ran (closeDanglingToolCalls patches calls left without a result). They are
+  // stored as the SDK's own response messages would be: tool results through the same
+  // conversion as the tool set (text, images only for a model that sees them, never the
+  // chart payload), errors cleaned, provider metadata (Gemini thought signatures) kept.
   let stepText = ""
-  const stepCalls: { toolCallId: string; toolName: string; input: unknown }[] = []
-  const stepResults: { toolCallId: string; toolName: string; output: unknown; error: boolean }[] = []
+  const stepCalls: Omit<ToolCallPart, "type">[] = []
+  const stepResults: Omit<ToolResultPart, "type">[] = []
   const flushProgress = () => {
     if (stepCalls.length === 0 && stepResults.length === 0 && !stepText) return
     const content = [
@@ -349,20 +384,7 @@ async function* relay(
       ...stepCalls.map((c) => ({ type: "tool-call" as const, ...c })),
     ]
     if (content.length > 0) outcome.progress.push({ role: "assistant", content })
-    if (stepResults.length > 0)
-      outcome.progress.push({
-        role: "tool",
-        content: stepResults.map((r) => ({
-          type: "tool-result" as const,
-          toolCallId: r.toolCallId,
-          toolName: r.toolName,
-          output: r.error
-            ? { type: "error-text" as const, value: String(r.output) }
-            : typeof r.output === "string"
-              ? { type: "text" as const, value: r.output }
-              : { type: "json" as const, value: r.output as JSONValue },
-        })),
-      })
+    if (stepResults.length > 0) outcome.progress.push({ role: "tool", content: stepResults.map((r) => ({ type: "tool-result" as const, ...r })) })
     stepText = ""
     stepCalls.length = 0
     stepResults.length = 0
@@ -427,7 +449,12 @@ async function* relay(
           break
         case "tool-call":
           started.set(part.toolCallId, Date.now())
-          stepCalls.push({ toolCallId: part.toolCallId, toolName: part.toolName, input: part.input })
+          stepCalls.push({
+            toolCallId: part.toolCallId,
+            toolName: part.toolName,
+            input: part.input,
+            ...(part.providerMetadata ? { providerOptions: part.providerMetadata } : {}),
+          })
           pendingTools.add(part.toolCallId)
           rearm()
           yield {
@@ -451,7 +478,11 @@ async function* relay(
             durationMs: Date.now() - (started.get(part.toolCallId) ?? Date.now()),
           }
           pendingTools.delete(part.toolCallId)
-          stepResults.push({ toolCallId: part.toolCallId, toolName: part.toolName, output: ok ? part.output : describeError(part.error), error: !ok })
+          stepResults.push({
+            toolCallId: part.toolCallId,
+            toolName: part.toolName,
+            output: ok ? keptOutput(part.output, images) : { type: "error-text", value: toolErrorText(describeError(part.error)) },
+          })
           rearm()
           break
         }
@@ -681,7 +712,20 @@ function requestFor(p: Prepared, messages: ModelMessage[], retry: RetryOptions =
       : p.assembled.system
   // Requests are retried by kind of failure (retry.ts); the SDK's own retry stays off.
   const model = wrapLanguageModel({ model: languageModel(p.target.provider, p.target.model, p.target.apiKey), middleware: retryMiddleware(retry) })
-  return { system, request, model, active: activeFor(p.built, request) }
+  return { system, request, model, active: activeFor(p.built, request), providerOptions: thoughtOptions(p.target) }
+}
+
+/**
+ * Gemini streams its thoughts only when asked (`includeThoughts`); otherwise a thinking model
+ * sends nothing until it answers, which the stall timer and the subagent watchdog cannot tell
+ * from a hung request. opencode asks for them on every Google reasoning model too
+ * (provider/transform.ts). Thoughts are never shown; they only count as progress.
+ */
+export function thoughtOptions(target: TargetLike & { provider: { models: Record<string, { reasoning?: boolean }> } }) {
+  const info = target.provider.models[target.model]
+  const npm = info?.provider?.npm ?? target.provider.npm
+  if (npm !== "@ai-sdk/google" || !info?.reasoning) return undefined
+  return { google: { thinkingConfig: { includeThoughts: true } } }
 }
 
 /** Context size after a response: the last step's prompt plus its answer, as the provider counted it. */
@@ -848,13 +892,13 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
   // A request that streams nothing for a long time is stalled, not slow: cut it (LLM_STALL_MS).
   const stall = new AbortController()
   let stalled = false
-  const stallMs = Number(process.env.OPENTRADING_STALL_MS ?? LLM_STALL_MS)
+  const stallMs = opts.stallMs ?? stallWindow()
   const abortSignal = opts.signal ? AbortSignal.any([opts.signal, stall.signal]) : stall.signal
   const onStall = () => {
     stalled = true
     stall.abort()
   }
-  const { system, request, model } = requestFor(prepared, [...opts.history, user], notices.options)
+  const { system, request, model, providerOptions } = requestFor(prepared, [...opts.history, user], notices.options)
   let summarized = false
   const nudge = nudgeAfterTools(target)
   // Visible tools at the current step; deferred tools join once loaded (tool search).
@@ -887,6 +931,7 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
     },
     experimental_repairToolCall: async ({ toolCall, error }) => repairCall(opts.registry, built, active, loaded, toolCall, error),
     abortSignal,
+    providerOptions,
     // The model is wrapped with retry.ts (by kind of failure, shown to the user, Esc
     // cancels the wait); the SDK's blind retry would repeat a daily-quota 429.
     maxRetries: 0,
@@ -894,7 +939,7 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
   })
 
   const outcome: Outcome = { text: "", aborted: false, steps: 0, progress: [] }
-  yield* relay(result, opts.registry, opts.signal, outcome, notices, { ms: stallMs, onStall })
+  yield* relay(result, opts.registry, opts.signal, outcome, notices, { ms: stallMs, onStall }, prepared.images)
   if (stalled) {
     outcome.aborted = false
     outcome.failure = new Error(stallMessage(stallMs))
@@ -924,11 +969,12 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
       activeTools: activeFor(built, [...request, ...kept]),
       toolChoice: tools ? "none" : undefined,
       abortSignal,
+      providerOptions,
       maxRetries: 0,
       onError: () => {},
     })
     const second: Outcome = { text: "", aborted: false, steps: 0, progress: [] }
-    yield* relay(retry, opts.registry, opts.signal, second, notices, { ms: stallMs, onStall })
+    yield* relay(retry, opts.registry, opts.signal, second, notices, { ms: stallMs, onStall }, prepared.images)
     if (stalled) {
       second.aborted = false
       second.failure = new Error(stallMessage(stallMs))

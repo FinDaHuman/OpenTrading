@@ -127,6 +127,8 @@ export class SubagentManager {
   private max = DEFAULT_MAX_CONCURRENT
   /** No-event stop threshold; config `subagents.idleMs`, default 5 minutes. */
   private idleMs = SUBAGENT_IDLE_MS
+  /** `subagents.idleMs` when set: it is also the run's stall window (runAgent `stallMs`). */
+  private idleConfigured?: number
   /** Sidechain writes not finished yet (exit waits for them). */
   private writes = new Set<Promise<unknown>>()
   /**
@@ -349,7 +351,8 @@ export class SubagentManager {
         const config = await loadConfig()
         this.max = config.subagents?.maxConcurrent ?? this.max
         const idle = config.subagents?.idleMs
-        this.idleMs = typeof idle === "number" && Number.isFinite(idle) && idle >= 1_000 ? idle : SUBAGENT_IDLE_MS
+        this.idleConfigured = typeof idle === "number" && Number.isFinite(idle) && idle >= 1_000 ? idle : undefined
+        this.idleMs = this.idleConfigured ?? SUBAGENT_IDLE_MS
         return this.targetFor(spec, config.subagents, fallback)
       })
       this.setup = prepared.catch(() => {})
@@ -411,6 +414,7 @@ export class SubagentManager {
           registry: child,
           maxSteps: spec.maxSteps ?? DEFAULT_SUBAGENT_STEPS,
           signal,
+          stallMs: this.idleConfigured,
           role: "subagent",
           target,
           agentPrompt: spec.agentPrompt,
