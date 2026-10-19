@@ -235,6 +235,8 @@ const runtime = initRuntime({ cwd, home, skills: () => state.skills, memory })
 let setup: Awaited<ReturnType<typeof testRender>>
 
 beforeAll(async () => {
+  // Test files share one process and one store: start from an empty transcript whatever ran before.
+  setState({ lines: [], approval: undefined, approvals: [], dialog: undefined })
   // exitOnCtrlC off, as in main.tsx: the app handles Ctrl+C (double press) itself.
   setup = await testRender(() => <App runtime={runtime} onExit={() => exits++} />, { width: 100, height: 32, exitOnCtrlC: false })
   // OSC52 always carries the copy (the OS command may not exist, e.g. on CI without xclip).

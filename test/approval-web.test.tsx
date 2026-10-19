@@ -3,9 +3,15 @@ import { testRender } from "@opentui/solid"
 import { PermissionGate, type AllowRule } from "../src/core/permission"
 import { webFetchTool } from "../src/core/tools/web/fetch"
 import { ApprovalPrompt } from "../src/tui/approval"
+import { setState } from "../src/tui/state"
 
 let setup: Awaited<ReturnType<typeof testRender>> | undefined
-afterAll(() => setup?.renderer.destroy())
+// The prompt records its decision as a transcript line in the shared store: leave it empty for
+// the next test file (tui.test.tsx expects the home screen, which shows only with no lines).
+afterAll(() => {
+  setup?.renderer.destroy()
+  setState("lines", [])
+})
 
 async function frameWith(text: string) {
   let frame = ""
