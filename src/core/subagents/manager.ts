@@ -23,6 +23,8 @@ export const DEFAULT_SUBAGENT_TYPE = "nghien-cuu"
 export const SUBAGENT_IDLE_MS = 5 * 60_000
 /** "5 phút" for the default, "0.4 giây" for a test-sized idleMs. */
 const idleText = (ms: number) => (ms >= 60_000 ? `${Math.round(ms / 60_000)} phút` : `${(ms / 1000).toFixed(ms % 1000 ? 1 : 0)} giây`)
+/** How often the idle watchdog checks a run. */
+const watchdogTick = (idleMs: number) => Math.min(10_000, idleMs)
 /** Finished runs kept in memory (the sidechain files keep the rest). */
 const MAX_FINISHED = 20
 
@@ -127,7 +129,10 @@ export class SubagentManager {
   private max = DEFAULT_MAX_CONCURRENT
   /** No-event stop threshold; config `subagents.idleMs`, default 5 minutes. */
   private idleMs = SUBAGENT_IDLE_MS
-  /** `subagents.idleMs` when set: it is also the run's stall window (runAgent `stallMs`). */
+  /**
+   * `subagents.idleMs` when set: the run's stall window follows it (runAgent `stallMs`), placed
+   * past the watchdog's next check so the watchdog, not the stall, stops a silent run.
+   */
   private idleConfigured?: number
   /** Sidechain writes not finished yet (exit waits for them). */
   private writes = new Set<Promise<unknown>>()
@@ -399,7 +404,7 @@ export class SubagentManager {
           idleStop = true
           run.controller.abort()
         }
-      }, Math.min(10_000, this.idleMs))
+      }, watchdogTick(this.idleMs))
       watchdog.unref?.()
 
       // A turn per message: the task, then whatever send_message queued meanwhile.
@@ -414,7 +419,7 @@ export class SubagentManager {
           registry: child,
           maxSteps: spec.maxSteps ?? DEFAULT_SUBAGENT_STEPS,
           signal,
-          stallMs: this.idleConfigured,
+          stallMs: this.idleConfigured === undefined ? undefined : this.idleConfigured + 2 * watchdogTick(this.idleConfigured),
           role: "subagent",
           target,
           agentPrompt: spec.agentPrompt,
