@@ -260,11 +260,12 @@ test("ask rules force the prompt; choices never offer 'always' for file writes",
   expect(p2.asked).toBeDefined() // the ask rule beats the session approval
 })
 
-test("backups and saved tool output are secret to read; protected folders count inside the fallback workspace", async () => {
+test("backups are secret to read, saved shell output is not; protected folders count inside the fallback workspace", async () => {
   const backup = path.join(data, "file-history", "2026-10-19-1", "0001-.env")
   const s = setup()
   expect(s.read.askFor?.({ path: backup })).toBe(`secret:${backup}`)
-  expect(s.read.askFor?.({ path: path.join(data, "tool-output", "x.txt") })).toStartWith("secret:")
+  // Saved shell output is the rest of what an approved command printed: readable to page through.
+  expect(s.read.askFor?.({ path: path.join(data, "tool-output", "x.txt") })).toBeUndefined()
   expect(protectedWriteReason(path.join(data, "workspace", ".git", "hooks", "pre-commit"), env)).toContain(".git")
   expect(protectedWriteReason(path.join(data, "workspace", ".github", "workflows", "x.yml"), env)).toContain(".github")
   expect(protectedWriteReason(path.join(data, "workspace", "bao-cao", "x.md"), env)).toBeUndefined()

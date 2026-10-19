@@ -41,9 +41,10 @@ const DATA_SECRETS = ["auth.json", "mcp-auth.json", "mcp.json"]
 
 /**
  * Folders under the data dir with copies of the user's files: a backup of `.env` is named
- * `0001-.env`, so the name rule alone would miss it (/undo copies, saved tool output).
+ * `0001-.env`, so the name rule alone would miss it (/undo copies). Saved shell output
+ * (`tool-output`) stays readable: it is the rest of what an approved command printed.
  */
-const DATA_SECRET_DIRS = ["file-history", "tool-output"]
+const DATA_SECRET_DIRS = ["file-history"]
 
 /** Directories under home that hold credentials (whole tree is secret). */
 const HOME_SECRET_DIRS = [

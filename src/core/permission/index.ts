@@ -129,6 +129,8 @@ export function choicesFor(def: ToolDef, scope: string | undefined, mode: Permis
   if (mode === "read-only" && def.effect) return ["once", "mode", "deny"]
   // A folder for the session, never "always" for every file write.
   if (def.effect === "file") return ["once", "session", "deny"]
+  // A chained command or an interpreter: this exact command for the session at most.
+  if (scope?.startsWith("cmd!")) return ["once", "session", "deny"]
   return ["once", "session", "always", "deny"]
 }
 
