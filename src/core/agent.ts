@@ -127,6 +127,11 @@ export interface RunOptions {
   prevClock?: ClockSnapshot
   now?: Date
   signal?: AbortSignal
+  /**
+   * How long a request may stream nothing before it is cut (default LLM_STALL_MS). A subagent
+   * with `subagents.idleMs` set passes it, so a longer idle limit is not undercut by the stall.
+   */
+  stallMs?: number
   maxSteps?: number
   sessionId?: string
   hooks?: HookBus
@@ -887,7 +892,7 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
   // A request that streams nothing for a long time is stalled, not slow: cut it (LLM_STALL_MS).
   const stall = new AbortController()
   let stalled = false
-  const stallMs = stallWindow()
+  const stallMs = opts.stallMs ?? stallWindow()
   const abortSignal = opts.signal ? AbortSignal.any([opts.signal, stall.signal]) : stall.signal
   const onStall = () => {
     stalled = true

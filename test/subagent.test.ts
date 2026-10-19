@@ -692,6 +692,21 @@ test("subagents.model auto: no match falls back to the session's model, with a n
   expect(manager.list()[0]!.notice).toContain("Không tìm thấy model lite")
 })
 
+test("a configured idleMs is also the subagent's stall window, so the stall does not undercut it", async () => {
+  process.env.OPENTRADING_STALL_MS = "300"
+  try {
+    await saveConfig({ provider: "groq", model: "tooly", subagents: { idleMs: 1200, maxConcurrent: 5 } })
+    // Silent longer than the stall window, shorter than idleMs.
+    childGate = new Promise((resolve) => setTimeout(resolve, 600))
+    const { registry, manager } = setup()
+    parentCalls = [spawn("Kỹ thuật HPG")]
+    await collect(runAgent({ history: [], input: "phân tích HPG", skills: [], registry }))
+    expect(manager.list()[0]).toMatchObject({ status: "completed" })
+  } finally {
+    delete process.env.OPENTRADING_STALL_MS
+  }
+})
+
 test("an invalid idleMs (0) is ignored and the 5-minute default applies", async () => {
   await saveConfig({ provider: "groq", model: "tooly", subagents: { idleMs: 0, maxConcurrent: 5 } })
   childSlowReasoning = true
