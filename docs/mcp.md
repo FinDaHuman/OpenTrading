@@ -144,6 +144,7 @@ Notion, Linear, Sentry, Atlassian… dùng OAuth: không cần token, chỉ cầ
 - **Không in gì ra stdout** ngoài giao thức, vì stdout là kênh MCP. Log thì ghi ra stderr. Khi server không khởi động được, 3 dòng stderr cuối cùng hiện trong `/mcp`.
 - **Timeout:** mặc định 30s để khởi động và 60s cho mỗi lần gọi tool. Đổi bằng `startupTimeoutMs` và `toolTimeoutMs`.
 - **Số lệnh gọi cùng lúc:** mỗi server nhận tối đa 4 lệnh gọi tool cùng lúc, tính chung cho agent chính và mọi subagent. Các lệnh còn lại xếp hàng; thời gian xếp hàng không tính vào `toolTimeoutMs` (nhưng vẫn nằm trong giới hạn tổng của một lần gọi, khoảng 2×`toolTimeoutMs` + `startupTimeoutMs`). Đổi bằng `maxConcurrent`. Chỉ áp dụng cho server remote. Server chạy trên gói hosting nhỏ (ví dụ Render free, 0.1 CPU) nên để 2–4.
+- **Đo tải 19/10/2026** (harness `opentrading`, server warm, Render free): `source_status` p50 0.21s ở 1–4 lệnh đồng thời, 0.58s ở 8 lệnh (p95 1.08s, 0/16 lỗi); `vn_equity_quote_batch` 3 mã × 4 lệnh đồng thời = 1.15s/lần gọi; `vn_equity_ohlcv` 0.64s; `financial_ratios` 1.13s. Kết luận: MCP không phải nút cổ chai khi 2–5 subagent; nút cổ chai thật là quota model. (Chưa đo cold start sau khi Render spin-down.)
 
 ## 6. Windows
 

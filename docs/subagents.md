@@ -29,8 +29,9 @@ Subagent là một agent riêng, bắt đầu với ngữ cảnh trống. Agent 
 | --- | --- | --- |
 | Subagent chạy song song | 10 | Không có trần. Tính chung cả agent nền. Vượt thì xếp hàng theo thứ tự spawn. Với key miễn phí nên đặt 1–2, xem [gemini-limits.md](gemini-limits.md) |
 | Model cho subagent | theo model của phiên | Chỉ liệt kê model gọi được tool. Model không dùng được thì tự quay về model của phiên và hiện `△` trên hàng của subagent |
+| Dừng khi không tiến triển | 5 phút | Subagent không có tiến triển (không gọi tool, không nhận gì từ model) trong `idleMs` thì bị dừng. Phần **suy luận (reasoning)** của model được tính là tiến triển, nên các pha "nghĩ" dài không còn bị dừng oan |
 
-Trong `~/.opentrading/config.json`: `"subagents": { "maxConcurrent": 2, "provider": "groq", "model": "…" }`.
+Trong `~/.opentrading/config.json`: `"subagents": { "maxConcurrent": 2, "idleMs": 600000, "provider": "groq", "model": "…" }`.
 
 `/context` có dòng `Subagent: N lần · X token tính phí`. Đây là tổng token của mọi request subagent đã gửi, không tính vào `ctx %` của agent chính.
 
@@ -77,7 +78,7 @@ Kiểm tra bằng `/agents`: danh sách, file lỗi, tool thực có và model (
 
 | Thành phần | Vị trí |
 | --- | --- |
-| Lõi | `src/core/subagents/`: `manager.ts` (start / continue / stop, watchdog im lặng 5 phút), `limiter.ts` (slot FIFO), `result.ts` (trailer `<subagent_meta>`), `sidechain.ts`, `notification.ts` |
+| Lõi | `src/core/subagents/`: `manager.ts` (start / continue / stop, watchdog im lặng `idleMs`, mặc định 5 phút), `limiter.ts` (slot FIFO), `result.ts` (trailer `<subagent_meta>`), `sidechain.ts`, `notification.ts` |
 | Tool | `src/core/tools/subagent/spawn.ts`: `spawn_subagent`, `send_message` và `stop_agent` (hai tool sau là tool hoãn) |
 | Loại agent | `src/core/agents/` |
 | Prompt | prompt của subagent là `prompts/subagent.md` + `<bat_bien>`/`<thu_tu_uu_tien>` lấy từ `identity.md`, không có hồ sơ nhà đầu tư, memory hay style. Prompt của agent chính không đổi |
