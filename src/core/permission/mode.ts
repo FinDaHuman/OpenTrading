@@ -23,7 +23,7 @@ export function cycleMode(mode: PermissionMode, withAuto = false): PermissionMod
 /** The mode line of the `<quyen_tep>` reminder: what the model may expect when it writes. */
 export function modeNote(mode: PermissionMode): string {
   if (mode === "read-only")
-    return "Chế độ quyền: ‖ chỉ đọc. Ghi file (write_file, edit_file) cần người dùng duyệt từng lần trong hộp thoại; vẫn gọi các tool này khi người dùng muốn tạo hay sửa file, đừng chỉ dán nội dung vào câu trả lời."
-  if (mode === "ask") return "Chế độ quyền: ▸ sửa có hỏi. Mỗi lần ghi file người dùng duyệt trong hộp thoại (có thể cho phép cả thư mục trong phiên)."
+    return "Chế độ quyền: ‖ chỉ đọc. Ghi file (write_file, edit_file) và chạy lệnh (shell) cần người dùng duyệt từng lần trong hộp thoại; vẫn gọi các tool này khi người dùng muốn tạo hay sửa file, đừng chỉ dán nội dung vào câu trả lời."
+  if (mode === "ask") return "Chế độ quyền: ▸ sửa có hỏi. Mỗi lần ghi file hay chạy lệnh người dùng duyệt trong hộp thoại (có thể cho phép cả thư mục, hoặc một lệnh, trong phiên)."
   return "Chế độ quyền: ▸▸ tự động."
 }

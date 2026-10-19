@@ -28,6 +28,7 @@ import { Workspace } from "./fs/workspace"
 import { readFileTool } from "./tools/fs/read"
 import { globFilesTool, grepFilesTool } from "./tools/fs/search"
 import { editFileTool, writeFileTool } from "./tools/fs/write"
+import { shellTool } from "./tools/shell/shell"
 import { FileHistory, pruneHistory } from "./fs/history"
 import { matchToolPattern } from "./tools/patterns"
 import { connectedProviders } from "./auth"
@@ -79,6 +80,8 @@ export function initRuntime(opts: { cwd?: string; home?: string; skills: () => S
   const historyRoot = path.join(home, "file-history")
   const history = new FileHistory(historyRoot)
   void pruneHistory(historyRoot)
+  // Saved shell output can hold whatever an approved command printed: kept a week (opencode).
+  void pruneHistory(path.join(home, "tool-output"), 7)
   const questions = new AskBroker()
   registry.register(currentTimeTool())
   registry.register(askUserTool(questions))
@@ -88,6 +91,7 @@ export function initRuntime(opts: { cwd?: string; home?: string; skills: () => S
   registry.register(grepFilesTool(workspace))
   registry.register(writeFileTool({ workspace, state: files, history }))
   registry.register(editFileTool({ workspace, state: files, history }))
+  registry.register(shellTool(workspace))
   registry.register(
     loadSkillTool(
       opts.skills,

@@ -67,7 +67,8 @@ function kindOf(req: ApprovalRequest): string {
   if (scope.startsWith("secret:")) return req.effect ? "ghi vào file chứa khoá/mật khẩu" : "đọc file chứa khoá/mật khẩu"
   if (scope.startsWith("unc:")) return "đọc đường dẫn mạng"
   if (scope.startsWith("odd:")) return "đường dẫn Windows dạng lạ"
-  if (scope.startsWith("protected:")) return "ghi vào vùng được bảo vệ (cấu hình, dữ liệu OpenTrading)"
+  if (scope.startsWith("protected:")) return req.effect === "shell" ? "lệnh đụng tới file khoá, cấu hình hoặc tự chạy khi đăng nhập" : "ghi vào vùng được bảo vệ (cấu hình, dữ liệu OpenTrading)"
+  if (scope.startsWith("outside:") && req.effect === "shell") return "chạy lệnh ngoài workspace"
   if (scope.startsWith("outside:")) return "ghi ngoài workspace"
   if (scope === "lap-lai") return "model gọi lặp lại cùng một lời gọi"
   if (req.mode === "read-only" && req.effect) return "đang ở chế độ ‖ chỉ đọc"
@@ -86,9 +87,12 @@ function hintOf(choice: Choice, req: ApprovalRequest): string {
     case "session":
       if (/^(secret|unc|odd):/.test(scope)) return "không hỏi lại đúng file này tới khi thoát"
       if (scope.startsWith("domain:")) return "không hỏi lại domain này tới khi thoát"
+      if (scope.startsWith("cmd:")) return `không hỏi lại lệnh \`${truncate(scope.slice("cmd:".length), 30)} …\` tới khi thoát`
+      if (scope.startsWith("cmd!")) return "không hỏi lại đúng lệnh này tới khi thoát"
       if (scope.startsWith("edit:")) return `không hỏi lại khi ghi file trong ${truncate(scope.slice("edit:".length), 40)} (cả thư mục con) tới khi thoát`
       return "không hỏi lại tool này tới khi thoát"
     case "always":
+      if (scope.startsWith("cmd:")) return `lưu vào cấu hình: lệnh \`${truncate(scope.slice("cmd:".length), 30)} …\``
       return scope.startsWith("domain:") ? "lưu vào cấu hình, cho domain này" : "lưu vào cấu hình, cho đúng server này"
     case "mode":
       return "các lần ghi sau vẫn hỏi; shift+tab để đổi lại"
