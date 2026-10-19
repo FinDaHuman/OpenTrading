@@ -187,3 +187,13 @@ Frontmatter gồm `name` (trùng tên file), `description`, `tools`, `disallowed
   2. Nếu vẫn cần, model tóm tắt phần đầu theo mẫu có mục "Số liệu đã xác minh" (giá trị, đơn vị, nguồn, thời điểm chép nguyên văn); 2 lượt cuối giữ nguyên.
   - History mới mở đầu bằng một `<nhac_nho><tom_tat_hoi_thoai>` do harness ghi: danh sách tool đã nạp, skill đã nạp, danh sách việc cần làm còn dở.
 - Reminder `<nhac_nho>` được lưu trong history (để model luôn biết phiên giao dịch) nhưng TUI không hiển thị. Hồ sơ nhà đầu tư và memory index **không** được lưu vào phiên, vì chúng được dựng lại ở mỗi request.
+
+## 9. File, shell và chế độ quyền (PR #91–#96)
+
+Phần khung, đồng nghiệp chỉ cần biết để viết prompt và skill:
+
+- Model có `read_file`, `glob_files`, `grep_files`, `write_file`, `edit_file`, `shell`. Luật dùng tool nằm trong mô tả của từng tool, không cần lặp lại trong `prompts/*.md`.
+- Mỗi lượt model nhận khối nhắc `<quyen_tep>`: workspace và chế độ quyền hiện tại (`‖ chỉ đọc` / `▸ sửa có hỏi` / `▸▸ tự động`). Prompt không nên giả định model ghi file được mà không hỏi.
+- **Việc cho đồng nghiệp (chưa làm):** một skill "tạo tài liệu/báo cáo" hướng dẫn cách trình bày artifact. Ví dụ: kế hoạch theo dõi mã `.md`, bảng so sánh `.csv`, trang `.html` tự chứa có biểu đồ (SVG/JS nội tuyến, không tải script ngoài), đặt tên file không dấu, ghi nguồn và thời điểm số liệu. Mô tả `write_file` hiện chỉ có phần tối thiểu.
+- Luật của model duyệt auto mode ở `src/core/permission/auto/rules.ts`, người dùng tuỳ biến trong `config.json → autoMode`. Muốn thêm luật mặc định liên quan nghiệp vụ chứng khoán (ví dụ thêm tên công ty chứng khoán vào luật "Real Trading") thì sửa file đó qua PR, rồi chạy `bun scripts/dev/auto-mode-eval.ts`.
+- Chi tiết: [permissions.md](permissions.md).

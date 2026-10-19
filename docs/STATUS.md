@@ -51,7 +51,9 @@ Contract cho đồng nghiệp: [docs/contracts.md](contracts.md).
 | ↳ tool | schema chuẩn hoá theo provider; tối đa 128 tool/request; tìm tool `tool_search` (tool MCP hoãn, nạp theo nhu cầu); ảnh trong kết quả; prompts → `/server:prompt`; resources |
 | ↳ CLI | `opentrading mcp add/list/login/secret/debug…` |
 | `/mcp` (giống Claude Code: danh sách → server → tool → chi tiết; danh mục server có sẵn, mặc định tắt), `/tools`, `ctrl+o` | Xong |
-| **Xác nhận tool ghi** (`src/core/permission.ts`) | Xong. Tool không chỉ đọc phải được cho phép: một lần / cả phiên / luôn (gắn với server) / không (kèm lời nhắn) |
+| **Xác nhận tool ghi** (`src/core/permission/`) | Xong. Tool không chỉ đọc phải được cho phép: một lần / cả phiên / luôn (gắn với server) / không (kèm lời nhắn). Từ #92 là pipeline: chặn cứng → quy tắc chặn → vùng chỉ người dùng duyệt → quy tắc hỏi/cho phép → chế độ |
+| **File và shell** (`src/core/fs/`, `src/core/tools/fs/`, `src/core/tools/shell/`, PR #91 #92 #94 #96) | `read_file` (text, thư mục, PDF, ảnh, .xlsx, .docx), `glob_files`, `grep_files`, `write_file`, `edit_file` (đọc trước, kiểm file đổi, giữ encoding, diff khi duyệt), `shell` (PowerShell/bash, timeout giết cả cây, lọc key khỏi env). Workspace = thư mục đang mở + `/add-dir`. `/undo`. Xem [permissions.md](permissions.md) |
+| **Chế độ quyền** (PR #92, #95) | `‖ chỉ đọc` / `▸ sửa có hỏi` / `▸▸ tự động` (model duyệt 2 bước, luật mặc định có "giao dịch thật", 3/20 lần chặn thì hỏi tay), Shift+Tab, `/permissions`, `/config`. Bộ đánh giá 61 ca: `bun scripts/dev/auto-mode-eval.ts` |
 | Server mẫu cho đồng nghiệp: `examples/mcp-demo` | Xong |
 | **Prompt theo tầng** (`src/core/prompt/`, nội dung ở `prompts/*.md`) | Xong. 3 kênh system / context / reminder; ngân sách theo hạng model; đồng hồ phiên từ `market/calendar.json`, chỉ gửi lại khi đổi phiên; cache cho Anthropic; `/context` |
 | **Skills** (`src/core/skills/`) | Xong. `skills/<tên>/SKILL.md`; 3 nguồn project > user > bundled; activation auto/always/manual; catalog có ngân sách; gợi ý theo từ khoá (preroute L1); `load_skill` đọc được file phụ |
@@ -96,6 +98,7 @@ Việc phụ:
 | MCP | Kết nối MCP phổ biến (OAuth, SSE, CLI), tương thích tool, `/mcp`, xác nhận tool ghi | **Xong** (#12–#14) |
 | UI | Giao diện giống Claude Code, `ask_user` | **Xong** (#15, D2) |
 | Subagent | `spawn_subagent`, loại agent, chạy nền, `/agents`, `/tasks` | **Xong** (#32–#34) |
+| File/shell + quyền | Tool đọc/ghi file, shell, 3 chế độ quyền, auto mode có model duyệt | **PR mở** (#91 #92 #94 #95 #96, tài liệu: [permissions.md](permissions.md)) |
 | 3 | Mở rộng config (giới hạn bước…), `/why`, đóng gói `bun build --compile` | Tiếp theo |
 
 ## Cho đồng nghiệp: bắt đầu thế nào

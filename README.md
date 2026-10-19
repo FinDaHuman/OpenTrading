@@ -28,11 +28,16 @@ Trong TUI:
 | `/export [đường dẫn] [--force]` | Lưu hội thoại ra file `.md`; không có đường dẫn thì vào `~/.opentrading/exports/<id phiên>.md` |
 | `/agents` | Các loại subagent (có sẵn, cá nhân, dự án) và tool của từng loại |
 | `/tasks` | Subagent của phiên: đang chạy, đã xong; xem kết quả, dừng (ctrl+x) |
+| `/add-dir [thư mục] [--luu]` | Thêm thư mục vào workspace (nơi agent ghi file); không tham số: xem workspace |
+| `/undo [số] [--force]` | Hoàn tác thay đổi file do agent ghi (`write_file`/`edit_file`) |
+| `/permissions` | Chế độ quyền, workspace, quy tắc cho phép/chặn, các lần auto mode chặn |
 | `/memory` | Xem, duyệt, xoá memory |
-| `/config` | Cài đặt, có hiệu lực ngay: memory, tìm tool, tự nén, số subagent chạy song song, model cho subagent |
+| `/config` | Cài đặt, có hiệu lực ngay: memory, tìm tool, tự nén, số subagent chạy song song, model cho subagent, chế độ quyền khi mở, model duyệt auto mode |
 | `/clear`, `/help`, `/exit` | Xoá màn hình và bắt đầu phiên mới, trợ giúp, thoát |
 
-Phím tắt: `tab` hoàn thành lệnh đang gõ (`/con` → `/connect`), `↑↓` chọn gợi ý, `esc` dừng câu trả lời hoặc đóng hộp thoại, `ctrl+o` mở rộng/thu gọn kết quả tool, `ctrl+c` thoát.
+Phím tắt: `tab` hoàn thành lệnh đang gõ (`/con` → `/connect`), `↑↓` chọn gợi ý, `esc` dừng câu trả lời hoặc đóng hộp thoại, `ctrl+o` mở rộng/thu gọn kết quả tool, `shift+tab` (hoặc `alt+m`) đổi chế độ quyền, `ctrl+c` thoát.
+
+**File và lệnh.** Agent đọc được file bạn đưa đường dẫn (text, CSV, PDF, ảnh, Excel `.xlsx`, Word `.docx`), tạo hay sửa file (kế hoạch `.md`, bảng `.csv`, trang `.html`) và chạy lệnh shell. Có 3 chế độ quyền: `‖ chỉ đọc` (mặc định, mọi lần ghi hay chạy lệnh đều hỏi), `▸ sửa có hỏi`, `▸▸ tự động` (một model duyệt thay bạn). File chứa khoá/mật khẩu, cấu hình OpenTrading và việc ghi ra ngoài workspace luôn hỏi bạn. Xem [docs/permissions.md](docs/permissions.md).
 
 Model gọi được tool có sẵn (`current_time`, `load_skill`, `todo_write`, `ask_user`, `tool_search`, chart, watchlist, web…) và tool từ MCP server, rồi trả lời dựa trên kết quả. Cách gắn MCP server: xem [docs/mcp.md](docs/mcp.md).
 
