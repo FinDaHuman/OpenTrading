@@ -86,7 +86,7 @@ function hintOf(choice: Choice, req: ApprovalRequest): string {
     case "session":
       if (/^(secret|unc|odd):/.test(scope)) return "không hỏi lại đúng file này tới khi thoát"
       if (scope.startsWith("domain:")) return "không hỏi lại domain này tới khi thoát"
-      if (scope.startsWith("edit:")) return `không hỏi lại khi ghi file trong ${truncate(scope.slice("edit:".length), 40)} tới khi thoát`
+      if (scope.startsWith("edit:")) return `không hỏi lại khi ghi file trong ${truncate(scope.slice("edit:".length), 40)} (cả thư mục con) tới khi thoát`
       return "không hỏi lại tool này tới khi thoát"
     case "always":
       return scope.startsWith("domain:") ? "lưu vào cấu hình, cho domain này" : "lưu vào cấu hình, cho đúng server này"

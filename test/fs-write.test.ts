@@ -259,3 +259,35 @@ test("ask rules force the prompt; choices never offer 'always' for file writes",
   const p2 = await viaGate(gate, fake, {}, "once")
   expect(p2.asked).toBeDefined() // the ask rule beats the session approval
 })
+
+test("backups and saved tool output are secret to read; protected folders count inside the fallback workspace", async () => {
+  const backup = path.join(data, "file-history", "2026-10-19-1", "0001-.env")
+  const s = setup()
+  expect(s.read.askFor?.({ path: backup })).toBe(`secret:${backup}`)
+  expect(s.read.askFor?.({ path: path.join(data, "tool-output", "x.txt") })).toStartWith("secret:")
+  expect(protectedWriteReason(path.join(data, "workspace", ".git", "hooks", "pre-commit"), env)).toContain(".git")
+  expect(protectedWriteReason(path.join(data, "workspace", ".github", "workflows", "x.yml"), env)).toContain(".github")
+  expect(protectedWriteReason(path.join(data, "workspace", "bao-cao", "x.md"), env)).toBeUndefined()
+})
+
+test("deny rules held in memory stop reads too; a folder allowed for the session covers its subfolders", async () => {
+  const s = setup()
+  writeFileSync(path.join(project, "rieng.md"), "bí mật riêng")
+  const gate = new PermissionGate(memoryStore({ deny: [{ tool: "read_file", pattern: path.join(project, "rieng*") }] }))
+  // Before refreshRules the read is not checked against rules (no config read per read).
+  expect((await gate.check(s.read, { path: "rieng.md" }, new AbortController().signal)).allow).toBe(true)
+  await gate.refreshRules()
+  expect(await gate.check(s.read, { path: "rieng.md" }, new AbortController().signal)).toEqual({ allow: false, reason: "rule" })
+  expect((await gate.check(s.read, { path: "ghi-chu.md" }, new AbortController().signal)).allow).toBe(true)
+
+  gate.interactive = true
+  gate.setMode("ask")
+  mkdirSync(path.join(project, "bao-cao", "2026"), { recursive: true })
+  const top = await viaGate(gate, s.write, { path: "bao-cao/a.md", content: "a\n" }, "session")
+  expect(top.asked).toBeDefined()
+  const deeper = await viaGate(gate, s.write, { path: "bao-cao/2026/b.md", content: "b\n" })
+  expect(deeper.asked).toBeUndefined()
+  expect(deeper.result.ok).toBe(true)
+  const sibling = await viaGate(gate, s.write, { path: "khac/c.md", content: "c\n" }, "deny")
+  expect(sibling.asked).toBeDefined()
+})

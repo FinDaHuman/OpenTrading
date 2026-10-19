@@ -69,6 +69,7 @@ export function globFilesTool(workspace: Workspace): ToolDef<GlobInput> {
     deferrable: true,
     source: LOCAL_SOURCE,
     askFor: secretRoot(workspace),
+    subject: (input) => rootOf(workspace, input.path),
     summarize: (input) => `glob_files ${input.pattern}${input.path ? ` trong ${input.path}` : ""}`,
     async execute(input, ctx) {
       const root = rootOf(workspace, input.path)
@@ -119,6 +120,7 @@ export function grepFilesTool(workspace: Workspace): ToolDef<GrepInput> {
     deferrable: true,
     source: LOCAL_SOURCE,
     askFor: secretRoot(workspace),
+    subject: (input) => rootOf(workspace, input.path),
     summarize: (input) => `grep_files "${input.pattern}"${input.path ? ` trong ${input.path}` : ""}`,
     async execute(input, ctx) {
       let re: RegExp

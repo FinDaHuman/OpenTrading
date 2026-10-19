@@ -50,7 +50,7 @@ function coverage(r: Row) {
   return parts.join(" · ")
 }
 
-export function PermissionsDialog(props: { mode: PermissionMode; workspace: Workspace }) {
+export function PermissionsDialog(props: { mode: PermissionMode; workspace: Workspace; onChanged?: () => Promise<void> }) {
   const [config, { refetch }] = createResource(loadConfig)
   const [open, setOpen] = createSignal<string>()
   const rows = createMemo(() => (config() ? rowsOf(config()!) : []))
@@ -63,6 +63,7 @@ export function PermissionsDialog(props: { mode: PermissionMode; workspace: Work
     if (row.kind === "deny") p.deny = (p.deny ?? []).filter((_, i) => i !== row.index)
     if (row.kind === "ask") p.ask = (p.ask ?? []).filter((_, i) => i !== row.index)
     await saveConfig({ permissions: p })
+    await props.onChanged?.()
     pushLine({ kind: "info", text: `Đã xoá quy tắc ${KIND[row.kind]}: ${row.tool}${coverage(row) ? ` (${coverage(row)})` : ""}` })
     setOpen(undefined)
     await refetch()
@@ -111,7 +112,7 @@ export function PermissionsDialog(props: { mode: PermissionMode; workspace: Work
               when={rows().length > 0}
               fallback={
                 <text fg={color.tx3} wrapMode="word">
-                  Chưa có quy tắc nào. "Luôn cho phép" trong hộp thoại xác nhận sẽ lưu ở đây; quy tắc chặn/luôn hỏi viết trong ~/.opentrading/config.json (permissions.deny, permissions.ask).
+                  {`Chưa có quy tắc nào. "Luôn cho phép" trong hộp thoại xác nhận sẽ lưu ở đây; quy tắc chặn/luôn hỏi viết trong ~/.opentrading/config.json (permissions.deny, permissions.ask: {"tool": "read_file", "pattern": "*rieng*"}); sửa tay xong thì mở lại /permissions để áp dụng.`}
                 </text>
               }
             >

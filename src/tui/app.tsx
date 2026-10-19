@@ -997,8 +997,11 @@ export function App(props: {
       case "tools":
       case "context":
       case "sessions":
-      case "memory":
       case "permissions":
+        // Rules edited by hand in config.json take effect from here on.
+        void props.runtime.permissions.refreshRules()
+        return setState("dialog", cmd.name)
+      case "memory":
       case "config":
       case "agents":
       case "tasks":
@@ -1224,7 +1227,7 @@ export function App(props: {
               <ConfigDialog runtime={props.runtime} />
             </Match>
             <Match when={state.dialog === "permissions"}>
-              <PermissionsDialog mode={props.runtime.permissions.mode} workspace={props.runtime.workspace} />
+              <PermissionsDialog mode={props.runtime.permissions.mode} workspace={props.runtime.workspace} onChanged={() => props.runtime.permissions.refreshRules()} />
             </Match>
             <Match when={state.dialog === "memory"}>
               <MemoryDialog memory={props.runtime.memory} />

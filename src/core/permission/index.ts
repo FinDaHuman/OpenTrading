@@ -1,5 +1,5 @@
 import { loadConfig, saveConfig } from "../config"
-import { isSensitiveScope } from "../fs/path-safety"
+import { isInside, isSensitiveScope } from "../fs/path-safety"
 import type { AgentOrigin, ApprovalPreview, ToolDef } from "../tools/types"
 import type { PermissionMode } from "./mode"
 
@@ -18,7 +18,7 @@ export { cycleMode, MODE_LABEL, modeNote, type PermissionMode } from "./mode"
  *
  * Order of the checks (first match wins; Claude Code permissions.ts, opencode evaluate):
  * 0. `blockFor` — never (odd Windows path, deleting a drive root).
- * 1. Calls that never ask (read-only, no per-call scope) run; then a user deny rule.
+ * 1. A user deny rule (also on reads); then calls that never ask (read-only, no per-call scope) run.
  * 2. A user-only scope (key file, network path, protected folder, outside the workspace,
  *    loop guard): asked every time (a key file may be allowed for the session); no rule or
  *    "always" covers it.
@@ -161,10 +161,19 @@ export class PermissionGate {
   private modeListeners = new Set<(mode: PermissionMode) => void>()
   private nextId = 1
   private current: PermissionMode = "read-only"
+  /** Deny/ask rules held in memory (refreshRules), so a deny rule also stops reads without a config read per call. */
+  private lists?: { deny: ListRule[]; ask: ListRule[] }
+  /** Folders allowed "for this session" per approval group: a write below one of them is covered too. */
+  private sessionDirs = new Map<string, string[]>()
   /** Set by the TUI. Without it every request is denied. */
   interactive = false
 
   constructor(private rules: RuleStore = configRuleStore) {}
+
+  /** Load the deny/ask rules again (startup, after /permissions edits). */
+  async refreshRules() {
+    this.lists = (await this.rules.lists?.()) ?? { deny: [], ask: [] }
+  }
 
   get mode(): PermissionMode {
     return this.current
@@ -229,6 +238,15 @@ export class PermissionGate {
     )
   }
 
+  /** A session approval for this call: the same key, or (file writes) a folder approved for the session above it. */
+  private sessionCovers(def: ToolDef, input: unknown, key: string) {
+    if (this.session.has(key)) return true
+    const part = def.askFor?.(input)
+    if (!part?.startsWith("edit:")) return false
+    const dir = part.slice("edit:".length)
+    return (this.sessionDirs.get(def.approvalGroup ?? def.name) ?? []).some((approved) => isInside(dir, approved))
+  }
+
   /** ‖ read-only asks every local file/shell effect, whatever was approved before (session or rule). */
   private approvalsApply(def: ToolDef) {
     return !def.effect || this.current !== "read-only"
@@ -239,17 +257,18 @@ export class PermissionGate {
     const blocked = def.blockFor?.(input)
     if (blocked) return { allow: false, reason: "blocked", message: blocked }
     const scope = def.askFor?.(input)
-    // Reads and other calls that never ask run at once, as before: no config read, no await,
-    // so parallel calls keep their order. Deny/ask rules cover the calls that would ask.
-    if (!userOnly(scope) && !needsApproval(def, input)) return { allow: true }
-    const lists = (await this.rules.lists?.()) ?? { deny: [], ask: [] }
     const subject = def.subject?.(input)
-    if (lists.deny.some((r) => listMatches(r, def, subject))) return { allow: false, reason: "rule" }
+    // Deny rules first, from memory: they stop reads too (refreshRules loads them).
+    if (this.lists?.deny.some((r) => listMatches(r, def, subject))) return { allow: false, reason: "rule" }
+    // Calls that never ask run at once, as before: no await, so parallel calls keep their order.
+    if (!userOnly(scope) && !needsApproval(def, input)) return { allow: true }
+    const lists = this.lists ?? (await this.rules.lists?.()) ?? { deny: [], ask: [] }
+    if (!this.lists && lists.deny.some((r) => listMatches(r, def, subject))) return { allow: false, reason: "rule" }
     const key = this.keyOf(def, input)
     if (userOnly(scope)) {
       if (sessionOk(scope) && this.session.has(key)) return { allow: true }
     } else if (!lists.ask.some((r) => listMatches(r, def, subject))) {
-      if (this.approvalsApply(def) && (this.session.has(key) || (await this.allowedAlways(def, input)))) return { allow: true }
+      if (this.approvalsApply(def) && (this.sessionCovers(def, input, key) || (await this.allowedAlways(def, input)))) return { allow: true }
     }
     if (!this.interactive) return { allow: false, reason: "headless" }
     if (signal.aborted) return { allow: false, reason: "cancelled" }
@@ -296,7 +315,14 @@ export class PermissionGate {
       pending!.resolve({ allow: false, reason: "user", message: message?.trim() || undefined })
     } else {
       if (choice === "mode") this.setMode("ask")
-      if (choice === "session" || choice === "always") this.session.add(pending!.key)
+      if (choice === "session" || choice === "always") {
+        this.session.add(pending!.key)
+        const scope = pending!.request.scope
+        if (scope?.startsWith("edit:")) {
+          const group = pending!.def.approvalGroup ?? pending!.def.name
+          this.sessionDirs.set(group, [...(this.sessionDirs.get(group) ?? []), scope.slice("edit:".length)])
+        }
+      }
       if (choice === "always") {
         const rules = await this.rules.load()
         const rule = { tool: pending!.def.name, scope: scopeOf(pending!.def, pending!.request.input) }
@@ -307,7 +333,7 @@ export class PermissionGate {
     // Calls queued behind this one may have just become allowed.
     const still: Pending[] = []
     for (const p of this.queue) {
-      if (!userOnly(p.request.scope) && this.approvalsApply(p.def) && this.session.has(p.key)) {
+      if (!userOnly(p.request.scope) && this.approvalsApply(p.def) && this.sessionCovers(p.def, p.request.input, p.key)) {
         p.cleanup()
         p.resolve({ allow: true })
       } else still.push(p)

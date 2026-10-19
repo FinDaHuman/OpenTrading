@@ -197,6 +197,7 @@ export function readFileTool(workspace: Workspace, state?: FileState): ToolDef<R
       const raw = (input as ReadFileInput).path
       return typeof raw === "string" ? readScope(workspace.resolve(raw), workspace.env(), realish) : undefined
     },
+    subject: (input) => workspace.resolve(input.path),
     summarize: (input) => `read_file ${input.path}${input.pages ? ` · trang ${input.pages}` : input.offset ? ` · từ dòng ${input.offset}` : ""}`,
     execute: (input) => readFileAt(workspace.resolve(input.path), input, state),
   }

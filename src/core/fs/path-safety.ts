@@ -39,6 +39,12 @@ export function isInside(child: string, parent: string, platform: NodeJS.Platfor
 /** Files under the data dir that hold keys and tokens (auth.json: LLM keys; mcp-*: OAuth tokens, headers). */
 const DATA_SECRETS = ["auth.json", "mcp-auth.json", "mcp.json"]
 
+/**
+ * Folders under the data dir with copies of the user's files: a backup of `.env` is named
+ * `0001-.env`, so the name rule alone would miss it (/undo copies, saved tool output).
+ */
+const DATA_SECRET_DIRS = ["file-history", "tool-output"]
+
 /** Directories under home that hold credentials (whole tree is secret). */
 const HOME_SECRET_DIRS = [
   ".ssh",
@@ -88,6 +94,7 @@ export function secretReason(abs: string, e?: SafetyEnv): string | undefined {
   const name = flavor.basename(abs)
   if (SECRET_NAME.test(name) && !ENV_TEMPLATE.test(name)) return `tên file bí mật (${name})`
   for (const file of DATA_SECRETS) if (samePathKey(abs, platform) === samePathKey(flavor.join(data, file), platform)) return `khoá/token của OpenTrading (${file})`
+  for (const dir of DATA_SECRET_DIRS) if (isInside(abs, flavor.join(data, dir), platform)) return `bản sao file của OpenTrading (${dir})`
   for (const dir of HOME_SECRET_DIRS) if (isInside(abs, flavor.join(home, dir), platform)) return `thư mục chứa thông tin đăng nhập (~/${dir})`
   for (const file of HOME_SECRET_FILES) if (samePathKey(abs, platform) === samePathKey(flavor.join(home, file), platform)) return `file chứa token (~/${file})`
   return undefined
@@ -98,8 +105,9 @@ export function secretReason(abs: string, e?: SafetyEnv): string | undefined {
  * and the data dir's key files are skipped file by file by `secretReason`.
  */
 export function isSecretDir(abs: string, e?: SafetyEnv): boolean {
-  const { home, platform } = env(e)
-  return HOME_SECRET_DIRS.some((dir) => isInside(abs, pathFor(platform).join(home, dir), platform))
+  const { home, data, platform } = env(e)
+  const flavor = pathFor(platform)
+  return HOME_SECRET_DIRS.some((dir) => isInside(abs, flavor.join(home, dir), platform)) || DATA_SECRET_DIRS.some((dir) => isInside(abs, flavor.join(data, dir), platform))
 }
 
 /** `\\server\share\…` or `//server/share/…` (not the `\\?\` / `\\.\` prefixes). */
@@ -193,14 +201,14 @@ export function protectedWriteReason(abs: string, e?: SafetyEnv): string | undef
   const flavor = pathFor(platform)
   const secret = secretReason(abs, e)
   if (secret) return secret
-  if (isInside(abs, data, platform)) {
-    // The fallback workspace sits in the data dir (named .opentrading); inside it, only file names count.
-    if (!isInside(abs, flavor.join(data, "workspace"), platform)) return "dữ liệu và cấu hình của OpenTrading"
-    return PROTECTED_NAME.test(flavor.basename(abs)) ? `file cấu hình (${flavor.basename(abs)})` : undefined
-  }
+  // The fallback workspace sits in the data dir (itself named .opentrading): folder names
+  // count from the workspace down, not above it.
+  const fallback = flavor.join(data, "workspace")
+  if (isInside(abs, data, platform) && !isInside(abs, fallback, platform)) return "dữ liệu và cấu hình của OpenTrading"
   const name = flavor.basename(abs)
   if (PROTECTED_NAME.test(name)) return `file cấu hình (${name})`
-  const segments = flavor.normalize(abs).split(/[\\/]+/)
+  const below = isInside(abs, fallback, platform) ? flavor.relative(fallback, abs) : flavor.normalize(abs)
+  const segments = below.split(/[\\/]+/)
   const dir = segments.slice(0, -1).find((s) => PROTECTED_DIR.has(s.toLowerCase()))
   if (dir) return `thư mục cấu hình ${dir}`
   if (AUTOSTART.some((d) => isInside(abs, flavor.join(home, d), platform))) return "thư mục tự chạy khi đăng nhập"
@@ -221,7 +229,8 @@ export function writeCheck(abs: string, inWorkspace: (p: string) => boolean, e?:
   const odd = suspiciousWindowsPath(abs, platform, { shortNames: false })
   if (odd) return { block: `đường dẫn dạng lạ: ${odd}` }
   const resolved = real(abs)
-  const oddReal = resolved !== abs ? suspiciousWindowsPath(resolved, platform) : suspiciousWindowsPath(abs, platform)
+  // 8.3 short names only on the real path (the given one may be C:\Users\RUNNER~1\…).
+  const oddReal = suspiciousWindowsPath(resolved, platform)
   if (oddReal) return { block: `đường dẫn dạng lạ: ${oddReal}` }
   const { home, data } = env(e)
   const realEnv: SafetyEnv = { home: real(home), data: real(data), platform }
