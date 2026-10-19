@@ -2,6 +2,7 @@ import { createMemo, createResource, createSignal, Match, Show, Switch } from "s
 import { loadConfig, saveConfig, type Config } from "../../core/config"
 import { MODE_LABEL, type PermissionMode } from "../../core/permission/mode"
 import type { Workspace } from "../../core/fs/workspace"
+import type { AutoReviewer, Denial } from "../../core/permission/auto"
 import { closeDialog, pushLine, state } from "../state"
 import { color } from "../theme"
 import { useKeys } from "../ui/keys"
@@ -50,11 +51,20 @@ function coverage(r: Row) {
   return parts.join(" · ")
 }
 
-export function PermissionsDialog(props: { mode: PermissionMode; workspace: Workspace; onChanged?: () => Promise<void> }) {
+export function PermissionsDialog(props: { mode: PermissionMode; workspace: Workspace; auto?: AutoReviewer; onChanged?: () => Promise<void> }) {
   const [config, { refetch }] = createResource(loadConfig)
   const [open, setOpen] = createSignal<string>()
   const rows = createMemo(() => (config() ? rowsOf(config()!) : []))
   const selected = createMemo(() => rows().find((r) => keyOf(r) === open()))
+  /** ▸▸ auto mode's recent blocks, newest first (a snapshot: the dialog is reopened to refresh). */
+  const denials: Denial[] = [...(props.auto?.recent ?? [])]
+  const denial = createMemo(() => (open()?.startsWith("blocked:") ? denials[Number(open()!.slice("blocked:".length))] : undefined))
+
+  function retry(d: Denial) {
+    props.auto?.grantRetry(d)
+    pushLine({ kind: "info", text: `Đã cho phép thử lại một lần: ${d.tool} ${truncate(d.summary, 60)}. Nhắn model gọi lại (ví dụ "thử lại đi").` })
+    setOpen(undefined)
+  }
 
   async function remove(row: Row) {
     const current = await loadConfig()
@@ -74,15 +84,32 @@ export function PermissionsDialog(props: { mode: PermissionMode; workspace: Work
     if (evt.name === "escape") return open() ? setOpen(undefined) : closeDialog()
     const row = selected()
     if (row && evt.name === "d") void remove(row)
+    const d = denial()
+    if (d && evt.name === "r") retry(d)
   })
 
-  const header = () => [
-    `Chế độ: ${MODE_LABEL[state.permissionMode ?? props.mode]} (shift+tab để đổi)`,
-    `Workspace: ${props.workspace.roots().join(" · ")}`,
-  ]
+  const autoLine = () => {
+    const model = config()?.autoMode?.model
+    const a = props.auto
+    return `Auto mode: model duyệt ${model?.model ? `${model.provider ?? "?"} · ${model.model}` : "theo model của phiên"} · ${a?.requests ?? 0} request duyệt · chặn ${a?.recent.length ?? 0} lần gần đây (/config để đổi model; luật trong config.json → autoMode)`
+  }
+  const header = () => [`Chế độ: ${MODE_LABEL[state.permissionMode ?? props.mode]} (shift+tab để đổi)`, `Workspace: ${props.workspace.roots().join(" · ")}`, autoLine()]
 
   return (
     <Switch>
+      <Match when={denial()}>
+        {(d) => (
+          <DialogFrame title={`Auto mode đã chặn${d().label ? ` · ${d().label}` : ""}`} hint="r cho thử lại một lần · esc quay lại">
+            <text fg={color.tx}>{`${d().tool}  ${truncate(d().summary, 90)}`}</text>
+            <text fg={color.tx2} wrapMode="word" marginTop={1}>
+              {d().reason}
+            </text>
+            <text fg={color.tx3} marginTop={1} wrapMode="word">
+              {"r: lần sau model gọi đúng lời gọi này thì chạy luôn (một lần). Muốn cho phép lâu dài: nói rõ trong tin nhắn, hoặc thêm luật autoMode.allow trong config.json."}
+            </text>
+          </DialogFrame>
+        )}
+      </Match>
       <Match when={selected()}>
         {(row) => (
           <DialogFrame title={`Quy tắc · ${KIND[row().kind]}`} hint="d xoá · esc quay lại">
@@ -101,7 +128,7 @@ export function PermissionsDialog(props: { mode: PermissionMode; workspace: Work
         )}
       </Match>
       <Match when={true}>
-        <DialogFrame title={`Quyền · ${rows().length} quy tắc`} hint="enter xem · esc đóng">
+        <DialogFrame title={`Quyền · ${rows().length} quy tắc${denials.length > 0 ? ` · ${denials.length} lần auto mode chặn` : ""}`} hint="enter xem · esc đóng">
           {header().map((line) => (
             <text fg={color.tx2} wrapMode="none">
               {truncate(line, 100)}
@@ -109,7 +136,7 @@ export function PermissionsDialog(props: { mode: PermissionMode; workspace: Work
           ))}
           <box marginTop={1} flexDirection="column">
             <Show
-              when={rows().length > 0}
+              when={rows().length > 0 || denials.length > 0}
               fallback={
                 <text fg={color.tx3} wrapMode="word">
                   {`Chưa có quy tắc nào. "Luôn cho phép" trong hộp thoại xác nhận sẽ lưu ở đây; quy tắc chặn/luôn hỏi viết trong ~/.opentrading/config.json (permissions.deny, permissions.ask: {"tool": "read_file", "pattern": "*rieng*"}); sửa tay xong thì mở lại /permissions để áp dụng.`}
@@ -117,12 +144,22 @@ export function PermissionsDialog(props: { mode: PermissionMode; workspace: Work
               }
             >
               <Picker
-                items={rows().map((r) => ({
-                  label: truncate(r.tool, 50),
-                  hint: [KIND[r.kind], coverage(r)].filter(Boolean).join(" · "),
-                  mark: r.kind === "deny" ? "✘" : r.kind === "ask" ? "?" : "✓",
-                  value: keyOf(r),
-                }))}
+                items={[
+                  ...rows().map((r) => ({
+                    label: truncate(r.tool, 50),
+                    hint: [KIND[r.kind], coverage(r)].filter(Boolean).join(" · "),
+                    mark: r.kind === "deny" ? "✘" : r.kind === "ask" ? "?" : "✓",
+                    value: keyOf(r),
+                    group: "Quy tắc",
+                  })),
+                  ...denials.map((d, i) => ({
+                    label: truncate(`${d.tool} ${d.summary}`, 50),
+                    hint: `${d.label ? `[${d.label}] ` : ""}${d.reason}`,
+                    mark: "▸",
+                    value: `blocked:${i}`,
+                    group: "Auto mode chặn gần đây",
+                  })),
+                ]}
                 onPick={setOpen}
                 rows={10}
               />

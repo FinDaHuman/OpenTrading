@@ -1,4 +1,5 @@
 import { useKeys } from "../ui/keys"
+import { MODE_LABEL, type PermissionMode } from "../../core/permission/mode"
 import { createMemo, createResource, createSignal, Match, Switch } from "solid-js"
 import { loadConfig, saveConfig } from "../../core/config"
 import { configFile } from "../../core/paths"
@@ -12,7 +13,9 @@ import { color } from "../theme"
 import { DialogFrame } from "./frame"
 import { Picker } from "./picker"
 
-type Setting = "memory" | "toolSearch" | "autoCompact" | "maxSteps" | "subagentMax" | "subagentModel" | "webModel"
+const DEFAULT_MODE_NEXT: Record<PermissionMode, PermissionMode> = { "read-only": "ask", ask: "auto", auto: "read-only" }
+
+type Setting = "memory" | "toolSearch" | "autoCompact" | "maxSteps" | "subagentMax" | "subagentModel" | "webModel" | "autoModel" | "defaultMode"
 type SubagentModel = { provider: string; model: string } | "inherit" | "auto"
 
 const TOOL_SEARCH_NEXT = { auto: "on", on: "off", off: "auto" } as const
@@ -26,7 +29,7 @@ const TOOL_SEARCH_HINT = {
 export function ConfigDialog(props: { runtime: Runtime }) {
   const [config, { refetch }] = createResource(loadConfig)
   /** A setting with its own sub-view (number entry, model list); undefined = the list. */
-  const [editing, setEditing] = createSignal<"maxSteps" | "subagentMax" | "subagentModel" | "webModel">()
+  const [editing, setEditing] = createSignal<"maxSteps" | "subagentMax" | "subagentModel" | "webModel" | "autoModel">()
   const [error, setError] = createSignal("")
 
   useKeys((evt) => {
@@ -39,6 +42,11 @@ export function ConfigDialog(props: { runtime: Runtime }) {
     const w = config()?.webModel
     return w?.model ? `${providerName(w.provider ?? state.provider)} · ${w.model}` : undefined
   }
+  const autoModel = () => {
+    const a = config()?.autoMode?.model
+    return a?.model ? `${providerName(a.provider ?? state.provider)} · ${a.model}` : undefined
+  }
+  const defaultMode = () => config()?.permissions?.defaultMode ?? "read-only"
   const subagentModel = () => {
     const s = config()?.subagents
     if (s?.model === AUTO_MODEL) return "Tự động (chọn model lite rẻ)"
@@ -51,7 +59,7 @@ export function ConfigDialog(props: { runtime: Runtime }) {
       const provider = state.catalog[id]
       if (!provider) return []
       // The models already chosen stay listed even if the filters would hide them.
-      const keep = [config()?.subagents, config()?.webModel].map((c) => (c && (c.provider ?? state.provider) === id ? c.model : undefined))
+      const keep = [config()?.subagents, config()?.webModel, config()?.autoMode?.model].map((c) => (c && (c.provider ?? state.provider) === id ? c.model : undefined))
       return chatModels(provider, keep)
         .map((m) => ({
           label: m.name,
@@ -89,6 +97,13 @@ export function ConfigDialog(props: { runtime: Runtime }) {
     await refetch()
   }
 
+  async function saveAutoModel(choice: Exclude<SubagentModel, "auto">) {
+    const current = await loadConfig()
+    await saveConfig({ autoMode: { ...current.autoMode, model: choice === "inherit" ? undefined : choice } })
+    setEditing(undefined)
+    await refetch()
+  }
+
   async function saveModel(choice: SubagentModel) {
     const current = await loadConfig()
     const { provider: _p, model: _m, ...rest } = current.subagents ?? {}
@@ -99,7 +114,14 @@ export function ConfigDialog(props: { runtime: Runtime }) {
   }
 
   async function toggle(setting: Setting) {
-    if (setting === "maxSteps" || setting === "subagentMax" || setting === "subagentModel" || setting === "webModel") return setEditing(setting)
+    if (setting === "maxSteps" || setting === "subagentMax" || setting === "subagentModel" || setting === "webModel" || setting === "autoModel") return setEditing(setting)
+    if (setting === "defaultMode") {
+      const current = await loadConfig()
+      const next = DEFAULT_MODE_NEXT[defaultMode()]
+      await saveConfig({ permissions: { ...current.permissions, defaultMode: next } })
+      await refetch()
+      return
+    }
     if (setting === "autoCompact") {
       await saveConfig({ autoCompact: config()?.autoCompact === "off" ? "auto" : "off" })
       await refetch()
@@ -170,6 +192,25 @@ export function ConfigDialog(props: { runtime: Runtime }) {
               })),
             ]}
             onPick={(c) => void saveWebModel(c as Exclude<SubagentModel, "auto">)}
+            rows={12}
+            placeholder="gõ tên model để lọc…"
+          />
+        </DialogFrame>
+      </Match>
+      <Match when={editing() === "autoModel"}>
+        <DialogFrame title="Model duyệt auto mode" hint="enter chọn · esc quay lại">
+          <text fg={color.tx3} wrapMode="word">
+            Ở chế độ ▸▸ tự động, model này duyệt từng lệnh / lần ghi file thay bạn (khoảng 1 request mỗi lần, thêm 1 khi bị nghi ngờ). Model yếu duyệt kém hơn: dễ chặn nhầm hoặc cho qua nhầm.
+          </text>
+          <Picker
+            items={[
+              { label: "Theo model của phiên (mặc định)", mark: autoModel() ? " " : "●", value: "inherit" as SubagentModel },
+              ...toolModels().map((m) => ({
+                ...m,
+                mark: config()?.autoMode?.model?.provider === (m.value as { provider: string }).provider && config()?.autoMode?.model?.model === (m.value as { model: string }).model ? "●" : " ",
+              })),
+            ]}
+            onPick={(c) => void saveAutoModel(c as Exclude<SubagentModel, "auto">)}
             rows={12}
             placeholder="gõ tên model để lọc…"
           />
@@ -246,9 +287,21 @@ export function ConfigDialog(props: { runtime: Runtime }) {
                 mark: webModel() ? "●" : "○",
                 value: "webModel" as Setting,
               },
+              {
+                label: "Chế độ quyền khi mở",
+                hint: `${MODE_LABEL[defaultMode()]} · enter để đổi (trong phiên: shift+tab)`,
+                mark: "●",
+                value: "defaultMode" as Setting,
+              },
+              {
+                label: "Model duyệt auto mode",
+                hint: autoModel() ?? "Mặc định: model của phiên · enter để chọn",
+                mark: autoModel() ? "●" : "○",
+                value: "autoModel" as Setting,
+              },
             ]}
             onPick={(s) => void toggle(s)}
-            rows={9}
+            rows={11}
           />
           <text fg={color.tx3} marginTop={1}>{`File cấu hình: ${configFile()}`}</text>
         </DialogFrame>

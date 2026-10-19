@@ -107,6 +107,8 @@ export interface ToolDef<I = any> {
   preview?(input: I): Promise<ApprovalPreview | undefined>
   /** What deny/ask rules with a `pattern` match: the target path (file tools) or the command (shell). */
   subject?(input: I): string | undefined
+  /** ▸▸ auto mode may run this file write without the classifier (a new file, or one this run created). */
+  autoSafe?(input: I): Promise<boolean>
   /** Session approvals are shared by tools of one group ("this folder, this session" covers write_file and edit_file). */
   approvalGroup?: string
   /**

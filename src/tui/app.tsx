@@ -51,7 +51,13 @@ import { ToolsDialog } from "./dialogs/tools"
 import { Home } from "./home"
 import { attachSubagents, currentSession, recordCompact, recordTurn, resumeFromArgs, startSession, transcriptOfCurrent } from "./session"
 import { resolveExportPath, writeExport } from "../core/session/export"
-import { cycleMode, MODE_LABEL } from "../core/permission/mode"
+import { cycleMode, MODE_LABEL, type PermissionMode } from "../core/permission/mode"
+
+const MODE_FLASH: Record<PermissionMode, string> = {
+  "read-only": "‖ chỉ đọc: ghi file / chạy lệnh hỏi từng lần",
+  ask: "▸ sửa có hỏi: mỗi lần ghi file / chạy lệnh hỏi bạn, cho phép được cả thư mục trong phiên",
+  auto: "▸▸ tự động: một model duyệt từng hành động thay bạn",
+}
 import { armExit, type Queued, closeDialog, contextWindow, EXIT_WINDOW_MS, flash, onExitRequest, providerName, pushLine, setState, state, type Line } from "./state"
 import { color, promptStyle } from "./theme"
 import { cleanSelection, writeClipboard } from "./clipboard"
@@ -464,6 +470,8 @@ export function App(props: {
     offFinished()
   })
   setState("permissionMode", props.runtime.permissions.mode)
+  const offAuto = props.runtime.auto.onChange(() => setState("autoPausedUntil", props.runtime.auto.paused()))
+  onCleanup(() => offAuto())
   const offMode = props.runtime.permissions.onModeChange((mode) => setState("permissionMode", mode))
   onCleanup(() => offMode())
   const offApproval = props.runtime.permissions.onChange((head) => {
@@ -637,6 +645,21 @@ export function App(props: {
       }
     }
     pushLine({ kind: "info", text: `✓ Đã thêm ${added.dir} vào workspace${keep ? " (đã lưu cho các phiên sau)" : " cho phiên này (thêm --luu để giữ cho các phiên sau)"}.` })
+  }
+
+  /** The first switch to ▸▸ auto: what it does and what it costs, once (saved in config). */
+  async function explainAutoOnce() {
+    const config = await loadConfig()
+    if (config.permissions?.autoAcknowledged) return
+    pushLine({
+      kind: "info",
+      text: [
+        "▸▸ Tự động: agent làm liên tục, không hỏi từng bước. Mỗi lệnh shell, lần sửa file có sẵn, tool ghi hay trang web mới được một model duyệt trước (khoảng 1 request mỗi lần, thêm 1 khi bị nghi ngờ; đổi model ở /config → Model duyệt auto mode).",
+        "Đọc file và tạo file mới trong workspace không cần duyệt (vẫn có bản sao để /undo). File khoá/mật khẩu, cấu hình OpenTrading, ghi ngoài workspace vẫn luôn hỏi bạn.",
+        "Model duyệt có thể sai: không dùng auto mode cho việc nhạy cảm. Bị chặn 3 lần liên tiếp hoặc model duyệt lỗi/hết quota thì quay về hỏi bạn. Shift+Tab để đổi chế độ.",
+      ].join("\n"),
+    })
+    await saveConfig({ permissions: { ...config.permissions, autoAcknowledged: true } })
   }
 
   /** `/undo` lists this run's file changes; `/undo <n> [--force]` puts change n back. */
@@ -1086,7 +1109,8 @@ export function App(props: {
       evt.preventDefault()
       const next = cycleMode(props.runtime.permissions.mode)
       props.runtime.permissions.setMode(next)
-      return flash(next === "read-only" ? "‖ chỉ đọc: ghi file / chạy lệnh hỏi từng lần" : `${MODE_LABEL[next]}: mỗi lần ghi file hỏi bạn, cho phép được cả thư mục trong phiên`)
+      if (next === "auto") void explainAutoOnce()
+      return flash(MODE_FLASH[next])
     }
     // Paste an image from the clipboard: Alt+V (Windows Terminal keeps Ctrl+V for its own
     // text paste, as in Claude Code), or Ctrl+V where the terminal passes the key through.
@@ -1227,7 +1251,7 @@ export function App(props: {
               <ConfigDialog runtime={props.runtime} />
             </Match>
             <Match when={state.dialog === "permissions"}>
-              <PermissionsDialog mode={props.runtime.permissions.mode} workspace={props.runtime.workspace} onChanged={() => props.runtime.permissions.refreshRules()} />
+              <PermissionsDialog mode={props.runtime.permissions.mode} workspace={props.runtime.workspace} auto={props.runtime.auto} onChanged={() => props.runtime.permissions.refreshRules()} />
             </Match>
             <Match when={state.dialog === "memory"}>
               <MemoryDialog memory={props.runtime.memory} />
@@ -1299,7 +1323,7 @@ function StatusBar() {
         </text>
       </Show>
       <text fg={state.permissionMode === "read-only" ? color.tx3 : state.permissionMode === "ask" ? color.tham : color.tang} flexShrink={0} selectable={false}>
-        {` ${MODE_LABEL[state.permissionMode]} `}
+        {` ${MODE_LABEL[state.permissionMode]}${state.permissionMode === "auto" && state.autoPausedUntil ? ` · tạm hỏi tay tới ${new Date(state.autoPausedUntil).toLocaleTimeString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit" })}` : ""} `}
       </text>
       <box flexGrow={1} />
       <text fg={state.flash ? color.tang : state.streaming ? color.tham : color.tx3} flexShrink={0} selectable={false}>

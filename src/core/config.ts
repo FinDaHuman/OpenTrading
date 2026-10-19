@@ -1,6 +1,7 @@
 import { configFile } from "./paths"
 import type { ProviderId } from "./providers"
 import { readJson, writeJson } from "./store"
+import type { AutoModeConfig } from "./permission/auto/rules"
 
 export interface Config {
   provider?: ProviderId
@@ -16,8 +17,16 @@ export interface Config {
     allow?: { tool: string; scope: string; pattern?: string }[]
     deny?: { tool: string; pattern?: string }[]
     ask?: { tool: string; pattern?: string }[]
-    defaultMode?: "read-only" | "ask"
+    defaultMode?: "read-only" | "ask" | "auto"
+    /** The one-time explanation of ▸▸ auto mode was shown. */
+    autoAcknowledged?: boolean
   }
+  /**
+   * ▸▸ auto mode's classifier (core/permission/auto): its model (unset = the session's) and
+   * the rule lists (environment / allow / soft_deny / hard_deny; "$defaults" keeps the built-in
+   * ones). Read only from here, never from a project folder.
+   */
+  autoMode?: AutoModeConfig
   /**
    * Deferred tool loading. "auto" (default): deferrable tools (MCP and the optional built-in
    * ones: charts, web, watchlist…) are sent by name only, and loaded with

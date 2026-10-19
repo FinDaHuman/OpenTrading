@@ -128,6 +128,10 @@ export function writeFileTool(deps: WriteDeps): ToolDef<WriteFileInput> {
     }),
     ...gateHooks(deps),
     validate,
+    async autoSafe(input) {
+      const abs = deps.workspace.resolve(input.path)
+      return deps.history.createdThisRun(abs) || !(await readBytes(abs).catch(() => undefined))
+    },
     async preview(input) {
       const abs = deps.workspace.resolve(input.path)
       const current = await readBytes(abs)
@@ -221,6 +225,7 @@ export function editFileTool(deps: WriteDeps): ToolDef<EditFileInput> {
       const p = await plan(input)
       return "error" in p ? p.error : undefined
     },
+    autoSafe: async (input) => deps.history.createdThisRun(deps.workspace.resolve(input.path)),
     async preview(input) {
       const p = await plan(input)
       if ("error" in p) return undefined

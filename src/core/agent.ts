@@ -783,6 +783,9 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
   // Fail fast on setup problems before any hook side effects run.
   const target0 = opts.target ?? (await resolveTarget())
   opts = { ...opts, target: target0 }
+  // The auto-mode classifier reads the user's words (or, for a subagent, its task as the main
+  // agent's words), never the answers.
+  opts.registry.gate?.auto?.log.turn(opts.input, { agent: opts.role === "subagent" ? opts.registry.origin : undefined })
 
   // user-prompt hooks: may block the turn or add context for it.
   const extras: TurnExtras = {}
