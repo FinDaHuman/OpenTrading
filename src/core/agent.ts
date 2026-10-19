@@ -321,6 +321,7 @@ async function* relay(
           break
         case "reasoning-delta":
           outcome.reasoned = true
+          yield { type: "progress" }
           break
         case "finish-step": {
           outcome.rawFinish = part.rawFinishReason

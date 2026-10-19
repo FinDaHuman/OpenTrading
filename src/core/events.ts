@@ -19,6 +19,8 @@ export type AgentEvent =
   | { type: "error"; message: string }
   /** Billed tokens of one model request (sent after each step that reported usage). */
   | { type: "step-usage"; inputTokens: number; outputTokens: number }
+  /** Model đang chảy phần suy luận (reasoning): không hiển thị, nhưng là tiến triển (watchdog). */
+  | { type: "progress" }
   /** Messages to append to history. Never contains a tool call without its result. */
   | {
       type: "done"

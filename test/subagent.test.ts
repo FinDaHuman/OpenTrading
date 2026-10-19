@@ -40,6 +40,10 @@ let childStatus: number | undefined
 let childUsage = { prompt_tokens: 1_000, completion_tokens: 200 }
 /** Child requests wait for this before answering. */
 let childGate: Promise<void> | undefined
+/** Reasoning chunks prepended to every answer() (test for the progress event). */
+let answerReasoning: string[] = []
+/** The child answers with a slow reasoning stream, one chunk per 80ms (idleMs tests). */
+let childSlowReasoning = false
 
 const sse = (chunks: object[]) =>
   new Response(chunks.map((c) => `data: ${JSON.stringify(c)}\n\n`).join("") + "data: [DONE]\n\n", {
@@ -63,7 +67,40 @@ const toolCalls = (calls: Call[]) =>
     chunk({}, "tool_calls"),
   ])
 const answer = (content: string, usage?: object) =>
-  sse([chunk({ role: "assistant", content }), chunk({}, "stop", usage ? { x_groq: { usage } } : {})])
+  sse([
+    ...answerReasoning.map((r) => chunk({ reasoning: r })),
+    chunk({ role: "assistant", content }),
+    chunk({}, "stop", usage ? { x_groq: { usage } } : {}),
+  ])
+
+/** A response body that streams reasoning chunks with real gaps, then the answer. */
+const sseSlow = (reasoning: string[], content: string, gapMs: number) => {
+  const encoder = new TextEncoder()
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const send = (event: string) => {
+        try {
+          controller.enqueue(encoder.encode(event))
+        } catch {
+          // The reader went away (stopped agent): nothing left to send.
+        }
+      }
+      for (const r of reasoning) {
+        send(`data: ${JSON.stringify(chunk({ reasoning: r }))}\n\n`)
+        await new Promise((res) => setTimeout(res, gapMs))
+      }
+      send(`data: ${JSON.stringify(chunk({ role: "assistant", content }))}\n\n`)
+      send(`data: ${JSON.stringify(chunk({}, "stop"))}\n\n`)
+      send("data: [DONE]\n\n")
+      try {
+        controller.close()
+      } catch {
+        // already closed by the abort
+      }
+    },
+  })
+  return new Response(stream, { headers: { "content-type": "text/event-stream" } })
+}
 
 const isChild = (body: Body) => typeof body.messages[0]?.content === "string" && (body.messages[0].content as string).includes("<subagent>")
 
@@ -83,6 +120,7 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     ])
     if (childStatus) return Response.json({ error: { message: "upstream down", type: "server_error" } }, { status: childStatus })
     if (childCall && !hasToolResult && body.tool_choice !== "none") return toolCalls([childCall])
+    if (childSlowReasoning) return sseSlow(Array.from({ length: 15 }, (_, i) => `nghĩ bước ${i}`), childReport, 80)
     return answer(childReport, childUsage)
   }
   parentBodies.push(body)
@@ -119,6 +157,8 @@ beforeEach(async () => {
   childStatus = undefined
   childUsage = { prompt_tokens: 1_000, completion_tokens: 200 }
   childGate = undefined
+  answerReasoning = []
+  childSlowReasoning = false
   await saveConfig({ provider: "groq", model: "tooly", subagents: undefined })
 })
 
@@ -524,4 +564,31 @@ test("a subagent's sidechain holds tool errors cleaned, like the main history", 
   expect(text).toContain("nguồn dữ liệu sập")
   expect(text).not.toContain("Error: nguồn")
   expect(JSON.stringify(childBodies[1]!.messages)).not.toContain("Error: nguồn")
+})
+
+test("reasoning-delta phát event progress cho UI/watchdog", async () => {
+  answerReasoning = ["nghĩ 1", "nghĩ 2"]
+  const { registry } = setup()
+  const events = await collect(runAgent({ history: [], input: "chào", skills: [], registry }))
+  expect(events.some((e) => e.type === "progress")).toBe(true)
+})
+
+test("watchdog không giết run còn reasoning khi idleMs nhỏ", async () => {
+  await saveConfig({ provider: "groq", model: "tooly", subagents: { idleMs: 400, maxConcurrent: 5 } })
+  childSlowReasoning = true
+  const { registry, manager } = setup()
+  parentCalls = [spawn("Kỹ thuật HPG")]
+  await collect(runAgent({ history: [], input: "phân tích HPG", skills: [], registry }))
+  expect(manager.list()[0]).toMatchObject({ status: "completed" })
+})
+
+test("watchdog đọc idleMs: run im lặng bị dừng theo idleMs thay vì chờ 5 phút", async () => {
+  await saveConfig({ provider: "groq", model: "tooly", subagents: { idleMs: 400, maxConcurrent: 5 } })
+  childGate = new Promise(() => {})
+  const { registry, manager } = setup()
+  parentCalls = [spawn("Kỹ thuật HPG")]
+  await collect(runAgent({ history: [], input: "phân tích HPG", skills: [], registry }))
+  const view = manager.list()[0]!
+  expect(view.status).toBe("stopped")
+  expect(view.error).toContain("không có tiến triển trong 0.4 giây")
 })

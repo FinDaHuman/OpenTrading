@@ -20,6 +20,8 @@ export const DEFAULT_SUBAGENT_STEPS = 8
 export const DEFAULT_SUBAGENT_TYPE = "nghien-cuu"
 /** A subagent that reports nothing for this long (not queued, not waiting on the user) is stopped. */
 export const SUBAGENT_IDLE_MS = 5 * 60_000
+/** "5 phút" for the default, "0.4 giây" for a test-sized idleMs. */
+const idleText = (ms: number) => (ms >= 60_000 ? `${Math.round(ms / 60_000)} phút` : `${(ms / 1000).toFixed(ms % 1000 ? 1 : 0)} giây`)
 /** Finished runs kept in memory (the sidechain files keep the rest). */
 const MAX_FINISHED = 20
 
@@ -121,6 +123,8 @@ export class SubagentManager {
   private finished = new Set<Listener>()
   private session?: { id: string; dir: string }
   private max = DEFAULT_MAX_CONCURRENT
+  /** No-event stop threshold; config `subagents.idleMs`, default 5 minutes. */
+  private idleMs = SUBAGENT_IDLE_MS
   /** Sidechain writes not finished yet (exit waits for them). */
   private writes = new Set<Promise<unknown>>()
   /**
@@ -342,6 +346,7 @@ export class SubagentManager {
       const prepared = this.setup.then(async () => {
         const config = await loadConfig()
         this.max = config.subagents?.maxConcurrent ?? this.max
+        this.idleMs = config.subagents?.idleMs ?? SUBAGENT_IDLE_MS
         return this.targetFor(spec, config.subagents, fallback)
       })
       this.setup = prepared.catch(() => {})
@@ -382,11 +387,11 @@ export class SubagentManager {
       watchdog = setInterval(() => {
         const asking = child.gate?.pending().some((r) => r.agent?.id === run.id)
         if (asking) last = Date.now()
-        else if (Date.now() - last > SUBAGENT_IDLE_MS) {
+        else if (Date.now() - last > this.idleMs) {
           idleStop = true
           run.controller.abort()
         }
-      }, 10_000)
+      }, Math.min(10_000, this.idleMs))
       watchdog.unref?.()
 
       // A turn per message: the task, then whatever send_message queued meanwhile.
@@ -462,7 +467,7 @@ export class SubagentManager {
         const lost = context.inbox.splice(0)
         run.error = `${run.error ? `${run.error}. ` : ""}Chưa xử lý ${lost.length} tin nhắn gửi thêm: ${lost.join(" / ").slice(0, 300)}`
       }
-      if (idleStop) run.error = `Subagent không có tiến triển trong ${SUBAGENT_IDLE_MS / 60_000} phút nên đã bị dừng.`
+      if (idleStop) run.error = `Subagent không có tiến triển trong ${idleText(this.idleMs)} nên đã bị dừng.`
     } catch (error) {
       run.status = signal.aborted ? "stopped" : "failed"
       if (!signal.aborted) run.error = describeError(error)
