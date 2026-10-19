@@ -156,6 +156,7 @@ const { PermissionGate } = await import("../src/core/permission")
 const { SubagentManager } = await import("../src/core/subagents/manager")
 const { sendMessageTool, spawnSubagentTool, stopAgentTool } = await import("../src/core/tools/subagent/spawn")
 const { parseTrailer } = await import("../src/core/subagents/result")
+const { closeDanglingToolCalls } = await import("../src/core/session/store")
 type AgentEvent = import("../src/core/events").AgentEvent
 
 beforeAll(async () => {
@@ -641,4 +642,33 @@ test("stream treo giữa chừng (sau 1 reasoning chunk) bị cắt bằng lỗi
   } finally {
     delete process.env.OPENTRADING_STALL_MS
   }
+})
+
+test("dừng giữa chừng vẫn giữ tool call/result đã hoàn thành trong sidechain", async () => {
+  const { registry, manager } = setup()
+  const sessionDir = path.join(home, "sessions", "2026", "10", "s-keep")
+  manager.attachSession({ id: "s-keep", dir: sessionDir })
+  parentCalls = [spawn("Kỹ thuật HPG")]
+  childCall = { name: "current_time", args: {} }
+  let release1!: () => void
+  childGate = new Promise<void>((r) => (release1 = r)) // giữ request 1 tới khi test cho chạy
+  const running = collect(runAgent({ history: [], input: "phân tích HPG", skills: [], registry }))
+  await waitFor(() => childBodies.length === 1)
+  childGate = new Promise(() => {}) // request 2 của con bị giữ hẳn (sau khi tool đã xong)
+  release1()
+  await waitFor(() => childBodies.some((b) => b.messages.some((m) => m.role === "tool")))
+  const id = manager.list()[0]!.id
+  manager.stop(id)
+  await running
+  await manager.flush()
+  const log = await readFile(path.join(sessionDir, "subagents", `agent-${id}.jsonl`), "utf8")
+  expect(log).toContain('"tool-result"')
+  expect(log).toContain("2026-09-28")
+  const messages = log
+    .trim()
+    .split("\n")
+    .map((l) => JSON.parse(l))
+    .filter((e) => e.type === "message")
+    .map((e) => e.message)
+  expect(closeDanglingToolCalls(messages).patched).toBe(0)
 })

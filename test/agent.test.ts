@@ -124,6 +124,7 @@ const { currentTimeTool } = await import("../src/core/tools/builtin/current-time
 const { saveConfig } = await import("../src/core/config")
 const { toolSearchTool } = await import("../src/core/tools/builtin/tool-search")
 const { setKey } = await import("../src/core/auth")
+const { closeDanglingToolCalls } = await import("../src/core/session/store")
 type AgentEvent = import("../src/core/events").AgentEvent
 
 beforeAll(async () => {
@@ -307,8 +308,10 @@ test("aborting mid-tool leaves no dangling tool call in history", async () => {
     if (e.type === "tool-start") setTimeout(() => controller.abort(), 20)
   })
   const messages = done(events).messages
-  expect(messages.map((m) => m.role)).toEqual(["user", "assistant"])
-  expect(JSON.stringify(messages)).not.toContain("tool-call")
+  // The started call is kept (the work is not lost) and closed, so providers accept the history.
+  expect(messages.map((m) => m.role)).toEqual(["user", "assistant", "tool", "assistant"])
+  expect(JSON.stringify(messages)).toContain("tool-call")
+  expect(closeDanglingToolCalls(messages).patched).toBe(0)
 })
 
 test("an empty answer after a tool result is retried once with tools disabled", async () => {

@@ -3,6 +3,7 @@ import {
   NoSuchToolError,
   isStepCount,
   streamText,
+  type JSONValue,
   type LanguageModelUsage,
   type ModelMessage,
   type StreamTextResult,
@@ -21,6 +22,7 @@ import type { Skill } from "./skills/schema"
 import type { HookBus } from "./hooks"
 import { MEMORY_INDEX_MAX_CHARS, MEMORY_RECALL_MAX_CHARS, MEMORY_RECALL_MAX_ITEMS, type MemoryProvider } from "./memory/types"
 import { loadConfig, type Config } from "./config"
+import { closeDanglingToolCalls } from "./session/store"
 import { sanitize, serverPrefix } from "./mcp/naming"
 import type { SchemaFlavor } from "./mcp/schema"
 import { isContextOverflow } from "./compact"
@@ -265,6 +267,8 @@ interface Outcome {
   finishMessage?: string
   /** The model streamed reasoning (thoughts) in this run. */
   reasoned?: boolean
+  /** Completed steps of this turn (assistant calls + their tool results), for aborted turns. */
+  progress: ModelMessage[]
 }
 
 /**
@@ -310,6 +314,36 @@ async function* relay(
   stall?: { ms: number; onStall: () => void },
 ): AsyncGenerator<AgentEvent> {
   const started = new Map<string, number>()
+  // The turn's completed steps so far, kept so an abort or failure keeps work whose tools
+  // already ran (closeDanglingToolCalls patches calls left without a result).
+  let stepText = ""
+  const stepCalls: { toolCallId: string; toolName: string; input: unknown }[] = []
+  const stepResults: { toolCallId: string; toolName: string; output: unknown; error: boolean }[] = []
+  const flushProgress = () => {
+    if (stepCalls.length === 0 && stepResults.length === 0 && !stepText) return
+    const content = [
+      ...(stepText ? [{ type: "text" as const, text: stepText }] : []),
+      ...stepCalls.map((c) => ({ type: "tool-call" as const, ...c })),
+    ]
+    if (content.length > 0) outcome.progress.push({ role: "assistant", content })
+    if (stepResults.length > 0)
+      outcome.progress.push({
+        role: "tool",
+        content: stepResults.map((r) => ({
+          type: "tool-result" as const,
+          toolCallId: r.toolCallId,
+          toolName: r.toolName,
+          output: r.error
+            ? { type: "error-text" as const, value: String(r.output) }
+            : typeof r.output === "string"
+              ? { type: "text" as const, value: r.output }
+              : { type: "json" as const, value: r.output as JSONValue },
+        })),
+      })
+    stepText = ""
+    stepCalls.length = 0
+    stepResults.length = 0
+  }
   // A request is alive while parts arrive OR while a tool call it made still runs: tool
   // execution can take minutes (spawn_subagent, ask_user, MCP) and streams no parts.
   const pendingTools = new Set<string>()
@@ -345,6 +379,7 @@ async function* relay(
           yield { type: "progress" }
           break
         case "finish-step": {
+          flushProgress()
           outcome.rawFinish = part.rawFinishReason
           const note = (part.providerMetadata?.google as { finishMessage?: unknown } | undefined)?.finishMessage
           outcome.finishMessage = typeof note === "string" && note.trim() ? note.trim().slice(0, 300) : undefined
@@ -357,10 +392,12 @@ async function* relay(
         }
         case "text-delta":
           outcome.text += part.text
+          stepText += part.text
           yield { type: "text-delta", text: part.text }
           break
         case "tool-call":
           started.set(part.toolCallId, Date.now())
+          stepCalls.push({ toolCallId: part.toolCallId, toolName: part.toolName, input: part.input })
           pendingTools.add(part.toolCallId)
           rearm()
           yield {
@@ -384,6 +421,7 @@ async function* relay(
             durationMs: Date.now() - (started.get(part.toolCallId) ?? Date.now()),
           }
           pendingTools.delete(part.toolCallId)
+          stepResults.push({ toolCallId: part.toolCallId, toolName: part.toolName, output: ok ? part.output : describeError(part.error), error: !ok })
           rearm()
           break
         }
@@ -399,6 +437,8 @@ async function* relay(
     if (signal?.aborted) outcome.aborted = true
     else outcome.failure = error
   } finally {
+    // A turn cut mid-step still keeps what completed: the abort path reads outcome.progress.
+    flushProgress()
     clearTimeout(stallTimer)
   }
   if (signal?.aborted) outcome.aborted = true
@@ -815,7 +855,7 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
     onError: () => {}, // errors are read from the stream
   })
 
-  const outcome: Outcome = { text: "", aborted: false, steps: 0 }
+  const outcome: Outcome = { text: "", aborted: false, steps: 0, progress: [] }
   yield* relay(result, opts.registry, opts.signal, outcome, notices, { ms: stallMs, onStall })
   if (stalled) {
     outcome.aborted = false
@@ -849,7 +889,7 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
       maxRetries: 0,
       onError: () => {},
     })
-    const second: Outcome = { text: "", aborted: false, steps: 0 }
+    const second: Outcome = { text: "", aborted: false, steps: 0, progress: [] }
     yield* relay(retry, opts.registry, opts.signal, second, notices, { ms: stallMs, onStall })
     if (stalled) {
       second.aborted = false
@@ -893,14 +933,16 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
   }
 
   if (outcome.failure && !outcome.aborted) yield { type: "error", message: describeError(outcome.failure) }
-  // Aborted or failed mid-turn: keep only plain text, so history never holds a tool call
-  // without its result (providers reject that on the next request). The user message keeps
-  // its reminders, so the clock it carried still counts as sent.
+  // Aborted or failed mid-turn: keep the steps whose tools already ran (closeDanglingToolCalls
+  // closes any call left without a result, so providers still accept the history), then the
+  // partial text. The user message keeps its reminders, so the clock it carried still counts
+  // as sent.
   const text = outcome.text
+  const kept = closeDanglingToolCalls(outcome.progress, "Tool bị ngắt vì lượt bị dừng giữa chừng.").messages
   yield {
     type: "done",
     // No square brackets: the markdown renderer read "[Đã dừng]" as a link.
-    messages: [user, { role: "assistant", content: text || (outcome.aborted ? "(đã dừng)" : "(lỗi)") }],
+    messages: [user, ...kept, { role: "assistant", content: text || (outcome.aborted ? "(đã dừng)" : "(lỗi)") }],
     clock: assembled.clock,
     usage: {
       contextTokens: estimateRequest(system, [...request, { role: "assistant", content: text }], built?.tokens),
