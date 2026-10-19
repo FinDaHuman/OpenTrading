@@ -80,6 +80,8 @@ export function initRuntime(opts: { cwd?: string; home?: string; skills: () => S
   const historyRoot = path.join(home, "file-history")
   const history = new FileHistory(historyRoot)
   void pruneHistory(historyRoot)
+  // Saved shell output can hold whatever an approved command printed: kept a week (opencode).
+  void pruneHistory(path.join(home, "tool-output"), 7)
   const questions = new AskBroker()
   registry.register(currentTimeTool())
   registry.register(askUserTool(questions))

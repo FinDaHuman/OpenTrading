@@ -103,7 +103,7 @@ export class FileHistory {
   }
 }
 
-/** Delete history folders older than `days` (best effort, at startup). */
+/** Delete entries (history folders, saved tool output) older than `days` (best effort, at startup). */
 export async function pruneHistory(root: string, days = HISTORY_KEEP_DAYS, now = Date.now()) {
   let entries: string[]
   try {
@@ -115,7 +115,7 @@ export async function pruneHistory(root: string, days = HISTORY_KEEP_DAYS, now =
     const dir = path.join(root, name)
     try {
       const info = await stat(dir)
-      if (info.isDirectory() && now - info.mtimeMs > days * 86_400_000) await rm(dir, { recursive: true, force: true })
+      if (now - info.mtimeMs > days * 86_400_000) await rm(dir, { recursive: true, force: true })
     } catch {
       // another process may be using it
     }

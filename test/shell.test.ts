@@ -25,9 +25,14 @@ const text = (r: string | { output: string }) => (typeof r === "string" ? r : r.
 
 test("simple commands and their prefixes; chains, pipes, redirection and substitution are not simple", () => {
   expect(commandPrefix("git status -s")).toBe("git status")
-  expect(commandPrefix("npm run build -- --watch")).toBe("npm run build")
+  expect(commandPrefix("git log --oneline -5")).toBe("git log")
+  expect(commandPrefix("conda list")).toBe("conda list")
   expect(commandPrefix("Get-ChildItem -Recurse")).toBe("get-childitem")
-  expect(commandPrefix("pip install pandas")).toBe("pip install")
+  expect(commandPrefix("python --version")).toBe("python")
+  // Commands that change something, or put an option in the prefix, are approved exactly only.
+  for (const c of ["npm run build", "pip install pandas", "Remove-Item x", "Set-Content a.txt b", "git push", "git -c a=b status", "npm install", "Stop-Process -Name x", "curl https://x"]) {
+    expect(commandPrefix(c)).toBeUndefined()
+  }
   for (const c of ["git status; Remove-Item -Recurse x", "git status && rm -rf x", "ls | grep a", "echo a > b.txt", "echo $(whoami)", "echo `id`", "a\nb", "Get-Item @(1)"]) {
     expect(isSimpleCommand(c)).toBe(false)
     expect(commandPrefix(c)).toBeUndefined()
@@ -71,6 +76,9 @@ test("commands naming key files, OpenTrading's config or login autostart are fla
   expect(mentionsSensitive("Add-Content $PROFILE 'x'")).toBeDefined()
   expect(mentionsSensitive("schtasks /create /tn x")).toBeDefined()
   expect(mentionsSensitive("powershell -ExecutionPolicy Bypass -File x.ps1")).toBeDefined()
+  expect(mentionsSensitive("Set-Content .git/hooks/pre-commit x")).toBe(".git")
+  expect(mentionsSensitive("cp x .github/workflows/ci.yml")).toBe(".github")
+  expect(mentionsSensitive("Add-Content .npmrc x")).toBe(".npmrc")
   expect(mentionsSensitive("python phan_tich.py data.csv")).toBeUndefined()
   expect(mentionsSensitive("echo environment")).toBeUndefined()
 })
@@ -82,6 +90,9 @@ test("scopes: a simple command by prefix, others exactly; outside the workspace 
   expect(tool.askFor?.({ command: "git status -s" })).toBe("cmd:git status")
   expect(tool.askFor?.({ command: "git status; rm x" })).toBe("cmd!git status; rm x")
   expect(tool.askFor?.({ command: "python phan_tich.py" })).toBe("cmd!python phan_tich.py")
+  expect(tool.askFor?.({ command: "Remove-Item x" })).toBe("cmd!Remove-Item x")
+  expect(tool.askFor?.({ command: "git -c a=b status" })).toBe("cmd!git -c a=b status")
+  expect(tool.askFor?.({ command: "Set-Content .git/hooks/pre-commit x" })).toStartWith("protected:")
   expect(tool.askFor?.({ command: "ls", workdir: root })).toBe(`outside:${root}`)
   expect(tool.askFor?.({ command: "type auth.json" })).toStartWith("protected:")
   expect(tool.blockFor?.({ command: "rm -rf ~" })).toContain("xoá đệ quy")
@@ -117,6 +128,8 @@ test("choices: prefix commands may be allowed always, chained/interpreter ones f
   }
   expect((await ask("git log -5")).choices).toEqual(["once", "session", "always", "deny"])
   expect((await ask("python x.py")).choices).toEqual(["once", "session", "deny"])
+  expect((await ask("Remove-Item x")).choices).toEqual(["once", "session", "deny"])
+  expect((await ask("Set-Content a.txt b")).choices).toEqual(["once", "session", "deny"])
   const sensitive = await ask("type .env")
   expect(sensitive.choices).toEqual(["once", "deny"])
   expect(sensitive.preview?.title).toContain(project)
@@ -161,4 +174,20 @@ test("long output is saved to a file the model can read; the result keeps the he
   expect(readFileSync(file, "utf8")).toContain("dòng 4000 ")
   expect(result.output).toContain("dòng 1 ")
   expect(result.output).toContain("dòng 4000 ")
+}, 60_000)
+
+test("Windows PowerShell 5.1 (what most users have; CI's default is pwsh): UTF-8, exit codes, errors as text, timeout", async () => {
+  const legacy = win ? Bun.which("powershell") : null
+  if (!legacy) return
+  const tool = shellTool(ws(), { shell: { kind: "powershell", path: legacy } })
+  const out = text(await tool.execute({ command: "Write-Output 'Lợi nhuận quý 3'; Write-Error 'hỏng rồi'; cmd /c exit 3" }, ctx()))
+  expect(out).toContain("Lợi nhuận quý 3")
+  expect(out).toContain("LỖI: hỏng rồi")
+  expect(out).not.toContain("CLIXML")
+  expect(out).toContain("mã thoát 3")
+  expect(text(await tool.execute({ command: "Write-Error 'chỉ lỗi'" }, ctx()))).toContain("mã thoát 1")
+  expect(text(await tool.execute({ command: "Get-ChildItem | Select-Object -First 1 | Out-Null; Write-Output 'xong'" }, ctx()))).toContain("mã thoát 0")
+  const started = Date.now()
+  expect(text(await tool.execute({ command: "Start-Sleep -Seconds 30", timeout_ms: 1500 }, ctx()))).toContain("dừng vì quá")
+  expect(Date.now() - started).toBeLessThan(15_000)
 }, 60_000)

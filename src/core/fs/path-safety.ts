@@ -216,6 +216,19 @@ export function protectedWriteReason(abs: string, e?: SafetyEnv): string | undef
   return undefined
 }
 
+/**
+ * A word of a shell command that names something write_file would protect or read_file would
+ * ask about: a key file name, a config file name, or a path through a protected folder
+ * (`.git/hooks/pre-commit`, `.opentrading\config.json`). Same lists as above, so the shell
+ * and the file tools cannot drift apart.
+ */
+export function namesProtected(word: string): string | undefined {
+  const parts = word.replace(/^["']|["']$/g, "").split(/[\\/]+/).filter(Boolean)
+  const name = parts.at(-1) ?? ""
+  if ((SECRET_NAME.test(name) && !ENV_TEMPLATE.test(name)) || PROTECTED_NAME.test(name) || DATA_SECRETS.includes(name.toLowerCase())) return name
+  return parts.find((p) => PROTECTED_DIR.has(p.toLowerCase()))
+}
+
 export type WriteCheck = { block: string } | { scope: string }
 
 /**

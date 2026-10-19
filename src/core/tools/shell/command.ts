@@ -1,3 +1,5 @@
+import { namesProtected } from "../../fs/path-safety"
+
 /**
  * What the permission gate needs to know about a shell command before it runs, by string
  * analysis only (best effort — no shell parser; the plan relies on the user, and later the
@@ -62,15 +64,50 @@ const INTERPRETERS = new Set([
 
 const bare = (w: string) => w.toLowerCase().replace(/\.(exe|cmd|bat|ps1)$/, "").replace(/^.*[\\/]/, "")
 
-/** `git status` for `git status -s`; undefined when the command is not simple. */
+/**
+ * Commands that change or delete files, processes, settings or remote state: approving one
+ * covers only that exact command, never its prefix (`Remove-Item x` must not approve
+ * `Remove-Item -Recurse D:\BCTC`; `Set-Content` writes with no backup or protected check).
+ */
+const MUTATING = new Set([
+  "rm", "rmdir", "rd", "del", "erase", "remove-item", "ri", "mv", "move", "move-item", "mi", "cp", "copy", "copy-item", "cpi", "xcopy", "robocopy",
+  "ren", "rename", "rename-item", "rni", "set-content", "sc", "add-content", "ac", "out-file", "clear-content", "clc", "new-item", "ni", "tee", "tee-object",
+  "truncate", "dd", "sed", "chmod", "chown", "icacls", "takeown", "attrib", "set-acl", "set-itemproperty", "sp", "new-itemproperty", "remove-itemproperty",
+  "reg", "setx", "stop-process", "kill", "taskkill", "pkill", "killall", "shutdown", "restart-computer", "stop-computer", "format", "format-volume", "diskpart",
+  "set-executionpolicy", "curl", "wget", "invoke-webrequest", "iwr", "invoke-restmethod", "irm", "scp", "rsync", "ftp", "mklink", "new-psdrive",
+])
+
+/** Second words that make a git / package-manager command change something. */
+const MUTATING_SUB: Record<string, Set<string>> = {
+  git: new Set(["push", "reset", "clean", "checkout", "switch", "restore", "rebase", "merge", "commit", "rm", "mv", "am", "apply", "cherry-pick", "revert", "stash", "tag", "branch", "remote", "config", "submodule", "gc", "prune", "filter-branch", "update-ref", "pull", "fetch", "clone", "init", "worktree"]),
+  npm: new Set(["install", "i", "add", "uninstall", "remove", "rm", "update", "publish", "ci", "link", "exec", "run", "init"]),
+  pnpm: new Set(["install", "i", "add", "remove", "update", "publish", "exec", "run", "dlx"]),
+  yarn: new Set(["install", "add", "remove", "upgrade", "publish", "run", "dlx"]),
+  pip: new Set(["install", "uninstall", "download"]),
+  pip3: new Set(["install", "uninstall", "download"]),
+  winget: new Set(["install", "uninstall", "upgrade", "import"]),
+  choco: new Set(["install", "uninstall", "upgrade"]),
+  docker: new Set(["run", "rm", "rmi", "stop", "kill", "exec", "build", "push", "pull", "compose", "system", "volume", "network"]),
+  gh: new Set(["pr", "issue", "release", "repo", "api", "gist", "workflow", "secret", "auth"]),
+  kubectl: new Set(["apply", "delete", "create", "edit", "patch", "scale", "exec", "drain", "replace", "rollout"]),
+}
+
+/**
+ * `git status` for `git status -s`: the prefix a session / "always" approval may cover.
+ * Undefined (exact command only) when the command is not simple, changes something, or puts
+ * an option inside the prefix (`git -c core.hooksPath=x status` runs code through config).
+ */
 export function commandPrefix(command: string): string | undefined {
   if (!isSimpleCommand(command)) return undefined
   const w = words(command)
   if (w.length === 0) return undefined
   const first = bare(w[0]!)
+  if (MUTATING.has(first) || MUTATING_SUB[first]?.has((w[1] ?? "").toLowerCase())) return undefined
   const two = w[1] ? `${first} ${w[1].toLowerCase()}` : first
   const n = ARITY[two] ?? ARITY[first] ?? 1
-  return [first, ...w.slice(1, n).map((x) => x.toLowerCase())].join(" ")
+  const rest = w.slice(1, n).map((x) => x.toLowerCase())
+  if (rest.some((x) => x.startsWith("-") || x.startsWith("/"))) return undefined
+  return [first, ...rest].join(" ")
 }
 
 /** The command starts an interpreter or a wrapper that runs other commands. */
@@ -133,7 +170,13 @@ export function criticalDelete(command: string, env: CriticalEnv): string | unde
 const SENSITIVE =
   /(auth\.json|mcp-auth\.json|\.opentrading\b|[\\/]\.ssh\b|^\.ssh\b|\s\.ssh\b|\.aws[\\/]|\.git-credentials|\.netrc|id_rsa|id_ed25519|\.pem\b|(^|[\s\\/"'])\.env(\.[a-z]+)?\b|\$profile\b|start menu[\\/]programs[\\/]startup|currentversion[\\/]run|crontab|\.bashrc|\.zshrc|\.profile\b|launchagents|user data[\\/]default|register-scheduledtask|schtasks|new-service|set-mppreference|executionpolicy\s+bypass)/i
 
-/** What sensitive name the command mentions, or undefined. */
+/** What sensitive name the command mentions, or undefined: the pattern above, then each word against path-safety's lists. */
 export function mentionsSensitive(command: string): string | undefined {
-  return command.match(SENSITIVE)?.[0]?.trim()
+  const hit = command.match(SENSITIVE)?.[0]?.trim()
+  if (hit) return hit
+  for (const segment of segments(command)) for (const w of words(segment)) {
+    const name = namesProtected(w)
+    if (name) return name
+  }
+  return undefined
 }
