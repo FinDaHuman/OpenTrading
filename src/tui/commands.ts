@@ -23,6 +23,7 @@ export const COMMANDS: CommandInfo[] = [
   { name: "compact", args: "[hướng dẫn]", description: "Nén hội thoại: dọn kết quả tool cũ và tóm tắt phần đầu" },
   { name: "save", description: "Copy toàn bộ hội thoại (Markdown) vào clipboard" },
   { name: "export", args: "[đường dẫn]", description: "Lưu hội thoại ra file .md (mặc định ~/.opentrading/exports)" },
+  { name: "add-dir", args: "[thư mục] [--luu]", description: "Thêm thư mục vào workspace (nơi agent đọc/ghi file); không tham số: xem workspace" },
   { name: "memory", description: "Xem, duyệt, xoá memory" },
   { name: "config", description: "Cài đặt: bật / tắt memory…" },
   { name: "clear", description: "Xoá màn hình và bắt đầu phiên mới" },

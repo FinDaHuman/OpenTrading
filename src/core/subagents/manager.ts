@@ -41,6 +41,7 @@ export const EXCLUDED_TOOLS = new Set(["spawn_subagent", "send_message", "stop_a
 export function childRegistry(parent: ToolRegistry, origin: AgentOrigin, filter?: (def: ToolDef) => boolean, skills?: () => Skill[]) {
   const child = new ToolRegistry({ lock: parent.lock, origin })
   child.gate = parent.gate
+  child.workspace = parent.workspace
   const candidates = parent
     .list()
     .filter((t) => !EXCLUDED_TOOLS.has(t.name) && !t.source?.startsWith("memory:") && (!filter || filter(t)))

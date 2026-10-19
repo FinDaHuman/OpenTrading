@@ -8,7 +8,7 @@ import { color } from "./theme"
 /** Boot the TUI. Kept out of src/index.tsx so `opentrading mcp …` never needs a JSX runtime. */
 export async function startTui(resume: string | undefined) {
   const config = await loadConfig()
-  const runtime = initRuntime({ skills: () => state.skills, memory: createMemory(config.memory?.provider) })
+  const runtime = initRuntime({ skills: () => state.skills, memory: createMemory(config.memory?.provider), workspaceDirs: config.workspace?.dirs })
 
   // Ctrl+C is handled inside the app; this is the fallback if the terminal still delivers SIGINT.
   // Stop MCP servers first (bounded), so no child process outlives us on Windows.

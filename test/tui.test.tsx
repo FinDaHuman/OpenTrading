@@ -215,7 +215,7 @@ const { state, setState } = await import("../src/tui/state")
 const { reconcile } = await import("solid-js/store")
 const { readJson } = await import("../src/core/store")
 const { setKey } = await import("../src/core/auth")
-const { saveConfig } = await import("../src/core/config")
+const { loadConfig, saveConfig } = await import("../src/core/config")
 const { initRuntime } = await import("../src/core/runtime")
 const { FileMemory } = await import("../src/core/memory/file-memory")
 
@@ -699,10 +699,10 @@ test("/tools lists built-in and MCP tools", async () => {
   try {
     await setup.mockInput.typeText("/tools")
     setup.mockInput.pressEnter()
-    // 5 core built-ins (current_time, load_skill, ask_user, todo_write, tool_search)
-    // + 18 local tools (chart, session, watchlist, web, spawn_subagent, send_message, stop_agent, doctor_local)
+    // 6 core built-ins (current_time, load_skill, ask_user, todo_write, tool_search, read_file)
+    // + 20 local tools (glob_files, grep_files, chart, session, watchlist, web, spawn_subagent, send_message, stop_agent, doctor_local)
     // + propose_memory + 4 from the demo MCP server
-    frame = await setup.waitForFrame((f) => f.includes("Tool · 28") && f.includes("20 tool hoãn"))
+    frame = await setup.waitForFrame((f) => f.includes("Tool · 31") && f.includes("22 tool hoãn"))
     show(frame)
     // Regression for the 01/10 screenshot: every tool is exactly one line, long descriptions
     // end in "…" instead of wrapping mid-word, and the mark column is straight.
@@ -715,20 +715,22 @@ test("/tools lists built-in and MCP tools", async () => {
     expect(timeRow).toMatch(/…\s+\[chỉ đọc\]\s*$/)
     expect(frame).not.toMatch(/^\s+Asia\/H/m)
     expect(frame).toContain("Có sẵn")
-    // 3 demo tools (add is alwaysLoad) + 17 optional local tools (incl. web_search/web_fetch) (chart, session, watchlist, doctor, send_message, stop_agent)
-    expect(frame).toContain("20 tool hoãn: model chỉ thấy tên")
+    // 3 demo tools (add is alwaysLoad) + 19 optional local tools (incl. glob_files/grep_files) (incl. web_search/web_fetch) (chart, session, watchlist, doctor, send_message, stop_agent)
+    expect(frame).toContain("22 tool hoãn: model chỉ thấy tên")
     expect(timeRow).not.toContain("hoãn · ")
-    expect(rows.find((r) => r.includes(" spawn_subagent "))).not.toContain("hoãn · ")
+    // read_file is core (a path from the user is read at once); spawn_subagent sits below the fold now.
+    expect(rows.find((r) => r.includes(" read_file "))).not.toContain("hoãn · ")
+    expect(rows.find((r) => r.includes(" glob_files "))).toContain("hoãn · ")
     expect(rows.find((r) => r.includes(" chart_render "))).toContain("hoãn · ")
     // ↑ from the first row wraps to the last: the Memory and MCP groups sit below the fold.
     setup.mockInput.pressArrow("up")
-    frame = await setup.waitForFrame((f) => f.includes("MCP · demo") && f.includes("28/28"))
+    frame = await setup.waitForFrame((f) => f.includes("MCP · demo") && f.includes("31/31"))
     show(frame)
     expect(frame).toContain("Memory")
     const tail = frame.split("\n").filter((l) => /^ {2}(❯ |  )[◇◆] \S/.test(l))
     expect(tail.find((r) => r.includes(" echo "))).toContain("hoãn · ")
     setup.mockInput.pressArrow("down")
-    await setup.waitForFrame((f) => f.includes("1/28"))
+    await setup.waitForFrame((f) => f.includes("1/31"))
   } finally {
     await saveConfig({ toolSearch: undefined })
   }
@@ -739,7 +741,7 @@ test("/tools lists built-in and MCP tools", async () => {
   expect(frame).toContain("ask_user")
   expect(frame).toMatch(/• questions \(bắt buộc\): array/)
   setup.mockInput.pressEscape()
-  await setup.waitForFrame((f) => f.includes("Tool · 28"))
+  await setup.waitForFrame((f) => f.includes("Tool · 31"))
   setup.mockInput.pressEscape()
   await setup.waitFor(() => state.dialog === undefined)
 })
@@ -1289,6 +1291,36 @@ test("/save copies the whole conversation as Markdown; /export writes it to a fi
   expect(line.kind).toBe("error")
   expect(line.text).toContain("--force")
   expect((await run(`/export ${target} --force`)).kind).toBe("info")
+})
+
+test("/add-dir lists the workspace, adds a folder for the session or for good (--luu), refuses home", async () => {
+  const run = async (cmd: string) => {
+    const before = state.lines.length
+    await setup.mockInput.typeText(cmd)
+    setup.mockInput.pressEnter()
+    await setup.waitFor(() => state.lines.length > before)
+    return state.lines.at(-1) as { kind: string; text: string }
+  }
+  expect((await run("/add-dir")).text).toContain(cwd)
+  const extra = path.join(cwd, "..", path.basename(cwd) + "-bctc")
+  await mkdir(extra, { recursive: true })
+  try {
+    let line = await run(`/add-dir ${extra}`)
+    expect(line.kind).toBe("info")
+    expect(line.text).toContain("cho phiên này")
+    expect(runtime.workspace.roots()).toContain(extra)
+    expect((await run(`/add-dir ${extra}`)).kind).toBe("error")
+    expect((await run(`/add-dir ${os.homedir()}`)).text).toContain("quá rộng")
+    const kept = `${extra}-2`
+    await mkdir(kept, { recursive: true })
+    line = await run(`/add-dir ${kept} --luu`)
+    expect(line.text).toContain("đã lưu")
+    expect((await loadConfig()).workspace?.dirs).toEqual([kept])
+    await saveConfig({ workspace: undefined })
+    await rm(kept, { recursive: true, force: true })
+  } finally {
+    await rm(extra, { recursive: true, force: true })
+  }
 })
 
 test("/memory: a model proposal is pending until approved with 'a'", async () => {

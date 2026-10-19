@@ -209,6 +209,27 @@ export function visibleUserText(message: ModelMessage) {
 }
 
 /**
+ * Body of the last `<id>` block sent inside a reminder, or undefined. Reminders that only go
+ * out when they change (`<quyen_tep>`) compare against it.
+ */
+export function lastReminder(history: readonly ModelMessage[], id: string): string | undefined {
+  const open = `<${id}>\n`
+  const close = `\n</${id}>`
+  for (let i = history.length - 1; i >= 0; i--) {
+    const m = history[i]!
+    if (m.role !== "user" || typeof m.content === "string") continue
+    for (const part of m.content) {
+      if (part.type !== "text" || !part.text.startsWith(`<${REMINDER_TAG}>`)) continue
+      const start = part.text.indexOf(open)
+      if (start < 0) continue
+      const end = part.text.indexOf(close, start)
+      if (end > start) return part.text.slice(start + open.length, end)
+    }
+  }
+  return undefined
+}
+
+/**
  * Calls the SDK could not parse. A short name from <tool_hoan> (`vn_quote_history`,
  * `server/tool`) that matches one active tool is rewritten to its full name. A deferred tool
  * the model called before loading it cannot run at this step (AI SDK 7 parses a repaired
@@ -602,6 +623,8 @@ async function assembleFor(opts: TurnInput, target: Target | undefined, extras: 
     declaredTools: built ? Object.keys(built.tools) : undefined,
     mcpInstructions: opts.serverInstructions?.(),
     todos: currentTodos(opts.history ?? []),
+    fileAccess: toolNames.includes("read_file") ? opts.registry.workspace?.describe() : undefined,
+    prevFileAccess: lastReminder(opts.history ?? [], "quyen_tep"),
   })
   if (built && built.names.length > 0) {
     const share = info?.limit?.context ? built.tokens / info.limit.context : 0
