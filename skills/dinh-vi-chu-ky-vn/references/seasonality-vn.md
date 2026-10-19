@@ -1,7 +1,7 @@
 # Mùa vụ thị trường Việt Nam (đọc qua tool, không hardcode số)
 
 > Số liệu sống trong PG (`cycle_month_stats`, `cycle_tet`), tra bằng `cycle_seasonality` / `cycle_tet`. File này chỉ giữ CÁCH ĐỌC + ngưỡng diễn giải; không trích con số nào từ file này như số liệu.
-> Basket v2 (2026-10-18): 15 mảng, mẫu mảng ~8–9 năm (từ 2018-10); VNINDEX ~17 năm.
+> Basket v2 (2026-10-18): 15 mảng; mẫu mảng tính từ 2018-10, VNINDEX dài hơn — số mẫu đọc ở cột `n`.
 
 ## 1. Đọc bảng mùa vụ (`cycle_seasonality`)
 
@@ -15,9 +15,9 @@
 
 - Q1 (đặc biệt T1–T2) thường mạnh nhất năm; T12→T3 là cửa sổ tốt.
 - T4 hit thấp nhất ("bán trước Sell-in-May"); Sell-in-May KHÔNG đúng ở VN (T5 thường dương).
-- T8 tốt thứ hai và rộng: nhiều mảng cùng vượt trội (vận tải, chứng khoán, bán lẻ, hóa chất; BĐS hit cao nhất bảng).
-- T10 tệ nhất gần như mọi mảng (mùa chốt NAV/quý 3 + báo cáo); nhóm rơi ít nhất: tiêu dùng, bảo hiểm (và hóa chất giữ được rel dương).
-- Bank = mảng đầu năm (T1/T12 hit cao nhất nhóm); CK mạnh T8/T11 (T10 yếu nhất); thép mạnh T2 — mạnh nhất toàn bảng, sau Tết; dầu khí mạnh T1–T2/T5, yếu T3–T4; hóa chất mạnh T2/T3/T8; vận tải mạnh T8/T5; Vin mạnh T3/T4/T11 (nhịp riêng, không theo nhóm BĐS).
+- T8 tốt thứ hai và thường rộng (nhiều mảng cùng vượt trội) — mảng nào vượt trội tra `cycle_seasonality(month=8)`, không lấy danh sách từ file này.
+- T10 tệ nhất gần như mọi mảng (mùa chốt NAV/quý 3 + báo cáo); mảng rơi ít nhất hoặc giữ được `rel_ret` dương tra `cycle_seasonality(month=10)`.
+- Bank = mảng đầu năm (T1/T12 vượt trội); CK mạnh T8/T11, yếu T10; thép mạnh T2 (sau Tết); dầu khí mạnh T1–T2/T5, yếu T3–T4; hóa chất mạnh T2/T3/T8; vận tải mạnh T8/T5; Vin mạnh T3/T4/T11 (nhịp riêng, không theo nhóm BĐS).
 - Hàng tiêu dùng thiết yếu gần như KHÔNG có mùa vụ vượt trội — chỉ "rơi ít hơn" (đặc biệt T10), dùng để trú.
 
 ## 3. Hiệu ứng Tết (`cycle_tet`)
