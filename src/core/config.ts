@@ -29,8 +29,10 @@ export interface Config {
   /**
    * Subagents (spawn_subagent). `maxConcurrent`: how many run at once, foreground and
    * background together (default 10, no upper cap); more wait for a slot. `provider` +
-   * `model`: their model; unset = the session's. `idleMs`: a run with no progress (no
-   * events, not waiting on the user) for this long is stopped; default 300000 (5 minutes).
+   * `model`: their model; unset = the session's. `"auto"` = the harness picks a small,
+   * cheap tool-capable model among the connected providers (see model-pick.ts). `idleMs`:
+   * a run with no progress (no events, not waiting on the user) for this long is stopped;
+   * default 300000 (5 minutes).
    */
   subagents?: { maxConcurrent?: number; idleMs?: number; provider?: string; model?: string }
   /**

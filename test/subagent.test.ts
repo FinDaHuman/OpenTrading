@@ -21,6 +21,7 @@ const CATALOG = {
       tooly: { id: "tooly", name: "Tooly", tool_call: true, modalities: text },
       other: { id: "other", name: "Other", tool_call: true, modalities: text },
       plain: { id: "plain", name: "Plain", tool_call: false, modalities: text },
+      "llama-3.1-8b-instant": { id: "llama-3.1-8b-instant", name: "Llama Instant", tool_call: true, modalities: text, limit: { context: 131_072 } },
     },
   },
 }
@@ -671,4 +672,22 @@ test("dừng giữa chừng vẫn giữ tool call/result đã hoàn thành trong
     .filter((e) => e.type === "message")
     .map((e) => e.message)
   expect(closeDanglingToolCalls(messages).patched).toBe(0)
+})
+
+test("subagents.model auto: con chạy model lite tự chọn và có notice", async () => {
+  await saveConfig({ provider: "groq", model: "tooly", subagents: { model: "auto", maxConcurrent: 5 } })
+  const { registry, manager } = setup()
+  parentCalls = [spawn("Kỹ thuật HPG")]
+  await collect(runAgent({ history: [], input: "phân tích HPG", skills: [], registry }))
+  expect(childBodies[0]!.model).toBe("llama-3.1-8b-instant")
+  expect(manager.list()[0]!.notice).toContain("tự chọn model")
+})
+
+test("subagents.model auto: không có model khớp thì quay về model phiên + notice", async () => {
+  await saveConfig({ provider: "groq", model: "tooly", subagents: { provider: "anthropic", model: "auto", maxConcurrent: 5 } })
+  const { registry, manager } = setup()
+  parentCalls = [spawn("Kỹ thuật HPG")]
+  await collect(runAgent({ history: [], input: "phân tích HPG", skills: [], registry }))
+  expect(childBodies[0]!.model).toBe("tooly")
+  expect(manager.list()[0]!.notice).toContain("Không tìm thấy model lite")
 })

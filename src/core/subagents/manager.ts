@@ -11,6 +11,7 @@ import { ToolRegistry } from "../tools/registry"
 import type { ChartData } from "../tools/chart/data"
 import type { AgentOrigin, ToolDef } from "../tools/types"
 import { Limiter } from "./limiter"
+import { AUTO_MODEL, autoTarget } from "./model-pick"
 import { lastAssistantText } from "./result"
 import { Sidechain, type SidechainEntry } from "./sidechain"
 import { MAX_TOOL_VIEWS, type SubagentResult, type SubagentRun, type SubagentView } from "./types"
@@ -525,6 +526,15 @@ export class SubagentManager {
     const configured = config?.model || config?.provider ? { provider: config.provider, model: config.model } : undefined
     const chosen = own ?? configured
     if (!chosen) return resolveTarget()
+    if (chosen.model === AUTO_MODEL) {
+      const picked = await autoTarget(chosen.provider)
+      if (picked) {
+        notes.push({ type: "notice", ts: new Date().toISOString(), text: `Subagent tự chọn model: ${picked.provider.name} · ${picked.model} (đổi trong /config).` })
+        return picked
+      }
+      notes.push({ type: "notice", ts: new Date().toISOString(), text: "Không tìm thấy model lite phù hợp cho subagent; dùng model của phiên." })
+      return resolveTarget()
+    }
     try {
       return await resolveTarget(chosen)
     } catch (error) {

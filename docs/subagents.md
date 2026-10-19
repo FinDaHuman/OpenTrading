@@ -33,6 +33,24 @@ Subagent là một agent riêng, bắt đầu với ngữ cảnh trống. Agent 
 
 Trong `~/.opentrading/config.json`: `"subagents": { "maxConcurrent": 2, "idleMs": 600000, "provider": "groq", "model": "…" }`.
 
+**Tự chọn model lite (`"model": "auto"`)**
+
+Harness tự tìm model nhỏ, rẻ, gọi được tool từ các provider đã kết nối — duyệt từ trên xuống, khớp đầu tiên thắng:
+
+| Ưu tiên | Provider | Model (theo thứ tự pattern) |
+| --- | --- | --- |
+| 1 | Google | `gemini-3.5-flash-lite`, `gemini-3.1-flash-lite`, rồi mọi `flash-lite` |
+| 2 | OpenCode Go | `claude-haiku-5-5`, `glm-5.3-flash`, rồi mọi `flash` |
+| 3 | Alibaba | `qwen3.7-flash`, `qwen-flash`, rồi mọi `flash` |
+| 4 | Anthropic | mọi model `haiku` |
+| 5 | OpenAI | mọi model `-mini` |
+| 6 | Groq | `llama-3.1-8b-instant`, rồi `qwen/…` |
+| 7 | OpenRouter | `haiku`, `gemini-3.5-flash-lite` |
+| 8 | NVIDIA | `deepseek-v4.1-flash`, rồi mọi `flash` |
+| 9 | Ollama Cloud | `deepseek-v4-flash`, rồi mọi `flash` |
+
+Điều kiện: model phải gọi được tool và có context ≥ 64k. Chọn xong, subagent ghi notice `Subagent tự chọn model: …` (xem `/tasks`). Không có ứng viên nào thì quay về model của phiên. Pin trong `agents/*.md` hoặc `subagents.provider/model` luôn thắng `auto`. Danh sách ưu tiên nằm ở `src/core/subagents/model-pick.ts` (`LITE_SHORTLIST`) — sửa một chỗ để đổi chính sách.
+
 `/context` có dòng `Subagent: N lần · X token tính phí`. Đây là tổng token của mọi request subagent đã gửi, không tính vào `ctx %` của agent chính.
 
 ## Loại agent
