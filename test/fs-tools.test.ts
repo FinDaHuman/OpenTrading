@@ -222,7 +222,8 @@ test("reading a key file asks first, per exact path, and never offers 'always'",
   const tool = readFileTool(ws())
   expect(tool.askFor?.({ path: path.join(data, "auth.json") })).toBe(`secret:${path.join(data, "auth.json")}`)
   expect(tool.askFor?.({ path: path.join(project, "ghi-chu.md") })).toBeUndefined()
-  expect(tool.askFor?.({ path: "\\\\fileserver\\share\\bctc.pdf" })).toStartWith("unc:")
+  // UNC exists on Windows only (on POSIX a backslash is an ordinary file-name character).
+  if (process.platform === "win32") expect(tool.askFor?.({ path: "\\\\fileserver\\share\\bctc.pdf" })).toStartWith("unc:")
   // Headless: nobody to ask, so the read never happens.
   const gate = new PermissionGate({ load: async () => [], save: async () => {} })
   await expect(runTool(tool, { path: path.join(data, "auth.json") }, ctx(), new RwLock(), gate)).rejects.toThrow("cần người dùng xác nhận")
@@ -345,6 +346,15 @@ test("read scope: network paths (also via file://), odd Windows spellings and sy
   }
   expect(readFileTool(w).askFor?.({ path: link })).toBe(`secret:${link}`)
   expect(grepFilesTool(w).askFor?.({ pattern: "sk-", path: link })).toBe(`secret:${link}`)
+})
+
+test("a link resolved to the long name still matches a data dir spelled short (C:\\Users\\RUNNER~1)", () => {
+  const short = w32`C:\Users\RUNNER~1`
+  const long = w32`C:\Users\runneradmin`
+  const win = { home: short, data: w32`${short}\.opentrading`, platform: "win32" as const }
+  const real = (p: string) => (p === w32`D:\Dau-tu\notes.txt` ? w32`${long}\.opentrading\auth.json` : p.replace(short, long))
+  expect(readScope(w32`D:\Dau-tu\notes.txt`, win, real)).toBe(w32`secret:D:\Dau-tu\notes.txt`)
+  expect(readScope(w32`D:\Dau-tu\other.txt`, win, real)).toBeUndefined()
 })
 
 test("on Windows an alternate data stream of a key file asks", () => {

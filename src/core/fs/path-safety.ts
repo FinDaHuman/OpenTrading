@@ -161,7 +161,13 @@ export function readScope(abs: string, e?: SafetyEnv, real: (p: string) => strin
   if (suspiciousWindowsPath(abs, platform, { shortNames: false })) return `odd:${abs}`
   if (secretReason(abs, e) || isSecretDir(abs, e)) return `secret:${abs}`
   const resolved = real(abs)
-  if (resolved !== abs && (isUncPath(resolved) || secretReason(resolved, e) || isSecretDir(resolved, e))) return `secret:${abs}`
+  if (resolved === abs) return undefined
+  if (isUncPath(resolved)) return `secret:${abs}`
+  // Compare real with real: home and the data dir may be spelled short (C:\Users\RUNNER~1)
+  // while a resolved link comes back with the long name.
+  const { home, data } = env(e)
+  const realEnv: SafetyEnv = { home: real(home), data: real(data), platform }
+  if (secretReason(resolved, realEnv) || isSecretDir(resolved, realEnv) || secretReason(resolved, e) || isSecretDir(resolved, e)) return `secret:${abs}`
   return undefined
 }
 
