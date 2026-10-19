@@ -16,7 +16,7 @@ const STATUS: Record<AgentStatus, string> = {
   stopped: "đã dừng",
 }
 
-const NOTE =
+export const NOTE =
   "Đây là thông báo tự động của harness khi một subagent chạy nền kết thúc, không phải lời người dùng. Người dùng chưa thấy kết quả này: nếu liên quan tới việc họ đang hỏi thì tóm tắt cho họ (giữ nguồn và thời điểm)."
 
 export function notificationText(view: SubagentView): string {

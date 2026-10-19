@@ -75,10 +75,11 @@ const STAGE2 =
 const bullets = (items: string[]) => items.map((r) => `- ${r}`).join("\n")
 
 export function systemPrompt(input: Pick<ClassifyInput, "environment" | "config">) {
-  return SYSTEM.replace("{{environment}}", bullets([...effectiveList("environment", input.config), ...input.environment]))
-    .replace("{{hard_deny}}", bullets(effectiveList("hard_deny", input.config)))
-    .replace("{{soft_deny}}", bullets(effectiveList("soft_deny", input.config)))
-    .replace("{{allow}}", bullets(effectiveList("allow", input.config)))
+  // Function replacers: a "$&" or "$$" in a user's rule stays literal.
+  return SYSTEM.replace("{{environment}}", () => bullets([...effectiveList("environment", input.config), ...input.environment]))
+    .replace("{{hard_deny}}", () => bullets(effectiveList("hard_deny", input.config)))
+    .replace("{{soft_deny}}", () => bullets(effectiveList("soft_deny", input.config)))
+    .replace("{{allow}}", () => bullets(effectiveList("allow", input.config)))
 }
 
 export function userContent(input: ClassifyInput) {

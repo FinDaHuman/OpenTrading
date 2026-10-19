@@ -710,6 +710,9 @@ export function App(props: {
       if (!text.trim()) return pushLine({ kind: "error", text: `Prompt /${command.name} không có nội dung.` })
       // What is sent in the user's name is shown in full as their message.
       pushLine({ kind: "info", text: `Prompt /${command.name} của server ${command.server}:` })
+      // The classifier reads what the user typed as theirs and the server's template as harness text.
+      props.runtime.auto.log.turn(`/${command.name} ${rawArgs}`.trim())
+      props.runtime.auto.log.markHarness(text)
       void send(props.runtime, text)
     } catch (error) {
       pushLine({ kind: "error", text: `/${command.name}: ${error instanceof Error ? error.message : String(error)}` })

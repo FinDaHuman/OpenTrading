@@ -71,15 +71,41 @@ export function asJson(text: string): unknown {
 /** Tools whose calls the classifier sees even when they ran without asking: they can leak data in a URL or a query. */
 const ALWAYS_LOGGED = new Set(["web_fetch", "web_search"])
 
+/** A background subagent's report as delivered to the main agent (subagents/notification.ts). */
+const NOTICE_BLOCK = /<thong_bao_subagent>[\s\S]*?<\/thong_bao_subagent>/g
+
 export class ActionLog {
   private entries: LogEntry[] = []
+  /** Turn texts the harness sends in the user's name (an MCP prompt's expansion): not the user's words. */
+  private harness = new Set<string>()
 
-  /** A turn's input: the user's words, a subagent's task, or a harness notice. */
-  turn(text: string, opts: { agent?: AgentOrigin } = {}) {
+  /** The next turn with exactly this text came from the harness, not the user. */
+  markHarness(text: string) {
+    this.harness.add(text.trim())
+  }
+
+  /**
+   * A turn's input: the user's words, a subagent's task (the main agent's words), or harness
+   * text. Subagent reports ride in front of what the user typed (tui send()): they are split
+   * off as notices, so a report built from web pages never counts as the user's consent.
+   */
+  turn(text: string, opts: { agent?: AgentOrigin; note?: string } = {}) {
     if (!text.trim()) return
-    if (opts.agent) this.entries.push({ kind: "task", agent: `${opts.agent.type}#${opts.agent.id}`, text: clip(text) })
-    else if (/^\s*<thong_bao_subagent/.test(text)) this.entries.push({ kind: "notice", text: clip(text, 600) })
-    else this.entries.push({ kind: "user", text: clip(text, 4_000) })
+    if (opts.agent) {
+      this.entries.push({ kind: "task", agent: `${opts.agent.type}#${opts.agent.id}`, text: clip(text) })
+      return
+    }
+    let rest = text
+    for (const block of text.match(NOTICE_BLOCK) ?? []) {
+      this.entries.push({ kind: "notice", text: clip(block, 600) })
+      rest = rest.replace(block, "")
+    }
+    if (opts.note) rest = rest.replace(opts.note, "")
+    rest = rest.trim()
+    if (!rest) return
+    // Checked after the reports are split off: they may ride in front of the prompt's text.
+    if (this.harness.delete(rest)) this.entries.push({ kind: "notice", text: clip(rest, 1_500) })
+    else this.entries.push({ kind: "user", text: clip(rest, 4_000) })
   }
 
   answer(text: string) {

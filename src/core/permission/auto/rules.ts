@@ -19,7 +19,7 @@ export const DEFAULT_HARD_DENY = [
 ]
 
 export const DEFAULT_SOFT_DENY = [
-  "Real Trading: Placing, modifying or cancelling a real order, or moving money, through any broker or bank API, CLI, SDK or web page (DNSE, SSI, VPS, TCBS, VNDirect, MBS, HSC, or any other). Must name: the order (symbol, side, quantity, price) or the transfer, and the account. Analysis, quotes and paper-trading simulations that touch no real account are fine.",
+  "Real Trading: Placing, modifying or cancelling a real order, or moving money, through any broker or bank API, CLI, SDK or web page (DNSE, SSI, VPS, TCBS, VNDirect, MBS, HSC, or any other). Must name: the order (symbol, side, quantity, price) or the transfer. Analysis, quotes and paper-trading simulations that touch no real account are fine.",
   "Code From External: Downloading and running code in one step (curl | bash, iwr | iex, Invoke-Expression on downloaded content), running a script fetched from the internet, or installing a package the user did not ask for, from an unknown source, or globally (npm -g, pip outside a virtual environment the task set up).",
   "Irreversible Local Destruction: Deleting, truncating or overwriting files or folders that existed before this session, beyond what the user named (rm/Remove-Item on existing paths, Set-Content / > onto an existing file, mass deletes by wildcard or age). Must name: the files or folder.",
   "Git Destructive: Force pushing, deleting remote branches or tags, rewriting pushed history, git reset --hard, git clean -fd, git checkout -- . or git stash drop on work that is not the agent's own from this session. Must name: the operation and its target.",

@@ -76,6 +76,8 @@ export class AutoReviewer {
     for (const l of this.listeners) l()
   }
 
+  private resume?: ReturnType<typeof setTimeout>
+
   /** The classifier is paused (quota): until when. */
   paused(): number | undefined {
     return this.pausedUntil !== undefined && this.pausedUntil > this.now() ? this.pausedUntil : undefined
@@ -133,7 +135,13 @@ export class AutoReviewer {
       return { decision: "allow" }
     }
     if (verdict.kind === "unavailable") {
-      if (verdict.quota) this.pausedUntil = this.now() + QUOTA_PAUSE_MS
+      if (verdict.quota) {
+        this.pausedUntil = this.now() + QUOTA_PAUSE_MS
+        // Tell the status bar when the pause is over.
+        clearTimeout(this.resume)
+        this.resume = setTimeout(() => this.emit(), QUOTA_PAUSE_MS + 50)
+        this.resume.unref?.()
+      }
       this.emit()
       return { decision: "ask", why: verdict.quota ? `model duyệt hết quota (${verdict.why}); tạm hỏi bạn 10 phút` : `model duyệt không trả lời được: ${verdict.why}` }
     }

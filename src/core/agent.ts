@@ -29,6 +29,7 @@ import { isContextOverflow } from "./compact"
 import { retryMiddleware, type RetryNotice, type RetryOptions } from "./retry"
 import { loadedTools } from "./tools/loaded"
 import { modeNote } from "./permission/mode"
+import { NOTE as NOTICE_NOTE } from "./subagents/notification"
 import { currentTodos, todoMark } from "./tools/todos"
 import { MAX_TOOLS_PER_REQUEST, stripImages, type BuiltToolSet, type ToolRegistry, type ToolSetOptions } from "./tools/registry"
 import { describeTool, LOADED_PREFIX, resolveToolName } from "./tools/search"
@@ -785,7 +786,7 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
   opts = { ...opts, target: target0 }
   // The auto-mode classifier reads the user's words (or, for a subagent, its task as the main
   // agent's words), never the answers.
-  opts.registry.gate?.auto?.log.turn(opts.input, { agent: opts.role === "subagent" ? opts.registry.origin : undefined })
+  opts.registry.gate?.auto?.log.turn(opts.input, { agent: opts.role === "subagent" ? opts.registry.origin : undefined, note: NOTICE_NOTE })
 
   // user-prompt hooks: may block the turn or add context for it.
   const extras: TurnExtras = {}
