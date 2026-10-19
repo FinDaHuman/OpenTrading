@@ -47,6 +47,8 @@ export interface Config {
    * their own per-type cap (`agents/*.md` maxSteps, default 8).
    */
   maxSteps?: number
+  /** Extra workspace folders kept across sessions (`/add-dir <thư mục> --luu`). */
+  workspace?: { dirs?: string[] }
 }
 
 export const loadConfig = () => readJson<Config>(configFile(), {})

@@ -1,6 +1,7 @@
 import { dynamicTool, jsonSchema, tool, type ModelMessage, type ToolSet } from "ai"
 import type { JSONSchema7 } from "@ai-sdk/provider"
 import { z } from "zod"
+import type { Workspace } from "../fs/workspace"
 import type { PermissionGate } from "../permission"
 import { sanitizeSchema, type SchemaFlavor } from "../mcp/schema"
 import type { AgentOrigin, ToolDef, ToolResult } from "./types"
@@ -83,6 +84,8 @@ export class ToolRegistry {
   lastHiddenNotice = ""
   /** Asks the user before tools with side effects run; unset = run everything (tests). */
   gate?: PermissionGate
+  /** Folders the file tools work in; its description reaches the model as `<quyen_tep>`. */
+  workspace?: Workspace
 
   constructor(opts: { lock?: RwLock; origin?: AgentOrigin } = {}) {
     // A subagent shares its parent's lock, so its writes exclude the parent's and siblings'.

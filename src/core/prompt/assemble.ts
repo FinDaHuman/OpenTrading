@@ -62,6 +62,10 @@ export interface AssembleInput {
   mcpInstructions?: { server: string; text: string }[]
   /** The todo list as of history (todo_write); recited every turn while items are open. */
   todos?: Todo[]
+  /** Workspace folders for the file tools (`<quyen_tep>`); sent when it differs from `prevFileAccess`. */
+  fileAccess?: string
+  /** The `<quyen_tep>` text last sent in this conversation; undefined = never. */
+  prevFileAccess?: string
   /**
    * "subagent": a child run working for the main agent. Its system prompt replaces identity
    * and style with prompts/subagent.md, keeps the invariants and priority order from
@@ -210,6 +214,7 @@ ${m.text}
   if (!sameSnapshot(input.prevClock, clock.snapshot)) {
     add(reminders, "phien_giao_dich", 2, "reminder", renderClock(clock, calendar), "market_clock")
   }
+  if (input.fileAccess && input.fileAccess !== input.prevFileAccess) add(reminders, "quyen_tep", 7, "reminder", input.fileAccess)
   add(reminders, "memory_lien_quan", 4, "reminder", input.recalled?.trim() || undefined, "memory")
   if (input.tools.includes(TODO_WRITE) && input.todos && hasOpenTodos(input.todos)) {
     add(reminders, "viec_can_lam", 2, "reminder", `${TODO_RECITE_HEADER}\n${renderTodos(input.todos)}`, "todos")

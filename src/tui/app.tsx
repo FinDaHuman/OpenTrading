@@ -21,7 +21,7 @@ import { acceptsImageInput } from "../core/agent"
 import { connectedProviders } from "../core/auth"
 import { describeError } from "../core/chat"
 import { retryText } from "../core/retry"
-import { loadConfig } from "../core/config"
+import { loadConfig, saveConfig } from "../core/config"
 import { loadCatalog } from "../core/catalog"
 import type { Runtime } from "../core/runtime"
 import { ensureProfile } from "../core/profile"
@@ -609,6 +609,31 @@ export function App(props: {
     }
   }
 
+  /** `/add-dir [thư mục] [--luu]`: add a workspace folder for this session (and keep it with --luu). */
+  async function addDirCommand(args: string) {
+    const workspace = props.runtime.workspace
+    const keep = /(^|\s)--luu$/.test(args)
+    const raw = args.replace(/(^|\s)--luu$/, "").trim()
+    if (!raw) {
+      return pushLine({
+        kind: "info",
+        text: `Workspace: ${workspace.roots().join(" · ")}${workspace.fallbackReason ? ` (mở ở ${workspace.fallbackReason} nên dùng thư mục riêng)` : ""}. Thêm thư mục: /add-dir <đường dẫn> [--luu]`,
+      })
+    }
+    const added = workspace.add(raw)
+    if ("error" in added) return pushLine({ kind: "error", text: added.error })
+    if (keep) {
+      try {
+        const config = await loadConfig()
+        const dirs = [...new Set([...(config.workspace?.dirs ?? []), added.dir])]
+        await saveConfig({ workspace: { ...config.workspace, dirs } })
+      } catch (error) {
+        return pushLine({ kind: "error", text: `Đã thêm ${added.dir} cho phiên này nhưng không lưu được cấu hình: ${error instanceof Error ? error.message : String(error)}` })
+      }
+    }
+    pushLine({ kind: "info", text: `✓ Đã thêm ${added.dir} vào workspace${keep ? " (đã lưu cho các phiên sau)" : " cho phiên này (thêm --luu để giữ cho các phiên sau)"}.` })
+  }
+
   async function mcpCommand(args: string) {
     const [action, name] = args.split(/\s+/)
     const known = state.mcp.some((s) => s.name === name)
@@ -977,6 +1002,8 @@ export function App(props: {
         return void saveCommand()
       case "export":
         return void exportCommand(cmd.args)
+      case "add-dir":
+        return void addDirCommand(cmd.args)
       case "exit":
       case "quit":
         return void exit()

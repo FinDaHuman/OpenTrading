@@ -1,4 +1,5 @@
 import { loadConfig, saveConfig } from "./config"
+import { isSensitiveScope } from "./fs/path-safety"
 import type { AgentOrigin, ToolDef } from "./tools/types"
 
 /**
@@ -183,6 +184,8 @@ export class PermissionGate {
     if (choice === "deny") {
       pending!.resolve({ allow: false, reason: "user", message: message?.trim() || undefined })
     } else {
+      // Key files and network paths are approved per session at most (approval.tsx hides "always").
+      if (choice === "always" && isSensitiveScope(pending!.request.scope)) choice = "session"
       if (choice === "session" || choice === "always") this.session.add(pending!.key)
       if (choice === "always") {
         const rules = await this.rules.load()
@@ -217,7 +220,7 @@ export class PermissionGate {
 /** The error the model reads when the user says no. */
 export function deniedMessage(decision: Decision) {
   if (decision.reason === "cancelled") return "Lời gọi tool đã bị huỷ."
-  if (decision.reason === "headless") return "Lời gọi này cần người dùng xác nhận (tool ghi, hoặc đọc domain chưa được cho phép), nhưng không có giao diện để hỏi. Không chạy."
+  if (decision.reason === "headless") return "Lời gọi này cần người dùng xác nhận, nhưng không có giao diện để hỏi. Không chạy."
   return decision.message
     ? `Người dùng từ chối chạy tool này. Lời nhắn của người dùng: ${decision.message}`
     : "Người dùng từ chối chạy tool này. Đừng thử lại cùng lời gọi; hỏi người dùng muốn làm gì khác."

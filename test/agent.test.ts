@@ -864,3 +864,29 @@ test("an aborted turn keeps each step's text once", async () => {
   expect(messages.map((m) => m.role).join(",")).not.toContain("assistant,assistant")
   expect(closeDanglingToolCalls(messages).patched).toBe(0)
 })
+
+test("<quyen_tep> names the workspace, goes out once and again when /add-dir changes it", async () => {
+  const { Workspace } = await import("../src/core/fs/workspace")
+  const { readFileTool } = await import("../src/core/tools/fs/read")
+  const { mkdir } = await import("node:fs/promises")
+  const project = path.join(home, "du-an")
+  const extra = path.join(home, "bctc")
+  await mkdir(project, { recursive: true })
+  await mkdir(extra, { recursive: true })
+  const r = registry()
+  const workspace = new Workspace(project, { data: path.join(home, "data") })
+  r.workspace = workspace
+  r.register(readFileTool(workspace))
+  const userOf = (i: number) => JSON.stringify(bodies[i]!.messages.filter((m) => m.role === "user").at(-1))
+  const first = done(await collect(runAgent({ history: [], input: "đọc file", skills: [], registry: r })))
+  expect(userOf(0)).toContain("quyen_tep")
+  expect(userOf(0)).toContain(JSON.stringify(project).slice(1, -1))
+  bodies.length = 0
+  const second = done(await collect(runAgent({ history: first.messages, input: "tiếp", skills: [], registry: r, prevClock: first.clock })))
+  expect(userOf(0)).not.toContain("quyen_tep")
+  workspace.add(extra)
+  bodies.length = 0
+  await collect(runAgent({ history: [...first.messages, ...second.messages], input: "thêm thư mục", skills: [], registry: r, prevClock: second.clock }))
+  expect(userOf(0)).toContain("quyen_tep")
+  expect(userOf(0)).toContain(JSON.stringify(extra).slice(1, -1))
+})

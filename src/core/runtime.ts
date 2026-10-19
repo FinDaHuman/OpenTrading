@@ -23,6 +23,10 @@ import { webFetchTool } from "./tools/web/fetch"
 import { webSearchTool } from "./tools/web/search"
 import { localWatchlistTools } from "./tools/watchlist/local"
 import { ToolRegistry } from "./tools/registry"
+import { FileState } from "./fs/file-state"
+import { Workspace } from "./fs/workspace"
+import { readFileTool } from "./tools/fs/read"
+import { globFilesTool, grepFilesTool } from "./tools/fs/search"
 import { matchToolPattern } from "./tools/patterns"
 import { connectedProviders } from "./auth"
 
@@ -42,6 +46,10 @@ export interface Runtime {
   subagents: SubagentManager
   /** Data directory this runtime reads and writes (OPENTRADING_HOME or the test's temp dir). */
   home: string
+  /** Folders the file tools work in (cwd, or <home>/workspace when cwd is too broad, plus /add-dir). */
+  workspace: Workspace
+  /** Files read this session (the edit tools require a read first). */
+  files: FileState
 }
 
 export type MemoryChoice = "none" | "file"
@@ -56,15 +64,21 @@ export function createMemory(choice: MemoryChoice | undefined, home = dataDir())
  * (never on import), so tests can build their own runtime against temporary directories. This
  * is the seam where a daemon would later live.
  */
-export function initRuntime(opts: { cwd?: string; home?: string; skills: () => Skill[]; memory?: MemoryProvider }): Runtime {
+export function initRuntime(opts: { cwd?: string; home?: string; skills: () => Skill[]; memory?: MemoryProvider; workspaceDirs?: string[] }): Runtime {
   const home = opts.home ?? dataDir()
   const registry = new ToolRegistry()
   const permissions = new PermissionGate()
   registry.gate = permissions
+  const workspace = new Workspace(opts.cwd ?? process.cwd(), { data: home, dirs: opts.workspaceDirs })
+  registry.workspace = workspace
+  const files = new FileState()
   const questions = new AskBroker()
   registry.register(currentTimeTool())
   registry.register(askUserTool(questions))
   registry.register(todoWriteTool())
+  registry.register(readFileTool(workspace, files))
+  registry.register(globFilesTool(workspace))
+  registry.register(grepFilesTool(workspace))
   registry.register(
     loadSkillTool(
       opts.skills,
@@ -110,7 +124,7 @@ export function initRuntime(opts: { cwd?: string; home?: string; skills: () => S
   registry.register(spawnSubagentTool(subagents))
   registry.register(sendMessageTool(subagents))
   registry.register(stopAgentTool(subagents))
-  const runtime: Runtime = { registry, permissions, questions, mcp, hooks: new HookBus(), memory: new NoopMemory(), subagents, home }
+  const runtime: Runtime = { registry, permissions, questions, mcp, hooks: new HookBus(), memory: new NoopMemory(), subagents, home, workspace, files }
   switchMemory(runtime, opts.memory ?? new NoopMemory())
   return runtime
 }

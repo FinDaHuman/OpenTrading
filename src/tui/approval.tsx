@@ -64,16 +64,28 @@ export function ApprovalPrompt(props: { gate: PermissionGate; request: ApprovalR
   /** web_fetch asks per domain: a read, not a write. */
   const domain = () => (req().scope?.startsWith("domain:") ? req().scope!.slice("domain:".length) : undefined)
   const hintOf = (option: (typeof OPTIONS)[number]) =>
-    domain() && option.choice === "session"
+    sensitive() && option.choice === "session"
+      ? "không hỏi lại đúng file này tới khi thoát"
+      : domain() && option.choice === "session"
       ? "không hỏi lại domain này tới khi thoát"
       : domain() && option.choice === "always"
         ? "lưu vào cấu hình, cho domain này"
         : option.hint
+  /** A key file or a network path: asked per exact path, never stored as "always". */
+  const sensitive = () => {
+    const scope = req().scope ?? ""
+    if (scope.startsWith("secret:")) return { kind: "đọc file chứa khoá/mật khẩu", path: scope.slice("secret:".length) }
+    if (scope.startsWith("unc:")) return { kind: "đọc đường dẫn mạng", path: scope.slice("unc:".length) }
+    if (scope.startsWith("odd:")) return { kind: "đường dẫn Windows dạng lạ", path: scope.slice("odd:".length) }
+    return undefined
+  }
+  const options = () => (sensitive() ? OPTIONS.filter((o) => o.choice !== "always") : OPTIONS)
+  const denyIndex = () => options().length - 1
   const args = () => argLines(req().input)
   const description = () => req().description.split("\n").filter(Boolean).slice(0, 2)
 
   function choose(index: number, message?: string) {
-    const option = OPTIONS[index]
+    const option = options()[index]
     if (!option) return
     // The decision belongs under its tool call in the transcript (Claude Code); a denial
     // already shows there from the tool's error, so only "allowed" needs recording.
@@ -101,7 +113,7 @@ export function ApprovalPrompt(props: { gate: PermissionGate; request: ApprovalR
   useKeyboard((evt) => {
     if (evt.eventType === "release") return
     // Ctrl+C answers "no" like Esc (opencode); the app only arms the double-press exit.
-    if (evt.ctrl && evt.name === "c") return choose(3)
+    if (evt.ctrl && evt.name === "c") return choose(denyIndex())
     if (noting()) {
       if (evt.name === "escape") {
         evt.preventDefault()
@@ -113,15 +125,16 @@ export function ApprovalPrompt(props: { gate: PermissionGate; request: ApprovalR
     evt.preventDefault()
     const early = !!req().agent && Date.now() - shownAt < ANSWER_GUARD_MS
     if (early && evt.name === "return") return
-    if (evt.name === "up") setSelected((i) => (i + OPTIONS.length - 1) % OPTIONS.length)
-    else if (evt.name === "down") setSelected((i) => (i + 1) % OPTIONS.length)
+    const count = options().length
+    if (evt.name === "up") setSelected((i) => (i + count - 1) % count)
+    else if (evt.name === "down") setSelected((i) => (i + 1) % count)
     else if (evt.name === "return") choose(selected())
-    else if (evt.name === "escape") choose(3)
+    else if (evt.name === "escape") choose(denyIndex())
     else if (evt.name === "tab") {
       note = ""
-      setSelected(3)
+      setSelected(denyIndex())
       setNoting(true)
-    } else if (/^[1-4]$/.test(evt.name ?? "") && !req().agent) choose(Number(evt.name) - 1)
+    } else if (/^[1-9]$/.test(evt.name ?? "") && Number(evt.name) <= count && !req().agent) choose(Number(evt.name) - 1)
   })
 
   const dims = useTerminalDimensions()
@@ -130,7 +143,7 @@ export function ApprovalPrompt(props: { gate: PermissionGate; request: ApprovalR
   return (
     <DialogFrame
       title={
-        (destructive() ? "Cần xác nhận · thay đổi không hoàn tác được" : domain() ? `Cần xác nhận · đọc trang từ domain mới: ${domain()}` : "Cần xác nhận · tool ghi") +
+        (sensitive() ? `Cần xác nhận · ${sensitive()!.kind}` : destructive() ? "Cần xác nhận · thay đổi không hoàn tác được" : domain() ? `Cần xác nhận · đọc trang từ domain mới: ${domain()}` : "Cần xác nhận · tool ghi") +
         (req().agent ? ` · subagent ${req().agent!.type} (${truncate(req().agent!.description, 30)})` : "")
       }
       accent={destructive() ? color.giam : color.tham}
@@ -139,7 +152,7 @@ export function ApprovalPrompt(props: { gate: PermissionGate; request: ApprovalR
           ? "enter từ chối kèm lời nhắn · esc quay lại"
           : req().agent
             ? "↑↓ chọn · enter xác nhận · tab từ chối kèm lời nhắn · esc từ chối"
-            : "↑↓ chọn · enter xác nhận · 1-4 chọn nhanh · tab từ chối kèm lời nhắn · esc từ chối"
+            : `↑↓ chọn · enter xác nhận · 1-${options().length} chọn nhanh · tab từ chối kèm lời nhắn · esc từ chối`
       }
     >
       <box flexDirection="column" paddingLeft={2}>
@@ -170,7 +183,7 @@ export function ApprovalPrompt(props: { gate: PermissionGate; request: ApprovalR
       <text fg={color.tx} marginTop={1}>
         <span style={{ bold: true }}>Cho phép chạy?</span>
       </text>
-      <For each={OPTIONS}>
+      <For each={options()}>
         {(option, i) => {
           const active = () => i() === selected()
           return (
@@ -202,7 +215,7 @@ export function ApprovalPrompt(props: { gate: PermissionGate; request: ApprovalR
             backgroundColor={color.panel2}
             focusedBackgroundColor={color.panel2}
             onInput={(v: string) => (note = v)}
-            onSubmit={() => choose(3, note.trim() || undefined)}
+            onSubmit={() => choose(denyIndex(), note.trim() || undefined)}
           />
         </box>
       </Show>
