@@ -22,12 +22,12 @@ Khi kích hoạt nhưng user CHƯA đồng ý: chỉ cảnh báo + ghi verdict �
 
 ## 3. Quy trình refresh bằng MCP tools (mặc định, incremental)
 
-1. `cycle_stats_check()` → xác nhận stale + coverage.
-2. `cycle_stats_refresh(symbols=[...12 mã...])` lặp lại đến hết ~90 mã. Batch nào `failed` → gọi lại batch đó (resumable). Lần đầu chạy full từ 2018 (VNINDEX từ 2011); các lần sau chỉ fetch delta. Overlap-validate 10 phiên, lệch >0.5% → tool tự full re-fetch mã đó.
+1. `cycle_stats_check()` → xác nhận stale + coverage. Nếu cảnh báo "cấu hình cũ (members_version=...)" → bảng tính theo danh sách ngành đời trước, phải refresh + finalize trước khi kết luận.
+2. `cycle_stats_refresh(symbols=[...12 mã...])` lặp lại đến hết danh sách theo dõi (~130 mã). Batch nào `failed` → gọi lại batch đó (resumable). Lần đầu chạy full từ 2018 (VNINDEX từ 2011); các lần sau chỉ fetch delta. Overlap-validate 10 phiên, lệch >0.5% → tool tự full re-fetch mã đó.
 3. `cycle_stats_finalize(extra_tet=[...])` (kèm Tết mới nếu có) → recompute toàn bộ + bump `cycle_meta`.
 4. Đối chiếu kết quả vs lần trước: ô nào đổi > 20% thì nêu "đảo regime" trong câu trả lời.
 
-Quy ước tính toán (khóa): basket equal-weight = mean lợi suất ngày (daily-rebalanced), **CẤM median**; coverage floor 2018-10-01; resample `prod(min_count=1)`; hit-rate chỉ tính trên tháng có data; members v1 versioned trong tool.
+Quy ước tính toán (khóa): basket equal-weight = mean lợi suất ngày (daily-rebalanced), **CẤM median**; coverage floor 2018-10-01; resample `prod(min_count=1)`; hit-rate chỉ tính trên tháng có data; members v2 (15 mảng) versioned trong tool; tham số `basket` nhận tên Việt không dấu.
 
 ## 4. Fallback khi MCP tools không sẵn sàng
 
@@ -46,3 +46,4 @@ Skill chỉ giữ phương pháp; mọi con số luôn tra tool ở lần dùng.
 
 - [2026-10-09] stats v1→v2 (khởi tạo PG từ cache, as_of 2026-10-09): seed 180.621 dòng/90 mã; định nghĩa: chuyển references sang methodology-only (xóa bảng số, giữ logic), workflow SKILL.md chuyển sang MCP tools; xóa harness cycle_stats_* (TS+py+cache JSON). Review bởi quy trình mục 6.
 - [2026-10-11] Bỏ mục tự sửa file skill; tool refresh không còn nạp sẵn; dừng khi bảng chưa có dữ liệu.
+- [2026-10-18] members v1→v2 (as_of 2026-10-18, rebuild toàn bộ): danh sách ngành đổi thành 15 mảng/119 mã — tách **Vin** (VIC/VHM/VRE/VPL) khỏi BĐS; gộp viễn thông vào CNTT; bỏ mã chết ITA/POM/SFN; bổ sung 43 mã cho các mảng mỏng (bảo hiểm/xây dựng/thép/hóa chất/điện/thực phẩm/vận tải...). Server thêm: alias tên Việt cho `basket`, cảnh báo `members_version` cũ ở `cycle_stats_check`, 3 cặp chuỗi Vin, cột `vin` trong `cycle_trough_events`. Số mới phủ định vài quy tắc cũ (xem `rotation-chains.md` mục 1/4, `market-history.md` mục 2) — đã cập nhật references theo bảng v2.
