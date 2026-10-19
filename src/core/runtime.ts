@@ -29,6 +29,9 @@ import { readFileTool } from "./tools/fs/read"
 import { globFilesTool, grepFilesTool } from "./tools/fs/search"
 import { editFileTool, writeFileTool } from "./tools/fs/write"
 import { shellTool } from "./tools/shell/shell"
+import { detectShell } from "./tools/shell/run"
+import { AutoReviewer } from "./permission/auto"
+import { resolveTarget } from "./chat"
 import { FileHistory, pruneHistory } from "./fs/history"
 import { matchToolPattern } from "./tools/patterns"
 import { connectedProviders } from "./auth"
@@ -55,6 +58,8 @@ export interface Runtime {
   files: FileState
   /** Copies taken before write_file/edit_file changed a file (/undo). */
   history: FileHistory
+  /** ▸▸ auto mode's reviewer; also the log of the user's words and the agent's actions. */
+  auto: AutoReviewer
 }
 
 export type MemoryChoice = "none" | "file"
@@ -133,11 +138,26 @@ export function initRuntime(opts: { cwd?: string; home?: string; skills: () => S
     }),
   )
   registry.register(toolSearchTool(registry, () => mcp.status().filter((s) => s.state === "connecting").map((s) => s.name)))
+  const auto = new AutoReviewer({
+    target: async () => {
+      const model = (await loadConfig()).autoMode?.model
+      return resolveTarget(model?.model ? model : undefined)
+    },
+    config: async () => (await loadConfig()).autoMode,
+    environment: () => [
+      `Workspace folders (trusted for files): ${workspace.roots().join("; ")}${workspace.fallbackReason ? " (a dedicated folder, because OpenTrading was opened in the home folder or a drive root)" : ""}.`,
+      `OpenTrading data folder (protected: keys, config, rules): ${home}.`,
+      `Machine: ${process.platform === "win32" ? "Windows" : process.platform}, shell ${detectShell().kind}.`,
+      `Connected OpenTrading data servers (MCP, trusted for market data): ${mcp.status().filter((s) => s.state === "connected").map((s) => s.name).join(", ") || "none"}.`,
+    ],
+  })
+  permissions.auto = auto
+  questions.onAnswered = (qs, answers) => auto.log.answer(qs.map((q) => `${q.question} → ${answers[q.question] ?? "(bỏ qua)"}`).join("\n"))
   const subagents = new SubagentManager({ parent: registry, skills: opts.skills, serverInstructions: () => mcp.instructions() })
   registry.register(spawnSubagentTool(subagents))
   registry.register(sendMessageTool(subagents))
   registry.register(stopAgentTool(subagents))
-  const runtime: Runtime = { registry, permissions, questions, mcp, hooks: new HookBus(), memory: new NoopMemory(), subagents, home, workspace, files, history }
+  const runtime: Runtime = { registry, permissions, questions, mcp, hooks: new HookBus(), memory: new NoopMemory(), subagents, home, workspace, files, history, auto }
   switchMemory(runtime, opts.memory ?? new NoopMemory())
   return runtime
 }

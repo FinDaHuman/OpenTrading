@@ -72,6 +72,7 @@ function kindOf(req: ApprovalRequest): string {
   if (scope.startsWith("outside:")) return "ghi ngoài workspace"
   if (scope === "lap-lai") return "model gọi lặp lại cùng một lời gọi"
   if (req.mode === "read-only" && req.effect) return "đang ở chế độ ‖ chỉ đọc"
+  if (req.notice) return "auto mode chuyển cho bạn duyệt"
   if (req.annotations?.destructive) return "thay đổi không hoàn tác được"
   if (scope.startsWith("domain:")) return `đọc trang từ domain mới: ${scope.slice("domain:".length)}`
   if (req.effect === "file") return "ghi file"
@@ -219,6 +220,11 @@ export function ApprovalPrompt(props: { gate: PermissionGate; request: ApprovalR
           <Show when={diff().length > diffRows()}>
             <text fg={color.tx3} flexShrink={0}>{`… còn ${diff().length - diffRows()} dòng (+${req().preview!.added ?? 0} −${req().preview!.removed ?? 0})`}</text>
           </Show>
+        </Show>
+        <Show when={req().notice}>
+          <text fg={color.tham} wrapMode="word" flexShrink={0}>
+            {`▸▸ ${req().notice}`}
+          </text>
         </Show>
         <For each={description()}>
           {(line) => (

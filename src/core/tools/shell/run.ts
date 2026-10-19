@@ -85,6 +85,16 @@ async function killTree(pid: number) {
   }
 }
 
+/** Names that hold keys and tokens (GOOGLE_GENERATIVE_AI_API_KEY, GITHUB_TOKEN, AWS_SECRET_ACCESS_KEY…). */
+const SECRET_ENV = /(API_?KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIALS?)(_|$)|^OPENTRADING_/i
+
+/** The parent's environment without secrets. */
+export function childEnv(env: NodeJS.ProcessEnv): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const [k, v] of Object.entries(env)) if (v !== undefined && !SECRET_ENV.test(k)) out[k] = v
+  return out
+}
+
 /** Collected output is capped in memory: past this, the middle is dropped. */
 const MEMORY_CAP = 4 * 1024 * 1024
 
@@ -96,8 +106,10 @@ export async function runShell(command: string, opts: { cwd: string; timeoutMs: 
     stdin: "ignore",
     stdout: "pipe",
     stderr: "pipe",
-    // Python prints Vietnamese as UTF-8 even on a Windows console code page.
-    env: { ...process.env, PYTHONIOENCODING: "utf-8", PYTHONUTF8: "1", ...opts.env },
+    // Python prints Vietnamese as UTF-8 even on a Windows console code page. Provider keys
+    // set as environment variables stay out of the child: `printenv` would put them in the
+    // transcript the model provider receives.
+    env: { ...childEnv(process.env), PYTHONIOENCODING: "utf-8", PYTHONUTF8: "1", ...opts.env },
     windowsHide: true,
     // POSIX: its own process group, so a timeout kills the children too.
     detached: process.platform !== "win32",

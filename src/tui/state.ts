@@ -103,6 +103,8 @@ export const [state, setState] = createStore({
   approvals: [] as ApprovalRequest[],
   /** ‖ read-only / ▸ ask (Shift+Tab); mirrors PermissionGate.mode. */
   permissionMode: "read-only" as PermissionMode,
+  /** ▸▸ auto's classifier paused after a quota error, until this time (ms). */
+  autoPausedUntil: undefined as number | undefined,
   /** Subagent types (bundled, user, project) and files that failed to load. */
   agentDefs: [] as AgentDefinition[],
   agentProblems: [] as AgentProblem[],

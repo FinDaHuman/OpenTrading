@@ -43,6 +43,8 @@ export class AskBroker {
   private nextId = 1
   /** Set by the TUI. Without it the model is told to ask in plain text. */
   interactive = false
+  /** The user's answers as they come (the auto-mode classifier counts them as the user's words). */
+  onAnswered?: (questions: AskQuestion[], answers: Record<string, string>) => void
 
   head(): AskRequest | undefined {
     return this.queue[0]?.request
@@ -80,6 +82,7 @@ export class AskBroker {
     if (index < 0) return
     const [pending] = this.queue.splice(index, 1)
     pending!.cleanup()
+    if (answers) this.onAnswered?.(pending!.request.questions, answers)
     pending!.resolve(answers ? { answered: true, answers } : { answered: false, reason: "declined" })
     this.emit()
   }

@@ -83,6 +83,7 @@ export async function startSession(runtime: Runtime, source: "startup" | "clear"
   setState({ notices: [], noticeHold: false })
   // A fresh conversation has not seen the market clock yet.
   setState({ lines: [], history: [], clock: undefined, ...NO_COMPACTION })
+  runtime.auto.reset()
   await runtime.hooks.emit({ type: "session-start", sessionId: current.id, source })
 }
 
@@ -125,6 +126,8 @@ export async function resumeSession(runtime: Runtime, id: string) {
     })
   }
 
+  // The auto-mode classifier reads the whole conversation, from before any /compact too.
+  runtime.auto.reset(loaded.display, (name) => runtime.registry.get(name), visibleUserText)
   // The clock snapshot is unknown after resume, so the next turn re-sends it.
   setState({ lines: [...notes, ...lines], history: loaded.messages, clock: undefined, ...NO_COMPACTION, contextTokens: loaded.contextTokens })
   await runtime.hooks.emit({ type: "session-start", sessionId: current.id, source: "resume" })

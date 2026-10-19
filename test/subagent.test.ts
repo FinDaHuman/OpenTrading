@@ -700,3 +700,29 @@ test("idleMs không hợp lệ (0) bị bỏ qua, dùng mặc định 5 phút", 
   await collect(runAgent({ history: [], input: "phân tích HPG", skills: [], registry }))
   expect(manager.list()[0]).toMatchObject({ status: "completed" })
 })
+
+test("watchdog: a tool still running in the child (long command, auto-mode review) is not idleness", async () => {
+  await saveConfig({ provider: "groq", model: "tooly", subagents: { idleMs: 1200, maxConcurrent: 5 } })
+  const { z } = await import("zod")
+  const { registry, manager } = setup((r) =>
+    r.register({ name: "cham", description: "chậm", input: z.object({}), readOnly: true, execute: () => new Promise((res) => setTimeout(() => res("xong"), 2600)) }),
+  )
+  childCall = { name: "cham", args: {} }
+  parentCalls = [spawn("Kỹ thuật HPG")]
+  await collect(runAgent({ history: [], input: "phân tích HPG", skills: [], registry }))
+  expect(manager.list()[0]).toMatchObject({ status: "completed" })
+}, 20_000)
+
+test("the auto-mode log gets the user's words from the main turn and the task as the main agent's", async () => {
+  const { AutoReviewer } = await import("../src/core/permission/auto")
+  const { registry } = setup()
+  const gate = new PermissionGate({ load: async () => [], save: async () => {} })
+  gate.auto = new AutoReviewer({ target: async () => undefined, config: async () => undefined, environment: () => [] })
+  registry.gate = gate
+  parentCalls = [spawn("Kỹ thuật HPG")]
+  await collect(runAgent({ history: [], input: "phân tích HPG giúp mình", skills: [], registry }))
+  const log = gate.auto.log.render()
+  expect(log).toContain('{"user":"phân tích HPG giúp mình"}')
+  expect(log).toContain('"main_agent_task":"Phân tích Kỹ thuật HPG"')
+  expect(log).not.toContain('{"user":"Phân tích Kỹ thuật HPG"}')
+})

@@ -1,6 +1,7 @@
 import { loadConfig, saveConfig } from "../config"
 import { isInside, isSensitiveScope } from "../fs/path-safety"
 import type { AgentOrigin, ApprovalPreview, ToolDef } from "../tools/types"
+import { blockedMessage, type AutoReviewer } from "./auto"
 import type { PermissionMode } from "./mode"
 
 export { cycleMode, MODE_LABEL, modeNote, type PermissionMode } from "./mode"
@@ -68,6 +69,8 @@ export interface ApprovalRequest {
   effect?: ToolDef["effect"]
   /** The diff of a write, the target in one line. */
   preview?: ApprovalPreview
+  /** ▸▸ auto mode handed this one to the user: why (classifier unavailable, blocked 3 times…). */
+  notice?: string
 }
 
 export interface Decision {
@@ -76,7 +79,7 @@ export interface Decision {
    * Why a call did not run: the user said no, the turn was cancelled, nobody could be asked,
    * a deny rule matched, or it can never run (`blocked`).
    */
-  reason?: "user" | "cancelled" | "headless" | "rule" | "blocked"
+  reason?: "user" | "cancelled" | "headless" | "rule" | "blocked" | "classifier"
   /** The user's note when denying, or why it is blocked. */
   message?: string
 }
@@ -169,6 +172,8 @@ export class PermissionGate {
   private sessionDirs = new Map<string, string[]>()
   /** Set by the TUI. Without it every request is denied. */
   interactive = false
+  /** ▸▸ auto mode's reviewer (runtime.ts); it also keeps the log the classifier reads, in every mode. */
+  auto?: AutoReviewer
 
   constructor(private rules: RuleStore = configRuleStore) {}
 
@@ -236,7 +241,13 @@ export class PermissionGate {
     const scope = scopeOf(def, input)
     const subject = def.subject?.(input)
     return (await this.rules.load()).some(
-      (r) => r.scope === scope && wildcard(r.tool, def.name) && (!r.pattern || (subject !== undefined && wildcard(r.pattern, subject))),
+      (r) =>
+        r.scope === scope &&
+        wildcard(r.tool, def.name) &&
+        (!r.pattern || (subject !== undefined && wildcard(r.pattern, subject))) &&
+        // ▸▸ auto: a hand-written wildcard rule (`mcp__x__*`) would let whole tool families skip
+        // the classifier; only rules for one tool count (Claude Code drops broad rules too).
+        !(this.current === "auto" && r.tool.includes("*")),
     )
   }
 
@@ -256,9 +267,12 @@ export class PermissionGate {
 
   /** Resolve before the tool runs. Waiting here never counts against the tool's timeout. */
   async check(def: ToolDef, input: unknown, signal: AbortSignal, label = def.name, callId?: string, agent?: AgentOrigin): Promise<Decision> {
+    const scope = def.askFor?.(input)
+    // The classifier's view of what the agent did, kept in every mode (the loop guard's
+    // second look at the same call is not a new action).
+    if (scope !== LOOP_SCOPE) this.auto?.log.action(def, input, agent)
     const blocked = def.blockFor?.(input)
     if (blocked) return { allow: false, reason: "blocked", message: blocked }
-    const scope = def.askFor?.(input)
     const subject = def.subject?.(input)
     // Deny rules first, from memory: they stop reads too (refreshRules loads them).
     if (this.lists?.deny.some((r) => listMatches(r, def, subject))) return { allow: false, reason: "rule" }
@@ -271,6 +285,16 @@ export class PermissionGate {
       if (sessionOk(scope) && this.session.has(key)) return { allow: true }
     } else if (!lists.ask.some((r) => listMatches(r, def, subject))) {
       if (this.approvalsApply(def) && (this.sessionCovers(def, input, key) || (await this.allowedAlways(def, input)))) return { allow: true }
+    }
+    let notice: string | undefined
+    if (this.current === "auto" && this.auto && !userOnly(scope) && !lists.ask.some((r) => listMatches(r, def, subject))) {
+      // A new file, or one this run created, in the workspace: the copy in /undo is the safety net.
+      if (def.effect === "file" && (await def.autoSafe?.(input))) return { allow: true }
+      const review = await this.auto.review(def, input, agent, signal).catch(() => undefined)
+      if (signal.aborted) return { allow: false, reason: "cancelled" }
+      if (review?.decision === "allow") return { allow: true }
+      if (review?.decision === "block") return { allow: false, reason: "classifier", message: blockedMessage(review.label, review.reason) }
+      notice = review?.why ?? "model duyệt lỗi"
     }
     if (!this.interactive) return { allow: false, reason: "headless" }
     if (signal.aborted) return { allow: false, reason: "cancelled" }
@@ -291,6 +315,7 @@ export class PermissionGate {
         ...(preview ? { preview } : {}),
         ...(agent ? { agent } : {}),
         ...(scope !== undefined ? { scope } : {}),
+        ...(notice ? { notice } : {}),
       }
       const onAbort = () => {
         this.queue = this.queue.filter((p) => p.request.id !== request.id)
@@ -313,7 +338,10 @@ export class PermissionGate {
     // Only what the prompt offered counts ("always" on a key file becomes the session).
     const offered = pending!.request.choices
     if (!offered.includes(choice)) choice = choice === "always" && offered.includes("session") ? "session" : "once"
+    if (pending!.request.mode === "auto") this.auto?.userAnswered()
     if (choice === "deny") {
+      // The user's note is their own words: the classifier reads it too.
+      if (message?.trim()) this.auto?.log.answer(`(từ chối ${pending!.def.name}) ${message.trim()}`)
       pending!.resolve({ allow: false, reason: "user", message: message?.trim() || undefined })
     } else {
       if (choice === "mode") this.setMode("ask")
@@ -360,6 +388,7 @@ export function deniedMessage(decision: Decision) {
   if (decision.reason === "cancelled") return "Lời gọi tool đã bị huỷ."
   if (decision.reason === "headless") return "Lời gọi này cần người dùng xác nhận, nhưng không có giao diện để hỏi. Không chạy."
   if (decision.reason === "blocked") return `Không chạy được: ${decision.message ?? "lời gọi này bị chặn"}. Đừng thử lại cùng cách.`
+  if (decision.reason === "classifier") return decision.message ?? "Auto mode chặn lời gọi này."
   if (decision.reason === "rule") return "Người dùng đã đặt quy tắc chặn lời gọi này (cấu hình permissions.deny). Đừng thử lại; làm cách khác hoặc hỏi người dùng."
   return decision.message
     ? `Người dùng từ chối chạy tool này. Lời nhắn của người dùng: ${decision.message}`

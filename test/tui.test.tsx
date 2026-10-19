@@ -1302,7 +1302,13 @@ test("shift+tab cycles ‖ chỉ đọc ↔ ▸ sửa có hỏi; a write in read
   await setup.waitForFrame((f) => f.includes("▸ sửa có hỏi"))
   expect(runtime.permissions.mode).toBe("ask")
   setup.mockInput.pressTab({ shift: true })
+  await setup.waitFor(() => runtime.permissions.mode === "auto")
+  // The first switch to auto explains it once.
+  await setup.waitFor(() => state.lines.some((l) => l.kind === "info" && l.text.startsWith("▸▸ Tự động:")))
+  await setup.waitFor(async () => (await loadConfig()).permissions?.autoAcknowledged === true)
+  setup.mockInput.pressTab({ shift: true })
   await setup.waitFor(() => runtime.permissions.mode === "read-only")
+  await saveConfig({ permissions: undefined })
 
   const write = runtime.registry.get("write_file")!
   const decision = runtime.permissions.check(write, { path: "tui-ke-hoach.md", content: "# Kế hoạch\nTheo dõi FPT\n" }, new AbortController().signal, "write_file tui-ke-hoach.md", "c-tui")

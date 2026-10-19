@@ -9,7 +9,8 @@ import { color } from "./theme"
 export async function startTui(resume: string | undefined) {
   const config = await loadConfig()
   const runtime = initRuntime({ skills: () => state.skills, memory: createMemory(config.memory?.provider), workspaceDirs: config.workspace?.dirs })
-  runtime.permissions.setMode(config.permissions?.defaultMode === "ask" ? "ask" : "read-only")
+  const mode = config.permissions?.defaultMode
+  runtime.permissions.setMode(mode === "ask" || mode === "auto" ? mode : "read-only")
   await runtime.permissions.refreshRules()
 
   // Ctrl+C is handled inside the app; this is the fallback if the terminal still delivers SIGINT.

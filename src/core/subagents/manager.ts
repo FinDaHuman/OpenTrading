@@ -388,8 +388,10 @@ export class SubagentManager {
       // approval never counts.
       let last = Date.now()
       watchdog = setInterval(() => {
+        // Waiting on the user, or on a tool still running (a long shell command, an auto-mode
+        // review), is not being idle.
         const asking = child.gate?.pending().some((r) => r.agent?.id === run.id)
-        if (asking) last = Date.now()
+        if (asking || run.tools.some((t) => t.status === "running")) last = Date.now()
         else if (Date.now() - last > this.idleMs) {
           idleStop = true
           run.controller.abort()
