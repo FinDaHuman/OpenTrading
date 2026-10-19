@@ -44,6 +44,8 @@ let childGate: Promise<void> | undefined
 let answerReasoning: string[] = []
 /** The child answers with a slow reasoning stream, one chunk per 80ms (idleMs tests). */
 let childSlowReasoning = false
+/** The child sends one reasoning chunk, then the stream never closes (stall tests). */
+let childDanglingStream = false
 
 const sse = (chunks: object[]) =>
   new Response(chunks.map((c) => `data: ${JSON.stringify(c)}\n\n`).join("") + "data: [DONE]\n\n", {
@@ -102,6 +104,22 @@ const sseSlow = (reasoning: string[], content: string, gapMs: number) => {
   return new Response(stream, { headers: { "content-type": "text/event-stream" } })
 }
 
+/** A response body that sends one reasoning chunk and then never closes. */
+const sseDangling = () => {
+  const encoder = new TextEncoder()
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      try {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk({ reasoning: "bắt đầu nghĩ" }))}\n\n`))
+      } catch {
+        // closed already
+      }
+      // Never closes: the reader waits until the request is aborted.
+    },
+  })
+  return new Response(stream, { headers: { "content-type": "text/event-stream" } })
+}
+
 const isChild = (body: Body) => typeof body.messages[0]?.content === "string" && (body.messages[0].content as string).includes("<subagent>")
 
 const realFetch = globalThis.fetch
@@ -120,6 +138,7 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     ])
     if (childStatus) return Response.json({ error: { message: "upstream down", type: "server_error" } }, { status: childStatus })
     if (childCall && !hasToolResult && body.tool_choice !== "none") return toolCalls([childCall])
+    if (childDanglingStream) return sseDangling()
     if (childSlowReasoning) return sseSlow(Array.from({ length: 15 }, (_, i) => `nghĩ bước ${i}`), childReport, 80)
     return answer(childReport, childUsage)
   }
@@ -159,6 +178,7 @@ beforeEach(async () => {
   childGate = undefined
   answerReasoning = []
   childSlowReasoning = false
+  childDanglingStream = false
   await saveConfig({ provider: "groq", model: "tooly", subagents: undefined })
 })
 
@@ -591,4 +611,34 @@ test("watchdog đọc idleMs: run im lặng bị dừng theo idleMs thay vì ch�
   const view = manager.list()[0]!
   expect(view.status).toBe("stopped")
   expect(view.error).toContain("không có tiến triển trong 0.4 giây")
+})
+
+test("request treo trước part đầu bị cắt bằng lỗi stall", async () => {
+  process.env.OPENTRADING_STALL_MS = "300"
+  try {
+    childGate = new Promise(() => {}) // treo hẳn, không trả gì
+    const { registry } = setup()
+    parentCalls = [spawn("Kỹ thuật HPG")]
+    const events = await collect(runAgent({ history: [], input: "phân tích HPG", skills: [], registry }))
+    const [end] = ends(events)
+    expect(end!.ok).toBe(false)
+    expect(end!.output).toContain("không gửi dữ liệu")
+  } finally {
+    delete process.env.OPENTRADING_STALL_MS
+  }
+})
+
+test("stream treo giữa chừng (sau 1 reasoning chunk) bị cắt bằng lỗi stall", async () => {
+  process.env.OPENTRADING_STALL_MS = "300"
+  try {
+    childDanglingStream = true
+    const { registry } = setup()
+    parentCalls = [spawn("Kỹ thuật HPG")]
+    const events = await collect(runAgent({ history: [], input: "phân tích HPG", skills: [], registry }))
+    const [end] = ends(events)
+    expect(end!.ok).toBe(false)
+    expect(end!.output).toContain("không gửi dữ liệu")
+  } finally {
+    delete process.env.OPENTRADING_STALL_MS
+  }
 })

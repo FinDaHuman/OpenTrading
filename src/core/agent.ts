@@ -48,6 +48,13 @@ const SUMMARY_PROMPT =
  */
 const NUDGE_PROMPT = "Hãy trả lời câu hỏi của người dùng dựa trên kết quả tool ở trên. Không gọi thêm tool."
 
+/** No stream part at all for this long: the request is stalled, not slow. */
+export const LLM_STALL_MS = 120_000
+
+/** What a stalled request reports; the turn fails instead of hanging. */
+const stallMessage = (ms: number) =>
+  `Model không gửi dữ liệu trong ${Math.round(ms / 1000)}s (provider hoặc mạng treo); đã dừng lượt để báo lỗi thay vì treo. Gửi lại tin nhắn hoặc đổi model.`
+
 /**
  * Sent after each round of tool results (never stored): weak models drift to one call per
  * step and lose the formatting rules once tool output piles up. It sits at the very end of
@@ -300,10 +307,23 @@ async function* relay(
   signal: AbortSignal | undefined,
   outcome: Outcome,
   notices?: RetryNotices,
+  stall?: { ms: number; onStall: () => void },
 ): AsyncGenerator<AgentEvent> {
   const started = new Map<string, number>()
+  // A request is alive while parts arrive OR while a tool call it made still runs: tool
+  // execution can take minutes (spawn_subagent, ask_user, MCP) and streams no parts.
+  const pendingTools = new Set<string>()
+  let stallTimer: ReturnType<typeof setTimeout> | undefined
+  const rearm = () => {
+    if (!stall) return
+    clearTimeout(stallTimer)
+    if (pendingTools.size > 0) return
+    stallTimer = setTimeout(stall.onStall, stall.ms)
+    stallTimer.unref?.()
+  }
   try {
     const parts = result.stream[Symbol.asyncIterator]()
+    rearm()
     let pending = parts.next()
     for (;;) {
       // While a request waits to be retried no part arrives: show the wait meanwhile.
@@ -315,6 +335,7 @@ async function* relay(
       if (next.done) break
       pending = parts.next()
       const part = next.value
+      rearm()
       switch (part.type) {
         case "start-step":
           outcome.steps++
@@ -340,6 +361,8 @@ async function* relay(
           break
         case "tool-call":
           started.set(part.toolCallId, Date.now())
+          pendingTools.add(part.toolCallId)
+          rearm()
           yield {
             type: "tool-start",
             callId: part.toolCallId,
@@ -360,6 +383,8 @@ async function* relay(
             chart: ok ? chartOf(part.output) : undefined,
             durationMs: Date.now() - (started.get(part.toolCallId) ?? Date.now()),
           }
+          pendingTools.delete(part.toolCallId)
+          rearm()
           break
         }
         case "abort":
@@ -373,6 +398,8 @@ async function* relay(
   } catch (error) {
     if (signal?.aborted) outcome.aborted = true
     else outcome.failure = error
+  } finally {
+    clearTimeout(stallTimer)
   }
   if (signal?.aborted) outcome.aborted = true
 }
@@ -740,6 +767,15 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
   const user = userMessage(opts.input, assembled.reminders, opts.images)
   // A vision model's screenshots stay in history; a model without vision gets placeholders.
   const notices = new RetryNotices()
+  // A request that streams nothing for a long time is stalled, not slow: cut it (LLM_STALL_MS).
+  const stall = new AbortController()
+  let stalled = false
+  const stallMs = Number(process.env.OPENTRADING_STALL_MS ?? LLM_STALL_MS)
+  const abortSignal = opts.signal ? AbortSignal.any([opts.signal, stall.signal]) : stall.signal
+  const onStall = () => {
+    stalled = true
+    stall.abort()
+  }
   const { system, request, model } = requestFor(prepared, [...opts.history, user], notices.options)
   let summarized = false
   const nudge = nudgeAfterTools(target)
@@ -772,7 +808,7 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
       return { toolChoice: "none", activeTools: active, messages: [...messages, { role: "user", content: SUMMARY_PROMPT }] }
     },
     experimental_repairToolCall: async ({ toolCall, error }) => repairCall(opts.registry, built, active, loaded, toolCall, error),
-    abortSignal: opts.signal,
+    abortSignal,
     // The model is wrapped with retry.ts (by kind of failure, shown to the user, Esc
     // cancels the wait); the SDK's blind retry would repeat a daily-quota 429.
     maxRetries: 0,
@@ -780,7 +816,11 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
   })
 
   const outcome: Outcome = { text: "", aborted: false, steps: 0 }
-  yield* relay(result, opts.registry, opts.signal, outcome, notices)
+  yield* relay(result, opts.registry, opts.signal, outcome, notices, { ms: stallMs, onStall })
+  if (stalled) {
+    outcome.aborted = false
+    outcome.failure = new Error(stallMessage(stallMs))
+  }
   // The request whose usage measures the context (the empty-answer retry replaces it).
   let measured: { steps: PromiseLike<{ usage: LanguageModelUsage }[]> } = result
 
@@ -805,12 +845,16 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
       tools,
       activeTools: activeFor(built, [...request, ...kept]),
       toolChoice: tools ? "none" : undefined,
-      abortSignal: opts.signal,
+      abortSignal,
       maxRetries: 0,
       onError: () => {},
     })
     const second: Outcome = { text: "", aborted: false, steps: 0 }
-    yield* relay(retry, opts.registry, opts.signal, second, notices)
+    yield* relay(retry, opts.registry, opts.signal, second, notices, { ms: stallMs, onStall })
+    if (stalled) {
+      second.aborted = false
+      second.failure = new Error(stallMessage(stallMs))
+    }
     measured = retry
     if (second.usage) {
       outcome.usage = { input: (outcome.usage?.input ?? 0) + second.usage.input, output: (outcome.usage?.output ?? 0) + second.usage.output }
