@@ -6,13 +6,16 @@ import { DOMParser } from "linkedom"
  * reports often come as one of these. Both are ZIP files of XML; a small ZIP reader (stored
  * and deflated entries, no ZIP64, no encryption) and linkedom's XML parser are enough, so no
  * new dependency. Formulas show their last computed value; dates stay Excel serial numbers
- * unless the cell is typed as a date string.
+ * unless the cell is typed as a date string; numbers are shown to 15 significant digits, as
+ * Excel does (the stored double 0.30000000000000004 is the 0.3 the user sees).
+ * Everything runs synchronously, so entries are capped by what they actually inflate to (a
+ * crafted file can lie about its declared size) and only the sheet asked for is parsed.
  */
 
-const MAX_ENTRY_BYTES = 64 * 1024 * 1024
+export const MAX_ENTRY_BYTES = 32 * 1024 * 1024
 
-/** The files inside a ZIP, read lazily by name. */
-export function readZip(bytes: Uint8Array): Map<string, () => Uint8Array> {
+/** The files inside a ZIP, read lazily by name; an entry inflating past `maxEntry` throws. */
+export function readZip(bytes: Uint8Array, maxEntry = MAX_ENTRY_BYTES): Map<string, () => Uint8Array> {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
   // End of central directory: scan back over a comment of at most 64 KB.
   let eocd = -1
@@ -42,11 +45,18 @@ export function readZip(bytes: Uint8Array): Map<string, () => Uint8Array> {
     at += 46 + nameLen + extraLen + commentLen
     files.set(name, () => {
       if (flags & 1) throw new Error("file có mật khẩu, không đọc được")
-      if (size > MAX_ENTRY_BYTES) throw new Error(`phần ${name} quá lớn`)
+      if (size > maxEntry || compressed > maxEntry) throw new Error(`phần ${name} quá lớn`)
       const start = local + 30 + view.getUint16(local + 26, true) + view.getUint16(local + 28, true)
       const data = bytes.subarray(start, start + compressed)
       if (method === 0) return data
-      if (method === 8) return new Uint8Array(inflateRawSync(data))
+      if (method === 8) {
+        try {
+          return new Uint8Array(inflateRawSync(data, { maxOutputLength: maxEntry }))
+        } catch (error) {
+          if (error instanceof RangeError || (error as { code?: string }).code === "ERR_BUFFER_TOO_LARGE") throw new Error(`phần ${name} quá lớn khi giải nén`)
+          throw new Error(`phần ${name} bị hỏng`)
+        }
+      }
       throw new Error(`kiểu nén ${method} chưa hỗ trợ`)
     })
   }
@@ -63,9 +73,19 @@ function part(files: Map<string, () => Uint8Array>, name: string) {
 
 // ── xlsx ───────────────────────────────────────────────────────────────────
 
-export interface Sheet {
-  name: string
+export interface Workbook {
+  /** Every sheet with its row count (counted without parsing the other sheets). */
+  sheets: { name: string; rows: number }[]
+  /** The sheet that was read. */
+  index: number
   rows: string[][]
+}
+
+/** A stored double as Excel shows it: 15 significant digits, no trailing zeros. */
+export function excelNumber(v: string): string {
+  const n = Number(v)
+  if (v.trim() === "" || !Number.isFinite(n)) return v
+  return String(Number(n.toPrecision(15)))
 }
 
 /** "C12" → column index 2. */
@@ -75,9 +95,13 @@ function columnOf(ref: string) {
   return n - 1
 }
 
-/** Every sheet's cells as text (shared strings resolved, inline strings, booleans). */
-export function readXlsx(bytes: Uint8Array): Sheet[] {
-  const files = readZip(bytes)
+/**
+ * One sheet's cells as text (shared strings resolved, inline strings, booleans), chosen by name
+ * or 1-based number (default the first); the others are listed with their row counts.
+ * Throws "không có sheet" with the list when `pick` matches none.
+ */
+export function readXlsx(bytes: Uint8Array, pick?: string, maxEntry = MAX_ENTRY_BYTES): Workbook {
+  const files = readZip(bytes, maxEntry)
   const workbook = part(files, "xl/workbook.xml")
   if (!workbook) throw new Error("không thấy xl/workbook.xml: không phải file Excel .xlsx")
   const rels = part(files, "xl/_rels/workbook.xml.rels")
@@ -87,10 +111,21 @@ export function readXlsx(bytes: Uint8Array): Sheet[] {
       .map((t) => t.textContent ?? "")
       .join(""),
   )
-  return byTag(workbook, "sheet").map((s, i) => {
-    const target = (targets.get(s.getAttribute("r:id")) ?? `worksheets/sheet${i + 1}.xml`).replace(/^\/?(xl\/)?/, "")
-    const sheet = part(files, `xl/${target}`)
-    const rows: string[][] = []
+  const entries = byTag(workbook, "sheet").map((s, i) => ({
+    name: s.getAttribute("name") ?? `Sheet${i + 1}`,
+    path: `xl/${(targets.get(s.getAttribute("r:id")) ?? `worksheets/sheet${i + 1}.xml`).replace(/^\/?(xl\/)?/, "")}`,
+  }))
+  const raw = (p: string) => {
+    const read = files.get(p)
+    return read ? new TextDecoder("utf-8").decode(read()) : ""
+  }
+  const sheets = entries.map((e) => ({ name: e.name, rows: (raw(e.path).match(/<row[\s>]/g) ?? []).length }))
+  const want = pick?.trim()
+  const index = !want ? 0 : /^\d+$/.test(want) ? Number(want) - 1 : entries.findIndex((e) => e.name.toLowerCase() === want.toLowerCase())
+  if (!entries[index]) throw new Error(`không có sheet "${want}". Các sheet: ${entries.map((e, i) => `${i + 1}. ${e.name}`).join(" · ")}`)
+  const sheet = part(files, entries[index]!.path)
+  const rows: string[][] = []
+  {
     for (const row of sheet ? byTag(sheet, "row") : []) {
       const r = Number(row.getAttribute("r") ?? rows.length + 1) - 1
       const cells: string[] = []
@@ -102,12 +137,13 @@ export function readXlsx(bytes: Uint8Array): Sheet[] {
         if (type === "s") value = shared[Number(v)] ?? ""
         else if (type === "inlineStr") value = byTag(c, "t").map((t) => t.textContent ?? "").join("")
         else if (type === "b") value = v === "1" ? "TRUE" : "FALSE"
+        else if (!type || type === "n") value = excelNumber(v)
         cells[col] = value
       }
       rows[r] = Array.from(cells, (x) => x ?? "")
     }
-    return { name: s.getAttribute("name") ?? `Sheet${i + 1}`, rows: Array.from(rows, (x) => x ?? []) }
-  })
+  }
+  return { sheets, index, rows: Array.from(rows, (x) => x ?? []) }
 }
 
 const csvCell = (v: string) => (/[",\n\r]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v)
@@ -115,10 +151,17 @@ export const toCsvRow = (cells: string[]) => cells.map(csvCell).join(",")
 
 // ── docx ───────────────────────────────────────────────────────────────────
 
-const textOf = (node: Element) =>
-  byTag(node, "w:t")
-    .map((t) => t.textContent ?? "")
-    .join("")
+/** A paragraph's or cell's text in order: runs, tabs and line breaks. */
+function textOf(node: Element): string {
+  let out = ""
+  for (const child of Array.from(node.children)) {
+    if (child.tagName === "w:t") out += child.textContent ?? ""
+    else if (child.tagName === "w:tab") out += "\t"
+    else if (child.tagName === "w:br" || child.tagName === "w:cr") out += "\n"
+    else out += textOf(child)
+  }
+  return out
+}
 
 function paragraph(p: Element): string {
   const text = textOf(p).trim()
@@ -139,16 +182,21 @@ function table(tbl: Element): string {
 }
 
 /** The document body as markdown: headings, list items, paragraphs, tables. */
-export function readDocx(bytes: Uint8Array): string {
-  const files = readZip(bytes)
+export function readDocx(bytes: Uint8Array, maxEntry = MAX_ENTRY_BYTES): string {
+  const files = readZip(bytes, maxEntry)
   const doc = part(files, "word/document.xml")
   if (!doc) throw new Error("không thấy word/document.xml: không phải file Word .docx")
   const body = byTag(doc, "w:body")[0]
   if (!body) return ""
   const blocks: string[] = []
-  for (const child of Array.from(body.children)) {
-    if (child.tagName === "w:p") blocks.push(paragraph(child))
-    else if (child.tagName === "w:tbl") blocks.push(table(child))
+  // Content controls (w:sdt: templates, a table of contents) hold paragraphs and tables too.
+  const walk = (node: Element) => {
+    for (const child of Array.from(node.children)) {
+      if (child.tagName === "w:p") blocks.push(paragraph(child))
+      else if (child.tagName === "w:tbl") blocks.push(table(child))
+      else if (child.tagName === "w:sdt" || child.tagName === "w:sdtContent") walk(child)
+    }
   }
+  walk(body)
   return blocks.filter(Boolean).join("\n\n")
 }

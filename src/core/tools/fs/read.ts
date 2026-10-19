@@ -141,21 +141,20 @@ function paged(label: string, lines: string[], input: Omit<ReadFileInput, "path"
 
 /** One sheet of a workbook as CSV rows numbered like Excel rows; the other sheets are listed. */
 function readSheet(abs: string, bytes: Uint8Array, input: Omit<ReadFileInput, "path">) {
-  let sheets
+  let book
   try {
-    sheets = readXlsx(bytes)
+    book = readXlsx(bytes, input.sheet)
   } catch (error) {
     throw new Error(`Không đọc được ${abs}: ${error instanceof Error ? error.message : String(error)}`)
   }
-  if (sheets.length === 0) return `Excel ${abs} · không có sheet nào.`
-  const want = input.sheet?.trim()
-  const index = !want ? 0 : /^\d+$/.test(want) ? Number(want) - 1 : sheets.findIndex((s) => s.name.toLowerCase() === want.toLowerCase())
-  const sheet = sheets[index]
-  if (!sheet) throw new Error(`Không có sheet "${want}". Các sheet: ${sheets.map((s, i) => `${i + 1}. ${s.name}`).join(" · ")}`)
-  const list = sheets.length > 1 ? `\nCác sheet: ${sheets.map((s, i) => `${i + 1}. ${s.name} (${s.rows.length} dòng)${i === index ? " ← đang đọc" : ""}`).join(" · ")}; chọn sheet khác bằng tham số sheet.` : ""
-  const width = Math.max(0, ...sheet.rows.map((r) => r.length))
-  const head = `Excel ${abs} · sheet "${sheet.name}" · ${width} cột (dạng CSV, số đầu dòng là số dòng Excel; ngày có thể là số seri Excel, 45658 = 2025-01-01)${list}`
-  return paged(head, sheet.rows.map(toCsvRow), input, "dòng")
+  if (book.sheets.length === 0) return `Excel ${abs} · không có sheet nào.`
+  const list =
+    book.sheets.length > 1 ? `\nCác sheet: ${book.sheets.map((s, i) => `${i + 1}. ${s.name} (${s.rows} dòng)${i === book.index ? " ← đang đọc" : ""}`).join(" · ")}; chọn sheet khác bằng tham số sheet.` : ""
+  const width = Math.max(0, ...book.rows.map((r) => r.length))
+  const head =
+    `Excel ${abs} · sheet "${book.sheets[book.index]!.name}" · ${width} cột (dạng CSV, số đầu dòng là số dòng Excel; giá trị là số gốc, không theo định dạng hiển thị: ô phần trăm là phân số, 0,12 = 12%; ngày có thể là số seri Excel, 45658 = 2025-01-01)` +
+    list
+  return paged(head, book.rows.map(toCsvRow), input, "dòng")
 }
 
 export async function readFileAt(abs: string, input: Omit<ReadFileInput, "path">, state?: FileState): Promise<string | ToolResult> {
@@ -182,11 +181,11 @@ export async function readFileAt(abs: string, input: Omit<ReadFileInput, "path">
     return readPdf(abs, bytes, input.pages)
   }
   if (ext === ".xlsx" || ext === ".xlsm") {
-    if (info.size > MAX_PDF_BYTES) throw new Error(`File Excel ${abs} quá lớn (${Math.round(info.size / 1024 / 1024)} MB).`)
+    if (info.size > MAX_TEXT_BYTES) throw new Error(`File Excel ${abs} quá lớn (${Math.round(info.size / 1024 / 1024)} MB).`)
     return readSheet(abs, new Uint8Array(await Bun.file(abs).arrayBuffer()), input)
   }
   if (ext === ".docx") {
-    if (info.size > MAX_PDF_BYTES) throw new Error(`File Word ${abs} quá lớn (${Math.round(info.size / 1024 / 1024)} MB).`)
+    if (info.size > MAX_TEXT_BYTES) throw new Error(`File Word ${abs} quá lớn (${Math.round(info.size / 1024 / 1024)} MB).`)
     let text: string
     try {
       text = readDocx(new Uint8Array(await Bun.file(abs).arrayBuffer()))
