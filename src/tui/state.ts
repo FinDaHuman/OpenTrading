@@ -43,6 +43,28 @@ export type Line =
   | { kind: "error"; text: string }
   /** A background subagent finished; its result went (or goes) to the model as a notification. */
   | { kind: "agent-notice"; agentId: string; text: string; status: string }
+  /** "✻ Xong sau 1m 23s": a long turn finished (`background` subagents still running). */
+  | { kind: "done"; ms: number; background?: number }
+
+/** The turn (or compaction) being worked on, for the row above the prompt (activity.tsx). */
+export interface Activity {
+  startedAt: number
+  /** Time the turn spent waiting for the user (approval, question): not counted. */
+  pausedMs: number
+  /** Set while a prompt waits for the user. */
+  pausedAt?: number
+  /** Output tokens the provider billed for the finished steps. */
+  billedOut: number
+  /** Output tokens of the step streaming now, estimated (chars / 4). */
+  streamedOut: number
+  /** Last sign of life: a delta, a tool event, streamed reasoning. */
+  lastProgressAt: number
+  toolsRunning: number
+  verb: string
+  tip?: string
+  /** A model request waiting to be retried; `until` is when it goes out again. */
+  retry?: { attempt: number; max: number; until: number; label: string }
+}
 
 /**
  * A message typed while an answer was streaming, sent once it ends (Claude Code). `display`
@@ -102,6 +124,12 @@ export const [state, setState] = createStore({
   agents: {} as Record<string, SubagentView>,
   /** Subagent slots: running, waiting for a slot, limit (config subagents.maxConcurrent). */
   agentSlots: { running: 0, waiting: 0, max: 10 },
+  /** What is being worked on now; undefined when idle. */
+  activity: undefined as Activity | undefined,
+  /** Config `ui.tips`: a tip under the working row once a turn runs long. */
+  tips: true,
+  /** Config `autoCompact: "off"`: the status bar warns when the context runs low. */
+  autoCompactOff: false,
   /** Every approval request waiting (the head is `approval`). */
   approvals: [] as ApprovalRequest[],
   /** ‖ read-only / ▸ ask (Shift+Tab); mirrors PermissionGate.mode. */

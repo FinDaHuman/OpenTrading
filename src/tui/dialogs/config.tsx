@@ -16,7 +16,7 @@ import { Picker } from "./picker"
 
 const DEFAULT_MODE_NEXT: Record<PermissionMode, PermissionMode> = { "read-only": "ask", ask: "auto", auto: "read-only" }
 
-type Setting = "memory" | "toolSearch" | "autoCompact" | "maxSteps" | "subagentMax" | "subagentModel" | "webModel" | "autoModel" | "defaultMode"
+type Setting = "memory" | "toolSearch" | "autoCompact" | "maxSteps" | "subagentMax" | "subagentModel" | "webModel" | "autoModel" | "defaultMode" | "tips"
 type SubagentModel = { provider: string; model: string } | "inherit" | "auto"
 
 const TOOL_SEARCH_NEXT = { auto: "on", on: "off", off: "auto" } as const
@@ -124,7 +124,17 @@ export function ConfigDialog(props: { runtime: Runtime }) {
       return
     }
     if (setting === "autoCompact") {
-      await saveConfig({ autoCompact: config()?.autoCompact === "off" ? "auto" : "off" })
+      const off = config()?.autoCompact !== "off"
+      await saveConfig({ autoCompact: off ? "off" : "auto" })
+      setState("autoCompactOff", off)
+      await refetch()
+      return
+    }
+    if (setting === "tips") {
+      const current = await loadConfig()
+      const on = current.ui?.tips === false
+      await saveConfig({ ui: { ...current.ui, tips: on } })
+      setState("tips", on)
       await refetch()
       return
     }
@@ -300,9 +310,15 @@ export function ConfigDialog(props: { runtime: Runtime }) {
                 mark: autoModel() ? "●" : "○",
                 value: "autoModel" as Setting,
               },
+              {
+                label: "Mẹo khi chờ",
+                hint: config()?.ui?.tips === false ? "Tắt · enter để bật" : "Bật · một mẹo dưới dòng đang làm khi lượt chạy lâu",
+                mark: config()?.ui?.tips === false ? "○" : "●",
+                value: "tips" as Setting,
+              },
             ]}
             onPick={(s) => void toggle(s)}
-            rows={11}
+            rows={12}
           />
           <text fg={color.tx3} marginTop={1}>{`File cấu hình: ${configFile()}`}</text>
         </DialogFrame>

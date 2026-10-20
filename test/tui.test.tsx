@@ -4,6 +4,7 @@ import os from "node:os"
 import path from "node:path"
 import { testRender } from "@opentui/solid"
 import { z } from "zod"
+import { createEffect, createRoot } from "solid-js"
 
 // Isolate state from the real ~/.opentrading before any core module loads.
 const home = await mkdtemp(path.join(os.tmpdir(), "opentrading-test-"))
@@ -815,22 +816,67 @@ test("/context shows each prompt layer with its token estimate", async () => {
   await setup.waitFor(() => state.dialog === undefined)
 })
 
-test("a retried request shows one wait line, rewritten per retry, then the answer", async () => {
+test("a retried request waits on the working row (with its deadline) and leaves nothing in the transcript", async () => {
   await setKey("nvidia", "nvapi-good-key")
   overloaded = 2
-  const before = state.lines.length
-  await setup.mockInput.typeText("QUÁ-TẢI thử")
-  setup.mockInput.pressEnter()
-  await setup.waitFor(() => state.lines.slice(before).some((l) => l.kind === "user" && l.text === "QUÁ-TẢI thử"))
-  await setup.waitFor(() => !state.streaming)
-  const turn = state.lines.slice(before)
-  const waits = turn.filter((l) => l.kind === "info" && l.text.includes("thử lại sau"))
-  expect(waits).toHaveLength(1) // one line, rewritten by the second retry
-  expect(turn.some((l) => l.kind === "assistant" && l.text.includes("HẾT-CÂU-TRẢ-LỜI"))).toBe(true)
-  const frame = await setup.waitForFrame((f) => f.includes("(lần 2/4)"))
-  show(frame)
-  expect(frame).toContain("provider lỗi tạm thời (503): thử lại sau")
-  expect(frame).not.toContain("(lần 1/4)")
+  // Every retry the working row sees, in order.
+  const seen: { attempt: number; until: number; label: string }[] = []
+  const stop = createRoot((dispose) => {
+    createEffect(() => {
+      const retry = state.activity?.retry
+      if (retry) seen.push({ attempt: retry.attempt, until: retry.until, label: retry.label })
+    })
+    return dispose
+  })
+  try {
+    const before = state.lines.length
+    await setup.mockInput.typeText("QUÁ-TẢI thử")
+    setup.mockInput.pressEnter()
+    await setup.waitFor(() => state.lines.slice(before).some((l) => l.kind === "user" && l.text === "QUÁ-TẢI thử"))
+    await setup.waitFor(() => !state.streaming)
+    const turn = state.lines.slice(before)
+    expect(turn.some((l) => l.kind === "assistant" && l.text.includes("HẾT-CÂU-TRẢ-LỜI"))).toBe(true)
+    expect(turn.filter((l) => "text" in l && /thử lại|lỗi tạm thời/.test(l.text))).toEqual([])
+    expect(seen.map((r) => r.attempt)).toEqual([1, 2])
+    expect(seen[0]!.label).toBe("provider lỗi tạm thời (503)")
+    // OPENTRADING_RETRY_SCALE=0: the deadline is the real (zero) wait, not the nominal delay.
+    expect(seen[0]!.until).toBeLessThanOrEqual(Date.now())
+    expect(state.activity).toBeUndefined()
+  } finally {
+    stop()
+  }
+})
+
+test("a real retry wait counts down on the working row above the prompt, then is gone", async () => {
+  await setKey("nvidia", "nvapi-good-key")
+  const saved = process.env.OPENTRADING_RETRY_SCALE
+  // The first backoff (2–2.5 s) really waits half of that: long enough to see the row.
+  process.env.OPENTRADING_RETRY_SCALE = "0.5"
+  overloaded = 1
+  try {
+    await setup.mockInput.typeText("QUÁ-TẢI đếm ngược")
+    setup.mockInput.pressEnter()
+    let frame = ""
+    for (let i = 0; i < 100 && !frame.includes("thử lại sau"); i++) {
+      await new Promise((r) => setTimeout(r, 20))
+      await setup.renderOnce()
+      frame = setup.captureCharFrame()
+    }
+    show(frame)
+    expect(frame).toMatch(/△ Provider lỗi tạm thời \(503\) · thử lại sau [12]s \(lần 1\/4\) · esc dừng/)
+    const rows = frame.split("\n")
+    expect(rows.findIndex((r) => r.includes("thử lại sau"))).toBeLessThan(rows.findIndex((r) => r.includes("› ")))
+    await waitMcp(() => !state.streaming)
+    const answered = state.lines.findIndex((l) => l.kind === "user" && l.text === "QUÁ-TẢI đếm ngược")
+    expect(state.lines.slice(answered).some((l) => l.kind === "assistant" && l.text.includes("HẾT-CÂU-TRẢ-LỜI"))).toBe(true)
+    frame = await setup.waitForFrame((f) => f.includes("QUÁ-TẢI đếm ngược") && !f.includes("đang trả lời…"))
+    expect(frame).not.toContain("thử lại sau")
+    expect(frame).not.toContain("lỗi tạm thời")
+  } finally {
+    if (saved === undefined) delete process.env.OPENTRADING_RETRY_SCALE
+    else process.env.OPENTRADING_RETRY_SCALE = saved
+    overloaded = 0
+  }
 })
 
 test("a tool call renders as a ● row with its result under ⎿, then the answer", async () => {
@@ -1542,14 +1588,24 @@ test("todo_write: the open list is pinned above the prompt, the transcript keeps
   expect(cleared).not.toContain("[>]")
 })
 
-test("status bar shows the share of the context window used", async () => {
-  const saved = { provider: state.provider, model: state.model, contextTokens: state.contextTokens }
+test("status bar warns only near the compaction threshold (or when context runs low with it off)", async () => {
+  const saved = { provider: state.provider, model: state.model, contextTokens: state.contextTokens, autoCompactOff: state.autoCompactOff, compactFailures: state.compactFailures }
+  const bar = (f: string) => f.split("\n").find((r) => r.includes("▲ OpenTrading")) ?? ""
   try {
-    setState({ provider: "groq", model: "test-model", contextTokens: 65_536 }) // 131072-token window
-    let frame = await setup.waitForFrame((f) => f.includes("ctx 50%"))
+    setState({ provider: "groq", model: "test-model", contextTokens: 65_536 }) // 50% of a 131072-token window
+    let frame = await setup.waitForFrame((f) => bar(f).includes("Groq · test-model"))
+    expect(bar(frame)).not.toContain("tới tự nén")
+    setState("contextTokens", 91_750) // 70%: 10 points before the 80% threshold
+    frame = await setup.waitForFrame((f) => bar(f).includes("còn 10% tới tự nén"))
     show(frame)
-    setState("contextTokens", undefined)
-    frame = await setup.waitForFrame((f) => !f.includes("ctx "))
+    setState({ autoCompactOff: true, contextTokens: 117_965 }) // 90%, nothing compacts by itself
+    frame = await setup.waitForFrame((f) => bar(f).includes("context còn 10% · /compact"))
+    // Auto-compaction given up after repeated failures: the same warning, never "còn 0% tới tự nén".
+    setState({ autoCompactOff: false, compactFailures: 3 })
+    frame = await setup.waitForFrame((f) => bar(f).includes("context còn 10% · /compact"))
+    expect(bar(frame)).not.toContain("tới tự nén")
+    setState({ compactFailures: 0, contextTokens: undefined })
+    frame = await setup.waitForFrame((f) => !bar(f).includes("tới tự nén") && !bar(f).includes("context còn"))
   } finally {
     setState(saved)
   }

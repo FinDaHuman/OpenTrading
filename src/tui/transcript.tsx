@@ -5,6 +5,7 @@ import { color, markdownStyle } from "./theme"
 import { ChartBox } from "./ui/chart-box"
 import { truncate } from "./ui/text"
 import { useSpinner } from "./ui/clock"
+import { fmtElapsed } from "./activity"
 import { TODO_PREFIX } from "../core/tools/todos"
 import { LOADED_PREFIX } from "../core/tools/search"
 import { isSpawn, SubagentRow } from "./subagent-row"
@@ -205,6 +206,13 @@ function Row(props: { line: Line; prev?: Line; index: number; width: number }) {
           const l = line() as Extract<Line, { kind: "agent-notice" }>
           const fg = l.status === "xong" || l.status === "completed" ? color.tang : l.status === "lỗi" || l.status === "failed" ? color.giam : color.tx3
           return <Hanging glyph="◆" glyphColor={fg} text={l.text} fg={color.tx2} />
+        }}
+      </Match>
+      <Match when={props.line.kind === "done" && props.line}>
+        {(line) => {
+          const l = line() as Extract<Line, { kind: "done" }>
+          const bg = l.background ? ` · ${l.background} subagent nền vẫn chạy` : ""
+          return <Hanging glyph="✻" glyphColor={color.tx3} text={`Xong sau ${fmtElapsed(l.ms)}${bg}`} fg={color.tx3} />
         }}
       </Match>
       <Match when={props.line.kind === "error"}>

@@ -1,6 +1,6 @@
 import type { KeyEvent, TextareaRenderable } from "@opentui/core"
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid"
-import { createMemo, createSignal, For, Match, onCleanup, onMount, Show, Switch } from "solid-js"
+import { createEffect, createMemo, createSignal, For, Match, on, onCleanup, onMount, Show, Switch } from "solid-js"
 import { produce, reconcile } from "solid-js/store"
 import { runAgent, summarizeConversation } from "../core/agent"
 import {
@@ -20,7 +20,7 @@ import { estimateTokens } from "../core/prompt/budget"
 import { acceptsImageInput } from "../core/agent"
 import { connectedProviders } from "../core/auth"
 import { describeError } from "../core/chat"
-import { retryText } from "../core/retry"
+import type { AgentEvent } from "../core/events"
 import { loadConfig, saveConfig } from "../core/config"
 import { loadCatalog } from "../core/catalog"
 import type { Runtime } from "../core/runtime"
@@ -62,6 +62,8 @@ import { armExit, type Queued, closeDialog, contextWindow, EXIT_WINDOW_MS, onExi
 import { flash, noticeText, say, type NoticeLevel } from "./notify"
 import { announceMcp } from "./mcp/notices"
 import { Toasts } from "./toast"
+import { ActivityRow, activeMs, startActivity } from "./activity"
+import { now } from "./ui/clock"
 import { color, promptStyle } from "./theme"
 import { cleanSelection, writeClipboard } from "./clipboard"
 import { ArgumentHint, Suggestions } from "./suggestions"
@@ -107,7 +109,7 @@ export async function compact(runtime: Runtime, trigger: "auto" | "manual", inst
   const controller = new AbortController()
   abort = controller
   const window = contextWindow()
-  setState({ streaming: true, compacting: true })
+  setState({ streaming: true, compacting: true, activity: startActivity({ compacting: true }) })
   try {
     const result = await compactHistory(state.history, {
       // Auto: what the next request would hold, including the message being sent.
@@ -162,7 +164,7 @@ export async function compact(runtime: Runtime, trigger: "auto" | "manual", inst
     // Still above the threshold: do not pay for another compaction until the context grows.
     setState("compactFloor", window && result.after >= window * AUTO_COMPACT_SHARE ? result.after : undefined)
   } finally {
-    if (epoch === mine) setState({ streaming: false, compacting: false })
+    if (epoch === mine) setState({ streaming: false, compacting: false, activity: undefined })
     if (abort === controller) abort = undefined
   }
   return true
@@ -243,6 +245,44 @@ function afterTurn(runtime: Runtime, ok: boolean) {
   void send(runtime, next!)
 }
 
+/** Turns shorter than this end without a "✻ Xong sau …" line. */
+const DONE_LINE_MS = 5000
+
+/**
+ * Feed the working row: any event is a sign of life and ends a retry wait; deltas and tool
+ * inputs estimate the output so far, and the provider's count replaces the estimate per step.
+ */
+function track(event: AgentEvent) {
+  if (!state.activity) return
+  setState(
+    produce((s) => {
+      const a = s.activity
+      if (!a) return
+      a.lastProgressAt = now()
+      if (event.type !== "retry") a.retry = undefined
+      switch (event.type) {
+        case "text-delta":
+          a.streamedOut += event.text.length / 4
+          break
+        case "tool-start":
+          a.toolsRunning++
+          a.streamedOut += (JSON.stringify(event.input ?? "")?.length ?? 0) / 4
+          break
+        case "tool-end":
+          a.toolsRunning = Math.max(0, a.toolsRunning - 1)
+          break
+        case "step-usage":
+          a.billedOut += event.outputTokens
+          a.streamedOut = 0
+          break
+        case "retry":
+          a.retry = { attempt: event.attempt, max: event.max, until: event.until, label: event.label }
+          break
+      }
+    }),
+  )
+}
+
 /** One turn; true when it ran to the end (not stopped, no error, no /clear meanwhile). */
 async function sendTurn(runtime: Runtime, msg: Outgoing): Promise<boolean> {
   // A notification turn already has its "◆ Subagent nền …" lines.
@@ -252,8 +292,6 @@ async function sendTurn(runtime: Runtime, msg: Outgoing): Promise<boolean> {
   let failed = false
   // Index of the assistant line currently receiving text; -1 after a tool call.
   let current = -1
-  // The "thử lại sau Ns" line of the request being retried.
-  let retryLine = -1
   const edit = (index: number, fn: (line: any) => void) => {
     if (live() && index >= 0) setState(produce((s) => fn(s.lines[index])))
   }
@@ -267,7 +305,7 @@ async function sendTurn(runtime: Runtime, msg: Outgoing): Promise<boolean> {
 
   const controller = new AbortController()
   abort = controller
-  setState("streaming", true)
+  setState({ streaming: true, activity: startActivity() })
   try {
     const turn = runAgent({
       history: state.history,
@@ -286,6 +324,7 @@ async function sendTurn(runtime: Runtime, msg: Outgoing): Promise<boolean> {
     })
     for await (const event of turn) {
       if (!live()) continue
+      track(event)
       switch (event.type) {
         case "text-delta":
           if (current < 0) {
@@ -316,13 +355,6 @@ async function sendTurn(runtime: Runtime, msg: Outgoing): Promise<boolean> {
         case "notice":
           pushLine({ kind: "info", text: event.text })
           break
-        case "retry":
-          // One line per wait, rewritten by later retries of the same request.
-          if (retryLine < 0 || retryLine !== state.lines.length - 1) {
-            pushLine({ kind: "info", text: retryText(event) })
-            retryLine = state.lines.length - 1
-          } else edit(retryLine, (l) => (l.text = retryText(event)))
-          break
         case "error":
           failed = true
           pushLine({ kind: "error", text: event.message })
@@ -344,8 +376,13 @@ async function sendTurn(runtime: Runtime, msg: Outgoing): Promise<boolean> {
     failed = true
     if (live()) pushLine({ kind: "error", text: describeError(error) })
   } finally {
+    const worked = state.activity ? activeMs(state.activity, now()) : 0
     if (live()) {
       closeText()
+      // A long turn that ran to the end says how long it took (Claude Code's "Worked for").
+      if (!failed && !controller.signal.aborted && worked >= DONE_LINE_MS) {
+        pushLine({ kind: "done", ms: worked, background: backgroundRunning() || undefined })
+      }
       // Tools still marked running never got a result (aborted turn).
       setState(
         produce((s) => {
@@ -355,7 +392,7 @@ async function sendTurn(runtime: Runtime, msg: Outgoing): Promise<boolean> {
     }
     // History now holds the accepted calls (or, after an abort, none of this turn's).
     setState("liveTodos", undefined)
-    setState("streaming", false)
+    setState({ streaming: false, activity: undefined })
     if (abort === controller) abort = undefined
   }
   return live() && !failed && !controller.signal.aborted
@@ -480,6 +517,17 @@ export function App(props: {
   onCleanup(() => offAuto())
   const offMode = props.runtime.permissions.onModeChange((mode) => setState("permissionMode", mode))
   onCleanup(() => offMode())
+  createEffect(
+    on(
+      () => [Boolean(owner()), Boolean(state.activity)] as const,
+      ([waiting, active]) => {
+        const a = state.activity
+        if (!active || !a) return
+        if (waiting && a.pausedAt === undefined) setState("activity", "pausedAt", now())
+        else if (!waiting && a.pausedAt !== undefined) setState("activity", { pausedMs: a.pausedMs + (now() - a.pausedAt), pausedAt: undefined })
+      },
+    ),
+  )
   const offApproval = props.runtime.permissions.onChange((head) => {
     setState("approval", head)
     if (!head) queueMicrotask(() => deliverNotices(props.runtime))
@@ -506,6 +554,8 @@ export function App(props: {
       catalog,
       connected,
       compactCap: config.compactWindow ?? DEFAULT_COMPACT_WINDOW,
+      tips: config.ui?.tips !== false,
+      autoCompactOff: config.autoCompact === "off",
     })
     attachSubagents(props.runtime)
     await reloadAgents(props.runtime)
@@ -1163,6 +1213,9 @@ export function App(props: {
           </Show>
         </box>
 
+        <Show when={state.activity && !owner() && !state.dialog}>
+          <ActivityRow tips={state.tips} />
+        </Show>
         <Show when={!owner() && !state.dialog}>
           <TodoPanel />
         </Show>
@@ -1290,6 +1343,10 @@ export function App(props: {
 }
 
 const BRAND = " ▲ OpenTrading "
+/** The status bar warns this close (share of the window) to the auto-compaction threshold… */
+const CONTEXT_WARN_LEFT = 0.15
+/** …or, when nothing will compact by itself, from this share of the window on. */
+const CONTEXT_LOW_SHARE = 0.8
 const NOTICE_COLOR: Record<NoticeLevel, string> = { info: color.tx2, success: color.tang, warning: color.tham, error: color.giam }
 
 const approvalStatus = (request: { agent?: { type: string } } | undefined) =>
@@ -1308,7 +1365,19 @@ function StatusBar() {
     return window && state.contextTokens !== undefined ? Math.min(1, state.contextTokens / window) : undefined
   }
   const mcpText = () => (state.mcp.length > 0 ? ` MCP ${ready()}/${state.mcp.length} ` : "")
-  const ctxText = () => (contextShare() !== undefined ? ` ctx ${Math.round(contextShare()! * 100)}% ` : "")
+  /** Room left before auto-compaction (Claude Code's TokenWarning), shown only when it is near. */
+  const ctx = (): { text: string; fg: string } | undefined => {
+    const share = contextShare()
+    if (share === undefined) return undefined
+    // Nothing will compact by itself: turned off, given up after failures, held until the
+    // context grows, or already past the threshold. Then only /compact helps.
+    const manual = state.autoCompactOff || state.compactFailures >= MAX_AUTO_FAILURES || state.compactFloor !== undefined || share >= AUTO_COMPACT_SHARE
+    if (manual) return share >= CONTEXT_LOW_SHARE ? { text: ` context còn ${Math.max(0, Math.round((1 - share) * 100))}% · /compact `, fg: color.giam } : undefined
+    const left = AUTO_COMPACT_SHARE - share
+    if (left > CONTEXT_WARN_LEFT) return undefined
+    return { text: ` còn ${Math.max(0, Math.round(left * 100))}% tới tự nén `, fg: left <= 0.05 ? color.tham : color.tx3 }
+  }
+  const ctxText = () => ctx()?.text ?? ""
   const bgText = () => (backgroundRunning() > 0 ? ` ⧗ ${backgroundRunning()} subagent nền ` : "")
   const skillText = () => (state.activeSkills.length > 0 ? ` ✦ ${truncate(state.activeSkills.join(", "), 30)}` : "")
   const modeText = () =>
@@ -1360,7 +1429,7 @@ function StatusBar() {
           </text>
         </Show>
         <Show when={ctxText()}>
-          <text fg={contextShare()! >= AUTO_COMPACT_SHARE ? color.giam : contextShare()! >= 0.6 ? color.tham : color.tx3} flexShrink={0} selectable={false}>
+          <text fg={ctx()?.fg ?? color.tx3} flexShrink={0} selectable={false}>
             {ctxText()}
           </text>
         </Show>

@@ -42,6 +42,8 @@ export interface Config {
    * "off": only /compact does it.
    */
   autoCompact?: "auto" | "off"
+  /** TUI details. `tips` (default on): a tip under the working row during long turns. */
+  ui?: { tips?: boolean }
   /** Cap on the context window used for the 80% threshold and ctx %. Default 200000. */
   compactWindow?: number
   /**
