@@ -56,6 +56,7 @@ import { cycleMode } from "../core/permission/mode"
 import { armExit, type Queued, closeDialog, contextWindow, EXIT_WINDOW_MS, onExitRequest, providerName, pushLine, setState, state, type Line } from "./state"
 import { flash, say } from "./notify"
 import { ModeLine } from "./mode-line"
+import { loadModelPrefs } from "../core/model-prefs"
 import { AgentPanel, panelAgents } from "./agent-panel"
 import { AutoOptInDialog } from "./dialogs/auto-optin"
 import { announceMcp } from "./mcp/notices"
@@ -555,7 +556,7 @@ export function App(props: {
 
   onMount(async () => {
     void props.runtime.mcp.start()
-    const [config, skillSet, catalog] = await Promise.all([loadConfig(), loadSkills(), loadCatalog()])
+    const [config, skillSet, catalog, modelPrefs] = await Promise.all([loadConfig(), loadSkills(), loadCatalog(), loadModelPrefs()])
     const connected = await connectedProviders()
     // A key from an env var counts as connected even before /connect is used.
     setState({
@@ -569,6 +570,7 @@ export function App(props: {
       tips: config.ui?.tips !== false,
       autoCompactOff: config.autoCompact === "off",
       autoAcknowledged: config.permissions?.autoAcknowledged === true,
+      modelPrefs,
     })
     // Set to open in ▸▸ auto without ever having said yes (config or /config): ask now.
     if (config.permissions?.defaultMode === "auto" && !state.autoAcknowledged) setState("autoOptIn", { from: props.runtime.permissions.mode })

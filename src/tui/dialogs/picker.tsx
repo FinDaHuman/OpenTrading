@@ -1,6 +1,7 @@
 import { useTerminalDimensions } from "@opentui/solid"
 import { useKeys } from "../ui/keys"
-import { createMemo, createSignal, For, Show } from "solid-js"
+import { createEffect, createMemo, createSignal, For, on, Show } from "solid-js"
+import type { KeyEvent } from "@opentui/core"
 import { blocked } from "../state"
 import { color } from "../theme"
 import { pad, rank, truncate, width as cells } from "../ui/text"
@@ -16,6 +17,8 @@ export interface PickerItem<T> {
   rightColor?: string
   /** Items with the same group are shown under one heading (in the order given). */
   group?: string
+  /** A shortcut row (favourites, recent): hidden while filtering, its item is listed anyway. */
+  shortcut?: boolean
   value: T
 }
 
@@ -39,6 +42,12 @@ export function Picker<T>(props: {
   initialFilter?: string
   /** Called when the highlighted item changes (for previews). */
   onHighlight?: (value: T | undefined) => void
+  /** Row identity: the highlight stays on the same row when the list changes (ctrl+f…). */
+  itemKey?: (item: PickerItem<T>) => string
+  /** Extra keys; return true when handled. Runs before the picker's own. */
+  onKey?: (evt: KeyEvent, highlighted: T | undefined) => boolean | void
+  /** ←/→ jump to the previous/next group while the filter is empty. */
+  groupJump?: boolean
 }) {
   const dims = useTerminalDimensions()
   const [filter, setFilter] = createSignal(props.initialFilter ?? "")
@@ -47,12 +56,36 @@ export function Picker<T>(props: {
 
   const visible = createMemo(() =>
     rank(
-      props.items,
+      filter() ? props.items.filter((i) => !i.shortcut) : props.items,
       filter(),
       (i) => i.label,
       (i) => `${i.hint ?? ""} ${i.group ?? ""}`,
     ),
   )
+  // Keep the highlight on the same row when the items change under it (a favourite toggled).
+  let highlightedKey: string | undefined
+  let seenFilter = filter()
+  createEffect(
+    on(visible, (list) => {
+      // Typing moves to the best match (onInput); only a change of the items keeps the row.
+      if (filter() !== seenFilter) return void (seenFilter = filter())
+      if (!props.itemKey || highlightedKey === undefined) return
+      const at = list.findIndex((i) => props.itemKey!(i) === highlightedKey)
+      setIndex(at >= 0 ? at : Math.max(0, Math.min(index(), list.length - 1)))
+    }),
+  )
+  createEffect(() => {
+    const item = visible()[index()]
+    highlightedKey = item && props.itemKey ? props.itemKey(item) : undefined
+  })
+  /** Index of the first item of each group, in order (only while not filtering). */
+  const groupStarts = () => {
+    const starts: number[] = []
+    visible().forEach((item, i) => {
+      if (i === 0 || item.group !== visible()[i - 1]!.group) starts.push(i)
+    })
+    return starts
+  }
   const clamp = (i: number) => Math.max(0, Math.min(visible().length - 1, i))
   const wrap = (i: number) => (visible().length === 0 ? 0 : (i + visible().length) % visible().length)
 
@@ -92,6 +125,15 @@ export function Picker<T>(props: {
 
   useKeys((evt) => {
     if (evt.eventType === "release") return
+    if (props.onKey?.(evt, visible()[index()]?.value)) return
+    if (props.groupJump && !filter() && (evt.name === "left" || evt.name === "right")) {
+      evt.preventDefault()
+      const starts = groupStarts()
+      const current = starts.findLast((s) => s <= index()) ?? 0
+      const target = evt.name === "right" ? starts.find((s) => s > index()) : starts.findLast((s) => s < current)
+      if (target !== undefined) highlight(target)
+      return
+    }
     if (evt.name === "up") highlight(wrap(index() - 1))
     else if (evt.name === "down") highlight(wrap(index() + 1))
     else if (evt.name === "pageup") highlight(clamp(index() - rows()))

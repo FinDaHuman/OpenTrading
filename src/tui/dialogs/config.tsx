@@ -1,9 +1,8 @@
 import { useKeys } from "../ui/keys"
 import { MODE_LABEL, type PermissionMode } from "../../core/permission/mode"
-import { createMemo, createResource, createSignal, Match, Switch } from "solid-js"
+import { createResource, createSignal, Match, Switch } from "solid-js"
 import { loadConfig, saveConfig } from "../../core/config"
 import { configFile } from "../../core/paths"
-import { chatModels } from "../../core/providers"
 import { createMemory, switchMemory, type Runtime } from "../../core/runtime"
 import { DEFAULT_MAX_CONCURRENT } from "../../core/subagents/manager"
 import { AUTO_MODEL } from "../../core/subagents/model-pick"
@@ -12,7 +11,8 @@ import { blocked, closeDialog, providerName, setState, state } from "../state"
 import { say } from "../notify"
 import { color } from "../theme"
 import { DialogFrame } from "./frame"
-import { Picker } from "./picker"
+import { Picker, type PickerItem } from "./picker"
+import { modelChoices, type ModelChoice } from "./model-choices"
 
 const DEFAULT_MODE_NEXT: Record<PermissionMode, PermissionMode> = { "read-only": "ask", ask: "auto", auto: "read-only" }
 
@@ -54,22 +54,25 @@ export function ConfigDialog(props: { runtime: Runtime }) {
     return s?.model ? `${providerName(s.provider ?? state.provider)} · ${s.model}` : undefined
   }
 
-  /** Models of connected providers that can call tools (a subagent without tools is useless). */
-  const toolModels = createMemo(() =>
-    state.connected.flatMap((id) => {
-      const provider = state.catalog[id]
-      if (!provider) return []
+  /**
+   * Models of connected providers that can call tools (a subagent without tools is useless),
+   * grouped as in /model (favourites, recent, per provider); `chosen` is marked ●.
+   */
+  const ref = (c: { provider?: string; model?: string } | undefined) =>
+    c?.model && c.model !== AUTO_MODEL ? { provider: c.provider ?? state.provider ?? "", model: c.model } : undefined
+  const toolModels = (chosen: { provider?: string; model?: string } | undefined): PickerItem<SubagentModel>[] =>
+    modelChoices({
+      prefs: state.modelPrefs,
+      current: ref(chosen),
       // The models already chosen stay listed even if the filters would hide them.
-      const keep = [config()?.subagents, config()?.webModel, config()?.autoMode?.model].map((c) => (c && (c.provider ?? state.provider) === id ? c.model : undefined))
-      return chatModels(provider, keep)
-        .map((m) => ({
-          label: m.name,
-          hint: provider.name,
-          mark: config()?.subagents?.provider === id && config()?.subagents?.model === m.id ? "●" : " ",
-          value: { provider: id, model: m.id } as SubagentModel,
-        }))
-    }),
-  )
+      keep: [ref(config()?.subagents), ref(config()?.webModel), ref(config()?.autoMode?.model)],
+    }) as PickerItem<SubagentModel>[]
+  /** A favourite that cannot be used now is said, not saved. */
+  const usable = (c: SubagentModel) => {
+    const why = typeof c === "object" ? (c as ModelChoice).unavailable : undefined
+    if (why) say(`Không dùng được ${(c as ModelChoice).model}: ${why}.`, "error")
+    return !why
+  }
 
   async function saveMax(text: string) {
     const n = Number(text.trim())
@@ -197,12 +200,10 @@ export function ConfigDialog(props: { runtime: Runtime }) {
           <Picker
             items={[
               { label: "Theo model của phiên (mặc định)", mark: webModel() ? " " : "●", value: "inherit" as SubagentModel },
-              ...toolModels().map((m) => ({
-                ...m,
-                mark: config()?.webModel?.provider === (m.value as { provider: string }).provider && config()?.webModel?.model === (m.value as { model: string }).model ? "●" : " ",
-              })),
+              ...toolModels(config()?.webModel),
             ]}
-            onPick={(c) => void saveWebModel(c as Exclude<SubagentModel, "auto">)}
+            onPick={(c) => usable(c) && void saveWebModel(c as Exclude<SubagentModel, "auto">)}
+            groupJump
             rows={12}
             placeholder="gõ tên model để lọc…"
           />
@@ -216,12 +217,10 @@ export function ConfigDialog(props: { runtime: Runtime }) {
           <Picker
             items={[
               { label: "Theo model của phiên (mặc định)", mark: autoModel() ? " " : "●", value: "inherit" as SubagentModel },
-              ...toolModels().map((m) => ({
-                ...m,
-                mark: config()?.autoMode?.model?.provider === (m.value as { provider: string }).provider && config()?.autoMode?.model?.model === (m.value as { model: string }).model ? "●" : " ",
-              })),
+              ...toolModels(config()?.autoMode?.model),
             ]}
-            onPick={(c) => void saveAutoModel(c as Exclude<SubagentModel, "auto">)}
+            onPick={(c) => usable(c) && void saveAutoModel(c as Exclude<SubagentModel, "auto">)}
+            groupJump
             rows={12}
             placeholder="gõ tên model để lọc…"
           />
@@ -238,9 +237,10 @@ export function ConfigDialog(props: { runtime: Runtime }) {
                 mark: config()?.subagents?.model === AUTO_MODEL ? "●" : " ",
                 value: "auto" as SubagentModel,
               },
-              ...toolModels(),
+              ...toolModels(config()?.subagents),
             ]}
-            onPick={(c) => void saveModel(c)}
+            onPick={(c) => usable(c) && void saveModel(c)}
+            groupJump
             rows={12}
             placeholder="gõ tên model để lọc… (chỉ model gọi được tool)"
           />
