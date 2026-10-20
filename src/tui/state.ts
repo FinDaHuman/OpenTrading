@@ -16,6 +16,7 @@ import type { DraftSnapshot } from "./prompt/parts"
 import type { SubagentView } from "../core/subagents/types"
 import type { AgentDefinition, AgentProblem } from "../core/agents/schema"
 import type { ShownNotice } from "./notify"
+import type { ModelPrefs } from "../core/model-prefs"
 
 export type ToolStatus = "running" | "ok" | "error"
 
@@ -84,6 +85,8 @@ export const [state, setState] = createStore({
   catalog: {} as Catalog,
   /** Providers that have a stored key or env var. */
   connected: [] as ProviderId[],
+  /** Favourite and recent models (~/.opentrading/model.json). */
+  modelPrefs: { favorite: [], recent: [] } as ModelPrefs,
   /** Pre-filled filter for the next /model dialog (e.g. right after /connect). */
   modelFilter: "",
   skills: [] as Skill[],
