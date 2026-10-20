@@ -37,11 +37,16 @@ export interface Config {
   /** Deferrable tool count above which "auto" defers. Default 40. */
   toolSearchMinTools?: number
   /**
-   * "auto" (default): before a turn that would pass 80% of the context window, prune old tool
-   * results and, if still needed, summarize the start of the conversation (1 request).
+   * "auto" (default): before a turn that would pass the threshold (`autoCompactPercent`), prune
+   * old tool results and, if still needed, summarize the start of the conversation (1 request).
    * "off": only /compact does it.
    */
   autoCompact?: "auto" | "off"
+  /**
+   * Auto-compaction threshold, in % of the window minus a reserve for the answer
+   * (min(output limit, 20k)). 50–95, default 95: about 93% of a 1M window.
+   */
+  autoCompactPercent?: number
   /**
    * TUI details (default on): `tips`, a tip under the working row during long turns;
    * `terminalNotify`, a desktop notification when a turn ends or waits for you while the
@@ -50,7 +55,12 @@ export interface Config {
    * (1 row per slow notch, up to 6×) instead.
    */
   ui?: { tips?: boolean; terminalNotify?: boolean; scrollSpeed?: number; scrollAcceleration?: boolean }
-  /** Cap on the context window used for the 80% threshold and ctx %. Default 200000. */
+  /**
+   * Cap, in tokens, on the context window used for the threshold and ctx %. Unset (default):
+   * the model's whole window (models.dev `limit.input`, else `limit.context`). Gemini's free
+   * tier takes at most 250k input tokens a minute, so a larger request always fails there:
+   * set about 200000.
+   */
   compactWindow?: number
   /**
    * Subagents (spawn_subagent). `maxConcurrent`: how many run at once, foreground and

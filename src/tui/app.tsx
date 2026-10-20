@@ -4,15 +4,14 @@ import { createEffect, createMemo, createSignal, For, Match, on, onCleanup, onMo
 import { produce, reconcile } from "solid-js/store"
 import { runAgent, summarizeConversation } from "../core/agent"
 import {
-  AUTO_COMPACT_SHARE,
   COMPACT_LEAN_TOKENS,
-  DEFAULT_COMPACT_WINDOW,
   IMAGE_TOKENS,
   MAX_AUTO_FAILURES,
   compactHistory,
   compactPrompt,
   formatCompactSummary,
   isContextOverflow,
+  clampPercent,
   pruneAttachmentsForRequest,
   shouldAutoCompact,
   tokensOf,
@@ -56,7 +55,7 @@ import { attachSubagents, currentSession, recordCompact, recordTurn, resumeFromA
 import { resolveExportPath, writeExport } from "../core/session/export"
 import { cycleMode } from "../core/permission/mode"
 
-import { armExit, type Queued, closeDialog, contextWindow, EXIT_WINDOW_MS, onExitRequest, providerName, pushLine, setState, state, type Line } from "./state"
+import { armExit, type Queued, closeDialog, contextLimits, EXIT_WINDOW_MS, onExitRequest, providerName, pushLine, setState, state, type Line } from "./state"
 import { flash, say } from "./notify"
 import { ModeLine } from "./mode-line"
 import { terminalAttention, type Attention } from "./attention"
@@ -113,7 +112,7 @@ export async function compact(runtime: Runtime, trigger: "auto" | "manual", inst
   const mine = epoch
   const controller = new AbortController()
   abort = controller
-  const window = contextWindow()
+  const limits = contextLimits()
   setState({ streaming: true, compacting: true, activity: startActivity({ compacting: true }) })
   try {
     const result = await compactHistory(state.history, {
@@ -124,7 +123,7 @@ export async function compact(runtime: Runtime, trigger: "auto" | "manual", inst
           kind: "info",
           text: trigger === "auto" ? "Context gần đầy: đang tóm tắt phần đầu hội thoại (dùng 1 request)…" : "Đang tóm tắt hội thoại (dùng 1 request)…",
         }),
-      window,
+      limits,
       manual: trigger === "manual",
       instructions,
       summarize: async (head, extra) => {
@@ -153,7 +152,7 @@ export async function compact(runtime: Runtime, trigger: "auto" | "manual", inst
     }
     if (result.summary !== undefined || result.pruned > 0) {
       // The clock reminder lived in the dropped turns: send it again next turn.
-      setState({ history: result.messages, contextTokens: result.after, clock: undefined })
+      setState({ history: result.messages, contextTokens: result.after, contextEstimated: true, clock: undefined })
       recordCompact({ trigger, before: result.before, after: result.after, messages: result.messages })
       pushLine({ kind: "compact", summary: result.summary, before: result.before, after: result.after, pruned: result.pruned })
     }
@@ -167,7 +166,7 @@ export async function compact(runtime: Runtime, trigger: "auto" | "manual", inst
       }
     } else setState("compactFailures", 0)
     // Still above the threshold: do not pay for another compaction until the context grows.
-    setState("compactFloor", window && result.after >= window * AUTO_COMPACT_SHARE ? result.after : undefined)
+    setState("compactFloor", limits && result.after >= limits.threshold ? result.after : undefined)
   } finally {
     if (epoch === mine) setState({ streaming: false, compacting: false, activity: undefined })
     if (abort === controller) abort = undefined
@@ -207,7 +206,7 @@ function send(runtime: Runtime, message: string | Outgoing) {
     // Files @-attached turns ago: their content goes once it adds up (resent every request).
     const cleared = pruneAttachmentsForRequest(state.history, state.contextTokens)
     if (cleared) {
-      setState({ history: cleared.messages, contextTokens: cleared.contextTokens })
+      setState({ history: cleared.messages, contextTokens: cleared.contextTokens, contextEstimated: true })
       say(`Đã dọn nội dung ${cleared.pruned} file gắn ở các lượt cũ để tiết kiệm context.`, "info")
     }
     // Near the window: compact first, so this turn still fits.
@@ -216,7 +215,7 @@ function send(runtime: Runtime, message: string | Outgoing) {
       (state.contextTokens ?? tokensOf(state.history)) + estimateTokens(msg.text) + (msg.images?.length ?? 0) * IMAGE_TOKENS
     const auto = shouldAutoCompact({
       contextTokens: projected,
-      window: contextWindow(),
+      limits: contextLimits(),
       floor: state.compactFloor,
       failures: state.compactFailures,
       disabled: config.autoCompact === "off",
@@ -410,13 +409,17 @@ async function sendTurn(runtime: Runtime, msg: Outgoing): Promise<boolean> {
         case "notice":
           pushLine({ kind: "info", text: event.text })
           break
+        case "step-usage":
+          // Live during a long tool loop: each step's prompt plus its answer (opencode).
+          if (event.inputTokens > 0) setState({ contextTokens: event.inputTokens + event.outputTokens, contextEstimated: false })
+          break
         case "error":
           failed = true
           pushLine({ kind: "error", text: event.message })
           if (isContextOverflow(event.message)) pushLine({ kind: "info", text: "Hội thoại có thể đã quá dài cho model này: gõ /compact để nén rồi hỏi lại." })
           break
         case "done":
-          if (event.usage) setState("contextTokens", event.usage.contextTokens)
+          if (event.usage) setState({ contextTokens: event.usage.contextTokens, contextEstimated: event.usage.estimated })
           if (event.messages.length > 0) {
             setState("history", (history) => [...history, ...event.messages])
             recordTurn(event.messages, event.usage?.contextTokens)
@@ -646,7 +649,8 @@ export function App(props: {
       skillProblems: skillSet.problems,
       catalog,
       connected,
-      compactCap: config.compactWindow ?? DEFAULT_COMPACT_WINDOW,
+      compactCap: config.compactWindow,
+      compactPercent: clampPercent(config.autoCompactPercent),
       tips: config.ui?.tips !== false,
       terminalNotify: config.ui?.terminalNotify !== false,
       scroll: scrollSetting(config.ui),
@@ -1596,10 +1600,8 @@ export function App(props: {
 }
 
 const BRAND = " ▲ OpenTrading "
-/** The status bar warns this close (share of the window) to the auto-compaction threshold… */
+/** The status bar warns this close (share of the threshold) to auto-compaction. */
 const CONTEXT_WARN_LEFT = 0.15
-/** …or, when nothing will compact by itself, from this share of the window on. */
-const CONTEXT_LOW_SHARE = 0.8
 
 const backgroundRunning = () =>
   Object.values(state.agents).filter((a) => a.background && (a.status === "running" || a.status === "queued")).length
@@ -1613,21 +1615,24 @@ function StatusBar() {
   const target = () => ` ${state.provider ? `${providerName(state.provider)} · ${state.model ?? "chưa chọn model"}` : "chưa kết nối"} `
   const ready = () => state.mcp.filter((s) => s.state === "connected").length
   const attention = () => state.mcp.some((s) => s.state === "failed" || s.state === "untrusted")
-  const contextShare = () => {
-    const window = contextWindow()
-    return window && state.contextTokens !== undefined ? Math.min(1, state.contextTokens / window) : undefined
-  }
-  /** Room left before auto-compaction (Claude Code's TokenWarning), shown only when it is near. */
+  /**
+   * Always: the context used against the model's window (opencode, Codex). Near the threshold,
+   * the room left before auto-compaction as a share of the threshold (Claude Code's
+   * TokenWarning); when nothing will compact by itself, a pointer to /compact.
+   */
   const ctx = (): { text: string; fg: string } | undefined => {
-    const share = contextShare()
-    if (share === undefined) return undefined
+    const limits = contextLimits()
+    if (!limits) return undefined
+    const tokens = state.contextTokens
+    if (tokens === undefined) return { text: ` ctx –/${fmtTokens(limits.window)} `, fg: color.tx3 }
+    const head = `ctx ${Math.round(Math.min(1, tokens / limits.window) * 100)}% · ${fmtTokens(tokens)}/${fmtTokens(limits.window)}`
+    const left = (limits.threshold - tokens) / limits.threshold
+    if (left > CONTEXT_WARN_LEFT) return { text: ` ${head} `, fg: color.tx3 }
     // Nothing will compact by itself: turned off, given up after failures, held until the
     // context grows, or already past the threshold. Then only /compact helps.
-    const manual = state.autoCompactOff || state.compactFailures >= MAX_AUTO_FAILURES || state.compactFloor !== undefined || share >= AUTO_COMPACT_SHARE
-    if (manual) return share >= CONTEXT_LOW_SHARE ? { text: ` context còn ${Math.max(0, Math.round((1 - share) * 100))}% · /compact `, fg: color.giam } : undefined
-    const left = AUTO_COMPACT_SHARE - share
-    if (left > CONTEXT_WARN_LEFT) return undefined
-    return { text: ` còn ${Math.max(0, Math.round(left * 100))}% tới tự nén `, fg: left <= 0.05 ? color.tham : color.tx3 }
+    const manual = state.autoCompactOff || state.compactFailures >= MAX_AUTO_FAILURES || state.compactFloor !== undefined || left <= 0
+    if (manual) return { text: ` ${head} · /compact `, fg: color.giam }
+    return { text: ` ${head} · còn ${Math.round(left * 100)}% tới tự nén `, fg: left <= 0.05 ? color.tham : color.tx2 }
   }
   return (
     <box flexDirection="row" height={1} flexShrink={0} backgroundColor={color.panel2} paddingLeft={2} paddingRight={2}>

@@ -18,7 +18,8 @@ export const groupDigits = (n: number) => String(Math.round(n)).replace(/\B(?=(\
 export function fmtTokens(n: number) {
   if (n < 1000) return String(Math.round(n))
   if (n < 100_000) return `${(n / 1000).toFixed(1).replace(/\.0$/, "").replace(".", ",")}k`
-  return `${Math.round(n / 1000)}k`
+  if (n < 999_500) return `${Math.round(n / 1000)}k`
+  return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, "").replace(".", ",")}M`
 }
 
 export const fmtSeconds = (ms: number) => (ms < 60_000 ? `${Math.max(0, Math.round(ms / 1000))}s` : `${Math.floor(ms / 60_000)}m${Math.round((ms % 60_000) / 1000)}s`)

@@ -88,6 +88,8 @@ test("result: trailer round-trips, report survives without it, token counts read
   expect(fmtTokens(12_345)).toBe("12,3k")
   expect(fmtTokens(18_000)).toBe("18k")
   expect(fmtTokens(123_456)).toBe("123k")
+  expect(fmtTokens(1_048_576)).toBe("1M")
+  expect(fmtTokens(1_250_000)).toBe("1,3M")
 })
 
 test("notifications: built from a view, split back out of a user message (resume, session title)", () => {

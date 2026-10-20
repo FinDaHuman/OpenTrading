@@ -17,7 +17,7 @@
   ● main                                                    ← panel subagent
   ⠹ nghien-cuu  Định giá FPT · valuation_run(FPT)    53s · ↓ 12,4k token
   ◌ vi-mo       Lãi suất VN                          chờ slot (10/10)
- ▲ OpenTrading  Google · gemini-3.5-flash-lite  MCP 1/1     còn 12% tới tự nén
+ ▲ OpenTrading  Google · gemini-3.5-flash-lite  MCP 1/1     ctx 82% · 860k/1M · còn 12% tới tự nén
 ```
 
 ## Thông báo
@@ -57,9 +57,10 @@ Câu trả lời được vẽ bằng markdown (đậm, danh sách, bảng, code
   - chế độ quyền `‖ chỉ đọc` / `▸ sửa có hỏi` / `▸▸ tự động`, kèm `(shift+tab đổi)` khi dòng còn chỗ;
   - số subagent đang chạy;
   - gợi ý phím: `esc dừng` khi agent đang chạy, `? phím tắt · / lệnh` khi rảnh.
-- **Status bar** (dòng cuối cùng): provider · model, MCP, skill đang bật.
-  - Khi context gần ngưỡng tự nén, status bar hiện `còn N% tới tự nén`.
-  - Khi không có gì tự nén nữa (tự nén đã tắt, đã lỗi 3 lần liền, hoặc đã vượt ngưỡng), status bar hiện `context còn N% · /compact` màu đỏ.
+- **Status bar** (dòng cuối cùng): provider · model, MCP, skill đang bật, và context đang dùng.
+  - Luôn hiện `ctx N% · đã dùng/cửa sổ` (như opencode, Codex). Cửa sổ là `limit.input` của model (không có thì `limit.context`), hoặc trần `compactWindow` nếu thấp hơn. Số đã dùng là token của request gần nhất theo provider (đầu vào gồm cả cache, cộng đầu ra), cập nhật sau mỗi bước gọi model.
+  - Khi còn ≤ 15% tới ngưỡng tự nén, thêm `còn N% tới tự nén`; N tính theo ngưỡng, như Claude Code.
+  - Khi không có gì tự nén nữa (tự nén đã tắt, đã lỗi 3 lần liền, hoặc đã vượt ngưỡng), thêm `· /compact` màu đỏ.
 - **Lần đầu Shift+Tab tới ▸▸ tự động**, một hộp xác nhận giải thích auto mode, với 3 lựa chọn: Bật / Bật và đặt làm mặc định / Không, quay lại.
   - Trong lúc hộp mở, chế độ quyền chưa đổi.
   - Đoạn giải thích này cũng có trong `/permissions` khi đang ở ▸▸.
