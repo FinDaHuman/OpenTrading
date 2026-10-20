@@ -1,5 +1,5 @@
 import { pad } from "../ui/text"
-import { AUTO_COMPACT_SHARE, tokensOf } from "../../core/compact"
+import { tokensOf } from "../../core/compact"
 import { useKeys } from "../ui/keys"
 import { createResource, For, Match, Show, Switch } from "solid-js"
 import { groupDigits } from "../../core/subagents/result"
@@ -8,7 +8,7 @@ import { describeError } from "../../core/chat"
 import type { LayerReport } from "../../core/prompt/assemble"
 import type { Runtime } from "../../core/runtime"
 import { currentSession } from "../session"
-import { closeDialog, contextWindow, state } from "../state"
+import { closeDialog, contextLimits, state } from "../state"
 import { color } from "../theme"
 import { DialogFrame } from "./frame"
 
@@ -73,15 +73,26 @@ export function ContextDialog(props: { runtime: Runtime }) {
           {(p) => {
             const total = () => p().report.reduce((sum, r) => sum + r.tokens, 0)
             const history = () => tokensOf(state.history)
-            const window = contextWindow()
+            const limits = contextLimits()
             return (
               <>
                 <text fg={color.tx2} wrapMode="none">{`${p().model} · hạng ${p().tier} · ~${total()} token (ước lượng, chưa gồm history)`}</text>
                 <text fg={color.tx2} wrapMode="none">
-                  {`History ~${history()} token · lượt trước dùng ${state.contextTokens !== undefined ? `~${state.contextTokens}` : "?"} token${
-                    window ? ` / ${window} (tự nén ở ${Math.round(window * AUTO_COMPACT_SHARE)})` : ""
+                  {`History ~${groupDigits(history())} token · đang dùng ${
+                    state.contextTokens !== undefined
+                      ? `${groupDigits(state.contextTokens)} token${limits ? ` (${Math.round((state.contextTokens / limits.window) * 100)}%)` : ""}`
+                      : "? token"
                   }`}
                 </text>
+                <Show when={limits}>
+                  {(l) => (
+                    <text fg={color.tx2} wrapMode="none">
+                      {`Cửa sổ ${groupDigits(l().window)}${l().capped ? " (trần compactWindow)" : ""} · chừa ${groupDigits(l().reserve)} cho trả lời · ${
+                        state.autoCompactOff ? "tự nén tắt" : `tự nén ở ${groupDigits(l().threshold)} (${state.compactPercent}% phần còn lại)`
+                      }`}
+                    </text>
+                  )}
+                </Show>
                 <Show when={Object.keys(state.agents).length > 0}>
                   <text fg={color.tx2} wrapMode="none">{subagentLine()}</text>
                 </Show>

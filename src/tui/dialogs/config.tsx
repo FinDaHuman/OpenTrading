@@ -7,7 +7,9 @@ import { createMemory, switchMemory, type Runtime } from "../../core/runtime"
 import { DEFAULT_MAX_CONCURRENT } from "../../core/subagents/manager"
 import { AUTO_MODEL } from "../../core/subagents/model-pick"
 import { DEFAULT_MAX_STEPS } from "../../core/agent"
-import { blocked, closeDialog, providerName, setState, state } from "../state"
+import { clampPercent, DEFAULT_COMPACT_PERCENT, MIN_COMPACT_WINDOW } from "../../core/compact"
+import { fmtTokens, groupDigits } from "../../core/subagents/result"
+import { blocked, closeDialog, contextLimits, providerName, setState, state } from "../state"
 import { say } from "../notify"
 import { color } from "../theme"
 import { DialogFrame } from "./frame"
@@ -15,9 +17,13 @@ import { Picker, type PickerItem } from "./picker"
 import { modelChoices, type ModelChoice } from "./model-choices"
 import { describeScroll, nextScrollSetting, scrollSetting } from "../scroll"
 
+/** Presets of `autoCompactPercent`; "cap" opens the token entry, "uncap" drops the cap. */
+type CompactLevel = number | "cap" | "uncap"
+const COMPACT_PERCENTS = [95, 90, 80, 70]
+
 const DEFAULT_MODE_NEXT: Record<PermissionMode, PermissionMode> = { "read-only": "ask", ask: "auto", auto: "read-only" }
 
-type Setting = "memory" | "toolSearch" | "autoCompact" | "maxSteps" | "subagentMax" | "subagentModel" | "webModel" | "autoModel" | "defaultMode" | "tips" | "terminalNotify" | "scroll"
+type Setting = "memory" | "toolSearch" | "autoCompact" | "compactLevel" | "maxSteps" | "subagentMax" | "subagentModel" | "webModel" | "autoModel" | "defaultMode" | "tips" | "terminalNotify" | "scroll"
 type SubagentModel = { provider: string; model: string } | "inherit" | "auto"
 
 const TOOL_SEARCH_NEXT = { auto: "on", on: "off", off: "auto" } as const
@@ -31,7 +37,7 @@ const TOOL_SEARCH_HINT = {
 export function ConfigDialog(props: { runtime: Runtime }) {
   const [config, { refetch }] = createResource(loadConfig)
   /** A setting with its own sub-view (number entry, model list); undefined = the list. */
-  const [editing, setEditing] = createSignal<"maxSteps" | "subagentMax" | "subagentModel" | "webModel" | "autoModel">()
+  const [editing, setEditing] = createSignal<"maxSteps" | "subagentMax" | "subagentModel" | "webModel" | "autoModel" | "compactLevel" | "compactWindow">()
   const [error, setError] = createSignal("")
 
   useKeys((evt) => {
@@ -96,6 +102,36 @@ export function ConfigDialog(props: { runtime: Runtime }) {
     await refetch()
   }
 
+  /** Where auto-compaction fires for the current model, e.g. "nén ở ~977k / 1M". */
+  const compactAt = () => {
+    const limits = contextLimits()
+    return limits ? `nén ở ~${fmtTokens(limits.threshold)} / ${fmtTokens(limits.window)}` : "nén gần đầy cửa sổ của model"
+  }
+
+  async function saveLevel(level: CompactLevel) {
+    if (level === "cap") return setEditing("compactWindow")
+    if (level === "uncap") {
+      await saveConfig({ compactWindow: undefined })
+      setState("compactCap", undefined)
+    } else {
+      await saveConfig({ autoCompactPercent: level })
+      setState("compactPercent", clampPercent(level))
+    }
+    setEditing(undefined)
+    await refetch()
+  }
+
+  async function saveCap(text: string) {
+    const raw = text.trim().replace(/[.,_\s]/g, "")
+    const n = raw === "" ? undefined : Number(raw)
+    if (n !== undefined && (!Number.isInteger(n) || n < MIN_COMPACT_WINDOW)) return setError(`Nhập số token từ ${groupDigits(MIN_COMPACT_WINDOW)} trở lên, hoặc để trống để bỏ trần.`)
+    await saveConfig({ compactWindow: n })
+    setState("compactCap", n)
+    setError("")
+    setEditing(undefined)
+    await refetch()
+  }
+
   async function saveWebModel(choice: Exclude<SubagentModel, "auto">) {
     await saveConfig({ webModel: choice === "inherit" ? undefined : choice })
     setEditing(undefined)
@@ -119,7 +155,15 @@ export function ConfigDialog(props: { runtime: Runtime }) {
   }
 
   async function toggle(setting: Setting) {
-    if (setting === "maxSteps" || setting === "subagentMax" || setting === "subagentModel" || setting === "webModel" || setting === "autoModel") return setEditing(setting)
+    if (
+      setting === "maxSteps" ||
+      setting === "subagentMax" ||
+      setting === "subagentModel" ||
+      setting === "webModel" ||
+      setting === "autoModel" ||
+      setting === "compactLevel"
+    )
+      return setEditing(setting)
     if (setting === "defaultMode") {
       const current = await loadConfig()
       const next = DEFAULT_MODE_NEXT[defaultMode()]
@@ -191,6 +235,50 @@ export function ConfigDialog(props: { runtime: Runtime }) {
             backgroundColor={color.panel2}
             focusedBackgroundColor={color.panel2}
             onSubmit={(v: unknown) => typeof v === "string" && void saveMax(v)}
+          />
+          <text fg={color.giam}>{error()}</text>
+        </DialogFrame>
+      </Match>
+      <Match when={editing() === "compactLevel"}>
+        <DialogFrame title="Ngưỡng tự nén" hint="enter chọn · esc quay lại">
+          <text fg={color.tx3} wrapMode="word">
+            Mặc định dùng hết cửa sổ của model. Tự nén khi context tới % này của (cửa sổ − phần chừa cho câu trả lời). Thấp hơn: rẻ hơn mỗi lượt, nén sớm hơn.
+          </text>
+          <Picker
+            items={[
+              ...COMPACT_PERCENTS.map((p) => ({
+                label: `${p}%${p === DEFAULT_COMPACT_PERCENT ? " (mặc định)" : ""}`,
+                mark: state.compactPercent === p ? "●" : " ",
+                value: p as CompactLevel,
+              })),
+              {
+                label: "Trần theo token…",
+                hint: state.compactCap ? `hiện tại ${groupDigits(state.compactCap)}` : "vd. 200000 cho Gemini gói miễn phí",
+                mark: state.compactCap ? "●" : " ",
+                value: "cap" as CompactLevel,
+              },
+              ...(state.compactCap ? [{ label: "Bỏ trần token", hint: "dùng hết cửa sổ của model", mark: " ", value: "uncap" as CompactLevel }] : []),
+            ]}
+            onPick={(level) => void saveLevel(level)}
+          />
+        </DialogFrame>
+      </Match>
+      <Match when={editing() === "compactWindow"}>
+        <DialogFrame title="Trần cửa sổ context" hint="enter lưu · esc quay lại">
+          <text fg={color.tx3} wrapMode="word">
+            Số token tối đa coi là cửa sổ (thấp hơn cửa sổ của model thì mới có tác dụng); ngưỡng tự nén và ctx % tính theo trần này. Để trống để bỏ trần.
+          </text>
+          <text fg={color.tx3} wrapMode="word">
+            Gemini gói miễn phí nhận tối đa 250K token đầu vào mỗi phút: request lớn hơn luôn bị 429, nên đặt khoảng 200000.
+          </text>
+          <input
+            focused={!blocked()}
+            placeholder={state.compactCap ? String(state.compactCap) : "200000"}
+            textColor={color.tx}
+            focusedTextColor={color.tx}
+            backgroundColor={color.panel2}
+            focusedBackgroundColor={color.panel2}
+            onSubmit={(v: unknown) => typeof v === "string" && void saveCap(v)}
           />
           <text fg={color.giam}>{error()}</text>
         </DialogFrame>
@@ -287,9 +375,15 @@ export function ConfigDialog(props: { runtime: Runtime }) {
                 hint:
                   config()?.autoCompact === "off"
                     ? "Tắt · chỉ nén khi gõ /compact"
-                    : "Tự động · khi context tới 80%: dọn kết quả tool cũ, rồi tóm tắt nếu cần (1 request)",
+                    : `Tự động · ${compactAt()}: dọn kết quả tool cũ, rồi tóm tắt nếu cần (1 request)`,
                 mark: config()?.autoCompact === "off" ? "○" : "●",
                 value: "autoCompact" as Setting,
+              },
+              {
+                label: "Ngưỡng tự nén",
+                hint: `${state.compactPercent}%${state.compactCap ? ` · trần ${fmtTokens(state.compactCap)} token` : " · hết cửa sổ của model"} · enter để đổi`,
+                mark: "●",
+                value: "compactLevel" as Setting,
               },
               {
                 label: "Số bước mỗi lượt",

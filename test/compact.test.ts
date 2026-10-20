@@ -2,9 +2,8 @@ import { expect, test } from "bun:test"
 import type { ModelMessage } from "ai"
 import { isCompactMarker } from "../src/core/compact-marker"
 import {
-  AUTO_COMPACT_SHARE,
-  DEFAULT_COMPACT_WINDOW,
-  effectiveWindow,
+  type ContextLimits,
+  contextLimits,
   isContextOverflow,
   MAX_AUTO_FAILURES,
   PRUNED_TEXT,
@@ -20,6 +19,9 @@ import { currentTodos } from "../src/core/tools/todos"
 import { transcriptFromMessages } from "../src/core/session/transcript"
 
 const BIG = "x".repeat(2_000)
+
+/** Limits with a round threshold, independent of the reserve rules (tested on their own). */
+const limits = (window: number, threshold = window * 0.8): ContextLimits => ({ window, reserve: 0, threshold, capped: false })
 
 /** One turn: a question, one tool call and its (large) result, an answer. */
 function turn(n: number, tool = "mcp__ot__quote", output = `${BIG}${n}`): ModelMessage[] {
@@ -69,12 +71,12 @@ const neverSummarize = async () => {
 
 test("auto: pruning alone is enough below the threshold (no request)", async () => {
   const history = [...turn(1), ...turn(2), ...turn(3), ...turn(4)]
-  const result = await compactHistory(history, { contextTokens: 8_400, window: 10_000, summarize: neverSummarize })
+  const result = await compactHistory(history, { contextTokens: 8_400, limits: limits(10_000), summarize: neverSummarize })
   expect(result.summary).toBeUndefined()
   expect(result.error).toBeUndefined()
   expect(result.pruned).toBe(2)
   expect(result.after).toBeLessThan(result.before)
-  expect(result.after).toBeLessThan(10_000 * AUTO_COMPACT_SHARE)
+  expect(result.after).toBeLessThan(8_000)
 })
 
 test("manual: the head is summarized; marker + summary + kept turns, and the harness state is carried", async () => {
@@ -97,7 +99,7 @@ test("manual: the head is summarized; marker + summary + kept turns, and the har
   // A small window: the last two turns exceed a quarter of it, so only the last one is kept.
   const result = await compactHistory(history, {
     manual: true,
-    window: 2_000,
+    limits: limits(2_000),
     instructions: "giữ số liệu FPT",
     summarize: async (h, instructions) => {
       head = h
@@ -156,12 +158,12 @@ test("a second compaction folds the earlier summary in and keeps the carried sta
   expect(loadedTools(second.messages)).toContain("mcp__ot__quote")
 })
 
-test("auto-compaction triggers at 80%, waits for growth after a compaction that stayed large, and stops after 3 failures", () => {
-  const base = { window: 100_000, failures: 0, disabled: false }
+test("auto-compaction triggers at the threshold, waits for growth after a compaction that stayed large, and stops after 3 failures", () => {
+  const base = { limits: limits(100_000), failures: 0, disabled: false }
   expect(shouldAutoCompact({ ...base, contextTokens: 79_000 })).toBe(false)
   expect(shouldAutoCompact({ ...base, contextTokens: 81_000 })).toBe(true)
   expect(shouldAutoCompact({ ...base, contextTokens: 81_000, disabled: true })).toBe(false)
-  expect(shouldAutoCompact({ ...base, contextTokens: 81_000, window: undefined })).toBe(false)
+  expect(shouldAutoCompact({ ...base, contextTokens: 81_000, limits: undefined })).toBe(false)
   expect(shouldAutoCompact({ ...base, contextTokens: 81_000, failures: MAX_AUTO_FAILURES })).toBe(false)
   // Compacted to 85k (still above 80%): not again until it passes 95k.
   expect(shouldAutoCompact({ ...base, contextTokens: 90_000, floor: 85_000 })).toBe(false)
@@ -200,11 +202,27 @@ test("the stored summary drops the scratchpad; a cut-off analysis is no summary"
   expect(formatCompactSummary("<analysis>a</analysis>")).toBeUndefined()
 })
 
-test("the effective window is capped (1M models compact around 160k by default)", () => {
-  expect(effectiveWindow(1_048_576)).toBe(DEFAULT_COMPACT_WINDOW)
-  expect(effectiveWindow(131_072)).toBe(131_072)
-  expect(effectiveWindow(1_048_576, 500_000)).toBe(500_000)
-  expect(effectiveWindow(undefined)).toBeUndefined()
+test("the whole window of the model by default: input limit first, a reserve for the answer, 95% of the rest", () => {
+  // Gemini 3.5 Flash: 1M context, 65k output → reserve 20k, compact at ~977k.
+  expect(contextLimits({ context: 1_048_576, output: 65_536 })).toEqual({ window: 1_048_576, reserve: 20_000, threshold: 977_147, capped: false })
+  // GPT-5.x: 400k context but 272k input; the input limit is what a request must fit.
+  expect(contextLimits({ context: 400_000, input: 272_000, output: 128_000 })).toEqual({ window: 272_000, reserve: 20_000, threshold: 239_400, capped: false })
+  // A 200k model (Claude Code compacts at 167k).
+  expect(contextLimits({ context: 200_000, output: 64_000 })?.threshold).toBe(171_000)
+  // A small output limit is the reserve; a small window keeps at most a quarter of itself.
+  expect(contextLimits({ context: 131_072, output: 8_192 })?.reserve).toBe(8_192)
+  expect(contextLimits({ context: 32_768, output: 32_768 })).toEqual({ window: 32_768, reserve: 8_192, threshold: 23_347, capped: false })
+  expect(contextLimits(undefined)).toBeUndefined()
+  expect(contextLimits({ output: 8_192 })).toBeUndefined()
+})
+
+test("compactWindow caps the window (only when lower); autoCompactPercent is kept within 50–95", () => {
+  const gemini = { context: 1_048_576, output: 65_536 }
+  expect(contextLimits(gemini, { cap: 200_000 })).toEqual({ window: 200_000, reserve: 20_000, threshold: 171_000, capped: true })
+  expect(contextLimits({ context: 131_072 }, { cap: 200_000 })?.capped).toBe(false)
+  expect(contextLimits(gemini, { percent: 80 })?.threshold).toBe(822_860)
+  expect(contextLimits(gemini, { percent: 100 })?.threshold).toBe(977_147)
+  expect(contextLimits(gemini, { percent: 10 })?.threshold).toBe(514_288)
 })
 
 test("context-overflow wording is told apart from quota and auth errors", () => {
@@ -216,7 +234,7 @@ test("context-overflow wording is told apart from quota and auth errors", () => 
 })
 
 test("a short history is no error for auto-compaction (only for /compact)", async () => {
-  const auto = await compactHistory(turn(1), { contextTokens: 9_000, window: 10_000, summarize: neverSummarize })
+  const auto = await compactHistory(turn(1), { contextTokens: 9_000, limits: limits(10_000), summarize: neverSummarize })
   expect(auto.error).toBeUndefined()
 })
 

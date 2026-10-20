@@ -19,17 +19,54 @@ import { attachmentAttrs, attachmentKey, attachmentsOf, clearedAttachment, witho
  * open todo list), so those survive the head being dropped.
  */
 
-/** Share of the (effective) context window at which the next turn compacts first. */
-export const AUTO_COMPACT_SHARE = 0.8
 /**
- * Effective window cap. Models now offer ~1M tokens, but every turn resends the whole
- * history (the user pays), answers degrade long before the limit, and old quotes go stale.
- * Claude Code and Codex let users cap it too. Config: `compactWindow`.
+ * Room kept free under the window for the answer and the summary request (Claude Code's
+ * MAX_OUTPUT_TOKENS_FOR_SUMMARY; opencode reserves min(output, 20k) too).
  */
-export const DEFAULT_COMPACT_WINDOW = 200_000
+export const SUMMARY_RESERVE = 20_000
+/** Default `autoCompactPercent`: compact at this share of (window − reserve). */
+export const DEFAULT_COMPACT_PERCENT = 95
+export const MIN_COMPACT_PERCENT = 50
+/** Above this there is no room left for one more turn of tool results before the hard limit. */
+export const MAX_COMPACT_PERCENT = 95
+/** Smallest `compactWindow` cap accepted: the system prompt and tools alone take ~15k. */
+export const MIN_COMPACT_WINDOW = 20_000
 
-export const effectiveWindow = (window: number | undefined, cap: number = DEFAULT_COMPACT_WINDOW) =>
-  window ? Math.min(window, cap) : undefined
+export interface ContextLimits {
+  /** Tokens a request may hold: models.dev `limit.input` (else `limit.context`), capped by `compactWindow`. */
+  window: number
+  /** Kept free for the answer / summary. */
+  reserve: number
+  /** Context size at which the next turn compacts first. */
+  threshold: number
+  /** `compactWindow` lowered the model's window. */
+  capped: boolean
+}
+
+export const clampPercent = (percent: number | undefined) =>
+  percent === undefined || !Number.isFinite(percent)
+    ? DEFAULT_COMPACT_PERCENT
+    : Math.min(MAX_COMPACT_PERCENT, Math.max(MIN_COMPACT_PERCENT, Math.round(percent)))
+
+/**
+ * The whole window of the model by default, as Claude Code, opencode and Codex do. Some
+ * models accept less input than their context (GPT-5: 400k context, 272k input): the input
+ * limit is what a request must fit. Config `compactWindow` caps it (Gemini's free tier
+ * allows 250k input tokens a minute, so a larger request can never pass), and
+ * `autoCompactPercent` moves the threshold. Undefined when the model's window is unknown.
+ */
+export function contextLimits(
+  limit: { context?: number; input?: number; output?: number } | undefined,
+  opts: { cap?: number; percent?: number } = {},
+): ContextLimits | undefined {
+  const raw = limit?.input || limit?.context
+  if (!raw) return undefined
+  const capped = opts.cap !== undefined && opts.cap > 0 && opts.cap < raw
+  const window = capped ? opts.cap! : raw
+  const reserve = Math.min(limit?.output || SUMMARY_RESERVE, SUMMARY_RESERVE, Math.floor(window / 4))
+  const threshold = Math.floor(((window - reserve) * clampPercent(opts.percent)) / 100)
+  return { window, reserve, threshold, capped }
+}
 
 /** Provider wording for "the request does not fit the context window". */
 const CONTEXT_OVERFLOW = /context (length|window)|too long|maximum context|token limit|too many tokens|prompt is too long/i
@@ -209,8 +246,8 @@ function loadedSkills(messages: readonly ModelMessage[]): string[] {
 export interface CompactOptions {
   /** Tokens of the last request (provider usage), or undefined to estimate. */
   contextTokens?: number
-  /** Model context window; undefined → no auto threshold (manual only) and no tail cap. */
-  window?: number
+  /** The model's limits (contextLimits); undefined → no auto threshold (manual only) and no tail cap. */
+  limits?: ContextLimits
   /** Manual /compact: summarize even below the threshold. */
   manual?: boolean
   instructions?: string
@@ -288,12 +325,11 @@ export async function compactHistory(history: readonly ModelMessage[], opts: Com
   const pruned = tools.pruned + files.pruned
   const afterPrune = scaled(before, history, prunedMessages)
   const base: CompactResult = { messages: prunedMessages, before, after: afterPrune, pruned }
-  const threshold = opts.window ? opts.window * AUTO_COMPACT_SHARE : undefined
-  if (!opts.manual && threshold !== undefined && afterPrune < threshold) return base
+  if (!opts.manual && opts.limits && afterPrune < opts.limits.threshold) return base
 
   const turns = splitTurns(prunedMessages)
   let keep = KEEP_TURNS
-  if (opts.window && tokensOf(turns.slice(-keep).flat()) > opts.window * TAIL_MAX_SHARE) keep = 1
+  if (opts.limits && tokensOf(turns.slice(-keep).flat()) > opts.limits.window * TAIL_MAX_SHARE) keep = 1
   // Too short to summarize: worth saying only when the user asked.
   if (turns.length <= keep) return { ...base, error: opts.manual && turns.length > 0 ? "Hội thoại còn quá ngắn để tóm tắt." : undefined }
   const head = turns.slice(0, -keep).flat()
@@ -319,10 +355,10 @@ export async function compactHistory(history: readonly ModelMessage[], opts: Com
 }
 
 /** Whether the next turn should compact first. */
-export function shouldAutoCompact(opts: { contextTokens: number; window?: number; floor?: number; failures: number; disabled: boolean }) {
-  if (opts.disabled || !opts.window || opts.failures >= MAX_AUTO_FAILURES) return false
-  if (opts.contextTokens < opts.window * AUTO_COMPACT_SHARE) return false
+export function shouldAutoCompact(opts: { contextTokens: number; limits?: ContextLimits; floor?: number; failures: number; disabled: boolean }) {
+  if (opts.disabled || !opts.limits || opts.failures >= MAX_AUTO_FAILURES) return false
+  if (opts.contextTokens < opts.limits.threshold) return false
   // Compacted already but still large: wait for real growth, or each turn would pay again.
-  if (opts.floor !== undefined && opts.contextTokens < opts.floor + opts.window * RECOMPACT_GROWTH_SHARE) return false
+  if (opts.floor !== undefined && opts.contextTokens < opts.floor + opts.limits.window * RECOMPACT_GROWTH_SHARE) return false
   return true
 }

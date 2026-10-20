@@ -193,7 +193,9 @@ Frontmatter gồm `name` (trùng tên file), `description`, `tools`, `disallowed
   - Dùng `/sessions`, `bun run dev -- --continue` (phiên mới nhất) hoặc `--resume <id>` (chỉ cần phần đầu của id).
   - History được dựng lại; tool-call thiếu kết quả được đóng bằng lỗi "bị ngắt"; đồng hồ phiên được gửi lại ở lượt đầu.
   - Nếu model đang dùng khác model lúc lưu, TUI cảnh báo.
-- **Nén hội thoại** (`src/core/compact.ts`, lệnh `/compact [hướng dẫn]`, tự chạy khi context tới 80%, tắt trong `/config`):
+- **Nén hội thoại** (`src/core/compact.ts`, lệnh `/compact [hướng dẫn]`, tắt hoặc chỉnh ngưỡng trong `/config`):
+  - Cửa sổ là toàn bộ cửa sổ của model: `limit.input` của models.dev, không có thì `limit.context`. Config `compactWindow` (số token) hạ trần nếu cần; Gemini gói miễn phí chỉ nhận 250K token/phút nên nên đặt khoảng 200000.
+  - Tự nén khi context tới `autoCompactPercent` (50–95, mặc định 95) của (cửa sổ − phần chừa cho câu trả lời, min(output, 20k)). Ví dụ model 1M nén ở khoảng 977k, model 200k ở 171k.
   1. Kết quả tool cũ (ngoài 2 lượt cuối, dài hơn 500 ký tự) được thay bằng một dòng "đã dọn"; không tốn request.
   2. Nếu vẫn cần, model tóm tắt phần đầu theo mẫu có mục "Số liệu đã xác minh" (giá trị, đơn vị, nguồn, thời điểm chép nguyên văn); 2 lượt cuối giữ nguyên.
   - History mới mở đầu bằng một `<nhac_nho><tom_tat_hoi_thoai>` do harness ghi: danh sách tool đã nạp, skill đã nạp, danh sách việc cần làm còn dở.

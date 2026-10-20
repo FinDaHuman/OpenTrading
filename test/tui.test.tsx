@@ -77,6 +77,8 @@ const ASK_MANY = {
     },
   ],
 }
+/** Holds the answer of an "ĐẾM-TOKEN" turn (after its tool step) while set. */
+let usageGate: Promise<void> | undefined
 /** Holds the (non-streamed) summary request open while set. */
 let summaryGate: Promise<void> | undefined
 /** Set by the esc-while-streaming test: "CHẬM" makes the fake model call the slow tool. */
@@ -189,6 +191,15 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     if (last.includes("QUÁ-TẢI") && overloaded > 0) {
       overloaded--
       return Response.json({ error: { message: "overloaded" } }, { status: 503 })
+    }
+    // "ĐẾM-TOKEN": a tool step that reports usage, then the answer waits for usageGate.
+    if (JSON.stringify(request.messages.slice(lastUser)).includes("ĐẾM-TOKEN")) {
+      if (!answeredThisTurn) {
+        const call = { index: 0, id: "call_count", type: "function", function: { name: "current_time", arguments: "{}" } }
+        const usage = `data: ${JSON.stringify({ id: "c1", object: "chat.completion.chunk", created: 1, model: "m", choices: [], usage: { prompt_tokens: 50_000, completion_tokens: 10 } })}\n\n`
+        return sseOf(chunk({ role: "assistant", tool_calls: [call] }) + chunk({}, "tool_calls") + usage + "data: [DONE]\n\n")
+      }
+      await usageGate
     }
     if (last.includes("MẤY-GIỜ") && !request.messages.some((m) => m.role === "tool")) {
       const call = { index: 0, id: "call_1", type: "function", function: { name: "current_time", arguments: "{}" } }
@@ -900,6 +911,23 @@ test("a tool call renders as a ● row with its result under ⎿, then the answe
   await setup.waitFor(() => !state.streaming)
   const roles = state.history.map((m) => m.role)
   expect(roles.slice(-4)).toEqual(["user", "assistant", "tool", "assistant"])
+})
+
+test("the context size follows each step's usage while a turn is still running", async () => {
+  await setKey("nvidia", "nvapi-good-key")
+  let release = () => {}
+  usageGate = new Promise<void>((resolve) => (release = resolve))
+  try {
+    await setup.mockInput.typeText("ĐẾM-TOKEN đi")
+    setup.mockInput.pressEnter()
+    // The tool step reported 50000 in + 10 out; the answer is still held.
+    await setup.waitFor(() => state.contextTokens === 50_010)
+    expect(state.streaming).toBe(true)
+  } finally {
+    release()
+    usageGate = undefined
+  }
+  await setup.waitFor(() => !state.streaming)
 })
 
 // Regression: every token was its own store write, so the answer was re-laid-out per token.
@@ -1632,6 +1660,52 @@ test("/config turns memory off and on without a restart", async () => {
   await setup.waitFor(() => state.dialog === undefined)
 })
 
+test("/config: the auto-compaction threshold is a preset % and an optional token cap, applied live", async () => {
+  const configJson = async () => Bun.file(path.join(home, "config.json")).json()
+  await setup.mockInput.typeText("/config")
+  setup.mockInput.pressEnter()
+  let frame = await setup.waitForFrame((f) => f.includes("Ngưỡng tự nén") && f.includes("hết cửa sổ của model"))
+  show(frame)
+  await setup.mockInput.typeText("nguong")
+  setup.mockInput.pressEnter()
+  frame = await setup.waitForFrame((f) => f.includes("95% (mặc định)") && f.includes("Trần theo token…"))
+  setup.mockInput.pressArrow("down")
+  setup.mockInput.pressEnter()
+  await setup.waitForFrame((f) => f.includes("Cài đặt") && f.includes("90% · hết cửa sổ của model"))
+  expect(state.compactPercent).toBe(90)
+  expect((await configJson()).autoCompactPercent).toBe(90)
+
+  await setup.mockInput.typeText("nguong")
+  setup.mockInput.pressEnter()
+  await setup.waitForFrame((f) => f.includes("Trần theo token…"))
+  await setup.mockInput.typeText("tran theo")
+  setup.mockInput.pressEnter()
+  await setup.waitForFrame((f) => f.includes("Trần cửa sổ context") && f.includes("250K token"))
+  await setup.mockInput.typeText("1000")
+  setup.mockInput.pressEnter()
+  await setup.waitForFrame((f) => f.includes("Nhập số token từ 20.000 trở lên"))
+  for (let i = 0; i < 4; i++) setup.mockInput.pressBackspace()
+  await setup.mockInput.typeText("200.000")
+  setup.mockInput.pressEnter()
+  await setup.waitForFrame((f) => f.includes("Cài đặt") && f.includes("90% · trần 200k token"))
+  expect(state.compactCap).toBe(200_000)
+  expect((await configJson()).compactWindow).toBe(200_000)
+
+  // "Bỏ trần token" appears once a cap is set and goes back to the model's whole window.
+  await setup.mockInput.typeText("nguong")
+  setup.mockInput.pressEnter()
+  await setup.waitForFrame((f) => f.includes("Bỏ trần token"))
+  await setup.mockInput.typeText("bo tran")
+  setup.mockInput.pressEnter()
+  await setup.waitForFrame((f) => f.includes("Cài đặt") && f.includes("90% · hết cửa sổ của model"))
+  expect(state.compactCap).toBeUndefined()
+  expect((await configJson()).compactWindow).toBeUndefined()
+  await saveConfig({ autoCompactPercent: undefined })
+  setState("compactPercent", 95)
+  setup.mockInput.pressEscape()
+  await setup.waitFor(() => state.dialog === undefined)
+})
+
 test("/config: subagent limit is a number ≥ 1 applied live; subagent model lists tool-capable models and can go back to the session's", async () => {
   await setup.mockInput.typeText("/config")
   setup.mockInput.pressEnter()
@@ -1718,26 +1792,30 @@ test("todo_write: the open list is pinned above the prompt, the transcript keeps
   expect(cleared).not.toContain("[>]")
 })
 
-test("status bar warns only near the compaction threshold (or when context runs low with it off)", async () => {
+test("status bar always shows the context used; near the threshold, the room left before auto-compaction", async () => {
   const saved = { provider: state.provider, model: state.model, contextTokens: state.contextTokens, autoCompactOff: state.autoCompactOff, compactFailures: state.compactFailures }
   const bar = (f: string) => f.split("\n").find((r) => r.includes("▲ OpenTrading")) ?? ""
   try {
-    setState({ provider: "groq", model: "test-model", contextTokens: 65_536 }) // 50% of a 131072-token window
-    let frame = await setup.waitForFrame((f) => bar(f).includes("Groq · test-model"))
+    // 131072-token window, no output limit: reserve 20k, threshold 95% of the rest = 105518.
+    setState({ provider: "groq", model: "test-model", contextTokens: undefined })
+    let frame = await setup.waitForFrame((f) => bar(f).includes("ctx –/131k"))
+    setState("contextTokens", 65_536)
+    frame = await setup.waitForFrame((f) => bar(f).includes("ctx 50% · 65,5k/131k"))
     expect(bar(frame)).not.toContain("tới tự nén")
-    setState("contextTokens", 91_750) // 70%: 10 points before the 80% threshold
-    frame = await setup.waitForFrame((f) => bar(f).includes("còn 10% tới tự nén"))
+    setState("contextTokens", 94_966) // 10% of the threshold left
+    frame = await setup.waitForFrame((f) => bar(f).includes("ctx 72% · 95k/131k · còn 10% tới tự nén"))
     show(frame)
     setState({ autoCompactOff: true, contextTokens: 117_965 }) // 90%, nothing compacts by itself
-    frame = await setup.waitForFrame((f) => bar(f).includes("context còn 10% · /compact"))
-    // Auto-compaction given up after repeated failures: the same warning, never "còn 0% tới tự nén".
-    setState({ autoCompactOff: false, compactFailures: 3 })
-    frame = await setup.waitForFrame((f) => bar(f).includes("context còn 10% · /compact"))
+    frame = await setup.waitForFrame((f) => bar(f).includes("ctx 90% · 118k/131k · /compact"))
+    // Auto-compaction given up after repeated failures: the same pointer, never "còn 0% tới tự nén".
+    setState({ autoCompactOff: false, compactFailures: 3, contextTokens: 100_000 })
+    frame = await setup.waitForFrame((f) => bar(f).includes("ctx 76% · 100k/131k · /compact"))
     expect(bar(frame)).not.toContain("tới tự nén")
-    setState({ compactFailures: 0, contextTokens: undefined })
-    frame = await setup.waitForFrame((f) => !bar(f).includes("tới tự nén") && !bar(f).includes("context còn"))
+    // A cap (compactWindow) is the window shown.
+    setState({ compactFailures: 0, compactCap: 50_000, contextTokens: 10_000 })
+    frame = await setup.waitForFrame((f) => bar(f).includes("ctx 20% · 10k/50k"))
   } finally {
-    setState(saved)
+    setState({ ...saved, compactCap: undefined })
   }
 })
 

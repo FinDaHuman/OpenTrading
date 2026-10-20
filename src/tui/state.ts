@@ -1,5 +1,5 @@
 import type { ModelMessage } from "ai"
-import { DEFAULT_COMPACT_WINDOW, effectiveWindow } from "../core/compact"
+import { contextLimits as limitsOf, DEFAULT_COMPACT_PERCENT, type ContextLimits } from "../core/compact"
 import type { Todo } from "../core/tools/todos"
 import type { ChartData } from "../core/tools/chart/data"
 import { createStore } from "solid-js/store"
@@ -124,8 +124,10 @@ export const [state, setState] = createStore({
   compacting: false,
   /** Messages waiting for the running answer to finish. */
   queue: [] as Queued[],
-  /** Effective-window cap (config compactWindow). */
-  compactCap: DEFAULT_COMPACT_WINDOW,
+  /** Config `compactWindow`: cap on the model's window; undefined = the model's whole window. */
+  compactCap: undefined as number | undefined,
+  /** Config `autoCompactPercent`: compact at this share of (window − reserve). */
+  compactPercent: DEFAULT_COMPACT_PERCENT,
   /** Subagents of this session by id (live progress from the SubagentManager). */
   agents: {} as Record<string, SubagentView>,
   /** The row of the subagent panel that has the keyboard (↓ from the prompt); undefined = the prompt. */
@@ -163,9 +165,12 @@ export const [state, setState] = createStore({
   noticeHold: false,
 })
 
-/** Effective context window of the selected model: models.dev limit, capped (see core/compact). */
-export const contextWindow = (): number | undefined =>
-  effectiveWindow(state.provider && state.model ? state.catalog[state.provider]?.models[state.model]?.limit?.context : undefined, state.compactCap)
+/** Window, reserve and auto-compaction threshold of the selected model (see core/compact). */
+export const contextLimits = (): ContextLimits | undefined =>
+  limitsOf(state.provider && state.model ? state.catalog[state.provider]?.models[state.model]?.limit : undefined, {
+    cap: state.compactCap,
+    percent: state.compactPercent,
+  })
 
 /** Fresh-session values for the compaction bookkeeping. */
 export const NO_COMPACTION = { contextTokens: undefined, compactFloor: undefined, compactFailures: 0 } as const

@@ -16,7 +16,8 @@ export interface CatalogModel {
   reasoning?: boolean
   tool_call?: boolean
   status?: "alpha" | "beta" | "deprecated"
-  limit?: { context?: number; output?: number }
+  /** `input`: some models accept less input than their context (GPT-5: 400k context, 272k input). */
+  limit?: { context?: number; input?: number; output?: number }
   modalities?: { input?: string[]; output?: string[] }
   provider?: { npm?: string; api?: string }
 }
