@@ -38,7 +38,9 @@ test("a toast is a card in the top-right corner with bars in its level's colour"
 
   // Newest on top.
   notify({ key: "web", level: "warning", text: "Trang chậm, đang thử lại" })
-  const both = (await frameWith("Trang chậm")).split("\n")
+  const framed = await frameWith("Trang chậm")
+  if (process.env.SHOW_FRAME) console.log(framed)
+  const both = framed.split("\n")
   expect(both.findIndex((r) => r.includes("Trang chậm"))).toBeLessThan(both.findIndex((r) => r.includes("MCP demo")))
   expect(both.find((r) => r.includes("Trang chậm"))).toContain("△ Trang chậm")
 })

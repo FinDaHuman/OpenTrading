@@ -30,7 +30,7 @@ import { Background } from "./background"
 import { ApprovalPrompt } from "./approval"
 import { AskPrompt } from "./ask"
 import { McpPanel, STATUS } from "./mcp/panel"
-import { rank, truncate } from "./ui/text"
+import { rank, truncate, width as cells } from "./ui/text"
 import { COMMANDS, parseCommand, parsePromptArgs, promptUsage, type CommandInfo } from "./commands"
 import { ConfigDialog } from "./dialogs/config"
 import { ConnectDialog } from "./dialogs/connect"
@@ -567,17 +567,17 @@ export function App(props: {
     try {
       switch (sub.toLowerCase()) {
         case "new":
-          if (!rest[0]) return say(usage, "error")
+          if (!rest[0]) return pushLine({ kind: "error", text: usage })
           return say(await watchlistOps.create(home, rest[0]), "success")
         case "add":
         case "rm":
-          if (!rest[0] || rest.length < 2) return say(usage, "error")
+          if (!rest[0] || rest.length < 2) return pushLine({ kind: "error", text: usage })
           return say(await (sub.toLowerCase() === "add" ? watchlistOps.add : watchlistOps.remove)(home, rest[0], rest.slice(1)), "success")
         case "rename":
-          if (rest.length < 2) return say(usage, "error")
+          if (rest.length < 2) return pushLine({ kind: "error", text: usage })
           return say(await watchlistOps.rename(home, rest[0]!, rest[1]!), "success")
         case "del":
-          if (!rest[0]) return say(usage, "error")
+          if (!rest[0]) return pushLine({ kind: "error", text: usage })
           return say(await watchlistOps.delete(home, rest[0]), "success")
         default:
           focusWatchlist(sub || undefined)
@@ -675,7 +675,7 @@ export function App(props: {
       const rows = changes.slice(0, 15).map((c) => `${c.n}. ${c.at.slice(11, 19)} ${c.tool} ${c.created ? "tạo" : "sửa"} ${c.path}${c.undone ? " (đã hoàn tác)" : ""}`)
       return pushLine({ kind: "info", text: ["Thay đổi file (mới nhất trước) — /undo <số> để hoàn tác:", ...rows].join("\n") })
     }
-    if (!m) return say("Dùng: /undo (xem danh sách) hoặc /undo <số> [--force].", "error")
+    if (!m) return pushLine({ kind: "error", text: "Dùng: /undo (xem danh sách) hoặc /undo <số> [--force]." })
     try {
       const result = await history.undo(Number(m[1]), !!m[2])
       if ("error" in result) return say(result.error, "error")
@@ -690,7 +690,7 @@ export function App(props: {
     const [action, name] = args.split(/\s+/)
     const known = state.mcp.some((s) => s.name === name)
     if (!name || !known || !["enable", "disable", "reconnect"].includes(action ?? "")) {
-      return say("Dùng: /mcp enable|disable|reconnect <tên server> (hoặc /mcp để mở bảng quản lý).", "error")
+      return pushLine({ kind: "error", text: "Dùng: /mcp enable|disable|reconnect <tên server> (hoặc /mcp để mở bảng quản lý)." })
     }
     try {
       if (action === "reconnect") await props.runtime.mcp.restart(name)
@@ -1289,6 +1289,7 @@ export function App(props: {
   )
 }
 
+const BRAND = " ▲ OpenTrading "
 const NOTICE_COLOR: Record<NoticeLevel, string> = { info: color.tx2, success: color.tang, warning: color.tham, error: color.giam }
 
 const approvalStatus = (request: { agent?: { type: string } } | undefined) =>
@@ -1298,56 +1299,90 @@ const backgroundRunning = () =>
   Object.values(state.agents).filter((a) => a.background && (a.status === "running" || a.status === "queued")).length
 
 function StatusBar() {
-  const target = () =>
-    state.provider ? `${providerName(state.provider)} · ${state.model ?? "chưa chọn model"}` : "chưa kết nối"
+  const dims = useTerminalDimensions()
+  const target = () => ` ${state.provider ? `${providerName(state.provider)} · ${state.model ?? "chưa chọn model"}` : "chưa kết nối"} `
   const ready = () => state.mcp.filter((s) => s.state === "connected").length
   const attention = () => state.mcp.some((s) => s.state === "failed" || s.state === "untrusted")
+  const contextShare = () => {
+    const window = contextWindow()
+    return window && state.contextTokens !== undefined ? Math.min(1, state.contextTokens / window) : undefined
+  }
+  const mcpText = () => (state.mcp.length > 0 ? ` MCP ${ready()}/${state.mcp.length} ` : "")
+  const ctxText = () => (contextShare() !== undefined ? ` ctx ${Math.round(contextShare()! * 100)}% ` : "")
+  const bgText = () => (backgroundRunning() > 0 ? ` ⧗ ${backgroundRunning()} subagent nền ` : "")
+  const skillText = () => (state.activeSkills.length > 0 ? ` ✦ ${truncate(state.activeSkills.join(", "), 30)}` : "")
+  const modeText = () =>
+    ` ${MODE_LABEL[state.permissionMode]}${state.permissionMode === "auto" && state.autoPausedUntil ? ` · tạm hỏi tay tới ${new Date(state.autoPausedUntil).toLocaleTimeString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit" })}` : ""} `
+  /** Columns left for the right-hand slot (the bar has 2 columns of padding on each side). */
+  const free = () => dims().width - 4 - [BRAND, target(), mcpText(), ctxText(), bgText(), skillText(), modeText()].reduce((n, s) => n + cells(s), 0)
+
+  /** The notification, unless an exit prompt takes the footer. */
+  const notice = () => (state.notification && !state.exiting && !state.exitArmed ? state.notification : undefined)
+  /** A notice too long for the slot gets its own wrapped row: a cut-off message is worse than none. */
+  const own = () => {
+    const n = notice()
+    return n !== undefined && cells(noticeText(n)) > free()
+  }
   /** The right-hand slot: exit prompts first, then a notification, then what the app is doing. */
   const slot = (): { text: string; fg: string; idle?: boolean } => {
     const busy = state.streaming ? color.tham : color.tx3
     if (state.exiting) return { text: "Đang thoát…", fg: busy }
     if (state.exitArmed) return { text: `Nhấn ${state.exitArmed} lần nữa để thoát`, fg: busy }
-    if (state.notification) return { text: truncate(noticeText(state.notification), 70), fg: NOTICE_COLOR[state.notification.level] }
+    const n = notice()
+    if (n && !own()) return { text: noticeText(n), fg: NOTICE_COLOR[n.level] }
     if (state.approval) return { text: approvalStatus(state.approval), fg: busy }
     if (state.question) return { text: "△ model đang hỏi bạn · esc bỏ qua", fg: busy }
     if (state.compacting) return { text: "● đang nén hội thoại · esc dừng", fg: busy }
     if (state.streaming) return { text: "● đang trả lời · esc dừng", fg: busy }
     return { text: "/ lệnh · shift+tab đổi quyền · ctrl+c ×2 thoát", fg: color.tx3, idle: true }
   }
-  const contextShare = () => {
-    const window = contextWindow()
-    return window && state.contextTokens !== undefined ? Math.min(1, state.contextTokens / window) : undefined
-  }
   return (
-    <box flexDirection="row" height={1} flexShrink={0} backgroundColor={color.panel2} paddingLeft={2} paddingRight={2}>
-      <text fg={color.bg} bg={color.tang} flexShrink={0} selectable={false}>
-        {" ▲ OpenTrading "}
-      </text>
-      <text fg={color.tx2} flexShrink={1} wrapMode="none" selectable={false}>{` ${target()} `}</text>
-      <Show when={state.mcp.length > 0}>
-        <text fg={attention() ? color.tham : color.san} flexShrink={0} selectable={false}>{` MCP ${ready()}/${state.mcp.length} `}</text>
+    <>
+      <Show when={own() && notice()}>
+        {(n) => (
+          <box flexShrink={0} paddingLeft={3} paddingRight={2} backgroundColor={color.bg}>
+            <text fg={NOTICE_COLOR[n().level]} wrapMode="word" selectable={false}>
+              {noticeText(n())}
+            </text>
+          </box>
+        )}
       </Show>
-      <Show when={contextShare() !== undefined}>
-        <text fg={contextShare()! >= AUTO_COMPACT_SHARE ? color.giam : contextShare()! >= 0.6 ? color.tham : color.tx3} flexShrink={0} selectable={false}>
-          {` ctx ${Math.round(contextShare()! * 100)}% `}
+      <box flexDirection="row" height={1} flexShrink={0} backgroundColor={color.panel2} paddingLeft={2} paddingRight={2}>
+        <text fg={color.bg} bg={color.tang} flexShrink={0} selectable={false}>
+          {BRAND}
         </text>
-      </Show>
-      <Show when={backgroundRunning() > 0}>
-        <text fg={color.san} flexShrink={0} selectable={false}>{` ⧗ ${backgroundRunning()} subagent nền `}</text>
-      </Show>
-      <Show when={state.activeSkills.length > 0}>
-        <text fg={color.tran} flexShrink={1} wrapMode="none" selectable={false}>
-          {` ✦ ${truncate(state.activeSkills.join(", "), 30)}`}
+        <text fg={color.tx2} flexShrink={1} wrapMode="none" selectable={false}>
+          {target()}
         </text>
-      </Show>
-      <text fg={state.permissionMode === "read-only" ? color.tx3 : state.permissionMode === "ask" ? color.tham : color.tang} flexShrink={0} selectable={false}>
-        {` ${MODE_LABEL[state.permissionMode]}${state.permissionMode === "auto" && state.autoPausedUntil ? ` · tạm hỏi tay tới ${new Date(state.autoPausedUntil).toLocaleTimeString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit" })}` : ""} `}
-      </text>
-      <box flexGrow={1} />
-      {/* Only the idle hint gives way on a narrow line; a status or a notice keeps its width. */}
-      <text fg={slot().fg} flexShrink={slot().idle ? 4 : 0} wrapMode="none" selectable={false}>
-        {slot().text}
-      </text>
-    </box>
+        <Show when={mcpText()}>
+          <text fg={attention() ? color.tham : color.san} flexShrink={0} selectable={false}>
+            {mcpText()}
+          </text>
+        </Show>
+        <Show when={ctxText()}>
+          <text fg={contextShare()! >= AUTO_COMPACT_SHARE ? color.giam : contextShare()! >= 0.6 ? color.tham : color.tx3} flexShrink={0} selectable={false}>
+            {ctxText()}
+          </text>
+        </Show>
+        <Show when={bgText()}>
+          <text fg={color.san} flexShrink={0} selectable={false}>
+            {bgText()}
+          </text>
+        </Show>
+        <Show when={skillText()}>
+          <text fg={color.tran} flexShrink={1} wrapMode="none" selectable={false}>
+            {skillText()}
+          </text>
+        </Show>
+        <text fg={state.permissionMode === "read-only" ? color.tx3 : state.permissionMode === "ask" ? color.tham : color.tang} flexShrink={0} selectable={false}>
+          {modeText()}
+        </text>
+        <box flexGrow={1} />
+        {/* Only the idle hint gives way on a narrow line; a status or a notice keeps its width. */}
+        <text fg={slot().fg} flexShrink={slot().idle ? 4 : 0} wrapMode="none" selectable={false}>
+          {slot().text}
+        </text>
+      </box>
+    </>
   )
 }

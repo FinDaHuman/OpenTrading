@@ -212,7 +212,7 @@ await writeFile(path.join(home, "mcp.json"), JSON.stringify({ mcpServers: { demo
 
 const { App } = await import("../src/tui/app")
 const { state, setState } = await import("../src/tui/state")
-const { resetNotifications } = await import("../src/tui/notify")
+const { resetNotifications, say } = await import("../src/tui/notify")
 const { reconcile } = await import("solid-js/store")
 const { readJson } = await import("../src/core/store")
 const { setKey } = await import("../src/core/auth")
@@ -986,6 +986,34 @@ test("80×24: panels and the '/' list keep their hint line and the status bar on
       await setup.waitFor(() => state.dialog === undefined)
     }
   } finally {
+    setup.resize(100, 32)
+  }
+})
+
+test("80×24: a short notice sits in the status bar; a long one gets its own wrapped row, in full", async () => {
+  setup.resize(80, 24)
+  try {
+    say("Đã copy 12 ký tự", "success")
+    let frame = await setup.waitForFrame((f) => f.includes("✓ Đã copy 12 ký tự"))
+    const bar = frame.split("\n").find((r) => r.includes("▲ OpenTrading"))!
+    expect(bar).toContain("✓ Đã copy 12 ký tự")
+
+    const long = "Model test-model không đọc được ảnh. Đổi model bằng /model, hoặc xoá ảnh khỏi ô nhập rồi gửi lại."
+    say(long, "error")
+    frame = await setup.waitForFrame((f) => f.includes("gửi lại."))
+    show(frame)
+    // Every word is on screen, above the status bar, and the bar keeps its own content.
+    const rows = frame.split("\n")
+    const barAt = rows.findIndex((r) => r.includes("▲ OpenTrading"))
+    const text = rows
+      .slice(0, barAt)
+      .map((r) => r.trim())
+      .join(" ")
+    expect(text).toContain(`✘ ${long}`)
+    expect(rows[barAt]).not.toContain("không đọc được ảnh")
+    expect(rows.length).toBeLessThanOrEqual(25)
+  } finally {
+    resetNotifications()
     setup.resize(100, 32)
   }
 })
