@@ -10,7 +10,8 @@ Agent đọc được file bạn đưa (PDF báo cáo, Excel, CSV, ghi chú, ả
 | `▸ sửa có hỏi` | tự do | hỏi; "cả phiên này" cho cả thư mục (và thư mục con) | hỏi; "cả phiên"/"luôn" cho một **tiền tố lệnh chỉ đọc** như `git status …` | hỏi như trước |
 | `▸▸ tự động` | tự do | file **mới** hoặc file do phiên tạo: chạy luôn; file có sẵn: model duyệt | model duyệt | model duyệt |
 
-- Chế độ hiện ở thanh trạng thái. `/config → Chế độ quyền khi mở` để đổi chế độ lúc khởi động (lưu `permissions.defaultMode`).
+- Chế độ hiện ở dòng chế độ ngay dưới ô nhập (xem [ui.md](ui.md)). `/config → Chế độ quyền khi mở` để đổi chế độ lúc khởi động (lưu `permissions.defaultMode`).
+- Lần đầu chuyển sang `▸▸`, một hộp xác nhận giải thích auto mode (Bật / Bật và đặt làm mặc định / Không, quay lại). Trong lúc hộp mở, chế độ chưa đổi. Đồng ý một lần thì lưu `permissions.autoAcknowledged`. Phiên đặt mở ở `▸▸` mà chưa từng đồng ý sẽ mở ở `▸` rồi hỏi. Đoạn giải thích cũng có trong `/permissions` khi đang ở `▸▸`.
 - Ở `‖`, các quyền "cả phiên" hay "luôn cho phép" không được dùng cho ghi file và chạy lệnh: lần nào cũng hỏi. Tool ghi khác vẫn dùng được các quyền đã cho như trước.
 - Ký hiệu là `‖ ▸ ▸▸`, không phải `⏸ ✎ ⏵⏵` như trong plan. Lý do: Windows Terminal vẽ `✎` thành emoji màu rộng 2 ô (repo có test cấm), và `⏸` cũng có dạng emoji.
 - Model được báo chế độ hiện tại qua khối nhắc `<quyen_tep>`. Khối này gửi lại mỗi khi chế độ hoặc workspace đổi.
@@ -102,7 +103,7 @@ Mỗi hành động cần duyệt được một model thứ hai xét trước k
 - **Quay về hỏi bạn khi:**
   - bị chặn 3 lần liên tiếp, hoặc 20 lần trong phiên;
   - model duyệt lỗi hoặc trả lời sai định dạng;
-  - model duyệt hết quota (429): thanh trạng thái hiện `tạm hỏi tay tới hh:mm`, kéo dài 10 phút.
+  - model duyệt hết quota (429): dòng chế độ hiện `tạm hỏi tay tới hh:mm`, kéo dài 10 phút.
 
   Hộp thoại khi đó ghi rõ vì sao nó hiện ra.
 - **Luật mặc định** (viết bằng tiếng Anh cho model duyệt, nhãn hiện bằng tiếng Việt):

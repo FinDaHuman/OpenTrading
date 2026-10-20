@@ -73,7 +73,7 @@ export interface Activity {
  */
 export type Queued = { text: string; display: string; images: PromptImage[]; saved: Omit<DraftSnapshot, "text"> }
 
-export type DialogName = "connect" | "model" | "skills" | "help" | "mcp" | "tools" | "context" | "sessions" | "memory" | "config" | "agents" | "tasks" | "watchlist" | "permissions"
+export type DialogName = "connect" | "model" | "skills" | "help" | "mcp" | "tools" | "context" | "sessions" | "memory" | "config" | "agents" | "tasks" | "watchlist" | "permissions" | "shortcuts"
 
 export const [state, setState] = createStore({
   lines: [] as Line[],
@@ -135,6 +135,8 @@ export const [state, setState] = createStore({
   activity: undefined as Activity | undefined,
   /** Config `ui.tips`: a tip under the working row once a turn runs long. */
   tips: true,
+  /** Config `ui.terminalNotify`: notifications and the tab progress ring (attention.ts). */
+  terminalNotify: true,
   /** Config `autoCompact: "off"`: the status bar warns when the context runs low. */
   autoCompactOff: false,
   /** Every approval request waiting (the head is `approval`). */

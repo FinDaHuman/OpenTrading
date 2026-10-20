@@ -16,7 +16,7 @@ import { modelChoices, type ModelChoice } from "./model-choices"
 
 const DEFAULT_MODE_NEXT: Record<PermissionMode, PermissionMode> = { "read-only": "ask", ask: "auto", auto: "read-only" }
 
-type Setting = "memory" | "toolSearch" | "autoCompact" | "maxSteps" | "subagentMax" | "subagentModel" | "webModel" | "autoModel" | "defaultMode" | "tips"
+type Setting = "memory" | "toolSearch" | "autoCompact" | "maxSteps" | "subagentMax" | "subagentModel" | "webModel" | "autoModel" | "defaultMode" | "tips" | "terminalNotify"
 type SubagentModel = { provider: string; model: string } | "inherit" | "auto"
 
 const TOOL_SEARCH_NEXT = { auto: "on", on: "off", off: "auto" } as const
@@ -130,6 +130,14 @@ export function ConfigDialog(props: { runtime: Runtime }) {
       const off = config()?.autoCompact !== "off"
       await saveConfig({ autoCompact: off ? "off" : "auto" })
       setState("autoCompactOff", off)
+      await refetch()
+      return
+    }
+    if (setting === "terminalNotify") {
+      const current = await loadConfig()
+      const on = current.ui?.terminalNotify === false
+      await saveConfig({ ui: { ...current.ui, terminalNotify: on } })
+      setState("terminalNotify", on)
       await refetch()
       return
     }
@@ -311,6 +319,15 @@ export function ConfigDialog(props: { runtime: Runtime }) {
                 value: "autoModel" as Setting,
               },
               {
+                label: "Báo khi xong / cần duyệt",
+                hint:
+                  config()?.ui?.terminalNotify === false
+                    ? "Tắt · enter để bật"
+                    : "Bật · thông báo khi bạn đang ở cửa sổ khác; vòng tiến trình trên tab Windows Terminal",
+                mark: config()?.ui?.terminalNotify === false ? "○" : "●",
+                value: "terminalNotify" as Setting,
+              },
+              {
                 label: "Mẹo khi chờ",
                 hint: config()?.ui?.tips === false ? "Tắt · enter để bật" : "Bật · một mẹo dưới dòng đang làm khi lượt chạy lâu",
                 mark: config()?.ui?.tips === false ? "○" : "●",
@@ -318,7 +335,7 @@ export function ConfigDialog(props: { runtime: Runtime }) {
               },
             ]}
             onPick={(s) => void toggle(s)}
-            rows={12}
+            rows={13}
           />
           <text fg={color.tx3} marginTop={1}>{`File cấu hình: ${configFile()}`}</text>
         </DialogFrame>

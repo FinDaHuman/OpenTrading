@@ -56,6 +56,8 @@ import { cycleMode } from "../core/permission/mode"
 import { armExit, type Queued, closeDialog, contextWindow, EXIT_WINDOW_MS, onExitRequest, providerName, pushLine, setState, state, type Line } from "./state"
 import { flash, say } from "./notify"
 import { ModeLine } from "./mode-line"
+import { terminalAttention, type Attention } from "./attention"
+import { ShortcutsPane } from "./shortcuts"
 import { loadModelPrefs } from "../core/model-prefs"
 import { AgentPanel, panelAgents } from "./agent-panel"
 import { AutoOptInDialog } from "./dialogs/auto-optin"
@@ -244,6 +246,9 @@ function afterTurn(runtime: Runtime, ok: boolean) {
   void send(runtime, next!)
 }
 
+/** The terminal side of the app (attention.ts), set while the app is mounted. */
+let attention: Attention | undefined
+
 /** How long a first x on a subagent panel row waits for the second one. */
 const STOP_WINDOW_MS = 2000
 
@@ -381,6 +386,12 @@ async function sendTurn(runtime: Runtime, msg: Outgoing): Promise<boolean> {
     const worked = state.activity ? activeMs(state.activity, now()) : 0
     if (live()) {
       closeText()
+      // Someone looking at another window hears that the answer (or the error) is in.
+      if (!controller.signal.aborted && !msg.notice) {
+        const last = state.lines.findLast((l) => l.kind === "assistant" || l.kind === "error")
+        const text = last && "text" in last ? last.text.replace(/\s+/g, " ").trim().slice(0, 120) : ""
+        attention?.attention(failed ? "error" : "done", failed ? `Lỗi: ${text}` : text || "Đã trả lời xong")
+      }
       // A long turn that ran to the end says how long it took (Claude Code's "Worked for").
       if (!failed && !controller.signal.aborted && worked >= DONE_LINE_MS) {
         pushLine({ kind: "done", ms: worked, background: backgroundRunning() || undefined })
@@ -450,6 +461,7 @@ export function App(props: {
       ]),
       new Promise((r) => setTimeout(r, 2000)),
     ])
+    attention?.clear()
     renderer.destroy()
     process.exit(0)
   }
@@ -491,7 +503,21 @@ export function App(props: {
   props.runtime.permissions.interactive = true
   // Questions from the model (ask_user) take over the same way; approval goes first.
   props.runtime.questions.interactive = true
+  // The terminal hears what the agent does: progress ring, program status, notifications.
+  attention = terminalAttention(renderer, () => state.terminalNotify)
+  const onFocus = () => attention?.focus(true)
+  const onBlur = () => attention?.focus(false)
+  renderer.on("focus", onFocus)
+  renderer.on("blur", onBlur)
+  createEffect(() => attention?.setBusy(state.approval ? "permission" : state.question ? "question" : state.streaming ? "working" : "idle"))
+  onCleanup(() => {
+    renderer.off("focus", onFocus)
+    renderer.off("blur", onBlur)
+    attention?.clear()
+    attention = undefined
+  })
   const offQuestion = props.runtime.questions.onChange((head) => {
+    if (head) attention?.attention("question", "Model đang hỏi bạn một câu")
     setState("question", head)
     if (!head) deliverNotices(props.runtime)
   })
@@ -542,6 +568,7 @@ export function App(props: {
     ),
   )
   const offApproval = props.runtime.permissions.onChange((head) => {
+    if (head) attention?.attention("approval", `Cần bạn duyệt: ${truncate(head.label, 80)}`)
     setState("approval", head)
     if (!head) queueMicrotask(() => deliverNotices(props.runtime))
   })
@@ -568,6 +595,7 @@ export function App(props: {
       connected,
       compactCap: config.compactWindow ?? DEFAULT_COMPACT_WINDOW,
       tips: config.ui?.tips !== false,
+      terminalNotify: config.ui?.terminalNotify !== false,
       autoCompactOff: config.autoCompact === "off",
       autoAcknowledged: config.permissions?.autoAcknowledged === true,
       modelPrefs,
@@ -1180,6 +1208,12 @@ export function App(props: {
     if (owner() || state.dialog) return
     if (state.panelFocus !== undefined) return panelKey(evt)
     const n = suggestions().length
+    // "?" on an empty prompt: the keys at a glance (Claude Code). Typed anywhere else it is text.
+    // The textarea's own text: draft() follows it a moment later, so fast typing would lose a "?".
+    if (evt.sequence === "?" && !evt.ctrl && !evt.meta && n === 0 && !(input?.plainText ?? draft())) {
+      evt.preventDefault()
+      return setState("dialog", "shortcuts")
+    }
     // Esc closes the "/" list first (it stays closed until the draft changes) and never
     // also stops the running answer.
     if (evt.name === "escape" && n > 0) {
@@ -1361,6 +1395,9 @@ export function App(props: {
             <Match when={state.dialog === "permissions"}>
               <PermissionsDialog mode={props.runtime.permissions.mode} workspace={props.runtime.workspace} auto={props.runtime.auto} onChanged={() => props.runtime.permissions.refreshRules()} />
             </Match>
+            <Match when={state.dialog === "shortcuts"}>
+              <ShortcutsPane onType={(text) => input?.insertText(text)} />
+            </Match>
             <Match when={state.dialog === "memory"}>
               <MemoryDialog memory={props.runtime.memory} />
             </Match>
@@ -1396,7 +1433,7 @@ export function App(props: {
                   ? "esc dừng"
                   : draft()
                     ? undefined
-                    : "/ lệnh · ctrl+c ×2 thoát"
+                    : "? phím tắt · / lệnh"
           }
         />
         <Show when={!owner() && !state.dialog}>
