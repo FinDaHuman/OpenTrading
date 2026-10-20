@@ -1810,6 +1810,22 @@ async function clearPrompt() {
   await setup.waitForFrame((f) => f.includes("Hỏi về thị trường"))
 }
 
+test("prompt: ? on an empty prompt shows the keys; a letter closes it and is typed; ? inside text is text", async () => {
+  await setup.waitForFrame((f) => f.includes("? phím tắt · / lệnh"))
+  await setup.mockInput.typeText("?")
+  let frame = await setup.waitForFrame((f) => f.includes("Phím tắt") && f.includes("Khi agent làm"))
+  show(frame)
+  expect(frame).toContain("quản lý subagent")
+  expect(state.dialog).toBe("shortcuts")
+  await setup.mockInput.typeText("a")
+  await setup.waitFor(() => state.dialog === undefined)
+  frame = await setup.waitForFrame((f) => promptRows(f).join("").includes("a"))
+  await setup.mockInput.typeText("?")
+  frame = await setup.waitForFrame((f) => promptRows(f).join("").includes("a?"))
+  expect(state.dialog).toBeUndefined()
+  await clearPrompt()
+})
+
 test("prompt: long text wraps onto new lines and the box grows instead of scrolling sideways", async () => {
   const words = Array.from({ length: 30 }, (_, i) => `tu${i}`).join(" ")
   await setup.mockInput.typeText(words)
