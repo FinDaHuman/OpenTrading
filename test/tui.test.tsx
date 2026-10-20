@@ -867,7 +867,9 @@ test("a real retry wait counts down on the working row above the prompt, then is
     const rows = frame.split("\n")
     expect(rows.findIndex((r) => r.includes("thử lại sau"))).toBeLessThan(rows.findIndex((r) => r.includes("› ")))
     await waitMcp(() => !state.streaming)
-    frame = await setup.waitForFrame((f) => f.includes("HẾT-CÂU-TRẢ-LỜI"))
+    const answered = state.lines.findIndex((l) => l.kind === "user" && l.text === "QUÁ-TẢI đếm ngược")
+    expect(state.lines.slice(answered).some((l) => l.kind === "assistant" && l.text.includes("HẾT-CÂU-TRẢ-LỜI"))).toBe(true)
+    frame = await setup.waitForFrame((f) => f.includes("QUÁ-TẢI đếm ngược") && !f.includes("đang trả lời…"))
     expect(frame).not.toContain("thử lại sau")
     expect(frame).not.toContain("lỗi tạm thời")
   } finally {
