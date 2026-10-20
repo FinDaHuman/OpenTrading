@@ -6,7 +6,7 @@ import { currentSession } from "../session"
 import type { Runtime } from "../../core/runtime"
 import { fmtSeconds, fmtTokens } from "../../core/subagents/result"
 import type { SubagentView } from "../../core/subagents/types"
-import { closeDialog, state } from "../state"
+import { closeDialog, setState, state } from "../state"
 import { color } from "../theme"
 import { useKeys } from "../ui/keys"
 import { truncate } from "../ui/text"
@@ -60,7 +60,9 @@ async function storedAgents(): Promise<SubagentView[]> {
  * (brief, calls, result); x stops a running one, as stop_agent would.
  */
 export function TasksDialog(props: { runtime: Runtime }) {
-  const [open, setOpen] = createSignal<string>()
+  // Enter on a row of the subagent panel opens that agent directly.
+  const [open, setOpen] = createSignal<string | undefined>(state.tasksFocus)
+  setState("tasksFocus", undefined)
   const [highlighted, setHighlighted] = createSignal<string>()
   const [stored] = createResource(storedAgents)
   const agents = createMemo(() =>

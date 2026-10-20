@@ -2208,7 +2208,7 @@ test("prompt: a message typed during /compact is sent once the compaction ends",
   }
 }, 30_000)
 
-test("subagents: parallel spawns render as one block; over the limit one waits for a slot; ctrl+o shows the brief and report", async () => {
+test("subagents: parallel spawns are one line in the transcript and one row each on the panel; over the limit one waits for a slot; ctrl+o shows the tree", async () => {
   await saveConfig({ ...(await readJson<object>(path.join(home, "config.json"), {})), subagents: { maxConcurrent: 1 } })
   runtime.subagents.setMax(1)
   let release!: () => void
@@ -2216,25 +2216,30 @@ test("subagents: parallel spawns render as one block; over the limit one waits f
   try {
     await setup.mockInput.typeText("SUBAGENT-SONG-SONG")
     setup.mockInput.pressEnter()
-    let frame = await setup.waitForFrame((f) => f.includes("Chạy 2 subagent") && f.includes("đang chờ slot (1/1)"))
+    let frame = await setup.waitForFrame((f) => f.includes("Chạy 2 subagent… · ↓ để quản lý") && f.includes("chờ slot (1/1)"))
     show(frame)
-    expect(frame).toMatch(/├─ nghien-cuu \(Định giá FPT\) · 0 tool · 0 token/)
-    expect(frame).toMatch(/│  ⎿ Đang khởi động…/)
-    expect(frame).toMatch(/└─ nghien-cuu \(Định giá CMG\) · đang chờ slot \(1\/1\)/)
+    // The transcript keeps one line; under the prompt, main and one row per agent.
+    expect(frame).not.toContain("├─")
+    const rows = frame.split("\n")
+    const below = rows.slice(rows.findIndex((r) => r.includes("› ")))
+    expect(below.some((r) => r.includes("● main") || /^ {3}\S main/.test(r))).toBe(true)
+    expect(below.some((r) => /nghien-cuu\s+Định giá FPT/.test(r))).toBe(true)
+    expect(below.some((r) => /nghien-cuu\s+Định giá CMG.*chờ slot \(1\/1\)/.test(r))).toBe(true)
+    expect(frame).toContain("2 subagent · ↓ quản lý")
     expect(frame).toContain("đang trả lời")
     release()
-    frame = await setup.waitForFrame((f) => f.includes("2 subagent đã xong"))
     await waitMcp(() => !state.streaming)
     frame = await setup.waitForFrame((f) => /2 subagent đã xong[\s\S]*HẾT-CÂU-TRẢ-LỜI/.test(f))
     show(frame)
-    expect(frame).toMatch(/├─ nghien-cuu \(Định giá FPT\)[^\n]*\n\s*│  ⎿ Xong \(0 tool · /)
+    expect(frame).not.toContain("⎿ Xong (0 tool")
+    setState("expandTools", true)
+    frame = await setup.waitForFrame((f) => /├─ nghien-cuu \(Định giá FPT\)[^\n]*\n\s*│  ⎿ Xong \(0 tool · /.test(f))
     expect(frame).toMatch(/└─ nghien-cuu \(Định giá CMG\)[^\n]*\n\s*⎿ Xong \(0 tool · /)
     // The parent model got both reports with their trailers.
     const results = state.history.filter((m) => m.role === "tool").slice(-2)
     for (const r of results) expect(JSON.stringify(r.content)).toContain("BÁO-CÁO-CON")
     expect(JSON.stringify(results[0]!.content)).toContain("agent_id: ag-")
 
-    setState("expandTools", true)
     frame = await setup.waitForFrame((f) => f.includes("Yêu cầu:") && f.includes("Kết quả:"))
     show(frame)
     expect(frame).toContain("BÁO-CÁO-CON: FPT ổn.")
@@ -2275,7 +2280,6 @@ test("subagents: a child's write tool asks in the main prompt, named after the s
     show(frame)
     expect(frame).toContain("subagent nghien-cuu (Ghi FPT)")
     expect(frame).toContain("nghien-cuu › ghi_tam")
-    expect(frame).toContain("Đang chờ bạn xác nhận…")
     expect(frame).not.toContain("1-4 chọn nhanh")
     // A prompt that pops up mid-typing is not answered by accident: digits never answer a
     // subagent's prompt, and Enter right after it appears is ignored.
@@ -2327,14 +2331,14 @@ test("/agents lists the subagent types by source; ctrl+r picks up a new file; en
   await setup.waitFor(() => state.dialog === undefined)
 })
 
-test("background subagent: the answer ends at once; /tasks and ⧗ show it running; when done its result is sent to the model on its own turn", async () => {
+test("background subagent: the answer ends at once; /tasks and the mode line show it running; when done its result is sent to the model on its own turn", async () => {
   let release!: () => void
   childGate = new Promise((r) => (release = r))
   try {
     await setup.mockInput.typeText("SUBAGENT-NEN")
     setup.mockInput.pressEnter()
     await waitMcp(() => !state.streaming && state.history.some((m) => m.role === "tool" && JSON.stringify(m.content).includes("Đã chạy nền subagent")))
-    let frame = await setup.waitForFrame((f) => f.includes("⧗ 1 subagent nền") && f.includes("nghien-cuu (Nền FPT) · chạy nền"))
+    let frame = await setup.waitForFrame((f) => f.includes("1 subagent · 1 nền · ↓ quản lý") && f.includes("nghien-cuu (Nền FPT) · chạy nền"))
     show(frame)
     const id = Object.values(state.agents).find((a) => a.background && a.status !== "completed")!.id
 
@@ -2349,7 +2353,7 @@ test("background subagent: the answer ends at once; /tasks and ⧗ show it runni
     release()
     frame = await setup.waitForFrame((f) => f.includes("◆ Subagent nền nghien-cuu (Nền FPT) · xong"))
     await waitMcp(() => !state.streaming && state.history.length > before + 1)
-    frame = await setup.waitForFrame((f) => !f.includes("⧗ 1 subagent nền") && f.includes("HẾT-CÂU-TRẢ-LỜI"))
+    frame = await setup.waitForFrame((f) => !f.includes("1 subagent · 1 nền") && f.includes("HẾT-CÂU-TRẢ-LỜI"))
     show(frame)
     const notice = state.history.slice(before).find((m) => m.role === "user")
     expect(JSON.stringify(notice?.content)).toContain("<thong_bao_subagent>")
@@ -2377,21 +2381,84 @@ test("background subagent: the answer ends at once; /tasks and ⧗ show it runni
   }
 }, 30_000)
 
-test("subagent row: between two model steps it shows the last tool, not 'Đang khởi động…'", async () => {
+test("subagent panel: between two model steps the row shows the last tool, not 'Đang khởi động…'", async () => {
   let release!: () => void
   childAfterTool = new Promise((r) => (release = r))
   try {
     await setup.mockInput.typeText("SUBAGENT-DOC")
     setup.mockInput.pressEnter()
-    const frame = await setup.waitForFrame((f) => /nghien-cuu \(Đọc FPT\) · 1 tool/.test(f))
+    const frame = await setup.waitForFrame((f) => /nghien-cuu\s+Đọc FPT · current_time/.test(f))
     show(frame)
-    expect(frame).toMatch(/nghien-cuu \(Đọc FPT\) · 1 tool[^\n]*\n[^\n]*⎿\s+current_time/)
     expect(frame).not.toContain("Đang khởi động…")
   } finally {
     // Even when an assertion fails, so the next test does not start mid-turn.
     release()
     await waitMcp(() => !state.streaming)
     childAfterTool = undefined
+  }
+}, 30_000)
+
+test("subagent panel: ↓ at the end of the prompt selects a row; enter opens it in /tasks; x stops it; typing goes back", async () => {
+  // Agents of earlier tests that finished a moment ago would still linger on the panel.
+  setState("agents", reconcile({}))
+  let release!: () => void
+  childGate = new Promise((r) => (release = r))
+  try {
+    await setup.mockInput.typeText("SUBAGENT-SONG-SONG")
+    setup.mockInput.pressEnter()
+    await setup.waitForFrame((f) => /nghien-cuu\s+Định giá FPT/.test(f) && /nghien-cuu\s+Định giá CMG/.test(f))
+
+    // In a two-line draft ↓ first moves to the second line: not into the panel.
+    await setup.mockInput.typeText("dòng một\\")
+    setup.mockInput.pressEnter()
+    await setup.mockInput.typeText("dòng hai")
+    setup.mockInput.pressArrow("up")
+    setup.mockInput.pressArrow("down")
+    await new Promise((r) => setTimeout(r, 50))
+    expect(state.panelFocus).toBeUndefined()
+    // Esc would stop the running turn: empty the draft with Backspace.
+    for (let i = 0; i < "dòng một\ndòng hai".length + 2; i++) setup.mockInput.pressBackspace()
+    await setup.waitForFrame((f) => f.includes("đang trả lời… esc để dừng"))
+
+    setup.mockInput.pressArrow("down")
+    await setup.waitFor(() => state.panelFocus === 0)
+    let frame = await setup.waitForFrame((f) => f.includes("↑↓ chọn · enter xem · x dừng · esc về ô nhập") && /❯ nghien-cuu\s+Định giá FPT/.test(f))
+    show(frame)
+    setup.mockInput.pressArrow("down")
+    await setup.waitFor(() => state.panelFocus === 1)
+    setup.mockInput.pressArrow("up")
+    setup.mockInput.pressArrow("up")
+    await setup.waitFor(() => state.panelFocus === undefined)
+
+    // Enter: that agent in /tasks.
+    setup.mockInput.pressArrow("down")
+    await setup.waitFor(() => state.panelFocus === 0)
+    const [first] = Object.values(state.agents).sort((a, b) => a.createdAt - b.createdAt)
+    setup.mockInput.pressEnter()
+    frame = await setup.waitForFrame((f) => f.includes(`Subagent ${first!.id}`) && f.includes("Định giá FPT"))
+    // Esc: back to the list, then closed (two presses in one read would be one alt+escape).
+    setup.mockInput.pressEscape()
+    await setup.waitForFrame((f) => f.includes("Subagent của phiên"))
+    setup.mockInput.pressEscape()
+    await setup.waitFor(() => state.dialog === undefined)
+
+    // x: stop it (a notice says so); a letter: back to the prompt, typed there.
+    setup.mockInput.pressArrow("down")
+    await setup.waitFor(() => state.panelFocus === 0)
+    setup.mockInput.pressKey("x")
+    await setup.waitFor(() => state.notification?.text.includes("Đã dừng subagent nghien-cuu (Định giá FPT)") === true)
+    setup.mockInput.pressKey("a")
+    await setup.waitFor(() => state.panelFocus === undefined)
+    await setup.waitForFrame((f) => promptRows(f).join("").includes("a"))
+    // The fake model holds the child until the gate opens; then the stop shows.
+    release()
+    await waitMcp(() => state.agents[first!.id]?.status === "stopped")
+  } finally {
+    release()
+    childGate = undefined
+    setState("panelFocus", undefined)
+    await waitMcp(() => !state.streaming)
+    for (let i = 0; i < 3; i++) setup.mockInput.pressBackspace()
   }
 }, 30_000)
 

@@ -19,8 +19,7 @@ export const NOTICE_COLOR: Record<NoticeLevel, string> = { info: color.tx2, succ
 
 export const MODE_COLOR = { "read-only": color.tx3, ask: color.tham, auto: color.tang } as const
 
-const backgroundRunning = () =>
-  Object.values(state.agents).filter((a) => a.background && (a.status === "running" || a.status === "queued")).length
+const running = () => Object.values(state.agents).filter((a) => a.status === "running" || a.status === "queued")
 
 const time = (ms: number) => new Date(ms).toLocaleTimeString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit" })
 
@@ -32,9 +31,12 @@ export function ModeLine(props: { hint?: string }) {
     return `${MODE_LABEL[state.permissionMode]}${paused}`
   }
   const modeColor = () => (state.autoOptIn ? color.tham : MODE_COLOR[state.permissionMode])
+  /** Subagents at work (Claude Code's tasks pill): "2 subagent · 1 nền · ↓ quản lý". */
   const pills = () => {
-    const n = backgroundRunning()
-    return n > 0 ? [`⧗ ${n} subagent nền`] : []
+    const list = running()
+    if (list.length === 0) return []
+    const bg = list.filter((a) => a.background).length
+    return [`${list.length} subagent${bg > 0 ? ` · ${bg} nền` : ""}${state.panelFocus === undefined ? " · ↓ quản lý" : ""}`]
   }
   /** Claude Code drops the cycle hint once the line has more than the mode on it. */
   const cycleHint = () => (pills().length === 0 && !state.autoOptIn ? " (shift+tab đổi)" : "")

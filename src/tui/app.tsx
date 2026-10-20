@@ -56,11 +56,12 @@ import { cycleMode } from "../core/permission/mode"
 import { armExit, type Queued, closeDialog, contextWindow, EXIT_WINDOW_MS, onExitRequest, providerName, pushLine, setState, state, type Line } from "./state"
 import { flash, say } from "./notify"
 import { ModeLine } from "./mode-line"
+import { AgentPanel, panelAgents } from "./agent-panel"
 import { AutoOptInDialog } from "./dialogs/auto-optin"
 import { announceMcp } from "./mcp/notices"
 import { Toasts } from "./toast"
 import { ActivityRow, activeMs, startActivity } from "./activity"
-import { now } from "./ui/clock"
+import { now, useNow } from "./ui/clock"
 import { color, promptStyle } from "./theme"
 import { cleanSelection, writeClipboard } from "./clipboard"
 import { ArgumentHint, Suggestions } from "./suggestions"
@@ -410,6 +411,17 @@ export function App(props: {
    * Every rule that hides the prompt, closes dialogs or reroutes Esc goes through this.
    */
   const owner = () => state.approval ?? state.question ?? state.autoOptIn
+  /** The subagent panel's rows (ticks once a second so finished agents leave). */
+  const panelTick = useNow(1000)
+  const panelList = createMemo(() => panelAgents(panelTick()))
+  // The selected row stays on the list as it changes; an empty panel gives the keys back.
+  createEffect(() => {
+    const at = state.panelFocus
+    if (at === undefined) return
+    const n = panelList().length
+    if (n === 0 || owner() || state.dialog) setState("panelFocus", undefined)
+    else if (at >= n) setState("panelFocus", n - 1)
+  })
   /** Draft at which Esc closed the "/" list; it reopens as soon as the draft changes. */
   const [dismissedFor, setDismissedFor] = createSignal<string>()
   let input: TextareaRenderable | undefined
@@ -837,6 +849,8 @@ export function App(props: {
     if (input.cursorOffset !== before) return
     const text = direction === "up" ? recall.up(input.plainText) : recall.down(input.plainText)
     if (text !== undefined) showRecalled(text, direction === "up" ? "start" : "end")
+    // Past the newest entry, on the draft's last line: ↓ goes on into the subagent panel.
+    else if (direction === "down" && panelList().length > 0) setState("panelFocus", 0)
   }
 
   /**
@@ -1105,6 +1119,37 @@ export function App(props: {
     }
   }
 
+  /**
+   * Keys while a panel row is selected: ↑↓ move (↑ on the first row goes back to the prompt),
+   * enter opens the agent in /tasks, x stops it, esc goes back; any other key goes back to the
+   * prompt, a typed character landing in it.
+   */
+  function panelKey(evt: KeyEvent) {
+    const list = panelList()
+    const at = Math.min(state.panelFocus ?? 0, list.length - 1)
+    const agent = list[at]
+    const plain = !evt.ctrl && !evt.meta
+    if (evt.name === "up" || evt.name === "down" || evt.name === "return" || evt.name === "escape" || (plain && evt.name === "x")) evt.preventDefault()
+    if (evt.name === "up") return setState("panelFocus", at <= 0 ? undefined : at - 1)
+    if (evt.name === "down") return setState("panelFocus", Math.min(list.length - 1, at + 1))
+    if (evt.name === "escape") return setState("panelFocus", undefined)
+    if (evt.name === "return") {
+      if (!agent) return setState("panelFocus", undefined)
+      return setState({ panelFocus: undefined, tasksFocus: agent.id, dialog: "tasks" })
+    }
+    if (plain && evt.name === "x") {
+      if (agent && (agent.status === "running" || agent.status === "queued") && props.runtime.subagents.stop(agent.id)) {
+        say(`Đã dừng subagent ${agent.type} (${truncate(agent.description, 40)})`, "success")
+      }
+      return
+    }
+    setState("panelFocus", undefined)
+    if (plain && evt.sequence && evt.sequence.length === 1 && evt.sequence >= " ") {
+      evt.preventDefault()
+      input?.insertText(evt.sequence)
+    }
+  }
+
   useKeyboard((evt) => {
     if (evt.eventType === "release") return
     if (search() && !owner() && !state.dialog) return searchKey(evt)
@@ -1116,6 +1161,7 @@ export function App(props: {
       return renderer.clearSelection()
     }
     if (owner() || state.dialog) return
+    if (state.panelFocus !== undefined) return panelKey(evt)
     const n = suggestions().length
     // Esc closes the "/" list first (it stays closed until the draft changes) and never
     // also stops the running answer.
@@ -1307,7 +1353,7 @@ export function App(props: {
         <PromptInput
           ref={(r) => (input = r)}
           visible={!owner() && !state.dialog}
-          focused={!state.dialog && !owner()}
+          focused={!state.dialog && !owner() && state.panelFocus === undefined}
           busy={state.streaming}
           placeholder={
             state.streaming ? "đang trả lời… esc để dừng · enter để xếp hàng tin tiếp" : "Hỏi về thị trường, hoặc gõ / để xem lệnh · ↑ lịch sử · ctrl+j xuống dòng"
@@ -1323,7 +1369,22 @@ export function App(props: {
           onPaste={onPaste}
         />
 
-        <ModeLine hint={owner() || state.dialog ? undefined : state.streaming ? "esc dừng" : draft() ? undefined : "/ lệnh · ctrl+c ×2 thoát"} />
+        <ModeLine
+          hint={
+            owner() || state.dialog
+              ? undefined
+              : state.panelFocus !== undefined
+                ? "↑↓ chọn · enter xem · x dừng · esc về ô nhập"
+                : state.streaming
+                  ? "esc dừng"
+                  : draft()
+                    ? undefined
+                    : "/ lệnh · ctrl+c ×2 thoát"
+          }
+        />
+        <Show when={!owner() && !state.dialog}>
+          <AgentPanel />
+        </Show>
         <StatusBar />
       </box>
       <Toasts />

@@ -122,6 +122,10 @@ export const [state, setState] = createStore({
   compactCap: DEFAULT_COMPACT_WINDOW,
   /** Subagents of this session by id (live progress from the SubagentManager). */
   agents: {} as Record<string, SubagentView>,
+  /** The row of the subagent panel that has the keyboard (↓ from the prompt); undefined = the prompt. */
+  panelFocus: undefined as number | undefined,
+  /** Subagent /tasks opens on (enter on a panel row). */
+  tasksFocus: undefined as string | undefined,
   /** Subagent slots: running, waiting for a slot, limit (config subagents.maxConcurrent). */
   agentSlots: { running: 0, waiting: 0, max: 10 },
   /** What is being worked on now; undefined when idle. */

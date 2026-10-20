@@ -83,7 +83,8 @@ export function activeMs(a: Pick<Activity, "startedAt" | "pausedMs" | "pausedAt"
 
 /** "12s", "1m 05s", "1h 02m" (codex's fmt_elapsed_compact). */
 export function fmtElapsed(ms: number): string {
-  const s = Math.floor(ms / 1000)
+  // A shared ticker can be up to one interval older than a start time taken just now.
+  const s = Math.max(0, Math.floor(ms / 1000))
   if (s < 60) return `${s}s`
   if (s < 3600) return `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, "0")}s`
   return `${Math.floor(s / 3600)}h ${String(Math.floor((s % 3600) / 60)).padStart(2, "0")}m`
