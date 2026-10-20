@@ -85,6 +85,8 @@ let summaryGate: Promise<void> | undefined
 let callSlowTool = false
 /** "QUÁ-TẢI" requests fail with 503 this many times before answering. */
 let overloaded = 0
+/** "TRÀN-NGỮ-CẢNH" requests fail as too long for the model this many times. */
+let overflowing = 0
 /** Subagent requests wait for this before answering (their rows stay "running"). */
 let childGate: Promise<void> | undefined
 /** A "CON-DOC" subagent waits for this after its first tool (between two model steps). */
@@ -187,6 +189,19 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     if (loopAt >= 0 && request.messages.slice(loopAt).filter((m) => m.role === "tool").length < 3) {
       const call = { index: 0, id: `call_loop_${chatBodies.length}`, type: "function", function: { name: "current_time", arguments: "{}" } }
       return sseOf(chunk({ role: "assistant", tool_calls: [call] }) + chunk({}, "tool_calls") + "data: [DONE]\n\n")
+    }
+    // "TRÀN-SAU-TOOL": calls current_time, then the request carrying its result is too long.
+    if (last.includes("TRÀN-SAU-TOOL") && !answeredThisTurn) {
+      const call = { index: 0, id: "call_before_overflow", type: "function", function: { name: "current_time", arguments: "{}" } }
+      return sseOf(chunk({ role: "assistant", tool_calls: [call] }) + chunk({}, "tool_calls") + "data: [DONE]\n\n")
+    }
+    if (JSON.stringify(request.messages.slice(lastUser)).includes("TRÀN-SAU-TOOL") && overflowing > 0) {
+      overflowing--
+      return Response.json({ error: { message: "prompt is too long: 210000 tokens > 200000 maximum" } }, { status: 400 })
+    }
+    if (last.includes("TRÀN-NGỮ-CẢNH") && overflowing > 0) {
+      overflowing--
+      return Response.json({ error: { message: "prompt is too long: 210000 tokens > 200000 maximum" } }, { status: 400 })
     }
     if (last.includes("QUÁ-TẢI") && overloaded > 0) {
       overloaded--
@@ -1894,6 +1909,62 @@ test("near the window, sending a message compacts first, then answers on the com
     show(frame)
   } finally {
     setState(saved)
+  }
+})
+test("a context-overflow error compacts the conversation and sends the message again, once", async () => {
+  await setKey("nvidia", "nvapi-good-key")
+  await setup.mockInput.typeText("/new")
+  setup.mockInput.pressEnter()
+  await setup.waitFor(() => state.history.length === 0)
+  const filler = "số liệu ".repeat(300)
+  // Three long turns straight into history (no requests), so compaction has a head to summarize.
+  for (const text of ["dài một", "dài hai", "dài ba"]) {
+    setState("history", (h) => [...h, { role: "user", content: `${text} ${filler}` }, { role: "assistant", content: `trả lời ${text} ${filler}` }])
+  }
+  overflowing = 1
+  try {
+    await setup.mockInput.typeText("TRÀN-NGỮ-CẢNH hỏi tiếp")
+    setup.mockInput.pressEnter()
+    await waitMcp(() => JSON.stringify(state.history.at(-1) ?? "").includes("HẾT-CÂU-TRẢ-LỜI") && !state.streaming)
+    expect(overflowing).toBe(0)
+    expect(state.lines.some((l) => l.kind === "info" && l.text.includes("đang nén rồi thử lại một lần"))).toBe(true)
+    expect(state.lines.some((l) => l.kind === "info" && l.text.includes("gõ /compact"))).toBe(false)
+    // The message shows once; in history it is asked once, after the summary, and answered.
+    expect(state.lines.filter((l) => l.kind === "user" && l.text === "TRÀN-NGỮ-CẢNH hỏi tiếp")).toHaveLength(1)
+    expect(JSON.stringify(state.history[0])).toContain("tom_tat_hoi_thoai")
+    const asked = state.history.filter((m) => m.role === "user" && JSON.stringify(m.content).includes("TRÀN-NGỮ-CẢNH"))
+    expect(asked).toHaveLength(1)
+    expect(JSON.stringify(state.history.at(-1))).toContain("HẾT-CÂU-TRẢ-LỜI")
+    expect(JSON.stringify(state.history)).not.toContain("(lỗi)")
+    const frame = await setup.waitForFrame((f) => f.includes("Đã nén hội thoại"))
+    show(frame)
+  } finally {
+    overflowing = 0
+  }
+})
+test("a context overflow after a tool ran keeps that turn, compacts, and continues without running the tool again", async () => {
+  await setKey("nvidia", "nvapi-good-key")
+  await setup.mockInput.typeText("/new")
+  setup.mockInput.pressEnter()
+  await setup.waitFor(() => state.history.length === 0)
+  const filler = "số liệu ".repeat(300)
+  for (const text of ["dài một", "dài hai", "dài ba"]) {
+    setState("history", (h) => [...h, { role: "user", content: `${text} ${filler}` }, { role: "assistant", content: `trả lời ${text} ${filler}` }])
+  }
+  overflowing = 1
+  try {
+    await setup.mockInput.typeText("TRÀN-SAU-TOOL mấy giờ")
+    setup.mockInput.pressEnter()
+    await waitMcp(() => JSON.stringify(state.history.at(-1) ?? "").includes("HẾT-CÂU-TRẢ-LỜI") && !state.streaming)
+    expect(overflowing).toBe(0)
+    const text = JSON.stringify(state.history)
+    expect(text).toContain("tom_tat_hoi_thoai")
+    // The turn with its tool result stays; the harness asks to continue from there.
+    expect(text.match(/call_before_overflow/g)?.length).toBe(2) // the call and its result, once
+    expect(text).toContain("Lượt trước bị ngắt vì hội thoại quá dài")
+    expect(state.lines.filter((l) => l.kind === "tool" && l.name === "current_time")).toHaveLength(1)
+  } finally {
+    overflowing = 0
   }
 })
 

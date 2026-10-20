@@ -49,6 +49,8 @@ let failBody: object | undefined
 let failAfterTool = 0
 /** Token usage reported on the answer's last chunk (Groq sends it as x_groq.usage). */
 let usage: { prompt_tokens: number; completion_tokens: number } | undefined
+/** Token usage reported on scripted tool-call steps. */
+let toolUsage: { prompt_tokens: number; completion_tokens: number } | undefined
 const NUDGE = "Hãy trả lời câu hỏi của người dùng dựa trên kết quả tool"
 const TOOL_NUDGE_START = "Nếu còn cần dữ liệu, gọi cùng lúc"
 
@@ -104,7 +106,7 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     return sse([
       chunk({ role: "assistant", tool_calls: [{ index: 0, id, type: "function", function: { name: scripted.tool, arguments: "" } }] }),
       chunk({ tool_calls: [{ index: 0, function: { arguments: JSON.stringify(scripted.args) } }] }),
-      chunk({}, "tool_calls"),
+      toolUsage ? { ...chunk({}, "tool_calls"), x_groq: { usage: toolUsage } } : chunk({}, "tool_calls"),
     ])
   }
   if (plan && body.tool_choice !== "none" && (plan.always || !hasToolResult)) {
@@ -151,6 +153,7 @@ beforeEach(async () => {
   emptyWithThoughts = false
   answerDelayMs = 0
   usage = undefined
+  toolUsage = undefined
   failFirst = 0
   failBody = undefined
   failAfterTool = 0
@@ -687,6 +690,35 @@ test("done carries the context size: provider usage of the last step, else an es
   const guessed = done(await collect(runAgent({ history: [], input: "x", skills: [], registry: registry() })))
   expect(guessed.usage?.estimated).toBe(true)
   expect(guessed.usage!.contextTokens).toBeGreaterThan(100) // system prompt + tool schemas
+})
+
+test("near the threshold mid-turn, later steps go out with old tool results pruned; history is untouched", async () => {
+  const { PRUNED_TEXT } = await import("../src/core/compact")
+  const oldTurn = (n: number): ModelMessage[] => [
+    { role: "user", content: `câu ${n}` },
+    { role: "assistant", content: [{ type: "tool-call", toolCallId: `old${n}`, toolName: "current_time", input: {} }] },
+    { role: "tool", content: [{ type: "tool-result", toolCallId: `old${n}`, toolName: "current_time", output: { type: "text", value: `CU-${n}-${"x".repeat(2_000)}` } }] },
+    { role: "assistant", content: `trả lời ${n}` },
+  ]
+  const history = [...oldTurn(1), ...oldTurn(2)]
+  script = [{ tool: "current_time", args: {} }]
+  toolUsage = { prompt_tokens: 9_000, completion_tokens: 10 }
+  const events = await collect(runAgent({ history, input: "x", skills: [], registry: registry(), compactAt: 5_000 }))
+  // The first request is as before; the step after a 9k-token one prunes outside the last 2 turns.
+  expect(JSON.stringify(bodies[0]!.messages)).toContain("CU-1-")
+  expect(JSON.stringify(bodies[1]!.messages)).not.toContain("CU-1-")
+  expect(JSON.stringify(bodies[1]!.messages)).toContain(PRUNED_TEXT)
+  expect(JSON.stringify(bodies[1]!.messages)).toContain("CU-2-")
+  expect(events.some((e) => e.type === "notice" && e.text.includes("1 kết quả tool cũ đã dọn"))).toBe(true)
+  expect(JSON.stringify(history)).toContain("CU-1-")
+
+  // Below the threshold, or without one, nothing is pruned.
+  bodies.length = 0
+  await collect(runAgent({ history, input: "x", skills: [], registry: registry(), compactAt: 50_000 }))
+  expect(JSON.stringify(bodies[1]!.messages)).toContain("CU-1-")
+  bodies.length = 0
+  await collect(runAgent({ history, input: "x", skills: [], registry: registry() }))
+  expect(JSON.stringify(bodies[1]!.messages)).toContain("CU-1-")
 })
 
 test("the compaction summary is asked with the turn's system prompt and visible tools, tools off, the prompt last", async () => {
