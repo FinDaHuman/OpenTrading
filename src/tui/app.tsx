@@ -254,6 +254,8 @@ const STOP_WINDOW_MS = 2000
 
 /** Turns shorter than this end without a "✻ Xong sau …" line. */
 const DONE_LINE_MS = 5000
+/** How long streamed text is buffered before it reaches the transcript (one frame at 30 fps). */
+const FLUSH_MS = 32
 
 /**
  * Feed the working row: any event is a sign of life and ends a retry wait; deltas and tool
@@ -302,7 +304,26 @@ async function sendTurn(runtime: Runtime, msg: Outgoing): Promise<boolean> {
   const edit = (index: number, fn: (line: any) => void) => {
     if (live() && index >= 0) setState(produce((s) => fn(s.lines[index])))
   }
+  // Text deltas are buffered and written once per frame (opencode batches its events the same
+  // way): one store write per token re-laid-out the answer for every token. Any other event
+  // flushes first, so lines keep their order.
+  let pending = ""
+  let flushTimer: ReturnType<typeof setTimeout> | undefined
+  const flush = () => {
+    if (flushTimer) clearTimeout(flushTimer)
+    flushTimer = undefined
+    const text = pending
+    pending = ""
+    if (!text || !live()) return
+    track({ type: "text-delta", text })
+    if (current < 0) {
+      pushLine({ kind: "assistant", text: "", done: false })
+      current = state.lines.length - 1
+    }
+    edit(current, (l) => (l.text += text))
+  }
   const closeText = () => {
+    flush()
     edit(current, (l) => (l.done = true))
     current = -1
   }
@@ -331,15 +352,14 @@ async function sendTurn(runtime: Runtime, msg: Outgoing): Promise<boolean> {
     })
     for await (const event of turn) {
       if (!live()) continue
+      if (event.type === "text-delta") {
+        pending += event.text
+        flushTimer ??= setTimeout(flush, FLUSH_MS)
+        continue
+      }
+      flush()
       track(event)
       switch (event.type) {
-        case "text-delta":
-          if (current < 0) {
-            pushLine({ kind: "assistant", text: "", done: false })
-            current = state.lines.length - 1
-          }
-          edit(current, (l) => (l.text += event.text))
-          break
         case "tool-start":
           closeText()
           pushLine({ kind: "tool", callId: event.callId, name: event.name, label: event.label, status: "running", step: event.step })
@@ -377,12 +397,17 @@ async function sendTurn(runtime: Runtime, msg: Outgoing): Promise<boolean> {
           break
       }
     }
+    flush()
     if (live() && controller.signal.aborted) pushLine({ kind: "info", text: "Đã dừng." })
   } catch (error) {
     // Setup problems (no provider, model or key) are thrown before the turn starts.
     failed = true
+    flush()
     if (live()) pushLine({ kind: "error", text: describeError(error) })
   } finally {
+    // After /clear the buffer belongs to nothing; never let its timer fire into a later turn.
+    clearTimeout(flushTimer)
+    if (!live()) pending = ""
     const worked = state.activity ? activeMs(state.activity, now()) : 0
     if (live()) {
       closeText()

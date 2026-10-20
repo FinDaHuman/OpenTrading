@@ -1,9 +1,10 @@
 import { useRenderer, useTerminalDimensions } from "@opentui/solid"
-import { For, Match, Show, Switch } from "solid-js"
+import { createMemo, For, Match, Show, Switch } from "solid-js"
 import { state, type Line } from "./state"
 import { color, markdownStyle } from "./theme"
 import { ChartBox } from "./ui/chart-box"
 import { truncate } from "./ui/text"
+import { STREAM_CURSOR, streamView } from "./ui/stream-view"
 import { useSpinner } from "./ui/clock"
 import { fmtElapsed } from "./activity"
 import { TODO_PREFIX } from "../core/tools/todos"
@@ -157,33 +158,13 @@ function Hanging(props: { glyph: string; glyphColor: string; text: string; fg: s
 }
 
 function Row(props: { line: Line; prev?: Line; index: number; width: number }) {
-  const scene = useRenderer().nativeScene
   return (
     <Switch>
       <Match when={props.line.kind === "user"}>
         <Hanging glyph="❯" glyphColor={color.tx3} text={(props.line as Extract<Line, { kind: "user" }>).text} fg={color.tx} bg={color.panel2} />
       </Match>
       <Match when={props.line.kind === "assistant" && ((props.line as { text: string }).text.trim() || !(props.line as { done: boolean }).done) && props.line}>
-        {(line) => {
-          const l = line() as Extract<Line, { kind: "assistant" }>
-          return (
-            <box flexDirection="row" marginTop={1} flexShrink={0}>
-              <Gutter glyph="●" fg={color.tx} />
-              {/* Models answer in markdown: render it (bold, lists, tables, code) instead of raw ** and *. */}
-              <markdown
-                flexGrow={1}
-                flexShrink={1}
-                content={l.text.trim() + (l.done ? "" : " ▍")}
-                syntaxStyle={markdownStyle(scene)}
-                streaming={!l.done}
-                conceal
-                fg={color.tx}
-                bg={color.bg}
-                tableOptions={{ style: "grid" }}
-              />
-            </box>
-          )
-        }}
+        {(line) => <AssistantRow line={line() as Extract<Line, { kind: "assistant" }>} />}
       </Match>
       <Match when={isSpawn(props.line) && props.line}>
         {(line) => <SubagentRow line={line() as ToolLine} index={props.index} width={props.width} />}
@@ -219,6 +200,50 @@ function Row(props: { line: Line; prev?: Line; index: number; width: number }) {
         <Hanging glyph="✘" glyphColor={color.giam} text={(props.line as Extract<Line, { kind: "error" }>).text} fg={color.giam} />
       </Match>
     </Switch>
+  )
+}
+
+/**
+ * An answer, rendered as markdown (bold, lists, tables, code) instead of raw ** and *. While it
+ * streams, only what `streamView` settles on reaches the renderer, and the memo hands it a new
+ * string only when that changes, so a token inside an unfinished heading costs nothing.
+ */
+function AssistantRow(props: { line: Extract<Line, { kind: "assistant" }> }) {
+  const scene = useRenderer().nativeScene
+  const view = createMemo(() => streamView(props.line.text, props.line.done), undefined, {
+    equals: (a, b) => a.markdown === b.markdown && a.heldTableRows === b.heldTableRows,
+  })
+  return (
+    <box flexDirection="row" marginTop={1} flexShrink={0}>
+      <Gutter glyph="●" fg={color.tx} />
+      <box flexDirection="column" flexGrow={1} flexShrink={1}>
+        <Show when={view().markdown}>
+          {/* Props are applied in order: content last, or nested list items are built
+              before the style and block mode reach them (their highlight then fails raw). */}
+          <markdown
+            flexGrow={1}
+            flexShrink={1}
+            syntaxStyle={markdownStyle(scene)}
+            internalBlockMode="top-level"
+            conceal
+            fg={color.tx}
+            bg={color.bg}
+            tableOptions={{ style: "grid" }}
+            streaming={!props.line.done}
+            content={view().markdown}
+          />
+        </Show>
+        {/* Outside <markdown>: there the text would be parsed. */}
+        <Show when={view().heldTableRows > 0}>
+          <text fg={color.tx3} marginTop={view().markdown ? 1 : 0}>
+            {`đang dựng bảng… (${view().heldTableRows} hàng)`}
+          </text>
+        </Show>
+        <Show when={!view().markdown && !view().heldTableRows}>
+          <text fg={color.tx3}>{STREAM_CURSOR.trim()}</text>
+        </Show>
+      </box>
+    </box>
   )
 }
 

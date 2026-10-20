@@ -1,4 +1,4 @@
-# Giao diện: thông báo, dòng đang làm, dòng chế độ, subagent, /model
+# Giao diện: thông báo, dòng đang làm, câu trả lời, dòng chế độ, subagent, /model
 
 Đợt UI/UX 10/2026 (PR #105–#110), thiết kế theo Claude Code, có tham khảo opencode và codex.
 
@@ -41,6 +41,15 @@
   - Retry xong thì dòng trở lại bình thường, không để lại gì trong lịch sử chat.
   - Nếu hết số lần thử thì lỗi của lượt mới được ghi vào lịch sử.
 - Lượt dài từ 5 giây trở lên kết thúc bằng `✻ Xong sau 1m 23s` trong lịch sử.
+
+## Câu trả lời đang stream
+
+Câu trả lời được vẽ bằng markdown (đậm, danh sách, bảng, code). Trong lúc model đang viết, chỉ phần đã "chốt" mới được vẽ, để không thấy `**`, `##`, `|` thô rồi mới đổi sang bản đã format:
+
+- Các dòng đã xuống dòng hiện ngay. Dòng đang viết dở hiện kèm con trỏ `▍` nếu là chữ thường hoặc một mục danh sách đã có chữ; nó dừng trước dấu `**`, `` ` ``, `*` chưa đóng.
+- Dòng dở là tiêu đề (`#`), dòng bảng (`|`), fence code (```` ``` ````) hay ký hiệu còn đang gõ thì chờ tới khi xuống dòng.
+- **Bảng** được giữ lại tới khi viết xong, trong lúc đó hiện `đang dựng bảng… (N hàng)`. Bảng hiện ra một lần, không co giãn cột theo từng hàng.
+- Chữ mới được gom và vẽ mỗi 32ms (một khung hình), không vẽ lại theo từng token.
 
 ## Dòng chế độ và status bar
 
