@@ -61,7 +61,7 @@ export function markdownStyle(owner: NativeResourceOwner): SyntaxStyle {
 
 const prompt = new WeakMap<NativeResourceOwner, SyntaxStyle>()
 
-/** The prompt's pills (`[Pasted text #1 +49 lines]`, `[Image #2]`): yellow chips, like opencode. */
+/** The prompt's pills (`[Pasted text #1 +49 lines]`, `[Image #2]`): yellow chips, like opencode; `@file` in cyan. */
 export function promptStyle(owner: NativeResourceOwner): SyntaxStyle {
   const cached = prompt.get(owner)
   if (cached) return cached
@@ -69,6 +69,8 @@ export function promptStyle(owner: NativeResourceOwner): SyntaxStyle {
     {
       default: { fg: color.tx },
       "extmark.paste": { fg: color.bg, bg: color.tham, bold: true },
+      // `@file` pills: cyan, so a file reads apart from a paste.
+      "extmark.file": { fg: color.san, bold: true },
     },
     owner,
   )

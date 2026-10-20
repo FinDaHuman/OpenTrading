@@ -7,7 +7,11 @@ import type { PromptImage } from "./image"
  * and one Backspace deletes all of it (OpenTUI does both). The full text is put back when
  * the prompt is sent.
  */
-export type PastePart = { kind: "text"; text: string } | ({ kind: "image" } & PromptImage)
+export type PastePart =
+  | { kind: "text"; text: string }
+  | ({ kind: "image" } & PromptImage)
+  /** A file picked from the `@` list: the pill is the mention itself (`@src/x.ts`), sent as typed. */
+  | { kind: "file"; mention: string }
 
 /** Claude Code: more than 800 characters, or more than two line breaks. */
 export const PASTE_MAX_CHARS = 800
@@ -23,11 +27,12 @@ export function pasteLabel(id: number, text: string) {
   return n === 0 ? `[Pasted text #${id}]` : `[Pasted text #${id} +${n} lines]`
 }
 export const imageLabel = (id: number) => `[Image #${id}]`
+const labelOf = (id: number, part: PastePart) => (part.kind === "text" ? pasteLabel(id, part.text) : part.kind === "image" ? imageLabel(id) : part.mention)
 
 const PART_LABEL = /\[(Pasted text|Image) #(\d+)(?: \+\d+ lines)?\]/g
 
 /** A draft set aside (Ctrl+S, Ctrl+R) or kept in history (pastes only). */
-export type DraftSnapshot = { text: string; pastes?: Record<string, string>; images?: Record<string, PromptImage> }
+export type DraftSnapshot = { text: string; pastes?: Record<string, string>; images?: Record<string, PromptImage>; files?: Record<string, string> }
 
 const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" })
 
@@ -66,6 +71,8 @@ export class PromptParts {
   constructor(
     private input: () => TextareaRenderable | undefined,
     private styleId: () => number | undefined,
+    /** File pills have their own colour. */
+    private fileStyleId: () => number | undefined = styleId,
   ) {}
 
   private type(input: TextareaRenderable) {
@@ -73,12 +80,12 @@ export class PromptParts {
     return this.typeId
   }
 
-  private mark(input: TextareaRenderable, start: number, label: string, id: number) {
+  private mark(input: TextareaRenderable, start: number, label: string, id: number, file = false) {
     const mark = input.extmarks.create({
       start,
       end: start + offsetWidth(label),
       virtual: true,
-      styleId: this.styleId(),
+      styleId: file ? this.fileStyleId() : this.styleId(),
       typeId: this.type(input),
     })
     this.marks.set(mark, id)
@@ -91,11 +98,11 @@ export class PromptParts {
     // Pasting over a highlight replaces it: delete it first, or the cursor moves under us.
     if (input.hasSelection()) input.deleteSelection()
     const id = this.nextId++
-    const label = part.kind === "text" ? pasteLabel(id, part.text) : imageLabel(id)
+    const label = labelOf(id, part)
     const start = input.cursorOffset
     input.insertText(label + " ")
     this.parts.set(id, part)
-    this.mark(input, start, label, id)
+    this.mark(input, start, label, id, part.kind === "file")
     return label
   }
 
@@ -111,8 +118,7 @@ export class PromptParts {
         const part = m.id === undefined ? undefined : this.parts.get(m.id)
         if (!part || m.id === undefined) return []
         // Partly deleted (Ctrl+W, a selection): what is left is plain text.
-        const label = part.kind === "text" ? pasteLabel(m.id, part.text) : imageLabel(m.id)
-        return m.slice === label ? [{ ...m, id: m.id, part }] : []
+        return m.slice === labelOf(m.id, part) ? [{ ...m, id: m.id, part }] : []
       })
       .sort((a, b) => a.start - b.start)
   }
@@ -140,11 +146,13 @@ export class PromptParts {
   snapshot(): DraftSnapshot {
     const pastes: Record<string, string> = {}
     const images: Record<string, PromptImage> = {}
+    const files: Record<string, string> = {}
     for (const m of this.live()) {
       if (m.part.kind === "text") pastes[m.id] = m.part.text
-      else images[m.id] = { data: m.part.data, mediaType: m.part.mediaType }
+      else if (m.part.kind === "image") images[m.id] = { data: m.part.data, mediaType: m.part.mediaType }
+      else files[m.id] = m.part.mention
     }
-    return { text: this.input()?.plainText ?? "", pastes, images }
+    return { text: this.input()?.plainText ?? "", pastes, images, files }
   }
 
   /** Forget the pills (the text was replaced). Numbers keep counting up, as in Claude Code. */
@@ -172,6 +180,17 @@ export class PromptParts {
       this.parts.set(id, part)
       this.mark(input, offsetWidth(text.slice(0, match.index)), match[0], id)
       this.nextId = Math.max(this.nextId, id + 1)
+    }
+    // File pills are their own text: find each, left to right.
+    let from = 0
+    for (const [key, mention] of Object.entries(saved.files ?? {}).sort((a, b) => Number(a[0]) - Number(b[0]))) {
+      const at = text.indexOf(mention, from)
+      if (at < 0) continue
+      const id = Number(key)
+      this.parts.set(id, { kind: "file", mention })
+      this.mark(input, offsetWidth(text.slice(0, at)), mention, id, true)
+      this.nextId = Math.max(this.nextId, id + 1)
+      from = at + mention.length
     }
   }
 }

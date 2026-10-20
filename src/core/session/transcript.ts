@@ -2,6 +2,7 @@ import type { ModelMessage } from "ai"
 import { isCompactMarker } from "../compact-marker"
 import { toolErrorText } from "../tools/errors"
 import { splitNotices, type ParsedNotice } from "../subagents/notification"
+import { attachedFromTag, attachmentsOf, isAttachmentText, type AttachedFile } from "../mentions"
 
 /**
  * Rebuild a UI-neutral transcript from stored model messages, so a resumed session looks the
@@ -9,7 +10,8 @@ import { splitNotices, type ParsedNotice } from "../subagents/notification"
  * item per tool call with its result.
  */
 export type TranscriptItem =
-  | { kind: "user"; text: string }
+  /** `files`: what the user @-attached, rebuilt from the attachment tags. */
+  | { kind: "user"; text: string; files?: AttachedFile[] }
   | { kind: "assistant"; text: string }
   | { kind: "tool"; callId: string; name: string; input: unknown; ok: boolean; output: string }
   /** The history was compacted here; `text` is the summary that replaced what came before. */
@@ -56,12 +58,13 @@ export function transcriptFromMessages(messages: ModelMessage[]): TranscriptItem
         typeof m.content === "string"
           ? m.content
           : m.content
-              .filter((p) => p.type === "text" && !p.text.trimStart().startsWith("<nhac_nho>"))
+              .filter((p) => p.type === "text" && !p.text.trimStart().startsWith("<nhac_nho>") && !isAttachmentText(p.text))
               .map((p) => (p as { text: string }).text)
               .join("\n")
+      const files = attachmentsOf(m).flatMap((t) => attachedFromTag(t) ?? [])
       const { notices, rest } = splitNotices(text)
       for (const n of notices) items.push({ kind: "agent-notice", ...n })
-      if (rest.trim()) items.push({ kind: "user", text: rest })
+      if (rest.trim()) items.push({ kind: "user", text: rest, ...(files.length > 0 ? { files } : {}) })
     } else if (m.role === "assistant") {
       if (typeof m.content === "string") {
         if (m.content.trim()) items.push({ kind: "assistant", text: m.content })

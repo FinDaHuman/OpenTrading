@@ -27,6 +27,7 @@ import { closeDanglingToolCalls } from "./session/store"
 import { sanitize, serverPrefix } from "./mcp/naming"
 import type { SchemaFlavor } from "./mcp/schema"
 import { isContextOverflow } from "./compact"
+import { isAttachmentText } from "./mentions"
 import { retryMiddleware, type RetryNotice, type RetryOptions } from "./retry"
 import { loadedTools } from "./tools/loaded"
 import { modeNote } from "./permission/mode"
@@ -118,6 +119,8 @@ export interface RunOptions {
   input: string
   /** Images pasted into the prompt, sent after the text (only to models that take image input). */
   images?: { data: string; mediaType: string }[]
+  /** Files the user @-mentioned, read for the model (mentions.ts), sent after the text. */
+  attachments?: string[]
   /** Every loaded skill (catalog + always-on). */
   skills: Skill[]
   /** Skills the user switched on with /skill <name>. */
@@ -215,27 +218,32 @@ export function withContext(messages: ModelMessage[], context: string | undefine
 }
 
 /**
- * The user message as stored in history: optional reminder block, what the user typed, then
- * the pasted images (Claude Code's order: text first; the `[Image #N]` labels refer to them).
+ * The user message as stored in history: optional reminder block, what the user typed, the
+ * @-attached files, then the images (Claude Code's order: text first; the `[Image #N]`
+ * labels refer to them).
  */
-export function userMessage(input: string, reminders: string[], images: RunOptions["images"] = []): ModelMessage {
-  if (reminders.length === 0 && images.length === 0) return { role: "user", content: input }
+export function userMessage(input: string, reminders: string[], images: RunOptions["images"] = [], attachments: string[] = []): ModelMessage {
+  if (reminders.length === 0 && images.length === 0 && attachments.length === 0) return { role: "user", content: input }
   return {
     role: "user",
     content: [
       ...(reminders.length > 0 ? [{ type: "text" as const, text: `<${REMINDER_TAG}>\n${reminders.join("\n\n")}\n</${REMINDER_TAG}>` }] : []),
       { type: "text" as const, text: input },
+      ...attachments.map((text) => ({ type: "text" as const, text })),
       ...images.map((i) => ({ type: "image" as const, image: i.data, mediaType: i.mediaType })),
     ],
   }
 }
 
-/** Visible text of a user message, without reminder blocks (for UIs rebuilding transcripts). */
+/**
+ * Visible text of a user message, without reminder blocks or attached files (for UIs
+ * rebuilding transcripts, and the auto-mode classifier: a file's content is not the user's).
+ */
 export function visibleUserText(message: ModelMessage) {
   if (message.role !== "user") return ""
   if (typeof message.content === "string") return message.content
   return message.content
-    .filter((p) => p.type === "text" && !p.text.startsWith(`<${REMINDER_TAG}>`))
+    .filter((p) => p.type === "text" && !p.text.startsWith(`<${REMINDER_TAG}>`) && !isAttachmentText(p.text))
     .map((p) => (p as { text: string }).text)
     .join("\n")
 }
@@ -886,7 +894,7 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
     }
   }
 
-  const user = userMessage(opts.input, assembled.reminders, opts.images)
+  const user = userMessage(opts.input, assembled.reminders, opts.images, opts.attachments)
   // A vision model's screenshots stay in history; a model without vision gets placeholders.
   const notices = new RetryNotices()
   // A request that streams nothing for a long time is stalled, not slow: cut it (LLM_STALL_MS).

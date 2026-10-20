@@ -18,6 +18,7 @@ export const SHORTCUTS: { title: string; keys: [string, string][] }[] = [
     title: "Soạn",
     keys: [
       ["/", "lệnh"],
+      ["@", "gắn file"],
       ["↑ ↓", "câu đã hỏi"],
       ["ctrl+r", "tìm câu cũ"],
       ["ctrl+j", "xuống dòng"],

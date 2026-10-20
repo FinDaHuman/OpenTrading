@@ -1,4 +1,4 @@
-# Giao diện: thông báo, dòng đang làm, câu trả lời, dòng chế độ, subagent, /model
+# Giao diện: thông báo, dòng đang làm, câu trả lời, @file, cuộn, dòng chế độ, subagent, /model
 
 Đợt UI/UX 10/2026 (PR #105–#110), thiết kế theo Claude Code, có tham khảo opencode và codex.
 
@@ -95,6 +95,22 @@ Tắt hết các báo dưới đây bằng `/config → Báo khi xong / cần du
 - **Vòng tiến trình trên tab:** quay khi agent làm, vàng khi chờ bạn. Chỉ bật trên Windows Terminal, ConEmu và Ghostty (OSC 9;4), vì terminal khác có thể hiểu nhầm thành thông báo. Thoát app thì vòng tự tắt.
 - **Thông báo desktop:** khi trả lời xong, cần bạn duyệt, model hỏi bạn, hoặc lượt bị lỗi. Chỉ gửi khi cửa sổ terminal **không** được focus, và mỗi loại chỉ một lần cho tới khi bạn quay lại.
 - **Trạng thái chương trình (OSC 7501):** gửi cho terminal nào hỗ trợ.
+
+## Gắn file bằng `@`
+
+Gõ `@` trong ô nhập để chọn file hoặc thư mục trong thư mục làm việc (giống Claude Code, opencode). File được gắn sẽ được **đọc sẵn và gửi kèm tin nhắn**, model không phải tự gọi `read_file`.
+
+- **Danh sách:** gõ tiếp để lọc (không cần dấu, `bao-cao` tìm được `báo-cáo.md`). `↑↓` chọn, `Enter` gắn, `Tab` điền (trên thư mục thì mở vào thư mục đó), `Esc` đóng.
+  - Trong git repo: lấy theo `git ls-files`, có cả file chưa commit, bỏ những gì `.gitignore` bỏ. Ngoài git: duyệt thư mục, bỏ `node_modules`, `.git`, `.venv`…
+  - File khoá/mật khẩu (`.env`, `auth.json`, `.ssh`…) không bao giờ hiện trong danh sách.
+  - Nếu mở OpenTrading ở thư mục home hoặc gốc ổ đĩa, thư mục làm việc là `~/.opentrading/workspace`; danh sách ghi rõ đang tìm ở đâu.
+- **Pill:** file đã chọn thành `@đường/dẫn` màu xanh; một lần Backspace xoá cả pill. Gõ tay `@ghi-chu.md` cũng được, miễn file có thật trong thư mục làm việc. Tên có dấu cách: `@"bao cao.md"`. Chỉ một đoạn: `@ghi-chu.md#L10-20`.
+- **Gửi cho model:** nội dung đọc như `read_file` (đánh số dòng; thư mục thành danh sách; PDF, Excel, Word đọc được; ảnh gửi kèm nếu model đọc được ảnh). Dưới tin nhắn hiện `⎿ Đã đọc ghi-chu.md (120 dòng)`, nội dung file không hiện trong chat.
+- **Không tốn context vô ích** (mỗi request gửi lại toàn bộ lịch sử):
+  - Mỗi file tối đa 20.000 ký tự, mỗi tin nhắn tối đa 50.000 ký tự. Phần còn lại: model được ghi chú để tự đọc tiếp bằng `read_file` với `offset`.
+  - Gắn lại một file chưa đổi (cùng đoạn dòng) thì chỉ gửi một dòng "không đổi so với bản đã gắn".
+  - Nội dung file gắn ở các lượt cũ (trừ 2 lượt gần nhất) được dọn theo đợt, khi dọn được từ 20k token trở lên, để không phá cache của provider mỗi lượt. Lúc nén hội thoại thì dọn hết.
+- Không đọc: file ngoài thư mục làm việc, file nhạy cảm (model được báo; nếu cần thì nó gọi `read_file` và bạn được hỏi), tối đa 10 file mỗi tin nhắn.
 
 ## Cuộn chat
 

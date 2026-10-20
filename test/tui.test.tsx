@@ -2048,6 +2048,56 @@ async function sendWith(model: string, expectUser: string) {
   await waitMcp(() => chatBodies.length > before && !state.streaming && state.lines.some((l) => l.kind === "user" && l.text.includes(expectUser)))
 }
 
+test("@: the list offers workspace files; tab opens a folder, enter makes a pill; the model gets the file read", async () => {
+  await mkdir(path.join(cwd, "bao-cao"), { recursive: true })
+  await writeFile(path.join(cwd, "bao-cao", "quy3.md"), "NỘI-DUNG-QUÝ-3\n")
+  await setup.mockInput.typeText("tóm tắt @bao")
+  let frame = await setup.waitForFrame((f) => f.includes("@bao-cao/") && f.includes("enter gắn file"))
+  show(frame)
+  expect(frame).toContain("thư mục")
+  setup.mockInput.pressTab()
+  frame = await setup.waitForFrame((f) => f.includes("@bao-cao/quy3.md") && f.includes("› tóm tắt @bao-cao/"))
+  setup.mockInput.pressEnter()
+  // Enter picked the file (nothing was sent): the list closes, the pill is in the prompt.
+  frame = await setup.waitForFrame((f) => f.includes("› tóm tắt @bao-cao/quy3.md") && !f.includes("enter gắn file"))
+  const { RGBA } = await import("@opentui/core")
+  const { color } = await import("../src/tui/theme")
+  const pill = setup
+    .captureSpans()
+    .lines.flatMap((l) => l.spans)
+    .filter((s) => s.text.includes("@bao-cao/quy3.md"))
+  expect(pill.some((s) => s.fg.equals(RGBA.fromHex(color.san)))).toBe(true)
+  await setup.mockInput.typeText("giúp")
+  await sendWith("test-model", "tóm tắt @bao-cao/quy3.md")
+  // What the model got: the typed text, then the file as read_file reads it.
+  const content = lastUserContent()
+  expect(content).toContain("tóm tắt @bao-cao/quy3.md giúp")
+  expect(content).toContain("<tep_dinh_kem path=\\\"bao-cao/quy3.md\\\"")
+  expect(content).toContain("NỘI-DUNG-QUÝ-3")
+  // The transcript shows the message as typed and one line for the file, never its content.
+  frame = await setup.waitForFrame((f) => f.includes("⎿  Đã đọc bao-cao/quy3.md (1 dòng)"))
+  show(frame)
+  expect(frame).not.toContain("NỘI-DUNG-QUÝ-3")
+})
+
+test("@: one Backspace deletes a file pill; Esc closes the list until the draft changes", async () => {
+  // Made after the list was last built: a query that matches nothing looks again (within 1s).
+  await writeFile(path.join(cwd, "ghi-chu-tui.md"), "x\n")
+  await setup.mockInput.typeText("@ghi-chu-t")
+  // About 4s of frames: the second look waits for the index to be 1s old.
+  await setup.waitForFrame((f) => f.includes("@ghi-chu-tui.md") && f.includes("enter gắn file"), { maxPasses: 120 })
+  setup.mockInput.pressEscape()
+  await setup.waitForFrame((f) => !f.includes("enter gắn file"))
+  await setup.mockInput.typeText("u")
+  await setup.waitForFrame((f) => f.includes("enter gắn file"))
+  setup.mockInput.pressEnter()
+  await setup.waitForFrame((f) => f.includes("› @ghi-chu-tui.md") && !f.includes("enter gắn file"))
+  // Pill + a space: Backspace removes the space, then the whole pill.
+  setup.mockInput.pressBackspace()
+  setup.mockInput.pressBackspace()
+  await setup.waitForFrame((f) => f.includes("Hỏi về thị trường"))
+})
+
 test("prompt: a long paste becomes one pill; one Backspace deletes it; sending puts the text back in place", async () => {
   const pasted = Array.from({ length: 50 }, (_, i) => `dòng-dán-${i + 1}`).join("\n")
   await setup.mockInput.pasteBracketedText(pasted)
