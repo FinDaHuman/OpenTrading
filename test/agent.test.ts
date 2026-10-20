@@ -703,7 +703,11 @@ test("near the threshold mid-turn, later steps go out with old tool results prun
   const history = [...oldTurn(1), ...oldTurn(2)]
   script = [{ tool: "current_time", args: {} }]
   toolUsage = { prompt_tokens: 9_000, completion_tokens: 10 }
+  usage = { prompt_tokens: 4_500, completion_tokens: 20 }
   const events = await collect(runAgent({ history, input: "x", skills: [], registry: registry(), compactAt: 5_000 }))
+  // The answer was measured on the pruned request; the history still holds the pruned result
+  // (~500 tokens), so the reported size adds it back and the next turn compacts.
+  expect(done(events).usage!.contextTokens).toBeGreaterThan(4_520 + 400)
   // The first request is as before; the step after a 9k-token one prunes outside the last 2 turns.
   expect(JSON.stringify(bodies[0]!.messages)).toContain("CU-1-")
   expect(JSON.stringify(bodies[1]!.messages)).not.toContain("CU-1-")

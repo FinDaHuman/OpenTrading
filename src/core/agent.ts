@@ -247,7 +247,7 @@ export function userMessage(input: string, reminders: string[], images: RunOptio
  */
 export function visibleUserText(message: ModelMessage) {
   if (message.role !== "user") return ""
-  if (typeof message.content === "string") return message.content
+  if (typeof message.content === "string") return message.content.startsWith(`<${REMINDER_TAG}>`) ? "" : message.content
   return message.content
     .filter((p) => p.type === "text" && !p.text.startsWith(`<${REMINDER_TAG}>`) && !isAttachmentText(p.text))
     .map((p) => (p as { text: string }).text)
@@ -926,6 +926,8 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
   let summarized = false
   /** Tool results pruned mid-turn (undefined: not near the threshold). */
   let midTurnPruned: number | undefined
+  /** Tokens the mid-turn prune keeps out of the last request; the history still holds them. */
+  let midTurnSaved = 0
   const nudge = nudgeAfterTools(target)
   // Visible tools at the current step; deferred tools join once loaded (tool search).
   let active = activeFor(built, request)
@@ -953,6 +955,7 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
         const tools = pruneToolResults(messages)
         const files = pruneAttachments(tools.messages, 0)
         midTurnPruned = Math.max(midTurnPruned, tools.pruned + files.pruned)
+        midTurnSaved = Math.max(0, tokensOf(messages) - tokensOf(files.messages))
         messages = files.messages
       }
       active = activeFor(built, messages)
@@ -1021,6 +1024,8 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
       second.failure = new Error(stallMessage(stallMs))
     }
     measured = retry
+    // That request carries the unpruned history.
+    midTurnSaved = 0
     if (second.usage) {
       outcome.usage = { input: (outcome.usage?.input ?? 0) + second.usage.input, output: (outcome.usage?.output ?? 0) + second.usage.output }
     }
@@ -1048,9 +1053,11 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
   if (messages && !outcome.aborted && !outcome.failure) {
     if (summarized) yield { type: "notice", text: `Đã dùng hết ${maxSteps} bước gọi tool; câu trả lời là bản tổng kết.` }
     const tokens = await lastStepTokens(measured)
+    // Measured on the pruned request: add back what the history still holds, so the next
+    // turn sees the real size and compacts.
     const usage =
       tokens !== undefined
-        ? { contextTokens: tokens, estimated: false, total: outcome.usage }
+        ? { contextTokens: tokens + midTurnSaved, estimated: false, total: outcome.usage }
         : { contextTokens: estimateRequest(system, [...request, ...messages], built?.tokens), estimated: true, total: outcome.usage }
     yield { type: "done", messages: [user, ...messages], clock: assembled.clock, usage, outcome: "completed" }
     if (opts.hooks) void opts.hooks.emit({ type: "turn-end", sessionId, messages: [user, ...messages] })

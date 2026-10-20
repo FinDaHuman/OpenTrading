@@ -2,7 +2,7 @@ import type { KeyEvent, TextareaRenderable } from "@opentui/core"
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid"
 import { createEffect, createMemo, createSignal, For, Match, on, onCleanup, onMount, Show, Switch } from "solid-js"
 import { produce, reconcile } from "solid-js/store"
-import { runAgent, summarizeConversation } from "../core/agent"
+import { REMINDER_TAG, runAgent, summarizeConversation } from "../core/agent"
 import {
   COMPACT_LEAN_TOKENS,
   IMAGE_TOKENS,
@@ -238,9 +238,13 @@ function send(runtime: Runtime, message: string | Outgoing) {
   })
 }
 
-/** Sent after a turn that ran tools and then overflowed, once the conversation is compacted. */
-const CONTINUE_AFTER_OVERFLOW =
-  "Lượt trước bị ngắt vì hội thoại quá dài cho model; harness đã nén hội thoại. Tiếp tục yêu cầu gần nhất của người dùng từ chỗ đã làm được, không gọi lại tool đã có kết quả."
+/**
+ * Sent after a turn that ran tools and then overflowed, once the conversation is compacted.
+ * A reminder block: harness text, never shown as something the user typed (transcript.ts).
+ */
+const CONTINUE_AFTER_OVERFLOW = `<${REMINDER_TAG}>
+Lượt trước bị ngắt vì hội thoại quá dài cho model; harness đã nén hội thoại. Tiếp tục yêu cầu gần nhất của người dùng từ chỗ đã làm được, không gọi lại tool đã có kết quả.
+</${REMINDER_TAG}>`
 
 /**
  * The provider said the request does not fit (Claude Code's reactive compact, opencode's

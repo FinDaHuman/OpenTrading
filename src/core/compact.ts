@@ -68,12 +68,30 @@ export function contextLimits(
   return { window, reserve, threshold, capped }
 }
 
-/** Provider wording for "the request does not fit the context window". */
-const CONTEXT_OVERFLOW = /context (length|window)|too long|maximum context|token limit|too many tokens|prompt is too long/i
+/**
+ * Provider wording for "the request does not fit the context window": ours, plus opencode's
+ * list (packages/llm/src/provider-error.ts) — Gemini says "The input token count (…) exceeds
+ * the maximum number of tokens allowed (…)", which none of ours matched.
+ */
+const CONTEXT_OVERFLOW = [
+  /context (length|window)|too long|maximum context|token limit|too many tokens|prompt is too long/i,
+  /request_too_large|request entity too large/i,
+  /input token count.*exceeds the maximum/i,
+  /tokens in request more than max tokens allowed/i,
+  /maximum prompt length is \d+/i,
+  /reduce the length of the messages/i,
+  /exceeds (?:the )?maximum allowed input length of [\d,]+ tokens?/i,
+  /input \(\d+ tokens\) is longer than the model'?s context length/i,
+  /exceeds the limit of \d+/i,
+  /exceeds the available context size/i,
+  /greater than the context length/i,
+  /exceeded model token limit/i,
+  /prompt has [\d,]+ tokens?, but the configured context size is/i,
+]
 /** Quota and auth errors may mention tokens too; they are never a reason to retry. */
-const NOT_OVERFLOW = /\b(429|401|403)\b|quota|rate.?limit|resource.?exhausted/i
+const NOT_OVERFLOW = /\b(429|401|403)\b|quota|rate.?limit|resource.?exhausted|too many requests/i
 
-export const isContextOverflow = (message: string) => CONTEXT_OVERFLOW.test(message) && !NOT_OVERFLOW.test(message)
+export const isContextOverflow = (message: string) => CONTEXT_OVERFLOW.some((p) => p.test(message)) && !NOT_OVERFLOW.test(message)
 /** After a compaction that stays above the threshold, wait for this much growth. */
 export const RECOMPACT_GROWTH_SHARE = 0.1
 /** Turns kept verbatim after the summary. */
