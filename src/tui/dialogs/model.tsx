@@ -12,14 +12,25 @@ import { Picker } from "./picker"
 
 type Choice = ModelChoice | "manual"
 
-/** Remember the preferences; a failed write is said, not thrown (the switch itself worked). */
-async function persist() {
-  try {
-    await saveModelPrefs(state.modelPrefs)
-  } catch (error) {
-    say(`Không lưu được danh sách model yêu thích: ${error instanceof Error ? error.message : String(error)}`, "warning")
-  }
+let saving = Promise.resolve()
+
+/**
+ * Remember the preferences; a failed write is said, not thrown (the switch itself worked).
+ * Writes go one after another: two renames onto model.json at once can fail on Windows.
+ */
+function persist() {
+  saving = saving.then(async () => {
+    try {
+      await saveModelPrefs(state.modelPrefs)
+    } catch (error) {
+      say(`Không lưu được danh sách model yêu thích: ${error instanceof Error ? error.message : String(error)}`, "warning")
+    }
+  })
+  return saving
 }
+
+/** Resolves once every preference write started so far has finished (tests clean up after it). */
+export const modelPrefsSaved = () => saving
 
 /**
  * /model, after opencode's model dialog: ★ favourites, recent models, then each connected
