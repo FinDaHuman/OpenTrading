@@ -39,6 +39,8 @@ export const SHORTCUTS: { title: string; keys: [string, string][] }[] = [
   {
     title: "Khác",
     keys: [
+      ["pgup/dn", "cuộn chat"],
+      ["ctrl+end", "cuối chat"],
       ["esc ×2", "xoá ô nhập"],
       ["ctrl+c ×2", "thoát"],
       ["/help", "mọi lệnh"],

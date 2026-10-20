@@ -96,6 +96,13 @@ Tắt hết các báo dưới đây bằng `/config → Báo khi xong / cần du
 - **Thông báo desktop:** khi trả lời xong, cần bạn duyệt, model hỏi bạn, hoặc lượt bị lỗi. Chỉ gửi khi cửa sổ terminal **không** được focus, và mỗi loại chỉ một lần cho tới khi bạn quay lại.
 - **Trạng thái chương trình (OSC 7501):** gửi cho terminal nào hỗ trợ.
 
+## Cuộn chat
+
+- Lăn chuột: **5 dòng mỗi nấc**. Đổi ở `/config → Tốc độ lăn chuột` (3 → 5 → 8 → tăng tốc khi lăn nhanh), hoặc trong `config.json`: `"ui": { "scrollSpeed": 5 }`, `"ui": { "scrollAcceleration": true }`.
+- `PageUp` / `PageDown`: nửa màn hình. `Ctrl+Home` / `Ctrl+End`: đầu / cuối hội thoại (`Home`/`End` trơn vẫn là của ô nhập).
+- Đã cuộn lên thì góc dưới hiện `↓ ctrl+end xuống cuối`; có chữ mới trong lúc đó thì đổi thành `↓ có nội dung mới · ctrl+end`. Bấm chuột vào đó cũng xuống cuối. Cuộn về sát cuối thì chat lại tự bám theo chữ mới.
+- Nền động (băng giá) chỉ chạy ở màn Home. Vào hội thoại thì nền đứng yên, để màn hình chỉ vẽ lại khi có thay đổi: lăn chuột được vẽ ngay, terminal nhận ít dữ liệu hơn.
+
 ## Phím tắt
 
 Gõ `?` khi ô nhập trống để xem bảng phím tắt. Gõ phím bất kỳ để đóng; nếu là chữ thì chữ đó được gõ tiếp vào ô nhập.

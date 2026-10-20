@@ -17,6 +17,7 @@ import type { SubagentView } from "../core/subagents/types"
 import type { AgentDefinition, AgentProblem } from "../core/agents/schema"
 import type { ShownNotice } from "./notify"
 import type { ModelPrefs } from "../core/model-prefs"
+import { DEFAULT_SCROLL_SPEED } from "./scroll"
 
 export type ToolStatus = "running" | "ok" | "error"
 
@@ -137,6 +138,8 @@ export const [state, setState] = createStore({
   tips: true,
   /** Config `ui.terminalNotify`: notifications and the tab progress ring (attention.ts). */
   terminalNotify: true,
+  /** Config `ui.scrollSpeed` / `ui.scrollAcceleration`: transcript rows per wheel notch. */
+  scroll: { speed: DEFAULT_SCROLL_SPEED, accelerate: false },
   /** Config `autoCompact: "off"`: the status bar warns when the context runs low. */
   autoCompactOff: false,
   /** Every approval request waiting (the head is `approval`). */

@@ -1,5 +1,7 @@
-import { useRenderer, useTerminalDimensions } from "@opentui/solid"
-import { createMemo, For, Match, Show, Switch } from "solid-js"
+import { ScrollBoxRenderable } from "@opentui/core"
+import { extend, useRenderer, useTerminalDimensions } from "@opentui/solid"
+import { createMemo, createSignal, For, Match, onCleanup, Show, Switch } from "solid-js"
+import { attachTranscript, scrollAcceleration, scrollTranscript } from "./scroll"
 import { state, type Line } from "./state"
 import { color, markdownStyle } from "./theme"
 import { ChartBox } from "./ui/chart-box"
@@ -278,15 +280,81 @@ function CompactRow(props: { line: Extract<Line, { kind: "compact" }> }) {
   )
 }
 
-/** Readable column centred over the tape; the animation stays visible in the side gutters. */
+/** The chat's scrollbox; it pings after each frame so the view can check where it stands. */
+class TranscriptBox extends ScrollBoxRenderable {
+  onFrame?: () => void
+
+  protected override onUpdate(deltaTime: number): void {
+    super.onUpdate(deltaTime)
+    this.onFrame?.()
+  }
+
+  /** Scrolled up from the bottom (by more than the row sticky scrolling tolerates). */
+  get away() {
+    return this.scrollTop < Math.max(0, this.scrollHeight - this.viewport.height) - 1
+  }
+}
+
+declare module "@opentui/solid" {
+  interface OpenTUIComponents {
+    ot_transcript: typeof TranscriptBox
+  }
+}
+
+extend({ ot_transcript: TranscriptBox })
+
+/** Readable column centred over the tape; the tape shows (still) in the side gutters. */
 export function Transcript() {
   const dims = useTerminalDimensions()
   const width = () => Math.min(dims().width - 4, 110)
+  // Scrolled up: a chip at the bottom says how to get back, and whether more came meanwhile.
+  const [away, setAway] = createSignal(false)
+  const [fresh, setFresh] = createSignal(false)
+  let seenHeight = 0
+  let pending: ReturnType<typeof setTimeout> | undefined
+  // Pinged during a frame, before its layout: look once the frame is done, so a height that
+  // grew in this very frame counts (an idle renderer may draw no next frame to report it).
+  const check = (box: TranscriptBox) => {
+    pending ??= setTimeout(() => {
+      pending = undefined
+      if (box.isDestroyed) return
+      const isAway = box.away
+      if (isAway !== away()) {
+        seenHeight = box.scrollHeight
+        setFresh(false)
+        setAway(isAway)
+      } else if (isAway && !fresh() && box.scrollHeight > seenHeight) setFresh(true)
+    }, 0)
+  }
+  onCleanup(() => {
+    clearTimeout(pending)
+    attachTranscript(undefined)
+  })
   return (
     <box flexGrow={1} flexShrink={1} minHeight={0} flexDirection="row" justifyContent="center">
-      <scrollbox width={width()} stickyScroll stickyStart="bottom" backgroundColor={color.bg} paddingLeft={2} paddingRight={2} paddingBottom={1}>
+      <ot_transcript
+        ref={(box: TranscriptBox) => {
+          box.onFrame = () => check(box)
+          attachTranscript(box)
+        }}
+        width={width()}
+        stickyScroll
+        stickyStart="bottom"
+        scrollAcceleration={scrollAcceleration(state.scroll)}
+        backgroundColor={color.bg}
+        paddingLeft={2}
+        paddingRight={2}
+        paddingBottom={1}
+      >
         <For each={state.lines}>{(line, i) => <Row line={line} prev={state.lines[i() - 1]} index={i()} width={width() - 4} />}</For>
-      </scrollbox>
+      </ot_transcript>
+      <Show when={away()}>
+        <box position="absolute" bottom={0} right={4} zIndex={2}>
+          <text fg={color.bg} bg={fresh() ? color.san : color.tx3} wrapMode="none" selectable={false} onMouseDown={() => scrollTranscript("bottom")}>
+            {fresh() ? " ↓ có nội dung mới · ctrl+end " : " ↓ ctrl+end xuống cuối "}
+          </text>
+        </box>
+      </Show>
     </box>
   )
 }

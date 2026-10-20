@@ -45,9 +45,11 @@ export interface Config {
   /**
    * TUI details (default on): `tips`, a tip under the working row during long turns;
    * `terminalNotify`, a desktop notification when a turn ends or waits for you while the
-   * terminal is in the background, and the tab progress ring.
+   * terminal is in the background, and the tab progress ring. `scrollSpeed`: chat rows per
+   * mouse-wheel notch (default 5); `scrollAcceleration`: speed up while the wheel spins fast
+   * (1 row per slow notch, up to 6×) instead.
    */
-  ui?: { tips?: boolean; terminalNotify?: boolean }
+  ui?: { tips?: boolean; terminalNotify?: boolean; scrollSpeed?: number; scrollAcceleration?: boolean }
   /** Cap on the context window used for the 80% threshold and ctx %. Default 200000. */
   compactWindow?: number
   /**

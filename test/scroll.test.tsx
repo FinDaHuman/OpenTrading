@@ -44,12 +44,11 @@ const LINES: Line[] = Array.from({ length: 120 }, (_, i) => ({ kind: "info", tex
 /** The highest "dòng-N" on screen. */
 const lastShown = (frame: string) => Math.max(0, ...[...frame.matchAll(/dòng-(\d+)/g)].map((m) => Number(m[1])))
 
-/** The chip follows the scroll state a frame later (reported mid-frame, applied after it). */
+/** One frame, the check that runs right after it, and the frame that shows its result. */
 async function settle(s: NonNullable<typeof setup>) {
-  for (let i = 0; i < 3; i++) {
-    await s.renderOnce()
-    await Promise.resolve()
-  }
+  await s.renderOnce()
+  await new Promise((r) => setTimeout(r, 0))
+  await s.renderOnce()
 }
 
 async function chat(speed?: number) {
@@ -117,6 +116,18 @@ describe("transcript scrolling", () => {
     await s.renderOnce()
     expect(s.captureCharFrame()).toContain("dòng-cuối-cùng")
   })
+})
+
+// With the tape still, nothing keeps the renderer drawing: spinners must ask for their frames.
+test("a running tool's spinner keeps turning on an idle renderer", async () => {
+  setState("lines", [{ kind: "tool", callId: "c1", name: "cho_lau", label: "cho_lau()", status: "running" }])
+  setup = await testRender(() => <Transcript />, { width: 60, height: 10 })
+  await setup.renderOnce()
+  expect(setup.renderer.liveRequestCount).toBe(0)
+  const first = setup.captureCharFrame()
+  // No renderOnce here: the frame must come from the spinner's own render request.
+  await new Promise((r) => setTimeout(r, 400))
+  expect(setup.captureCharFrame()).not.toBe(first)
 })
 
 test("the background animates on Home only: in a chat nothing keeps the renderer drawing", async () => {
