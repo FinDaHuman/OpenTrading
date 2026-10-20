@@ -216,6 +216,17 @@ test("the whole window of the model by default: input limit first, a reserve for
   expect(contextLimits({ output: 8_192 })).toBeUndefined()
 })
 
+test("with a threshold near a 1M window, a compaction that stayed large is retried before the window is full", () => {
+  const gemini = contextLimits({ context: 1_048_576, output: 65_536 })!
+  const base = { limits: gemini, failures: 0, disabled: false }
+  // Compacted to 990k (above the 977k threshold): 10% of the window would wait until 1.09M,
+  // past the window; half the room left under window − reserve is 19,288 tokens.
+  expect(shouldAutoCompact({ ...base, contextTokens: 1_000_000, floor: 990_000 })).toBe(false)
+  expect(shouldAutoCompact({ ...base, contextTokens: 1_009_300, floor: 990_000 })).toBe(true)
+  // Already past window − reserve: no wait at all.
+  expect(shouldAutoCompact({ ...base, contextTokens: 1_030_000, floor: 1_030_000 })).toBe(true)
+})
+
 test("compactWindow caps the window (only when lower); autoCompactPercent is kept within 50–95", () => {
   const gemini = { context: 1_048_576, output: 65_536 }
   expect(contextLimits(gemini, { cap: 200_000 })).toEqual({ window: 200_000, reserve: 20_000, threshold: 171_000, capped: true })

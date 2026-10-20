@@ -117,6 +117,8 @@ export const [state, setState] = createStore({
   liveTodos: undefined as Todo[] | undefined,
   /** Context size after the last turn (provider usage, else estimated); undefined = unknown. */
   contextTokens: undefined as number | undefined,
+  /** `contextTokens` is an estimate (chars/4, scaled after a compaction), not the provider's count. */
+  contextEstimated: false,
   /** Size right after a compaction that stayed above the threshold: wait for growth past it. */
   compactFloor: undefined as number | undefined,
   /** Consecutive failed automatic compactions in this session. */
@@ -173,7 +175,7 @@ export const contextLimits = (): ContextLimits | undefined =>
   })
 
 /** Fresh-session values for the compaction bookkeeping. */
-export const NO_COMPACTION = { contextTokens: undefined, compactFloor: undefined, compactFailures: 0 } as const
+export const NO_COMPACTION = { contextTokens: undefined, contextEstimated: false, compactFloor: undefined, compactFailures: 0 } as const
 
 export function pushLine(line: Line) {
   setState("lines", (lines) => [...lines, line])

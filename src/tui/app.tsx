@@ -152,7 +152,7 @@ export async function compact(runtime: Runtime, trigger: "auto" | "manual", inst
     }
     if (result.summary !== undefined || result.pruned > 0) {
       // The clock reminder lived in the dropped turns: send it again next turn.
-      setState({ history: result.messages, contextTokens: result.after, clock: undefined })
+      setState({ history: result.messages, contextTokens: result.after, contextEstimated: true, clock: undefined })
       recordCompact({ trigger, before: result.before, after: result.after, messages: result.messages })
       pushLine({ kind: "compact", summary: result.summary, before: result.before, after: result.after, pruned: result.pruned })
     }
@@ -206,7 +206,7 @@ function send(runtime: Runtime, message: string | Outgoing) {
     // Files @-attached turns ago: their content goes once it adds up (resent every request).
     const cleared = pruneAttachmentsForRequest(state.history, state.contextTokens)
     if (cleared) {
-      setState({ history: cleared.messages, contextTokens: cleared.contextTokens })
+      setState({ history: cleared.messages, contextTokens: cleared.contextTokens, contextEstimated: true })
       say(`Đã dọn nội dung ${cleared.pruned} file gắn ở các lượt cũ để tiết kiệm context.`, "info")
     }
     // Near the window: compact first, so this turn still fits.
@@ -411,7 +411,7 @@ async function sendTurn(runtime: Runtime, msg: Outgoing): Promise<boolean> {
           break
         case "step-usage":
           // Live during a long tool loop: each step's prompt plus its answer (opencode).
-          if (event.inputTokens > 0) setState("contextTokens", event.inputTokens + event.outputTokens)
+          if (event.inputTokens > 0) setState({ contextTokens: event.inputTokens + event.outputTokens, contextEstimated: false })
           break
         case "error":
           failed = true
@@ -419,7 +419,7 @@ async function sendTurn(runtime: Runtime, msg: Outgoing): Promise<boolean> {
           if (isContextOverflow(event.message)) pushLine({ kind: "info", text: "Hội thoại có thể đã quá dài cho model này: gõ /compact để nén rồi hỏi lại." })
           break
         case "done":
-          if (event.usage) setState("contextTokens", event.usage.contextTokens)
+          if (event.usage) setState({ contextTokens: event.usage.contextTokens, contextEstimated: event.usage.estimated })
           if (event.messages.length > 0) {
             setState("history", (history) => [...history, ...event.messages])
             recordTurn(event.messages, event.usage?.contextTokens)

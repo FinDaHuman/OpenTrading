@@ -80,7 +80,9 @@ export function ContextDialog(props: { runtime: Runtime }) {
                 <text fg={color.tx2} wrapMode="none">
                   {`History ~${groupDigits(history())} token · đang dùng ${
                     state.contextTokens !== undefined
-                      ? `${groupDigits(state.contextTokens)} token${limits ? ` (${Math.round((state.contextTokens / limits.window) * 100)}%)` : ""}`
+                      ? `${groupDigits(state.contextTokens)} token${limits ? ` (${Math.round((state.contextTokens / limits.window) * 100)}%)` : ""} · ${
+                          state.contextEstimated ? "ước lượng" : "theo provider"
+                        }`
                       : "? token"
                   }`}
                 </text>

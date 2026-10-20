@@ -358,7 +358,13 @@ export async function compactHistory(history: readonly ModelMessage[], opts: Com
 export function shouldAutoCompact(opts: { contextTokens: number; limits?: ContextLimits; floor?: number; failures: number; disabled: boolean }) {
   if (opts.disabled || !opts.limits || opts.failures >= MAX_AUTO_FAILURES) return false
   if (opts.contextTokens < opts.limits.threshold) return false
-  // Compacted already but still large: wait for real growth, or each turn would pay again.
-  if (opts.floor !== undefined && opts.contextTokens < opts.floor + opts.limits.window * RECOMPACT_GROWTH_SHARE) return false
+  // Compacted already but still large: wait for real growth, or each turn would pay again —
+  // but no further than half the room left under (window − reserve): with a threshold near
+  // the window, 10% of a 1M window would lie past the window itself.
+  if (opts.floor !== undefined) {
+    const room = opts.limits.window - opts.limits.reserve - opts.floor
+    const growth = Math.min(opts.limits.window * RECOMPACT_GROWTH_SHARE, Math.max(0, room / 2))
+    if (opts.contextTokens < opts.floor + growth) return false
+  }
   return true
 }
