@@ -2,7 +2,8 @@ import { truncate } from "../ui/text"
 import { useKeys } from "../ui/keys"
 import { createMemo, createResource, createSignal, Match, Show, Switch } from "solid-js"
 import type { MemoryItem, MemoryProvider } from "../../core/memory/types"
-import { closeDialog, pushLine } from "../state"
+import { closeDialog } from "../state"
+import { say } from "../notify"
 import { color } from "../theme"
 import { DialogFrame } from "./frame"
 import { Picker } from "./picker"
@@ -19,10 +20,7 @@ export function MemoryDialog(props: { memory: MemoryProvider }) {
 
   async function act(action: "approve" | "reject" | "remove", item: MemoryItem) {
     await props.memory[action]?.(item.id)
-    pushLine({
-      kind: "info",
-      text: `${action === "approve" ? "Đã duyệt" : action === "reject" ? "Đã bỏ" : "Đã xoá"} memory: ${truncate(item.text, 60)}`,
-    })
+    say(`${action === "approve" ? "Đã duyệt" : action === "reject" ? "Đã bỏ" : "Đã xoá"} memory: ${truncate(item.text, 60)}`, "success")
     setOpen(undefined)
     await refetch()
   }

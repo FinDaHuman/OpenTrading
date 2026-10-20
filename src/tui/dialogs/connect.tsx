@@ -3,7 +3,8 @@ import { createMemo, createSignal, Match, Switch } from "solid-js"
 import { connectedProviders, maskKey, setKey } from "../../core/auth"
 import { saveConfig } from "../../core/config"
 import { isSupported, sortedProviders, type ProviderId } from "../../core/providers"
-import { closeDialog, providerName, pushLine, setState, state } from "../state"
+import { closeDialog, providerName, setState, state } from "../state"
+import { say } from "../notify"
 import { color } from "../theme"
 import { DialogFrame } from "./frame"
 import { Picker } from "./picker"
@@ -26,7 +27,7 @@ export function ConnectDialog() {
       await saveConfig({ provider: id })
       setState("provider", id)
     }
-    pushLine({ kind: "info", text: `Đã lưu key ${providerName(id)} (${maskKey(value)}) vào ~/.opentrading/auth.json` })
+    say(`Đã lưu key ${providerName(id)} (${maskKey(value)}) vào ~/.opentrading/auth.json`, "success", 6000)
     setState({ modelFilter: providerName(id), dialog: "model" })
   }
 

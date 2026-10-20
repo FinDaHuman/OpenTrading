@@ -8,7 +8,8 @@ import { createMemory, switchMemory, type Runtime } from "../../core/runtime"
 import { DEFAULT_MAX_CONCURRENT } from "../../core/subagents/manager"
 import { AUTO_MODEL } from "../../core/subagents/model-pick"
 import { DEFAULT_MAX_STEPS } from "../../core/agent"
-import { blocked, closeDialog, providerName, pushLine, setState, state } from "../state"
+import { blocked, closeDialog, providerName, setState, state } from "../state"
+import { say } from "../notify"
 import { color } from "../theme"
 import { DialogFrame } from "./frame"
 import { Picker } from "./picker"
@@ -136,13 +137,13 @@ export function ConfigDialog(props: { runtime: Runtime }) {
     const next = props.runtime.memory.id === "file" ? "none" : "file"
     await saveConfig({ memory: { provider: next } })
     switchMemory(props.runtime, createMemory(next))
-    pushLine({
-      kind: "info",
-      text:
-        next === "file"
-          ? "Đã bật memory (lưu file ở ~/.opentrading/memory). Nói \"Ghi nhớ: …\" để lưu; xem và duyệt bằng /memory."
-          : "Đã tắt memory. Các memory đã lưu vẫn còn trên đĩa và sẽ dùng lại khi bật.",
-    })
+    say(
+      next === "file"
+        ? "Đã bật memory (lưu file ở ~/.opentrading/memory). Nói \"Ghi nhớ: …\" để lưu; xem và duyệt bằng /memory."
+        : "Đã tắt memory. Các memory đã lưu vẫn còn trên đĩa và sẽ dùng lại khi bật.",
+      "success",
+      8000,
+    )
     await refetch()
   }
 

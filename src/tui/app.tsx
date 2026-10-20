@@ -30,7 +30,7 @@ import { Background } from "./background"
 import { ApprovalPrompt } from "./approval"
 import { AskPrompt } from "./ask"
 import { McpPanel, STATUS } from "./mcp/panel"
-import { rank, truncate } from "./ui/text"
+import { rank, truncate, width as cells } from "./ui/text"
 import { COMMANDS, parseCommand, parsePromptArgs, promptUsage, type CommandInfo } from "./commands"
 import { ConfigDialog } from "./dialogs/config"
 import { ConnectDialog } from "./dialogs/connect"
@@ -58,7 +58,10 @@ const MODE_FLASH: Record<PermissionMode, string> = {
   ask: "▸ sửa có hỏi: mỗi lần ghi file / chạy lệnh hỏi bạn, cho phép được cả thư mục trong phiên",
   auto: "▸▸ tự động: một model duyệt từng hành động thay bạn",
 }
-import { armExit, type Queued, closeDialog, contextWindow, EXIT_WINDOW_MS, flash, onExitRequest, providerName, pushLine, setState, state, type Line } from "./state"
+import { armExit, type Queued, closeDialog, contextWindow, EXIT_WINDOW_MS, onExitRequest, providerName, pushLine, setState, state, type Line } from "./state"
+import { flash, noticeText, say, type NoticeLevel } from "./notify"
+import { announceMcp } from "./mcp/notices"
+import { Toasts } from "./toast"
 import { color, promptStyle } from "./theme"
 import { cleanSelection, writeClipboard } from "./clipboard"
 import { ArgumentHint, Suggestions } from "./suggestions"
@@ -97,7 +100,7 @@ function lineIndex(predicate: (line: Line) => boolean) {
  */
 export async function compact(runtime: Runtime, trigger: "auto" | "manual", instructions?: string, projected?: number): Promise<boolean> {
   if (state.history.length === 0) {
-    if (trigger === "manual") pushLine({ kind: "info", text: "Chưa có hội thoại để nén." })
+    if (trigger === "manual") say("Chưa có hội thoại để nén.")
     return true
   }
   const mine = epoch
@@ -412,7 +415,7 @@ export function App(props: {
     if (!keep) renderer.clearSelection()
     if (!text) return false
     writeClipboard(text, (t) => renderer.copyToClipboardOSC52(t))
-    flash(`✓ Đã copy ${[...text].length} ký tự`)
+    flash(`Đã copy ${[...text].length} ký tự`, 2000, "success")
     return true
   }
   // A finished drag copies at once — no keystroke needed, like Claude Code in a terminal.
@@ -427,7 +430,10 @@ export function App(props: {
   renderer.on("selection", onSelection)
   onCleanup(() => renderer.off("selection", onSelection))
 
-  const offMcp = props.runtime.mcp.onChange((status) => setState("mcp", status))
+  const offMcp = props.runtime.mcp.onChange((status) => {
+    announceMcp(state.mcp, status)
+    setState("mcp", status)
+  })
   onCleanup(() => offMcp())
 
   // Tools with side effects ask first. A pending question takes over the keyboard: any open
@@ -562,34 +568,31 @@ export function App(props: {
       switch (sub.toLowerCase()) {
         case "new":
           if (!rest[0]) return pushLine({ kind: "error", text: usage })
-          return pushLine({ kind: "info", text: await watchlistOps.create(home, rest[0]) })
+          return say(await watchlistOps.create(home, rest[0]), "success")
         case "add":
         case "rm":
           if (!rest[0] || rest.length < 2) return pushLine({ kind: "error", text: usage })
-          return pushLine({
-            kind: "info",
-            text: await (sub.toLowerCase() === "add" ? watchlistOps.add : watchlistOps.remove)(home, rest[0], rest.slice(1)),
-          })
+          return say(await (sub.toLowerCase() === "add" ? watchlistOps.add : watchlistOps.remove)(home, rest[0], rest.slice(1)), "success")
         case "rename":
           if (rest.length < 2) return pushLine({ kind: "error", text: usage })
-          return pushLine({ kind: "info", text: await watchlistOps.rename(home, rest[0]!, rest[1]!) })
+          return say(await watchlistOps.rename(home, rest[0]!, rest[1]!), "success")
         case "del":
           if (!rest[0]) return pushLine({ kind: "error", text: usage })
-          return pushLine({ kind: "info", text: await watchlistOps.delete(home, rest[0]) })
+          return say(await watchlistOps.delete(home, rest[0]), "success")
         default:
           focusWatchlist(sub || undefined)
           return setState("dialog", "watchlist")
       }
     } catch (error) {
-      pushLine({ kind: "error", text: error instanceof Error ? error.message : String(error) })
+      say(error instanceof Error ? error.message : String(error), "error")
     }
   }
 
   /** The conversation as Markdown, or undefined (with the reason shown) when there is none yet. */
   async function transcriptOrSay() {
-    if (state.streaming) return void pushLine({ kind: "error", text: "Đang trả lời; chờ xong rồi lưu hội thoại." })
+    if (state.streaming) return void say("Đang trả lời; chờ xong rồi lưu hội thoại.", "warning")
     const transcript = await transcriptOfCurrent(props.runtime)
-    if (!transcript) pushLine({ kind: "info", text: "Chưa có lượt nào để lưu." })
+    if (!transcript) say("Chưa có lượt nào để lưu.")
     return transcript
   }
 
@@ -601,11 +604,11 @@ export function App(props: {
       const { text } = transcript
       const sent = writeClipboard(text, (t) => renderer.copyToClipboardOSC52(t), { maxOsc52: MAX_OSC52_CHARS, timeoutMs: 15_000 })
       const size = `${transcript.turns} lượt, ${[...text].length} ký tự`
-      if (await sent.native) return pushLine({ kind: "info", text: `✓ Đã copy toàn bộ hội thoại vào clipboard (${size}).` })
-      if (sent.osc52) return pushLine({ kind: "info", text: `Đã gửi hội thoại cho terminal copy (OSC52, ${size}); nếu dán không ra, dùng /export.` })
-      pushLine({ kind: "error", text: "Không copy được vào clipboard. Dùng /export để lưu ra file." })
+      if (await sent.native) return say(`Đã copy toàn bộ hội thoại vào clipboard (${size}).`, "success")
+      if (sent.osc52) return say(`Đã gửi hội thoại cho terminal copy (OSC52, ${size}); nếu dán không ra, dùng /export.`, "info", 8000)
+      say("Không copy được vào clipboard. Dùng /export để lưu ra file.", "error")
     } catch (error) {
-      pushLine({ kind: "error", text: `Không lưu được hội thoại: ${error instanceof Error ? error.message : String(error)}` })
+      say(`Không lưu được hội thoại: ${error instanceof Error ? error.message : String(error)}`, "error")
     }
   }
 
@@ -634,17 +637,17 @@ export function App(props: {
       })
     }
     const added = workspace.add(raw)
-    if ("error" in added) return pushLine({ kind: "error", text: added.error })
+    if ("error" in added) return say(added.error, "error")
     if (keep) {
       try {
         const config = await loadConfig()
         const dirs = [...new Set([...(config.workspace?.dirs ?? []), added.dir])]
         await saveConfig({ workspace: { ...config.workspace, dirs } })
       } catch (error) {
-        return pushLine({ kind: "error", text: `Đã thêm ${added.dir} cho phiên này nhưng không lưu được cấu hình: ${error instanceof Error ? error.message : String(error)}` })
+        return say(`Đã thêm ${added.dir} cho phiên này nhưng không lưu được cấu hình: ${error instanceof Error ? error.message : String(error)}`, "error")
       }
     }
-    pushLine({ kind: "info", text: `✓ Đã thêm ${added.dir} vào workspace${keep ? " (đã lưu cho các phiên sau)" : " cho phiên này (thêm --luu để giữ cho các phiên sau)"}.` })
+    say(`Đã thêm ${added.dir} vào workspace${keep ? " (đã lưu cho các phiên sau)" : " cho phiên này (thêm --luu để giữ cho các phiên sau)"}.`, "success", 6000)
   }
 
   /** The first switch to ▸▸ auto: what it does and what it costs, once (saved in config). */
@@ -675,11 +678,11 @@ export function App(props: {
     if (!m) return pushLine({ kind: "error", text: "Dùng: /undo (xem danh sách) hoặc /undo <số> [--force]." })
     try {
       const result = await history.undo(Number(m[1]), !!m[2])
-      if ("error" in result) return pushLine({ kind: "error", text: result.error })
+      if ("error" in result) return say(result.error, "error")
       props.runtime.files.forget(history.list().find((c) => c.n === Number(m[1]))!.path)
-      pushLine({ kind: "info", text: `✓ ${result.ok}` })
+      say(result.ok, "success", 6000)
     } catch (error) {
-      pushLine({ kind: "error", text: `Không hoàn tác được: ${error instanceof Error ? error.message : String(error)}` })
+      say(`Không hoàn tác được: ${error instanceof Error ? error.message : String(error)}`, "error")
     }
   }
 
@@ -693,21 +696,21 @@ export function App(props: {
       if (action === "reconnect") await props.runtime.mcp.restart(name)
       else await props.runtime.mcp.setEnabled(name, action === "enable")
       const s = state.mcp.find((x) => x.name === name)
-      pushLine({ kind: "info", text: `MCP "${name}": ${s ? STATUS[s.state].text : "?"}${s?.error ? ` — ${s.error}` : ""}` })
+      say(`MCP "${name}": ${s ? STATUS[s.state].text : "?"}${s?.error ? ` — ${s.error}` : ""}`, s?.state === "failed" ? "error" : "success")
     } catch (error) {
-      pushLine({ kind: "error", text: `/mcp ${action} ${name}: ${error instanceof Error ? error.message : String(error)}` })
+      say(`/mcp ${action} ${name}: ${error instanceof Error ? error.message : String(error)}`, "error")
     }
   }
 
   /** Fetch an MCP prompt with the typed arguments and send it as the user's message. */
   async function runPrompt(command: { server: string; prompt: string; name: string }, rawArgs: string) {
     const info = state.mcp.find((s) => s.name === command.server)?.prompts.find((p) => p.name === command.prompt)
-    if (!info) return pushLine({ kind: "error", text: `Không còn prompt /${command.name}.` })
+    if (!info) return say(`Không còn prompt /${command.name}.`, "error")
     const parsed = parsePromptArgs(info.arguments, rawArgs)
-    if ("error" in parsed) return pushLine({ kind: "error", text: `/${command.name}: ${parsed.error}` })
+    if ("error" in parsed) return say(`/${command.name}: ${parsed.error}`, "error")
     try {
       const text = await props.runtime.mcp.getPrompt(command.server, command.prompt, parsed.values)
-      if (!text.trim()) return pushLine({ kind: "error", text: `Prompt /${command.name} không có nội dung.` })
+      if (!text.trim()) return say(`Prompt /${command.name} không có nội dung.`, "error")
       // What is sent in the user's name is shown in full as their message.
       pushLine({ kind: "info", text: `Prompt /${command.name} của server ${command.server}:` })
       // The classifier reads what the user typed as theirs and the server's template as harness text.
@@ -715,7 +718,7 @@ export function App(props: {
       props.runtime.auto.log.markHarness(text)
       void send(props.runtime, text)
     } catch (error) {
-      pushLine({ kind: "error", text: `/${command.name}: ${error instanceof Error ? error.message : String(error)}` })
+      say(`/${command.name}: ${error instanceof Error ? error.message : String(error)}`, "error")
     }
   }
 
@@ -750,13 +753,13 @@ export function App(props: {
   async function pasteImage() {
     flash("Đang đọc ảnh từ clipboard…", 15_000)
     const image = await readClipboardImage()
-    if (!image) return flash(`Không có ảnh trong clipboard · ${process.platform === "win32" ? "alt+v" : "ctrl+v"} để dán ảnh`, 3000)
+    if (!image) return flash(`Không có ảnh trong clipboard · ${process.platform === "win32" ? "alt+v" : "ctrl+v"} để dán ảnh`, 3000, "warning")
     attachImage(image)
   }
   function attachImage(image: PromptImage) {
-    if (image.data.length > MAX_IMAGE_BASE64) return flash("Ảnh quá lớn để gửi (tối đa 5 MB)", 3000)
+    if (image.data.length > MAX_IMAGE_BASE64) return flash("Ảnh quá lớn để gửi (tối đa 5 MB)", 4000, "error")
     parts.insert({ kind: "image", ...image })
-    flash("Đã đính ảnh", 1500)
+    flash("Đã đính ảnh", 1500, "success")
   }
   /** A paste: an image path becomes `[Image #N]`, a long text `[Pasted text #N +X lines]`. */
   function onPaste(text: string) {
@@ -809,9 +812,9 @@ export function App(props: {
     const snap = parts.snapshot()
     const result = await editInEditor(parts.expand().text, renderer)
     input?.focus()
-    if ("error" in result) return flash(result.error, 5000)
+    if ("error" in result) return flash(result.error, 6000, "error")
     if (result.returnedAtOnce) {
-      return flash('Trình soạn thảo đóng ngay (Notepad có thể đã mở thành tab) · đặt biến EDITOR, ví dụ "code --wait"', 6000)
+      return flash('Trình soạn thảo đóng ngay (Notepad có thể đã mở thành tab) · đặt biến EDITOR, ví dụ "code --wait"', 6000, "warning")
     }
     let text = result.text
     for (const [id, content] of Object.entries(snap.pastes ?? {})) {
@@ -833,7 +836,7 @@ export function App(props: {
   }
   returnQueue = (items) => {
     pullBack(items)
-    flash("Tin đang chờ đã được trả về ô nhập", 3000)
+    flash("Tin đang chờ đã được trả về ô nhập", 4000, "warning")
   }
   onCleanup(() => (returnQueue = undefined))
 
@@ -843,7 +846,7 @@ export function App(props: {
     if (draft().trim()) {
       stash = parts.snapshot()
       setInput("")
-      flash("Đã cất bản nháp · ctrl+s để lấy lại", 3000)
+      flash("Đã cất bản nháp · ctrl+s để lấy lại", 3000, "success")
     } else if (stash !== undefined) {
       setInput(stash.text, "end", stash)
       stash = undefined
@@ -985,10 +988,7 @@ export function App(props: {
       const target = state.provider && state.model ? { provider: state.catalog[state.provider]!, model: state.model } : undefined
       if (images.length > 0 && target?.provider && !acceptsImageInput(target)) {
         // Keep the draft: switch model or delete the image, then send again.
-        return pushLine({
-          kind: "error",
-          text: `Model ${state.model} không đọc được ảnh. Đổi model bằng /model, hoặc xoá ${images.length > 1 ? "các ảnh" : "ảnh"} khỏi ô nhập rồi gửi lại.`,
-        })
+        return say(`Model ${state.model} không đọc được ảnh. Đổi model bằng /model, hoặc xoá ${images.length > 1 ? "các ảnh" : "ảnh"} khỏi ô nhập rồi gửi lại.`, "error")
       }
       const saved = expanded ? parts.snapshot() : {}
       setInput("")
@@ -1001,7 +1001,7 @@ export function App(props: {
     const known = allCommands().some((c) => c.name.toLowerCase() === cmd.name) || cmd.name === "quit"
     if (!known) {
       // Keep what was typed so it can be fixed.
-      return pushLine({ kind: "error", text: `Không có lệnh /${cmd.name}. Gõ /help để xem các lệnh.` })
+      return say(`Không có lệnh /${cmd.name}. Gõ /help để xem các lệnh.`, "error")
     }
     setInput("")
     runCommand(cmd.name, cmd.args)
@@ -1012,7 +1012,7 @@ export function App(props: {
     const cmd = { name, args }
     const promptCmd = promptCommands().find((c) => c.name.toLowerCase() === cmd.name)
     if (promptCmd) {
-      if (state.streaming) return pushLine({ kind: "error", text: "Đang trả lời; chờ xong rồi chạy prompt." })
+      if (state.streaming) return say("Đang trả lời; chờ xong rồi chạy prompt.", "warning")
       return void runPrompt(promptCmd, cmd.args)
     }
     switch (cmd.name) {
@@ -1051,7 +1051,7 @@ export function App(props: {
       case "new":
         return void clearTranscript(props.runtime)
       case "compact":
-        if (state.streaming) return pushLine({ kind: "error", text: "Đang trả lời; chờ xong rồi nén." })
+        if (state.streaming) return say("Đang trả lời; chờ xong rồi nén.", "warning")
         // Messages typed while it runs are queued: send them (or give them back) afterwards.
         return void compact(props.runtime, "manual", cmd.args || undefined).then((ok) => afterTurn(props.runtime, ok))
       case "save":
@@ -1066,7 +1066,7 @@ export function App(props: {
       case "quit":
         return void exit()
       default:
-        pushLine({ kind: "error", text: `Không có lệnh /${cmd.name}. Gõ /help để xem các lệnh.` })
+        say(`Không có lệnh /${cmd.name}. Gõ /help để xem các lệnh.`, "error")
     }
   }
 
@@ -1283,10 +1283,14 @@ export function App(props: {
 
         <StatusBar />
       </box>
+      <Toasts />
 
     </box>
   )
 }
+
+const BRAND = " ▲ OpenTrading "
+const NOTICE_COLOR: Record<NoticeLevel, string> = { info: color.tx2, success: color.tang, warning: color.tham, error: color.giam }
 
 const approvalStatus = (request: { agent?: { type: string } } | undefined) =>
   request?.agent ? `△ subagent ${request.agent.type} cần bạn xác nhận · esc từ chối` : "△ cần bạn xác nhận · esc từ chối"
@@ -1295,57 +1299,90 @@ const backgroundRunning = () =>
   Object.values(state.agents).filter((a) => a.background && (a.status === "running" || a.status === "queued")).length
 
 function StatusBar() {
-  const target = () =>
-    state.provider ? `${providerName(state.provider)} · ${state.model ?? "chưa chọn model"}` : "chưa kết nối"
+  const dims = useTerminalDimensions()
+  const target = () => ` ${state.provider ? `${providerName(state.provider)} · ${state.model ?? "chưa chọn model"}` : "chưa kết nối"} `
   const ready = () => state.mcp.filter((s) => s.state === "connected").length
   const attention = () => state.mcp.some((s) => s.state === "failed" || s.state === "untrusted")
   const contextShare = () => {
     const window = contextWindow()
     return window && state.contextTokens !== undefined ? Math.min(1, state.contextTokens / window) : undefined
   }
+  const mcpText = () => (state.mcp.length > 0 ? ` MCP ${ready()}/${state.mcp.length} ` : "")
+  const ctxText = () => (contextShare() !== undefined ? ` ctx ${Math.round(contextShare()! * 100)}% ` : "")
+  const bgText = () => (backgroundRunning() > 0 ? ` ⧗ ${backgroundRunning()} subagent nền ` : "")
+  const skillText = () => (state.activeSkills.length > 0 ? ` ✦ ${truncate(state.activeSkills.join(", "), 30)}` : "")
+  const modeText = () =>
+    ` ${MODE_LABEL[state.permissionMode]}${state.permissionMode === "auto" && state.autoPausedUntil ? ` · tạm hỏi tay tới ${new Date(state.autoPausedUntil).toLocaleTimeString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit" })}` : ""} `
+  /** Columns left for the right-hand slot (the bar has 2 columns of padding on each side). */
+  const free = () => dims().width - 4 - [BRAND, target(), mcpText(), ctxText(), bgText(), skillText(), modeText()].reduce((n, s) => n + cells(s), 0)
+
+  /** The notification, unless an exit prompt takes the footer. */
+  const notice = () => (state.notification && !state.exiting && !state.exitArmed ? state.notification : undefined)
+  /** A notice too long for the slot gets its own wrapped row: a cut-off message is worse than none. */
+  const own = () => {
+    const n = notice()
+    return n !== undefined && cells(noticeText(n)) > free()
+  }
+  /** The right-hand slot: exit prompts first, then a notification, then what the app is doing. */
+  const slot = (): { text: string; fg: string; idle?: boolean } => {
+    const busy = state.streaming ? color.tham : color.tx3
+    if (state.exiting) return { text: "Đang thoát…", fg: busy }
+    if (state.exitArmed) return { text: `Nhấn ${state.exitArmed} lần nữa để thoát`, fg: busy }
+    const n = notice()
+    if (n && !own()) return { text: noticeText(n), fg: NOTICE_COLOR[n.level] }
+    if (state.approval) return { text: approvalStatus(state.approval), fg: busy }
+    if (state.question) return { text: "△ model đang hỏi bạn · esc bỏ qua", fg: busy }
+    if (state.compacting) return { text: "● đang nén hội thoại · esc dừng", fg: busy }
+    if (state.streaming) return { text: "● đang trả lời · esc dừng", fg: busy }
+    return { text: "/ lệnh · shift+tab đổi quyền · ctrl+c ×2 thoát", fg: color.tx3, idle: true }
+  }
   return (
-    <box flexDirection="row" height={1} flexShrink={0} backgroundColor={color.panel2} paddingLeft={2} paddingRight={2}>
-      <text fg={color.bg} bg={color.tang} flexShrink={0} selectable={false}>
-        {" ▲ OpenTrading "}
-      </text>
-      <text fg={color.tx2} flexShrink={1} wrapMode="none" selectable={false}>{` ${target()} `}</text>
-      <Show when={state.mcp.length > 0}>
-        <text fg={attention() ? color.tham : color.san} flexShrink={0} selectable={false}>{` MCP ${ready()}/${state.mcp.length} `}</text>
+    <>
+      <Show when={own() && notice()}>
+        {(n) => (
+          <box flexShrink={0} paddingLeft={3} paddingRight={2} backgroundColor={color.bg}>
+            <text fg={NOTICE_COLOR[n().level]} wrapMode="word" selectable={false}>
+              {noticeText(n())}
+            </text>
+          </box>
+        )}
       </Show>
-      <Show when={contextShare() !== undefined}>
-        <text fg={contextShare()! >= AUTO_COMPACT_SHARE ? color.giam : contextShare()! >= 0.6 ? color.tham : color.tx3} flexShrink={0} selectable={false}>
-          {` ctx ${Math.round(contextShare()! * 100)}% `}
+      <box flexDirection="row" height={1} flexShrink={0} backgroundColor={color.panel2} paddingLeft={2} paddingRight={2}>
+        <text fg={color.bg} bg={color.tang} flexShrink={0} selectable={false}>
+          {BRAND}
         </text>
-      </Show>
-      <Show when={backgroundRunning() > 0}>
-        <text fg={color.san} flexShrink={0} selectable={false}>{` ⧗ ${backgroundRunning()} subagent nền `}</text>
-      </Show>
-      <Show when={state.activeSkills.length > 0}>
-        <text fg={color.tran} flexShrink={1} wrapMode="none" selectable={false}>
-          {` ✦ ${truncate(state.activeSkills.join(", "), 30)}`}
+        <text fg={color.tx2} flexShrink={1} wrapMode="none" selectable={false}>
+          {target()}
         </text>
-      </Show>
-      <text fg={state.permissionMode === "read-only" ? color.tx3 : state.permissionMode === "ask" ? color.tham : color.tang} flexShrink={0} selectable={false}>
-        {` ${MODE_LABEL[state.permissionMode]}${state.permissionMode === "auto" && state.autoPausedUntil ? ` · tạm hỏi tay tới ${new Date(state.autoPausedUntil).toLocaleTimeString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit" })}` : ""} `}
-      </text>
-      <box flexGrow={1} />
-      <text fg={state.flash ? color.tang : state.streaming ? color.tham : color.tx3} flexShrink={0} selectable={false}>
-        {state.exiting
-          ? "Đang thoát…"
-          : state.exitArmed
-            ? `Nhấn ${state.exitArmed} lần nữa để thoát`
-            : state.flash
-              ? state.flash
-              : state.approval
-                ? approvalStatus(state.approval)
-                : state.question
-                  ? "△ model đang hỏi bạn · esc bỏ qua"
-                  : state.compacting
-                    ? "● đang nén hội thoại · esc dừng"
-                    : state.streaming
-                    ? "● đang trả lời · esc dừng"
-                    : "/ lệnh · shift+tab đổi quyền · ctrl+c ×2 thoát"}
-      </text>
-    </box>
+        <Show when={mcpText()}>
+          <text fg={attention() ? color.tham : color.san} flexShrink={0} selectable={false}>
+            {mcpText()}
+          </text>
+        </Show>
+        <Show when={ctxText()}>
+          <text fg={contextShare()! >= AUTO_COMPACT_SHARE ? color.giam : contextShare()! >= 0.6 ? color.tham : color.tx3} flexShrink={0} selectable={false}>
+            {ctxText()}
+          </text>
+        </Show>
+        <Show when={bgText()}>
+          <text fg={color.san} flexShrink={0} selectable={false}>
+            {bgText()}
+          </text>
+        </Show>
+        <Show when={skillText()}>
+          <text fg={color.tran} flexShrink={1} wrapMode="none" selectable={false}>
+            {skillText()}
+          </text>
+        </Show>
+        <text fg={state.permissionMode === "read-only" ? color.tx3 : state.permissionMode === "ask" ? color.tham : color.tang} flexShrink={0} selectable={false}>
+          {modeText()}
+        </text>
+        <box flexGrow={1} />
+        {/* Only the idle hint gives way on a narrow line; a status or a notice keeps its width. */}
+        <text fg={slot().fg} flexShrink={slot().idle ? 4 : 0} wrapMode="none" selectable={false}>
+          {slot().text}
+        </text>
+      </box>
+    </>
   )
 }

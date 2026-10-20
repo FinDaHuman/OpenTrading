@@ -212,6 +212,7 @@ await writeFile(path.join(home, "mcp.json"), JSON.stringify({ mcpServers: { demo
 
 const { App } = await import("../src/tui/app")
 const { state, setState } = await import("../src/tui/state")
+const { resetNotifications, say } = await import("../src/tui/notify")
 const { reconcile } = await import("solid-js/store")
 const { readJson } = await import("../src/core/store")
 const { setKey } = await import("../src/core/auth")
@@ -250,7 +251,23 @@ beforeAll(async () => {
 // cascade into every later test typing into that dialog.
 afterEach(() => {
   if (state.dialog) setState("dialog", undefined)
+  // A notification left by one test must not hide a footer hint the next one waits for.
+  resetNotifications()
 })
+
+/**
+ * Run a slash command. Resolves to the transcript line it added, or — for confirmations and
+ * command errors, which go to the footer — `{ kind: "notice", level, text }`.
+ */
+async function command(cmd: string): Promise<{ kind: string; text: string; level?: string }> {
+  resetNotifications()
+  const before = state.lines.length
+  await setup.mockInput.typeText(cmd)
+  setup.mockInput.pressEnter()
+  await setup.waitFor(() => state.lines.length > before || state.notification !== undefined)
+  if (state.lines.length > before) return state.lines.at(-1) as { kind: string; text: string }
+  return { kind: "notice", level: state.notification!.level, text: state.notification!.text }
+}
 
 afterAll(async () => {
   await runtime.mcp.stop()
@@ -370,11 +387,7 @@ test("an unknown /command is reported and kept for editing, never sent to the mo
 test("/save and /export before any turn say there is nothing to save", async () => {
   const copiedBefore = copied.length
   for (const cmd of ["/save", "/export"]) {
-    const before = state.lines.length
-    await setup.mockInput.typeText(cmd)
-    setup.mockInput.pressEnter()
-    await setup.waitFor(() => state.lines.length > before)
-    expect(state.lines.at(-1)).toMatchObject({ kind: "info", text: "Chưa có lượt nào để lưu." })
+    expect(await command(cmd)).toMatchObject({ kind: "notice", text: "Chưa có lượt nào để lưu." })
   }
   expect(copied.length).toBe(copiedBefore)
   await readdir(path.join(home, "exports")).then(
@@ -977,6 +990,34 @@ test("80×24: panels and the '/' list keep their hint line and the status bar on
   }
 })
 
+test("80×24: a short notice sits in the status bar; a long one gets its own wrapped row, in full", async () => {
+  setup.resize(80, 24)
+  try {
+    say("Đã copy 12 ký tự", "success")
+    let frame = await setup.waitForFrame((f) => f.includes("✓ Đã copy 12 ký tự"))
+    const bar = frame.split("\n").find((r) => r.includes("▲ OpenTrading"))!
+    expect(bar).toContain("✓ Đã copy 12 ký tự")
+
+    const long = "Model test-model không đọc được ảnh. Đổi model bằng /model, hoặc xoá ảnh khỏi ô nhập rồi gửi lại."
+    say(long, "error")
+    frame = await setup.waitForFrame((f) => f.includes("gửi lại."))
+    show(frame)
+    // Every word is on screen, above the status bar, and the bar keeps its own content.
+    const rows = frame.split("\n")
+    const barAt = rows.findIndex((r) => r.includes("▲ OpenTrading"))
+    const text = rows
+      .slice(0, barAt)
+      .map((r) => r.trim())
+      .join(" ")
+    expect(text).toContain(`✘ ${long}`)
+    expect(rows[barAt]).not.toContain("không đọc được ảnh")
+    expect(rows.length).toBeLessThanOrEqual(25)
+  } finally {
+    resetNotifications()
+    setup.resize(100, 32)
+  }
+})
+
 test("80×24: a full todo panel and the '/' list still leave the prompt, hint and status bar on screen", async () => {
   setup.resize(80, 24)
   setState("liveTodos", Array.from({ length: 8 }, (_, i) => ({ content: `Việc số ${i}`, status: i === 0 ? ("in_progress" as const) : ("pending" as const) })))
@@ -1252,20 +1293,13 @@ test("/new starts a fresh session; /sessions reopens the previous one with its t
 })
 
 test("/save copies the whole conversation as Markdown; /export writes it to a file, never replacing one unasked", async () => {
-  const lastLine = () => state.lines.at(-1) as { kind: string; text: string }
-  const run = async (cmd: string) => {
-    const before = state.lines.length
-    await setup.mockInput.typeText(cmd)
-    setup.mockInput.pressEnter()
-    await setup.waitFor(() => state.lines.length > before)
-    return lastLine()
-  }
+  const run = command
 
   // The OS command may not exist (CI without xclip): then OSC52 alone carries the copy.
   const copiedBefore = copied.length
   const oscBefore = osc52.length
   const saved = await run("/save")
-  expect(saved.kind).toBe("info")
+  expect(saved.kind).toBe("notice")
   expect(saved.text).toMatch(/Đã copy toàn bộ hội thoại|OSC52/)
   expect(copied.length + osc52.length).toBeGreaterThan(copiedBefore + oscBefore)
   const md = copied.length > copiedBefore ? copied.at(-1)! : osc52.at(-1)!
@@ -1274,7 +1308,7 @@ test("/save copies the whole conversation as Markdown; /export writes it to a fi
   expect(md).toContain("**Input**")
   expect(md).toContain("HẾT-CÂU-TRẢ-LỜI")
   expect(md).not.toContain("<nhac_nho>")
-  // UI-only lines (like the one /save just printed) are not part of the conversation.
+  // The confirmation is a footer notice, never part of the conversation.
   expect(md).not.toContain("Đã copy toàn bộ")
 
   // No path: the session's file under OPENTRADING_HOME/exports; again replaces it.
@@ -1298,8 +1332,8 @@ test("/save copies the whole conversation as Markdown; /export writes it to a fi
 
 test("shift+tab cycles ‖ chỉ đọc ↔ ▸ sửa có hỏi; a write in read-only shows its diff and can switch the mode", async () => {
   expect(runtime.permissions.mode).toBe("read-only")
-  // A flash from the test before ("✓ Đã copy…") would hide the hint for 2s.
-  setState("flash", undefined)
+  // A notification from the test before ("✓ Đã copy…") would hide the hint for 2s.
+  resetNotifications()
   await setup.waitForFrame((f) => f.includes("‖ chỉ đọc") && f.includes("shift+tab đổi quyền"))
   setup.mockInput.pressTab({ shift: true })
   await setup.waitForFrame((f) => f.includes("▸ sửa có hỏi"))
@@ -1327,13 +1361,7 @@ test("shift+tab cycles ‖ chỉ đọc ↔ ▸ sửa có hỏi; a write in read
 })
 
 test("/undo lists and puts back the agent's file changes; /permissions lists rules and deletes one with d", async () => {
-  const run = async (cmd: string) => {
-    const before = state.lines.length
-    await setup.mockInput.typeText(cmd)
-    setup.mockInput.pressEnter()
-    await setup.waitFor(() => state.lines.length > before)
-    return state.lines.at(-1) as { kind: string; text: string }
-  }
+  const run = command
   const write = runtime.registry.get("write_file")!
   await write.execute({ path: "undo-me.md", content: "x\n" }, { signal: new AbortController().signal, callId: "u1" })
   const file = path.join(cwd, "undo-me.md")
@@ -1342,10 +1370,13 @@ test("/undo lists and puts back the agent's file changes; /permissions lists rul
   expect(line.text).toContain("undo-me.md")
   expect(line.text).toContain("tạo")
   const n = runtime.history.list()[0]!.n
+  // The list stays in the transcript; the result is a footer notice.
+  expect(line.kind).toBe("info")
   line = await run(`/undo ${n}`)
+  expect(line).toMatchObject({ kind: "notice", level: "success" })
   expect(line.text).toContain("Đã xoá")
   expect(await Bun.file(file).exists()).toBe(false)
-  expect((await run(`/undo ${n}`)).kind).toBe("error")
+  expect(await run(`/undo ${n}`)).toMatchObject({ kind: "notice", level: "error" })
 
   await saveConfig({ permissions: { allow: [{ tool: "mcp__demo__echo", scope: "demo@x" }], deny: [{ tool: "write_file", pattern: "*bi-mat*" }] } })
   try {
@@ -1372,22 +1403,16 @@ test("/undo lists and puts back the agent's file changes; /permissions lists rul
 })
 
 test("/add-dir lists the workspace, adds a folder for the session or for good (--luu), refuses home", async () => {
-  const run = async (cmd: string) => {
-    const before = state.lines.length
-    await setup.mockInput.typeText(cmd)
-    setup.mockInput.pressEnter()
-    await setup.waitFor(() => state.lines.length > before)
-    return state.lines.at(-1) as { kind: string; text: string }
-  }
-  expect((await run("/add-dir")).text).toContain(cwd)
+  const run = command
+  expect(await run("/add-dir")).toMatchObject({ kind: "info", text: expect.stringContaining(cwd) })
   const extra = path.join(cwd, "..", path.basename(cwd) + "-bctc")
   await mkdir(extra, { recursive: true })
   try {
     let line = await run(`/add-dir ${extra}`)
-    expect(line.kind).toBe("info")
+    expect(line).toMatchObject({ kind: "notice", level: "success" })
     expect(line.text).toContain("cho phiên này")
     expect(runtime.workspace.roots()).toContain(extra)
-    expect((await run(`/add-dir ${extra}`)).kind).toBe("error")
+    expect(await run(`/add-dir ${extra}`)).toMatchObject({ kind: "notice", level: "error" })
     expect((await run(`/add-dir ${os.homedir()}`)).text).toContain("quá rộng")
     const kept = `${extra}-2`
     await mkdir(kept, { recursive: true })
@@ -1622,7 +1647,7 @@ function promptRows(frame: string) {
 
 /** Esc twice clears the prompt (the first press only warns). */
 async function clearPrompt() {
-  setState("flash", undefined) // a warning left by the previous test must not count
+  resetNotifications() // a warning left by the previous test must not count
   setup.mockInput.pressEscape()
   await setup.waitForFrame((f) => f.includes("Esc lần nữa để xoá ô nhập"))
   setup.mockInput.pressEscape()

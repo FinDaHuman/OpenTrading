@@ -3,7 +3,8 @@ import { createResource, Match, Switch } from "solid-js"
 import type { Runtime } from "../../core/runtime"
 import { listSessions } from "../../core/session/store"
 import { currentSession, resumeSession } from "../session"
-import { closeDialog, pushLine, state } from "../state"
+import { closeDialog, state } from "../state"
+import { say } from "../notify"
 import { color } from "../theme"
 import { DialogFrame } from "./frame"
 import { Picker } from "./picker"
@@ -24,12 +25,12 @@ export function SessionsDialog(props: { runtime: Runtime }) {
 
   async function open(id: string) {
     closeDialog()
-    if (state.streaming) return pushLine({ kind: "info", text: "Đang trả lời; dừng (esc) rồi mới mở phiên khác." })
+    if (state.streaming) return say("Đang trả lời; dừng (esc) rồi mới mở phiên khác.", "warning")
     if (id === currentSession().id) return
     try {
       await resumeSession(props.runtime, id)
     } catch (error) {
-      pushLine({ kind: "error", text: error instanceof Error ? error.message : String(error) })
+      say(error instanceof Error ? error.message : String(error), "error")
     }
   }
 
