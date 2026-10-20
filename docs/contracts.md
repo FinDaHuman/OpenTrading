@@ -102,6 +102,17 @@ version: 1.0.0
 - **File phụ** (bảng chỉ tiêu, checklist) để cùng thư mục. Model đọc bằng `load_skill` với tham số `file`; không đọc được file nằm ngoài thư mục skill. Mỗi file phụ tốn thêm một lượt gọi tool, nên chỉ tách khi nội dung dài và chỉ dùng ở nhánh hiếm; vài dòng mà bước chính luôn cần thì để thẳng trong SKILL.md. Bảng tra cứu (mã, id) mà tool tự hiểu được thì sửa ở tool, không chép vào skill. Khi tách: bảng tra cứu để `assets/`, file diễn giải cách đọc để `references/`.
 - Frontmatter sai: skill không được nạp và lỗi hiện trong `/skills`. App không crash.
 - Không viết số liệu thị trường cụ thể vào skill (giá, P/E hiện tại), vì chúng sẽ cũ. Skill mô tả **cách** phân tích; số liệu lấy từ tool.
+- **`references/` cùng luật, theo 2 tầng:**
+
+  | Tầng | Được giữ | Bị cấm |
+  | --- | --- | --- |
+  | **Luật** | Luật, ngưỡng, cơ chế, hạn chế, provenance | — |
+  | **Kết quả** | — | Kết quả bảng: thứ hạng, xếp hạng, so sánh nhất, năm/số mẫu, danh sách "ai dẫn" |
+
+- Vì sao: kết quả đo sẽ cũ sau **mỗi lần refresh** và model sẽ trích từ file thay vì tra tool → trả lời sai mà vẫn tự tin. Nêu **tên ứng viên** để tra (search space) thì được; nêu **kết luận so sánh** trong search space thì không.
+- Khi số mới phủ định một quy tắc trong `references/`: sửa **quy tắc** thành điều kiện tra được (tra X, đọc cột Y, áp ngưỡng Z), **không** chép bảng kết quả vào file. Muốn giữ một nhận định định tính thì ghi rõ là prior + điều kiện để nó thành tín hiệu.
+- Skill có bảng thống kê dài hạn nên có **mục "Giới hạn"** (mẫu nhỏ, ô partial, tìm max trên nhiều ô) để kết luận nào cũng phải kèm độ tin cậy.
+- `test/helpers/skill-lint.ts` có rule `copiedResults` chặn pattern kết quả bảng trong `references/**` (thoát bằng `<!-- lint:allow-result -->` cho ca hợp lệ, VD provenance của framework).
 
 ## 4. Hồ sơ nhà đầu tư: `~/.opentrading/INVESTOR.md`
 

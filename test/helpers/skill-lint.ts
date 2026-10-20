@@ -61,11 +61,43 @@ export async function toolNames(root: string) {
 
 const MCP_WRITE = /_(refresh|finalize|create|add|remove|delete|update|pause|resume)$/
 
+/**
+ * `references/` giữ luật + ngưỡng + cơ chế, không giữ **kết quả bảng** (luật ở
+ * docs/contracts.md §3). Kết quả đo sẽ cũ sau mỗi lần refresh và model sẽ trích
+ * từ file thay vì tra tool. Ba dạng hay gặp (PR #90):
+ * - so sánh nhất kèm phạm vi: "mạnh nhất toàn bảng", "hit cao nhất nhóm", "dẫn đầu cả hai đáy";
+ * - số mẫu: "mẫu ~8 Tết", "mẫu mảng ~8–9 năm";
+ * - kết quả gắn năm: "đáy 2020 … trung bình ở đáy 2022".
+ * Chỉ quét `references/` — SKILL.md hợp lệ dùng "mạnh nhất"/"dẫn đầu" (VD so-sanh mã).
+ * Ca hợp lệ (provenance của framework) thoát bằng `<!-- lint:allow-result -->`.
+ */
+const COPIED_RESULT_RULES: { name: string; res: RegExp[] }[] = [
+  {
+    name: "so sánh nhất",
+    res: [
+      // "mạnh nhất toàn bảng", "hit cao nhất nhóm", "dẫn đầu cả hai đáy"
+      /(mạnh nhất|cao nhất|hit cao nhất|dẫn đầu)[^\n]{0,40}(bảng|nhóm|cả hai|tuyệt đối|thứ \d)/i,
+      // "top 3 cả hai", "top cả 2 đáy" — nhưng "top 3 ở mọi đáy" là tiêu chí, không bắt
+      /\btop\s+(?:cả\s+)?\d+\s*(?:đáy|bảng|nhóm|cả)/i,
+    ],
+  },
+  { name: "số mẫu", res: [/(mẫu|số mã|quy mắc)(\s+\S+){0,2}\s*~\s*\d+/i] },
+  { name: "kết quả gắn năm", res: [/(năm|đáy)\s*(19|20)\d{2}[^\n]{0,50}(dẫn|top|rơi|mạnh|yếu|nhất|trung bình)/i] },
+]
+const ALLOW_RESULT = /<!--\s*lint:allow-result\s*-->/
+
+/** Tên rule vi phạm trong một dòng references, hoặc null nếu dòng đó sạch. */
+export function copiedResultHit(line: string): string | null {
+  if (ALLOW_RESULT.test(line)) return null
+  for (const { name, res } of COPIED_RESULT_RULES) if (res.some((re) => re.test(line))) return name
+  return null
+}
+
 export async function lintSkills(root: string) {
   const { skills } = await loadSkills(skillRoots(root).filter((r) => r.source === "bundled"))
   const { all, writes } = await toolNames(root)
   const skillNames = new Set(skills.map((s) => s.name))
-  const report: Record<string, string[]> = { unknownTools: [], triggers: [], catalogLength: [], englishHeadings: [], preloadedWrites: [] }
+  const report: Record<string, string[]> = { unknownTools: [], triggers: [], catalogLength: [], englishHeadings: [], preloadedWrites: [], copiedResults: [] }
   const known = (t: string) => all.has(bare(t)) || matchToolPattern(bare(t), all).length > 0
   // Only words in a tool family (vn_, vs_, cycle_, chart_…) are checked in bodies; the
   // rest of the snake_case there is field names.
@@ -95,9 +127,23 @@ export async function lintSkills(root: string) {
     for (const t of skill.uses_tools ?? skill.requires_tools ?? []) {
       if (writes.has(bare(t)) || MCP_WRITE.test(t)) report.preloadedWrites!.push(`${skill.name}: ${t}`)
     }
+    for (const { file, text } of await referenceFiles(skill)) {
+      for (const line of text.split("\n")) {
+        const rule = copiedResultHit(line)
+        if (rule) report.copiedResults!.push(`${skill.name}: ${file} — ${rule}: ${line.trim().slice(0, 90)}`)
+      }
+    }
   }
   for (const key of Object.keys(report)) report[key] = [...new Set(report[key])]
   return report
+}
+
+/** The `references/` files of one skill, with their path relative to the skill dir. */
+async function referenceFiles(skill: Skill) {
+  const glob = new Bun.Glob("references/**/*.md")
+  const out: { file: string; text: string }[] = []
+  for await (const file of glob.scan({ cwd: skill.dir })) out.push({ file, text: await readFile(path.join(skill.dir, file), "utf8") })
+  return out
 }
 
 async function bodyWithReferences(skill: Skill) {

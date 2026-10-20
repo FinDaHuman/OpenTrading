@@ -16,15 +16,23 @@
 | 2022 | Đỉnh đầu năm, đáy panic cuối năm | Vạn Thịnh Phát/SCB, trái phiếu DN, Fed tăng lãi suất |
 | 2023 | Hồi | SBV hạ lãi suất nhiều lần; CK-growth hồi |
 | 2024 | Đi ngang biên rộng | Tín dụng tăng; CNTT bứt phá |
-| 2025 | Sốc thuế quan tháng 4, rồi uptrend mạnh | Kỳ vọng FTSE nâng hạng, tín dụng cao; sóng Vin (VIC/VHM) bùng nổ |
-| 2026 | Chốt lời sau nâng hạng | Brent cao; năm chưa kết thúc — mảng dẫn RS tra `cycle_yearly(year=2026)` |
+| 2025 | Sốc thuế quan tháng 4, rồi uptrend mạnh | Kỳ vọng FTSE nâng hạng, tín dụng cao |
+| 2026 | Chốt lời sau nâng hạng | Brent cao; năm chưa kết thúc — tra `cycle_yearly(year=2026)`, ghi rõ "tính đến `as_of`" |
 
 Bảng trên là ghi chú định tính, chưa kiểm chứng bằng tool. Muốn nêu mức điểm, ngày hay % của năm nào thì tra `cycle_turning` / `cycle_yearly` trước.
 
+> `cycle_yearly` xếp hạng theo **lợi suất năm tuyệt đối**, không phải RS (RS = lợi suất vượt VNI). Muốn "mảng dẫn RS" thì tự trừ lợi suất VN-Index cùng năm và nói rõ cách tính.
+
 ## 2. Ai dẫn sau các đáy lớn (tra `cycle_trough_events`)
 
-Cách đọc: số đáy đủ dữ liệu (từ 2018-10) ít — nêu số đáy theo kết quả tool và coi là mẫu nhỏ. Chỉ mảng nằm **top 3 ở mọi đáy** trong bảng mới được coi là nhóm dẫn sau đáy; mảng có thứ hạng trái ngược giữa các đáy (đọc từng cột, kể cả `vin`) thì không dùng làm kinh nghiệm bắt đáy. BĐS: không bắt đáy sớm khi tool cho thấy BĐS hồi yếu ở đáy gần nhất. Không trích thứ hạng từ file này.
+Cách đọc:
+- Số đáy đủ dữ liệu ít (coverage từ 2018-10) — **nêu số đáy theo kết quả tool** và coi là mẫu nhỏ.
+- Chỉ mảng **top 3 ở mọi đáy** mới coi là nhóm dẫn sau đáy. Xếp hạng tự tính từ lợi suất 3 tháng sau đáy mà tool trả (tool không có cột rank).
+- "Thứ hạng lệch rõ" = một đáy vào top 3 nhưng đáy khác nằm ngoài top 5 → mảng đó không dùng làm kinh nghiệm bắt đáy.
+- Cột `vin` đọc như mọi cột: thứ hạng lệch giữa các đáy thì không dùng.
+- **Dưới 3 đáy: chỉ nêu dạng quan sát, không chốt nhóm dẫn.**
+- Không trích thứ hạng từ file này.
 
 ## 3. Quán quân theo năm (tra `cycle_yearly`)
 
-Cách đọc: xếp mảng dẫn và mảng đội sổ theo loại năm (mega-cycle như 2021, bear như 2022, hồi như 2023, năm do một nhóm dẫn riêng — đối chiếu bảng mục 1) để tìm pha lịch sử tương đồng. Năm chưa kết thúc thì ghi rõ "tính đến <ngày cuối dữ liệu>". Không trích quán quân từ file này — tra `cycle_yearly` mỗi lần dùng.
+Cách đọc: xếp mảng theo lợi suất năm rồi đối chiếu **loại năm** trong bảng mục 1 (mega-cycle, bear, hồi, năm có sóng riêng) để tìm pha lịch sử tương đồng. Loại năm chỉ là nhãn của timeline — **không** suy ra mảng dẫn từ đó; mảng dẫn phải tra `cycle_yearly` mỗi lần dùng. Năm chưa kết thúc thì ghi rõ "tính đến `as_of`" (`as_of` lấy từ `cycle_stats_check`).

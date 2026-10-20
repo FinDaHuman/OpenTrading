@@ -5,8 +5,8 @@ activation: auto
 triggers:
   keywords: [chu kỳ thị trường, giai đoạn thị trường, pha thị trường, luân chuyển ngành, rotation, sóng ngành, đỉnh chu kỳ, giai đoạn phân phối, đầu phục hồi, bank dẫn, chứng dẫn, dòng tiền ngành, cuối sóng, giữa sóng, mùa vụ ngành, mảng vin, họ vin]
 requires_tools: [cycle_stats_check, vn_index_ohlcv]
-uses_tools: [cycle_stats_check, cycle_seasonality, cycle_chains, cycle_turning, cycle_tet, cycle_yearly, cycle_trough_events, vn_index_ohlcv, seasonality, sbv_rates, breadth_scan, market_movers, market_candles_batch]
-version: 1.6.1
+uses_tools: [cycle_stats_check, cycle_seasonality, cycle_chains, cycle_turning, cycle_tet, cycle_yearly, cycle_trough_events, vn_index_ohlcv, seasonality, sbv_rates, breadth_scan, market_movers, market_candles_batch, event_study, sector_performance]
+version: 1.6.2
 ---
 
 # Định vị pha chu kỳ thị trường Việt Nam
@@ -33,7 +33,7 @@ Gọi `cycle_stats_check`.
 
 **Bước 1: RS mảng live (song song).**
 
-Chạy `vn_index_ohlcv` cho VNINDEX + VN30 + VNFIN + VNREAL + VNUTI + VNMAT + VNIT (count=126, interval=1D; cần đủ nến để có giá 63 phiên trước, không dùng summary), mỗi lượt tối đa 3 chỉ số để không dồn tải lên server. Tính RS 3 tháng (≈63 nến) từng chỉ số ngành vs VNINDEX = % thay đổi chỉ số ngành − % thay đổi VNINDEX; ghi rõ ngày đầu/cuối dùng để tính. Mảng Vin không có chỉ số riêng: chạy `market_candles_batch` cho VIC, VHM, VRE, VPL (days=126) rồi tính RS 3 tháng bằng trung bình % thay đổi 4 mã trừ VNINDEX (ghi rõ cách tính và mã nào thiếu nến). Đối chiếu quy tắc đọc RS trong `references/rotation-chains.md` + tra `cycle_trough_events` so mẫu hồi sau đáy. Song song chạy `market_movers` + `breadth_scan` (sóng thật cần breadth > 50%).
+Chạy `vn_index_ohlcv` cho VNINDEX + VN30 + VNFIN + VNREAL + VNUTI + VNMAT + VNIT (count=126, interval=1D; cần đủ nến để có giá 63 phiên trước, không dùng summary), mỗi lượt tối đa 3 chỉ số để không dồn tải lên server. Tính RS 3 tháng (≈63 nến) từng chỉ số ngành vs VNINDEX = % thay đổi chỉ số ngành − % thay đổi VNINDEX; ghi rõ ngày đầu/cuối dùng để tính. Mảng Vin không có chỉ số riêng: chạy `market_candles_batch` cho VIC, VHM, VRE, VPL (days=126) rồi tính RS 3 tháng bằng trung bình % thay đổi 4 mã trừ VNINDEX (ghi rõ cách tính và mã nào thiếu nến). Đối chiếu quy tắc đọc RS trong `references/rotation-chains.md` + tra `cycle_trough_events` so mẫu hồi sau đáy. Song song chạy `market_movers` + `breadth_scan` (sóng thật cần breadth > 50%). Muốn đọc nhanh mảng nào đang khỏe thì `sector_performance` (heatmap GICS) để đối chiếu — nhưng RS chính vẫn tự tính như trên, RS của skill này không lấy từ heatmap.
 
 Tham số `basket` của các tool `cycle_*` nhận cả tên tiếng Việt không dấu ("bất động sản", "dầu khí", "CNTT"...) — danh sách ngành đầy đủ nằm trong mô tả tool `cycle_seasonality`; không cần chép vào câu trả lời.
 
@@ -55,7 +55,7 @@ Chấm 4 trụ cột theo checklist trong `references/phase-playbook.md`, chọn
 
 ## Cấu trúc câu trả lời
 
-Trình bày đúng thứ tự: độ tươi bảng (`as_of` từ check) · verdict pha (1 dòng + độ tin cậy) · bằng chứng 4 trụ cột (mỗi số kèm provenance tool) · 1–2 mảng gợi ý kèm hit-rate live · pha lịch sử tương đồng nhất · thay đổi định nghĩa trong lần refresh này (nếu có, trích changelog) · caveat + đề xuất refresh nếu bảng cũ. Khoảng 12–16 lệnh gọi, gom song song trong từng bước.
+Trình bày đúng thứ tự: độ tươi bảng (`as_of` từ check) · verdict pha (1 dòng + độ tin cậy) · bằng chứng 4 trụ cột (mỗi số kèm provenance tool) · 1–2 mảng gợi ý kèm hit-rate live · pha lịch sử tương đồng nhất · thay đổi định nghĩa trong lần refresh này (nếu có, trích changelog) · caveat + đề xuất refresh nếu bảng cũ. Khoảng 14–18 lệnh gọi, gom song song trong từng bước.
 
 ## Ngôn ngữ trình bày
 
@@ -70,7 +70,7 @@ Viết tắt trong `references/` dùng để bạn làm việc, không viết ra
 | bias tháng, hit-rate, breadth | xu hướng thường thấy của tháng đó, tỷ lệ đúng theo lịch sử, độ rộng thị trường |
 | pre-Tết, post-Tết, turning | trước Tết, sau Tết, đảo chiều |
 
-Tên chỉ số và mã giữ nguyên (VN-Index, VN30). Số liệu trong `references/` là dữ liệu để ra quyết định, không phải để chép lại cho người dùng: chốt pha bằng lời của bạn, kèm độ tin cậy và nguồn.
+Tên chỉ số và mã giữ nguyên (VN-Index, VN30). Quy tắc và ngưỡng trong `references/` dùng để ra quyết định, không phải để chép lại cho người dùng; mọi số liệu, thứ hạng và tỷ lệ đều lấy từ tool. Chốt pha bằng lời của bạn, kèm độ tin cậy và nguồn.
 
 ## Ví dụ
 
