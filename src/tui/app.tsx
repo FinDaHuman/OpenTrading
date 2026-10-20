@@ -2,7 +2,7 @@ import type { KeyEvent, TextareaRenderable } from "@opentui/core"
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid"
 import { createEffect, createMemo, createSignal, For, Match, on, onCleanup, onMount, Show, Switch } from "solid-js"
 import { produce, reconcile } from "solid-js/store"
-import { runAgent, summarizeConversation } from "../core/agent"
+import { REMINDER_TAG, runAgent, summarizeConversation } from "../core/agent"
 import {
   COMPACT_LEAN_TOKENS,
   IMAGE_TOKENS,
@@ -104,7 +104,7 @@ function lineIndex(predicate: (line: Line) => boolean) {
  * Compact the conversation (see core/compact.ts). Runs like a turn: esc stops it, /new
  * discards it. On failure the history is left as is (or only pruned).
  */
-export async function compact(runtime: Runtime, trigger: "auto" | "manual", instructions?: string, projected?: number): Promise<boolean> {
+export async function compact(runtime: Runtime, trigger: "auto" | "manual", instructions?: string, projected?: number, force = false): Promise<boolean> {
   if (state.history.length === 0) {
     if (trigger === "manual") say("Chưa có hội thoại để nén.")
     return true
@@ -124,7 +124,8 @@ export async function compact(runtime: Runtime, trigger: "auto" | "manual", inst
           text: trigger === "auto" ? "Context gần đầy: đang tóm tắt phần đầu hội thoại (dùng 1 request)…" : "Đang tóm tắt hội thoại (dùng 1 request)…",
         }),
       limits,
-      manual: trigger === "manual",
+      // Forced after a context-overflow error: summarize even if the estimate is below the threshold.
+      manual: trigger === "manual" || force,
       instructions,
       summarize: async (head, extra) => {
         // One request: <analysis> scratchpad then <summary> (Claude Code); lean when the head is huge.
@@ -221,7 +222,9 @@ function send(runtime: Runtime, message: string | Outgoing) {
       disabled: config.autoCompact === "off",
     })
     if (auto) await compact(runtime, "auto", undefined, projected)
-    return sendTurn(runtime, msg)
+    const first = await sendTurn(runtime, msg, { recover: config.autoCompact !== "off" })
+    if (typeof first === "boolean") return first
+    return recoverOverflow(runtime, msg, first)
   })()
   const settled = turn.then(
     (ok) => ok,
@@ -233,6 +236,33 @@ function send(runtime: Runtime, message: string | Outgoing) {
     if (inflight === done) inflight = undefined
     afterTurn(runtime, ok)
   })
+}
+
+/**
+ * Sent after a turn that ran tools and then overflowed, once the conversation is compacted.
+ * A reminder block: harness text, never shown as something the user typed (transcript.ts).
+ */
+const CONTINUE_AFTER_OVERFLOW = `<${REMINDER_TAG}>
+Lượt trước bị ngắt vì hội thoại quá dài cho model; harness đã nén hội thoại. Tiếp tục yêu cầu gần nhất của người dùng từ chỗ đã làm được, không gọi lại tool đã có kết quả.
+</${REMINDER_TAG}>`
+
+/**
+ * The provider said the request does not fit (Claude Code's reactive compact, opencode's
+ * ContextOverflowError): compact even below the threshold, then try once more. A turn that
+ * failed before any tool ran is sent again as is; one whose tools already ran is kept and
+ * continued, so no tool runs twice.
+ */
+async function recoverOverflow(runtime: Runtime, msg: Outgoing, how: "resend" | "continue"): Promise<boolean> {
+  const mine = epoch
+  const size = tokensOf(state.history)
+  const finished = await compact(runtime, "auto", undefined, undefined, true)
+  if (!finished || epoch !== mine) return false
+  if (tokensOf(state.history) >= size) {
+    pushLine({ kind: "info", text: "Không nén được hội thoại để gửi lại: gõ /compact với hướng dẫn ngắn hơn, hoặc /new để bắt đầu phiên mới." })
+    return false
+  }
+  const again = how === "resend" ? await sendTurn(runtime, msg, { resend: true }) : await sendTurn(runtime, { text: CONTINUE_AFTER_OVERFLOW, notice: true })
+  return again === true
 }
 
 let returnQueue: ((items: Queued[]) => void) | undefined
@@ -313,14 +343,20 @@ function mentionsOf(runtime: Runtime, text: string) {
   })
 }
 
-/** One turn; true when it ran to the end (not stopped, no error, no /clear meanwhile). */
-async function sendTurn(runtime: Runtime, msg: Outgoing): Promise<boolean> {
+/**
+ * One turn; true when it ran to the end (not stopped, no error, no /clear meanwhile).
+ * `recover`: a context-overflow error returns how to retry after compacting (recoverOverflow)
+ * instead of false; a turn that failed before any tool ran is then left out of history.
+ * `resend`: the same message again, its line is already in the transcript.
+ */
+async function sendTurn(runtime: Runtime, msg: Outgoing, mode: { recover?: boolean; resend?: boolean } = {}): Promise<boolean | "resend" | "continue"> {
   // A notification turn already has its "◆ Subagent nền …" lines.
-  if (!msg.notice) pushLine({ kind: "user", text: msg.display ?? msg.text })
-  const userLine = msg.notice ? -1 : state.lines.length - 1
+  if (!msg.notice && !mode.resend) pushLine({ kind: "user", text: msg.display ?? msg.text })
+  const userLine = msg.notice || mode.resend ? -1 : state.lines.length - 1
   const mine = epoch
   const live = () => epoch === mine
   let failed = false
+  let overflow: "resend" | "continue" | undefined
   // Index of the assistant line currently receiving text; -1 after a tool call.
   let current = -1
   const edit = (index: number, fn: (line: any) => void) => {
@@ -376,6 +412,7 @@ async function sendTurn(runtime: Runtime, msg: Outgoing): Promise<boolean> {
       hooks: msg.notice ? undefined : runtime.hooks,
       memory: runtime.memory,
       serverInstructions: () => runtime.mcp.instructions(),
+      compactAt: state.autoCompactOff ? undefined : contextLimits()?.threshold,
     })
     for await (const event of turn) {
       if (!live()) continue
@@ -416,9 +453,17 @@ async function sendTurn(runtime: Runtime, msg: Outgoing): Promise<boolean> {
         case "error":
           failed = true
           pushLine({ kind: "error", text: event.message })
-          if (isContextOverflow(event.message)) pushLine({ kind: "info", text: "Hội thoại có thể đã quá dài cho model này: gõ /compact để nén rồi hỏi lại." })
+          if (isContextOverflow(event.message)) {
+            if (mode.recover) {
+              overflow = "resend"
+              pushLine({ kind: "info", text: "Hội thoại quá dài cho model: đang nén rồi thử lại một lần." })
+            } else pushLine({ kind: "info", text: "Hội thoại có thể đã quá dài cho model này: gõ /compact để nén rồi hỏi lại." })
+          }
           break
         case "done":
+          // Overflowed before any tool ran: nothing worth keeping, the message is sent again.
+          if (overflow && !event.messages.some((m) => m.role === "tool")) break
+          if (overflow) overflow = "continue"
           if (event.usage) setState({ contextTokens: event.usage.contextTokens, contextEstimated: event.usage.estimated })
           if (event.messages.length > 0) {
             setState("history", (history) => [...history, ...event.messages])
@@ -443,7 +488,7 @@ async function sendTurn(runtime: Runtime, msg: Outgoing): Promise<boolean> {
     if (live()) {
       closeText()
       // Someone looking at another window hears that the answer (or the error) is in.
-      if (!controller.signal.aborted && !msg.notice) {
+      if (!controller.signal.aborted && !msg.notice && !overflow) {
         const last = state.lines.findLast((l) => l.kind === "assistant" || l.kind === "error")
         const text = last && "text" in last ? last.text.replace(/\s+/g, " ").trim().slice(0, 120) : ""
         attention?.attention(failed ? "error" : "done", failed ? `Lỗi: ${text}` : text || "Đã trả lời xong")
@@ -464,6 +509,7 @@ async function sendTurn(runtime: Runtime, msg: Outgoing): Promise<boolean> {
     setState({ streaming: false, activity: undefined })
     if (abort === controller) abort = undefined
   }
+  if (overflow && live() && !controller.signal.aborted) return overflow
   return live() && !failed && !controller.signal.aborted
 }
 

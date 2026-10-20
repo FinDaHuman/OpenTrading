@@ -1,5 +1,7 @@
 import type { LanguageModelMiddleware } from "ai"
-import { isContextOverflow } from "./compact"
+import type { ModelMessage } from "ai"
+import { isContextOverflow, tokensOf } from "./compact"
+import { groupDigits } from "./subagents/result"
 
 /**
  * Retry for model requests, by kind of failure (opencode `session/retry.ts`, Claude Code
@@ -45,6 +47,8 @@ export interface RetryNotice {
 
 export interface RetryOptions {
   onRetry?: (notice: RetryNotice) => void
+  /** Estimated size of the request, to tell a request too large for a per-minute quota. */
+  requestTokens?: () => number
   /** Injected in tests. Must reject when the signal aborts. */
   sleep?: (ms: number, signal?: AbortSignal) => Promise<void>
   random?: () => number
@@ -86,6 +90,28 @@ export function classifyFailure(error: unknown): Failure {
   if (OVERLOADED.test(text)) return { kind: "overloaded", label: "provider quá tải" }
   if (NETWORK.test(text) || NETWORK.test(String((e.cause as ErrorShape | undefined)?.message ?? ""))) return { kind: "network", label: "lỗi mạng" }
   return { kind: "fatal", label: "lỗi không thử lại được" }
+}
+
+/**
+ * Gemini's per-minute input-token quota from a 429 ("…input_token_count, limit: 250000",
+ * quotaId "…InputTokensPerModelPerMinute…"); undefined for any other limit.
+ */
+export function inputTokensPerMinute(error: unknown): number | undefined {
+  const e = (error ?? {}) as ErrorShape
+  const text = `${e.message ?? ""} ${e.responseBody ?? ""}`
+  if (!/input_token_count|InputTokensPer\w*Minute/i.test(text)) return undefined
+  const limit = /limit:\s*(\d+)/.exec(text) ?? /"quotaValue"\s*:\s*"(\d+)"/.exec(text)
+  return limit ? Number(limit[1]) : undefined
+}
+
+/** One request holds more input tokens than the plan allows per minute: waiting cannot help. */
+export class RequestOverQuota extends Error {
+  override name = "RequestOverQuota"
+  constructor(tokens: number, limit: number) {
+    super(
+      `Request khoảng ${groupDigits(tokens)} token, vượt giới hạn ${groupDigits(limit)} token đầu vào mỗi phút của gói (429), nên chờ cũng không gửi được. Vào /config → Ngưỡng tự nén → Trần theo token (thấp hơn ${groupDigits(limit)}), rồi /compact; hoặc đổi model.`,
+    )
+  }
 }
 
 /** RetryInfo.retryDelay (Gemini), retry-after-ms / retry-after, or "try again in 1m30s" (Groq, OpenAI). */
@@ -162,6 +188,11 @@ export async function withRetries<T>(call: () => PromiseLike<T>, signal: AbortSi
     } catch (error) {
       if (signal?.aborted) throw error
       const failure = classifyFailure(error)
+      if (failure.kind === "rate-limit" && opts.requestTokens) {
+        const limit = inputTokensPerMinute(error)
+        const tokens = limit === undefined ? 0 : opts.requestTokens()
+        if (limit !== undefined && tokens > limit) throw new RequestOverQuota(tokens, limit)
+      }
       const max = retriesFor(failure.kind)
       if (attempt > max) throw error
       const delayMs = failure.kind === "rate-limit" && failure.delayMs !== undefined ? failure.delayMs : backoff(attempt, opts.random)
@@ -177,10 +208,14 @@ export async function withRetries<T>(call: () => PromiseLike<T>, signal: AbortSi
 /** Middleware that retries the model request (generate or stream) before anything streamed. */
 export function retryMiddleware(opts: RetryOptions = {}): LanguageModelMiddleware {
   return {
-    wrapGenerate: ({ doGenerate, params }) => withRetries(doGenerate, params.abortSignal, opts),
-    wrapStream: ({ doStream, params }) => withRetries(doStream, params.abortSignal, opts),
+    wrapGenerate: ({ doGenerate, params }) => withRetries(doGenerate, params.abortSignal, { ...opts, requestTokens: () => promptTokens(params) }),
+    wrapStream: ({ doStream, params }) => withRetries(doStream, params.abortSignal, { ...opts, requestTokens: () => promptTokens(params) }),
   }
 }
+
+/** Estimated input of a request: its prompt (images at their token cost) and tool schemas. */
+const promptTokens = (params: { prompt: unknown; tools?: unknown }) =>
+  tokensOf(params.prompt as ModelMessage[]) + tokensOf([{ role: "user", content: JSON.stringify(params.tools ?? []) }])
 
 /** The wait as the UI shows it. */
 export function retryText(notice: Pick<RetryNotice, "attempt" | "max" | "delayMs" | "label">): string {

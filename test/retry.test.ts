@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test"
 import { APICallError } from "ai"
-import { backoff, classifyFailure, describeFailure, MAX_WAIT_MS, RATE_RETRIES, RETRIES, requestedDelay, withRetries } from "../src/core/retry"
+import { backoff, classifyFailure, describeFailure, inputTokensPerMinute, MAX_WAIT_MS, RATE_RETRIES, RequestOverQuota, RETRIES, requestedDelay, withRetries } from "../src/core/retry"
 
 /**
  * Gemini 429 bodies, shaped after Google's documented google.rpc error details
@@ -181,4 +181,46 @@ test("withRetries: each notice carries the deadline of the wait that is really s
     if (saved === undefined) delete process.env.OPENTRADING_RETRY_SCALE
     else process.env.OPENTRADING_RETRY_SCALE = saved
   }
+})
+
+/** A Gemini 429 for the per-minute input-token quota (shape as in geminiBody). */
+const tpmBody = JSON.stringify({
+  error: {
+    code: 429,
+    message: "You exceeded your current quota, please check your plan and billing details.",
+    status: "RESOURCE_EXHAUSTED",
+    details: [
+      {
+        "@type": "type.googleapis.com/google.rpc.QuotaFailure",
+        violations: [
+          {
+            quotaMetric: "generativelanguage.googleapis.com/generate_content_free_tier_input_token_count",
+            quotaId: "GenerateContentInputTokensPerModelPerMinute-FreeTier",
+            quotaValue: "250000",
+          },
+        ],
+      },
+      { "@type": "type.googleapis.com/google.rpc.RetryInfo", retryDelay: "20s" },
+    ],
+  },
+})
+
+test("a request larger than the per-minute input-token quota fails at once; a smaller one waits as usual", async () => {
+  expect(inputTokensPerMinute(apiError(429, tpmBody))).toBe(250_000)
+  expect(inputTokensPerMinute(apiError(429, "", {}, "Quota exceeded for metric: generate_content_free_tier_input_token_count, limit: 1000000"))).toBe(1_000_000)
+  expect(inputTokensPerMinute(apiError(429, geminiBody("GenerateRequestsPerMinutePerProjectPerModel-FreeTier")))).toBeUndefined()
+
+  let calls = 0
+  const fail = async () => {
+    calls++
+    throw apiError(429, tpmBody)
+  }
+  const big = withRetries(fail, undefined, { ...noSleep, requestTokens: () => 300_000 })
+  await expect(big).rejects.toBeInstanceOf(RequestOverQuota)
+  await expect(big).rejects.toThrow("vượt giới hạn 250.000 token đầu vào mỗi phút")
+  expect(calls).toBe(1)
+
+  calls = 0
+  await expect(withRetries(fail, undefined, { ...noSleep, requestTokens: () => 40_000 })).rejects.toMatchObject({ statusCode: 429 })
+  expect(calls).toBe(RATE_RETRIES + 1)
 })

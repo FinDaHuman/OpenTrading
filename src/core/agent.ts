@@ -26,7 +26,7 @@ import { loadConfig, type Config } from "./config"
 import { closeDanglingToolCalls } from "./session/store"
 import { sanitize, serverPrefix } from "./mcp/naming"
 import type { SchemaFlavor } from "./mcp/schema"
-import { isContextOverflow } from "./compact"
+import { isContextOverflow, pruneAttachments, pruneToolResults, tokensOf } from "./compact"
 import { isAttachmentText } from "./mentions"
 import { retryMiddleware, type RetryNotice, type RetryOptions } from "./retry"
 import { loadedTools } from "./tools/loaded"
@@ -136,6 +136,12 @@ export interface RunOptions {
    */
   stallMs?: number
   maxSteps?: number
+  /**
+   * Auto-compaction threshold (contextLimits). Between tool steps, a request that would reach
+   * it goes out with old tool results pruned (no extra request, history untouched); the next
+   * turn compacts for real. Undefined: never.
+   */
+  compactAt?: number
   sessionId?: string
   hooks?: HookBus
   memory?: MemoryProvider
@@ -241,7 +247,7 @@ export function userMessage(input: string, reminders: string[], images: RunOptio
  */
 export function visibleUserText(message: ModelMessage) {
   if (message.role !== "user") return ""
-  if (typeof message.content === "string") return message.content
+  if (typeof message.content === "string") return message.content.startsWith(`<${REMINDER_TAG}>`) ? "" : message.content
   return message.content
     .filter((p) => p.type === "text" && !p.text.startsWith(`<${REMINDER_TAG}>`) && !isAttachmentText(p.text))
     .map((p) => (p as { text: string }).text)
@@ -747,6 +753,16 @@ async function lastStepTokens(result: { steps: PromiseLike<{ usage: LanguageMode
   }
 }
 
+/**
+ * What the next step's request will hold: the last request and its answer as the provider
+ * counted them, plus what came after that answer (its tool results). Undefined usage: 0.
+ */
+function stepSize(usage: LanguageModelUsage | undefined, messages: readonly ModelMessage[]) {
+  if (usage?.inputTokens === undefined) return 0
+  const answeredAt = messages.findLastIndex((m) => m.role === "assistant")
+  return usage.inputTokens + (usage.outputTokens ?? 0) + tokensOf(messages.slice(answeredAt + 1))
+}
+
 const estimateRequest = (system: string | SystemModelMessage, messages: ModelMessage[], toolTokens = 0) =>
   estimateTokens(JSON.stringify([system, ...messages])) + toolTokens
 
@@ -908,6 +924,10 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
   }
   const { system, request, model, providerOptions } = requestFor(prepared, [...opts.history, user], notices.options)
   let summarized = false
+  /** Tool results pruned mid-turn (undefined: not near the threshold). */
+  let midTurnPruned: number | undefined
+  /** Tokens the mid-turn prune keeps out of the last request; the history still holds them. */
+  let midTurnSaved = 0
   const nudge = nudgeAfterTools(target)
   // Visible tools at the current step; deferred tools join once loaded (tool search).
   let active = activeFor(built, request)
@@ -924,10 +944,20 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
     // but forbid calling them, so the turn always ends with an answer.
     // Message overrides carry forward to later steps, so every step rebuilds its messages from
     // the request plus what the model and tools produced: a nudge stays a one-step addition.
-    prepareStep: ({ stepNumber, initialMessages, responseMessages }) => {
+    prepareStep: ({ stepNumber, steps, initialMessages, responseMessages }) => {
       if (!tools) return undefined
       // Clean before activeFor reads them: the model never sees the SDK's raw error strings.
-      const messages = cleanToolErrors([...initialMessages, ...responseMessages])
+      let messages = cleanToolErrors([...initialMessages, ...responseMessages])
+      // Near the threshold mid-turn: prune old tool results, and keep doing so for the rest of
+      // the turn (switching back would grow past it again and break the provider's cache).
+      if (midTurnPruned === undefined && opts.compactAt !== undefined && stepSize(steps.at(-1)?.usage, messages) >= opts.compactAt) midTurnPruned = 0
+      if (midTurnPruned !== undefined) {
+        const tools = pruneToolResults(messages)
+        const files = pruneAttachments(tools.messages, 0)
+        midTurnPruned = Math.max(midTurnPruned, tools.pruned + files.pruned)
+        midTurnSaved = Math.max(0, tokensOf(messages) - tokensOf(files.messages))
+        messages = files.messages
+      }
       active = activeFor(built, messages)
       loaded = loadedTools(messages)
       if (stepNumber < maxSteps - 1) {
@@ -951,6 +981,12 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
   if (stalled) {
     outcome.aborted = false
     outcome.failure = new Error(stallMessage(stallMs))
+  }
+  if (midTurnPruned) {
+    yield {
+      type: "notice",
+      text: `Context gần ngưỡng tự nén giữa lượt: các bước sau gửi kèm ${midTurnPruned} kết quả tool cũ đã dọn. Lượt sau sẽ nén hội thoại.`,
+    }
   }
   // The request whose usage measures the context (the empty-answer retry replaces it).
   let measured: { steps: PromiseLike<{ usage: LanguageModelUsage }[]> } = result
@@ -988,6 +1024,8 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
       second.failure = new Error(stallMessage(stallMs))
     }
     measured = retry
+    // That request carries the unpruned history.
+    midTurnSaved = 0
     if (second.usage) {
       outcome.usage = { input: (outcome.usage?.input ?? 0) + second.usage.input, output: (outcome.usage?.output ?? 0) + second.usage.output }
     }
@@ -1015,9 +1053,11 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
   if (messages && !outcome.aborted && !outcome.failure) {
     if (summarized) yield { type: "notice", text: `Đã dùng hết ${maxSteps} bước gọi tool; câu trả lời là bản tổng kết.` }
     const tokens = await lastStepTokens(measured)
+    // Measured on the pruned request: add back what the history still holds, so the next
+    // turn sees the real size and compacts.
     const usage =
       tokens !== undefined
-        ? { contextTokens: tokens, estimated: false, total: outcome.usage }
+        ? { contextTokens: tokens + midTurnSaved, estimated: false, total: outcome.usage }
         : { contextTokens: estimateRequest(system, [...request, ...messages], built?.tokens), estimated: true, total: outcome.usage }
     yield { type: "done", messages: [user, ...messages], clock: assembled.clock, usage, outcome: "completed" }
     if (opts.hooks) void opts.hooks.emit({ type: "turn-end", sessionId, messages: [user, ...messages] })

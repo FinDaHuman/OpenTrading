@@ -196,6 +196,9 @@ Frontmatter gồm `name` (trùng tên file), `description`, `tools`, `disallowed
 - **Nén hội thoại** (`src/core/compact.ts`, lệnh `/compact [hướng dẫn]`, tắt hoặc chỉnh ngưỡng trong `/config`):
   - Cửa sổ là toàn bộ cửa sổ của model: `limit.input` của models.dev, không có thì `limit.context`. Config `compactWindow` (số token) hạ trần nếu cần; Gemini gói miễn phí chỉ nhận 250K token/phút nên nên đặt khoảng 200000.
   - Tự nén khi context tới `autoCompactPercent` (50–95, mặc định 95) của (cửa sổ − phần chừa cho câu trả lời, min(output, 20k)). Ví dụ model 1M nén ở khoảng 977k, model 200k ở 171k.
+  - Giữa các bước gọi tool của một lượt: nếu request tiếp theo sẽ chạm ngưỡng, các bước còn lại gửi kèm kết quả tool cũ đã dọn (không tốn request, history không đổi); lượt sau mới nén thật.
+  - Provider báo request quá dài: harness nén (kể cả khi ước lượng còn dưới ngưỡng) rồi thử lại một lần. Lượt hỏng trước khi có tool chạy thì gửi lại đúng câu hỏi; lượt đã chạy tool thì giữ lại và nhắn model làm tiếp, để không tool nào chạy hai lần.
+  - Gemini báo 429 vì quota token/phút mà riêng request đã lớn hơn quota đó: báo ngay (đặt trần token trong `/config`), không chờ thử lại.
   1. Kết quả tool cũ (ngoài 2 lượt cuối, dài hơn 500 ký tự) được thay bằng một dòng "đã dọn"; không tốn request.
   2. Nếu vẫn cần, model tóm tắt phần đầu theo mẫu có mục "Số liệu đã xác minh" (giá trị, đơn vị, nguồn, thời điểm chép nguyên văn); 2 lượt cuối giữ nguyên.
   - History mới mở đầu bằng một `<nhac_nho><tom_tat_hoi_thoai>` do harness ghi: danh sách tool đã nạp, skill đã nạp, danh sách việc cần làm còn dở.

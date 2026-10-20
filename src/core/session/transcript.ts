@@ -56,7 +56,9 @@ export function transcriptFromMessages(messages: ModelMessage[]): TranscriptItem
     if (m.role === "user") {
       const text =
         typeof m.content === "string"
-          ? m.content
+          ? m.content.trimStart().startsWith("<nhac_nho>")
+            ? ""
+            : m.content
           : m.content
               .filter((p) => p.type === "text" && !p.text.trimStart().startsWith("<nhac_nho>") && !isAttachmentText(p.text))
               .map((p) => (p as { text: string }).text)

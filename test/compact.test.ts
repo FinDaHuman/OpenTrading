@@ -239,6 +239,11 @@ test("compactWindow caps the window (only when lower); autoCompactPercent is kep
 test("context-overflow wording is told apart from quota and auth errors", () => {
   expect(isContextOverflow("This model's maximum context length is 8192 tokens")).toBe(true)
   expect(isContextOverflow("prompt is too long: 210000 tokens > 200000 maximum")).toBe(true)
+  // Gemini, Bedrock, llama.cpp/LM Studio wordings (opencode's list).
+  expect(isContextOverflow("Lỗi 400: The input token count (1100000) exceeds the maximum number of tokens allowed (1048576).")).toBe(true)
+  expect(isContextOverflow("Input is too long for requested model.")).toBe(true)
+  expect(isContextOverflow("request (40000 tokens) exceeds the available context size (32768 tokens)")).toBe(true)
+  expect(isContextOverflow("Too many requests, please wait")).toBe(false)
   expect(isContextOverflow("Lỗi 429: Resource exhausted: input token count per minute")).toBe(false)
   expect(isContextOverflow("You exceeded your current quota")).toBe(false)
   expect(isContextOverflow("Invalid API key")).toBe(false)
@@ -273,4 +278,12 @@ test("tokensOf counts an image as IMAGE_TOKENS, but a long non-image `data` stri
     { role: "tool", content: [{ type: "tool-result", toolCallId: "1", toolName: "t", output: { type: "json", value: { data: csv } } }] },
   ]
   expect(tokensOf(withData)).toBeGreaterThan(10_000)
+})
+
+test("a harness reminder sent as the whole user message (continue after an overflow) is not shown as typed by the user", async () => {
+  const { visibleUserText } = await import("../src/core/agent")
+  const reminder = { role: "user", content: "<nhac_nho>\nTiếp tục.\n</nhac_nho>" } as ModelMessage
+  expect(transcriptFromMessages([reminder, { role: "assistant", content: "xong" }])).toEqual([{ kind: "assistant", text: "xong" }])
+  expect(visibleUserText(reminder)).toBe("")
+  expect(transcriptFromMessages([{ role: "user", content: "hỏi" }])).toEqual([{ kind: "user", text: "hỏi" }])
 })
