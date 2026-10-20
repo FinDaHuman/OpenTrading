@@ -134,6 +134,10 @@ export const [state, setState] = createStore({
   approvals: [] as ApprovalRequest[],
   /** ‖ read-only / ▸ ask (Shift+Tab); mirrors PermissionGate.mode. */
   permissionMode: "read-only" as PermissionMode,
+  /** The ▸▸ auto opt-in dialog is open; `from` is the mode kept if the user says no. */
+  autoOptIn: undefined as { from: PermissionMode } | undefined,
+  /** The user said yes to ▸▸ auto once (config permissions.autoAcknowledged). */
+  autoAcknowledged: false,
   /** ▸▸ auto's classifier paused after a quota error, until this time (ms). */
   autoPausedUntil: undefined as number | undefined,
   /** Subagent types (bundled, user, project) and files that failed to load. */
@@ -184,4 +188,4 @@ export function requestExit() {
  * A prompt (approval or question) sits on top. Panels and dialogs stay mounted underneath —
  * nothing typed or chosen is lost — but must not react to keys meanwhile.
  */
-export const blocked = () => Boolean(state.approval || state.question)
+export const blocked = () => Boolean(state.approval || state.question || state.autoOptIn)
