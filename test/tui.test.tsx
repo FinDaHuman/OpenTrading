@@ -2449,7 +2449,7 @@ test("subagent panel: between two model steps the row shows the last tool, not '
   }
 }, 30_000)
 
-test("subagent panel: ↓ at the end of the prompt selects a row; enter opens it in /tasks; x stops it; typing goes back", async () => {
+test("subagent panel: ↓ at the end of the prompt selects a row; enter opens it in /tasks; x twice stops it; typing goes back", async () => {
   // Agents of earlier tests that finished a moment ago would still linger on the panel.
   setState("agents", reconcile({}))
   let release!: () => void
@@ -2473,7 +2473,7 @@ test("subagent panel: ↓ at the end of the prompt selects a row; enter opens it
 
     setup.mockInput.pressArrow("down")
     await setup.waitFor(() => state.panelFocus === 0)
-    let frame = await setup.waitForFrame((f) => f.includes("↑↓ chọn · enter xem · x dừng · esc về ô nhập") && /❯ nghien-cuu\s+Định giá FPT/.test(f))
+    let frame = await setup.waitForFrame((f) => f.includes("↑↓ chọn · enter xem · x ×2 dừng · esc về ô nhập") && /❯ nghien-cuu\s+Định giá FPT/.test(f))
     show(frame)
     setup.mockInput.pressArrow("down")
     await setup.waitFor(() => state.panelFocus === 1)
@@ -2493,9 +2493,17 @@ test("subagent panel: ↓ at the end of the prompt selects a row; enter opens it
     setup.mockInput.pressEscape()
     await setup.waitFor(() => state.dialog === undefined)
 
-    // x: stop it (a notice says so); a letter: back to the prompt, typed there.
+    // One x only asks (a word typed after a stray ↓ must not stop anything); another key
+    // in between disarms it; x twice stops it.
     setup.mockInput.pressArrow("down")
     await setup.waitFor(() => state.panelFocus === 0)
+    setup.mockInput.pressKey("x")
+    await setup.waitFor(() => state.notification?.text.includes("Nhấn x lần nữa để dừng nghien-cuu (Định giá FPT)") === true)
+    setup.mockInput.pressArrow("down")
+    setup.mockInput.pressArrow("up")
+    setup.mockInput.pressKey("x")
+    await new Promise((r) => setTimeout(r, 50))
+    expect(state.notification?.text).toContain("Nhấn x lần nữa")
     setup.mockInput.pressKey("x")
     await setup.waitFor(() => state.notification?.text.includes("Đã dừng subagent nghien-cuu (Định giá FPT)") === true)
     setup.mockInput.pressKey("a")

@@ -243,6 +243,9 @@ function afterTurn(runtime: Runtime, ok: boolean) {
   void send(runtime, next!)
 }
 
+/** How long a first x on a subagent panel row waits for the second one. */
+const STOP_WINDOW_MS = 2000
+
 /** Turns shorter than this end without a "✻ Xong sau …" line. */
 const DONE_LINE_MS = 5000
 
@@ -1119,17 +1122,23 @@ export function App(props: {
     }
   }
 
+  /** A first x on a panel row only asks; a second x on the same row within the window stops it. */
+  let stopArmed: { id: string; at: number } | undefined
+
   /**
    * Keys while a panel row is selected: ↑↓ move (↑ on the first row goes back to the prompt),
-   * enter opens the agent in /tasks, x stops it, esc goes back; any other key goes back to the
-   * prompt, a typed character landing in it.
+   * enter opens the agent in /tasks, x twice (or ctrl+x, as in /tasks) stops it, esc goes back;
+   * any other key goes back to the prompt, a typed character landing in it. Stopping asks twice
+   * because a stray ↓ then a word starting with "x" must not throw away a running agent's work.
    */
   function panelKey(evt: KeyEvent) {
     const list = panelList()
     const at = Math.min(state.panelFocus ?? 0, list.length - 1)
     const agent = list[at]
     const plain = !evt.ctrl && !evt.meta
-    if (evt.name === "up" || evt.name === "down" || evt.name === "return" || evt.name === "escape" || (plain && evt.name === "x")) evt.preventDefault()
+    const stopKey = evt.name === "x" && !evt.meta
+    if (!stopKey) stopArmed = undefined
+    if (evt.name === "up" || evt.name === "down" || evt.name === "return" || evt.name === "escape" || stopKey) evt.preventDefault()
     if (evt.name === "up") return setState("panelFocus", at <= 0 ? undefined : at - 1)
     if (evt.name === "down") return setState("panelFocus", Math.min(list.length - 1, at + 1))
     if (evt.name === "escape") return setState("panelFocus", undefined)
@@ -1137,10 +1146,16 @@ export function App(props: {
       if (!agent) return setState("panelFocus", undefined)
       return setState({ panelFocus: undefined, tasksFocus: agent.id, dialog: "tasks" })
     }
-    if (plain && evt.name === "x") {
-      if (agent && (agent.status === "running" || agent.status === "queued") && props.runtime.subagents.stop(agent.id)) {
-        say(`Đã dừng subagent ${agent.type} (${truncate(agent.description, 40)})`, "success")
+    if (stopKey) {
+      if (!agent || (agent.status !== "running" && agent.status !== "queued")) return
+      const name = `${agent.type} (${truncate(agent.description, 40)})`
+      const confirmed = evt.ctrl || (stopArmed?.id === agent.id && Date.now() - stopArmed.at <= STOP_WINDOW_MS)
+      if (!confirmed) {
+        stopArmed = { id: agent.id, at: Date.now() }
+        return flash(`Nhấn x lần nữa để dừng ${name}`, STOP_WINDOW_MS, "warning")
       }
+      stopArmed = undefined
+      if (props.runtime.subagents.stop(agent.id)) say(`Đã dừng subagent ${name}`, "success")
       return
     }
     setState("panelFocus", undefined)
@@ -1374,7 +1389,7 @@ export function App(props: {
             owner() || state.dialog
               ? undefined
               : state.panelFocus !== undefined
-                ? "↑↓ chọn · enter xem · x dừng · esc về ô nhập"
+                ? "↑↓ chọn · enter xem · x ×2 dừng · esc về ô nhập"
                 : state.streaming
                   ? "esc dừng"
                   : draft()

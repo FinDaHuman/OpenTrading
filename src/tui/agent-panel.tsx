@@ -21,7 +21,7 @@ import { pad, truncate, width as cells } from "./ui/text"
  *
  * Running and queued agents stay; finished ones linger a few seconds, then go. ↓ from the
  * prompt (at the end of its history) selects a row: ↑↓ move, enter opens it in /tasks,
- * x stops it, esc or typing goes back to the prompt.
+ * x twice (or ctrl+x) stops it, esc or typing goes back to the prompt.
  */
 
 /** A finished agent stays on the panel this long. */
