@@ -108,7 +108,7 @@ const newId = () => `ag-${Math.random().toString(36).slice(2, 8).padEnd(6, "0")}
 /** A copy without the live parts (controller, messages, promise): what UIs store. */
 export function viewOf(run: SubagentRun): SubagentView {
   const { controller: _c, messages: _m, done: _d, ...view } = run
-  return { ...view, tools: run.tools.map((t) => ({ ...t })), usage: { ...run.usage } }
+  return { ...view, tools: run.tools.map((t) => ({ ...t })), usage: { ...run.usage }, retry: run.retry ? { ...run.retry } : undefined }
 }
 
 const isActive = (run: { status: string }) => run.status === "queued" || run.status === "running"
@@ -426,6 +426,11 @@ export class SubagentManager {
           serverInstructions: this.deps.serverInstructions,
         })) {
           last = Date.now()
+          // Anything after a retry notice means the wait is over (the request went out again).
+          if (run.retry && event.type !== "retry") {
+            run.retry = undefined
+            this.emit(run)
+          }
           switch (event.type) {
             case "text-delta":
               streamed += event.text
@@ -453,6 +458,8 @@ export class SubagentManager {
               break
             case "retry":
               entries.push({ type: "notice", ts: new Date().toISOString(), text: retryText(event) })
+              run.retry = { attempt: event.attempt, max: event.max, until: event.until, label: event.label }
+              this.emit(run)
               break
             case "error":
               run.error = event.message
@@ -490,6 +497,7 @@ export class SubagentManager {
       clearInterval(watchdog)
       release?.()
       run.endedAt = Date.now()
+      run.retry = undefined
       for (const call of run.tools) if (call.status === "running") call.status = "error"
       this.emit(run)
     }

@@ -13,8 +13,11 @@ export type AgentEvent =
   | { type: "tool-end"; callId: string; ok: boolean; output: string; chart?: ChartData; durationMs: number }
   /** Informational: step limit reached, model without tool support… */
   | { type: "notice"; text: string }
-  /** A model request failed and is retried after `delayMs` (retry `attempt` of `max`). */
-  | { type: "retry"; attempt: number; max: number; delayMs: number; label: string }
+  /**
+   * A model request failed and is retried after `delayMs` (retry `attempt` of `max`); the
+   * next attempt starts at `until` (epoch ms). Any later event means the wait is over.
+   */
+  | { type: "retry"; attempt: number; max: number; delayMs: number; until: number; label: string }
   /** The turn failed; `done` still follows. */
   | { type: "error"; message: string }
   /** Billed tokens of one model request (sent after each step that reported usage). */

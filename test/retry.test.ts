@@ -146,3 +146,39 @@ test("the messages a user sees when quota runs out", () => {
   expect(describeFailure(apiError(429, "", { "retry-after": "90" }))).toContain("khoảng 90 giây")
   expect(describeFailure(apiError(503))).toBeUndefined()
 })
+
+test("withRetries: each notice carries the deadline of the wait that is really slept", async () => {
+  const saved = process.env.OPENTRADING_RETRY_SCALE
+  try {
+    // Default sleep, scaled down 1000×: the deadline is ~2 ms away, not the nominal 2 s.
+    process.env.OPENTRADING_RETRY_SCALE = "0.001"
+    const scaled: { delayMs: number; until: number; at: number }[] = []
+    let calls = 0
+    await withRetries(
+      async () => {
+        if (++calls === 1) throw apiError(503)
+        return "ok"
+      },
+      undefined,
+      { onRetry: (n) => scaled.push({ delayMs: n.delayMs, until: n.until, at: Date.now() }), random: () => 0 },
+    )
+    expect(scaled[0]!.delayMs).toBe(2000)
+    expect(scaled[0]!.until - scaled[0]!.at).toBeLessThanOrEqual(5)
+
+    // An injected sleep waits what it is given.
+    const injected: number[] = []
+    calls = 0
+    await withRetries(
+      async () => {
+        if (++calls === 1) throw apiError(503)
+        return "ok"
+      },
+      undefined,
+      { sleep: async () => {}, onRetry: (n) => injected.push(n.until - Date.now()), random: () => 0 },
+    )
+    expect(injected[0]).toBeGreaterThan(1900)
+  } finally {
+    if (saved === undefined) delete process.env.OPENTRADING_RETRY_SCALE
+    else process.env.OPENTRADING_RETRY_SCALE = saved
+  }
+})

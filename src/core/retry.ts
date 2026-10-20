@@ -38,6 +38,8 @@ export interface RetryNotice {
   attempt: number
   max: number
   delayMs: number
+  /** When the next attempt starts (epoch ms): the wait that is really slept, for a countdown. */
+  until: number
   label: string
 }
 
@@ -133,6 +135,9 @@ const scale = () => {
   return Number.isFinite(value) && value >= 0 ? value : 1
 }
 
+/** How long {@link abortableSleep} really waits for `ms`. */
+export const sleptMs = (ms: number) => ms * scale()
+
 export function abortableSleep(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
     const abort = () => {
@@ -143,7 +148,7 @@ export function abortableSleep(ms: number, signal?: AbortSignal): Promise<void> 
     const timer = setTimeout(() => {
       signal?.removeEventListener("abort", abort)
       resolve()
-    }, ms * scale())
+    }, sleptMs(ms))
     signal?.addEventListener("abort", abort, { once: true })
   })
 }
@@ -161,7 +166,9 @@ export async function withRetries<T>(call: () => PromiseLike<T>, signal: AbortSi
       if (attempt > max) throw error
       const delayMs = failure.kind === "rate-limit" && failure.delayMs !== undefined ? failure.delayMs : backoff(attempt, opts.random)
       if (delayMs > MAX_WAIT_MS) throw error
-      opts.onRetry?.({ attempt, max, delayMs, label: failure.label })
+      // An injected sleep waits what it is given; the default one is scaled (tests).
+      const until = Date.now() + (opts.sleep ? delayMs : sleptMs(delayMs))
+      opts.onRetry?.({ attempt, max, delayMs, until, label: failure.label })
       await sleep(delayMs, signal)
     }
   }
