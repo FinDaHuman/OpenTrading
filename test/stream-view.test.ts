@@ -41,6 +41,11 @@ describe("streamView", () => {
     expect(view("**Đậm").markdown).toBe("")
     expect(view("* Ý có *nghiêng*").markdown).toBe(`* Ý có *nghiêng*${STREAM_CURSOR}`)
     expect(view("- Ý **đậm").markdown).toBe(`- Ý${STREAM_CURSOR}`)
+    // Source links are cut until they close.
+    expect(view("Nguồn: [vnstock").markdown).toBe(`Nguồn:${STREAM_CURSOR}`)
+    expect(view("Nguồn: [vnstock]").markdown).toBe(`Nguồn:${STREAM_CURSOR}`)
+    expect(view("Nguồn: [vnstock](https://vnstock.site/d").markdown).toBe(`Nguồn:${STREAM_CURSOR}`)
+    expect(view("Nguồn: [vnstock](https://x.vn) ngày").markdown).toBe(`Nguồn: [vnstock](https://x.vn) ngày${STREAM_CURSOR}`)
     // Cut back to a bare marker, the item would become another block: nothing is shown.
     expect(view("Mở.\n- **Đậm").markdown).toBe("Mở.")
   })
