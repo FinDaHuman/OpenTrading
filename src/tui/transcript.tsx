@@ -162,8 +162,21 @@ function Hanging(props: { glyph: string; glyphColor: string; text: string; fg: s
 function Row(props: { line: Line; prev?: Line; index: number; width: number }) {
   return (
     <Switch>
-      <Match when={props.line.kind === "user"}>
-        <Hanging glyph="❯" glyphColor={color.tx3} text={(props.line as Extract<Line, { kind: "user" }>).text} fg={color.tx} bg={color.panel2} />
+      <Match when={props.line.kind === "user" && props.line}>
+        {(line) => {
+          const l = line() as Extract<Line, { kind: "user" }>
+          return (
+            <box flexDirection="column" flexShrink={0}>
+              <Hanging glyph="❯" glyphColor={color.tx3} text={l.text} fg={color.tx} bg={color.panel2} />
+              {/* Files the message @-attached: read before the turn, like Claude Code's "⎿ Read …". */}
+              <For each={l.files ?? []}>
+                {(file, i) => (
+                  <ResultLine prefix={i() === 0 ? RESULT : RESULT_CONT} text={truncate(file.note, Math.max(10, props.width - RESULT.length))} fg={file.ok ? color.tx3 : color.giam} />
+                )}
+              </For>
+            </box>
+          )
+        }}
       </Match>
       <Match when={props.line.kind === "assistant" && ((props.line as { text: string }).text.trim() || !(props.line as { done: boolean }).done) && props.line}>
         {(line) => <AssistantRow line={line() as Extract<Line, { kind: "assistant" }>} />}

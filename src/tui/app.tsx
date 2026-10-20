@@ -13,11 +13,14 @@ import {
   compactPrompt,
   formatCompactSummary,
   isContextOverflow,
+  pruneAttachmentsForRequest,
   shouldAutoCompact,
   tokensOf,
 } from "../core/compact"
 import { estimateTokens } from "../core/prompt/budget"
 import { acceptsImageInput } from "../core/agent"
+import { attachMentions, mentionText } from "../core/mentions"
+import { FileIndex, INDEX_MISS_MS, matchPaths } from "../core/fs/file-index"
 import { connectedProviders } from "../core/auth"
 import { describeError } from "../core/chat"
 import type { AgentEvent } from "../core/events"
@@ -67,14 +70,14 @@ import { ActivityRow, activeMs, startActivity } from "./activity"
 import { now, useNow } from "./ui/clock"
 import { color, promptStyle } from "./theme"
 import { cleanSelection, writeClipboard } from "./clipboard"
-import { ArgumentHint, Suggestions } from "./suggestions"
+import { ArgumentHint, commandItem, Suggestions } from "./suggestions"
 import { Transcript } from "./transcript"
 import { scrollSetting, scrollTranscript } from "./scroll"
 import { TodoPanel } from "./todo-panel"
 import { PromptInput } from "./prompt/input"
 import { addHistory, HistoryCursor, loadHistory, pastesFor, searchHistory } from "./prompt/history"
 import { imagePath, MAX_IMAGE_BASE64, readClipboardImage, readImageFile, type PromptImage } from "./prompt/image"
-import { isLargePaste, pasteLabel, PromptParts, type DraftSnapshot, type ExpandedPrompt } from "./prompt/parts"
+import { isLargePaste, offsetSlice, offsetWidth, pasteLabel, PromptParts, type DraftSnapshot, type ExpandedPrompt } from "./prompt/parts"
 import { editInEditor } from "./prompt/editor"
 import { TODO_WRITE, TodoWriteInput } from "../core/tools/todos"
 
@@ -201,6 +204,12 @@ function send(runtime: Runtime, message: string | Outgoing) {
   }
   if (!msg.notice) setState("noticeHold", false)
   const turn = (async () => {
+    // Files @-attached turns ago: their content goes once it adds up (resent every request).
+    const cleared = pruneAttachmentsForRequest(state.history, state.contextTokens)
+    if (cleared) {
+      setState({ history: cleared.messages, contextTokens: cleared.contextTokens })
+      say(`Đã dọn nội dung ${cleared.pruned} file gắn ở các lượt cũ để tiết kiệm context.`, "info")
+    }
     // Near the window: compact first, so this turn still fits.
     const config = await loadConfig()
     const projected =
@@ -293,10 +302,23 @@ function track(event: AgentEvent) {
   )
 }
 
+/** Files the message @-mentions, read for the model; images only for a model that sees them. */
+function mentionsOf(runtime: Runtime, text: string) {
+  if (!text.includes("@")) return undefined
+  const target = state.provider && state.model ? { provider: state.catalog[state.provider]!, model: state.model } : undefined
+  return attachMentions(text, {
+    workspace: runtime.workspace,
+    files: runtime.files,
+    history: state.history,
+    images: !!target?.provider && acceptsImageInput(target),
+  })
+}
+
 /** One turn; true when it ran to the end (not stopped, no error, no /clear meanwhile). */
 async function sendTurn(runtime: Runtime, msg: Outgoing): Promise<boolean> {
   // A notification turn already has its "◆ Subagent nền …" lines.
   if (!msg.notice) pushLine({ kind: "user", text: msg.display ?? msg.text })
+  const userLine = msg.notice ? -1 : state.lines.length - 1
   const mine = epoch
   const live = () => epoch === mine
   let failed = false
@@ -336,10 +358,15 @@ async function sendTurn(runtime: Runtime, msg: Outgoing): Promise<boolean> {
   abort = controller
   setState({ streaming: true, activity: startActivity() })
   try {
+    // @-mentions in what the user typed (not in pasted text: code there is full of "@").
+    const attached = msg.notice ? undefined : await mentionsOf(runtime, msg.display ?? msg.text)
+    if (attached && attached.files.length > 0) edit(userLine, (l) => (l.files = attached.files))
+    if (!live() || controller.signal.aborted) return false
     const turn = runAgent({
       history: state.history,
       input: msg.text,
-      images: msg.images,
+      images: [...(msg.images ?? []), ...(attached?.images ?? [])],
+      attachments: attached?.parts,
       skills: state.skills,
       sticky: state.activeSkills,
       prevClock: state.clock,
@@ -671,6 +698,67 @@ export function App(props: {
     if (!d.startsWith("/") || /\s/.test(d) || d === dismissedFor()) return []
     return rank(allCommands(), d.slice(1), (c) => c.name, (c) => c.description)
   })
+  const commandItems = createMemo(() => suggestions().map(commandItem))
+  const allCommandItems = createMemo(() => allCommands().map(commandItem))
+
+  /**
+   * The `@` list (Claude Code, opencode): open while the word before the cursor starts with
+   * `@`, files and folders of the workspace ranked against what follows, closed by Esc until
+   * the draft changes.
+   */
+  const [cursor, setCursor] = createSignal(0)
+  const fileIndex = new FileIndex(props.runtime.workspace.primary, props.runtime.workspace.env())
+  const [indexed, setIndexed] = createSignal(0)
+  const mention = createMemo(() => {
+    const d = draft()
+    if (d.startsWith("/") || d === dismissedFor()) return undefined
+    const before = offsetSlice(d, 0, cursor())
+    const m = /(^|\s)@("?)([^\s"]*)$/.exec(before)
+    if (!m) return undefined
+    return { query: m[3]!, start: offsetWidth(before) - offsetWidth(`@${m[2]}${m[3]}`), end: cursor() }
+  })
+  // Opening the list (re)builds a stale index in the background; the list fills in when it ends.
+  createEffect(
+    on(
+      () => mention() !== undefined,
+      (open) => {
+        if (open) void fileIndex.refresh().then((rebuilt) => rebuilt && setIndexed((n) => n + 1))
+      },
+    ),
+  )
+  const fileMatches = createMemo(() => {
+    const m = mention()
+    indexed()
+    return m ? matchPaths(fileIndex.current(), m.query, 50) : []
+  })
+  // Nothing matches: maybe the file was made a moment ago. Look again, once per query and at
+  // most once a second (an "@FPT" that is no file must not rescan the folder on every key).
+  let missed: string | undefined
+  createEffect(() => {
+    const m = mention()
+    if (!m || fileMatches().length > 0 || m.query === missed) return
+    missed = m.query
+    void fileIndex.refreshAfter(INDEX_MISS_MS).then((rebuilt) => rebuilt && setIndexed((n) => n + 1))
+  })
+  const fileItems = createMemo(() => fileMatches().map((p) => ({ label: `@${p.rel}`, description: p.dir ? "thư mục" : "" })))
+  const fileNote = () => (props.runtime.workspace.fallbackReason ? `tìm trong ${props.runtime.workspace.primary} (mở OpenTrading ở ${props.runtime.workspace.fallbackReason})` : undefined)
+
+  /**
+   * Put the highlighted path in place of the `@word`: a pill (one Backspace deletes it). Tab
+   * on a folder opens it instead (`@dir/`, the list goes on inside it), as in opencode.
+   */
+  function pickFile(open: boolean) {
+    const m = mention()
+    const p = fileMatches()[selected()]
+    if (!m || !p || !input) return
+    input.setSelection(m.start, m.end)
+    if (open && p.dir) {
+      input.deleteSelection()
+      input.insertText(`@${p.rel}`)
+      return
+    }
+    parts.insert({ kind: "file", mention: mentionText(p.rel) })
+  }
 
   /** After "/name " (with the space): the arguments the command takes, shown under the list's place. */
   const argHint = createMemo(() => {
@@ -829,10 +917,11 @@ export function App(props: {
     }
   }
 
-  /** Pasted pills in the prompt: `[Pasted text #1 +49 lines]`, `[Image #2]`. */
+  /** Pills in the prompt: `[Pasted text #1 +49 lines]`, `[Image #2]`, `@src/x.ts`. */
   const parts = new PromptParts(
     () => input,
     () => promptStyle(renderer.nativeScene).getStyleId("extmark.paste") ?? undefined,
+    () => promptStyle(renderer.nativeScene).getStyleId("extmark.file") ?? undefined,
   )
 
   /**
@@ -845,6 +934,7 @@ export function App(props: {
       parts.restore(saved)
       if (cursor === "start") input.gotoBufferHome()
       else input.gotoBufferEnd()
+      setCursor(input.cursorOffset)
     }
     setDraft(value)
     setSelected(0)
@@ -1068,8 +1158,9 @@ export function App(props: {
    * "/…" line is a command (unknown ones are reported, never sent to the model) and
    * anything else is a message.
    */
-  /** Enter in the prompt: what the box shows, with its pills expanded. */
+  /** Enter in the prompt: what the box shows, with its pills expanded. With the `@` list open, it picks. */
   function submit() {
+    if (fileMatches().length > 0) return pickFile(false)
     run(input?.plainText ?? draft(), parts.expand())
   }
 
@@ -1246,9 +1337,9 @@ export function App(props: {
       evt.preventDefault()
       return setState("dialog", "shortcuts")
     }
-    // Esc closes the "/" list first (it stays closed until the draft changes) and never
+    // Esc closes the "/" or "@" list first (it stays closed until the draft changes) and never
     // also stops the running answer.
-    if (evt.name === "escape" && n > 0) {
+    if (evt.name === "escape" && (n > 0 || fileMatches().length > 0)) {
       evt.preventDefault()
       setDismissedFor(draft())
       return
@@ -1284,6 +1375,22 @@ export function App(props: {
     if ((evt.meta || evt.ctrl) && evt.name === "v" && !evt.shift) {
       evt.preventDefault()
       return void pasteImage()
+    }
+    // The "@" list: ↑↓ choose, Tab fills (opens a folder), Enter picks (submit()).
+    const k = fileMatches().length
+    if (n === 0 && k > 0) {
+      if (evt.name === "tab" && !evt.shift) {
+        evt.preventDefault()
+        return pickFile(true)
+      }
+      if (evt.name === "up" || (evt.ctrl && evt.name === "p")) {
+        evt.preventDefault()
+        return setSelected((i) => (i + k - 1) % k)
+      }
+      if (evt.name === "down" || (evt.ctrl && evt.name === "n")) {
+        evt.preventDefault()
+        return setSelected((i) => (i + 1) % k)
+      }
     }
     // With the list closed, Tab does nothing special (no autofill) and the arrows walk
     // through the prompt history.
@@ -1334,7 +1441,10 @@ export function App(props: {
           <TodoPanel />
         </Show>
         <Show when={suggestions().length > 0 && !owner() && !state.dialog}>
-          <Suggestions items={suggestions()} all={allCommands()} selected={selected()} />
+          <Suggestions items={commandItems()} all={allCommandItems()} selected={selected()} />
+        </Show>
+        <Show when={suggestions().length === 0 && fileItems().length > 0 && !owner() && !state.dialog}>
+          <Suggestions items={fileItems()} all={fileItems()} selected={selected()} noun="mục" note={fileNote()} hint="↑↓ chọn · enter gắn file · tab điền (mở thư mục) · esc đóng" />
         </Show>
         <Show when={!owner() && !state.dialog && search()}>
           {(s) => (
@@ -1445,11 +1555,17 @@ export function App(props: {
             state.streaming ? "đang trả lời… esc để dừng · enter để xếp hàng tin tiếp" : "Hỏi về thị trường, hoặc gõ / để xem lệnh · ↑ lịch sử · ctrl+j xuống dòng"
           }
           onChange={(v) => {
+            if (input) setCursor(input.cursorOffset)
             if (v === draft()) return
             setDraft(v)
             setSelected(0)
             // A dismissed list stays closed only until the draft changes.
             if (v !== dismissedFor()) setDismissedFor(undefined)
+          }}
+          onCursor={(at) => {
+            if (at === cursor()) return
+            setCursor(at)
+            setSelected(0)
           }}
           onSubmit={submit}
           onPaste={onPaste}

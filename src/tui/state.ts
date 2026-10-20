@@ -18,11 +18,13 @@ import type { AgentDefinition, AgentProblem } from "../core/agents/schema"
 import type { ShownNotice } from "./notify"
 import type { ModelPrefs } from "../core/model-prefs"
 import { DEFAULT_SCROLL_SPEED } from "./scroll"
+import type { AttachedFile } from "../core/mentions"
 
 export type ToolStatus = "running" | "ok" | "error"
 
 export type Line =
-  | { kind: "user"; text: string }
+  /** `files`: what the user @-attached, one "⎿ Đã đọc …" line each. */
+  | { kind: "user"; text: string; files?: AttachedFile[] }
   | { kind: "assistant"; text: string; done: boolean }
   | {
       kind: "tool"

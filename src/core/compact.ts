@@ -4,6 +4,7 @@ import { loadedTools } from "./tools/loaded"
 import { compactCarry, compactPair, isCompactMarker } from "./compact-marker"
 import { LOADED_PREFIX } from "./tools/search"
 import { currentTodos } from "./tools/todos"
+import { attachmentAttrs, attachmentKey, attachmentsOf, clearedAttachment, withoutOrphanStubs } from "./mentions"
 
 /**
  * Conversation compaction (Claude Code /compact, opencode compaction, Codex compact):
@@ -44,6 +45,8 @@ export const KEEP_TURNS = 2
 const TAIL_MAX_SHARE = 0.25
 /** Tool results shorter than this are not worth pruning. */
 const PRUNE_MIN_CHARS = 500
+/** Old @-attachments are cleared before a request once this many tokens would be saved. */
+export const ATTACHMENT_PRUNE_TOKENS = 20_000
 /** Consecutive automatic failures before auto-compaction stops for the session. */
 export const MAX_AUTO_FAILURES = 3
 
@@ -235,9 +238,54 @@ function scaled(before: number, from: readonly ModelMessage[], to: readonly Mode
   return Math.round(fixed + b)
 }
 
+/**
+ * Files attached with `@` (mentions.ts) outside the last `keepTurns` turns lose their content
+ * (path, lines and mtime stay). Only when that saves at least `minTokens`: each rewrite of old
+ * history costs the provider's prefix cache, so it is done in batches (opencode's
+ * PRUNE_MINIMUM is 20k). `0` prunes whatever there is (compaction).
+ */
+export function pruneAttachments(messages: readonly ModelMessage[], minTokens = ATTACHMENT_PRUNE_TOKENS, keepTurns = KEEP_TURNS): { messages: ModelMessage[]; pruned: number } {
+  const turns = splitTurns(messages)
+  const old = turns.slice(0, Math.max(0, turns.length - keepTurns)).reduce((n, t) => n + t.length, 0)
+  // A later "unchanged, see above" stub still points at this content: it stays.
+  const stubbedAt = new Map<string, number>()
+  messages.forEach((message, index) => {
+    for (const text of attachmentsOf(message)) {
+      const key = attachmentKey(text)
+      if (key && attachmentAttrs(text)?.da_gui) stubbedAt.set(key, index)
+    }
+  })
+  let pruned = 0
+  let saved = 0
+  const out = messages.map((message, index) => {
+    if (index >= old || message.role !== "user" || typeof message.content === "string" || attachmentsOf(message).length === 0) return message
+    const content = message.content.map((part) => {
+      const cleared = part.type === "text" ? clearedAttachment(part.text) : undefined
+      if (!cleared || part.type !== "text") return part
+      if ((stubbedAt.get(attachmentKey(part.text) ?? "") ?? -1) > index) return part
+      pruned++
+      saved += estimateTokens(part.text) - estimateTokens(cleared)
+      return { ...part, text: cleared }
+    })
+    return { ...message, content } as ModelMessage
+  })
+  if (pruned === 0 || saved < minTokens) return { messages: [...messages], pruned: 0 }
+  return { messages: out, pruned }
+}
+
+/** Before a request: clear old attachments once they add up (pruneAttachments). */
+export function pruneAttachmentsForRequest(history: readonly ModelMessage[], contextTokens: number | undefined) {
+  const { messages, pruned } = pruneAttachments(history)
+  if (pruned === 0) return undefined
+  return { messages, pruned, contextTokens: contextTokens === undefined ? undefined : scaled(contextTokens, history, messages) }
+}
+
 export async function compactHistory(history: readonly ModelMessage[], opts: CompactOptions): Promise<CompactResult> {
   const before = opts.contextTokens ?? tokensOf(history)
-  const { messages: prunedMessages, pruned } = pruneToolResults(history)
+  const tools = pruneToolResults(history)
+  const files = pruneAttachments(tools.messages, 0)
+  const prunedMessages = files.messages
+  const pruned = tools.pruned + files.pruned
   const afterPrune = scaled(before, history, prunedMessages)
   const base: CompactResult = { messages: prunedMessages, before, after: afterPrune, pruned }
   const threshold = opts.window ? opts.window * AUTO_COMPACT_SHARE : undefined
@@ -265,7 +313,8 @@ export async function compactHistory(history: readonly ModelMessage[], opts: Com
     skills: loadedSkills(head),
     todos: currentTodos(history),
   }
-  const messages = [...compactPair(summary, carry), ...tail]
+  // A kept "unchanged, see above" file stub may point into the summarized head.
+  const messages = withoutOrphanStubs([...compactPair(summary, carry), ...tail])
   return { messages, before, after: scaled(before, history, messages), pruned, summary }
 }
 

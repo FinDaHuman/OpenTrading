@@ -16,6 +16,8 @@ import { readDocx, readXlsx, toCsvRow } from "../../fs/office"
  */
 
 export type ReadFileInput = { path: string; offset?: number; limit?: number; pages?: string; sheet?: string }
+/** Internal only (not in the tool schema): a smaller character cap, for files the user @-attached. */
+type ReadOptions = Omit<ReadFileInput, "path"> & { maxChars?: number }
 
 export const MAX_LINES = 2000
 export const MAX_LINE_CHARS = 2000
@@ -112,8 +114,8 @@ async function nearNames(abs: string): Promise<string[]> {
   }
 }
 
-/** Numbered lines from `offset` (1-based), at most `limit` lines and MAX_TEXT_CHARS characters. */
-export function numberLines(lines: string[], offset: number, limit: number): { body: string; first: number; last: number } {
+/** Numbered lines from `offset` (1-based), at most `limit` lines and `maxChars` characters. */
+export function numberLines(lines: string[], offset: number, limit: number, maxChars = MAX_TEXT_CHARS): { body: string; first: number; last: number } {
   const out: string[] = []
   let chars = 0
   let last = offset - 1
@@ -121,7 +123,7 @@ export function numberLines(lines: string[], offset: number, limit: number): { b
     let line = lines[n - 1]!
     if (line.length > MAX_LINE_CHARS) line = `${line.slice(0, MAX_LINE_CHARS)}… (dòng bị cắt, dài ${line.length} ký tự)`
     const row = `${n}\t${line}`
-    if (out.length > 0 && chars + row.length + 1 > MAX_TEXT_CHARS) break
+    if (out.length > 0 && chars + row.length + 1 > maxChars) break
     out.push(row)
     chars += row.length + 1
     last = n
@@ -130,17 +132,17 @@ export function numberLines(lines: string[], offset: number, limit: number): { b
 }
 
 /** Numbered rows from `offset`, with the same paging note as text files. */
-function paged(label: string, lines: string[], input: Omit<ReadFileInput, "path">, unit: string) {
+function paged(label: string, lines: string[], input: ReadOptions, unit: string) {
   if (lines.length === 0) return `${label} · trống.`
   const offset = Math.max(1, input.offset ?? 1)
   if (offset > lines.length) throw new Error(`offset ${offset} vượt quá số ${unit} (${lines.length}).`)
-  const { body, first, last } = numberLines(lines, offset, Math.max(1, input.limit ?? MAX_LINES))
+  const { body, first, last } = numberLines(lines, offset, Math.max(1, input.limit ?? MAX_LINES), input.maxChars)
   const footer = last < lines.length ? `\n\n(còn ${lines.length - last} ${unit}; đọc tiếp với offset=${last + 1})` : ""
   return `${label} · ${lines.length} ${unit}${first === 1 && last === lines.length ? "" : ` · đang hiện ${unit} ${first}–${last}`}\n${body}${footer}`
 }
 
 /** One sheet of a workbook as CSV rows numbered like Excel rows; the other sheets are listed. */
-function readSheet(abs: string, bytes: Uint8Array, input: Omit<ReadFileInput, "path">) {
+function readSheet(abs: string, bytes: Uint8Array, input: ReadOptions) {
   let book
   try {
     book = readXlsx(bytes, input.sheet)
@@ -157,7 +159,7 @@ function readSheet(abs: string, bytes: Uint8Array, input: Omit<ReadFileInput, "p
   return paged(head, book.rows.map(toCsvRow), input, "dòng")
 }
 
-export async function readFileAt(abs: string, input: Omit<ReadFileInput, "path">, state?: FileState): Promise<string | ToolResult> {
+export async function readFileAt(abs: string, input: ReadOptions, state?: FileState): Promise<string | ToolResult> {
   let info
   try {
     info = await stat(abs)
@@ -208,7 +210,7 @@ export async function readFileAt(abs: string, input: Omit<ReadFileInput, "path">
     return `${abs} · file rỗng.`
   }
   if (offset > lines.length) throw new Error(`offset ${offset} vượt quá số dòng của file (${lines.length}).`)
-  const { body, first, last } = numberLines(lines, offset, limit)
+  const { body, first, last } = numberLines(lines, offset, limit, input.maxChars)
   const full = first === 1 && last === lines.length
   state?.record(abs, { mtimeMs: info.mtimeMs, size: info.size, hash: hashBytes(bytes), full })
   const header = `${abs} · ${lines.length} dòng${full ? "" : ` · đang hiện dòng ${first}–${last}`}`

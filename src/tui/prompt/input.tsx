@@ -41,6 +41,8 @@ export function PromptInput(props: {
   busy: boolean
   placeholder: string
   onChange: (text: string) => void
+  /** The cursor moved (typing, arrows, a click): the `@` list follows the word under it. */
+  onCursor?: (offset: number) => void
   onSubmit: () => void
   /** Pasted text, already normalised; the caller decides between text, pill and image. */
   onPaste: (text: string) => void
@@ -93,6 +95,7 @@ export function PromptInput(props: {
         syntaxStyle={promptStyle(renderer.nativeScene)}
         // The Solid typing says string, the core passes {}: read the text from the renderable.
         onContentChange={() => props.onChange(input?.plainText ?? "")}
+        onCursorChange={() => props.onCursor?.(input?.cursorOffset ?? 0)}
         onSubmit={() => props.onSubmit()}
         onPaste={(event: PasteEvent) => {
           // ConPTY (Windows Terminal) can paste CR-only line ends; tabs become spaces (Claude Code).
