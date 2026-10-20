@@ -243,6 +243,9 @@ beforeAll(async () => {
   setState({ lines: [], approval: undefined, approvals: [], dialog: undefined })
   // exitOnCtrlC off, as in main.tsx: the app handles Ctrl+C (double press) itself.
   setup = await testRender(() => <App runtime={runtime} onExit={() => exits++} />, { width: 100, height: 32, exitOnCtrlC: false })
+  // waitFor/waitForFrame count frames and give up once the renderer idles. The app draws on
+  // demand in a chat (the background holds still there), so keep the frame clock ticking.
+  setup.renderer.requestLive()
   // OSC52 always carries the copy (the OS command may not exist, e.g. on CI without xclip).
   setup.renderer.copyToClipboardOSC52 = (text: string) => {
     osc52.push(text)

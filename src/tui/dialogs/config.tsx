@@ -13,10 +13,11 @@ import { color } from "../theme"
 import { DialogFrame } from "./frame"
 import { Picker, type PickerItem } from "./picker"
 import { modelChoices, type ModelChoice } from "./model-choices"
+import { describeScroll, nextScrollSetting, scrollSetting } from "../scroll"
 
 const DEFAULT_MODE_NEXT: Record<PermissionMode, PermissionMode> = { "read-only": "ask", ask: "auto", auto: "read-only" }
 
-type Setting = "memory" | "toolSearch" | "autoCompact" | "maxSteps" | "subagentMax" | "subagentModel" | "webModel" | "autoModel" | "defaultMode" | "tips" | "terminalNotify"
+type Setting = "memory" | "toolSearch" | "autoCompact" | "maxSteps" | "subagentMax" | "subagentModel" | "webModel" | "autoModel" | "defaultMode" | "tips" | "terminalNotify" | "scroll"
 type SubagentModel = { provider: string; model: string } | "inherit" | "auto"
 
 const TOOL_SEARCH_NEXT = { auto: "on", on: "off", off: "auto" } as const
@@ -138,6 +139,14 @@ export function ConfigDialog(props: { runtime: Runtime }) {
       const on = current.ui?.terminalNotify === false
       await saveConfig({ ui: { ...current.ui, terminalNotify: on } })
       setState("terminalNotify", on)
+      await refetch()
+      return
+    }
+    if (setting === "scroll") {
+      const current = await loadConfig()
+      const next = nextScrollSetting(scrollSetting(current.ui))
+      await saveConfig({ ui: { ...current.ui, scrollSpeed: next.speed, scrollAcceleration: next.accelerate } })
+      setState("scroll", next)
       await refetch()
       return
     }
@@ -328,6 +337,12 @@ export function ConfigDialog(props: { runtime: Runtime }) {
                 value: "terminalNotify" as Setting,
               },
               {
+                label: "Tốc độ lăn chuột",
+                hint: `${describeScroll(scrollSetting(config()?.ui))} · enter để đổi (3 → 5 → 8 → tăng tốc)`,
+                mark: "●",
+                value: "scroll" as Setting,
+              },
+              {
                 label: "Mẹo khi chờ",
                 hint: config()?.ui?.tips === false ? "Tắt · enter để bật" : "Bật · một mẹo dưới dòng đang làm khi lượt chạy lâu",
                 mark: config()?.ui?.tips === false ? "○" : "●",
@@ -335,7 +350,7 @@ export function ConfigDialog(props: { runtime: Runtime }) {
               },
             ]}
             onPick={(s) => void toggle(s)}
-            rows={13}
+            rows={14}
           />
           <text fg={color.tx3} marginTop={1}>{`File cấu hình: ${configFile()}`}</text>
         </DialogFrame>

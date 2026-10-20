@@ -1,6 +1,6 @@
 import { FrameBufferRenderable, RGBA, type OptimizedBuffer, type RenderContext } from "@opentui/core"
 import { extend, useRenderer } from "@opentui/solid"
-import { onCleanup, onMount } from "solid-js"
+import { createEffect, onCleanup } from "solid-js"
 import { color, mix } from "./theme"
 
 /**
@@ -44,31 +44,67 @@ type TapeOptions = Omit<ConstructorParameters<typeof FrameBufferRenderable>[1], 
   width?: number | `${number}%` | "auto"
   height?: number | `${number}%` | "auto"
   calm?: number
+  animate?: boolean
 }
 
 class TapeRenderable extends FrameBufferRenderable {
   private t = 0
   /** Quietness in the centre so foreground text stays readable (0..1). */
-  calm = 0.75
+  private _calm = 0.75
+  private still = false
+  /** A still tape repaints only when its buffer was resized (and so cleared). */
+  private stale = true
 
   constructor(ctx: RenderContext, options: TapeOptions) {
-    const { width, height, calm, ...rest } = options
+    const { width, height, calm, animate, ...rest } = options
     super(ctx, {
       ...rest,
       width: typeof width === "number" ? width : 1,
       height: typeof height === "number" ? height : 1,
-      live: true,
+      live: animate !== false,
       respectAlpha: false,
     })
+    this.still = animate === false
     if (width !== undefined && typeof width !== "number") this.width = width
     if (height !== undefined && typeof height !== "number") this.height = height
     if (calm !== undefined) this.calm = calm
   }
 
+  /**
+   * Off: the tape keeps its last frame and stops the renderer's frame loop (a live renderable
+   * keeps it drawing the whole screen 24 times a second), so the renderer draws on demand and
+   * a wheel notch shows at once instead of on the next tick.
+   */
+  set animate(value: boolean) {
+    this.still = !value
+    this.live = value
+  }
+
+  get calm() {
+    return this._calm
+  }
+
+  set calm(value: number) {
+    if (this._calm === value) return
+    this._calm = value
+    this.stale = true
+    this.requestRender()
+  }
+
+  protected override onResize(width: number, height: number): void {
+    super.onResize(width, height)
+    this.stale = true
+  }
+
   protected override renderSelf(buffer: OptimizedBuffer, deltaTime = 0): void {
     if (!this.visible || this.isDestroyed) return
-    this.t += Math.min(deltaTime, 100) / 1000
-    this.paint(this.frameBuffer)
+    if (!this.still) {
+      this.t += Math.min(deltaTime, 100) / 1000
+      this.paint(this.frameBuffer)
+    } else if (this.stale) {
+      this.paint(this.frameBuffer)
+    }
+    this.stale = false
     super.renderSelf(buffer)
   }
 
@@ -125,16 +161,24 @@ declare module "@opentui/solid" {
 
 extend({ ot_tape: TapeRenderable })
 
-/** `quiet` dims the centre further while a conversation is on screen. */
+/**
+ * `quiet` (a conversation is on screen) dims the centre further and holds the tape still:
+ * the animation runs on Home only, and the chat is drawn on demand, like Claude Code.
+ */
 export function Background(props: { quiet?: boolean }) {
   const renderer = useRenderer()
-  let prev = renderer.targetFps
-  onMount(() => {
-    prev = renderer.targetFps
-    renderer.targetFps = 24
+  let prev: number | undefined
+  createEffect(() => {
+    if (props.quiet) {
+      if (prev !== undefined) renderer.targetFps = prev
+      prev = undefined
+    } else if (prev === undefined) {
+      prev = renderer.targetFps
+      renderer.targetFps = 24
+    }
   })
   onCleanup(() => {
-    renderer.targetFps = prev
+    if (prev !== undefined) renderer.targetFps = prev
   })
   return (
     <ot_tape
@@ -145,6 +189,7 @@ export function Background(props: { quiet?: boolean }) {
       height="100%"
       zIndex={0}
       calm={props.quiet ? 0.93 : 0.72}
+      animate={!props.quiet}
     />
   )
 }

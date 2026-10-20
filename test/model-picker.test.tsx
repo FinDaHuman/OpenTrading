@@ -10,7 +10,7 @@ const savedHome = process.env.OPENTRADING_HOME
 process.env.OPENTRADING_HOME = home
 
 const { loadModelPrefs, MAX_RECENT, modelPrefsFile, toggleFavorite, withRecent } = await import("../src/core/model-prefs")
-const { ModelDialog } = await import("../src/tui/dialogs/model")
+const { ModelDialog, modelPrefsSaved } = await import("../src/tui/dialogs/model")
 const { resetNotifications } = await import("../src/tui/notify")
 const { setState, state } = await import("../src/tui/state")
 
@@ -34,9 +34,12 @@ let setup: Awaited<ReturnType<typeof testRender>> | undefined
 beforeAll(() => {
   setState({ catalog: catalog as never, connected: ["google", "groq"] })
 })
-afterEach(() => {
+afterEach(async () => {
   setup?.renderer.destroy()
   setup = undefined
+  // A write still in flight would fail once the scratch home is gone, and its warning
+  // would land in the next test file's notifications.
+  await modelPrefsSaved()
   resetNotifications()
   setState({ dialog: undefined, modelPrefs: { favorite: [], recent: [] }, provider: undefined, model: undefined })
 })

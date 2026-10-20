@@ -69,6 +69,7 @@ import { color, promptStyle } from "./theme"
 import { cleanSelection, writeClipboard } from "./clipboard"
 import { ArgumentHint, Suggestions } from "./suggestions"
 import { Transcript } from "./transcript"
+import { scrollSetting, scrollTranscript } from "./scroll"
 import { TodoPanel } from "./todo-panel"
 import { PromptInput } from "./prompt/input"
 import { addHistory, HistoryCursor, loadHistory, pastesFor, searchHistory } from "./prompt/history"
@@ -621,6 +622,7 @@ export function App(props: {
       compactCap: config.compactWindow ?? DEFAULT_COMPACT_WINDOW,
       tips: config.ui?.tips !== false,
       terminalNotify: config.ui?.terminalNotify !== false,
+      scroll: scrollSetting(config.ui),
       autoCompactOff: config.autoCompact === "off",
       autoAcknowledged: config.permissions?.autoAcknowledged === true,
       modelPrefs,
@@ -1232,6 +1234,11 @@ export function App(props: {
     }
     if (owner() || state.dialog) return
     if (state.panelFocus !== undefined) return panelKey(evt)
+    // The chat scrolls from the keyboard too (opencode): PageUp/PageDown half a screen,
+    // Ctrl+Home/Ctrl+End to the start/end (plain Home/End stay with the prompt).
+    const move =
+      evt.name === "pageup" ? "page-up" : evt.name === "pagedown" ? "page-down" : evt.ctrl && evt.name === "home" ? "top" : evt.ctrl && evt.name === "end" ? "bottom" : undefined
+    if (move && scrollTranscript(move)) return evt.preventDefault()
     const n = suggestions().length
     // "?" on an empty prompt: the keys at a glance (Claude Code). Typed anywhere else it is text.
     // The textarea's own text: draft() follows it a moment later, so fast typing would lose a "?".
