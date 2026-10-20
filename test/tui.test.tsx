@@ -2216,7 +2216,14 @@ test("subagents: parallel spawns are one line in the transcript and one row each
   try {
     await setup.mockInput.typeText("SUBAGENT-SONG-SONG")
     setup.mockInput.pressEnter()
-    let frame = await setup.waitForFrame((f) => f.includes("Chạy 2 subagent… · ↓ để quản lý") && f.includes("chờ slot (1/1)"))
+    // Everything in one predicate: the rows arrive over a few frames.
+    let frame = await setup.waitForFrame(
+      (f) =>
+        f.includes("Chạy 2 subagent… · ↓ để quản lý") &&
+        f.includes("2 subagent · ↓ quản lý") &&
+        /nghien-cuu\s+Định giá FPT/.test(f) &&
+        /nghien-cuu\s+Định giá CMG.*chờ slot \(1\/1\)/.test(f),
+    )
     show(frame)
     // The transcript keeps one line; under the prompt, main and one row per agent.
     expect(frame).not.toContain("├─")
