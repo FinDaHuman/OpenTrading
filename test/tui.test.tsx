@@ -196,9 +196,11 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
         headers: { "content-type": "text/event-stream" },
       })
     }
+    // "NHIỀU-MẨU": an answer in 60 tiny deltas.
+    const parts = last.includes("NHIỀU-MẨU") ? Array.from({ length: 60 }, (_, i) => `m${i} `).concat("HẾT-CÂU-TRẢ-LỜI") : REPLY
     const body =
       chunk({ role: "assistant", content: "" }) +
-      REPLY.map((content) => chunk({ content })).join("") +
+      parts.map((content) => chunk({ content })).join("") +
       chunk({}, "stop") +
       "data: [DONE]\n\n"
     return new Response(body, { headers: { "content-type": "text/event-stream" } })
@@ -895,6 +897,31 @@ test("a tool call renders as a ● row with its result under ⎿, then the answe
   await setup.waitFor(() => !state.streaming)
   const roles = state.history.map((m) => m.role)
   expect(roles.slice(-4)).toEqual(["user", "assistant", "tool", "assistant"])
+})
+
+// Regression: every token was its own store write, so the answer was re-laid-out per token.
+test("streamed text reaches the transcript in batches, whole and in order", async () => {
+  await setKey("nvidia", "nvapi-good-key")
+  const seen = new Set<string>()
+  const stop = createRoot((dispose) => {
+    createEffect(() => {
+      const last = state.lines.at(-1)
+      if (last?.kind === "assistant") seen.add(last.text)
+    })
+    return dispose
+  })
+  const before = state.lines.length
+  try {
+    await setup.mockInput.typeText("NHIỀU-MẨU nhé")
+    setup.mockInput.pressEnter()
+    await waitMcp(() => !state.streaming && state.lines.slice(before).some((l) => l.kind === "assistant" && l.text.includes("HẾT-CÂU-TRẢ-LỜI")))
+  } finally {
+    stop()
+  }
+  const answer = state.lines.findLast((l) => l.kind === "assistant")
+  expect(answer?.kind === "assistant" && answer.text).toBe(Array.from({ length: 60 }, (_, i) => `m${i} `).join("") + "HẾT-CÂU-TRẢ-LỜI")
+  // 61 deltas, a handful of writes.
+  expect(seen.size).toBeLessThan(10)
 })
 
 test("a write tool asks first: esc denies just that call (the turn goes on), 2 allows for the session", async () => {
