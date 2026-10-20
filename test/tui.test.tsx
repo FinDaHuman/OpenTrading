@@ -1801,6 +1801,13 @@ function promptRows(frame: string) {
   return out
 }
 
+/** The prompt's text once rendering has settled (a late second insertion would show by then). */
+async function settledPrompt() {
+  await new Promise((r) => setTimeout(r, 60))
+  await setup.renderOnce()
+  return promptRows(setup.captureCharFrame()).join("").trim()
+}
+
 /** Esc twice clears the prompt (the first press only warns). */
 async function clearPrompt() {
   resetNotifications() // a warning left by the previous test must not count
@@ -1819,9 +1826,10 @@ test("prompt: ? on an empty prompt shows the keys; a letter closes it and is typ
   expect(state.dialog).toBe("shortcuts")
   await setup.mockInput.typeText("a")
   await setup.waitFor(() => state.dialog === undefined)
-  frame = await setup.waitForFrame((f) => promptRows(f).join("").includes("a"))
+  // Exactly once: the pane hands the letter over and the textarea must not type it again.
+  expect(await settledPrompt()).toBe("a")
   await setup.mockInput.typeText("?")
-  frame = await setup.waitForFrame((f) => promptRows(f).join("").includes("a?"))
+  expect(await settledPrompt()).toBe("a?")
   expect(state.dialog).toBeUndefined()
   await clearPrompt()
 })
@@ -2524,7 +2532,8 @@ test("subagent panel: ↓ at the end of the prompt selects a row; enter opens it
     await setup.waitFor(() => state.notification?.text.includes("Đã dừng subagent nghien-cuu (Định giá FPT)") === true)
     setup.mockInput.pressKey("a")
     await setup.waitFor(() => state.panelFocus === undefined)
-    await setup.waitForFrame((f) => promptRows(f).join("").includes("a"))
+    // Exactly once: the panel hands the letter over and the textarea must not type it again.
+    expect(await settledPrompt()).toBe("a")
     // The fake model holds the child until the gate opens; then the stop shows.
     release()
     await waitMcp(() => state.agents[first!.id]?.status === "stopped")

@@ -1,3 +1,4 @@
+import { writeSync } from "node:fs"
 import type { CliRenderer, ProgramStatus } from "@opentui/core"
 
 /**
@@ -102,6 +103,14 @@ export function terminalAttention(renderer: CliRenderer, enabled: () => boolean)
     enabled,
   )
   // A crash or process.exit skips the app's own exit path: never leave the ring spinning.
-  if (progress) process.once("exit", () => process.stdout.write(PROGRESS.off))
+  // Synchronous, since an exit handler gets no further turn of the event loop.
+  if (progress)
+    process.once("exit", () => {
+      try {
+        writeSync(1, PROGRESS.off)
+      } catch {
+        // stdout already gone: nothing left to clear.
+      }
+    })
   return attention
 }
