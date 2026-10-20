@@ -68,36 +68,49 @@ test("the bundled skills all load cleanly", async () => {
   const { skills, problems } = await loadSkills(skillRoots(await root()).filter((r) => r.source === "bundled"))
   expect(problems).toEqual([])
   expect(skills.map((s) => s.name)).toEqual([
+    "bat-dong-san-vn",
     "bat-on-quoc-gia",
+    "bao-hiem-vn",
     "chu-ky-tai-san-the-gioi",
     "chu-ky-tai-san-vn",
+    "chung-khoan-vn",
     "co-ban-chuyen-sau",
+    "cong-nghe-vn",
     "danh-gia-tinh-hinh-chinh-tri-toan-cau",
     "danh-gia-tinh-hinh-xung-dot",
     "danh-gia-truoc-bctc",
     "danh-gia-vi-mo-quoc-te",
     "danh-gia-vi-mo-viet-nam",
+    "dau-khi-vn",
     "devil-advocate",
+    "dien-luc-vn",
     "dinh-gia-chuyen-sau",
     "dinh-vi-chu-ky-vn",
     "du-doan-fed",
     "du-doan-polymarket",
     "explain-term",
+    "hoa-chat-vn",
     "kiem-chien-luoc-backtest",
     "kiem-tra-nguon-du-lieu",
     "ky-thuat-chuyen-sau",
+    "ngan-hang-vn",
     "nhip-dap-crypto",
     "phan-tich-chuyen-sau-1-ma",
     "phan-tich-sentiment",
     "phan-tich-vang-ty-gia",
     "so-sanh-cung-nganh",
     "tao-ho-so",
+    "thep-vn",
+    "tieu-dung-ban-le-vn",
     "tim-co-hoi-bao-cao-ctck",
     "tim-kiem-tin-tuc",
     "tin-tuc-nong-quoc-te",
     "tin-tuc-nong-viet-nam",
+    "van-tai-vn",
     "ve-bieu-do",
+    "vingroup-vn",
     "vn-market-basics",
+    "xuat-nhap-khau-vn",
   ])
 })
 
@@ -202,11 +215,15 @@ test("soft routing names one bundled skill only when it clearly beats the others
 test("analysis skills có hook Trực quan hóa trỏ về ve-bieu-do", async () => {
   const { skills } = await loadSkills(skillRoots(await root()).filter((r) => r.source === "bundled"))
   const withHook = [
-    "bat-on-quoc-gia", "co-ban-chuyen-sau", "danh-gia-tinh-hinh-chinh-tri-toan-cau", "danh-gia-tinh-hinh-xung-dot",
-    "danh-gia-truoc-bctc", "danh-gia-vi-mo-quoc-te", "danh-gia-vi-mo-viet-nam", "dinh-gia-chuyen-sau",
-    "du-doan-fed", "du-doan-polymarket", "kiem-chien-luoc-backtest", "ky-thuat-chuyen-sau",
+    "bat-on-quoc-gia", "bat-dong-san-vn", "bao-hiem-vn", "chung-khoan-vn", "co-ban-chuyen-sau",
+    "cong-nghe-vn", "danh-gia-tinh-hinh-chinh-tri-toan-cau", "danh-gia-tinh-hinh-xung-dot",
+    "danh-gia-truoc-bctc", "danh-gia-vi-mo-quoc-te", "danh-gia-vi-mo-viet-nam", "dau-khi-vn",
+    "dien-luc-vn", "dinh-gia-chuyen-sau", "du-doan-fed", "du-doan-polymarket",
+    "hoa-chat-vn", "kiem-chien-luoc-backtest", "ky-thuat-chuyen-sau", "ngan-hang-vn",
     "nhip-dap-crypto", "phan-tich-chuyen-sau-1-ma", "phan-tich-sentiment", "phan-tich-vang-ty-gia",
-    "so-sanh-cung-nganh", "tim-co-hoi-bao-cao-ctck", "tim-kiem-tin-tuc", "tin-tuc-nong-quoc-te", "tin-tuc-nong-viet-nam",
+    "so-sanh-cung-nganh", "thep-vn", "tieu-dung-ban-le-vn", "tim-co-hoi-bao-cao-ctck",
+    "tim-kiem-tin-tuc", "tin-tuc-nong-quoc-te", "tin-tuc-nong-viet-nam", "van-tai-vn",
+    "vingroup-vn", "xuat-nhap-khau-vn",
   ]
   for (const name of withHook) {
     const s = skills.find((x) => x.name === name)!
