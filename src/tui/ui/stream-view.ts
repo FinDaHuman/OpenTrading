@@ -30,7 +30,7 @@ const ITEM_WITH_TEXT = /^\s*([-*+]|\d{1,9}[.)]|>)\s+\S/
 const BLOCK_START = /^\s*(#|\||>|[-*+](\s|$)|\d{1,9}[.)]?(\s|$)|`{1,3}|~{1,3}|[-*_=]+\s*$)/
 
 /**
- * The line up to its first inline marker still open (`**`, `` ` ``, `*`), which the preview
+ * The line up to its first inline marker still open (`**`, `` ` ``, `*`, a link), which the preview
  * would show raw until it closes. Cutting there instead of hiding the line keeps text already
  * on screen from vanishing when a marker opens.
  */
@@ -43,7 +43,9 @@ function settled(line: string) {
   const lone = /(?<!\*)\*(?!\*)/g
   const marker = /^\s*[*]\s/.exec(line)?.[0].length ?? 0
   const singles = [...line.slice(marker).matchAll(lone)].map((m) => m.index + marker)
-  const cut = Math.min(open(/\*\*/g), open(/`/g), singles.length % 2 === 1 ? singles[singles.length - 1]! : Infinity)
+  // A link still being typed: `[nhãn`, `[nhãn]`, `[nhãn](https://…`.
+  const link = /\[[^\]]*(\](\([^)]*)?)?$/.exec(line)?.index ?? Infinity
+  const cut = Math.min(open(/\*\*/g), open(/`/g), singles.length % 2 === 1 ? singles[singles.length - 1]! : Infinity, link)
   return cut === Infinity ? line : line.slice(0, cut).trimEnd()
 }
 

@@ -44,7 +44,7 @@ const STREAMED = [
   "",
   "### Rủi ro",
   "",
-  "Đoạn cuối với *nghiêng* nữa.",
+  "Đoạn cuối với *nghiêng* nữa, nguồn [vnstock](https://vnstock.site/ho-so) ngày 20/10.",
 ].join("\n")
 
 // Regression: while streaming, frames flipped between raw markers and formatted text.
@@ -60,15 +60,26 @@ test("a streaming answer never shows raw markdown markers, and never shrinks", a
     await setup.renderOnce()
     await new Promise((r) => setTimeout(r, 10))
     await setup.renderOnce()
-    const frame = setup.captureCharFrame()
-    const raw = frame.split("\n").filter((l) => /\*\*|^[●\s]*#|\| -{3}|^[●\s]*\|/.test(l))
-    if (raw.length > 0) bad.push(`@${i + step}: ${raw.map((l) => l.trim()).join(" / ")}`)
-    const now = frame.split("\n").filter((l) => l.trim()).length
-    if (now < rows) bad.push(`@${i + step}: shrank from ${rows} to ${now} rows`)
-    rows = now
+    rows = check(`@${i + step}`, rows, 0)
+  }
+  // The end of the stream re-renders the blocks unstreamed: no blink, no raw markers.
+  setState(produce((s) => void ((s.lines[0] as { done: boolean }).done = true)))
+  for (let i = 0; i < 5; i++) {
+    await setup.renderOnce()
+    rows = check(`done+${i}`, rows, 1)
   }
   if (process.env.SHOW_FRAME) console.log(setup.captureCharFrame())
   expect(bad).toEqual([])
+
+  /** Records raw markers, or the answer losing more than `slack` rows; returns the row count. */
+  function check(at: string, rows: number, slack: number) {
+    const frame = setup!.captureCharFrame()
+    const raw = frame.split("\n").filter((l) => /\*\*|^[●\s]*#|\| -{3}|^[●\s]*\||\]\(|\[vn/.test(l))
+    if (raw.length > 0) bad.push(`${at}: ${raw.map((l) => l.trim()).join(" / ")}`)
+    const now = frame.split("\n").filter((l) => l.trim()).length
+    if (now < rows - slack) bad.push(`${at}: shrank from ${rows} to ${now} rows`)
+    return now
+  }
 })
 
 test("assistant answers render markdown instead of raw markers", async () => {
