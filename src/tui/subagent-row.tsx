@@ -1,10 +1,11 @@
-import { createMemo, createSignal, For, onCleanup, Show } from "solid-js"
+import { createMemo, For, Show } from "solid-js"
 import { fmtSeconds, fmtTokens, parseTrailer, stripTrailer } from "../core/subagents/result"
 import type { AgentStatus, ChildToolView } from "../core/subagents/types"
 import { SPAWN_SUBAGENT } from "../core/tools/subagent/spawn"
 import { state, type Line } from "./state"
 import { color } from "./theme"
 import { truncate } from "./ui/text"
+import { useSpinner } from "./ui/clock"
 
 /**
  * Subagents in the transcript, after Claude Code's AgentTool UI: the spawn_subagent calls
@@ -19,8 +20,6 @@ import { truncate } from "./ui/text"
  */
 
 type ToolLine = Extract<Line, { kind: "tool" }>
-
-const SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
 
 export const isSpawn = (line: Line | undefined): line is ToolLine => line?.kind === "tool" && line.name === SPAWN_SUBAGENT
 
@@ -187,7 +186,6 @@ function Details(props: { info: AgentInfo; prefix: string; width: number }) {
 }
 
 export function SubagentRow(props: { line: ToolLine; index: number; width: number }) {
-  const [frame, setFrame] = createSignal(0)
   const group = createMemo(() => groupAt(props.index))
   const first = () => group()[0]?.callId === props.line.callId
   const last = () => group().at(-1)?.callId === props.line.callId
@@ -195,10 +193,9 @@ export function SubagentRow(props: { line: ToolLine; index: number; width: numbe
   const info = createMemo(() => infoFor(props.line))
   const infos = createMemo(() => (first() ? group().map(infoFor) : []))
   const running = () => (single() ? active(info().status) : infos().some((i) => active(i.status)))
-  const timer = setInterval(() => running() && setFrame((f) => (f + 1) % SPINNER.length), 90)
-  onCleanup(() => clearInterval(timer))
+  const frame = useSpinner(running)
 
-  const headerGlyph = () => (running() ? SPINNER[frame()]! : "●")
+  const headerGlyph = () => (running() ? frame() : "●")
   const headerColor = () => {
     const all = single() ? [info()] : infos()
     if (all.some((i) => i.waitingApproval)) return color.tham

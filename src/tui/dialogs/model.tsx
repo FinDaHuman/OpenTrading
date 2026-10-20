@@ -2,7 +2,8 @@ import { useKeys } from "../ui/keys"
 import { createMemo, createSignal, Match, Switch } from "solid-js"
 import { saveConfig } from "../../core/config"
 import { chatModels, type ProviderId } from "../../core/providers"
-import { blocked, closeDialog, providerName, pushLine, setState, state } from "../state"
+import { blocked, closeDialog, providerName, setState, state } from "../state"
+import { say } from "../notify"
 import { color } from "../theme"
 import { DialogFrame } from "./frame"
 import { Picker } from "./picker"
@@ -38,7 +39,7 @@ export function ModelDialog() {
     if (choice === "manual") return setManual(true)
     await saveConfig(choice)
     setState({ provider: choice.provider, model: choice.model })
-    pushLine({ kind: "info", text: `Model: ${providerName(choice.provider)} · ${choice.model}` })
+    say(`Model: ${providerName(choice.provider)} · ${choice.model}`, "success")
     closeDialog()
   }
 

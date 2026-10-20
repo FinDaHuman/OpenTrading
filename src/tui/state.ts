@@ -15,6 +15,7 @@ import type { PromptImage } from "./prompt/image"
 import type { DraftSnapshot } from "./prompt/parts"
 import type { SubagentView } from "../core/subagents/types"
 import type { AgentDefinition, AgentProblem } from "../core/agents/schema"
+import type { ShownNotice } from "./notify"
 
 export type ToolStatus = "running" | "ok" | "error"
 
@@ -75,8 +76,10 @@ export const [state, setState] = createStore({
   dialog: undefined as DialogName | undefined,
   /** Tool call waiting for the user's yes/no (head of the permission queue). */
   approval: undefined as ApprovalRequest | undefined,
-  /** A short status-bar message ("✓ Đã copy 42 ký tự"), cleared after a moment. */
-  flash: undefined as string | undefined,
+  /** The footer notification showing now (see notify.ts); the rest wait in its queue. */
+  notification: undefined as ShownNotice | undefined,
+  /** Warning/error cards in the top-right corner, newest first. */
+  toasts: [] as ShownNotice[],
   /** Set after one Ctrl+C / Ctrl+D: a second press within the window exits. */
   exitArmed: undefined as "Ctrl+C" | "Ctrl+D" | undefined,
   exiting: false,
@@ -128,14 +131,6 @@ export function pushLine(line: Line) {
 export const closeDialog = () => setState("dialog", undefined)
 
 export const providerName = (id?: ProviderId) => (id ? (state.catalog[id]?.name ?? id) : "")
-
-let flashTimer: ReturnType<typeof setTimeout> | undefined
-/** Show a message in the status bar for `ms`. */
-export function flash(text: string, ms = 2000) {
-  clearTimeout(flashTimer)
-  setState("flash", text)
-  flashTimer = setTimeout(() => setState("flash", undefined), ms)
-}
 
 /** Claude Code's double-press window for Ctrl+C / Ctrl+D. */
 export const EXIT_WINDOW_MS = 800

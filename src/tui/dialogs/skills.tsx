@@ -1,6 +1,7 @@
 import { useKeys } from "../ui/keys"
 import { For, Show } from "solid-js"
-import { closeDialog, pushLine, setState, state } from "../state"
+import { closeDialog, setState, state } from "../state"
+import { say } from "../notify"
 import { color } from "../theme"
 import { DialogFrame } from "./frame"
 import { Picker } from "./picker"
@@ -17,11 +18,11 @@ const ACTIVATION: Record<string, string> = {
  */
 export function toggleSkill(name: string) {
   const skill = state.skills.find((s) => s.name === name)
-  if (!skill) return pushLine({ kind: "error", text: `Không có skill "${name}". Gõ /skills để xem danh sách.` })
-  if (skill.activation === "always") return pushLine({ kind: "info", text: `Skill ${name} luôn bật sẵn.` })
+  if (!skill) return say(`Không có skill "${name}". Gõ /skills để xem danh sách.`, "error")
+  if (skill.activation === "always") return say(`Skill ${name} luôn bật sẵn.`)
   const on = !state.activeSkills.includes(name)
   setState("activeSkills", (list) => (on ? [...list, name] : list.filter((n) => n !== name)))
-  pushLine({ kind: "info", text: `${on ? "Bật" : "Tắt"} skill ${name} cho cả phiên` })
+  say(`${on ? "Đã bật" : "Đã tắt"} skill ${name} cho cả phiên`, "success")
 }
 
 export function SkillsDialog() {

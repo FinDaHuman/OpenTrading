@@ -1,9 +1,10 @@
 import { useRenderer, useTerminalDimensions } from "@opentui/solid"
-import { createSignal, For, Match, onCleanup, Show, Switch } from "solid-js"
+import { For, Match, Show, Switch } from "solid-js"
 import { state, type Line } from "./state"
 import { color, markdownStyle } from "./theme"
 import { ChartBox } from "./ui/chart-box"
 import { truncate } from "./ui/text"
+import { useSpinner } from "./ui/clock"
 import { TODO_PREFIX } from "../core/tools/todos"
 import { LOADED_PREFIX } from "../core/tools/search"
 import { isSpawn, SubagentRow } from "./subagent-row"
@@ -17,7 +18,6 @@ import { isSpawn, SubagentRow } from "./subagent-row"
 
 type ToolLine = Extract<Line, { kind: "tool" }>
 
-const SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
 const COLLAPSED_LINES = 3
 const COLLAPSED_ERROR_LINES = 10
 const RESULT = "  ⎿  "
@@ -58,11 +58,8 @@ function summary(line: ToolLine): { tone: "ok" | "denied" | "answers"; lines: st
 }
 
 function ToolRow(props: { line: ToolLine; first: boolean; width: number }) {
-  const [frame, setFrame] = createSignal(0)
-  const timer = setInterval(() => {
-    if (props.line.status === "running") setFrame((f) => (f + 1) % SPINNER.length)
-  }, 90)
-  onCleanup(() => clearInterval(timer))
+  // Only running rows subscribe to the clock; finished ones cost nothing.
+  const frame = useSpinner(() => props.line.status === "running")
 
   const waiting = () =>
     props.line.status === "running"
@@ -72,7 +69,7 @@ function ToolRow(props: { line: ToolLine; first: boolean; width: number }) {
           ? "Đang chờ bạn trả lời…"
           : undefined
       : undefined
-  const dot = () => (waiting() ? "△" : props.line.status === "running" ? SPINNER[frame()]! : "●")
+  const dot = () => (waiting() ? "△" : props.line.status === "running" ? frame() : "●")
   const dotColor = () => (waiting() ? color.tham : props.line.status === "running" ? color.tham : props.line.status === "ok" ? color.tang : color.giam)
   const special = () => summary(props.line)
   const out = () =>
@@ -121,7 +118,7 @@ function ToolRow(props: { line: ToolLine; first: boolean; width: number }) {
 }
 
 /**
- * Decorations (❯ ● ⎿ ✻ ✘ and indents) are not selectable: highlighting a reply with the
+ * Decorations (❯ ● ⎿ · ✘ and indents) are not selectable: highlighting a reply with the
  * mouse copies the words only.
  */
 function Gutter(props: { glyph: string; fg: string }) {
@@ -198,7 +195,7 @@ function Row(props: { line: Line; prev?: Line; index: number; width: number }) {
         {(line) => <ChartBox data={(line() as Extract<Line, { kind: "chart" }>).data} width={props.width} />}
       </Match>
       <Match when={props.line.kind === "info"}>
-        <Hanging glyph="✻" glyphColor={color.tx3} text={(props.line as Extract<Line, { kind: "info" }>).text} fg={color.tx3} />
+        <Hanging glyph="·" glyphColor={color.tx3} text={(props.line as Extract<Line, { kind: "info" }>).text} fg={color.tx3} />
       </Match>
       <Match when={props.line.kind === "compact" && props.line}>
         {(line) => <CompactRow line={line() as Extract<Line, { kind: "compact" }>} />}

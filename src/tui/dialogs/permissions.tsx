@@ -3,7 +3,8 @@ import { loadConfig, saveConfig, type Config } from "../../core/config"
 import { MODE_LABEL, type PermissionMode } from "../../core/permission/mode"
 import type { Workspace } from "../../core/fs/workspace"
 import type { AutoReviewer, Denial } from "../../core/permission/auto"
-import { closeDialog, pushLine, state } from "../state"
+import { closeDialog, state } from "../state"
+import { say } from "../notify"
 import { color } from "../theme"
 import { useKeys } from "../ui/keys"
 import { truncate } from "../ui/text"
@@ -62,7 +63,7 @@ export function PermissionsDialog(props: { mode: PermissionMode; workspace: Work
 
   function retry(d: Denial) {
     props.auto?.grantRetry(d)
-    pushLine({ kind: "info", text: `Đã cho phép thử lại một lần: ${d.tool} ${truncate(d.summary, 60)}. Nhắn model gọi lại (ví dụ "thử lại đi").` })
+    say(`Đã cho phép thử lại một lần: ${d.tool} ${truncate(d.summary, 60)}. Nhắn model gọi lại (ví dụ "thử lại đi").`, "success", 10_000)
     setOpen(undefined)
   }
 
@@ -74,7 +75,7 @@ export function PermissionsDialog(props: { mode: PermissionMode; workspace: Work
     if (row.kind === "ask") p.ask = (p.ask ?? []).filter((_, i) => i !== row.index)
     await saveConfig({ permissions: p })
     await props.onChanged?.()
-    pushLine({ kind: "info", text: `Đã xoá quy tắc ${KIND[row.kind]}: ${row.tool}${coverage(row) ? ` (${coverage(row)})` : ""}` })
+    say(`Đã xoá quy tắc ${KIND[row.kind]}: ${row.tool}${coverage(row) ? ` (${coverage(row)})` : ""}`, "success")
     setOpen(undefined)
     await refetch()
   }

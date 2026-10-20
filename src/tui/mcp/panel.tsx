@@ -5,7 +5,8 @@ import { availableCatalog, MCP_CATALOG, missingRequirement } from "../../core/mc
 import { isRemote, type ServerConfig } from "../../core/mcp/config"
 import { cleanErrorText, type McpManager, type McpServerStatus, type McpState } from "../../core/mcp/manager"
 import type { ToolDef } from "../../core/tools/types"
-import { blocked, closeDialog, pushLine, state } from "../state"
+import { blocked, closeDialog, state } from "../state"
+import { say } from "../notify"
 import { color } from "../theme"
 import { pad, truncate, width as cells } from "../ui/text"
 import { BADGE, BADGE_LEGEND, toolBadge, toolMark } from "../ui/badges"
@@ -180,7 +181,7 @@ export function McpPanel(props: { mcp: McpManager; cwd: string }) {
           onUrl: (url) => setScreen({ kind: "auth", name, url }),
           signal: login!.signal,
         })
-        pushLine({ kind: "info", text: `Đã đăng nhập MCP server "${name}".` })
+        say(`Đã đăng nhập MCP server "${name}".`, "success")
         go({ kind: "server", name })
       } catch (e) {
         go({ kind: "server", name })
@@ -204,7 +205,7 @@ export function McpPanel(props: { mcp: McpManager; cwd: string }) {
         run: () =>
           act("đang kết nối…", async () => {
             await props.mcp.trust(name)
-            pushLine({ kind: "info", text: `Đã cho phép MCP server "${name}" (${s.target}).` })
+            say(`Đã cho phép MCP server "${name}" (${s.target}).`, "success")
           }),
       })
     }
@@ -281,7 +282,7 @@ export function McpPanel(props: { mcp: McpManager; cwd: string }) {
       if (index() === 1) return go({ kind: "server", name: sc.name })
       void act("đang xoá…", async () => {
         await props.mcp.remove(sc.name)
-        pushLine({ kind: "info", text: `Đã xoá MCP server "${sc.name}" khỏi cấu hình.` })
+        say(`Đã xoá MCP server "${sc.name}" khỏi cấu hình.`, "success")
         go({ kind: "list" })
       })
     }
@@ -329,7 +330,7 @@ export function McpPanel(props: { mcp: McpManager; cwd: string }) {
       const ok = await act("đang bật và kết nối…", async () => {
         const secrets = entry.secret ? { [entry.secret.env]: input.secret.trim() } : {}
         await props.mcp.add(entry.id, entry.build({ folder: input.folder.trim() || props.cwd }), secrets)
-        pushLine({ kind: "info", text: `Đã bật MCP server "${entry.name}".` })
+        say(`Đã bật MCP server "${entry.name}".`, "success")
       })
       if (!ok) return
       // Log in only after the enable action finished: one action at a time.
@@ -352,7 +353,7 @@ export function McpPanel(props: { mcp: McpManager; cwd: string }) {
         })()
     void act("đang thêm và kết nối…", async () => {
       await props.mcp.add(name, config)
-      pushLine({ kind: "info", text: `Đã thêm MCP server "${name}".` })
+      say(`Đã thêm MCP server "${name}".`, "success")
       go({ kind: "server", name })
     })
   }
