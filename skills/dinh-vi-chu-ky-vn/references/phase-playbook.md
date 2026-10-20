@@ -38,6 +38,7 @@ Chấm mỗi trụ cột +1/0/-1 (ủng hộ/trung tính/chống) rồi cộng:
 ## 4. Ranh giới (không vượt qua)
 
 - Chỉ gợi ý MẢNG + hit-rate tra từ tool. Picking mã cụ thể → skill phân tích mã. Quy tắc mua/bán, sizing, cắt lỗ → skill chiến lược/backtest.
+- Phân tích ngành theo driver/KPI/định giá riêng của ngành (VD "NIM ngân hàng đang thế nào", "thép chịu gì từ giá than") → 13 skill ngành, bảng ở SKILL.md mục "Bản đồ skill ngành". Skill này không đọc KPI ngành; skill ngành không xác định pha.
 - Cặp có `rel_mean` âm lúc tra (VD NH→dầu khí, NH mạnh→tiêu dùng, CNTT mạnh→CK) — không dùng làm tín hiệu; kiểm lại bằng `cycle_chains` mỗi lần dùng. Dầu khí chỉ theo giá dầu + mùa.
 - Defensives (consumer/staples) ở VN gần như không dẫn sóng nào — chỉ gợi ý để TRÚ trong P4 (và trong tháng yếu khi `cycle_seasonality` cho thấy consumer rơi ít hơn VNI), không gợi ý để đón sóng.
 - food/bảo hiểm/xây dựng: lúc viết chưa có mắt xích chuỗi đáng tin (kiểm lại `cycle_chains`) — chỉ đọc theo mùa vụ/Tết, không gợi ý "dẫn dắt".

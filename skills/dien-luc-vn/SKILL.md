@@ -5,7 +5,7 @@ activation: auto
 requires_tools: [financial_detail, yf_commodities]
 uses_tools: [financial_detail, yf_commodities, financial_ratios, planned_targets, analyst_consensus, peer_compare, news_symbol, news_market, company_events, symbol_lookup, vn_company]
 triggers:
-  keywords: [điện lực, ngành điện, phát điện, giá điện, thủy điện, nhiệt điện, sản lượng điện, kế hoạch phát triển điện lực, lưới điện truyền tải, nhà máy điện]
+  keywords: [ngành điện, phát điện, giá điện, thủy điện, nhiệt điện, sản lượng điện, kế hoạch phát triển điện lực, lưới điện truyền tải, nhà máy điện, nguyên giá điện]
 version: 1.0.0
 ---
 

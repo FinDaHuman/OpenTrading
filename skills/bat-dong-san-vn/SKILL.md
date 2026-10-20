@@ -5,7 +5,7 @@ activation: auto
 requires_tools: [financial_detail, planned_targets]
 uses_tools: [financial_detail, planned_targets, analyst_consensus, peer_compare, financial_ratios, stock_overview, news_symbol, news_market, company_events, event_calendar_vn, dividends_splits, symbol_lookup, vn_company]
 triggers:
-  keywords: [bất động sản, nhóm bất động sản, chủ đầu tư, bán trước, căn hộ, khu công nghiệp, nhà ở thương mại, bất động sản công nghiệp, dòng tiền bất động sản, doanh nghiệp bất động sản]
+  keywords: [ngành bất động sản, chủ đầu tư, bán trước, căn hộ, khu công nghiệp, nhà ở thương mại, bất động sản công nghiệp, dòng tiền bất động sản, doanh nghiệp bất động sản]
 version: 1.0.0
 ---
 

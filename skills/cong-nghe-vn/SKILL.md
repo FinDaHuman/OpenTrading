@@ -5,7 +5,7 @@ activation: auto
 requires_tools: [financial_detail, planned_targets]
 uses_tools: [financial_detail, planned_targets, financial_ratios, analyst_consensus, peer_compare, news_symbol, news_market, symbol_lookup, vn_company]
 triggers:
-  keywords: [công nghệ, ngành công nghệ, công nghệ thông tin, dịch vụ công nghệ, chuyển đổi số, thuê ngoài công nghệ, bán giải pháp chuyển đổi số, đội ngũ kỹ sư công nghệ, phần mềm]
+  keywords: [ngành công nghệ, công nghệ thông tin, dịch vụ công nghệ, chuyển đổi số, thuê ngoài công nghệ, đội ngũ kỹ sư công nghệ, phần mềm]
 version: 1.0.0
 ---
 

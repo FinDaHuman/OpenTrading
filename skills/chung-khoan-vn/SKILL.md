@@ -5,7 +5,7 @@ activation: auto
 requires_tools: [financial_detail, vs_financial_norms]
 uses_tools: [financial_detail, vs_financial_norms, financial_ratios, stock_overview, planned_targets, analyst_consensus, peer_compare, market_overview, breadth_scan, news_symbol, news_market, symbol_lookup, vn_company]
 triggers:
-  keywords: [chứng khoán, ngành chứng khoán, công ty chứng khoán, dư nợ margin, cho vay ký quỹ, môi giới chứng khoán, lãi margin, doanh thu môi giới, tự doanh, ctck vn]
+  keywords: [ngành chứng khoán, mảng chứng khoán, dư nợ margin, cho vay ký quỹ, môi giới chứng khoán, lãi margin, doanh thu môi giới, ctck vn]
 version: 1.0.0
 ---
 

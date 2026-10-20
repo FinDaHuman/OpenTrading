@@ -5,7 +5,7 @@ activation: auto
 requires_tools: [financial_detail, vs_indicator_data]
 uses_tools: [financial_detail, vs_indicator_data, financial_ratios, planned_targets, analyst_consensus, peer_compare, news_symbol, news_market, symbol_lookup, vn_company]
 triggers:
-  keywords: [tiêu dùng, ngành tiêu dùng, bán lẻ, siêu thị, chuỗi bán lẻ, hàng tiêu dùng, bán lẻ hiện đại, thu nhập hộ gia đình, sức mua, thị phần bán lẻ]
+  keywords: [ngành tiêu dùng, chuỗi bán lẻ, hàng tiêu dùng, bán lẻ hiện đại, thu nhập hộ gia đình, sức mua, thị phần bán lẻ, mảng tiêu dùng]
 version: 1.0.0
 ---
 

@@ -5,7 +5,7 @@ activation: auto
 requires_tools: [yf_commodities, financial_detail]
 uses_tools: [yf_commodities, financial_detail, financial_ratios, planned_targets, analyst_consensus, peer_compare, news_symbol, news_market, symbol_lookup, vn_company]
 triggers:
-  keywords: [dầu khí, ngành dầu khí, dầu thô, khí đốt, lọc hoá dầu, giếng khoan, dự án khai thác, tỷ trọng dầu khí, giá dầu brent, công ty dầu khí]
+  keywords: [ngành dầu khí, dầu thô, khí đốt, lọc hoá dầu, giếng khoan, dự án khai thác, tỷ trọng dầu khí, giá dầu brent, công ty dầu khí]
 version: 1.0.0
 ---
 

@@ -5,7 +5,7 @@ activation: auto
 requires_tools: [financial_detail, yf_commodities]
 uses_tools: [financial_detail, yf_commodities, financial_ratios, planned_targets, analyst_consensus, peer_compare, vs_xnk_detail, news_symbol, news_market, symbol_lookup, vn_company]
 triggers:
-  keywords: [hoá chất, ngành hoá chất, phân bón, nông nghiệp, khí đầu vào, sản xuất phân bón, giá phân bón, nhà máy hoá chất]
+  keywords: [ngành hoá chất, phân bón, sản xuất phân bón, giá phân bón, nhà máy hoá chất, khí đầu vào phân bón, chu kỳ giá phân bón]
 version: 1.0.0
 ---
 

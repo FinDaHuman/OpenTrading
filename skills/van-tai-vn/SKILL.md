@@ -5,7 +5,7 @@ activation: auto
 requires_tools: [financial_detail, vs_xnk_detail]
 uses_tools: [financial_detail, vs_xnk_detail, financial_ratios, planned_targets, analyst_consensus, peer_compare, yf_commodities, news_symbol, news_market, symbol_lookup, vn_company]
 triggers:
-  keywords: [vận tải, ngành vận tải, vận tải biển, cảng biển, logistics, cước vận chuyển, container, tàu chở container, luồng hàng hoá, công ty cảng]
+  keywords: [ngành vận tải, vận tải biển, cảng biển, cước vận chuyển, tàu chở container, luồng hàng hoá, công ty cảng, mảng logistics]
 version: 1.0.0
 ---
 

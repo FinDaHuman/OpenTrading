@@ -5,7 +5,7 @@ activation: auto
 requires_tools: [vs_xnk_detail, vs_indicator_data]
 uses_tools: [vs_xnk_detail, vs_indicator_data, financial_detail, financial_ratios, yf_commodities, vn_forex_ohlcv, planned_targets, analyst_consensus, news_symbol, news_market, symbol_lookup, vn_company]
 triggers:
-  keywords: [xuất nhập khẩu, xuất khẩu, nhập khẩu, thuế quan, cán cân thương mại, xuất khẩu hàng hoá, dòng vốn nước ngoài, thuế quan mỹ, nhập siêu, tỷ giá xuất khẩu]
+  keywords: [ngành xuất nhập khẩu, thuế quan, thuế quan mỹ, cán cân thương mại, dòng vốn nước ngoài, nhập siêu, tỷ giá xuất khẩu, phân tích xuất khẩu]
 version: 1.0.0
 ---
 

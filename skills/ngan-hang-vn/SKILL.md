@@ -5,7 +5,7 @@ activation: auto
 requires_tools: [financial_detail, vs_financial_norms]
 uses_tools: [financial_detail, vs_financial_norms, financial_ratios, financial_statements, stock_overview, planned_targets, sbv_rates, analyst_consensus, peer_compare, compare_equities, news_symbol, news_market, dividends_splits, symbol_lookup, vn_company]
 triggers:
-  keywords: [ngân hàng, nhóm ngân hàng, nợ xấu, lãi suất cho vay, biên lợi nhuận thuần, room tín dụng, tăng trưởng tín dụng, huy động vốn, trần ldr, thanh khoản ngân hàng, cổ phiếu bank, nhóm bank]
+  keywords: [ngành ngân hàng, nhóm ngân hàng, nợ xấu, nợ nhóm 2, lãi suất cho vay, biên lợi nhuận thuần, room tín dụng, hạn mức tín dụng, trần ldr, thanh khoản ngân hàng]
 version: 1.0.0
 ---
 
