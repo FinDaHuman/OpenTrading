@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test"
 import { z } from "zod"
 import { type AllowRule, PermissionGate, type RuleStore } from "../src/core/permission"
+import { startMode } from "../src/core/permission/mode"
 import { ToolRegistry } from "../src/core/tools/registry"
 import type { ToolDef } from "../src/core/tools/types"
 import { RwLock, runTool } from "../src/core/tools/wrap"
@@ -130,4 +131,13 @@ test("the registry passes its gate to every tool call", async () => {
     .execute({}, { toolCallId: "t", messages: [] })
     .catch((e: Error) => e.message)
   expect(out).toContain("không có giao diện để hỏi")
+})
+
+test("startMode: a session opens in the configured mode, but never in ▸▸ auto the user has not accepted", () => {
+  expect(startMode(undefined)).toBe("read-only")
+  expect(startMode({ defaultMode: "ask" })).toBe("ask")
+  expect(startMode({ defaultMode: "auto" })).toBe("ask")
+  expect(startMode({ defaultMode: "auto", autoAcknowledged: false })).toBe("ask")
+  expect(startMode({ defaultMode: "auto", autoAcknowledged: true })).toBe("auto")
+  expect(startMode({ defaultMode: "nonsense" })).toBe("read-only")
 })

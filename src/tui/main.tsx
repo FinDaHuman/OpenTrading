@@ -3,14 +3,15 @@ import { loadConfig } from "../core/config"
 import { createMemory, initRuntime } from "../core/runtime"
 import { App } from "./app"
 import { requestExit, state } from "./state"
+import { startMode } from "../core/permission/mode"
 import { color } from "./theme"
 
 /** Boot the TUI. Kept out of src/index.tsx so `opentrading mcp …` never needs a JSX runtime. */
 export async function startTui(resume: string | undefined) {
   const config = await loadConfig()
   const runtime = initRuntime({ skills: () => state.skills, memory: createMemory(config.memory?.provider), workspaceDirs: config.workspace?.dirs })
-  const mode = config.permissions?.defaultMode
-  runtime.permissions.setMode(mode === "ask" || mode === "auto" ? mode : "read-only")
+  // ▸▸ auto never accepted (set by hand or in /config) opens as ▸; the app asks first.
+  runtime.permissions.setMode(startMode(config.permissions))
   await runtime.permissions.refreshRules()
 
   // Ctrl+C is handled inside the app; this is the fallback if the terminal still delivers SIGINT.

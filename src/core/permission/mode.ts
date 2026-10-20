@@ -20,6 +20,16 @@ export function cycleMode(mode: PermissionMode, withAuto = true): PermissionMode
   return order[(order.indexOf(mode) + 1) % order.length] ?? "read-only"
 }
 
+/**
+ * The mode a session opens in (config `permissions.defaultMode`). ▸▸ auto that the user never
+ * said yes to (set by hand, or picked in /config) opens as ▸ instead; the TUI then asks.
+ */
+export function startMode(permissions: { defaultMode?: string; autoAcknowledged?: boolean } | undefined): PermissionMode {
+  const mode = permissions?.defaultMode
+  if (mode === "auto") return permissions?.autoAcknowledged === true ? "auto" : "ask"
+  return mode === "ask" ? "ask" : "read-only"
+}
+
 /** The mode line of the `<quyen_tep>` reminder: what the model may expect when it writes. */
 export function modeNote(mode: PermissionMode): string {
   if (mode === "read-only")

@@ -1,4 +1,4 @@
-import { createMemo, createResource, createSignal, Match, Show, Switch } from "solid-js"
+import { createMemo, createResource, createSignal, For, Match, Show, Switch } from "solid-js"
 import { loadConfig, saveConfig, type Config } from "../../core/config"
 import { MODE_LABEL, type PermissionMode } from "../../core/permission/mode"
 import type { Workspace } from "../../core/fs/workspace"
@@ -10,6 +10,7 @@ import { useKeys } from "../ui/keys"
 import { truncate } from "../ui/text"
 import { DialogFrame } from "./frame"
 import { Picker } from "./picker"
+import { AUTO_EXPLAIN } from "./auto-optin"
 
 /**
  * /permissions: the mode, the workspace, and every stored rule — "always allow" answers and
@@ -135,6 +136,18 @@ export function PermissionsDialog(props: { mode: PermissionMode; workspace: Work
               {truncate(line, 100)}
             </text>
           ))}
+          {/* The explanation the first switch to ▸▸ showed, for when it is on. */}
+          <Show when={(state.permissionMode ?? props.mode) === "auto"}>
+            <box marginTop={1} flexDirection="column" flexShrink={0}>
+              <For each={AUTO_EXPLAIN}>
+                {(line) => (
+                  <text fg={color.tx3} wrapMode="word">
+                    {line}
+                  </text>
+                )}
+              </For>
+            </box>
+          </Show>
           <box marginTop={1} flexDirection="column">
             <Show
               when={rows().length > 0 || denials.length > 0}

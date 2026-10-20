@@ -252,6 +252,8 @@ beforeAll(async () => {
 // cascade into every later test typing into that dialog.
 afterEach(() => {
   if (state.dialog) setState("dialog", undefined)
+  // An opt-in left open would keep every later prompt blocked.
+  if (state.autoOptIn) setState("autoOptIn", undefined)
   // A notification left by one test must not hide a footer hint the next one waits for.
   resetNotifications()
 })
@@ -1036,26 +1038,28 @@ test("80×24: panels and the '/' list keep their hint line and the status bar on
   }
 })
 
-test("80×24: a short notice sits in the status bar; a long one gets its own wrapped row, in full", async () => {
+test("80×24: a short notice sits on the mode line; a long one gets its own wrapped rows, in full", async () => {
   setup.resize(80, 24)
   try {
     say("Đã copy 12 ký tự", "success")
     let frame = await setup.waitForFrame((f) => f.includes("✓ Đã copy 12 ký tự"))
-    const bar = frame.split("\n").find((r) => r.includes("▲ OpenTrading"))!
-    expect(bar).toContain("✓ Đã copy 12 ký tự")
+    const line = frame.split("\n").find((r) => r.includes("✓ Đã copy 12 ký tự"))!
+    expect(line).toContain("‖ chỉ đọc")
 
     const long = "Model test-model không đọc được ảnh. Đổi model bằng /model, hoặc xoá ảnh khỏi ô nhập rồi gửi lại."
     say(long, "error")
     frame = await setup.waitForFrame((f) => f.includes("gửi lại."))
     show(frame)
-    // Every word is on screen, above the status bar, and the bar keeps its own content.
+    // Every word is on screen, on its own rows under the mode line; neither line is squeezed.
     const rows = frame.split("\n")
+    const modeAt = rows.findIndex((r) => r.includes("‖ chỉ đọc"))
     const barAt = rows.findIndex((r) => r.includes("▲ OpenTrading"))
     const text = rows
-      .slice(0, barAt)
+      .slice(modeAt + 1, barAt)
       .map((r) => r.trim())
       .join(" ")
     expect(text).toContain(`✘ ${long}`)
+    expect(rows[modeAt]).not.toContain("không đọc được ảnh")
     expect(rows[barAt]).not.toContain("không đọc được ảnh")
     expect(rows.length).toBeLessThanOrEqual(25)
   } finally {
@@ -1378,24 +1382,76 @@ test("/save copies the whole conversation as Markdown; /export writes it to a fi
 
 test("shift+tab cycles ‖ chỉ đọc ↔ ▸ sửa có hỏi; a write in read-only shows its diff and can switch the mode", async () => {
   expect(runtime.permissions.mode).toBe("read-only")
-  // A notification from the test before ("✓ Đã copy…") would hide the hint for 2s.
-  resetNotifications()
-  await setup.waitForFrame((f) => f.includes("‖ chỉ đọc") && f.includes("shift+tab đổi quyền"))
+  const lines = state.lines.length
+  // The mode sits on the line under the prompt, with the cycle hint.
+  // The mode line is indented 3 columns and starts with the mode glyph (dialog titles use 2).
+  const modeRow = (f: string) => f.split("\n").find((r) => /^ {3}(‖|▸)/.test(r)) ?? ""
+  await setup.waitForFrame((f) => modeRow(f).includes("‖ chỉ đọc (shift+tab đổi)"))
   setup.mockInput.pressTab({ shift: true })
-  await setup.waitForFrame((f) => f.includes("▸ sửa có hỏi"))
+  await setup.waitForFrame((f) => modeRow(f).includes("▸ sửa có hỏi (shift+tab đổi)"))
   expect(runtime.permissions.mode).toBe("ask")
+
+  // The first ▸▸ asks first, and the gate stays in ▸ until the user says yes.
   setup.mockInput.pressTab({ shift: true })
+  let frame = await setup.waitForFrame((f) => f.includes("Bật chế độ ▸▸ tự động?"))
+  show(frame)
+  expect(modeRow(frame)).toContain("▸▸ tự động (chờ xác nhận)")
+  expect(frame).toContain("Model duyệt có thể sai")
+  expect(frame).toContain("giữ ▸ sửa có hỏi")
+  expect(runtime.permissions.mode).toBe("ask")
+  // Esc: no, stay in ▸.
+  setup.mockInput.pressEscape()
+  await setup.waitForFrame((f) => !f.includes("Bật chế độ ▸▸ tự động?") && modeRow(f).includes("▸ sửa có hỏi"))
+  expect(runtime.permissions.mode).toBe("ask")
+  // Shift+Tab inside the dialog skips auto and moves on to ‖.
+  setup.mockInput.pressTab({ shift: true })
+  await setup.waitForFrame((f) => f.includes("Bật chế độ ▸▸ tự động?"))
+  setup.mockInput.pressTab({ shift: true })
+  await setup.waitForFrame((f) => !f.includes("Bật chế độ ▸▸ tự động?") && modeRow(f).includes("‖ chỉ đọc"))
+  expect(runtime.permissions.mode).toBe("read-only")
+
+  // An approval that arrives meanwhile goes first; the dialog comes back after it.
+  setup.mockInput.pressTab({ shift: true })
+  setup.mockInput.pressTab({ shift: true })
+  await setup.waitForFrame((f) => f.includes("Bật chế độ ▸▸ tự động?"))
+  const write = runtime.registry.get("write_file")!
+  let decision = runtime.permissions.check(write, { path: "tui-optin.md", content: "x\n" }, new AbortController().signal, "write_file tui-optin.md", "c-optin")
+  frame = await setup.waitForFrame((f) => f.includes("Cho phép chạy?"))
+  expect(frame).not.toContain("Bật chế độ ▸▸ tự động?")
+  setup.mockInput.pressEscape()
+  expect((await decision).allow).toBe(false)
+  await setup.waitForFrame((f) => f.includes("Bật chế độ ▸▸ tự động?"))
+  expect(runtime.permissions.mode).toBe("ask")
+
+  // Yes: auto from now on, remembered; the next time Shift+Tab goes straight to it.
+  setup.mockInput.pressKey("1")
   await setup.waitFor(() => runtime.permissions.mode === "auto")
-  // The first switch to auto explains it once.
-  await setup.waitFor(() => state.lines.some((l) => l.kind === "info" && l.text.startsWith("▸▸ Tự động:")))
   await setup.waitFor(async () => (await loadConfig()).permissions?.autoAcknowledged === true)
+  expect((await loadConfig()).permissions?.defaultMode).toBeUndefined()
+  await setup.waitForFrame((f) => modeRow(f).includes("▸▸ tự động (shift+tab đổi)"))
+  // /permissions keeps the explanation for later, while auto is on.
+  await setup.mockInput.typeText("/permissions")
+  setup.mockInput.pressEnter()
+  frame = await setup.waitForFrame((f) => f.includes("Chế độ: ▸▸ tự động"))
+  expect(frame).toContain("Model duyệt có thể sai")
+  setup.mockInput.pressEscape()
+  await setup.waitFor(() => state.dialog === undefined)
   setup.mockInput.pressTab({ shift: true })
   await setup.waitFor(() => runtime.permissions.mode === "read-only")
+  setup.mockInput.pressTab({ shift: true })
+  setup.mockInput.pressTab({ shift: true })
+  await setup.waitFor(() => runtime.permissions.mode === "auto")
+  expect(state.autoOptIn).toBeUndefined()
+  setup.mockInput.pressTab({ shift: true })
+  await setup.waitFor(() => runtime.permissions.mode === "read-only")
+  // Nothing about the modes went to the transcript (only the denied write is recorded).
+  expect(state.lines.slice(lines).filter((l) => "text" in l && /tự động|chỉ đọc|sửa có hỏi/i.test(l.text))).toEqual([])
+  expect(state.lines.slice(lines)).toHaveLength(1)
   await saveConfig({ permissions: undefined })
+  setState("autoAcknowledged", false)
 
-  const write = runtime.registry.get("write_file")!
-  const decision = runtime.permissions.check(write, { path: "tui-ke-hoach.md", content: "# Kế hoạch\nTheo dõi FPT\n" }, new AbortController().signal, "write_file tui-ke-hoach.md", "c-tui")
-  const frame = await setup.waitForFrame((f) => f.includes("đang ở chế độ ‖ chỉ đọc") && f.includes("+ # Kế hoạch"))
+  decision = runtime.permissions.check(write, { path: "tui-ke-hoach.md", content: "# Kế hoạch\nTheo dõi FPT\n" }, new AbortController().signal, "write_file tui-ke-hoach.md", "c-tui")
+  frame = await setup.waitForFrame((f) => f.includes("đang ở chế độ ‖ chỉ đọc") && f.includes("+ # Kế hoạch"))
   show(frame)
   expect(frame).toContain("Có, và chuyển sang ▸ sửa có hỏi")
   expect(frame).toContain("(mới, 2 dòng)")
@@ -2220,7 +2276,6 @@ test("subagents: a child's write tool asks in the main prompt, named after the s
     expect(frame).toContain("subagent nghien-cuu (Ghi FPT)")
     expect(frame).toContain("nghien-cuu › ghi_tam")
     expect(frame).toContain("Đang chờ bạn xác nhận…")
-    expect(frame).toContain("subagent nghien-cuu cần bạn xác nhận")
     expect(frame).not.toContain("1-4 chọn nhanh")
     // A prompt that pops up mid-typing is not answered by accident: digits never answer a
     // subagent's prompt, and Enter right after it appears is ignored.
