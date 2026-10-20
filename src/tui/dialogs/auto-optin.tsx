@@ -23,7 +23,8 @@ const CHOICES: { value: Choice; label: string; hint: (from: string) => string }[
   { value: "back", label: "Không, quay lại", hint: (from) => `giữ ${from}` },
 ]
 
-const EXPLAIN = [
+/** What ▸▸ auto does, costs and where it stops; also shown in /permissions while in auto. */
+export const AUTO_EXPLAIN = [
   "Agent làm liên tục, không hỏi từng bước. Mỗi lệnh shell, lần sửa file có sẵn, tool ghi hay trang web mới được một model duyệt trước (khoảng 1 request mỗi lần, thêm 1 khi bị nghi ngờ; đổi model duyệt ở /config).",
   "Đọc file và tạo file mới trong workspace không cần duyệt (vẫn /undo được). File khoá/mật khẩu, cấu hình OpenTrading, ghi ngoài workspace vẫn luôn hỏi bạn.",
   "Model duyệt có thể sai: đừng dùng cho việc nhạy cảm. Bị chặn 3 lần liên tiếp, hoặc model duyệt lỗi/hết quota, thì quay về hỏi bạn.",
@@ -66,7 +67,7 @@ export function AutoOptInDialog(props: { gate: PermissionGate }) {
   return (
     <DialogFrame title="Bật chế độ ▸▸ tự động?" accent={color.tham} hint="↑↓ chọn · enter xác nhận · 1-3 chọn nhanh · shift+tab chế độ tiếp · esc quay lại">
       <box flexDirection="column" paddingLeft={2} flexShrink={0}>
-        <For each={EXPLAIN}>
+        <For each={AUTO_EXPLAIN}>
           {(line) => (
             <text fg={color.tx2} wrapMode="word" flexShrink={0}>
               {line}

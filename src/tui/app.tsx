@@ -516,7 +516,7 @@ export function App(props: {
   onCleanup(() => offMode())
   createEffect(
     on(
-      () => [Boolean(owner()), Boolean(state.activity)] as const,
+      () => [Boolean(state.approval || state.question), Boolean(state.activity)] as const,
       ([waiting, active]) => {
         const a = state.activity
         if (!active || !a) return

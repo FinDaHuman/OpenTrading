@@ -252,6 +252,8 @@ beforeAll(async () => {
 // cascade into every later test typing into that dialog.
 afterEach(() => {
   if (state.dialog) setState("dialog", undefined)
+  // An opt-in left open would keep every later prompt blocked.
+  if (state.autoOptIn) setState("autoOptIn", undefined)
   // A notification left by one test must not hide a footer hint the next one waits for.
   resetNotifications()
 })
@@ -1427,6 +1429,13 @@ test("shift+tab cycles ‖ chỉ đọc ↔ ▸ sửa có hỏi; a write in read
   await setup.waitFor(async () => (await loadConfig()).permissions?.autoAcknowledged === true)
   expect((await loadConfig()).permissions?.defaultMode).toBeUndefined()
   await setup.waitForFrame((f) => modeRow(f).includes("▸▸ tự động (shift+tab đổi)"))
+  // /permissions keeps the explanation for later, while auto is on.
+  await setup.mockInput.typeText("/permissions")
+  setup.mockInput.pressEnter()
+  frame = await setup.waitForFrame((f) => f.includes("Chế độ: ▸▸ tự động"))
+  expect(frame).toContain("Model duyệt có thể sai")
+  setup.mockInput.pressEscape()
+  await setup.waitFor(() => state.dialog === undefined)
   setup.mockInput.pressTab({ shift: true })
   await setup.waitFor(() => runtime.permissions.mode === "read-only")
   setup.mockInput.pressTab({ shift: true })
