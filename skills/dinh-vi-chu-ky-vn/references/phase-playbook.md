@@ -24,7 +24,7 @@
 | P4 (đang rơi) | Trú: consumer + utilities · TRÁNH: thép/CK/BĐS | Tra `cycle_yearly` năm bear gần nhất (lợi suất năm tuyệt đối, không phải RS) |
 | P4 (vừa tạo đáy) | Hồi kỹ thuật: mảng nằm top 3 ở mọi đáy | Tra `cycle_trough_events` (nêu số đáy theo kết quả tool; dưới 3 đáy chỉ nêu quan sát, không chốt — xem `market-history.md` §2) |
 
-**Vin**: điều kiện dùng Vin trong chuỗi ở `rotation-chains.md` §1. Ngoài chuỗi, Vin chỉ là thông tin riêng: bias tháng của hàng `vin` (`cycle_seasonality`), cột `vin` của `cycle_trough_events`, sự kiện tập đoàn.
+- **Vin**: điều kiện dùng Vin trong chuỗi ở `rotation-chains.md` §1 (một luật duy nhất — không tự suy ra ngưỡng khác). Ngoài chuỗi, Vin chỉ là thông tin riêng: bias tháng của hàng `vin` (`cycle_seasonality`, ngưỡng ở `seasonality-vn.md` §1), cột `vin` của `cycle_trough_events` (quy tắc đọc ở `market-history.md` §2), sự kiện tập đoàn.
 
 ## 3. Checklist chấm pha (dùng ở Bước 5 của SKILL.md)
 
@@ -41,6 +41,7 @@ Chấm mỗi trụ cột +1/0/-1 (ủng hộ/trung tính/chống) rồi cộng:
 - Cặp có `rel_mean` âm lúc tra (VD NH→dầu khí, NH mạnh→tiêu dùng, CNTT mạnh→CK) — không dùng làm tín hiệu; kiểm lại bằng `cycle_chains` mỗi lần dùng. Dầu khí chỉ theo giá dầu + mùa.
 - Defensives (consumer/staples) ở VN gần như không dẫn sóng nào — chỉ gợi ý để TRÚ trong P4 (và trong tháng yếu khi `cycle_seasonality` cho thấy consumer rơi ít hơn VNI), không gợi ý để đón sóng.
 - food/bảo hiểm/xây dựng: lúc viết chưa có mắt xích chuỗi đáng tin (kiểm lại `cycle_chains`) — chỉ đọc theo mùa vụ/Tết, không gợi ý "dẫn dắt".
+- Vin: không gợi ý Vin như mảng "dẫn dắt tiếp theo" nếu chưa đạt **điều kiện Vin** ở `rotation-chains.md` §1. Ngoài chuỗi thì Vin chỉ là thông tin (mùa vụ / đáy / sự kiện tập đoàn), không phải mảng gợi ý.
 - CẤM bịa ngưỡng mới: mọi ngưỡng trong checklist (RS +15%, drawdown 20%, breadth 50%...) chỉ đổi khi có bằng chứng định lượng từ ≥2 chu kỳ trong dữ liệu mới.
 - CẤM chép kết quả bảng vào `references/`: kết quả đo sẽ cũ sau mỗi lần refresh và model sẽ trích từ file thay vì tra tool. Số mới phủ định một quy tắc thì sửa **quy tắc** thành điều kiện tra được, không chép bảng (luật ở `docs/contracts.md` §3).
 
