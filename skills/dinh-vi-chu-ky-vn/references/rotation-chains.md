@@ -9,7 +9,7 @@
 - Thứ tự sức mạnh đã biết, kiểm lại mỗi lần dùng (basket v2): **NH→thép ≈ BĐS→CK ≈ NH→CK > thép→CK > CK→CNTT ≈ CK→BĐS > NH→BĐS**. Chiều ngược vẫn có nghĩa (CK→Bank, thép→CK, hóa chất→Bank): sóng VN thường đi 2 chiều bank↔CK↔BĐS.
 - Hai chuỗi KHÔNG tồn tại: NH→dầu khí (rel âm) và NH mạnh→tiêu dùng (rel âm = tiền rời defensives). CNTT mạnh→CK yếu — không dùng làm tín hiệu.
 - Dầu khí không nối đuôi BĐS — trade dầu khí theo giá dầu + mùa, không theo flow NH→BĐS→DK.
-- **Vin ngoài chuỗi:** các cặp có Vin đều yếu (NH→Vin hit thấp, Vin→BĐS và BĐS→Vin âm — đọc `cycle_chains`) — Vin đi theo nhịp riêng (vốn hóa lớn, câu chuyện tập đoàn), không dùng chuỗi cho Vin.
+- **Vin:** 3 cặp NH→Vin, Vin→BĐS, BĐS→Vin — đọc `rel_mean`/`rel_hit`/`n_up` trong `cycle_chains`; cặp nào `rel_mean` âm thì không dùng. Lúc viết cả 3 cặp đều yếu/âm (kiểm lại): Vin thường đi nhịp riêng (vốn hóa lớn, câu chuyện tập đoàn).
 - Mẫu nhỏ: mỗi cặp chỉ vài chục tháng (từ 2018-10); luôn đọc kèm `n_up` và chỉ coi là gợi ý, không phải quy luật.
 
 ## 2. Lead-lag
@@ -27,7 +27,7 @@
 
 ## 4. Quy tắc timing đỉnh (verify bằng `cycle_turning(year=...)`)
 
-1. **VNFIN đỉnh trước VNI 3–6 tháng = dấu hiệu cuối sóng.** Ba đỉnh lớn gần nhất (2021, 2025, 2026) VNFIN đều đỉnh trước VNI trong khoảng 4–5 tháng — tra `cycle_turning(year=...)` để lấy ngày đỉnh từng năm trước khi trích. Các năm khác lag không ổn định (có năm VNFIN đỉnh sau VNI hàng tháng) → không suy diễn.
+1. **VNFIN đỉnh trước VNI 3–6 tháng = dấu hiệu cuối sóng.** Trước khi dùng: tra `cycle_turning(year=...)` các đỉnh lớn gần nhất, tính độ trễ VNFIN→VNI từng năm (ghi ngày đỉnh). Độ trễ nằm trong 3–6 tháng ở các đỉnh gần thì áp quy tắc; độ trễ lệch nhau giữa các năm (kể cả năm VNFIN đỉnh sau VNI) thì hạ độ tin cậy, không suy diễn.
 2. **VNREAL/VNUTI rướn sau đỉnh VNI 1–4 tháng = "last leg"** → thoát dần, không mua đuổi BĐS/utilities lúc này.
-3. Đáy panic: các chỉ số thường đáy gần cùng lúc (mẫu cuối 2022 — kiểm bằng `cycle_turning`/`cycle_trough_events`), riêng BĐS hay đáy muộn hơn và hồi yếu nhất sau đáy; Vin cần kiểm riêng `cycle_trough_events` (2 mẫu gần nhất cho kết quả trái ngược).
+3. Đáy panic: các chỉ số thường đáy gần cùng lúc (mẫu cuối 2022 — kiểm bằng `cycle_turning`/`cycle_trough_events`), riêng BĐS hay đáy muộn hơn và hồi yếu nhất sau đáy; Vin cần kiểm riêng cột `vin` của `cycle_trough_events` (kết quả trái ngược giữa các đáy thì không suy diễn).
 4. Ngoại lệ đã biết: khi VNI đỉnh sớm do trụ Vin (VIC/VHM) kéo mà VNFIN rướn thêm (mẫu 2024) → luôn kiểm tra breadth (`breadth_scan`) kèm theo.
