@@ -7,7 +7,7 @@
 
 ## 1. Tách vòng kinh doanh
 
-| Vòng | Đặc nhận | Chu kỳ bám | So với ai |
+| Vòng | Đặc điểm nhận dạng | Chu kỳ bám | So với ai |
 |---|---|---|---|
 | Thượng nguồn (khai thác) | Sản lượng khai thác, trữ lượng, chi phí thăm dò | Giá dầu + trữ lượng | Cùng vòng thượng nguồn |
 | Lọc hoá dầu | Doanh thu bán sản phẩm lọc − giá dầu thô đầu vào | Chênh lệch tinh chế | Cùng vòng lọc dầu |

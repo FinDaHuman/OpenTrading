@@ -1,11 +1,11 @@
 ---
 name: thep-vn
-description: "Phân tích ngành thép VN theo spread nguyên liệu–thành phẩm, phòng vệ thương mại và cơ cấu sản phẩm. Dùng khi hỏi xu hướng nhóm thép, đọc kết quả nhà máy thép hay chi phí đầu vào."
+description: "Phân tích ngành thép VN theo spread nguyên liệu–thành phẩm, phòng vệ thương mại, cơ cấu sản phẩm và biên lãi gộp. Dùng khi hỏi xu hướng nhóm thép, đọc kết quả nhà máy thép, lãi gộp hay chi phí đầu vào."
 activation: auto
 requires_tools: [financial_detail, yf_commodities]
 uses_tools: [financial_detail, yf_commodities, financial_ratios, planned_targets, analyst_consensus, peer_compare, news_symbol, news_market, vs_xnk_detail, symbol_lookup, vn_company]
 triggers:
-  keywords: [ngành thép, thép xây dựng, thép cuộn, nhà máy thép, sản xuất thép, giá thép, thép nhập khẩu, sản lượng thép, ban thep, nguoi ban thep]
+  keywords: [ngành thép, thép xây dựng, thép cuộn, nhà máy thép, sản xuất thép, giá thép, thép nhập khẩu, sản lượng thép, lãi gộp thép, chi phí đầu vào thép]
 version: 1.0.0
 ---
 
@@ -161,7 +161,7 @@ dụng, biên lãi gộp theo quý, độ trễ tồn kho, và verdict theo cây
 Chỉ vẽ khi người dùng muốn xem hình; tối đa 1 biểu đồ. Hợp với dữ liệu skill này:
 waterfall từ giá bán trừ nguyên liệu ra biên/tấn, multiline giá thành phẩm với
 giá quặng/than, bar biên lãi gộp của nhóm. Vẽ bằng `chart_render` với `from_call`
-(mã `[ref …]`) từ kết qu tool đã có; cần chọn loại hình thì nạp `ve-bieu-do`.
+(mã `[ref …]`) từ kết quả tool đã có; cần chọn loại hình thì nạp `ve-bieu-do`.
 
 ## File tham chiếu
 

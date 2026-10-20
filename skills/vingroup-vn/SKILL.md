@@ -3,7 +3,7 @@ name: vingroup-vn
 description: "Phân tích tập đoàn Vingroup theo giá trị tách rời từng mảng, vòng quay tiền mặt, đòn bẩy so với trần nợ và tỷ trọng của nhóm Vin trong chỉ số. Dùng khi hỏi tập đoàn Vingroup, Vinhomes, VinFast hay Vincom Retail."
 activation: auto
 requires_tools: [financial_detail, company_events]
-uses_tools: [financial_detail, company_events, news_symbol, news_market, financial_ratios, planned_targets, analyst_consensus, peer_compare, market_overview, event_calendar_vn, symbol_lookup, vn_company]
+uses_tools: [financial_detail, company_events, news_symbol, news_market, financial_ratios, planned_targets, analyst_consensus, peer_compare, market_overview, event_calendar_vn, symbol_lookup, vn_company, vs_industry_tree]
 triggers:
   keywords: [vingroup, vinfast, vinhomes, vincom, vinpearl, nhóm vin, tập đoàn vingroup, tossanholding, quỹ đất vinhomes, xe điện vinfast, bán lẻ vincom]
 version: 1.0.0
@@ -11,10 +11,13 @@ version: 1.0.0
 
 # Vingroup — framework phân tích
 
-Vingroup là **tập đoàn đa mảng**, không phải một ngành: một nửa lãi đến từ bất động
-sản, một nửa đến từ sản xuất kinh doanh khác (xe điện, bán lẻ, khách sạn, giáo dục,
-y tế). Đọc VIC bằng bộ chỉ báo ngành nào cũng sai. Skill này phân tích bằng cách
-**tách giá trị theo mảng và theo dòng tiền thật**, cùng ba điểm chỉ tập đoàn này có:
+Vingroup là **tập đoàn đa mảng**, không phải một ngành: lãi đến từ nhiều mảng với
+chu kỳ khác nhau (bất động sản, xe điện, bán lẻ, khách sạn, dịch vụ) và **tỷ trọng
+mỗi mảng thay đổi theo kỳ** — kỳ nào mảng BĐS bàn giao thì BĐS dẫn, kỳ nào xe điện
+mở rộng thì nó là biến số dòng tiền. Đọc VIC bằng bộ chỉ báo ngành nào cũng sai.
+Skill này phân tích bằng cách **tách giá trị theo mảng và theo dòng tiền thật**, và
+bước bắt buộc đầu tiên là đo tỷ trọng đóng góp của từng mảng (`financial_detail` +
+công bố công ty) trước khi kết luận bất cứ điều gì về tổng hợp:
 
 1. **Vòng quay bất động sản**: lãi đến từ bàn giao dự án, nên lãi nhảy theo đợt —
    đọc bán trước và tích luỹ chi phí dở, không đọc một quý.
@@ -31,7 +34,7 @@ y tế). Đọc VIC bằng bộ chỉ báo ngành nào cũng sai. Skill này ph�
 - Khi KHÔNG dùng (dùng skill khác thay thế):
   - Hỏi pha thị trường / luân chuyển ngành / sóng tiếp theo → `dinh-vi-chu-ky-vn`.
   - Phân tích toàn diện một mã → `phan-tich-chuyen-sau-1-ma`.
-  - Chỉ định giá một mã → `dinh-gia-chuyen-sau`.
+  - Chỉ định giá một mã → `dinh-gia-chuyen-sau`; chỉ đọc BCTC một mã → `co-ban-chuyen-sau`.
   - Ngành bất động sản nói chung → `bat-dong-san-vn`.
   - Bán lẻ tiêu dùng nói chung → `tieu-dung-ban-le-vn`.
 

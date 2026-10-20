@@ -1,9 +1,9 @@
 ---
 name: cong-nghe-vn
-description: "Phân tích ngành công nghệ Việt Nam theo doanh thu ký, phân hoá nội địa và nước ngoài, đơn hàng dài hạn và tỷ lệ sử dụng nhân công. Dùng khi hỏi xu hướng nhóm công nghệ hoặc công ty dịch vụ công nghệ."
+description: "Phân tích ngành công nghệ Việt Nam theo giá trị hợp đồng ký, phân hoá nội địa và nước ngoài, đơn hàng dài hạn và tỷ lệ sử dụng nhân công. Dùng khi hỏi xu hướng nhóm công nghệ hoặc công ty dịch vụ công nghệ."
 activation: auto
 requires_tools: [financial_detail, planned_targets]
-uses_tools: [financial_detail, planned_targets, financial_ratios, analyst_consensus, peer_compare, news_symbol, news_market, symbol_lookup, vn_company]
+uses_tools: [financial_detail, planned_targets, financial_ratios, analyst_consensus, peer_compare, news_symbol, news_market, symbol_lookup, vn_company, yf_commodities]
 triggers:
   keywords: [ngành công nghệ, công nghệ thông tin, dịch vụ công nghệ, chuyển đổi số, thuê ngoài công nghệ, đội ngũ kỹ sư công nghệ, phần mềm]
 version: 1.0.0
@@ -41,7 +41,7 @@ theo từng quý. Đọc doanh thu nhận mà không đọc đơn ký sẽ thấ
 | Phân hoá nước ngoài – nội địa | Nước ngoài phụ thuộc chu kỳ khách hàng quốc tế (Nhật/EU/Mỹ); nội địa phụ thuộc chính phủ điện tử và doanh nghiệp. Hai chu kỳ khác nhau | Mảng nội địa/nước ngoài trong `financial_detail` hoặc công bố công ty |
 | Chất lượng hợp đồng | Đơn lớn (trên ngưỡng) và kỳ hạn 2–3 năm cho doanh thu bền vững hơn đơn nhỏ lẻ | Tỷ trọng đơn lớn + kỳ hạn: công bố công ty trong `news_market` |
 | Tỷ lệ sử dụng nhân công | Ngành vốn người: nhân công sử dụng thấp đồng nghĩa biên giảm và cơ cấu lỗ thời, đặc biệt khi tác vụ truyền thống bị tự động hoá | Số nhân viên + thu nhập/người: `financial_detail` (tự tính, ghi rõ). So quý trước |
-| Chi phí đầu vào AI | Máy tính và cơ sở hạ tầng tăng do nhu cầu AI toàn cầu; siết chi phí cung cấp | `yf_commodities` (chu kỳ kim loại nếu cần bối cảnh) + `news_market` |
+| Chi phí đầu vào AI | Máy tính và cơ sở hạ tầng tăng do nhu cầu AI toàn cầu; đẩy chi phí cung cấp | `yf_commodities` (chu kỳ kim loại nếu cần bối cảnh) + `news_market` |
 
 ## Các bước
 

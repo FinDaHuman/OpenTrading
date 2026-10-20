@@ -37,7 +37,7 @@ nước ngoài và giá thuê). Nhìn chung một ngành sẽ đọc sai cả ha
 | Kênh trái phiếu + tường đáo hạn | Phát hành trái phiếu tăng nhanh đổi lấy rủi ro tái cấu trung hạn: tường đáo hạn tập trung vài quý là điểm nghẽn. Lãi phát hành tăng = thị trường phát giá rủi ro ngành cao hơn | Phát hành + lãi + tường đáo hạn: `news_market`/`web_search`; riêng mã đọc trái phiếu phát hành trong `financial_detail` |
 | Rào pháp lý | Quy định giới hạn (vay ngân hàng + trái phiếu)/vốn chủ theo quy mô dự án làm trần đòn bẩy của cả ngành; Luật Đất đất định kỳ công bố bảng giá đất (+ quy định thay thế khác) đổi chi phí đầu vào | Nội dung văn bản + hiệu lực: `news_market`/`web_search`. **Không suy ngưỡng mới** — tra văn bản hiện hành rồi ghi nguồn |
 | Phân khúc | Nhà ở thương mại: lãi vay + khả năng hấp thụ + cung mới. Công nghiệp: dòng vốn nước ngoài + giá thuê + hấp thụ đất. Hai chu kỳ khác chiều được | Bán trước/bàn giao và giá thuê/hấp thụ: `news_market`/`web_search`; riêng mã trong `financial_detail` và `planned_targets` |
-| Thanh khoên thị trường | Cung mới đổ về cùng lúc làm giảm khả năng tính giá → biên lãi gộp mảng BĐS bị nén dù doanh thu tăng | Biên lãi gộp mảng BĐS: `financial_detail` |
+| Thanh khoản thị trường | Cung mới đổ về cùng lúc làm giảm khả năng tính giá → biên lãi gộp mảng BĐS bị nén dù doanh thu tăng | Biên lãi gộp mảng BĐS: `financial_detail` |
 | Kỳ vọng + phê duyệt | Dự án phải qua chuỗi phê duyệt; kỳ vọng chững lại làm tiến độ chậm và chi phí tài chính đội lên | Tiến độ + sự kiện phê duyệt: `company_events` · `event_calendar_vn` |
 
 ## Các bước

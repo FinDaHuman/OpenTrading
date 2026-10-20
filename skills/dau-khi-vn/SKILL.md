@@ -3,7 +3,7 @@ name: dau-khi-vn
 description: "Phân tích ngành dầu khí VN theo giá dầu quốc tế, tuyến vận chuyển, thay thế trữ lượng và ranh giới giữa khai thác với lọc hoá dầu. Dùng khi hỏi xu hướng nhóm dầu khí hay công ty dầu khí chịu gì."
 activation: auto
 requires_tools: [yf_commodities, financial_detail]
-uses_tools: [yf_commodities, financial_detail, financial_ratios, planned_targets, analyst_consensus, peer_compare, news_symbol, news_market, symbol_lookup, vn_company]
+uses_tools: [yf_commodities, financial_detail, financial_ratios, planned_targets, analyst_consensus, peer_compare, company_events, news_symbol, news_market, symbol_lookup, vn_company]
 triggers:
   keywords: [ngành dầu khí, dầu thô, khí đốt, lọc hoá dầu, giếng khoan, dự án khai thác, tỷ trọng dầu khí, giá dầu brent, công ty dầu khí]
 version: 1.0.0
@@ -41,7 +41,7 @@ của chuỗi luân chuyển ngành** (đó là nhiệm vụ của skill chu k�
 | Thay thế trữ lượng | Sản lượng hiện tại chỉ bền khi trữ lượng mới được bù đắp. Trữ lượng bù đắp thấp hơn sản lượng kéo dài = sản lượng sẽ giảm trong tương lai gần | Sản lượng + trữ lượng phát hiện mới: công bố ngành trong `news_market`/`web_search`; dư đọng chi phí thăm dò trong `financial_detail` |
 | Chi tiêu đầu tư | Ngân sách E&P của tập đoàn quyết định doanh thu của vòng dịch vụ kỹ thuật, và thứ tự dự án quyết định vòng thượng nguồn | Kế hoạch đầu tư 5 năm: `news_market`/`web_search`; chỉ báo riêng mã: dự án trong `company_events` |
 | Cơ cấu mảng | Cùng một nhãn ngành, biên hoàn toàn khác. Đọc nhầm vòng kinh doanh sẽ kết luận ngược | Mảng trong `financial_detail` + bảng mảng ở `vn_company` |
-| Mùa vụ quốc tế | Nhu cầu và họp bộ phận sản xuất tạo nhịp giá theo mùa; tác động đến nhịp ngành nhưng không đổi kỳ vọng dài hạn | Nhịp theo kỳ: `yf_commodities` theo chu kỳ |
+| Mùa vụ quốc tế | Nhu cầu theo mùa và các họp của nhóm sản xuất tạo nhịp giá; tác động đến nhịp ngành nhưng không đổi kỳ vọng dài hạn | Nhịp theo kỳ: `yf_commodities` theo chu kỳ |
 
 ## Các bước
 

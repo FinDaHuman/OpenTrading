@@ -3,7 +3,7 @@ name: hoa-chat-vn
 description: "Phân tích ngành hoá chất và phân bón Việt Nam theo chu kỳ giá ure, chính sách xuất khẩu Trung Quốc, tỷ lệ xuất khẩu và chi phí khí đầu vào. Dùng khi hỏi xu hướng nhóm hoá chất hoặc công ty phân bón."
 activation: auto
 requires_tools: [financial_detail, yf_commodities]
-uses_tools: [financial_detail, yf_commodities, financial_ratios, planned_targets, analyst_consensus, peer_compare, vs_xnk_detail, news_symbol, news_market, symbol_lookup, vn_company]
+uses_tools: [financial_detail, yf_commodities, financial_ratios, planned_targets, analyst_consensus, peer_compare, vs_xnk_detail, vs_indicator_data, news_symbol, news_market, symbol_lookup, vn_company]
 triggers:
   keywords: [ngành hoá chất, phân bón, sản xuất phân bón, giá phân bón, nhà máy hoá chất, khí đầu vào phân bón, chu kỳ giá phân bón]
 version: 1.0.0

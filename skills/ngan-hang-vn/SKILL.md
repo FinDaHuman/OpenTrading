@@ -3,7 +3,7 @@ name: ngan-hang-vn
 description: "Phân tích ngành ngân hàng VN theo bộ chỉ báo riêng: hạn mức tín dụng, spread lãi thuần, chất lượng tài sản 3 lớp, ngoại bảng và chuẩn mực thanh khoản. Dùng khi hỏi xu hướng nhóm ngân hàng hoặc đọc BCTC ngân hàng."
 activation: auto
 requires_tools: [financial_detail, vs_financial_norms]
-uses_tools: [financial_detail, vs_financial_norms, financial_ratios, financial_statements, stock_overview, planned_targets, sbv_rates, analyst_consensus, peer_compare, compare_equities, news_symbol, news_market, dividends_splits, symbol_lookup, vn_company]
+uses_tools: [financial_detail, vs_financial_norms, financial_ratios, financial_statements, stock_overview, planned_targets, sbv_rates, analyst_consensus, peer_compare, compare_equities, news_symbol, news_market, dividends_splits, symbol_lookup, vn_company, valuation_run]
 triggers:
   keywords: [ngành ngân hàng, nhóm ngân hàng, nợ xấu, nợ nhóm 2, lãi suất cho vay, biên lợi nhuận thuần, room tín dụng, hạn mức tín dụng, trần ldr, thanh khoản ngân hàng]
 version: 1.0.0
@@ -38,7 +38,7 @@ với báo cáo loại ngân hàng), không đọc bằng bộ dòng CTCP chung.
 | CASA | Cơ cấu vốn không kỳ hạn là đệm chi phí vốn: nhóm khách hàng bán lẻ càng lớn, spread càng giữ được | Cơ cấu nguồn vốn trong `financial_detail` (chuẩn mực ngân hàng); so với nhóm cùng phân khúc bằng `peer_compare` |
 | Chất lượng tài sản 3 lớp | Nợ xấu chỉ là lớp trên cùng. Nợ nhóm 2 (cần chú ý) tăng trong khi nợ xấu phẳng = rủi ro đang hình thành nhưng chưa lên báo cáo; tỷ lệ bao phủ rủi ro giảm = đệm provision đang mỏng. Đọc **3 lớp cùng lúc** mới có kết luận | `financial_detail`: tỷ lệ nợ xấu, tỷ lệ nợ nhóm 2, tỷ lệ bao phủ nợ vay, chi phí rủi ro tín dụng — mỗi quý, kèm xu hướng QoQ |
 | Ngoại bảng | Tín dụng tương đương ngoại bảng (bảo lãnh, cam kết) không nằm trong nợ xấu và dự phòng đã công bố → rủi ro thật lớn hơn bảng | `financial_detail` dòng ngoại bảng nếu kỳ báo cáo có; số tổng hợp ngành lấy từ `news_market`/`web_search`, ghi rõ nguồn và kỳ |
-| Thanh khoản + chuẩn mực | Khoảng cách tăng trưởng tín dụng − tiền gửi quyết định áp lực huy động; chuẩn mực mới (Circular 50/2026 thay Circular 22, hiệu lực từ 12/2026: trần LDR nới lên, mẫu số tính theo nguồn vốn ổn định hơn, LCR/NSFR theo lộ trình 2027–2028, miễn LDR nếu tuân thủ LCR+NSFR sớm ở mức 100%) quyết định ai bị siết tăng trưởng | `financial_detail` (tín dụng/tiền gửi, trích lãi) + nội dung văn bản qua `news_market`/`web_search`. **Không suy ngưỡng mới** — tra văn bản hiện hành rồi ghi nguồn |
+| Thanh khoản + chuẩn mực | Khoảng cách tăng trưởng tín dụng − tiền gửi quyết định áp lực huy động. Chuẩn mực an toàn hoạt động ngân hàng đang được thay thế theo lộ trình: văn bản mới đổi trần tỷ lệ cho vay/tiền gửi, mẫu số tính theo nguồn vốn ổn định hơn, và đưa vào các tỷ lệ thanh khoản Basel III (LCR/NSFR) áp dụng theo lộ trình từng năm — ai tuân thủ sớm được miễn trần cho vay/tiền gửi, ai không thì chịu siết tăng trưởng | Xác nhận bằng văn bản: tra `news_market`/`web_search` để lấy **số hiệu văn bản + ngày hiệu lực + trần/lộ trình đang áp dụng**, rồi ghi nguồn trong câu trả lời. **Không suy ngưỡng mới từ trí nhớ** — nếu chưa tra được văn bản, nói "chưa xác nhận", không đoán |
 
 ## Các bước
 

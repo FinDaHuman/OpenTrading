@@ -88,7 +88,7 @@ Q3. Thu nhập hộ gia đình có cải thiện không?
 
 Q4. Chính sách đang hỗ trợ ai?
 ├─ Hỗ trợ chuỗi hiện đại (hoá đơn, chính thức hoá) → tiếp Q5
-└─ Không có chính sách lợi cho ai riêng → ★ "Tăng trưởng bình thường: điểm Viet
+└─ Không có chính sách lợi cho ai riêng → ★ "Tăng trưởng bình thường: điểm
    cạnh tranh là cơ cấu, đọc biên lãi gộp và tồn kho thay vì kỳ vọng đặc biệt"
 
 Q5. Biên lãi gộp có giữ được không?

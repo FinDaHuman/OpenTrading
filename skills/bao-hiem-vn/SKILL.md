@@ -5,7 +5,7 @@ activation: auto
 requires_tools: [financial_detail, vs_financial_norms]
 uses_tools: [financial_detail, vs_financial_norms, financial_ratios, planned_targets, analyst_consensus, peer_compare, news_symbol, news_market, symbol_lookup, vn_company]
 triggers:
-  keywords: [ngành bảo hiểm, nhân thọ, phi nhân thọ, phí bảo hiểm, bancassurance, hợp đồng bảo hiểm, công ty bảo hiểm]
+  keywords: [ngành bảo hiểm, hãng bảo hiểm, nhân thọ, bảo hiểm nhân thọ, phí bảo hiểm, bancassurance, công ty bảo hiểm]
 version: 1.0.0
 ---
 

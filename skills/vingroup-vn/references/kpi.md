@@ -11,7 +11,7 @@
 |---|---|---|
 | Bất động sản nhà ở | Bàn giao dự án + bán trước | Bán trước, tích luỹ chi phí dở, biên lãi gộp mảng |
 | Xe điện | Quy mô sản lượng + chi phí/biến | Doanh thu, lỗ lũy kế, tỷ lệ biên âm |
-| Bán lẻ (trung tâm thương mại) | Toàn thuế dịch vụ + lưu lượng | Doanh thu cho thuê, diện tích, tỷ lệ lấp đầy |
+| Bán lẻ (trung tâm thương mại) | Toàn bộ thuế dịch vụ + lưu lượng | Doanh thu cho thuê, diện tích, tỷ lệ lấp đầy |
 | Khách sạn / nghỉ dưỡng | Du lịch | Doanh thu phòng, tỷ lệ lấp đầy |
 | Dịch vụ (giáo dục, y tế) | Nhu cầu độc lập | Doanh thu, số học sinh/bệnh nhân |
 

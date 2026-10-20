@@ -20,7 +20,7 @@
 |---|---|---|
 | Doanh thu | `financial_detail` | Tăng do giá hay do khối lượng: so với lưu lượng công bố |
 | Giá thu bình quân/ khối lượng | Tự tính (ghi rõ) | So QoQ/YoY. Giá tăng + khối lượng giảm là tăng trưởng không bền |
-| Cước tuyển (bên ngoài) | `news_market` | Ghi rõ tuyến và ngày tra; cước là chu kỳ ngắn |
+| Cước tuyến (bên ngoài) | `news_market` | Ghi rõ tuyến và ngày tra; cước là chu kỳ ngắn |
 | Tỷ lệ sử dụng bến | `news_market` | Bến mới chưa lấp đầy = chi phí cố định chạy trước doanh thu |
 
 ## 3. Nhóm chi phí

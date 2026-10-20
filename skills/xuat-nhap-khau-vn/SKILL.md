@@ -3,9 +3,9 @@ name: xuat-nhap-khau-vn
 description: "Phân tích xuất nhập khẩu Việt Nam theo chính sách thuế hai lớp, cơ cấu ngành hàng, động lực đầu tư nước ngoài và dòng nhập khẩu làm tín hiệu dẫn. Dùng khi hỏi xuất khẩu, thuế quan hay chu kỳ xuất khẩu."
 activation: auto
 requires_tools: [vs_xnk_detail, vs_indicator_data]
-uses_tools: [vs_xnk_detail, vs_indicator_data, financial_detail, financial_ratios, yf_commodities, vn_forex_ohlcv, planned_targets, analyst_consensus, news_symbol, news_market, symbol_lookup, vn_company]
+uses_tools: [vs_xnk_detail, vs_indicator_data, financial_detail, financial_ratios, yf_commodities, vn_forex_ohlcv, planned_targets, analyst_consensus, peer_compare, news_symbol, news_market, symbol_lookup, vn_company]
 triggers:
-  keywords: [ngành xuất nhập khẩu, thuế quan, thuế quan mỹ, cán cân thương mại, dòng vốn nước ngoài, nhập siêu, tỷ giá xuất khẩu, phân tích xuất khẩu]
+  keywords: [ngành xuất nhập khẩu, thuế quan, thuế quan mỹ, cán cân thương mại, dòng vốn nước ngoài, nhập siêu, tỷ giá xuất khẩu, phân tích xuất khẩu, xuất khẩu tăng, nhập khẩu máy móc]
 version: 1.0.0
 ---
 
@@ -32,8 +32,9 @@ nhau (điện tử đang tăng mạnh trong khi dệt may đi ngang). Skill này
 - Khi KHÔNG dùng (dùng skill khác thay thế):
   - Hỏi pha thị trường / luân chuyển ngành / sóng ngành tiếp theo → `dinh-vi-chu-ky-vn`.
   - Phân tích toàn diện một mã → `phan-tich-chuyen-sau-1-ma`.
-  - Ngành xuất khẩu hàng nông sản/lâm thổ sản (gạo, cà phê, gỗ) → `tieu-dung-ban-le-vn`
-    cho phần sản xuất; kênh xuất khẩu đọc ở đây.
+  - Chỉ định giá một mã → `dinh-gia-chuyen-sau`; chỉ đọc BCTC một mã → `co-ban-chuyen-sau`.
+  - Xuất khẩu nông sản/lâm thổ sản (gạo, cà phê, hạt điều, gỗ) đọc tại đây — kênh xuất
+    khẩu và nhóm hàng; phần vĩ mô sản xuất nội địa → `danh-gia-vi-mo-viet-nam`.
   - Số liệu vĩ mô VN chi tiết (tăng trưởng GDP, lạm phát) → `danh-gia-vi-mo-viet-nam`.
 
 ## Trụ cột driver
@@ -103,11 +104,13 @@ Q5. Nhập khẩu thiết bị cùng nhóm có đang tăng trước không?
 └─ Không, nhập chững → ★ "Không có công suất mới: tăng trưởng đến từ giá/cầu hiện
    có, hạ độ tin cậy khi cầu toàn cầu đổi chiều"
 
-Q6. Tỷ giá đang hỗ trợ hay siết?
-├─ Hỗ trợ (nội tệ yếu hỗ trợ trị giá xuất khẩu tính ngoại tệ) → ★ "Tỷ giá thuận:
-   giá trị xuất khẩu tính ngoại tệ được đỡ — nhưng đọc chi phí nhập khẩu tính nội tệ"
-└─ Siết (nội tệ mạnh/phá giá) → ★ "Tỷ giá nghịch: chi phí nhập nguyên liệu tăng —
-   đọc tỷ trọng đầu vào trong giá thành"
+Q6. Tỷ giá đang ở trạng thái nào?
+├─ Nội tệ yếu/phá giá → ★ "Tỷ giá thuận cho xuất khẩu: trị giá xuất khẩu tính
+   ngoại tệ được đỡ, NHƯNG chi phí nguyên liệu nhập khẩu tính nội tệ tăng — đọc
+   tỷ trọng đầu vào nhập khẩu trong giá thành"
+├─ Nội tệ mạnh → ★ "Tỷ giá nghịch cho xuất khẩu: trị giá xuất khẩu tính ngoại tệ
+   bị ăn mòn, chi phí nhập khẩu giảm — đọc tỷ trọng doanh thu bằng ngoại tệ"
+└─ Ổn định → ★ "Tỷ giá trung tính: biến chính là nhóm hàng và chính sách thuế (Q1–Q5)"
 
 ## Chỉ báo đặc thù ngành
 
@@ -115,7 +118,7 @@ Bảng chỉ báo xnk + cách đọc ở `references/kpi.md`.
 
 ## Định giá theo đặc thù ngành
 
-Xnk không định giá bằng hệ số chung: dùng **khung theo nhóm hàng** — hàng công
+Xuất nhập khẩu không định giá bằng hệ số chung: dùng **khung theo nhóm hàng** — hàng công
 nghệ theo P/E kỳ vọng chu kỳ thay thế, hàng thủ công theo EV/EBITDA theo mùa và
 chi phí đầu vào, hàng nông sản theo P/E kỳ vọng giá đầu ra. Luôn ước lượng **tỷ
 trọng thuế được miễn trong trị giá xuất khẩu** trước khi chốt kỳ vọng tăng trưởng.
@@ -169,4 +172,4 @@ nghệ, bar tỷ trọng thuế miễn ước lượng. Vẽ bằng `chart_rende
 
 | File | Dùng khi |
 |---|---|
-| `references/kpi.md` | Cần cách đọc cặp nhập – xuất làm chỉ báo dẫn, phân nhóm hàng và cách estimators tỷ trọng thuế miễn |
+| `references/kpi.md` | Cần cách đọc cặp nhập – xuất làm chỉ báo dẫn, phân nhóm hàng và cách ước lượng tỷ trọng thuế miễn |

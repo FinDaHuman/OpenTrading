@@ -3,7 +3,7 @@ name: chung-khoan-vn
 description: "Phân tích ngành chứng khoán VN theo đòn bẩy và cơ cấu doanh thu: dư nợ margin so vốn chủ, spread margin, sự dịch chuyển từ phí sang mảng cân đối. Dùng khi hỏi xu hướng ngành chứng khoán hay đọc kết quả công ty chứng khoán."
 activation: auto
 requires_tools: [financial_detail, vs_financial_norms]
-uses_tools: [financial_detail, vs_financial_norms, financial_ratios, stock_overview, planned_targets, analyst_consensus, peer_compare, market_overview, breadth_scan, news_symbol, news_market, symbol_lookup, vn_company]
+uses_tools: [financial_detail, vs_financial_norms, financial_ratios, stock_overview, planned_targets, analyst_consensus, peer_compare, market_overview, breadth_scan, news_symbol, news_market, symbol_lookup, vn_company, vs_market_info, valuation_run]
 triggers:
   keywords: [ngành chứng khoán, mảng chứng khoán, dư nợ margin, cho vay ký quỹ, môi giới chứng khoán, lãi margin, doanh thu môi giới, ctck vn]
 version: 1.0.0
@@ -37,7 +37,7 @@ BCTC công ty chứng khoán đọc qua chuẩn mực riêng (`vs_financial_norm
 |---|---|---|
 | Dư nợ margin | Mềm dai nhất của ngành: nhà đầu tư vay mua cổ phiếu. Dư nợ tăng liên tục = nhận thức rủi ro đang mở ra; giảm đột ngột = thị trường vừa xả hoặc CTCK siết gọi ký quỹ | Tổng dư nợ margin ngành + của mã: `news_market`/`web_search` (các CTCK lớn công bố dư nợ theo quý), riêng mã đọc `financial_detail` |
 | Mức đòn bẩy | Dư nợ margin so vốn chủ so với **trần quy định** (2× vốn chủ) quyết định còn bao nhiêu chỗ tăng trưởng. Gần trần → tăng trưởng phải đến từ vốn mới hoặc tự doanh | Tính từ `financial_detail` (dư nợ cho vay ký quỹ, vốn chủ) — ghi rõ công thức tự tính |
-| Spread margin | Lãi margin cố định trong ngắn hạn (11–13,5%/năm) nhưng chi phí huy động của CTCK tăng theo tiền gửi và giấy tờ có giá → spread nén là rủi ro lợi nhuận trực tiếp | Lãi margin trung bình + chi phí vốn: `news_market` + `financial_detail` |
+| Spread margin | Lãi margin điều chỉnh theo từng CTCK và gói ký quỹ, trong khi chi phí huy động của CTCK tăng theo tiền gửi và giấy tờ có giá → spread nén là rủi ro lợi nhuận trực tiếp | Lãi margin trung bình (từng gói, công bố từng công ty) + chi phí vốn: `news_market` + `financial_detail` — lấy số của kỳ đang xét, không mang số cũ giữa các kỳ |
 | Cơ cấu doanh thu | Ngành dịch từ phí sang cân đối. Nhóm nội địa phụ thuộc đầu tư + margin; nhóm nước ngoài cân bằng hơn. Cơ cấu quyết định nhóm nào chịu thị trường giảm | `financial_detail` (chuẩn CTCK): doanh thu môi giới · cho vay ký quỹ · đầu tư · tư vấn |
 | Thanh khoản thị trường | Phí môi giới bị cạnh tranh phí 0 làm mất giá trị đo lường, nhưng thanh khoản vẫn là nền cho ký quỹ và tự doanh | `market_overview` · `breadth_scan` · `vs_market_info` |
 | Cơ chế mới | Non-prefunding, hệ thống bù trừ (CCP), nâng hạng thị trường theo đợt, pipeline IPO/ECM → phí tư vấn bảo lãnh và vốn chủ mở rộng | `news_market`/`web_search`; ghi rõ nguồn và mốc thời gian |

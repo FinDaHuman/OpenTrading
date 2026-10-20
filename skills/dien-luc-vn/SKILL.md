@@ -3,7 +3,7 @@ name: dien-luc-vn
 description: "Phân tích ngành điện Việt Nam theo cải cách giá điện, cơ cấu nguồn, thủy văn và kế hoạch phát triển lưới. Dùng khi hỏi xu hướng nhóm điện, đọc kết quả nhà máy điện hay tác động giá điện."
 activation: auto
 requires_tools: [financial_detail, yf_commodities]
-uses_tools: [financial_detail, yf_commodities, financial_ratios, planned_targets, analyst_consensus, peer_compare, news_symbol, news_market, company_events, symbol_lookup, vn_company]
+uses_tools: [financial_detail, yf_commodities, financial_ratios, planned_targets, analyst_consensus, peer_compare, news_symbol, news_market, company_events, symbol_lookup, vn_company, vn_forex_ohlcv]
 triggers:
   keywords: [ngành điện, phát điện, giá điện, thủy điện, nhiệt điện, sản lượng điện, kế hoạch phát triển điện lực, lưới điện truyền tải, nhà máy điện, nguyên giá điện]
 version: 1.0.0

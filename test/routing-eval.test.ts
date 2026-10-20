@@ -11,10 +11,22 @@ import { catalogRegistry, evalRouting, loadCases } from "./helpers/routing-eval"
 const FLOOR = {
   /** Cases whose expected MCP tool a keyword tool_search on the question loads. */
   toolHits: 51, // of 70 (2026-10-14: +distribution_count, 2/2 new cases hit)
-  /** Cases whose expected skill is suggested. */
-  skillHits: 42, // of 46
-  /** Suggested skills that are not expected (on scored cases). */
-  maxWrongSuggestions: 18, // of 60 (2026-10-14: tim-co-hoi description de-duplicated "giá hiện tại" pair, Q232 fixed)
+  /**
+   * Cases whose expected skill is suggested.
+   * 2026-10-20: 34 dev cases mới cho 13 skill ngành VN (25 câu "hỏi đúng ngành" +
+   * 9 câu nhắc tên ngành nhưng thuộc khía cạnh khác — định giá, so sánh, pha, vĩ mô,
+   * tin, kỹ thuật, pre-BCTC, BCTC, cơ bản sàn). Floor = 75/79.
+   */
+  skillHits: 75, // of 79
+  /**
+   * Suggested skills that are not expected (on scored cases).
+   * 18 gốc + 2 mới từ chồng lấn trigger đã biết: `danh-gia-vi-mo-viet-nam` có trigger
+   * "xuất nhập khẩu"/"xuất khẩu" nên bắn cả câu "ngành xuất nhập khẩu chịu gì từ thuế
+   * quan" (Q267/Q268). Muốn hạ phải siết trigger của skill vĩ mô — PR riêng.
+   * +1: devil-advocate bắn thêm ở Q275 (câu pre-BCTC của HPG). Nới lên 21 có chủ đích,
+   * ghi rõ thành phần để lần sau siết lại đúng chỗ.
+   */
+  maxWrongSuggestions: 21, // of 96
   /** "No skill" cases that still get a suggestion. */
   maxNegativesSuggested: 5, // of 27
 }
