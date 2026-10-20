@@ -68,9 +68,9 @@ test("the bundled skills all load cleanly", async () => {
   const { skills, problems } = await loadSkills(skillRoots(await root()).filter((r) => r.source === "bundled"))
   expect(problems).toEqual([])
   expect(skills.map((s) => s.name)).toEqual([
+    "bao-hiem-vn",
     "bat-dong-san-vn",
     "bat-on-quoc-gia",
-    "bao-hiem-vn",
     "chu-ky-tai-san-the-gioi",
     "chu-ky-tai-san-vn",
     "chung-khoan-vn",
