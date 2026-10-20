@@ -847,6 +847,36 @@ test("a retried request waits on the working row (with its deadline) and leaves 
   }
 })
 
+test("a real retry wait counts down on the working row above the prompt, then is gone", async () => {
+  await setKey("nvidia", "nvapi-good-key")
+  const saved = process.env.OPENTRADING_RETRY_SCALE
+  // The first backoff (2–2.5 s) really waits half of that: long enough to see the row.
+  process.env.OPENTRADING_RETRY_SCALE = "0.5"
+  overloaded = 1
+  try {
+    await setup.mockInput.typeText("QUÁ-TẢI đếm ngược")
+    setup.mockInput.pressEnter()
+    let frame = ""
+    for (let i = 0; i < 100 && !frame.includes("thử lại sau"); i++) {
+      await new Promise((r) => setTimeout(r, 20))
+      await setup.renderOnce()
+      frame = setup.captureCharFrame()
+    }
+    show(frame)
+    expect(frame).toMatch(/△ Provider lỗi tạm thời \(503\) · thử lại sau [12]s \(lần 1\/4\) · esc dừng/)
+    const rows = frame.split("\n")
+    expect(rows.findIndex((r) => r.includes("thử lại sau"))).toBeLessThan(rows.findIndex((r) => r.includes("› ")))
+    await waitMcp(() => !state.streaming)
+    frame = await setup.waitForFrame((f) => f.includes("HẾT-CÂU-TRẢ-LỜI"))
+    expect(frame).not.toContain("thử lại sau")
+    expect(frame).not.toContain("lỗi tạm thời")
+  } finally {
+    if (saved === undefined) delete process.env.OPENTRADING_RETRY_SCALE
+    else process.env.OPENTRADING_RETRY_SCALE = saved
+    overloaded = 0
+  }
+})
+
 test("a tool call renders as a ● row with its result under ⎿, then the answer", async () => {
   await setKey("nvidia", "nvapi-good-key")
   await setup.mockInput.typeText("MẤY-GIỜ rồi?")
@@ -1557,7 +1587,7 @@ test("todo_write: the open list is pinned above the prompt, the transcript keeps
 })
 
 test("status bar warns only near the compaction threshold (or when context runs low with it off)", async () => {
-  const saved = { provider: state.provider, model: state.model, contextTokens: state.contextTokens, autoCompactOff: state.autoCompactOff }
+  const saved = { provider: state.provider, model: state.model, contextTokens: state.contextTokens, autoCompactOff: state.autoCompactOff, compactFailures: state.compactFailures }
   const bar = (f: string) => f.split("\n").find((r) => r.includes("▲ OpenTrading")) ?? ""
   try {
     setState({ provider: "groq", model: "test-model", contextTokens: 65_536 }) // 50% of a 131072-token window
@@ -1568,7 +1598,11 @@ test("status bar warns only near the compaction threshold (or when context runs 
     show(frame)
     setState({ autoCompactOff: true, contextTokens: 117_965 }) // 90%, nothing compacts by itself
     frame = await setup.waitForFrame((f) => bar(f).includes("context còn 10% · /compact"))
-    setState({ autoCompactOff: false, contextTokens: undefined })
+    // Auto-compaction given up after repeated failures: the same warning, never "còn 0% tới tự nén".
+    setState({ autoCompactOff: false, compactFailures: 3 })
+    frame = await setup.waitForFrame((f) => bar(f).includes("context còn 10% · /compact"))
+    expect(bar(frame)).not.toContain("tới tự nén")
+    setState({ compactFailures: 0, contextTokens: undefined })
     frame = await setup.waitForFrame((f) => !bar(f).includes("tới tự nén") && !bar(f).includes("context còn"))
   } finally {
     setState(saved)

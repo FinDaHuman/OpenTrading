@@ -1345,7 +1345,7 @@ export function App(props: {
 const BRAND = " ▲ OpenTrading "
 /** The status bar warns this close (share of the window) to the auto-compaction threshold… */
 const CONTEXT_WARN_LEFT = 0.15
-/** …or, with auto-compaction off, from this share of the window on. */
+/** …or, when nothing will compact by itself, from this share of the window on. */
 const CONTEXT_LOW_SHARE = 0.8
 const NOTICE_COLOR: Record<NoticeLevel, string> = { info: color.tx2, success: color.tang, warning: color.tham, error: color.giam }
 
@@ -1366,18 +1366,18 @@ function StatusBar() {
   }
   const mcpText = () => (state.mcp.length > 0 ? ` MCP ${ready()}/${state.mcp.length} ` : "")
   /** Room left before auto-compaction (Claude Code's TokenWarning), shown only when it is near. */
-  const ctxLeft = () => {
+  const ctx = (): { text: string; fg: string } | undefined => {
     const share = contextShare()
     if (share === undefined) return undefined
-    return state.autoCompactOff ? 1 - share : AUTO_COMPACT_SHARE - share
+    // Nothing will compact by itself: turned off, given up after failures, held until the
+    // context grows, or already past the threshold. Then only /compact helps.
+    const manual = state.autoCompactOff || state.compactFailures >= MAX_AUTO_FAILURES || state.compactFloor !== undefined || share >= AUTO_COMPACT_SHARE
+    if (manual) return share >= CONTEXT_LOW_SHARE ? { text: ` context còn ${Math.max(0, Math.round((1 - share) * 100))}% · /compact `, fg: color.giam } : undefined
+    const left = AUTO_COMPACT_SHARE - share
+    if (left > CONTEXT_WARN_LEFT) return undefined
+    return { text: ` còn ${Math.max(0, Math.round(left * 100))}% tới tự nén `, fg: left <= 0.05 ? color.tham : color.tx3 }
   }
-  const ctxText = () => {
-    const left = ctxLeft()
-    if (left === undefined) return ""
-    const pct = Math.max(0, Math.round(left * 100))
-    if (state.autoCompactOff) return left <= 1 - CONTEXT_LOW_SHARE ? ` context còn ${pct}% · /compact ` : ""
-    return left <= CONTEXT_WARN_LEFT ? ` còn ${pct}% tới tự nén ` : ""
-  }
+  const ctxText = () => ctx()?.text ?? ""
   const bgText = () => (backgroundRunning() > 0 ? ` ⧗ ${backgroundRunning()} subagent nền ` : "")
   const skillText = () => (state.activeSkills.length > 0 ? ` ✦ ${truncate(state.activeSkills.join(", "), 30)}` : "")
   const modeText = () =>
@@ -1429,7 +1429,7 @@ function StatusBar() {
           </text>
         </Show>
         <Show when={ctxText()}>
-          <text fg={state.autoCompactOff ? color.giam : ctxLeft()! <= 0.05 ? color.tham : color.tx3} flexShrink={0} selectable={false}>
+          <text fg={ctx()?.fg ?? color.tx3} flexShrink={0} selectable={false}>
             {ctxText()}
           </text>
         </Show>
