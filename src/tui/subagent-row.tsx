@@ -16,7 +16,9 @@ import { useSpinner } from "./ui/clock"
  *     │  ⎿ mcp__opentrading__valuation_run(FPT)
  *     └─ nghien-cuu (Định giá ELC) · đang chờ slot (10/10)
  *
- * A single subagent is its own header. ctrl+o adds the brief, the child's calls and its report.
+ * That is the ctrl+o view. Collapsed, a block is one line ("● Chạy 3 subagent… · ↓ để quản lý",
+ * "● nghien-cuu (Định giá FPT) · xong · 4 tool · 12k token · 53s"), plus failures and notices:
+ * what each agent does right now is on the panel under the prompt (agent-panel.tsx).
  */
 
 type ToolLine = Extract<Line, { kind: "tool" }>
@@ -185,6 +187,18 @@ function Details(props: { info: AgentInfo; prefix: string; width: number }) {
   )
 }
 
+/** "xong · 4 tool · 12k token · 53s": how one agent ended, for a collapsed header. */
+function ended(info: AgentInfo): string {
+  const word = info.status === "failed" ? "lỗi" : info.status === "stopped" ? "đã dừng" : "xong"
+  const parts = [
+    word,
+    info.toolCount !== undefined ? `${info.toolCount} tool` : undefined,
+    info.tokens !== undefined ? `${fmtTokens(info.tokens)} token` : undefined,
+    info.durationMs !== undefined ? fmtSeconds(info.durationMs) : undefined,
+  ].filter(Boolean)
+  return ` · ${parts.join(" · ")}`
+}
+
 export function SubagentRow(props: { line: ToolLine; index: number; width: number }) {
   const group = createMemo(() => groupAt(props.index))
   const first = () => group()[0]?.callId === props.line.callId
@@ -194,6 +208,8 @@ export function SubagentRow(props: { line: ToolLine; index: number; width: numbe
   const infos = createMemo(() => (first() ? group().map(infoFor) : []))
   const running = () => (single() ? active(info().status) : infos().some((i) => active(i.status)))
   const frame = useSpinner(running)
+  /** ctrl+o: the full tree. Otherwise one line: the live view is the panel under the prompt. */
+  const expanded = () => state.expandTools
 
   const headerGlyph = () => (running() ? frame() : "●")
   const headerColor = () => {
@@ -208,11 +224,19 @@ export function SubagentRow(props: { line: ToolLine; index: number; width: numbe
     const failed = infos().filter((i) => i.status === "failed").length
     return running() ? `Chạy ${n} subagent…` : `${n} subagent đã xong${failed > 0 ? ` · ${failed} lỗi` : ""}`
   }
+  const headerStats = () => {
+    if (expanded()) return single() ? stats(info()) : ""
+    const bg = (single() ? info().background : infos().some((i) => i.background)) ? " · chạy nền" : ""
+    if (running()) return `${bg} · ↓ để quản lý`
+    return single() ? `${bg}${ended(info())}` : bg
+  }
 
   const branch = () => (last() ? "  └─ " : "  ├─ ")
   const under = () => (single() ? "  ⎿  " : last() ? "     ⎿ " : "  │  ⎿ ")
   const detailPrefix = () => (single() ? "     " : last() ? "       " : "  │    ")
   const status = () => statusLine(info())
+  /** Collapsed, only a failure says more than the header. */
+  const failure = () => (info().status === "failed" ? `${single() ? "" : `${info().type} (${info().description}): `}Lỗi: ${info().error ?? "không rõ"}` : undefined)
 
   return (
     <box flexDirection="column" marginTop={first() ? 1 : 0} flexShrink={0}>
@@ -223,28 +247,35 @@ export function SubagentRow(props: { line: ToolLine; index: number; width: numbe
           </text>
           <text wrapMode="none">
             <span style={{ fg: color.tx, bold: true }}>{truncate(headerText(), props.width - 30)}</span>
-            <span style={{ fg: color.tx3 }}>{single() ? stats(info()) : ""}</span>
+            <span style={{ fg: color.tx3 }}>{headerStats()}</span>
           </text>
         </box>
       </Show>
-      <Show when={!single()}>
-        <box flexDirection="row" height={1}>
-          <text fg={color.tx3} width={5} flexShrink={0} selectable={false}>
-            {branch()}
-          </text>
-          <text wrapMode="none">
-            <span style={{ fg: color.tx }}>{truncate(`${info().type} (${info().description})`, props.width - 40)}</span>
-            <span style={{ fg: color.tx3 }}>{stats(info())}</span>
-          </text>
-        </box>
-      </Show>
-      <Show when={status()}>
-        {(s) => <Prefixed prefix={under()} text={truncate(s().text, props.width - under().length)} fg={s().fg} />}
-      </Show>
-      <Show when={info().notice && !state.expandTools}>
-        <Prefixed prefix={detailPrefix()} text={truncate(`△ ${info().notice}`, props.width - detailPrefix().length)} fg={color.tham} />
-      </Show>
-      <Show when={state.expandTools}>
+      <Show
+        when={expanded()}
+        fallback={
+          <>
+            <Show when={failure()}>{(text) => <Prefixed prefix="  ⎿  " text={truncate(text(), props.width - 5)} fg={color.giam} />}</Show>
+            <Show when={info().notice}>
+              <Prefixed prefix="     " text={truncate(`△ ${info().notice}`, props.width - 5)} fg={color.tham} />
+            </Show>
+          </>
+        }
+      >
+        <Show when={!single()}>
+          <box flexDirection="row" height={1}>
+            <text fg={color.tx3} width={5} flexShrink={0} selectable={false}>
+              {branch()}
+            </text>
+            <text wrapMode="none">
+              <span style={{ fg: color.tx }}>{truncate(`${info().type} (${info().description})`, props.width - 40)}</span>
+              <span style={{ fg: color.tx3 }}>{stats(info())}</span>
+            </text>
+          </box>
+        </Show>
+        <Show when={status()}>
+          {(s) => <Prefixed prefix={under()} text={truncate(s().text, props.width - under().length)} fg={s().fg} />}
+        </Show>
         <Details info={info()} prefix={detailPrefix()} width={props.width} />
       </Show>
     </box>

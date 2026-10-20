@@ -111,6 +111,7 @@ test("time waiting for the user does not count", () => {
 
 test("elapsed is compact: 12s, 1m 05s, 1h 02m", () => {
   expect(fmtElapsed(12_400)).toBe("12s")
+  expect(fmtElapsed(-400)).toBe("0s") // a start time newer than the shared ticker
   expect(fmtElapsed(65_000)).toBe("1m 05s")
   expect(fmtElapsed(3_720_000)).toBe("1h 02m")
 })
