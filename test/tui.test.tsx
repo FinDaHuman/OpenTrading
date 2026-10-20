@@ -1233,8 +1233,9 @@ test("/new starts a fresh session; /sessions reopens the previous one with its t
 
   await setup.mockInput.typeText("/sessions")
   setup.mockInput.pressEnter()
-  const list = await setup.waitForFrame((f) => f.includes("Phiên đã lưu"))
-  expect(list).toContain("lượt")
+  // The title shows at once, the list after the sessions are read ("Đang đọc…"): wait for the
+  // rows, or Enter lands on an empty list (slow Windows runners, main CI after #103).
+  const list = await setup.waitForFrame((f) => f.includes("Phiên đã lưu") && f.includes("lượt"))
   show(list)
   setup.mockInput.pressEnter() // newest first: the session we just left
   await setup.waitFor(() => state.dialog === undefined && state.lines.length > 0)
