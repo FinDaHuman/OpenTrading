@@ -1,7 +1,7 @@
 import { afterAll, afterEach, expect, test } from "bun:test"
 import { testRender } from "@opentui/solid"
 import { reconcile } from "solid-js/store"
-import { AgentPanel, LINGER_MS, panelWindow } from "../src/tui/agent-panel"
+import { AgentPanel, LINGER_MS, panelRowsFor, panelWindow } from "../src/tui/agent-panel"
 import { formatResult } from "../src/core/subagents/result"
 import type { SubagentView } from "../src/core/subagents/types"
 import { SPAWN_SUBAGENT } from "../src/core/tools/subagent/spawn"
@@ -49,7 +49,7 @@ async function frame() {
   return setup!.captureCharFrame()
 }
 
-test("main, then one row per agent: time and output tokens, a slot, a retry countdown, an approval", async () => {
+test("main, then one row per agent: time and output tokens, the call it makes, a slot, a retry countdown", async () => {
   at(5_000_000)
   setState("agentSlots", { running: 10, waiting: 1, max: 10 })
   setState(
@@ -58,23 +58,20 @@ test("main, then one row per agent: time and output tokens, a slot, a retry coun
       a1: agent("a1", { tools: [{ callId: "c", name: "valuation_run", label: "valuation_run(FPT)", status: "running" }] }),
       a2: agent("a2", { status: "queued", startedAt: undefined }),
       a3: agent("a3", { retry: { attempt: 1, max: 4, until: t + 5000, label: "provider lỗi tạm thời (503)" } }),
-      a4: agent("a4"),
     }),
   )
-  setState("approvals", [{ agent: { id: "a4", type: "nghien-cuu", description: "Việc a4" } } as never])
-  setup = await testRender(() => <AgentPanel />, { width: 100, height: 10 })
+  setup = await testRender(() => <AgentPanel />, { width: 100, height: 30 })
   const f = await frame()
   expect(f).toContain("main")
   expect(f).toMatch(/nghien-cuu\s+Việc a1 · valuation_run\(FPT\)\s+53s · ↓ 12,4k token/)
   expect(f).toMatch(/◌ nghien-cuu\s+Việc a2\s+chờ slot \(10\/10\)/)
   expect(f).toMatch(/Việc a3\s+△ thử lại sau 5s \(lần 1\/4\)/)
-  expect(f).toMatch(/Việc a4\s+cần bạn duyệt/)
 })
 
 test("more agents than rows: the rest are counted, and the window follows the selected row", async () => {
   at(5_000_000)
   setState("agents", reconcile(Object.fromEntries(Array.from({ length: 7 }, (_, i) => [`a${i}`, agent(`a${i}`)]))))
-  setup = await testRender(() => <AgentPanel />, { width: 100, height: 12 })
+  setup = await testRender(() => <AgentPanel />, { width: 100, height: 30 })
   let f = await frame()
   expect(f).toContain("Việc a0")
   expect(f).toContain("Việc a3")
@@ -85,13 +82,18 @@ test("more agents than rows: the rest are counted, and the window follows the se
   expect(f).toMatch(/❯ nghien-cuu\s+Việc a6/)
   expect(f).not.toContain("Việc a0")
   expect(panelWindow(7, undefined)).toEqual({ start: 0, end: 4 })
+  // A short terminal keeps fewer rows, never fewer than one agent and the count.
+  expect(panelRowsFor(30)).toBe(5)
+  expect(panelRowsFor(14)).toBe(5)
+  expect(panelRowsFor(12)).toBe(3)
+  expect(panelRowsFor(8)).toBe(2)
   expect(panelWindow(3, 2)).toEqual({ start: 0, end: 3 })
 })
 
 test("a finished agent lingers a few seconds with how it ended, then leaves (and so does the panel)", async () => {
   at(5_000_000)
   setState("agents", reconcile({ done: agent("done", { status: "completed", endedAt: t - 1000 }), bad: agent("bad", { status: "failed", endedAt: t - 1000 }) }))
-  setup = await testRender(() => <AgentPanel />, { width: 100, height: 6 })
+  setup = await testRender(() => <AgentPanel />, { width: 100, height: 30 })
   let f = await frame()
   expect(f).toMatch(/✓ nghien-cuu\s+Việc done\s+xong · 52s · ↓ 12,4k token/)
   expect(f).toMatch(/✘ nghien-cuu\s+Việc bad\s+lỗi · 52s/)

@@ -1068,6 +1068,50 @@ test("80×24: a short notice sits on the mode line; a long one gets its own wrap
   }
 })
 
+test("80×24: todos, the working row and seven subagents still leave the prompt, mode line and status bar on screen", async () => {
+  setup.resize(80, 24)
+  const { startActivity } = await import("../src/tui/activity")
+  const agents = Object.fromEntries(
+    Array.from({ length: 7 }, (_, i) => [
+      `ag-80x24-${i}`,
+      {
+        id: `ag-80x24-${i}`,
+        type: "nghien-cuu",
+        description: `Việc số ${i}`,
+        prompt: "",
+        background: false,
+        model: "",
+        status: "running" as const,
+        createdAt: Date.now() + i,
+        startedAt: Date.now(),
+        tools: [],
+        toolCount: 0,
+        usage: { input: 0, output: 0 },
+        text: "",
+      },
+    ]),
+  )
+  setState("agents", reconcile(agents))
+  setState({
+    activity: startActivity(),
+    liveTodos: Array.from({ length: 8 }, (_, i) => ({ content: `Việc cần ${i}`, status: i === 0 ? ("in_progress" as const) : ("pending" as const) })),
+  })
+  try {
+    const frame = await setup.waitForFrame((f) => f.includes("Việc cần làm · 0/8") && f.includes("Việc số 0") && f.includes("… +"))
+    show(frame)
+    const rows = frame.split("\n")
+    expect(rows.length).toBeLessThanOrEqual(25)
+    expect(rows.some((r) => r.includes("› "))).toBe(true)
+    expect(rows.some((r) => /^ {3}‖ chỉ đọc/.test(r))).toBe(true)
+    expect(rows.some((r) => r.includes("▲ OpenTrading"))).toBe(true)
+    expect(rows.some((r) => r.includes("main"))).toBe(true)
+  } finally {
+    setState("agents", reconcile({}))
+    setState({ activity: undefined, liveTodos: undefined })
+    setup.resize(100, 32)
+  }
+})
+
 test("80×24: a full todo panel and the '/' list still leave the prompt, hint and status bar on screen", async () => {
   setup.resize(80, 24)
   setState("liveTodos", Array.from({ length: 8 }, (_, i) => ({ content: `Việc số ${i}`, status: i === 0 ? ("in_progress" as const) : ("pending" as const) })))
