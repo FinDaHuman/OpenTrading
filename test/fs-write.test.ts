@@ -147,6 +147,48 @@ test("write_file creates a new file (parents too) and refuses to overwrite one i
   await expect(fresh.write.execute({ path: notes, content: "x" }, ctx())).rejects.toThrow("đã thay đổi")
 })
 
+test("pages read in order up to EOF count as a full read; a gap or a changed file does not", async () => {
+  const file = path.join(project, "trang.md")
+  writeFileSync(file, Array.from({ length: 180 }, (_, i) => `dòng ${i + 1}`).join("\n"))
+  const s = setup()
+  // Four pages, following the footer's offset like the model does.
+  let offset = 1
+  for (let page = 0; page < 4; page++) {
+    const out = (await s.read.execute({ path: file, offset, limit: 50 }, ctx())) as string
+    const next = /offset=(\d+)/.exec(out)?.[1]
+    if (page < 3) expect(await s.write.validate!({ path: file, content: "x" })).toContain("một phần")
+    if (!next) break
+    offset = Number(next)
+  }
+  expect(await s.write.validate!({ path: file, content: "x" })).toBeUndefined()
+
+  // A gap (lines 51–100 never shown) keeps the file partial.
+  const gap = setup()
+  await gap.read.execute({ path: file, offset: 1, limit: 50 }, ctx())
+  await gap.read.execute({ path: file, offset: 101, limit: 100 }, ctx())
+  expect(await gap.write.validate!({ path: file, content: "x" })).toContain("một phần")
+
+  // Pages of different bytes do not add up.
+  const changed = setup()
+  await changed.read.execute({ path: file, offset: 1, limit: 100 }, ctx())
+  writeFileSync(file, Array.from({ length: 180 }, (_, i) => `DÒNG ${i + 1}`).join("\n"))
+  await changed.read.execute({ path: file, offset: 101, limit: 100 }, ctx())
+  expect(await changed.write.validate!({ path: file, content: "x" })).toContain("một phần")
+})
+
+test("a line cut at 2000 characters keeps the file partial: write_file cannot overwrite the unseen tail", async () => {
+  const file = path.join(project, "mot-dong.json")
+  const json = JSON.stringify({ data: "x".repeat(12_000), tail: "PHẦN-ĐUÔI" })
+  writeFileSync(file, json)
+  const s = setup()
+  const out = (await s.read.execute({ path: file }, ctx())) as string
+  expect(out).toContain("dòng bị cắt")
+  expect(out).not.toContain("PHẦN-ĐUÔI")
+  expect(await s.write.validate!({ path: file, content: "{}" })).toContain("một phần")
+  await expect(s.write.execute({ path: file, content: "{}" }, ctx())).rejects.toThrow("một phần")
+  expect(readFileSync(file, "utf8")).toBe(json)
+})
+
 test("write_file keeps an existing file's CRLF and UTF-16 encoding", async () => {
   const s = setup()
   const file = path.join(project, "ps.txt")

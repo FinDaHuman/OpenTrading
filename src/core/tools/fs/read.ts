@@ -115,20 +115,29 @@ async function nearNames(abs: string): Promise<string[]> {
 }
 
 /** Numbered lines from `offset` (1-based), at most `limit` lines and `maxChars` characters. */
-export function numberLines(lines: string[], offset: number, limit: number, maxChars = MAX_TEXT_CHARS): { body: string; first: number; last: number } {
+/** `cut`: some line shown was longer than MAX_LINE_CHARS and lost its end. */
+export function numberLines(
+  lines: string[],
+  offset: number,
+  limit: number,
+  maxChars = MAX_TEXT_CHARS,
+): { body: string; first: number; last: number; cut: boolean } {
   const out: string[] = []
   let chars = 0
   let last = offset - 1
+  let cut = false
   for (let n = offset; n <= Math.min(lines.length, offset + limit - 1); n++) {
     let line = lines[n - 1]!
-    if (line.length > MAX_LINE_CHARS) line = `${line.slice(0, MAX_LINE_CHARS)}… (dòng bị cắt, dài ${line.length} ký tự)`
+    const long = line.length > MAX_LINE_CHARS
+    if (long) line = `${line.slice(0, MAX_LINE_CHARS)}… (dòng bị cắt, dài ${line.length} ký tự)`
     const row = `${n}\t${line}`
     if (out.length > 0 && chars + row.length + 1 > maxChars) break
     out.push(row)
     chars += row.length + 1
     last = n
+    cut ||= long
   }
-  return { body: out.join("\n"), first: offset, last }
+  return { body: out.join("\n"), first: offset, last, cut }
 }
 
 /** Numbered rows from `offset`, with the same paging note as text files. */
@@ -210,12 +219,14 @@ export async function readFileAt(abs: string, input: ReadOptions, state?: FileSt
     return `${abs} · file rỗng.`
   }
   if (offset > lines.length) throw new Error(`offset ${offset} vượt quá số dòng của file (${lines.length}).`)
-  const { body, first, last } = numberLines(lines, offset, limit, input.maxChars)
-  const full = first === 1 && last === lines.length
-  state?.record(abs, { mtimeMs: info.mtimeMs, size: info.size, hash: hashBytes(bytes), full })
-  const header = `${abs} · ${lines.length} dòng${full ? "" : ` · đang hiện dòng ${first}–${last}`}`
+  const { body, first, last, cut } = numberLines(lines, offset, limit, input.maxChars)
+  const whole = first === 1 && last === lines.length
+  // A cut line hid part of the file: it was not fully read, however the pages add up.
+  state?.record(abs, { mtimeMs: info.mtimeMs, size: info.size, hash: hashBytes(bytes), full: whole && !cut }, cut ? undefined : { first, last, lines: lines.length })
+  const header = `${abs} · ${lines.length} dòng${whole ? "" : ` · đang hiện dòng ${first}–${last}`}`
   const footer = last < lines.length ? `\n\n(còn ${lines.length - last} dòng; đọc tiếp với offset=${last + 1})` : ""
-  return `${header}\n${body}${footer}`
+  const note = cut ? "\n\n(Có dòng bị cắt: chưa thấy hết file nên write_file không ghi đè cả file được; sửa đúng chỗ bằng edit_file.)" : ""
+  return `${header}\n${body}${footer}${note}`
 }
 
 export function readFileTool(workspace: Workspace, state?: FileState): ToolDef<ReadFileInput> {
