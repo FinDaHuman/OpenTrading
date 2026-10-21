@@ -78,3 +78,19 @@ test("OSC 9;4 only for terminals that draw it (iTerm2 would show it as a notific
   expect(drawsProgress({ TERM_PROGRAM: "iTerm.app" })).toBe(false)
   expect(drawsProgress({})).toBe(false)
 })
+
+test("a notification the terminal did not take is tried again; one it took still deduplicates until focus", () => {
+  let ok = false
+  const calls: string[] = []
+  const attention = new Attention({ write: () => {}, notify: (m) => (calls.push(m), ok), status: () => {}, progress: false }, () => true)
+  attention.focus(false)
+  attention.attention("done", "lần 1")
+  ok = true
+  attention.attention("done", "lần 2")
+  attention.attention("done", "lần 3")
+  expect(calls).toEqual(["lần 1", "lần 2"])
+  attention.focus(true)
+  attention.focus(false)
+  attention.attention("done", "lần 4")
+  expect(calls).toEqual(["lần 1", "lần 2", "lần 4"])
+})

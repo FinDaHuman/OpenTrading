@@ -68,12 +68,14 @@ export class Attention {
     if (focused) this.sent.clear()
   }
 
-  /** Something worth coming back for. Sent only while the window is known to be elsewhere. */
+  /**
+   * Something worth coming back for. Sent only while the window is known to be elsewhere, once
+   * per kind until focus returns; a notification the terminal did not take is tried again next time.
+   */
   attention(kind: AttentionKind, message: string) {
     if (!this.enabled() || this.focused !== false || this.sent.has(kind)) return
-    this.sent.add(kind)
     if (kind === "done" || kind === "error") this.deps.status({ state: kind, app: "opentrading", title: TITLE, message })
-    this.deps.notify(message, TITLE)
+    if (this.deps.notify(message, TITLE)) this.sent.add(kind)
   }
 
   /** On the way out: no ring left spinning, no status left behind. */

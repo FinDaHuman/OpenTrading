@@ -160,6 +160,33 @@ test("enter switches the model and puts it first in recent", async () => {
   expect(state.dialog).toBeUndefined()
 })
 
+test("manual entry with no model id ('groq/', '/', blank) keeps the dialog open with the reason and saves nothing", async () => {
+  await writeFile(path.join(home, "config.json"), "{}\n")
+  await open()
+  await setup!.mockInput.typeText("thủ công")
+  await frameWith("+ Nhập model id thủ công")
+  setup!.mockInput.pressEnter()
+  await frameWith("Nhập model id")
+  for (const [typed, reason] of [
+    ["groq/", 'Thiếu model id sau "groq/"'],
+    ["/", "Thiếu model id"],
+    ["groq/   ", 'Thiếu model id sau "groq/"'],
+  ] as const) {
+    await setup!.mockInput.typeText(typed)
+    setup!.mockInput.pressEnter()
+    const f = await frameWith(reason)
+    expect(f).toContain(reason)
+    expect(state.dialog).toBe("model")
+    expect({ provider: state.provider, model: state.model }).toEqual({ provider: "google", model: "gemini-3.5-flash-lite" })
+    for (let i = 0; i < typed.length; i++) setup!.mockInput.pressBackspace()
+  }
+  expect(await readFile(path.join(home, "config.json"), "utf8")).toBe("{}\n")
+  await setup!.mockInput.typeText("groq/llama-moi")
+  setup!.mockInput.pressEnter()
+  for (let i = 0; i < 50 && state.model !== "llama-moi"; i++) await new Promise((r) => setTimeout(r, 10))
+  expect({ provider: state.provider, model: state.model }).toEqual({ provider: "groq", model: "llama-moi" })
+})
+
 test("model.json: recent is capped and de-duplicated; junk entries are dropped", async () => {
   let prefs = { favorite: [], recent: [] } as { favorite: { provider: string; model: string }[]; recent: { provider: string; model: string }[] }
   for (let i = 0; i < 15; i++) prefs = withRecent(prefs, { provider: "p", model: `m${i % 12}` })
