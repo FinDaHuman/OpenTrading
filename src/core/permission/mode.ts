@@ -1,5 +1,5 @@
 /**
- * Permission modes (Shift+Tab cycles them; Claude Code getNextPermissionMode.ts):
+ * Permission modes (Shift+Tab cycles them, as in Claude Code):
  * - `read-only` (‖ chỉ đọc, the default): reads run; a local file write or shell command asks
  *   each time, with "switch to ▸" as one of the answers.
  * - `ask` (▸ sửa có hỏi): every write or command asks; "this session" covers a folder.

@@ -9,7 +9,7 @@ import { now, useNow } from "./ui/clock"
 import { truncate } from "./ui/text"
 
 /**
- * The working row above the prompt, after Claude Code's spinner (components/Spinner.tsx):
+ * The working row above the prompt, after Claude Code's spinner:
  *
  *   ✶ Đang phân tích… (1m 23s · ↓ 4,2k token)
  *     ⎿ Tiếp: So sánh P/E với ngành

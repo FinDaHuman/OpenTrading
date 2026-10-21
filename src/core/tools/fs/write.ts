@@ -11,7 +11,7 @@ import { LOCAL_SOURCE, type ApprovalPreview, type ToolDef } from "../types"
 
 /**
  * write_file / edit_file: the agent's artifacts (plans, reports, CSV tables, HTML pages)
- * and edits to the user's files. Rules from Claude Code's FileWriteTool/FileEditTool:
+ * and edits to the user's files. Rules as in Claude Code's Write/Edit tools:
  * - an existing file is changed only after read_file showed it (whole, for an overwrite) and
  *   only while it is unchanged since (checked again under the write lock: compare and swap);
  * - encoding, BOM and CRLF of an existing file are kept;

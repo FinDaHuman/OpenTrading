@@ -17,7 +17,7 @@ export { cycleMode, MODE_LABEL, modeNote, type PermissionMode } from "./mode"
  * - Requests queue: the UI shows one at a time; when it advances, calls the user just
  *   allowed for the session go through without a second prompt.
  *
- * Order of the checks (first match wins; Claude Code permissions.ts, opencode evaluate):
+ * Order of the checks (first match wins, as in Claude Code and opencode's evaluate):
  * 0. `blockFor` — never (odd Windows path, deleting a drive root).
  * 1. A user deny rule (also on reads); then calls that never ask (read-only, no per-call scope) run.
  * 2. A user-only scope (key file, network path, protected folder, outside the workspace,

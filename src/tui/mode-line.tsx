@@ -7,7 +7,7 @@ import { color } from "./theme"
 import { width as cells } from "./ui/text"
 
 /**
- * The line under the prompt, after Claude Code's PromptInputFooter: the permission mode
+ * The line under the prompt, after Claude Code's prompt footer: the permission mode
  * (with "(shift+tab đổi)" while there is room), what runs in the background, a key hint on
  * the left; notifications and exit prompts on the right. A notice too long for what is left
  * gets its own wrapped row under the line: a message cut off is worse than none.

@@ -10,9 +10,9 @@ import { dataDir } from "../paths"
  *   the user and no rule or classifier can approve it (Claude Code protected paths,
  *   opencode `read: { "*.env": "ask" }`).
  * - UNC paths (`\\server\share`): touching one can leak the user's NTLM hash to that host,
- *   so nothing reads it before the user says yes (Claude Code FileReadTool).
+ *   so nothing reads it before the user says yes.
  * - Odd Windows spellings (alternate data streams, `\\?\`, device names, trailing dots)
- *   that can make a path check and the real file disagree (Claude Code filesystem.ts).
+ *   that can make a path check and the real file disagree.
  */
 
 const isWin = (platform: NodeJS.Platform) => platform === "win32"

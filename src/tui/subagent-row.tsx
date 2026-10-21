@@ -8,7 +8,7 @@ import { truncate } from "./ui/text"
 import { useSpinner } from "./ui/clock"
 
 /**
- * Subagents in the transcript, after Claude Code's AgentTool UI: the spawn_subagent calls
+ * Subagents in the transcript, after Claude Code's Agent tool rows: the spawn_subagent calls
  * of one model step form one block.
  *
  *   ● Chạy 3 subagent…

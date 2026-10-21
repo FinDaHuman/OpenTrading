@@ -1,7 +1,7 @@
 import { setState, state } from "./state"
 
 /**
- * Short-lived messages, after Claude Code's notification queue (context/notifications.tsx):
+ * Short-lived messages, after Claude Code's footer notifications:
  * one message shows at a time in the footer, the rest wait by priority, a `key` keeps the
  * same message from piling up, `invalidates` retires messages a newer one makes stale
  * ("MCP reconnected" removes "MCP lost"), and `fold` merges repeats ("3 agents done").

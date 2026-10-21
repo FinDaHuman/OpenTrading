@@ -11,7 +11,7 @@ export const RESULT_TOOL = "tra_ket_qua"
 /** Sorts before native tools (no priority, read as -1) and MCP tools (server order, 0 and up). */
 export const RESULT_PRIORITY = -1000
 
-/** Turns a run may take to produce a valid result (Claude Code: MAX_STRUCTURED_OUTPUT_RETRIES 5). */
+/** Turns a run may take to produce a valid result. */
 export const MAX_RESULT_ATTEMPTS = 5
 
 /** Sent when a turn ended without a valid call; the next turn's last step forces the tool. */

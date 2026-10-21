@@ -23,8 +23,7 @@ flowchart TD
     DATA -. implement .-> PORTS
     STORE -. implement .-> PORTS
     PROVIDERS --> LLM[Approved LLM APIs]
-    DATA --> DA[DongAnhCapital API]
-    DATA --> TA[Trading_Agents APIs]
+    DATA --> MCP[Market-data MCP servers]
 ```
 
 Dependency direction is enforced: interfaces depend on application/bootstrap; application and

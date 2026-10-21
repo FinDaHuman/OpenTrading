@@ -159,7 +159,7 @@ export class AutoReviewer {
   }
 }
 
-/** What the model reads when the classifier blocks (Claude Code's wording, in Vietnamese). */
+/** What the model reads when the classifier blocks. */
 export function blockedMessage(label: string | undefined, reason: string) {
   return (
     `Auto mode chặn lời gọi này${label ? ` [${label}]` : ""}: ${reason}. ` +

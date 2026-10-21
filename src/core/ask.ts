@@ -97,7 +97,7 @@ export class AskBroker {
   }
 }
 
-/** What the model reads back (Claude Code's wording, in Vietnamese). */
+/** What the model reads back. */
 export function formatAskResult(result: AskResult) {
   if (result.answered) {
     // JSON strings, so a typed answer containing " cannot break the format.

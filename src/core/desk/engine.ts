@@ -454,7 +454,7 @@ export class DeskEngine {
 
   /**
    * Siblings with the same prompt prefix wait (up to staggerMs) for the first one's response,
-   * so their first requests read its cache (Claude Code: CLAUDE_CODE_WORKFLOW_PREFIX_STAGGER_MS).
+   * so their first requests read its cache.
    */
   private async staggered(state: RunState, prefix: string): Promise<boolean> {
     if (state.settings.staggerMs <= 0 || !this.deps.starter.onChange) return false
