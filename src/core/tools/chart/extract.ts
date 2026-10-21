@@ -155,7 +155,9 @@ interface Located {
 
 function locate(ref: string, ohlc: boolean | undefined): Located {
   const stored = recallResult(ref)
-  if (!stored) throw new Error(`Không còn kết quả "${ref}" (chỉ giữ ~40 kết quả gần nhất trong phiên). Gọi lại tool dữ liệu rồi dùng ref mới.`)
+  if (!stored) {
+    throw new Error(`Không còn kết quả "${ref}" (chỉ giữ ~40 kết quả gần nhất của phiên đang mở; ref từ trước khi mở lại phiên đã hết hạn). Gọi lại tool dữ liệu rồi dùng ref mới.`)
+  }
   const value = parseResult(stored.text)
   if (value === undefined) throw new Error(`Kết quả ${ref} (${stored.tool}) không phải JSON, không trích được số.`)
   const all = candidates(value)
