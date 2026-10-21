@@ -258,6 +258,7 @@ export class SubagentManager {
       tools: [],
       toolCount: 0,
       usage: { input: 0, output: 0 },
+      requests: 0,
       text: "",
       controller: new AbortController(),
       messages: [],
@@ -346,6 +347,7 @@ export class SubagentManager {
       tools: [],
       toolCount: ends.reduce((n, e) => n + (e.type === "agent_end" ? e.toolCount : 0), 0),
       usage: { input: 0, output: 0 },
+      requests: 0,
       text: lastAssistantText(messages),
       controller: new AbortController(),
       messages,
@@ -371,6 +373,7 @@ export class SubagentManager {
     const started = Date.now()
     const toolsBefore = run.toolCount
     const usageBefore = { ...run.usage }
+    const requestsBefore = run.requests ?? 0
     let release: (() => void) | undefined
     let watchdog: ReturnType<typeof setInterval> | undefined
     let idleStop = false
@@ -497,6 +500,10 @@ export class SubagentManager {
               if (event.ok && event.chart) for (const listener of this.chartListeners) listener(event.chart, viewOf(run), event.callId)
               break
             }
+            case "step":
+              run.requests = (run.requests ?? 0) + 1
+              this.emit(run)
+              break
             case "step-usage":
               run.usage.input += event.inputTokens
               run.usage.output += event.outputTokens
@@ -581,6 +588,7 @@ export class SubagentManager {
       ...(context.data !== undefined ? { data: context.data } : {}),
       toolCount: run.toolCount - toolsBefore,
       usage: { input: run.usage.input - usageBefore.input, output: run.usage.output - usageBefore.output },
+      requests: (run.requests ?? 0) - requestsBefore,
       durationMs: run.endedAt! - (first ? (run.startedAt ?? run.createdAt) : started),
     }
     if (sidechain) {

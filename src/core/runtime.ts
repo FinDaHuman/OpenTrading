@@ -17,6 +17,8 @@ import { doctorLocalTool, sessionHistoryTools } from "./tools/session/history"
 import { sendMessageTool, spawnSubagentTool, stopAgentTool } from "./tools/subagent/spawn"
 import { SubagentManager } from "./subagents/manager"
 import type { AgentDefinition } from "./agents/schema"
+import { DeskEngine } from "./desk/engine"
+import { PLAYBOOKS } from "./desk/playbooks"
 import { toolSearchTool } from "./tools/builtin/tool-search"
 import { todoWriteTool } from "./tools/builtin/todo-write"
 import { webFetchTool } from "./tools/web/fetch"
@@ -50,6 +52,10 @@ export interface Runtime {
   detachMemory?: () => void
   /** Subagents started by spawn_subagent: progress, limits, stop. */
   subagents: SubagentManager
+  /** Ultradesk runs (playbooks of many subagents). */
+  desk: DeskEngine
+  /** Agent types loaded by setAgents (desk agents resolve their type here). */
+  agents: AgentDefinition[]
   /** Data directory this runtime reads and writes (OPENTRADING_HOME or the test's temp dir). */
   home: string
   /** Folders the file tools work in (cwd, or <home>/workspace when cwd is too broad, plus /add-dir). */
@@ -157,13 +163,16 @@ export function initRuntime(opts: { cwd?: string; home?: string; skills: () => S
   registry.register(spawnSubagentTool(subagents))
   registry.register(sendMessageTool(subagents))
   registry.register(stopAgentTool(subagents))
-  const runtime: Runtime = { registry, permissions, questions, mcp, hooks: new HookBus(), memory: new NoopMemory(), subagents, home, workspace, files, history, auto }
+  // Read lazily: setAgents replaces the list once agent types load.
+  const desk = new DeskEngine({ starter: subagents, agents: () => runtime.agents, playbooks: () => PLAYBOOKS })
+  const runtime: Runtime = { registry, permissions, questions, mcp, hooks: new HookBus(), memory: new NoopMemory(), subagents, desk, agents: [], home, workspace, files, history, auto }
   switchMemory(runtime, opts.memory ?? new NoopMemory())
   return runtime
 }
 
 /** Re-register spawn_subagent with the loaded agent types (its description lists them). */
 export function setAgents(runtime: Runtime, agents: AgentDefinition[]) {
+  runtime.agents = agents
   runtime.registry.register(spawnSubagentTool(runtime.subagents, agents))
   runtime.registry.register(sendMessageTool(runtime.subagents, agents))
 }

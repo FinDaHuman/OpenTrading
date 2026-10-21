@@ -40,6 +40,8 @@ export interface SubagentView {
   toolCount: number
   /** Billed tokens over every request the subagent made. */
   usage: { input: number; output: number }
+  /** Model requests made (finished steps; free tiers count requests per day). */
+  requests?: number
   /** Final answer (or the partial text after a failure or stop). */
   text: string
   error?: string
@@ -66,6 +68,8 @@ export interface SubagentResult {
   data?: unknown
   toolCount: number
   usage: { input: number; output: number }
+  /** Model requests of this run (see SubagentView.requests). */
+  requests?: number
   durationMs: number
 }
 

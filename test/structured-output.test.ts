@@ -223,3 +223,26 @@ test("an agent restored from its sidechain keeps its desk run id (review #118)",
   expect(second.get(run.id)?.deskRunId).toBe("dk-keep01")
   await second.flush()
 })
+
+test("ultradesk wiring: a playbook agent runs on the real manager, read-only, and returns its data", async () => {
+  const { DeskEngine } = await import("../src/core/desk/engine")
+  const registry = new ToolRegistry()
+  registry.register(currentTimeTool(() => new Date("2026-10-21T02:30:00Z")))
+  registry.register({ name: "ghi_file", description: "ghi", input: z.object({}), readOnly: false, async execute() { return "x" } })
+  const subagents = new SubagentManager({ parent: registry, skills: () => [] })
+  const agents = [{ name: "tra-cuu", description: "tra cứu", tools: ["@chi-doc"], body: "", file: "tra-cuu.md", source: "bundled" as const }]
+  const playbook = {
+    meta: { name: "p", version: "1", description: "p", whenToUse: "p", args: z.object({}), agentTypes: ["tra-cuu"], phases: ["Chấm"], estimate: () => ({ agents: 1, requests: 6 }) },
+    run: (ctx: { agent: (p: string, o: object) => Promise<unknown> }) => ctx.agent("Chấm FPT", { schema: SCORE }),
+  }
+  const desk = new DeskEngine({ starter: subagents, agents: () => agents, playbooks: () => [playbook], config: async () => ({ desk: { staggerMs: 0 } }) })
+  replies = [{ call: { name: RESULT_TOOL, args: { ticker: "FPT", score: 8 } } }]
+  const view = await (await desk.start("p", {})).done
+  expect(view.status).toBe("done")
+  expect(view.result).toEqual({ ticker: "FPT", score: 8 })
+  expect(view.counters.requests).toBe(1)
+  const names = bodies[0]!.tools?.map((t) => t.function.name) ?? []
+  expect(names).toContain("current_time")
+  expect(names).not.toContain("ghi_file")
+  expect(subagents.list()[0]?.deskRunId).toBe(view.id)
+})
