@@ -33,10 +33,13 @@ pay per request per day, so the cost side weighs more here than for Claude Code.
    quota or repeated rate limits cut the run as partial and resumable, and work that could not
    run is reported as unverified, never as refuted.
 4. **Measurement decides.** `scripts/dev/desk-eval.ts` answers 20 real questions
-   (`test/fixtures/desk-eval/cases.json`, five per playbook) with the single agent and with the
-   playbook, and an LLM judge scores both blind (accuracy, citations, completeness, grounding,
-   0–1 each; A/B position alternates). This ADR becomes accepted when, on the user's models:
-   - the desk's mean score exceeds the single agent's by at least 0.10, and
+   (`test/fixtures/desk-eval/cases.json`, five per playbook) with today's default path (the main
+   agent with every tool, including subagents a skill spawns; their requests count) and with the
+   playbook. An LLM judge scores both blind (accuracy, citations, completeness, grounding, 0–1
+   each; A/B position alternates; text that would identify the desk is stripped first). A case
+   where either arm failed or was cut is not judged. This ADR becomes accepted when, on the
+   user's models:
+   - the desk's mean score exceeds the default path's by at least 0.10, and
    - the desk wins at least 60% of the judged cases,
    reported per playbook together with the request cost of each arm. A playbook that misses
    the bar on its own cases is reworked or removed even if the total passes.
@@ -53,5 +56,8 @@ pay per request per day, so the cost side weighs more here than for Claude Code.
   call a model without `--yes`.
 - LLM-judge scores are a proxy: a human spot-check of a few cases per playbook goes with any
   decision to accept. Thresholds are heuristics written down so the decision is not made by eye.
+- The judge has no tools. On the fact-check cases (kiem-chung) its accuracy score means little
+  until the user adds reference values (`tham_chieu`) from a source they trust; those are not
+  filled in by an agent.
 - If the thresholds are not met, ultradesk stays as an opt-in tool (the user asked for it) and
   the effort goes into the playbooks that underperform, not into phase 2.

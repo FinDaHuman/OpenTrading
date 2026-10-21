@@ -8,8 +8,10 @@ import { PLAYBOOKS } from "../../src/core/desk/playbooks"
  * Ultradesk eval (ADR 0006): does a playbook answer better than one agent, and at what cost?
  * Anthropic's method for its research system: ~20 real questions, an LLM judge with one
  * prompt scoring factual accuracy, citations, completeness and grounding 0–1, small samples
- * first. The two answers are shown blind as A and B; which arm is A alternates by case so
- * position bias averages out. The offline test checks this file; scripts/dev/desk-eval.ts
+ * first. The baseline ("single") is today's default path without ultradesk: the main agent
+ * with every tool, including the subagents a skill may spawn (their requests count too). The
+ * two answers are shown blind as A and B (blindText strips what would give the desk away);
+ * which arm is A alternates by case so position bias averages out. The offline test checks this file; scripts/dev/desk-eval.ts
  * runs the arms and the judge on real models (the user's quota, never the tests).
  */
 
@@ -21,6 +23,12 @@ export const DeskEvalCase = z.object({
   /** What desk_run would get for the same question. */
   args: z.record(z.string(), z.unknown()),
   size: z.enum(DESK_SIZES as [string, ...string[]]).optional(),
+  /**
+   * Reference facts the judge may rely on (the judge has no tools): without them, accuracy on
+   * a fact-check case measures how sure an answer sounds, not whether it is right. Filled in
+   * by the user from a source they trust; never guessed.
+   */
+  tham_chieu: z.string().optional(),
 })
 export type DeskEvalCase = z.infer<typeof DeskEvalCase>
 
@@ -60,10 +68,28 @@ export type JudgeVerdict = z.infer<typeof JudgeVerdict>
 /** Odd ids show the desk answer as A, even ids as B. */
 export const deskIsA = (id: number) => id % 2 === 1
 
+/**
+ * What would tell the judge which answer is the desk's: the code-built table headings, resume
+ * and cut notes, product words. Applied to both answers alike.
+ */
+const GIVEAWAYS = [
+  /^\*\*Bảng điểm[^\n]*\(tính bằng code[^\n]*\*\*\s*$/gim,
+  /^\*\*Kiểm chứng số liệu của hai phe:\*\*\s*$/gim,
+  /^.*(\/desk resume|Run bị cắt|run ultradesk|desk_run|<thong_bao_desk>).*$/gim,
+  /\b(ultradesk|playbook|subagent)\b/gi,
+]
+
+export function blindText(text: string): string {
+  return GIVEAWAYS.reduce((t, re) => t.replace(re, ""), text)
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
+}
+
 export function judgePrompt(c: DeskEvalCase, a: string, b: string): string {
   return [
     "Bạn chấm hai câu trả lời cho cùng một câu hỏi về chứng khoán Việt Nam. Không biết câu nào do hệ thống nào viết; đừng ưu tiên câu dài hơn hay câu đứng trước.",
     `Câu hỏi: ${c.question}`,
+    ...(c.tham_chieu ? [`Dữ kiện tham chiếu (đáng tin, dùng để chấm chinh_xac): ${c.tham_chieu}`] : []),
     `<tra_loi_a>\n${a}\n</tra_loi_a>`,
     `<tra_loi_b>\n${b}\n</tra_loi_b>`,
     "Chấm mỗi câu trả lời theo 4 tiêu chí, mỗi tiêu chí từ 0 đến 1:",
@@ -122,8 +148,12 @@ export async function runDeskEval(cases: DeskEvalCase[], deps: EvalDeps, arms: {
     const row: Row = { id: c.id, playbook: c.playbook, judgeRequests: 0 }
     if (arms.single) row.single = await deps.single(c).catch(failed)
     if (arms.desk) row.desk = await deps.desk(c).catch(failed)
-    if (row.single?.text && row.desk?.text) {
-      const [a, b] = deskIsA(c.id) ? [row.desk.text, row.single.text] : [row.single.text, row.desk.text]
+    // An arm that failed or was cut (quota, rate limit) is not judged: infrastructure is not quality.
+    const broken = [row.single, row.desk].some((a) => a?.error)
+    if (broken) row.reason = "chưa chấm (hạ tầng)"
+    else if (row.single?.text && row.desk?.text) {
+      const [deskText, singleText] = [blindText(row.desk.text), blindText(row.single.text)]
+      const [a, b] = deskIsA(c.id) ? [deskText, singleText] : [singleText, deskText]
       const judged = await deps.judge(judgePrompt(c, a, b)).catch((e) => ({ text: "", requests: 0, error: e }))
       row.judgeRequests = judged.requests
       const verdict = parseJudge(judged.text)
@@ -143,8 +173,9 @@ export async function runDeskEval(cases: DeskEvalCase[], deps: EvalDeps, arms: {
 
 export function rowLine(r: Row) {
   const arm = (a?: ArmResult) => (!a ? "—" : a.error ? `lỗi: ${a.error.slice(0, 60)}` : `${a.requests} req · ${a.seconds}s`)
-  const scores = r.scores ? `desk ${r.scores.desk.toFixed(2)} vs single ${r.scores.single.toFixed(2)} → ${r.winner}` : r.reason ?? "chưa chấm"
-  return `#${r.id} ${r.playbook}: single ${arm(r.single)} · desk ${arm(r.desk)} · ${scores}`
+  const winner = r.winner === "single" ? "mặc định" : r.winner === "tie" ? "hoà" : r.winner
+  const scores = r.scores ? `desk ${r.scores.desk.toFixed(2)} vs mặc định ${r.scores.single.toFixed(2)} → ${winner}` : r.reason ?? "chưa chấm"
+  return `#${r.id} ${r.playbook}: mặc định ${arm(r.single)} · desk ${arm(r.desk)} · ${scores}`
 }
 
 /** The thresholds ADR 0006 asks for; heuristics, stated so the decision is not made by eye. */

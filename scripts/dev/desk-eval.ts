@@ -22,9 +22,9 @@ import {
 } from "../../test/helpers/desk-eval"
 
 /**
- * Ultradesk eval for ADR 0006: each case is answered by the single agent (the question as
- * typed) and by its playbook (the same request as desk_run args), then an LLM judge scores
- * both blind. Spends the user's quota — about 50 requests per case at the small size — and
+ * Ultradesk eval for ADR 0006: each case is answered by today's default path (the main agent
+ * with every tool, subagents included, on the question as typed) and by its playbook (the same
+ * request as desk_run args), then an LLM judge scores both blind. Spends the user's quota — about 50 requests per case at the small size — and
  * is never run by the tests. Approvals: read-only per-call prompts (web_fetch domains) are
  * allowed once, anything else is denied, so an unattended run never hangs.
  *
@@ -81,6 +81,8 @@ await runtime.mcp.start()
 
 async function single(c: DeskEvalCase): Promise<ArmResult> {
   const started = Date.now()
+  // Subagents a skill spawns are part of the default path: their requests count too.
+  const before = new Set(runtime.subagents.list().map((v) => v.id))
   let text = ""
   let requests = 0
   let tokens = 0
@@ -90,6 +92,11 @@ async function single(c: DeskEvalCase): Promise<ArmResult> {
     else if (event.type === "step") requests++
     else if (event.type === "step-usage") tokens += event.inputTokens + event.outputTokens
     else if (event.type === "error") error = event.message
+  }
+  for (const v of runtime.subagents.list()) {
+    if (before.has(v.id) || v.deskRunId) continue
+    requests += v.requests ?? 0
+    tokens += v.usage.input + v.usage.output
   }
   return { text: text.trim(), requests, tokens, seconds: Math.round((Date.now() - started) / 1000), error }
 }
@@ -109,7 +116,8 @@ async function desk(c: DeskEvalCase): Promise<ArmResult> {
 }
 
 async function judge(prompt: string) {
-  const result = await generateText({ model: languageModel(judgeTarget.provider, judgeTarget.model, judgeTarget.apiKey), prompt, temperature: 0, maxRetries: 2 })
+  // No blind SDK retries: a daily-quota 429 must not be repeated.
+  const result = await generateText({ model: languageModel(judgeTarget.provider, judgeTarget.model, judgeTarget.apiKey), prompt, temperature: 0, maxRetries: 0 })
   return { text: result.text, requests: 1 }
 }
 
@@ -118,12 +126,14 @@ const s = summarize(rows)
 const pct = (x: number) => `${(100 * x).toFixed(0)}%`
 console.log("")
 for (const [name, p] of Object.entries(s.perPlaybook)) {
-  console.log(`${name.padEnd(11)} chấm ${p.judged} · desk ${p.deskMean.toFixed(2)} vs single ${p.singleMean.toFixed(2)} · request desk ${p.deskRequests} / single ${p.singleRequests}`)
+  console.log(`${name.padEnd(11)} chấm ${p.judged} · desk ${p.deskMean.toFixed(2)} vs mặc định ${p.singleMean.toFixed(2)} · request desk ${p.deskRequests} / mặc định ${p.singleRequests}`)
 }
 console.log("")
-console.log(`Chấm được ${s.judged}/${rows.length} ca · điểm trung bình desk ${s.deskMean.toFixed(2)} vs single ${s.singleMean.toFixed(2)} (chênh ${(s.deskMean - s.singleMean).toFixed(2)})`)
-console.log(`Thắng: desk ${s.deskWins} · single ${s.singleWins} · hoà ${s.ties} (desk thắng ${s.judged ? pct(s.deskWins / s.judged) : "-"})`)
-console.log(`Request: desk ${s.requests.desk} · single ${s.requests.single} · judge ${s.requests.judge}`)
+console.log(`Chấm được ${s.judged}/${rows.length} ca (ca có nhánh lỗi/bị cắt không chấm) · điểm trung bình desk ${s.deskMean.toFixed(2)} vs mặc định ${s.singleMean.toFixed(2)} (chênh ${(s.deskMean - s.singleMean).toFixed(2)})`)
+console.log(`Thắng: desk ${s.deskWins} · mặc định ${s.singleWins} · hoà ${s.ties} (desk thắng ${s.judged ? pct(s.deskWins / s.judged) : "-"})`)
+console.log(`Request: desk ${s.requests.desk} · mặc định ${s.requests.single} · judge ${s.requests.judge}`)
+const unreferenced = cases.filter((c) => c.playbook === "kiem-chung" && !c.tham_chieu).length
+if (unreferenced > 0) console.log(`Lưu ý: ${unreferenced} ca kiem-chung chưa có tham_chieu: điểm chinh_xac của chúng chưa nói lên đúng/sai.`)
 console.log(
   s.worth
     ? `=> Đạt ngưỡng ADR 0006 (chênh ≥ ${WORTH.minDelta}, desk thắng ≥ ${pct(WORTH.minWinRate)}): có cơ sở chuyển ADR sang accepted và làm chặng 2.`

@@ -101,7 +101,7 @@ Agent của desk:
 
 ## Đo đạc: desk có đáng không
 
-`scripts/dev/desk-eval.ts` trả lời 20 câu hỏi thật (`test/fixtures/desk-eval/cases.json`, 5 câu mỗi playbook) bằng hai cách: agent chính trả lời câu hỏi như người dùng gõ, và playbook tương ứng chạy cùng yêu cầu. Một model chấm (LLM-judge) chấm cả hai câu trả lời **mù**: không biết câu nào của desk, vị trí A/B đổi theo từng câu. Có 4 tiêu chí, mỗi tiêu chí 0–1: chính xác, trích dẫn, đầy đủ, có cơ sở dữ liệu. Cách làm theo bài "How we built our multi-agent research system" của Anthropic.
+`scripts/dev/desk-eval.ts` trả lời 20 câu hỏi thật (`test/fixtures/desk-eval/cases.json`, 5 câu mỗi playbook) bằng hai cách. **Mặc định**: agent chính trả lời câu hỏi như người dùng gõ, với mọi tool, kể cả subagent do skill gọi (request của chúng được tính). **Desk**: playbook tương ứng chạy cùng yêu cầu. Trước khi chấm, câu trả lời của cả hai nhánh đều được xoá những chi tiết làm lộ desk (tiêu đề bảng "tính bằng code", ghi chú `/desk resume`…). Câu nào có nhánh lỗi hoặc bị cắt thì không chấm. Một model chấm (LLM-judge) chấm cả hai câu trả lời **mù**: không biết câu nào của desk, vị trí A/B đổi theo từng câu. Có 4 tiêu chí, mỗi tiêu chí 0–1: chính xác, trích dẫn, đầy đủ, có cơ sở dữ liệu. Cách làm theo bài "How we built our multi-agent research system" của Anthropic.
 
 ```
 bun scripts/dev/desk-eval.ts --playbook sang-loc            # chỉ in ước tính
@@ -113,7 +113,8 @@ bun scripts/dev/desk-eval.ts --only 1,6,11,16 --judge google/gemini-3.1-pro --ye
 - Cả bộ ở quy mô small tốn hơn 500 request. Hãy chạy từng playbook, mỗi ngày một phần.
 - Duyệt quyền khi không có người: các lời hỏi chỉ đọc (domain của `web_fetch`) được cho phép một lần, mọi thứ khác bị từ chối, để run không bị treo.
 - Model chấm nên mạnh hơn model trả lời (`--judge`). Kết quả JSON ghi ở `~/.opentrading/exports/desk-eval-<thời điểm>.json`.
-- **Ngưỡng của ADR 0006**: điểm trung bình của desk cao hơn single ít nhất 0,10 **và** desk thắng ít nhất 60% số câu được chấm. Script in kết luận theo từng playbook kèm số request của mỗi nhánh. Điểm của LLM chỉ là thước đo gần đúng: trước khi chuyển ADR sang *accepted*, cần đọc tay vài câu mỗi playbook.
+- Model chấm không có tool: với các câu `kiem-chung`, hãy điền `tham_chieu` (số liệu đúng, từ nguồn bạn tin) vào `cases.json`, nếu không thì điểm "chính xác" chỉ phản ánh câu trả lời nghe có chắc chắn hay không.
+- **Ngưỡng của ADR 0006**: điểm trung bình của desk cao hơn đường mặc định ít nhất 0,10 **và** desk thắng ít nhất 60% số câu được chấm. Script in kết luận theo từng playbook kèm số request của mỗi nhánh. Điểm của LLM chỉ là thước đo gần đúng: trước khi chuyển ADR sang *accepted*, cần đọc tay vài câu mỗi playbook.
 
 ## Viết playbook an toàn
 

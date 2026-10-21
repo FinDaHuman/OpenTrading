@@ -1,6 +1,8 @@
 import { expect, test } from "bun:test"
 import path from "node:path"
+import { rank, rankingTable } from "../src/core/desk/playbooks/sang-loc"
 import {
+  blindText,
   caseProblems,
   deskIsA,
   judgePrompt,
@@ -65,9 +67,60 @@ test("runDeskEval maps the blind verdict back to desk vs single, skips the judge
   expect(rows.map((r) => r.winner)).toEqual(["desk", "desk", undefined])
   expect(rows[0]!.scores).toEqual({ desk: 0.9, single: 0.4 })
   expect(rows[2]!.single?.error).toBe("429")
+  expect(rows[2]!.reason).toBe("chưa chấm (hạ tầng)")
   const s = summarize(rows)
   expect(s).toMatchObject({ judged: 2, deskWins: 2, singleWins: 0, worth: true, requests: { desk: 90, single: 8, judge: 2 } })
   expect(s.perPlaybook["kiem-chung"]).toMatchObject({ judged: 0, deskRequests: 30, singleRequests: 0 })
+})
+
+test("blindText strips what gives the desk away from a real sang-loc result, keeping the substance", () => {
+  const card = (ticker: string) => ({
+    ticker,
+    data_time: "Q2/2026",
+    chi_so: { pe: 10, pb: 1.5, roe: 18, tang_truong_lnst: 12, bien_gop: 20, no_vay_von_chu: 0.4, ocf_lnst: 1.1 },
+    diem: { chat_luong: 7, dinh_gia: 6, tang_truong: 6, suc_khoe: 7 },
+    diem_manh: [],
+    rui_ro: [],
+    thieu_du_lieu: [],
+    nguon: ["vn_fundamentals"],
+  })
+  const table = rankingTable(rank([card("FPT"), card("MWG")]))
+  // What sang-loc returns: the referee's text, then the code-built table under its heading.
+  const desk = `Bảng xếp hạng FPT dẫn đầu nhờ ROE 18%.\n\n**Bảng điểm (tính bằng code, để đối chiếu):**\n\n${table}\n\nRun bị cắt trước bước tổng hợp. Chạy tiếp bằng /desk resume dk-abc123`
+  const blind = blindText(desk)
+  expect(blind).not.toMatch(/tính bằng code|desk resume|Run bị cắt|dk-abc123/)
+  expect(blind).toContain("ROE 18%")
+  expect(blind).toContain("| 1 | FPT")
+  expect(blindText("Theo playbook ultradesk, subagent đã kiểm 5 mã.")).not.toMatch(/playbook|ultradesk|subagent/i)
+})
+
+test("an arm that failed or was cut is not judged (infrastructure is not quality); the judge gets both answers blinded", async () => {
+  const prompts: string[] = []
+  const rows = await runDeskEval(
+    [
+      { id: 1, playbook: "sang-loc", question: "q1 xếp hạng", args: {} },
+      { id: 2, playbook: "sang-loc", question: "q2 xếp hạng", args: {} },
+    ],
+    {
+      single: async (c) => arm(`mặc định ${c.id}`),
+      desk: async (c) => (c.id === 1 ? { ...arm("một phần"), error: "run bị cắt (quota)" } : arm("**Bảng điểm (tính bằng code, để đối chiếu):**\n\nbảng ultradesk")),
+      judge: async (prompt) => {
+        prompts.push(prompt)
+        return { text: JSON.stringify({ a: score(0.5), b: score(0.5), tot_hon: "hoa", ly_do: "x" }), requests: 1 }
+      },
+    },
+  )
+  expect(rows[0]).toMatchObject({ reason: "chưa chấm (hạ tầng)", judgeRequests: 0 })
+  expect(rows[0]!.scores).toBeUndefined()
+  expect(prompts).toHaveLength(1)
+  expect(prompts[0]).not.toMatch(/tính bằng code|ultradesk/)
+  expect(rows[1]!.winner).toBe("tie")
+})
+
+test("a reference fact reaches the judge when the case has one", () => {
+  const c: DeskEvalCase = { id: 6, playbook: "kiem-chung", question: "Kiểm tra LNST FPT", args: {}, tham_chieu: "LNST FPT 2024: 7.856 tỷ (BCTC kiểm toán)" }
+  expect(judgePrompt(c, "a", "b")).toContain("Dữ kiện tham chiếu (đáng tin, dùng để chấm chinh_xac): LNST FPT 2024")
+  expect(judgePrompt({ ...c, tham_chieu: undefined }, "a", "b")).not.toContain("tham chiếu")
 })
 
 test("worth needs both a clear score gap and a win rate", () => {
