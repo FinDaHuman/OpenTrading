@@ -27,7 +27,8 @@ quality/cost/latency baselines are versioned and every upstream capability has a
 
 Add versioned skills and standard MCP only where concrete workflows require them. Consider multi-agent
 work only after the single-agent baseline identifies a task decomposition that improves measured
-quality enough to justify added cost and failure modes. A local web UI reuses application services.
+quality enough to justify added cost and failure modes. ADR 0006 sets that measurement for the ultradesk
+playbooks (`scripts/dev/desk-eval.ts`). A local web UI reuses application services.
 
 ## Separate future programme — execution
 
