@@ -28,7 +28,7 @@ export function toolSearchTool(registry: ToolRegistry, pending: () => string[] =
     summarize: (input) => `tool_search ${input.query}`,
     async execute({ query, max_results }) {
       const limit = Math.min(max_results ?? DEFAULT_RESULTS, MAX_RESULTS)
-      const candidates = registry.list().filter((d) => d.deferrable)
+      const candidates = registry.list().filter((d) => d.deferrable && !d.onDemand)
       const q = query.trim()
       let found: ToolDef[] = []
       const notes: string[] = []
@@ -36,7 +36,9 @@ export function toolSearchTool(registry: ToolRegistry, pending: () => string[] =
       if (q.toLowerCase().startsWith("select:")) {
         for (const raw of q.slice("select:".length).split(",").map((s) => s.trim()).filter(Boolean)) {
           const names = resolveToolName(registry, raw)
-          if (names.length === 1) found.push(registry.get(names[0]!)!)
+          const def = names.length === 1 ? registry.get(names[0]!) : undefined
+          if (def?.onDemand) notes.push(`${def.name} chỉ dùng được khi người dùng bật nó cho yêu cầu (ví dụ gõ ultradesk); không nạp bằng tool_search.`)
+          else if (def) found.push(def)
           else if (names.length > 1) notes.push(`"${raw}" khớp nhiều tool: ${names.join(", ")} — ghi rõ server/tên.`)
           else notes.push(`Không có tool "${raw}".`)
         }

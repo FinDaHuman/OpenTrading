@@ -34,8 +34,15 @@ export const COMMANDS: CommandInfo[] = [
   { name: "exit", description: "Thoát OpenTrading" },
 ]
 
+/** The built-in commands with the playbook commands right after /desk (so /exit stays last). */
+export function withPlaybooks(commands: CommandInfo[], playbooks: CommandInfo[]): CommandInfo[] {
+  const at = commands.findIndex((c) => c.name === "desk")
+  return at < 0 ? [...commands, ...playbooks] : [...commands.slice(0, at + 1), ...playbooks, ...commands.slice(at + 1)]
+}
+
 export function parseCommand(input: string): { name: string; args: string } | undefined {
-  const match = input.trim().match(/^\/(\S+)\s*(.*)$/)
+  // Arguments may span lines (a pasted report for /kiem-chung, a long /compact instruction).
+  const match = input.trim().match(/^\/(\S+)\s*([\s\S]*)$/)
   if (!match) return undefined
   return { name: match[1]!.toLowerCase(), args: match[2]!.trim() }
 }

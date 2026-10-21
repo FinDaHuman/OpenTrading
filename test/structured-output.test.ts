@@ -251,13 +251,20 @@ test("ultradesk wiring: a playbook agent runs on the real manager, read-only, an
   expect(subagents.list()[0]?.deskRunId).toBe(view.id)
 })
 
-test("an opted-in turn declares desk_run without tool_search and carries the <ultradesk> reminder", async () => {
+test("desk_run (on demand) exists only in an opted-in turn: never in tool_search, declared with the <ultradesk> reminder", async () => {
   const { runAgent } = await import("../src/core/agent")
   const { toolSearchTool } = await import("../src/core/tools/builtin/tool-search")
   const registry = new ToolRegistry()
   registry.register(currentTimeTool(() => new Date("2026-10-21T02:30:00Z")))
-  registry.register({ name: "desk_run", description: "chạy playbook", input: z.object({}), readOnly: true, deferrable: true, async execute() { return "x" } })
-  registry.register(toolSearchTool(registry))
+  registry.register({ name: "desk_run", description: "chạy playbook sàng lọc", input: z.object({}), readOnly: true, onDemand: true, async execute() { return "x" } })
+  registry.register({ name: "sang_loc_data", description: "dữ liệu sàng lọc", input: z.object({}), readOnly: true, deferrable: true, async execute() { return "x" } })
+  const search = toolSearchTool(registry)
+  registry.register(search)
+  // tool_search neither finds nor loads it.
+  const found = String(await search.execute({ query: "sàng lọc playbook" } as never, { signal: new AbortController().signal, callId: "s" }))
+  expect(found).toContain("sang_loc_data")
+  expect(found).not.toContain("desk_run")
+  expect(String(await search.execute({ query: "select:desk_run" } as never, { signal: new AbortController().signal, callId: "s" }))).toContain("chỉ dùng được khi người dùng bật")
   await saveConfig({ provider: "groq", model: "tooly", toolSearch: "on" })
   try {
     replies = [{ text: "Đã rõ." }]

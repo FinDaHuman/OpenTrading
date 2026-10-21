@@ -334,7 +334,10 @@ test("home screen shows branding and connect hint", async () => {
 })
 
 test("the slash-command list: one line per command, straight columns, wraps with the arrow keys", async () => {
-  const { COMMANDS } = await import("../src/tui/commands")
+  const { COMMANDS, withPlaybooks } = await import("../src/tui/commands")
+  const { PLAYBOOKS } = await import("../src/core/desk/playbooks")
+  // Playbook commands sit right after /desk.
+  const listed = withPlaybooks(COMMANDS, PLAYBOOKS.map((p) => ({ name: p.meta.name, description: "" })))
   await setup.mockInput.typeText("/")
   // List rows: after the 2-cell margin (where the animated background may draw), " ❯ /x" or
   // "   /x". Home's own tips are indented much further.
@@ -350,7 +353,7 @@ test("the slash-command list: one line per command, straight columns, wraps with
   expect(frame).not.toContain("/helpr")
   const rows = listRows(frame)
   expect(rows).toHaveLength(8)
-  expect(rows.map((r) => r.trim().replace(/^❯ /, "").split(" ")[0])).toEqual(COMMANDS.slice(0, 8).map((c) => `/${c.name}`))
+  expect(rows.map((r) => r.trim().replace(/^❯ /, "").split(" ")[0])).toEqual(listed.slice(0, 8).map((c) => `/${c.name}`))
   // The description column starts at the same cell on every row.
   const starts = rows.map((r) => r.search(/\/\S+( \S+)*? {2,}\S/) + (/\/\S+( \S+)*? {2,}/.exec(r)?.[0].length ?? 0))
   expect(new Set(starts).size).toBe(1)
@@ -751,7 +754,7 @@ test("/tools lists built-in and MCP tools", async () => {
     // 6 core built-ins (current_time, load_skill, ask_user, todo_write, tool_search, read_file)
     // + 24 local tools (glob_files, grep_files, write_file, edit_file, shell, chart, session, watchlist, web, spawn_subagent, send_message, stop_agent, doctor_local, desk_run)
     // + propose_memory + 4 from the demo MCP server
-    frame = await setup.waitForFrame((f) => f.includes("Tool · 35") && f.includes("26 tool hoãn"))
+    frame = await setup.waitForFrame((f) => f.includes("Tool · 35") && f.includes("25 tool hoãn"))
     show(frame)
     // Regression for the 01/10 screenshot: every tool is exactly one line, long descriptions
     // end in "…" instead of wrapping mid-word, and the mark column is straight.
@@ -764,8 +767,8 @@ test("/tools lists built-in and MCP tools", async () => {
     expect(timeRow).toMatch(/…\s+\[chỉ đọc\]\s*$/)
     expect(frame).not.toMatch(/^\s+Asia\/H/m)
     expect(frame).toContain("Có sẵn")
-    // 3 demo tools (add is alwaysLoad) + 23 optional local tools (incl. glob_files/grep_files/write_file/edit_file/shell) (incl. web_search/web_fetch) (chart, session, watchlist, doctor, send_message, stop_agent, desk_run)
-    expect(frame).toContain("26 tool hoãn: model chỉ thấy tên")
+    // 3 demo tools (add is alwaysLoad) + 22 optional local tools (incl. glob_files/grep_files/write_file/edit_file/shell) (incl. web_search/web_fetch) (chart, session, watchlist, doctor, send_message, stop_agent); desk_run is on demand, not deferred
+    expect(frame).toContain("25 tool hoãn: model chỉ thấy tên")
     expect(timeRow).not.toContain("hoãn · ")
     // read_file is core (a path from the user is read at once); spawn_subagent sits below the fold now.
     expect(rows.find((r) => r.includes(" read_file "))).not.toContain("hoãn · ")
@@ -2289,6 +2292,23 @@ test("prompt: a long paste becomes one pill; one Backspace deletes it; sending p
   const last = JSON.parse((await Bun.file(historyFile()).text()).trim().split("\n").at(-1)!)
   expect(Object.values(last.pastes)).toEqual([pasted])
   await clearPrompt()
+})
+
+test("/kiem-chung with a pasted multi-line report: the whole text reaches the model, opted in, desk_run declared", async () => {
+  const report = Array.from({ length: 30 }, (_, i) => `FPT dòng-báo-cáo-${i + 1}: LNST ${i + 1}00 tỷ`).join("\n")
+  await setup.mockInput.typeText("/kiem-chung ")
+  await setup.mockInput.pasteBracketedText(report)
+  const frame = await setup.waitForFrame((f) => /\/kiem-chung \[Pasted text #\d+ \+29 lines\]/.test(f))
+  show(frame)
+  await sendWith("test-model", "/kiem-chung")
+  const sent = lastUserContent()
+  expect(sent).toContain("Chạy playbook ultradesk kiem-chung")
+  expect(sent).toContain("dòng-báo-cáo-1:")
+  expect(sent).toContain("dòng-báo-cáo-30")
+  // The <ultradesk> reminder rides on the message, and desk_run is declared for this turn only.
+  expect(sent).toContain("thay vì tự điều phối theo skill")
+  const tools = (chatBodies.at(-1) as unknown as { tools?: { function: { name: string } }[] }).tools ?? []
+  expect(tools.some((t) => t.function.name === "desk_run")).toBe(true)
 })
 
 test("prompt: pasting over a highlight replaces it with the pill, which still expands", async () => {

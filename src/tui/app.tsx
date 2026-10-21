@@ -33,7 +33,7 @@ import { ApprovalPrompt } from "./approval"
 import { AskPrompt } from "./ask"
 import { McpPanel, STATUS } from "./mcp/panel"
 import { rank, truncate } from "./ui/text"
-import { COMMANDS, parseCommand, parsePromptArgs, promptUsage, type CommandInfo } from "./commands"
+import { COMMANDS, parseCommand, parsePromptArgs, promptUsage, withPlaybooks, type CommandInfo } from "./commands"
 import { ConfigDialog } from "./dialogs/config"
 import { ConnectDialog } from "./dialogs/connect"
 import { ContextDialog } from "./dialogs/context"
@@ -779,7 +779,7 @@ export function App(props: {
 
   /** /<playbook>: ask the model to run that playbook for the rest of the line (an opt-in). */
   const playbookCommands: CommandInfo[] = PLAYBOOKS.map((p) => ({ name: p.meta.name, args: "<yêu cầu>", argsRequired: true, description: `Ultradesk: ${p.meta.description.split("\n")[0]}` }))
-  const allCommands = createMemo<CommandInfo[]>(() => [...COMMANDS, ...playbookCommands, ...promptCommands()])
+  const allCommands = createMemo<CommandInfo[]>(() => [...withPlaybooks(COMMANDS, playbookCommands), ...promptCommands()])
 
   /**
    * The "/" list, Claude Code style: open while the draft is "/" + a command name (no
@@ -1321,7 +1321,8 @@ export function App(props: {
     if (playbook) {
       if (!cmd.args) return say(`Dùng: /${playbook.meta.name} <yêu cầu>`, "error")
       const text = `Chạy playbook ultradesk ${playbook.meta.name} cho yêu cầu sau (gọi desk_run với args đúng schema): ${cmd.args}`
-      const outgoing = { text, display: `/${playbook.meta.name} ${cmd.args}`, desk: "command" as const }
+      // The transcript shows the start of a long pasted argument; the model gets all of it.
+      const outgoing = { text, display: `/${playbook.meta.name} ${truncate(cmd.args.replace(/\s+/g, " "), 200)}`, desk: "command" as const }
       if (state.streaming) return void setState("queue", (q) => [...q, { ...outgoing, images: [], saved: {} }])
       return void send(props.runtime, outgoing)
     }
