@@ -2378,6 +2378,22 @@ test("/kiem-chung with a pasted multi-line report: the whole text reaches the mo
   expect(sent).toContain("thay vì tự điều phối theo skill")
   const tools = (chatBodies.at(-1) as unknown as { tools?: { function: { name: string } }[] }).tools ?? []
   expect(tools.some((t) => t.function.name === "desk_run")).toBe(true)
+  // The fake model answered in text: the transcript says the playbook never started.
+  await setup.waitFor(() => state.lines.some((l) => l.kind === "info" && l.text.includes("model không gọi desk_run")))
+})
+
+test("ultradesk keyword answered without a run: one line says no playbook ran and how to start one", async () => {
+  await setup.mockInput.typeText("ultradesk phân tích các mã nổi bật gần đây")
+  await sendWith("test-model", "ultradesk phân tích")
+  const frame = await setup.waitForFrame((f) => f.includes("ultradesk: model không chạy playbook nào"))
+  show(frame)
+  const note = state.lines.findLast((l) => l.kind === "info")
+  expect(note).toMatchObject({ text: expect.stringContaining("/sang-loc · /kiem-chung · /tranh-bien · /nganh <yêu cầu>") })
+  // An ordinary message says nothing about ultradesk.
+  const count = state.lines.filter((l) => l.kind === "info" && l.text.startsWith("ultradesk:")).length
+  await setup.mockInput.typeText("chào bạn")
+  await sendWith("test-model", "chào bạn")
+  expect(state.lines.filter((l) => l.kind === "info" && l.text.startsWith("ultradesk:")).length).toBe(count)
 })
 
 test("prompt: pasting over a highlight replaces it with the pill, which still expands", async () => {

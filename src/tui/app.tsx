@@ -49,7 +49,7 @@ import { focusWatchlist, WatchlistDialog } from "./dialogs/watchlist"
 import { watchlistOps } from "../core/tools/watchlist/local"
 import { noticesMessage, notificationText } from "../core/subagents/notification"
 import { DESK_NOTE, deskNotification } from "../core/desk/notification"
-import { deskReminder, hasDeskKeyword, type DeskOptIn } from "../core/desk/keyword"
+import { deskReminder, deskSkippedNote, hasDeskKeyword, type DeskOptIn } from "../core/desk/keyword"
 import { deskSettings } from "../core/desk/settings"
 import { DESK_RUN } from "../core/desk/tool"
 import { PLAYBOOKS } from "../core/desk/playbooks"
@@ -367,6 +367,8 @@ async function sendTurn(runtime: Runtime, msg: Outgoing, mode: { recover?: boole
   const live = () => epoch === mine
   let failed = false
   let overflow: "resend" | "continue" | undefined
+  // The request asked for ultradesk (keyword, /<playbook>) and the model started a run.
+  let deskStarted = false
   // Index of the assistant line currently receiving text; -1 after a tool call.
   let current = -1
   const edit = (index: number, fn: (line: any) => void) => {
@@ -442,6 +444,7 @@ async function sendTurn(runtime: Runtime, msg: Outgoing, mode: { recover?: boole
           closeText()
           pushLine({ kind: "tool", callId: event.callId, name: event.name, label: event.label, status: "running", step: event.step })
           if (event.name === TODO_WRITE) todoCalls.set(event.callId, event.input)
+          if (event.name === DESK_RUN) deskStarted = true
           break
         case "tool-end":
           edit(
@@ -501,6 +504,11 @@ async function sendTurn(runtime: Runtime, msg: Outgoing, mode: { recover?: boole
     const worked = state.activity ? activeMs(state.activity, now()) : 0
     if (live()) {
       closeText()
+      // The user asked for ultradesk in this message but the model ran no playbook: say so,
+      // or nothing on screen tells the run never started (/desk on has its mode-line pill).
+      if (msg.desk && msg.desk !== "session" && !deskStarted && !failed && !controller.signal.aborted && PLAYBOOKS.length > 0) {
+        pushLine({ kind: "info", text: deskSkippedNote(msg.desk, PLAYBOOKS) })
+      }
       // Someone looking at another window hears that the answer (or the error) is in.
       if (!controller.signal.aborted && !msg.notice && !overflow) {
         const last = state.lines.findLast((l) => l.kind === "assistant" || l.kind === "error")

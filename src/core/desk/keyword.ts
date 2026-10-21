@@ -32,6 +32,18 @@ const WHY: Record<DeskOptIn, string> = {
   command: "Người dùng chạy lệnh playbook",
 }
 
+/**
+ * The transcript line when the user asked for ultradesk in a message (keyword or /<playbook>)
+ * and the turn ended without desk_run: the model judged no playbook fits, or ignored the
+ * reminder (weak models often do). Without it nothing on screen says no run started.
+ */
+export function deskSkippedNote(optIn: DeskOptIn, playbooks: Playbook[]): string {
+  const commands = playbooks.map((p) => `/${p.meta.name}`).join(" · ")
+  return optIn === "command"
+    ? `ultradesk: model không gọi desk_run nên playbook chưa chạy. Thử lại, hoặc dùng model gọi tool tốt hơn (/model).`
+    : `ultradesk: model không chạy playbook nào cho yêu cầu này (không khớp playbook, hoặc model bỏ qua). Chạy thẳng một playbook: ${commands} <yêu cầu>; /desk xem các run.`
+}
+
 /** The reminder for a request with desk runs allowed: what the playbooks are for, and how to start one. */
 export function deskReminder(optIn: DeskOptIn, playbooks: Playbook[]): string {
   const list = playbooks.map((p) => `- ${p.meta.name.replace(/-/g, "_")}: ${p.meta.whenToUse.replace(/\s+/g, " ").trim()}`).join("\n")
