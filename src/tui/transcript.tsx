@@ -12,6 +12,8 @@ import { fmtElapsed } from "./activity"
 import { TODO_PREFIX } from "../core/tools/todos"
 import { LOADED_PREFIX } from "../core/tools/search"
 import { isSpawn, SubagentRow } from "./subagent-row"
+import { DESK_RUN } from "../core/desk/tool"
+import { DeskCard, deskRunIdOf, isLiveRun, runSummary } from "./desk-card"
 
 /**
  * The conversation, in Claude Code's style:
@@ -50,6 +52,8 @@ function summary(line: ToolLine): { tone: "ok" | "denied" | "answers"; lines: st
   if (line.status === "error" && out.startsWith(LOADED_PREFIX) && !state.expandTools) {
     return { tone: "ok", lines: [out.split("\n")[1] ?? out], wrap: true }
   }
+  // The live card under the row says the rest.
+  if (line.name === DESK_RUN && line.status === "ok" && deskRunIdOf(out)) return { tone: "ok", lines: [out.split("\n")[0] ?? out] }
   if (line.status === "error" && out.startsWith("Người dùng từ chối chạy tool này")) {
     const note = /Lời nhắn của người dùng: (.*)$/s.exec(out)?.[1]
     return { tone: "denied", lines: [`✘ Đã từ chối${note ? ` — "${note.trim()}"` : ""}`] }
@@ -136,6 +140,26 @@ function ToolRow(props: { line: ToolLine; first: boolean; width: number }) {
   )
 }
 
+/** Under a desk_run row: the live card while the run goes, one line once it ended (ctrl+o: the card). */
+function DeskRunBlock(props: { line: ToolLine; width: number }) {
+  const run = () => {
+    const id = deskRunIdOf(props.line.output)
+    return id ? state.deskRuns[id] : undefined
+  }
+  return (
+    <Show when={run()}>
+      {(r) => (
+        <Show
+          when={isLiveRun(r()) || state.expandTools}
+          fallback={<ResultLine prefix={RESULT_CONT} text={truncate(`◆ ${runSummary(r())} · ctrl+o xem · /desk`, Math.max(10, props.width - RESULT.length))} fg={r().status === "done" ? color.tang : color.tham} />}
+        >
+          <DeskCard run={r()} width={props.width} />
+        </Show>
+      )}
+    </Show>
+  )
+}
+
 /**
  * Decorations (❯ ● ⎿ · ✘ and indents) are not selectable: highlighting a reply with the
  * mouse copies the words only.
@@ -204,7 +228,14 @@ function Row(props: { line: Line; prev?: Line; index: number; width: number }) {
       </Match>
       <Match when={props.line.kind === "tool" && props.line}>
         {/* Consecutive tool calls sit together; a new group gets a blank line above. */}
-        {(line) => <ToolRow line={line() as ToolLine} first={props.prev?.kind !== "tool" || isSpawn(props.prev)} width={props.width} />}
+        {(line) => (
+          <>
+            <ToolRow line={line() as ToolLine} first={props.prev?.kind !== "tool" || isSpawn(props.prev)} width={props.width} />
+            <Show when={(line() as ToolLine).name === DESK_RUN}>
+              <DeskRunBlock line={line() as ToolLine} width={props.width} />
+            </Show>
+          </>
+        )}
       </Match>
       <Match when={props.line.kind === "chart" && props.line}>
         {(line) => <ChartBox data={(line() as Extract<Line, { kind: "chart" }>).data} width={props.width} />}
