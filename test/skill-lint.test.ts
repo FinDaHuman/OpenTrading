@@ -7,7 +7,7 @@ import { suggestSkills } from "../src/core/skills/catalog"
 import { loadSkillTool } from "../src/core/tools/builtin/load-skill"
 import type { Skill } from "../src/core/skills/schema"
 import { lintSkills } from "./helpers/skill-lint"
-import { copiedResultHit } from "./helpers/skill-lint"
+import { copiedResultHit, treeProblems } from "./helpers/skill-lint"
 
 const root = path.join(import.meta.dir, "..")
 const ctx = { signal: new AbortController().signal, callId: "c1" }
@@ -48,6 +48,27 @@ test("copiedResults bắt đúng các dạng kết quả bảng, và không bắ
   expect(copiedResultHit("| 2016–2017 | Uptrend dài | Tín dụng cao, bank + Vingroup dẫn dắt |")).toBeNull()
   // ca hợp lệ (provenance) thoát bằng marker
   expect(copiedResultHit("<!-- lint:allow-result --> Backtest gốc Mỹ 1973–2004, mạnh nhất toàn bảng")).toBeNull()
+})
+
+test("decision trees: every node ends in └─, a ★ stops, every other branch names an existing next node", () => {
+  expect(report.decisionTrees).toEqual([])
+})
+
+test("treeProblems catches the tree defects found in the PR #116 review", () => {
+  const tree = (lines: string) => `## Cây quyết định thử\n\n${lines}\n\n## Khác\n`
+  // ★ that reads on, node without └─, dead-end branch, jump to a missing node
+  expect(treeProblems(tree("Q1. A?\n├─ Có → ★ \"X\". Đọc Q2 để chốt\n└─ Không → tiếp Q2\n\nQ2. B?\n├─ Có → ★ \"Y\"\n├─ Không → ★ \"Z\""))).toEqual([
+    'Q1: ★ vừa dừng vừa đi tiếp — ├─ Có → ★ "X". Đọc Q2 để chốt',
+    "Q2: nhánh cuối phải là └─ (có câu trả lời không có nhánh)",
+  ])
+  expect(treeProblems(tree("Q1. A?\n├─ Có → ghi lại\n└─ Không → tiếp Q9"))).toEqual([
+    "Q1: nhánh không có ★ cũng không trỏ Q tiếp — ├─ Có → ghi lại",
+    "Q1: trỏ tới Q9 không tồn tại",
+  ])
+  // a ★ that points elsewhere with "(Q1)" is the same defect; continuation lines join their branch
+  expect(treeProblems(tree('Q1. A?\n├─ Có → ★ "X — đọc chu kỳ\n   (Q1)"\n└─ Không → ★ "Y"'))).toHaveLength(1)
+  const ok = 'Q1 (chung). A?\n├─ Có → tiếp tục Q2\n└─ Không → ★ "X: kèm\n   ghi chú công suất"\n\nQ2. B?\n├─ Có → ★ "Y"\n└─ Không → ★ "Z"'
+  expect(treeProblems(tree(ok))).toEqual([])
 })
 
 test("an everyday question does not pull in the chart skill", async () => {

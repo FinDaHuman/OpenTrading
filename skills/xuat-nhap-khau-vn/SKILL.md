@@ -1,181 +1,155 @@
 ---
 name: xuat-nhap-khau-vn
-description: "Phân tích xuất nhập khẩu Việt Nam theo chính sách thuế hai lớp, cơ cấu ngành hàng, động lực đầu tư nước ngoài và dòng nhập khẩu làm tín hiệu dẫn. Dùng khi hỏi xuất khẩu, thuế quan hay chu kỳ xuất khẩu."
+description: "Đọc xuất nhập khẩu VN theo nhóm hàng: chênh lệch thuế Mỹ so với đối thủ, nhập máy móc làm chỉ báo dẫn, FDI, đơn hàng, tỷ giá. Dùng khi hỏi ngành xuất khẩu chịu gì, nhóm hàng nào hưởng."
 activation: auto
-requires_tools: [vs_xnk_detail, vs_indicator_data]
-uses_tools: [vs_xnk_detail, vs_indicator_data, financial_detail, financial_ratios, yf_commodities, vn_forex_ohlcv, planned_targets, analyst_consensus, peer_compare, news_symbol, news_market, symbol_lookup, vn_company]
+requires_tools: [vs_indicator_data]
+uses_tools: [vs_indicator_data, vs_categories, vs_xnk_detail, vn_forex_ohlcv, financial_detail, financial_statements, financial_ratios, planned_targets, analyst_consensus, peer_compare, news_symbol, news_market, web_search, symbol_lookup, vn_company]
 triggers:
-  keywords: [ngành xuất nhập khẩu, thuế quan, thuế quan mỹ, cán cân thương mại, dòng vốn nước ngoài, nhập siêu, tỷ giá xuất khẩu, phân tích xuất khẩu, xuất khẩu tăng, nhập khẩu máy móc]
+  keywords: [ngành xuất nhập khẩu, ngành xuất khẩu, nhóm xuất khẩu, doanh nghiệp xuất khẩu, kim ngạch xuất khẩu, cán cân thương mại, nhập siêu, xuất siêu, thuế đối ứng, xuất khẩu tăng, nhập khẩu máy móc, vốn fdi, đầu tư trực tiếp nước ngoài]
+  exclude: [dẫn sóng, sóng ngành, đầu sóng, giữa sóng, cuối sóng, pha nào, giai đoạn nào, chu kỳ ngành, luân chuyển ngành, rotation, tin gì, tin tức, tin mới, so sánh, khuyến nghị, nên mua, nên bán]
 version: 1.0.0
 ---
 
 # Xuất nhập khẩu Việt Nam — framework phân tích
 
-Xuất nhập khẩu VN là **chu kỳ chính sách trên nền chu kỳ công nghệ**: tăng trưởng
-hàng năm là một con số, nhưng bên trong nó các ngành hàng chạy theo chu kỳ khác
-nhau (điện tử đang tăng mạnh trong khi dệt may đi ngang). Skill này đọc ngành bằng:
+Tổng kim ngạch là một con số che nhiều nhóm hàng đi ngược nhau. Skill này đọc theo
+**nhóm hàng** và bốn biến:
 
-1. **Thuế hai lớp** — thuế đối ứng chung (mức đều cho mọi đối tác) và **thuế chủ
-   đề chọn lọc** (ví dụ biện pháp kỹ thuật lao động): lớp thứ hai có **danh sách
-   miễn** và các ngành không được miễn chịu chênh lệch rõ rệt so với đối thủ.
-2. **Chu kỳ công nghệ toàn cầu** — điện tử và linh kiện có chu kỳ riêng, không đi
-   cùng dệt may.
-3. **Nhập khẩu máy móc như chỉ báo dẫn** — nhập thiết bị tăng trước khi xuất khẩu
-   tăng, vì tiến độ triển khai công suất chưa cho ra sản phẩm.
-4. **Dòng vốn nước ngoài** — doanh nghiệp vốn ngoại chiếm phần lớn trị giá xuất
-   khẩu; thu hút đầu tư mới là tín hiệu dẫn cho chu kỳ xuất khẩu tiếp theo.
+1. **Thuế quan của thị trường nhập khẩu (chủ yếu Mỹ) có hai lớp.** Lớp theo nước: mức
+   thuế đối ứng **khác nhau giữa các nước**, nên chênh lệch giữa Việt Nam và đối thủ
+   cùng mặt hàng (Trung Quốc, Ấn Độ, Indonesia, Bangladesh, Thái Lan…) đổi thứ hạng cạnh
+   tranh. Lớp theo mặt hàng: thuế riêng cho một số ngành áp cho mọi nước, kèm danh sách
+   miễn trừ và quy tắc xuất xứ, chống chuyển tải.
+2. **Chu kỳ của nhóm hàng**: điện tử, linh kiện theo chu kỳ công nghệ toàn cầu; dệt may,
+   giày dép, đồ gỗ theo đơn hàng và tồn kho của nhà bán lẻ nước ngoài; nông thuỷ sản
+   theo mùa vụ, giá thế giới và rào kiểm dịch.
+3. **Nhập khẩu máy móc, linh kiện là chỉ báo dẫn**: dây chuyền mới nhập trước, vài quý
+   sau mới ra hàng xuất khẩu.
+4. **FDI**: doanh nghiệp vốn nước ngoài chiếm phần lớn kim ngạch; vốn đăng ký và giải
+   ngân mới báo trước công suất xuất khẩu.
 
 ## Khi nào dùng
 
-- Dùng khi: user hỏi xuất khẩu, nhập khẩu, thuế quan ảnh hưởng gì, dòng vốn nước
-  ngoài, ngành nào đang hưởng và ngành nào bị siết.
-- Khi KHÔNG dùng (dùng skill khác thay thế):
-  - Hỏi pha thị trường / luân chuyển ngành / sóng ngành tiếp theo → `dinh-vi-chu-ky-vn`.
+- Dùng khi: hỏi ngành/nhóm hàng xuất khẩu chịu gì từ thuế quan, xuất khẩu tăng thì nhóm
+  nào hưởng, nhập khẩu máy móc nói lên gì, FDI vào ngành nào.
+- Khi KHÔNG dùng:
+  - Pha thị trường, xuất khẩu tốt thì ngành nào dẫn sóng → `dinh-vi-chu-ky-vn`.
+  - Số GDP, CPI, xuất khẩu tháng như một chỉ tiêu vĩ mô → `danh-gia-vi-mo-viet-nam`.
+  - Khối ngoại mua/bán ròng trên sàn chứng khoán: không phải FDI, skill này không áp dụng.
+  - Thuế quan ảnh hưởng chính sách Fed → `du-doan-fed`.
   - Phân tích toàn diện một mã → `phan-tich-chuyen-sau-1-ma`.
-  - Chỉ định giá một mã → `dinh-gia-chuyen-sau`; chỉ đọc BCTC một mã → `co-ban-chuyen-sau`.
-  - Xuất khẩu nông sản/lâm thổ sản (gạo, cà phê, hạt điều, gỗ) đọc tại đây — kênh xuất
-    khẩu và nhóm hàng; phần vĩ mô sản xuất nội địa → `danh-gia-vi-mo-viet-nam`.
-  - Số liệu vĩ mô VN chi tiết (tăng trưởng GDP, lạm phát) → `danh-gia-vi-mo-viet-nam`.
 
 ## Trụ cột driver
 
-| Driver | Kênh truyền dẫn | Đọc/xác minh bằng |
+| Driver | Cơ chế | Đọc bằng |
 |---|---|---|
-| Thuế hai lớp | Thuế đối ứng chung đều cho mọi đối thủ, nên **không đổi thứ hạng cạnh tranh**. Thuế chủ đề chọn lọc làm chênh: ngành không được miễn mất lợi thế giá so với quốc gia bị áp mức thấp hơn | Chính sách thuế + danh sách miễn + mức áp từng nước: `news_market`/`web_search` (cơ quan thương mại và báo chí chuyên ngành), ghi rõ nguồn + ngày |
-| Chu kỳ công nghệ toàn cầu | Chu kỳ thay thế/tăng công suất điện tử điều khiển cả tăng trưởng toàn ngành, tách khỏi dệt may và hàng thủ công | Tăng trưởng **theo nhóm hàng**: `news_market`/`web_search` (công bố GSO và Tổng cục Hải quan theo kỳ, ghi rõ nguồn) — `vs_xnk_detail` chỉ trả cơ cấu theo nước, không có nhóm hàng |
-| Nhập khẩu máy móc (chỉ báo dẫn) | Nhập thiết bị công nghệ tăng trước vài quý so với xuất khẩu hàng công nghệ: dây chuyền chưa chạy thì hàng chưa chảy về | Nhập **thiết bị/máy móc theo nhóm hàng**: `news_market`/`web_search` (bảng hàng hoá theo kỳ, ghi nguồn + kỳ); đối chiếu thêm `vs_xnk_detail` cho hướng nhập theo nước |
-| Dòng vốn nước ngoài | Doanh nghiệp vốn ngoài chiếm phần lớn trị giá xuất khẩu; đăng ký mới và giải ngân quyết định sản lượng tương lai | Vốn đăng ký/giải ngân: `vs_indicator_data` hoặc `news_market`, ghi kỳ |
-| Cơ cấu ngành hàng | Cùng nhãn "xuất khẩu", nhưng điện tử, dệt may, hàng thủ công, lâm thổ sản và thủy sản chịu thuế khác nhau và theo chu kỳ khác nhau | Nhóm hàng + trị giá: `news_market`/`web_search` (thống kê hàng hoá theo kỳ). `vs_xnk_detail` chỉ cho **cơ cấu theo nước + tỷ trọng khu vực FDI** |
-| Tỷ giá | Tỷ giá vàng (USD) tác động giá trị xuất khẩu tính theo ngoại tệ và chi phí nhập khẩu tính bằng nội tệ | `vn_forex_ohlcv` (USD/VND theo chu kỳ) + `yf_commodities` (chỉ số USD) |
+| Chênh lệch thuế theo nước | Mức thuế đối ứng của Việt Nam so với đối thủ cùng mặt hàng quyết định ai rẻ hơn ở thị trường nhập khẩu | Mức thuế từng nước, ngày hiệu lực: `web_search` (văn bản, cơ quan thương mại), ghi nguồn + ngày |
+| Thuế theo mặt hàng, xuất xứ | Thuế ngành áp mọi nước; danh sách miễn trừ; quy tắc xuất xứ và chống chuyển tải làm hàng có tỷ lệ nguyên liệu nhập cao bị áp mức khác | `web_search`, ghi văn bản + ngày |
+| Kim ngạch theo nhóm hàng | Mỗi nhóm một chu kỳ | Số liệu theo nhóm hàng (Tổng cục Thống kê, Hải quan): `web_search`, ghi kỳ; tổng xuất khẩu: `vs_indicator_data(indicator="XK")` |
+| Thị trường đích | Tỷ trọng Mỹ, EU, Trung Quốc… cho biết nhóm nào chịu thuế Mỹ nhiều nhất | `vs_xnk_detail(direction="xk")` — số liệu **theo nước**, không theo nhóm hàng |
+| Nhập máy móc, linh kiện | Chỉ báo dẫn vài quý cho xuất khẩu cùng nhóm | Nhập khẩu theo nhóm hàng: `web_search`; nhập theo nước: `vs_xnk_detail(direction="nk")` |
+| FDI | Vốn đăng ký và giải ngân mới | `vs_categories` → `vs_indicator_data(category_id=…, term_type_id=…)`; không có chuỗi thì `web_search` |
+| Tỷ giá | Nội tệ yếu: kim ngạch quy đổi ra đồng tăng nhưng nguyên liệu nhập đắt hơn; nội tệ mạnh thì ngược lại | `vn_forex_ohlcv(pair="USDVND")` |
 
 ## Các bước
 
-**Bước 1: Xác định phạm vi (song song).**
+**Bước 1 (song song):** xác định nhóm hàng (và mã nếu hỏi một công ty: `symbol_lookup`,
+`vn_company`, `financial_detail(symbol, statement=TM)` cho doanh thu theo thị trường).
 
-`symbol_lookup` (nếu hỏi về một công ty) · `vn_company` (mảng sản phẩm + thị trường
-xuất khẩu). Nếu hỏi ngành → đọc thẳng Bước 2.
+**Bước 2 (song song):** `vs_indicator_data(indicator="XK")` (tổng xuất khẩu) ·
+`vs_xnk_detail(direction="xk")` và `vs_xnk_detail(direction="nk")` (theo nước) ·
+`web_search` cho kim ngạch xuất và nhập máy móc, linh kiện **theo nhóm hàng** (ghi kỳ,
+nguồn).
 
-**Bước 2: Số liệu thương mại (song song).**
+**Bước 3 (song song):** `web_search` (mức thuế Việt Nam và đối thủ cho nhóm hàng, thuế
+theo mặt hàng, quy tắc xuất xứ — ghi văn bản + ngày) · `vs_categories` →
+`vs_indicator_data` (FDI) · `vn_forex_ohlcv` (USDVND).
 
-`vs_xnk_detail` (xuất/nhập khẩu theo kỳ, **theo nước** + tỷ trọng FDI) · `vs_indicator_data`
-(tổng mức XK qua preset `XK`, dòng vốn nước ngoài) · `news_market`/`web_search` cho chuỗi
-**theo nhóm hàng** (thiết bị, điện tử, dệt may, thủy sản) — ghi rõ kỳ và nhóm hàng đang đọc.
+**Bước 4:** đi cây, rồi **ghi một dòng tác động tỷ giá cạnh verdict** (đọc ở Bước 3).
+Riêng mã: `financial_detail(symbol, statement=KQKD)`, `planned_targets`,
+`analyst_consensus`; `peer_compare` chỉ trả P/E, P/B, EPS, BVPS, ROE/ROA.
 
-**Bước 3: Chính sách thuế + tỷ giá (song song).**
+## Cây quyết định nhóm hàng đang hưởng hay bị siết
 
-`news_market` (chính sách thuế, danh sách miễn, biện pháp kỹ thuật, điều tra) ·
-`vn_forex_ohlcv` + `yf_commodities` (tỷ giá và chỉ báo USD).
+Duyệt từ Q1, **dừng ở ★ đầu tiên**. Nhánh "không có số" đi tiếp với độ tin cậy thấp.
 
-**Bước 4: Đọc chéo cặp nhập – xuất (song song).**
+Q1. Mức thuế Mỹ (theo nước + theo mặt hàng) áp lên nhóm hàng của Việt Nam so với đối
+thủ chính?
+├─ Cao hơn rõ và Mỹ là thị trường đích lớn của nhóm → ★ "Bị siết bởi chênh lệch thuế:
+│  đơn hàng có thể dịch sang đối thủ, đọc tỷ trọng Mỹ và biên của doanh nghiệp"
+├─ Thấp hơn hoặc ngang đối thủ, hoặc Mỹ không phải thị trường chính → tiếp Q2
+└─ Chưa tra được mức thuế hiện hành → tiếp Q2, ghi "chưa xác nhận thuế"
 
-Đặt nhập khẩu thiết bị/linh kiện cạnh xuất khẩu **cùng nhóm hàng** (cả hai lấy từ
-`news_market`/`web_search` theo kỳ; `vs_xnk_detail` chỉ đối chiếu hướng theo nước) ·
-tương quan chính sách (`news_market`) · riêng mã: `financial_detail` (doanh thu xuất
-khẩu nếu công bố) · `peer_compare` nếu so nhiều công ty.
+Q2. Nhóm hàng theo chu kỳ nào?
+├─ Điện tử, linh kiện, máy móc → tiếp Q3
+├─ Dệt may, giày dép, đồ gỗ → tiếp Q4
+└─ Nông, thuỷ sản → tiếp Q4
 
-## Cây quyết định ngành hàng đang hưởng hay bị siết
+Q3 (công nghệ). Nhập khẩu máy móc, linh kiện cùng nhóm có tăng trước vài quý không?
+├─ Có → ★ "Công suất mới đang lên: xuất khẩu nhóm này có nền tăng trong các quý tới"
+└─ Không, hoặc chưa dựng được chuỗi theo nhóm hàng → tiếp Q4
 
-Duyệt Q1→Q6 theo thứ tự, **DỪNG ở ★ đầu tiên** mà ĐỦ điều kiện. Thiếu dữ liệu thì
-hạ độ tin cậy, không bù số.
-
-Q1. Nhóm hàng có nằm trong danh sách miễn của chính sách thuế chọn lọc không?
-├─ Có → ★ "Không chịu lớp thuế chủ đề: ranh giới cạnh tranh giữ nguyên — đọc chu kỳ
-   công nghệ (Q4) để xem nguồn tăng"
-├─ Không → tiếp Q2
-└─ Chưa có danh sách rõ → tiếp Q2 với độ tin cậy thấp, ghi rõ
-
-Q2. Nước đang áp mức thuế cao hơn đối thủ cùng phân khúc không?
-├─ Có → tiếp Q3
-└─ Không hoặc bằng đối thủ → ★ "Ranh giới thuế không siết thêm: đọc chu kỳ công
-   nghệ (Q4) và chu kỳ cầu"
-
-Q3. Ngành hàng có đối thủ cùng phân khúc ở mức thuế thấp hơn không?
-├─ Có (ví dụ cùng loại hàng xuất khẩu) → ★ "Bị siết bởi thuế chủ đề: đối thủ cùng
-   sản phẩm ở mức thuế thấp hơn hưởng chênh lệch — đọc vị thế giá và đơn hàng"
-└─ Không, đối thủ đều ở mức trên hoặc bằng → tiếp Q4
-
-Q4. Nhóm hàng đang theo chu kỳ công nghệ tăng hay chu kỳ thủ công đi ngang?
-├─ Chu kỳ công nghệ (điện tử, linh kiện, thiết bị) → tiếp Q5
-├─ Chu kỳ thủ công/dệt may đi ngang → ★ "Tăng trưởng toàn ngành không phân bổ đều:
-   nhóm này đang đi ngang dù tổng xuất khẩu tăng — hạ độ tin cậy kỳ vọng tăng"
-└─ Chưa rõ → tiếp Q5 với độ tin cậy thấp
-
-Q5. Nhập khẩu thiết bị cùng nhóm có đang tăng trước không? (node TRUNG GIAN —
-ghi lại kết luận rồi tiếp Q6, không dừng ở đây)
-├─ Có, nhập tăng vài quý trước → ghi "có công suất mới đang triển khai" → tiếp Q6
-├─ Không, nhập chững → ghi "không có công suất mới; tăng trưởng đến từ giá/cầu
-   hiện có, hạ độ tin cậy khi cầu toàn cầu đổi chiều" → tiếp Q6
-└─ Chưa dựng được → ghi "thiếu chuỗi nhập theo nhóm hàng" → tiếp Q6
-
-Q6. Tỷ giá đang ở trạng thái nào? (node ★ CUỐI — verdict gộp cả trạng thái Q5)
-├─ Nội tệ yếu/phá giá → ★ "Tỷ giá thuận cho xuất khẩu (trị giá tính ngoại tệ được
-   đỡ) NHƯNG chi phí nguyên liệu nhập khẩu tính nội tệ tăng — đọc tỷ trọng đầu vào
-   nhập khẩu. Kèm trạng thái Q5: [có/không có công suất mới] quyết định tăng trưởng
-   bền hay chỉ là cửa sổ giá"
-├─ Nội tệ mạnh → ★ "Tỷ giá nghịch cho xuất khẩu (trị giá tính ngoại tệ bị ăn mòn,
-   chi phí nhập giảm) — đọc tỷ trọng doanh thu bằng ngoại tệ. Kèm trạng thái Q5:
-   [có/không có công suất mới] quyết định tăng trưởng bền hay chỉ là cửa sổ giá"
-└─ Ổn định → ★ "Tỷ giá trung tính: biến chính là nhóm hàng, chính sách thuế và
-   trạng thái Q5 — [có/không có công suất mới]"
+Q4. Đơn hàng và giá xuất khẩu của nhóm?
+├─ Kim ngạch và đơn hàng tăng, giá xuất giữ → ★ "Nhóm hàng đang hưởng: cầu thị trường
+│  đích kéo"
+├─ Kim ngạch tăng chủ yếu nhờ giá, khối lượng phẳng → ★ "Tăng nhờ giá: dễ đảo chiều
+│  khi giá thế giới quay đầu"
+├─ Kim ngạch hoặc đơn hàng giảm → ★ "Bị siết bởi cầu: tồn kho nhà nhập khẩu hoặc cầu
+│  thị trường đích yếu"
+└─ Không có số theo nhóm hàng → ★ "Chỉ có số tổng: không kết luận được cho nhóm hàng
+   này, độ tin cậy thấp"
 
 ## Chỉ báo đặc thù ngành
 
-Bảng chỉ báo xnk + cách đọc ở `references/kpi.md`.
+Phân nhóm hàng và cách đọc cặp nhập – xuất ở `references/kpi.md`.
 
 ## Định giá theo đặc thù ngành
 
-Xuất nhập khẩu không định giá bằng hệ số chung: dùng **khung theo nhóm hàng** — hàng công
-nghệ theo P/E kỳ vọng chu kỳ thay thế, hàng thủ công theo EV/EBITDA theo mùa và
-chi phí đầu vào, hàng nông sản theo P/E kỳ vọng giá đầu ra. Luôn ước lượng **tỷ
-trọng thuế được miễn trong trị giá xuất khẩu** trước khi chốt kỳ vọng tăng trưởng.
-Neo kỳ vọng bằng `planned_targets` và `analyst_consensus`.
+Không có hệ số chung cho "ngành xuất khẩu": định giá doanh nghiệp theo ngành của nó
+(dệt may, thuỷ sản, gỗ thường **P/E** và **P/B** theo chu kỳ đơn hàng). Trước khi chốt
+kỳ vọng tăng trưởng, ghi rõ **tỷ trọng doanh thu từ thị trường chịu thuế cao** và giả
+định thuế đang dùng.
 
 ## Rủi ro đặc thù
 
-- **Rủi ro thuế chủ đề**: danh sách miễn thay đổi theo vòng chính sách; ngành không
-  miễn mất lợi thế giá so với đối thủ được miễn.
-- **Rủi ro đơn hàng**: nông sản/thủy sản nhỏ lẻ dễ chịu đơn hàng hủy và điều tra.
-- **Rủi ro chu kỳ công nghệ**: điện tử nhảy mạnh khi tăng trưởng, nhưng cũng rơi mạnh
-  khi chu kỳ thay thế chững.
-- **Rủi ro tỷ giá**: chi phí nguyên liệu nhập khẩu và trị giá xuất khẩu đi ngược
-  chiều trên cùng một bảng cân đối.
-- **Rủi ro đọc sai tổng số**: tăng trưởng toàn ngành là một con số che nhiều chu kỳ
-  ngành hàng đi ngược chiều.
+- Mức thuế theo nước thay đổi theo đàm phán; danh sách miễn trừ thay đổi theo đợt.
+- Quy tắc xuất xứ, chống chuyển tải: hàng dùng nhiều nguyên liệu nhập có thể bị áp mức
+  khác.
+- Thuế carbon biên giới của EU với thép, nhôm, xi măng, phân bón.
+- Điều tra chống bán phá giá, rào kiểm dịch với nông thuỷ sản.
+- Tổng kim ngạch đẹp che nhóm hàng đang giảm.
 
 ## Ranh giới
 
-- Không xác định pha thị trường, không suy "xuất khẩu mạnh nên ngành X sẽ dẫn sóng" →
+- Không xác định pha thị trường, không nói "xuất khẩu mạnh nên ngành X dẫn sóng" →
   `dinh-vi-chu-ky-vn`.
-- Không chọn mã khuyến nghị mua/bán → `phan-tich-chuyen-sau-1-ma`.
-- Không suy mức thuế từ trí nhớ khi chưa tra: thuế là biến số chính sách, phải ghi
-  rõ nguồn và ngày văn bản.
-- Không trộn tổng số thương mại với kỳ vọng ngành hàng cụ thể.
+- Không khuyến nghị mua/bán.
+- Không nêu mức thuế, danh sách miễn trừ, ngày hiệu lực từ trí nhớ: tra văn bản, ghi
+  nguồn + ngày (luật này chỉ nằm ở đây).
+- Không suy kết luận cho một nhóm hàng từ tổng kim ngạch.
 
 ## Giới hạn
 
-- `vs_xnk_detail` cập nhật theo tháng qua phiên trình duyệt, có độ trễ: ghi rõ kỳ dữ
-  liệu.
-- Tỷ trọng xuất khẩu/khu vực FDI là tổng số quốc gia, không phải tỷ trọng của một
-  công ty riêng.
-- Danh sách miễn và mức thuế là chính sách đang thay đổi: kết luận phải ghi ngày văn
-  bản đang áp dụng.
+- `vs_xnk_detail` chia theo nước, không theo nhóm hàng; số theo nhóm hàng cần nguồn công
+  bố.
+- Số thương mại theo tháng có độ trễ và có thể được điều chỉnh — ghi kỳ.
+- Tỷ trọng FDI là số toàn quốc, không phải của một doanh nghiệp.
 
 ## Ví dụ
 
-**Ví dụ 1:**
-Hỏi: Xuất khẩu tăng mạnh thì nhóm nào hưởng?
-Đạt khi: phân biệt được tổng số với nhóm hàng, có nhập khẩu máy móc cùng nhóm làm chỉ
-báo dẫn, và verdict theo cây Q1→Q6 ghi rõ nhóm hàng nào.
+Hỏi: Xuất khẩu tăng mạnh thì nhóm hàng nào hưởng?
+Đạt khi: tách được nhóm hàng (hoặc nói rõ chỉ có số tổng), có mức thuế so đối thủ kèm
+nguồn, nhập máy móc cùng nhóm, một dòng tác động tỷ giá, verdict theo cây.
 
 ## Trực quan hóa
 
-Chỉ vẽ khi người dùng muốn xem hình; tối đa 1 biểu đồ. Hợp với dữ liệu skill này:
-stacked trị giá xuất khẩu theo nhóm hàng, multiline nhập thiết bị với xuất hàng công
-nghệ, bar tỷ trọng thuế miễn ước lượng. Vẽ bằng `chart_render` với `from_call`
-(mã `[ref …]`) từ kết quả tool đã có; cần chọn loại hình thì nạp `ve-bieu-do`.
+Chỉ vẽ khi người dùng muốn xem hình; tối đa 1 biểu đồ: cột kim ngạch theo nhóm hàng,
+đường nhập máy móc với xuất hàng điện tử, cột tỷ trọng thị trường đích. Vẽ bằng
+`chart_render` với `from_call` (mã `[ref …]`) từ kết quả tool đã có; cần chọn loại hình
+thì nạp `ve-bieu-do`.
 
 ## File tham chiếu
 
 | File | Dùng khi |
 |---|---|
-| `references/kpi.md` | Cần cách đọc cặp nhập – xuất làm chỉ báo dẫn, phân nhóm hàng và cách ước lượng tỷ trọng thuế miễn |
+| `references/kpi.md` | Cần phân nhóm hàng, nguồn cho từng chuỗi và cách đọc cặp nhập – xuất |

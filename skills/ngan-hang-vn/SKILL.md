@@ -1,177 +1,151 @@
 ---
 name: ngan-hang-vn
-description: "Phân tích ngành ngân hàng VN theo bộ chỉ báo riêng: hạn mức tín dụng, spread lãi thuần, chất lượng tài sản 3 lớp, ngoại bảng và chuẩn mực thanh khoản. Dùng khi hỏi xu hướng nhóm ngân hàng hoặc đọc BCTC ngân hàng."
+description: "Đọc ngành ngân hàng VN: tín dụng và room, NIM, CASA, chất lượng tài sản (nhóm nợ, bao phủ), chuẩn mực an toàn. Dùng khi hỏi nhóm ngân hàng hay đọc BCTC ngân hàng."
 activation: auto
 requires_tools: [financial_detail, vs_financial_norms]
-uses_tools: [financial_detail, vs_financial_norms, financial_ratios, financial_statements, stock_overview, planned_targets, sbv_rates, analyst_consensus, peer_compare, compare_equities, news_symbol, news_market, dividends_splits, symbol_lookup, vn_company, valuation_run]
+uses_tools: [financial_detail, vs_financial_norms, financial_statements, financial_ratios, valuation_run, planned_targets, analyst_consensus, peer_compare, sbv_rates, news_symbol, news_market, web_search, symbol_lookup, vn_company]
 triggers:
-  keywords: [ngành ngân hàng, nhóm ngân hàng, nợ xấu, nợ nhóm 2, lãi suất cho vay, biên lợi nhuận thuần, room tín dụng, hạn mức tín dụng, trần ldr, thanh khoản ngân hàng]
+  keywords: [ngành ngân hàng, nhóm ngân hàng, cổ phiếu ngân hàng, bctc ngân hàng, chất lượng tài sản ngân hàng, nợ nhóm 2, nim ngân hàng, tỷ lệ casa, room tín dụng, hạn mức tín dụng, thanh khoản ngân hàng]
+  exclude: [dẫn sóng, sóng ngành, đầu sóng, giữa sóng, cuối sóng, pha nào, giai đoạn nào, chu kỳ ngành, luân chuyển ngành, rotation, tin gì, tin tức, tin mới, so sánh, khuyến nghị, nên mua, nên bán]
 version: 1.0.0
 ---
 
 # Ngân hàng Việt Nam — framework phân tích
 
-Skill đọc ngành ngân hàng bằng **chỉ báo của ngành ngân hàng**: dòng tiền tăng
-trưởng (hạn mức tín dụng), chất lượng dòng tiền đó (spread), rủi ro của nó
-(chất lượng tài sản 3 lớp + ngoại bảng) và khung siết/nới (thanh khoản, chuẩn
-mực). BCTC ngân hàng đọc qua chuẩn mực riêng của loại hình (`vs_financial_norms`
-với báo cáo loại ngân hàng), không đọc bằng bộ dòng CTCP chung.
+Ngân hàng đọc bằng chỉ báo của chính ngành: tín dụng tăng được bao nhiêu, mỗi đồng
+tín dụng lãi bao nhiêu (NIM, chi phí vốn), rủi ro đi kèm (nợ xấu, nợ nhóm 2, bao phủ,
+ngoại bảng) và khung an toàn đang siết hay nới. BCTC ngân hàng theo mẫu riêng của
+tổ chức tín dụng: tra tên dòng bằng `vs_financial_norms(btype=3)`, không dùng tên
+dòng của doanh nghiệp thường (không có "doanh thu", "lãi gộp").
 
 ## Khi nào dùng
 
-- Dùng khi: user hỏi xu hướng nhóm ngân hàng, chỉ tiêu một ngân hàng nên xem gì,
-  chất lượng tài sản, hay ngành đang được tiếp sức hay bị siết (`ngân hàng đang
-  thế nào`, `NPL của VCB`, `tăng trưởng tín dụng ảnh hưởng gì`).
-- Khi KHÔNG dùng (dùng skill khác thay thế):
-  - Hỏi pha thị trường / luân chuyển ngành / sóng ngành tiếp theo → `dinh-vi-chu-ky-vn`.
-  - Phân tích toàn diện một mã (kỹ thuật + định giá + tin) → `phan-tich-chuyen-sau-1-ma`.
-  - Chỉ định giá một mã (fair value, vùng P/B) → `dinh-gia-chuyen-sau`.
-  - Chỉ đọc BCTC một mã không có mảng ngành (M-Score, cổ đông) → `co-ban-chuyen-sau`.
-  - Số liệu vĩ mô VN chi tiết (GDP, lãi suất điều hành) → `danh-gia-vi-mo-viet-nam`.
+- Dùng khi: hỏi nhóm ngân hàng đang được tiếp sức hay bị siết, một ngân hàng nên
+  xem chỉ tiêu gì, chất lượng tài sản, NIM/CASA (`ngân hàng đang thế nào`, `BCTC
+  ngân hàng đọc gì`, `NIM ngân hàng đang thế nào`).
+- Khi KHÔNG dùng:
+  - Pha thị trường, ngân hàng có dẫn sóng không → `dinh-vi-chu-ky-vn`.
+  - Phân tích toàn diện một mã → `phan-tich-chuyen-sau-1-ma`; chỉ định giá → `dinh-gia-chuyen-sau`.
+  - So vài mã ngân hàng theo chỉ số → `so-sanh-cung-nganh`.
+  - Lãi suất điều hành, tín dụng toàn nền kinh tế → `danh-gia-vi-mo-viet-nam`.
 
 ## Trụ cột driver
 
-| Driver | Kênh truyền dẫn | Đo/xác minh bằng |
+| Driver | Cơ chế | Đọc bằng |
 |---|---|---|
-| Hạn mức tín dụng | SBV cấp hạn mức tăng trưởng tín dụng theo ngân hàng; ngân hàng nhận nhiệm vụ tái cơ cấu ngân hàng yếu thường được hạn mức cao hơn. Hạn mức bị chặn theo quý đầu năm → tăng trưởng sụt theo mùa ở Q1 rồi đuổi về cuối năm | Tăng trưởng tín dụng YTD của mã so hạn mức được công bố: `financial_detail` (theo dòng BCTC ngân hàng) + phân phối hạn mức trong `news_market`/`web_search`. Ghi rõ hạn mức đọc từ đâu |
-| Spread lãi thuần | Thu nhập lãi thuần = tài sản sinh lãi × (tỷ suất sinh lời − chi phí vốn). Khi chi phí huy động (giấy tỉ có giá, tiền gửi kỳ hạn) lên nhanh hơn tỷ suất cho vay → spread nén; ngân hàng giữ được nhóm khách hàng ít nhạy giá và cơ cấu vốn rẻ thì nén ít hơn | `financial_detail`: chi phí thu nhập lãi thuần theo quý + cơ cấu huy động; `sbv_rates` cho trần lãi huy động điều hành |
-| CASA | Cơ cấu vốn không kỳ hạn là đệm chi phí vốn: nhóm khách hàng bán lẻ càng lớn, spread càng giữ được | Cơ cấu nguồn vốn trong `financial_detail` (chuẩn mực ngân hàng); so với nhóm cùng phân khúc bằng `peer_compare` |
-| Chất lượng tài sản 3 lớp | Nợ xấu chỉ là lớp trên cùng. Nợ nhóm 2 (cần chú ý) tăng trong khi nợ xấu phẳng = rủi ro đang hình thành nhưng chưa lên báo cáo; tỷ lệ bao phủ rủi ro giảm = đệm provision đang mỏng. Đọc **3 lớp cùng lúc** mới có kết luận | `financial_detail`: tỷ lệ nợ xấu, tỷ lệ nợ nhóm 2, tỷ lệ bao phủ nợ vay, chi phí rủi ro tín dụng — mỗi quý, kèm xu hướng QoQ |
-| Ngoại bảng | Tín dụng tương đương ngoại bảng (bảo lãnh, cam kết) không nằm trong nợ xấu và dự phòng đã công bố → rủi ro thật lớn hơn bảng | `financial_detail` dòng ngoại bảng nếu kỳ báo cáo có; số tổng hợp ngành lấy từ `news_market`/`web_search`, ghi rõ nguồn và kỳ |
-| Thanh khoản + chuẩn mực | Khoảng cách tăng trưởng tín dụng − tiền gửi quyết định áp lực huy động. Chuẩn mực an toàn hoạt động ngân hàng đang được thay thế theo lộ trình: văn bản mới đổi trần tỷ lệ cho vay/tiền gửi, mẫu số tính theo nguồn vốn ổn định hơn, và đưa vào các tỷ lệ thanh khoản Basel III (LCR/NSFR) áp dụng theo lộ trình từng năm — ai tuân thủ sớm được miễn trần cho vay/tiền gửi, ai không thì chịu siết tăng trưởng | Xác nhận bằng văn bản: tra `news_market`/`web_search` để lấy **số hiệu văn bản + ngày hiệu lực + trần/lộ trình đang áp dụng**, rồi ghi nguồn trong câu trả lời. **Không suy ngưỡng mới từ trí nhớ** — nếu chưa tra được văn bản, nói "chưa xác nhận", không đoán |
+| Tăng trưởng tín dụng | Tín dụng là "khối lượng" của ngân hàng. Khi NHNN còn phân bổ hạn mức (room) theo từng ngân hàng, tăng trưởng bị chặn hành chính; khi cơ chế này nới hoặc bỏ, giới hạn chuyển sang vốn và các tỷ lệ an toàn | `financial_detail(statement=CDKT)`: Cho vay khách hàng; cơ chế + hạn mức năm đang xét: `web_search` (ghi văn bản, ngày) |
+| NIM và chi phí vốn | NIM = thu nhập lãi thuần / tài sản sinh lãi bình quân. Chi phí vốn lên nhanh hơn lợi suất tài sản thì NIM nén | KQKD: Thu nhập lãi và các khoản thu nhập tương tự, Chi phí lãi và các chi phí tương tự, Thu nhập lãi thuần; CDKT: tài sản sinh lãi |
+| CASA | Tiền gửi không kỳ hạn là vốn rẻ, đệm cho NIM khi lãi huy động tăng | `financial_detail(statement=TM)`: cơ cấu tiền gửi theo loại |
+| Chất lượng tài sản 3 lớp | Nợ xấu (nhóm 3–5) là chuyện đã xảy ra; nợ nhóm 2 tăng khi nợ xấu còn phẳng là rủi ro đang hình thành; tỷ lệ bao phủ giảm là đệm mỏng đi. Đọc cả 3 lớp cùng lúc | `financial_detail(statement=TM)`: phân loại nợ nhóm 1–5; CDKT: dự phòng rủi ro cho vay khách hàng; KQKD: chi phí dự phòng rủi ro tín dụng |
+| Ngoại bảng | Bảo lãnh, thư tín dụng, cam kết cho vay không nằm trong dư nợ và dự phòng đã báo cáo | `financial_detail(statement=TM)`: các cam kết ngoại bảng (nếu kỳ có công bố) |
+| Chuẩn mực an toàn | Tỷ lệ cho vay/huy động (LDR), vốn ngắn hạn cho vay trung dài hạn, CAR, các tỷ lệ thanh khoản theo lộ trình mới. Gần trần thì tăng trưởng phải chậm lại hoặc phải tăng vốn | Văn bản hiện hành + lộ trình: `web_search`; CAR do ngân hàng công bố (thuyết minh/báo cáo thường niên) |
 
 ## Các bước
 
-Khoảng 4 lượt gọi tool. Bắt buộc có `vs_financial_norms(btype=3)` TRƯỚC khi đọc dòng
-BCTC ngân hàng — dùng dòng chuẩn ngành thay vì đoán tên dòng CTCP chung.
+Khoảng 4 lượt. `financial_detail` nhận **một** `statement` mỗi lời gọi (KQKD, CDKT,
+LCTT, TM); không gọi được thì dùng `financial_statements` và ghi rõ là bản rút gọn.
 
-**Bước 1: Chuẩn mực + một mã làm gốc (song song).**
+**Bước 1 (song song):** `vs_financial_norms(btype=3)` (tên dòng chuẩn) · `symbol_lookup`
+nếu user đưa tên · `vn_company` (ngân hàng quốc doanh / tư nhân lớn / nhỏ).
 
-`vs_financial_norms(btype=3)` (dòng BCTC ngân hàng) · `symbol_lookup` (nếu user
-đưa tên công ty) · `vn_company` (hồ sơ, mô hình). Thiếu hạn mức tín dụng công bố
-→ ghi "không lấy được hạn mức", không đoán.
+**Bước 2 (song song, 3 lời gọi):** `financial_detail(symbol, statement=KQKD)` ·
+`financial_detail(symbol, statement=CDKT)` · `financial_detail(symbol, statement=TM)`,
+4–8 kỳ. Tự tính NIM, lợi suất tài sản, chi phí vốn, tỷ lệ nợ xấu, nợ nhóm 2, bao phủ
+(công thức ở `references/kpi.md`) và ghi rõ là tự tính.
 
-**Bước 2: Đọc 3 lớp chất lượng tài sản + spread (song song — 3 lời gọi `financial_detail`, mỗi lời gọi MỘT `statement`).**
+**Bước 3 (song song):** `web_search` cho cơ chế/hạn mức tín dụng năm đang xét và văn
+bản an toàn đang áp dụng (ghi số hiệu + ngày) · `sbv_rates` (lãi suất điều hành) ·
+`news_symbol(symbol)` cho tin riêng ngân hàng (tăng vốn, xử lý nợ, nhận chuyển giao).
+`news_market` chỉ là luồng tin mới nhất, không tra được theo chủ đề.
 
-`financial_detail` chỉ nhận **một** `statement` mỗi lời gọi (mặc định `KQKD`) nên phải
-gọi riêng, gom song song trong một lượt:
+**Bước 4:** `planned_targets` (kế hoạch năm) · `analyst_consensus` (kỳ vọng của CTCK,
+không thay kết luận). So với ngân hàng cùng nhóm: NIM/nợ xấu/CASA của peer đọc bằng
+`financial_detail` từng mã (tối đa 3 mã); `peer_compare` chỉ trả P/E, P/B, EPS, BVPS,
+ROE/ROA.
 
-- `financial_detail(symbol, statement=KQKD)`: chi phí thu nhập lãi thuần · chi phí rủi ro
-  tín dụng · lãi thuần ngoài lãi → phục vụ đọc spread.
-- `financial_detail(symbol, statement=CDKT)`: tín dụng khách hàng · tiền gửi · trích lãi ·
-  mức vốn → phục vụ đọc tăng trưởng, khoảng cách tín dụng − tiền gửi và đòn bẩy.
-- `financial_detail(symbol, statement=TM)`: nợ xấu · nợ nhóm 2 · tỷ lệ bao phủ nợ vay ·
-  ngoại bảng → phục vụ **3 lớp chất lượng tài sản** (các chỉ tiêu này nằm ở thuyết minh,
-  không nằm trong KQKD).
+## Cây quyết định ngân hàng đang được tiếp sức hay bị siết
 
-So QoQ/YoY từng chỉ tiêu, ghi số + kỳ + `statement` nào ra số đó.
+Duyệt từ Q1, **dừng ở ★ đầu tiên**. Nhánh "không có số" đi tiếp với độ tin cậy
+thấp, không bù số.
 
-**Bước 3: Bối cảnh vốn + chuẩn mực (song song).**
+Q1. Tín dụng năm nay còn chỗ tăng không?
+├─ Còn hạn mức, hoặc cơ chế hạn mức đã bỏ (có văn bản) và các tỷ lệ an toàn còn
+│  xa trần → tiếp Q2
+├─ Đã dùng gần hết hạn mức, hoặc tỷ lệ an toàn sát trần → ★ "Tăng trưởng tín
+│  dụng bị chặn: lợi nhuận năm nay phải đến từ NIM, thu ngoài lãi và chi phí dự
+│  phòng"
+└─ Không tra được hạn mức/cơ chế → tiếp Q2, ghi "chưa xác nhận room"
 
-`sbv_rates` (chế độ lãi suất điều hành) · `news_market` (phân phối hạn mức tín
-dụng, văn bản chuẩn mực mới, điều chỉnh room). Ghi rõ số nào từ tool nào.
+Q2. NIM đang giãn hay nén?
+├─ Nén vì chi phí vốn tăng nhanh hơn lợi suất tài sản → ★ "Bị siết bởi chi phí
+│  vốn: lợi thế thuộc ngân hàng có CASA cao và vốn rẻ"
+├─ Nén vì lợi suất tài sản giảm (giảm lãi cho vay, cơ cấu sang khoản vay rẻ) →
+│  ★ "NIM bị nén từ phía tài sản: tăng trưởng tín dụng chưa chuyển thành lợi
+│  nhuận tương ứng"
+└─ Giãn hoặc đi ngang → tiếp Q3
 
-**Bước 4: Neo kỳ vọng + vị thế trong nhóm.**
+Q3. Ba lớp chất lượng tài sản có cùng chiều không?
+├─ Cả nợ xấu, nợ nhóm 2 và bao phủ cùng xấu đi → ★ "Bị siết bởi chất lượng tài
+│  sản: chi phí dự phòng sẽ ăn vào tăng trưởng lợi nhuận"
+├─ Nợ xấu phẳng nhưng nợ nhóm 2 tăng hoặc bao phủ giảm → ★ "Rủi ro đang hình
+│  thành trước khi lên nợ xấu: hạ độ tin cậy cho dự báo lợi nhuận"
+└─ Cả 3 lớp ổn hoặc cải thiện → tiếp Q4
 
-`planned_targets` (kế hoạch năm của mã) · `peer_compare` (so NIM/CASA/NPL với
-nhóm cùng phân khúc) · `analyst_consensus` (neo quan điểm CTCK — làm kỳ vọng,
-không thay thế kết luận).
-
-## Cây quyết định ngành đang tiếp sức hay siết
-
-Duyệt Q1→Q5 theo thứ tự, **DỪNG ở ★ đầu tiên** mà ĐỦ điều kiện. Thiếu dữ liệu ở
-một nhánh thì hạ độ tin cậy, không bù số.
-
-Q1. Hạn mức tín dụng năm nay có được công bố rõ và còn headroom không?
-├─ CÓ, headroom rộng → tiếp tục Q2
-└─ KHÔNG hoặc đã dùng gần hết → ★ "Tăng trưởng bị chặn bởi hạn mức — driver lợi
-   nhuận của năm nay là spread và phí, không phải tín dụng". Đọc Q2 để chốt chất
-   lượng, dừng.
-
-Q2. Spread lãi thuần đang giãn hay nén?
-├─ Nén (chi phí vốn tăng nhanh hơn tỷ suất sinh lời) → Q3 để xem nén do đâu
-└─ Giãn/đi ngang → Q4
-
-Q3. Nguyên nhân nén là chi phí vốn hay cơ cấu tài sản?
-├─ Chi phí vốn (huy động đắt, CASA giảm) → ★ "Bị siết bởi vốn: ưu tiên mã có
-   nhóm khách hàng rẻ + khả năng giữ giá cho vay"
-└─ Cơ cấu tài sản (tỷ suất sinh lợi giảm do trộn lẫn) → ★ "Bị siết bởi chất lượng
-   tài sản: đọc Q4 trước khi dùng mảng này làm kênh tăng trưởng"
-
-Q4. Chất lượng tài sản 3 lớp có cùng chiều không?
-├─ Nợ xấu phẳng nhưng nợ nhóm 2 tăng HOẶC tỷ lệ bao phủ giảm → ★ "Chất lượng đang
-   xấu đi chậm: rủi ro hình thành trước báo cáo"
-├─ Cả 3 lớp cùng xấu → ★ "Bị siết: chi phí dự phòng sẽ nuốt tăng trưởng"
-└─ Cả 3 lớp ổn hoặc cải thiện → Q5
-
-Q5. Kênh ngoại bảng có đáng kể không?
-├─ Có, tăng nhanh so với tín dụng trên bảng → ★ "Rủi ro ngoại bảng treo trên
-   định giá: đọc cả ngoại bảng khi so với nhóm"
-└─ Không đáng kể → ★ "Ngành được tiếp sức bởi tín dụng trừ khi hạn mức chặn (Q1)"
+Q4. Ngoại bảng có tăng nhanh hơn dư nợ trên bảng không?
+├─ Có → ★ "Rủi ro ngoài bảng đang lớn lên: tính cả ngoại bảng khi so với ngân
+│  hàng cùng nhóm"
+└─ Không, hoặc kỳ này không công bố → ★ "Được tiếp sức: tín dụng còn chỗ, NIM
+   giữ được, chất lượng tài sản ổn" (ghi rõ nếu ngoại bảng chưa đọc được)
 
 ## Chỉ báo đặc thù ngành
 
-Bảng dòng BCTC ngân hàng + cách đọc từng tỷ lệ ở `references/kpi.md`. Đọc file đó
-khi cần đúng tên dòng trong `vs_financial_norms(btype=3)` hoặc ngưỡng diễn giải.
+Tên dòng, công thức tự tính và cách đọc từng tỷ lệ ở `references/kpi.md`.
 
 ## Định giá theo đặc thù ngành
 
-Ngân hàng định giá bằng **P/B neo ROE**, không bằng P/E: cùng một P/B, ngân hàng
-ROE 20% và ROE 13% là hai giá trị hoàn toàn khác nhau. Nhóm theo ROE rồi so P/B
-trong nhóm (`valuation_run` cho vùng; `peer_compare` để xếp hạng trong nhóm cùng
-phân khúc). Neo kỳ vọng bằng `planned_targets` (kế hoạch lãi của năm) và
-`analyst_consensus`. Ngân hàng lỗ/lãi đột biến một lần → P/E vô nghĩa, ghi rõ
-thay vì bịa fair value.
+Ngân hàng định giá bằng **P/B neo ROE**: cùng P/B, ngân hàng ROE cao hơn đáng giá
+hơn. Vùng giá: `valuation_run(symbol, btype=3)` (P/B cho ngân hàng). So P/B trong
+nhóm ROE tương đương. Lợi nhuận đột biến một lần (thoái vốn, hoàn nhập dự phòng)
+làm P/E và ROE kỳ đó mất ý nghĩa — ghi rõ thay vì tính fair value từ đó.
 
 ## Rủi ro đặc thù
 
-- **Rủi ro hình thành trễ**: nợ xấu là kết quả đã xảy ra; nợ nhóm 2 + bao phủ là
-  chỉ báo trước. Chỉ nhìn nợ xấu sẽ đọc muộn cả chu kỳ.
-- **Rủi ro chuẩn mực**: LCR/NSFR theo lộ trình khiến ngân hàng nhỏ phải giữ tài
-  sản thanh khoản dư thừa → nới lỏng tín dụng chậm lại hoặc đắt hơn.
-- **Rủi ro hạn mức**: dùng hạn mức xong trước Q4 thì quý cuối tăng trưởng sụt.
-- **Rủi ro tập trung**: nhóm khách hàng hoặc một ngành cho vay chiếm tỷ trọng lớn
-  thì chu kỳ của ngành đó thành chu kỳ của ngân hàng.
-- **Rủi ro thành viên yếu**: kỳ vọng tiếp nhận/tái cơ cấu lan sang vốn và dòng
-  tiền của cả nhóm — đọc riêng ở bước `news_market`.
+- Nợ xấu là chỉ báo trễ; nợ nhóm 2 và bao phủ đi trước.
+- Tái cơ cấu nợ, giãn hoãn theo chính sách làm nợ xấu báo cáo thấp hơn thực tế.
+- Tập trung cho vay vào một ngành (BĐS, một nhóm khách hàng) biến chu kỳ ngành đó
+  thành rủi ro của ngân hàng.
+- Nhận chuyển giao/tái cơ cấu ngân hàng yếu: có thể kèm ưu đãi room nhưng cũng kèm
+  gánh nặng vốn.
 
 ## Ranh giới
 
-- Không xác định pha thị trường, không bảo "ngân hàng sắp dẫn sóng", không đọc
-  chuỗi luân chuyển → đó là nhiệm vụ của `dinh-vi-chu-ky-vn`.
-- Không chọn mã khuyến nghị mua/bán, không đặt tỷ trọng → `phan-tich-chuyen-sau-1-ma`.
-- Không suy ngưỡng chuẩn mực từ trí nhớ: mọi trần/tỷ lệ pháp lý phải tra văn bản
-  hiện hành rồi ghi nguồn + ngày văn bản (luật này chỉ nằm ở đây, không lặp lại
-  trong `references/kpi.md`).
-- Chỉ đọc dòng BCTC theo chuẩn ngành (`vs_financial_norms(btype=3)`); đoán tên
-  dòng CTCP chung sẽ lấy nhầm chỉ tiêu.
+- Không xác định pha thị trường, không nói "ngân hàng sắp dẫn sóng" → `dinh-vi-chu-ky-vn`.
+- Không khuyến nghị mua/bán, không đặt tỷ trọng.
+- Không nêu trần, tỷ lệ hay lộ trình pháp lý từ trí nhớ: tra văn bản hiện hành,
+  ghi số hiệu + ngày; tra không ra thì nói "chưa xác nhận" (luật này chỉ nằm ở đây).
 
 ## Giới hạn
 
-- Hạn mức tín dụng là phân bổ hành chính, không công bố đều cho mọi mã: thiếu thì
-  hạ độ tin cậy, không suy.
-- Nợ nhóm 2 và ngoại bảng không phải kỳ báo cáo nào cũng công bố đầy đủ — ghi rõ
-  kỳ còn thiếu thay vì nội suy.
-- Chuẩn mực thanh khoản đang trong lộ trình chuyển tiếp: kết luận riêng cho một
-  năm có thể không đúng sau khi văn bản mới có hiệu lực.
+- Room tín dụng không công bố đều cho mọi ngân hàng; nợ nhóm 2, CASA, ngoại bảng
+  không phải kỳ nào cũng có trong thuyết minh — ghi rõ kỳ thiếu, không nội suy.
+- LDR theo quy định có công thức riêng; cho vay/tiền gửi khách hàng tự tính chỉ là
+  ước lượng.
 
 ## Ví dụ
 
-**Ví dụ 1:**
 Hỏi: Ngân hàng đang bị siết bởi cái gì?
-Đạt khi: có hạn mức tín dụng + nguồn, spread nén/giãn với 2 số QoQ/YoY, 3 lớp
-chất lượng tài sản đọc cùng lúc, và verdict đi theo cây Q1→Q5 kèm nhánh dừng.
+Đạt khi: có trạng thái room/chuẩn mực kèm nguồn, NIM tự tính 4 kỳ (ghi công thức),
+3 lớp chất lượng tài sản cùng kỳ, verdict theo cây kèm nhánh đã dừng.
 
 ## Trực quan hóa
 
-Chỉ vẽ khi người dùng muốn xem hình; tối đa 1 biểu đồ. Hợp với dữ liệu skill này:
-stacked thu nhập lãi thuần/ngoài lãi theo quý, multiline NIM+CASA của nhóm cùng
-phân khúc, bar nợ xấu/nhóm 2/bao phủ. Vẽ bằng `chart_render` với `from_call`
-(mã `[ref …]`) từ kết quả `financial_detail`/`peer_compare` đã có; cần chọn loại
-hình thì nạp `ve-bieu-do`.
+Chỉ vẽ khi người dùng muốn xem hình; tối đa 1 biểu đồ: cột chồng thu nhập lãi
+thuần/ngoài lãi theo quý, đường NIM theo quý, cột nợ xấu – nợ nhóm 2 – bao phủ. Vẽ
+bằng `chart_render` với `from_call` (mã `[ref …]`) từ kết quả `financial_detail`
+đã có; cần chọn loại hình thì nạp `ve-bieu-do`.
 
 ## File tham chiếu
 
 | File | Dùng khi |
 |---|---|
-| `references/kpi.md` | Cần đúng dòng BCTC ngân hàng trong `vs_financial_norms(btype=3)`, ngưỡng diễn giải từng tỷ lệ, và bảng KPI theo báo cáo |
+| `references/kpi.md` | Cần tên dòng BCTC ngân hàng theo từng statement, công thức NIM/bao phủ/nợ nhóm 2 và cách đọc |

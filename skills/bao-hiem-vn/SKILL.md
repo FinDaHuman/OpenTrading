@@ -1,164 +1,155 @@
 ---
 name: bao-hiem-vn
-description: "Phân tích ngành bảo hiểm Việt Nam theo phí bảo hiểm mới, tỷ lệ duy trì hợp đồng, thu nhập bảo hiểm so với thu nhập tài chính và cơ cấu kênh phân phối. Dùng khi hỏi xu hướng ngành bảo hiểm."
+description: "Đọc ngành bảo hiểm VN: phi nhân thọ (bồi thường, combined ratio, tái bảo hiểm), nhân thọ (phí khai thác mới, duy trì hợp đồng), lãi đầu tư. Dùng khi hỏi nhóm bảo hiểm."
 activation: auto
 requires_tools: [financial_detail, vs_financial_norms]
-uses_tools: [financial_detail, vs_financial_norms, financial_ratios, planned_targets, analyst_consensus, peer_compare, news_symbol, news_market, symbol_lookup, vn_company]
+uses_tools: [financial_detail, vs_financial_norms, financial_statements, financial_ratios, valuation_run, planned_targets, analyst_consensus, peer_compare, news_symbol, news_market, web_search, symbol_lookup, vn_company]
 triggers:
-  keywords: [ngành bảo hiểm, hãng bảo hiểm, nhân thọ, bảo hiểm nhân thọ, phí bảo hiểm, bancassurance, công ty bảo hiểm]
+  keywords: [ngành bảo hiểm, nhóm bảo hiểm, cổ phiếu bảo hiểm, công ty bảo hiểm, doanh nghiệp bảo hiểm, hãng bảo hiểm, bảo hiểm phi nhân thọ, tỷ lệ bồi thường, tái bảo hiểm, bancassurance]
+  exclude: [dẫn sóng, sóng ngành, đầu sóng, giữa sóng, cuối sóng, pha nào, giai đoạn nào, chu kỳ ngành, luân chuyển ngành, rotation, tin gì, tin tức, tin mới, so sánh, khuyến nghị, nên mua, nên bán]
 version: 1.0.0
 ---
 
 # Bảo hiểm Việt Nam — framework phân tích
 
-Bảo hiểm là **ngành niềm tin**: doanh thu phí phụ thuộc khả năng bán hàng đúng quy
-tắc, và một đợt mất niềm tin có thể kéo sản phẩm mới xuống đáy trong nhiều năm. Ngoài
-ra, ngành có **hai nguồn lãi khác nhau**: nghiệp vụ bảo hiểm (thu phí, trả bồi
-thường) và thu nhập tài chính (đầu tư quỹ phí). Trong giai đoạn lãi suất cao, một
-công ty có thể đẹp trên báo cáo vì quỹ phí cũ đang thu lãi tốt, trong khi nghiệp vụ
-bảo hiểm đang teo.
+Bảo hiểm có **hai nguồn lãi**: nghiệp vụ bảo hiểm (phí thu được trừ bồi thường và chi
+phí) và **đầu tư** (quỹ dự phòng gửi ngân hàng, mua trái phiếu, cổ phiếu). Hai nguồn
+này nhạy với hai thứ khác nhau: nghiệp vụ nhạy chất lượng khai thác và tổn thất; đầu
+tư nhạy lãi suất. Ngành có hai mô hình khác hẳn:
 
-Skill này đọc ngành bằng phí mới, tỷ lệ duy trì hợp đồng, tỷ lệ phân chia nghiệp vụ
-và tài chính, cơ cấu kênh bán, và mức độ sụt giảm quy mô so với đáy trong quá khứ.
+- **Phi nhân thọ** (phần lớn mã niêm yết): hợp đồng ngắn hạn (xe cơ giới, sức khoẻ, tài
+  sản – kỹ thuật, hàng hải). Đọc bằng tỷ lệ bồi thường, tỷ lệ chi phí, **combined ratio**
+  (bồi thường + chi phí trên phí thuần) và mức tái bảo hiểm.
+- **Nhân thọ**: hợp đồng dài hạn. Đọc bằng phí khai thác mới, tỷ lệ duy trì hợp đồng và
+  kênh phân phối (đại lý, qua ngân hàng). Một đợt mất niềm tin có thể kéo phí mới thấp
+  nhiều năm.
+
+BCTC bảo hiểm theo mẫu riêng: tra tên dòng bằng `vs_financial_norms(btype=5)`.
 
 ## Khi nào dùng
 
-- Dùng khi: user hỏi xu hướng ngành bảo hiểm, một hãng bảo hiểm có đang hồi phục
-  không, tại sao lãi tăng mà phí giảm.
-- Khi KHÔNG dùng (dùng skill khác thay thế):
-  - Hỏi pha thị trường / luân chuyển ngành → `dinh-vi-chu-ky-vn`.
-  - Phân tích toàn diện một mã → `phan-tich-chuyen-sau-1-ma`.
-  - Chỉ định giá một mã → `dinh-gia-chuyen-sau`.
-  - Chỉ đọc BCTC một mã không có mảng ngành → `co-ban-chuyen-sau`.
-  - Ngân hàng (kênh bán bảo hiểm qua ngân hàng) → `ngan-hang-vn`.
+- Dùng khi: hỏi nhóm bảo hiểm đang được tiếp sức hay bị siết, một hãng bảo hiểm có hồi
+  phục thật không, vì sao lãi tăng mà phí giảm.
+- Khi KHÔNG dùng:
+  - Pha thị trường, bảo hiểm có dẫn sóng không → `dinh-vi-chu-ky-vn`.
+  - Phân tích toàn diện một mã → `phan-tich-chuyen-sau-1-ma`; chỉ định giá → `dinh-gia-chuyen-sau`.
+  - Có nên mua một gói bảo hiểm cho bản thân → không thuộc skill này.
 
 ## Trụ cột driver
 
-| Driver | Kênh truyền dẫn | Đọc/xác minh bằng |
+| Driver | Cơ chế | Đọc bằng |
 |---|---|---|
-| Phí bảo hiểm mới | Nguồn tăng trưởng tương lai: phí mới teo 3 năm liền nghĩa sản lượng mới đang rất thấp, cần thời gian phục hồi dù niềm tin đã về | Hiệp hội bảo hiểm + công bố công ty: `news_market`/`web_search` |
-| Tỷ lệ duy trì hợp đồng | Hợp đồng bị huỷ sớm làm teo quỹ phí bền vững; đây là chỉ báo chất lượng bán hàng **sau** mọi khủng hoảng niềm tin | Tỷ lệ duy trì: công bố công ty hoặc ước tính từ nghiệp vụ trong `financial_detail` |
-| Nghiệp vụ so với tài chính | Thu nhập tài chính nhạy lãi suất; nghiệp vụ bảo hiểm nhạy chất lượng bán hàng. Tách hai nguồn trước khi kết luận hồi phục | Mảng nghiệp vụ và mảng tài chính trong `financial_detail` |
-| Cơ cấu kênh phân phối | Bảo hiểm qua ngân hàng (bancassurance) và đại lý: kênh bị siết sau khủng hoảng niềm tin, kênh đại lý hồi phục chậm nhưng bền | Tỷ trọng kênh: `news_market`; chỉ báo ngành: hiệp hội bảo hiểm |
-| Mức độ sụt giảm so với đáy | Sản phẩm mới có thể rơi về mức trước đợt tăng trưởng bùng nổ — đọc theo năm để biết đang ở vùng đáy hay hồi phục | Số liệu phí mới theo năm: `news_market`/`web_search` |
-| Chính sách | Quy định bán hàng, minh bạch hoá sản phẩm, giới hạn sở hữu nước ngoài ảnh hưởng chiến lược công ty | Văn bản: `news_market`/`web_search`, ghi rõ nguồn + ngày |
+| Phí bảo hiểm | Phi nhân thọ: phí gốc theo nghiệp vụ, bám tín dụng, xe mới, đầu tư; nhân thọ: phí khai thác mới (năm đầu) là tăng trưởng tương lai, phí tái tục là quỹ hiện tại | KQKD: doanh thu phí bảo hiểm; phí khai thác mới: công bố công ty, hiệp hội bảo hiểm qua `web_search` |
+| Bồi thường và chi phí (phi nhân thọ) | Combined ratio dưới 100% là nghiệp vụ có lãi; thiên tai, dịch bệnh, cạnh tranh phí làm tỷ lệ bồi thường tăng | KQKD: chi bồi thường, chi phí kinh doanh bảo hiểm, phí bảo hiểm thuần |
+| Tái bảo hiểm | Nhượng tái nhiều thì ít rủi ro tổn thất lớn nhưng giữ lại ít phí; thu bồi thường nhượng tái đỡ năm có tổn thất lớn | KQKD: phí nhượng tái, thu bồi thường nhượng tái |
+| Duy trì hợp đồng và kênh (nhân thọ) | Hợp đồng huỷ sớm làm quỹ phí co; quy định bán hàng qua ngân hàng chặt hơn làm kênh này chậm lại | Công bố công ty, `web_search` (quy định, ghi văn bản + ngày) |
+| Lãi đầu tư | Lợi suất danh mục bám lãi tiền gửi và trái phiếu; tiền gửi đáo hạn tái đầu tư ở lãi thấp hơn thì lãi đầu tư giảm dần | KQKD: doanh thu hoạt động tài chính; CDKT/TM: cơ cấu danh mục đầu tư |
 
 ## Các bước
 
-**Bước 1: Nhận diện mảng (song song).**
+`financial_detail` nhận **một** `statement` mỗi lời gọi; không gọi được thì dùng
+`financial_statements` và ghi rõ.
 
-`symbol_lookup` · `vn_company` (nhân thọ / phi nhân thổ / tài chính / dịch vụ) ·
-`financial_detail` (doanh thu theo mảng). BCTC bảo hiểm đọc qua
-`vs_financial_norms(btype=5)`.
+**Bước 1 (song song):** `vs_financial_norms(btype=5)` · `symbol_lookup` · `vn_company`
+(phi nhân thọ, nhân thọ hay cả hai; tái bảo hiểm).
 
-**Bước 2: Phí mới + chất lượng sổ (song song).**
+**Bước 2 (song song):** `financial_detail(symbol, statement=KQKD)` (phí, nhượng tái,
+bồi thường, chi phí, doanh thu tài chính) · `financial_detail(symbol, statement=CDKT)`
+(dự phòng nghiệp vụ, đầu tư tài chính) · `financial_detail(symbol, statement=TM)` (phí
+theo nghiệp vụ, cơ cấu danh mục), 4–8 quý. Tự tính tỷ lệ bồi thường, tỷ lệ chi phí,
+combined ratio, lợi suất đầu tư (công thức ở `references/kpi.md`).
 
-`news_market` (phí mới ngành, chính sách, kênh bán) · `financial_detail` (doanh
-thu phí, thu nhập tài chính, dự phòng nghiệp vụ).
+**Bước 3 (song song):** `web_search` (phí khai thác mới toàn ngành, quy định kênh bán,
+lãi suất tiền gửi hiện hành) · `news_symbol(symbol)` (tổn thất lớn, thay đổi cổ đông,
+tăng vốn).
 
-**Bước 3: Hai nguồn lãi (song song).**
+**Bước 4:** `planned_targets` · `analyst_consensus`. So với doanh nghiệp cùng mô hình;
+chỉ báo nghiệp vụ của peer đọc bằng `financial_detail` từng mã, `peer_compare` chỉ trả
+P/E, P/B, EPS, BVPS, ROE/ROA.
 
-`financial_detail`: tách thu nhập nghiệp vụ bảo hiểm với thu nhập tài chính.
-Nghiệp vụ cải thiện là tín hiệu hồi phục thật; chỉ có thu nhập tài chính tăng là
-tín hiệu phụ thuộc lãi suất.
+## Cây quyết định doanh nghiệp bảo hiểm đang được tiếp sức hay bị siết
 
-**Bước 4: Neo kỳ vọng + vị thế nhóm.**
+Duyệt từ Q1, **dừng ở ★ đầu tiên**. Nhánh "không có số" đi tiếp với độ tin cậy thấp.
 
-`planned_targets` · `peer_compare` (so phí mới, chênh lệch nghiệp vụ/tài chính
-trong nhóm cùng phân khúc) · `analyst_consensus`.
+Q1. Mô hình đóng góp lợi nhuận lớn nhất (tập đoàn có cả hai: đi nhánh lớn hơn, nêu
+nhánh còn lại ở phần rủi ro)?
+├─ Phi nhân thọ, tái bảo hiểm → tiếp Q2
+└─ Nhân thọ → tiếp Q3
 
-## Cây quyết định công ty bảo hiểm đang được tiếp sức hay siết
+Q2 (phi nhân thọ). Combined ratio đang đi đâu?
+├─ Xấu đi, bồi thường tăng nhanh hơn phí thuần → ★ "Bị siết bởi tổn thất: nghiệp vụ
+│  co lãi, đọc nghiệp vụ nào và tổn thất có phải một lần không"
+├─ Cải thiện hoặc ổn → tiếp Q4
+└─ Không tính được → tiếp Q4, ghi rõ
 
-Duyệt Q1→Q5 theo thứ tự, **DỪNG ở ★ đầu tiên** mà ĐỦ điều kiện. Thiếu dữ liệu thì
-hạ độ tin cậy, không bù số.
+Q3 (nhân thọ). Phí khai thác mới và duy trì hợp đồng?
+├─ Phí mới còn giảm hoặc tỷ lệ duy trì thấp → ★ "Quỹ phí tương lai đang co: lãi hiện
+│  tại dựa vào hợp đồng cũ và đầu tư"
+├─ Phí mới hồi phục, duy trì tốt → tiếp Q4
+└─ Không có số → tiếp Q4, ghi rõ
 
-Q1. Phí mới của ngành đang ở đâu so với đáy lịch sử?
-├─ Đang hồi phục từ đáy → tiếp Q2
-├─ Vẫn ở đáy hoặc chưa rõ → tiếp Q2 với độ tin cậy thấp, ghi rõ ngành vẫn trong giai
-   đoạn tích lũy niềm tin
-└─ Chưa có số liệu → Q2 với độ tin cậy thấp
+Q4 (chung). Lợi nhuận đến chủ yếu từ đâu?
+├─ Đầu tư là phần lớn, nghiệp vụ hoà hoặc lỗ → ★ "Lãi dựa lãi suất: hạ độ tin cậy khi
+│  lãi tiền gửi giảm, không gọi là hồi phục nghiệp vụ"
+├─ Nghiệp vụ là phần đáng kể → tiếp Q5
+└─ Chưa tách được → tiếp Q5, ghi rõ
 
-Q2. Cải thiện trên báo cáo đến từ đâu?
-├─ Từ nghiệp vụ bảo hiểm (phí và biên nghiệp vụ) → tiếp Q3
-├─ Chủ yếu từ thu nhập tài chính → ★ "Lãi dựa lãi suất, không dựa nghiệp vụ: đọc
-   nhạy lãi suất — hạ độ tin cậy khi lãi suất đảo chiều"
-└─ Chưa tách được hai nguồn → tiếp Q3 với độ tin cậy thấp, ghi rõ
-
-Q3. Kênh bán đang lành lại không?
-├─ Có, kênh truyền thống/đại lý đang phục hồi và kênh mới mở rộng → tiếp Q4
-├─ Kênh bị siết hoặc công ty chuyển mô hình → ★ "Bị siết bởi kênh: đọc chi phí
-   thuê/hoa hồng và thời gian xây lại đội ngũ"
-└─ Chưa rõ → tiếp Q4 với độ tin cậy thấp
-
-Q4. Chất lượng sổ bảo hiểm có cải thiện không?
-├─ Có, tỷ lệ duy trì hợp đồng tăng, dự phòng nghiệp vụ bền vững → tiếp Q5
-├─ Chưa rõ hoặc xấu → ★ "Chất lượng sổ chưa rõ: đọc dự phòng và chi phí bồi thường
-   trước khi tin tăng trưởng phí"
-└─ Thiếu chỉ báo → Q5 với độ tin cậy thấp
-
-Q5. Chính sách đang mở hay siết?
-├─ Mở (minh bạch, cho phép mô hình mới, nới room nước ngoài) → ★ "Được tiếp sức bởi
-   thể chế: đọc chi phí tuân thủ và chính sách room ngoài rồi mới kỳ vọng thị phần"
-└─ Siết hoặc chưa rõ → ★ "Bị siết bởi thể chế: đọc chi phí tuân thủ và giới hạn sở
-   hữu trước khi kỳ vọng tăng trưởng"
+Q5 (chung). Lợi suất danh mục đầu tư?
+├─ Ổn hoặc tăng → ★ "Được tiếp sức: nghiệp vụ có lãi và đầu tư giữ được"
+├─ Giảm vì tái đầu tư ở lãi thấp hơn → ★ "Lãi đầu tư sẽ thu hẹp: tăng trưởng lợi nhuận
+│  phải đến từ nghiệp vụ"
+└─ Không tính được → ★ "Nghiệp vụ là tín hiệu chính, chưa đọc được đầu tư: độ tin cậy
+   trung bình"
 
 ## Chỉ báo đặc thù ngành
 
-Bảng chỉ báo ngành bảo hiểm + cách đọc ở `references/kpi.md`.
+Tên dòng theo statement và công thức tự tính ở `references/kpi.md`.
 
 ## Định giá theo đặc thù ngành
 
-Bảo hiểm định giá bằng **P/B neo giá trị sổ sách và chất lượng nghiệp vụ** (thu nhập
-nghiệp vụ bảo hiểm trừ thu nhập tài chính một lần) và **P/E trên lãi bảo hiểm thuần**
-không phải lãi hợp nhất. Không so giá trị vốn hoá với nhóm ngân hàng được — mô hình
-và mức độ an toàn khác nhau. Neo kỳ vọng bằng `planned_targets` và
-`analyst_consensus`.
+Bảo hiểm định giá chủ yếu bằng **P/B neo ROE** và chất lượng nghiệp vụ;
+`valuation_run(symbol, btype=5)` cho vùng giá. P/E chỉ dùng khi đã tách lãi đầu tư một
+lần (bán cổ phiếu, hoàn nhập). Nhân thọ thường định giá theo giá trị nội tại (EV) do công
+ty công bố — dùng nếu có, ghi nguồn. Không so P/B bảo hiểm với ngân hàng.
 
 ## Rủi ro đặc thù
 
-- **Rủi ro niềm tin**: một đợt bán hàng sai quy tắc kéo sản lượng mới xuống đáy
-  nhiều năm.
-- **Rủi ro lãi suất giảm**: thu nhập tài chính là nguồn lãi chính trong giai đoạn
-  lãi cao; lãi suất hạ làm lãi giảm nhanh hơn nghiệp vụ phục hồi.
-- **Rủi ro chất lượng sổ**: hợp đồng bị huỷ sớm làm teo quỹ phí bền vững.
-- **Rủi ro cạnh tranh từ ngân hàng**: ngân hàng tự lập hoặc góp vốn vào công ty bảo
-  hiểm làm cạnh tranh kênh.
-- **Rủi ro đọc lẫn nguồn lãi**: lãi tăng nhờ tài chính trong khi nghiệp vụ teo không
-  phải hồi phục.
+- Tổn thất lớn (thiên tai, cháy nổ) làm combined ratio vượt 100% trong một kỳ.
+- Cạnh tranh hạ phí ở nghiệp vụ xe, sức khoẻ.
+- Lãi tiền gửi giảm làm lãi đầu tư thu hẹp dần.
+- Nhân thọ: mất niềm tin, huỷ hợp đồng sớm, quy định bán qua ngân hàng chặt hơn.
+- Dự phòng nghiệp vụ trích thiếu làm lãi kỳ này đẹp hơn thực tế.
 
 ## Ranh giới
 
-- Không xác định pha thị trường, không suy "bảo hiểm là nơi trú ẩn theo chu kỳ" →
-  `dinh-vi-chu-ky-vn` (nơi giữ vai trò các mảng theo pha).
-- Không chọn mã khuyến nghị mua/bán → `phan-tich-chuyen-sau-1-ma`.
-- Không kết luận hồi phục khi chỉ có thu nhập tài chính tăng.
-- Không suy luật bán hàng hoặc room nước ngoài từ trí nhớ: tra văn bản, ghi nguồn.
+- Không xác định pha thị trường, không nói "bảo hiểm là nơi trú ẩn" → `dinh-vi-chu-ky-vn`.
+- Không khuyến nghị mua/bán; không tư vấn mua sản phẩm bảo hiểm.
+- Không gọi là hồi phục khi chỉ có lãi đầu tư tăng.
+- Không nêu quy định bán hàng, room nước ngoài, vốn tối thiểu từ trí nhớ: tra văn bản,
+  ghi số hiệu + ngày (luật này chỉ nằm ở đây).
 
 ## Giới hạn
 
-- Phí mới ngành là số định kỳ, có thể chưa đầy đủ cho mọi hãng: thiếu thì hạ độ tin
-  cậy nhánh Q1.
-- Thu nhập nghiệp vụ và tài chính không phải kỳ nào cũng tách riêng rõ ràng: khi
-  không tách được, ghi rõ đang dùng lãi hợp nhất.
-- Niềm tin là yếu tố không đo bằng số trực tiếp: chỉ nhận biết qua phí mới và tỷ lệ
-  duy trì hợp đồng, không kết luận chắc chắn.
+- Phí khai thác mới, tỷ lệ duy trì không có trong BCTC; công bố không đều — ghi rõ khi
+  thiếu.
+- Tên dòng KQKD bảo hiểm khác nhau giữa doanh nghiệp; luôn đối chiếu với
+  `vs_financial_norms(btype=5)`.
 
 ## Ví dụ
 
-**Ví dụ 1:**
 Hỏi: Hãng bảo hiểm này có thật sự hồi phục không?
-Đạt khi: tách được nghiệp vụ và tài chính, có phí mới ngành + nguồn, chỉ báo chất
-lượng sổ, và verdict theo cây Q1→Q5.
+Đạt khi: nêu mô hình, có combined ratio hoặc phí khai thác mới (theo mô hình) 4 kỳ, tách
+nghiệp vụ và đầu tư, verdict theo cây kèm nhánh đã dừng.
 
 ## Trực quan hóa
 
-Chỉ vẽ khi người dùng muốn xem hình; tối đa 1 biểu đồ. Hợp với dữ liệu skill này:
-waterfall từ phí mới ra thu nhập nghiệp vụ và tài chính, bar thu nhập nghiệp vụ/tài
-chính theo kỳ, multiline phí mới theo năm. Vẽ bằng `chart_render` với `from_call`
-(mã `[ref …]`) từ kết quả tool đã có; cần chọn loại hình thì nạp `ve-bieu-do`.
+Chỉ vẽ khi người dùng muốn xem hình; tối đa 1 biểu đồ: đường combined ratio theo quý,
+cột chồng lãi nghiệp vụ và lãi đầu tư, cột phí theo nghiệp vụ. Vẽ bằng `chart_render`
+với `from_call` (mã `[ref …]`) từ kết quả `financial_detail` đã có; cần chọn loại hình
+thì nạp `ve-bieu-do`.
 
 ## File tham chiếu
 
 | File | Dùng khi |
 |---|---|
-| `references/kpi.md` | Cần cách tách thu nhập nghiệp vụ/tài chính, đọc phí mới và chỉ báo chất lượng sổ |
+| `references/kpi.md` | Cần tên dòng BCTC bảo hiểm theo statement, công thức tỷ lệ bồi thường, combined ratio, lợi suất đầu tư |

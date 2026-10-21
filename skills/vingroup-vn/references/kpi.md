@@ -1,52 +1,45 @@
 # Chỉ báo tập đoàn Vingroup — tách mảng và đọc dòng tiền
 
-> File này giữ **cách đọc**, không giữ con số kỳ nào. Mọi giá trị lấy từ
-> `financial_detail` / `company_events` / `news_market` gần nhất và ghi kỳ kèm theo.
-> Luật về trần nợ của mảng bất động sản nằm ở `bat-dong-san-vn`; luật về chuỗi và
-> mảng Vin theo chu kỳ nằm ở `dinh-vi-chu-ky-vn` — không lặp lại ở đây.
+> File này giữ **cách đọc**, không giữ số kỳ nào. `financial_detail` nhận một
+> `statement` mỗi lời gọi. Luật về tra lịch nợ và tỷ trọng chỉ số nằm ở mục "Ranh
+> giới" của SKILL.md; điều kiện vốn dự án BĐS nằm ở `bat-dong-san-vn`.
 
 ## 1. Tách mảng
 
-| Mảng | Chu kỳ bám | Chỉ báo riêng |
+| Mảng | Bám theo | Chỉ báo riêng |
 |---|---|---|
-| Bất động sản nhà ở | Bàn giao dự án + bán trước | Bán trước, tích luỹ chi phí dở, biên lãi gộp mảng |
-| Xe điện | Quy mô sản lượng + chi phí/biến | Doanh thu, lỗ lũy kế, tỷ lệ biên âm |
-| Bán lẻ (trung tâm thương mại) | Toàn bộ thuế dịch vụ + lưu lượng | Doanh thu cho thuê, diện tích, tỷ lệ lấp đầy |
-| Khách sạn / nghỉ dưỡng | Du lịch | Doanh thu phòng, tỷ lệ lấp đầy |
-| Dịch vụ (giáo dục, y tế) | Nhu cầu độc lập | Doanh thu, số học sinh/bệnh nhân |
+| Bất động sản | Bàn giao, mở bán | Người mua trả tiền trước, hàng tồn kho dự án, biên mảng |
+| Xe điện | Số xe giao, giá bán, chi phí sản xuất | Doanh thu, lỗ gộp, lỗ mảng |
+| Bán lẻ, cho thuê | Giá thuê, lưu lượng khách | Doanh thu cho thuê, tỷ lệ lấp đầy |
+| Nghỉ dưỡng, vui chơi | Du lịch | Doanh thu, công suất phòng |
+| Giáo dục, y tế, khác | Nhu cầu riêng | Doanh thu, lợi nhuận mảng |
 
-## 2. Nhóm vòng quay BĐS
+Lợi nhuận theo mảng: `financial_detail(statement=TM)` của VIC. Thiếu chi tiết thì đọc
+riêng công ty con niêm yết (VHM, VRE) và ghi rõ.
 
-| Chỉ báo | Đọc từ | Cách đọc |
+## 2. Dòng tiền và nợ
+
+| Chỉ báo | Statement | Cách đọc |
 |---|---|---|
-| Bán trước kỳ | `financial_detail` (nếu có) | Khoản thu trước — chưa phải lãi; đọc cùng tích luỹ chi phí dở |
-| Tích luỹ chi phí dở | `financial_detail` | Chi phí đã cam kết chưa nhận; chênh giữa hai bên là lãi tương lai chưa chắc ăn khi bị siết |
-| Biên lãi gộp mảng BĐS | `financial_detail` / công bố công ty | Đọc 4–8 quý trước khi nội suy (một đợt bàn giao làm nhảy) |
-| Quỹ đất | `news_market` | Nguồn tăng trưởng tương lai của vòng BĐS |
+| Vay ngắn hạn + nợ dài hạn đến hạn | CDKT | Phần phải trả trong 12 tháng |
+| Trái phiếu, lịch đáo hạn | TM, công bố (`web_search`) | Dựng lịch theo quý; đáo hạn tập trung = rủi ro tái cấp vốn |
+| Tiền và tương đương tiền | CDKT | So với nợ đến hạn 4 quý tới |
+| Chi phí lãi vay | KQKD | Tăng nhanh hơn doanh thu = chi phí tài chính ăn vào lãi |
+| Lưu chuyển tiền từ hoạt động kinh doanh | LCTT | Âm kéo dài khi lợi nhuận dương = lãi chưa thành tiền |
+| Giao dịch với bên liên quan | TM | Quy mô so với lợi nhuận kỳ; chuyển nhượng công ty con là một lần |
 
-## 3. Nhóm dòng tiền và đòn bẩn
+## 3. SOTP (tự tính, ghi rõ giả định)
 
-| Chỉ báo | Đọc từ | Cách đọc |
-|---|---|---|
-| Nợ và trái phiếu | `financial_detail` | Đọc cùng lịch đáo hạn trong `news_market`; tập trung vài kỳ = rủi ro tái cấu |
-| Tiền mặt | `financial_detail` | So với khoản đến hạn trong 6 tháng tới |
-| Chi phí lãi và chi phí vốn bình quân | `financial_detail` / `news_market` | Tăng nhanh hơn doanh thu = lãi bị chi phí tài chính nuốt |
-| Lỗ lũy kế mảng xe điện | `news_market` | Nguồn đốt tiền mặt chính của tập đoàn |
+| Phần | Cách tính |
+|---|---|
+| Công ty con niêm yết | Vốn hoá thị trường (`stock_overview` từng mã) × tỷ lệ sở hữu của VIC (TM hoặc `vn_company(detail=true)`) |
+| Mảng chưa niêm yết | Phương pháp hợp mảng; không đủ số thì ghi "chưa định giá" thay vì đoán |
+| Nợ ròng công ty mẹ | Nợ vay công ty mẹ − tiền công ty mẹ (BCTC riêng nếu có) |
+| Chiết khấu tập đoàn | Nêu mức giả định và lý do |
 
-## 4. Nhóm quản trị và chỉ số
+## 4. Bẫy đọc thường gặp
 
-| Nguồn | Đọc gì | Cách dùng |
-|---|---|---|
-| `company_events` | Thay đổi cơ cấu hợp nhất, thoái/tách/gộp mảng, giao dịch với cổ đông sáng lập | Muốn so sánh với kỳ trước, phải đọc trước khi nhìn doanh thu |
-| `news_market` | Tường trái phiếu, phát hành mới, nhận định tác động chỉ số | Ghi rõ nguồn + ngày |
-| `breadth_scan` | Độ rộng toàn sàn | Phát hiện "chỉ số do nhóm một mình kéo" trước khi kết luận toàn thị trường — `market_overview` chỉ đếm rổ bluechip nên không đủ làm bằng chứng |
-| `market_snapshot` / `vn_equity_quote_batch` | Vốn hoá các mã thành viên | **Tự tính** tỷ trọng nhóm Vin = vốn hoá thành viên / vốn hoá sàn (ghi rõ tự tính); nếu có số báo cáo ngành thì lấy từ `news_market`/`web_search` |
-| `peer_compare` | Biên và đòn bẩy so với nhóm BĐS lớn | So mảng BĐS với mảng BĐS, không so hợp nhất với BĐS thuần |
-
-## 5. Bẫy đọc thường gặp
-
-- So doanh thu/lãi hợp nhất với kỳ trước khi vừa tách hoặc thoái mảng: kết luận vô
-  nghĩa, đọc chênh lệch pháp nhân trước.
-- Nhìn lãi tăng mạnh mà không đọc tỷ trọng đóng góp: phần lớn có thể đến từ một đợt
-  bàn giao hoặc một giao dịch nội bộ.
-- Dùng P/E hợp nhất để so với công ty BĐS thuần: mô hình khác nhau, cần SOTP.
+- So số hợp nhất với kỳ trước khi vừa tách hoặc bán một công ty con.
+- Lãi tăng mạnh mà không đọc đóng góp theo mảng: có thể chỉ một đợt bàn giao hoặc một
+  giao dịch nội bộ.
+- Dùng P/E hợp nhất so với công ty BĐS thuần: mô hình khác nhau.

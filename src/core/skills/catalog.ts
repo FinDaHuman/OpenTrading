@@ -46,17 +46,25 @@ export function fold(text: string) {
   return text.normalize("NFD").replace(/\p{M}/gu, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase()
 }
 
+/** Folded words joined by single spaces, so phrases match on word boundaries. */
+const phraseKey = (text: string) => fold(text).replace(/[^\p{L}\p{N}+]+/gu, " ").trim()
+
+/** Whether any phrase occurs in `input` as whole words (case and diacritics ignored). */
+function mentions(input: string, phrases: string[]) {
+  const text = ` ${phraseKey(input)} `
+  return phrases.some((p) => {
+    const key = phraseKey(p)
+    return key.length > 0 && text.includes(` ${key} `)
+  })
+}
+
+/** Skills the router may consider for this message: not manual, not ruled out by `triggers.exclude`. */
+const routable = (input: string, skills: Skill[]) =>
+  skills.filter((s) => s.activation !== "manual" && !mentions(input, s.triggers?.exclude ?? []))
+
 /** Pre-routing layer 1: skills whose trigger keywords appear in the user's message. */
 export function matchTriggers(input: string, skills: Skill[]): Skill[] {
-  const text = ` ${fold(input).replace(/[^\p{L}\p{N}+]+/gu, " ")} `
-  return skills.filter(
-    (s) =>
-      s.activation !== "manual" &&
-      (s.triggers?.keywords ?? []).some((k) => {
-        const key = fold(k).replace(/[^\p{L}\p{N}+]+/gu, " ").trim()
-        return key.length > 0 && text.includes(` ${key} `)
-      }),
-  )
+  return routable(input, skills).filter((s) => mentions(input, s.triggers?.keywords ?? []))
 }
 
 /** Vietnamese function words (folded) that say nothing about which skill fits. */
@@ -100,10 +108,14 @@ function skillIndex(skills: Skill[]) {
 export function matchSoft(input: string, skills: Skill[]): Skill | undefined {
   const candidates = skills.filter((s) => s.activation !== "manual")
   if (candidates.length === 0) return undefined
+  // IDF comes from every candidate so a skill's weight does not depend on the message;
+  // skills the message excludes just drop out of the ranking.
   const index = skillIndex(candidates)
+  const allowed = new Set(routable(input, candidates))
   const words = [...new Set(terms(input))]
   const wordPairs = [...new Set(pairs(terms(input)))]
   const ranked = index.docs
+    .filter((d) => allowed.has(d.skill))
     .map((d) => ({
       skill: d.skill,
       score:

@@ -1,47 +1,36 @@
-# Chỉ báo ngành công nghệ — đơn ký, backlog và chất lượng nhân công
+# Chỉ báo ngành công nghệ — hợp đồng ký mới, mảng và năng suất
 
-> File này giữ **cách đọc**, không giữ con số kỳ nào. Mọi giá trị lấy từ
-> `financial_detail` / `news_market` gần nhất và ghi kỳ kèm theo. Luật về đơn ký
-> dẫn doanh thu chỉ nằm ở §Trụ cột driver của SKILL.md — không lặp lại ở đây.
+> File này giữ **cách đọc**, không giữ số kỳ nào. `financial_detail` nhận một
+> `statement` mỗi lời gọi. Luật "không nội suy từ một hợp đồng lớn" nằm ở mục "Ranh
+> giới" của SKILL.md.
 
-## 1. Nhóm đơn hàng
+## 1. Đơn hàng
 
-| Chỉ báo | Đọc từ | Cách đọc |
+| Chỉ báo | Nguồn | Cách đọc |
 |---|---|---|
-| Doanh thu ký | Công bố công ty (`news_market`) | Tín hiệu **dẫn**; kỳ ký mạnh chưa vào doanh thu ngay. Ghi kỳ ký |
-| Thời hạn hợp đồng | Công bố công ty | Hợp đồng 2–3 năm cho doanh thu bền hơn đơn ngắn hạn |
-| Tỷ trọng đơn lớn | Công bố công ty | Đơn lớn tạo lãi bất thường: đánh dấu một lần, không nội suy |
-| Backlog / doanh thu chưa nhận | `financial_detail` (nếu có) | Tồn kho doanh thu tương lai; giảm = đang tiêu backlog |
+| Giá trị hợp đồng ký mới | `news_symbol`, `company_events`, `web_search` (báo cáo kết quả) | Chỉ báo dẫn; ghi kỳ ký và thị trường |
+| Thời hạn, quy mô hợp đồng | Công bố công ty | Hợp đồng nhiều năm cho doanh thu bền hơn đơn ngắn |
+| Doanh thu chưa thực hiện | CDKT | Chỉ là phần khách đã trả trước, không phải toàn bộ đơn tồn |
 
-## 2. Nhóm mảng
+## 2. Mảng và thị trường
 
-| Chỉ báo | Đọc từ | Cách đọc |
+| Chỉ báo | Statement | Cách đọc |
 |---|---|---|
-| Doanh thu nước ngoài | `financial_detail` / công bố công ty | Chu kỳ khách hàng quốc tế; nhạy tỷ giá |
-| Doanh thu nội địa | `financial_detail` / công bố công ty | Phụ thuộc chính phủ điện tử và ngân sách công |
-| Doanh thu sản phẩm riêng | `financial_detail` | Mảng biên cao hơn dịch vụ; đọc kỳ vọng doanh thu sản phẩm |
+| Doanh thu theo mảng (dịch vụ, viễn thông, giáo dục, khác) | TM | Xác định mảng chính |
+| Doanh thu theo thị trường | TM, công bố công ty | Nước ngoài nhạy tỷ giá và ngân sách khách; trong nước nhạy đầu tư công |
+| Biên lãi gộp, biên lợi nhuận trước thuế | KQKD | Đọc theo mảng nếu có; hợp nhất che chênh lệch |
 
-## 3. Nhóm chất lượng vận hành
+## 3. Năng suất và dòng tiền
 
-| Chỉ báo | Đọc từ | Cách đọc |
+| Chỉ báo | Nguồn | Cách đọc |
 |---|---|---|
-| Doanh thu trên mỗi nhân viên | Tự tính (ghi rõ) | Tăng trong khi doanh thu tăng = hiệu quả cải thiện |
-| Số nhân viên | `financial_detail` / công bố công ty | Tăng nhanh hơn doanh thu = mở rộng bằng đầu người |
-| Biên lãi gộp | `financial_detail` | Giảm trong 2 quý liền với tăng trưởng mở rộng = chi phí nhân công đang ép biên |
-| Biên lợi nhuận trước thuế | `financial_detail` | Đọc cùng phân hoá mảng: nội địa và nước ngoài khác biên |
+| Số nhân viên | Báo cáo thường niên, công bố (`web_search`, `news_symbol`) | Tăng nhanh hơn doanh thu = mở rộng bằng người |
+| Doanh thu/nhân viên (tự tính) | KQKD + số nhân viên | Doanh thu 4 quý / nhân viên bình quân; ghi rõ cách tính |
+| Phải thu khách hàng | CDKT | Tăng nhanh hơn doanh thu = khách trả chậm, thường ở mảng trong nước |
+| Khấu hao, chi đầu tư tài sản cố định | LCTT | Viễn thông, trung tâm dữ liệu: chi đầu tư lớn đi trước doanh thu |
 
-## 4. Nhóm đối chiếu
+## 4. Bẫy đọc thường gặp
 
-| Nguồn | Đọc gì | Cách dùng |
-|---|---|---|
-| `news_market` | Công bố đơn hàng ký, thị trường khách hàng, chính sách chuyển đổi số | Tín hiệu dẫn; ghi rõ nguồn + ngày |
-| `planned_targets` | Kế hoạch doanh thu/lãi | Neo kỳ vọng |
-| `peer_compare` | Tăng trưởng, biên, thu nhập/người | So trong cùng mô hình (dịch vụ vs sản phẩm) |
-| `yf_commodities` | Chu kỳ kim loại (bối cảnh chi phí) | Chỉ dùng khi xét cơ sở hạ tầng/cấu phần |
-
-## 5. Bẫy đọc thường gặp
-
-- Doanh thu nhận chững nhưng đơn ký mạnh: đọc backlog, đừng kết luận chững.
-- Biên một quý nhờ một đơn lớn: đánh dấu một lần.
-- Thu nhập trên người giảm do thuê trước doanh thu: đây là đầu tư, không phải lỗ —
-  nhưng đọc 2 quý liền để xem có chuyển thành doanh thu không.
+- Doanh thu chững nhưng ký mới mạnh: đọc ký mới trước khi nói "chững".
+- Lãi một quý nhờ một hợp đồng hay thoái vốn: đánh dấu một lần.
+- Doanh thu/nhân viên giảm do tuyển trước cho dự án lớn: đọc 2 kỳ liền.

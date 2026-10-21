@@ -1,163 +1,141 @@
 ---
 name: tieu-dung-ban-le-vn
-description: "Phân tích ngành tiêu dùng và bán lẻ Việt Nam theo bán lẻ thực, thu nhập hộ gia đình, chính sách thuế và độ thâm nhập bán lẻ hiện đại. Dùng khi hỏi xu hướng nhóm tiêu dùng hoặc kết quả chuỗi bán lẻ."
+description: "Đọc ngành tiêu dùng – bán lẻ VN: bán lẻ thực (bỏ lạm phát), thu nhập hộ gia đình, cửa hàng hiện hữu so với mở mới, biên, chi phí đầu vào. Dùng khi hỏi sức mua hay chuỗi bán lẻ, hàng tiêu dùng."
 activation: auto
 requires_tools: [financial_detail, vs_indicator_data]
-uses_tools: [financial_detail, vs_indicator_data, vs_categories, financial_ratios, planned_targets, analyst_consensus, peer_compare, news_symbol, news_market, symbol_lookup, vn_company]
+uses_tools: [financial_detail, financial_statements, vs_indicator_data, vs_categories, financial_ratios, planned_targets, analyst_consensus, peer_compare, news_symbol, news_market, web_search, symbol_lookup, vn_company]
 triggers:
-  keywords: [ngành tiêu dùng, chuỗi bán lẻ, hàng tiêu dùng, bán lẻ hiện đại, thu nhập hộ gia đình, sức mua, thị phần bán lẻ, mảng tiêu dùng]
+  keywords: [ngành tiêu dùng, nhóm tiêu dùng, ngành bán lẻ, nhóm bán lẻ, chuỗi bán lẻ, cổ phiếu bán lẻ, hàng tiêu dùng, bán lẻ hiện đại, sức mua, tổng mức bán lẻ, cửa hàng hiện hữu]
+  exclude: [dẫn sóng, sóng ngành, đầu sóng, giữa sóng, cuối sóng, pha nào, giai đoạn nào, chu kỳ ngành, luân chuyển ngành, rotation, tin gì, tin tức, tin mới, so sánh, khuyến nghị, nên mua, nên bán]
 version: 1.0.0
 ---
 
 # Tiêu dùng & bán lẻ Việt Nam — framework phân tích
 
-Ngành này không đọc bằng doanh thu danh nghĩa: số liệu bán lẻ danh nghĩa gồm cả
-lạm phát, còn sức mua thật nằm ở **tăng trưởng thực (bỏ lạm phát)** và **thu nhập
-hộ gia đình**. Skill này đọc ngành qua bán lẻ thực, thu nhập (rào cản cầu), chính
-sách hỗ trợ sức mua, và **độ thâm nhập bán lẻ hiện đại** — động cơ dài hạn của
-ngành và là thứ phân biệt chuỗi hiện đại với chợ truyền thống.
-
-Lưu ý phân loại: **bán lẻ điện tử tiêu dùng** (máy tính, điện thoại, thiết bị) là
-chu kỳ thay thế thiết bị, khác chu kỳ thực phẩm – hàng thiết yếu. Cả hai cùng nằm
-trong nhãn "bán lẻ" nhưng driver không dùng chung.
+Doanh thu tiêu dùng danh nghĩa gồm cả lạm phát; sức mua thật là **tăng trưởng thực**
+(bỏ lạm phát) và **thu nhập hộ gia đình**. Với chuỗi bán lẻ, tăng trưởng gồm hai phần
+khác nhau: **mở cửa hàng mới** và **tăng trưởng cùng cửa hàng** (cửa hàng hiện hữu
+bán nhiều hơn) — chỉ phần sau cho thấy thị phần thật. Ngành gồm nhiều phân khúc có
+driver riêng: hàng thiết yếu (bách hoá, thực phẩm), điện máy – điện thoại (chu kỳ thay
+thiết bị), trang sức (giá vàng), nhà thuốc, và nhà sản xuất hàng tiêu dùng (chi phí
+nguyên liệu, sản lượng).
 
 ## Khi nào dùng
 
-- Dùng khi: user hỏi xu hướng nhóm tiêu dùng/bán lẻ, một chuỗi bán lẻ có còn tăng
-  trưởng mở rộng không, sức mua đang thế nào.
-- Khi KHÔNG dùng (dùng skill khác thay thế):
-  - Hỏi pha thị trường / luân chuyển ngành / sóng ngành tiếp theo → `dinh-vi-chu-ky-vn`.
-  - Phân tích toàn diện một mã → `phan-tich-chuyen-sau-1-ma`.
-  - Chỉ định giá một mã → `dinh-gia-chuyen-sau`.
-  - Chỉ đọc BCTC một mã không có mảng ngành → `co-ban-chuyen-sau`.
-  - Số liệu vĩ mô VN chi tiết → `danh-gia-vi-mo-viet-nam`.
-  - Xuất khẩu thực phẩm/nông sản → `xuat-nhap-khau-vn`.
+- Dùng khi: hỏi sức mua đang thế nào, nhóm tiêu dùng – bán lẻ được tiếp sức hay bị
+  siết, một chuỗi bán lẻ còn tăng trưởng không, nên đọc bán lẻ thực hay danh nghĩa.
+- Khi KHÔNG dùng:
+  - Pha thị trường, tiêu dùng có phải nơi trú ẩn không → `dinh-vi-chu-ky-vn`.
+  - Phân tích toàn diện một mã → `phan-tich-chuyen-sau-1-ma`; chỉ định giá → `dinh-gia-chuyen-sau`.
+  - GDP, CPI, vĩ mô tổng thể → `danh-gia-vi-mo-viet-nam`.
+  - Xuất khẩu thực phẩm, nông sản → `xuat-nhap-khau-vn`.
 
 ## Trụ cột driver
 
-| Driver | Kênh truyền dẫn | Đọc/xác minh bằng |
+| Driver | Cơ chế | Đọc bằng |
 |---|---|---|
-| Bán lẻ thực | Chênh lệch bán lẻ danh nghĩa và thực là lạm phát. Đọc số danh nghĩa sẽ thấy "tăng trưởng tốt" trong khi thể tích tăng ít | `vs_indicator_data` (tổng mức bán lẻ + chỉ số giá) — đọc cả hai rồi mới kết luận thực |
-| Thu nhập hộ gia đình | Thu nhập là rào cản cầu. Tạo việc làm chậm + tiền lương công vụ đóng băng làm thu nhập tăng chậm, kéo sức mua | `vs_indicator_data` (thu nhập/tiền lương nếu có) + `news_market` (chính sách thu nhập). Thiếu → ghi rõ |
-| Chính sách hỗ trợ sức mua | Giảm thuế giá trị gia tăng hàng thiết yếu hỗ trợ sức mua trong thời hạn nhất định; chính sách "chính thức hoá thị trường" (hoá đơn, niêm yết) làm giảm lợi thế giá của kênh truyền thống | `news_market` (văn bản + hiệu lực), ghi rõ nguồn + ngày |
-| Độ thâm nhập bán lẻ hiện đại | Bán lẻ hiện đại chiếm tỷ trọng thấp so với khu vực → mở chuỗi là động cơ tăng trưởng dài hạn. Chuỗi mở cửa vượt tốc độ thị trường thì tăng thị phần | Diễn biến chuỗi (số cửa, diện tích) + thị phần: `news_market` |
-| Doanh thu cùng cửa hàng | Mở cửa hàng mới và tăng trưởng cùng cửa hàng là hai tăng trưởng khác nhau. Cùng cửa tăng nghĩa là thị phần đang ăn vào đối thủ | `financial_detail` + công bố công ty trong `news_market`; tự tính nếu công bố cho phép, ghi rõ |
-| Phân khúc | Hàng thực phẩm thiết yếu (chu kỳ ổn) khác điện tử tiêu dùng (chu kỳ thay thế thiết bị). Không dùng chung một driver | Mảng trong `financial_detail` + `vn_company` |
+| Bán lẻ thực | Tổng mức bán lẻ danh nghĩa trừ lạm phát mới là thể tích; danh nghĩa tăng đẹp có thể chỉ là giá | Tổng mức bán lẻ: `vs_categories` → `vs_indicator_data(category_id=…, term_type_id=…)`; CPI: `vs_indicator_data(indicator="CPI")` |
+| Thu nhập hộ gia đình | Thu nhập, việc làm quyết định sức mua; tăng chậm thì người mua chuyển sang hàng rẻ hơn | Catalogue chỉ tiêu (`vs_categories`) nếu có chuỗi thu nhập; không có thì `web_search` (số thống kê theo kỳ) |
+| Chính sách | Giảm thuế GTGT, điều chỉnh lương, hoá đơn điện tử với hộ kinh doanh (thu hẹp lợi thế giá của kênh truyền thống) | `web_search`, ghi văn bản + ngày hiệu lực |
+| Cùng cửa hàng và mở mới | Mở mới nhanh mà cùng cửa hàng âm = tăng trưởng mua bằng mở rộng, dễ đảo chiều khi ngừng mở | Số cửa hàng, doanh thu/cửa hàng: công bố công ty (`news_symbol`); tự tính khi đủ số, ghi rõ |
+| Chi phí đầu vào | Nhà sản xuất chịu giá nguyên liệu (sữa bột, đường, lúa mạch, bao bì); trang sức chịu giá vàng | Giá vốn (KQKD); giá nguyên liệu: `web_search` |
 
 ## Các bước
 
-**Bước 1: Nhận diện phân khúc (song song).**
+`financial_detail` nhận **một** `statement` mỗi lời gọi; không gọi được thì dùng
+`financial_statements` và ghi rõ.
 
-`symbol_lookup` · `vn_company` (mảng: thực phẩm/điện tử/dịch vụ) · `financial_detail`
-(doanh thu theo mảng). Ghi rõ phân khúc đang phân tích.
+**Bước 1 (song song):** `symbol_lookup` · `vn_company` · `financial_detail(symbol,
+statement=TM)` (doanh thu theo chuỗi/mảng). Xác định **phân khúc lớn nhất**.
 
-**Bước 2: Sức mua thật (song song — tra catalogue TRƯỚC).**
+**Bước 2 (song song):** `vs_categories` (tìm category tổng mức bán lẻ, thu nhập) rồi
+`vs_indicator_data(category_id=…, term_type_id=…)` — cặp category/term_type phải khớp
+metadata, sai thì trả rỗng · `vs_indicator_data(indicator="CPI")` · `web_search` (chính
+sách thuế, lương).
 
-`vs_indicator_data` chỉ có preset sẵn cho GDP/CPI/XK; các chuỗi khác (tổng mức bán
-lẻ, CPI lõi, thu nhập) phải lấy `category_id` từ `vs_categories` trước, rồi truyền
-kèm `term_type_id` phù hợp. Gọi `vs_categories` → chọn category + term_type →
-`vs_indicator_data(category_id=…, term_type_id=…)`; preset `CPI` dùng trực tiếp
-`vs_indicator_data(indicator="CPI")`. Kèm `news_market` (chính sách thuế, thu nhập,
-tiền lương công vụ).
+**Bước 3 (song song):** `financial_detail(symbol, statement=KQKD)` (doanh thu, giá vốn,
+chi phí bán hàng) · `financial_detail(symbol, statement=CDKT)` (tồn kho, phải trả người
+bán) · `news_symbol(symbol)` (số cửa hàng, doanh thu tháng, mở/đóng cửa hàng).
 
-**Bước 3: Chất lượng tăng trưởng (song song).**
+**Bước 4:** `planned_targets` · `analyst_consensus`. So với chuỗi cùng phân khúc: chỉ
+báo vận hành đọc bằng `financial_detail` từng mã (tối đa 3); số cửa hàng từ công bố
+công ty; `peer_compare` chỉ trả P/E, P/B, EPS, BVPS, ROE/ROA.
 
-`financial_detail` (doanh thu, biên lãi gộp, tồn kho, công nợ; số điểm bán nếu
-công bố) · `news_market` (mở/đóng cửa, thị phần, đối thủ truyền thống).
+## Cây quyết định doanh nghiệp tiêu dùng – bán lẻ đang được tiếp sức hay bị siết
 
-**Bước 4: Neo kỳ vọng + vị thế nhóm (song song).**
+Duyệt từ Q1, **dừng ở ★ đầu tiên**. Nhánh "không có số" đi tiếp với độ tin cậy thấp.
 
-`planned_targets` · `analyst_consensus` · hai mảng đối chiếu khác nhau: (a) tỷ lệ
-định giá (P/E, P/B, ROE) dùng `peer_compare`; (b) chỉ báo vận hành (biên lãi gộp,
-tồn kho, công nợ) đọc bằng `financial_detail` **từng peer**, số điểm bán/tốc độ mở
-rộng lấy từ công bố công ty qua `news_market` — `peer_compare` không trả được
-những dòng này.
+Q1. Tăng trưởng đến từ đâu?
+├─ Chủ yếu mở cửa hàng mới, cùng cửa hàng đi ngang hoặc âm → ★ "Tăng trưởng mua bằng
+│  mở rộng: dễ chững khi tốc độ mở chậm lại, đọc chi phí mở mới và biên"
+├─ Cùng cửa hàng tăng, hoặc là nhà sản xuất (không có cửa hàng) → tiếp Q2
+└─ Không tách được → tiếp Q2, ghi rõ
 
-## Cây quyết định chuỗi bán lẻ đang được tiếp sức hay siết
+Q2. Bán lẻ thực (bỏ lạm phát) còn dương không?
+├─ Danh nghĩa dương nhưng thực âm → ★ "Tăng trưởng của thị trường đến từ giá, không
+│  từ thể tích: hạ kỳ vọng sản lượng"
+├─ Thực dương → tiếp Q3
+└─ Không lấy được số → tiếp Q3, ghi "chưa đọc được bán lẻ thực"
 
-Duyệt Q1→Q5 theo thứ tự, **DỪNG ở ★ đầu tiên** mà ĐỦ điều kiện. Thiếu dữ liệu thì
-hạ độ tin cậy, không bù số.
+Q3. Thu nhập và chính sách có đỡ sức mua không?
+├─ Thu nhập tăng chậm, không có chính sách hỗ trợ → ★ "Bị siết bởi thu nhập: người mua
+│  chuyển sang hàng rẻ, chuỗi giá cao chịu trước"
+└─ Thu nhập cải thiện hoặc có chính sách hỗ trợ, hoặc không có số → tiếp Q4
 
-Q1. Tăng trưởng đến từ mở cửa hay từ cùng cửa?
-├─ Từ cùng cửa (thị phần tăng) → tiếp Q2
-├─ Chủ yếu từ mở cửa mới, cùng cửa chững → tiếp Q2 (đọc kỹ) nhưng ghi rõ nguồn
-└─ Chưa phân tách được → tiếp Q2 với độ tin cậy thấp, ghi rõ
-
-Q2. Bán lẻ THỰC (bỏ lạm phát) còn dương không?
-├─ Có → tiếp Q3
-├─ Không, danh nghĩa dương nhưng thực âm → ★ "Tăng trưởng đến từ giá, không từ thể
-   tích: hạ độ tin cậy các kỳ tiếp theo"
-
-Q3. Thu nhập hộ gia đình có cải thiện không?
-├─ Có, hoặc chính sách đang hỗ trợ sức mua → tiếp Q4
-└─ Không, thu nhập đứng + lạm phát lõi cao → ★ "Bị siết bởi thu nhập: người tiêu
-   dùng chọn mua ít hơn và đổi sang hàng giá rẻ hơn"
-
-Q4. Chính sách đang hỗ trợ ai?
-├─ Hỗ trợ chuỗi hiện đại (hoá đơn, chính thức hoá) → tiếp Q5
-└─ Không có chính sách lợi cho ai riêng → ★ "Tăng trưởng bình thường: điểm
-   cạnh tranh là cơ cấu, đọc biên lãi gộp và tồn kho thay vì kỳ vọng đặc biệt"
-
-Q5. Biên lãi gộp có giữ được không?
-├─ Có, hoặc đang cải thiện cùng với tăng trưởng thực → ★ "Được tiếp sức: tăng
-   trưởng thực + biên ổn hoặc mở rộng là cấu trúc tốt nhất của ngành"
-└─ Không, tăng trưởng bằng khuyến mại làm biên giảm → ★ "Tăng trưởng mua bằng giá:
-   đọc tồn kho và công nợ để xem chi phí của đà này"
+Q4. Biên lãi gộp có giữ được không?
+├─ Giữ hoặc mở rộng cùng tăng trưởng → ★ "Được tiếp sức: thể tích tăng và biên giữ
+│  được là cấu trúc tốt nhất của ngành"
+├─ Giảm vì khuyến mại hoặc chi phí đầu vào → ★ "Tăng trưởng mua bằng giá hoặc bị chi
+│  phí ép: đọc tồn kho và chi phí bán hàng"
+└─ Một quý biến động chưa đủ → ★ "Biên chưa rõ xu hướng: cần thêm một quý, độ tin
+   cậy trung bình"
 
 ## Chỉ báo đặc thù ngành
 
-Bảng chỉ báo ngành tiêu dùng/bán lẻ + cách đọc ở `references/kpi.md`.
+Công thức bán lẻ thực, cùng cửa hàng và cách đọc theo phân khúc ở `references/kpi.md`.
 
 ## Định giá theo đặc thù ngành
 
-Tiêu dùng/bán lẻ định giá bằng **P/E** (ngành có lợi nhuận ổn định) và **EV/
-chỉ số vốn hoá theo doanh thu** cho giai đoạn mở rộng chưa có lãi. Đọc kèm quy mô
-doanh thu cùng cửa để tránh nhầm "mở rộng" với "tăng trưởng thật". Neo kỳ vọng
-bằng `planned_targets` và `analyst_consensus`. Giai đoạn khuyến mại: một kỳ biên
-giảm có thể là cố ý, đọc 2 quý liền.
+Doanh nghiệp có lợi nhuận ổn định: **P/E** so với tăng trưởng lợi nhuận. Chuỗi đang mở
+rộng chưa có lãi: **EV/doanh thu** kèm doanh thu/cửa hàng, ghi rõ giai đoạn. Một kỳ biên
+giảm có thể là khuyến mại có chủ đích — đọc 2 quý liền.
 
 ## Rủi ro đặc thù
 
-- **Rủi ro đọc sai danh nghĩa**: báo cáo "bán lẻ tăng trưởng tốt" trong khi thể
-  tích tăng ít.
-- **Rủi ro thu nhập đứng**: rào cản cầu không phá được trong ngắn hạn.
-- **Rủi ro biên bằng khuyến mại**: tăng trưởng mua bằng giá, biến đổi khi đối thủ
-  theo sau.
-- **Rủi ro chi phí đầu vào**: giá nguyên liệu thực phẩm và chi phí vận hành chuỗi
-  áp biên.
-- **Rủi ro nhầm phân khúc**: chu kỳ điện tử tiêu dùng khác chu kỳ thực phẩm.
+- Đọc số danh nghĩa thay thực: thấy "tăng trưởng tốt" khi thể tích tăng ít.
+- Thu nhập tăng chậm làm người mua chuyển sang hàng rẻ.
+- Khuyến mại kéo dài để giữ thị phần ăn vào biên.
+- Giá nguyên liệu (sữa, đường, vàng) tăng khi giá bán chưa theo.
+- Nhầm phân khúc: điện máy, trang sức, thực phẩm theo chu kỳ khác nhau.
 
 ## Ranh giới
 
-- Không xác định pha thị trường, không suy "tiêu dùng là nơi trú ẩn" theo chu kỳ →
-  `dinh-vi-chu-ky-vn` (nơi giữ vai trò các mảng theo pha).
-- Không chọn mã khuyến nghị mua/bán → `phan-tich-chuyen-sau-1-ma`.
-- Không dùng số danh nghĩa thay tăng trưởng thực trong kết luận.
-- Không suy chính sách thuế từ trí nhớ: tra văn bản hiện hành, ghi nguồn + ngày.
+- Không xác định pha thị trường, không nói "tiêu dùng là nơi trú ẩn" → `dinh-vi-chu-ky-vn`.
+- Không khuyến nghị mua/bán.
+- Không dùng số danh nghĩa thay số thực trong kết luận.
+- Không nêu thuế suất, mức lương, thời hạn chính sách từ trí nhớ: tra văn bản, ghi số
+  hiệu + ngày (luật này chỉ nằm ở đây).
 
 ## Giới hạn
 
-- Chỉ số giá tiêu dùng và lõi cập nhật theo tháng, độ trễ — ghi rõ kỳ đang dùng.
-- Doanh thu cùng cửa không phải kỳ nào công ty cũng công bố: khi thiếu, hạ độ tin
-  cậy nhánh Q1.
-- Bán lẻ hiện đại thâm nhập là con số ước tính ngành, ghi rõ nguồn.
+- Số thống kê theo tháng có độ trễ — ghi kỳ.
+- Cùng cửa hàng không phải công ty nào cũng công bố — ghi rõ khi thiếu.
 
 ## Ví dụ
 
-**Ví dụ 1:**
-Hỏi: Chuỗi bán lẻ này còn tăng trưởng được nữa không?
-Đạt khi: phân biệt được tăng trưởng mở cửa với cùng cửa, có bán lẻ thực, biên 2 quý,
-và verdict theo cây Q1→Q5.
+Hỏi: Chuỗi bán lẻ còn tăng trưởng được nữa không?
+Đạt khi: tách mở mới và cùng cửa hàng (hoặc ghi thiếu), có bán lẻ thực tự tính kèm kỳ,
+biên 2 quý, verdict theo cây kèm nhánh đã dừng.
 
 ## Trực quan hóa
 
-Chỉ vẽ khi người dùng muốn xem hình; tối đa 1 biểu đồ. Hợp với dữ liệu skill này:
-multiline bán lẻ danh nghĩa vs thực, bar biên lãi gộp theo phân khúc, scatter số
-điểm bán với doanh thu cùng cửa. Vẽ bằng `chart_render` với `from_call` (mã
-`[ref …]`) từ kết quả tool đã có; cần chọn loại hình thì nạp `ve-bieu-do`.
+Chỉ vẽ khi người dùng muốn xem hình; tối đa 1 biểu đồ: đường bán lẻ danh nghĩa và thực,
+cột biên lãi gộp theo quý, cột số cửa hàng và doanh thu/cửa hàng. Vẽ bằng `chart_render`
+với `from_call` (mã `[ref …]`) từ kết quả tool đã có; cần chọn loại hình thì nạp
+`ve-bieu-do`.
 
 ## File tham chiếu
 
 | File | Dùng khi |
 |---|---|
-| `references/kpi.md` | Cần cách tính bán lẻ thực, đọc tăng trưởng cùng cửa, và chỉ báo biên/tồn kho theo phân khúc |
+| `references/kpi.md` | Cần công thức bán lẻ thực, cùng cửa hàng, dòng BCTC theo statement và cách đọc theo phân khúc |

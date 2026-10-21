@@ -17,8 +17,14 @@ export const SkillFrontmatter = z.object({
    * manual: not listed; only the user turns it on with /skill <name>
    */
   activation: z.enum(["auto", "always", "manual"]).default("auto"),
-  /** Deterministic pre-routing (HarnessPlan §5.3 L1): keywords suggest the skill for a turn. */
-  triggers: z.object({ keywords: z.array(z.string()).default([]) }).optional(),
+  /**
+   * Deterministic pre-routing (HarnessPlan §5.3 L1): keywords suggest the skill for a turn;
+   * an `exclude` phrase in the message rules it out of both routing layers for that turn
+   * (a sector skill steps aside when the question is about market phase or rotation).
+   */
+  triggers: z
+    .object({ keywords: z.array(z.string()).default([]), exclude: z.array(z.string()).optional() })
+    .optional(),
   /**
    * Gate: hide the skill unless all these tools are available. Keep it to the one to three
    * tools the skill cannot work without — every extra entry is another way to hide it.

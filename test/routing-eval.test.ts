@@ -13,22 +13,20 @@ const FLOOR = {
   toolHits: 51, // of 70 (2026-10-14: +distribution_count, 2/2 new cases hit)
   /**
    * Cases whose expected skill is suggested.
-   * 2026-10-20: 34 dev cases mới cho 13 skill ngành VN (25 câu "hỏi đúng ngành" +
-   * 9 câu nhắc tên ngành nhưng thuộc khía cạnh khác — định giá, so sánh, pha, vĩ mô,
-   * tin, kỹ thuật, pre-BCTC, BCTC, cơ bản sàn). Floor = 75/79.
+   * 2026-10-21 (sector skills, PR #116): 2 cases per sector skill, look-alike questions that
+   * belong to other skills, and the misroutes found in review. Misses: Q229/Q239 (old), Q290
+   * (no news skill fires for "Vinhomes có tin gì mới", same on main).
    */
-  skillHits: 75, // of 79
+  skillHits: 86, // of 89
   /**
    * Suggested skills that are not expected (on scored cases).
-   * 18 gốc + 2 mới từ chồng lấn trigger đã biết: `danh-gia-vi-mo-viet-nam` có trigger
-   * "xuất nhập khẩu"/"xuất khẩu" nên bắn cả câu "ngành xuất nhập khẩu chịu gì từ thuế
-   * quan" (Q267/Q268). Muốn hạ phải siết trigger của skill vĩ mô — PR riêng.
-   * +1: devil-advocate bắn thêm ở Q275 (câu pre-BCTC của HPG). Nới lên 21 có chủ đích,
-   * ghi rõ thành phần để lần sau siết lại đúng chỗ.
+   * 18 as before, +1 devil-advocate on Q275 (a pre-earnings HPG question, the same pattern
+   * as Q5). Sector skills add none: phase/news/compare/buy questions are excluded through
+   * `triggers.exclude`, and danh-gia-vi-mo-viet-nam steps aside for sector trade questions.
    */
-  maxWrongSuggestions: 21, // of 96
+  maxWrongSuggestions: 19, // of 105
   /** "No skill" cases that still get a suggestion. */
-  maxNegativesSuggested: 5, // of 27
+  maxNegativesSuggested: 5, // of 35
 }
 
 const root = path.resolve(import.meta.dir, "..")

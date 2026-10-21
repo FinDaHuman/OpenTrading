@@ -1,163 +1,149 @@
 ---
 name: dau-khi-vn
-description: "Phân tích ngành dầu khí VN theo giá dầu quốc tế, tuyến vận chuyển, thay thế trữ lượng và ranh giới giữa khai thác với lọc hoá dầu. Dùng khi hỏi xu hướng nhóm dầu khí hay công ty dầu khí chịu gì."
+description: "Đọc ngành dầu khí VN theo từng mảng: khai thác, dịch vụ kỹ thuật, vận chuyển, lọc hoá dầu, phân phối khí và xăng dầu. Dùng khi hỏi nhóm dầu khí chịu gì từ giá dầu."
 activation: auto
-requires_tools: [yf_commodities, financial_detail]
-uses_tools: [yf_commodities, financial_detail, financial_ratios, planned_targets, analyst_consensus, peer_compare, company_events, news_symbol, news_market, symbol_lookup, vn_company]
+requires_tools: [financial_detail, yf_commodities]
+uses_tools: [financial_detail, financial_statements, yf_commodities, financial_ratios, planned_targets, analyst_consensus, peer_compare, company_events, news_symbol, news_market, web_search, symbol_lookup, vn_company]
 triggers:
-  keywords: [ngành dầu khí, dầu thô, khí đốt, lọc hoá dầu, giếng khoan, dự án khai thác, tỷ trọng dầu khí, giá dầu brent, công ty dầu khí]
+  keywords: [ngành dầu khí, nhóm dầu khí, cổ phiếu dầu khí, công ty dầu khí, dịch vụ dầu khí, lọc hoá dầu, phân phối khí, giàn khoan, dự án khai thác dầu]
+  exclude: [dẫn sóng, sóng ngành, đầu sóng, giữa sóng, cuối sóng, pha nào, giai đoạn nào, chu kỳ ngành, luân chuyển ngành, rotation, tin gì, tin tức, tin mới, so sánh, khuyến nghị, nên mua, nên bán]
 version: 1.0.0
 ---
 
 # Dầu khí Việt Nam — framework phân tích
 
-Ngành dầu khí VN gồm **bốn vòng kinh doanh khác nhau** trong một nhãn chung: khai
-thác (thượng nguồn), vận chuyển, lọc hoá dầu, và dịch vụ kỹ thuật. Nhãn chung là
-bẫy: biên của khai thác phụ thuộc giá dầu, biên của lọc dầu phụ thuộc chênh lệch
-tinh chế dầu thô, biên của dịch vụ phụ thuộc chi tiêu đầu tư. Skill này đọc ngành
-bằng giá dầu quốc tế, **độ dài đường đi của dầu (tonne-mile)** — yếu tố làm cước
-vận chuyển tăng kể cả khi lượng dầu qua kênh vận tải giảm — và năng lực thay thế
-trữ lượng của công ty. Và một ranh giới cứng: **không xem ngành này là mắt xích
-của chuỗi luân chuyển ngành** (đó là nhiệm vụ của skill chu kỳ).
+"Dầu khí" là một nhãn chung cho nhiều mảng có chu kỳ khác nhau: **khai thác** (bám
+giá dầu và sản lượng), **dịch vụ kỹ thuật** (khoan, xây lắp — bám chi tiêu đầu tư của
+chủ mỏ, đi sau giá dầu), **vận chuyển** (cước tàu, độ dài tuyến), **lọc hoá dầu**
+(chênh lệch giá sản phẩm và dầu thô), **phân phối khí và bán lẻ xăng dầu** (sản lượng
+tiêu thụ, giá điều hành, chênh lệch tồn kho). Đọc sai mảng là kết luận ngược: giá dầu
+giảm có thể tốt cho mảng này và xấu cho mảng kia.
 
 ## Khi nào dùng
 
-- Dùng khi: user hỏi xu hướng nhóm dầu khí, một công ty dầu khí chịu gì từ giá dầu,
-  khác nhau giữa khai thác và lọc dầu, cú sốc địa chính trị đổi gì cho ngành.
-- Khi KHÔNG dùng (dùng skill khác thay thế):
-  - Hỏi pha thị trường, luân chuyển ngành, sóng ngành tiếp theo → `dinh-vi-chu-ky-vn`.
-  - Phân tích toàn diện một mã → `phan-tich-chuyen-sau-1-ma`.
-  - Chỉ định giá một mã → `dinh-gia-chuyen-sau`.
-  - Chỉ đọc BCTC một mã không có mảng ngành → `co-ban-chuyen-sau`.
-  - Số liệu vĩ mô quốc tế chi tiết (dự báo nguồn cung toàn cầu) → `danh-gia-vi-mo-quoc-te`.
-  - Vận tải biển nói chung (container, logistics) → `van-tai-vn`.
+- Dùng khi: hỏi nhóm dầu khí đang được tiếp sức hay bị siết, một công ty dầu khí chịu
+  gì từ giá dầu, khai thác và lọc dầu khác nhau thế nào.
+- Khi KHÔNG dùng:
+  - Pha thị trường, dầu khí có dẫn sóng không → `dinh-vi-chu-ky-vn`.
+  - Phân tích toàn diện một mã → `phan-tich-chuyen-sau-1-ma`; chỉ định giá → `dinh-gia-chuyen-sau`.
+  - Chỉ hỏi giá dầu hôm nay → `yf_commodities`, không cần skill.
+  - Cung cầu dầu thế giới, OPEC+, vĩ mô quốc tế → `danh-gia-vi-mo-quoc-te`.
 
 ## Trụ cột driver
 
-| Driver | Kênh truyền dẫn | Đọc/xác minh bằng |
+| Driver | Cơ chế | Đọc bằng |
 |---|---|---|
-| Giá dầu thô | Hầu hết dòng thu của ngành bám giá dầu. Nhạy theo mảng vòng kinh doanh: thượng nguồn nhạy trực tiếp, lọc dầu nhạy chênh lệch tinh chế, dịch vụ nhạy ngân sách đầu tư | `yf_commodities` (WTI, Brent) theo chu kỳ; đối chiếu giá dầu trong `news_market` |
-| Độ dài đường đi của dầu (tonne-mile) | Khi tuyến vận chuyển dài lên, cước tàu tăng kể cả khi tổng khối lượng dầu không đổi. Đây là driver của vòng vận chuyển, khác với driver của thượng nguồn | Tình trạng tuyến vận chuyển: `news_market`/`web_search`, ghi rõ nguồn và kỳ |
-| Thay thế trữ lượng | Sản lượng hiện tại chỉ bền khi trữ lượng mới được bù đắp. Trữ lượng bù đắp thấp hơn sản lượng kéo dài = sản lượng sẽ giảm trong tương lai gần | Sản lượng + trữ lượng phát hiện mới: công bố ngành trong `news_market`/`web_search`; dư đọng chi phí thăm dò trong `financial_detail` |
-| Chi tiêu đầu tư | Ngân sách E&P của tập đoàn quyết định doanh thu của vòng dịch vụ kỹ thuật, và thứ tự dự án quyết định vòng thượng nguồn | Kế hoạch đầu tư 5 năm: `news_market`/`web_search`; chỉ báo riêng mã: dự án trong `company_events` |
-| Cơ cấu mảng | Cùng một nhãn ngành, biên hoàn toàn khác. Đọc nhầm vòng kinh doanh sẽ kết luận ngược | Mảng trong `financial_detail` + bảng mảng ở `vn_company` |
-| Mùa vụ quốc tế | Nhu cầu theo mùa và các họp của nhóm sản xuất tạo nhịp giá; tác động đến nhịp ngành nhưng không đổi kỳ vọng dài hạn | Nhịp theo kỳ: `yf_commodities` theo chu kỳ |
+| Giá dầu | Khai thác hưởng trực tiếp; dịch vụ kỹ thuật hưởng sau khi chủ mỏ tăng ngân sách; lọc dầu và phân phối chịu chênh lệch tồn kho khi giá biến động mạnh | `yf_commodities(tickers=["BZ=F","CL=F"], period="6mo")` (Brent, WTI tham chiếu) |
+| Chi tiêu đầu tư thượng nguồn | Dự án mỏ mới được phê duyệt và triển khai là đơn hàng của dịch vụ khoan, xây lắp; giá thuê giàn khoan đi theo | `web_search` (dự án, giá thuê giàn), `company_events` + `news_symbol` của mã |
+| Sản lượng và trữ lượng | Sản lượng hiện tại chỉ bền khi trữ lượng được bù; mỏ cũ suy giảm tự nhiên | `web_search` (công bố tập đoàn/ngành), `news_symbol` |
+| Chênh lệch lọc dầu | Giá sản phẩm (xăng, dầu diesel…) trừ giá dầu thô đầu vào; tồn kho dầu thô làm lãi/lỗ đột biến khi giá đổi chiều | `web_search` (chênh lệch tham chiếu khu vực), biên lãi gộp `financial_detail(statement=KQKD)` |
+| Phân phối khí, xăng dầu | Sản lượng tiêu thụ, giá bán điều hành theo kỳ, chênh lệch tồn kho; khí bán cho điện và đạm theo hợp đồng | Doanh thu, sản lượng: `financial_detail`, `news_symbol`; cơ chế giá điều hành: `web_search` |
+| Vận chuyển | Cước tàu dầu, khí tăng khi tuyến dài ra (tàu phải đi vòng) dù khối lượng không đổi; hợp đồng thuê dài hạn làm chậm tác động | `web_search` (cước, tình trạng tuyến, ghi ngày) |
 
 ## Các bước
 
-**Bước 1: Nhận diện vòng kinh doanh (song song).**
+`financial_detail` nhận **một** `statement` mỗi lời gọi; không gọi được thì dùng
+`financial_statements` và ghi rõ.
 
-`symbol_lookup` · `vn_company` + `financial_detail` để xác định mảng nào nuôi lãi:
-thượng nguồn / lọc dầu / vận chuyển / dịch vụ. Ghi rõ vòng đang phân tích.
+**Bước 1 (song song):** `symbol_lookup` · `vn_company` · `financial_detail(symbol,
+statement=TM)` (doanh thu theo mảng). Xác định **mảng đóng góp lợi nhuận lớn nhất**;
+cây đi theo mảng đó, mảng khác nêu ở phần rủi ro.
 
-**Bước 2: Giá dầu + cú sốc tuyến vận chuyển (song song).**
+**Bước 2 (song song):** `yf_commodities` (Brent/WTI 6 tháng) ·
+`financial_detail(symbol, statement=KQKD)` 4–8 quý (doanh thu, giá vốn, biên).
 
-`yf_commodities` (giá dầu theo chu kỳ) · `news_market` (trạng thái tuyến vận chuyển,
-cước tàu dầu nếu liên quan, diễn biến địa chính trị).
+**Bước 3 (song song):** `web_search` (dự án thượng nguồn, giá thuê giàn khoan, chênh
+lệch lọc dầu, cước tàu — tuỳ mảng, ghi nguồn + ngày) · `company_events(symbol)` +
+`news_symbol(symbol)` (hợp đồng mới, dự án của riêng mã).
 
-**Bước 3: Sản lượng + trữ lượng + dự án (song song).**
+**Bước 4:** `planned_targets` (kế hoạch thường đặt theo một mức giá dầu giả định — so
+với giá hiện tại) · `analyst_consensus`. So với doanh nghiệp **cùng mảng**; chỉ báo vận
+hành của peer đọc bằng `financial_detail` từng mã, `peer_compare` chỉ trả P/E, P/B,
+EPS, BVPS, ROE/ROA.
 
-`news_market` (sản lượng, trữ lượng phát hiện, dự án mới, khởi công) ·
-`company_events` (sự kiện dự án của riêng mã). `financial_detail`: chi phí thăm dò,
-xu hướng giá vốn.
+## Cây quyết định công ty dầu khí đang được tiếp sức hay bị siết
 
-**Bước 4: Neo kỳ vọng + vị thế nhóm.**
+Duyệt từ Q1, **dừng ở ★ đầu tiên**. Nhánh "không có số" đi tiếp với độ tin cậy thấp.
 
-`planned_targets` · `analyst_consensus` · `peer_compare` (so chỉ trong **cùng vòng
-kinh doanh** — so thượng nguồn với lọc dầu là vô nghĩa).
+Q1. Mảng đóng góp lợi nhuận lớn nhất?
+├─ Khai thác → tiếp Q2
+├─ Dịch vụ kỹ thuật (khoan, xây lắp, giàn) → tiếp Q3
+├─ Lọc hoá dầu → ★ "Bám chênh lệch lọc dầu và chênh lệch tồn kho, không bám mức giá
+│  dầu: đọc biên lãi gộp và giá dầu biến động mạnh trong quý"
+├─ Vận chuyển dầu khí → ★ "Bám cước tàu và tỷ lệ hợp đồng dài hạn: giá dầu chỉ tác
+│  động gián tiếp"
+└─ Phân phối khí, bán lẻ xăng dầu → ★ "Bám sản lượng tiêu thụ, giá điều hành và
+   chênh lệch tồn kho: giá dầu tăng nhanh có thể làm lãi tồn kho một lần"
 
-## Cây quyết định công ty dầu khí đang được tiếp sức hay siết
+Q2 (khai thác). Giá dầu so với mức kế hoạch hoặc giá hoà vốn?
+├─ Thấp hơn và đang giảm → ★ "Khai thác bị siết bởi giá dầu: đọc chi phí khai thác
+│  để xem chịu được bao lâu"
+├─ Cao hơn hoặc đang tăng → tiếp Q4
+└─ Không có mức so sánh → tiếp Q4, ghi rõ
 
-Duyệt Q1→Q5 theo thứ tự, **DỪNG ở ★ đầu tiên** mà ĐỦ điều kiện. Thiếu dữ liệu thì
-hạ độ tin cậy, không bù số.
+Q3 (dịch vụ). Chủ mỏ có đang tăng chi tiêu đầu tư không?
+├─ Có dự án lớn được phê duyệt/triển khai, giá thuê giàn tăng → tiếp Q5
+├─ Dự án lùi, giá thuê giàn giảm → ★ "Dịch vụ bị siết bởi đơn hàng: doanh thu đi sau
+│  quyết định đầu tư của chủ mỏ"
+└─ Chưa rõ → tiếp Q5
 
-Q1. Công ty thuộc vòng kinh doanh nào?
-├─ Thượng nguồn (khai thác) → Q2
-├─ Lọc hoá dầu → ★ "Chu kỳ bám chênh lệch tinh chế và giá nguyên liệu đầu vào, không
-   bám giá dầu trực tiếp — đọc chênh lệch tinh chế trước"
-├─ Vận chuyển → ★ "Chu kỳ bám cước tàu và độ dài đường đi — đọc hướng cước tàu dầu
-   trong `news_market`, đối chiếu tỷ trọng hợp đồng dài hạn"
-├─ Dịch vụ kỹ thuật → ★ "Chu kỳ bám ngân sách đầu tư E&P — đọc kế hoạch đầu tư
-   trước khi đọc giá dầu"
-└─ Nhiều vòng, không có vòng nào > nửa lãi → Q2 và đọc cả các nhánh
+Q4 (khai thác). Trữ lượng có được bù không?
+├─ Không, sản lượng giảm và chưa có mỏ mới → ★ "Bị siết bởi trữ lượng: lãi hiện tại
+│  đang dựa mỏ cũ"
+└─ Có mỏ mới hoặc không có số → tiếp Q5
 
-Q2. Giá dầu đang ở phía nào so với kỳ vọng gần?
-├─ Trên kỳ vọng hoặc đang lên → Q4
-├─ Dưới kỳ vọng hoặc đang giảm → tiếp Q3
-└─ Chưa có kỳ vọng rõ → Q4 với độ tin cậy thấp, ghi rõ
-
-Q3. Giá dầu giảm có đi kèm cú sốc cung/tuyến không?
-├─ Có, tuyến vận chuyển dài lên → ★ "Cước vận chuyển được tiếp sức: nguồn thu của
-   vòng vận chuyển có thể đi ngược giá dầu — đọc riêng vòng đó"
-└─ Không, cung dư → ★ "Thượng nguồn bị siết: đọc biên/tỷ lệ chi phí để xem ai chịu
-   được giá thấp kéo dài"
-
-Q4. Trữ lượng có được bù đắp không?
-├─ Có, trữ lượng phát hiện mới bù đắp hoặc vượt sản lượng → Q5
-└─ Không, trữ lượng phát hiện mới thấp hơn sản lượng liên tiếp → ★ "Bị siết bởi
-   trữ lượng: sản lượng hiện tại đang được tiêu từ trữ lượng cũ, đọc thứ tự dự án
-   mới trước khi nội suy sản lượng"
-
-Q5. Biên có phụ thuộc một yếu tố đơn lẻ không?
-├─ Phụ thuộc một dự án / một hợp đồng → ★ "Rủi ro tập trung: một yếu tố đổi chiều
-   là toàn bộ dòng thu đổi chiều"
-└─ Đa dạng mảng/khu vực → ★ "Được tiếp sức: cơ cấu đủ rộng để chịu một cú sốc giá"
+Q5 (chung). Doanh thu có phụ thuộc một dự án/hợp đồng không?
+├─ Có → ★ "Rủi ro tập trung: một dự án đổi tiến độ là cả năm đổi chiều"
+└─ Không → ★ "Được tiếp sức: mảng chính thuận chiều và nguồn thu đủ rộng"
 
 ## Chỉ báo đặc thù ngành
 
-Bảng chỉ báo ngành dầu khí + cách đọc ở `references/kpi.md`.
+Cách đọc theo mảng ở `references/kpi.md`.
 
 ## Định giá theo đặc thù ngành
 
-Dầu khí định giá bằng **EV/EBITDA** (xử lý được giai đoạn thâm hụt) và **giá trị
-trữ lượng** cho vòng thượng nguồn; vòng lọc dầu theo EV/EBITDA chu kỳ; vòng dịch
-vụ theo tiền cảnh ngân sách đầu tư. Không dùng P/E tại đỉnh chu kỳ: cùng một P/E
-có thể là đáy hoặc đỉnh tuỳ vị thế trong vòng. Neo kỳ vọng bằng `planned_targets` và
-`analyst_consensus`.
+Khai thác và dịch vụ: **EV/EBITDA** và **P/B** so với vùng của chính doanh nghiệp
+qua chu kỳ giá dầu; P/E thấp nhất thường đúng lúc lãi đỉnh. Phân phối: **P/E** và cổ
+tức (dòng tiền đều hơn). Lọc dầu: EV/EBITDA, loại lãi/lỗ tồn kho trước khi tính.
+Kế hoạch năm đặt theo giá dầu giả định — so giả định đó với giá hiện tại.
 
 ## Rủi ro đặc thù
 
-- **Rủi ro giá dầu đảo chiều**: trong nửa năm, không phải một quý.
-- **Rủi ro suy giảm trữ lượng**: sản lượng hiện tại không bền khi trữ lượng không
-  được bù đắp — rủi ro này chỉ hiện ra nhiều năm sau.
-- **Rủi ro chuyển dịch năng lượng**: làm khó tài trợ cho dự án mới, đặc biệt thăm
-  dò nước sâu.
-- **Rủi ro tập trung**: một dự án hoặc một giao dịch định kỳ có thể nuôi cả năm.
-- **Rủi ro đọc sai vòng kinh doanh**: nhãn ngành giấu bốn chu kỳ khác nhau.
+- Giá dầu đảo chiều trong vài tháng; lọc dầu và phân phối chịu lỗ tồn kho khi giá
+  giảm nhanh.
+- Dự án thượng nguồn lùi tiến độ làm hụt đơn hàng dịch vụ cả năm.
+- Mỏ suy giảm tự nhiên; chuyển dịch năng lượng làm khó tài trợ dự án mới.
+- Doanh nghiệp nhiều mảng: mảng phụ có thể đi ngược mảng chính.
 
 ## Ranh giới
 
-- Không xác định pha thị trường, không xem dầu khí là mắt xích của chuỗi luân
-  chuyển ngành, không suy "dầu khí sẽ theo sau nhóm X" → `dinh-vi-chu-ky-vn` (nơi
-  giữ quy tắc chuỗi).
-- Không chọn mã khuyến nghị mua/bán → `phan-tich-chuyen-sau-1-ma`.
-- Không suy giá dầu kỳ vọng từ một kỳ báo cáo: dùng kỳ vọng công bố có nguồn rõ,
-  ghi kỳ.
-- Chỉ xếp hạng trong cùng vòng kinh doanh; so thượng nguồn với lọc dầu bị cấm.
+- Không xác định pha thị trường, không xếp dầu khí vào chuỗi luân chuyển ngành →
+  `dinh-vi-chu-ky-vn`.
+- Không khuyến nghị mua/bán.
+- Không dự báo giá dầu; chỉ dùng giá tra được và kỳ vọng có nguồn, ghi ngày.
+- Chỉ so trong cùng mảng.
 
 ## Giới hạn
 
-- Giá dầu từ `yf_commodities` là theo chu kỳ tra được, không phải giá thực hiện của
-  hợp đồng từng công ty — ghi rõ khi dùng.
-- Trạng thái tuyến vận chuyển và cước tàu là tin có độ trễ, ghi rõ ngày nguồn.
-- Sản lượng và trữ lượng là công bố không định kỳ: ghi kỳ công bố, không nội suy.
+- Giá từ `yf_commodities` là giá hợp đồng tương lai tham chiếu, không phải giá bán
+  thực của công ty.
+- Sản lượng, trữ lượng, cước tàu là công bố không định kỳ — ghi kỳ, không nội suy.
 
 ## Ví dụ
 
-**Ví dụ 1:**
 Hỏi: Giá dầu giảm thì nhóm dầu khí chịu gì?
-Đạt khi: xác định được vòng kinh doanh đang hỏi, có giá dầu + nguồn, tác động đến
-từng vòng theo cây Q1, và verdict ghi rõ vòng nào được tiếp sức vòng nào bị siết.
+Đạt khi: tách tác động theo từng mảng, có giá Brent kèm kỳ, nêu mảng chính của mã
+đang hỏi (nếu có), verdict theo cây kèm nhánh đã dừng.
 
 ## Trực quan hóa
 
-Chỉ vẽ khi người dùng muốn xem hình; tối đa 1 biểu đồ. Hợp với dữ liệu skill này:
-multiline giá dầu với doanh thu mảng thượng nguồn, bar biên theo vòng kinh doanh,
-waterfall từ giá dầu ra biên đơn giản. Vẽ bằng `chart_render` với `from_call`
-(mã `[ref …]`) từ kết quả tool đã có; cần chọn loại hình thì nạp `ve-bieu-do`.
+Chỉ vẽ khi người dùng muốn xem hình; tối đa 1 biểu đồ: đường giá Brent với biên lãi
+gộp theo quý, cột doanh thu theo mảng. Vẽ bằng `chart_render` với `from_call` (mã
+`[ref …]`) từ kết quả `yf_commodities`/`financial_detail` đã có; cần chọn loại hình thì
+nạp `ve-bieu-do`.
 
 ## File tham chiếu
 
 | File | Dùng khi |
 |---|---|
-| `references/kpi.md` | Cần cách tách bốn vòng kinh doanh, đọc biên theo vòng và chỉ báo trữ lượng – sản lượng |
+| `references/kpi.md` | Cần nhận diện mảng, chỉ báo và cách đọc riêng của từng mảng |

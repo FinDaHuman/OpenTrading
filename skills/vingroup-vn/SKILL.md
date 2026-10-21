@@ -1,166 +1,144 @@
 ---
 name: vingroup-vn
-description: "Phân tích tập đoàn Vingroup theo giá trị tách rời từng mảng, vòng quay tiền mặt, đòn bẩy so với trần nợ và tỷ trọng của nhóm Vin trong chỉ số. Dùng khi hỏi tập đoàn Vingroup, Vinhomes, VinFast hay Vincom Retail."
+description: "Đọc tập đoàn Vingroup theo từng mảng (BĐS Vinhomes, xe điện VinFast, bán lẻ Vincom…): SOTP, dòng tiền, nợ đến hạn, giao dịch liên kết. Dùng khi hỏi sức khoẻ VIC, VHM hay VinFast."
 activation: auto
-requires_tools: [financial_detail, company_events]
-uses_tools: [financial_detail, company_events, news_symbol, news_market, financial_ratios, planned_targets, analyst_consensus, peer_compare, breadth_scan, market_snapshot, vn_equity_quote_batch, event_calendar_vn, symbol_lookup, vn_company]
+requires_tools: [financial_detail]
+uses_tools: [financial_detail, financial_statements, company_events, news_symbol, news_market, web_search, financial_ratios, planned_targets, analyst_consensus, peer_compare, stock_overview, breadth_scan, symbol_lookup, vn_company]
 triggers:
-  keywords: [vingroup, vinfast, vinhomes, vincom, vinpearl, nhóm vin, tập đoàn vingroup, tossanholding, quỹ đất vinhomes, xe điện vinfast, bán lẻ vincom]
+  keywords: [vingroup, vinfast, vinhomes, tập đoàn vingroup, hệ sinh thái vingroup, xe điện vinfast, quỹ đất vinhomes, vincom retail]
+  exclude: [dẫn sóng, sóng ngành, đầu sóng, giữa sóng, cuối sóng, pha nào, giai đoạn nào, chu kỳ ngành, luân chuyển ngành, rotation, tin gì, tin tức, tin mới, hôm nay, bao nhiêu điểm, kéo chỉ số, kéo vn-index]
 version: 1.0.0
 ---
 
 # Vingroup — framework phân tích
 
-Vingroup là **tập đoàn đa mảng**, không phải một ngành: lãi đến từ nhiều mảng với
-chu kỳ khác nhau (bất động sản, xe điện, bán lẻ, khách sạn, dịch vụ) và **tỷ trọng
-mỗi mảng thay đổi theo kỳ** — kỳ nào mảng BĐS bàn giao thì BĐS dẫn, kỳ nào xe điện
-mở rộng thì nó là biến số dòng tiền. Đọc VIC bằng bộ chỉ báo ngành nào cũng sai.
-Skill này phân tích bằng cách **tách giá trị theo mảng và theo dòng tiền thật**, và
-bước bắt buộc đầu tiên là đo tỷ trọng đóng góp của từng mảng (`financial_detail` +
-công bố công ty) trước khi kết luận bất cứ điều gì về tổng hợp:
-
-1. **Vòng quay bất động sản**: lãi đến từ bàn giao dự án, nên lãi nhảy theo đợt —
-   đọc bán trước và tích luỹ chi phí dở, không đọc một quý.
-2. **Mảng xe điện đốt tiền mặt**: doanh thu xe điện tăng nhanh nhưng biên âm → lỗ
-   lũy kế và nhu cầu tái cấp trở thành driver của cả tập đoàn.
-3. **Giao dịch liên kết**: mua/bán tài sản với cổ đông sáng lập, thoái/tách khỏi hợp
-   nhất, góp vốn — thay đổi pháp nhân báo cáo. Đây là rủi ro quản trị, chỉ thấy khi
-   đọc trước khi số ra.
+Vingroup là **tập đoàn nhiều mảng**, không phải một ngành: bất động sản (Vinhomes), xe
+điện (VinFast), bán lẻ – cho thuê (Vincom Retail), nghỉ dưỡng, giáo dục, y tế, công
+nghiệp. Mỗi mảng có chu kỳ riêng và **tỷ trọng đóng góp đổi theo kỳ**: kỳ Vinhomes bàn
+giao lớn thì BĐS kéo lãi, còn xe điện là biến dòng tiền vì đang cần nhiều vốn. Phạm vi
+hợp nhất cũng thay đổi (tách, bán, gộp công ty con), nên số kỳ này có thể không so được
+với kỳ trước.
 
 ## Khi nào dùng
 
-- Dùng khi: user hỏi về Vingroup, VIC, VHM, VinFast, Vincom, sức khoẻ tài chính
-  tập đoàn, tại sao một ngày Vin dắt cả thị trường.
-- Khi KHÔNG dùng (dùng skill khác thay thế):
-  - Hỏi pha thị trường / luân chuyển ngành / sóng tiếp theo → `dinh-vi-chu-ky-vn`.
-  - Phân tích toàn diện một mã → `phan-tich-chuyen-sau-1-ma`.
-  - Chỉ định giá một mã → `dinh-gia-chuyen-sau`; chỉ đọc BCTC một mã → `co-ban-chuyen-sau`.
-  - Ngành bất động sản nói chung → `bat-dong-san-vn`.
-  - Bán lẻ tiêu dùng nói chung → `tieu-dung-ban-le-vn`.
+- Dùng khi: hỏi sức khoẻ tài chính Vingroup hay công ty thành viên, VinFast lỗ ảnh
+  hưởng tập đoàn thế nào, định giá tập đoàn theo từng mảng.
+- Khi KHÔNG dùng:
+  - Pha thị trường, nhóm Vin có dẫn sóng không → `dinh-vi-chu-ky-vn`.
+  - Tin trong ngày về Vin → `tim-kiem-tin-tuc`; Vin kéo chỉ số hôm nay bao nhiêu điểm →
+    tra market movers, không cần skill.
+  - Ngành BĐS nói chung → `bat-dong-san-vn`; bán lẻ nói chung → `tieu-dung-ban-le-vn`.
+  - Chỉ định giá một mã → `dinh-gia-chuyen-sau`.
 
 ## Trụ cột driver
 
-| Driver | Kênh truyền dẫn | Đọc/xác minh bằng |
+| Driver | Cơ chế | Đọc bằng |
 |---|---|---|
-| Vòng quay BĐS | Lãi đến từ bàn giao dự án Vinhomes. Bán trước là khoản thu trước, tích luỹ chi phí dở là chi phí đã cam kết chưa nhận — chênh lệch hai bên là lãi tương lai | `financial_detail` (bán trước, tích luỹ chi phí dở, biên mảng BĐS) |
-| Vòng xe điện | Doanh thu xe điện tăng nhưng biên âm; tỷ lệ hoàn vốn phụ thuộc quy mô và chi phí/biến. Tái cấu trúc (tách, bán, gộp mảng) đổi pháp nhân báo cáo | Mảng xe điện + lỗ lũy kế + tái cấu trúc: `financial_detail`, `company_events` |
-| Đòn bẩy | Tài trợ dự án bằng nợ và trái phiếu; tường trái phiếu và chi phí vốn bình quân quyết định rủi ro tái cấp | `financial_detail` (nợ, trái phiếu, lãi) + `news_market` (tường đáo hạn, phát hành) |
-| Giao dịch liên kết | Mua bán tài sản nội bộ và loại trừ bàn giao làm thay đổi cả cơ cấu hợp nhất lẫn biên | `company_events` (đợt thay đổi cơ cấu) + `news_market` |
-| Tỷ trọng chỉ số | Nhóm Vin chiếm tỷ trọng lớn vốn hoá và thanh khoản chỉ định; biến động nhóm một mình có thể kéo cả chỉ số → rủi ro tập trung danh mục | Tỷ trọng: **tự tính** từ vốn hoá các mã thành viên so tổng vốn hoá sàn (`vn_equity_quote_batch`/`market_snapshot`, ghi rõ tự tính) hoặc lấy số công bố trong báo cáo ngành qua `news_market`/`web_search`; độ rộng phiên: `market_overview`/`breadth_scan`. **Không** hỏi `market_overview` tỷ trọng (tool chỉ trả giá/rổ bluechip/độ rộng rổ) |
-| Dòng tiền / thanh khoản | Kiểm soát độc lập: tiền mặt, vốn điều lệ, nợ đến hạn | `financial_detail` (tiền, vốn, nợ ngắn hạn) |
+| Vòng BĐS | Lãi theo đợt bàn giao dự án; tiền khách trả trước và hàng tồn kho dự án là lãi tương lai | `financial_detail` VHM/VIC: người mua trả tiền trước, hàng tồn kho (CDKT), doanh thu – biên mảng BĐS (TM) |
+| Vòng xe điện | Doanh thu tăng nhưng biên âm; lỗ và nhu cầu vốn của VinFast là biến dòng tiền của tập đoàn | Lợi nhuận theo mảng (TM), công bố VinFast và tập đoàn (`news_symbol`, `web_search`) |
+| Nợ và tái cấp vốn | Tài trợ bằng vay ngân hàng, trái phiếu trong và ngoài nước; nợ đến hạn tập trung là rủi ro chính | CDKT: vay ngắn + dài hạn, tiền; TM: trái phiếu và lịch đáo hạn |
+| Giao dịch liên kết, thay đổi hợp nhất | Mua bán tài sản, góp vốn, chuyển nhượng công ty con với bên liên quan làm lãi và phạm vi hợp nhất thay đổi | `company_events(symbol)`, `news_symbol(symbol)`, TM (giao dịch bên liên quan) |
+| Bán lẻ, cho thuê | Giá thuê, tỷ lệ lấp đầy trung tâm thương mại — dòng tiền đều nhất của nhóm | `financial_detail` VRE |
 
 ## Các bước
 
-**Bước 1: Tách mảng + cơ cấu hợp nhất (song song).**
+`financial_detail` nhận **một** `statement` mỗi lời gọi; không gọi được thì dùng
+`financial_statements` và ghi rõ.
 
-`symbol_lookup` · `vn_company` (mảng, tỷ trọng doanh thu/lãi) · `financial_detail`
-(doanh thu và biên theo mảng). Ghi rõ phần nào mới thay đổi cơ cấu hợp nhất.
+**Bước 1 (song song):** `vn_company` · `financial_detail(symbol, statement=TM)` (lợi
+nhuận theo mảng, giao dịch bên liên quan) · `company_events(symbol)`. Ghi rõ thay đổi
+phạm vi hợp nhất trong 4 kỳ gần nhất — có thay đổi thì nói số kỳ trước không so trực
+tiếp được.
 
-**Bước 2: Vòng quay BĐS (song song).**
+**Bước 2 (song song):** `financial_detail(symbol, statement=CDKT)` (vay, tiền, người mua
+trả tiền trước, hàng tồn kho) · `financial_detail(symbol, statement=KQKD)` (doanh thu,
+lợi nhuận, chi phí lãi vay), 4–8 kỳ.
 
-`financial_detail`: bán trước, tích luỹ chi phí dở, biên lãi gộp mảng BĐS.
-`company_events` + `news_market`: tiến độ bàn giao dự án, sự kiện phê duyệt.
+**Bước 3 (song song):** `web_search` (lịch đáo hạn trái phiếu, phương án huy động, số
+liệu VinFast) · `news_symbol(symbol)` cho VIC/VHM/VRE (bàn giao, mở bán, giao dịch
+nội bộ).
 
-**Bước 3: Vòng xe điện + đòn bẩy (song song).**
-
-`financial_detail`: doanh thu và lỗ mảng xe điện, nợ, trái phiếu, tiền mặt,
-chi phí lãi. `news_market`: tường trái phiếu đến hạn, phát hành mới, tái cấu trúc.
-
-**Bước 4: Tác động chỉ số + neo kỳ vọng.**
-
-`breadth_scan` (độ rộng thật toàn sàn — phân biệt "chỉ số do nhóm lớn kéo") ·
-`market_snapshot`/`vn_equity_quote_batch` (vốn hoá các mã thành viên để **tự tính**
-tỷ trọng) · `news_market` (nhận định/báo cáo ngành về ảnh hưởng chỉ số) ·
-`planned_targets` · `peer_compare` · `analyst_consensus`.
+**Bước 4:** `planned_targets` · `analyst_consensus`. Khi user hỏi Vin tác động chỉ số:
+tỷ trọng nhóm Vin trong VN-Index lấy từ số công bố (`web_search`, ghi nguồn + ngày);
+`breadth_scan` để xem cả thị trường hay chỉ vài mã lớn kéo.
 
 ## Cây quyết định sức khoẻ tập đoàn
 
-Duyệt Q1→Q5 theo thứ tự, **DỪNG ở ★ đầu tiên** mà ĐỦ điều kiện. Thiếu dữ liệu thì
-hạ độ tin cậy, không bù số.
+Duyệt từ Q1, **dừng ở ★ đầu tiên**. Nhánh "không có số" đi tiếp với độ tin cậy thấp.
 
-Q1. Cơ cấu hợp nhất vừa thay đổi chưa (tách, thoái, gộp mảng)?
-├─ Có → ★ "Con số kỳ này không so được với kỳ trước: đọc chênh lệch pháp nhân trước,
-   rồi mới đọc xu hướng"
-└─ Không → tiếp Q2
+Q1. Nợ đến hạn trong 4 quý tới so với tiền và nguồn huy động đã xác nhận?
+├─ Vượt tiền và chưa có phương án tài trợ công bố → ★ "Bị siết bởi tái cấp vốn: đọc
+│  lịch đáo hạn và phương án huy động trước khi nhìn lợi nhuận"
+├─ Trong tầm tiền hoặc đã có phương án → tiếp Q2
+└─ Không dựng được lịch đáo hạn → tiếp Q2, ghi rõ
 
-Q2. Mảng BĐS có còn dẫn lãi không?
-├─ Có, bán trước + biên mảng BĐS đang tăng → tiếp Q3
-└─ Không, mảng BĐS chững hoặc biên giảm → ★ "Bánh lái đang chuyển khỏi BĐS: đọc
-   mảng nào sẽ kế nghiệp trước khi nội suy lãi"
+Q2. Lỗ của mảng xe điện đang thu hẹp hay mở rộng?
+├─ Mở rộng hoặc giữ nguyên → ★ "Xe điện vẫn hút vốn: dòng tiền tập đoàn phụ thuộc
+│  bàn giao BĐS và huy động mới"
+├─ Thu hẹp → tiếp Q3
+└─ Không có số theo mảng → tiếp Q3, ghi rõ
 
-Q3. Mảng xe điện đốt tiền mặt ở mức nào?
-├─ Đang thu hẹp lỗ (biên cải thiện, chi phí/biến giảm) → tiếp Q4
-└─ Lỗ giữ nguyên hoặc mở rộng → ★ "Đốt tiền mặt chưa dừng: đọc nhu cầu tái cấp và
-   dòng tiền tổng thể — mảng này là rủi ro dòng tiền của cả tập đoàn"
+Q3. Mảng BĐS có còn đủ lãi để gánh?
+├─ Người mua trả tiền trước giảm, bàn giao chững → ★ "Nguồn lãi chính đang yếu đi:
+│  lãi tập đoàn các kỳ tới khó giữ"
+├─ Người mua trả tiền trước tăng hoặc giữ, biên giữ được → tiếp Q4
+└─ Không có số → tiếp Q4
 
-Q4. Tái cấp vốn có chắc chắn không?
-├─ Có, nợ đến hạn xa hoặc đã có phương án tài trợ → tiếp Q5
-└─ Chưa, tường trái phiếu gần + chi phí vốn cao → ★ "Bị siết bởi tái cấu: đọc lịch
-   đáo hạn và phương án huy động trước khi nhìn lãi"
-
-Q5. Giao dịch liên kết có làm lệch báo cáo không?
-├─ Không đáng kể → ★ "Sức khoẻ đo được: đọc giá trị từng mảng và dòng tiền"
-└─ Có, giao dịch nội bộ chiếm tỷ trọng lớn trong kỳ → ★ "Lãi kỳ này một phần đến từ
-   giao dịch nội bộ: đánh dấu một lần, hạ độ tin cậy kỳ vọng lãi tương lai"
+Q4. Lãi kỳ này có phần đáng kể từ giao dịch với bên liên quan hoặc chuyển nhượng
+công ty con không?
+├─ Có → ★ "Lãi kỳ này một phần là một lần: hạ độ tin cậy kỳ vọng lãi tương lai"
+└─ Không → ★ "Sức khoẻ đo được: dòng tiền đến từ hoạt động chính, đọc giá trị từng
+   mảng"
 
 ## Chỉ báo đặc thù ngành
 
-Bảng chỉ báo tập đoàn + cách đọc ở `references/kpi.md`.
+Cách tách mảng và đọc dòng tiền ở `references/kpi.md`.
 
 ## Định giá theo đặc thù ngành
 
-Tập đoàn đa mảng **không định giá bằng một hệ số hợp nhất**: định giá bằng **giá trị
-từng mảng cộng lại (SOTP)** với hệ số phù hợp từng mảng (BĐS theo P/B và NAV, xe
-điện theo doanh thu/biên hoặc chiết khấu dòng tiền, bán lẻ theo P/E), rồi trừ chiết
-khấu tập đoàn. Neo kỳ vọng bằng `planned_targets` và `analyst_consensus`. Không so
-P/E hợp nhất với công ty BĐS thuần được.
+Định giá **từng mảng cộng lại (SOTP)**: phần sở hữu trong công ty con niêm yết theo giá
+thị trường (VHM, VRE), mảng chưa niêm yết theo phương pháp hợp với mảng (BĐS theo giá
+trị tài sản ròng, bán lẻ cho thuê theo dòng tiền, xe điện theo giá trị thị trường nếu có
+hoặc ghi "không định giá được"), trừ nợ ròng công ty mẹ, áp chiết khấu tập đoàn. Ghi rõ
+mọi giả định. Không so P/E hợp nhất của VIC với công ty BĐS thuần.
 
 ## Rủi ro đặc thù
 
-- **Rủi ro đa mảng**: cấu trúc lãi đổi theo mảng dẫn dắt, nên một chu kỳ duy nhất
-  không mô tả được tập đoàn.
-- **Rủi ro đốt tiền mặt**: mảng xe điện lỗ lũy kế thành rủi ro dòng tiền của cả tập
-  đoàn.
-- **Rủi ro tái cấu**: nợ và trái phiếu đến hạn tập trung vài kỳ.
-- **Rủi ro quản trị**: giao dịch liên kết và thay đổi cơ cấu hợp nhất làm biên báo
-  cáo và giá trị hợp nhất không so được với kỳ trước.
-- **Rủi ro tập trung danh mục**: nhóm Vin chiếm tỷ trọng lớn chỉ số nên biến động
-  nhóm một mình có thể làm lệch chỉ số toàn thị trường.
+- Xe điện cần vốn lớn và lâu; lỗ kéo dài là rủi ro dòng tiền của cả tập đoàn.
+- Nợ và trái phiếu đến hạn tập trung vài kỳ.
+- Giao dịch với bên liên quan, thay đổi hợp nhất làm số liệu khó so qua các kỳ.
+- Nhóm Vin chiếm tỷ trọng lớn trong chỉ số: biến động của nhóm làm lệch đọc toàn thị
+  trường.
 
 ## Ranh giới
 
-- Không xác định pha thị trường, không suy "nhóm Vin sắp dẫn sóng" → `dinh-vi-chu-ky-vn`
-  (nơi duy nhất giữ quy tắc chuỗi và mảng Vin theo chu kỳ).
-- Không chọn mã khuyến nghị mua/bán → `phan-tich-chuyen-sau-1-ma`.
-- Không suy phương án tái cấu hoặc lịch đáo hạn từ trí nhớ: tra công bố, ghi nguồn.
-- Không kết luận dòng tiền khi biên báo cáo bị giao dịch nội bộ làm lệch: đọc kỹ
-  mảng nào đóng góp.
+- Không xác định pha thị trường, không nói "nhóm Vin sắp dẫn sóng" → `dinh-vi-chu-ky-vn`
+  (nơi giữ quy tắc về mảng Vin theo chu kỳ).
+- Không khuyến nghị mua/bán.
+- Không nêu lịch đáo hạn, phương án huy động hay tỷ trọng chỉ số từ trí nhớ: tra công
+  bố, ghi nguồn + ngày (luật này chỉ nằm ở đây).
+- Điều kiện vốn của dự án BĐS theo luật ngành nằm ở `bat-dong-san-vn`.
 
 ## Giới hạn
 
-- Chi phí mảng không phải kỳ nào công ty cũng công bố đầy đủ: khi thiếu, hạ độ tin
-  cậy nhánh mảng.
-- Trần nợ theo quy định BĐS là luật ngành (`bat-dong-san-vn`), áp cho mảng BĐS của
-  tập đoàn — không lặp lại ở đây.
-- Tài trợ nội bộ giữa các công ty con làm số hợp nhất khác số riêng từng công ty:
-  ghi rõ đang đọc hợp nhất hay riêng.
+- Lợi nhuận theo mảng không phải kỳ nào cũng đủ chi tiết — ghi rõ nhánh thiếu.
+- Số hợp nhất VIC khác số riêng từng công ty con: ghi rõ đang đọc số nào.
 
 ## Ví dụ
 
-**Ví dụ 1:**
-Hỏi: VIC có đang khoẻ không?
-Đạt khi: tách được lãi theo mảng, có bán trước + tích luỹ chi phí dở, nợ + tường
-đáo hạn, và verdict theo cây Q1→Q5 ghi rõ điểm cần thận trọng.
+Hỏi: VinFast lỗ to thì Vingroup có sao không?
+Đạt khi: có lỗ mảng xe điện kèm kỳ, nợ đến hạn so tiền, người mua trả tiền trước của
+mảng BĐS, giao dịch liên kết nếu có, verdict theo cây kèm nhánh đã dừng.
 
 ## Trực quan hóa
 
-Chỉ vẽ khi người dùng muốn xem hình; tối đa 1 biểu đồ. Hợp với dữ liệu skill này:
-stacked doanh thu theo mảng, waterfall từ bán trước ra lãi nhận, multiline nợ/tiền
-mặt theo kỳ. Vẽ bằng `chart_render` với `from_call` (mã `[ref …]`) từ kết quả tool
-đã có; cần chọn loại hình thì nạp `ve-bieu-do`.
+Chỉ vẽ khi người dùng muốn xem hình; tối đa 1 biểu đồ: cột lợi nhuận theo mảng từng
+kỳ, cột nợ đến hạn theo quý so với tiền, đường người mua trả tiền trước. Vẽ bằng
+`chart_render` với `from_call` (mã `[ref …]`) từ kết quả tool đã có; cần chọn loại hình
+thì nạp `ve-bieu-do`.
 
 ## File tham chiếu
 
 | File | Dùng khi |
 |---|---|
-| `references/kpi.md` | Cần cách đọc bán trước – tích luỹ chi phí dở, phân bổ lãi theo mảng và chỉ báo dòng tiền của tập đoàn |
+| `references/kpi.md` | Cần cách tách mảng, dòng BCTC theo statement, cách dựng lịch nợ và SOTP |

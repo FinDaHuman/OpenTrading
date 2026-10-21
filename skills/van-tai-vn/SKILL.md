@@ -1,162 +1,147 @@
 ---
 name: van-tai-vn
-description: "Phân tích ngành vận tải và logistics Việt Nam theo cước vận chuyển, cầu xuất khẩu, công suất cảng và đòn bẩn nhiên liệu. Dùng khi hỏi xu hướng nhóm vận tải, công ty cảng hay cước vận chuyển."
+description: "Đọc ngành vận tải – cảng – logistics – hàng không VN: cước, sản lượng qua cảng, tỷ lệ hợp đồng cố định, nhiên liệu. Dùng khi hỏi nhóm vận tải, cảng biển hay hàng không."
 activation: auto
-requires_tools: [financial_detail, vs_xnk_detail]
-uses_tools: [financial_detail, vs_xnk_detail, financial_ratios, planned_targets, analyst_consensus, peer_compare, yf_commodities, news_symbol, news_market, symbol_lookup, vn_company]
+requires_tools: [financial_detail]
+uses_tools: [financial_detail, financial_statements, vs_xnk_detail, vs_indicator_data, yf_commodities, financial_ratios, planned_targets, analyst_consensus, peer_compare, news_symbol, news_market, web_search, symbol_lookup, vn_company]
 triggers:
-  keywords: [ngành vận tải, vận tải biển, cảng biển, cước vận chuyển, tàu chở container, luồng hàng hoá, công ty cảng, mảng logistics]
+  keywords: [ngành vận tải, nhóm vận tải, cổ phiếu vận tải, vận tải biển, cảng biển, công ty cảng, cước vận chuyển, cước container, tàu chở container, ngành logistics, nhóm cảng biển, ngành hàng không, hãng hàng không, cổ phiếu hàng không]
+  exclude: [dẫn sóng, sóng ngành, đầu sóng, giữa sóng, cuối sóng, pha nào, giai đoạn nào, chu kỳ ngành, luân chuyển ngành, rotation, tin gì, tin tức, tin mới, so sánh, khuyến nghị, nên mua, nên bán]
 version: 1.0.0
 ---
 
 # Vận tải & logistics Việt Nam — framework phân tích
 
-Ngành vận tải VN là **chu kỳ cước, không phải chu kỳ nhu cầu nội địa**: dòng thu
-bám cước vận chuyển quốc tế và thể tích hàng qua cảng. Skill này đọc ngành qua cước
-tuyến, cầu xuất khẩu (tín hiệu dẫn của lưu lượng), công suất cảng (nơi chứa biên
-lợi nhuận bền vững nhất), và **tỷ lệ hợp đồng cố định** — thứ quyết định ai thực
-sự hưởng sóng cước và ai bị khóa giá bỏ lỡ.
-
-Yếu tố thứ hai: **phân khúc**. Cảng nước sâu, vận tải container nội Á, và vận tải
-dầu nằm trong ba chu kỳ khác nhau — cước tàu dầu đắt kỷ lục có thể đi kèm với vận
-tải container bị siết.
+Vận tải là nhiều chu kỳ dưới một nhãn: **cảng** (sản lượng hàng qua cảng, giá dịch vụ
+xếp dỡ, công suất bến — biên ổn nhất), **vận tải container** và **tàu hàng rời, tàu
+dầu** (cước biến động theo tuần, chịu tỷ lệ hợp đồng cố định), **logistics** (kho bãi,
+giao nhận — bám sản lượng xuất nhập khẩu), **hàng không** (lượng khách, giá nhiên liệu
+bay, tỷ giá). Sản lượng qua cảng bám **tổng** khối lượng xuất + nhập khẩu, không bám
+chênh lệch giữa hai bên.
 
 ## Khi nào dùng
 
-- Dùng khi: user hỏi xu hướng nhóm vận tải, cước vận chuyển tác động ra sao, một
-  công ty cảng có còn dư địa, thuế quan ảnh hưởng ai.
-- Khi KHÔNG dùng (dùng skill khác thay thế):
-  - Hỏi pha thị trường / luân chuyển ngành / sóng ngành tiếp theo → `dinh-vi-chu-ky-vn`.
-  - Phân tích toàn diện một mã → `phan-tich-chuyen-sau-1-ma`.
-  - Chỉ định giá một mã → `dinh-gia-chuyen-sau`.
-  - Chỉ đọc BCTC một mã không có mảng ngành → `co-ban-chuyen-sau`.
-  - Vận tải thuộc tập đoàn dầu khí (mảng vận chuyển) → đọc tiếp ở `dau-khi-vn`.
+- Dùng khi: hỏi nhóm vận tải, cảng, hàng không đang được tiếp sức hay bị siết; cước
+  tăng thì ai hưởng; cảng có còn dư địa.
+- Khi KHÔNG dùng:
+  - Pha thị trường, vận tải có dẫn sóng không → `dinh-vi-chu-ky-vn`.
+  - Phân tích toàn diện một mã → `phan-tich-chuyen-sau-1-ma`; chỉ định giá → `dinh-gia-chuyen-sau`.
+  - Vận chuyển dầu khí của tập đoàn dầu khí → `dau-khi-vn`.
+  - Thuế quan và xuất khẩu theo nhóm hàng → `xuat-nhap-khau-vn`.
 
 ## Trụ cột driver
 
-| Driver | Kênh truyền dẫn | Đọc/xác minh bằng |
+| Driver | Cơ chế | Đọc bằng |
 |---|---|---|
-| Cước vận chuyển | Bảng cước theo tuyến (xuyên Đại Dương, nội Á, Âu-Mỹ) quyết định doanh thu mảng vận tải. Cước lên không đồng đều: tuyến ngắn và bến trung chuyển chịu quy luật khác | Cước tuyến: `news_market`/`web_search`, ghi rõ chỉ số cước + ngày; riêng mã giá thu bình quân trong `financial_detail` |
-| Cầu xuất khẩu | Lưu lượng hàng qua cảng bám xuất khẩu và nhập khẩu linh kiện. Nhập khẩu máy móc/linh kiện tăng nhanh hơn xuất khẩu là tín hiệu cầu tương lai | Xuất/nhập khẩu theo kỳ: `vs_xnk_detail`; cầu ngành tổng hợp: `news_market` |
-| Công suất cảng | Bến mới chạy chưa đủ tải làm chi phí cố định đội lên; công suất đủ thì giá thu được giữ. Đây là nguồn biên bền vững nhất ngành | Tỷ lệ sử dụng bến + cước dịch vụ: `news_market`/`web_search`; riêng mã doanh thu/cước bình quân trong `financial_detail` |
-| Tỷ lệ khóa giá | Hợp đồng vận chuyển theo định kỳ dài hạn co giãn thu nhập: tỷ lệ khóa cao thì sóng cước không vào doanh thu ngay | Tỷ trọng hợp đồng cố định: `news_market`/`web_search`; dấu hiệu gián tiếp ở doanh thu/khối lượng trong `financial_detail` |
-| Nhiên liệu | Chi phí nhiên liệu và chi phí bến siết biên vận tải; ngược lại ít ảnh hưởng cảng | Giá nhiên liệu: `yf_commodities` theo chu kỳ |
-| Chính sách thương mại | Thuế quan đổi hướng tuyến: tuyến nội Á chịu ít hơn tuyến đi Mỹ | Thuế/chính sách: `news_market`/`web_search` |
+| Cước vận tải | Cước container, hàng rời, thuê tàu biến động theo tuần; tuyến dài ra (tàu đi vòng) làm cước tăng dù hàng không đổi | Chỉ số cước container, hàng rời, giá thuê tàu: `web_search` (ghi chỉ số + ngày) |
+| Tỷ lệ hợp đồng cố định | Tàu cho thuê định hạn dài hoặc hợp đồng giá cố định thì sóng cước vào doanh thu chậm, theo cả hai chiều | Công bố công ty: `news_symbol`, báo cáo thường niên qua `web_search` |
+| Sản lượng qua cảng | Bám tổng khối lượng xuất + nhập khẩu và tuyến tàu ghé cảng; bến mới chưa đủ tải thì chi phí cố định chạy trước | Sản lượng thông qua (TEU, tấn): `news_symbol`, `web_search`; kim ngạch: `vs_indicator_data(indicator="XK")`; thị trường xuất khẩu theo nước: `vs_xnk_detail` |
+| Giá dịch vụ cảng | Khung giá xếp dỡ container do nhà nước quy định; điều chỉnh khung giá là biến doanh thu của cảng | `web_search` (văn bản, ngày) |
+| Nhiên liệu | Nhiên liệu tàu, nhiên liệu bay bám giá dầu; siết biên vận tải và hàng không khi giá vé/cước chưa kịp theo | `yf_commodities(tickers=["BZ=F","HO=F"])` (dầu, dầu đốt tham chiếu) |
+| Hàng không | Lượng khách quốc tế/nội địa, số tàu bay khai thác được, giá vé; nợ thuê tàu bay bằng USD nhạy tỷ giá | `web_search` (số khách theo kỳ), `news_symbol`, `vn_forex_ohlcv` khi cần tỷ giá |
 
 ## Các bước
 
-**Bước 1: Nhận diện phân khúc (song song).**
+`financial_detail` nhận **một** `statement` mỗi lời gọi; không gọi được thì dùng
+`financial_statements` và ghi rõ.
 
-`symbol_lookup` · `vn_company` (mảng: cảng / container nội Á / tàu dầu / giao nhận
-chuyển phát) · `financial_detail` (doanh thu theo mảng). Ghi rõ phân khúc.
+**Bước 1 (song song):** `symbol_lookup` · `vn_company` · `financial_detail(symbol,
+statement=TM)` (doanh thu theo mảng). Xác định **phân khúc đóng góp lợi nhuận lớn
+nhất**; cây đi theo phân khúc đó.
 
-**Bước 2: Cước + cầu (song song).**
+**Bước 2 (song song):** `financial_detail(symbol, statement=KQKD)` (doanh thu, giá vốn,
+chi phí lãi vay) · `financial_detail(symbol, statement=CDKT)` (tài sản cố định, vay),
+4–8 quý.
 
-`news_market` (cước tuyến, chỉ số cước, cước tàu dầu nếu liên quan) ·
-`vs_xnk_detail` (xuất/nhập khẩu theo kỳ làm tín hiệu cầu).
+**Bước 3 (song song, tuỳ phân khúc):** `web_search` (chỉ số cước, sản lượng cảng khu
+vực, số khách hàng không, khung giá cảng) · `news_symbol(symbol)` (sản lượng, tàu mới,
+bến mới) · `vs_indicator_data(indicator="XK")` và `vs_xnk_detail` (kim ngạch và thị
+trường xuất khẩu theo nước) · `yf_commodities` (nhiên liệu tham chiếu).
 
-**Bước 3: Công suất + khối lượng + chi phí (song song).**
+**Bước 4:** `planned_targets` · `analyst_consensus`. So với doanh nghiệp **cùng phân
+khúc**; chỉ báo vận hành của peer đọc bằng `financial_detail` từng mã, `peer_compare`
+chỉ trả P/E, P/B, EPS, BVPS, ROE/ROA.
 
-`news_market` (tỷ lệ sử dụng bến, lưu lượng qua cảng, tuyến mới) ·
-`financial_detail` (doanh thu, giá vốn, chi phí tài chính, tồn kho nhiên liệu) ·
-`yf_commodities` (nhiên liệu tham chiếu nếu đường biển).
+## Cây quyết định công ty vận tải đang được tiếp sức hay bị siết
 
-**Bước 4: Neo kỳ vọng + vị thế nhóm.**
+Duyệt từ Q1, **dừng ở ★ đầu tiên**. Nhánh "không có số" đi tiếp với độ tin cậy thấp.
 
-`planned_targets` · `analyst_consensus` · `peer_compare` (so **trong cùng phân
-khúc** — so cảng với vận tải container bị cấm).
+Q1. Phân khúc đóng góp lợi nhuận lớn nhất?
+├─ Cảng, bến → tiếp Q3
+├─ Vận tải container, hàng rời, tàu dầu → tiếp Q2
+├─ Hàng không → ★ "Bám lượng khách, giá nhiên liệu bay và tỷ giá: đọc số khách và
+│  chi phí nhiên liệu trên doanh thu trước giá vé"
+└─ Logistics, giao nhận, kho bãi → tiếp Q4
 
-## Cây quyết định công ty vận tải đang được tiếp sức hay siết
+Q2 (tàu). Hướng cước của phân khúc và tỷ lệ hợp đồng cố định?
+├─ Ít hợp đồng cố định, cước đang lên → ★ "Được tiếp sức bởi cước: doanh thu theo
+│  giá thị trường gần như ngay"
+├─ Ít hợp đồng cố định, cước đang giảm → ★ "Bị siết bởi cước: doanh thu giảm theo
+│  thị trường gần như ngay"
+├─ Nhiều hợp đồng cố định → ★ "Hợp đồng cố định làm đệm: sóng cước vào doanh thu
+│  chậm, khi hợp đồng được gia hạn, theo cả hai chiều"
+└─ Thiếu chỉ số cước hoặc tỷ lệ hợp đồng → ★ "Chưa dựng được cước hoặc độ trễ:
+   kết luận chỉ dựa biên và doanh thu các quý gần nhất, độ tin cậy thấp"
 
-Duyệt Q1→Q5 theo thứ tự, **DỪNG ở ★ đầu tiên** mà ĐỦ điều kiện. Thiếu dữ liệu thì
-hạ độ tin cậy, không bù số.
+Q3 (cảng). Công suất bến có đủ tải không?
+├─ Bến mới chạy thấp tải → ★ "Biên đang bị công suất kìm: khấu hao và lãi vay chạy
+│  trước sản lượng"
+└─ Đủ tải, hoặc không có số công suất → tiếp Q4
 
-Q1. Công ty thuộc phân khúc nào?
-├─ Cảng / bến → Q4 (nhánh cảng: cước dịch vụ + công suất)
-├─ Vận tải container → Q2 (nhánh container: cước + tuyến + khóa giá)
-├─ Vận tải dầu / hàng rời → ★ "Chu kỳ bám cước tàu theo tuyến và cú sốc cung —
-   đọc hướng cước và tỷ lệ hợp đồng dài hạn trong `news_market`"
-└─ Giao nhận / chuyển phát → ★ "Chu kỳ bám lưu lượng bưu kiện và chi phí nhiên
-   liệu — đọc lưu lượng và chi phí nhiên liệu trước cước"
-
-Q2 (container). Cước tuyến của công ty đang ở phía nào của chu kỳ?
-├─ Đang lên → tiếp Q3
-├─ Đang giảm → ★ "Bị siết bởi cước: đọc tỷ lệ khóa giá — hợp đồng cố định là đệm,
-   tỷ lệ khóa cao thì sóng giảm vào chậm"
-└─ Chưa dựng được cước → ghi thiếu, Q3 với độ tin cậy thấp
-
-Q3 (container). Tuyến và chính sách thuế quan có đang đổi hướng cước không?
-├─ Tuyến chính ít chịu thuế Mỹ hoặc đang chuyển sang nội Á → tiếp Q5
-├─ Tuyến chính vào thị trường đang bị thuế quan siết → ★ "Bị siết bởi chính sách:
-   lưu lượng sẽ dịch dần, đọc tỷ trọng doanh thu theo tuyến trước khi nội suy"
-
-Q4 (cảng). Công suất bến có đủ tải không?
-├─ Có, tỷ lệ sử dụng đang lên → Q5
-└─ Chưa, bến mới chưa đủ tải → ★ "Biên đang bị công suất kìm: chi phí cố định chạy
-   trước doanh thu, đọc tiến độ lấp đầy trước khi kỳ vọng biên"
-
-Q5 (chung). Cầu nền có còn kéo không?
-├─ Có, nhập khẩu máy móc/linh kiện tăng nhanh hơn xuất khẩu → ★ "Được tiếp sức bởi
-   cầu: lưu lượng tăng trước doanh thu — đọc dấu hiệu này như chỉ báo dẫn"
-├─ Cầu chững nhưng doanh thu vẫn tăng → ★ "Tăng trưởng đến từ giá/cước, không từ
-   thể tích: hạ độ tin cậy khi cước đảo chiều"
-└─ Cầu giảm → ★ "Bị siết bởi cầu: cả giá lẫn khối lượng cùng chiều xuống"
+Q4 (cảng, logistics). Tổng khối lượng hàng xuất + nhập khẩu và sản lượng qua cảng?
+├─ Tăng → ★ "Được tiếp sức bởi sản lượng: hàng qua cảng và kho bãi tăng theo xuất
+│  nhập khẩu"
+├─ Đi ngang hoặc giảm → ★ "Bị siết bởi sản lượng: giá dịch vụ khó bù phần khối
+│  lượng hụt"
+└─ Không có số sản lượng → ★ "Chưa đọc được sản lượng: kết luận chỉ dựa công suất và
+   biên, độ tin cậy thấp"
 
 ## Chỉ báo đặc thù ngành
 
-Bảng chỉ báo ngành vận tải + cách đọc ở `references/kpi.md`.
+Cách đọc theo phân khúc ở `references/kpi.md`.
 
 ## Định giá theo đặc thù ngành
 
-Vận tải định giá **theo phân khúc**: cảng/cảng biển theo P/E ổn định hơn (doanh
-thu theo hợp đồng dài hạn), vận tải container theo EV/EBITDA chu kỳ (không P/E tại
-đỉnh cước). Neo kỳ vọng bằng `planned_targets` và `analyst_consensus`. Cước đang
-ở đỉnh chu kỳ thì mọi multiple đều rẻ — ghi rõ vị thế trong vòng trước khi so.
+Cảng: **P/E và EV/EBITDA** ổn định hơn (sản lượng đều, giá theo khung). Tàu: **P/B**
+so giá trị đội tàu và **EV/EBITDA** — cước ở đỉnh thì P/E thấp nhất, không phải rẻ.
+Hàng không: **EV/EBITDA** vì nợ thuê tàu bay lớn. Chỉ so trong cùng phân khúc.
 
 ## Rủi ro đặc thù
 
-- **Rủi ro cước đảo chiều**: cước vận chuyển biến động trong vài tuần, không phải
-  vài quý.
-- **Rủi ro công suất bến**: bến mới chưa đủ tải, chi phí cố định chạy trước doanh
-  thu.
-- **Rủi ro chính sách thương mại**: thuế quan đổi hướng tuyến và lưu lượng, tác
-  động chênh lệch giữa các công ty.
-- **Rủi ro nhiên liệu**: siết biên vận tải ngay khi cước chưa kịp điều chỉnh.
-- **Rủi ro hỗn hợp phân khúc**: công ty vừa cảng vừa tàu sẽ cho con số hợp nhất
-  lệch khỏi cả hai chu kỳ.
+- Cước đảo chiều trong vài tuần; đội tàu mới đóng xong cùng lúc làm dư cung.
+- Bến mới chưa đủ tải; tuyến tàu lớn chuyển cảng.
+- Thuế quan, chính sách thương mại làm giảm khối lượng xuất khẩu và đổi tuyến.
+- Nhiên liệu tăng khi cước/giá vé chưa theo; tỷ giá với nợ thuê tàu bay bằng USD.
 
 ## Ranh giới
 
-- Không xác định pha thị trường, không suy "vận tải sắp dẫn sóng" → `dinh-vi-chu-ky-vn`.
-- Không chọn mã khuyến nghị mua/bán → `phan-tich-chuyen-sau-1-ma`.
-- Không suy cước tuyến từ một kỳ báo cáo: cước là chu kỳ ngắn, phải tra cước theo
-  thời gian gần và ghi ngày nguồn.
-- Chỉ xếp hạng trong cùng phân khúc; so cảng với container bị cấm.
+- Không xác định pha thị trường, không nói "vận tải sắp dẫn sóng" → `dinh-vi-chu-ky-vn`.
+- Không khuyến nghị mua/bán.
+- Không nêu cước, khung giá cảng từ trí nhớ: tra, ghi chỉ số/văn bản + ngày (luật này
+  chỉ nằm ở đây).
+- Chỉ so trong cùng phân khúc.
 
 ## Giới hạn
 
-- Cước tuyến là chu kỳ ngắn và biến động mạnh: kết luận phải ghi ngày tra, không
-  dùng số tuần trước.
-- Xuất/nhập khẩu từ `vs_xnk_detail` là tín hiệu cầu chung, không phải lưu lượng
-  của riêng công ty.
-- Tỷ lệ hợp đồng cố định không công bố đều: khi thiếu, hạ độ tin cậy nhánh Q2.
+- Kim ngạch xuất nhập khẩu là số toàn quốc, không phải sản lượng của một cảng.
+- `vs_xnk_detail` chia theo nước, không theo nhóm hàng.
+- Tỷ lệ hợp đồng cố định không công bố đều — ghi rõ khi thiếu.
 
 ## Ví dụ
 
-**Ví dụ 1:**
-Hỏi: Cước vận chuyển lên thì cả nhóm vận tải hưởng không?
-Đạt khi: tách được phân khúc, có cước tuyến + ngày tra, tỷ lệ khóa giá, và verdict
-theo cây Q1→Q5 cho từng phân khúc.
+Hỏi: Cước vận chuyển tăng thì cả nhóm vận tải hưởng không?
+Đạt khi: tách tác động theo phân khúc, có chỉ số cước kèm ngày, tỷ lệ hợp đồng cố định
+(hoặc ghi thiếu), verdict theo cây cho mã/phân khúc đang hỏi.
 
 ## Trực quan hóa
 
-Chỉ vẽ khi người dùng muốn xem hình; tối đa 1 biểu đồ. Hợp với dữ liệu skill này:
-multiline cước tuyến với giá thu bình quân, bar biên lãi gộp theo phân khúc, bar
-lưu lượng qua cảng. Vẽ bằng `chart_render` với `from_call` (mã `[ref …]`) từ kết
-quả tool đã có; cần chọn loại hình thì nạp `ve-bieu-do`.
+Chỉ vẽ khi người dùng muốn xem hình; tối đa 1 biểu đồ: đường doanh thu và biên theo
+quý, cột sản lượng qua cảng, cột biên lãi gộp theo phân khúc. Vẽ bằng `chart_render`
+với `from_call` (mã `[ref …]`) từ kết quả tool đã có; cần chọn loại hình thì nạp
+`ve-bieu-do`.
 
 ## File tham chiếu
 
 | File | Dùng khi |
 |---|---|
-| `references/kpi.md` | Cần cách phân khúc, đọc giá thu bình quân và biên theo phân khúc, dùng cước tuyến và cầu xuất khẩu |
+| `references/kpi.md` | Cần nhận diện phân khúc, dòng BCTC theo statement và chỉ báo riêng của cảng, tàu, hàng không |

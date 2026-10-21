@@ -15,7 +15,8 @@ import { matchToolPattern } from "../../src/core/tools/patterns"
  *   matched "nên", so "VCB có nên mua" loaded the chart skill;
  * - a catalog line over 250 characters is cut with "…";
  * - headings are Vietnamese (the 06/10 convention);
- * - write tools are never preloaded by a skill.
+ * - write tools are never preloaded by a skill;
+ * - decision trees have no unreachable verdicts (see treeProblems).
  */
 
 /** Folded forms that are everyday words, or so generic they fire on most questions. */
@@ -86,6 +87,45 @@ const COPIED_RESULT_RULES: { name: string; res: RegExp[] }[] = [
 ]
 const ALLOW_RESULT = /<!--\s*lint:allow-result\s*-->/
 
+const TREE_NODE = /^Q(\d+[a-z]?)(?:\s*\([^)]*\))?\./
+const TREE_BRANCH = /^\s*([├└])─/
+/** A ★ verdict that names another node ("★ … đọc Q4", "★ … (Q5)") both stops and continues. */
+const NAMES_NODE = /\bQ\d/
+const GOES_TO = /(?:→|tiếp(?:\s+tục)?)\s*(?:tới\s*)?Q(\d+[a-z]?)/
+
+/**
+ * Problems in the `## Cây quyết định` trees (PR #116 review): a node whose last branch is not
+ * `└─` (some answer has no branch, so the walk never reaches a ★), a ★ that also says to read
+ * on, a branch with neither ★ nor a next node, and a jump to a node that does not exist.
+ */
+export function treeProblems(body: string): string[] {
+  const out: string[] = []
+  for (const section of body.split(/^## /m).filter((s) => s.startsWith("Cây quyết định"))) {
+    const nodes: { id: string; branches: { mark: string; text: string }[] }[] = []
+    for (const line of section.split("\n")) {
+      const node = line.match(TREE_NODE)
+      const branch = line.match(TREE_BRANCH)
+      if (node) nodes.push({ id: node[1]!, branches: [] })
+      else if (branch && nodes.length) nodes.at(-1)!.branches.push({ mark: branch[1]!, text: line })
+      // continuation of the last branch: indented, or under a "│" guide
+      else if (/^(\s+\S|\s*│)/.test(line) && nodes.at(-1)?.branches.length) nodes.at(-1)!.branches.at(-1)!.text += ` ${line.replace(/^\s*│?/, "").trim()}`
+    }
+    const ids = new Set(nodes.map((n) => n.id))
+    for (const { id, branches } of nodes) {
+      if (branches.length < 2 || branches.at(-1)!.mark !== "└" || branches.slice(0, -1).some((b) => b.mark === "└")) {
+        out.push(`Q${id}: nhánh cuối phải là └─ (có câu trả lời không có nhánh)`)
+      }
+      for (const { text } of branches) {
+        const next = text.match(GOES_TO)?.[1]
+        if (text.includes("★") && NAMES_NODE.test(text)) out.push(`Q${id}: ★ vừa dừng vừa đi tiếp — ${text.trim().slice(0, 60)}`)
+        else if (!text.includes("★") && !next) out.push(`Q${id}: nhánh không có ★ cũng không trỏ Q tiếp — ${text.trim().slice(0, 60)}`)
+        else if (next && !ids.has(next)) out.push(`Q${id}: trỏ tới Q${next} không tồn tại`)
+      }
+    }
+  }
+  return out
+}
+
 /** Tên rule vi phạm trong một dòng references, hoặc null nếu dòng đó sạch. */
 export function copiedResultHit(line: string): string | null {
   if (ALLOW_RESULT.test(line)) return null
@@ -97,7 +137,15 @@ export async function lintSkills(root: string) {
   const { skills } = await loadSkills(skillRoots(root).filter((r) => r.source === "bundled"))
   const { all, writes } = await toolNames(root)
   const skillNames = new Set(skills.map((s) => s.name))
-  const report: Record<string, string[]> = { unknownTools: [], triggers: [], catalogLength: [], englishHeadings: [], preloadedWrites: [], copiedResults: [] }
+  const report: Record<string, string[]> = {
+    unknownTools: [],
+    triggers: [],
+    catalogLength: [],
+    englishHeadings: [],
+    preloadedWrites: [],
+    copiedResults: [],
+    decisionTrees: [],
+  }
   const known = (t: string) => all.has(bare(t)) || matchToolPattern(bare(t), all).length > 0
   // Only words in a tool family (vn_, vs_, cycle_, chart_…) are checked in bodies; the
   // rest of the snake_case there is field names.
@@ -112,7 +160,7 @@ export async function lintSkills(root: string) {
       if (NOT_TOOLS.has(t) || skillNames.has(t) || !families.has(t.split("_")[0]!)) continue
       if (!known(t)) report.unknownTools!.push(`${skill.name}: \`${t}\``)
     }
-    for (const k of skill.triggers?.keywords ?? []) {
+    for (const k of [...(skill.triggers?.keywords ?? []), ...(skill.triggers?.exclude ?? [])]) {
       const key = fold(k).replace(/[^\p{L}\p{N}+]+/gu, " ").trim()
       if (BANNED_TRIGGERS.has(key) || (!key.includes(" ") && key.length <= 4 && !SHORT_OK.has(key))) report.triggers!.push(`${skill.name}: "${k}"`)
     }
@@ -127,6 +175,7 @@ export async function lintSkills(root: string) {
     for (const t of skill.uses_tools ?? skill.requires_tools ?? []) {
       if (writes.has(bare(t)) || MCP_WRITE.test(t)) report.preloadedWrites!.push(`${skill.name}: ${t}`)
     }
+    for (const problem of treeProblems(skill.body)) report.decisionTrees!.push(`${skill.name}: ${problem}`)
     for (const { file, text } of await referenceFiles(skill)) {
       for (const line of text.split("\n")) {
         const rule = copiedResultHit(line)

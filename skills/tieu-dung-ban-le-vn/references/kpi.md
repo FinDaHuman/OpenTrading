@@ -1,50 +1,41 @@
 # Chỉ báo ngành tiêu dùng & bán lẻ — cách đọc sức mua thật
 
-> File này giữ **cách đọc**, không giữ con số kỳ nào. Mọi giá trị lấy từ
-> `financial_detail` / `vs_indicator_data` gần nhất và ghi kỳ kèm theo. Luật về
-> phân biệt danh nghĩa – thực chỉ nằm ở §Trụ cột driver của SKILL.md — không lặp
-> lại ở đây.
+> File này giữ **cách đọc**, không giữ số kỳ nào. `financial_detail` nhận một
+> `statement` mỗi lời gọi. Luật "không dùng số danh nghĩa thay số thực" nằm ở mục
+> "Ranh giới" của SKILL.md.
 
 ## 1. Phân khúc
 
-| Phân khúc | Chu kỳ bám | Lưu ý đọc |
+| Phân khúc | Bám theo | Đọc thêm |
 |---|---|---|
-| Thực phẩm – hàng thiết yếu | Thu nhập + giá thị trường | Chu kỳ êm; biên phụ thuộc giá nguyên liệu thực phẩm |
-| Bán lẻ điện tử tiêu dùng | Chu kỳ thay thế thiết bị | Chu kỳ riêng — **không** dùng driver hàng thực phẩm |
-| Dịch vụ tiêu dùng (ăn uống, du lịch) | Thu nhập + du lịch | Tăng theo mùa; đọc kèm du lịch trong `vs_indicator_data` |
+| Bách hoá, thực phẩm thiết yếu | Thu nhập, giá thực phẩm | Doanh thu/cửa hàng, biên sau khuyến mại |
+| Điện máy, điện thoại | Chu kỳ thay thiết bị, tín dụng tiêu dùng | Tồn kho, mùa ra mắt sản phẩm |
+| Trang sức | Giá vàng, nhu cầu cưới hỏi, quà tặng | Biên khi giá vàng biến động mạnh |
+| Nhà thuốc | Nhu cầu ổn định, mở chuỗi | Doanh thu/cửa hàng, thời gian hoà vốn cửa hàng |
+| Nhà sản xuất hàng tiêu dùng | Sản lượng, giá nguyên liệu, kênh phân phối | Biên lãi gộp, chi phí bán hàng |
 
-## 2. Nhóm sức mua
+## 2. Sức mua
 
-| Chỉ báo | Đọc từ | Cách đọc |
+| Chỉ báo | Nguồn | Cách đọc |
 |---|---|---|
-| Tổng mức bán lẻ danh nghĩa | `vs_indicator_data(category_id từ vs_categories)` | Chỉ là điểm khởi đầu — chưa kết luận gì. Không có preset; phải tra category trước |
-| Chỉ số giá tiêu dùng | `vs_indicator_data(indicator="CPI")` | Mẫu số để ra tăng trưởng thực — CPI có preset sẵn |
-| Chỉ số giá lõi | `vs_indicator_data(category_id từ vs_categories)` | Lõi cao hơn mục tiêu = áp lực sức mua — không có preset |
-| Bán lẻ thực | Tự tính (ghi rõ công thức) | Tăng trưởng thực âm = danh nghĩa đến từ giá |
+| Tổng mức bán lẻ hàng hoá và dịch vụ | `vs_categories` → `vs_indicator_data(category_id, term_type_id)` | Không có preset; tra category trước |
+| CPI | `vs_indicator_data(indicator="CPI")` | Có preset |
+| Bán lẻ thực (tự tính) | Hai dòng trên | (1 + tăng trưởng danh nghĩa) / (1 + lạm phát) − 1, cùng kỳ so sánh; ghi rõ đã dùng chỉ số giá nào |
+| Thu nhập bình quân | `vs_categories` nếu có chuỗi, không thì `web_search` | Ghi kỳ và nguồn |
 
-## 3. Nhóm chất lượng tăng trưởng
+## 3. Dòng BCTC
 
-| Chỉ báo | Đọc từ | Cách đọc |
+| Chỉ báo | Statement | Cách đọc |
 |---|---|---|
-| Doanh thu | `financial_detail` | Đọc cùng số điểm bán và biên, không riêng lẻ |
-| Tăng trưởng cùng cửa | Tự tính nếu công bố cho phép (ghi rõ) | Vượt trội hơn tăng trưởng từ mở cửa trong đánh giá thị phần |
-| Biên lãi gộp | `financial_detail` | Giảm trong 2 quý liền cùng với tăng trưởng mạnh = dấu hiệu khuyến mại mua đà |
-| Tồn kho | `financial_detail` | Tồn kho tăng nhanh hơn doanh thu = bán chậm hơn dự kiến |
-| Công nợ | `financial_detail` | Phải thu khách hàng tăng nhanh = bán chịu, đặc biệt kênh truyền thống |
+| Doanh thu theo chuỗi/mảng | TM | Xác định phân khúc chính |
+| Doanh thu, giá vốn, biên lãi gộp | KQKD | Biên giảm 2 quý liền khi doanh thu tăng mạnh = mua tăng trưởng bằng giá |
+| Chi phí bán hàng | KQKD | Tăng nhanh hơn doanh thu = chi phí mở mới, khuyến mại, thuê mặt bằng |
+| Hàng tồn kho | CDKT | Tăng nhanh hơn doanh thu = bán chậm hơn kế hoạch |
+| Phải trả người bán | CDKT | Chuỗi lớn dùng vốn nhà cung cấp; giảm đột ngột = nhà cung cấp siết điều kiện |
+| Tăng trưởng cùng cửa hàng (tự tính) | Doanh thu + số cửa hàng công bố | Doanh thu / số cửa hàng hoạt động đủ kỳ; ghi rõ là ước lượng nếu công ty không công bố |
 
-## 4. Nhóm đối chiếu bên ngoài
+## 4. Bẫy đọc thường gặp
 
-| Nguồn | Đọc gì | Cách dùng |
-|---|---|---|
-| `news_market` | Chính sách thuế và hiệu lực, thu nhập/tiền lương, mở cửa/đóng cửa, thị phần | Ghi rõ văn bản + ngày |
-| `vs_indicator_data` | Thu nhập, tiêu dùng, lạm phát | Sức mua thật; đọc cả danh nghĩa và thực |
-| `planned_targets` | Kế hoạch doanh thu/lãi/mở cửa | Neo kỳ vọng |
-| `peer_compare` | Chỉ tỷ lệ định giá (P/E, P/B, ROE) | So trong cùng phân khúc — chỉ báo vận hành đọc bằng `financial_detail` từng peer, KHÔNG hỏi `peer_compare` |
-
-## 5. Bẫy đọc thường gặp
-
-- Báo cáo "bán lẻ tăng trưởng hai con số" mà không hỏi lạm phát: đó là tăng trưởng
-  giá, không phải sức mua.
-- Mở cửa nhanh trong khi cùng cửa chững: tăng trưởng đến từ mở rộng, dễ đảo chiều
-  khi mở rộng chậm.
-- Một quý biên giảm sau khuyến mại lớn: đọc 2 quý liền trước khi kết luận ép biên.
+- "Bán lẻ tăng hai con số" mà không trừ lạm phát.
+- Mở cửa hàng nhanh trong khi cùng cửa hàng chững: tăng trưởng mượn từ mở rộng.
+- Một quý biên giảm sau đợt khuyến mại lớn: đọc 2 quý liền trước khi kết luận.

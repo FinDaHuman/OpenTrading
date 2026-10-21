@@ -61,6 +61,7 @@ when_to_use: Câu hỏi về cổ phiếu ngân hàng hoặc BCTC ngân hàng.  
 activation: auto                     # auto (mặc định) | always | manual
 triggers:
   keywords: [ngân hàng, NIM, CASA, nợ xấu, room tín dụng]   # tuỳ chọn, xem mục Kích hoạt
+  exclude: [dẫn sóng, pha nào]         # tuỳ chọn: câu có cụm này thì không gợi ý skill
 requires_tools: [opentrading/financial_*, vn_quote_history]  # tuỳ chọn, xem dưới
 version: 1.0.0
 ---
@@ -98,6 +99,8 @@ version: 1.0.0
 | `manual` | Không có trong danh sách; chỉ người dùng bật bằng `/skill <tên>` (giữ cho cả phiên) | Quy trình nặng hoặc cần người dùng chủ động |
 
 - **`triggers.keywords`** (tầng L1 preroute trong HarnessPlan §5.3): nếu câu hỏi chứa từ khoá (không phân biệt hoa thường, bỏ dấu, khớp theo từ), harness nhắc model "có thể liên quan tới skill X". Đây chỉ là gợi ý; model vẫn quyết định có gọi hay không. Tầng thứ hai khớp mềm: so từ và cặp từ (trọng số IDF) giữa câu hỏi với tên, `description`, `when_to_use` và từ khoá; chỉ gợi ý thêm một skill khi điểm đủ cao và gấp 1,5 lần skill đứng sau. Vì vậy `description`/`when_to_use` viết bằng chữ người dùng hay nói cũng giúp định tuyến. Đo bằng `test/routing-eval.test.ts`.
+- **`triggers.exclude`**: câu hỏi chứa một cụm trong danh sách này (khớp như từ khoá) thì skill bị loại khỏi **cả hai** tầng gợi ý cho lượt đó. Dùng khi skill có từ khoá đúng nhưng một loại câu hỏi thuộc skill khác: 13 skill ngành loại các câu hỏi về pha/sóng (`dinh-vi-chu-ky-vn`), tin tức, so sánh, khuyến nghị mua bán. Đừng dùng thay cho việc viết từ khoá hẹp hơn.
+- **Tránh từ chung trong `description` của skill hẹp** ("doanh thu", "tăng trưởng", "lợi nhuận"): tầng khớp mềm chỉ gợi ý khi skill đứng đầu hơn skill thứ hai 1,5 lần, nên một skill hẹp mang từ chung sẽ làm skill tổng quát mất gợi ý.
 - **Viết `description` và `when_to_use` cụ thể.** Kinh nghiệm của Cursor: mô tả mơ hồ thì model không bao giờ chọn. Trong danh sách, mỗi skill tối đa 250 ký tự.
 - **File phụ** (bảng chỉ tiêu, checklist) để cùng thư mục. Model đọc bằng `load_skill` với tham số `file`; không đọc được file nằm ngoài thư mục skill. Mỗi file phụ tốn thêm một lượt gọi tool, nên chỉ tách khi nội dung dài và chỉ dùng ở nhánh hiếm; vài dòng mà bước chính luôn cần thì để thẳng trong SKILL.md. Bảng tra cứu (mã, id) mà tool tự hiểu được thì sửa ở tool, không chép vào skill. Khi tách: bảng tra cứu để `assets/`, file diễn giải cách đọc để `references/`.
 - Frontmatter sai: skill không được nạp và lỗi hiện trong `/skills`. App không crash.
@@ -113,6 +116,8 @@ version: 1.0.0
 - Khi số mới phủ định một quy tắc trong `references/`: sửa **quy tắc** thành điều kiện tra được (tra X, đọc cột Y, áp ngưỡng Z), **không** chép bảng kết quả vào file. Muốn giữ một nhận định định tính thì ghi rõ là prior + điều kiện để nó thành tín hiệu.
 - Skill có bảng thống kê dài hạn nên có **mục "Giới hạn"** (mẫu nhỏ, ô partial, tìm max trên nhiều ô) để kết luận nào cũng phải kèm độ tin cậy.
 - `test/helpers/skill-lint.ts` có rule `copiedResults` chặn pattern kết quả bảng trong `references/**` (thoát bằng `<!-- lint:allow-result -->` cho ca hợp lệ, VD provenance của framework).
+- **Cây quyết định** (mục `## Cây quyết định …`, nút `Qn.`, nhánh `├─`/`└─`, kết luận `★`): mỗi nút kết thúc bằng nhánh `└─` (mọi câu trả lời đều có đường đi); nhánh có `★` là dừng, không nhắc tới `Qn` khác; nhánh không có `★` phải trỏ `→ tiếp Qn` tới nút có thật; nhánh "không có số" đi tiếp với độ tin cậy thấp, không biến thành kết luận tiêu cực. Rule `decisionTrees` trong `skill-lint.ts` kiểm các điều này.
+- **Gọi tool đúng khả năng của tool**: `financial_detail` nhận một `statement` mỗi lời gọi; `peer_compare` chỉ trả snapshot định giá (P/E, P/B, EPS, BVPS, ROE/ROA); `news_market` là luồng tin mới nhất, không tra theo chủ đề (dùng `web_search`) hay theo mã (dùng `news_symbol`); `vs_xnk_detail` chia theo nước. Kiểm schema trong `test/fixtures/mcp-catalog/opentrading.json` trước khi viết bước.
 
 ## 4. Hồ sơ nhà đầu tư: `~/.opentrading/INVESTOR.md`
 

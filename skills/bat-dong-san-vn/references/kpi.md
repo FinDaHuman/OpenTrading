@@ -1,51 +1,40 @@
-# Chỉ báo ngành bất động sản — dòng báo cáo và cách đọc
+# Chỉ báo ngành bất động sản — dòng BCTC và cách đọc
 
-> File này giữ **cách đọc**, không giữ con số kỳ nào. Mọi giá trị lấy từ
-> `financial_detail` / `news_market` gần nhất và ghi kỳ kèm theo. Luật về trần nợ
-> theo quy mô dự án và cách tính đòn bẩy chỉ nằm ở §Trụ cột driver của SKILL.md —
-> không lặp lại ở đây.
+> File này giữ **cách đọc**, không giữ số kỳ nào. `financial_detail` nhận một
+> `statement` mỗi lời gọi — cột "Statement" ghi sẵn. Luật về văn bản pháp lý nằm ở
+> mục "Ranh giới" của SKILL.md.
 
-## 1. Nhóm dòng vốn
+## 1. Dòng vốn
 
-| Chỉ báo | Đọc từ | Cách đọc |
+| Chỉ báo | Statement | Cách đọc |
 |---|---|---|
-| Nợ vay | `financial_detail` | Xu hướng 4–8 quý. Tăng nhanh hơn vốn chủ = đòn bẩy đang giãn |
-| Trái phiếu phát hành | `financial_detail` | Đọc cùng lãi suất phát hành (bên ngoài): nợ **đắt** tăng nhanh là tín hiệu trước, không phải sau |
-| Vốn chủ | `financial_detail` | Mẫu số cho đòn bẩy theo trần quy định |
-| Chi phí lãi thuần | `financial_detail` | Tăng nhanh hơn tổng nợ = lãi bình quân đang lên |
-| Tiền thu từ khách hàng | `financial_detail` | Vốn ứng dài hạn rẻ: tăng đều là tiếp sức; giảm là dấu hiệu bán chậm trước khi doanh thu nhận bị ảnh hưởng |
+| Vay và nợ thuê tài chính (ngắn + dài hạn) | CDKT | Tăng nhanh hơn vốn chủ = đòn bẩy giãn |
+| Trái phiếu phát hành, lịch đáo hạn | TM | Đáo hạn trong 4 quý tới so với tiền và tương đương tiền |
+| Chi phí lãi vay | KQKD | Tăng nhanh hơn dư nợ = lãi suất bình quân đang lên; một phần có thể được vốn hoá vào dự án (TM) |
+| Vốn chủ sở hữu | CDKT | Mẫu số đòn bẩy; tăng vốn bằng phát hành là tín hiệu cần vốn |
+| Tiền và tương đương tiền | CDKT | Đệm cho nợ đến hạn |
 
-## 2. Nhóm chất lượng bán hàng
+## 2. Bán hàng và ghi nhận
 
-| Chỉ báo | Đọc từ | Cách đọc |
+| Chỉ báo | Statement | Cách đọc |
 |---|---|---|
-| Bán trước (ký trong kỳ) | `financial_detail` / `planned_targets` | Đọc cùng biên lãi gộp: bán trước tăng + biên giảm = tăng trưởng bằng giảm giá |
-| Doanh thu chưa ghi nhận (tích luỹ) | `financial_detail` | Tồn kho doanh thu tương lai. Tăng = pipeline bàn giao; giảm = đang tiêu backlog |
-| Tích luỹ chi phí dở | `financial_detail` | Cơ sở nhận lãi khi bàn giao. So với doanh thu chưa ghi nhận để xem giai đoạn còn dài hay ngắn |
-| Biên lãi gộp mảng BĐS | `financial_detail` | Chỉ tiêu chất lượng của ngành. Biên giảm dù doanh thu tăng = cung cạnh tranh hoặc chiết khấu |
+| Người mua trả tiền trước (ngắn + dài hạn) | CDKT | Phần khách đã trả cho căn chưa bàn giao — vốn rẻ và chỉ báo trước của doanh thu |
+| Doanh thu chưa thực hiện | CDKT | Doanh thu sẽ ghi nhận khi bàn giao |
+| Hàng tồn kho (BĐS dở dang, thành phẩm) | CDKT + TM | Quỹ dự án đang làm; tồn kho thành phẩm tăng = bán chậm |
+| Doanh thu, giá vốn, biên lãi gộp | KQKD | Nhảy theo đợt bàn giao — đọc 4 quý |
+| Tiền thu từ bán hàng | LCTT | Đối chiếu với doanh thu để thấy bán hàng có thành tiền không |
 
-## 3. Nhóm phân khúc
+## 3. Phân khúc
 
 | Phân khúc | Đọc gì | So với ai |
 |---|---|---|
-| Nhà ở thương mại | Bán trước, biên, tích luỹ chi phí dở, lãi vay chịu | Nhóm cùng phân khúc nhà ở |
-| Công nghiệp | Diện tích cho thuê mới, diện tích đã cho thuê, giá thuê bình quân, tỷ lệ lấp đầy | Nhóm KCN cùng khu vực (bắc / nam) |
-| Bán lẻ – dịch vụ | Doanh thu dịch vụ, tỷ lệ lấp đầy, chi phí vận hành | Nhóm bán lẻ; đọc thêm `tieu-dung-ban-le-vn` |
+| Nhà ở thương mại | Người mua trả tiền trước, tồn kho, biên, nợ đến hạn | Chủ đầu tư nhà ở |
+| Khu công nghiệp | Diện tích cho thuê mới, giá thuê, quỹ đất sạch, doanh thu chưa thực hiện từ thuê đất trả trước | KCN cùng vùng |
+| Cho thuê bán lẻ, văn phòng | Tỷ lệ lấp đầy, giá thuê, chi phí vận hành | Chủ sở hữu tài sản cho thuê |
 
-## 4. Nhóm đối chiếu bên ngoài
+## 4. Bẫy đọc thường gặp
 
-| Nguồn | Đọc gì | Khi nào |
-|---|---|---|
-| `news_market` | Tăng trưởng tín dụng ngành, phát hành + lãi trái phiếu, tường đáo hạn, cung mới theo kỳ | Mỗi lần cần số ngành; ghi rõ nguồn và kỳ |
-| `company_events` | Phê duyệt dự án, tăng vốn, chào bán trái phiếu | Trước khi kết luận tiến độ hoặc kế hoạch vốn |
-| `event_calendar_vn` | Họp cổ đông, ngày chốt, lịch công bố | Neo mốc thời gian cho kỳ vọng |
-| `planned_targets` | Kế hoạch doanh thu/lãi/bán trước | Neo kỳ vọng và đối chiểu kết quả đã công bố |
-
-## 5. Bẫy đọc thường gặp
-
-- So đòn bẩy giữa hai phân khúc: nhà ở và công nghiệp có trần nợ và vòng quay vốn
-  khác nhau.
-- Doanh thu BĐS nhảy giữa các quý do bàn giao mất đều — đọc 4 quý và backlog, đừng
-  đọc một quý.
-- Tín dụng ngành siết nhưng doanh nghiệp vẫn tăng trưởng: nguồn có thể là vốn ứng
-  từ khách hàng hoặc trái phiếu — phân biệt trước khi kết luận chất lượng.
+- So đòn bẩy giữa nhà ở và khu công nghiệp: vòng quay vốn khác nhau.
+- Tín dụng ngành siết nhưng doanh nghiệp vẫn tăng trưởng: kiểm tra có phải nhờ tiền
+  khách trả trước hay trái phiếu trước khi kết luận.
+- Doanh thu một quý vọt lên vì bàn giao một dự án lớn: xử lý như một lần.

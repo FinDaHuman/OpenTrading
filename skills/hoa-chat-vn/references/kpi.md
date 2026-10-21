@@ -1,50 +1,43 @@
-# Chỉ báo ngành hoá chất & phân bón — cách đọc theo cửa sổ giá
+# Chỉ báo ngành phân bón & hoá chất — cách đọc theo cửa sổ giá
 
-> File này giữ **cách đọc**, không giữ con số kỳ nào. Mọi giá trị lấy từ
-> `financial_detail` / `news_market` / `yf_commodities` gần nhất và ghi kỳ kèm
-> theo. Luật về cửa sổ giá và tồn kho giá gốc chỉ nằm ở mục "Trụ cột driver"
-> của SKILL.md — không lặp lại ở đây.
+> File này giữ **cách đọc**, không giữ số kỳ nào. `financial_detail` nhận một
+> `statement` mỗi lời gọi. Luật về tra chính sách và thuế nằm ở mục "Ranh giới" của
+> SKILL.md.
 
-## 1. Phân biệt nội địa và quốc tế
+## 1. Nhóm sản phẩm
 
-| Tiêu chí | Bán nội địa | Xuất khẩu |
+| Nhóm | Giá bám | Chi phí chính | So với |
+|---|---|---|---|
+| Phân đạm (ure) | Giá ure thế giới và trong nước | Khí (giá theo hợp đồng) hoặc than | Nhà máy ure |
+| Lân, NPK | Giá trong nước, mùa vụ | Quặng apatit, lưu huỳnh, ure/kali đầu vào | Nhà sản xuất lân, NPK |
+| Phốt pho vàng, hoá chất phốt pho | Giá Trung Quốc và xuất khẩu | Quặng apatit, điện, than cốc | Hoá chất phốt pho |
+| Hoá chất cơ bản (xút, clo, axit) | Giá trong nước, khách công nghiệp | Muối, điện | Hoá chất cơ bản |
+
+## 2. Dòng BCTC
+
+| Chỉ báo | Statement | Cách đọc |
 |---|---|---|
-| Giá bám | Khung giá trong nước + nhu cầu nội địa | Giá quốc tế theo thời điểm giao dịch |
-| Biến quyết định | Nhu cầu nông nghiệp + giá nông sản | Cú sốc cung + chính sách xuất khẩu |
-| Chu kỳ | Chậm hơn, êm hơn | Nhanh và biến động mạnh |
-| Đọc gì | Sản lượng bán nội địa + giá bán trong nước | Tỷ lệ xuất + giá quốc tế + tồn kho |
+| Doanh thu theo sản phẩm, xuất khẩu | TM | Xác định nhóm và tỷ lệ xuất khẩu |
+| Doanh thu, giá vốn | KQKD | Tách giá và sản lượng nếu có sản lượng công bố |
+| Biên lãi gộp (tự tính) | KQKD | Đọc **2 quý liền**: một quý mở có thể nhờ tồn kho giá rẻ |
+| Giá bán bình quân (tự tính) | KQKD + sản lượng | So với giá tham chiếu để xem công ty nhận đủ cửa sổ giá không |
+| Hàng tồn kho | CDKT | Tồn kho thành phẩm tăng mạnh = bán chậm hơn sản xuất |
+| Số ngày tồn kho (tự tính) | CDKT + KQKD | Tồn kho bình quân / giá vốn quý × 90 |
+| Tiền, tiền gửi | CDKT | Nhiều doanh nghiệp đầu ngành giữ tiền lớn: thu lãi tiền gửi đỡ lợi nhuận khi cửa sổ đóng |
 
-## 2. Nhóm giá và biên
+## 3. Ngoài BCTC
 
-| Chỉ báo | Đọc từ | Cách đọc |
+| Chỉ báo | Nguồn | Cách dùng |
 |---|---|---|
-| Doanh thu | `financial_detail` | Tách giá và khối lượng nếu công bố cho phép; tăng do giá không bền bằng tăng do khối lượng |
-| Giá bán bình quân | Tự tính (ghi rõ) hoặc công bố công ty | Đối chiếu giá quốc tế/nội địa để xem công ty có nhận đủ cửa sổ không |
-| Biên lãi gộp | `financial_detail` | Đọc **2 quý liền**: một quý mở rộng có thể là tồn kho giá gốc thấp |
-| Giá vốn | `financial_detail` | Nơi chứa chi phí khí/nguyên liệu; đọc cùng tồn kho |
+| Giá ure, DAP, phốt pho vàng | `web_search` | Ghi loại giá (khu vực, điều kiện giao) + ngày |
+| Chính sách xuất khẩu Trung Quốc | `web_search` | Ghi thông báo + ngày |
+| Giá dầu tham chiếu | `yf_commodities` | Hướng giá khí đầu vào nếu hợp đồng gắn giá dầu |
+| Mùa vụ, giá lúa | `web_search` | Cầu trong nước |
 
-## 3. Nhóm cửa sổ giá
+## 4. Bẫy đọc thường gặp
 
-| Chỉ báo | Đọc từ | Cách đọc |
-|---|---|---|
-| Tồn kho | `financial_detail` | Đọc theo luật ở §Trụ cột driver của SKILL.md (tồn kho giá gốc quyết định biên còn được hỗ trợ bao lâu): tồn kho giá gốc thấp thì biên còn đỡ, giá gốc cao thì biên bị nén khi giá giảm |
-| Chi phí khí/nguyên liệu | `financial_detail` + `yf_commodities` | Đuổi kịp giá bán thì cửa sổ đóng |
-| Xuất khẩu kỳ | `vs_xnk_detail` | Tín hiệu hướng: xuất tăng mạnh thường đi kèm giá quốc tế tốt |
-| Chính sách Trung Quốc | `news_market` | Biến số cung toàn cầu; ghi rõ nguồn và ngày |
-
-## 4. Nhóm đối chiếu
-
-| Nguồn | Đọc gì | Cách dùng |
-|---|---|---|
-| `news_market` | Giá phân bón quốc tế/nội địa, chính sách xuất khẩu, tình trạng cung | Ghi rõ chỉ số giá và ngày tra |
-| `vs_indicator_data` | Sản xuất nông nghiệp (nhu cầu nội địa) | Chỉ dùng khi xét nhánh nội địa |
-| `planned_targets` | Kế hoạch sản lượng/doanh thu/lãi | Neo kỳ vọng |
-| `peer_compare` | Biên lãi gộp, tỷ lệ xuất, chi phí đầu vào | So trong cùng nhóm sản phẩm (ure vs NPK vs phân kali) |
-
-## 5. Bẫy đọc thường gặp
-
-- Một quý lãi nhảy mạnh: kiểm tra tồn kho giá gốc trước khi nội suy thành năng lực.
-- Giá quốc tế lên nhưng công ty bán nội địa: khung giá trong nước giới hạn phần
-  được tăng — verdict khác công ty xuất khẩu.
-- Chính sách Trung Quốc nới ra: cả nhóm chu kỳ giá bị kéo xuống dù công ty chưa xuất
-  khẩu sang Trung Quốc.
+- Một quý lãi nhảy mạnh: kiểm tra tồn kho giá rẻ trước khi nội suy.
+- Giá thế giới tăng nhưng công ty bán chủ yếu trong nước: phần được hưởng nhỏ hơn
+  công ty xuất khẩu.
+- Trung Quốc nới xuất khẩu: giá cả nhóm bị kéo xuống dù công ty không xuất sang
+  Trung Quốc.

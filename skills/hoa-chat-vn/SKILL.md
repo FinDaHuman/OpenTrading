@@ -1,159 +1,148 @@
 ---
 name: hoa-chat-vn
-description: "Phân tích ngành hoá chất và phân bón Việt Nam theo chu kỳ giá ure, chính sách xuất khẩu Trung Quốc, tỷ lệ xuất khẩu và chi phí khí đầu vào. Dùng khi hỏi xu hướng nhóm hoá chất hoặc công ty phân bón."
+description: "Đọc ngành phân bón – hoá chất VN: giá ure, phốt pho, chính sách xuất khẩu Trung Quốc, giá khí đầu vào, tồn kho, thuế GTGT. Dùng khi hỏi nhóm phân bón hay hoá chất."
 activation: auto
-requires_tools: [financial_detail, yf_commodities]
-uses_tools: [financial_detail, yf_commodities, financial_ratios, planned_targets, analyst_consensus, peer_compare, vs_xnk_detail, vs_indicator_data, news_symbol, news_market, symbol_lookup, vn_company]
+requires_tools: [financial_detail]
+uses_tools: [financial_detail, financial_statements, yf_commodities, financial_ratios, planned_targets, analyst_consensus, peer_compare, news_symbol, news_market, web_search, symbol_lookup, vn_company]
 triggers:
-  keywords: [ngành hoá chất, phân bón, sản xuất phân bón, giá phân bón, nhà máy hoá chất, khí đầu vào phân bón, chu kỳ giá phân bón]
+  keywords: [ngành hoá chất, nhóm hoá chất, ngành phân bón, nhóm phân bón, cổ phiếu phân bón, công ty phân bón, doanh nghiệp phân bón, giá ure, phân đạm, phốt pho vàng, nhà máy đạm]
+  exclude: [dẫn sóng, sóng ngành, đầu sóng, giữa sóng, cuối sóng, pha nào, giai đoạn nào, chu kỳ ngành, luân chuyển ngành, rotation, tin gì, tin tức, tin mới, so sánh, khuyến nghị, nên mua, nên bán]
 version: 1.0.0
 ---
 
-# Hoá chất & phân bón Việt Nam — framework phân tích
+# Phân bón & hoá chất Việt Nam — framework phân tích
 
-Ngành này sinh lời theo **cửa sổ giá**: lợi nhuận đến từ giai đoạn giá bán vượt
-chi phí đầu vào, và cửa sổ đó có thể mở rồi đóng trong một quý. Skill này đọc ngành
-bằng chu kỳ giá phân bón, **chính sách xuất khẩu của Trung Quốc** (biến số cung toàn
-cầu), tỷ lệ xuất khẩu (quyết định công ty bám giá nội địa hay bám giá quốc tế), và
-chi phí khí đầu vào.
-
-Một điểm dễ đọc sai nằm ở bảng driver dưới (**tồn kho giá gốc**): khi giá thị trường
-nhảy, biên còn được hỗ trợ vài quý bởi tồn kho mua trước khi giá lên, rồi đảo chiều —
-biên một quý tốt chưa nói lên năng lực.
+Ngành này lãi theo **cửa sổ giá**: lợi nhuận đến từ giai đoạn giá bán vượt xa chi phí
+đầu vào, và cửa sổ đó có thể mở rồi đóng trong vài quý. Các nhóm chính: **phân đạm
+(ure)** từ khí hoặc than — giá bám thị trường ure thế giới, chi phí bám giá khí đầu
+vào; **phân lân, NPK** — bán chủ yếu trong nước, bám mùa vụ và giá nông sản; **hoá chất
+phốt pho** (phốt pho vàng, axit phosphoric) — giá bám thị trường Trung Quốc và xuất
+khẩu. Trung Quốc là biến cung lớn: hạn chế xuất khẩu phân bón, hoá chất của Trung Quốc
+làm giá thế giới tăng, nới ra thì giá giảm.
 
 ## Khi nào dùng
 
-- Dùng khi: user hỏi xu hướng nhóm hoá chất/phân bón, tại sao lãi nhảy rồi sụt,
-  công ty phân bón chịu gì từ giá quốc tế và Trung Quốc.
-- Khi KHÔNG dùng (dùng skill khác thay thế):
-  - Hỏi pha thị trường / luân chuyển ngành / sóng ngành tiếp theo → `dinh-vi-chu-ky-vn`.
-  - Phân tích toàn diện một mã → `phan-tich-chuyen-sau-1-ma`.
-  - Chỉ định giá một mã → `dinh-gia-chuyen-sau`.
-  - Chỉ đọc BCTC một mã không có mảng ngành → `co-ban-chuyen-sau`.
-  - Xuất khẩu nông sản (gạo, cà phê, hạt điều) → `xuat-nhap-khau-vn`.
+- Dùng khi: hỏi nhóm phân bón/hoá chất đang được tiếp sức hay bị siết, vì sao lãi
+  nhảy rồi sụt, công ty phân bón chịu gì từ giá ure thế giới hay chính sách Trung Quốc.
+- Khi KHÔNG dùng:
+  - Pha thị trường, phân bón có dẫn sóng không → `dinh-vi-chu-ky-vn`.
+  - Phân tích toàn diện một mã → `phan-tich-chuyen-sau-1-ma`; chỉ định giá → `dinh-gia-chuyen-sau`.
+  - Xuất khẩu nông sản → `xuat-nhap-khau-vn`.
+  - Nhựa, cao su, săm lốp: driver khác, skill này không áp dụng.
 
 ## Trụ cột driver
 
-| Driver | Kênh truyền dẫn | Đọc/xác minh bằng |
+| Driver | Cơ chế | Đọc bằng |
 |---|---|---|
-| Chu kỳ giá phân bón | Giá bán là biến số số 1: giá nhảy theo cú sốc cung (địa chính trị, thời tiết, xuất khẩu) rồi thu về. Ngành ăn theo **cửa sổ giá**, không theo xu hướng dài | Giá phân bón quốc tế và nội địa: `news_market`/`web_search`, ghi rõ chỉ số giá + ngày |
-| Chính sách xuất khẩu Trung Quốc | Trung Quốc là nguồn cung lớn; kiểm soát xuất khẩu (hạn ngạch, cấm, thuế) làm giá toàn cầu nhảy và ngược lại | Chính sách xuất khẩu: `news_market`/`web_search`, ghi rõ văn bản/thông báo + ngày |
-| Tỷ lệ xuất khẩu | Công ty xuất phần lớn sản lượng thì bám giá quốc tế và giao dịch ngoại thương; công ty bán nội địa thì lãi bị khung giá trong nước và nhu cầu nội địa quyết định | Tỷ lệ xuất khẩu: công bố công ty trong `news_market`; xuất khẩu ngành: `vs_xnk_detail` |
-| Chi phí khí đầu vào | Chi phí khí đầu vào theo hợp đồng dài hạn là chi phí cố định lớn; nhiên liệu tham chiếu đỡ phần dự báo | Chi phí nhiên liệu tham chiếu: `yf_commodities` theo chu kỳ; chi phí giá vốn trong `financial_detail` |
-| Nhu cầu nội địa | Nhu cầu nội địa nhạy giá nông sản (như lúa); yếu khi giá nông sản thấp hoặc giá phân bón cao | Nhu cầu nội địa: `news_market`, `vs_indicator_data` (sản xuất nông nghiệp) |
-| Tồn kho giá gốc | Tồn kho mua trước khi giá lên hỗ trợ biên 1–2 quý rồi đảo chiều — nhãn "cửa sổ" của toàn ngành | Tồn kho trong `financial_detail`; tỷ lệ xuất trong công bố công ty |
+| Giá bán | Giá ure, DAP, phốt pho vàng thế giới nhảy theo cú sốc cung (địa chính trị, chính sách Trung Quốc, giá khí châu Âu) rồi về lại; giá trong nước theo cạnh tranh và mùa vụ | Giá tham chiếu và giá trong nước: `web_search` (ghi loại giá, khu vực, ngày) |
+| Chính sách xuất khẩu Trung Quốc | Hạn ngạch, kiểm tra xuất khẩu làm giảm cung ra thế giới → giá tăng; nới ra thì ngược lại | `web_search`, ghi thông báo + ngày |
+| Giá khí đầu vào | Nhà máy đạm dùng khí mua theo hợp đồng, giá thường gắn với giá dầu/nhiên liệu tham chiếu; nhà máy dùng than chịu giá than | Điều khoản hợp đồng: công bố công ty, `web_search`; hướng giá dầu: `yf_commodities(tickers=["BZ=F"])` |
+| Mùa vụ và cầu trong nước | Cầu phân bón trong nước theo mùa vụ lúa và giá nông sản; giá nông sản thấp thì nông dân giảm bón | `web_search` (mùa vụ, giá lúa), sản lượng bán của công ty: `news_symbol` |
+| Thuế GTGT với phân bón | Chính sách thuế GTGT quyết định doanh nghiệp có được khấu trừ thuế đầu vào hay phải tính vào giá vốn | Văn bản hiện hành: `web_search`, ghi số hiệu + ngày hiệu lực |
+| Tồn kho | Nguyên liệu mua trước khi giá tăng đỡ biên vài tháng; thành phẩm làm lúc chi phí cao bán khi giá giảm thì biên nén | Hàng tồn kho (CDKT) so với giá vốn (KQKD) |
 
 ## Các bước
 
-**Bước 1: Nhận diện cơ cấu mảng (song song).**
+`financial_detail` nhận **một** `statement` mỗi lời gọi; không gọi được thì dùng
+`financial_statements` và ghi rõ.
 
-`symbol_lookup` · `vn_company` (mảng: phân bón / hoá chất / thương mại) ·
-`financial_detail` (doanh thu theo mảng). Ghi rõ tỷ lệ xuất khẩu nếu công bố.
+**Bước 1 (song song):** `symbol_lookup` · `vn_company` · `financial_detail(symbol,
+statement=TM)` (doanh thu theo sản phẩm, xuất khẩu). Xác định sản phẩm chính và tỷ lệ
+xuất khẩu.
 
-**Bước 2: Hai đầu giá (song song).**
+**Bước 2 (song song):** `financial_detail(symbol, statement=KQKD)` (doanh thu, giá vốn,
+biên) · `financial_detail(symbol, statement=CDKT)` (hàng tồn kho), 4–8 quý.
 
-`news_market` (giá phân bón quốc tế + nội địa, chính sách Trung Quốc, tình trạng
-cung) · `yf_commodities` (năng lượng tham chiếu cho chi phí đầu vào) ·
-`vs_xnk_detail` (xuất khẩu phân bón theo kỳ).
+**Bước 3 (song song):** `web_search` (giá sản phẩm chính trong nước và thế giới, chính
+sách xuất khẩu Trung Quốc, văn bản thuế GTGT — ghi nguồn + ngày) · `news_symbol(symbol)`
+(sản lượng, giá khí, bảo dưỡng nhà máy) · `yf_commodities` (hướng giá dầu nếu là đạm
+từ khí).
 
-**Bước 3: Biên + tồn kho (song song).**
+**Bước 4:** `planned_targets` · `analyst_consensus`. So với doanh nghiệp **cùng sản
+phẩm** (ure với ure, NPK với NPK); chỉ báo vận hành đọc bằng `financial_detail` từng mã,
+`peer_compare` chỉ trả P/E, P/B, EPS, BVPS, ROE/ROA.
 
-`financial_detail`: doanh thu, giá vốn → biên lãi gộp theo quý; tồn kho; chi phí
-tài chính. Đọc 4 quý liền để phân biệt "cửa sổ giá" với năng lực bền.
+## Cây quyết định công ty phân bón/hoá chất đang được tiếp sức hay bị siết
 
-**Bước 4: Neo kỳ vọng + vị thế nhóm.**
+Duyệt từ Q1, **dừng ở ★ đầu tiên**. Nhánh "không có số" đi tiếp với độ tin cậy thấp.
 
-`planned_targets` · `peer_compare` (so biên lãi gộp, tỷ lệ xuất khẩu, chi phí đầu
-vào trong nhóm) · `analyst_consensus`.
+Q1. Giá bán theo thị trường nào?
+├─ Giá thế giới (xuất khẩu lớn, hoặc ure/phốt pho bám giá thế giới) → tiếp Q2
+├─ Chủ yếu bán trong nước theo mùa vụ (lân, NPK) → tiếp Q4
+└─ Không rõ tỷ lệ xuất khẩu → tiếp Q2, ghi rõ
 
-## Cây quyết định công ty hoá chất đang được tiếp sức hay siết
+Q2 (giá thế giới). Cửa sổ giá đang mở hay đóng?
+├─ Giá đang giảm về sau cú sốc → ★ "Cửa sổ giá đang đóng: doanh thu theo giá thị
+│  trường, biên co về; tồn kho làm lúc chi phí cao sẽ nén thêm"
+├─ Giá đang cao hoặc tăng → tiếp Q3
+└─ Không dựng được giá → tiếp Q5
 
-Duyệt Q1→Q5 theo thứ tự, **DỪNG ở ★ đầu tiên** mà ĐỦ điều kiện. Thiếu dữ liệu thì
-hạ độ tin cậy, không bù số.
+Q3 (giá thế giới). Trung Quốc đang hạn chế hay nới xuất khẩu sản phẩm này?
+├─ Hạn chế → ★ "Cung thế giới đang bị thắt: cửa sổ giá còn mở, nhưng phụ thuộc chính
+│  sách — ghi rõ là cơ hội theo chính sách"
+├─ Nới → ★ "Cung Trung Quốc quay lại: cửa sổ giá sắp đóng, đọc giá chào bán gần nhất"
+└─ Không đổi hoặc chưa tra được → tiếp Q5
 
-Q1. Tỷ lệ xuất khẩu của công ty?
-├─ Xuất phần lớn sản lượng → tiếp Q2 (nhánh quốc tế)
-├─ Bán chủ yếu nội địa → tiếp Q4 (nhánh nội địa)
-└─ Không rõ → tiếp Q2 với độ tin cậy thấp, ghi rõ
+Q4 (trong nước). Cầu mùa vụ và giá bán trong nước có cùng chiều không?
+├─ Giá nông sản thấp, nông dân giảm bón, giá bán khó tăng → ★ "Bị siết bởi cầu
+│  trong nước: giá thế giới tăng cũng khó chuyển vào giá bán"
+└─ Cầu ổn hoặc tăng, hoặc không có số → tiếp Q5
 
-Q2 (quốc tế). Cửa sổ giá quốc tế đang mở hay đóng?
-├─ Mở (giá nhảy sau cú sốc cung) → tiếp Q3
-├─ Đóng (giá hạ về sau cú sốc) → ★ "Bị siết bởi giá: doanh thu sẽ bám giá thị
-   trường, biên co về — đọc tồn kho giá cao còn lại"
-└─ Chưa dựng được giá → Q3 với độ tin cậy thấp
-
-Q3 (quốc tế). Chính sách Trung Quốc đang nới hay siết?
-├─ Siết (kiểm soát xuất khẩu) → ★ "Cung toàn cầu bị nuôi: cửa sổ giá có thể nở rộng
-   thêm — nhưng ghi rõ đây là cơ hội theo chính sách, không phải kỳ vọng dài hạn"
-└─ Nới (xuất khẩu tăng trở lại) → ★ "Cung toàn cầu quay lại: cửa sổ đang đóng,
-   đọc tỷ lệ khóa đơn hàng trước khi kỳ vọng biên"
-
-Q4 (nội địa). Nhu cầu nội địa và giá bán có cùng chiều không?
-├─ Có, nhu cầu hồi + giá giữ được → tiếp Q5
-└─ Không, giá quốc tế lên nhưng nhu cầu nội địa yếu → ★ "Bị siết bởi cầu: khung giá
-   trong nước giới hạn phần được tăng giá trong cửa sổ này"
-
-Q5 (chung). Chi phí đầu vào và biên có cùng chiều với giá bán không?
-├─ Có, giá bán tăng nhanh hơn chi phí đầu vào → ★ "Được tiếp sức: xác nhận biên
-   mở rộng trên 2 quý liền trước khi nội suy"
-└─ Không, chi phí đầu vào đuổi kịp giá bán → ★ "Bị siết bởi chi phí: cửa sổ giá
-   không còn đủ rộng, đọc tồn kho giá gốc để xem biên còn được hỗ trợ bao lâu"
+Q5 (chung). Biên lãi gộp và chi phí đầu vào?
+├─ Giá bán tăng nhanh hơn chi phí, biên mở 2 quý liền → ★ "Được tiếp sức: cửa sổ giá
+│  đang vào lợi nhuận"
+├─ Chi phí khí/nguyên liệu đuổi kịp giá bán → ★ "Bị siết bởi chi phí: cửa sổ giá
+│  không còn đủ rộng"
+└─ Một quý biên tốt chưa đủ xác nhận → ★ "Biên cải thiện mới một quý, có thể nhờ tồn
+   kho giá rẻ: độ tin cậy thấp"
 
 ## Chỉ báo đặc thù ngành
 
-Bảng chỉ báo ngành hoá chất/phân bón + cách đọc ở `references/kpi.md`.
+Cách đọc theo sản phẩm ở `references/kpi.md`.
 
 ## Định giá theo đặc thù ngành
 
-Hoá chất/phân bón là chu kỳ giá: định giá bằng **EV/EBITDA theo vòng** và **P/B so
-đáy của chính ngành**, không dùng P/E tại đỉnh cửa sổ giá. Đánh dấu rõ một kỳ lãi
-bất thường là "cửa sổ giá" và không nội suy. Neo kỳ vọng bằng `planned_targets` và
-`analyst_consensus`.
+Ngành chu kỳ giá: **EV/EBITDA** và **P/B** so vùng của chính doanh nghiệp qua nhiều
+năm; P/E thấp nhất thường rơi đúng đỉnh cửa sổ giá. Đánh dấu kỳ lãi bất thường là cửa
+sổ giá, không nội suy. Doanh nghiệp trả cổ tức tiền mặt đều: đọc thêm lợi suất cổ tức.
 
 ## Rủi ro đặc thù
 
-- **Rủi ro cửa sổ đóng**: giá hồi sau cú sốc cung và biên co về trong 1–2 quý.
-- **Rủi ro chính sách Trung Quốc đảo chiều**: nới xuất khẩu làm giá toàn cầu giảm,
-  tác động đến cả công ty bán nội địa qua khung giá.
-- **Rủi ro tồn kho giá cao**: mua đầu vào trước khi giá lên rồi giá giảm → biên bị
-  nén hai chiều.
-- **Rủi ro cầu nội địa**: nhu cầu nhạy giá nông sản; nông sản yếu thì phân bón yếu
-  theo.
-- **Rủi ro khung giá trong nước**: công ty bán nội địa không hưởng trọn cửa sổ
-  quốc tế.
+- Cửa sổ giá đóng nhanh khi cung Trung Quốc quay lại hoặc giá khí châu Âu giảm.
+- Giá khí đầu vào tăng theo giá dầu trong khi giá ure giảm.
+- Nhà máy dừng bảo dưỡng: sản lượng hụt một quý.
+- Cầu trong nước yếu khi giá nông sản thấp.
+- Thay đổi chính sách thuế GTGT đổi giá vốn và giá bán.
 
 ## Ranh giới
 
-- Không xác định pha thị trường, không suy "hoá chất sắp dẫn sóng" → `dinh-vi-chu-ky-vn`.
-- Không chọn mã khuyến nghị mua/bán → `phan-tich-chuyen-sau-1-ma`.
-- Không suy chính sách xuất khẩu Trung Quốc từ trí nhớ: tra thông báo/văn bản hiện
-  hành, ghi nguồn và ngày.
-- Không dùng giá quốc tế thay giá bán thực tế của công ty — giá bán trong công bố
-  công ty mới là giá áp dụng.
+- Không xác định pha thị trường, không nói "phân bón sắp dẫn sóng" → `dinh-vi-chu-ky-vn`.
+- Không khuyến nghị mua/bán.
+- Không nêu chính sách Trung Quốc, thuế suất GTGT hay giá khí hợp đồng từ trí nhớ: tra,
+  ghi nguồn + ngày (luật này chỉ nằm ở đây).
+- Giá thế giới không thay giá bán thực của công ty; giá bán thực từ doanh thu / sản
+  lượng hoặc công bố công ty.
 
 ## Giới hạn
 
-- Giá năng lượng từ `yf_commodities` là tham chiếu, không phải giá khí hợp đồng dài
-  hạn của từng nhà máy.
-- Tỷ lệ xuất khẩu là công bố không định kỳ: khi thiếu, hạ độ tin cậy nhánh Q1.
-- Chu kỳ giá ngắn: mọi kết luận phải ghi ngày tra giá.
+- Giá tham chiếu tra được không phải giá hợp đồng của từng nhà máy.
+- Tỷ lệ xuất khẩu và sản lượng là công bố không định kỳ — ghi rõ khi thiếu.
 
 ## Ví dụ
 
-**Ví dụ 1:**
 Hỏi: Giá ure tăng mạnh thì công ty phân bón hưởng không?
-Đạt khi: có giá quốc tế + ngày tra, chính sách Trung Quốc, tỷ lệ xuất khẩu, biên 2
-quý liền, và verdict theo cây Q1→Q5.
+Đạt khi: có giá ure kèm loại giá và ngày, tỷ lệ xuất khẩu của mã, chính sách Trung Quốc,
+biên 2 quý, verdict theo cây kèm nhánh đã dừng.
 
 ## Trực quan hóa
 
-Chỉ vẽ khi người dùng muốn xem hình; tối đa 1 biểu đồ. Hợp với dữ liệu skill này:
-multiline giá phân bón với biên lãi gộp, bar biên theo nhóm, waterfall giá bán
-trừ chi phí đầu vào. Vẽ bằng `chart_render` với `from_call` (mã `[ref …]`) từ kết
-quả tool đã có; cần chọn loại hình thì nạp `ve-bieu-do`.
+Chỉ vẽ khi người dùng muốn xem hình; tối đa 1 biểu đồ: đường biên lãi gộp theo quý,
+cột doanh thu theo sản phẩm, cột số ngày tồn kho. Vẽ bằng `chart_render` với
+`from_call` (mã `[ref …]`) từ kết quả `financial_detail` đã có; cần chọn loại hình thì
+nạp `ve-bieu-do`.
 
 ## File tham chiếu
 
 | File | Dùng khi |
 |---|---|
-| `references/kpi.md` | Cần cách đọc cửa sổ giá, phân biệt nội địa – quốc tế, và cách đọc tồn kho giá gốc |
+| `references/kpi.md` | Cần nhận diện nhóm sản phẩm, dòng BCTC theo statement, công thức số ngày tồn kho |

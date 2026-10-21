@@ -2,6 +2,7 @@ import { afterEach, expect, test } from "bun:test"
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
+import { BUDGETS, estimateTokens } from "../src/core/prompt/budget"
 import { availableSkills, fold, matchSoft, matchTriggers, renderCatalog, suggestSkills } from "../src/core/skills/catalog"
 import { matchToolPattern } from "../src/core/tools/patterns"
 import { loadSkills, readSkillFile, skillRoots } from "../src/core/skills/loader"
@@ -196,6 +197,26 @@ test("trigger keywords match without Vietnamese diacritics, on word boundaries",
   expect(matchTriggers("animation", skills)).toEqual([]) // "nim" inside a word does not count
 })
 
+test("an exclude phrase rules a skill out of both routing layers for that message", () => {
+  const sector = make({
+    name: "ngan-hang",
+    description: "Ngành ngân hàng: hạn mức tín dụng, nợ nhóm 2, biên lãi thuần của nhóm ngân hàng",
+    triggers: { keywords: ["nhóm ngân hàng"], exclude: ["dẫn sóng", "pha nào"] },
+  })
+  const cycle = make({ name: "chu-ky", description: "Pha thị trường và nhóm nào dẫn sóng tiếp", triggers: { keywords: ["dẫn sóng"] } })
+  const other = make({ name: "khac", description: "Tin tức thị trường hôm nay" })
+  const skills = [sector, cycle, other]
+  expect(suggestSkills("Nhóm ngân hàng đang thế nào?", skills).map((s) => s.name)).toEqual(["ngan-hang"])
+  expect(suggestSkills("Nhóm ngân hàng có dẫn sóng tiếp không?", skills).map((s) => s.name)).toEqual(["chu-ky"])
+  // the soft layer drops it too: without the exclude, these shared words would pick it
+  expect(matchSoft("biên lãi thuần nhóm ngân hàng hạn mức tín dụng", skills)?.name).toBe("ngan-hang")
+  expect(matchSoft("biên lãi thuần nhóm ngân hàng hạn mức tín dụng, đang ở pha nào", skills)?.name).not.toBe("ngan-hang")
+  expect(parseSkill("---\nname: x\ndescription: y\ntriggers:\n  exclude: [dẫn sóng]\n---\nThân").meta.triggers).toEqual({
+    keywords: [],
+    exclude: ["dẫn sóng"],
+  })
+})
+
 test("soft routing names one bundled skill only when it clearly beats the others", async () => {
   const { skills } = await loadSkills(skillRoots(await root()).filter((r) => r.source === "bundled"))
   const soft = (q: string) => matchSoft(q, skills)?.name
@@ -244,6 +265,17 @@ test("ve-bieu-do được gợi ý khi hỏi vẽ chart + có trong catalog", as
   const catalog = renderCatalog(skills, 10_000)!
   expect(catalog.text).toContain("- ve-bieu-do:")
   expect(catalog.text).toContain("trực quan hóa")
+})
+
+test("the bundled catalog fits tier A with headroom and keeps real descriptions on tier B", async () => {
+  const { skills } = await loadSkills(skillRoots(await root()).filter((r) => r.source === "bundled"))
+  const full = renderCatalog(skills, 1e9)!
+  // chars / 4 undercounts Vietnamese, so tier A keeps 20% spare (src/core/prompt/budget.ts)
+  expect(estimateTokens(full.text)).toBeLessThanOrEqual(BUDGETS.skill_catalog!.A! * 0.8)
+  expect(renderCatalog(skills, BUDGETS.skill_catalog!.A!)!.truncated).toBe(false)
+  // tier B shortens every entry evenly; below ~75 characters the "Dùng khi" part is gone
+  const lines = renderCatalog(skills, BUDGETS.skill_catalog!.B!)!.text.split("\n").slice(1)
+  for (const line of lines) expect(line.length, line).toBeGreaterThanOrEqual(75)
 })
 
 test("cây quyết định choosing-a-form bao phủ đủ kinds + có lưới an toàn", async () => {

@@ -1,50 +1,47 @@
-# Chỉ báo ngành bảo hiểm — tách nghiệp vụ và tài chính
+# Chỉ báo ngành bảo hiểm — nghiệp vụ và đầu tư
 
-> File này giữ **cách đọc**, không giữ con số kỳ nào. Mọi giá trị lấy từ
-> `financial_detail` / `news_market` gần nhất và ghi kỳ kèm theo. Luật về hai nguồn
-> lãi chỉ nằm ở §Trụ cột driver của SKILL.md — không lặp lại ở đây.
+> Tên dòng chính xác tra bằng `vs_financial_norms(btype=5)`; tên dưới đây theo mẫu BCTC
+> doanh nghiệp bảo hiểm và có thể khác chữ. File này giữ **cách đọc**, không giữ số kỳ
+> nào. Luật "không gọi là hồi phục khi chỉ có lãi đầu tư tăng" nằm ở mục "Ranh giới" của
+> SKILL.md.
 
-## 1. Tách hai nguồn lãi
+## 1. Phí và tái bảo hiểm
 
-| Nguồn | Nhạy | Cách đọc |
+| Chỉ báo | Statement | Cách đọc |
 |---|---|---|
-| Nghiệp vụ bảo hiểm (phí thuần trừ bồi thường, chi phí hoạt động) | Chất lượng bán hàng, chất lượng sổ | Cải thiện của nguồn này mới là hồi phục thật |
-| Thu nhập tài chính (đầu tư quỹ phí) | Lãi suất, biến động thị trường | Tăng trong giai đoạn lãi cao ≠ năng lực; nhạy lãi suất đảo chiều |
+| Doanh thu phí bảo hiểm (phí gốc + nhận tái) | KQKD | Tăng trưởng theo nghiệp vụ (TM) cho biết mảng nào kéo |
+| Phí nhượng tái bảo hiểm | KQKD | Chia cho doanh thu phí = tỷ lệ nhượng tái; cao = giữ lại ít rủi ro và ít phí |
+| Doanh thu phí bảo hiểm thuần | KQKD | Mẫu số của các tỷ lệ dưới |
+| Phí theo nghiệp vụ | TM | Xe, sức khoẻ, tài sản – kỹ thuật, hàng hải: mỗi nghiệp vụ một mức bồi thường |
 
-Công thức tự tính (ghi rõ): tỷ trọng thu nhập nghiệp vụ = nghiệp vụ / tổng thu nhập
-trước thu nhập tài chính. Tỷ trọng thấp = lãi đang dựa lãi suất.
+## 2. Nghiệp vụ phi nhân thọ (tự tính, ghi rõ)
 
-## 2. Nhóm phí mới và chất lượng sổ
-
-| Chỉ báo | Đọc từ | Cách đọc |
+| Chỉ báo | Công thức | Cách đọc |
 |---|---|---|
-| Doanh thu phí bảo hiểm | `financial_detail` | Đọc theo mảng nhân thọ/phi nhân thọ; tổng số che sự teo tập trung một mảng |
-| Phí bảo hiểm mới | Công bố công ty/hiệp hội (`news_market`) | Chỉ báo tăng trưởng tương lai; đọc theo năm để biết vùng đáy |
-| Tỷ lệ duy trì hợp đồng | Công bố công ty | Thấp = sổ đang teo dù phí mới đẹp |
-| Dự phòng nghiệp vụ | `financial_detail` | Tăng bền vững = sổ đang tích lũy; tăng đột ngột bất thường cần lý do |
-| Chi phí bồi thường và chi phí quản lý | `financial_detail` | Biên nghiệp vụ; tăng nhanh hơn phí = biên xấu đi |
+| Tỷ lệ bồi thường | Chi bồi thường thuần (sau thu bồi thường nhượng tái) / phí thuần | Tăng = tổn thất nặng hơn hoặc hạ phí cạnh tranh |
+| Tỷ lệ chi phí | Chi phí kinh doanh bảo hiểm (hoa hồng, quản lý) / phí thuần | Tăng = chi phí khai thác đắt hơn |
+| Combined ratio | Tỷ lệ bồi thường + tỷ lệ chi phí | Dưới 100% = nghiệp vụ có lãi; đọc 4 quý vì tổn thất lớn dồn vào một kỳ |
+| Trích lập dự phòng nghiệp vụ | KQKD (tăng/giảm dự phòng), CDKT | Trích ít đi trong khi phí tăng = lãi kỳ này có thể đẹp hơn thực tế |
 
-## 3. Nhóm kênh phân phối
+## 3. Nhân thọ
 
-| Chỉ báo | Đọc từ | Cách đọc |
+| Chỉ báo | Nguồn | Cách đọc |
 |---|---|---|
-| Tỷ trọng kênh | `news_market` | Kênh qua ngân hàng bị siết sau khủng hoảng niềm tin; đại lý hồi phục chậm nhưng bền |
-| Chi phí hoa hồng/thuê | `financial_detail` | Co giãn theo kênh bán đang mở rộng |
-| Chính sách kênh | `news_market` | Quy định bán hàng ảnh hưởng hiệu quả kênh |
+| Phí khai thác mới | Công bố công ty, hiệp hội (`web_search`) | Chỉ báo tăng trưởng tương lai; đọc theo năm |
+| Tỷ lệ duy trì hợp đồng | Công bố công ty | Thấp = quỹ phí co dù phí mới đẹp |
+| Cơ cấu kênh (đại lý, ngân hàng) | Công bố công ty | Kênh ngân hàng nhạy quy định bán hàng |
 
-## 4. Nhóm đối chiếu
+## 4. Đầu tư
 
-| Nguồn | Đọc gì | Cách dùng |
+| Chỉ báo | Statement | Cách đọc |
 |---|---|---|
-| `news_market` | Phí mới ngành, chính sách kênh, room nước ngoài | Số ngành; ghi rõ nguồn + ngày |
-| `planned_targets` | Kế hoạch doanh thu/lãi/phí mới | Neo kỳ vọng |
-| `peer_compare` | Phí mới, tỷ trọng nghiệp vụ, biên | So trong cùng phân khúc nhân thọ/phi nhân thọ |
-| `vs_financial_norms(btype=5)` | Dòng BCTT loại bảo hiểm | Đọc đúng dòng, không đoán dòng CTCP chung |
+| Doanh thu hoạt động tài chính | KQKD | Tách lãi tiền gửi, trái phiếu (đều) khỏi lãi bán cổ phiếu (một lần) nếu TM cho phép |
+| Danh mục đầu tư (tiền gửi, trái phiếu, cổ phiếu) | CDKT + TM | Tiền gửi nhiều = nhạy lãi suất tiền gửi |
+| Lợi suất đầu tư (tự tính) | KQKD + CDKT | Lãi đầu tư năm hoá / danh mục bình quân; ghi rõ công thức |
+| Tỷ trọng lợi nhuận từ đầu tư (tự tính) | KQKD | Lãi đầu tư / lợi nhuận trước thuế; cao = lãi dựa lãi suất |
 
 ## 5. Bẫy đọc thường gặp
 
-- Lãi tăng mạnh trong năm lãi suất cao: kiểm tra tỷ trọng thu nhập tài chính trước
-  khi kết luận hồi phục.
-- Phí mới tạm thời nhờ một hợp đồng tập thể/ngân hàng lớn: đánh dấu một lần.
-- Tổng phí hợp nhất tăng nhưng phí mới teo: quỹ cũ đang thu, nguồn mới đang yếu —
-  hồi phục chưa thật.
+- Lãi tăng mạnh năm lãi suất cao: kiểm tra tỷ trọng lãi đầu tư trước khi nói hồi phục.
+- Một năm tổn thất lớn: combined ratio vượt 100% một kỳ không phải xu hướng.
+- Tổng phí nhân thọ tăng nhưng phí khai thác mới giảm: quỹ cũ đang thu, nguồn mới yếu.

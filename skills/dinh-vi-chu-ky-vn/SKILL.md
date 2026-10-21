@@ -3,7 +3,7 @@ name: dinh-vi-chu-ky-vn
 description: "Định vị pha thị trường VN (phục hồi, giữa sóng, cuối sóng, suy yếu) từ sức mạnh tương đối các nhóm ngành (kể cả Vin), mùa vụ và lãi suất SBV, rồi gợi ý 1–2 nhóm có thể dẫn dắt tiếp. Dùng khi hỏi thị trường đang ở giai đoạn nào, sóng ngành tiếp theo."
 activation: auto
 triggers:
-  keywords: [chu kỳ thị trường, giai đoạn thị trường, pha thị trường, luân chuyển ngành, rotation, sóng ngành, đỉnh chu kỳ, giai đoạn phân phối, đầu phục hồi, bank dẫn, chứng dẫn, dòng tiền ngành, cuối sóng, giữa sóng, mùa vụ ngành, mảng vin, họ vin]
+  keywords: [chu kỳ thị trường, giai đoạn thị trường, pha thị trường, luân chuyển ngành, rotation, sóng ngành, đỉnh chu kỳ, giai đoạn phân phối, đầu phục hồi, bank dẫn, chứng dẫn, dòng tiền ngành, cuối sóng, giữa sóng, mùa vụ ngành, mảng vin, họ vin, dẫn sóng, pha nào, chu kỳ ngành, giai đoạn nào của chu kỳ]
 requires_tools: [cycle_stats_check, vn_index_ohlcv]
 uses_tools: [cycle_stats_check, cycle_seasonality, cycle_chains, cycle_turning, cycle_tet, cycle_yearly, cycle_trough_events, vn_index_ohlcv, seasonality, sbv_rates, breadth_scan, market_movers, market_candles_batch, event_study, sector_performance]
 version: 1.8.0
@@ -13,9 +13,9 @@ version: 1.8.0
 
 Skill suy luận pha hiện tại từ 4 trụ cột live (RS mảng, timing đỉnh, mùa vụ tháng, tiền tệ) + bảng thống kê dài hạn trong PG (`cycle_*`, version trong `cycle_meta`). Kết luận luôn kèm hit-rate và provenance, không nói chắc chắn.
 
-**Phạm vi skill này là PHA và LUÂN CHUYỂN ngành.** Phân tích ngành theo driver/KPI/định
-giá của ngành đó thuộc 13 skill ngành — bảng dưới. Hai bên không dò quyền của nhau:
-skill ngành không xác định pha, skill này không đọc KPI ngành.
+**Phạm vi skill này là PHA và LUÂN CHUYỂN ngành.** Phân tích một ngành bằng driver, KPI
+và định giá riêng của ngành đó thuộc 13 skill ngành (bảng dưới). Hai bên không lấn phạm
+vi của nhau: skill ngành không xác định pha, skill này không đọc KPI ngành.
 
 ## Khi nào dùng
 
@@ -27,28 +27,26 @@ skill ngành không xác định pha, skill này không đọc KPI ngành.
   - Chu kỳ đa tài sản VN (vàng/USD/trái phiếu/xăng) → dùng `chu-ky-tai-san-vn`.
   - Chỉ muốn XEM biểu đồ RS/heatmap → dùng `ve-bieu-do`.
 
-## Bản đồ skill ngành (13 skill — định tuyến khi user hỏi đúng ngành)
+## Bản đồ skill ngành
 
-Mỗi skill ngành đọc ngành đó bằng driver + KPI riêng và **không** xác định pha.
-Hỏi "ngành X đang thế nào" / "BCTC ngành X đọc gì" / "driver của X là gì" → dùng
-skill ngành bên dưới. Hỏi "thị trường đang ở pha nào / mảng nào dẫn tiếp" → ở lại
-skill này.
+Hỏi "ngành X đang thế nào", "BCTC ngành X đọc gì", "X chịu gì từ …" → skill ngành dưới
+đây. Hỏi "pha nào", "ngành nào dẫn sóng", "chu kỳ ngành X đang ở đâu" → ở lại skill này.
 
-| Skill ngành | Dùng khi hỏi về |
+| Skill ngành | Đọc gì |
 |---|---|
-| `ngan-hang-vn` | hạn mức tín dụng, spread lãi thuần, nợ xấu/nhóm 2, chuẩn mực thanh khoản ngân hàng |
-| `chung-khoan-vn` | dư nợ margin, mức đòn bẩy công ty chứng khoán, cơ cấu doanh thu 4 mảng |
-| `bat-dong-san-vn` | tín dụng BĐS, kênh trái phiếu và tường đáo hạn, phân khúc nhà ở vs khu công nghiệp |
-| `thep-vn` | spread quặng–than cốc, cơ cấu thép cuộn nóng, phòng vệ thương mại thép |
-| `dau-khi-vn` | giá dầu, tuyến vận chuyển/tonne-mile, 4 vòng kinh doanh dầu khí |
-| `dien-luc-vn` | giá điện và cải cách giá bán lẻ, cơ cấu nguồn, thủy văn, quy hoạch phát triển lưới |
-| `van-tai-vn` | cước tuyến, công suất cảng, tỷ lệ khóa giá, cầu xuất khẩu |
-| `hoa-chat-vn` | chu kỳ giá ure/phân bón, chính sách xuất khẩu Trung Quốc, tỷ lệ xuất khẩu |
-| `tieu-dung-ban-le-vn` | bán lẻ thực (bỏ lạm phát), thu nhập hộ gia đình, độ thâm nhập hiện đại |
-| `cong-nghe-vn` | doanh thu ký/backlog, phân hoá nội địa–nước ngoài, thu nhập trên nhân viên |
-| `bao-hiem-vn` | phí bảo hiểm mới, nghiệp vụ so với thu nhập tài chính, cơ cấu kênh |
-| `vingroup-vn` | SOTP từng mảng, vòng xe điện đốt tiền mặt, giao dịch liên kết, tỷ trọng nhóm Vin trong chỉ số |
-| `xuat-nhap-khau-vn` | thuế hai lớp, cơ cấu ngành hàng, nhập khẩu máy móc làm chỉ báo dẫn, dòng vốn ngoại |
+| `ngan-hang-vn` | tín dụng và room, NIM, CASA, nợ xấu – nợ nhóm 2 – bao phủ, chuẩn mực an toàn |
+| `chung-khoan-vn` | dư nợ margin so trần, tự doanh, môi giới, vốn chủ |
+| `bat-dong-san-vn` | tín dụng, trái phiếu và nợ đến hạn, tiền khách trả trước, nhà ở vs khu công nghiệp |
+| `thep-vn` | spread giá thép − quặng/than cốc, độ trễ tồn kho, phòng vệ thương mại |
+| `dau-khi-vn` | khai thác, dịch vụ, vận chuyển, lọc dầu, phân phối — mỗi mảng một chu kỳ |
+| `dien-luc-vn` | giá bán lẻ và công nợ EVN, thuỷ văn, huy động theo loại nguồn |
+| `van-tai-vn` | cảng, tàu, logistics, hàng không: cước, sản lượng, hợp đồng cố định |
+| `hoa-chat-vn` | giá ure/phốt pho, chính sách xuất khẩu Trung Quốc, giá khí đầu vào |
+| `tieu-dung-ban-le-vn` | bán lẻ thực, thu nhập, tăng trưởng cùng cửa hàng, biên |
+| `cong-nghe-vn` | hợp đồng ký mới, thị trường khách hàng, doanh thu/nhân viên |
+| `bao-hiem-vn` | combined ratio (phi nhân thọ), phí khai thác mới (nhân thọ), lãi đầu tư |
+| `vingroup-vn` | từng mảng của tập đoàn, nợ đến hạn, xe điện, giao dịch liên kết |
+| `xuat-nhap-khau-vn` | chênh lệch thuế theo nước, nhóm hàng, nhập máy móc làm chỉ báo dẫn, FDI |
 
 ## Các bước
 

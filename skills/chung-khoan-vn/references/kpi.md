@@ -1,50 +1,44 @@
 # Chỉ báo ngành chứng khoán — dòng BCTC và cách đọc
 
-> Tra `vs_financial_norms(btype=2)` để lấy đúng tên dòng BCTC loại chứng khoán; file
-> này giữ **cách đọc**, không giữ con số kỳ nào. Mọi giá trị lấy từ `financial_detail`
-> gần nhất và ghi kỳ báo cáo kèm theo. Luật về trần ký quỹ và cách tính mức đòn
-> bẩy chỉ nằm ở §Trụ cột driver của SKILL.md — không lặp lại ở đây.
+> Tên dòng chính xác tra bằng `vs_financial_norms(btype=2)`; tên dưới đây theo mẫu BCTC
+> công ty chứng khoán và có thể khác chữ đôi chút. File này giữ **cách đọc**, không giữ
+> số kỳ nào. Luật về trần cho vay nằm ở mục "Ranh giới" của SKILL.md.
 
-## 1. Nhóm đòn bẩn
+## 1. Cho vay ký quỹ và vốn
 
-| Chỉ báo | Đọc từ | Cách đọc |
+| Chỉ báo | Statement | Cách đọc |
 |---|---|---|
-| Dư nợ cho vay ký quỹ | `financial_detail` | Xu hướng 4–8 quý. Tăng đều = nhận thức rủi ro đang mở; giảm đột ngột = thị trường vừa xả hoặc CTCK siết gọi |
-| Vốn chủ sở hữu | `financial_detail` | Dùng làm mẫu số cho mức đòn bẩy. Vốn giảm vì cổ tức bằng cổ phiếu làm mức đòn bẩy tăng ảo — ghi rõ |
-| Mức đòn bẩy | Tự tính: dư nợ / vốn chủ (ghi rõ tự tính) | So trần quy định hiện hành. Đây là chỉ báo **chỗ tăng trưởng còn lại**, không phải chỉ báo chất lượng |
-| Các khoản phải thu | `financial_detail` | Phải thu từ giao dịch margin tăng nhanh hơn dư nợ = công nợ đang ùn lại |
+| Các khoản cho vay (ký quỹ + ứng trước tiền bán) | CDKT | Xu hướng 4–8 quý; tách ứng trước nếu thuyết minh cho phép |
+| Dự phòng suy giảm giá trị các khoản cho vay | CDKT / TM | Tăng nhanh = có khoản vay ký quỹ khó thu hồi |
+| Vốn chủ sở hữu | CDKT | Mẫu số của dư nợ / vốn chủ; tăng vốn mở thêm chỗ cho vay |
+| Dư nợ cho vay / vốn chủ (tự tính) | CDKT | So với trần theo văn bản hiện hành; là chỉ báo **chỗ còn lại**, không phải chất lượng |
+| Lãi từ các khoản cho vay và phải thu | KQKD | Chia cho dư nợ bình quân = lãi suất cho vay bình quân (ước lượng) |
+| Chi phí lãi vay | KQKD | So với lãi cho vay: chênh hẹp lại là biên mảng ký quỹ nén |
+| Vay ngắn hạn, trái phiếu phát hành | CDKT | Nguồn vốn cho vay ký quỹ; tăng nhanh hơn vốn chủ = đòn bẩy tài chính tăng |
 
-## 2. Nhóm doanh thu
+## 2. Tự doanh
 
-| Chỉ báo | Đọc từ | Cách đọc |
+| Chỉ báo | Statement | Cách đọc |
 |---|---|---|
-| Doanh thu môi giới | `financial_detail` | Phí đang bị nén cấu trúc bởi cạnh tranh phí 0. Doanh thu môi giới giảm **không** đồng nghĩa ngành xấu |
-| Doanh thu cho vay ký quỹ | `financial_detail` | Đọc kèm dư nợ và lãi suất trung bình: doanh thu tăng nhưng dư nợ giảm = lãi suất tăng, không phải khối lượng |
-| Doanh thu đầu tư | `financial_detail` | Mảng biến động nhất. Đọc 4 quý và tách phần thực hiện lãi định kỳ |
-| Doanh thu tư vấn | `financial_detail` | Mảng nhỏ nhưng ổn định nhất; tăng theo pipeline IPO/ECM |
-| Tỷ trọng 4 mảng | Tự tính (ghi rõ) | Cơ cấu quyết định nhóm nào chịu thị trường giảm. Đọc 4 quý liền mới xếp nhóm |
+| Lãi/lỗ từ tài sản tài chính FVTPL | KQKD | Biến động nhất; tách phần cổ tức, lãi trái phiếu (đều) khỏi phần chênh lệch giá (không đều) nếu có |
+| Tài sản tài chính FVTPL / AFS / HTM | CDKT | Quy mô và cơ cấu danh mục; cổ phiếu nhiều = nhạy thị trường, trái phiếu/tiền gửi nhiều = nhạy lãi suất và rủi ro tín dụng |
 
-## 3. Nhóm vốn và hiệu quả
+## 3. Phí
 
-| Chỉ báo | Đọc từ | Cách đọc |
+| Chỉ báo | Statement | Cách đọc |
 |---|---|---|
-| ROE | `financial_ratios` | Dùng làm mẫu số cho P/B. ROE từ tự doanh lên bất thường thì giảm trọng số kỳ đó |
-| Chi phí hoạt động | `financial_detail` | So với doanh thu: chi phí tăng nhanh hơn doanh thu là ép biên dài hạn |
-| Trích lãi | `financial_detail` | So với ngưỡng quy định hiện hành cho mảng ký quỹ, không so với trí nhớ |
+| Doanh thu môi giới chứng khoán | KQKD | Bám thanh khoản; giảm không đồng nghĩa ngành xấu khi các nguồn khác bù |
+| Doanh thu bảo lãnh, đại lý phát hành; tư vấn | KQKD | Theo thương vụ, không đều; một thương vụ lớn = một lần |
+| Chi phí hoạt động | KQKD | Tăng nhanh hơn doanh thu phí = biên mảng phí đang hẹp lại |
 
-## 4. Nhóm đối chiếu
+## 4. Tỷ trọng nguồn lợi nhuận (tự tính)
 
-| Nguồn | Đọc gì | Khi nào |
-|---|---|---|
-| `news_market` | Dư nợ margin toàn ngành, lãi margin trung bình, chi phí vốn CTCK | Mỗi lần cần số ngành; ghi rõ số ngành lấy từ công bố nào |
-| `market_overview` | Giá bluechip, movers, độ rộng | Cần bối cảnh nhịp phiên trước khi đọc kết quả CTCK |
-| `breadth_scan` | Độ rộng tăng/giảm | Kiểm tra câu chuyện thanh khoản có lan tỏa hay chỉ vài mã lớn |
-| `planned_targets` | Kế hoạch năm (doanh thu, lợi nhuận, vốn) | Neo kỳ vọng; đặc biệt cần khi xét vấn đề huy động vốn mở rộng |
+Ký quỹ ≈ lãi cho vay − chi phí lãi vay phân bổ; tự doanh ≈ lãi/lỗ tài sản tài chính;
+phí ≈ doanh thu phí − chi phí môi giới. Ghi rõ là ước lượng, đọc 4 quý liền mới
+xếp CTCK vào nhóm "dựa ký quỹ" hay "dựa tự doanh".
 
 ## 5. Bẫy đọc thường gặp
 
-- Doanh thu môi giới giảm trong khi ngành vẫn lãi: đừng kết luận "ngành xấu" —
-  cạnh tranh phí là cấu trúc, không phải chu kỳ.
-- Dư nợ ký quỹ tăng cùng lúc với thị trường chỉ là hệ quả, không kéo theo lãi
-  CTCK bằng vốn chủ mới.
-- Quý lãi bất thường từ tự doanh: xử lý như một lần, không nội suy thành năng lực.
+- Một quý lãi đột biến từ tự doanh: xử lý như một lần.
+- Dư nợ toàn ngành tăng cùng thị trường là hệ quả của thanh khoản, chưa chắc thành
+  lãi cho từng CTCK nếu chi phí vốn tăng nhanh hơn.

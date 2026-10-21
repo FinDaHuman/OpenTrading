@@ -25,11 +25,10 @@ export const BUDGETS: Record<string, Record<Tier, number | undefined>> = {
   hook_context: { A: 2_500, B: 2_500, C: 1_000 },
   skills_always: { A: 1_800, B: 1_200, C: 600 },
   skills_sticky: { A: 2_500, B: 1_600, C: 800 },
-  // 2026-10-21: 41 auto skills (bộ 13 skill ngành VN) → catalog đầy đủ 2.010 token; hạng A
-  // còn 1.400 bị rút ngắn toàn bộ mô tả nên nâng lên 2.200 (~10% headroom). Hạng B/C đã
-  // phải cắt từ trước (bản 28 skill = 1.298 token > 700) nên giữ nguyên — nếu cần đổi,
-  // đo lại catalog trước rồi sửa cùng lúc với bộ test định tuyến.
-  skill_catalog: { A: 2_200, B: 700, C: 280 },
+  // 2026-10-21, 41 auto skills (13 sector skills added): the full catalog is ~1,900 tokens,
+  // so A keeps 20% headroom and B keeps ~80 characters per entry, as 700 gave 28 skills.
+  // C stays names-only. test/skills.test.ts checks both; measure again when adding skills.
+  skill_catalog: { A: 2_400, B: 1_050, C: 280 },
   deferred_tools: { A: 2_000, B: 1_200, C: 600 },
   mcp_instructions: { A: 2_000, B: 1_200, C: 500 },
   tools: { A: undefined, B: undefined, C: undefined },

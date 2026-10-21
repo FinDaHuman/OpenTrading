@@ -1,54 +1,43 @@
-# Chỉ báo ngành dầu khí — tách vòng kinh doanh và cách đọc
+# Chỉ báo ngành dầu khí — đọc theo mảng
 
-> File này giữ **bốn vòng kinh doanh khác nhau** và cách đọc từng vòng, không giữ
-> con số kỳ nào. Mọi giá trị lấy từ `financial_detail` / `yf_commodities` /
-> `news_market` gần nhất và ghi kỳ kèm theo. Luật về không đặt ngành vào chuỗi luân
-> chuyển chỉ nằm ở §Ranh giới của SKILL.md — không lặp lại ở đây.
+> File này giữ **cách đọc**, không giữ số kỳ nào. `financial_detail` nhận một
+> `statement` mỗi lời gọi. Luật "không xếp dầu khí vào chuỗi luân chuyển" nằm ở mục
+> "Ranh giới" của SKILL.md.
 
-## 1. Tách vòng kinh doanh
+## 1. Nhận diện mảng
 
-| Vòng | Đặc điểm nhận dạng | Chu kỳ bám | So với ai |
+| Mảng | Nhận diện | Bám theo | Chỉ báo riêng |
 |---|---|---|---|
-| Thượng nguồn (khai thác) | Sản lượng khai thác, trữ lượng, chi phí thăm dò | Giá dầu + trữ lượng | Cùng vòng thượng nguồn |
-| Lọc hoá dầu | Doanh thu bán sản phẩm lọc − giá dầu thô đầu vào | Chênh lệch tinh chế | Cùng vòng lọc dầu |
-| Vận chuyển | Cước tàu, hợp đồng thuê | Cước tàu + độ dài đường đi | Cùng vòng vận chuyển |
-| Dịch vụ kỹ thuật | Doanh thu hợp đồng, backlog | Chi tiêu đầu tư của tập đoàn | Cùng vòng dịch vụ |
+| Khai thác | Doanh thu bán dầu thô, khí | Giá dầu, sản lượng, trữ lượng | Sản lượng, chi phí khai thác/thùng (nếu công bố) |
+| Dịch vụ kỹ thuật | Doanh thu khoan, xây lắp, cho thuê giàn | Chi tiêu đầu tư của chủ mỏ | Giá trị hợp đồng mới, hiệu suất sử dụng giàn, giá thuê ngày |
+| Vận chuyển | Doanh thu cước tàu | Cước, độ dài tuyến | Tỷ lệ hợp đồng dài hạn, đội tàu |
+| Lọc hoá dầu | Doanh thu sản phẩm lọc | Chênh lệch lọc dầu | Biên lãi gộp, lãi/lỗ tồn kho |
+| Phân phối khí, xăng dầu | Doanh thu bán khí, LPG, xăng dầu | Sản lượng, giá điều hành | Sản lượng tiêu thụ, biên phân phối |
 
-Bước bắt buộc trước khi so sánh: xác định vòng nào nuôi lãi của mã bằng mảng trong
-`financial_detail` + bảng mảng trong `vn_company`. Không rõ → xử lý như nhiều vòng
-và đọc cả các nhánh, không chọn một vòng đại diện.
+Doanh thu theo mảng: `financial_detail(statement=TM)`. Không tách được thì nói rõ
+đang đọc số hợp nhất.
 
-## 2. Nhóm biên theo vòng
+## 2. Dòng BCTC
 
-| Chỉ báo | Đọc từ | Cách đọc |
+| Chỉ báo | Statement | Cách đọc |
 |---|---|---|
-| Doanh thu hợp nhất | `financial_detail` | Đọc kèm cơ cấu mảng: doanh thu tăng nhưng không nói được vòng nào kéo là vô nghĩa |
-| Biên lãi gộp theo mảng (nếu công bố) | `financial_detail` | Chỉ báo cốt lõi. Biên hợp nhất che sự dịch chuyển giữa các vòng |
-| Chi phí thăm dò | `financial_detail` | Xu hướng 4 quý: chi tiêu tăng báo hiệu sản lượng tương lai; chi tiêu cắt báo hiệu suy giảm về sau |
-| Tỷ lệ chi phí | `financial_detail` (tự tính, ghi rõ) | Tỷ lệ thấp khi giá dầu cao không phải năng lực — đo lại ở vùng giá thấp |
+| Doanh thu, giá vốn, biên lãi gộp | KQKD | Đọc theo mảng; biên hợp nhất che dịch chuyển giữa các mảng |
+| Hàng tồn kho | CDKT | Lọc dầu, phân phối: tồn kho lớn khi giá biến động mạnh = lãi/lỗ tồn kho một lần |
+| Phải thu khách hàng | CDKT | Dịch vụ: phải thu chủ mỏ tăng nhanh hơn doanh thu = thanh toán chậm |
+| Chi phí thăm dò, tài sản dầu khí | TM | Khai thác: đầu tư thăm dò giảm kéo dài = sản lượng tương lai giảm |
+| Khấu hao | LCTT | Dùng tính EBITDA |
 
-## 3. Nhóm khối lượng và trữ lượng
+## 3. Đầu vào thị trường
 
-| Chỉ báo | Đọc từ | Cách đọc |
+| Chỉ báo | Nguồn | Cách dùng |
 |---|---|---|
-| Sản lượng kỳ | `news_market` (công bố ngành/công ty) | Bù đắp trữ lượng chỉ có nghĩa khi đọc cạnh sản lượng |
-| Trữ lượng bù đắp | `news_market` | Thấp hơn sản lượng liên tiếp = sản lượng đang tiêu từ trữ lượng cũ |
-| Thứ tự dự án / khởi công | `company_events` · `news_market` | Quyết định sản lượng 2–5 năm tới; thứ tự lùi làm dòng thu trễ |
-| Hợp đồng dài hạn | `news_market` | Co giãn thu nhập qua chu kỳ; tỷ trọng cao giảm nhạy giá ngắn hạn |
+| Brent, WTI | `yf_commodities` | Mốc tham chiếu; không thay giá bán thực |
+| Khí tự nhiên tham chiếu (Henry Hub) | `yf_commodities` | Chỉ là bối cảnh; giá khí trong nước theo hợp đồng riêng |
+| Chênh lệch lọc dầu, cước tàu, giá thuê giàn | `web_search` | Ghi nguồn, ngày và loại chỉ số |
 
-## 4. Nhóm giá và tuyến
+## 4. Bẫy đọc thường gặp
 
-| Nguồn | Đọc gì | Cách dùng |
-|---|---|---|
-| `yf_commodities` | Giá dầu theo chu kỳ tra được | Làm mốc đối chiếu, **không** thay giá thực hiện hợp đồng |
-| `news_market` | Tình trạng tuyến vận chuyển, cước tàu dầu, diễn biến địa chính trị | Driver của vòng vận chuyển; ghi rõ ngày nguồn |
-| `planned_targets` | Kế hoạch năm của công ty | Neo kỳ vọng sản lượng/doanh thu |
-| `peer_compare` | Chỉ báo trong cùng vòng | Cấm so vòng khác; ghi rõ vòng đang so |
-
-## 5. Bẫy đọc thường gặp
-
-- Tin giá dầu thì "cả ngành cùng hưởng": sai — lọc dầu có thể đi ngược, dịch vụ
-  đi sau 6–12 tháng.
-- Doanh thu tăng vì một giao dịch bất thường trong kỳ: đánh dấu là một lần, không
-  nội suy.
-- Sản lượng hiện tại đẹp: kiểm tra bù đắp trữ lượng trước khi kết luận bền vững.
+- "Giá dầu tăng thì cả ngành hưởng": dịch vụ đi sau 2–4 quý, phân phối có thể chỉ có
+  lãi tồn kho một lần.
+- Lãi tăng vọt một quý ở lọc dầu, phân phối: kiểm tra lãi tồn kho trước khi nội suy.
+- Sản lượng hiện tại đẹp: kiểm tra trữ lượng và mỏ mới trước khi nói bền vững.
