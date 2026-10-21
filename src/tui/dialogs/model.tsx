@@ -1,5 +1,5 @@
 import { useKeys } from "../ui/keys"
-import { createMemo, createSignal, Match, Switch } from "solid-js"
+import { createMemo, createSignal, Match, Show, Switch } from "solid-js"
 import { saveConfig } from "../../core/config"
 import { saveModelPrefs, sameModel, toggleFavorite, withRecent, type ModelRef } from "../../core/model-prefs"
 import type { ProviderId } from "../../core/providers"
@@ -63,14 +63,27 @@ export function ModelDialog() {
     say(on ? `Đã thêm ${ref.model} vào yêu thích` : `Đã bỏ ${ref.model} khỏi yêu thích`, "success", 2500)
   }
 
-  /** Manual entry is `provider/model-id`, or just `model-id` for the current provider. */
+  const [manualError, setManualError] = createSignal<string>()
+
+  /**
+   * Manual entry is `provider/model-id`, or just `model-id` for the current provider. Input
+   * with no model id keeps the dialog open with the reason; nothing is saved.
+   */
   function chooseManual(text: string) {
     const value = text.trim()
-    if (!value) return
+    if (!value) return setManualError("Nhập model id.")
     const slash = value.indexOf("/")
-    const head = slash > 0 ? value.slice(0, slash) : ""
-    if (head && state.connected.includes(head)) return choose({ provider: head as ProviderId, model: value.slice(slash + 1) })
-    if (state.provider) return choose({ provider: state.provider, model: value })
+    const head = slash > 0 ? value.slice(0, slash).trim() : ""
+    const connected = head && state.connected.includes(head)
+    const model = (connected ? value.slice(slash + 1) : value).trim()
+    // "groq/", "/" or "a/": no model id left to save.
+    if (!model || model.startsWith("/") || model.endsWith("/")) {
+      return setManualError(`Thiếu model id${connected ? ` sau "${head}/"` : ""}. Dạng provider/model-id.`)
+    }
+    setManualError(undefined)
+    if (connected) return choose({ provider: head as ProviderId, model })
+    if (state.provider) return choose({ provider: state.provider, model })
+    setManualError(`Provider "${head || value}" chưa kết nối. Gõ /connect trước, hoặc dùng ${state.connected.join(", ")}.`)
   }
 
   useKeys((evt) => {
@@ -96,6 +109,11 @@ export function ModelDialog() {
             focusedBackgroundColor={color.panel2}
             onSubmit={(v: unknown) => typeof v === "string" && chooseManual(v)}
           />
+          <Show when={manualError()}>
+            <text fg={color.giam} marginTop={1} wrapMode="word">
+              {manualError()}
+            </text>
+          </Show>
         </DialogFrame>
       </Match>
       <Match when={true}>

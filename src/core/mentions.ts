@@ -35,8 +35,9 @@ export interface Mention {
   to?: number
 }
 
-// `@` at the start or after a space (never inside an e-mail address), then `"a path"` or a word.
-const MENTION = /(^|\s)@(?:"([^"\n]+)"|([^\s"]+))/g
+// `@` at the start or after a space (never inside an e-mail address), then `"a path"` (its
+// line range may follow the closing quote: `@"báo cáo.md"#L3-4`) or a word.
+const MENTION = /(^|\s)@(?:"([^"\n]+)"(#L?\d+(?:-\d+)?)?|([^\s"]+))/g
 const RANGE = /#L?(\d+)(?:-(\d+))?$/
 const TRAILING = /[,.;:!?)\]}'»]+$/
 
@@ -57,10 +58,10 @@ export function parseMentions(text: string): Mention[][] {
   for (const m of text.matchAll(MENTION)) {
     const quoted = m[2]
     if (quoted) {
-      out.push([withRange(quoted)])
+      out.push([withRange(quoted + (m[3] ?? ""))])
       continue
     }
-    const raw = m[3]!
+    const raw = m[4]!
     const tries = [withRange(raw)]
     const bare = raw.replace(TRAILING, "")
     if (bare && bare !== raw) tries.push(withRange(bare))

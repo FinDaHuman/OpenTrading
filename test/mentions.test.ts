@@ -53,6 +53,14 @@ describe("parseMentions", () => {
     expect(mentionText("báo cáo.md")).toBe('@"báo cáo.md"')
     expect(mentionText("docs/a.md")).toBe("@docs/a.md")
   })
+
+  test("a quoted path keeps the line range written after its closing quote", () => {
+    expect(parseMentions('xem @"báo cáo.md"#L3-4')).toEqual([[{ path: "báo cáo.md", from: 3, to: 4 }]])
+    expect(parseMentions('@"thư mục/ghi chú.md"#7, rồi @"a b.md"')).toEqual([[{ path: "thư mục/ghi chú.md", from: 7, to: undefined }], [{ path: "a b.md" }]])
+    // A range the wrong way round reads from its start; text after the quote that is not a range is left alone.
+    expect(parseMentions('@"a b.md"#L9-2')).toEqual([[{ path: "a b.md", from: 9, to: undefined }]])
+    expect(parseMentions('@"a b.md"#abc')).toEqual([[{ path: "a b.md" }]])
+  })
 })
 
 describe("attachMentions", () => {
