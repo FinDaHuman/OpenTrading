@@ -6,6 +6,10 @@
  * it unchanged, and console output is switched to UTF-8 first.
  */
 
+import { mkdirSync } from "node:fs"
+import path from "node:path"
+import type { FileSink } from "bun"
+
 export interface ShellInfo {
   kind: "pwsh" | "powershell" | "bash" | "sh"
   path: string
@@ -60,6 +64,10 @@ export interface RunResult {
   timedOut: boolean
   aborted: boolean
   ms: number
+  /** Characters dropped from the middle of `output` (memory cap). */
+  dropped: number
+  /** The spill file, when output passed `spill.after`: every character as it came, unless `cut`. */
+  saved?: { file: string; chars: number; cut: boolean }
 }
 
 /** Kill the process and everything it started. */
@@ -97,8 +105,21 @@ export function childEnv(env: NodeJS.ProcessEnv): Record<string, string> {
 
 /** Collected output is capped in memory: past this, the middle is dropped. */
 const MEMORY_CAP = 4 * 1024 * 1024
+/** A runaway command must not fill the disk: the spill file stops here. */
+export const SPILL_CAP = 64 * 1024 * 1024
 
-export async function runShell(command: string, opts: { cwd: string; timeoutMs: number; signal: AbortSignal; shell?: ShellInfo; env?: Record<string, string> }): Promise<RunResult> {
+export async function runShell(
+  command: string,
+  opts: {
+    cwd: string
+    timeoutMs: number
+    signal: AbortSignal
+    shell?: ShellInfo
+    env?: Record<string, string>
+    /** Past `after` characters, stream everything (from the first byte) to `file`, before the memory cap cuts the middle. */
+    spill?: { file: string; after: number }
+  },
+): Promise<RunResult> {
   const shell = opts.shell ?? detectShell()
   const started = Date.now()
   const proc = Bun.spawn(shellArgs(shell, command), {
@@ -119,7 +140,39 @@ export async function runShell(command: string, opts: { cwd: string; timeoutMs: 
   let head = ""
   let tail = ""
   let dropped = 0
-  const append = (text: string) => {
+  // The spill file opens once output passes `spill.after` (well under MEMORY_CAP / 2, so
+  // nothing is dropped yet) with all that came so far, then takes every chunk.
+  let total = 0
+  let sink: FileSink | undefined
+  let spillTried = false
+  let saved: RunResult["saved"]
+  const spill = (text: string) => {
+    if (!saved || saved.cut || !sink) return
+    const room = SPILL_CAP - saved.chars
+    const part = text.length > room ? text.slice(0, room) : text
+    try {
+      sink.write(part)
+      saved.chars += part.length
+      if (part.length < text.length) saved.cut = true
+    } catch {
+      saved = undefined
+    }
+  }
+  const append = (raw: string) => {
+    let text = raw.replace(/\r\n/g, "\n")
+    total += text.length
+    if (opts.spill && !spillTried && total > opts.spill.after) {
+      spillTried = true
+      try {
+        mkdirSync(path.dirname(opts.spill.file), { recursive: true })
+        sink = Bun.file(opts.spill.file).writer()
+        saved = { file: opts.spill.file, chars: 0, cut: false }
+        spill(head + tail)
+      } catch {
+        sink = undefined
+      }
+    }
+    spill(text)
     if (head.length < MEMORY_CAP / 2) {
       const room = MEMORY_CAP / 2 - head.length
       head += text.slice(0, room)
@@ -157,7 +210,13 @@ export async function runShell(command: string, opts: { cwd: string; timeoutMs: 
   } finally {
     clearTimeout(timer)
     opts.signal.removeEventListener("abort", onAbort)
+    try {
+      await sink?.end()
+    } catch {
+      saved = undefined
+    }
   }
   const output = dropped > 0 ? `${head}\n[... đã bỏ ${dropped} ký tự ở giữa ...]\n${tail}` : head + tail
-  return { output: output.replace(/\r\n/g, "\n"), exitCode: proc.exitCode, timedOut, aborted, ms: Date.now() - started }
+  // Chunks are normalised as they come; a \r\n split across two chunks is joined here.
+  return { output: output.replace(/\r\n/g, "\n"), exitCode: proc.exitCode, timedOut, aborted, ms: Date.now() - started, dropped, ...(saved ? { saved } : {}) }
 }

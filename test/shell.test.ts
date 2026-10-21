@@ -1,5 +1,5 @@
 import { afterAll, expect, test } from "bun:test"
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import os from "node:os"
 import path from "node:path"
 import { Workspace } from "../src/core/fs/workspace"
@@ -175,6 +175,29 @@ test("long output is saved to a file the model can read; the result keeps the he
   expect(result.output).toContain("dòng 1 ")
   expect(result.output).toContain("dòng 4000 ")
 }, 60_000)
+
+test("output past the memory cap: the saved file still has every character, the middle sentinel included", async () => {
+  const script = path.join(project, "dai.js")
+  // ~4.4M characters: HEAD, 22k lines, MIDDLE-SENTINEL, 22k lines, TAIL.
+  writeFileSync(
+    script,
+    'const line = "x".repeat(99) + "\\n"; const half = line.repeat(22000);\nprocess.stdout.write("HEAD\\n" + half + "MIDDLE-SENTINEL\\n" + half + "TAIL\\n")\n',
+  )
+  const tool = shellTool(ws())
+  const command = win ? `& '${process.execPath}' '${script}'` : `'${process.execPath}' '${script}'`
+  const result = await runTool(tool, { command }, ctx("call-rat-dai"), new RwLock())
+  const file = path.join(data, "tool-output", "call-rat-dai.txt")
+  // The shell may add a line ending or two around the program's output.
+  const reported = Number(/bản đầy đủ \((\d+) ký tự\) ở (.*?), đọc tiếp/.exec(result.output.slice(0, 2000))?.[1])
+  expect(result.output.slice(0, 2000).includes(file)).toBe(true)
+  const saved = readFileSync(file, "utf8")
+  expect(saved.length).toBe(reported)
+  expect(saved.length).toBeGreaterThanOrEqual(4_400_021)
+  expect(saved.includes("MIDDLE-SENTINEL")).toBe(true)
+  expect(saved.includes("đã bỏ")).toBe(false)
+  expect(saved.startsWith("HEAD\n")).toBe(true)
+  expect(saved.trimEnd().endsWith("TAIL")).toBe(true)
+}, 120_000)
 
 test("Windows PowerShell 5.1 (what most users have; CI's default is pwsh): UTF-8, exit codes, errors as text, timeout", async () => {
   const legacy = win ? Bun.which("powershell") : null

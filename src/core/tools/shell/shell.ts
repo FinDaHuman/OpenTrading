@@ -1,11 +1,11 @@
-import { mkdir, stat, writeFile } from "node:fs/promises"
+import { stat } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { z } from "zod"
 import type { Workspace } from "../../fs/workspace"
 import { LOCAL_SOURCE, type ToolDef } from "../types"
 import { commandPrefix, criticalDelete, mentionsSensitive, startsInterpreter } from "./command"
-import { detectShell, runShell, type ShellInfo } from "./run"
+import { detectShell, runShell, SPILL_CAP, type ShellInfo } from "./run"
 
 /**
  * shell: run one command on the user's machine (a Python script that crunches a CSV, a
@@ -94,7 +94,9 @@ export function shellTool(workspace: Workspace, opts: { shell?: ShellInfo } = {}
     async execute(input, ctx) {
       const cwd = cwdOf(input)
       const timeoutMs = Math.min(MAX_TIMEOUT_MS, input.timeout_ms ?? DEFAULT_TIMEOUT_MS)
-      const result = await runShell(input.command, { cwd, timeoutMs, signal: ctx.signal, shell })
+      // Long output goes to this file as it streams, before the memory cap drops its middle.
+      const file = path.join(workspace.env().data!, "tool-output", `${ctx.callId.replace(/[^\w-]/g, "_")}.txt`)
+      const result = await runShell(input.command, { cwd, timeoutMs, signal: ctx.signal, shell, spill: { file, after: SHELL_OUTPUT_CHARS } })
       const status = result.timedOut
         ? `dừng vì quá ${Math.round(timeoutMs / 1000)}s (đã giết cả các tiến trình con); lệnh chạy lâu hơn thì tăng timeout_ms, lệnh chờ nhập thì không chạy được`
         : result.aborted
@@ -102,17 +104,15 @@ export function shellTool(workspace: Workspace, opts: { shell?: ShellInfo } = {}
           : `mã thoát ${result.exitCode ?? "?"}`
       const meta = `[${status} · ${(result.ms / 1000).toFixed(1)}s · ${cwd}]`
       const output = result.output.trimEnd()
-      if (output.length <= SHELL_OUTPUT_CHARS) return `${meta}\n${output || "(không có output)"}`
-      // Long output: the whole of it in a file, head and tail here (wrap.ts cuts the middle).
-      const dir = path.join(workspace.env().data!, "tool-output")
-      const file = path.join(dir, `${ctx.callId.replace(/[^\w-]/g, "_")}.txt`)
-      try {
-        await mkdir(dir, { recursive: true })
-        await writeFile(file, output)
-        return `${meta}\n(Output dài ${output.length} ký tự; bản đầy đủ ở ${file}, đọc tiếp bằng read_file với offset hoặc tìm bằng grep_files.)\n${output}`
-      } catch {
-        return `${meta}\n${output}`
-      }
+      if (output.length <= SHELL_OUTPUT_CHARS && !result.dropped) return `${meta}\n${output || "(không có output)"}`
+      // Long output: in the file as it came, head and tail here (wrap.ts cuts the middle).
+      const saved = result.saved
+      const where = !saved
+        ? `không lưu được ra file${result.dropped ? `; phần giữa (${result.dropped} ký tự) đã mất` : ""}`
+        : saved.cut
+          ? `file ${saved.file} chỉ giữ ${saved.chars} ký tự đầu (giới hạn ${SPILL_CAP / 1024 / 1024} MB), phần sau không được lưu; đọc bằng read_file với offset hoặc tìm bằng grep_files`
+          : `bản đầy đủ (${saved.chars} ký tự) ở ${saved.file}, đọc tiếp bằng read_file với offset hoặc tìm bằng grep_files`
+      return `${meta}\n(Output dài${result.dropped ? "" : ` ${output.length} ký tự`}; ${where}.)\n${output}`
     },
   }
 }
