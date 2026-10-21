@@ -241,6 +241,7 @@ await writeFile(path.join(home, "mcp.json"), JSON.stringify({ mcpServers: { demo
 
 const { App } = await import("../src/tui/app")
 const { state, setState } = await import("../src/tui/state")
+const { LOADED_PREFIX } = await import("../src/core/tools/search")
 const { resetNotifications, say } = await import("../src/tui/notify")
 const { reconcile } = await import("solid-js/store")
 const { readJson } = await import("../src/core/store")
@@ -929,6 +930,41 @@ test("a tool call renders as a ● row with its result under ⎿, then the answe
   await setup.waitFor(() => !state.streaming)
   const roles = state.history.map((m) => m.role)
   expect(roles.slice(-4)).toEqual(["user", "assistant", "tool", "assistant"])
+})
+
+test("ctrl+o wraps a long error line instead of cutting it with …", async () => {
+  const long = "Lỗi máy chủ MCP: " + "kết nối bị đóng giữa chừng ".repeat(8) + "ĐUÔI-LỖI-CUỐI"
+  const before = state.lines.length
+  setState("lines", (lines) => [...lines, { kind: "tool", callId: "c-wrap", name: "demo", label: "demo_loi()", status: "error", output: `${long}\ndòng hai` }])
+  try {
+    let frame = await setup.waitForFrame((f) => f.includes("● demo_loi()") && f.includes("dòng hai"))
+    // Collapsed: one row per line, cut at the width.
+    expect(frame).not.toContain("ĐUÔI-LỖI-CUỐI")
+    setState("expandTools", true)
+    frame = await setup.waitForFrame((f) => f.includes("ĐUÔI-LỖI-CUỐI"))
+    show(frame)
+    // The continuation rows hang under the text, not under ⎿.
+    const rows = frame.split("\n")
+    const head = rows.findIndex((r) => r.includes("⎿  Lỗi máy chủ MCP"))
+    expect(head).toBeGreaterThanOrEqual(0)
+    expect(rows[head + 1]!.startsWith("     ")).toBe(true)
+    expect(rows[head + 1]!.trim().length).toBeGreaterThan(0)
+  } finally {
+    setState("expandTools", false)
+    setState("lines", (lines) => lines.slice(0, before))
+  }
+})
+
+test("a deferred tool loaded by its first call reads as a grey note, wrapped, not a red error", async () => {
+  const output = `${LOADED_PREFIX}mcp__opentrading__market_movers\nTool mcp__opentrading__market_movers chưa có trong bước này nên chưa chạy; đã nạp xong — gọi lại đúng lệnh với tên mcp__opentrading__market_movers. CUỐI-CÂU`
+  const before = state.lines.length
+  setState("lines", (lines) => [...lines, { kind: "tool", callId: "c-loaded", name: "market_movers", label: "market_movers()", status: "error", output }])
+  try {
+    const frame = await setup.waitForFrame((f) => f.includes("● market_movers()") && f.includes("CUỐI-CÂU"))
+    show(frame)
+  } finally {
+    setState("lines", (lines) => lines.slice(0, before))
+  }
 })
 
 test("the context size follows each step's usage while a turn is still running", async () => {
