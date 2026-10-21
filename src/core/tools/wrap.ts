@@ -28,9 +28,29 @@ export class RwLock {
   private writer = false
   private queue: { write: boolean; wake: () => void }[] = []
 
-  async acquire(write: boolean): Promise<() => void> {
+  /** `signal` aborting while queued drops the waiter (it must not block the ones behind) and rejects. */
+  async acquire(write: boolean, signal?: AbortSignal): Promise<() => void> {
+    if (signal?.aborted) throw new Error("Đã huỷ.")
     if (this.canEnter(write) && this.queue.length === 0) this.enter(write)
-    else await new Promise<void>((wake) => this.queue.push({ write, wake }))
+    else {
+      await new Promise<void>((resolve, reject) => {
+        const waiter = {
+          write,
+          wake: () => {
+            signal?.removeEventListener("abort", onAbort)
+            resolve()
+          },
+        }
+        const onAbort = () => {
+          this.queue = this.queue.filter((w) => w !== waiter)
+          // A writer leaving the head may let readers behind it in.
+          this.drain()
+          reject(new Error("Đã huỷ."))
+        }
+        signal?.addEventListener("abort", onAbort, { once: true })
+        this.queue.push(waiter)
+      })
+    }
     let released = false
     return () => {
       if (released) return
@@ -100,7 +120,12 @@ export async function runTool(def: ToolDef, input: unknown, ctx: ToolContext, lo
     const decision = await gate.check(def, input, ctx.signal, def.displayName, ctx.callId, ctx.agent)
     if (!decision.allow) throw new Error(deniedMessage(decision))
   }
-  const release = def.unlocked ? () => {} : await lock.acquire(!def.readOnly)
+  const release = def.unlocked ? () => {} : await lock.acquire(!def.readOnly, ctx.signal)
+  // Cancelled while approval or the lock was pending: no side effect may start now.
+  if (ctx.signal.aborted) {
+    release()
+    throw new Error("Đã huỷ.")
+  }
   const ms = def.timeoutMs ?? DEFAULT_TIMEOUT_MS
   const timeout = new AbortController()
   let timer: ReturnType<typeof setTimeout> | undefined
