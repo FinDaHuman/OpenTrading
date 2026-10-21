@@ -51,10 +51,20 @@ BCTC ngân hàng — dùng dòng chuẩn ngành thay vì đoán tên dòng CTCP 
 đưa tên công ty) · `vn_company` (hồ sơ, mô hình). Thiếu hạn mức tín dụng công bố
 → ghi "không lấy được hạn mức", không đoán.
 
-**Bước 2: Đọc 3 lớp chất lượng tài sản + spread (song song).**
+**Bước 2: Đọc 3 lớp chất lượng tài sản + spread (song song — 3 lời gọi `financial_detail`, mỗi lời gọi MỘT `statement`).**
 
-`financial_detail` cho từng mã (1 lượt, gom song song): nợ xấu · nợ nhóm 2 · tỷ lệ
-bao phủ · chi phí rủi ro · chi phí thu nhập lãi thuần. So QoQ/YoY, ghi số + kỳ.
+`financial_detail` chỉ nhận **một** `statement` mỗi lời gọi (mặc định `KQKD`) nên phải
+gọi riêng, gom song song trong một lượt:
+
+- `financial_detail(symbol, statement=KQKD)`: chi phí thu nhập lãi thuần · chi phí rủi ro
+  tín dụng · lãi thuần ngoài lãi → phục vụ đọc spread.
+- `financial_detail(symbol, statement=CDKT)`: tín dụng khách hàng · tiền gửi · trích lãi ·
+  mức vốn → phục vụ đọc tăng trưởng, khoảng cách tín dụng − tiền gửi và đòn bẩy.
+- `financial_detail(symbol, statement=TM)`: nợ xấu · nợ nhóm 2 · tỷ lệ bao phủ nợ vay ·
+  ngoại bảng → phục vụ **3 lớp chất lượng tài sản** (các chỉ tiêu này nằm ở thuyết minh,
+  không nằm trong KQKD).
+
+So QoQ/YoY từng chỉ tiêu, ghi số + kỳ + `statement` nào ra số đó.
 
 **Bước 3: Bối cảnh vốn + chuẩn mực (song song).**
 

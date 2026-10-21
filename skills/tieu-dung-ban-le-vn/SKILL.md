@@ -3,7 +3,7 @@ name: tieu-dung-ban-le-vn
 description: "Phân tích ngành tiêu dùng và bán lẻ Việt Nam theo bán lẻ thực, thu nhập hộ gia đình, chính sách thuế và độ thâm nhập bán lẻ hiện đại. Dùng khi hỏi xu hướng nhóm tiêu dùng hoặc kết quả chuỗi bán lẻ."
 activation: auto
 requires_tools: [financial_detail, vs_indicator_data]
-uses_tools: [financial_detail, vs_indicator_data, financial_ratios, planned_targets, analyst_consensus, peer_compare, news_symbol, news_market, symbol_lookup, vn_company]
+uses_tools: [financial_detail, vs_indicator_data, vs_categories, financial_ratios, planned_targets, analyst_consensus, peer_compare, news_symbol, news_market, symbol_lookup, vn_company]
 triggers:
   keywords: [ngành tiêu dùng, chuỗi bán lẻ, hàng tiêu dùng, bán lẻ hiện đại, thu nhập hộ gia đình, sức mua, thị phần bán lẻ, mảng tiêu dùng]
 version: 1.0.0
@@ -51,20 +51,27 @@ trong nhãn "bán lẻ" nhưng driver không dùng chung.
 `symbol_lookup` · `vn_company` (mảng: thực phẩm/điện tử/dịch vụ) · `financial_detail`
 (doanh thu theo mảng). Ghi rõ phân khúc đang phân tích.
 
-**Bước 2: Sức mua thật (song song).**
+**Bước 2: Sức mua thật (song song — tra catalogue TRƯỚC).**
 
-`vs_indicator_data` (tổng mức bán lẻ, chỉ số giá tiêu dùng, chỉ số giá lõi) ·
-`news_market` (chính sách thuế, thu nhập, tiền lương công vụ).
+`vs_indicator_data` chỉ có preset sẵn cho GDP/CPI/XK; các chuỗi khác (tổng mức bán
+lẻ, CPI lõi, thu nhập) phải lấy `category_id` từ `vs_categories` trước, rồi truyền
+kèm `term_type_id` phù hợp. Gọi `vs_categories` → chọn category + term_type →
+`vs_indicator_data(category_id=…, term_type_id=…)`; preset `CPI` dùng trực tiếp
+`vs_indicator_data(indicator="CPI")`. Kèm `news_market` (chính sách thuế, thu nhập,
+tiền lương công vụ).
 
 **Bước 3: Chất lượng tăng trưởng (song song).**
 
 `financial_detail` (doanh thu, biên lãi gộp, tồn kho, công nợ; số điểm bán nếu
 công bố) · `news_market` (mở/đóng cửa, thị phần, đối thủ truyền thống).
 
-**Bước 4: Neo kỳ vọng + vị thế nhóm.**
+**Bước 4: Neo kỳ vọng + vị thế nhóm (song song).**
 
-`planned_targets` · `peer_compare` (so biên, tốc độ mở rộng, tồn kho trong cùng
-phân khúc) · `analyst_consensus`.
+`planned_targets` · `analyst_consensus` · hai mảng đối chiếu khác nhau: (a) tỷ lệ
+định giá (P/E, P/B, ROE) dùng `peer_compare`; (b) chỉ báo vận hành (biên lãi gộp,
+tồn kho, công nợ) đọc bằng `financial_detail` **từng peer**, số điểm bán/tốc độ mở
+rộng lấy từ công bố công ty qua `news_market` — `peer_compare` không trả được
+những dòng này.
 
 ## Cây quyết định chuỗi bán lẻ đang được tiếp sức hay siết
 

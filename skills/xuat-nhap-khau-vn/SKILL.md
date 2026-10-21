@@ -42,10 +42,10 @@ nhau (điện tử đang tăng mạnh trong khi dệt may đi ngang). Skill này
 | Driver | Kênh truyền dẫn | Đọc/xác minh bằng |
 |---|---|---|
 | Thuế hai lớp | Thuế đối ứng chung đều cho mọi đối thủ, nên **không đổi thứ hạng cạnh tranh**. Thuế chủ đề chọn lọc làm chênh: ngành không được miễn mất lợi thế giá so với quốc gia bị áp mức thấp hơn | Chính sách thuế + danh sách miễn + mức áp từng nước: `news_market`/`web_search` (cơ quan thương mại và báo chí chuyên ngành), ghi rõ nguồn + ngày |
-| Chu kỳ công nghệ toàn cầu | Chu kỳ thay thế/tăng công suất điện tử điều khiển cả tăng trưởng toàn ngành, tách khỏi dệt may và hàng thủ công | Tăng trưởng theo nhóm hàng: `vs_xnk_detail` (xuất khẩu theo kỳ) + `news_market` |
-| Nhập khẩu máy móc (chỉ báo dẫn) | Nhập thiết bị công nghệ tăng trước vài quý so với xuất khẩu hàng công nghệ: dây chuyền chưa chạy thì hàng chưa chảy về | `vs_xnk_detail` (nhập khẩu theo kỳ), đọc cặp nhập – xuất cùng nhóm hàng |
+| Chu kỳ công nghệ toàn cầu | Chu kỳ thay thế/tăng công suất điện tử điều khiển cả tăng trưởng toàn ngành, tách khỏi dệt may và hàng thủ công | Tăng trưởng **theo nhóm hàng**: `news_market`/`web_search` (công bố GSO và Tổng cục Hải quan theo kỳ, ghi rõ nguồn) — `vs_xnk_detail` chỉ trả cơ cấu theo nước, không có nhóm hàng |
+| Nhập khẩu máy móc (chỉ báo dẫn) | Nhập thiết bị công nghệ tăng trước vài quý so với xuất khẩu hàng công nghệ: dây chuyền chưa chạy thì hàng chưa chảy về | Nhập **thiết bị/máy móc theo nhóm hàng**: `news_market`/`web_search` (bảng hàng hoá theo kỳ, ghi nguồn + kỳ); đối chiếu thêm `vs_xnk_detail` cho hướng nhập theo nước |
 | Dòng vốn nước ngoài | Doanh nghiệp vốn ngoài chiếm phần lớn trị giá xuất khẩu; đăng ký mới và giải ngân quyết định sản lượng tương lai | Vốn đăng ký/giải ngân: `vs_indicator_data` hoặc `news_market`, ghi kỳ |
-| Cơ cấu ngành hàng | Cùng nhãn "xuất khẩu", nhưng điện tử, dệt may, hàng thủ công, lâm thổ sản và thủy sản chịu thuế khác nhau và theo chu kỳ khác nhau | Nhóm hàng + trị giá: `vs_xnk_detail` |
+| Cơ cấu ngành hàng | Cùng nhãn "xuất khẩu", nhưng điện tử, dệt may, hàng thủ công, lâm thổ sản và thủy sản chịu thuế khác nhau và theo chu kỳ khác nhau | Nhóm hàng + trị giá: `news_market`/`web_search` (thống kê hàng hoá theo kỳ). `vs_xnk_detail` chỉ cho **cơ cấu theo nước + tỷ trọng khu vực FDI** |
 | Tỷ giá | Tỷ giá vàng (USD) tác động giá trị xuất khẩu tính theo ngoại tệ và chi phí nhập khẩu tính bằng nội tệ | `vn_forex_ohlcv` (USD/VND theo chu kỳ) + `yf_commodities` (chỉ số USD) |
 
 ## Các bước
@@ -57,8 +57,9 @@ xuất khẩu). Nếu hỏi ngành → đọc thẳng Bước 2.
 
 **Bước 2: Số liệu thương mại (song song).**
 
-`vs_xnk_detail` (xuất/nhập khẩu theo kỳ, theo nhóm hàng) · `vs_indicator_data`
-(tổng mức thương mại, dòng vốn nước ngoài). Ghi rõ kỳ và nhóm hàng đang đọc.
+`vs_xnk_detail` (xuất/nhập khẩu theo kỳ, **theo nước** + tỷ trọng FDI) · `vs_indicator_data`
+(tổng mức XK qua preset `XK`, dòng vốn nước ngoài) · `news_market`/`web_search` cho chuỗi
+**theo nhóm hàng** (thiết bị, điện tử, dệt may, thủy sản) — ghi rõ kỳ và nhóm hàng đang đọc.
 
 **Bước 3: Chính sách thuế + tỷ giá (song song).**
 
@@ -67,7 +68,8 @@ xuất khẩu). Nếu hỏi ngành → đọc thẳng Bước 2.
 
 **Bước 4: Đọc chéo cặp nhập – xuất (song song).**
 
-Đặt nhập khẩu thiết bị/linh kiện cạnh xuất khẩu cùng nhóm hàng (`vs_xnk_detail`) ·
+Đặt nhập khẩu thiết bị/linh kiện cạnh xuất khẩu **cùng nhóm hàng** (cả hai lấy từ
+`news_market`/`web_search` theo kỳ; `vs_xnk_detail` chỉ đối chiếu hướng theo nước) ·
 tương quan chính sách (`news_market`) · riêng mã: `financial_detail` (doanh thu xuất
 khẩu nếu công bố) · `peer_compare` nếu so nhiều công ty.
 
@@ -98,19 +100,23 @@ Q4. Nhóm hàng đang theo chu kỳ công nghệ tăng hay chu kỳ thủ công 
    nhóm này đang đi ngang dù tổng xuất khẩu tăng — hạ độ tin cậy kỳ vọng tăng"
 └─ Chưa rõ → tiếp Q5 với độ tin cậy thấp
 
-Q5. Nhập khẩu thiết bị cùng nhóm có đang tăng trước không?
-├─ Có, nhập tăng vài quý trước → ★ "Được tiếp sức bởi công suất mới: chỉ báo dẫn
-   đang tích lũy — xuất khẩu nhóm này sẽ vào sau"
-└─ Không, nhập chững → ★ "Không có công suất mới: tăng trưởng đến từ giá/cầu hiện
-   có, hạ độ tin cậy khi cầu toàn cầu đổi chiều"
+Q5. Nhập khẩu thiết bị cùng nhóm có đang tăng trước không? (node TRUNG GIAN —
+ghi lại kết luận rồi tiếp Q6, không dừng ở đây)
+├─ Có, nhập tăng vài quý trước → ghi "có công suất mới đang triển khai" → tiếp Q6
+├─ Không, nhập chững → ghi "không có công suất mới; tăng trưởng đến từ giá/cầu
+   hiện có, hạ độ tin cậy khi cầu toàn cầu đổi chiều" → tiếp Q6
+└─ Chưa dựng được → ghi "thiếu chuỗi nhập theo nhóm hàng" → tiếp Q6
 
-Q6. Tỷ giá đang ở trạng thái nào?
-├─ Nội tệ yếu/phá giá → ★ "Tỷ giá thuận cho xuất khẩu: trị giá xuất khẩu tính
-   ngoại tệ được đỡ, NHƯNG chi phí nguyên liệu nhập khẩu tính nội tệ tăng — đọc
-   tỷ trọng đầu vào nhập khẩu trong giá thành"
-├─ Nội tệ mạnh → ★ "Tỷ giá nghịch cho xuất khẩu: trị giá xuất khẩu tính ngoại tệ
-   bị ăn mòn, chi phí nhập khẩu giảm — đọc tỷ trọng doanh thu bằng ngoại tệ"
-└─ Ổn định → ★ "Tỷ giá trung tính: biến chính là nhóm hàng và chính sách thuế (Q1–Q5)"
+Q6. Tỷ giá đang ở trạng thái nào? (node ★ CUỐI — verdict gộp cả trạng thái Q5)
+├─ Nội tệ yếu/phá giá → ★ "Tỷ giá thuận cho xuất khẩu (trị giá tính ngoại tệ được
+   đỡ) NHƯNG chi phí nguyên liệu nhập khẩu tính nội tệ tăng — đọc tỷ trọng đầu vào
+   nhập khẩu. Kèm trạng thái Q5: [có/không có công suất mới] quyết định tăng trưởng
+   bền hay chỉ là cửa sổ giá"
+├─ Nội tệ mạnh → ★ "Tỷ giá nghịch cho xuất khẩu (trị giá tính ngoại tệ bị ăn mòn,
+   chi phí nhập giảm) — đọc tỷ trọng doanh thu bằng ngoại tệ. Kèm trạng thái Q5:
+   [có/không có công suất mới] quyết định tăng trưởng bền hay chỉ là cửa sổ giá"
+└─ Ổn định → ★ "Tỷ giá trung tính: biến chính là nhóm hàng, chính sách thuế và
+   trạng thái Q5 — [có/không có công suất mới]"
 
 ## Chỉ báo đặc thù ngành
 

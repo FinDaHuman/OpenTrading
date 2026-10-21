@@ -39,7 +39,8 @@
 |---|---|---|
 | `company_events` | Thay đổi cơ cấu hợp nhất, thoái/tách/gộp mảng, giao dịch với cổ đông sáng lập | Muốn so sánh với kỳ trước, phải đọc trước khi nhìn doanh thu |
 | `news_market` | Tường trái phiếu, phát hành mới, nhận định tác động chỉ số | Ghi rõ nguồn + ngày |
-| `market_overview` | Độ rộng chỉ số, tỷ trọng nhóm lớn | Phát hiện "chỉ số do nhóm một mình kéo" trước khi kết luận toàn thị trường |
+| `breadth_scan` | Độ rộng toàn sàn | Phát hiện "chỉ số do nhóm một mình kéo" trước khi kết luận toàn thị trường — `market_overview` chỉ đếm rổ bluechip nên không đủ làm bằng chứng |
+| `market_snapshot` / `vn_equity_quote_batch` | Vốn hoá các mã thành viên | **Tự tính** tỷ trọng nhóm Vin = vốn hoá thành viên / vốn hoá sàn (ghi rõ tự tính); nếu có số báo cáo ngành thì lấy từ `news_market`/`web_search` |
 | `peer_compare` | Biên và đòn bẩy so với nhóm BĐS lớn | So mảng BĐS với mảng BĐS, không so hợp nhất với BĐS thuần |
 
 ## 5. Bẫy đọc thường gặp

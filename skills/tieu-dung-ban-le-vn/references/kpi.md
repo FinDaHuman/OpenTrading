@@ -17,9 +17,9 @@
 
 | Chỉ báo | Đọc từ | Cách đọc |
 |---|---|---|
-| Tổng mức bán lẻ danh nghĩa | `vs_indicator_data` | Chỉ là điểm khởi đầu — chưa kết luận gì |
-| Chỉ số giá tiêu dùng | `vs_indicator_data` | Mẫu số để ra tăng trưởng thực |
-| Chỉ số giá lõi | `vs_indicator_data` | Lõi cao hơn mục tiêu = áp lực sức mua |
+| Tổng mức bán lẻ danh nghĩa | `vs_indicator_data(category_id từ vs_categories)` | Chỉ là điểm khởi đầu — chưa kết luận gì. Không có preset; phải tra category trước |
+| Chỉ số giá tiêu dùng | `vs_indicator_data(indicator="CPI")` | Mẫu số để ra tăng trưởng thực — CPI có preset sẵn |
+| Chỉ số giá lõi | `vs_indicator_data(category_id từ vs_categories)` | Lõi cao hơn mục tiêu = áp lực sức mua — không có preset |
 | Bán lẻ thực | Tự tính (ghi rõ công thức) | Tăng trưởng thực âm = danh nghĩa đến từ giá |
 
 ## 3. Nhóm chất lượng tăng trưởng
@@ -39,7 +39,7 @@
 | `news_market` | Chính sách thuế và hiệu lực, thu nhập/tiền lương, mở cửa/đóng cửa, thị phần | Ghi rõ văn bản + ngày |
 | `vs_indicator_data` | Thu nhập, tiêu dùng, lạm phát | Sức mua thật; đọc cả danh nghĩa và thực |
 | `planned_targets` | Kế hoạch doanh thu/lãi/mở cửa | Neo kỳ vọng |
-| `peer_compare` | Biên, tốc độ mở rộng, tồn kho | So trong cùng phân khúc |
+| `peer_compare` | Chỉ tỷ lệ định giá (P/E, P/B, ROE) | So trong cùng phân khúc — chỉ báo vận hành đọc bằng `financial_detail` từng peer, KHÔNG hỏi `peer_compare` |
 
 ## 5. Bẫy đọc thường gặp
 

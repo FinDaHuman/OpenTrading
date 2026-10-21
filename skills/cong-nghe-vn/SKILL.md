@@ -3,7 +3,7 @@ name: cong-nghe-vn
 description: "Phân tích ngành công nghệ Việt Nam theo giá trị hợp đồng ký, phân hoá nội địa và nước ngoài, đơn hàng dài hạn và tỷ lệ sử dụng nhân công. Dùng khi hỏi xu hướng nhóm công nghệ hoặc công ty dịch vụ công nghệ."
 activation: auto
 requires_tools: [financial_detail, planned_targets]
-uses_tools: [financial_detail, planned_targets, financial_ratios, analyst_consensus, peer_compare, news_symbol, news_market, symbol_lookup, vn_company, yf_commodities]
+uses_tools: [financial_detail, planned_targets, financial_ratios, analyst_consensus, peer_compare, news_symbol, company_events, news_market, symbol_lookup, vn_company, yf_commodities]
 triggers:
   keywords: [ngành công nghệ, công nghệ thông tin, dịch vụ công nghệ, chuyển đổi số, thuê ngoài công nghệ, đội ngũ kỹ sư công nghệ, phần mềm]
 version: 1.0.0
@@ -37,9 +37,9 @@ theo từng quý. Đọc doanh thu nhận mà không đọc đơn ký sẽ thấ
 
 | Driver | Kênh truyền dẫn | Đọc/xác minh bằng |
 |---|---|---|
-| Doanh thu ký | Ký được hợp đồng dài hạn là điều kiện của doanh thu tương lai. Kỳ ký mạnh là tín hiệu dẫn cho 1–3 kỳ sau, kể cả khi doanh thu nhận của kỳ hiện tại chững | Công bố công ty (`news_market`/`web_search`): giá trị hợp đồng ký, kỳ hạn, thị trường |
+| Doanh thu ký | Ký được hợp đồng dài hạn là điều kiện của doanh thu tương lai. Kỳ ký mạnh là tín hiệu dẫn cho 1–3 kỳ sau, kể cả khi doanh thu nhận của kỳ hiện tại chững | Công bố của **riêng công ty**: `news_symbol(symbol=…)` (tin gắn mã) + `company_events`; `news_market` chỉ cho bối cảnh thị trường/chính sách vì nó không tra được theo mã |
 | Phân hoá nước ngoài – nội địa | Nước ngoài phụ thuộc chu kỳ khách hàng quốc tế (Nhật/EU/Mỹ); nội địa phụ thuộc chính phủ điện tử và doanh nghiệp. Hai chu kỳ khác nhau | Mảng nội địa/nước ngoài trong `financial_detail` hoặc công bố công ty |
-| Chất lượng hợp đồng | Đơn lớn (trên ngưỡng) và kỳ hạn 2–3 năm cho doanh thu bền vững hơn đơn nhỏ lẻ | Tỷ trọng đơn lớn + kỳ hạn: công bố công ty trong `news_market` |
+| Chất lượng hợp đồng | Đơn lớn (trên ngưỡng) và kỳ hạn 2–3 năm cho doanh thu bền vững hơn đơn nhỏ lẻ | Tỷ trọng đơn lớn + kỳ hạn: công bố của riêng công ty qua `news_symbol`/`company_events` |
 | Tỷ lệ sử dụng nhân công | Ngành vốn người: nhân công sử dụng thấp đồng nghĩa biên giảm và cơ cấu lỗ thời, đặc biệt khi tác vụ truyền thống bị tự động hoá | Số nhân viên + thu nhập/người: `financial_detail` (tự tính, ghi rõ). So quý trước |
 | Chi phí đầu vào AI | Máy tính và cơ sở hạ tầng tăng do nhu cầu AI toàn cầu; đẩy chi phí cung cấp | `yf_commodities` (chu kỳ kim loại nếu cần bối cảnh) + `news_market` |
 
@@ -52,8 +52,10 @@ riêng / viễn thông) · `financial_detail` (doanh thu theo mảng).
 
 **Bước 2: Đơn hàng và tín hiệu dẫn (song song).**
 
-`news_market` (công bố đơn hàng ký, đơn lớn, thị trường khách hàng) ·
-`financial_detail` (backlog và doanh thu chưa nhận nếu có).
+`news_symbol(symbol=…)` + `company_events` cho công bố đơn hàng ký của riêng công ty
+(giá trị hợp đồng, kỳ hạn, thị trường khách hàng) — `news_market` **không** nhận
+tham số theo mã, chỉ dùng cho bối cảnh thị trường · `financial_detail` (backlog và
+doanh thu chưa nhận nếu có).
 
 **Bước 3: Chất lượng hoạt động (song song).**
 

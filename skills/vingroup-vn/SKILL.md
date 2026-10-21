@@ -3,7 +3,7 @@ name: vingroup-vn
 description: "Phân tích tập đoàn Vingroup theo giá trị tách rời từng mảng, vòng quay tiền mặt, đòn bẩy so với trần nợ và tỷ trọng của nhóm Vin trong chỉ số. Dùng khi hỏi tập đoàn Vingroup, Vinhomes, VinFast hay Vincom Retail."
 activation: auto
 requires_tools: [financial_detail, company_events]
-uses_tools: [financial_detail, company_events, news_symbol, news_market, financial_ratios, planned_targets, analyst_consensus, peer_compare, market_overview, event_calendar_vn, symbol_lookup, vn_company, vs_industry_tree]
+uses_tools: [financial_detail, company_events, news_symbol, news_market, financial_ratios, planned_targets, analyst_consensus, peer_compare, breadth_scan, market_snapshot, vn_equity_quote_batch, event_calendar_vn, symbol_lookup, vn_company]
 triggers:
   keywords: [vingroup, vinfast, vinhomes, vincom, vinpearl, nhóm vin, tập đoàn vingroup, tossanholding, quỹ đất vinhomes, xe điện vinfast, bán lẻ vincom]
 version: 1.0.0
@@ -46,7 +46,7 @@ công bố công ty) trước khi kết luận bất cứ điều gì về tổn
 | Vòng xe điện | Doanh thu xe điện tăng nhưng biên âm; tỷ lệ hoàn vốn phụ thuộc quy mô và chi phí/biến. Tái cấu trúc (tách, bán, gộp mảng) đổi pháp nhân báo cáo | Mảng xe điện + lỗ lũy kế + tái cấu trúc: `financial_detail`, `company_events` |
 | Đòn bẩy | Tài trợ dự án bằng nợ và trái phiếu; tường trái phiếu và chi phí vốn bình quân quyết định rủi ro tái cấp | `financial_detail` (nợ, trái phiếu, lãi) + `news_market` (tường đáo hạn, phát hành) |
 | Giao dịch liên kết | Mua bán tài sản nội bộ và loại trừ bàn giao làm thay đổi cả cơ cấu hợp nhất lẫn biên | `company_events` (đợt thay đổi cơ cấu) + `news_market` |
-| Tỷ trọng chỉ số | Nhóm Vin chiếm tỷ trọng lớn vốn hoá và thanh khoản chỉ định; biến động nhóm một mình có thể kéo cả chỉ số → rủi ro tập trung danh mục | Tỷ trọng + độ rộng chỉ số: `market_overview` · `news_market` · `vs_industry_tree` |
+| Tỷ trọng chỉ số | Nhóm Vin chiếm tỷ trọng lớn vốn hoá và thanh khoản chỉ định; biến động nhóm một mình có thể kéo cả chỉ số → rủi ro tập trung danh mục | Tỷ trọng: **tự tính** từ vốn hoá các mã thành viên so tổng vốn hoá sàn (`vn_equity_quote_batch`/`market_snapshot`, ghi rõ tự tính) hoặc lấy số công bố trong báo cáo ngành qua `news_market`/`web_search`; độ rộng phiên: `market_overview`/`breadth_scan`. **Không** hỏi `market_overview` tỷ trọng (tool chỉ trả giá/rổ bluechip/độ rộng rổ) |
 | Dòng tiền / thanh khoản | Kiểm soát độc lập: tiền mặt, vốn điều lệ, nợ đến hạn | `financial_detail` (tiền, vốn, nợ ngắn hạn) |
 
 ## Các bước
@@ -68,8 +68,10 @@ chi phí lãi. `news_market`: tường trái phiếu đến hạn, phát hành m
 
 **Bước 4: Tác động chỉ số + neo kỳ vọng.**
 
-`market_overview` (độ rộng, tỷ trọng nhóm lớn nếu có) · `news_market` (nhận định về
-ảnh hưởng chỉ số) · `planned_targets` · `peer_compare` · `analyst_consensus`.
+`breadth_scan` (độ rộng thật toàn sàn — phân biệt "chỉ số do nhóm lớn kéo") ·
+`market_snapshot`/`vn_equity_quote_batch` (vốn hoá các mã thành viên để **tự tính**
+tỷ trọng) · `news_market` (nhận định/báo cáo ngành về ảnh hưởng chỉ số) ·
+`planned_targets` · `peer_compare` · `analyst_consensus`.
 
 ## Cây quyết định sức khoẻ tập đoàn
 
