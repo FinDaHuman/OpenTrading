@@ -229,6 +229,7 @@ test("ultradesk wiring: a playbook agent runs on the real manager, read-only, an
   const registry = new ToolRegistry()
   registry.register(currentTimeTool(() => new Date("2026-10-21T02:30:00Z")))
   registry.register({ name: "ghi_file", description: "ghi", input: z.object({}), readOnly: false, async execute() { return "x" } })
+  registry.register({ name: "desk_run", description: "chạy playbook", input: z.object({}), readOnly: true, deferrable: true, async execute() { return "x" } })
   const subagents = new SubagentManager({ parent: registry, skills: () => [] })
   const agents = [{ name: "tra-cuu", description: "tra cứu", tools: ["@chi-doc"], body: "", file: "tra-cuu.md", source: "bundled" as const }]
   const playbook = {
@@ -244,5 +245,30 @@ test("ultradesk wiring: a playbook agent runs on the real manager, read-only, an
   const names = bodies[0]!.tools?.map((t) => t.function.name) ?? []
   expect(names).toContain("current_time")
   expect(names).not.toContain("ghi_file")
+  // A child never gets desk_run, not even deferred behind tool_search (no nested desk runs).
+  expect(names).not.toContain("desk_run")
+  expect(names).not.toContain("tool_search")
   expect(subagents.list()[0]?.deskRunId).toBe(view.id)
+})
+
+test("an opted-in turn declares desk_run without tool_search and carries the <ultradesk> reminder", async () => {
+  const { runAgent } = await import("../src/core/agent")
+  const { toolSearchTool } = await import("../src/core/tools/builtin/tool-search")
+  const registry = new ToolRegistry()
+  registry.register(currentTimeTool(() => new Date("2026-10-21T02:30:00Z")))
+  registry.register({ name: "desk_run", description: "chạy playbook", input: z.object({}), readOnly: true, deferrable: true, async execute() { return "x" } })
+  registry.register(toolSearchTool(registry))
+  await saveConfig({ provider: "groq", model: "tooly", toolSearch: "on" })
+  try {
+    replies = [{ text: "Đã rõ." }]
+    for await (const _ of runAgent({ history: [], input: "ultradesk so sánh FPT, MWG", skills: [], registry, preload: ["desk_run"], desk: "NHAC-NHO-DESK" })) void _
+    expect(bodies[0]!.tools?.map((t) => t.function.name)).toContain("desk_run")
+    expect(JSON.stringify(bodies[0]!.messages)).toContain("NHAC-NHO-DESK")
+    bodies.length = 0
+    for await (const _ of runAgent({ history: [], input: "so sánh FPT, MWG", skills: [], registry })) void _
+    expect(bodies[0]!.tools?.map((t) => t.function.name)).not.toContain("desk_run")
+    expect(JSON.stringify(bodies[0]!.messages)).not.toContain("NHAC-NHO-DESK")
+  } finally {
+    await saveConfig({ toolSearch: undefined })
+  }
 })

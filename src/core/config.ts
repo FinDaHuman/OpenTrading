@@ -97,7 +97,8 @@ export interface Config {
    * `maxRequests` hard cap of model requests per run (none); `warnRequests` warn above (150);
    * `effort` / `provider` + `model` for desk agents (default: as subagents); `keyword`
    * false turns the ultradesk keyword off; `alwaysOn` starts sessions in desk mode;
-   * `staggerMs` cache stagger (3000, 0 = off).
+   * `staggerMs` cache stagger (3000, 0 = off); `approved` playbooks that run without the
+   * approval card when the request opted in.
    */
   desk?: {
     size?: DeskSize
@@ -111,6 +112,8 @@ export interface Config {
     keyword?: boolean
     alwaysOn?: boolean
     staggerMs?: number
+    /** Playbooks approved with "không hỏi lại": an opted-in request runs them without the card. */
+    approved?: string[]
   }
   /** Extra workspace folders kept across sessions (`/add-dir <thư mục> --luu`). */
   workspace?: { dirs?: string[] }

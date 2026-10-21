@@ -17,7 +17,10 @@ import { doctorLocalTool, sessionHistoryTools } from "./tools/session/history"
 import { sendMessageTool, spawnSubagentTool, stopAgentTool } from "./tools/subagent/spawn"
 import { SubagentManager } from "./subagents/manager"
 import type { AgentDefinition } from "./agents/schema"
+import { DeskApprovals } from "./desk/approval"
 import { DeskEngine } from "./desk/engine"
+import type { DeskOptIn } from "./desk/keyword"
+import { deskRunTool } from "./desk/tool"
 import { PLAYBOOKS } from "./desk/playbooks"
 import { toolSearchTool } from "./tools/builtin/tool-search"
 import { todoWriteTool } from "./tools/builtin/todo-write"
@@ -54,6 +57,10 @@ export interface Runtime {
   subagents: SubagentManager
   /** Ultradesk runs (playbooks of many subagents). */
   desk: DeskEngine
+  /** Approval cards before a desk run; the TUI answers them. */
+  deskApprovals: DeskApprovals
+  /** How the request being answered opted into desk runs (set by the UI per turn). */
+  deskOptIn?: DeskOptIn
   /** Agent types loaded by setAgents (desk agents resolve their type here). */
   agents: AgentDefinition[]
   /** Data directory this runtime reads and writes (OPENTRADING_HOME or the test's temp dir). */
@@ -165,7 +172,9 @@ export function initRuntime(opts: { cwd?: string; home?: string; skills: () => S
   registry.register(stopAgentTool(subagents))
   // Read lazily: setAgents replaces the list once agent types load.
   const desk = new DeskEngine({ starter: subagents, agents: () => runtime.agents, playbooks: () => PLAYBOOKS })
-  const runtime: Runtime = { registry, permissions, questions, mcp, hooks: new HookBus(), memory: new NoopMemory(), subagents, desk, agents: [], home, workspace, files, history, auto }
+  const deskApprovals = new DeskApprovals()
+  const runtime: Runtime = { registry, permissions, questions, mcp, hooks: new HookBus(), memory: new NoopMemory(), subagents, desk, deskApprovals, agents: [], home, workspace, files, history, auto }
+  registry.register(deskRunTool({ engine: desk, approvals: deskApprovals, playbooks: () => PLAYBOOKS, optIn: () => runtime.deskOptIn, mode: () => permissions.mode }))
   switchMemory(runtime, opts.memory ?? new NoopMemory())
   return runtime
 }

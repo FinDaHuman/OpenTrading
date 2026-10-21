@@ -1,5 +1,4 @@
 import { groupDigits } from "../subagents/result"
-import { CUT_TEXT } from "./engine"
 import { cleanText } from "./sanitize"
 import type { DeskRunStatus, DeskRunView } from "./types"
 
@@ -8,6 +7,15 @@ import type { DeskRunStatus, DeskRunView } from "./types"
  * subagent's <thong_bao_subagent>. Its agents never notify one by one.
  */
 export const DESK_TAG = "thong_bao_desk"
+
+/** Why a run ended early, for its log and its notice. */
+export const CUT_TEXT: Record<NonNullable<DeskRunView["cut"]>, string> = {
+  quota: "Hết quota ngày của model: không chạy thêm agent mới.",
+  agents: "Đã chạm trần số agent của run (desk.maxAgents).",
+  requests: "Đã chạm trần số request của run (desk.maxRequests).",
+  rate: "Model liên tục báo giới hạn tốc độ (429): dừng run, chạy tiếp sau bằng /desk resume.",
+  stop: "Run đã bị dừng.",
+}
 
 /** The result block is capped so one run cannot flood the main context. */
 export const MAX_RESULT_CHARS = 20_000
@@ -29,6 +37,16 @@ function resultText(view: DeskRunView) {
   const raw = typeof view.result === "string" ? view.result : JSON.stringify(view.result, null, 2)
   const text = cleanText(raw)
   return text.length > MAX_RESULT_CHARS ? `${text.slice(0, MAX_RESULT_CHARS)}\n… (cắt bớt ${groupDigits(text.length - MAX_RESULT_CHARS)} ký tự)` : text
+}
+
+/** A stored desk notice, for transcript lines on resume (subagents/notification.ts splitNotices). */
+export const DESK_NOTICE_PATTERN = new RegExp(
+  `<${DESK_TAG}>\\nrun_id: (\\S+) · playbook: (\\S+) · quy mô: \\S+ · trạng thái: ([^\\n]+)\\n[\\s\\S]*?\\n([^\\n]*)\\n</${DESK_TAG}>(?:\\n${escape(DESK_NOTE)})?`,
+  "g",
+)
+
+function escape(text: string) {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
 }
 
 export function deskNotification(view: DeskRunView): string {

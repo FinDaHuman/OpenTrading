@@ -36,7 +36,9 @@ const MAX_FINISHED = 20
  * nesting, nothing that talks to the user or the parent's pinned panel. tool_search and
  * load_skill are re-created bound to the child's own registry.
  */
-export const EXCLUDED_TOOLS = new Set(["spawn_subagent", "send_message", "stop_agent", "ask_user", "todo_write", "tool_search", "load_skill"])
+// desk_run (literal: importing desk/tool would cycle back here): a child must never start a
+// desk run, and it would read the main turn's opt-in.
+export const EXCLUDED_TOOLS = new Set(["spawn_subagent", "send_message", "stop_agent", "ask_user", "todo_write", "tool_search", "load_skill", "desk_run"])
 
 /**
  * The child's registry: the parent's tools minus EXCLUDED_TOOLS and memory tools (a child

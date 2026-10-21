@@ -19,6 +19,9 @@ import type { ShownNotice } from "./notify"
 import type { ModelPrefs } from "../core/model-prefs"
 import { DEFAULT_SCROLL_SPEED } from "./scroll"
 import type { AttachedFile } from "../core/mentions"
+import type { DeskApprovalRequest } from "../core/desk/approval"
+import type { DeskRunView } from "../core/desk/types"
+import type { DeskOptIn } from "../core/desk/keyword"
 
 export type ToolStatus = "running" | "ok" | "error"
 
@@ -74,9 +77,9 @@ export interface Activity {
  * A message typed while an answer was streaming, sent once it ends (Claude Code). `display`
  * is what the box showed; `saved` turns its pills back on if it returns to the box.
  */
-export type Queued = { text: string; display: string; images: PromptImage[]; saved: Omit<DraftSnapshot, "text"> }
+export type Queued = { text: string; display: string; images: PromptImage[]; saved: Omit<DraftSnapshot, "text">; desk?: DeskOptIn }
 
-export type DialogName = "connect" | "model" | "skills" | "help" | "mcp" | "tools" | "context" | "sessions" | "memory" | "config" | "agents" | "tasks" | "watchlist" | "permissions" | "shortcuts"
+export type DialogName = "connect" | "model" | "skills" | "help" | "mcp" | "tools" | "context" | "sessions" | "memory" | "config" | "agents" | "tasks" | "watchlist" | "permissions" | "shortcuts" | "desk"
 
 export const [state, setState] = createStore({
   lines: [] as Line[],
@@ -165,6 +168,16 @@ export const [state, setState] = createStore({
   notices: [] as string[],
   /** The last turn failed: hold notices until the user sends something (no 429 retry loop). */
   noticeHold: false,
+  /** Ultradesk runs of this session by id (live views from the DeskEngine). */
+  deskRuns: {} as Record<string, DeskRunView>,
+  /** /desk on: every request of the session may run playbooks (config desk.alwaysOn at start). */
+  deskMode: false,
+  /** Config desk.keyword: the ultradesk keyword opts a request in. */
+  deskKeywordOn: true,
+  /** The approval card of a desk run waiting for the user. */
+  deskApproval: undefined as DeskApprovalRequest | undefined,
+  /** Run /desk opens on (enter on a panel row). */
+  deskFocus: undefined as string | undefined,
 })
 
 /** Window, reserve and auto-compaction threshold of the selected model (see core/compact). */
@@ -209,4 +222,4 @@ export function requestExit() {
  * A prompt (approval or question) sits on top. Panels and dialogs stay mounted underneath —
  * nothing typed or chosen is lost — but must not react to keys meanwhile.
  */
-export const blocked = () => Boolean(state.approval || state.question || state.autoOptIn)
+export const blocked = () => Boolean(state.approval || state.question || state.autoOptIn || state.deskApproval)

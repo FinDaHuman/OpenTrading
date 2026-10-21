@@ -36,7 +36,7 @@ async function storedAgents(): Promise<SubagentView[]> {
     ),
   )
   return metas
-    .filter((m): m is SidechainMeta => !!m?.agentId)
+    .filter((m): m is SidechainMeta => !!m?.agentId && !m.deskRunId)
     .map((m) => ({
       id: m.agentId,
       type: m.agentType,
@@ -66,7 +66,8 @@ export function TasksDialog(props: { runtime: Runtime }) {
   const [highlighted, setHighlighted] = createSignal<string>()
   const [stored] = createResource(storedAgents)
   const agents = createMemo(() =>
-    [...Object.values(state.agents), ...(stored() ?? []).filter((s) => !state.agents[s.id])].sort(
+    // Desk agents live in /desk, one run at a time.
+    [...Object.values(state.agents).filter((a) => !a.deskRunId), ...(stored() ?? []).filter((s) => !state.agents[s.id])].sort(
       (a, b) => Number(active(b)) - Number(active(a)) || b.createdAt - a.createdAt,
     ),
   )

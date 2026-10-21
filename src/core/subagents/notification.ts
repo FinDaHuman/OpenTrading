@@ -1,3 +1,4 @@
+import { DESK_NOTICE_PATTERN } from "../desk/notification"
 import { groupDigits } from "./result"
 import type { AgentStatus, SubagentView } from "./types"
 
@@ -52,6 +53,11 @@ export function splitNotices(text: string): { notices: ParsedNotice[]; rest: str
   const pattern = new RegExp(`<${NOTICE_TAG}>\\nagent_id: (\\S+) · loại: (\\S+) · mô tả: (.*?) · trạng thái: ([^\\n]+)\\n[\\s\\S]*?\\n([^\\n]*)\\n</${NOTICE_TAG}>`, "g")
   let rest = text.replace(pattern, (_m, agentId, type, description, status, stats) => {
     notices.push({ agentId, type, description, status, stats })
+    return ""
+  })
+  // Desk runs notify the same way, one block per run (desk/notification.ts).
+  rest = rest.replace(new RegExp(DESK_NOTICE_PATTERN.source, "g"), (_m, runId, playbook, status, stats) => {
+    notices.push({ agentId: runId, type: "ultradesk", description: playbook, status, stats })
     return ""
   })
   if (notices.length > 0) rest = rest.replace(NOTE, "")

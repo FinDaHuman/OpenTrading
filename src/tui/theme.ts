@@ -71,6 +71,8 @@ export function promptStyle(owner: NativeResourceOwner): SyntaxStyle {
       "extmark.paste": { fg: color.bg, bg: color.tham, bold: true },
       // `@file` pills: cyan, so a file reads apart from a paste.
       "extmark.file": { fg: color.san, bold: true },
+      // The ultradesk keyword (Claude Code colours ultracode).
+      "extmark.desk": { fg: color.tham, bold: true },
     },
     owner,
   )

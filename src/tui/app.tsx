@@ -48,6 +48,14 @@ import { TasksDialog } from "./dialogs/tasks"
 import { focusWatchlist, WatchlistDialog } from "./dialogs/watchlist"
 import { watchlistOps } from "../core/tools/watchlist/local"
 import { noticesMessage, notificationText } from "../core/subagents/notification"
+import { DESK_NOTE, deskNotification } from "../core/desk/notification"
+import { deskReminder, hasDeskKeyword, type DeskOptIn } from "../core/desk/keyword"
+import { deskSettings } from "../core/desk/settings"
+import { DESK_RUN } from "../core/desk/tool"
+import { PLAYBOOKS } from "../core/desk/playbooks"
+import { DeskApprovalCard } from "./dialogs/desk-approval"
+import { DESK_STATUS, DeskDialog, runStats } from "./dialogs/desk"
+import { KeywordMark } from "./prompt/keyword"
 import { fmtSeconds, fmtTokens } from "../core/subagents/result"
 import { ToolsDialog } from "./dialogs/tools"
 import { Home } from "./home"
@@ -61,7 +69,7 @@ import { ModeLine } from "./mode-line"
 import { terminalAttention, type Attention } from "./attention"
 import { ShortcutsPane } from "./shortcuts"
 import { loadModelPrefs } from "../core/model-prefs"
-import { AgentPanel, panelAgents } from "./agent-panel"
+import { AgentPanel, isDeskRow, panelAgents } from "./agent-panel"
 import { AutoOptInDialog } from "./dialogs/auto-optin"
 import { announceMcp } from "./mcp/notices"
 import { Toasts } from "./toast"
@@ -91,6 +99,8 @@ export async function clearTranscript(runtime: Runtime) {
   epoch++
   setState("queue", [])
   abort?.abort()
+  // Desk runs first: cut as stopped, they start no new agent while their agents stop.
+  runtime.desk.stopAll()
   runtime.subagents.stopAll()
   await startSession(runtime, "clear")
 }
@@ -179,7 +189,7 @@ export async function compact(runtime: Runtime, trigger: "auto" | "manual", inst
 let inflight: Promise<void> | undefined
 
 /** A message to send: the text for the model, what the transcript shows, pasted images. */
-type Outgoing = { text: string; display?: string; images?: PromptImage[]; notice?: boolean }
+type Outgoing = { text: string; display?: string; images?: PromptImage[]; notice?: boolean; desk?: DeskOptIn }
 
 /**
  * Background subagent results go to the model on their own turn when nothing else is
@@ -189,7 +199,7 @@ type Outgoing = { text: string; display?: string; images?: PromptImage[]; notice
  */
 export function deliverNotices(runtime: Runtime) {
   if (state.notices.length === 0 || state.noticeHold || state.streaming || state.compacting) return
-  if (state.approval || state.question || inflight || state.queue.length > 0) return
+  if (state.approval || state.question || state.deskApproval || inflight || state.queue.length > 0) return
   const texts = [...state.notices]
   setState("notices", [])
   void send(runtime, { text: noticesMessage(texts), notice: true })
@@ -397,9 +407,13 @@ async function sendTurn(runtime: Runtime, msg: Outgoing, mode: { recover?: boole
     const attached = msg.notice ? undefined : await mentionsOf(runtime, msg.display ?? msg.text)
     if (attached && attached.files.length > 0) edit(userLine, (l) => (l.files = attached.files))
     if (!live() || controller.signal.aborted) return false
+    // Desk runs are allowed by what the user did (keyword, /desk on, /<playbook>), never by a notice.
+    const optIn: DeskOptIn | undefined = msg.notice || PLAYBOOKS.length === 0 ? undefined : (msg.desk ?? (state.deskMode ? "session" : undefined))
+    runtime.deskOptIn = optIn
     const turn = runAgent({
       history: state.history,
       input: msg.text,
+      ...(optIn ? { preload: [DESK_RUN], desk: deskReminder(optIn, PLAYBOOKS) } : {}),
       images: [...(msg.images ?? []), ...(attached?.images ?? [])],
       attachments: attached?.parts,
       skills: state.skills,
@@ -527,7 +541,7 @@ export function App(props: {
    * Who owns the keyboard instead of the prompt: an approval or a question from the model.
    * Every rule that hides the prompt, closes dialogs or reroutes Esc goes through this.
    */
-  const owner = () => state.approval ?? state.question ?? state.autoOptIn
+  const owner = () => state.approval ?? state.question ?? state.autoOptIn ?? state.deskApproval
   /** The subagent panel's rows (ticks once a second so finished agents leave). */
   const panelTick = useNow(1000)
   const panelList = createMemo(() => panelAgents(panelTick()))
@@ -553,11 +567,13 @@ export function App(props: {
     if (props.onExit) return props.onExit()
     setState("exiting", true)
     abort?.abort()
+    props.runtime.desk.stopAll()
     props.runtime.subagents.stopAll()
     await Promise.race([
       Promise.all([
         inflight ?? Promise.resolve(),
         props.runtime.subagents.flush(),
+        props.runtime.desk.flush(),
         props.runtime.hooks.emit({ type: "session-end", sessionId: currentSession().id }),
         props.runtime.mcp.stop(),
       ]),
@@ -644,6 +660,29 @@ export function App(props: {
     setState("notices", (n) => [...n, notificationText(view)])
     deliverNotices(props.runtime)
   })
+  const desk = props.runtime.desk
+  const offDesk = desk.onChange((view) => {
+    if (view.sessionId === currentSession().id) setState("deskRuns", view.id, reconcile(view))
+  })
+  // A desk run finished: one line and one notice for the whole run, never one per agent.
+  const offDeskDone = desk.onFinished((view) => {
+    if (view.sessionId !== currentSession().id) return
+    const status = DESK_STATUS[view.status]
+    pushLine({ kind: "agent-notice", agentId: view.id, status, text: `Ultradesk ${view.playbook} (${view.id}) · ${status} · ${runStats(view)}${view.error ? ` · ${view.error}` : ""}` })
+    setState("notices", (n) => [...n, `${deskNotification(view)}\n${DESK_NOTE}`])
+    deliverNotices(props.runtime)
+  })
+  const offDeskAsk = props.runtime.deskApprovals.onChange((head) => {
+    if (head) attention?.attention("question", `Ultradesk cần bạn duyệt: ${head.playbook}`)
+    setState("deskApproval", head)
+    if (!head) deliverNotices(props.runtime)
+  })
+  desk.onPersistError = (error) => pushLine({ kind: "error", text: `Không lưu được journal của ultradesk: ${error instanceof Error ? error.message : String(error)}` })
+  onCleanup(() => {
+    offDesk()
+    offDeskDone()
+    offDeskAsk()
+  })
   subagents.onPersistError = (error) =>
     pushLine({ kind: "error", text: `Không lưu được transcript của subagent: ${error instanceof Error ? error.message : String(error)}` })
   onCleanup(() => {
@@ -703,6 +742,8 @@ export function App(props: {
       autoCompactOff: config.autoCompact === "off",
       autoAcknowledged: config.permissions?.autoAcknowledged === true,
       modelPrefs,
+      deskKeywordOn: deskSettings(config).keyword,
+      deskMode: deskSettings(config).alwaysOn,
     })
     // Set to open in ▸▸ auto without ever having said yes (config or /config): ask now.
     if (config.permissions?.defaultMode === "auto" && !state.autoAcknowledged) setState("autoOptIn", { from: props.runtime.permissions.mode })
@@ -736,7 +777,9 @@ export function App(props: {
     ),
   )
 
-  const allCommands = createMemo<CommandInfo[]>(() => [...COMMANDS, ...promptCommands()])
+  /** /<playbook>: ask the model to run that playbook for the rest of the line (an opt-in). */
+  const playbookCommands: CommandInfo[] = PLAYBOOKS.map((p) => ({ name: p.meta.name, args: "<yêu cầu>", argsRequired: true, description: `Ultradesk: ${p.meta.description.split("\n")[0]}` }))
+  const allCommands = createMemo<CommandInfo[]>(() => [...COMMANDS, ...playbookCommands, ...promptCommands()])
 
   /**
    * The "/" list, Claude Code style: open while the draft is "/" + a command name (no
@@ -974,6 +1017,12 @@ export function App(props: {
     () => promptStyle(renderer.nativeScene).getStyleId("extmark.file") ?? undefined,
   )
 
+  /** `ultradesk` coloured in the prompt while the keyword is on (config desk.keyword). */
+  const keywordMark = new KeywordMark(
+    () => input,
+    () => promptStyle(renderer.nativeScene).getStyleId("extmark.desk") ?? undefined,
+  )
+
   /**
    * Replace the draft; the cursor goes to the end (or the start, for an entry recalled with
    * ↑). `saved` turns known labels back into pills.
@@ -981,12 +1030,14 @@ export function App(props: {
   function setInput(value: string, cursor: "start" | "end" = "end", saved?: Omit<DraftSnapshot, "text">) {
     if (input) {
       input.setText(value)
+      keywordMark.reset()
       parts.restore(saved)
       if (cursor === "start") input.gotoBufferHome()
       else input.gotoBufferEnd()
       setCursor(input.cursorOffset)
     }
     setDraft(value)
+    keywordMark.update(value, state.deskKeywordOn)
     setSelected(0)
     if (value !== dismissedFor()) setDismissedFor(undefined)
   }
@@ -1244,8 +1295,9 @@ export function App(props: {
       setInput("")
       restoreStash()
       // Typed while an answer is streaming: sent when it ends (Claude Code), ↑ to edit it.
-      if (state.streaming) return void setState("queue", (q) => [...q, { text, display: shown, images, saved }])
-      void send(props.runtime, { text, display: shown, images })
+      const desk = state.deskKeywordOn && hasDeskKeyword(shown) ? ("keyword" as const) : undefined
+      if (state.streaming) return void setState("queue", (q) => [...q, { text, display: shown, images, saved, desk }])
+      void send(props.runtime, { text, display: shown, images, desk })
       return
     }
     const known = allCommands().some((c) => c.name.toLowerCase() === cmd.name) || cmd.name === "quit"
@@ -1265,7 +1317,17 @@ export function App(props: {
       if (state.streaming) return say("Đang trả lời; chờ xong rồi chạy prompt.", "warning")
       return void runPrompt(promptCmd, cmd.args)
     }
+    const playbook = PLAYBOOKS.find((p) => p.meta.name === cmd.name)
+    if (playbook) {
+      if (!cmd.args) return say(`Dùng: /${playbook.meta.name} <yêu cầu>`, "error")
+      const text = `Chạy playbook ultradesk ${playbook.meta.name} cho yêu cầu sau (gọi desk_run với args đúng schema): ${cmd.args}`
+      const outgoing = { text, display: `/${playbook.meta.name} ${cmd.args}`, desk: "command" as const }
+      if (state.streaming) return void setState("queue", (q) => [...q, { ...outgoing, images: [], saved: {} }])
+      return void send(props.runtime, outgoing)
+    }
     switch (cmd.name) {
+      case "desk":
+        return void deskCommand(cmd.args)
       case "connect":
       case "model":
       case "skills":
@@ -1320,6 +1382,26 @@ export function App(props: {
     }
   }
 
+  /** /desk: the runs; on|off for the session; resume <run> runs a cut run again from its journal. */
+  async function deskCommand(args: string) {
+    const [sub, id] = args.split(/\s+/)
+    if (!sub) return setState("dialog", "desk")
+    if (sub === "on" || sub === "off") {
+      setState("deskMode", sub === "on")
+      return say(sub === "on" ? "Ultradesk bật cho cả phiên: yêu cầu nghiên cứu lớn có thể chạy playbook (vẫn duyệt trước khi chạy)" : "Đã tắt ultradesk cho phiên này", "success")
+    }
+    if (sub === "resume") {
+      if (!id) return setState("dialog", "desk")
+      try {
+        await props.runtime.desk.resume(id)
+        return say(`Đang chạy tiếp run ${id}`, "success")
+      } catch (error) {
+        return say(error instanceof Error ? error.message : String(error), "error")
+      }
+    }
+    say("Dùng: /desk, /desk on, /desk off, /desk resume <run>", "error")
+  }
+
   /** A first x on a panel row only asks; a second x on the same row within the window stops it. */
   let stopArmed: { id: string; at: number } | undefined
 
@@ -1342,6 +1424,7 @@ export function App(props: {
     if (evt.name === "escape") return setState("panelFocus", undefined)
     if (evt.name === "return") {
       if (!agent) return setState("panelFocus", undefined)
+      if (isDeskRow(agent)) return setState({ panelFocus: undefined, deskFocus: agent.id, dialog: "desk" })
       return setState({ panelFocus: undefined, tasksFocus: agent.id, dialog: "tasks" })
     }
     if (stopKey) {
@@ -1353,6 +1436,10 @@ export function App(props: {
         return flash(`Nhấn x lần nữa để dừng ${name}`, STOP_WINDOW_MS, "warning")
       }
       stopArmed = undefined
+      if (isDeskRow(agent)) {
+        if (props.runtime.desk.stop(agent.id)) say(`Đã dừng run ultradesk ${agent.id}`, "success")
+        return
+      }
       if (props.runtime.subagents.stop(agent.id)) say(`Đã dừng subagent ${name}`, "success")
       return
     }
@@ -1535,6 +1622,10 @@ export function App(props: {
         <Show when={state.autoOptIn && !state.approval && !state.question}>
           <AutoOptInDialog gate={props.runtime.permissions} />
         </Show>
+        {/* A desk run's approval card waits behind tool approvals and questions. */}
+        <Show when={!state.approval && !state.question ? state.deskApproval : undefined} keyed>
+          {(request) => <DeskApprovalCard request={request} approvals={props.runtime.deskApprovals} />}
+        </Show>
         {/* A question stays mounted (answers kept) while an approval covers it. */}
         <Show when={state.question} keyed>
           {(request) => (
@@ -1590,6 +1681,9 @@ export function App(props: {
             <Match when={state.dialog === "shortcuts"}>
               <ShortcutsPane onType={(text) => input?.insertText(text)} />
             </Match>
+            <Match when={state.dialog === "desk"}>
+              <DeskDialog runtime={props.runtime} />
+            </Match>
             <Match when={state.dialog === "memory"}>
               <MemoryDialog memory={props.runtime.memory} />
             </Match>
@@ -1608,6 +1702,7 @@ export function App(props: {
             if (input) setCursor(input.cursorOffset)
             if (v === draft()) return
             setDraft(v)
+            keywordMark.update(v, state.deskKeywordOn)
             setSelected(0)
             // A dismissed list stays closed only until the draft changes.
             if (v !== dismissedFor()) setDismissedFor(undefined)
@@ -1630,7 +1725,9 @@ export function App(props: {
                 : state.streaming
                   ? "esc dừng"
                   : draft()
-                    ? undefined
+                    ? state.deskKeywordOn && hasDeskKeyword(draft())
+                      ? "ultradesk: yêu cầu này được chạy playbook"
+                      : undefined
                     : "? phím tắt · / lệnh"
           }
         />

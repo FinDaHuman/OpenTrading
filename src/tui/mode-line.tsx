@@ -19,7 +19,9 @@ export const NOTICE_COLOR: Record<NoticeLevel, string> = { info: color.tx2, succ
 
 export const MODE_COLOR = { "read-only": color.tx3, ask: color.tham, auto: color.tang } as const
 
-const running = () => Object.values(state.agents).filter((a) => a.status === "running" || a.status === "queued")
+// Desk agents count as their run, not one by one.
+const running = () => Object.values(state.agents).filter((a) => !a.deskRunId && (a.status === "running" || a.status === "queued"))
+const deskLive = () => Object.values(state.deskRuns).filter((r) => r.status === "running" || r.status === "paused")
 
 const time = (ms: number) => new Date(ms).toLocaleTimeString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit" })
 
@@ -34,9 +36,16 @@ export function ModeLine(props: { hint?: string }) {
   /** Subagents at work (Claude Code's tasks pill): "2 subagent · 1 nền · ↓ quản lý". */
   const pills = () => {
     const list = running()
-    if (list.length === 0) return []
-    const bg = list.filter((a) => a.background).length
-    return [`${list.length} subagent${bg > 0 ? ` · ${bg} nền` : ""}${state.panelFocus === undefined ? " · ↓ quản lý" : ""}`]
+    const runs = deskLive()
+    const out: string[] = []
+    if (state.deskMode) out.push("desk ●")
+    if (runs.length > 0) out.push(runs.length === 1 ? `desk ${runs[0]!.playbook} ${runs[0]!.counters.agents} agent` : `${runs.length} run desk`)
+    if (list.length > 0) {
+      const bg = list.filter((a) => a.background).length
+      out.push(`${list.length} subagent${bg > 0 ? ` · ${bg} nền` : ""}`)
+    }
+    if ((list.length > 0 || runs.length > 0) && state.panelFocus === undefined) out[out.length - 1] += " · ↓ quản lý"
+    return out
   }
   /** Claude Code drops the cycle hint once the line has more than the mode on it. */
   const cycleHint = () => (pills().length === 0 && !state.autoOptIn ? " (shift+tab đổi)" : "")
