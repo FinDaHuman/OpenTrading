@@ -63,6 +63,12 @@ export function MemoryDialog(props: { memory: MemoryProvider }) {
       </Match>
       <Match when={true}>
         <DialogFrame title={`Memory · ${items()?.length ?? 0}`} hint="enter xem · esc đóng">
+          {/* Files that did not parse are skipped, not silently: the user can fix or delete them. */}
+          <Show when={items() && (props.memory.problems?.() ?? []).length > 0}>
+            <text fg={color.tham} wrapMode="word" marginBottom={1}>
+              {`△ Bỏ qua ${props.memory.problems!().length} file memory không đọc được (sửa hoặc xoá file):\n${props.memory.problems!().join("\n")}`}
+            </text>
+          </Show>
           <Show
             when={(items() ?? []).length > 0}
             fallback={<text fg={color.tx2}>Chưa có memory. Nói "Ghi nhớ: …" trong chat, hoặc để model đề xuất.</text>}

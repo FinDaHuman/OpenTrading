@@ -84,12 +84,30 @@ export class FileMemory implements MemoryProvider {
     return item
   }
 
+  private unreadable: string[] = []
+
+  /** One broken file is skipped and reported (problems()); it never hides the valid memories. */
   async list(): Promise<MemoryItem[]> {
     const files = await readdir(this.dir).catch(() => [] as string[])
+    const broken: string[] = []
     const items = await Promise.all(
-      files.filter((f) => f.endsWith(".md")).map(async (f) => parse(await readFile(path.join(this.dir, f), "utf8").catch(() => ""))),
+      files
+        .filter((f) => f.endsWith(".md"))
+        .map(async (f) => {
+          try {
+            return parse(await readFile(path.join(this.dir, f), "utf8"))
+          } catch (error) {
+            broken.push(`${path.join(this.dir, f)}: ${error instanceof Error ? error.message.split("\n")[0] : String(error)}`)
+            return undefined
+          }
+        }),
     )
+    this.unreadable = broken.sort()
     return items.filter((i): i is MemoryItem => Boolean(i)).sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+  }
+
+  problems() {
+    return this.unreadable
   }
 
   private async active() {

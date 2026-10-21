@@ -96,3 +96,15 @@ test("switching memory live swaps its tools and hooks", async () => {
   switchMemory(runtime, m)
   expect(runtime.registry.get("propose_memory")).toBeDefined()
 })
+
+test("one broken memory file is skipped and reported; the valid ones still reach index and recall", async () => {
+  const { dir, memory: m } = await memory()
+  await m.add("Người dùng không dùng margin", { status: "active", via: "user" })
+  await Bun.write(path.join(dir, "corrupt.md"), '---\nid: "x\nscope: [user\n---\nhỏng')
+  const items = await m.list()
+  expect(items.map((i) => i.text)).toEqual(["Người dùng không dùng margin"])
+  expect(m.problems()).toHaveLength(1)
+  expect(m.problems()[0]).toContain("corrupt.md")
+  expect(await m.index()).toContain("margin")
+  expect((await m.recall("có dùng margin không")).map((i) => i.text)).toEqual(["Người dùng không dùng margin"])
+})

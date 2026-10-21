@@ -91,6 +91,20 @@ test("config: project overrides global, invalid entries become errors", async ()
   expect(servers.find((s) => s.name === "bad")!.error).toContain("không hợp lệ")
 })
 
+test("config: a UTF-8 BOM is read; a file that does not parse is an error, not 'no servers'", async () => {
+  const home = await mkdtemp(path.join(os.tmpdir(), "ot-mcp-bom-"))
+  try {
+    const file = path.join(home, "mcp.json")
+    await writeFile(file, "﻿" + JSON.stringify({ mcpServers: { tat: { command: "x", disabled: true } } }), "utf8")
+    expect((await loadServers(home, home)).map((s) => [s.name, s.error])).toEqual([["tat", undefined]])
+    await writeFile(file, "{ mcpServers: ", "utf8")
+    const [broken] = await loadServers(home, home)
+    expect(broken!.error).toContain("không phải JSON hợp lệ")
+  } finally {
+    await rm(home, { recursive: true, force: true })
+  }
+})
+
 test("connects to the demo server over stdio and calls its tools", async () => {
   const { registry, manager } = await setup({ demo: demoConfig })
   await manager.start()

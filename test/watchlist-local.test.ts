@@ -79,3 +79,26 @@ test("parallel adds in one step keep every symbol", async () => {
   await Promise.all(["VCB", "HPG", "FPT", "MWG", "SSI"].map((s) => add.execute({ name: "core", symbols: [s] }, ctx())))
   expect((await tool("watchlist_local_get").execute({ name: "core" }, ctx())) as string).toContain("FPT, HPG, MWG, SSI, VCB")
 })
+
+test("three processes adding at once lose no symbol (the lock spans processes)", async () => {
+  await tool("watchlist_local_create").execute({ name: "qa" }, ctx())
+  const script = path.join(import.meta.dir, "fixtures", "scripts", "watchlist-writer.ts")
+  const procs = ["X", "Y", "Z"].map((prefix) => Bun.spawn([process.execPath, script, home, prefix], { stdout: "pipe", stderr: "pipe" }))
+  const codes = await Promise.all(procs.map((p) => p.exited))
+  const errors = await Promise.all(procs.map((p) => new Response(p.stderr).text()))
+  expect(errors.join("")).toBe("")
+  expect(codes).toEqual([0, 0, 0])
+  const store = JSON.parse(await Bun.file(path.join(home, "watchlists.json")).text())
+  expect(store.QA.symbols).toHaveLength(60)
+  expect(await Bun.file(path.join(home, "watchlists.json.lock")).exists()).toBe(false)
+}, 60_000)
+
+test("a lock left by a dead process is taken over; a live one makes the writer wait, then fail clearly", async () => {
+  const { withFileLock } = await import("../src/core/file-lock")
+  const file = path.join(home, "x.json")
+  // pid 2^22+1 is not running anywhere we test.
+  await writeFile(`${file}.lock`, JSON.stringify({ pid: 4194305, at: Date.now() }))
+  expect(await withFileLock(file, async () => "ok")).toBe("ok")
+  await writeFile(`${file}.lock`, JSON.stringify({ pid: process.ppid, at: Date.now() }))
+  await expect(withFileLock(file, async () => "ok", { timeoutMs: 200 })).rejects.toThrow("đang giữ khoá")
+})

@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises"
 import path from "node:path"
 import { z } from "zod"
+import { withFileLock } from "../../file-lock"
 import { writeJson } from "../../store"
 import { LOCAL_SOURCE, type ToolDef } from "../types"
 
@@ -83,18 +84,21 @@ export async function readWatchlists(home: string): Promise<WatchlistStore> {
 }
 
 // Writes are serialized per file: two tool calls in one step must not each read the old
-// store and overwrite the other's change.
+// store and overwrite the other's change. The queue orders this process's writes; the file
+// lock orders them against other processes (two TUIs, a headless run) on the same home.
 const queues = new Map<string, Promise<unknown>>()
 
-/** Read-modify-write under the per-file queue; `change` returns the message for the caller. */
+/** Read-modify-write under the per-file queue and lock; `change` returns the message for the caller. */
 export function updateWatchlists<T>(home: string, change: (store: WatchlistStore) => T): Promise<T> {
   const file = watchlistFile(home)
-  const run = (queues.get(file) ?? Promise.resolve()).catch(() => {}).then(async () => {
-    const store = await readWatchlists(home)
-    const result = change(store)
-    await writeJson(file, store)
-    return result
-  })
+  const run = (queues.get(file) ?? Promise.resolve()).catch(() => {}).then(() =>
+    withFileLock(file, async () => {
+      const store = await readWatchlists(home)
+      const result = change(store)
+      await writeJson(file, store)
+      return result
+    }),
+  )
   queues.set(file, run)
   return run
 }
