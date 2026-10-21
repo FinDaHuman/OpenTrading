@@ -1206,54 +1206,78 @@ test("80×24: a full todo panel and the '/' list still leave the prompt, hint an
   }
 })
 
+/**
+ * A question is open, then drawn. State first: right after the previous turn a frame can still
+ * show the last (identical) question, and a key sent then reaches nobody (flaky under load).
+ */
+async function questionShown(text = "Câu hỏi cho bạn") {
+  await setup.waitFor(() => state.question !== undefined)
+  return setup.waitForFrame((f) => f.includes(text))
+}
+
+/** A failed ask test must not leave its question open for the tests after it. */
+function closeQuestions() {
+  if (state.question) runtime.questions.cancelAll()
+}
+
 test("ask_user: one single-choice question sends on pick and the turn goes on", async () => {
   const lastTool = () => JSON.stringify([...state.history].reverse().find((m) => m.role === "tool")?.content ?? "")
-  await setup.mockInput.typeText("HỎI-TÔI giúp mình")
-  setup.mockInput.pressEnter()
-  const frame = await setup.waitForFrame((f) => f.includes("Câu hỏi cho bạn") && f.includes("Bạn đầu tư trong bao lâu?"))
-  show(frame)
-  expect(frame).toMatch(/❯ 1\. Dưới 1 năm/)
-  expect(frame).toContain("Lướt sóng, ưu tiên thanh khoản")
-  expect(frame).toContain("4. Khác (tự nhập)")
-  expect(frame).not.toContain("Hỏi về thị trường") // the prompt input is hidden meanwhile
-  await setup.mockInput.typeText("2")
-  await waitMcp(() => !state.streaming)
-  expect(lastTool()).toContain('Người dùng đã trả lời: \\"Bạn đầu tư trong bao lâu?\\"=\\"1–3 năm\\"')
-  expect(JSON.stringify(state.history.at(-1)?.content)).toContain("HẾT-CÂU-TRẢ-LỜI")
-  expect(state.question).toBeUndefined()
+  try {
+    await setup.mockInput.typeText("HỎI-TÔI giúp mình")
+    setup.mockInput.pressEnter()
+    await questionShown()
+    const frame = await setup.waitForFrame((f) => f.includes("Câu hỏi cho bạn") && f.includes("Bạn đầu tư trong bao lâu?"))
+    show(frame)
+    expect(frame).toMatch(/❯ 1\. Dưới 1 năm/)
+    expect(frame).toContain("Lướt sóng, ưu tiên thanh khoản")
+    expect(frame).toContain("4. Khác (tự nhập)")
+    expect(frame).not.toContain("Hỏi về thị trường") // the prompt input is hidden meanwhile
+    await setup.mockInput.typeText("2")
+    await waitMcp(() => !state.streaming)
+    expect(lastTool()).toContain('Người dùng đã trả lời: \\"Bạn đầu tư trong bao lâu?\\"=\\"1–3 năm\\"')
+    expect(JSON.stringify(state.history.at(-1)?.content)).toContain("HẾT-CÂU-TRẢ-LỜI")
+    expect(state.question).toBeUndefined()
+  } finally {
+    closeQuestions()
+  }
 }, 30_000)
 
 test("ask_user: esc declines without stopping the turn; 'Khác' takes a typed answer", async () => {
   const lastTool = () => JSON.stringify([...state.history].reverse().find((m) => m.role === "tool")?.content ?? "")
-  await setup.mockInput.typeText("HỎI-TÔI lần nữa")
-  setup.mockInput.pressEnter()
-  await setup.waitForFrame((f) => f.includes("Câu hỏi cho bạn"))
-  setup.mockInput.pressEscape()
-  await waitMcp(() => !state.streaming)
-  expect(lastTool()).toContain("Người dùng bỏ qua các câu hỏi")
-  expect(JSON.stringify(state.history.at(-1)?.content)).toContain("HẾT-CÂU-TRẢ-LỜI")
-  expect(JSON.stringify(state.history.at(-1)?.content)).not.toContain("đã dừng")
+  try {
+    await setup.mockInput.typeText("HỎI-TÔI lần nữa")
+    setup.mockInput.pressEnter()
+    await questionShown()
+    setup.mockInput.pressEscape()
+    await waitMcp(() => !state.streaming && state.question === undefined)
+    expect(lastTool()).toContain("Người dùng bỏ qua các câu hỏi")
+    expect(JSON.stringify(state.history.at(-1)?.content)).toContain("HẾT-CÂU-TRẢ-LỜI")
+    expect(JSON.stringify(state.history.at(-1)?.content)).not.toContain("đã dừng")
 
-  await setup.mockInput.typeText("HỎI-TÔI tự nhập")
-  setup.mockInput.pressEnter()
-  await setup.waitForFrame((f) => f.includes("Câu hỏi cho bạn"))
-  await setup.mockInput.typeText("4")
-  await setup.waitForFrame((f) => f.includes("Câu trả lời của bạn"))
-  setup.mockInput.pressEnter() // empty: nothing typed yet, the question stays open
-  await setup.waitForFrame((f) => f.includes("Bạn đầu tư trong bao lâu?") && !f.includes("Câu trả lời của bạn"))
-  expect(state.question).toBeDefined()
-  await setup.mockInput.typeText("4")
-  await setup.waitForFrame((f) => f.includes("Câu trả lời của bạn"))
-  await setup.mockInput.typeText("6 tháng")
-  setup.mockInput.pressEnter()
-  await waitMcp(() => !state.streaming)
-  expect(lastTool()).toContain("6 tháng")
+    await setup.mockInput.typeText("HỎI-TÔI tự nhập")
+    setup.mockInput.pressEnter()
+    await questionShown()
+    await setup.mockInput.typeText("4")
+    await setup.waitForFrame((f) => f.includes("Câu trả lời của bạn"))
+    setup.mockInput.pressEnter() // empty: nothing typed yet, the question stays open
+    await setup.waitForFrame((f) => f.includes("Bạn đầu tư trong bao lâu?") && !f.includes("Câu trả lời của bạn"))
+    expect(state.question).toBeDefined()
+    await setup.mockInput.typeText("4")
+    await setup.waitForFrame((f) => f.includes("Câu trả lời của bạn"))
+    await setup.mockInput.typeText("6 tháng")
+    setup.mockInput.pressEnter()
+    await waitMcp(() => !state.streaming)
+    expect(lastTool()).toContain("6 tháng")
+  } finally {
+    closeQuestions()
+  }
 }, 30_000)
 
 test("ask_user: several questions have tabs, multi-select and a review before sending", async () => {
   const lastTool = () => JSON.stringify([...state.history].reverse().find((m) => m.role === "tool")?.content ?? "")
   await setup.mockInput.typeText("HỎI-NHIỀU nhé")
   setup.mockInput.pressEnter()
+  await setup.waitFor(() => state.question !== undefined)
   let frame = await setup.waitForFrame((f) => f.includes("[ ] Khung TG") && f.includes("✓ Gửi"))
   show(frame)
   await setup.mockInput.typeText("3") // single choice → next tab
@@ -1268,9 +1292,13 @@ test("ask_user: several questions have tabs, multi-select and a review before se
   expect(frame).toContain("→ Trên 3 năm")
   expect(frame).toContain("→ Ngân hàng, Thép")
   setup.mockInput.pressEnter()
-  await waitMcp(() => !state.streaming)
-  expect(lastTool()).toContain("Ngân hàng, Thép")
-  expect(lastTool()).toContain("Trên 3 năm")
+  try {
+    await waitMcp(() => !state.streaming)
+    expect(lastTool()).toContain("Ngân hàng, Thép")
+    expect(lastTool()).toContain("Trên 3 năm")
+  } finally {
+    closeQuestions()
+  }
 }, 30_000)
 
 test("Ctrl+C like Claude Code: the first press clears the draft and says press again; a second within 800 ms exits", async () => {
