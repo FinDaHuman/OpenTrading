@@ -35,7 +35,7 @@ export function clip(text: string, max = FIELD_CHARS) {
   return `${text.slice(0, head)}[đã lược ${text.length - head - tail} ký tự]${text.slice(text.length - tail)}`
 }
 
-/** The parts of a call that decide what it does, short (Claude Code toAutoClassifierInput). */
+/** The parts of a call that decide what it does, short. */
 export function compactInput(def: Pick<ToolDef, "name" | "subject">, input: unknown): string {
   const i = (input ?? {}) as Record<string, unknown>
   const s = (v: unknown) => (typeof v === "string" ? v : JSON.stringify(v ?? ""))

@@ -1,5 +1,5 @@
 /**
- * The auto-mode classifier's rules, in four lists (Claude Code auto-mode-config):
+ * The auto-mode classifier's rules, in four lists (as `claude auto-mode defaults` prints them):
  * - `hard_deny`: block unconditionally — no user message, no allow rule clears them;
  * - `soft_deny`: block unless an `allow` exception matches or the user's own message names
  *   this exact action and its target;

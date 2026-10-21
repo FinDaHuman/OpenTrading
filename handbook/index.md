@@ -11,7 +11,6 @@ integration assumptions, engineering workflow, testing, and delivery order.
 [test strategy](testing/test-strategy.md).
 
 **Adapter author:** [core contracts](contracts/core-contracts.md) →
-[internal APIs](integrations/internal-apis.md) →
 [adapter checklist](integrations/adapter-checklist.md).
 
 **Runtime author:** [agent runtime](architecture/agent-runtime.md) →

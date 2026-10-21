@@ -9,7 +9,7 @@ import { color } from "../theme"
 import { DialogFrame } from "./frame"
 
 /**
- * The first switch to ▸▸ auto asks first (Claude Code's AutoModeOptInDialog): what the mode
+ * The first switch to ▸▸ auto asks first (as Claude Code does): what the mode
  * does, what it costs, where it stops. The gate stays in its old mode until the user says
  * yes, so nothing is approved by the classifier while this is open. Nothing is written to
  * the transcript. Shift+Tab closes it without turning auto on and moves on (to ‖ chỉ đọc).

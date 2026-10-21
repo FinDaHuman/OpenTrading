@@ -14,7 +14,7 @@ import { LOADED_PREFIX } from "../core/tools/search"
 import { isSpawn, SubagentRow } from "./subagent-row"
 
 /**
- * The conversation, in Claude Code's style (components/messages/*):
+ * The conversation, in Claude Code's style:
  *   ❯ what you typed
  *   ● an answer, or a tool call whose dot shows its state
  *     ⎿  the tool's result, a few lines, "… +N dòng (ctrl+o để mở rộng)"

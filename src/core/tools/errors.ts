@@ -4,7 +4,7 @@ import type { ModelMessage } from "ai"
  * Tool errors as the model and the user read them. The AI SDK builds them with
  * `Error.toString()`, so they reach both as "AI_ToolCallRepairError: Error repairing tool
  * call: Error: …" and "AI_InvalidToolInputError: … Value: {the whole input} … [zod JSON]".
- * Like Claude Code (formatZodValidationError) and opencode, keep only what helps the next
+ * Like Claude Code and opencode, keep only what helps the next
  * call: one line per wrong parameter, never the input echoed back.
  */
 

@@ -20,8 +20,8 @@ import { attachmentAttrs, attachmentKey, attachmentsOf, clearedAttachment, witho
  */
 
 /**
- * Room kept free under the window for the answer and the summary request (Claude Code's
- * MAX_OUTPUT_TOKENS_FOR_SUMMARY; opencode reserves min(output, 20k) too).
+ * Room kept free under the window for the answer and the summary request (opencode
+ * reserves min(output, 20k) too).
  */
 export const SUMMARY_RESERVE = 20_000
 /** Default `autoCompactPercent`: compact at this share of (window − reserve). */
@@ -116,7 +116,7 @@ export type CompactVariant = "full" | "lean"
 
 /**
  * Sent after the head when summarizing; the summary must stand in for everything above it.
- * One request, as Claude Code does (services/compact/prompt.ts): the model first inventories
+ * One request, as Claude Code's /compact does: the model first inventories
  * the conversation in an <analysis> scratchpad, then writes the <summary>;
  * {@link formatCompactSummary} keeps only the summary.
  */

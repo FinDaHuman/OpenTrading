@@ -1500,7 +1500,7 @@ export function App(props: {
       return void openEditor()
     }
     // Permission mode: Shift+Tab, or Alt+M where the terminal does not send Shift+Tab
-    // (Claude Code defaultBindings.ts). Not while a prompt or dialog owns the keys (checked above).
+    // (as in Claude Code). Not while a prompt or dialog owns the keys (checked above).
     if ((evt.name === "tab" && evt.shift) || (evt.meta && evt.name === "m")) {
       evt.preventDefault()
       const next = cycleMode(props.runtime.permissions.mode)

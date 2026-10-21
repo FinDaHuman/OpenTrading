@@ -3,7 +3,7 @@ import { samePathKey } from "./path-safety"
 
 /**
  * What the agent has read this session, per file: the edit tools require a full read before
- * overwriting or editing, and refuse when the file changed since (Claude Code readFileState,
+ * overwriting or editing, and refuse when the file changed since (Claude Code's Edit tool,
  * deepseek fs-observation-policy). Kept in memory only: a resumed session reads again.
  */
 

@@ -8,7 +8,7 @@ import { asJson } from "./transcript"
 
 /**
  * The auto-mode classifier: a second model call that judges one pending action before it runs
- * (Claude Code yoloClassifier.ts, two stages):
+ * (two stages, like Claude Code's auto mode):
  * 1. fast — "err on the side of blocking", answer `<block>yes|no</block>` at once;
  * 2. only when stage 1 blocks or gives no readable answer — the same prompt asking for brief
  *    reasoning first, then `<block>`, `<rule>`, `<reason>`. Its answer is final.

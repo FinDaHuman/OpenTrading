@@ -8,7 +8,7 @@ import { LOCAL_SOURCE, type ToolDef } from "../types"
 export const SPAWN_SUBAGENT = "spawn_subagent"
 
 /**
- * Model-facing guidance, after Claude Code's Agent tool prompt (tools/AgentTool/prompt.ts):
+ * Model-facing guidance, covering what Claude Code's Agent tool covers:
  * when to delegate, parallel calls in one step, a self-contained brief, and the result
  * being visible to the main agent only.
  */

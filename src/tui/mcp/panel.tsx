@@ -13,7 +13,7 @@ import { BADGE, BADGE_LEGEND, toolBadge, toolMark } from "../ui/badges"
 import { Field, ToolDetail } from "../ui/tool-detail"
 
 /**
- * /mcp — modelled on Claude Code's MCP settings (components/mcp/*): a full-width pane in
+ * /mcp — modelled on Claude Code's /mcp screen: a full-width pane in
  * place of the prompt, servers grouped by where they are configured, one row per server
  * (`name · ✓ connected`), then a server menu → its tools → one tool's details. Built-in
  * catalog servers sit in their own group and stay off until enabled.

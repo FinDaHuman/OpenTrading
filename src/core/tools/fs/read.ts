@@ -11,7 +11,7 @@ import { readDocx, readXlsx, toCsvRow } from "../../fs/office"
 /**
  * read_file: what the user hands over by path (a broker's PDF report, an Excel export saved
  * as CSV, notes, a screenshot), and later the agent's own artifacts before editing them.
- * Text comes back numbered like `cat -n` (Claude Code FileReadTool), a folder comes back as
+ * Text comes back numbered like `cat -n` (Claude Code's Read tool), a folder comes back as
  * a listing (opencode read.ts), PDFs page by page, images as images.
  */
 

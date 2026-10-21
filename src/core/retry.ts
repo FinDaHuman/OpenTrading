@@ -4,8 +4,8 @@ import { isContextOverflow, tokensOf } from "./compact"
 import { groupDigits } from "./subagents/result"
 
 /**
- * Retry for model requests, by kind of failure (opencode `session/retry.ts`, Claude Code
- * `services/api/withRetry.ts`): both turn the SDK's own retry off and run their own,
+ * Retry for model requests, by kind of failure (opencode `session/retry.ts`; Claude Code
+ * does the same): both turn the SDK's own retry off and run their own,
  * because the SDK retries every 429 alike, waits in silence, and drops Gemini's
  * RetryInfo. Streams are created with `maxRetries: 0` and wrapped with this middleware.
  *

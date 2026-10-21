@@ -3,7 +3,7 @@ import path from "node:path"
 /**
  * Reading and writing text the way the file was: Windows PowerShell 5.1 writes UTF-16LE
  * with a BOM (`Out-File`, `>`), Notepad may add a UTF-8 BOM, Excel exports CRLF. The edit
- * tools write back in the same encoding and line endings (Claude Code writeTextContent).
+ * tools write back in the same encoding and line endings.
  */
 
 export type Encoding = "utf8" | "utf8-bom" | "utf16le" | "utf16be"
