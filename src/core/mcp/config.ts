@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises"
 import path from "node:path"
 import { z } from "zod"
-import { readJson, writeJson } from "../store"
+import { stripBom, writeJson } from "../store"
 
 /**
  * MCP server config, in the same `{ "mcpServers": { ... } }` shape Claude Code uses,
@@ -93,8 +93,21 @@ export function configFiles(home: string, cwd: string) {
 }
 
 async function readServers(file: string, scope: Scope): Promise<ServerEntry[]> {
-  const raw = await readJson<unknown>(file, undefined)
-  if (raw === undefined) return []
+  // A missing file is no servers; a file that does not parse is an error the user sees in
+  // /mcp and `mcp list`, never "no servers configured".
+  let text: string
+  try {
+    text = await readFile(file, "utf8")
+  } catch (error) {
+    if ((error as { code?: string }).code === "ENOENT") return []
+    return [{ name: path.basename(file), scope, file, error: `Không đọc được ${file}: ${(error as Error).message}` }]
+  }
+  let raw: unknown
+  try {
+    raw = JSON.parse(stripBom(text))
+  } catch (error) {
+    return [{ name: path.basename(file), scope, file, error: `${file} không phải JSON hợp lệ (${(error as Error).message}); sửa file rồi chạy lại.` }]
+  }
   const servers = (raw as { mcpServers?: unknown })?.mcpServers
   if (!servers || typeof servers !== "object") {
     return [{ name: path.basename(file), scope, file, error: `${file}: thiếu khoá "mcpServers".` }]
@@ -129,7 +142,7 @@ async function readForEdit(file: string): Promise<Record<string, unknown> & { mc
   }
   let raw: unknown
   try {
-    raw = JSON.parse(text)
+    raw = JSON.parse(stripBom(text))
   } catch (error) {
     throw new Error(`Không đọc được ${file} (JSON lỗi: ${(error as Error).message}). Sửa file trước rồi thử lại.`)
   }

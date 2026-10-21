@@ -46,6 +46,8 @@ export interface MemoryProvider {
   register?(hooks: HookBus): void | (() => void)
   /** Management, used by /memory. */
   list?(): Promise<MemoryItem[]>
+  /** What the last list() could not read (a broken file), for /memory to show; the rest still works. */
+  problems?(): string[]
   approve?(id: string): Promise<void>
   reject?(id: string): Promise<void>
   remove?(id: string): Promise<void>

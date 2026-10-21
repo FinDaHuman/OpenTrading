@@ -1,9 +1,12 @@
 import { chmod, mkdir, readFile, rename, writeFile } from "node:fs/promises"
 import path from "node:path"
 
+/** JSON text as editors save it: Notepad and PowerShell 5 put a UTF-8 BOM first, which JSON.parse rejects. */
+export const stripBom = (text: string) => (text.charCodeAt(0) === 0xfeff ? text.slice(1) : text)
+
 export async function readJson<T>(file: string, fallback: T): Promise<T> {
   try {
-    return JSON.parse(await readFile(file, "utf8")) as T
+    return JSON.parse(stripBom(await readFile(file, "utf8"))) as T
   } catch {
     return fallback
   }
