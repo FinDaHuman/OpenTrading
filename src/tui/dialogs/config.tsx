@@ -7,7 +7,7 @@ import { createMemory, switchMemory, type Runtime } from "../../core/runtime"
 import { DEFAULT_MAX_CONCURRENT } from "../../core/subagents/manager"
 import { AUTO_MODEL } from "../../core/subagents/model-pick"
 import { DEFAULT_MAX_STEPS } from "../../core/agent"
-import { EFFORT_LEVELS, isEffort, nextEffort } from "../../core/effort"
+import { isEffort } from "../../core/effort"
 import { clampPercent, DEFAULT_COMPACT_PERCENT, MIN_COMPACT_WINDOW } from "../../core/compact"
 import { fmtTokens, groupDigits } from "../../core/subagents/result"
 import { blocked, closeDialog, contextLimits, providerName, setState, state } from "../state"
@@ -24,12 +24,11 @@ const COMPACT_PERCENTS = [95, 90, 80, 70]
 
 const DEFAULT_MODE_NEXT: Record<PermissionMode, PermissionMode> = { "read-only": "ask", ask: "auto", auto: "read-only" }
 
-type Setting = "memory" | "toolSearch" | "autoCompact" | "compactLevel" | "maxSteps" | "effort" | "subagentEffort" | "subagentMax" | "subagentModel" | "webModel" | "autoModel" | "defaultMode" | "tips" | "terminalNotify" | "scroll"
+type Setting = "memory" | "toolSearch" | "autoCompact" | "compactLevel" | "maxSteps" | "effort" | "subagentMax" | "subagentModel" | "webModel" | "autoModel" | "defaultMode" | "tips" | "terminalNotify" | "scroll"
 type SubagentModel = { provider: string; model: string } | "inherit" | "auto"
 
 const TOOL_SEARCH_NEXT = { auto: "on", on: "off", off: "auto" } as const
 
-const EFFORT_CYCLE = `enter để đổi (${EFFORT_LEVELS.join(" → ")}); model thiếu mức nào thì dùng mức thấp hơn gần nhất`
 const TOOL_SEARCH_HINT = {
   auto: "Tự động · hoãn tool khi > 40 tool hoặc > 10% context; model nạp bằng tool_search",
   on: "Luôn hoãn tool (MCP và tool có sẵn) · model nạp bằng tool_search",
@@ -174,17 +173,7 @@ export function ConfigDialog(props: { runtime: Runtime }) {
       await refetch()
       return
     }
-    if (setting === "effort") {
-      await saveConfig({ effort: nextEffort(config()?.effort) })
-      await refetch()
-      return
-    }
-    if (setting === "subagentEffort") {
-      const current = await loadConfig()
-      await saveConfig({ subagents: { ...current.subagents, effort: nextEffort(current.subagents?.effort) } })
-      await refetch()
-      return
-    }
+    if (setting === "effort") return setState("dialog", "effort")
     if (setting === "autoCompact") {
       const off = config()?.autoCompact !== "off"
       await saveConfig({ autoCompact: off ? "off" : "auto" })
@@ -406,16 +395,10 @@ export function ConfigDialog(props: { runtime: Runtime }) {
                 value: "maxSteps" as Setting,
               },
               {
-                label: "Effort suy luận",
-                hint: `${isEffort(config()?.effort) ? config()!.effort : "Mặc định của provider"} · ${EFFORT_CYCLE}`,
+                label: "Effort",
+                hint: `phiên ${config()?.effort ?? "auto"} · subagent ${config()?.subagents?.effort ?? "theo phiên"} · ultradesk ${config()?.desk?.effort ?? "như subagent"} · enter mở /effort (ctrl+t đổi nhanh)`,
                 mark: isEffort(config()?.effort) ? "●" : "○",
                 value: "effort" as Setting,
-              },
-              {
-                label: "Effort của subagent",
-                hint: `${isEffort(config()?.subagents?.effort) ? config()!.subagents!.effort : "Theo effort của phiên"} · loại agent có effort riêng thì dùng của nó`,
-                mark: isEffort(config()?.subagents?.effort) ? "●" : "○",
-                value: "subagentEffort" as Setting,
               },
               {
                 label: "Subagent chạy song song",

@@ -22,6 +22,7 @@ const KEYS: [string, string][] = [
   ["esc", "đóng danh sách / · đóng bảng · dừng câu trả lời đang chạy · bấm 2 lần để xoá ô nhập"],
   ["shift+tab · alt+m", "đổi chế độ quyền: ‖ chỉ đọc (ghi file hỏi từng lần) ↔ ▸ sửa có hỏi (cho phép được cả thư mục trong phiên)"],
   ["ctrl+o", "mở rộng / thu gọn kết quả tool"],
+  ["ctrl+t", "đổi effort phiên chính: auto → các mức model nhận → auto (/effort chỉnh cả subagent, ultradesk)"],
   ["kéo chuột", "bôi đen để copy (tự copy khi thả chuột); trong ô nhập thì giữ vùng chọn để sửa · giữ shift để dùng chọn chữ của terminal"],
   ["ctrl+c", "copy phần đang bôi đen · xoá ô nhập / dừng câu trả lời · bấm 2 lần để thoát"],
   ["ctrl+d", "bấm 2 lần khi ô nhập trống để thoát"],

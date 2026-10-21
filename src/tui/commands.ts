@@ -9,6 +9,7 @@ export interface CommandInfo {
 export const COMMANDS: CommandInfo[] = [
   { name: "connect", description: "Nhập API key (Groq, Gemini, NVIDIA và 200+ provider khác)" },
   { name: "model", description: "Chọn model từ mọi provider đã kết nối" },
+  { name: "effort", args: "[auto|low…max]", description: "Effort suy luận: phiên chính, subagent, ultradesk (ctrl+t đổi nhanh)" },
   { name: "skills", description: "Danh sách skill; bật / tắt skill cho cả phiên" },
   { name: "agents", description: "Các loại subagent (có sẵn, người dùng, dự án) và tool của từng loại" },
   { name: "tasks", description: "Subagent của phiên này: đang chạy, đã xong; xem kết quả, dừng" },

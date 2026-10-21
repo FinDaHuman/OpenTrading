@@ -35,6 +35,7 @@ export const SHORTCUTS: { title: string; keys: [string, string][] }[] = [
       ["↓", "quản lý subagent"],
       ["ctrl+o", "xem chi tiết"],
       ["shift+tab", "đổi chế độ quyền"],
+      ["ctrl+t", "đổi effort"],
     ],
   },
   {
