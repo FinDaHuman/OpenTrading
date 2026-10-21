@@ -14,7 +14,7 @@ const FLOOR = {
   /**
    * Cases whose expected skill is suggested.
    * 2026-10-21 (sector skills, PR #116): 2 cases per sector skill, look-alike questions that
-   * belong to other skills, and the misroutes found in review. Misses: Q229/Q239 (old), Q290
+   * belong to other skills, and the misroutes found in review. Misses: Q176/Q229 (old), Q290
    * (no news skill fires for "Vinhomes có tin gì mới", same on main).
    */
   skillHits: 86, // of 89

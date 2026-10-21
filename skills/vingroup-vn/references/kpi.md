@@ -32,7 +32,7 @@ riêng công ty con niêm yết (VHM, VRE) và ghi rõ.
 
 | Phần | Cách tính |
 |---|---|
-| Công ty con niêm yết | Vốn hoá thị trường (`stock_overview` từng mã) × tỷ lệ sở hữu của VIC (TM hoặc `vn_company(detail=true)`) |
+| Công ty con niêm yết | Vốn hoá = số cổ phiếu lưu hành (KLCPLH) × giá, cả hai trong `stock_overview` từng mã; × tỷ lệ sở hữu của VIC (TM hoặc `vn_company(detail=true)`) |
 | Mảng chưa niêm yết | Phương pháp hợp mảng; không đủ số thì ghi "chưa định giá" thay vì đoán |
 | Nợ ròng công ty mẹ | Nợ vay công ty mẹ − tiền công ty mẹ (BCTC riêng nếu có) |
 | Chiết khấu tập đoàn | Nêu mức giả định và lý do |
