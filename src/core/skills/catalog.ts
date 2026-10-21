@@ -46,17 +46,18 @@ export function fold(text: string) {
   return text.normalize("NFD").replace(/\p{M}/gu, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase()
 }
 
+/** Shared whole-word normalization for positive and negative keyword matches. */
+const keywordText = (text: string) => ` ${fold(text).replace(/[^\p{L}\p{N}+]+/gu, " ").trim()} `
+const hasKeyword = (text: string, keywords: string[]) => keywords.some((keyword) => {
+  const key = keywordText(keyword).trim()
+  return key.length > 0 && text.includes(` ${key} `)
+})
+const excluded = (text: string, skill: Skill) => hasKeyword(text, skill.triggers?.exclude_keywords ?? [])
+
 /** Pre-routing layer 1: skills whose trigger keywords appear in the user's message. */
 export function matchTriggers(input: string, skills: Skill[]): Skill[] {
-  const text = ` ${fold(input).replace(/[^\p{L}\p{N}+]+/gu, " ")} `
-  return skills.filter(
-    (s) =>
-      s.activation !== "manual" &&
-      (s.triggers?.keywords ?? []).some((k) => {
-        const key = fold(k).replace(/[^\p{L}\p{N}+]+/gu, " ").trim()
-        return key.length > 0 && text.includes(` ${key} `)
-      }),
-  )
+  const text = keywordText(input)
+  return skills.filter((s) => s.activation !== "manual" && !excluded(text, s) && hasKeyword(text, s.triggers?.keywords ?? []))
 }
 
 /** Vietnamese function words (folded) that say nothing about which skill fits. */
@@ -100,10 +101,13 @@ function skillIndex(skills: Skill[]) {
 export function matchSoft(input: string, skills: Skill[]): Skill | undefined {
   const candidates = skills.filter((s) => s.activation !== "manual")
   if (candidates.length === 0) return undefined
+  // Keep the original corpus for IDF: an exclusion must not rescore unrelated skills.
   const index = skillIndex(candidates)
+  const text = keywordText(input)
   const words = [...new Set(terms(input))]
   const wordPairs = [...new Set(pairs(terms(input)))]
   const ranked = index.docs
+    .filter((d) => !excluded(text, d.skill))
     .map((d) => ({
       skill: d.skill,
       score:

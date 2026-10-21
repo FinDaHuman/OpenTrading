@@ -5,12 +5,12 @@
 > gần nhất và ghi kỳ báo cáo kèm theo. Luật về trần ký quỹ và cách tính mức đòn
 > bẩy chỉ nằm ở §Trụ cột driver của SKILL.md — không lặp lại ở đây.
 
-## 1. Nhóm đòn bẩn
+## 1. Nhóm đòn bẩy
 
 | Chỉ báo | Đọc từ | Cách đọc |
 |---|---|---|
-| Dư nợ cho vay ký quỹ | `financial_detail` | Xu hướng 4–8 quý. Tăng đều = nhận thức rủi ro đang mở; giảm đột ngột = thị trường vừa xả hoặc CTCK siết gọi |
-| Vốn chủ sở hữu | `financial_detail` | Dùng làm mẫu số cho mức đòn bẩy. Vốn giảm vì cổ tức bằng cổ phiếu làm mức đòn bẩy tăng ảo — ghi rõ |
+| Dư nợ cho vay ký quỹ | `financial_detail` | Xu hướng 4–8 quý. Tăng đều cho thấy nhu cầu ký quỹ tăng, chưa chứng minh chất lượng tín dụng; giảm đột ngột = thị trường vừa xả hoặc CTCK siết gọi |
+| Vốn chủ sở hữu | `financial_detail` | Dùng làm mẫu số cho mức đòn bẩy. Cổ tức bằng cổ phiếu thường tái phân loại trong vốn chủ, không tự làm giảm tổng vốn chủ; kiểm tra biến động vốn thực tế |
 | Mức đòn bẩy | Tự tính: dư nợ / vốn chủ (ghi rõ tự tính) | So trần quy định hiện hành. Đây là chỉ báo **chỗ tăng trưởng còn lại**, không phải chỉ báo chất lượng |
 | Các khoản phải thu | `financial_detail` | Phải thu từ giao dịch margin tăng nhanh hơn dư nợ = công nợ đang ùn lại |
 
@@ -28,9 +28,9 @@
 
 | Chỉ báo | Đọc từ | Cách đọc |
 |---|---|---|
-| ROE | `financial_ratios` | Dùng làm mẫu số cho P/B. ROE từ tự doanh lên bất thường thì giảm trọng số kỳ đó |
+| ROE | `financial_ratios` | Dùng neo chất lượng P/B. ROE từ tự doanh lên bất thường thì giảm trọng số kỳ đó |
 | Chi phí hoạt động | `financial_detail` | So với doanh thu: chi phí tăng nhanh hơn doanh thu là ép biên dài hạn |
-| Trích lãi | `financial_detail` | So với ngưỡng quy định hiện hành cho mảng ký quỹ, không so với trí nhớ |
+| Tỷ lệ vốn khả dụng | Báo cáo an toàn tài chính do CTCK công bố | Dùng định nghĩa và ngưỡng văn bản hiện hành; không suy từ vốn chủ hoặc thay bằng chỉ tiêu không xác định |
 
 ## 4. Nhóm đối chiếu
 
@@ -48,3 +48,5 @@
 - Dư nợ ký quỹ tăng cùng lúc với thị trường chỉ là hệ quả, không kéo theo lãi
   CTCK bằng vốn chủ mới.
 - Quý lãi bất thường từ tự doanh: xử lý như một lần, không nội suy thành năng lực.
+
+So KPI vận hành bằng `financial_detail`/công bố từng peer cùng kỳ; `peer_compare` chỉ cho key tổng quan thực trả, không tạo dư nợ/vốn chủ hay cơ cấu doanh thu qua `metrics`.

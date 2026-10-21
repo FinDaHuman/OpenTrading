@@ -93,11 +93,43 @@ export function copiedResultHit(line: string): string | null {
   return null
 }
 
+/** Check only the sector decision-tree section, leaving unrelated prose/trees alone. */
+export function decisionTreeIssues(body: string): string[] {
+  const section = body.match(/^## Cây quyết định[^\n]*\n([\s\S]*?)(?=^## |$(?![\s\S]))/m)?.[1]
+  if (!section) return []
+  const nodes = [...section.matchAll(/^(Q\d+[a-z]*)(?:\s*\([^\n]*?\))?\.[^\n]*$/gm)]
+  const ids = new Set(nodes.map((node) => node[1]!))
+  const issues: string[] = []
+  if (!nodes.length) return ["Cây quyết định không có node Q"]
+  if (ids.size !== nodes.length) issues.push("Node Q trùng ID")
+  for (const [i, node] of nodes.entries()) {
+    const block = section.slice(node.index! + node[0].length, nodes[i + 1]?.index ?? section.length)
+    const branches: { marker: string; text: string }[] = []
+    for (const line of block.split("\n")) {
+      const branch = line.match(/^([├└]─)\s*(.*)$/)
+      if (branch) branches.push({ marker: branch[1]!, text: branch[2]! })
+      else if (/^\s+\S/.test(line) && branches.length) branches.at(-1)!.text += ` ${line.trim()}`
+    }
+    if (!branches.length || branches.at(-1)!.marker !== "└─" || branches.slice(0, -1).some((b) => b.marker === "└─")) {
+      issues.push(`${node[1]}: nhánh cuối phải là └─`)
+    }
+    for (const branch of branches) {
+      for (const ref of branch.text.matchAll(/\bQ\d+[a-z]*\b/g)) {
+        if (!ids.has(ref[0])) issues.push(`${node[1]}: tham chiếu ${ref[0]} không tồn tại`)
+      }
+      if (branch.text.includes("★") && /(?:→|tiếp|rồi|sang)\s*Q\d+[a-z]*\b/.test(branch.text)) {
+        issues.push(`${node[1]}: ★ vừa kết luận vừa chuyển Q`)
+      }
+    }
+  }
+  return [...new Set(issues)]
+}
+
 export async function lintSkills(root: string) {
   const { skills } = await loadSkills(skillRoots(root).filter((r) => r.source === "bundled"))
   const { all, writes } = await toolNames(root)
   const skillNames = new Set(skills.map((s) => s.name))
-  const report: Record<string, string[]> = { unknownTools: [], triggers: [], catalogLength: [], englishHeadings: [], preloadedWrites: [], copiedResults: [] }
+  const report: Record<string, string[]> = { unknownTools: [], triggers: [], catalogLength: [], englishHeadings: [], preloadedWrites: [], copiedResults: [], decisionTrees: [] }
   const known = (t: string) => all.has(bare(t)) || matchToolPattern(bare(t), all).length > 0
   // Only words in a tool family (vn_, vs_, cycle_, chart_…) are checked in bodies; the
   // rest of the snake_case there is field names.
@@ -106,6 +138,7 @@ export async function lintSkills(root: string) {
     for (const t of [...(skill.requires_tools ?? []), ...(skill.uses_tools ?? [])]) {
       if (!known(t)) report.unknownTools!.push(`${skill.name}: frontmatter ${t}`)
     }
+    for (const issue of decisionTreeIssues(skill.body)) report.decisionTrees!.push(`${skill.name}: ${issue}`)
     const body = await bodyWithReferences(skill)
     for (const m of body.matchAll(/`([a-z][a-z0-9]*(?:_[a-z0-9]+)+)(?:\(|`)/g)) {
       const t = m[1]!

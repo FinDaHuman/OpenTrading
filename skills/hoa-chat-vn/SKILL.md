@@ -1,11 +1,12 @@
 ---
 name: hoa-chat-vn
-description: "Phân tích ngành hoá chất và phân bón Việt Nam theo chu kỳ giá ure, chính sách xuất khẩu Trung Quốc, tỷ lệ xuất khẩu và chi phí khí đầu vào. Dùng khi hỏi xu hướng nhóm hoá chất hoặc công ty phân bón."
+description: "Pha/sóng: dùng skill chu kỳ. Phân tích ngành hoá chất và phân bón Việt Nam theo chu kỳ giá ure, chính sách xuất khẩu Trung Quốc, tỷ lệ xuất khẩu và chi phí khí đầu vào. Dùng khi hỏi xu hướng nhóm hoá chất hoặc công ty phân bón."
 activation: auto
 requires_tools: [financial_detail, yf_commodities]
-uses_tools: [financial_detail, yf_commodities, financial_ratios, planned_targets, analyst_consensus, peer_compare, vs_xnk_detail, vs_indicator_data, news_symbol, news_market, symbol_lookup, vn_company]
+uses_tools: [financial_detail, yf_commodities, financial_ratios, planned_targets, analyst_consensus, peer_compare, vs_categories, vs_indicator_data, news_symbol, news_market, symbol_lookup, vn_company]
 triggers:
-  keywords: [ngành hoá chất, phân bón, sản xuất phân bón, giá phân bón, nhà máy hoá chất, khí đầu vào phân bón, chu kỳ giá phân bón]
+  exclude_keywords: [đỉnh chu kỳ, giai đoạn phân phối, đầu phục hồi, giai đoạn nào, dẫn sóng, pha nào, chu kỳ ngành, sóng ngành, luân chuyển ngành, pha thị trường, chu kỳ thị trường, giai đoạn thị trường, sóng tiếp theo, cuối sóng, giữa sóng, đầu sóng, bank dẫn, chứng dẫn, rotation, pha tiếp theo]
+  keywords: [ngành hoá chất, phân bón, sản xuất phân bón, biên lợi nhuận phân bón, nhà máy hoá chất, khí đầu vào phân bón, chu kỳ giá phân bón]
 version: 1.0.0
 ---
 
@@ -38,9 +39,9 @@ biên một quý tốt chưa nói lên năng lực.
 |---|---|---|
 | Chu kỳ giá phân bón | Giá bán là biến số số 1: giá nhảy theo cú sốc cung (địa chính trị, thời tiết, xuất khẩu) rồi thu về. Ngành ăn theo **cửa sổ giá**, không theo xu hướng dài | Giá phân bón quốc tế và nội địa: `news_market`/`web_search`, ghi rõ chỉ số giá + ngày |
 | Chính sách xuất khẩu Trung Quốc | Trung Quốc là nguồn cung lớn; kiểm soát xuất khẩu (hạn ngạch, cấm, thuế) làm giá toàn cầu nhảy và ngược lại | Chính sách xuất khẩu: `news_market`/`web_search`, ghi rõ văn bản/thông báo + ngày |
-| Tỷ lệ xuất khẩu | Công ty xuất phần lớn sản lượng thì bám giá quốc tế và giao dịch ngoại thương; công ty bán nội địa thì lãi bị khung giá trong nước và nhu cầu nội địa quyết định | Tỷ lệ xuất khẩu: công bố công ty trong `news_market`; xuất khẩu ngành: `vs_xnk_detail` |
-| Chi phí khí đầu vào | Chi phí khí đầu vào theo hợp đồng dài hạn là chi phí cố định lớn; nhiên liệu tham chiếu đỡ phần dự báo | Chi phí nhiên liệu tham chiếu: `yf_commodities` theo chu kỳ; chi phí giá vốn trong `financial_detail` |
-| Nhu cầu nội địa | Nhu cầu nội địa nhạy giá nông sản (như lúa); yếu khi giá nông sản thấp hoặc giá phân bón cao | Nhu cầu nội địa: `news_market`, `vs_indicator_data` (sản xuất nông nghiệp) |
+| Tỷ lệ xuất khẩu | Công ty xuất phần lớn sản lượng thì bám giá quốc tế và giao dịch ngoại thương; công ty bán nội địa thì lãi bị khung giá trong nước và nhu cầu nội địa quyết định | Tỷ lệ xuất khẩu: công bố công ty qua `news_symbol`/`web_search`; xuất khẩu phân bón theo nhóm hàng: số liệu Hải quan có kỳ và đơn vị rõ, tra qua `web_search` |
+| Chi phí khí đầu vào | Chi phí khí đầu vào theo hợp đồng dài hạn là khoản chi phí lớn thay đổi theo sản lượng và điều khoản giá; nhiên liệu tham chiếu đỡ phần dự báo | Chi phí nhiên liệu tham chiếu: `yf_commodities` theo chu kỳ; chi phí giá vốn trong `financial_detail` |
+| Nhu cầu nội địa | Nhu cầu nội địa nhạy giá nông sản (như lúa); yếu khi giá nông sản thấp hoặc giá phân bón cao | Nhu cầu nội địa: `news_market`, `vs_categories` → `vs_indicator_data` (tra mã danh mục sản xuất nông nghiệp thực có; thiếu thì dùng công bố cơ quan thống kê) |
 | Tồn kho giá gốc | Tồn kho mua trước khi giá lên hỗ trợ biên 1–2 quý rồi đảo chiều — nhãn "cửa sổ" của toàn ngành | Tồn kho trong `financial_detail`; tỷ lệ xuất trong công bố công ty |
 
 ## Các bước
@@ -54,7 +55,7 @@ biên một quý tốt chưa nói lên năng lực.
 
 `news_market` (giá phân bón quốc tế + nội địa, chính sách Trung Quốc, tình trạng
 cung) · `yf_commodities` (năng lượng tham chiếu cho chi phí đầu vào) ·
-`vs_xnk_detail` (xuất khẩu phân bón theo kỳ).
+`web_search` (xuất khẩu phân bón theo nhóm hàng từ Hải quan, có kỳ và đơn vị rõ; `vs_xnk_detail` không cung cấp chuỗi nhóm hàng).
 
 **Bước 3: Biên + tồn kho (song song).**
 
@@ -63,41 +64,40 @@ tài chính. Đọc 4 quý liền để phân biệt "cửa sổ giá" với nă
 
 **Bước 4: Neo kỳ vọng + vị thế nhóm.**
 
-`planned_targets` · `peer_compare` (so biên lãi gộp, tỷ lệ xuất khẩu, chi phí đầu
-vào trong nhóm) · `analyst_consensus`.
+`planned_targets` · `peer_compare` (chỉ tiêu tổng quan trong nhóm) · `analyst_consensus`.
+
+Đối chiếu công cụ: `peer_compare` chỉ dùng các key tổng quan thực sự có trong kết quả (như P/E, P/B, ROE); tham số `metrics` không tạo thêm chỉ tiêu. Biên, sản lượng, chi phí, tồn kho và KPI vận hành phải đọc `financial_detail` từng peer cùng kỳ; nếu không có thì tra công bố doanh nghiệp qua `news_symbol`/`web_search`, ghi nguồn, công thức và kỳ. Thiếu dữ liệu thì để trống, không xếp hạng.
 
 ## Cây quyết định công ty hoá chất đang được tiếp sức hay siết
 
-Duyệt Q1→Q5 theo thứ tự, **DỪNG ở ★ đầu tiên** mà ĐỦ điều kiện. Thiếu dữ liệu thì
-hạ độ tin cậy, không bù số.
 
-Q1. Tỷ lệ xuất khẩu của công ty?
-├─ Xuất phần lớn sản lượng → tiếp Q2 (nhánh quốc tế)
-├─ Bán chủ yếu nội địa → tiếp Q4 (nhánh nội địa)
-└─ Không rõ → tiếp Q2 với độ tin cậy thấp, ghi rõ
+Đi theo nhánh phù hợp; ghi nhận trạng thái trung gian và chỉ dừng ở ★. Mọi kết luận phải tách dữ liệu đã biết và phần còn thiếu, không bù số hay đổi "chưa rõ" thành "xấu".
 
-Q2 (quốc tế). Cửa sổ giá quốc tế đang mở hay đóng?
-├─ Mở (giá nhảy sau cú sốc cung) → tiếp Q3
-├─ Đóng (giá hạ về sau cú sốc) → ★ "Bị siết bởi giá: doanh thu sẽ bám giá thị
-   trường, biên co về — đọc tồn kho giá cao còn lại"
-└─ Chưa dựng được giá → Q3 với độ tin cậy thấp
+Q1. Cơ cấu thị trường của công ty thế nào?
+├─ Xuất phần lớn sản lượng → Q2 (quốc tế)
+├─ Bán chủ yếu nội địa → Q4 (nội địa)
+├─ Hỗn hợp → xét riêng Q2 và Q4 theo cơ cấu công bố
+└─ Chưa rõ tỷ lệ → ghi thiếu cơ cấu, tiếp Q2 và Q4 với độ tin cậy thấp
 
-Q3 (quốc tế). Chính sách Trung Quốc đang nới hay siết?
-├─ Siết (kiểm soát xuất khẩu) → ★ "Cung toàn cầu bị nuôi: cửa sổ giá có thể nở rộng
-   thêm — nhưng ghi rõ đây là cơ hội theo chính sách, không phải kỳ vọng dài hạn"
-└─ Nới (xuất khẩu tăng trở lại) → ★ "Cung toàn cầu quay lại: cửa sổ đang đóng,
-   đọc tỷ lệ khóa đơn hàng trước khi kỳ vọng biên"
+Q2 (quốc tế). Cửa sổ giá bán có mở rộng không?
+├─ Giá bán tăng tương đối so với chi phí → ghi thuận lợi, tiếp Q3
+├─ Giá bán giảm hoặc chi phí đuổi kịp → ghi áp lực, tiếp Q3
+└─ Chưa có cặp giá so sánh được → ghi thiếu, tiếp Q3
 
-Q4 (nội địa). Nhu cầu nội địa và giá bán có cùng chiều không?
-├─ Có, nhu cầu hồi + giá giữ được → tiếp Q5
-└─ Không, giá quốc tế lên nhưng nhu cầu nội địa yếu → ★ "Bị siết bởi cầu: khung giá
-   trong nước giới hạn phần được tăng giá trong cửa sổ này"
+Q3 (quốc tế). Chính sách xuất khẩu Trung Quốc đã xác minh ra sao?
+├─ Kiểm soát xuất khẩu làm giảm cung thị trường đích → ghi nguồn/ngày và thuận lợi có điều kiện, tiếp Q5
+├─ Nới hoặc nguồn cung tăng lại → ghi áp lực cạnh tranh, tiếp Q5
+└─ Chưa xác minh hoặc không liên quan sản phẩm → không giả định tác động, tiếp Q5
 
-Q5 (chung). Chi phí đầu vào và biên có cùng chiều với giá bán không?
-├─ Có, giá bán tăng nhanh hơn chi phí đầu vào → ★ "Được tiếp sức: xác nhận biên
-   mở rộng trên 2 quý liền trước khi nội suy"
-└─ Không, chi phí đầu vào đuổi kịp giá bán → ★ "Bị siết bởi chi phí: cửa sổ giá
-   không còn đủ rộng, đọc tồn kho giá gốc để xem biên còn được hỗ trợ bao lâu"
+Q4 (nội địa). Nhu cầu và giá bán thực hiện ra sao?
+├─ Sản lượng bán tăng, giá giữ được → ghi thuận lợi, tiếp Q5
+├─ Sản lượng giảm hoặc giá không bù được chi phí → ghi áp lực, tiếp Q5
+└─ Chưa công bố → ghi thiếu, tiếp Q5
+
+Q5 (chung). Biên và tồn kho có xác nhận tín hiệu không?
+├─ Biên cải thiện nhiều kỳ, giá/khối lượng thuận lợi, không chỉ do tồn kho rẻ → ★ "Được tiếp sức; nêu điều kiện duy trì cửa sổ giá"
+├─ Biên co hoặc tồn kho giá cao gây áp lực có bằng chứng → ★ "Bị siết theo giá/chi phí đã xác minh"
+└─ Dữ liệu thiếu hoặc trái chiều → ★ "Chưa đủ dữ liệu kết luận tổng thể; không coi chính sách chưa rõ là bất lợi"
 
 ## Chỉ báo đặc thù ngành
 

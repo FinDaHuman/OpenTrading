@@ -275,3 +275,83 @@ test("SKILL.md trỏ sang cây thay vì bảng phẳng", async () => {
   expect(viz.body).toContain("choosing-a-form.md")
   expect(viz.body).toContain("DỪNG ở node")
 })
+
+test("exclusion metadata is optional, typed, and uses the trigger word boundaries", () => {
+  expect(parseSkill("---\nname: old\ndescription: x\ntriggers:\n  keywords: [NIM]\n---\nx").meta.triggers?.exclude_keywords ?? []).toEqual([])
+  expect(() => parseSkill("---\nname: bad\ndescription: x\ntriggers:\n  exclude_keywords: pha\n---\nx")).toThrow('trường "triggers.exclude_keywords"')
+  const bank = make({ name: "bank", triggers: { keywords: ["ngân hàng"], exclude_keywords: ["dẫn sóng", "pha"] } })
+  expect(matchTriggers("ngan hang DAN SONG tiếp", [bank])).toEqual([])
+  expect(matchTriggers("ngân hàng đang phân bổ vốn", [bank])).toEqual([bank])
+  expect(matchTriggers("ngân hàng đang ở pha?", [bank])).toEqual([])
+})
+
+test("soft exclusions preserve the full IDF corpus and do not affect explicit loading", async () => {
+  const target = make({ name: "target", description: "aurora nebula quasar" })
+  const blocked = Array.from({ length: 20 }, (_, i) => make({ name: `other-${i}`, description: "unrelated background", triggers: { keywords: [], exclude_keywords: ["chu kỳ"] } }))
+  const query = "aurora nebula quasar chu ky"
+  expect(matchSoft(query, [target, ...blocked])).toBe(target)
+  const excludedTarget = { ...target, triggers: { keywords: [], exclude_keywords: ["chu kỳ"] } }
+  expect(matchSoft(query, [excludedTarget, ...blocked])).toBeUndefined()
+  expect(suggestSkills(query, [excludedTarget, ...blocked])).toEqual([])
+  const dir = await root()
+  await skill(dir, "target", "name: target\ndescription: x\ntriggers:\n  exclude_keywords: [chu kỳ]", "Explicit loading still works")
+  const loaded = (await loadSkills([{ dir, source: "user" }])).skills[0]!
+  expect(await readSkillFile(loaded, "SKILL.md")).toContain("Explicit loading still works")
+})
+
+test("real bundled catalog fits A with headroom; B preserves descriptions and C all names", async () => {
+  const { BUDGETS, estimateTokens } = await import("../src/core/prompt/budget")
+  const { skills } = await loadSkills(skillRoots(await root()).filter((r) => r.source === "bundled"))
+  const names = skills.filter((s) => s.activation === "auto").map((s) => s.name).sort()
+  const full = renderCatalog(skills, 100_000)!
+  expect(BUDGETS.skill_catalog).toEqual({ A: 2_600, B: 1_200, C: 280 })
+  expect(estimateTokens(full.text)).toBeLessThanOrEqual(BUDGETS.skill_catalog!.A! * 0.8)
+  for (const tier of ["A", "B", "C"] as const) {
+    const catalog = renderCatalog(skills, BUDGETS.skill_catalog![tier]!)!
+    const entries = catalog.text.split("\n").filter((line) => line.startsWith("- "))
+    expect(entries.map((line) => line.slice(2).split(":")[0]!).sort()).toEqual(names)
+    expect(estimateTokens(catalog.text)).toBeLessThanOrEqual(BUDGETS.skill_catalog![tier]!)
+    expect(catalog.truncated).toBe(tier !== "A")
+    if (tier === "A") expect(catalog.text).toBe(full.text)
+    if (tier === "B") {
+      expect(entries.every((line) => /^- [a-z0-9-]+: .+/.test(line))).toBe(true)
+      expect(catalog.text).toContain("…")
+      // Main's 28-skill B catalog allocated ~78 characters per shortened line.
+      expect(entries.filter((line) => line.endsWith("…")).every((line) => line.length > 78)).toBe(true)
+      expect(catalog.text.length).toBeGreaterThan(renderCatalog(skills, 700)!.text.length)
+    }
+    if (tier === "C") expect(entries.every((line) => !line.includes(":"))).toBe(true)
+  }
+})
+
+
+test("sector cycle intent selects the cycle skill and excludes all thirteen sectors", async () => {
+  const { skills } = await loadSkills(skillRoots(await root()).filter((r) => r.source === "bundled"))
+  const sectors = ["ngân hàng", "chứng khoán", "bất động sản", "bảo hiểm", "công nghệ", "dầu khí", "điện lực", "hóa chất", "thép", "tiêu dùng bán lẻ", "vận tải", "Vingroup", "xuất nhập khẩu"]
+  for (const sector of sectors) {
+    for (const question of [
+      `Nhóm ${sector} đang ở pha nào, có dẫn sóng tiếp theo không?`,
+      `Nhóm ${sector} đã tới đỉnh chu kỳ chưa?`,
+      `Nhóm ${sector} đang ở giai đoạn phân phối?`,
+      `Nhóm ${sector} mới đầu phục hồi?`,
+      `Sóng ${sector} đang ở giai đoạn nào?`,
+    ]) {
+    const suggestions = suggestSkills(question, skills).map((s) => s.name)
+    expect(suggestions, sector).toContain("dinh-vi-chu-ky-vn")
+    const sectorNames = ["ngan-hang-vn", "chung-khoan-vn", "bat-dong-san-vn", "bao-hiem-vn", "cong-nghe-vn", "dau-khi-vn", "dien-luc-vn", "hoa-chat-vn", "thep-vn", "tieu-dung-ban-le-vn", "van-tai-vn", "vingroup-vn", "xuat-nhap-khau-vn"]
+    expect(suggestions.filter((name) => sectorNames.includes(name)), question).toEqual([])
+    }
+  }
+  expect(suggestSkills("VinFast lỗ to thì Vingroup có sao không?", skills).map((s) => s.name)).toEqual(["vingroup-vn"])
+  expect(suggestSkills("Lợi nhuận 4 quý gần nhất của FPT có đáng lo không bạn? Tăng trưởng doanh thu với lợi nhuận có thật chất không?", skills).map((s) => s.name)).not.toContain("vingroup-vn")
+  expect(suggestSkills("7 ngày gần nhất các công ty chứng khoán đang khuyến nghị những mã nào bạn?", skills).map((s) => s.name)).toEqual(["tim-co-hoi-bao-cao-ctck"])
+})
+
+
+test("combined business, technical and valuation intent retains comprehensive stock analysis", async () => {
+  const { skills } = await loadSkills(skillRoots(await root()).filter((r) => r.source === "bundled"))
+  const question = "Tôi đang muốn hiểu rõ FPT lúc này, bạn phân tích giúp tôi từ mảng kinh doanh, kỹ thuật, định giá tới kết quả 4 quý gần nhất và tin tức sắp tới nhé?"
+  expect(suggestSkills(question, skills).map((s) => s.name)).toEqual([
+    "dinh-gia-chuyen-sau", "ky-thuat-chuyen-sau", "phan-tich-chuyen-sau-1-ma",
+  ])
+})

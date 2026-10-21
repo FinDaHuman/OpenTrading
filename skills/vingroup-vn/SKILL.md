@@ -1,11 +1,12 @@
 ---
 name: vingroup-vn
-description: "Phân tích tập đoàn Vingroup theo giá trị tách rời từng mảng, vòng quay tiền mặt, đòn bẩy so với trần nợ và tỷ trọng của nhóm Vin trong chỉ số. Dùng khi hỏi tập đoàn Vingroup, Vinhomes, VinFast hay Vincom Retail."
+description: "KPI nhóm Vin; pha/sóng dùng skill chu kỳ. SOTP VIC: Vinhomes bàn giao, VinFast đốt tiền, Vincom cho thuê; kiểm tra giao dịch liên kết, tái cấp vốn và trọng số chỉ số Vingroup."
 activation: auto
 requires_tools: [financial_detail, company_events]
 uses_tools: [financial_detail, company_events, news_symbol, news_market, financial_ratios, planned_targets, analyst_consensus, peer_compare, breadth_scan, market_snapshot, vn_equity_quote_batch, event_calendar_vn, symbol_lookup, vn_company]
 triggers:
-  keywords: [vingroup, vinfast, vinhomes, vincom, vinpearl, nhóm vin, tập đoàn vingroup, tossanholding, quỹ đất vinhomes, xe điện vinfast, bán lẻ vincom]
+  keywords: [nhóm vin, tập đoàn vingroup, phân tích vingroup, sức khỏe tài chính vingroup, SOTP Vingroup, quỹ đất vinhomes, hiệu quả vinfast, dòng tiền vinfast, kinh doanh vincom, vinfast lỗ]
+  exclude_keywords: [đỉnh chu kỳ, giai đoạn phân phối, đầu phục hồi, giai đoạn nào, pha tiếp theo, dẫn sóng, pha nào, chu kỳ ngành, sóng ngành, luân chuyển ngành, pha thị trường, chu kỳ thị trường, giai đoạn thị trường, sóng tiếp theo, cuối sóng, giữa sóng, đầu sóng, bank dẫn, chứng dẫn, rotation]
 version: 1.0.0
 ---
 
@@ -20,7 +21,7 @@ bước bắt buộc đầu tiên là đo tỷ trọng đóng góp của từng 
 công bố công ty) trước khi kết luận bất cứ điều gì về tổng hợp:
 
 1. **Vòng quay bất động sản**: lãi đến từ bàn giao dự án, nên lãi nhảy theo đợt —
-   đọc bán trước và tích luỹ chi phí dở, không đọc một quý.
+   đọc doanh số ký bán, tiền người mua trả trước và chi phí dở dang, không đọc một quý.
 2. **Mảng xe điện đốt tiền mặt**: doanh thu xe điện tăng nhanh nhưng biên âm → lỗ
    lũy kế và nhu cầu tái cấp trở thành driver của cả tập đoàn.
 3. **Giao dịch liên kết**: mua/bán tài sản với cổ đông sáng lập, thoái/tách khỏi hợp
@@ -42,11 +43,11 @@ công bố công ty) trước khi kết luận bất cứ điều gì về tổn
 
 | Driver | Kênh truyền dẫn | Đọc/xác minh bằng |
 |---|---|---|
-| Vòng quay BĐS | Lãi đến từ bàn giao dự án Vinhomes. Bán trước là khoản thu trước, tích luỹ chi phí dở là chi phí đã cam kết chưa nhận — chênh lệch hai bên là lãi tương lai | `financial_detail` (bán trước, tích luỹ chi phí dở, biên mảng BĐS) |
+| Vòng quay BĐS | Lãi đến từ bàn giao dự án Vinhomes. Doanh số ký bán trước khác tiền người mua trả trước; chi phí dở dang là tồn kho đầu tư, chênh hai số không phải lãi tương lai | `financial_detail` (bán trước, tích luỹ chi phí dở, biên mảng BĐS) |
 | Vòng xe điện | Doanh thu xe điện tăng nhưng biên âm; tỷ lệ hoàn vốn phụ thuộc quy mô và chi phí/biến. Tái cấu trúc (tách, bán, gộp mảng) đổi pháp nhân báo cáo | Mảng xe điện + lỗ lũy kế + tái cấu trúc: `financial_detail`, `company_events` |
 | Đòn bẩy | Tài trợ dự án bằng nợ và trái phiếu; tường trái phiếu và chi phí vốn bình quân quyết định rủi ro tái cấp | `financial_detail` (nợ, trái phiếu, lãi) + `news_market` (tường đáo hạn, phát hành) |
 | Giao dịch liên kết | Mua bán tài sản nội bộ và loại trừ bàn giao làm thay đổi cả cơ cấu hợp nhất lẫn biên | `company_events` (đợt thay đổi cơ cấu) + `news_market` |
-| Tỷ trọng chỉ số | Nhóm Vin chiếm tỷ trọng lớn vốn hoá và thanh khoản chỉ định; biến động nhóm một mình có thể kéo cả chỉ số → rủi ro tập trung danh mục | Tỷ trọng: **tự tính** từ vốn hoá các mã thành viên so tổng vốn hoá sàn (`vn_equity_quote_batch`/`market_snapshot`, ghi rõ tự tính) hoặc lấy số công bố trong báo cáo ngành qua `news_market`/`web_search`; độ rộng phiên: `market_overview`/`breadth_scan`. **Không** hỏi `market_overview` tỷ trọng (tool chỉ trả giá/rổ bluechip/độ rộng rổ) |
+| Tỷ trọng và đóng góp chỉ số | Tỷ trọng vốn hóa sàn, trọng số chỉ số và đóng góp điểm là ba đại lượng khác nhau | Lấy trọng số thành viên theo phương pháp chỉ số, ngày cơ sở và biến động giá cùng chỉ số/cùng kỳ từ đơn vị quản lý chỉ số hoặc nguồn báo cáo có thể kiểm chứng. Không dùng quote VN30 hoặc quote batch để suy vốn hóa sàn/trọng số |
 | Dòng tiền / thanh khoản | Kiểm soát độc lập: tiền mặt, vốn điều lệ, nợ đến hạn | `financial_detail` (tiền, vốn, nợ ngắn hạn) |
 
 ## Các bước
@@ -68,40 +69,49 @@ chi phí lãi. `news_market`: tường trái phiếu đến hạn, phát hành m
 
 **Bước 4: Tác động chỉ số + neo kỳ vọng.**
 
-`breadth_scan` (độ rộng thật toàn sàn — phân biệt "chỉ số do nhóm lớn kéo") ·
-`market_snapshot`/`vn_equity_quote_batch` (vốn hoá các mã thành viên để **tự tính**
-tỷ trọng) · `news_market` (nhận định/báo cáo ngành về ảnh hưởng chỉ số) ·
-`planned_targets` · `peer_compare` · `analyst_consensus`.
+`breadth_scan` (độ rộng toàn sàn) · nguồn công bố đơn vị chỉ số hoặc báo cáo
+có trọng số thành viên và kỳ rõ · `planned_targets` · `peer_compare` (chỉ key tổng
+quan thực trả như P/B, ROE; KPI vận hành lấy từ BCTC/công bố từng peer) · `analyst_consensus`.
+
+Chỉ tính đóng góp khi có đầy đủ nguồn trọng số và biến động tương thích của **cùng
+chỉ số, cùng kỳ**. Ước tính tỷ lệ đóng góp đơn kỳ ≈ tổng trọng số đầu kỳ × lợi suất
+thành viên; đóng góp điểm ≈ mức chỉ số đầu kỳ × tỷ lệ đó, ghi rõ ước tính và điều
+chỉnh theo phương pháp/divisor/tái cân bằng/sự kiện doanh nghiệp nếu cần. Nếu nguồn
+công bố trực tiếp đóng góp, ưu tiên số đó. Tỷ trọng vốn hóa sàn chỉ tính khi có vốn
+hóa toàn bộ phạm vi và tổng cùng thời điểm; không gọi đó là trọng số chỉ số, đặc biệt
+với chỉ số điều chỉnh free-float/giới hạn tỷ trọng. Thiếu mẫu số, trọng số hoặc kỳ
+thì không tính; mô tả tương quan giá/độ rộng và ghi thiếu dữ liệu.
 
 ## Cây quyết định sức khoẻ tập đoàn
 
-Duyệt Q1→Q5 theo thứ tự, **DỪNG ở ★ đầu tiên** mà ĐỦ điều kiện. Thiếu dữ liệu thì
-hạ độ tin cậy, không bù số.
+Duyệt các node theo thứ tự; ghi trạng thái trung gian rồi đi tiếp. Chỉ dừng ở ★.
+Thiếu dữ liệu phải ghi rõ và hạ độ tin cậy; không coi thiếu là tín hiệu xấu.
 
-Q1. Cơ cấu hợp nhất vừa thay đổi chưa (tách, thoái, gộp mảng)?
-├─ Có → ★ "Con số kỳ này không so được với kỳ trước: đọc chênh lệch pháp nhân trước,
-   rồi mới đọc xu hướng"
-└─ Không → tiếp Q2
+Q1. Cơ cấu hợp nhất có thay đổi không?
+├─ Có → ghi cần số so sánh điều chỉnh cùng phạm vi → Q2
+├─ Không → Q2
+└─ Chưa xác minh → ghi hạn chế so sánh → Q2
 
-Q2. Mảng BĐS có còn dẫn lãi không?
-├─ Có, bán trước + biên mảng BĐS đang tăng → tiếp Q3
-└─ Không, mảng BĐS chững hoặc biên giảm → ★ "Bánh lái đang chuyển khỏi BĐS: đọc
-   mảng nào sẽ kế nghiệp trước khi nội suy lãi"
+Q2. Mảng BĐS đóng góp thế nào?
+├─ Bán trước, bàn giao và biên cải thiện → ghi đóng góp BĐS thuận → Q3
+├─ BĐS chững/biên giảm → ghi áp lực BĐS, chưa suy mảng khác thay thế → Q3
+└─ Thiếu số theo mảng → ghi chưa rõ đóng góp → Q3
 
-Q3. Mảng xe điện đốt tiền mặt ở mức nào?
-├─ Đang thu hẹp lỗ (biên cải thiện, chi phí/biến giảm) → tiếp Q4
-└─ Lỗ giữ nguyên hoặc mở rộng → ★ "Đốt tiền mặt chưa dừng: đọc nhu cầu tái cấp và
-   dòng tiền tổng thể — mảng này là rủi ro dòng tiền của cả tập đoàn"
+Q3. Dòng tiền mảng xe điện ra sao?
+├─ Dòng tiền hoạt động và nhu cầu đầu tư cải thiện → ghi nhu cầu tài trợ giảm nếu có bằng chứng → Q4
+├─ Biên/lỗ cải thiện nhưng chưa có dòng tiền → ghi chưa xác nhận giảm đốt tiền → Q4
+├─ Dòng tiền âm và nhu cầu đầu tư tăng → ghi áp lực tài trợ → Q4
+└─ Thiếu số → ghi chưa đo được dòng tiền xe điện → Q4
 
-Q4. Tái cấp vốn có chắc chắn không?
-├─ Có, nợ đến hạn xa hoặc đã có phương án tài trợ → tiếp Q5
-└─ Chưa, tường trái phiếu gần + chi phí vốn cao → ★ "Bị siết bởi tái cấu: đọc lịch
-   đáo hạn và phương án huy động trước khi nhìn lãi"
+Q4. Tái cấp vốn đã được bảo đảm chưa?
+├─ Nguồn cam kết có điều kiện rõ, đủ đối chiếu nợ đến hạn → ghi nguồn vốn khả dụng → Q5
+├─ Thiếu hụt tiền so lịch đáo hạn → ghi rủi ro tái cấp → Q5
+└─ Chưa có lịch nợ/cam kết → ghi chưa xác minh khả năng tái cấp → Q5
 
-Q5. Giao dịch liên kết có làm lệch báo cáo không?
-├─ Không đáng kể → ★ "Sức khoẻ đo được: đọc giá trị từng mảng và dòng tiền"
-└─ Có, giao dịch nội bộ chiếm tỷ trọng lớn trong kỳ → ★ "Lãi kỳ này một phần đến từ
-   giao dịch nội bộ: đánh dấu một lần, hạ độ tin cậy kỳ vọng lãi tương lai"
+Q5. Giao dịch liên kết có làm méo so sánh không?
+├─ Không đáng kể, đã đối chiếu loại trừ hợp nhất → ★ "Đánh giá SOTP và dòng tiền theo các trạng thái đã xác minh"
+├─ Có lãi bất thường từ giao dịch/thoái vốn → ★ "Điều chỉnh lãi một lần và phạm vi hợp nhất trước khi định giá; giữ rủi ro dòng tiền đã ghi"
+└─ Thiếu thuyết minh → ★ "Chưa đủ dữ liệu quản trị/hợp nhất; không kết luận lãi nội bộ đã ghi nhận ở cấp tập đoàn"
 
 ## Chỉ báo đặc thù ngành
 

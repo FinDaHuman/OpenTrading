@@ -35,10 +35,10 @@
 
 | Nguồn | Đọc gì | Cách dùng |
 |---|---|---|
-| `vs_xnk_detail` | Xuất/nhập khẩu theo kỳ | Tín hiệu cầu chung của lưu lượng — **chỉ báo dẫn**: nhập máy móc/linh kiện dẫn trước lưu lượng |
+| `vs_xnk_detail` | Xuất/nhập khẩu theo kỳ | Bối cảnh tổng xuất + nhập cùng kỳ; tách biến động giá và lượng. Xác nhận cầu bằng TEU/tấn công bố, không suy cầu từ nhập máy móc tăng nhanh hơn xuất khẩu |
 | `news_market` | Cước tuyến, lưu lượng qua cảng, tuyến mới, thuế quan | Số ngành; ghi rõ ngày nguồn |
 | `planned_targets` | Kế hoạch doanh thu/lãi/lưu lượng | Neo kỳ vọng |
-| `peer_compare` | Biên và cước thu trong phân khúc | Cấm so cảng với container |
+| `peer_compare` | Key tổng quan thực sự trả về, như P/E, P/B, ROE | So cùng phân khúc; KPI vận hành lấy từ `financial_detail` từng peer cùng kỳ và công bố doanh nghiệp, không tạo key bằng `metrics` |
 
 ## 5. Bẫy đọc thường gặp
 

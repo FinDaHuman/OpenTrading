@@ -11,7 +11,7 @@
 |---|---|---|
 | Bất động sản nhà ở | Bàn giao dự án + bán trước | Bán trước, tích luỹ chi phí dở, biên lãi gộp mảng |
 | Xe điện | Quy mô sản lượng + chi phí/biến | Doanh thu, lỗ lũy kế, tỷ lệ biên âm |
-| Bán lẻ (trung tâm thương mại) | Toàn bộ thuế dịch vụ + lưu lượng | Doanh thu cho thuê, diện tích, tỷ lệ lấp đầy |
+| Bán lẻ (trung tâm thương mại) | Doanh thu thuê, dịch vụ và lưu lượng | Doanh thu cho thuê, diện tích, tỷ lệ lấp đầy |
 | Khách sạn / nghỉ dưỡng | Du lịch | Doanh thu phòng, tỷ lệ lấp đầy |
 | Dịch vụ (giáo dục, y tế) | Nhu cầu độc lập | Doanh thu, số học sinh/bệnh nhân |
 
@@ -19,19 +19,19 @@
 
 | Chỉ báo | Đọc từ | Cách đọc |
 |---|---|---|
-| Bán trước kỳ | `financial_detail` (nếu có) | Khoản thu trước — chưa phải lãi; đọc cùng tích luỹ chi phí dở |
-| Tích luỹ chi phí dở | `financial_detail` | Chi phí đã cam kết chưa nhận; chênh giữa hai bên là lãi tương lai chưa chắc ăn khi bị siết |
+| Bán trước kỳ | `financial_detail` (nếu có) | Doanh số hợp đồng ký mới; không đồng nghĩa tiền người mua trả trước hay doanh thu ghi nhận |
+| Tích luỹ chi phí dở | `financial_detail` | Chi phí dự án đang nằm trong tồn kho; không lấy chênh bán trước trừ chi phí dở để suy lãi |
 | Biên lãi gộp mảng BĐS | `financial_detail` / công bố công ty | Đọc 4–8 quý trước khi nội suy (một đợt bàn giao làm nhảy) |
-| Quỹ đất | `news_market` | Nguồn tăng trưởng tương lai của vòng BĐS |
+| Quỹ đất | Công bố doanh nghiệp qua `news_symbol`/`company_events`/`web_search` | Nguồn tăng trưởng tương lai của vòng BĐS |
 
-## 3. Nhóm dòng tiền và đòn bẩn
+## 3. Nhóm dòng tiền và đòn bẩy
 
 | Chỉ báo | Đọc từ | Cách đọc |
 |---|---|---|
 | Nợ và trái phiếu | `financial_detail` | Đọc cùng lịch đáo hạn trong `news_market`; tập trung vài kỳ = rủi ro tái cấu |
 | Tiền mặt | `financial_detail` | So với khoản đến hạn trong 6 tháng tới |
 | Chi phí lãi và chi phí vốn bình quân | `financial_detail` / `news_market` | Tăng nhanh hơn doanh thu = lãi bị chi phí tài chính nuốt |
-| Lỗ lũy kế mảng xe điện | `news_market` | Nguồn đốt tiền mặt chính của tập đoàn |
+| Lỗ lũy kế mảng xe điện | BCTC/thuyết minh hãng qua `financial_detail`/`news_symbol`/`web_search` | Lỗ kế toán không đồng nhất tiền đã đốt; đối chiếu dòng tiền hoạt động và đầu tư |
 
 ## 4. Nhóm quản trị và chỉ số
 
@@ -40,8 +40,8 @@
 | `company_events` | Thay đổi cơ cấu hợp nhất, thoái/tách/gộp mảng, giao dịch với cổ đông sáng lập | Muốn so sánh với kỳ trước, phải đọc trước khi nhìn doanh thu |
 | `news_market` | Tường trái phiếu, phát hành mới, nhận định tác động chỉ số | Ghi rõ nguồn + ngày |
 | `breadth_scan` | Độ rộng toàn sàn | Phát hiện "chỉ số do nhóm một mình kéo" trước khi kết luận toàn thị trường — `market_overview` chỉ đếm rổ bluechip nên không đủ làm bằng chứng |
-| `market_snapshot` / `vn_equity_quote_batch` | Vốn hoá các mã thành viên | **Tự tính** tỷ trọng nhóm Vin = vốn hoá thành viên / vốn hoá sàn (ghi rõ tự tính); nếu có số báo cáo ngành thì lấy từ `news_market`/`web_search` |
-| `peer_compare` | Biên và đòn bẩy so với nhóm BĐS lớn | So mảng BĐS với mảng BĐS, không so hợp nhất với BĐS thuần |
+| Nguồn công bố chỉ số có trọng số và ngày | Trọng số, biến động thành viên cùng chỉ số/cùng kỳ và mức chỉ số đầu kỳ | Chỉ tính đóng góp khi đủ dữ liệu tương thích; quote VN30 không có mẫu số vốn hóa sàn hoặc trọng số. Tỷ trọng vốn hóa sàn khác trọng số chỉ số và đóng góp điểm |
+| `peer_compare` | Key tổng quan thực trả (P/B, ROE...) | KPI biên/đòn bẩy mảng phải đọc BCTC/công bố từng peer cùng kỳ; không so hợp nhất đa ngành với BĐS thuần |
 
 ## 5. Bẫy đọc thường gặp
 

@@ -1,11 +1,12 @@
 ---
 name: thep-vn
-description: "Phân tích ngành thép VN theo spread nguyên liệu–thành phẩm, phòng vệ thương mại, cơ cấu sản phẩm và biên lãi gộp. Dùng khi hỏi xu hướng nhóm thép, đọc kết quả nhà máy thép, lãi gộp hay chi phí đầu vào."
+description: "Pha/sóng: dùng skill chu kỳ. Phân tích ngành thép VN theo spread nguyên liệu–thành phẩm, phòng vệ thương mại, cơ cấu sản phẩm và biên lãi gộp. Dùng khi hỏi xu hướng nhóm thép, đọc kết quả nhà máy thép, lãi gộp hay chi phí đầu vào."
 activation: auto
-requires_tools: [financial_detail, yf_commodities]
-uses_tools: [financial_detail, yf_commodities, financial_ratios, planned_targets, analyst_consensus, peer_compare, news_symbol, news_market, vs_xnk_detail, symbol_lookup, vn_company]
+requires_tools: [financial_detail]
+uses_tools: [financial_detail, financial_ratios, planned_targets, analyst_consensus, peer_compare, news_symbol, news_market, symbol_lookup, vn_company]
 triggers:
-  keywords: [ngành thép, thép xây dựng, thép cuộn, nhà máy thép, sản xuất thép, giá thép, thép nhập khẩu, sản lượng thép, lãi gộp thép, chi phí đầu vào thép]
+  exclude_keywords: [đỉnh chu kỳ, giai đoạn phân phối, đầu phục hồi, giai đoạn nào, dẫn sóng, pha nào, chu kỳ ngành, sóng ngành, luân chuyển ngành, pha thị trường, chu kỳ thị trường, giai đoạn thị trường, sóng tiếp theo, cuối sóng, giữa sóng, đầu sóng, bank dẫn, chứng dẫn, rotation, pha tiếp theo]
+  keywords: [ngành thép, thép xây dựng, thép cuộn, nhà máy thép, sản xuất thép, biên lợi nhuận thép, thép nhập khẩu, sản lượng thép, lãi gộp thép, chi phí đầu vào thép]
 version: 1.0.0
 ---
 
@@ -35,12 +36,12 @@ nguyên liệu tăng cùng lúc khiến lãi giảm dù sản lượng tăng.
 
 | Driver | Kênh truyền dẫn | Đọc/xác minh bằng |
 |---|---|---|
-| Spread thành phẩm − nguyên liệu | Biên lãi gộp = giá bán trung bình − giá vốn/nguyên liệu. Quặng sắt và than cốc chiếm phần lớn giá vốn. Chú ý: chi phí nguyên liệu lọt vào báo cáo **chậm** qua tồn kho và thời gian vận chuyển | Giá bán thành phẩm + giá quặng/than: `yf_commodities` (kim loại và năng lượng) đối chiếu giá bán trong `financial_detail` và `news_market` |
-| Khối lượng thật | Sản lượng × tỷ lệ sử dụng công suất quyết định phân bổ chi phí cố định. Nhà máy mới vận hành chưa đủ công suất làm biên thấp dù doanh thu cao | Sản lượng và tỷ lệ sử dụng: `news_market`/`web_search` (công bố nhà máy) + `financial_detail` (doanh thu, giá vốn) |
-| Phòng vệ thương mại | Thuế chống bán phá giá / tự vệ đặt một bức tường giá cho nhập khẩu. Hết hoặc thay đổi phạm vi → giá trong nước chịu áp lực ngay | Văn bản phòng vệ + thay đổi: `news_market`/`web_search`, có nguồn và ngày; nhập khẩu đối chiếu `vs_xnk_detail` |
+| Spread thành phẩm − nguyên liệu | Spread là chênh lệch giá bán và chi phí nguyên liệu quy về cùng đơn vị; biên lãi gộp = (doanh thu − giá vốn) / doanh thu, không đồng nhất với spread. Quặng sắt và than cốc chiếm phần lớn giá vốn. Chú ý: chi phí nguyên liệu lọt vào báo cáo **chậm** qua tồn kho và thời gian vận chuyển | Giá thành phẩm + quặng/than từ công bố nhà máy, sàn giao dịch hoặc cơ quan ngành qua `web_search`; cùng kỳ, đơn vị, chủng loại và điều kiện giao hàng; đối chiếu `financial_detail` |
+| Khối lượng thật | Sản lượng sản xuất và tỷ lệ sử dụng công suất giải thích phân bổ chi phí cố định trên mỗi đơn vị; không nhân sản lượng với tỷ lệ sử dụng lần nữa. Nhà máy mới vận hành chưa đủ công suất làm biên thấp dù doanh thu cao | Sản lượng và tỷ lệ sử dụng: `news_market`/`web_search` (công bố nhà máy) + `financial_detail` (doanh thu, giá vốn) |
+| Phòng vệ thương mại | Thuế chống bán phá giá / tự vệ đặt một bức tường giá cho nhập khẩu. Hết hoặc thay đổi phạm vi → giá trong nước chịu áp lực ngay | Văn bản phòng vệ + thay đổi: `news_market`/`web_search`, có nguồn và ngày; nhập khẩu theo nhóm thép lấy từ Hải quan/cơ quan ngành qua `web_search`, có kỳ/đơn vị rõ |
 | Cơ cấu sản phẩm | Thép xây dựng phục vụ công trình trong nước, giá bám mùa xây dựng. Thép cuộn nóng giao dịch quốc tế, giá bám khu vực và đơn xuất khẩu — hai logic giá khác nhau | Tỷ trọng sản phẩm: công bố nhà máy trong `news_market`; biên theo mảng trong `financial_detail` |
 | Nhu cầu đầu tư công | Giải ngân đầu tư công kéo cầu thép xây dựng phục vụ hạ tầng | Tiến độ giải ngân: `news_market`; số hệ thống qua `danh-gia-vi-mo-viet-nam` nếu user cần sâu |
-| Xuất khẩu và thuế thị trường đích | Xuất khẩu là cửa xả dư thừa, nhưng là nơi chịu điều tra chống bán phá giá đầu tiên | Xuất khẩu: `vs_xnk_detail`; rủi ro điều tra: `news_market` |
+| Xuất khẩu và thuế thị trường đích | Xuất khẩu là cửa xả dư thừa, nhưng là nơi chịu điều tra chống bán phá giá đầu tiên | Xuất khẩu theo nhóm thép: Hải quan/cơ quan ngành qua `web_search`; rủi ro điều tra: `news_market` |
 
 ## Các bước
 
@@ -51,61 +52,43 @@ phẩm lấy từ công bố nhà máy (`news_market`), ghi rõ kỳ.
 
 **Bước 2: Hai đầu spread (song song).**
 
-`yf_commodities` (quặng sắt, than cốc, thép thế giới) · `financial_detail` (doanh
-thu, giá vốn hàng bán → biên lãi gộp theo quý). Ghi rõ giá đầu vào tra từ đâu và
-kỳ nào.
+`web_search` tìm giá từ công bố nhà máy/sàn giao dịch/cơ quan ngành (quặng sắt, than cốc, thép); ghi ngày, kỳ, đơn vị, chủng loại và điều kiện giao hàng trước khi so. `financial_detail` lấy doanh thu, giá vốn → biên lãi gộp theo quý. Bộ COMMO mặc định của `yf_commodities` không có quặng sắt/than cốc/thép: không dùng để dựng spread. Thiếu giá so sánh được thì không tính spread; biên gộp chỉ là dữ liệu bổ trợ.
 
 **Bước 3: Khối lượng + rào phòng vệ (song song).**
 
 `news_market` (sản lượng, tỷ lệ sử dụng công suất, văn bản phòng vệ thương mại,
-nhập khẩu) · `vs_xnk_detail` (xuất khẩu thép và sản phẩm thép theo kỳ).
+nhập khẩu) · `web_search` (xuất khẩu thép theo nhóm hàng từ Hải quan/cơ quan ngành; không lấy chuỗi theo quốc gia từ `vs_xnk_detail` làm nhóm hàng).
 
 **Bước 4: Neo kỳ vọng + vị thế nhóm.**
 
-`planned_targets` (kế hoạch năm) · `peer_compare` (so biên lãi gộp, chi phí tài
-chính/tồn kho trong nhóm) · `analyst_consensus` (neo kỳ vọng).
+`planned_targets` (kế hoạch năm) · `peer_compare` (so chỉ tiêu tổng quan cùng phân khúc) · `analyst_consensus` (neo kỳ vọng).
+
+Đối chiếu công cụ: `peer_compare` chỉ dùng các key tổng quan thực sự có trong kết quả (như P/E, P/B, ROE); tham số `metrics` không tạo thêm chỉ tiêu. Biên, sản lượng, chi phí, tồn kho và KPI vận hành phải đọc `financial_detail` từng peer cùng kỳ; nếu không có thì tra công bố doanh nghiệp qua `news_symbol`/`web_search`, ghi nguồn, công thức và kỳ. Thiếu dữ liệu thì để trống, không xếp hạng.
 
 ## Cây quyết định nhà máy thép đang được tiếp sức hay siết
 
-Duyệt Q1→Q5 theo thứ tự, **DỪNG ở ★ đầu tiên** mà ĐỦ điều kiện. Thiếu dữ liệu thì
-hạ độ tin cậy, không bù số.
 
-Q1. Cặp giá thành phẩm − nguyên liệu đang nở hay hẹp?
-├─ Nở (thành phẩm tăng hoặc giữ, quặng/than giảm) → tiếp Q2
-├─ Hẹp (thành phẩm giảm hoặc quặng/than tăng) → tiếp Q3 (vẫn có thể là cơ hội
-   nếu là do giãn tồn kho)
-└─ Chưa dựng được cặp giá → ghi thiếu dữ liệu, dùng Q4 với độ tin cậy thấp
+Đi theo nhánh phù hợp; ghi nhận trạng thái trung gian và chỉ dừng ở ★. Mọi kết luận phải tách dữ liệu đã biết và phần còn thiếu, không bù số hay đổi "chưa rõ" thành "xấu".
 
-Q2. Khối lượng có đủ để phân bổ chi phí cố định không?
-├─ Có, tỷ lệ sử dụng công suất đang lên → Q4
-└─ Chưa, nhà máy mới chưa đủ công suất → ★ "Biên đang bị tỷ lệ sử dụng kìm: đọc
-   tiến độ ramp-up trước khi nhìn biên"
+Q1. Cặp giá thành phẩm − nguyên liệu có so sánh được không?
+├─ Spread nở, cùng kỳ/đơn vị/chủng loại → ghi thuận lợi, tiếp Q2
+├─ Spread hẹp → ghi áp lực chi phí/giá bán và độ trễ tồn kho, tiếp Q2
+└─ Chưa dựng được spread → ghi thiếu, chỉ dùng biên gộp bổ trợ, tiếp Q2
 
-Q3. Nguyên nhân hẹp là do nguyên liệu hay do giá bán?
-├─ Nguyên liệu tăng (than/quặng) → tiếp Q3b
-├─ Giá bán giảm trong khi rào phòng vệ đang bị siết hoặc hết → ★ "Bị siết bởi
-   nhập khẩu: giá bán không giữ được, đọc văn bản phòng vệ để xem hướng đi"
-└─ Giá bán giảm do cơ cấu chuyển sang sản phẩm giao dịch quốc tế → ★ "Biên chuyển
-   theo chu kỳ quốc tế: đọc giá bán khu vực thay vì giá nội địa"
+Q2. Khối lượng bán và tỷ lệ sử dụng công suất ra sao?
+├─ Tăng, đủ phân bổ chi phí cố định → ghi thuận lợi, tiếp Q3
+├─ Giảm hoặc nhà máy mới chưa đủ tải → ghi áp lực công suất, tiếp Q3
+└─ Chưa có số liệu → ghi thiếu dữ liệu sản lượng, tiếp Q3
 
-Q3b. Chi phí nguyên liệu đã vào báo cáo chưa?
-├─ Chưa toàn bộ (tồn kho giá cao còn chưa tiêu) → ★ "Biên sẽ còn bị nén thêm:
-   đọc tồn kho nguyên liệu trước khi kỳ vọng hồi phục"
-└─ Đã vào (tồn kho giá mới đang áp) → ★ "Biên đang ở vùng đáy của vòng: spread
-   đảo chiều sẽ thấy trước ở giá thị trường, sau ở báo cáo"
+Q3. Rào phòng vệ và cơ cấu sản phẩm đang thay đổi thế nào?
+├─ Giá bán giữ được, thị trường đích ổn → ghi thuận lợi, tiếp Q4
+├─ Thuế/phạm vi thay đổi gây áp lực nhập khẩu hoặc xuất khẩu → ghi rủi ro có văn bản/ngày, tiếp Q4
+└─ Chưa xác minh được → ghi chưa rõ chính sách/cơ cấu, tiếp Q4
 
-Q4. Cơ cấu sản phẩm đang nghiêng về đâu?
-├─ Về sản phẩm nội địa (xây dựng) → tiếp Q5
-├─ Về sản phẩm giao dịch quốc tế (cuộn nóng) → ★ "Chu kỳ bám giá khu vực và
-   cước vận chuyển: đọc hàng tồn + đơn xuất khẩu, cầu nội địa không còn là
-   biến quyết định"
-└─ Chưa rõ tỷ trọng → tiếp Q5 với độ tin cậy thấp
-
-Q5. Rào phòng vệ thương mại đang bảo vệ hay bị thử thách?
-├─ Đang bảo vệ, nhập khẩu giảm → ★ "Được tiếp sức: giá trong nước giữ được, đọc
-   khối lượng để xem tăng trưởng bám giá hay bám volume"
-├─ Bị điều tra từ thị trường đích xuất khẩu → ★ "Bị siết một đầu: cửa xả dư thừa
-   đang bị thu hẹp, đọc tỷ trọng xuất khẩu trong doanh thu"
+Q4. Tồn kho và biên gộp có xác nhận tín hiệu giá/khối lượng không?
+├─ Spread nở + sản lượng tăng + biên cải thiện, có nguồn cùng kỳ → ★ "Được tiếp sức; tách tác động giá, lượng và tồn kho"
+├─ Có bằng chứng spread hẹp hoặc công suất thấp, biên co → ★ "Bị siết theo yếu tố đã xác minh; không khẳng định đã ở đáy"
+└─ Dữ liệu thiếu, trái chiều hoặc chỉ có biên gộp → ★ "Chưa đủ dữ liệu kết luận tổng thể; nêu tín hiệu đã biết và cần bổ sung"
 
 ## Chỉ báo đặc thù ngành
 
@@ -142,7 +125,7 @@ trong giai đoạn ramp-up: ghi rõ công suất đã vận hành so với thi�
 
 ## Giới hạn
 
-- Giá nguyên liệu từ `yf_commodities` là giá tham chiếu quốc tế theo chu kỳ, không
+- Giá nguyên liệu từ nguồn công bố có ngày là giá tham chiếu, không
   phải giá hợp đồng thực mua của từng nhà máy — ghi rõ khi dùng.
 - Tỷ trọng sản phẩm và tỷ lệ sử dụng công suất là công bố không định kỳ; thiếu thì
   hạ độ tin cậy nhánh Q2/Q4.
@@ -154,7 +137,7 @@ trong giai đoạn ramp-up: ghi rõ công suất đã vận hành so với thi�
 **Ví dụ 1:**
 Hỏi: Bán nhiều thép hơn mà lãi không theo, tại sao?
 Đạt khi: có cặp giá thành phẩm − nguyên liệu với 2 đầu kỳ nào, sản lượng/tỷ lệ sử
-dụng, biên lãi gộp theo quý, độ trễ tồn kho, và verdict theo cây Q1→Q5.
+dụng, biên lãi gộp theo quý, độ trễ tồn kho, và verdict theo cây Q1→Q4.
 
 ## Trực quan hóa
 

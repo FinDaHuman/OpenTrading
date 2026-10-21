@@ -19,8 +19,8 @@
 
 | Chỉ báo | Đọc từ | Cách đọc |
 |---|---|---|
-| Bán trước (ký trong kỳ) | `financial_detail` / `planned_targets` | Đọc cùng biên lãi gộp: bán trước tăng + biên giảm = tăng trưởng bằng giảm giá |
-| Doanh thu chưa ghi nhận (tích luỹ) | `financial_detail` | Tồn kho doanh thu tương lai. Tăng = pipeline bàn giao; giảm = đang tiêu backlog |
+| Bán trước (ký trong kỳ) | Công bố doanh nghiệp; `planned_targets` chỉ là kế hoạch | Đọc cùng biên lãi gộp: bán trước tăng + biên giảm = tăng trưởng bằng giảm giá |
+| Backlog hợp đồng chưa ghi nhận | Công bố doanh nghiệp/thuyết minh | Không đồng nhất với tiền người mua trả trước hoặc doanh thu chưa thực hiện kế toán; theo dõi bàn giao và hủy hợp đồng |
 | Tích luỹ chi phí dở | `financial_detail` | Cơ sở nhận lãi khi bàn giao. So với doanh thu chưa ghi nhận để xem giai đoạn còn dài hay ngắn |
 | Biên lãi gộp mảng BĐS | `financial_detail` | Chỉ tiêu chất lượng của ngành. Biên giảm dù doanh thu tăng = cung cạnh tranh hoặc chiết khấu |
 
@@ -39,7 +39,7 @@
 | `news_market` | Tăng trưởng tín dụng ngành, phát hành + lãi trái phiếu, tường đáo hạn, cung mới theo kỳ | Mỗi lần cần số ngành; ghi rõ nguồn và kỳ |
 | `company_events` | Phê duyệt dự án, tăng vốn, chào bán trái phiếu | Trước khi kết luận tiến độ hoặc kế hoạch vốn |
 | `event_calendar_vn` | Họp cổ đông, ngày chốt, lịch công bố | Neo mốc thời gian cho kỳ vọng |
-| `planned_targets` | Kế hoạch doanh thu/lãi/bán trước | Neo kỳ vọng và đối chiểu kết quả đã công bố |
+| `planned_targets` | Kế hoạch doanh thu/lãi/bán trước | Neo kỳ vọng và đối chiếu kết quả đã công bố |
 
 ## 5. Bẫy đọc thường gặp
 

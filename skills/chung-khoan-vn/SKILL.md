@@ -1,11 +1,12 @@
 ---
 name: chung-khoan-vn
-description: "Phân tích ngành chứng khoán VN theo đòn bẩy và cơ cấu doanh thu: dư nợ margin so vốn chủ, spread margin, sự dịch chuyển từ phí sang mảng cân đối. Dùng khi hỏi xu hướng ngành chứng khoán hay đọc kết quả công ty chứng khoán."
+description: "Pha/sóng: dùng skill chu kỳ. Phân tích ngành chứng khoán VN theo đòn bẩy và cơ cấu doanh thu: dư nợ margin so vốn chủ, spread margin, sự dịch chuyển từ phí sang mảng cân đối. Dùng khi đọc kết quả công ty chứng khoán."
 activation: auto
 requires_tools: [financial_detail, vs_financial_norms]
 uses_tools: [financial_detail, vs_financial_norms, financial_ratios, stock_overview, planned_targets, analyst_consensus, peer_compare, market_overview, breadth_scan, news_symbol, news_market, symbol_lookup, vn_company, vs_market_info, valuation_run]
 triggers:
   keywords: [ngành chứng khoán, mảng chứng khoán, dư nợ margin, cho vay ký quỹ, môi giới chứng khoán, lãi margin, doanh thu môi giới, ctck vn]
+  exclude_keywords: [đỉnh chu kỳ, giai đoạn phân phối, đầu phục hồi, giai đoạn nào, đang khuyến nghị, khuyến nghị mã, khuyến nghị những mã, báo cáo khuyến nghị, pha tiếp theo, dẫn sóng, pha nào, chu kỳ ngành, sóng ngành, luân chuyển ngành, pha thị trường, chu kỳ thị trường, giai đoạn thị trường, sóng tiếp theo, cuối sóng, giữa sóng, đầu sóng, bank dẫn, chứng dẫn, rotation]
 version: 1.0.0
 ---
 
@@ -13,7 +14,7 @@ version: 1.0.0
 
 Ngành chứng khoán VN đã rời mô hình "sống bằng phí môi giới": doanh thu đang dịch
 sang **mảng cân đối** (đầu tư tự doanh + cho vay ký quỹ). Vì vậy skill này đọc
-ngành qua **đòn bẩn** (dư nợ margin so vốn chủ và so trần cho phép), **chất lượng
+ngành qua **đòn bẩy** (dư nợ margin so vốn chủ và so trần cho phép), **chất lượng
 đòn bẩy đó** (spread margin) và **cơ cấu doanh thu** (mảng nào đang nuôi lãi),
 không đọc bằng doanh thu môi giới — mảng này bị cạnh tranh phí 0 làm méo giá trị
 chỉ báo.
@@ -35,8 +36,8 @@ BCTC công ty chứng khoán đọc qua chuẩn mực riêng (`vs_financial_norm
 
 | Driver | Kênh truyền dẫn | Đo/xác minh bằng |
 |---|---|---|
-| Dư nợ margin | Mềm dai nhất của ngành: nhà đầu tư vay mua cổ phiếu. Dư nợ tăng liên tục = nhận thức rủi ro đang mở ra; giảm đột ngột = thị trường vừa xả hoặc CTCK siết gọi ký quỹ | Tổng dư nợ margin ngành + của mã: `news_market`/`web_search` (các CTCK lớn công bố dư nợ theo quý), riêng mã đọc `financial_detail` |
-| Mức đòn bẩy | Dư nợ margin so vốn chủ so với **trần quy định** (2× vốn chủ) quyết định còn bao nhiêu chỗ tăng trưởng. Gần trần → tăng trưởng phải đến từ vốn mới hoặc tự doanh | Tính từ `financial_detail` (dư nợ cho vay ký quỹ, vốn chủ) — ghi rõ công thức tự tính |
+| Dư nợ margin | Một nguồn thu lãi của ngành: nhà đầu tư vay mua cổ phiếu. Dư nợ tăng liên tục = nhận thức rủi ro đang mở ra; giảm đột ngột = thị trường vừa xả hoặc CTCK siết gọi ký quỹ | Tổng dư nợ margin ngành + của mã: `news_market`/`web_search` (các CTCK lớn công bố dư nợ theo quý), riêng mã đọc `financial_detail` |
+| Mức đòn bẩy | Dư nợ margin so vốn chủ so với **trần quy định đang áp dụng** (tra văn bản cơ quan quản lý: số hiệu, ngày hiệu lực, phạm vi, công thức và điều kiện áp dụng; chưa xác minh thì không chốt dư địa) quyết định còn bao nhiêu chỗ tăng trưởng. Gần trần → khả năng tăng dư nợ có thể cần vốn mới; tự doanh là nguồn rủi ro riêng, không mặc định bù được tăng trưởng | Tính từ `financial_detail` (dư nợ cho vay ký quỹ, vốn chủ) — ghi rõ công thức tự tính |
 | Spread margin | Lãi margin điều chỉnh theo từng CTCK và gói ký quỹ, trong khi chi phí huy động của CTCK tăng theo tiền gửi và giấy tờ có giá → spread nén là rủi ro lợi nhuận trực tiếp | Lãi margin trung bình (từng gói, công bố từng công ty) + chi phí vốn: `news_market` + `financial_detail` — lấy số của kỳ đang xét, không mang số cũ giữa các kỳ |
 | Cơ cấu doanh thu | Ngành dịch từ phí sang cân đối. Nhóm nội địa phụ thuộc đầu tư + margin; nhóm nước ngoài cân bằng hơn. Cơ cấu quyết định nhóm nào chịu thị trường giảm | `financial_detail` (chuẩn CTCK): doanh thu môi giới · cho vay ký quỹ · đầu tư · tư vấn |
 | Thanh khoản thị trường | Phí môi giới bị cạnh tranh phí 0 làm mất giá trị đo lường, nhưng thanh khoản vẫn là nền cho ký quỹ và tự doanh | `market_overview` · `breadth_scan` · `vs_market_info` |
@@ -55,7 +56,7 @@ dòng BCTC công ty chứng khoán.
 **Bước 2: Đòn bẩy + cơ cấu doanh thu (song song).**
 
 `financial_detail`: dư nợ cho vay ký quỹ · vốn chủ · doanh thu theo 4 mảng ·
-các khoản phải thu. Tự tính mức đòn bẩn (ghi rõ công thức) và so trần quy định.
+các khoản phải thu. Tự tính mức đòn bẩy (ghi rõ công thức) và so trần quy định.
 
 **Bước 3: Nhịp thị trường + spread (song song).**
 
@@ -64,41 +65,39 @@ thật không) · `news_market` (dư nợ margin ngành, lãi margin, chi phí v
 
 **Bước 4: Neo kỳ vọng + vị thế nhóm.**
 
-`planned_targets` (kế hoạch năm) · `peer_compare` (so mức đòn bẩn, cơ cấu doanh
-thu, ROE với nhóm cùng mô hình) · `analyst_consensus` (neo kỳ vọng, không thay
+`planned_targets` (kế hoạch năm) · `peer_compare` (chỉ key tổng quan thực trả như P/B, ROE) · `financial_detail`/công bố từng peer cùng kỳ để so dư nợ/vốn chủ và cơ cấu doanh thu · `analyst_consensus` (neo kỳ vọng, không thay
 thế kết luận).
 
 ## Cây quyết định ngành đang được tiếp sức hay bị siết
 
-Duyệt Q1→Q5 theo thứ tự, **DỪNG ở ★ đầu tiên** mà ĐỦ điều kiện. Thiếu dữ liệu ở
-một nhánh thì hạ độ tin cậy, không bù số.
+Duyệt các node theo thứ tự; ghi trạng thái trung gian rồi đi tiếp. Chỉ dừng ở ★.
+Thiếu dữ liệu phải ghi rõ và hạ độ tin cậy; không coi thiếu là tín hiệu xấu.
 
 Q1. Dư nợ margin ngành đang tăng hay giảm?
-├─ Tăng liên tục nhiều quý → tiếp Q2
-└─ Giảm hoặc đi ngang → ★ "Đòn bẩn đang rút: driver tăng trưởng chuyển sang tự
-   doanh và phí tư vấn — đọc cơ cấu doanh thu trước khi kỳ vọng lãi từ ký quỹ"
+├─ Tăng liên tục → ghi cầu ký quỹ tăng → Q2
+├─ Giảm/đi ngang → ghi động lực ký quỹ yếu; chưa suy tự doanh bù được → Q2
+└─ Thiếu chuỗi ngành → ghi chưa rõ cầu ký quỹ → Q2
 
-Q2. Mức đòn bẩn của mã còn cách trần bao xa?
-├─ Đã gần trần quy định → ★ "Chỗ tăng trưởng từ ký quỹ bị chặn: cần vốn mới —
-   đọc kế hoạch huy động trong `planned_targets`/`news_market`"
-├─ Còn cách xa trần → tiếp Q3
-└─ Chưa tính được (thiếu vốn chủ hoặc dư nợ) → tiếp Q3 với độ tin cậy thấp
+Q2. Dư nợ margin/vốn chủ còn cách trần đang áp dụng bao xa?
+├─ Gần trần đã xác minh → ghi hạn chế dư địa, cần vốn mới → Q3
+├─ Còn cách xa trần đã xác minh → ghi còn dư địa → Q3
+└─ Thiếu số liệu/văn bản → ghi chưa xác nhận dư địa pháp lý → Q3
 
 Q3. Spread margin đang nở hay nén?
-├─ Nén (chi phí vốn CTCK tăng nhanh hơn lãi margin) → ★ "Bị siết bởi vốn: mảng
-   ký quỹ tăng trưởng nhưng lãi không theo"
-└─ Nở hoặc ổn định → tiếp Q4
+├─ Nén → ghi áp lực lợi nhuận ký quỹ → Q4
+├─ Nở/ổn định → ghi biên ký quỹ thuận/ổn → Q4
+└─ Thiếu lãi suất hoặc chi phí vốn cùng kỳ → ghi chưa đo được spread → Q4
 
-Q4. Cơ cấu doanh thu đã dịch sang cân đối chưa?
-├─ Vẫn phụ thuộc phí môi giới → ★ "Rủi ro cạnh tranh phí: doanh thu bị bòn từ
-   biên, đọc cơ cấu trước khi xếp hạng nhóm"
-└─ Đã dịch sang ký quỹ + đầu tư → tiếp Q5
+Q4. Chất lượng cơ cấu doanh thu ra sao?
+├─ Phụ thuộc môi giới → ghi rủi ro cạnh tranh phí → Q5
+├─ Ký quỹ tăng, chi phí vốn được kiểm soát → ghi nguồn lãi ký quỹ → Q5
+├─ Phụ thuộc tự doanh → ghi biến động danh mục, tách lãi đã/chưa thực hiện; không mặc định tích cực → Q5
+└─ Thiếu chi tiết hoặc cơ cấu hỗn hợp → ghi chưa rõ mức bền vững → Q5
 
-Q5. Cơ chế mới (nâng hạng theo đợt, CCP, pipeline IPO) có mở thêm vòng tăng trưởng không?
-├─ Có, còn trong lộ trình → ★ "Ngành được tiếp sức bởi thể chế: vốn chủ mở rộng,
-   phí tư vấn tăng, khách hàng tổ chức hóa — ghi mốc thời gian từng đợt"
-└─ Đã qua giai đoạn chính → ★ "Ngành bước vào giai đoạn tăng trưởng chọn lọc:
-   lợi nhuận đến từ nhóm có vốn và cơ cấu tốt, không phải cả ngành"
+Q5. Cơ chế mới và pipeline tư vấn có bằng chứng thực hiện không?
+├─ Có mốc và tác động doanh thu/vốn được xác minh → ★ "Có động lực bổ sung; đánh giá cùng rủi ro ký quỹ và tự doanh đã ghi"
+├─ Chưa thực hiện/đã phản ánh → ★ "Đánh giá tăng trưởng từ hoạt động thực tế; không nội suy lợi nhuận từ tên chính sách"
+└─ Chưa xác minh → ★ "Chưa đủ dữ liệu về động lực thể chế; kết luận giới hạn theo các mảng đã xác minh"
 
 ## Chỉ báo đặc thù ngành
 

@@ -1,10 +1,11 @@
 ---
 name: van-tai-vn
-description: "Phân tích ngành vận tải và logistics Việt Nam theo cước vận chuyển, cầu xuất khẩu, công suất cảng và đòn bẩn nhiên liệu. Dùng khi hỏi xu hướng nhóm vận tải, công ty cảng hay cước vận chuyển."
+description: "Pha/sóng: dùng skill chu kỳ. Phân tích ngành vận tải và logistics Việt Nam theo cước vận chuyển, cầu xuất khẩu, công suất cảng và chi phí nhiên liệu. Dùng khi hỏi xu hướng nhóm vận tải, công ty cảng hay cước vận chuyển."
 activation: auto
 requires_tools: [financial_detail, vs_xnk_detail]
 uses_tools: [financial_detail, vs_xnk_detail, financial_ratios, planned_targets, analyst_consensus, peer_compare, yf_commodities, news_symbol, news_market, symbol_lookup, vn_company]
 triggers:
+  exclude_keywords: [đỉnh chu kỳ, giai đoạn phân phối, đầu phục hồi, giai đoạn nào, dẫn sóng, pha nào, chu kỳ ngành, sóng ngành, luân chuyển ngành, pha thị trường, chu kỳ thị trường, giai đoạn thị trường, sóng tiếp theo, cuối sóng, giữa sóng, đầu sóng, bank dẫn, chứng dẫn, rotation, pha tiếp theo]
   keywords: [ngành vận tải, vận tải biển, cảng biển, cước vận chuyển, tàu chở container, luồng hàng hoá, công ty cảng, mảng logistics]
 version: 1.0.0
 ---
@@ -37,7 +38,7 @@ tải container bị siết.
 | Driver | Kênh truyền dẫn | Đọc/xác minh bằng |
 |---|---|---|
 | Cước vận chuyển | Bảng cước theo tuyến (xuyên Đại Dương, nội Á, Âu-Mỹ) quyết định doanh thu mảng vận tải. Cước lên không đồng đều: tuyến ngắn và bến trung chuyển chịu quy luật khác | Cước tuyến: `news_market`/`web_search`, ghi rõ chỉ số cước + ngày; riêng mã giá thu bình quân trong `financial_detail` |
-| Cầu xuất khẩu | Lưu lượng hàng qua cảng bám xuất khẩu và nhập khẩu linh kiện. Nhập khẩu máy móc/linh kiện tăng nhanh hơn xuất khẩu là tín hiệu cầu tương lai | Xuất/nhập khẩu theo kỳ: `vs_xnk_detail`; cầu ngành tổng hợp: `news_market` |
+| Cầu xuất khẩu | Lưu lượng hàng qua cảng bám xuất khẩu và nhập khẩu linh kiện. Đọc sản lượng TEU/tấn qua cảng và tổng lưu lượng thương mại; giá trị nhập thiết bị tăng không chứng minh nhu cầu vận tải tăng | Xuất/nhập khẩu theo kỳ: `vs_xnk_detail`; cầu ngành tổng hợp: `news_market` |
 | Công suất cảng | Bến mới chạy chưa đủ tải làm chi phí cố định đội lên; công suất đủ thì giá thu được giữ. Đây là nguồn biên bền vững nhất ngành | Tỷ lệ sử dụng bến + cước dịch vụ: `news_market`/`web_search`; riêng mã doanh thu/cước bình quân trong `financial_detail` |
 | Tỷ lệ khóa giá | Hợp đồng vận chuyển theo định kỳ dài hạn co giãn thu nhập: tỷ lệ khóa cao thì sóng cước không vào doanh thu ngay | Tỷ trọng hợp đồng cố định: `news_market`/`web_search`; dấu hiệu gián tiếp ở doanh thu/khối lượng trong `financial_detail` |
 | Nhiên liệu | Chi phí nhiên liệu và chi phí bến siết biên vận tải; ngược lại ít ảnh hưởng cảng | Giá nhiên liệu: `yf_commodities` theo chu kỳ |
@@ -53,7 +54,7 @@ chuyển phát) · `financial_detail` (doanh thu theo mảng). Ghi rõ phân kh�
 **Bước 2: Cước + cầu (song song).**
 
 `news_market` (cước tuyến, chỉ số cước, cước tàu dầu nếu liên quan) ·
-`vs_xnk_detail` (xuất/nhập khẩu theo kỳ làm tín hiệu cầu).
+`vs_xnk_detail` (tổng xuất + nhập cùng kỳ làm bối cảnh; tách giá/khối lượng, không suy TEU từ giá trị).
 
 **Bước 3: Công suất + khối lượng + chi phí (song song).**
 
@@ -66,41 +67,40 @@ chuyển phát) · `financial_detail` (doanh thu theo mảng). Ghi rõ phân kh�
 `planned_targets` · `analyst_consensus` · `peer_compare` (so **trong cùng phân
 khúc** — so cảng với vận tải container bị cấm).
 
+Đối chiếu công cụ: `peer_compare` chỉ dùng các key tổng quan thực sự có trong kết quả (như P/E, P/B, ROE); tham số `metrics` không tạo thêm chỉ tiêu. Biên, sản lượng, chi phí, tồn kho và KPI vận hành phải đọc `financial_detail` từng peer cùng kỳ; nếu không có thì tra công bố doanh nghiệp qua `news_symbol`/`web_search`, ghi nguồn, công thức và kỳ. Thiếu dữ liệu thì để trống, không xếp hạng.
+
 ## Cây quyết định công ty vận tải đang được tiếp sức hay siết
 
-Duyệt Q1→Q5 theo thứ tự, **DỪNG ở ★ đầu tiên** mà ĐỦ điều kiện. Thiếu dữ liệu thì
-hạ độ tin cậy, không bù số.
+
+Đi theo nhánh phù hợp; ghi nhận trạng thái trung gian và chỉ dừng ở ★. Mọi kết luận phải tách dữ liệu đã biết và phần còn thiếu, không bù số hay đổi "chưa rõ" thành "xấu".
 
 Q1. Công ty thuộc phân khúc nào?
-├─ Cảng / bến → Q4 (nhánh cảng: cước dịch vụ + công suất)
-├─ Vận tải container → Q2 (nhánh container: cước + tuyến + khóa giá)
-├─ Vận tải dầu / hàng rời → ★ "Chu kỳ bám cước tàu theo tuyến và cú sốc cung —
-   đọc hướng cước và tỷ lệ hợp đồng dài hạn trong `news_market`"
-└─ Giao nhận / chuyển phát → ★ "Chu kỳ bám lưu lượng bưu kiện và chi phí nhiên
-   liệu — đọc lưu lượng và chi phí nhiên liệu trước cước"
+├─ Cảng/bến → Q4 (cảng)
+├─ Container → Q2 (container)
+├─ Tàu dầu/hàng rời → ★ "Đánh giá cước tuyến, tonne-mile, sản lượng và hợp đồng; thiếu thì chưa đủ dữ liệu cho phân khúc"
+├─ Giao nhận/chuyển phát → ★ "Đánh giá lưu lượng bưu kiện, giá dịch vụ và chi phí; thiếu thì chưa đủ dữ liệu cho phân khúc"
+├─ Nhiều phân khúc → đánh giá độc lập từng phân khúc theo Q1 rồi tổng hợp theo tỷ trọng công bố
+└─ Chưa rõ → ★ "Chưa đủ dữ liệu phân khúc"
 
-Q2 (container). Cước tuyến của công ty đang ở phía nào của chu kỳ?
-├─ Đang lên → tiếp Q3
-├─ Đang giảm → ★ "Bị siết bởi cước: đọc tỷ lệ khóa giá — hợp đồng cố định là đệm,
-   tỷ lệ khóa cao thì sóng giảm vào chậm"
-└─ Chưa dựng được cước → ghi thiếu, Q3 với độ tin cậy thấp
+Q2 (container). Cước và tỷ lệ khóa giá ra sao?
+├─ Cước lên, hợp đồng cho phép hưởng giá mới → ghi thuận lợi, tiếp Q3
+├─ Cước giảm hoặc khóa giá làm chậm hưởng lợi → ghi áp lực/độ trễ, tiếp Q3
+└─ Chưa rõ cước/hợp đồng → ghi thiếu, tiếp Q3
 
-Q3 (container). Tuyến và chính sách thuế quan có đang đổi hướng cước không?
-├─ Tuyến chính ít chịu thuế Mỹ hoặc đang chuyển sang nội Á → tiếp Q5
-├─ Tuyến chính vào thị trường đang bị thuế quan siết → ★ "Bị siết bởi chính sách:
-   lưu lượng sẽ dịch dần, đọc tỷ trọng doanh thu theo tuyến trước khi nội suy"
+Q3 (container). Chính sách thương mại ảnh hưởng tuyến thực tế thế nào?
+├─ Tuyến và lưu lượng giữ được, đã xác minh thuế theo hàng/xuất xứ/đích/ngày → tiếp Q5
+├─ Có bằng chứng mất hàng hoặc chuyển tuyến gây chi phí → ghi áp lực chính sách, tiếp Q5
+└─ Chưa rõ chính sách/tuyến → ghi thiếu, tiếp Q5
 
-Q4 (cảng). Công suất bến có đủ tải không?
-├─ Có, tỷ lệ sử dụng đang lên → Q5
-└─ Chưa, bến mới chưa đủ tải → ★ "Biên đang bị công suất kìm: chi phí cố định chạy
-   trước doanh thu, đọc tiến độ lấp đầy trước khi kỳ vọng biên"
+Q4 (cảng). Công suất và lưu lượng bến ra sao?
+├─ TEU/tấn và tỷ lệ sử dụng tăng → ghi thuận lợi, tiếp Q5
+├─ Bến mới chưa đủ tải hoặc sản lượng giảm → ghi áp lực chi phí cố định, tiếp Q5
+└─ Chưa có số liệu → ghi thiếu, tiếp Q5
 
-Q5 (chung). Cầu nền có còn kéo không?
-├─ Có, nhập khẩu máy móc/linh kiện tăng nhanh hơn xuất khẩu → ★ "Được tiếp sức bởi
-   cầu: lưu lượng tăng trước doanh thu — đọc dấu hiệu này như chỉ báo dẫn"
-├─ Cầu chững nhưng doanh thu vẫn tăng → ★ "Tăng trưởng đến từ giá/cước, không từ
-   thể tích: hạ độ tin cậy khi cước đảo chiều"
-└─ Cầu giảm → ★ "Bị siết bởi cầu: cả giá lẫn khối lượng cùng chiều xuống"
+Q5 (chung). Cầu nền và biên có xác nhận không?
+├─ TEU/tấn tăng cùng kỳ, biên giữ được, cước/công suất thuận lợi → ★ "Được tiếp sức bởi lưu lượng và vận hành đã xác minh"
+├─ TEU/tấn giảm hoặc doanh thu chỉ tăng nhờ giá/cước → ★ "Có áp lực cầu hoặc phụ thuộc giá; nêu bằng chứng và độ nhạy cước"
+└─ Chỉ có giá trị thương mại hoặc dữ liệu thiếu/trái chiều → ★ "Chưa đủ dữ liệu cầu thực; không suy cầu từ nhập máy móc tăng nhanh hơn xuất khẩu"
 
 ## Chỉ báo đặc thù ngành
 

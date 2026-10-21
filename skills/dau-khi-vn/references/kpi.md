@@ -43,7 +43,7 @@ và đọc cả các nhánh, không chọn một vòng đại diện.
 | `yf_commodities` | Giá dầu theo chu kỳ tra được | Làm mốc đối chiếu, **không** thay giá thực hiện hợp đồng |
 | `news_market` | Tình trạng tuyến vận chuyển, cước tàu dầu, diễn biến địa chính trị | Driver của vòng vận chuyển; ghi rõ ngày nguồn |
 | `planned_targets` | Kế hoạch năm của công ty | Neo kỳ vọng sản lượng/doanh thu |
-| `peer_compare` | Chỉ báo trong cùng vòng | Cấm so vòng khác; ghi rõ vòng đang so |
+| `peer_compare` | Key tổng quan thực sự trả về, như P/E, P/B, ROE | So cùng phân khúc; KPI vận hành lấy từ `financial_detail` từng peer cùng kỳ và công bố doanh nghiệp, không tạo key bằng `metrics` |
 
 ## 5. Bẫy đọc thường gặp
 

@@ -29,7 +29,7 @@
 |---|---|---|
 | Tồn kho | `financial_detail` | Đọc theo luật ở §Trụ cột driver của SKILL.md (tồn kho giá gốc quyết định biên còn được hỗ trợ bao lâu): tồn kho giá gốc thấp thì biên còn đỡ, giá gốc cao thì biên bị nén khi giá giảm |
 | Chi phí khí/nguyên liệu | `financial_detail` + `yf_commodities` | Đuổi kịp giá bán thì cửa sổ đóng |
-| Xuất khẩu kỳ | `vs_xnk_detail` | Tín hiệu hướng: xuất tăng mạnh thường đi kèm giá quốc tế tốt |
+| Xuất khẩu kỳ | Hải quan/cơ quan ngành qua `web_search`, nhóm hàng và kỳ rõ | Tách lượng và trị giá để phân biệt tăng giá với tăng cầu; không lấy chuỗi theo quốc gia từ `vs_xnk_detail` làm nhóm hàng |
 | Chính sách Trung Quốc | `news_market` | Biến số cung toàn cầu; ghi rõ nguồn và ngày |
 
 ## 4. Nhóm đối chiếu
@@ -37,9 +37,9 @@
 | Nguồn | Đọc gì | Cách dùng |
 |---|---|---|
 | `news_market` | Giá phân bón quốc tế/nội địa, chính sách xuất khẩu, tình trạng cung | Ghi rõ chỉ số giá và ngày tra |
-| `vs_indicator_data` | Sản xuất nông nghiệp (nhu cầu nội địa) | Chỉ dùng khi xét nhánh nội địa |
+| `vs_categories` → `vs_indicator_data` | Tra mã danh mục sản xuất nông nghiệp thực có | Chỉ dùng khi xét nhánh nội địa; thiếu chuỗi thì dùng công bố cơ quan thống kê có kỳ |
 | `planned_targets` | Kế hoạch sản lượng/doanh thu/lãi | Neo kỳ vọng |
-| `peer_compare` | Biên lãi gộp, tỷ lệ xuất, chi phí đầu vào | So trong cùng nhóm sản phẩm (ure vs NPK vs phân kali) |
+| `peer_compare` | Key tổng quan thực sự trả về, như P/E, P/B, ROE | So cùng phân khúc; KPI vận hành lấy từ `financial_detail` từng peer cùng kỳ và công bố doanh nghiệp, không tạo key bằng `metrics` |
 
 ## 5. Bẫy đọc thường gặp
 

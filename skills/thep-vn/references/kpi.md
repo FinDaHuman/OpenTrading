@@ -1,13 +1,13 @@
 # Chỉ báo ngành thép — dòng báo cáo và cách đọc
 
 > File này giữ **cách đọc**, không giữ con số kỳ nào. Mọi giá trị lấy từ
-> `financial_detail` / `yf_commodities` / `news_market` gần nhất và ghi kỳ kèm
+> `financial_detail` / công bố nhà máy, sàn giao dịch hoặc cơ quan ngành gần nhất và ghi kỳ kèm
 > theo. Luật về đọc spread theo độ trễ tồn kho chỉ nằm ở §Trụ cột driver của
 > SKILL.md — không lặp lại ở đây.
 
 ## 1. Nhóm đầu ra
 
-| Chỉ báo | Đón từ | Cách đọc |
+| Chỉ báo | Đọc từ | Cách đọc |
 |---|---|---|
 | Doanh thu | `financial_detail` | Tách phần tăng do giá và do khối lượng nếu công bố cho phép; cùng mức doanh thu có thể là giá lên hoặc khối lượng lên |
 | Giá vốn hàng bán | `financial_detail` | Nơi chứa giá nguyên liệu. Tăng nhanh hơn doanh thu = biên đang nén |
@@ -18,9 +18,9 @@
 
 | Chỉ báo | Đọc từ | Cách đọc |
 |---|---|---|
-| Giá quặng sắt | `yf_commodities` | Giá tham chiếu quốc tế theo chu kỳ — ghi rõ kỳ và là giá tham chiếu, không phải giá hợp đồng |
-| Giá than cốc | `yf_commodities` | Biến động mạnh hơn quặng; thường là nguyên nhân chính bóp biên trong nửa năm |
-| Giá thép tham chiếu quốc tế | `yf_commodities` / `news_market` | Dùng cho nhóm sản phẩm giao dịch quốc tế, **không** thay giá bán trong nước |
+| Giá quặng sắt | `web_search` (nguồn công bố có ngày, đơn vị, chủng loại) | Giá tham chiếu quốc tế theo chu kỳ — ghi rõ kỳ và là giá tham chiếu, không phải giá hợp đồng |
+| Giá than cốc | `web_search` (nguồn công bố có ngày, đơn vị, chủng loại) | Biến động mạnh hơn quặng; thường là nguyên nhân chính bóp biên trong nửa năm |
+| Giá thép tham chiếu quốc tế | `web_search` (công bố sàn/nhà máy có ngày) | Dùng cho nhóm sản phẩm giao dịch quốc tế, **không** thay giá bán trong nước |
 
 ## 3. Nhóm khối lượng và công suất
 
@@ -35,9 +35,9 @@
 | Nguồn | Đọc gì | Khi nào |
 |---|---|---|
 | `news_market` | Văn bản phòng vệ thương mại (thuế, phạm vi, thời hạn), nhập khẩu, khởi công/dự án mới | Mỗi lần kết luận về giá bán hoặc thị phần |
-| `vs_xnk_detail` | Xuất khẩu thép và sản phẩm thép theo kỳ | Khi cần đo tỷ trọng xuất khẩu và cửa xả dư thừa |
+| `web_search` | Xuất nhập khẩu nhóm thép từ Hải quan/cơ quan ngành, có kỳ và đơn vị rõ | Đo tỷ trọng xuất khẩu theo nhóm hàng; không dùng chuỗi quốc gia của `vs_xnk_detail` làm nhóm hàng |
 | `planned_targets` | Kế hoạch doanh thu/lãi/sản lượng | Neo kỳ vọng của công ty |
-| `peer_compare` | Biên lãi gộp, chi phí tài chính/tổng nợ trong nhóm | So cùng nhóm phân khúc sản phẩm |
+| `peer_compare` | Key tổng quan thực sự trả về, như P/E, P/B, ROE | So cùng phân khúc; KPI vận hành lấy từ `financial_detail` từng peer cùng kỳ và công bố doanh nghiệp, không tạo key bằng `metrics` |
 
 ## 5. Bẫy đọc thường gặp
 

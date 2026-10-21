@@ -36,10 +36,10 @@
 
 | Nguồn | Đọc gì | Cách dùng |
 |---|---|---|
-| `news_market` | Chính sách thuế và hiệu lực, thu nhập/tiền lương, mở cửa/đóng cửa, thị phần | Ghi rõ văn bản + ngày |
+| `news_market` | Chính sách thuế và hiệu lực, thu nhập/tiền lương; mở/đóng cửa và thị phần từng công ty dùng `news_symbol`/`company_events` hoặc `web_search` nguồn doanh nghiệp | Ghi rõ văn bản + ngày |
 | `vs_indicator_data` | Thu nhập, tiêu dùng, lạm phát | Sức mua thật; đọc cả danh nghĩa và thực |
 | `planned_targets` | Kế hoạch doanh thu/lãi/mở cửa | Neo kỳ vọng |
-| `peer_compare` | Chỉ tỷ lệ định giá (P/E, P/B, ROE) | So trong cùng phân khúc — chỉ báo vận hành đọc bằng `financial_detail` từng peer, KHÔNG hỏi `peer_compare` |
+| `peer_compare` | Key tổng quan thực sự trả về, như P/E, P/B, ROE | So cùng phân khúc; KPI vận hành lấy từ `financial_detail` từng peer cùng kỳ và công bố doanh nghiệp, không tạo key bằng `metrics` |
 
 ## 5. Bẫy đọc thường gặp
 

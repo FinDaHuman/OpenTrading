@@ -1,54 +1,44 @@
-# Chỉ báo ngành ngân hàng — dòng BCTC và cách đọc
+# Chỉ báo ngân hàng — nguồn, công thức và kỳ so sánh
 
-> Tra `vs_financial_norms(btype=3)` để lấy đúng tên dòng BCTC loại ngân hàng; file
-> này giữ **cách đọc**, không giữ con số kỳ nào. Mọi giá trị lấy từ `financial_detail`
-> gần nhất và ghi kỳ báo cáo kèm theo. `financial_detail` chỉ nhận MỘT `statement`
-> mỗi lời gọi nên phải gọi riêng: nhóm 1–2 ở `KQKD`, nhóm 3 ở `TM`, nhóm 4 ở
-> `CDKT` + `TM` — cột "Đọc từ" bên dưới ghi sẵn statement cần dùng. Luật ngưỡng chuẩn mực chỉ nằm ở mục
-> "Ranh giới" của SKILL.md — không lặp lại ở đây.
+Tra `vs_financial_norms(btype=3)` trước khi chọn dòng ngân hàng. Mỗi lời gọi
+`financial_detail` nhận một `statement`: `KQKD`, `CDKT` hoặc `TM`. Tên dòng thực tế
+phải khớp kết quả tra; tỷ lệ không có sẵn cần tính từ thuyết minh hoặc công bố ngân hàng.
+Không truyền `btype` vào `financial_detail`. Ghi rõ đơn vị, kỳ và công thức tự tính.
 
-## 1. Nhóm thu nhập
+## Thu nhập và hiệu quả
 
-| Chỉ báo | Đọc từ | Cách đọc |
+| Chỉ báo | Nguồn/công thức | Lưu ý |
 |---|---|---|
-| Thu nhập lãi thuần | `financial_detail(statement=KQKD)` | Xu hướng theo quý, không chỉ tuyệt đối. Lãi thuần tăng nhưng biên NIM nén = tăng trưởng bằng tài sản, chưa phải bằng chất lượng |
-| Lãi thuần ngoài lãi | `financial_detail(statement=KQKD)` | Tỷ trọng càng cao càng phụ thuộc thị trường + chính sách; tăng trưởng lệch giữa 2 mảng phải có lý do rõ |
-| Chi phí thu nhập lãi thuần | `financial_detail(statement=KQKD)` | So QoQ. Tăng nhanh hơn tỷ suất sinh lợi trên tài sản = spread nén |
-| Biên lãi thuần | Tính từ các dòng trên | Đọc cùng chi phí vốn, không đọc riêng lẻ: cùng một mức biên có thể đến từ 2 nguyên nhân ngược nhau |
+| Thu nhập lãi, chi phí lãi, thu nhập lãi thuần | `KQKD`; thu nhập lãi thuần = thu nhập lãi − chi phí lãi | Không dùng tên dòng “chi phí thu nhập lãi thuần” |
+| NIM | Thu nhập lãi thuần quy đổi năm / tài sản sinh lãi bình quân | Quý độc lập ×4; YTD n tháng ×12/n; TTM không nhân. Nếu KQKD là lũy kế, trừ kỳ trước để ra quý độc lập. Bình quân số dư đầu/cuối đúng kỳ thu nhập, hoặc bình quân quý nếu có đủ dữ liệu; ghi phương pháp. Không chia cho tổng tài sản hoặc số dư cuối kỳ. Thiếu tài sản sinh lãi đầu/cuối thì không tính |
+| Lợi suất tài sản sinh lãi | Thu nhập lãi quy đổi năm / tài sản sinh lãi bình quân cùng kỳ | Giữ cùng phạm vi các khoản sinh lãi; đọc với chi phí vốn |
+| Chi phí vốn | Chi phí lãi quy đổi năm / nguồn vốn chịu lãi bình quân cùng kỳ | Mẫu số khác NIM; chênh lợi suất và chi phí vốn không đồng nhất NIM |
+| Thu nhập ngoài lãi | Tổng các mảng ngoài lãi trong KQKD | Tách phí, kinh doanh ngoại hối, chứng khoán, khoản một lần |
 
-## 2. Nhóm chất lượng tài sản
+## Chất lượng tài sản
 
-| Chỉ báo | Đọc từ | Cách đọc |
+| Chỉ báo | Nguồn/công thức | Lưu ý |
 |---|---|---|
-| Tỷ lệ nợ xấu | `financial_detail(statement=TM)` | Lớp **đã xảy ra**. Phẳng nhưng nợ nhóm 2 tăng → rủi ro đang hình thành, đọc tiếp 2 dòng dưới |
-| Tỷ lệ nợ nhóm 2 (cần chú ý) | `financial_detail(statement=TM)` | Lớp **đang hình thành**. Tăng liên tục 2 quý trong khi nợ xấu phẳng là tín hiệu trước |
-| Tỷ lệ bao phủ nợ vay | `financial_detail(statement=TM)` | Lớp **đệm**. Giảm = đệm mỏng, dù nợ xấu đẹp. Hạ độ tin cậy khi đệm giảm và nợ xấu phẳng |
-| Chi phí rủi ro tín dụng | `financial_detail(statement=KQKD)` | So với lợi nhuận trước dự phòng: chi phí rủi ro nuốt phần lớn tăng trưởng thì tăng trưởng là hình thức |
-| Nợ nhóm 2 → nợ xấu (tỷ lệ di cư) | Tính từ 2 dòng trên, ghi rõ là tự tính | Tỷ lệ càng cao thì càng ít nợ "hồi phục", chất lượng xấu hơn vẻ ngoài |
+| Nợ xấu (NPL) | `TM`: nợ nhóm 3–5 / tổng dư nợ cùng phạm vi | So cả số tuyệt đối và tỷ lệ |
+| Nợ nhóm 2 | `TM`: nợ nhóm 2 / tổng dư nợ cùng phạm vi | Chỉ báo sớm; không tự suy tỷ lệ chuyển nhóm từ hai số dư cuối kỳ |
+| Bao phủ nợ xấu | Dự phòng cho vay khách hàng / nợ nhóm 3–5, cùng phạm vi và kỳ | Không gọi là bao phủ nợ vay; ghi rõ dự phòng chung/cụ thể theo công bố |
+| Chi phí dự phòng rủi ro tín dụng | `KQKD` | So với lợi nhuận trước dự phòng; credit cost cần chi phí quy đổi năm / dư nợ bình quân |
+| Ngoại bảng | `TM` hoặc công bố ngân hàng | Bảo lãnh/cam kết không đồng nghĩa đã thành nợ xấu; chỉ dùng tín dụng tương đương nếu có hệ số chuyển đổi phù hợp |
 
-## 3. Nhóm tăng trưởng & vốn
+## Tăng trưởng, vốn và thanh khoản
 
-| Chỉ báo | Đọc từ | Cách đọc |
+| Chỉ báo | Nguồn/công thức | Lưu ý |
 |---|---|---|
-| Tăng trưởng tín dụng YTD | `financial_detail(statement=CDKT)` + phân phối hạn mức trong `news_market` | **Không kết luận "tăng trưởng tốt/xấu" khi chưa có hạn mức**: so với hạn mức được công bố mới có nghĩa. Thiếu hạn mức ghi rõ |
-| Tăng trưởng tiền gửi YTD | `financial_detail(statement=CDKT)` | Khoảng cách (tín dụng − tiền gửi) là áp lực huy động: âm lớn thì phụ thuộc liên ngân hàng và giấy tờ có giá |
-| CASA | `financial_detail` | Chỉ đọc khi đặt cạnh spread: đây là **đệm** chi phí vốn, không phải mục tiêu tự thân |
-| Trích lãi | `financial_detail(statement=CDKT)` | So với ngưỡng chuẩn mực hiện hành (tra văn bản), không so với trí nhớ |
-| Mức vốn chủ sở hữu | `financial_detail(statement=CDKT)` | So với chuẩn mực hiện hành; chưa đạt phải đọc kèm hạn mức phát hành thêm trong `news_market` |
-| Ngoại bảng (tín dụng tương đương) | `financial_detail(statement=TM)` nếu kỳ có, nếu không thì `news_market` | Tỷ trọng so với tín dụng trên bảng. Không đưa vào kết luận nợ xấu, nhưng phải nằm trong đánh giá rủi ro |
+| Tăng trưởng tín dụng YTD | `CDKT` so cuối năm trước; công bố hạn mức nếu có | Vẫn mô tả tăng trưởng quan sát được khi thiếu hạn mức, nhưng không suy dư địa hành chính |
+| Tăng trưởng tiền gửi YTD | `CDKT` so cuối năm trước | Tín dụng tăng nhanh hơn tiền gửi là khoảng chênh dương có thể gây áp lực huy động; cần xét vốn liên ngân hàng/giấy tờ có giá |
+| CASA | Tiền gửi không kỳ hạn khách hàng / tổng tiền gửi khách hàng, `TM` cùng phạm vi | Không trộn tiền gửi liên ngân hàng; không so khác cơ sở |
+| LDR | Công bố ngân hàng hoặc tính theo đúng định nghĩa văn bản áp dụng | Tỷ lệ cho vay/tiền gửi kế toán không tự tương đương LDR pháp lý |
+| CAR | Công bố an toàn vốn ngân hàng, nguồn và kỳ rõ | Vốn tự có đủ điều kiện / tài sản có rủi ro theo phương pháp áp dụng; không suy từ vốn chủ/tổng tài sản |
+| Vốn chủ sở hữu | `CDKT` | Là chỉ tiêu kế toán, không thay vốn tự có pháp lý hoặc chứng minh đáp ứng CAR |
 
-## 4. Nhóm theo báo cáo
+## So sánh
 
-| Kỳ | Đọc gì thêm |
-|---|---|
-| Đầu năm (Q1) | Tăng trưởng tín dụng có bị chặn theo quý không (hạn mức phân bổ theo quý) — đây là hiệu ứng mùa vụ do chính sách, không phải nhu cầu giảm |
-| Giữa năm (Q2/Q3) | Xu hướng chi phí vốn + nợ nhóm 2: hai chỉ báo trước của nửa cuối năm |
-| Cuối năm (Q4) | Đuổi hạn mức tín dụng → tăng trưởng vọt lên có thể là hành vi hành chính; đọc kèm chất lượng tài sản |
-| Năm chuyển tiếp | Văn bản chuẩn mực mới có hiệu lực: so sánh cùng kỳ năm trước vô nghĩa nếu mẫu số đổi |
-
-## 5. Nhóm so sánh
-
-- Chỉ so chỉ báo **cùng phân khúc** (ngân hàng tư nhân lớn / ngân hàng nhà nước /
-  ngân hàng nhỏ): `peer_compare` theo từng chỉ báo, ghi rõ đang so với nhóm nào.
-- So với lịch sử của chính mã (QoQ/YoY 4–8 quý) trước khi so với nhóm — một quý
-  đột biến có thể do một lần điều chỉnh kế toán.
+So QoQ/YoY và 4–8 quý cùng cơ sở trước khi so ngân hàng cùng phân khúc.
+`peer_compare` chỉ cung cấp key tổng quan thực trả như P/B, ROE; tham số `metrics`
+không tạo NIM/CASA/NPL. Lấy các KPI này từ `financial_detail`/công bố từng peer cùng kỳ.
+Thiếu dữ liệu hoặc thay đổi mẫu số thì ghi hạn chế, không bù số hay suy tỷ lệ di cư nợ.

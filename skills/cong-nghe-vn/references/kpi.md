@@ -8,7 +8,7 @@
 
 | Chỉ báo | Đọc từ | Cách đọc |
 |---|---|---|
-| Doanh thu ký | Công bố công ty (`news_market`) | Tín hiệu **dẫn**; kỳ ký mạnh chưa vào doanh thu ngay. Ghi kỳ ký |
+| Doanh thu ký | Công bố công ty (`news_symbol`/`company_events`) | Tín hiệu **dẫn**; kỳ ký mạnh chưa vào doanh thu ngay. Ghi kỳ ký |
 | Thời hạn hợp đồng | Công bố công ty | Hợp đồng 2–3 năm cho doanh thu bền hơn đơn ngắn hạn |
 | Tỷ trọng đơn lớn | Công bố công ty | Đơn lớn tạo lãi bất thường: đánh dấu một lần, không nội suy |
 | Backlog / doanh thu chưa nhận | `financial_detail` (nếu có) | Tồn kho doanh thu tương lai; giảm = đang tiêu backlog |
@@ -34,9 +34,9 @@
 
 | Nguồn | Đọc gì | Cách dùng |
 |---|---|---|
-| `news_market` | Công bố đơn hàng ký, thị trường khách hàng, chính sách chuyển đổi số | Tín hiệu dẫn; ghi rõ nguồn + ngày |
+| `news_symbol` / `company_events` | Công bố đơn hàng ký và thị trường khách hàng; `news_market` chỉ cho chính sách/bối cảnh | Tín hiệu dẫn; ghi rõ nguồn + ngày |
 | `planned_targets` | Kế hoạch doanh thu/lãi | Neo kỳ vọng |
-| `peer_compare` | Tăng trưởng, biên, thu nhập/người | So trong cùng mô hình (dịch vụ vs sản phẩm) |
+| `peer_compare` | Key tổng quan thực sự trả về, như P/E, P/B, ROE | So cùng phân khúc; KPI vận hành lấy từ `financial_detail` từng peer cùng kỳ và công bố doanh nghiệp, không tạo key bằng `metrics` |
 | `yf_commodities` | Chu kỳ kim loại (bối cảnh chi phí) | Chỉ dùng khi xét cơ sở hạ tầng/cấu phần |
 
 ## 5. Bẫy đọc thường gặp

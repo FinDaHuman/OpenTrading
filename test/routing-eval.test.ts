@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test"
 import path from "node:path"
 import { loadSkills, skillRoots } from "../src/core/skills/loader"
-import { catalogRegistry, evalRouting, loadCases } from "./helpers/routing-eval"
+import { catalogRegistry, evalRouting, loadCases, suggestedSkills } from "./helpers/routing-eval"
 
 /**
  * Ratchet over the offline routing eval (test/helpers/routing-eval.ts). The floors are the
@@ -55,3 +55,15 @@ test("routing does not regress below the recorded floors", async () => {
   expect(all.suggestions - all.rightSuggestions).toBeLessThanOrEqual(FLOOR.maxWrongSuggestions)
   expect(all.negativesSuggested).toBeLessThanOrEqual(FLOOR.maxNegativesSuggested)
 }, 30_000)
+
+
+test("PR116 regressions produce the exact expected suggestions", async () => {
+  const cases = (await loadCases(root)).filter((c) => c.note === "PR116 exact suggestions regression")
+  const registry = await catalogRegistry(root)
+  const { skills } = await loadSkills(skillRoots(root).filter((r) => r.source === "bundled"))
+  const declared = registry.list().map((tool) => tool.name)
+  expect(cases.length).toBeGreaterThanOrEqual(14)
+  for (const c of cases) {
+    expect(suggestedSkills(c.q, skills, declared).sort(), `Q${c.id}: ${c.q}`).toEqual([...c.skills!].sort())
+  }
+})

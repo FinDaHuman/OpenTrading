@@ -1086,6 +1086,121 @@
    "skills": [
     "vn-market-basics"
    ]
+  },
+  {
+   "id": 278,
+   "split": "dev",
+   "q": "Nhóm ngân hàng có dẫn sóng tiếp không?",
+   "skills": [
+    "dinh-vi-chu-ky-vn"
+   ],
+   "note": "PR116 exact suggestions regression"
+  },
+  {
+   "id": 279,
+   "split": "dev",
+   "q": "Ngành ngân hàng đang ở pha nào của chu kỳ?",
+   "skills": [
+    "dinh-vi-chu-ky-vn"
+   ],
+   "note": "PR116 exact suggestions regression"
+  },
+  {
+   "id": 280,
+   "split": "dev",
+   "q": "Chu kỳ ngành chứng khoán đang ở đâu?",
+   "skills": [
+    "dinh-vi-chu-ky-vn"
+   ],
+   "note": "PR116 exact suggestions regression"
+  },
+  {
+   "id": 281,
+   "split": "dev",
+   "q": "Nợ xấu của HPG có cao không?",
+   "skills": [],
+   "note": "PR116 exact suggestions regression"
+  },
+  {
+   "id": 282,
+   "split": "dev",
+   "q": "Lãi suất cho vay đang thế nào, có nên vay mua nhà?",
+   "skills": [],
+   "note": "PR116 exact suggestions regression"
+  },
+  {
+   "id": 283,
+   "split": "dev",
+   "q": "Có nên mua căn hộ hay gửi tiết kiệm?",
+   "skills": [],
+   "note": "PR116 exact suggestions regression"
+  },
+  {
+   "id": 284,
+   "split": "dev",
+   "q": "Giá dầu Brent hôm nay bao nhiêu?",
+   "skills": [],
+   "note": "PR116 exact suggestions regression"
+  },
+  {
+   "id": 285,
+   "split": "dev",
+   "q": "Vinhomes có tin gì mới hôm nay?",
+   "skills": [],
+   "note": "PR116 exact suggestions regression"
+  },
+  {
+   "id": 286,
+   "split": "dev",
+   "q": "Khối ngoại bán ròng mạnh, dòng vốn nước ngoài có quay lại không?",
+   "skills": [],
+   "note": "PR116 exact suggestions regression"
+  },
+  {
+   "id": 287,
+   "split": "dev",
+   "q": "Fed sẽ phản ứng thế nào trước thuế quan?",
+   "skills": [
+    "du-doan-fed"
+   ],
+   "note": "PR116 exact suggestions regression"
+  },
+  {
+   "id": 288,
+   "split": "dev",
+   "q": "Nhóm ngân hàng đang thế nào?",
+   "skills": [
+    "ngan-hang-vn"
+   ],
+   "note": "PR116 exact suggestions regression"
+  },
+  {
+   "id": 289,
+   "split": "dev",
+   "q": "Phân tích NIM CASA ngân hàng",
+   "skills": [
+    "ngan-hang-vn"
+   ],
+   "note": "PR116 exact suggestions regression"
+  },
+  {
+   "id": 290,
+   "split": "dev",
+   "q": "Phân tích bảo hiểm phi nhân thọ",
+   "skills": [
+    "bao-hiem-vn"
+   ],
+   "note": "PR116 exact suggestions regression"
+  },
+  {
+   "id": 291,
+   "split": "dev",
+   "q": "Định giá SOTP Vingroup",
+   "skills": [
+    "vingroup-vn",
+    "dinh-gia-chuyen-sau"
+   ],
+   "note": "PR116 exact suggestions regression"
   }
  ]
 }

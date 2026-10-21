@@ -1,11 +1,12 @@
 ---
 name: dau-khi-vn
-description: "Phân tích ngành dầu khí VN theo giá dầu quốc tế, tuyến vận chuyển, thay thế trữ lượng và ranh giới giữa khai thác với lọc hoá dầu. Dùng khi hỏi xu hướng nhóm dầu khí hay công ty dầu khí chịu gì."
+description: "Pha/sóng: dùng skill chu kỳ. Phân tích ngành dầu khí VN theo giá dầu quốc tế, tuyến vận chuyển, thay thế trữ lượng và ranh giới giữa khai thác với lọc hoá dầu. Dùng khi hỏi xu hướng nhóm dầu khí hay công ty dầu khí chịu gì."
 activation: auto
 requires_tools: [yf_commodities, financial_detail]
 uses_tools: [yf_commodities, financial_detail, financial_ratios, planned_targets, analyst_consensus, peer_compare, company_events, news_symbol, news_market, symbol_lookup, vn_company]
 triggers:
-  keywords: [ngành dầu khí, dầu thô, khí đốt, lọc hoá dầu, giếng khoan, dự án khai thác, tỷ trọng dầu khí, giá dầu brent, công ty dầu khí]
+  exclude_keywords: [nhóm dầu khí, đỉnh chu kỳ, giai đoạn phân phối, đầu phục hồi, giai đoạn nào, giá dầu Brent hôm nay, dẫn sóng, pha nào, chu kỳ ngành, sóng ngành, luân chuyển ngành, pha thị trường, chu kỳ thị trường, giai đoạn thị trường, sóng tiếp theo, cuối sóng, giữa sóng, đầu sóng, bank dẫn, chứng dẫn, rotation, pha tiếp theo]
+  keywords: [nhóm dầu khí, ngành dầu khí, khai thác dầu khí, chi phí khí đầu vào, lọc hoá dầu, giếng khoan, dự án khai thác, tỷ trọng dầu khí, tác động giá dầu, công ty dầu khí]
 version: 1.0.0
 ---
 
@@ -66,42 +67,35 @@ xu hướng giá vốn.
 `planned_targets` · `analyst_consensus` · `peer_compare` (so chỉ trong **cùng vòng
 kinh doanh** — so thượng nguồn với lọc dầu là vô nghĩa).
 
+Đối chiếu công cụ: `peer_compare` chỉ dùng các key tổng quan thực sự có trong kết quả (như P/E, P/B, ROE); tham số `metrics` không tạo thêm chỉ tiêu. Biên, sản lượng, chi phí, tồn kho và KPI vận hành phải đọc `financial_detail` từng peer cùng kỳ; nếu không có thì tra công bố doanh nghiệp qua `news_symbol`/`web_search`, ghi nguồn, công thức và kỳ. Thiếu dữ liệu thì để trống, không xếp hạng.
+
 ## Cây quyết định công ty dầu khí đang được tiếp sức hay siết
 
-Duyệt Q1→Q5 theo thứ tự, **DỪNG ở ★ đầu tiên** mà ĐỦ điều kiện. Thiếu dữ liệu thì
-hạ độ tin cậy, không bù số.
 
-Q1. Công ty thuộc vòng kinh doanh nào?
-├─ Thượng nguồn (khai thác) → Q2
-├─ Lọc hoá dầu → ★ "Chu kỳ bám chênh lệch tinh chế và giá nguyên liệu đầu vào, không
-   bám giá dầu trực tiếp — đọc chênh lệch tinh chế trước"
-├─ Vận chuyển → ★ "Chu kỳ bám cước tàu và độ dài đường đi — đọc hướng cước tàu dầu
-   trong `news_market`, đối chiếu tỷ trọng hợp đồng dài hạn"
-├─ Dịch vụ kỹ thuật → ★ "Chu kỳ bám ngân sách đầu tư E&P — đọc kế hoạch đầu tư
-   trước khi đọc giá dầu"
-└─ Nhiều vòng, không có vòng nào > nửa lãi → Q2 và đọc cả các nhánh
+Đi theo nhánh phù hợp; ghi nhận trạng thái trung gian và chỉ dừng ở ★. Mọi kết luận phải tách dữ liệu đã biết và phần còn thiếu, không bù số hay đổi "chưa rõ" thành "xấu".
 
-Q2. Giá dầu đang ở phía nào so với kỳ vọng gần?
-├─ Trên kỳ vọng hoặc đang lên → Q4
-├─ Dưới kỳ vọng hoặc đang giảm → tiếp Q3
-└─ Chưa có kỳ vọng rõ → Q4 với độ tin cậy thấp, ghi rõ
+Q1. Mảng nào nuôi lợi nhuận công ty?
+├─ Thượng nguồn → tiếp Q2
+├─ Lọc hóa dầu → ★ "Đánh giá chênh lệch tinh chế, tồn kho và công suất; thiếu thì chưa đủ dữ liệu cho mảng lọc dầu"
+├─ Vận chuyển → ★ "Đánh giá riêng cước tàu, tonne-mile và hợp đồng dài hạn; tuyến dài không mặc nhiên tăng lãi toàn công ty"
+├─ Dịch vụ kỹ thuật → ★ "Đánh giá ngân sách E&P, backlog và tiến độ nghiệm thu; thiếu thì chưa đủ dữ liệu mảng dịch vụ"
+├─ Nhiều mảng → phân tích độc lập từng mảng theo Q1, sau đó tổng hợp theo tỷ trọng lợi nhuận công bố
+└─ Chưa rõ cơ cấu → ★ "Chưa đủ dữ liệu phân mảng; không dùng giá dầu đại diện cả công ty"
 
-Q3. Giá dầu giảm có đi kèm cú sốc cung/tuyến không?
-├─ Có, tuyến vận chuyển dài lên → ★ "Cước vận chuyển được tiếp sức: nguồn thu của
-   vòng vận chuyển có thể đi ngược giá dầu — đọc riêng vòng đó"
-└─ Không, cung dư → ★ "Thượng nguồn bị siết: đọc biên/tỷ lệ chi phí để xem ai chịu
-   được giá thấp kéo dài"
+Q2. Giá dầu so với giá thực hiện và kỳ vọng có nguồn ra sao?
+├─ Cao hơn hoặc tăng → ghi thuận lợi cho thượng nguồn, tiếp Q3
+├─ Thấp hơn hoặc giảm → ghi áp lực thượng nguồn, tiếp Q3
+└─ Chưa có kỳ vọng/giá thực hiện → ghi thiếu, tiếp Q3
 
-Q4. Trữ lượng có được bù đắp không?
-├─ Có, trữ lượng phát hiện mới bù đắp hoặc vượt sản lượng → Q5
-└─ Không, trữ lượng phát hiện mới thấp hơn sản lượng liên tiếp → ★ "Bị siết bởi
-   trữ lượng: sản lượng hiện tại đang được tiêu từ trữ lượng cũ, đọc thứ tự dự án
-   mới trước khi nội suy sản lượng"
+Q3. Sản lượng và trữ lượng có được duy trì không?
+├─ Sản lượng ổn/tăng, trữ lượng bù đắp được xác nhận → ghi thuận lợi, tiếp Q4
+├─ Trữ lượng suy giảm hoặc dự án bù sản lượng trễ → ghi áp lực đã xác minh, tiếp Q4
+└─ Chưa công bố → ghi thiếu trữ lượng/sản lượng, tiếp Q4
 
-Q5. Biên có phụ thuộc một yếu tố đơn lẻ không?
-├─ Phụ thuộc một dự án / một hợp đồng → ★ "Rủi ro tập trung: một yếu tố đổi chiều
-   là toàn bộ dòng thu đổi chiều"
-└─ Đa dạng mảng/khu vực → ★ "Được tiếp sức: cơ cấu đủ rộng để chịu một cú sốc giá"
+Q4. Biên và mức tập trung có xác nhận khả năng chịu chu kỳ không?
+├─ Biên giữ được ở giá thấp, dự án đa dạng, dữ liệu đủ → ★ "Thượng nguồn có sức chống chịu; nêu điều kiện về giá và sản lượng"
+├─ Biên giảm hoặc phụ thuộc một dự án/hợp đồng → ★ "Thượng nguồn chịu áp lực hoặc tập trung rủi ro theo bằng chứng; không suy lợi ích từ cước tàu"
+└─ Chưa có dữ liệu/không đồng kỳ → ★ "Chưa đủ dữ liệu kết luận thượng nguồn; tách rõ tín hiệu giá đã biết"
 
 ## Chỉ báo đặc thù ngành
 
@@ -109,9 +103,9 @@ Bảng chỉ báo ngành dầu khí + cách đọc ở `references/kpi.md`.
 
 ## Định giá theo đặc thù ngành
 
-Dầu khí định giá bằng **EV/EBITDA** (xử lý được giai đoạn thâm hụt) và **giá trị
+Dầu khí định giá bằng **EV/EBITDA** (chỉ khi EBITDA dương và có thể so sánh; EBITDA không dương thì không diễn giải bội số, chuyển sang dòng tiền chuẩn hóa hoặc tài sản) và **giá trị
 trữ lượng** cho vòng thượng nguồn; vòng lọc dầu theo EV/EBITDA chu kỳ; vòng dịch
-vụ theo tiền cảnh ngân sách đầu tư. Không dùng P/E tại đỉnh chu kỳ: cùng một P/E
+vụ theo triển vọng ngân sách đầu tư. Không dùng P/E tại đỉnh chu kỳ: cùng một P/E
 có thể là đáy hoặc đỉnh tuỳ vị thế trong vòng. Neo kỳ vọng bằng `planned_targets` và
 `analyst_consensus`.
 

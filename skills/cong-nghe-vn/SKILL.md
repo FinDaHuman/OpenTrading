@@ -1,10 +1,11 @@
 ---
 name: cong-nghe-vn
-description: "Phân tích ngành công nghệ Việt Nam theo giá trị hợp đồng ký, phân hoá nội địa và nước ngoài, đơn hàng dài hạn và tỷ lệ sử dụng nhân công. Dùng khi hỏi xu hướng nhóm công nghệ hoặc công ty dịch vụ công nghệ."
+description: "Pha/sóng: dùng skill chu kỳ. Phân tích ngành công nghệ Việt Nam theo giá trị hợp đồng ký, phân hoá nội địa và quốc tế, đơn hàng dài hạn và tỷ lệ sử dụng nhân công. Dùng khi hỏi xu hướng nhóm công nghệ hoặc công ty dịch vụ công nghệ."
 activation: auto
 requires_tools: [financial_detail, planned_targets]
 uses_tools: [financial_detail, planned_targets, financial_ratios, analyst_consensus, peer_compare, news_symbol, company_events, news_market, symbol_lookup, vn_company, yf_commodities]
 triggers:
+  exclude_keywords: [đỉnh chu kỳ, giai đoạn phân phối, đầu phục hồi, giai đoạn nào, dẫn sóng, pha nào, chu kỳ ngành, sóng ngành, luân chuyển ngành, pha thị trường, chu kỳ thị trường, giai đoạn thị trường, sóng tiếp theo, cuối sóng, giữa sóng, đầu sóng, bank dẫn, chứng dẫn, rotation, pha tiếp theo]
   keywords: [ngành công nghệ, công nghệ thông tin, dịch vụ công nghệ, chuyển đổi số, thuê ngoài công nghệ, đội ngũ kỹ sư công nghệ, phần mềm]
 version: 1.0.0
 ---
@@ -40,7 +41,7 @@ theo từng quý. Đọc doanh thu nhận mà không đọc đơn ký sẽ thấ
 | Doanh thu ký | Ký được hợp đồng dài hạn là điều kiện của doanh thu tương lai. Kỳ ký mạnh là tín hiệu dẫn cho 1–3 kỳ sau, kể cả khi doanh thu nhận của kỳ hiện tại chững | Công bố của **riêng công ty**: `news_symbol(symbol=…)` (tin gắn mã) + `company_events`; `news_market` chỉ cho bối cảnh thị trường/chính sách vì nó không tra được theo mã |
 | Phân hoá nước ngoài – nội địa | Nước ngoài phụ thuộc chu kỳ khách hàng quốc tế (Nhật/EU/Mỹ); nội địa phụ thuộc chính phủ điện tử và doanh nghiệp. Hai chu kỳ khác nhau | Mảng nội địa/nước ngoài trong `financial_detail` hoặc công bố công ty |
 | Chất lượng hợp đồng | Đơn lớn (trên ngưỡng) và kỳ hạn 2–3 năm cho doanh thu bền vững hơn đơn nhỏ lẻ | Tỷ trọng đơn lớn + kỳ hạn: công bố của riêng công ty qua `news_symbol`/`company_events` |
-| Tỷ lệ sử dụng nhân công | Ngành vốn người: nhân công sử dụng thấp đồng nghĩa biên giảm và cơ cấu lỗ thời, đặc biệt khi tác vụ truyền thống bị tự động hoá | Số nhân viên + thu nhập/người: `financial_detail` (tự tính, ghi rõ). So quý trước |
+| Nhân công và năng suất | Tỷ lệ sử dụng = giờ tính phí / giờ khả dụng theo định nghĩa công ty; tỷ lệ thấp có thể do tuyển trước hợp đồng, đào tạo hoặc thiếu việc, không tự chứng minh cơ cấu lỗi thời | Tỷ lệ sử dụng từ công bố công ty; doanh thu/nhân viên bình quân từ `financial_detail` và công bố nhân sự chỉ là chỉ báo năng suất, không thay tỷ lệ sử dụng |
 | Chi phí đầu vào AI | Máy tính và cơ sở hạ tầng tăng do nhu cầu AI toàn cầu; đẩy chi phí cung cấp | `yf_commodities` (chu kỳ kim loại nếu cần bối cảnh) + `news_market` |
 
 ## Các bước
@@ -59,45 +60,46 @@ doanh thu chưa nhận nếu có).
 
 **Bước 3: Chất lượng hoạt động (song song).**
 
-`financial_detail`: doanh thu, lợi nhuận, chi phí, số nhân viên. Tự tính thu nhập
-trên mỗi nhân viên (ghi rõ tự tính) và so quý trước.
+`financial_detail`: doanh thu, lợi nhuận, chi phí, số nhân viên. Tự tính doanh thu
+trên nhân viên bình quân cùng kỳ (ghi rõ phương pháp); tỷ lệ sử dụng cần giờ tính phí/giờ khả dụng từ công bố công ty. Thiếu số thì không suy tỷ lệ này từ doanh thu/nhân viên.
 
 **Bước 4: Neo kỳ vọng + vị thế nhóm.**
 
-`planned_targets` (kế hoạch doanh thu/lãi) · `peer_compare` (so tăng trưởng, biên,
-thu nhập/người trong nhóm) · `analyst_consensus`.
+`planned_targets` (kế hoạch doanh thu/lãi) · `peer_compare` (chỉ tiêu tổng quan trong nhóm) · `analyst_consensus`.
+
+Đối chiếu công cụ: `peer_compare` chỉ dùng các key tổng quan thực sự có trong kết quả (như P/E, P/B, ROE); tham số `metrics` không tạo thêm chỉ tiêu. Biên, sản lượng, chi phí, tồn kho và KPI vận hành phải đọc `financial_detail` từng peer cùng kỳ; nếu không có thì tra công bố doanh nghiệp qua `news_symbol`/`web_search`, ghi nguồn, công thức và kỳ. Thiếu dữ liệu thì để trống, không xếp hạng.
 
 ## Cây quyết định công ty công nghệ đang được tiếp sức hay siết
 
-Duyệt Q1→Q5 theo thứ tự, **DỪNG ở ★ đầu tiên** mà ĐỦ điều kiện. Thiếu dữ liệu thì
-hạ độ tin cậy, không bù số.
 
-Q1. Đơn hàng ký của kỳ đang dẫn doanh thu tương lai không?
-├─ Có, ký mạnh và/hoặc đơn lớn kỳ hạn dài → tiếp Q2
-├─ Không công bố được → ghi thiếu dữ liệu, tiếp Q2 với độ tin cậy thấp
-└─ Ký yếu trong khi doanh thu nhận vẫn đẹp → ★ "Doanh thu đang tiêu backlog: đọc
-   backlog trước, nguồn tăng trưởng có thể đang cạn"
+Đi theo nhánh phù hợp; ghi nhận trạng thái trung gian và chỉ dừng ở ★. Mọi kết luận phải tách dữ liệu đã biết và phần còn thiếu, không bù số hay đổi "chưa rõ" thành "xấu".
 
-Q2. Mảng nào đang kéo?
-├─ Nước ngoài → tiếp Q3 (nhánh quốc tế)
-├─ Trong nước → tiếp Q4 (nhánh nội địa)
-└─ Không mảng nào > nửa doanh thu → đọc cả hai nhánh
+Q1. Đơn ký và backlog đang thế nào?
+├─ Đơn ký tăng, kỳ hạn dài → ghi thuận lợi, tiếp Q2
+├─ Đơn ký giảm, backlog giảm được xác minh → ghi áp lực nguồn doanh thu, tiếp Q2
+└─ Chưa công bố → ghi thiếu dữ liệu, tiếp Q2
 
-Q3 (quốc tế). Đơn hàng có đang dài hạn và tập trung thị trường không?
-├─ Đơn kỳ hạn 2–3 năm, quy mô lớn, thị trường đa dạng → Q5
-└─ Đơn ngắn hạn, nhỏ lẻ, tập trung một thị trường → ★ "Rủi ro tập trung: một thị
-   trường khách hàng đảo chiều là cả mảng đảo chiều"
+Q2. Mảng nào đang kéo doanh thu/lợi nhuận?
+├─ Nước ngoài → Q3 (quốc tế)
+├─ Nội địa → Q4 (nội địa)
+├─ Hỗn hợp → xét riêng Q3 và Q4 theo tỷ trọng công bố
+└─ Chưa rõ cơ cấu → ghi thiếu, tiếp Q5
 
-Q4 (nội địa). Doanh thu nội địa có bám chính phủ điện tử không?
-├─ Có và chính sách đang tiếp tục → Q5
-└─ Có nhưng chính sách chững hoặc quay ra doanh nghiệp tư nhân → ★ "Nội địa dựa
-   chính sách: đọc kỳ vọng ngân sách chính phủ trước khi nội suy"
+Q3 (quốc tế). Chất lượng và độ tập trung hợp đồng ra sao?
+├─ Dài hạn, khách hàng đa dạng → ghi thuận lợi, tiếp Q5
+├─ Ngắn hạn hoặc tập trung một khách hàng/thị trường → ghi rủi ro tập trung, tiếp Q5
+└─ Chưa có kỳ hạn/cơ cấu → ghi thiếu, tiếp Q5
 
-Q5 (chung). Thu nhập trên mỗi nhân viên đang đi đâu?
-├─ Tăng hoặc giữ trong khi doanh thu tăng → ★ "Được tiếp sức: tăng trưởng không
-   phải bằng thuê thêm người — đọc 2 quý liền mới xác nhận"
-└─ Giảm (thuê nhanh hơn doanh thu) → ★ "Bị siết bởi nhân công: mở rộng bằng đầu
-   người làm biên giảm — hạ độ tin cậy kỳ vọng lãi"
+Q4 (nội địa). Nguồn khách hàng và ngân sách ra sao?
+├─ Ngân sách/hợp đồng công đã xác minh tiến độ → ghi điều kiện nghiệm thu, tiếp Q5
+├─ Khách hàng tư nhân → đánh giá backlog, nhu cầu và thu tiền của khách tư, tiếp Q5
+├─ Ngân sách công chậm đã xác minh → ghi áp lực, tiếp Q5
+└─ Chưa rõ → ghi thiếu, tiếp Q5
+
+Q5 (chung). Năng suất, nhân công và biên có xác nhận không?
+├─ Doanh thu trên nhân viên và biên giữ/cải thiện nhiều kỳ, đơn ký thuận lợi → ★ "Được tiếp sức bởi đơn hàng và vận hành đã xác minh"
+├─ Năng suất/biên giảm kéo dài hoặc đơn ký yếu → ★ "Có áp lực cần kiểm tra thời gian thuê trước doanh thu; không mặc định mở nhân sự là lỗ"
+└─ Thiếu số nhân viên bình quân, biên hoặc đơn ký, hay dữ liệu trái chiều → ★ "Chưa đủ dữ liệu kết luận tổng thể; doanh thu/nhân viên không thay tỷ lệ sử dụng nhân công"
 
 ## Chỉ báo đặc thù ngành
 
@@ -106,7 +108,7 @@ Bảng chỉ báo ngành công nghệ + cách đọc ở `references/kpi.md`.
 ## Định giá theo đặc thù ngành
 
 Công nghệ định giá bằng **P/E** (ngành có lãi ổn định hơn chu kỳ hàng hoá) và **P/E
-trên lãi thuần từ đơn ký dài hạn** khi biên đang cải thiện. Anchor kỳ vọng bằng
+trên lãi thuần từ đơn ký dài hạn** khi biên đang cải thiện. Neo kỳ vọng bằng
 `planned_targets` (kế hoạch doanh thu/lãi năm) và `analyst_consensus`. Không dùng
 P/E tại đỉnh khi lãi phụ thuộc một đơn lớn nhất thời — ghi rõ chất lượng lãi.
 
