@@ -107,10 +107,10 @@ export const MCP_CATALOG: CatalogEntry[] = [
   },
   {
     id: "opentrading",
-    name: "OpenTrading data (nhóm)",
-    description: "Dữ liệu thị trường Việt Nam của nhóm: giá, BCTC, dòng tiền, tin tức.",
+    name: "OpenTrading data",
+    description: "Dữ liệu thị trường Việt Nam: giá, BCTC, dòng tiền, tin tức (cần token).",
     auth: "token",
-    secret: { env: "OPENTRADING_MCP_TOKEN", label: "Token nhóm (xin admin)" },
+    secret: { env: "OPENTRADING_MCP_TOKEN", label: "Token (xin người quản lý server)" },
     build: () => ({
       type: "http",
       url: "https://opentrading-mcp-web.onrender.com/mcp",

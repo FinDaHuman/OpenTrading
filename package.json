@@ -4,6 +4,11 @@
   "private": true,
   "type": "module",
   "description": "OpenTrading — AI harness TUI for Vietnamese equity research (demo v0)",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/FinDaHuman/OpenTrading.git"
+  },
   "bin": {
     "opentrading": "./src/index.tsx"
   },
