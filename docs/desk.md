@@ -113,7 +113,7 @@ bun scripts/dev/desk-eval.ts --only 1,6,11,16 --judge google/gemini-3.1-pro --ye
 - Cả bộ ở quy mô small tốn hơn 500 request. Hãy chạy từng playbook, mỗi ngày một phần.
 - Duyệt quyền khi không có người: các lời hỏi chỉ đọc (domain của `web_fetch`) được cho phép một lần, mọi thứ khác bị từ chối, để run không bị treo.
 - Model chấm nên mạnh hơn model trả lời (`--judge`). Kết quả JSON ghi ở `~/.opentrading/exports/desk-eval-<thời điểm>.json`.
-- Model chấm không có tool: với các câu `kiem-chung`, hãy điền `tham_chieu` (số liệu đúng, từ nguồn bạn tin) vào `cases.json`, nếu không thì điểm "chính xác" chỉ phản ánh câu trả lời nghe có chắc chắn hay không.
+- Model chấm không có tool: các câu `kiem-chung` có `tham_chieu` (số liệu đúng kèm nguồn, người dùng điền ngày 22/10/2026) để chấm tiêu chí "chính xác"; test sẽ đỏ nếu một câu `kiem-chung` thiếu tham chiếu. P/E của FPT và P/B của VCB được ghim ở ngày 21/10/2026 theo nguồn tham chiếu.
 - **Ngưỡng của ADR 0006**: điểm trung bình của desk cao hơn đường mặc định ít nhất 0,10 **và** desk thắng ít nhất 60% số câu được chấm. Script in kết luận theo từng playbook kèm số request của mỗi nhánh. Điểm của LLM chỉ là thước đo gần đúng: trước khi chuyển ADR sang *accepted*, cần đọc tay vài câu mỗi playbook.
 
 ## Viết playbook an toàn
