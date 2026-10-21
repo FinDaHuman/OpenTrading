@@ -25,6 +25,8 @@ test("the eval set: ~20 real questions, 5 per playbook, args valid for each play
   expect(caseProblems(cases)).toEqual([])
   const per = Object.fromEntries(["sang-loc", "kiem-chung", "tranh-bien", "nganh"].map((p) => [p, cases.filter((c) => c.playbook === p).length]))
   expect(per).toEqual({ "sang-loc": 5, "kiem-chung": 5, "tranh-bien": 5, nganh: 5 })
+  // The judge has no tools: a fact-check case is only scored for accuracy against a reference.
+  expect(cases.filter((c) => c.playbook === "kiem-chung" && !c.tham_chieu?.trim()).map((c) => c.id)).toEqual([])
   expect(caseProblems([{ id: 1, playbook: "sang-loc", question: "so sánh FPT", args: { tickers: ["FPT"] } }])).toEqual(["#1: args sai cho sang-loc"])
 })
 
