@@ -6,7 +6,7 @@ requires_tools: [symbol_lookup, financial_detail]
 uses_tools: [symbol_lookup, symbol_resolve, vn_company, vs_company_info, vs_industry_tree, financial_detail, news_symbol, company_events, event_calendar_vn, evidence_bundle]
 triggers:
   keywords: [kỹ thuật định giá, phân tích cổ phiếu, phân tích mã, phân tích toàn diện, chi tiết mã, mã này sao]
-version: 1.4.0
+version: 1.5.0
 ---
 
 # Phân tích toàn diện một mã
@@ -36,6 +36,8 @@ Chạy `symbol_lookup` (tên công ty) hoặc `symbol_resolve` (mã đa loại, 
 Chạy `vn_company` · `vs_company_info` · `vs_industry_tree`. Lấy ngành GICS, mô hình kinh doanh, nguồn thu chính. Mã chưa phân loại ngành (`vs_industry_tree` không match) → ghi "chưa phân loại", vẫn làm các bước còn lại.
 
 **Bước 3: Kỹ thuật + định giá bằng 2 subagent chạy song song.**
+
+Khi có tool `desk_run` (người dùng đã bật ultradesk) → gọi `desk_run` với key `tranh_bien` cho mã ở Bước 1 thay cho Bước 3–5; kết quả về sau, báo ngắn là run đang chạy.
 
 Gọi `spawn_subagent` hai lần trong cùng một lượt (loại `nghien-cuu`): một subagent nạp `ky-thuat-chuyen-sau`, một subagent nạp `dinh-gia-chuyen-sau`, cùng mã ở Bước 1. Yêu cầu mỗi subagent trả về 5–8 dòng có số, khung thời gian và tên tool nguồn. Không gọi trực tiếp `signals_technical` / `valuation_run` / `stock_forensic` ở lượt chính.
 

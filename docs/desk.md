@@ -6,7 +6,7 @@ Ultradesk điều phối nhiều subagent nghiên cứu theo một **playbook**:
 - Server MCP chạy gói free (0,1 CPU), nên mỗi run có cap đồng thời riêng.
 - Kết luận ở dạng kịch bản, không đưa khuyến nghị Mua/Bán.
 
-Trạng thái: engine (PR3), giao diện (PR4) và 2 playbook `sang-loc`, `kiem-chung` (PR5) đã có; `tranh-bien` và `nganh` đến ở PR6.
+Trạng thái: engine (PR3), giao diện (PR4) và 4 playbook `sang-loc`, `kiem-chung` (PR5), `tranh-bien`, `nganh` (PR6) đã có.
 
 ## Playbook có sẵn
 
@@ -16,9 +16,12 @@ Cột là số agent / số request tối đa (tổng `maxSteps`; thực tế th
 | --- | --- | --- | --- | --- |
 | `sang-loc {tickers, tieu_chi?}` | Mỗi mã một thẻ điểm cơ bản (agent `co-ban`, 6 bước, effort low, schema: P/E, P/B, ROE, tăng trưởng LNST, biên gộp, nợ vay/vốn chủ, OCF/LNST, điểm 0–10 bốn chiều) chạy theo pipeline → code xếp hạng (≤ 10 mã: điểm thẻ có trọng số theo `tieu_chi`; > 10 mã: trộn thêm z-score các chỉ số) → các mã dẫn đầu bị `phan-bien` bác bỏ (effort high, mỗi phiếu một góc nhìn; đa số bác bỏ thì gắn cờ và trừ điểm) → `tong-hop` viết bảng xếp hạng, nhóm dẫn đầu/cuối, kịch bản tích cực/cơ sở/tiêu cực (không khuyến nghị Mua/Bán). Bảng điểm do code tính luôn đi kèm để đối chiếu | 5 mã, không phản biện: **6 / 36** | 10 mã, top 3 × 1 phiếu: 14 / 84 | 30 mã, top 5 × 3 phiếu: 46 / 276 |
 | `kiem-chung {noi_dung, boi_canh?}` | Một agent trích các khẳng định định lượng (2 bước, không cần tool) → xếp theo mức quan trọng → mỗi khẳng định được 1 hoặc 3 phiếu `tra-cuu` (4 bước) đối chiếu dữ liệu, mỗi phiếu một góc nhìn: số liệu gốc / kỳ và đơn vị / bối cảnh → đa số quyết định ✓ đúng / ✘ sai; không đủ phiếu hợp lệ là ? chưa kiểm chứng (lỗi hay hết quota không bao giờ thành "sai"). Báo cáo do code dựng, không tốn thêm agent | 5 khẳng định × 1 phiếu: **6 / 22** | 10 × 3: 31 / 122 | 20 × 3: 61 / 242 |
+| `tranh-bien {ticker, cau_hoi?}` | Các analyst báo cáo song song (`co-ban`, `dinh-gia`, `tin-tuc`; thêm `ky-thuat`, `vi-mo` từ medium) → `bull` ∥ `bear` mở màn (4 bước) → 0/1/2 vòng phản bác, mỗi phe nhận lập luận gần nhất của phe kia làm bằng chứng → ở large, số liệu của hai phe qua `kiem-chung` **bậc small** ngay trong run → trọng tài `tong-hop`: kịch bản chính và mức tin cậy, ba kịch bản kèm điều kiện kích hoạt, luận điểm còn đứng vững (không khuyến nghị Mua/Bán/Giữ) | 3 analyst, không phản bác: **6 / 30** | 5 analyst, 1 vòng: 10 / 50 | 5 analyst (8 bước), 2 vòng, có kiểm chứng: 18 / 92 |
+| `nganh {nganh, tickers?, cau_hoi?}` | `nganh` xác định phạm vi (doanh nghiệp đầu ngành, động lực; giữ đúng mã người dùng đưa) và nạp skill ngành của #116 **một lần** để chọn 2–4 chỉ tiêu riêng của ngành (skill ngành nặng 3–4k token, không nạp lại ở từng doanh nghiệp; có skill cho ngân hàng, thép, BĐS, chứng khoán, bảo hiểm, dầu khí, điện, hóa chất, bán lẻ, vận tải, công nghệ, xuất nhập khẩu, Vingroup) → **song song** các chủ đề (`chu-ky-nganh`, `vi-mo`, thêm `tai-san-toan-cau` từ medium) và thẻ điểm từng doanh nghiệp có lấy thêm các chỉ tiêu ngành đó → từ medium: `phan-bien` chỉ ra chỗ còn thiếu, một vòng `tra-cuu` bổ sung → `tong-hop` viết báo cáo ngành, bảng doanh nghiệp, kịch bản | 3 DN, 2 chủ đề: **7 / 40** | 6 DN, 3 chủ đề, phê bình + 2 bổ sung: 14 / 79 | 12 DN (8 bước), 4 bổ sung: 22 / 157 |
 
 - Danh sách vượt bậc (mã, khẳng định) bị cắt kèm một dòng log nói rõ bỏ những gì.
-- Lệnh tắt: `/sang-loc FPT MWG HPG VNM` hoặc `/kiem-chung <dán văn bản>` (văn bản nhiều dòng được giữ nguyên). Với `kiem-chung`, model phải chép văn bản vào lời gọi tool: văn bản rất dài tốn token đầu ra, và model lite có thể chép không nguyên văn.
+- `tin-tuc` (trong `tranh-bien`) dùng `web_search`/`web_fetch`: các lời gọi model phụ bên trong tool không được tính vào `requests`/`maxRequests`, và `web_fetch` hỏi duyệt từng domain ở chế độ mặc định, nên run có thể chờ bạn duyệt giữa chừng.
+- Lệnh tắt: `/sang-loc FPT MWG HPG VNM`, `/kiem-chung <dán văn bản>`, `/tranh-bien FPT có nên giữ qua quý 3`, `/nganh thép` (văn bản nhiều dòng được giữ nguyên). Với `kiem-chung`, model phải chép văn bản vào lời gọi tool: văn bản rất dài tốn token đầu ra, và model lite có thể chép không nguyên văn.
 - `desk_run` chỉ hiện với model khi yêu cầu đã opt-in (keyword, `/desk on`, lệnh playbook): nó không nằm trong danh sách tool hoãn hay kết quả `tool_search`, nên không chen chỗ các tool dữ liệu khi tìm tool.
 
 ## Dùng thế nào
