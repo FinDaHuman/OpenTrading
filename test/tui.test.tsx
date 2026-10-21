@@ -3109,7 +3109,7 @@ test("a desk run shows a live card under its desk_run row, folds to one line whe
     expect(frame).toMatch(/đang chạy · 1m ?1\ds/)
     expect(frame).toMatch(/━+[╺─]+\s+2\/\d+ agent · \d+%/)
     expect(frame).toMatch(/Thu thập\s+━+[╺─]*\s+2\/4/)
-    expect(frame).toContain("chờ slot")
+    expect(frame).toContain("chờ lượt · 2 đang chạy")
     expect(frame).toContain("» Xếp hạng tạm: FPT 7.8")
 
     await setup.mockInput.typeText("/desk")

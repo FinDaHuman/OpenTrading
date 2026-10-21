@@ -114,7 +114,7 @@ export function runSummary(run: DeskRunView): string {
   return `ultradesk ${run.playbook} · ${STATUS_TEXT[run.status]}${cut} · ${c.agents} agent · ${groupDigits(c.requests)} request · ${fmtTokens(c.input + c.output)} token · ${span}`
 }
 
-function AgentLine(props: { agent: DeskAgentView; width: number; t: number; typeWidth: number }) {
+function AgentLine(props: { agent: DeskAgentView; width: number; t: number; typeWidth: number; runningInRun: number }) {
   const live = () => liveOf(props.agent)
   const running = () => props.agent.status === "running"
   const frame = useSpinner(running)
@@ -138,7 +138,8 @@ function AgentLine(props: { agent: DeskAgentView; width: number; t: number; type
   const right = (): { text: string; fg: string } => {
     const a = props.agent
     const v = live()
-    if (a.status === "queued") return { text: `chờ slot ${state.agentSlots.running}/${state.agentSlots.max}`, fg: color.tx3 }
+    // The run's own limiter (desk.maxConcurrent), not the subagent slots: say how many of its agents run.
+    if (a.status === "queued") return { text: `chờ lượt · ${props.runningInRun} đang chạy`, fg: color.tx3 }
     if (v?.retry) return { text: `△ thử lại sau ${Math.max(0, Math.ceil((v.retry.until - props.t) / 1000))}s`, fg: color.tham }
     const span = v?.startedAt ? fmtElapsed((v.endedAt ?? props.t) - v.startedAt) : ""
     const out = (v?.usage.output ?? a.tokens.output) > 0 ? `↓${fmtTokens(v?.usage.output ?? a.tokens.output)}` : ""
@@ -273,7 +274,7 @@ export function DeskCard(props: { run: DeskRunView; width: number; rows?: number
       </For>
       <Show when={shown().rows.length > 0}>
         <box flexDirection="column" flexShrink={0} marginTop={1}>
-          <For each={shown().rows}>{(a) => <AgentLine agent={a} width={inner()} t={t()} typeWidth={typeWidth()} />}</For>
+          <For each={shown().rows}>{(a) => <AgentLine agent={a} width={inner()} t={t()} typeWidth={typeWidth()} runningInRun={props.run.agents.filter((x) => x.status === "running").length} />}</For>
           <Show when={shown().hidden > 0}>
             <text fg={color.tx3} wrapMode="none">{`  … +${shown().hidden} agent đang chạy/chờ`}</text>
           </Show>

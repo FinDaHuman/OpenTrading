@@ -2,19 +2,21 @@
  * The desk demo without a terminal: drives the real App headless and writes text frames of
  * the approval card, the live card, the finished run and /desk to `<out>/*.txt`.
  *
- *   bun scripts/dev/desk-demo-frames.tsx <out-dir>
+ *   bun scripts/dev/desk-demo-frames.tsx <out-dir> [--medium]
+ *
+ * --medium picks the medium size on the approval card (more agents, a refute phase).
  */
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 
-const out = path.resolve(process.argv[2] ?? "desk-frames")
+const out = path.resolve(process.argv.slice(2).find((a) => !a.startsWith("--")) ?? "desk-frames")
 const home = await mkdtemp(path.join(os.tmpdir(), "opentrading-desk-frames-"))
 process.env.OPENTRADING_HOME = home
 for (const name of Object.keys(process.env)) if (/(API_?KEY|TOKEN|SECRET)$/i.test(name)) delete process.env[name]
 
 const { installFakeModel, MODEL } = await import("./desk-demo-model")
-installFakeModel({ speed: 0.3 })
+installFakeModel({ speed: 0.6 })
 const { setKey } = await import("../../src/core/auth")
 const { saveConfig } = await import("../../src/core/config")
 await setKey("nvidia", "demo-key-khong-dung-duoc")
@@ -54,12 +56,22 @@ setup.mockInput.pressEnter()
 await until(() => Boolean(state.deskApproval), 20_000)
 await save("1-approval")
 await sleep(500)
+if (process.argv.includes("--medium")) {
+  // The card opens on "Chạy"; size is two rows up.
+  setup.mockInput.pressArrow("up")
+  setup.mockInput.pressArrow("up")
+  setup.mockInput.pressArrow("right")
+  setup.mockInput.pressArrow("down")
+  setup.mockInput.pressArrow("down")
+  await sleep(200)
+}
 setup.mockInput.pressEnter()
 await until(() => !state.deskApproval, 10_000)
 await until(() => Object.values(state.deskRuns).some((r) => r.agents.some((a) => a.status === "running")))
 await sleep(2500)
 await save("2-running")
-await until(() => Object.values(state.deskRuns).some((r) => r.phases.filter((p) => p.total > 0).length >= 2 && r.status === "running"), 240_000).catch(() => {})
+// A later phase at work (the refute phase at medium), else whatever is running.
+await until(() => Object.values(state.deskRuns).some((r) => r.status === "running" && r.agents.some((a) => a.status === "running" && a.phase !== r.phases[0]?.title)), 240_000).catch(() => {})
 await save("3-later")
 setup.mockInput.typeText("/desk")
 setup.mockInput.pressEnter()
