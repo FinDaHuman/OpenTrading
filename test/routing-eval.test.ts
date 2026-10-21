@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test"
 import path from "node:path"
 import { loadSkills, skillRoots } from "../src/core/skills/loader"
-import { catalogRegistry, evalRouting, loadCases } from "./helpers/routing-eval"
+import { catalogRegistry, evalRouting, loadCases, suggestedSkills } from "./helpers/routing-eval"
 
 /**
  * Ratchet over the offline routing eval (test/helpers/routing-eval.ts). The floors are the
@@ -11,12 +11,13 @@ import { catalogRegistry, evalRouting, loadCases } from "./helpers/routing-eval"
 const FLOOR = {
   /** Cases whose expected MCP tool a keyword tool_search on the question loads. */
   toolHits: 51, // of 70 (2026-10-14: +distribution_count, 2/2 new cases hit)
-  /** Cases whose expected skill is suggested. */
-  skillHits: 42, // of 46
-  /** Suggested skills that are not expected (on scored cases). */
-  maxWrongSuggestions: 18, // of 60 (2026-10-14: tim-co-hoi description de-duplicated "giá hiện tại" pair, Q232 fixed)
+  /** Existing and review regression cases; tool recall is unchanged. */
+  skillHits: 86, // minimum retained from the parallel PR review fix
+  /** Keep the stricter remote ratchet; macro trade exclusions remove Q267/Q268 overlap. */
+  maxWrongSuggestions: 19,
   /** "No skill" cases that still get a suggestion. */
-  maxNegativesSuggested: 5, // of 27
+  maxNegativesSuggested: 5,
+
 }
 
 const root = path.resolve(import.meta.dir, "..")
@@ -43,3 +44,15 @@ test("routing does not regress below the recorded floors", async () => {
   expect(all.suggestions - all.rightSuggestions).toBeLessThanOrEqual(FLOOR.maxWrongSuggestions)
   expect(all.negativesSuggested).toBeLessThanOrEqual(FLOOR.maxNegativesSuggested)
 }, 30_000)
+
+
+test("PR116 regressions produce the exact expected suggestions", async () => {
+  const cases = (await loadCases(root)).filter((c) => c.note === "PR116 exact suggestions regression" || c.note === "PR116 reconciled remote exact regression")
+  const registry = await catalogRegistry(root)
+  const { skills } = await loadSkills(skillRoots(root).filter((r) => r.source === "bundled"))
+  const declared = registry.list().map((tool) => tool.name)
+  expect(cases.length).toBeGreaterThanOrEqual(14)
+  for (const c of cases) {
+    expect(suggestedSkills(c.q, skills, declared).sort(), `Q${c.id}: ${c.q}`).toEqual([...c.skills!].sort())
+  }
+})

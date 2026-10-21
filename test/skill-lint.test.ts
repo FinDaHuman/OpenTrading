@@ -7,7 +7,7 @@ import { suggestSkills } from "../src/core/skills/catalog"
 import { loadSkillTool } from "../src/core/tools/builtin/load-skill"
 import type { Skill } from "../src/core/skills/schema"
 import { lintSkills } from "./helpers/skill-lint"
-import { copiedResultHit } from "./helpers/skill-lint"
+import { copiedResultHit, decisionTreeIssues } from "./helpers/skill-lint"
 
 const root = path.join(import.meta.dir, "..")
 const ctx = { signal: new AbortController().signal, callId: "c1" }
@@ -84,4 +84,35 @@ test("load_skill preloads uses_tools (not every gate tool) and refuses a skill w
 
   const missing = loadSkillTool(() => [skill], () => [], () => new Set(["current_time"]))
   await expect(missing.execute({ name: "chu-ky" }, ctx)).rejects.toThrow("đang tắt vì thiếu tool: cycle_stats_check")
+})
+
+
+test("sector decision trees close branches and reference existing Q nodes", () => {
+  expect(report.decisionTrees).toEqual([])
+})
+
+test("decision tree lint handles source-qualified Q headings and wrapped branches", () => {
+  const body = `## Cây quyết định nhà máy
+Q1. Nhóm nào?
+├─ Có → Q3 (thủy)
+└─ Chưa rõ → ★ "Chưa đủ dữ liệu"
+
+Q3 (thủy). Nước đủ không?
+├─ Có → ★ "Thuận lợi"
+└─ Chưa rõ → ★ "Chưa đủ dữ liệu"
+
+## Ví dụ
+Q99. Ngoài cây
+├─ Không kiểm tra
+`
+  expect(decisionTreeIssues(body)).toEqual([])
+  expect(decisionTreeIssues(body.replace('└─ Chưa rõ → ★ "Chưa đủ dữ liệu"', '├─ Chưa rõ → ★ "Chưa đủ dữ liệu"'))).toContain("Q1: nhánh cuối phải là └─")
+  expect(decisionTreeIssues(body.replace("→ Q3 (thủy)", "→ Q4 (thủy)"))).toContain("Q1: tham chiếu Q4 không tồn tại")
+  const terminalTransition = body.replace('Có → ★ "Thuận lợi"', `Có → ★ "Thuận lợi" nhưng
+   tiếp Q1`)
+  expect(decisionTreeIssues(terminalTransition)).toContain("Q3: ★ vừa kết luận vừa chuyển Q")
+  expect(decisionTreeIssues(body.replace('Có → ★ "Thuận lợi"', 'Có → Q1 rồi ★ "Thuận lợi"'))).toContain("Q3: ★ vừa kết luận vừa chuyển Q")
+  expect(decisionTreeIssues(`## Ví dụ
+Q1. Không phải cây
+├─ thử → Q99`)).toEqual([])
 })

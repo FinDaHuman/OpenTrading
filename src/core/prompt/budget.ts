@@ -25,7 +25,9 @@ export const BUDGETS: Record<string, Record<Tier, number | undefined>> = {
   hook_context: { A: 2_500, B: 2_500, C: 1_000 },
   skills_always: { A: 1_800, B: 1_200, C: 600 },
   skills_sticky: { A: 2_500, B: 1_600, C: 800 },
-  skill_catalog: { A: 1_400, B: 700, C: 280 },
+  // Full bundled catalog must fit A with at least 20% headroom. B shortens
+  // descriptions while preserving every name; C prioritizes the names-only index.
+  skill_catalog: { A: 2_600, B: 1_200, C: 280 },
   deferred_tools: { A: 2_000, B: 1_200, C: 600 },
   mcp_instructions: { A: 2_000, B: 1_200, C: 500 },
   tools: { A: undefined, B: undefined, C: undefined },

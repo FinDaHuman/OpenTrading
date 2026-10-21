@@ -822,6 +822,460 @@
     "distribution_count"
    ],
    "id": 243
+  },
+  {
+   "id": 244,
+   "split": "dev",
+   "q": "Ngành ngân hàng đang thế nào, bị siết bởi cái gì?",
+   "skills": [
+    "ngan-hang-vn"
+   ]
+  },
+  {
+   "id": 245,
+   "split": "dev",
+   "q": "Nợ xấu và biên lợi nhuận thuần của nhóm ngân hàng nên đọc như thế nào?",
+   "skills": [
+    "ngan-hang-vn"
+   ]
+  },
+  {
+   "id": 246,
+   "split": "dev",
+   "q": "Ngành chứng khoán còn dư địa tăng trưởng không?",
+   "skills": [
+    "chung-khoan-vn"
+   ]
+  },
+  {
+   "id": 247,
+   "split": "dev",
+   "q": "Đòn bẩy ký quỹ của ngành chứng khoán ra sao?",
+   "skills": [
+    "chung-khoan-vn"
+   ]
+  },
+  {
+   "id": 248,
+   "split": "dev",
+   "q": "Chủ đầu tư bất động sản có bị siết vốn không?",
+   "skills": [
+    "bat-dong-san-vn"
+   ]
+  },
+  {
+   "id": 249,
+   "split": "dev",
+   "q": "Khu công nghiệp đang khác gì so với nhà ở thương mại?",
+   "skills": [
+    "bat-dong-san-vn"
+   ]
+  },
+  {
+   "id": 250,
+   "split": "dev",
+   "q": "Ngành thép đang bị siết bởi chi phí đầu vào thế nào?",
+   "skills": [
+    "thep-vn"
+   ]
+  },
+  {
+   "id": 251,
+   "split": "dev",
+   "q": "Ngành thép chịu gì từ thuế chống bán phá giá?",
+   "skills": [
+    "thep-vn"
+   ]
+  },
+  {
+   "id": 252,
+   "split": "dev",
+   "q": "Giá dầu giảm thì nhóm dầu khí chịu gì?",
+   "skills": [
+    "dau-khi-vn"
+   ]
+  },
+  {
+   "id": 253,
+   "split": "dev",
+   "q": "Ngành dầu khí cần theo dõi biến số gì ngoài giá dầu?",
+   "skills": [
+    "dau-khi-vn"
+   ]
+  },
+  {
+   "id": 254,
+   "split": "dev",
+   "q": "Nhà máy điện bị siết vì đâu khi nhu cầu đang tăng?",
+   "skills": [
+    "dien-luc-vn"
+   ]
+  },
+  {
+   "id": 255,
+   "split": "dev",
+   "q": "Nhóm thủy điện bị ảnh hưởng gì bởi thủy văn?",
+   "skills": [
+    "dien-luc-vn"
+   ]
+  },
+  {
+   "id": 256,
+   "split": "dev",
+   "q": "Cước vận chuyển tăng thì cả nhóm vận tải hưởng không?",
+   "skills": [
+    "van-tai-vn"
+   ]
+  },
+  {
+   "id": 257,
+   "split": "dev",
+   "q": "Ngành vận tải cần xem tỷ lệ khóa giá bao nhiêu?",
+   "skills": [
+    "van-tai-vn"
+   ]
+  },
+  {
+   "id": 258,
+   "split": "dev",
+   "q": "Giá ure tăng mạnh thì công ty phân bón hưởng không?",
+   "skills": [
+    "hoa-chat-vn"
+   ]
+  },
+  {
+   "id": 259,
+   "split": "dev",
+   "q": "Ngành hoá chất chịu gì từ chính sách hạn ngạch của Trung Quốc?",
+   "skills": [
+    "hoa-chat-vn"
+   ]
+  },
+  {
+   "id": 260,
+   "split": "dev",
+   "q": "Chuỗi bán lẻ còn tăng trưởng được nữa không?",
+   "skills": [
+    "tieu-dung-ban-le-vn"
+   ]
+  },
+  {
+   "id": 261,
+   "split": "dev",
+   "q": "Ngành tiêu dùng nên đọc bán lẻ thực hay danh nghĩa?",
+   "skills": [
+    "tieu-dung-ban-le-vn"
+   ]
+  },
+  {
+   "id": 262,
+   "split": "dev",
+   "q": "Công ty dịch vụ công nghệ còn dư địa không?",
+   "skills": [
+    "cong-nghe-vn"
+   ]
+  },
+  {
+   "id": 263,
+   "split": "dev",
+   "q": "Ngành công nghệ cần theo dõi tín hiệu đơn hàng nào?",
+   "skills": [
+    "cong-nghe-vn"
+   ]
+  },
+  {
+   "id": 264,
+   "split": "dev",
+   "q": "Hãng bảo hiểm này có thật sự hồi phục không?",
+   "skills": [
+    "bao-hiem-vn"
+   ]
+  },
+  {
+   "id": 265,
+   "split": "dev",
+   "q": "Ngành bảo hiểm đọc nghiệp vụ bảo hiểm khác thu nhập tài chính thế nào?",
+   "skills": [
+    "bao-hiem-vn"
+   ]
+  },
+  {
+   "id": 266,
+   "split": "dev",
+   "q": "VinFast lỗ to thì Vingroup có sao không?",
+   "skills": [
+    "vingroup-vn"
+   ]
+  },
+  {
+   "id": 267,
+   "split": "dev",
+   "q": "Ngành xuất nhập khẩu chịu gì từ thuế quan?",
+   "skills": [
+    "xuat-nhap-khau-vn"
+   ]
+  },
+  {
+   "id": 268,
+   "split": "dev",
+   "q": "Xuất khẩu tăng mạnh thì nhóm hàng nào hưởng?",
+   "skills": [
+    "xuat-nhap-khau-vn"
+   ]
+  },
+  {
+   "id": 269,
+   "split": "dev",
+   "q": "VCB giờ đắt hay rẻ, tính vùng giá hợp lý giúp tôi.",
+   "skills": [
+    "dinh-gia-chuyen-sau"
+   ]
+  },
+  {
+   "id": 270,
+   "split": "dev",
+   "q": "So sánh VCB với TCB với MBB giúp tôi xem ngân hàng nào đẹp hơn về chỉ số.",
+   "skills": [
+    "so-sanh-cung-nganh"
+   ]
+  },
+  {
+   "id": 271,
+   "split": "dev",
+   "q": "Thị trường đang ở pha nào vậy, nhóm ngành nào có thể dẫn tiếp?",
+   "skills": [
+    "dinh-vi-chu-ky-vn"
+   ]
+  },
+  {
+   "id": 272,
+   "split": "dev",
+   "q": "Cho tôi GDP quý gần nhất, lạm phát và xuất khẩu tháng rồi của Việt Nam.",
+   "skills": [
+    "danh-gia-vi-mo-viet-nam"
+   ]
+  },
+  {
+   "id": 273,
+   "split": "dev",
+   "q": "Hôm nay có tin chứng khoán nào đáng chú ý không?",
+   "skills": [
+    "tin-tuc-nong-viet-nam"
+   ]
+  },
+  {
+   "id": 274,
+   "split": "dev",
+   "q": "HPG khung ngày với khung tuần đang xu hướng ra sao, xem RSI giúp tôi.",
+   "skills": [
+    "ky-thuat-chuyen-sau"
+   ]
+  },
+  {
+   "id": 275,
+   "split": "dev",
+   "q": "Hòa Phát sắp ra báo cáo, tôi có nên giữ qua kỳ không?",
+   "skills": [
+    "danh-gia-truoc-bctc"
+   ]
+  },
+  {
+   "id": 277,
+   "split": "dev",
+   "q": "Người mới như tôi cần hiểu HOSE, HNX với UPCoM khác nhau thế nào về biên độ và bước giá?",
+   "skills": [
+    "vn-market-basics"
+   ]
+  },
+  {
+   "id": 278,
+   "split": "dev",
+   "q": "Nhóm ngân hàng có dẫn sóng tiếp không?",
+   "skills": [
+    "dinh-vi-chu-ky-vn"
+   ],
+   "note": "PR116 exact suggestions regression"
+  },
+  {
+   "id": 279,
+   "split": "dev",
+   "q": "Ngành ngân hàng đang ở pha nào của chu kỳ?",
+   "skills": [
+    "dinh-vi-chu-ky-vn"
+   ],
+   "note": "PR116 exact suggestions regression"
+  },
+  {
+   "id": 280,
+   "split": "dev",
+   "q": "Chu kỳ ngành chứng khoán đang ở đâu?",
+   "skills": [
+    "dinh-vi-chu-ky-vn"
+   ],
+   "note": "PR116 exact suggestions regression"
+  },
+  {
+   "id": 281,
+   "split": "dev",
+   "q": "Nợ xấu của HPG có cao không?",
+   "skills": [],
+   "note": "PR116 exact suggestions regression"
+  },
+  {
+   "id": 282,
+   "split": "dev",
+   "q": "Lãi suất cho vay đang thế nào, có nên vay mua nhà?",
+   "skills": [],
+   "note": "PR116 exact suggestions regression"
+  },
+  {
+   "id": 283,
+   "split": "dev",
+   "q": "Có nên mua căn hộ hay gửi tiết kiệm?",
+   "skills": [],
+   "note": "PR116 exact suggestions regression"
+  },
+  {
+   "id": 284,
+   "split": "dev",
+   "q": "Giá dầu Brent hôm nay bao nhiêu?",
+   "skills": [],
+   "note": "PR116 exact suggestions regression"
+  },
+  {
+   "id": 285,
+   "split": "dev",
+   "q": "Vinhomes có tin gì mới hôm nay?",
+   "skills": [],
+   "note": "PR116 exact suggestions regression"
+  },
+  {
+   "id": 286,
+   "split": "dev",
+   "q": "Khối ngoại bán ròng mạnh, dòng vốn nước ngoài có quay lại không?",
+   "skills": [],
+   "note": "PR116 exact suggestions regression"
+  },
+  {
+   "id": 287,
+   "split": "dev",
+   "q": "Fed sẽ phản ứng thế nào trước thuế quan?",
+   "skills": [
+    "du-doan-fed"
+   ],
+   "note": "PR116 exact suggestions regression"
+  },
+  {
+   "id": 288,
+   "split": "dev",
+   "q": "Nhóm ngân hàng đang thế nào?",
+   "skills": [
+    "ngan-hang-vn"
+   ],
+   "note": "PR116 exact suggestions regression"
+  },
+  {
+   "id": 289,
+   "split": "dev",
+   "q": "Phân tích NIM CASA ngân hàng",
+   "skills": [
+    "ngan-hang-vn"
+   ],
+   "note": "PR116 exact suggestions regression"
+  },
+  {
+   "id": 290,
+   "split": "dev",
+   "q": "Phân tích bảo hiểm phi nhân thọ",
+   "skills": [
+    "bao-hiem-vn"
+   ],
+   "note": "PR116 exact suggestions regression"
+  },
+  {
+   "id": 291,
+   "split": "dev",
+   "q": "Định giá SOTP Vingroup",
+   "skills": [
+    "vingroup-vn",
+    "dinh-gia-chuyen-sau"
+   ],
+   "note": "PR116 exact suggestions regression"
+  },
+  {
+   "id": 292,
+   "split": "dev",
+   "q": "Ngành bất động sản đang ở giai đoạn nào của chu kỳ?",
+   "skills": [
+    "dinh-vi-chu-ky-vn"
+   ],
+   "note": "PR116 reconciled remote exact regression"
+  },
+  {
+   "id": 293,
+   "split": "dev",
+   "q": "Nhóm thép có phải sắp dẫn sóng không?",
+   "skills": [
+    "dinh-vi-chu-ky-vn"
+   ],
+   "note": "PR116 reconciled remote exact regression"
+  },
+  {
+   "id": 294,
+   "split": "dev",
+   "q": "Có nên mua bảo hiểm nhân thọ không?",
+   "skills": [],
+   "note": "PR116 reconciled remote exact regression"
+  },
+  {
+   "id": 295,
+   "split": "dev",
+   "q": "Nên mở tài khoản ở công ty chứng khoán nào?",
+   "skills": [],
+   "note": "PR116 reconciled remote exact regression"
+  },
+  {
+   "id": 296,
+   "split": "dev",
+   "q": "Vingroup kéo VN-Index hôm nay bao nhiêu điểm?",
+   "skills": [],
+   "note": "PR116 reconciled remote exact regression"
+  },
+  {
+   "id": 297,
+   "split": "dev",
+   "q": "Thuế quan Mỹ ảnh hưởng thế nào đến Fed?",
+   "skills": [
+    "du-doan-fed"
+   ],
+   "note": "PR116 reconciled remote exact regression"
+  },
+  {
+   "id": 298,
+   "split": "dev",
+   "q": "Dệt may chịu thuế đối ứng của Mỹ thế nào so với đối thủ?",
+   "skills": [
+    "xuat-nhap-khau-vn"
+   ],
+   "note": "PR116 reconciled remote exact regression"
+  },
+  {
+   "id": 299,
+   "split": "dev",
+   "q": "Công ty bảo hiểm phi nhân thọ đọc tỷ lệ bồi thường thế nào?",
+   "skills": [
+    "bao-hiem-vn"
+   ],
+   "note": "PR116 reconciled remote exact regression"
+  },
+  {
+   "id": 300,
+   "split": "dev",
+   "q": "Hãng hàng không chịu gì khi giá dầu tăng?",
+   "skills": [
+    "van-tai-vn"
+   ],
+   "note": "PR116 reconciled remote exact regression"
   }
  ]
 }

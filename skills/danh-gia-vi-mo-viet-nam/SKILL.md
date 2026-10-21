@@ -5,7 +5,9 @@ activation: auto
 requires_tools: [mcp__opentrading__vs_indicator_data]
 triggers:
   keywords: [vĩ mô, GDP, CPI, lạm phát, xuất khẩu, nhập khẩu, lãi suất điều hành, sbv, xnk, cán cân, câu chuyện thị trường]
-version: 1.6.0
+  # A trade question about one sector or product group belongs to xuat-nhap-khau-vn.
+  exclude_keywords: [ngành xuất nhập khẩu, ngành xuất khẩu, nhóm hàng]
+version: 1.6.1
 ---
 
 # Vĩ mô Việt Nam

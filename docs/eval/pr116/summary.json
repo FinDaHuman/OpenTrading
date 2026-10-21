@@ -1,0 +1,54 @@
+{
+  "live-harness.json": {
+    "planned": 20,
+    "completed": 20,
+    "failed": 14,
+    "passed": 6,
+    "createdAt": "2026-10-21T07:03:12.891Z",
+    "model": "nvidia/z-ai/glm-5.3-flash",
+    "failures": {
+      "selectionMismatch": 7,
+      "missingRequiredToolCall": 3,
+      "timeout": 4,
+      "otherError": 0
+    },
+    "tiers": {
+      "A": {
+        "passed": 3,
+        "total": 10
+      },
+      "B": {
+        "passed": 3,
+        "total": 10
+      }
+    },
+    "recordedUsage": 72728,
+    "usageCaveat": "Only requests returning SDK usage are included; error usage is unavailable."
+  },
+  "live-catalog.json": {
+    "planned": 6,
+    "completed": 6,
+    "failed": 4,
+    "passed": 2,
+    "createdAt": "2026-10-21T07:03:06.309Z",
+    "model": "nvidia/z-ai/glm-5.3-flash",
+    "failures": {
+      "selectionMismatch": 2,
+      "missingRequiredToolCall": 2,
+      "timeout": 0,
+      "otherError": 0
+    },
+    "tiers": {
+      "A": {
+        "passed": 1,
+        "total": 3
+      },
+      "B": {
+        "passed": 1,
+        "total": 3
+      }
+    },
+    "recordedUsage": 21870,
+    "usageCaveat": "Only requests returning SDK usage are included; error usage is unavailable."
+  }
+}
