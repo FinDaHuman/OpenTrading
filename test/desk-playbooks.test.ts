@@ -4,11 +4,13 @@ import { DeskEngine, type AgentStarter } from "../src/core/desk/engine"
 import { PLAYBOOKS } from "../src/core/desk/playbooks"
 import { CHECK, CLAIMS, kiemChung, tally, type Claim } from "../src/core/desk/playbooks/kiem-chung"
 import { rank, SCORECARD, sangLoc, VERDICT, weights, type Scorecard } from "../src/core/desk/playbooks/sang-loc"
+import { tranhBien } from "../src/core/desk/playbooks/tranh-bien"
+import { GAPS, nganh, SCOPE, sectorSkill } from "../src/core/desk/playbooks/nganh"
 import { DESK_SIZES, type DeskRunView, type DeskSize, type Playbook } from "../src/core/desk/types"
 import type { StartSpec } from "../src/core/subagents/manager"
 import type { SubagentResult } from "../src/core/subagents/types"
 
-const AGENTS: AgentDefinition[] = ["co-ban", "phan-bien", "tong-hop", "tra-cuu"].map((name) => ({ name, description: name, tools: ["@chi-doc"], body: "", file: `${name}.md`, source: "bundled" }))
+const AGENTS: AgentDefinition[] = ["co-ban", "phan-bien", "tong-hop", "tra-cuu", "dinh-gia", "tin-tuc", "ky-thuat", "vi-mo", "bull", "bear", "nganh", "chu-ky-nganh", "tai-san-toan-cau"].map((name) => ({ name, description: name, tools: ["@chi-doc"], body: "", file: `${name}.md`, source: "bundled" }))
 
 const ok = (text: string, data?: unknown): SubagentResult => ({ status: "completed", text, ...(data !== undefined ? { data } : {}), toolCount: 1, usage: { input: 10, output: 5 }, requests: 2, durationMs: 1 })
 const fail = (failure: SubagentResult["failure"] = "fatal"): SubagentResult => ({ status: "failed", text: "", error: "lỗi", failure, toolCount: 0, usage: { input: 0, output: 0 }, requests: 1, durationMs: 1 })
@@ -46,7 +48,7 @@ const flat = (n: number) => ({ chat_luong: n, dinh_gia: n, tang_truong: n, suc_k
 const tickerIn = (prompt: string) => /mã ([A-Z0-9]{3,5})/.exec(prompt)?.[1] ?? "???"
 
 test("every bundled playbook declares its phases, agent types and an estimate per size; small stays well under the warning", () => {
-  expect(PLAYBOOKS.map((p) => p.meta.name)).toEqual(["sang-loc", "kiem-chung"])
+  expect(PLAYBOOKS.map((p) => p.meta.name)).toEqual(["sang-loc", "kiem-chung", "tranh-bien", "nganh"])
   for (const p of PLAYBOOKS) {
     expect(p.meta.phases.length).toBeGreaterThan(0)
     for (const t of p.meta.agentTypes) expect(AGENTS.some((a) => a.name === t)).toBe(true)
@@ -67,6 +69,22 @@ test("every bundled playbook declares its phases, agent types and an estimate pe
     large: { agents: 61, requests: 242 },
     unrestricted: { agents: 61, requests: 242 },
   })
+  expect(sizes(tranhBien, { ticker: "FPT" })).toEqual({
+    small: { agents: 6, requests: 30 },
+    medium: { agents: 10, requests: 50 },
+    large: { agents: 18, requests: 92 },
+    unrestricted: { agents: 18, requests: 92 },
+  })
+  expect(sizes(nganh, { nganh: "thép" })).toEqual({
+    small: { agents: 7, requests: 40 },
+    medium: { agents: 14, requests: 79 },
+    large: { agents: 22, requests: 157 },
+    unrestricted: { agents: 22, requests: 157 },
+  })
+  for (const p of PLAYBOOKS) {
+    const args = p === sangLoc ? many : p === kiemChung ? text : p === tranhBien ? { ticker: "FPT" } : { nganh: "thép" }
+    expect(p.meta.estimate(p.meta.args.parse(args), "small").requests).toBeLessThanOrEqual(40)
+  }
   // Fewer tickers than the tier: fewer agents.
   expect(sangLoc.meta.estimate(sangLoc.meta.args.parse({ tickers: ["FPT", "MWG"] }), "medium")).toEqual({ agents: 5, requests: 30 })
 })
@@ -201,6 +219,127 @@ test("deterministic: each playbook makes the same agent calls on the same answer
   for (const [p, args] of [
     [sangLoc, { tickers: ["FPT", "MWG", "HPG", "VNM"] }],
     [kiemChung, { noi_dung: "VNM ROE 20% năm 2025, cao nhất ngành sữa." }],
+  ] as const) {
+    const keys = async () => (await runPlaybook(p as Playbook, args, "large", respond)).view.agents.map((a) => a.key).sort()
+    expect(await keys()).toEqual(await keys())
+  }
+})
+
+test("sector names map to the sector skills of #116 (accents, wording); unknown sectors get none", () => {
+  expect(sectorSkill("Ngân hàng")).toBe("ngan-hang-vn")
+  expect(sectorSkill("nhóm thép")).toBe("thep-vn")
+  expect(sectorSkill("BĐS khu công nghiệp")).toBe("bat-dong-san-vn")
+  expect(sectorSkill("điện")).toBe("dien-luc-vn")
+  expect(sectorSkill("bán lẻ điện thoại")).toBe("tieu-dung-ban-le-vn")
+  expect(sectorSkill("cảng biển")).toBe("van-tai-vn")
+  expect(sectorSkill("hàng không")).toBe("van-tai-vn")
+  expect(sectorSkill("phân bón")).toBe("hoa-chat-vn")
+  expect(sectorSkill("ngành gì đó")).toBeUndefined()
+})
+
+const debateRespond = (spec: StartSpec): SubagentResult => {
+  if (spec.schema === CLAIMS) return ok("", { claims: [{ ma: "FPT", chi_tieu: "LNST", gia_tri: "2.100 tỷ", nguyen_van: "LNST 2.100 tỷ", muc_quan_trong: "cao" }] })
+  if (spec.schema === CHECK) return ok("", { ket_luan: "sai", gia_tri_tim_thay: "1.900 tỷ", nguon: "financial_statements", giai_thich: "lệch" })
+  if (spec.type === "bull" || spec.type === "bear") return ok(`${spec.type.toUpperCase()}: ${spec.description} — LNST 2.100 tỷ, P/E 18 lần (Q2/2026)`)
+  if (spec.type === "tong-hop") return ok("PHÁN QUYẾT TRỌNG TÀI")
+  return ok(`Báo cáo ${spec.type}: LNST 2.100 tỷ (Q2/2026)`)
+}
+
+test("tranh-bien medium: 5 analysts, bull and bear open then rebut once, the referee gets everything framed", async () => {
+  const { view, specs } = await runPlaybook(tranhBien, { ticker: "fpt", cau_hoi: "có nên giữ qua quý 3" }, "medium", debateRespond)
+  expect(view.status).toBe("done")
+  expect(specs.filter((s) => ["co-ban", "dinh-gia", "tin-tuc", "ky-thuat", "vi-mo"].includes(s.type!))).toHaveLength(5)
+  expect(specs.filter((s) => s.type === "bull").map((s) => s.description)).toEqual(["bull mở màn FPT", "bull vòng 1"])
+  expect(specs.filter((s) => s.type === "bear")).toHaveLength(2)
+  // A rebuttal quotes the other side's last argument as evidence.
+  const rebut = specs.find((s) => s.description === "bear vòng 1")!.prompt
+  expect(rebut).toContain("BULL: bull mở màn FPT")
+  expect(rebut).toContain("<bang_chung")
+  const judge = specs.find((s) => s.type === "tong-hop")!.prompt
+  expect(judge).toContain("Báo cáo vi-mo")
+  expect(judge).toContain("BEAR: bear vòng 1")
+  expect(judge).toContain("Không khuyến nghị mua, bán, giữ")
+  expect(String(view.result)).toBe("PHÁN QUYẾT TRỌNG TÀI")
+  expect(view.counters.agents).toBe(tranhBien.meta.estimate(tranhBien.meta.args.parse({ ticker: "FPT" }), "medium").agents)
+})
+
+test("tranh-bien large: the debaters' numbers go through kiem-chung at the small tier, inside the same run", async () => {
+  const { view, specs } = await runPlaybook(tranhBien, { ticker: "FPT" }, "large", debateRespond)
+  expect(specs.filter((s) => s.type === "bull")).toHaveLength(3)
+  expect(specs.filter((s) => s.schema === CLAIMS)).toHaveLength(1)
+  // Small tier: one voter per claim.
+  expect(specs.filter((s) => s.schema === CHECK)).toHaveLength(1)
+  expect(view.agents.some((a) => a.phase.startsWith("kiem-chung › "))).toBe(true)
+  expect(specs.find((s) => s.type === "tong-hop")!.prompt).toContain("kiểm chứng số liệu")
+  expect(String(view.result)).toContain("✘ sai")
+  expect(view.counters.agents).toBeLessThanOrEqual(tranhBien.meta.estimate(tranhBien.meta.args.parse({ ticker: "FPT" }), "large").agents)
+})
+
+test("tranh-bien: a failed analyst is logged and named to the referee; no report at all ends early", async () => {
+  const partial = await runPlaybook(tranhBien, { ticker: "FPT" }, "small", (spec) => (spec.type === "tin-tuc" ? fail() : debateRespond(spec)))
+  expect(partial.view.logs.some((l) => l.includes("Thiếu báo cáo: tin-tuc"))).toBe(true)
+  expect(partial.specs.find((s) => s.type === "tong-hop")!.prompt).toContain("thiếu báo cáo tin-tuc")
+  const none = await runPlaybook(tranhBien, { ticker: "FPT" }, "small", () => fail())
+  expect(String(none.view.result)).toContain("Không lấy được báo cáo nào")
+  expect(none.specs.some((s) => s.type === "bull")).toBe(false)
+})
+
+const sectorRespond =
+  (scope: { ma: string }[], gaps: { cau_hoi: string }[] = []) =>
+  (spec: StartSpec): SubagentResult => {
+    if (spec.schema === SCOPE) return ok("", { nganh: "Thép", doanh_nghiep: scope, dong_luc: ["giá quặng", "đầu tư công"], chi_tieu_nganh: ["giá bán HRC", "sản lượng tiêu thụ"] })
+    if (spec.schema === SCORECARD) return ok("", card(tickerIn(spec.prompt), flat(tickerIn(spec.prompt) === "HPG" ? 8 : 5)))
+    if (spec.schema === GAPS) return ok("", { thieu: gaps })
+    if (spec.type === "tong-hop") return ok("BÁO CÁO NGÀNH")
+    return ok(`Báo cáo ${spec.type}: thép (Q2/2026)`)
+  }
+
+test("nganh small: scope picks the companies (cut to the tier) and the sector metrics, themes and scorecards run together", async () => {
+  const { view, specs } = await runPlaybook(nganh, { nganh: "thép" }, "small", sectorRespond([{ ma: "hpg" }, { ma: "HSG" }, { ma: "NKG" }, { ma: "TLH" }, { ma: "SMC" }]))
+  expect(view.status).toBe("done")
+  expect(specs.filter((s) => s.schema === SCORECARD).map((s) => tickerIn(s.prompt))).toEqual(["HPG", "HSG", "NKG"])
+  expect(view.logs.some((l) => l.includes("bỏ 2: TLH, SMC"))).toBe(true)
+  expect(view.logs).toContain("Skill ngành: thep-vn")
+  // The sector skill is loaded once, by the scope agent; the companies get its metrics.
+  expect(specs.find((s) => s.schema === SCOPE)!.prompt).toContain("Nạp skill thep-vn")
+  const cardText = specs.find((s) => s.schema === SCORECARD)!.prompt
+  expect(cardText).toContain("giá bán HRC, sản lượng tiêu thụ")
+  expect(cardText).not.toContain("load_skill")
+  expect(specs.filter((s) => s.type === "chu-ky-nganh" || s.type === "vi-mo")).toHaveLength(2)
+  expect(specs.some((s) => s.schema === GAPS)).toBe(false)
+  const result = String(view.result)
+  expect(result).toContain("BÁO CÁO NGÀNH")
+  expect([...result.matchAll(/^\| \d+ \| ([A-Z]{3})/gm)].map((m) => m[1])[0]).toBe("HPG")
+  expect(view.agents.filter((a) => a.phase === "Bối cảnh")).toHaveLength(2)
+  expect(view.agents.filter((a) => a.phase === "Doanh nghiệp")).toHaveLength(3)
+})
+
+test("nganh medium: the user's tickers win over the scope; the critic's gaps get one extra round", async () => {
+  const { view, specs } = await runPlaybook(
+    nganh,
+    { nganh: "ngân hàng", tickers: ["VCB", "TCB"], cau_hoi: "NIM có cải thiện không" },
+    "medium",
+    sectorRespond([{ ma: "BID" }], [{ cau_hoi: "NIM quý 2 của TCB là bao nhiêu?" }, { cau_hoi: "Tín dụng toàn ngành tăng bao nhiêu?" }]),
+  )
+  expect(specs.find((s) => s.schema === SCOPE)!.prompt).toContain("VCB, TCB")
+  expect(specs.filter((s) => s.schema === SCORECARD).map((s) => tickerIn(s.prompt))).toEqual(["VCB", "TCB"])
+  expect(specs.filter((s) => s.type === "tai-san-toan-cau")).toHaveLength(1)
+  const extra = specs.filter((s) => s.type === "tra-cuu")
+  expect(extra).toHaveLength(2)
+  expect(extra[0]!.prompt).toContain("NIM quý 2 của TCB")
+  expect(specs.find((s) => s.type === "tong-hop")!.prompt).toContain("Tín dụng toàn ngành tăng bao nhiêu?")
+  expect(view.counters.agents).toBeLessThanOrEqual(nganh.meta.estimate(nganh.meta.args.parse({ nganh: "ngân hàng", tickers: ["VCB", "TCB"] }), "medium").agents)
+})
+
+test("nganh: no company found ends early with advice", async () => {
+  const { view } = await runPlaybook(nganh, { nganh: "ngành lạ" }, "small", sectorRespond([]))
+  expect(String(view.result)).toContain("Không xác định được doanh nghiệp")
+})
+
+test("deterministic: tranh-bien and nganh make the same agent calls on the same answers", async () => {
+  for (const [p, args, respond] of [
+    [tranhBien, { ticker: "FPT" }, debateRespond],
+    [nganh, { nganh: "thép" }, sectorRespond([{ ma: "HPG" }, { ma: "HSG" }, { ma: "NKG" }], [{ cau_hoi: "giá HRC?" }])],
   ] as const) {
     const keys = async () => (await runPlaybook(p as Playbook, args, "large", respond)).view.agents.map((a) => a.key).sort()
     expect(await keys()).toEqual(await keys())

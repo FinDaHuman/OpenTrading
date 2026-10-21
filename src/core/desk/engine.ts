@@ -301,11 +301,12 @@ export class DeskEngine {
         agents: () => state.view.counters.agents,
         requests: () => state.view.counters.requests,
       },
-      playbook: async (name, args) => {
+      playbook: async (name, args, opts) => {
         if (depth >= 1) throw new Error("Playbook chỉ lồng được một cấp.")
         const child = this.require(name)
         const childCtx = this.context(state, child, depth + 1)
         childCtx.args = parseArgs(child, args)
+        if (opts?.size) childCtx.size = opts.size
         const outer = state.phase
         try {
           return (await child.run(childCtx)) as never

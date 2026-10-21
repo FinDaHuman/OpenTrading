@@ -75,8 +75,11 @@ export interface DeskContext<A = unknown> {
   phase(title: string): void
   log(message: string): void
   budget: { maxAgents: number; maxRequests: number | undefined; agents(): number; requests(): number }
-  /** Run another playbook inline (one level only); it shares this run's caps and journal. */
-  playbook<R = unknown>(name: string, args: unknown): Promise<R>
+  /**
+   * Run another playbook inline (one level only); it shares this run's caps and journal.
+   * `size` picks its tier (default: this run's), e.g. a small fact-check inside a large run.
+   */
+  playbook<R = unknown>(name: string, args: unknown, opts?: { size?: DeskSize }): Promise<R>
   /** Whether the run is winding down (quota, cap, stop): long loops should end early. */
   stopping(): boolean
 }
