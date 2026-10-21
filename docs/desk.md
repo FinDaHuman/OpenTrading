@@ -38,11 +38,11 @@ Cột là số agent / số request tối đa (tổng `maxSteps`; thực tế th
 - **Không có opt-in** (chỉ xảy ra khi lịch sử hội thoại đã từng gọi `desk_run`, nên tool còn được khai báo): thẻ **luôn** hiện, kể cả ở ▸▸ tự động và với playbook đã "không hỏi lại".
 - **Có opt-in** (keyword, `/desk on`, `/<playbook>`): playbook đã "không hỏi lại" thì chạy luôn; lần đầu thì hiện thẻ. Ở ▸▸ tự động, "Chạy" lần đầu tự ghi nhớ playbook (`desk.approved`).
 
-**Khi đang chạy**: ngay dưới dòng `desk_run` trong chat là một **card cập nhật liên tục** (`src/tui/desk-card.tsx`): trạng thái và thời gian, quy mô/effort/tham số, thanh tổng (agent xong / ước tính của playbook), một thanh cho mỗi phase kèm thời gian, các agent đang chạy (tool đang gọi, thời gian, token ra), agent chờ slot, hai agent vừa xong, dòng log mới nhất và tổng request/token. Agent panel có **một dòng cho cả run** (`ultradesk  sang-loc · Thu thập 3/5 · 21 req`), không liệt kê từng agent; enter mở `/desk`, `x` hai lần dừng run. `/tasks` không hiện agent của desk. Khi xong, card thu về một dòng (`ctrl+o` mở lại card cuối) và agent chính nhận **một** `<thong_bao_desk>`.
+**Khi đang chạy**: ngay dưới dòng `desk_run` trong chat là một **card cập nhật liên tục** (`src/tui/desk-card.tsx`): trạng thái và thời gian, quy mô/effort/tham số, thanh tổng (agent xong / ước tính của playbook), một thanh cho mỗi phase kèm thời gian, các agent đang chạy (tool đang gọi, thời gian, token ra), agent chờ lượt của run, hai agent vừa xong, dòng log mới nhất và tổng request/token. Agent panel có **một dòng cho cả run** (`ultradesk  sang-loc · Thu thập 3/5 · 21 req`), không liệt kê từng agent; enter mở `/desk`, `x` hai lần dừng run. `/tasks` không hiện agent của desk. Khi xong, card thu về một dòng (`ctrl+o` mở lại card cuối) và agent chính nhận **một** `<thong_bao_desk>`.
 
 **Không có run nào**: yêu cầu có `ultradesk` (hoặc `/<playbook>`) mà lượt trả lời kết thúc không gọi `desk_run` thì transcript có một dòng `ultradesk: model không chạy playbook nào…` kèm các lệnh chạy thẳng, để biết là chưa có run.
 
-**Xem thử không cần key**: `bun scripts/dev/desk-demo.tsx` mở TUI thật với model giả (số liệu ngẫu nhiên; `OPENTRADING_HOME` tạm, chặn mọi request mạng khác). `bun scripts/dev/desk-demo-frames.tsx <thư mục>` chạy cùng kịch bản headless và ghi khung hình.
+**Xem thử không cần key**: `bun scripts/dev/desk-demo.tsx` mở TUI thật với model giả (số liệu ngẫu nhiên; `OPENTRADING_HOME` tạm, chặn mọi request mạng khác). `bun scripts/dev/desk-demo-frames.tsx <thư mục> [--medium]` chạy cùng kịch bản headless và ghi khung hình.
 
 ## Playbook
 

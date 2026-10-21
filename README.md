@@ -92,30 +92,30 @@ Trước mỗi run có một thẻ: mô tả, các phase, `◂ quy mô ▸` và 
 
 ### Card tiến độ trong chat
 
-Khi run chạy, ngay dưới dòng `desk_run` là một card cập nhật liên tục:
+Khi run chạy, ngay dưới dòng `desk_run` là một card cập nhật liên tục (khung hình chụp từ `desk-demo-frames.tsx --medium`):
 
 ```
-╭──────────────────────────────────────────────────────────────────────────────╮
-│ ◆ ultradesk · sang-loc · dk-we21fy                        ⠹ đang chạy · 1m12s │
-│ medium · effort high · 8 mã: FPT, MWG, VNM, … (+5)                           │
-│                                                                              │
-│ ━━━━━━━━━━━━━━━━━━━━━━━━╺───────────  9/14 agent · 64%                        │
-│ ✓ Thu thập    ━━━━━━━━━━  8/8 · 52s                                          │
-│ ⠹ Kiểm chứng  ━━━━╺─────  1/3                                                │
-│ ○ Tổng hợp    ──────────  0/0                                                │
-│                                                                              │
-│ ⠹ phan-bien  FPT · vn_financials(FPT)                         23s · ↓1,2k    │
-│ ⠹ phan-bien  MWG · market_snapshot(MWG)                       11s · ↓640     │
-│ ◌ phan-bien  VNM                                              chờ slot 3/3   │
-│ ✓ co-ban     thẻ điểm HPG                              4 req · 31s · ↓2,2k   │
-│ » Xếp hạng 8 mã theo điểm thẻ có trọng số.                                   │
-│                                                                              │
-│ 48 request · ↑182k ↓21k token · /desk chi tiết (p tạm dừng · x×2 dừng)       │
-╰──────────────────────────────────────────────────────────────────────────────╯
+● desk_run(sang-loc) · 852ms
+  ⎿  Đã bắt đầu run ultradesk dk-fmvc3o: playbook sang-loc, quy mô medium (~10 agent, ~60 request).
+  ╭──────────────────────────────────────────────────────────────────────────────────────────────────╮
+  │ ◆ ultradesk · sang-loc · dk-fmvc3o                                             ⠙ đang chạy · 11s │
+  │ medium · 6 mã: FPT, MWG, VNM, … (+3) · ROE cao, nợ thấp                                          │
+  │ ━━━━━━━━━━━━━━━━━━━━━╺──────────────  6/10 agent · 60%                                           │
+  │ ✓ Thu thập    ━━━━━━━━━━  6/6 · 12s                                                              │
+  │ ⠙ Kiểm chứng  ──────────  0/3                                                                    │
+  │ ○ Tổng hợp    ──────────  0/0                                                                    │
+  │ ⠙ phan-bien  phản biện MWG #1                                                                 0s │
+  │ ◌ phan-bien  phản biện HPG #1                                             chờ lượt · 1 đang chạy │
+  │ ◌ phan-bien  phản biện VCB #1                                             chờ lượt · 1 đang chạy │
+  │ ✓ co-ban     thẻ điểm ACB                                                     2 req · 4s · ↓2,3k │
+  │ ✓ co-ban     thẻ điểm VCB                                                     2 req · 3s · ↓1,9k │
+  │ » Xếp hạng 6 mã theo điểm thẻ có trọng số.                                                       │
+  │ 12 request · ↑85,6k ↓12,1k token · /desk chi tiết (p tạm dừng · x×2 dừng)                        │
+  ╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
 - Thanh tổng so số agent đã xong với ước tính của playbook; mỗi phase có thanh riêng và thời gian chạy.
-- Các agent đang chạy hiện tool đang gọi, thời gian và token ra; agent chờ slot hiện `◌`; hai agent vừa xong hiện `✓` (lỗi `✘`, lấy lại từ journal `↺`).
+- Các agent đang chạy hiện tool đang gọi, thời gian và token ra; agent chờ lượt của run (`desk.maxConcurrent`) hiện `◌`; hai agent vừa xong hiện `✓` (lỗi `✘`, lấy lại từ journal `↺`).
 - Dòng `»` là log mới nhất của playbook (cắt bớt mã, xếp hạng tạm…).
 - Run xong thì card thu về một dòng (`◆ ultradesk sang-loc · xong · 14 agent · 61 request · …`); `ctrl+o` mở lại card cuối. Agent chính nhận kết quả và trình bày bảng xếp hạng, kịch bản.
 - Panel dưới ô nhập có **một dòng cho cả run**; `↓` chọn dòng đó, enter mở `/desk`, `x` hai lần dừng run.
@@ -136,7 +136,7 @@ Danh sách run của phiên → một run: cùng card ở trên (thanh tiến đ
 bun scripts/dev/desk-demo.tsx
 ```
 
-Mở TUI thật với một model giả: gõ `ultradesk so sánh FPT, MWG, VNM, HPG, VCB, ACB theo ROE`, enter trên thẻ duyệt (←→ chọn `medium` để thấy thêm phase phản biện), rồi xem card và `/desk`. Engine, subagent và giao diện là thật; số liệu là ngẫu nhiên. Script dùng một `OPENTRADING_HOME` tạm, xoá biến key khỏi môi trường và chặn mọi request mạng ngoài provider giả, nên không bao giờ tốn key thật. `bun scripts/dev/desk-demo-frames.tsx <thư mục>` chạy cùng kịch bản không cần terminal và ghi các khung hình ra file text.
+Mở TUI thật với một model giả: gõ `ultradesk so sánh FPT, MWG, VNM, HPG, VCB, ACB theo ROE`, enter trên thẻ duyệt (←→ chọn `medium` để thấy thêm phase phản biện), rồi xem card và `/desk`. Engine, subagent và giao diện là thật; số liệu là ngẫu nhiên. Script dùng một `OPENTRADING_HOME` tạm, xoá biến key khỏi môi trường và chặn mọi request mạng ngoài provider giả, nên không bao giờ tốn key thật. `bun scripts/dev/desk-demo-frames.tsx <thư mục> [--medium]` chạy cùng kịch bản không cần terminal và ghi các khung hình ra file text.
 
 ## Effort suy luận
 
@@ -288,7 +288,7 @@ Script trong `scripts/dev/`:
 | Script | Việc | Gọi model thật? |
 | --- | --- | --- |
 | `desk-demo.tsx` | TUI thật với model giả để xem ultradesk | Không |
-| `desk-demo-frames.tsx <thư mục>` | Như trên, không cần terminal, ghi khung hình ra file | Không |
+| `desk-demo-frames.tsx <thư mục> [--medium]` | Như trên, không cần terminal, ghi khung hình ra file | Không |
 | `routing-eval.ts` | Đo gợi ý skill/tool trên bộ câu hỏi gắn nhãn | Không |
 | `desk-eval.ts` | So sánh ultradesk với cách trả lời thường | Có, chỉ khi thêm `--yes` |
 | `auto-mode-eval.ts --model <model>` | Đo model duyệt của chế độ ▸▸ tự động | **Có**, ngay khi chạy (tốn quota) |
