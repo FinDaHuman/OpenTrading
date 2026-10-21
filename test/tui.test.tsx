@@ -947,8 +947,11 @@ test("ctrl+o wraps a long error line instead of cutting it with …", async () =
     const rows = frame.split("\n")
     const head = rows.findIndex((r) => r.includes("⎿  Lỗi máy chủ MCP"))
     expect(head).toBeGreaterThanOrEqual(0)
-    expect(rows[head + 1]!.startsWith("     ")).toBe(true)
-    expect(rows[head + 1]!.trim().length).toBeGreaterThan(0)
+    // Columns 0–1 may hold the animated background; compare from the gutter on.
+    const col = rows[head]!.indexOf("Lỗi máy chủ")
+    const next = rows[head + 1]!
+    expect(next.slice(2, col).trim()).toBe("")
+    expect(next[col]).not.toBe(" ")
   } finally {
     setState("expandTools", false)
     setState("lines", (lines) => lines.slice(0, before))
