@@ -31,14 +31,18 @@ Cột là số agent / số request tối đa (tổng `maxSteps`; thực tế th
 | Gõ `ultradesk` trong câu hỏi | Yêu cầu đó được chạy playbook (giống `ultracode` của Claude Code). Chữ được tô màu trong ô nhập và dòng chế độ ghi "ultradesk: yêu cầu này được chạy playbook". Chỉ tính chữ bạn gõ, không tính text dán, nội dung @file, prompt MCP hay thông báo của harness. Tắt bằng `"desk": { "keyword": false }` |
 | `/desk on` / `/desk off` | Bật/tắt cho cả phiên: yêu cầu nghiên cứu lớn có thể chạy playbook. Dòng chế độ hiện `desk ●`. `"desk": { "alwaysOn": true }` để phiên mới tự bật |
 | `/<playbook> <yêu cầu>` | Nhờ model chạy đúng playbook đó cho yêu cầu (vd. `/sang-loc FPT MWG HPG`) |
-| `/desk` | Danh sách run → các phase (đếm xong/tổng) → agent của phase → chi tiết. `p` tạm dừng/chạy tiếp, `x` hai lần (hoặc `ctrl+x`) dừng, `r` chạy tiếp run bị cắt |
+| `/desk` | Danh sách run → một run: card tiến độ (thanh tổng, thanh từng phase) và mọi agent xếp theo phase (việc đang làm, request, thời gian, token) → chi tiết một agent (yêu cầu, tool đã gọi, kết quả). `p` tạm dừng/chạy tiếp, `x` hai lần (hoặc `ctrl+x`) dừng, `r` chạy tiếp run bị cắt |
 | `/desk resume <run>` | Chạy tiếp run bị cắt (hết quota, chạm trần, bị dừng), kể cả sau khi mở lại phiên |
 
 **Thẻ duyệt** hiện trước khi chạy: mô tả, các phase, `◂ quy mô ▸` và `◂ effort ▸` (←→ để đổi, số agent/request cập nhật theo), cảnh báo △ khi vượt `warnRequests`/`maxRequests`. Lựa chọn: Chạy / Chạy, không hỏi lại `<playbook>` / Xem tham số / Không.
 - **Không có opt-in** (chỉ xảy ra khi lịch sử hội thoại đã từng gọi `desk_run`, nên tool còn được khai báo): thẻ **luôn** hiện, kể cả ở ▸▸ tự động và với playbook đã "không hỏi lại".
 - **Có opt-in** (keyword, `/desk on`, `/<playbook>`): playbook đã "không hỏi lại" thì chạy luôn; lần đầu thì hiện thẻ. Ở ▸▸ tự động, "Chạy" lần đầu tự ghi nhớ playbook (`desk.approved`).
 
-**Khi đang chạy**: agent panel có **một dòng cho cả run** (`ultradesk  sang-loc · Thu thập 3/5 · 21 req`), không liệt kê từng agent; enter mở `/desk`, `x` hai lần dừng run. `/tasks` không hiện agent của desk. Khi xong, transcript có một dòng và agent chính nhận **một** `<thong_bao_desk>`.
+**Khi đang chạy**: ngay dưới dòng `desk_run` trong chat là một **card cập nhật liên tục** (`src/tui/desk-card.tsx`): trạng thái và thời gian, quy mô/effort/tham số, thanh tổng (agent xong / ước tính của playbook), một thanh cho mỗi phase kèm thời gian, các agent đang chạy (tool đang gọi, thời gian, token ra), agent chờ slot, hai agent vừa xong, dòng log mới nhất và tổng request/token. Agent panel có **một dòng cho cả run** (`ultradesk  sang-loc · Thu thập 3/5 · 21 req`), không liệt kê từng agent; enter mở `/desk`, `x` hai lần dừng run. `/tasks` không hiện agent của desk. Khi xong, card thu về một dòng (`ctrl+o` mở lại card cuối) và agent chính nhận **một** `<thong_bao_desk>`.
+
+**Không có run nào**: yêu cầu có `ultradesk` (hoặc `/<playbook>`) mà lượt trả lời kết thúc không gọi `desk_run` thì transcript có một dòng `ultradesk: model không chạy playbook nào…` kèm các lệnh chạy thẳng, để biết là chưa có run.
+
+**Xem thử không cần key**: `bun scripts/dev/desk-demo.tsx` mở TUI thật với model giả (số liệu ngẫu nhiên; `OPENTRADING_HOME` tạm, chặn mọi request mạng khác). `bun scripts/dev/desk-demo-frames.tsx <thư mục>` chạy cùng kịch bản headless và ghi khung hình.
 
 ## Playbook
 
