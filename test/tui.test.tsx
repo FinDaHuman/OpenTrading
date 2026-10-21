@@ -3048,6 +3048,94 @@ test("a desk run is one panel row and one mode-line pill, never a row per agent"
   await setup.waitForFrame((f) => !f.includes("sang-loc · Thu thập"))
 })
 
+test("a desk run shows a live card under its desk_run row, folds to one line when done, and /desk lists every agent", async () => {
+  const t0 = Date.now() - 72_000
+  const agent = (key: string, phase: string, label: string, status: "done" | "running" | "queued", agentId?: string) => ({ key, label, phase, type: phase === "Thu thập" ? "phan-tich" : "phan-bien", status, agentId, requests: status === "done" ? 4 : 1, tokens: { input: 900, output: 300 } })
+  const run = {
+    id: "dk-card01",
+    playbook: "sang-loc",
+    version: "1",
+    args: { tickers: ["FPT", "MWG", "VNM", "HPG"] },
+    size: "medium" as const,
+    effort: "high" as const,
+    status: "running" as const,
+    phases: [
+      { title: "Thu thập", total: 4, done: 2, failed: 0 },
+      { title: "Phản biện", total: 1, done: 0, failed: 0 },
+      { title: "Tổng hợp", total: 0, done: 0, failed: 0 },
+    ],
+    agents: [
+      agent("a1", "Thu thập", "FPT", "done", "ag-card1"),
+      agent("a2", "Thu thập", "VNM", "done", "ag-card2"),
+      agent("a3", "Thu thập", "MWG", "running", "ag-card3"),
+      agent("a4", "Thu thập", "HPG", "running", "ag-card4"),
+      agent("a5", "Phản biện", "FPT", "queued"),
+    ],
+    logs: ["Xếp hạng tạm: FPT 7.8 · VNM 6.9"],
+    createdAt: t0,
+    counters: { agents: 4, cached: 0, requests: 12, input: 182_000, output: 21_000 },
+    sessionId: undefined,
+  }
+  const sub = (id: string, label: string, tool: string, running: boolean) => ({
+    id,
+    type: "phan-tich",
+    description: label,
+    prompt: `Chấm điểm ${label}`,
+    background: false,
+    model: "",
+    status: running ? ("running" as const) : ("completed" as const),
+    createdAt: t0,
+    startedAt: t0 + 1000,
+    endedAt: running ? undefined : t0 + 30_000,
+    tools: [{ callId: `${id}-t`, name: tool.split("(")[0]!, label: tool, status: running ? ("running" as const) : ("ok" as const) }],
+    toolCount: 1,
+    usage: { input: 900, output: 1200 },
+    text: "",
+    deskRunId: "dk-card01",
+  })
+  const before = state.lines.length
+  setState("lines", (lines) => [
+    ...lines,
+    { kind: "tool", callId: "c-desk", name: "desk_run", label: "desk_run(sang_loc)", status: "ok", output: "Đã bắt đầu run ultradesk dk-card01: playbook sang-loc, quy mô medium (~9 agent, ~60 request).\nRun chạy nền…" },
+  ])
+  setState("agents", "ag-card1", sub("ag-card1", "FPT", "vn_financials(FPT)", false))
+  setState("agents", "ag-card2", sub("ag-card2", "VNM", "vn_financials(VNM)", false))
+  setState("agents", "ag-card3", sub("ag-card3", "MWG", "vn_financials(MWG)", true))
+  setState("agents", "ag-card4", sub("ag-card4", "HPG", "market_snapshot(HPG)", true))
+  setState("deskRuns", "dk-card01", run)
+  try {
+    let frame = await setup.waitForFrame((f) => f.includes("◆ ultradesk · sang-loc · dk-card01") && f.includes("MWG · vn_financials(MWG)"))
+    show(frame)
+    expect(frame).toMatch(/đang chạy · 1m ?1\ds/)
+    expect(frame).toMatch(/━+[╺─]+\s+2\/\d+ agent · \d+%/)
+    expect(frame).toMatch(/Thu thập\s+━+[╺─]*\s+2\/4/)
+    expect(frame).toContain("chờ slot")
+    expect(frame).toContain("» Xếp hạng tạm: FPT 7.8")
+
+    await setup.mockInput.typeText("/desk")
+    setup.mockInput.pressEnter()
+    frame = await setup.waitForFrame((f) => f.includes("↑↓ chọn agent") && f.includes("phan-bien · FPT"))
+    show(frame)
+    expect(frame).toMatch(/Thu thập[\s\S]*phan-tich · MWG[\s\S]*Phản biện[\s\S]*phan-bien · FPT/)
+    setup.mockInput.pressEscape()
+    await setup.waitFor(() => state.dialog === undefined)
+
+    // Done: one line in the chat; ctrl+o shows the final card.
+    setState("deskRuns", "dk-card01", { ...run, status: "done", endedAt: t0 + 100_000, agents: run.agents.map((a) => ({ ...a, status: "done" as const })), phases: run.phases.map((p) => ({ ...p, done: p.total })) })
+    frame = await setup.waitForFrame((f) => f.includes("◆ ultradesk sang-loc · xong"))
+    expect(frame).not.toContain("◆ ultradesk · sang-loc · dk-card01")
+    setState("expandTools", true)
+    frame = await setup.waitForFrame((f) => f.includes("◆ ultradesk · sang-loc · dk-card01") && /✓ xong · 1m ?40s/.test(f))
+    show(frame)
+  } finally {
+    setState("expandTools", false)
+    setState("deskRuns", reconcile({}))
+    const rest = Object.fromEntries(Object.entries(state.agents).filter(([id]) => !id.startsWith("ag-card")))
+    setState("agents", reconcile(rest))
+    setState("lines", (lines) => lines.slice(0, before))
+  }
+})
+
 // Last: its transcript (tool rows + the stock answer) would satisfy later tests' frame waits.
 test("the third identical call asks before it runs; esc stops the loop and the turn answers", async () => {
   await setKey("nvidia", "nvapi-good-key")
