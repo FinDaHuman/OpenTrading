@@ -1,9 +1,10 @@
 import { readFile } from "node:fs/promises"
+import type { z } from "zod"
 import { runAgent } from "../agent"
 import { describeError, resolveTarget, type Target } from "../chat"
 import { loadConfig, type Config } from "../config"
 import { isEffort, type Effort } from "../effort"
-import { retryText } from "../retry"
+import { classifyFailure, retryText } from "../retry"
 import { closeDanglingToolCalls } from "../session/store"
 import type { Skill } from "../skills/schema"
 import { loadSkillTool } from "../tools/builtin/load-skill"
@@ -15,7 +16,8 @@ import { Limiter } from "./limiter"
 import { AUTO_MODEL, autoTarget } from "./model-pick"
 import { lastAssistantText } from "./result"
 import { Sidechain, type SidechainEntry } from "./sidechain"
-import { MAX_TOOL_VIEWS, type SubagentResult, type SubagentRun, type SubagentView } from "./types"
+import { MAX_RESULT_ATTEMPTS, RESULT_LAST_STEP, RESULT_REMINDER, RESULT_TOOL, resultTool } from "./structured"
+import { MAX_TOOL_VIEWS, type RunFailure, type SubagentResult, type SubagentRun, type SubagentView } from "./types"
 
 export const DEFAULT_MAX_CONCURRENT = 10
 export const DEFAULT_SUBAGENT_STEPS = 8
@@ -91,6 +93,13 @@ export interface StartSpec extends TypeSpec {
   /** Aborts the subagent with the parent turn (foreground); background runs have none. */
   parentSignal?: AbortSignal
   background?: boolean
+  /**
+   * Structured output: the agent must call tra_ket_qua with input matching this schema (its
+   * last step is forced to); the result's `data` holds it. Up to MAX_RESULT_ATTEMPTS turns.
+   */
+  schema?: z.ZodObject
+  /** The ultradesk run this agent belongs to. */
+  deskRunId?: string
 }
 
 export interface ManagerDeps {
@@ -105,6 +114,8 @@ type Listener = (view: SubagentView) => void
 interface RunContext {
   child: ToolRegistry
   spec: StartSpec
+  /** The structured result, once tra_ket_qua accepted one. */
+  data?: unknown
   /** Messages from send_message, taken after the current turn. */
   inbox: string[]
   /** The parent turn's signal, for foreground runs. */
@@ -252,10 +263,13 @@ export class SubagentManager {
       messages: [],
       done: Promise.resolve(undefined as never),
       sessionId: this.session?.id,
+      deskRunId: spec.deskRunId,
     }
+    const context: RunContext = { child, spec, inbox: [], parentSignal: spec.parentSignal }
+    if (spec.schema) child.register(resultTool(spec.schema, (data) => (context.data = data)))
     this.runs.set(id, run)
     this.owners.set(id, this.session?.id)
-    this.contexts.set(id, { child, spec, inbox: [], parentSignal: spec.parentSignal })
+    this.contexts.set(id, context)
     this.prune()
     run.done = this.loop(run, spec.prompt, true)
     this.emit(run)
@@ -278,6 +292,8 @@ export class SubagentManager {
       return "queued"
     }
     context.parentSignal = undefined
+    // A continuation must produce its own structured result, never return the previous one.
+    context.data = undefined
     Object.assign(run, { status: "queued", background: true, controller: new AbortController(), text: "", error: undefined, endedAt: undefined })
     run.done = this.loop(run, message, false)
     this.emit(run)
@@ -335,6 +351,7 @@ export class SubagentManager {
       messages,
       done: Promise.resolve(undefined as never),
       sessionId: this.session.id,
+      deskRunId: meta.deskRunId,
     }
     this.runs.set(id, run)
     this.owners.set(id, this.session.id)
@@ -359,6 +376,10 @@ export class SubagentManager {
     let idleStop = false
     let streamed = ""
     let effort: Effort | undefined
+    let failure: RunFailure | undefined
+    let attempts = 0
+    /** This turn ended because the model ignored the forced tra_ket_qua call. */
+    let missedTool = false
     try {
       const fallback: SidechainEntry[] = []
       const prepared = this.setup.then(async () => {
@@ -389,6 +410,7 @@ export class SubagentManager {
           prompt: run.prompt,
           parentSessionId: session.id,
           parentCallId: run.parentCallId,
+          ...(run.deskRunId ? { deskRunId: run.deskRunId } : {}),
           background: run.background,
           provider: target.provider.id ?? "",
           model: target.model,
@@ -417,17 +439,32 @@ export class SubagentManager {
       }, watchdogTick(this.idleMs))
       watchdog.unref?.()
 
-      // A turn per message: the task, then whatever send_message queued meanwhile.
-      for (let next: string | undefined = input; next !== undefined; next = context.inbox.length > 0 ? context.inbox.splice(0).join("\n\n") : undefined) {
+      // A turn per message: the task, then whatever send_message queued meanwhile. With a
+      // schema, a turn that ended without a valid result is followed by a reminder turn.
+      // Reminder turns get a single step, which is then the forced one: the findings are
+      // already in the conversation, only the call is missing. A schema run therefore makes
+      // at most maxSteps + MAX_RESULT_ATTEMPTS - 1 requests (ultradesk estimates count on it).
+      let reminding = false
+      const following = () => {
+        reminding = false
+        if (context.inbox.length > 0) return context.inbox.splice(0).join("\n\n")
+        if (spec.schema && context.data === undefined && run.status === "completed" && attempts < MAX_RESULT_ATTEMPTS) {
+          reminding = true
+          return RESULT_REMINDER
+        }
+        return undefined
+      }
+      for (let next: string | undefined = input; next !== undefined; next = following()) {
         const history = run.messages
         streamed = ""
         run.status = "running"
+        attempts++
         for await (const event of runAgent({
           history,
           input: next,
           skills: this.deps.skills?.() ?? [],
           registry: child,
-          maxSteps: spec.maxSteps ?? DEFAULT_SUBAGENT_STEPS,
+          maxSteps: reminding ? 1 : (spec.maxSteps ?? DEFAULT_SUBAGENT_STEPS),
           signal,
           stallMs: this.idleConfigured === undefined ? undefined : this.idleConfigured + 2 * watchdogTick(this.idleConfigured),
           role: "subagent",
@@ -435,6 +472,7 @@ export class SubagentManager {
           agentPrompt: spec.agentPrompt,
           serverInstructions: this.deps.serverInstructions,
           effort,
+          ...(spec.schema ? { finalTool: RESULT_TOOL, finalPrompt: RESULT_LAST_STEP } : {}),
         })) {
           last = Date.now()
           // Anything after a retry notice means the wait is over (the request went out again).
@@ -473,7 +511,14 @@ export class SubagentManager {
               this.emit(run)
               break
             case "error":
+              // Prose where tra_ket_qua was required is a missing result, not a failure:
+              // the reminder turns below ask again.
+              if (event.kind === "tool-choice" && spec.schema) {
+                missedTool = true
+                break
+              }
               run.error = event.message
+              failure = event.kind === "tool-choice" ? "fatal" : event.kind
               break
             case "done": {
               run.messages = [...history, ...event.messages]
@@ -483,10 +528,14 @@ export class SubagentManager {
                 const text = lastAssistantText(event.messages)
                 run.text = text === "(không có câu trả lời)" ? "" : text
                 run.status = "completed"
+              } else if (missedTool && event.outcome === "failed") {
+                run.text = streamed.trim()
+                run.status = "completed"
               } else {
                 run.text = streamed.trim()
                 run.status = event.outcome === "aborted" ? "stopped" : "failed"
               }
+              missedTool = false
               break
             }
           }
@@ -499,10 +548,21 @@ export class SubagentManager {
         const lost = context.inbox.splice(0)
         run.error = `${run.error ? `${run.error}. ` : ""}Chưa xử lý ${lost.length} tin nhắn gửi thêm: ${lost.join(" / ").slice(0, 300)}`
       }
-      if (idleStop) run.error = `Subagent không có tiến triển trong ${idleText(this.idleMs)} nên đã bị dừng.`
+      if (idleStop) {
+        run.error = `Subagent không có tiến triển trong ${idleText(this.idleMs)} nên đã bị dừng.`
+        failure = "stall"
+      }
+      if (spec.schema && run.status === "completed" && context.data === undefined) {
+        run.status = "failed"
+        run.error = `Subagent không trả kết quả đúng schema qua ${RESULT_TOOL} sau ${attempts} lượt.`
+        failure = "invalid-output"
+      }
     } catch (error) {
       run.status = signal.aborted ? "stopped" : "failed"
-      if (!signal.aborted) run.error = describeError(error)
+      if (!signal.aborted) {
+        run.error = describeError(error)
+        failure = classifyFailure(error).kind
+      }
       run.text = streamed.trim()
     } finally {
       clearInterval(watchdog)
@@ -517,6 +577,8 @@ export class SubagentManager {
       status: run.status,
       text: run.text,
       error: run.error,
+      ...(run.status === "failed" ? { failure: failure ?? "fatal" } : {}),
+      ...(context.data !== undefined ? { data: context.data } : {}),
       toolCount: run.toolCount - toolsBefore,
       usage: { input: run.usage.input - usageBefore.input, output: run.usage.output - usageBefore.output },
       durationMs: run.endedAt! - (first ? (run.startedAt ?? run.createdAt) : started),
@@ -535,6 +597,7 @@ export class SubagentManager {
           toolCount: run.toolCount,
           usage: { ...run.usage },
           parentCallId: run.parentCallId,
+          ...(run.deskRunId ? { deskRunId: run.deskRunId } : {}),
         },
         persistError,
       )

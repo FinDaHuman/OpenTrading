@@ -144,7 +144,8 @@ export class ToolRegistry {
 
   /** JSON Schema the provider receives for this tool. */
   jsonSchemaFor(def: ToolDef, flavor: SchemaFlavor = "default"): JSONSchema7 {
-    return def.input instanceof z.ZodType ? (z.toJSONSchema(def.input) as JSONSchema7) : this.schemaFor(def, flavor)
+    // The model writes the tool's input: describe the input side (a transform's output has no JSON Schema).
+    return def.input instanceof z.ZodType ? (z.toJSONSchema(def.input, { io: "input" }) as JSONSchema7) : this.schemaFor(def, flavor)
   }
 
   /** Rough token cost of sending these definitions (name + description + schema, chars / 4). */

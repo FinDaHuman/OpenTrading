@@ -1,6 +1,8 @@
 import {
   generateText,
   NoSuchToolError,
+  ToolChoiceViolationError,
+  hasToolCall,
   isStepCount,
   streamText,
   type LanguageModelUsage,
@@ -29,7 +31,7 @@ import { sanitize, serverPrefix } from "./mcp/naming"
 import type { SchemaFlavor } from "./mcp/schema"
 import { isContextOverflow, pruneAttachments, pruneToolResults, tokensOf } from "./compact"
 import { isAttachmentText } from "./mentions"
-import { retryMiddleware, type RetryNotice, type RetryOptions } from "./retry"
+import { classifyFailure, retryMiddleware, type RetryNotice, type RetryOptions } from "./retry"
 import { loadedTools } from "./tools/loaded"
 import { modeNote } from "./permission/mode"
 import { NOTE as NOTICE_NOTE } from "./subagents/notification"
@@ -156,6 +158,12 @@ export interface RunOptions {
   agentPrompt?: string
   /** Reasoning effort; undefined = the provider's default. Stepped down to what the model takes. */
   effort?: Effort
+  /**
+   * A tool that ends the turn (a subagent's structured result): calling it stops the loop,
+   * and the last allowed step must call it (with `finalPrompt`) instead of answering in prose.
+   */
+  finalTool?: string
+  finalPrompt?: string
 }
 
 export function label(registry: ToolRegistry, name: string, input: unknown) {
@@ -748,6 +756,11 @@ export function thoughtOptions(target: TargetLike & { provider: { models: Record
   return { google: { thinkingConfig: { includeThoughts: true } } }
 }
 
+/** Whether the request's tool set has `name` (a final tool the caller registered). */
+function registryHas(built: BuiltToolSet | undefined, name: string) {
+  return !!built && name in built.tools
+}
+
 /** Context size after a response: the last step's prompt plus its answer, as the provider counted it. */
 async function lastStepTokens(result: { steps: PromiseLike<{ usage: LanguageModelUsage }[]> }): Promise<number | undefined> {
   try {
@@ -781,9 +794,12 @@ export async function summarizeConversation(
   opts: Omit<TurnInput, "input"> & { head: ModelMessage[]; prompt: string; signal?: AbortSignal },
 ): Promise<string> {
   let head = opts.head
+  // The same effort as the conversation's turns (config `effort` unless the caller passes one).
+  const configured = (await loadConfig()).effort
+  const effort = opts.effort ?? (isEffort(configured) ? configured : undefined)
   for (let attempt = 0; ; attempt++) {
-    const prepared = await prepare({ ...opts, history: head, input: "" }, {})
-    const { system, request, model, active } = requestFor(prepared, [...head, { role: "user", content: opts.prompt }])
+    const prepared = await prepare({ ...opts, effort, history: head, input: "" }, {})
+    const { system, request, model, active, providerOptions } = requestFor(prepared, [...head, { role: "user", content: opts.prompt }])
     try {
       const result = await generateText({
         model,
@@ -794,6 +810,7 @@ export async function summarizeConversation(
         toolChoice: prepared.tools ? "none" : undefined,
         maxOutputTokens: compactOutputTokens(prepared.target),
         abortSignal: opts.signal,
+        providerOptions,
         // retry.ts retries transient failures; never a daily-quota 429.
         maxRetries: 0,
       })
@@ -946,7 +963,7 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
     instructions: system,
     messages: request,
     tools,
-    stopWhen: isStepCount(maxSteps),
+    stopWhen: opts.finalTool ? [isStepCount(maxSteps), hasToolCall(opts.finalTool)] : isStepCount(maxSteps),
     // Every step exposes what the conversation has loaded so far, so a tool found by
     // tool_search is callable at the very next step.
     // Last allowed step: keep tools declared (some providers reject tool history otherwise)
@@ -972,6 +989,10 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
       if (stepNumber < maxSteps - 1) {
         if (!nudge || messages.at(-1)?.role !== "tool") return { ...(active ? { activeTools: active } : {}), messages }
         return { ...(active ? { activeTools: active } : {}), messages: [...messages, { role: "user", content: toolNudge(messages) }] }
+      }
+      if (opts.finalTool && registryHas(built, opts.finalTool)) {
+        const prompt = opts.finalPrompt ?? SUMMARY_PROMPT
+        return { toolChoice: { type: "tool", toolName: opts.finalTool }, activeTools: [opts.finalTool], messages: [...messages, { role: "user", content: prompt }] }
       }
       summarized = true
       return { toolChoice: "none", activeTools: active, messages: [...messages, { role: "user", content: SUMMARY_PROMPT }] }
@@ -1009,8 +1030,10 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
     }
   }
 
-  // Completed, but the model said nothing: ask once more for the actual answer.
-  if (messages && !outcome.text.trim()) {
+  // Completed, but the model said nothing: ask once more for the actual answer. Not for a run
+  // with a final tool: the retry forbids tools, so it could never bring the result (the
+  // subagent manager asks again with the tool forced instead).
+  if (messages && !outcome.text.trim() && !opts.finalTool) {
     const usedTools = messages.some((m) => m.role === "tool")
     const kept = messages.filter((m) => !isEmptyAssistant(m))
     const retry = streamText({
@@ -1073,7 +1096,11 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
     return
   }
 
-  if (outcome.failure && !outcome.aborted) yield { type: "error", message: describeError(outcome.failure) }
+  if (outcome.failure && !outcome.aborted) {
+    // A model that answered in prose where the final tool was required: the caller decides.
+    const kind = stalled ? "stall" : ToolChoiceViolationError.isInstance(outcome.failure) ? "tool-choice" : classifyFailure(outcome.failure).kind
+    yield { type: "error", message: describeError(outcome.failure), kind }
+  }
   // Aborted or failed mid-turn: keep the steps whose tools already ran (closeDanglingToolCalls
   // closes any call left without a result, so providers still accept the history), then the
   // partial text. The user message keeps its reminders, so the clock it carried still counts

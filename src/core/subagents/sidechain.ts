@@ -21,6 +21,7 @@ export type SidechainEntry =
       prompt: string
       parentSessionId: string
       parentCallId?: string
+      deskRunId?: string
       background: boolean
       provider: string
       model: string
@@ -48,6 +49,8 @@ export interface SidechainMeta {
   toolCount: number
   usage: { input: number; output: number }
   parentCallId?: string
+  /** The ultradesk run that started the agent. */
+  deskRunId?: string
 }
 
 export const sidechainDir = (sessionDir: string) => path.join(sessionDir, "subagents")

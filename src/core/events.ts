@@ -1,5 +1,6 @@
 import type { ModelMessage } from "ai"
 import type { ClockSnapshot } from "./prompt/market-clock"
+import type { FailureKind } from "./retry"
 import type { ChartData } from "./tools/chart/data"
 
 /**
@@ -18,8 +19,11 @@ export type AgentEvent =
    * next attempt starts at `until` (epoch ms). Any later event means the wait is over.
    */
   | { type: "retry"; attempt: number; max: number; delayMs: number; until: number; label: string }
-  /** The turn failed; `done` still follows. */
-  | { type: "error"; message: string }
+  /**
+   * The turn failed; `done` still follows. `kind`: retry.ts's reading of the error, a stall,
+   * or "tool-choice" (the model ignored a required final tool).
+   */
+  | { type: "error"; message: string; kind?: FailureKind | "stall" | "tool-choice" }
   /** Billed tokens of one model request (sent after each step that reported usage). */
   | { type: "step-usage"; inputTokens: number; outputTokens: number }
   /** The model is streaming reasoning: never shown, but it is progress (stall timer, subagent watchdog). */
