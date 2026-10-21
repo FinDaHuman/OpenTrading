@@ -182,7 +182,7 @@ Hook ném lỗi hoặc chạy quá 5 giây sẽ bị bỏ qua và báo thành m�
 
 ## 7b. Loại subagent: `agents/<tên>.md`
 
-Frontmatter gồm `name` (trùng tên file), `description`, `tools`, `disallowedTools`, `provider`/`model` và `maxSteps`. Phần thân file là chỉ dẫn riêng của loại đó. Thứ tự ưu tiên: dự án `.opentrading/agents/` > cá nhân `~/.opentrading/agents/` > có sẵn `agents/`. Chi tiết: [subagents.md](subagents.md).
+Frontmatter gồm `name` (trùng tên file), `description`, `tools`, `disallowedTools`, `provider`/`model`, `maxSteps` và `effort`. Phần thân file là chỉ dẫn riêng của loại đó. Thứ tự ưu tiên: dự án `.opentrading/agents/` > cá nhân `~/.opentrading/agents/` > có sẵn `agents/`. Chi tiết: [subagents.md](subagents.md).
 
 ## 8. Session: `~/.opentrading/sessions/`
 

@@ -1,3 +1,4 @@
+import type { Effort } from "./effort"
 import { configFile } from "./paths"
 import type { ProviderId } from "./providers"
 import { readJson, writeJson } from "./store"
@@ -68,9 +69,15 @@ export interface Config {
    * `model`: their model; unset = the session's. `"auto"` = the harness picks a small,
    * cheap tool-capable model among the connected providers (see model-pick.ts). `idleMs`:
    * a run with no progress (no events, not waiting on the user) for this long is stopped;
-   * default 300000 (5 minutes), values below 1000 are ignored.
+   * default 300000 (5 minutes), values below 1000 are ignored. `effort`: their reasoning
+   * effort when the agent type sets none; unset = `effort` below.
    */
-  subagents?: { maxConcurrent?: number; idleMs?: number; provider?: string; model?: string }
+  subagents?: { maxConcurrent?: number; idleMs?: number; provider?: string; model?: string; effort?: Effort }
+  /**
+   * Reasoning effort of the main agent: low | medium | high | xhigh | max (effort.ts maps it
+   * per provider; a level the model lacks steps down). Unset: the provider's default.
+   */
+  effort?: Effort
   /**
    * Model for side calls: provider-native search (web_search), reading a page against a
    * prompt (web_fetch) and the session title. Unset: the session's model. A cheap model saves quota.

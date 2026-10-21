@@ -1,6 +1,7 @@
 import { generateText, type LanguageModel } from "ai"
 import { describeError, type Target } from "../../chat"
-import { languageModel, sdkOf } from "../../providers"
+import { lowThinking } from "../../effort"
+import { languageModel } from "../../providers"
 import { classifyFailure } from "../../retry"
 import { effectiveList, labelOf, type AutoModeConfig } from "./rules"
 import { asJson } from "./transcript"
@@ -100,19 +101,7 @@ export function parseTag(text: string, tag: "rule" | "reason"): string | undefin
   return m?.[1]?.trim() || undefined
 }
 
-/** Settings that keep a thinking model from spending the whole budget before answering. */
-export function lowThinking(target: Target): Record<string, Record<string, unknown>> | undefined {
-  const { npm } = sdkOf(target.provider, target.model)
-  const id = target.model.toLowerCase()
-  if (npm === "@ai-sdk/google") {
-    if (/gemini-2\.5-pro/.test(id)) return { google: { thinkingConfig: { thinkingBudget: 128, includeThoughts: false } } }
-    if (/gemini-2\.5/.test(id)) return { google: { thinkingConfig: { thinkingBudget: 0, includeThoughts: false } } }
-    if (/gemini-3/.test(id)) return { google: { thinkingConfig: { thinkingLevel: "low", includeThoughts: false } } }
-    return undefined
-  }
-  if (npm === "@ai-sdk/openai" && /^(gpt-5|o\d)/.test(id)) return { openai: { reasoningEffort: "low" } }
-  return undefined
-}
+export { lowThinking }
 
 export interface ClassifierDeps {
   /** Tests replace the model call. */
