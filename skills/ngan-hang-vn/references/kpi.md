@@ -2,8 +2,8 @@
 
 > Tra `vs_financial_norms(btype=3)` để lấy đúng tên dòng BCTC loại ngân hàng; file
 > này giữ **cách đọc**, không giữ con số kỳ nào. Mọi giá trị lấy từ `financial_detail`
-> gần nhất và ghi kỳ báo cáo kèm theo. Luật ngưỡng chuẩn mực chỉ nằm ở §3 của
-> SKILL.md — không lặp lại ở đây.
+> gần nhất và ghi kỳ báo cáo kèm theo. Luật ngưỡng chuẩn mực chỉ nằm ở mục
+> "Ranh giới" của SKILL.md — không lặp lại ở đây.
 
 ## 1. Nhóm thu nhập
 

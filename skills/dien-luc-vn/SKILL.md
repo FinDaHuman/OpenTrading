@@ -67,8 +67,8 @@ nhiên liệu đầu vào nếu nhóm nhiệt).
 
 **Bước 4: Neo kỳ vọng + vị thế nhóm.**
 
-`planned_targets` · `analyst_consensus` · `peer_compare` (so **trong cùng nhóm
-nguồn** — so thủy điện với nhiệt điện bị cấm).
+`planned_targets` · `analyst_consensus` · `peer_compare` (so trong cùng nhóm
+nguồn — luật ở §Ranh giới, không lặp lại ở đây).
 
 ## Cây quyết định nhà máy điện đang được tiếp sức hay siết
 
@@ -113,8 +113,8 @@ Bảng chỉ báo ngành điện + cách đọc ở `references/kpi.md`.
 
 Điện định giá **theo nhóm nguồn**, không có một cặp multiple cho cả ngành: nhóm
 nhiệt trong mùa khô và nhóm thủy điện trong cùng kỳ là hai chu kỳ khác nhau. Dùng
-P/E và P/B trong cùng nhóm nguồn (`peer_compare`), kèm dòng tiền từ phải thu để
-đánh giá chất lượng doanh thu. Neo kỳ vọng bằng `planned_targets` (kế hoạch sản
+P/E và P/B trong **cùng nhóm nguồn** (luật so sánh ở §Ranh giới), kèm dòng tiền từ
+phải thu để đánh giá chất lượng doanh thu. Neo kỳ vọng bằng `planned_targets` (kế hoạch sản
 lượng/doanh thu) và `analyst_consensus`. Nhà máy trong giai đoạn chưa ký hợp đồng
 mua bán điện: ghi rõ là dòng thu chưa chắc chắn.
 

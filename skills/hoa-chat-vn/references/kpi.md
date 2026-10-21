@@ -2,8 +2,8 @@
 
 > File này giữ **cách đọc**, không giữ con số kỳ nào. Mọi giá trị lấy từ
 > `financial_detail` / `news_market` / `yf_commodities` gần nhất và ghi kỳ kèm
-> theo. Luật về cửa sổ giá và tồn kho giá gốc chỉ nằm ở §Trụ cột driver của
-> SKILL.md — không lặp lại ở đây.
+> theo. Luật về cửa sổ giá và tồn kho giá gốc chỉ nằm ở mục "Trụ cột driver"
+> của SKILL.md — không lặp lại ở đây.
 
 ## 1. Phân biệt nội địa và quốc tế
 
@@ -27,7 +27,7 @@
 
 | Chỉ báo | Đọc từ | Cách đọc |
 |---|---|---|
-| Tồn kho | `financial_detail` | Tồn kho giá gốc thấp hỗ trợ biên 1–2 quý; tồn kho giá gốc cao thì biên bị nén khi giá giảm |
+| Tồn kho | `financial_detail` | Đọc theo luật ở §Trụ cột driver của SKILL.md (tồn kho giá gốc quyết định biên còn được hỗ trợ bao lâu): tồn kho giá gốc thấp thì biên còn đỡ, giá gốc cao thì biên bị nén khi giá giảm |
 | Chi phí khí/nguyên liệu | `financial_detail` + `yf_commodities` | Đuổi kịp giá bán thì cửa sổ đóng |
 | Xuất khẩu kỳ | `vs_xnk_detail` | Tín hiệu hướng: xuất tăng mạnh thường đi kèm giá quốc tế tốt |
 | Chính sách Trung Quốc | `news_market` | Biến số cung toàn cầu; ghi rõ nguồn và ngày |

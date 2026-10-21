@@ -2,8 +2,9 @@
 
 > File này giữ **cách phân nhóm nguồn** và cách đọc từng chỉ báo, không giữ con số
 > kỳ nào. Mọi giá trị lấy từ `financial_detail` / `news_market` gần nhất và ghi kỳ
-> kèm theo. Luật về giá điện và cơ chế một người mua chỉ nằm ở §Trụ cột driver của
-> SKILL.md — không lặp lại ở đây.
+> kèm theo. Hai luật chỉ nằm ở SKILL.md và KHÔNG lặp lại ở đây: cơ chế một người
+> mua và giá điện (§Trụ cột driver) + luật chỉ so sánh trong cùng nhóm nguồn
+> (§Ranh giới). Cột "So với ai" bên dưới là cách áp dụng, không phải bản sao luật.
 
 ## 1. Phân nhóm nguồn
 

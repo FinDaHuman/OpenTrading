@@ -17,9 +17,9 @@ bằng chu kỳ giá phân bón, **chính sách xuất khẩu của Trung Quốc
 cầu), tỷ lệ xuất khẩu (quyết định công ty bám giá nội địa hay bám giá quốc tế), và
 chi phí khí đầu vào.
 
-Một điểm dễ đọc sai: **tồn kho giá gốc thấp**. Khi giá thị trường nhảy, lãi gộp còn
-được hỗ trợ 1–2 quý bởi tồn kho mua trước khi giá lên, rồi đảo chiều. Biên một quý
-tốt chưa nói lên năng lực.
+Một điểm dễ đọc sai nằm ở bảng driver dưới (**tồn kho giá gốc**): khi giá thị trường
+nhảy, biên còn được hỗ trợ vài quý bởi tồn kho mua trước khi giá lên, rồi đảo chiều —
+biên một quý tốt chưa nói lên năng lực.
 
 ## Khi nào dùng
 
