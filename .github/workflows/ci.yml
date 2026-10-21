@@ -28,10 +28,13 @@ jobs:
       - run: bun test
 
   secrets:
-    # Replaces the deleted scripts/check_secrets.py: scan the checked-out tree for keys.
-    # Fake keys in tests carry a `gitleaks:allow` comment.
+    # Scan every commit, not just the checked-out tree: a key removed later is still public
+    # in history. Fake keys in tests carry a `gitleaks:allow` comment; known fakes in old
+    # commits are listed in .gitleaksignore.
     timeout-minutes: 5
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - run: docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.21.2 dir /repo --redact --no-banner
+        with:
+          fetch-depth: 0
+      - run: docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.21.2 git /repo --log-opts="--all" --redact --no-banner
