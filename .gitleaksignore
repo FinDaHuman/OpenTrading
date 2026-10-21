@@ -1,0 +1,3 @@
+# Known fakes in old commits (the current lines carry `gitleaks:allow`).
+# Format: <commit>:<file>:<rule>:<line>
+c4db74f659de1deb61766757e7d4f0da213ddf66:test/tui.test.tsx:generic-api-key:140
