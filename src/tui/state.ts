@@ -21,6 +21,7 @@ import { DEFAULT_SCROLL_SPEED } from "./scroll"
 import type { AttachedFile } from "../core/mentions"
 import type { DeskApprovalRequest } from "../core/desk/approval"
 import type { DeskRunView } from "../core/desk/types"
+import type { Effort } from "../core/effort"
 import type { DeskOptIn } from "../core/desk/keyword"
 
 export type ToolStatus = "running" | "ok" | "error"
@@ -79,7 +80,7 @@ export interface Activity {
  */
 export type Queued = { text: string; display: string; images: PromptImage[]; saved: Omit<DraftSnapshot, "text">; desk?: DeskOptIn }
 
-export type DialogName = "connect" | "model" | "skills" | "help" | "mcp" | "tools" | "context" | "sessions" | "memory" | "config" | "agents" | "tasks" | "watchlist" | "permissions" | "shortcuts" | "desk"
+export type DialogName = "connect" | "model" | "skills" | "help" | "mcp" | "tools" | "context" | "sessions" | "memory" | "config" | "agents" | "tasks" | "watchlist" | "permissions" | "shortcuts" | "desk" | "effort"
 
 export const [state, setState] = createStore({
   lines: [] as Line[],
@@ -172,6 +173,8 @@ export const [state, setState] = createStore({
   deskRuns: {} as Record<string, DeskRunView>,
   /** /desk on: every request of the session may run playbooks (config desk.alwaysOn at start). */
   deskMode: false,
+  /** Reasoning effort of the main agent (config `effort`); undefined = the provider's default. */
+  effort: undefined as Effort | undefined,
   /** Config desk.keyword: the ultradesk keyword opts a request in. */
   deskKeywordOn: true,
   /** The approval card of a desk run waiting for the user. */

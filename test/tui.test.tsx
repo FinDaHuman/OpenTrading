@@ -243,7 +243,7 @@ const { App } = await import("../src/tui/app")
 const { state, setState } = await import("../src/tui/state")
 const { LOADED_PREFIX } = await import("../src/core/tools/search")
 const { resetNotifications, say } = await import("../src/tui/notify")
-const { reconcile } = await import("solid-js/store")
+const { reconcile, unwrap } = await import("solid-js/store")
 const { readJson } = await import("../src/core/store")
 const { setKey } = await import("../src/core/auth")
 const { loadConfig, saveConfig } = await import("../src/core/config")
@@ -3133,6 +3133,70 @@ test("a desk run shows a live card under its desk_run row, folds to one line whe
     const rest = Object.fromEntries(Object.entries(state.agents).filter(([id]) => !id.startsWith("ag-card")))
     setState("agents", reconcile(rest))
     setState("lines", (lines) => lines.slice(0, before))
+  }
+})
+
+test("/effort: ←→ set each row and save at once; /effort <level>; ctrl+t steps through what the model takes", async () => {
+  // The app's startup (catalog, config) must not overwrite what this test sets.
+  await setup.waitFor(() => Object.keys(state.catalog).length > 0)
+  const saved = { provider: state.provider, model: state.model }
+  const groq = state.catalog.groq ? structuredClone(unwrap(state.catalog.groq)) : undefined
+  // A model with an effort knob (gpt-oss on Groq takes low/medium/high).
+  const gptOss = { id: "openai/gpt-oss-120b", name: "GPT-OSS 120B", reasoning: true, tool_call: true, modalities: { input: ["text"], output: ["text"] }, limit: { context: 131072 } }
+  setState("catalog", "groq", { ...(groq ?? CATALOG.groq), models: { ...(groq ?? CATALOG.groq).models, "openai/gpt-oss-120b": gptOss } } as never)
+  setState({ provider: "groq", model: "openai/gpt-oss-120b", effort: undefined })
+  await saveConfig({ effort: undefined, subagents: {}, desk: {} })
+  try {
+    await setup.mockInput.typeText("/effort")
+    setup.mockInput.pressEnter()
+    let frame = await setup.waitForFrame((f) => f.includes("Effort · Groq · openai/gpt-oss-120b") && f.includes("Quy mô ultradesk"))
+    show(frame)
+    expect(frame).toMatch(/❯ Phiên chính\s+◂ auto ▸\s+model nhận: low · medium · high/)
+    setup.mockInput.pressArrow("right")
+    await setup.waitFor(() => state.effort === "low")
+    // Down to Ultradesk: ← from "như subagent" wraps to max.
+    setup.mockInput.pressArrow("down")
+    setup.mockInput.pressArrow("down")
+    setup.mockInput.pressArrow("left")
+    await setup.waitFor(async () => (await loadConfig()).desk?.effort === "max")
+    setup.mockInput.pressArrow("down")
+    setup.mockInput.pressArrow("right")
+    await setup.waitFor(async () => (await loadConfig()).desk?.size === "medium")
+    frame = await setup.waitForFrame((f) => /Ultradesk\s+◂ ◉ max ▸/.test(f) && /Quy mô ultradesk\s+◂ medium ▸/.test(f))
+    show(frame)
+    setup.mockInput.pressEscape()
+    await setup.waitFor(() => state.dialog === undefined)
+    expect((await loadConfig()).effort).toBe("low")
+    // The status bar shows the level the model gets.
+    await setup.waitForFrame((f) => /gpt-oss-120b ○ low/.test(f))
+
+    // /effort xhigh: saved as asked, sent as high (the model's top level).
+    await setup.mockInput.typeText("/effort xhigh")
+    setup.mockInput.pressEnter()
+    await setup.waitFor(() => state.effort === "xhigh")
+    frame = await setup.waitForFrame((f) => /gpt-oss-120b ● high/.test(f))
+    expect(state.notification?.text).toContain("xhigh chạy như high")
+    await setup.mockInput.typeText("/effort ultra")
+    setup.mockInput.pressEnter()
+    await setup.waitFor(() => state.notification?.level === "error")
+    expect(state.effort).toBe("xhigh")
+
+    // ctrl+t: xhigh → (past high) auto → low.
+    setup.mockInput.pressKey("t", { ctrl: true })
+    await setup.waitFor(() => state.effort === undefined)
+    setup.mockInput.pressKey("t", { ctrl: true })
+    await setup.waitFor(() => state.effort === "low")
+    expect((await loadConfig()).effort).toBe("low")
+
+    // A model without a knob: ctrl+t says so and changes nothing.
+    setState({ model: "test-model" })
+    setup.mockInput.pressKey("t", { ctrl: true })
+    await setup.waitFor(() => state.notification?.text.includes("không có mức effort") === true)
+    expect(state.effort).toBe("low")
+  } finally {
+    await saveConfig({ effort: undefined, subagents: {}, desk: {} })
+    setState({ ...saved, effort: undefined })
+    setState("catalog", "groq", groq as never)
   }
 })
 

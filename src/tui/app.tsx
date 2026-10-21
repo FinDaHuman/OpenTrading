@@ -55,6 +55,8 @@ import { DESK_RUN } from "../core/desk/tool"
 import { PLAYBOOKS } from "../core/desk/playbooks"
 import { DeskApprovalCard } from "./dialogs/desk-approval"
 import { DESK_STATUS, DeskDialog, runStats } from "./dialogs/desk"
+import { currentTarget, EffortDialog, effortText, supportNote } from "./dialogs/effort"
+import { EFFORT_LEVELS, EFFORT_SYMBOL, effectiveEffort, isEffort, stepEffort, supportedEfforts, type Effort } from "../core/effort"
 import { KeywordMark } from "./prompt/keyword"
 import { fmtSeconds, fmtTokens } from "../core/subagents/result"
 import { ToolsDialog } from "./dialogs/tools"
@@ -752,6 +754,7 @@ export function App(props: {
       modelPrefs,
       deskKeywordOn: deskSettings(config).keyword,
       deskMode: deskSettings(config).alwaysOn,
+      effort: isEffort(config.effort) ? config.effort : undefined,
     })
     // Set to open in ▸▸ auto without ever having said yes (config or /config): ask now.
     if (config.permissions?.defaultMode === "auto" && !state.autoAcknowledged) setState("autoOptIn", { from: props.runtime.permissions.mode })
@@ -1337,6 +1340,8 @@ export function App(props: {
     switch (cmd.name) {
       case "desk":
         return void deskCommand(cmd.args)
+      case "effort":
+        return void effortCommand(cmd.args)
       case "connect":
       case "model":
       case "skills":
@@ -1392,6 +1397,33 @@ export function App(props: {
   }
 
   /** /desk: the runs; on|off for the session; resume <run> runs a cut run again from its journal. */
+  /** Save the main agent's effort (undefined = auto) and say what the model will get. */
+  async function setEffort(next: Effort | undefined) {
+    try {
+      await saveConfig({ effort: next })
+    } catch (error) {
+      return say(`Không lưu được effort: ${error instanceof Error ? error.message : String(error)}`, "error")
+    }
+    setState("effort", next)
+    say(`Effort ${effortText(next, "auto")} · ${supportNote(next).text} · /effort`, "success", 3000)
+  }
+
+  /** /effort opens the panel; /effort <level|auto> sets the main agent's level at once. */
+  async function effortCommand(args: string) {
+    const wanted = args.trim().toLowerCase()
+    if (!wanted) return setState("dialog", "effort")
+    if (wanted !== "auto" && !isEffort(wanted)) return say(`Mức effort không hợp lệ: ${args.trim()}. Dùng auto, ${EFFORT_LEVELS.join(", ")}.`, "error")
+    await setEffort(wanted === "auto" ? undefined : wanted)
+  }
+
+  /** ctrl+t: auto → each level the current model takes → auto. */
+  async function cycleEffort() {
+    const target = currentTarget()
+    const levels = target ? supportedEfforts(target) : []
+    if (levels.length === 0) return say("Model này không có mức effort để đổi. /effort chỉnh effort của subagent và ultradesk.", "warning", 3000)
+    await setEffort(stepEffort(state.effort, [undefined, ...levels], 1))
+  }
+
   async function deskCommand(args: string) {
     const [sub, id] = args.split(/\s+/)
     if (!sub) return setState("dialog", "desk")
@@ -1464,6 +1496,11 @@ export function App(props: {
     if (search() && !owner() && !state.dialog) return searchKey(evt)
     if (evt.ctrl && (evt.name === "c" || evt.name === "d")) return onQuitKey(evt.name)
     if (evt.ctrl && evt.name === "o") return void setState("expandTools", (v) => !v)
+    // ctrl+t: the next effort level the model takes (Claude Code's ← → in /model, one key here).
+    if (evt.ctrl && evt.name === "t" && !owner() && !state.dialog) {
+      evt.preventDefault()
+      return void cycleEffort()
+    }
     if (evt.name === "escape" && renderer.hasSelection) {
       evt.preventDefault()
       input?.clearSelection()
@@ -1693,6 +1730,9 @@ export function App(props: {
             <Match when={state.dialog === "desk"}>
               <DeskDialog runtime={props.runtime} />
             </Match>
+            <Match when={state.dialog === "effort"}>
+              <EffortDialog />
+            </Match>
             <Match when={state.dialog === "memory"}>
               <MemoryDialog memory={props.runtime.memory} />
             </Match>
@@ -1765,6 +1805,12 @@ const backgroundRunning = () =>
  */
 function StatusBar() {
   const target = () => ` ${state.provider ? `${providerName(state.provider)} · ${state.model ?? "chưa chọn model"}` : "chưa kết nối"} `
+  /** "◐ medium" when the main agent's level reaches the model (stepped down to what it takes). */
+  const effort = () => {
+    const t = currentTarget()
+    const sent = t ? effectiveEffort(t, state.effort) : undefined
+    return sent ? `${EFFORT_SYMBOL[sent]} ${sent} ` : undefined
+  }
   const ready = () => state.mcp.filter((s) => s.state === "connected").length
   const attention = () => state.mcp.some((s) => s.state === "failed" || s.state === "untrusted")
   /**
@@ -1794,6 +1840,11 @@ function StatusBar() {
       <text fg={color.tx2} flexShrink={1} wrapMode="none" selectable={false}>
         {target()}
       </text>
+      <Show when={effort()}>
+        <text fg={color.tran} flexShrink={0} wrapMode="none" selectable={false}>
+          {effort()}
+        </text>
+      </Show>
       <Show when={state.mcp.length > 0}>
         <text fg={attention() ? color.tham : color.san} flexShrink={0} selectable={false}>
           {` MCP ${ready()}/${state.mcp.length} `}

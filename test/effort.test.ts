@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test"
 import { generateText } from "ai"
 import type { CatalogProvider } from "../src/core/catalog"
-import { effectiveEffort, effortOptions, mergeProviderOptions, nextEffort, supportedEfforts, type Effort } from "../src/core/effort"
+import { effectiveEffort, effortOptions, mergeProviderOptions, stepEffort, supportedEfforts, type Effort } from "../src/core/effort"
 import { AgentFrontmatter } from "../src/core/agents/schema"
 import { subagentEffort } from "../src/core/subagents/manager"
 import { thoughtOptions } from "../src/core/agent"
@@ -74,11 +74,17 @@ test("agent frontmatter takes effort and rejects unknown levels", () => {
   expect(AgentFrontmatter.safeParse({ name: "a", description: "d", effort: "ultra" }).success).toBe(false)
 })
 
-test("/config cycles unset → low … max → unset", () => {
+test("/effort and ctrl+t step through the choices, wrapping; a level the model lacks moves to its neighbour", () => {
+  const choices: (Effort | undefined)[] = [undefined, "low", "medium", "high"]
   const seen: (Effort | undefined)[] = []
   let e: Effort | undefined
-  for (let i = 0; i < 6; i++) seen.push((e = nextEffort(e)))
-  expect(seen).toEqual(["low", "medium", "high", "xhigh", "max", undefined])
+  for (let i = 0; i < 5; i++) seen.push((e = stepEffort(e, choices, 1)))
+  expect(seen).toEqual(["low", "medium", "high", undefined, "low"])
+  expect(stepEffort(undefined, choices, -1)).toBe("high")
+  // xhigh on a model that stops at high: up wraps to auto, down lands on high.
+  expect(stepEffort("xhigh", choices, 1)).toBeUndefined()
+  expect(stepEffort("xhigh", choices, -1)).toBe("high")
+  expect(stepEffort("medium", [], 1)).toBe("medium")
 })
 
 /** The options reach the wire in each SDK's own field (no network: the request is captured). */

@@ -88,10 +88,23 @@ export function effortOptions(target: EffortTarget, wanted: Effort | undefined):
   return level ? schemeFor(target)!.options(level) : undefined
 }
 
-/** /config cycles unset → low → … → max → unset. */
-export function nextEffort(current: unknown): Effort | undefined {
-  if (!isEffort(current)) return EFFORT_LEVELS[0]
-  return EFFORT_LEVELS[EFFORT_LEVELS.indexOf(current) + 1]
+/** Claude Code's effort glyphs (○ ◐ ● ◉), shown next to the level. */
+export const EFFORT_SYMBOL: Record<Effort, string> = { low: "○", medium: "◐", high: "●", xhigh: "◉", max: "◉" }
+
+/**
+ * One step through `choices` (undefined = the provider's default, "auto"), wrapping around:
+ * ←/→ in /effort, ctrl+t in the prompt. A value not in `choices` moves to its neighbour.
+ */
+export function stepEffort(current: Effort | undefined, choices: (Effort | undefined)[], dir: 1 | -1): Effort | undefined {
+  if (choices.length === 0) return current
+  let at = choices.indexOf(current)
+  if (at < 0) {
+    // A level the model lacks: start from where it would sit among the choices.
+    const rank = current ? EFFORT_LEVELS.indexOf(current) : -1
+    at = choices.findLastIndex((c) => (c ? EFFORT_LEVELS.indexOf(c) : -1) <= rank)
+    if (dir < 0) at += 1
+  }
+  return choices[(at + dir + choices.length) % choices.length]
 }
 
 /** Deep-merges provider options (two levels: provider, then its keys; thinkingConfig merged too). */
