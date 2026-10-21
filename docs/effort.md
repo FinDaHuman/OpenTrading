@@ -6,11 +6,17 @@
 
 | Chỗ | Áp dụng cho |
 | --- | --- |
-| `/config` → **Effort suy luận** (`"effort"` trong `config.json`) | Agent chính |
-| `/config` → **Effort của subagent** (`"subagents": { "effort": … }`) | Subagent, khi loại agent không tự đặt |
+| `/effort` → **Phiên chính** (`"effort"` trong `config.json`), hoặc `/effort <mức\|auto>`, hoặc `ctrl+t` | Agent chính |
+| `/effort` → **Subagent** (`"subagents": { "effort": … }`) | Subagent, khi loại agent không tự đặt |
+| `/effort` → **Ultradesk** (`"desk": { "effort": … }`) | Agent trong run ultradesk; mỗi run đổi riêng được trên thẻ duyệt |
 | `effort:` trong frontmatter của `agents/*.md` | Loại agent đó |
 
-Không đặt gì thì harness không gửi effort, và provider dùng mức mặc định của nó.
+Không đặt gì (`auto`) thì harness không gửi effort, và provider dùng mức mặc định của nó.
+
+- Trong `/effort`, `←→` đổi một dòng và lưu ngay; dòng **Phiên chính** ghi các mức model đang dùng nhận được, và mức bạn chọn chạy thành gì (`xhigh chạy như high`). Dòng **Quy mô ultradesk** là quy mô mặc định trên thẻ duyệt.
+- `ctrl+t` ở ô nhập xoay vòng `auto` → các mức model nhận được → `auto`. Model không có mức effort thì báo và không đổi.
+- Thanh trạng thái hiện mức thật sự gửi đi, kèm ký hiệu của Claude Code: ○ low · ◐ medium · ● high · ◉ xhigh/max.
+- `/config` chỉ còn một dòng **Effort** tóm tắt ba giá trị; enter mở `/effort`.
 
 ## Mỗi provider hiểu thế nào
 

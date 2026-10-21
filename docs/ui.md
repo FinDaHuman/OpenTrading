@@ -57,7 +57,8 @@ Câu trả lời được vẽ bằng markdown (đậm, danh sách, bảng, code
   - chế độ quyền `‖ chỉ đọc` / `▸ sửa có hỏi` / `▸▸ tự động`, kèm `(shift+tab đổi)` khi dòng còn chỗ;
   - số subagent đang chạy;
   - gợi ý phím: `esc dừng` khi agent đang chạy, `? phím tắt · / lệnh` khi rảnh.
-- **Status bar** (dòng cuối cùng): provider · model, MCP, skill đang bật, và context đang dùng.
+- **Status bar** (dòng cuối cùng): provider · model, effort (khi model nhận effort), MCP, skill đang bật, và context đang dùng.
+  - Effort hiện mức thật sự gửi đi, ví dụ `● high` (○ low · ◐ medium · ● high · ◉ xhigh/max); `ctrl+t` đổi nhanh, `/effort` chỉnh cả subagent và ultradesk (xem [effort.md](effort.md)).
   - Luôn hiện `ctx N% · đã dùng/cửa sổ` (như opencode, Codex). Cửa sổ là `limit.input` của model (không có thì `limit.context`), hoặc trần `compactWindow` nếu thấp hơn. Số đã dùng là token của request gần nhất theo provider (đầu vào gồm cả cache, cộng đầu ra), cập nhật sau mỗi bước gọi model.
   - Khi còn ≤ 15% tới ngưỡng tự nén, thêm `còn N% tới tự nén`; N tính theo ngưỡng, như Claude Code.
   - Khi không có gì tự nén nữa (tự nén đã tắt, đã lỗi 3 lần liền, hoặc đã vượt ngưỡng), thêm `· /compact` màu đỏ.
@@ -123,3 +124,5 @@ Gõ `@` trong ô nhập để chọn file hoặc thư mục trong thư mục là
 ## Phím tắt
 
 Gõ `?` khi ô nhập trống để xem bảng phím tắt. Gõ phím bất kỳ để đóng; nếu là chữ thì chữ đó được gõ tiếp vào ô nhập.
+
+`ctrl+t` đổi effort của phiên chính (auto → các mức model nhận → auto); `ctrl+o` cũng mở card cuối của một run ultradesk đã xong.
