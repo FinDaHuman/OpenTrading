@@ -48,6 +48,7 @@ export function typeSpec(agents: AgentDefinition[], type: string): TypeSpec | un
     agentPrompt: def.body,
     toolFilter: toolFilter(def),
     model: def.provider || def.model ? { provider: def.provider, model: def.model } : undefined,
+    effort: def.effort,
   }
 }
 

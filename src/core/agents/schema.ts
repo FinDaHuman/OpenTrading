@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { EFFORT_LEVELS } from "../effort"
 import { parseFrontmatter, type SkillSource } from "../skills/schema"
 
 /**
@@ -22,6 +23,8 @@ export const AgentFrontmatter = z.object({
   model: z.string().optional(),
   /** Model requests per run (default 8). */
   maxSteps: z.number().int().min(1).max(30).optional(),
+  /** Reasoning effort (low…max); unset = config subagents.effort, then effort. */
+  effort: z.enum(EFFORT_LEVELS).optional(),
 }).refine((a) => !a.provider || a.model, { path: ["model"], message: "có provider thì phải ghi cả model" })
 
 export type AgentFrontmatter = z.infer<typeof AgentFrontmatter>

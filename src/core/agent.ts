@@ -13,6 +13,7 @@ import {
   wrapLanguageModel,
 } from "ai"
 import { ChatSetupError, describeError, resolveTarget, type Target } from "./chat"
+import { effortOptions, isEffort, mergeProviderOptions, type Effort } from "./effort"
 import type { AgentEvent } from "./events"
 import { loadProfile } from "./profile"
 import { assemble, type Assembled } from "./prompt/assemble"
@@ -153,6 +154,8 @@ export interface RunOptions {
   role?: "main" | "subagent"
   /** A subagent type's own instructions (the body of its definition). */
   agentPrompt?: string
+  /** Reasoning effort; undefined = the provider's default. Stepped down to what the model takes. */
+  effort?: Effort
 }
 
 export function label(registry: ToolRegistry, name: string, input: unknown) {
@@ -530,6 +533,7 @@ interface Prepared {
   userImages: boolean
   assembled: Assembled
   supportsTools: boolean
+  effort?: Effort
 }
 
 type TargetLike = {
@@ -707,6 +711,7 @@ async function prepare(opts: TurnInput, extras: TurnExtras): Promise<Prepared> {
     userImages: acceptsImageInput(target),
     tools: toolNames.length > 0 ? built!.tools : undefined,
     assembled,
+    effort: opts.effort,
   }
 }
 
@@ -726,7 +731,8 @@ function requestFor(p: Prepared, messages: ModelMessage[], retry: RetryOptions =
       : p.assembled.system
   // Requests are retried by kind of failure (retry.ts); the SDK's own retry stays off.
   const model = wrapLanguageModel({ model: languageModel(p.target.provider, p.target.model, p.target.apiKey), middleware: retryMiddleware(retry) })
-  return { system, request, model, active: activeFor(p.built, request), providerOptions: thoughtOptions(p.target) }
+  const providerOptions = mergeProviderOptions(thoughtOptions(p.target), effortOptions(p.target, p.effort))
+  return { system, request, model, active: activeFor(p.built, request), providerOptions }
 }
 
 /**
@@ -876,9 +882,12 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
     yield { type: "notice", text: `Dùng ${recalled.length} memory: ${recalled.map((m) => m.text.slice(0, 40)).join("; ")}` }
   }
 
+  const config = await loadConfig()
+  // The main agent's effort comes from config; a subagent's is resolved by its manager.
+  if (opts.role !== "subagent" && opts.effort === undefined && isEffort(config.effort)) opts = { ...opts, effort: config.effort }
   const prepared = await prepare(opts, extras)
   const { target, tools, built, assembled, supportsTools } = prepared
-  const configured = (await loadConfig()).maxSteps
+  const configured = config.maxSteps
   const maxSteps = opts.maxSteps ?? (Number.isInteger(configured) && configured! >= 2 ? configured! : DEFAULT_MAX_STEPS)
   if (!supportsTools && opts.registry.list().length > 0) {
     yield { type: "notice", text: "Model này không hỗ trợ tool; trả lời không dùng tool." }

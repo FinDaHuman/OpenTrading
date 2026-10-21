@@ -28,10 +28,11 @@ Subagent là một agent riêng, bắt đầu với ngữ cảnh trống. Agent 
 | Mục | Mặc định | Ghi chú |
 | --- | --- | --- |
 | Subagent chạy song song | 10 | Không có trần. Tính chung cả agent nền. Vượt thì xếp hàng theo thứ tự spawn. Với key miễn phí nên đặt 1–2, xem [gemini-limits.md](gemini-limits.md) |
+| Effort của subagent | theo `effort` của phiên | `low` → `medium` → `high` → `xhigh` → `max`. Thứ tự: `effort` trong frontmatter của loại agent > `subagents.effort` > `effort`. Model không có mức đó thì dùng mức thấp hơn gần nhất; model không suy luận thì bỏ qua (xem [effort.md](effort.md)) |
 | Model cho subagent | theo model của phiên | Chỉ liệt kê model gọi được tool. Model không dùng được thì tự quay về model của phiên và hiện `△` trên hàng của subagent |
 | Dừng khi không tiến triển | 5 phút | Subagent không có tiến triển (không gọi tool, không nhận gì từ model) trong `idleMs` thì bị dừng. Phần **suy luận (reasoning)** của model được tính là tiến triển, nên các pha "nghĩ" dài không còn bị dừng oan. Với Gemini, harness bật `includeThoughts` cho model có suy luận (giống opencode) để Gemini gửi phần suy luận về; phần này không hiển thị. Đặt `idleMs` thì đó cũng là thời gian tối đa một request của subagent được im lặng (agent chính: 5 phút, giống Codex/opencode). Giá trị `idleMs` dưới 1 giây bị bỏ qua (dùng mặc định) |
 
-Trong `~/.opentrading/config.json`: `"subagents": { "maxConcurrent": 2, "idleMs": 600000, "provider": "groq", "model": "…" }`.
+Trong `~/.opentrading/config.json`: `"subagents": { "maxConcurrent": 2, "idleMs": 600000, "provider": "groq", "model": "…", "effort": "low" }`.
 
 **Tự chọn model lite (`"model": "auto"`)**
 
@@ -80,6 +81,7 @@ disallowedTools: ["web_*"]      # tuỳ chọn
 provider: groq                  # tuỳ chọn; có provider thì phải có model
 model: llama-3.3-70b-versatile
 maxSteps: 5                     # 1–30, mặc định 8
+effort: low                     # tuỳ chọn; low | medium | high | xhigh | max
 ---
 Chỉ dẫn riêng cho loại này (vào system prompt của subagent, trong <chi_dan_agent>).
 ```

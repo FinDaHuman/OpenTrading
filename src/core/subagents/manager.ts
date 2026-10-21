@@ -1,7 +1,8 @@
 import { readFile } from "node:fs/promises"
 import { runAgent } from "../agent"
 import { describeError, resolveTarget, type Target } from "../chat"
-import { loadConfig } from "../config"
+import { loadConfig, type Config } from "../config"
+import { isEffort, type Effort } from "../effort"
 import { retryText } from "../retry"
 import { closeDanglingToolCalls } from "../session/store"
 import type { Skill } from "../skills/schema"
@@ -63,6 +64,11 @@ export function childRegistry(parent: ToolRegistry, origin: AgentOrigin, filter?
   return child
 }
 
+/** A run's effort: the call's or the type's, else config subagents.effort, else config effort. */
+export function subagentEffort(spec: { effort?: unknown }, config: Pick<Config, "effort" | "subagents">): Effort | undefined {
+  return [spec.effort, config.subagents?.effort, config.effort].find(isEffort)
+}
+
 /** What an agent type contributes to a run (spawn_subagent and send_message resolve it). */
 export interface TypeSpec {
   maxSteps?: number
@@ -72,6 +78,8 @@ export interface TypeSpec {
   toolFilter?: (def: ToolDef) => boolean
   /** Model of the agent type; else config subagents, else the session's. */
   model?: { provider?: string; model?: string }
+  /** Reasoning effort; else config subagents.effort, else config effort. */
+  effort?: Effort
 }
 
 export interface StartSpec extends TypeSpec {
@@ -350,10 +358,12 @@ export class SubagentManager {
     let watchdog: ReturnType<typeof setInterval> | undefined
     let idleStop = false
     let streamed = ""
+    let effort: Effort | undefined
     try {
       const fallback: SidechainEntry[] = []
       const prepared = this.setup.then(async () => {
         const config = await loadConfig()
+        effort = subagentEffort(spec, config)
         this.max = config.subagents?.maxConcurrent ?? this.max
         const idle = config.subagents?.idleMs
         this.idleConfigured = typeof idle === "number" && Number.isFinite(idle) && idle >= 1_000 ? idle : undefined
@@ -424,6 +434,7 @@ export class SubagentManager {
           target,
           agentPrompt: spec.agentPrompt,
           serverInstructions: this.deps.serverInstructions,
+          effort,
         })) {
           last = Date.now()
           // Anything after a retry notice means the wait is over (the request went out again).
