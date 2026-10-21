@@ -335,15 +335,30 @@ export class PermissionGate {
     if (index < 0) return
     const [pending] = this.queue.splice(index, 1)
     pending!.cleanup()
-    // Only what the prompt offered counts ("always" on a key file becomes the session).
-    const offered = pending!.request.choices
-    if (!offered.includes(choice)) choice = choice === "always" && offered.includes("session") ? "session" : "once"
-    if (pending!.request.mode === "auto") this.auto?.userAnswered()
-    if (choice === "deny") {
-      // The user's note is their own words: the classifier reads it too.
-      if (message?.trim()) this.auto?.log.answer(`(từ chối ${pending!.def.name}) ${message.trim()}`)
-      pending!.resolve({ allow: false, reason: "user", message: message?.trim() || undefined })
-    } else {
+    // The request has left the queue: whatever happens below, its promise settles and the UI hears of it.
+    try {
+      // Only what the prompt offered counts ("always" on a key file becomes the session).
+      const offered = pending!.request.choices
+      if (!offered.includes(choice)) choice = choice === "always" && offered.includes("session") ? "session" : "once"
+      if (pending!.request.mode === "auto") this.auto?.userAnswered()
+      if (choice === "deny") {
+        // The user's note is their own words: the classifier reads it too.
+        if (message?.trim()) this.auto?.log.answer(`(từ chối ${pending!.def.name}) ${message.trim()}`)
+        pending!.resolve({ allow: false, reason: "user", message: message?.trim() || undefined })
+        return
+      }
+      // The rule is saved before anything is granted: a failed save grants nothing, not even the session.
+      if (choice === "always") {
+        try {
+          const rules = await this.rules.load()
+          const rule = { tool: pending!.def.name, scope: scopeOf(pending!.def, pending!.request.input) }
+          if (!rules.some((r) => r.tool === rule.tool && r.scope === rule.scope && !r.pattern)) await this.rules.save([...rules, rule])
+        } catch (error) {
+          const why = error instanceof Error ? error.message : String(error)
+          pending!.resolve({ allow: false, reason: "blocked", message: `không lưu được quyền "luôn cho phép" (${why}); chưa cấp quyền nào, người dùng có thể duyệt lại "chỉ lần này" hoặc "cả phiên"` })
+          return
+        }
+      }
       if (choice === "mode") this.setMode("ask")
       if (choice === "session" || choice === "always") {
         this.session.add(pending!.key)
@@ -353,23 +368,19 @@ export class PermissionGate {
           this.sessionDirs.set(group, [...(this.sessionDirs.get(group) ?? []), scope.slice("edit:".length)])
         }
       }
-      if (choice === "always") {
-        const rules = await this.rules.load()
-        const rule = { tool: pending!.def.name, scope: scopeOf(pending!.def, pending!.request.input) }
-        if (!rules.some((r) => r.tool === rule.tool && r.scope === rule.scope && !r.pattern)) await this.rules.save([...rules, rule])
-      }
       pending!.resolve({ allow: true })
+      // Calls queued behind this one may have just become allowed.
+      const still: Pending[] = []
+      for (const p of this.queue) {
+        if (!userOnly(p.request.scope) && this.approvalsApply(p.def) && this.sessionCovers(p.def, p.request.input, p.key)) {
+          p.cleanup()
+          p.resolve({ allow: true })
+        } else still.push(p)
+      }
+      this.queue = still
+    } finally {
+      this.emit()
     }
-    // Calls queued behind this one may have just become allowed.
-    const still: Pending[] = []
-    for (const p of this.queue) {
-      if (!userOnly(p.request.scope) && this.approvalsApply(p.def) && this.sessionCovers(p.def, p.request.input, p.key)) {
-        p.cleanup()
-        p.resolve({ allow: true })
-      } else still.push(p)
-    }
-    this.queue = still
-    this.emit()
   }
 
   /** Deny everything waiting (turn aborted, app closing). */

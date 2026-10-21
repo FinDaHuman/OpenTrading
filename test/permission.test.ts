@@ -116,6 +116,49 @@ test("'always' is saved per server identity: a different server with the same na
   expect((await impostor).allow).toBe(false)
 })
 
+test("'always' whose save fails: the call is denied with the reason, nothing is granted, the queue moves on", async () => {
+  const store = memoryStore()
+  store.save = async () => {
+    throw new Error("EACCES: permission denied")
+  }
+  const gate = new PermissionGate(store)
+  gate.interactive = true
+  const heads: (number | undefined)[] = []
+  gate.onChange((head) => heads.push(head?.id))
+  const running = runTool(write(), {}, ctx(), new RwLock(), gate).catch((e: Error) => e.message)
+  await tick()
+  await gate.respond(gate.head()!.id, "always")
+  const message = await running
+  expect(message).toContain("không lưu được quyền")
+  expect(message).toContain("EACCES")
+  expect(gate.head()).toBeUndefined()
+  expect(heads.at(-1)).toBeUndefined()
+  // No session grant was left behind: the next call asks again.
+  const again = gate.check(write(), {}, new AbortController().signal)
+  await tick()
+  expect(gate.head()?.tool).toBe("mcp__gh__create_issue")
+  await gate.respond(gate.head()!.id, "deny")
+  expect((await again).allow).toBe(false)
+})
+
+test("a write cancelled while it waits for the lock never runs", async () => {
+  const lock = new RwLock()
+  const holder = await lock.acquire(true)
+  let ran = 0
+  const def: ToolDef = { ...write(), approval: "never", execute: async () => (ran++, "đã ghi") }
+  const controller = new AbortController()
+  const waiting = runTool(def, {}, ctx(controller.signal), lock).catch((e: Error) => e.message)
+  // A reader queued behind the cancelled writer gets in once the holder leaves.
+  const reader = runTool({ ...def, readOnly: true }, {}, ctx(), lock)
+  await tick()
+  controller.abort()
+  expect(await waiting).toBe("Đã huỷ.")
+  holder()
+  expect(await reader).toEqual({ output: "đã ghi" })
+  await tick()
+  expect(ran).toBe(1) // the reader only
+})
+
 test("wildcard rules cover a whole server", async () => {
   const gate = new PermissionGate(memoryStore([{ tool: "mcp__gh__*", scope: "gh@abc" }]))
   gate.interactive = true
