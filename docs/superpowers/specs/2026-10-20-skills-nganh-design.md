@@ -99,3 +99,23 @@ dinh-vi-chu-ky-vn        ← CHỈ pha thị trường + luân chuyển (giữ n
 - Không thêm tool MCP mới.
 - Không ghi số liệu thị trường cụ thể (giá, P/E, hit-rate hiện tại) vào skill.
 - Không đổi `prompts/`.
+
+## Cập nhật sau review (2026-10-21)
+
+Bản triển khai khác thiết kế trên ở các điểm sau (lý do trong review PR #116):
+
+- Định tuyến: thêm `triggers.exclude_keywords`; 13 skill ngành loại câu hỏi pha/sóng, tin tức, so
+  sánh, khuyến nghị mua bán; `dinh-vi-chu-ky-vn` thêm trigger `dẫn sóng`, `pha nào`,
+  `chu kỳ ngành`. Bỏ trigger rộng (`nợ xấu`, `lãi suất cho vay`, `căn hộ`, `giá dầu brent`,
+  `dòng vốn nước ngoài`, `thuế quan`, tên thương hiệu đơn lẻ).
+- `requires_tools` chỉ giữ tool skill không thể thiếu; `yf_commodities` không có quặng sắt,
+  than cốc, than nhiệt, ure nên các giá này tra bằng `web_search`.
+- `news_market` không tra theo chủ đề: số ngành và văn bản tra bằng `web_search`.
+  `peer_compare` chỉ trả snapshot định giá; chỉ báo vận hành của peer đọc bằng
+  `financial_detail` từng mã. `vs_xnk_detail` chia theo nước, không theo nhóm hàng.
+- Cây quyết định theo luật lint `decisionTrees` (docs/contracts.md §3).
+- `bao-hiem-vn` tách phi nhân thọ (combined ratio, tái bảo hiểm) và nhân thọ;
+  `dau-khi-vn` thêm mảng phân phối khí, xăng dầu; `van-tai-vn` thêm hàng không.
+- `xuat-nhap-khau-vn`: thuế đối ứng của Mỹ khác nhau theo nước (không "đều cho mọi đối
+  tác"); bỏ các tên văn bản/số hiệu cụ thể ở bảng trên — skill tra văn bản khi chạy.
+- Ngân sách catalog: A 2.600, B 1.200, C 280 (test trong `test/skills.test.ts`).

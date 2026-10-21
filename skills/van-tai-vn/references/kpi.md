@@ -12,6 +12,7 @@
 | Cảng / bến | Cước dịch vụ + công suất + lưu lượng qua cảng | Cùng nhóm cảng |
 | Vận tải container nội Á | Cước tuyến nội Á + tuyến + khóa giá | Cùng nhóm container |
 | Vận tải dầu / hàng rời | Cước tàu dầu theo tuyến + cú sốc cung | Cùng nhóm tàu dầu |
+| Hàng không (chở khách/hàng) | Chi phí nhiên liệu **ngược chiều** giá dầu + nhu cầu đi lại theo mùa + giá vé | Cùng nhóm hàng không — ghi chú riêng trong SKILL.md vì chiều ảnh hưởng giá dầu **ngược** với tàu dầu |
 | Giao nhận / chuyển phát | Lưu lượng bưu kiện + chi phí nhiên liệu | Cùng nhóm chuyển phát |
 
 ## 2. Nhóm giá và khối lượng

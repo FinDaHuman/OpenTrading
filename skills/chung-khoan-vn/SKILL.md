@@ -6,7 +6,7 @@ requires_tools: [financial_detail, vs_financial_norms]
 uses_tools: [financial_detail, vs_financial_norms, financial_ratios, stock_overview, planned_targets, analyst_consensus, peer_compare, market_overview, breadth_scan, news_symbol, news_market, symbol_lookup, vn_company, vs_market_info, valuation_run]
 triggers:
   keywords: [ngành chứng khoán, mảng chứng khoán, dư nợ margin, cho vay ký quỹ, môi giới chứng khoán, lãi margin, doanh thu môi giới, ctck vn]
-  exclude_keywords: [đỉnh chu kỳ, giai đoạn phân phối, đầu phục hồi, giai đoạn nào, đang khuyến nghị, khuyến nghị mã, khuyến nghị những mã, báo cáo khuyến nghị, pha tiếp theo, dẫn sóng, pha nào, chu kỳ ngành, sóng ngành, luân chuyển ngành, pha thị trường, chu kỳ thị trường, giai đoạn thị trường, sóng tiếp theo, cuối sóng, giữa sóng, đầu sóng, bank dẫn, chứng dẫn, rotation]
+  exclude_keywords: [mở tài khoản, nên mua cổ phiếu nào, đỉnh chu kỳ, giai đoạn phân phối, đầu phục hồi, giai đoạn nào, đang khuyến nghị, khuyến nghị mã, khuyến nghị những mã, báo cáo khuyến nghị, pha tiếp theo, dẫn sóng, pha nào, chu kỳ ngành, sóng ngành, luân chuyển ngành, pha thị trường, chu kỳ thị trường, giai đoạn thị trường, sóng tiếp theo, cuối sóng, giữa sóng, đầu sóng, bank dẫn, chứng dẫn, rotation]
 version: 1.0.0
 ---
 

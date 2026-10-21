@@ -6,7 +6,7 @@ requires_tools: [financial_detail, vs_financial_norms]
 uses_tools: [financial_detail, vs_financial_norms, financial_ratios, planned_targets, analyst_consensus, peer_compare, news_symbol, news_market, symbol_lookup, vn_company]
 triggers:
   keywords: [ngành bảo hiểm, hãng bảo hiểm, bảo hiểm phi nhân thọ, bảo hiểm nhân thọ, phí bảo hiểm, bancassurance, công ty bảo hiểm]
-  exclude_keywords: [đỉnh chu kỳ, giai đoạn phân phối, đầu phục hồi, giai đoạn nào, pha tiếp theo, dẫn sóng, pha nào, chu kỳ ngành, sóng ngành, luân chuyển ngành, pha thị trường, chu kỳ thị trường, giai đoạn thị trường, sóng tiếp theo, cuối sóng, giữa sóng, đầu sóng, bank dẫn, chứng dẫn, rotation]
+  exclude_keywords: [nên mua bảo hiểm, mua bảo hiểm nhân thọ, đỉnh chu kỳ, giai đoạn phân phối, đầu phục hồi, giai đoạn nào, pha tiếp theo, dẫn sóng, pha nào, chu kỳ ngành, sóng ngành, luân chuyển ngành, pha thị trường, chu kỳ thị trường, giai đoạn thị trường, sóng tiếp theo, cuối sóng, giữa sóng, đầu sóng, bank dẫn, chứng dẫn, rotation]
 version: 1.0.0
 ---
 

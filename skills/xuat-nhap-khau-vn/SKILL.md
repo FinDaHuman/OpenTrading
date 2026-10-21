@@ -5,7 +5,7 @@ activation: auto
 requires_tools: [vs_xnk_detail, vs_indicator_data]
 uses_tools: [vs_xnk_detail, vs_indicator_data, financial_detail, financial_ratios, vn_forex_ohlcv, planned_targets, analyst_consensus, peer_compare, news_symbol, news_market, symbol_lookup, vn_company]
 triggers:
-  keywords: [ngành xuất nhập khẩu, tác động thuế quan đến xuất khẩu, thuế xuất khẩu, thuế nhập khẩu, cán cân thương mại, vốn FDI, nhập siêu, tỷ giá xuất khẩu, phân tích xuất khẩu, xuất khẩu tăng, nhập khẩu máy móc]
+  keywords: [ngành xuất nhập khẩu, tác động thuế quan đến xuất khẩu, thuế đối ứng, thuế đối ứng mỹ, thuế xuất khẩu, thuế nhập khẩu, cán cân thương mại, vốn FDI, nhập siêu, tỷ giá xuất khẩu, phân tích xuất khẩu, xuất khẩu tăng, nhập khẩu máy móc]
   exclude_keywords: [đỉnh chu kỳ, giai đoạn phân phối, đầu phục hồi, giai đoạn nào, pha tiếp theo, dẫn sóng, pha nào, chu kỳ ngành, sóng ngành, luân chuyển ngành, pha thị trường, chu kỳ thị trường, giai đoạn thị trường, sóng tiếp theo, cuối sóng, giữa sóng, đầu sóng, bank dẫn, chứng dẫn, rotation]
 version: 1.0.0
 ---

@@ -1201,6 +1201,81 @@
     "dinh-gia-chuyen-sau"
    ],
    "note": "PR116 exact suggestions regression"
+  },
+  {
+   "id": 292,
+   "split": "dev",
+   "q": "Ngành bất động sản đang ở giai đoạn nào của chu kỳ?",
+   "skills": [
+    "dinh-vi-chu-ky-vn"
+   ],
+   "note": "PR116 reconciled remote exact regression"
+  },
+  {
+   "id": 293,
+   "split": "dev",
+   "q": "Nhóm thép có phải sắp dẫn sóng không?",
+   "skills": [
+    "dinh-vi-chu-ky-vn"
+   ],
+   "note": "PR116 reconciled remote exact regression"
+  },
+  {
+   "id": 294,
+   "split": "dev",
+   "q": "Có nên mua bảo hiểm nhân thọ không?",
+   "skills": [],
+   "note": "PR116 reconciled remote exact regression"
+  },
+  {
+   "id": 295,
+   "split": "dev",
+   "q": "Nên mở tài khoản ở công ty chứng khoán nào?",
+   "skills": [],
+   "note": "PR116 reconciled remote exact regression"
+  },
+  {
+   "id": 296,
+   "split": "dev",
+   "q": "Vingroup kéo VN-Index hôm nay bao nhiêu điểm?",
+   "skills": [],
+   "note": "PR116 reconciled remote exact regression"
+  },
+  {
+   "id": 297,
+   "split": "dev",
+   "q": "Thuế quan Mỹ ảnh hưởng thế nào đến Fed?",
+   "skills": [
+    "du-doan-fed"
+   ],
+   "note": "PR116 reconciled remote exact regression"
+  },
+  {
+   "id": 298,
+   "split": "dev",
+   "q": "Dệt may chịu thuế đối ứng của Mỹ thế nào so với đối thủ?",
+   "skills": [
+    "xuat-nhap-khau-vn"
+   ],
+   "note": "PR116 reconciled remote exact regression"
+  },
+  {
+   "id": 299,
+   "split": "dev",
+   "q": "Công ty bảo hiểm phi nhân thọ đọc tỷ lệ bồi thường thế nào?",
+   "skills": [
+    "bao-hiem-vn"
+   ],
+   "note": "PR116 reconciled remote exact regression"
+  },
+  {
+   "id": 300,
+   "split": "dev",
+   "q": "Hãng hàng không chịu gì khi giá dầu tăng?",
+   "skills": [
+    "van-tai-vn"
+   ],
+   "note": "PR116 reconciled remote exact regression"
   }
  ]
 }

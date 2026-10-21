@@ -6,7 +6,7 @@ requires_tools: [financial_detail, vs_xnk_detail]
 uses_tools: [financial_detail, vs_xnk_detail, financial_ratios, planned_targets, analyst_consensus, peer_compare, yf_commodities, news_symbol, news_market, symbol_lookup, vn_company]
 triggers:
   exclude_keywords: [đỉnh chu kỳ, giai đoạn phân phối, đầu phục hồi, giai đoạn nào, dẫn sóng, pha nào, chu kỳ ngành, sóng ngành, luân chuyển ngành, pha thị trường, chu kỳ thị trường, giai đoạn thị trường, sóng tiếp theo, cuối sóng, giữa sóng, đầu sóng, bank dẫn, chứng dẫn, rotation, pha tiếp theo]
-  keywords: [ngành vận tải, vận tải biển, cảng biển, cước vận chuyển, tàu chở container, luồng hàng hoá, công ty cảng, mảng logistics]
+  keywords: [ngành vận tải, vận tải biển, cảng biển, cước vận chuyển, tàu chở container, luồng hàng hoá, công ty cảng, mảng logistics, hãng hàng không, vận tải hàng không]
 version: 1.0.0
 ---
 
@@ -41,7 +41,7 @@ tải container bị siết.
 | Cầu xuất khẩu | Lưu lượng hàng qua cảng bám xuất khẩu và nhập khẩu linh kiện. Đọc sản lượng TEU/tấn qua cảng và tổng lưu lượng thương mại; giá trị nhập thiết bị tăng không chứng minh nhu cầu vận tải tăng | Xuất/nhập khẩu theo kỳ: `vs_xnk_detail`; cầu ngành tổng hợp: `news_market` |
 | Công suất cảng | Bến mới chạy chưa đủ tải làm chi phí cố định đội lên; công suất đủ thì giá thu được giữ. Đây là nguồn biên bền vững nhất ngành | Tỷ lệ sử dụng bến + cước dịch vụ: `news_market`/`web_search`; riêng mã doanh thu/cước bình quân trong `financial_detail` |
 | Tỷ lệ khóa giá | Hợp đồng vận chuyển theo định kỳ dài hạn co giãn thu nhập: tỷ lệ khóa cao thì sóng cước không vào doanh thu ngay | Tỷ trọng hợp đồng cố định: `news_market`/`web_search`; dấu hiệu gián tiếp ở doanh thu/khối lượng trong `financial_detail` |
-| Nhiên liệu | Chi phí nhiên liệu và chi phí bến siết biên vận tải; ngược lại ít ảnh hưởng cảng | Giá nhiên liệu: `yf_commodities` theo chu kỳ |
+| Nhiên liệu | Chi phí nhiên liệu và chi phí bến siết biên **vận tải và hàng không**; ngược lại ít ảnh hưởng cảng. Chiều ngược nhau theo phân khúc: tàu dầu hưởng khi giá dầu tăng (cước theo giá dầu), hàng không bị bóp (nhiên liệu chiếm phần lớn chi phí) | Giá nhiên liệu: `yf_commodities` theo chu kỳ |
 | Chính sách thương mại | Thuế quan đổi hướng tuyến: tuyến nội Á chịu ít hơn tuyến đi Mỹ | Thuế/chính sách: `news_market`/`web_search` |
 
 ## Các bước
@@ -49,7 +49,7 @@ tải container bị siết.
 **Bước 1: Nhận diện phân khúc (song song).**
 
 `symbol_lookup` · `vn_company` (mảng: cảng / container nội Á / tàu dầu / giao nhận
-chuyển phát) · `financial_detail` (doanh thu theo mảng). Ghi rõ phân khúc.
+chuyển phát / hàng không) · `financial_detail` (doanh thu theo mảng). Ghi rõ phân khúc.
 
 **Bước 2: Cước + cầu (song song).**
 
@@ -79,6 +79,7 @@ Q1. Công ty thuộc phân khúc nào?
 ├─ Container → Q2 (container)
 ├─ Tàu dầu/hàng rời → ★ "Đánh giá cước tuyến, tonne-mile, sản lượng và hợp đồng; thiếu thì chưa đủ dữ liệu cho phân khúc"
 ├─ Giao nhận/chuyển phát → ★ "Đánh giá lưu lượng bưu kiện, giá dịch vụ và chi phí; thiếu thì chưa đủ dữ liệu cho phân khúc"
+├─ Hàng không → ★ "Đánh giá ngược chiều giá dầu: giá dầu tăng bóp biên (nhiên liệu chiếm phần lớn chi phí) trong khi tàu dầu hưởng; kèm nhu cầu đi lại theo mùa và giá vé; thiếu dữ liệu thì chưa đủ cho phân khúc"
 ├─ Nhiều phân khúc → đánh giá độc lập từng phân khúc theo Q1 rồi tổng hợp theo tỷ trọng công bố
 └─ Chưa rõ → ★ "Chưa đủ dữ liệu phân khúc"
 
