@@ -104,3 +104,12 @@ Kiểm tra bằng `/agents`: danh sách, file lỗi, tool thực có và model (
 | Prompt | prompt của subagent là `prompts/subagent.md` + `<bat_bien>`/`<thu_tu_uu_tien>` lấy từ `identity.md`, không có hồ sơ nhà đầu tư, memory hay style. Prompt của agent chính không đổi |
 | Lưu trữ | transcript của subagent ở `sessions/YYYY/MM/<session>/subagents/agent-<id>.jsonl` + `.meta.json`, không nằm trong `index.jsonl` |
 | Giao diện | `src/tui/subagent-row.tsx`, `src/tui/dialogs/agents.tsx`, `src/tui/dialogs/tasks.tsx` |
+
+**Kết quả có cấu trúc (`StartSpec.schema`)** — dùng cho code điều phối (ultradesk), không có trong `spawn_subagent`:
+- Truyền một `z.object(...)`. Subagent có thêm tool `tra_ket_qua` (input đúng schema) và phải gọi đúng 1 lần; gọi xong thì lượt dừng ngay, không tốn thêm request.
+- Bước cuối được phép (`maxSteps`) bị ép gọi `tra_ket_qua` (`toolChoice`). Input sai schema được trả lại cho model để sửa ngay trong lượt.
+- Lượt kết thúc mà chưa có kết quả hợp lệ (model trả lời văn xuôi, kể cả khi bị ép) → thêm lượt nhắc, tối đa 5 lượt tính cả lượt đầu (`MAX_RESULT_ATTEMPTS`, giống `MAX_STRUCTURED_OUTPUT_RETRIES` của Claude Code). Lượt nhắc chỉ có 1 bước và bị ép gọi tool ngay, nên một subagent có schema gửi **tối đa `maxSteps + 4` request**. Hết lượt → `failed`, `failure: "invalid-output"`.
+- Lượt có `tra_ket_qua` không dùng lần hỏi lại "câu trả lời rỗng" (lần đó tắt tool nên không thể trả kết quả).
+- Claude không nhận ép tool khi đang suy luận: `@ai-sdk/anthropic` tự chuyển sang `auto` và chỉ gửi mỗi `tra_ket_qua`; lượt nhắc lo phần còn lại.
+- `SubagentResult.data` là object đã kiểm. `SubagentResult.failure` (khi `failed`): `daily-quota`, `rate-limit`, `overloaded`, `network`, `fatal` (theo `retry.ts`), `stall` hoặc `invalid-output`. Code điều phối dựa vào đây để phân biệt hết quota với câu trả lời hỏng.
+- Không dùng `Output.object` của AI SDK: tool bắt buộc chạy giống nhau trên mọi provider.

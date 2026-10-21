@@ -1,4 +1,5 @@
 import type { ModelMessage } from "ai"
+import type { FailureKind } from "../retry"
 
 /**
  * queued: waiting for a slot (subagents.maxConcurrent); running; completed: answered;
@@ -48,12 +49,21 @@ export interface SubagentView {
   retry?: { attempt: number; max: number; until: number; label: string }
   /** Session the run belongs to (UIs ignore runs of a session they no longer show). */
   sessionId?: string
+  /** The ultradesk run that started it; such agents are shown as their run, not one by one. */
+  deskRunId?: string
 }
+
+/** Why a run failed: retry.ts's reading of the provider error, a stall, or no valid structured result. */
+export type RunFailure = FailureKind | "stall" | "invalid-output"
 
 export interface SubagentResult {
   status: AgentStatus
   text: string
   error?: string
+  /** Set when status is failed: the kind of failure, for callers that treat them apart (quota vs. a bad answer). */
+  failure?: RunFailure
+  /** The validated structured result, for a run started with a schema. */
+  data?: unknown
   toolCount: number
   usage: { input: number; output: number }
   durationMs: number
