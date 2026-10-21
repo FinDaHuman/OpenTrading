@@ -24,7 +24,17 @@ CI runs the same commands and is the source of truth.
   malformed payloads, stale data, and partial results.
 - Dependencies need a concrete use case, active maintenance, compatible terms, and an owner.
 - Never catch a broad exception and return an empty or successful financial result.
-- Avoid generic `utils.py` or `manager.py` modules. Name modules after one responsibility.
+- Avoid catch-all modules such as `utils.ts`. Name modules after one responsibility.
+- Never commit API keys, tokens or personal data. A fake key in a test needs a
+  `gitleaks:allow` comment on its line.
+- Other projects' code: only from compatibly licensed sources, credited in
+  `THIRD_PARTY_NOTICES.md`. Never copy from proprietary source.
 
 See [engineering standards](handbook/engineering/coding-standards.md) and the
 [definition of done](handbook/testing/test-strategy.md).
+
+## License of contributions
+
+OpenTrading is licensed under the [Apache License 2.0](LICENSE). Unless you state otherwise,
+any contribution you submit is licensed under the same terms (section 5 of the license),
+with no additional conditions.

@@ -2,14 +2,26 @@
 
 Harness AI phân tích chứng khoán Việt Nam, chạy trong terminal. Viết bằng TypeScript: Bun, [OpenTUI](https://github.com/sst/opentui), SolidJS và Vercel AI SDK.
 
+*English:* OpenTrading is a terminal AI harness for researching Vietnamese equities. Connect any of 200+ LLM providers, plug in MCP servers for market data, and let the agent call tools, run subagents and cite its sources. The UI, prompts and docs are in Vietnamese. It is not investment advice (see [Disclaimer](#miễn-trừ-trách-nhiệm--disclaimer)). Licensed under Apache-2.0.
+
 > **Bản demo.** Đã có TUI, kết nối LLM, agent loop gọi tool, MCP client (dữ liệu thị trường qua server `opentrading-mcp`), skills, subagent, nén hội thoại và lưu phiên. Đây không phải tư vấn đầu tư. Tiến độ: [docs/STATUS.md](docs/STATUS.md).
 
 ## Chạy
+
+Cần [Bun](https://bun.sh) 1.3 trở lên; chạy trên Windows, macOS và Linux.
 
 ```shell
 bun install
 bun run dev
 ```
+
+### Dữ liệu thị trường
+
+OpenTrading không kèm dữ liệu. Số liệu đến từ MCP server bạn gắn vào (xem [docs/mcp.md](docs/mcp.md)):
+
+- Server `opentrading` trong `/mcp` cần token do người quản lý server cấp. Không có token thì bỏ qua mục này.
+- Mã nguồn server: [opentrading-mcp](https://github.com/DoanDuyLong212/opentrading-mcp). Bạn có thể tự chạy server này, hoặc gắn bất kỳ MCP server nào khác.
+- Không có MCP server thì agent chỉ còn các tool có sẵn (web, file, chart, watchlist) để làm việc.
 
 Trong TUI:
 
@@ -83,3 +95,17 @@ docs/decisions/ các quyết định kiến trúc
 ```
 
 Xem [docs/decisions/0001-typescript.md](docs/decisions/0001-typescript.md) để biết vì sao chọn TypeScript và Python sẽ được dùng ở đâu.
+
+## Miễn trừ trách nhiệm / Disclaimer
+
+OpenTrading là phần mềm nghiên cứu. Nó **không phải dịch vụ tư vấn đầu tư chứng khoán** và không đặt lệnh giao dịch.
+
+- Câu trả lời do model AI viết, có thể sai, thiếu hoặc dựa trên số liệu cũ. Hãy kiểm tra lại với nguồn gốc trước khi dùng.
+- Mọi quyết định đầu tư và rủi ro đi kèm là của bạn.
+- Tác giả và người đóng góp không chịu trách nhiệm về thiệt hại phát sinh từ việc dùng phần mềm (xem điều 7–8 của `LICENSE`).
+
+OpenTrading is research software, not an investment advisory service, and it does not place orders. Answers are written by AI models and may be wrong, incomplete or based on stale data; verify them against the original sources. You are solely responsible for your investment decisions. The software is provided "AS IS", without warranties (see sections 7–8 of `LICENSE`).
+
+## Giấy phép / License
+
+[Apache License 2.0](LICENSE). Một số file được chuyển thể từ opencode (MIT): xem [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) và [NOTICE](NOTICE). Khi đóng góp code, bạn đồng ý phát hành đóng góp đó theo cùng giấy phép (xem [CONTRIBUTING.md](CONTRIBUTING.md)).

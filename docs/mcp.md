@@ -45,7 +45,7 @@ Server bạn tự thêm (bằng `add`, `add-json`, `import`) **luôn ở trạng
 | Sentry | `mcp add sentry https://mcp.sentry.dev/mcp` | OAuth: `mcp login sentry` |
 | Atlassian (Jira, Confluence) | `mcp add atlassian https://mcp.atlassian.com/v1/sse -t sse` | OAuth: `mcp login atlassian` |
 | GitHub | `mcp add github https://api.githubcopilot.com/mcp/ -H 'Authorization: Bearer ${GITHUB_PAT}'` rồi `mcp secret set GITHUB_PAT` | Personal Access Token (GitHub không cho đăng nhập OAuth tự động) |
-| MCP server công ty | `mcp add opentrading https://opentrading-mcp-web.onrender.com/mcp -H 'Authorization: Bearer ${OPENTRADING_MCP_TOKEN}'` rồi `mcp secret set OPENTRADING_MCP_TOKEN` | Token nhóm (xin admin) |
+| MCP server OpenTrading | `mcp add opentrading https://opentrading-mcp-web.onrender.com/mcp -H 'Authorization: Bearer ${OPENTRADING_MCP_TOKEN}'` rồi `mcp secret set OPENTRADING_MCP_TOKEN` | Token (xin người quản lý server) |
 
 **Header có `${BIẾN}` phải đặt trong nháy đơn** (`'...'`). Trong nháy kép, PowerShell và bash thay `${BIẾN}` bằng giá trị (thường là rỗng) trước khi lệnh nhận được; lệnh sẽ báo lỗi nếu header bị rỗng.
 
