@@ -48,6 +48,8 @@ export interface AssembleInput {
   recalled?: string
   /** user-prompt hook additionalContext for this turn: reminder. */
   hookContext?: string[]
+  /** The ultradesk reminder for a request that opted into desk runs. */
+  desk?: string
   /** The user's message, for trigger matching. */
   input: string
   now: Date
@@ -220,6 +222,7 @@ ${m.text}
     add(reminders, "viec_can_lam", 2, "reminder", `${TODO_RECITE_HEADER}\n${renderTodos(input.todos)}`, "todos")
   }
   for (const context of input.hookContext ?? []) add(reminders, "hook_context", 4, "reminder", context)
+  add(reminders, "ultradesk", 6, "reminder", input.desk)
   if (input.tools.includes("load_skill")) {
     const hits = suggestSkills(input.input, visible).filter((s) => !input.sticky.includes(s.name) && s.activation === "auto")
     if (hits.length > 0) {

@@ -164,6 +164,10 @@ export interface RunOptions {
    */
   finalTool?: string
   finalPrompt?: string
+  /** Deferred tools callable this turn without tool_search (desk_run when the request opted in). */
+  preload?: string[]
+  /** The <ultradesk> reminder (desk/keyword.ts deskReminder). */
+  desk?: string
 }
 
 export function label(registry: ToolRegistry, name: string, input: unknown) {
@@ -664,7 +668,7 @@ async function assembleFor(opts: TurnInput, target: Target | undefined, extras: 
   // ‖ read-only sends the local write tools by name only; ▸ declares them in full.
   const mode = opts.registry.gate?.mode ?? "read-only"
   const modeTools = mode === "read-only" ? [] : opts.registry.list().filter((d) => d.effect).map((d) => d.name)
-  const loaded = new Set([...loadedTools(opts.history ?? []), ...modeTools])
+  const loaded = new Set([...loadedTools(opts.history ?? []), ...modeTools, ...(opts.preload ?? [])])
   const built = supportsTools ? opts.registry.toToolSet({ ...setOptions, defer, loaded }) : undefined
   const toolNames = built?.names ?? []
   const assembled = assemble({
@@ -680,6 +684,7 @@ async function assembleFor(opts: TurnInput, target: Target | undefined, extras: 
     memoryIndex: cap(await opts.memory?.index?.({ sessionId: opts.sessionId ?? "" }).catch(() => undefined), MEMORY_INDEX_MAX_CHARS),
     recalled: extras.recalled,
     hookContext: extras.hookContext,
+    desk: opts.desk,
     input: opts.input,
     now: opts.now ?? new Date(),
     prevClock: opts.prevClock,

@@ -749,9 +749,9 @@ test("/tools lists built-in and MCP tools", async () => {
     await setup.mockInput.typeText("/tools")
     setup.mockInput.pressEnter()
     // 6 core built-ins (current_time, load_skill, ask_user, todo_write, tool_search, read_file)
-    // + 23 local tools (glob_files, grep_files, write_file, edit_file, shell, chart, session, watchlist, web, spawn_subagent, send_message, stop_agent, doctor_local)
+    // + 24 local tools (glob_files, grep_files, write_file, edit_file, shell, chart, session, watchlist, web, spawn_subagent, send_message, stop_agent, doctor_local, desk_run)
     // + propose_memory + 4 from the demo MCP server
-    frame = await setup.waitForFrame((f) => f.includes("Tool · 34") && f.includes("25 tool hoãn"))
+    frame = await setup.waitForFrame((f) => f.includes("Tool · 35") && f.includes("26 tool hoãn"))
     show(frame)
     // Regression for the 01/10 screenshot: every tool is exactly one line, long descriptions
     // end in "…" instead of wrapping mid-word, and the mark column is straight.
@@ -764,8 +764,8 @@ test("/tools lists built-in and MCP tools", async () => {
     expect(timeRow).toMatch(/…\s+\[chỉ đọc\]\s*$/)
     expect(frame).not.toMatch(/^\s+Asia\/H/m)
     expect(frame).toContain("Có sẵn")
-    // 3 demo tools (add is alwaysLoad) + 22 optional local tools (incl. glob_files/grep_files/write_file/edit_file/shell) (incl. web_search/web_fetch) (chart, session, watchlist, doctor, send_message, stop_agent)
-    expect(frame).toContain("25 tool hoãn: model chỉ thấy tên")
+    // 3 demo tools (add is alwaysLoad) + 23 optional local tools (incl. glob_files/grep_files/write_file/edit_file/shell) (incl. web_search/web_fetch) (chart, session, watchlist, doctor, send_message, stop_agent, desk_run)
+    expect(frame).toContain("26 tool hoãn: model chỉ thấy tên")
     expect(timeRow).not.toContain("hoãn · ")
     // read_file is core (a path from the user is read at once); spawn_subagent sits below the fold now.
     expect(rows.find((r) => r.includes(" read_file "))).not.toContain("hoãn · ")
@@ -773,13 +773,13 @@ test("/tools lists built-in and MCP tools", async () => {
     expect(rows.find((r) => r.includes(" chart_render "))).toContain("hoãn · ")
     // ↑ from the first row wraps to the last: the Memory and MCP groups sit below the fold.
     setup.mockInput.pressArrow("up")
-    frame = await setup.waitForFrame((f) => f.includes("MCP · demo") && f.includes("34/34"))
+    frame = await setup.waitForFrame((f) => f.includes("MCP · demo") && f.includes("35/35"))
     show(frame)
     expect(frame).toContain("Memory")
     const tail = frame.split("\n").filter((l) => /^ {2}(❯ |  )[◇◆] \S/.test(l))
     expect(tail.find((r) => r.includes(" echo "))).toContain("hoãn · ")
     setup.mockInput.pressArrow("down")
-    await setup.waitForFrame((f) => f.includes("1/34"))
+    await setup.waitForFrame((f) => f.includes("1/35"))
   } finally {
     await saveConfig({ toolSearch: undefined })
   }
@@ -790,7 +790,7 @@ test("/tools lists built-in and MCP tools", async () => {
   expect(frame).toContain("ask_user")
   expect(frame).toMatch(/• questions \(bắt buộc\): array/)
   setup.mockInput.pressEscape()
-  await setup.waitForFrame((f) => f.includes("Tool · 34"))
+  await setup.waitForFrame((f) => f.includes("Tool · 35"))
   setup.mockInput.pressEscape()
   await setup.waitFor(() => state.dialog === undefined)
 })
@@ -2836,6 +2836,111 @@ test("/watchlist: edits by command, opens a list and shows live quotes from the 
   } finally {
     runtime.registry.unregister("mcp__fakewl__")
   }
+})
+
+test("ultradesk: the keyword is hinted while typed; /desk on|off shows on the mode line; /desk without runs", async () => {
+  await setup.mockInput.typeText("ultradesk so sánh FPT")
+  let frame = await setup.waitForFrame((f) => f.includes("ultradesk: yêu cầu này được chạy playbook"))
+  show(frame)
+  setup.mockInput.pressKey("c", { ctrl: true })
+  await setup.waitForFrame((f) => !f.includes("ultradesk so sánh FPT"))
+  await new Promise((r) => setTimeout(r, 900))
+  await setup.mockInput.typeText("/desk on")
+  setup.mockInput.pressEnter()
+  frame = await setup.waitForFrame((f) => f.includes("desk ●"))
+  expect(state.deskMode).toBe(true)
+  await setup.mockInput.typeText("/desk off")
+  setup.mockInput.pressEnter()
+  await setup.waitFor(() => !state.deskMode)
+  await setup.waitForFrame((f) => !f.includes("desk ●"))
+  await setup.mockInput.typeText("/desk")
+  setup.mockInput.pressEnter()
+  frame = await setup.waitForFrame((f) => f.includes("Chưa có run ultradesk nào"))
+  show(frame)
+  setup.mockInput.pressEscape()
+  await setup.waitFor(() => state.dialog === undefined)
+})
+
+test("ultradesk card: ←→ change the size and its cost, a large run warns, enter runs with what was chosen", async () => {
+  const estimates = { small: { agents: 6, requests: 36 }, medium: { agents: 14, requests: 84 }, large: { agents: 46, requests: 276 }, unrestricted: { agents: 46, requests: 276 } }
+  const asking = runtime.deskApprovals.ask({
+    playbook: "sang-loc",
+    description: "Sàng lọc nhiều mã",
+    phases: ["Thu thập", "Kiểm chứng", "Tổng hợp"],
+    summary: "8 mã: FPT, MWG, HPG, … (+5)",
+    args: { tickers: ["FPT"] },
+    size: "small",
+    estimates,
+    warnRequests: 150,
+    model: "groq · test-model",
+    reason: "first-time",
+  })
+  let frame = await setup.waitForFrame((f) => f.includes("ultradesk · sang-loc") && f.includes("6 agent · ~36 request"))
+  show(frame)
+  expect(frame).toContain("Thu thập → Kiểm chứng → Tổng hợp")
+  expect(frame).toContain("Chạy, không hỏi lại sang-loc")
+  // From "Chạy" up to the size row, then right twice: medium, then large (which warns).
+  setup.mockInput.pressArrow("up")
+  setup.mockInput.pressArrow("up")
+  setup.mockInput.pressArrow("right")
+  await setup.waitForFrame((f) => f.includes("◂ medium ▸") && f.includes("14 agent · ~84 request"))
+  setup.mockInput.pressArrow("right")
+  frame = await setup.waitForFrame((f) => f.includes("◂ large ▸") && f.includes("Run này có thể tốn tới ~276 request"))
+  show(frame)
+  await new Promise((r) => setTimeout(r, 450))
+  setup.mockInput.pressArrow("down")
+  setup.mockInput.pressArrow("down")
+  setup.mockInput.pressEnter()
+  expect(await asking).toEqual({ run: true, size: "large", effort: undefined, remember: false })
+  await setup.waitFor(() => state.deskApproval === undefined)
+})
+
+test("a desk run is one panel row and one mode-line pill, never a row per agent", async () => {
+  const run = {
+    id: "dk-tui001",
+    playbook: "sang-loc",
+    version: "1",
+    args: {},
+    size: "small" as const,
+    status: "running" as const,
+    phases: [
+      { title: "Thu thập", total: 3, done: 1, failed: 0 },
+      { title: "Tổng hợp", total: 0, done: 0, failed: 0 },
+    ],
+    agents: [],
+    logs: [],
+    createdAt: Date.now(),
+    counters: { agents: 2, cached: 0, requests: 5, input: 100, output: 20 },
+    sessionId: undefined,
+  }
+  const child = {
+    id: "ag-desk01",
+    type: "tra-cuu",
+    description: "chấm điểm MWG",
+    prompt: "",
+    background: false,
+    model: "",
+    status: "running" as const,
+    createdAt: Date.now(),
+    tools: [],
+    toolCount: 0,
+    usage: { input: 0, output: 0 },
+    text: "",
+    deskRunId: "dk-tui001",
+  }
+  setState("deskRuns", "dk-tui001", run)
+  setState("agents", "ag-desk01", child)
+  try {
+    const frame = await setup.waitForFrame((f) => f.includes("ultradesk") && f.includes("sang-loc · Thu thập 1/3"))
+    show(frame)
+    expect(frame).toContain("desk sang-loc 2 agent")
+    expect(frame).not.toContain("chấm điểm MWG")
+  } finally {
+    setState("deskRuns", reconcile({}))
+    const { "ag-desk01": _gone, ...rest } = state.agents
+    setState("agents", reconcile(rest))
+  }
+  await setup.waitForFrame((f) => !f.includes("sang-loc · Thu thập"))
 })
 
 // Last: its transcript (tool rows + the stock answer) would satisfy later tests' frame waits.

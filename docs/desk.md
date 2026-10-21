@@ -6,7 +6,23 @@ Ultradesk điều phối nhiều subagent nghiên cứu theo một **playbook**:
 - Server MCP chạy gói free (0,1 CPU), nên mỗi run có cap đồng thời riêng.
 - Kết luận ở dạng kịch bản, không đưa khuyến nghị Mua/Bán.
 
-Trạng thái: engine đã có (PR3). Keyword `ultradesk`, `/desk` và các playbook đóng gói sẵn đến ở các PR sau.
+Trạng thái: engine (PR3) và giao diện (PR4) đã có. Các playbook đóng gói sẵn đến ở PR5–PR6; trước đó `desk_run` chưa có playbook nào để chạy.
+
+## Dùng thế nào
+
+| Cách | Ý nghĩa |
+| --- | --- |
+| Gõ `ultradesk` trong câu hỏi | Yêu cầu đó được chạy playbook (giống `ultracode` của Claude Code). Chữ được tô màu trong ô nhập và dòng chế độ ghi "ultradesk: yêu cầu này được chạy playbook". Chỉ tính chữ bạn gõ, không tính text dán, nội dung @file, prompt MCP hay thông báo của harness. Tắt bằng `"desk": { "keyword": false }` |
+| `/desk on` / `/desk off` | Bật/tắt cho cả phiên: yêu cầu nghiên cứu lớn có thể chạy playbook. Dòng chế độ hiện `desk ●`. `"desk": { "alwaysOn": true }` để phiên mới tự bật |
+| `/<playbook> <yêu cầu>` | Nhờ model chạy đúng playbook đó cho yêu cầu (vd. `/sang-loc FPT MWG HPG`) |
+| `/desk` | Danh sách run → các phase (đếm xong/tổng) → agent của phase → chi tiết. `p` tạm dừng/chạy tiếp, `x` hai lần (hoặc `ctrl+x`) dừng, `r` chạy tiếp run bị cắt |
+| `/desk resume <run>` | Chạy tiếp run bị cắt (hết quota, chạm trần, bị dừng), kể cả sau khi mở lại phiên |
+
+**Thẻ duyệt** hiện trước khi chạy: mô tả, các phase, `◂ quy mô ▸` và `◂ effort ▸` (←→ để đổi, số agent/request cập nhật theo), cảnh báo △ khi vượt `warnRequests`/`maxRequests`. Lựa chọn: Chạy / Chạy, không hỏi lại `<playbook>` / Xem tham số / Không.
+- **Không có opt-in** (model tự tìm ra `desk_run`): thẻ **luôn** hiện, kể cả ở ▸▸ tự động và với playbook đã "không hỏi lại".
+- **Có opt-in** (keyword, `/desk on`, `/<playbook>`): playbook đã "không hỏi lại" thì chạy luôn; lần đầu thì hiện thẻ. Ở ▸▸ tự động, "Chạy" lần đầu tự ghi nhớ playbook (`desk.approved`).
+
+**Khi đang chạy**: agent panel có **một dòng cho cả run** (`ultradesk  sang-loc · Thu thập 3/5 · 21 req`), không liệt kê từng agent; enter mở `/desk`, `x` hai lần dừng run. `/tasks` không hiện agent của desk. Khi xong, transcript có một dòng và agent chính nhận **một** `<thong_bao_desk>`.
 
 ## Playbook
 

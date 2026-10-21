@@ -8,6 +8,7 @@ import type { StartSpec } from "../subagents/manager"
 import type { SubagentResult, SubagentView } from "../subagents/types"
 import { typeSpec } from "../tools/subagent/spawn"
 import { agentKey, callHash, DeskJournal, type DeskMeta, type JournalEntry } from "./journal"
+import { CUT_TEXT } from "./notification"
 import { cleanLabel } from "./sanitize"
 import { deskSettings, type DeskSettings } from "./settings"
 import type { AgentOpts, DeskAgentView, DeskContext, DeskRunView, DeskSize, Estimate, Playbook } from "./types"
@@ -47,13 +48,6 @@ export class DeskCut extends Error {
   }
 }
 
-export const CUT_TEXT: Record<NonNullable<DeskRunView["cut"]>, string> = {
-  quota: "Hết quota ngày của model: không chạy thêm agent mới.",
-  agents: "Đã chạm trần số agent của run (desk.maxAgents).",
-  requests: "Đã chạm trần số request của run (desk.maxRequests).",
-  rate: "Model liên tục báo giới hạn tốc độ (429): dừng run, chạy tiếp sau bằng /desk resume.",
-  stop: "Run đã bị dừng.",
-}
 
 interface RunState {
   view: DeskRunView
@@ -162,6 +156,13 @@ export class DeskEngine {
     state.controller.abort()
     state.paused?.release()
     return true
+  }
+
+  /** Stop every live run (/clear, /new, exit): each is cut as stopped, so no new agent starts. */
+  stopAll() {
+    let n = 0
+    for (const state of this.runs.values()) if (this.stop(state.view.id)) n++
+    return n
   }
 
   /** Paused: agents already running finish; no new one starts until resumed. */

@@ -72,6 +72,7 @@ export async function transcriptOfCurrent(runtime: Runtime) {
 /** Subagent transcripts go next to the session being written. */
 export function attachSubagents(runtime: Runtime) {
   runtime.subagents.attachSession({ id: current.id, dir: current.dir })
+  runtime.desk.attachSession({ id: current.id, dir: current.dir })
 }
 
 /** Start a fresh session (startup, /new, /clear). */
@@ -80,6 +81,7 @@ export async function startSession(runtime: Runtime, source: "startup" | "clear"
   current = Session.create()
   attachSubagents(runtime)
   setState("agents", reconcile({}))
+  setState("deskRuns", reconcile({}))
   setState({ notices: [], noticeHold: false })
   // A fresh conversation has not seen the market clock yet.
   setState({ lines: [], history: [], clock: undefined, ...NO_COMPACTION })
@@ -94,6 +96,7 @@ export async function resumeSession(runtime: Runtime, id: string) {
   current = Session.continue(loaded.summary)
   attachSubagents(runtime)
   setState("agents", reconcile({}))
+  setState("deskRuns", reconcile({}))
   setState({ notices: [], noticeHold: false })
 
   const lines: Line[] = transcriptFromMessages(loaded.display).flatMap((item): Line[] => {

@@ -46,6 +46,8 @@ export interface PlaybookMeta<A = unknown> {
   /** Phase titles in order, for the progress view. */
   phases: string[]
   estimate(args: A, size: DeskSize): Estimate
+  /** One line about the arguments for the approval card, e.g. "8 mã: FPT, MWG, … (+4)". */
+  summarize?(args: A): string
 }
 
 export interface Playbook<A = any, R = unknown> {

@@ -12,6 +12,7 @@ export const COMMANDS: CommandInfo[] = [
   { name: "skills", description: "Danh sách skill; bật / tắt skill cho cả phiên" },
   { name: "agents", description: "Các loại subagent (có sẵn, người dùng, dự án) và tool của từng loại" },
   { name: "tasks", description: "Subagent của phiên này: đang chạy, đã xong; xem kết quả, dừng" },
+  { name: "desk", args: "[on|off|resume <run>]", description: "Ultradesk: xem các run nhiều agent; bật/tắt cho cả phiên; chạy tiếp run bị cắt" },
   { name: "skill", args: "<tên>", description: "Bật / tắt một skill cho cả phiên" },
   { name: "watchlist", args: "[tên]", description: "Watchlist cá nhân: xem giá; new|add|rm|rename|del để sửa" },
   { name: "profile", description: "Mở hồ sơ nhà đầu tư (INVESTOR.md)" },

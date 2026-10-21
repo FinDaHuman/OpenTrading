@@ -2,6 +2,7 @@ import { useTerminalDimensions } from "@opentui/solid"
 import { createMemo, For, Show } from "solid-js"
 import { fmtTokens } from "../core/subagents/result"
 import type { SubagentView } from "../core/subagents/types"
+import type { DeskRunView } from "../core/desk/types"
 import { fmtElapsed } from "./activity"
 import { state } from "./state"
 import { shownTodos, visibleTodos } from "./todo-panel"
@@ -31,9 +32,38 @@ export const PANEL_ROWS = 5
 
 const isActive = (a: SubagentView) => a.status === "queued" || a.status === "running"
 
-/** The agents the panel lists at time `t`, oldest first. */
+/** Panel rows for desk runs carry the run id (dk-…): enter opens /desk, x stops the run. */
+export const isDeskRow = (a: { id: string }) => a.id.startsWith("dk-")
+
+/** One row for a whole desk run (its agents are not listed one by one): playbook · phase n/m. */
+export function deskRow(run: DeskRunView): SubagentView {
+  const phase = run.phases.find((p) => p.total > 0 && p.done + p.failed < p.total) ?? [...run.phases].reverse().find((p) => p.total > 0)
+  const where = phase ? `${phase.title} ${phase.done}/${phase.total}` : "bắt đầu"
+  const note = run.status === "paused" ? " · tạm dừng" : run.status === "partial" ? " · một phần" : ""
+  const status = run.status === "running" || run.status === "paused" ? "running" : run.status === "failed" ? "failed" : run.status === "stopped" ? "stopped" : "completed"
+  return {
+    id: run.id,
+    type: "ultradesk",
+    description: `${run.playbook} · ${where}${note} · ${run.counters.requests} req`,
+    prompt: "",
+    background: true,
+    model: "",
+    status,
+    createdAt: run.createdAt,
+    startedAt: run.createdAt,
+    endedAt: run.endedAt,
+    tools: [],
+    toolCount: 0,
+    usage: { input: run.counters.input, output: run.counters.output },
+    requests: run.counters.requests,
+    text: "",
+  }
+}
+
+/** The agents the panel lists at time `t`, oldest first; a desk run is one row, not its agents. */
 export function panelAgents(t: number): SubagentView[] {
-  return Object.values(state.agents)
+  const desk = Object.values(state.deskRuns).map(deskRow)
+  return [...Object.values(state.agents).filter((a) => !a.deskRunId), ...desk]
     .filter((a) => isActive(a) || (a.endedAt !== undefined && t - a.endedAt < LINGER_MS))
     .sort((a, b) => a.createdAt - b.createdAt)
 }
