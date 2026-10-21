@@ -41,14 +41,14 @@ function preview(output: string, expanded: boolean, max: number) {
 }
 
 /** What a tool row says under its header, besides raw output. */
-function summary(line: ToolLine): { tone: "ok" | "denied" | "answers"; lines: string[] } | undefined {
+function summary(line: ToolLine): { tone: "ok" | "denied" | "answers"; lines: string[]; wrap?: boolean } | undefined {
   const out = line.output ?? ""
   // The pinned panel shows the list; the transcript keeps one line (ctrl+o for the list).
   if (line.status === "ok" && out.startsWith(TODO_PREFIX) && !state.expandTools) return { tone: "ok", lines: [] }
   // A deferred tool called before loading: the call loaded it. One sentence; ctrl+o shows the
   // parameters the model got with it.
   if (line.status === "error" && out.startsWith(LOADED_PREFIX) && !state.expandTools) {
-    return { tone: "ok", lines: [out.split("\n")[1] ?? out] }
+    return { tone: "ok", lines: [out.split("\n")[1] ?? out], wrap: true }
   }
   if (line.status === "error" && out.startsWith("Người dùng từ chối chạy tool này")) {
     const note = /Lời nhắn của người dùng: (.*)$/s.exec(out)?.[1]
@@ -79,6 +79,9 @@ function ToolRow(props: { line: ToolLine; first: boolean; width: number }) {
   const out = () =>
     preview(props.line.output ?? "", state.expandTools, props.line.status === "error" ? COLLAPSED_ERROR_LINES : COLLAPSED_LINES)
   const textWidth = () => Math.max(10, props.width - RESULT.length)
+  // A deferred tool the call just loaded is not a failure: grey, not red.
+  const loaded = () => (props.line.output ?? "").startsWith(LOADED_PREFIX)
+  const outColor = () => (props.line.status === "error" && !loaded() ? color.giam : color.tx3)
 
   /** First result line gets "  ⎿  ", the rest line up under it. */
   const prefix = (first: boolean) => (first && !props.line.decision ? RESULT : RESULT_CONT)
@@ -102,14 +105,26 @@ function ToolRow(props: { line: ToolLine; first: boolean; width: number }) {
         <Match when={special()}>
           {(s) => (
             <For each={s().lines}>
-              {(row, i) => <ResultLine prefix={prefix(i() === 0)} text={truncate(row, textWidth())} fg={s().tone === "denied" ? color.giam : color.tx2} />}
+              {(row, i) =>
+                s().wrap ? (
+                  <ResultLine prefix={prefix(i() === 0)} text={row} fg={color.tx2} wrap />
+                ) : (
+                  <ResultLine prefix={prefix(i() === 0)} text={truncate(row, textWidth())} fg={s().tone === "denied" ? color.giam : color.tx2} />
+                )
+              }
             </For>
           )}
         </Match>
         <Match when={props.line.output}>
+          {/* ctrl+o shows every character: long lines wrap under the ⎿ column instead of ending in "…". */}
           <For each={out().lines}>
             {(row, i) => (
-              <ResultLine prefix={prefix(i() === 0)} text={truncate(row, textWidth(), true)} fg={props.line.status === "error" ? color.giam : color.tx3} />
+              <Show
+                when={state.expandTools}
+                fallback={<ResultLine prefix={prefix(i() === 0)} text={truncate(row, textWidth(), true)} fg={outColor()} />}
+              >
+                <ResultLine prefix={prefix(i() === 0)} text={row.replace(/\t/g, "  ").trimEnd()} fg={outColor()} wrap />
+              </Show>
             )}
           </For>
           <Show when={out().hidden > 0}>
@@ -133,14 +148,17 @@ function Gutter(props: { glyph: string; fg: string }) {
   )
 }
 
-/** One result line under a tool call: a fixed, unselectable "  ⎿  " prefix and the text. */
-function ResultLine(props: { prefix: string; text: string; fg: string }) {
+/**
+ * One result line under a tool call: a fixed, unselectable "  ⎿  " prefix and the text.
+ * `wrap`: the text may take several rows, each hanging under the first (not under ⎿).
+ */
+function ResultLine(props: { prefix: string; text: string; fg: string; wrap?: boolean }) {
   return (
-    <box flexDirection="row" height={1}>
+    <box flexDirection="row" height={props.wrap ? undefined : 1} flexShrink={0}>
       <text fg={color.tx3} width={RESULT.length} flexShrink={0} selectable={false}>
         {props.prefix}
       </text>
-      <text fg={props.fg} wrapMode="none">
+      <text fg={props.fg} wrapMode={props.wrap ? "word" : "none"} flexGrow={props.wrap ? 1 : 0} flexShrink={props.wrap ? 1 : 0}>
         {props.text}
       </text>
     </box>
