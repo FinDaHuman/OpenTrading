@@ -460,6 +460,8 @@ async function* relay(
           outcome.rawFinish = part.rawFinishReason
           const note = (part.providerMetadata?.google as { finishMessage?: unknown } | undefined)?.finishMessage
           outcome.finishMessage = typeof note === "string" && note.trim() ? note.trim().slice(0, 300) : undefined
+          // Every finished step is one model request, usage reported or not (quota counts requests).
+          yield { type: "step" }
           const input = part.usage?.inputTokens
           const output = part.usage?.outputTokens
           if (input === undefined && output === undefined) break

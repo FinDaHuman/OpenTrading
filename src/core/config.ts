@@ -1,3 +1,4 @@
+import type { DeskSize } from "./desk/types"
 import type { Effort } from "./effort"
 import { configFile } from "./paths"
 import type { ProviderId } from "./providers"
@@ -90,6 +91,27 @@ export interface Config {
    * their own per-type cap (`agents/*.md` maxSteps, default 8).
    */
   maxSteps?: number
+  /**
+   * Ultradesk (docs/desk.md): `size` small | medium | large | unrestricted (default small);
+   * `maxAgents` hard cap per run (100); `maxConcurrent` agents of one run at once (3);
+   * `maxRequests` hard cap of model requests per run (none); `warnRequests` warn above (150);
+   * `effort` / `provider` + `model` for desk agents (default: as subagents); `keyword`
+   * false turns the ultradesk keyword off; `alwaysOn` starts sessions in desk mode;
+   * `staggerMs` cache stagger (3000, 0 = off).
+   */
+  desk?: {
+    size?: DeskSize
+    maxAgents?: number
+    maxConcurrent?: number
+    maxRequests?: number
+    warnRequests?: number
+    effort?: Effort
+    provider?: string
+    model?: string
+    keyword?: boolean
+    alwaysOn?: boolean
+    staggerMs?: number
+  }
   /** Extra workspace folders kept across sessions (`/add-dir <thư mục> --luu`). */
   workspace?: { dirs?: string[] }
 }
