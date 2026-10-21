@@ -71,6 +71,12 @@ export interface ToolDef<I = any> {
    * built-ins (load_skill, ask_user, todo_write, tool_search…) are never deferred.
    */
   deferrable?: boolean
+  /**
+   * Never declared, listed as deferred or found by tool_search; it exists for a request only
+   * when the turn preloads it (or history already called it). desk_run: only a request that
+   * opted into ultradesk sees it, and it never crowds other tools out of search results.
+   */
+  onDemand?: boolean
   /** Extra words tool_search matches on (MCP `_meta["anthropic/searchHint"]`). */
   searchHint?: string
   /** Human label, e.g. `github · create_issue` (MCP); defaults to `name`. */

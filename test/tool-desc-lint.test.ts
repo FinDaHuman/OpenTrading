@@ -14,6 +14,8 @@ import { readFileTool } from "../src/core/tools/fs/read"
 import { globFilesTool, grepFilesTool } from "../src/core/tools/fs/search"
 import { editFileTool, writeFileTool } from "../src/core/tools/fs/write"
 import { shellTool } from "../src/core/tools/shell/shell"
+import { deskRunTool } from "../src/core/desk/tool"
+import { PLAYBOOKS } from "../src/core/desk/playbooks"
 import type { ToolDef } from "../src/core/tools/types"
 import type { ToolRegistry } from "../src/core/tools/registry"
 
@@ -68,7 +70,8 @@ const LENGTH_CAPS: Record<string, number> = {
 }
 const MCP_CAP = 900
 const BUILTIN_CAP = 1600
-const BUILTIN_CAPS: Record<string, number> = { spawn_subagent: 2000 }
+// desk_run lists every bundled playbook with its args (4 planned).
+const BUILTIN_CAPS: Record<string, number> = { spawn_subagent: 2000, desk_run: 2000 }
 
 const descOf = (t: CatalogTool) => (t.description ?? "").replace(/\s+/g, " ").trim()
 const hasUse = (d: string) => /Dùng khi|Use (for|when|to|this)|Dùng để|Dùng lúc/i.test(d)
@@ -154,6 +157,8 @@ function builtin(name: string): ToolDef<never> {
       return editFileTool({} as never) as ToolDef<never>
     case "shell":
       return shellTool({} as never, { shell: { kind: "powershell", path: "powershell.exe" } }) as ToolDef<never>
+    case "desk_run":
+      return deskRunTool({ engine: {} as never, approvals: {} as never, playbooks: () => PLAYBOOKS, optIn: () => undefined, mode: () => "ask" }) as ToolDef<never>
     default:
       throw new Error(`builtin không rõ: ${name}`)
   }
@@ -164,7 +169,7 @@ const NO_NOT_USE = new Set(["current_time", "tool_search", "load_skill", "chart_
 
 test("builtin tools follow the Claude standard: purpose + when + (when not) + bounded length", () => {
   const problems: string[] = []
-  for (const name of ["todo_write", "ask_user", "load_skill", "tool_search", "current_time", "chart_compare", "chart_render", "spawn_subagent", "read_file", "glob_files", "grep_files", "write_file", "edit_file", "shell"]) {
+  for (const name of ["todo_write", "ask_user", "load_skill", "tool_search", "current_time", "chart_compare", "chart_render", "spawn_subagent", "read_file", "glob_files", "grep_files", "write_file", "edit_file", "shell", "desk_run"]) {
     const d = (builtin(name).description ?? "").replace(/\s+/g, " ").trim()
     if (!hasUse(d)) problems.push(`${name}: thiếu "Dùng khi/Khi nào"`)
     if (!NO_NOT_USE.has(name) && !hasNotUse(d)) problems.push(`${name}: thiếu "Không dùng khi"`)

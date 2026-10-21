@@ -34,14 +34,15 @@ const WHY: Record<DeskOptIn, string> = {
 
 /** The reminder for a request with desk runs allowed: what the playbooks are for, and how to start one. */
 export function deskReminder(optIn: DeskOptIn, playbooks: Playbook[]): string {
-  const list = playbooks.map((p) => `- ${p.meta.name}: ${p.meta.whenToUse.replace(/\s+/g, " ").trim()}`).join("\n")
+  const list = playbooks.map((p) => `- ${p.meta.name.replace(/-/g, "_")}: ${p.meta.whenToUse.replace(/\s+/g, " ").trim()}`).join("\n")
   const scope =
     optIn === "session"
       ? "Với yêu cầu nghiên cứu lớn khớp một playbook, chạy nó bằng desk_run; câu hỏi nhỏ thì trả lời bình thường."
-      : "Nếu yêu cầu khớp một playbook, gọi desk_run với playbook và args đúng schema. Không khớp playbook nào thì làm như bình thường và nói ngắn vì sao."
+      : "Nếu yêu cầu khớp một playbook, gọi desk_run và điền key của playbook đó (ví dụ sang_loc) bằng tham số đúng schema. Không khớp playbook nào thì làm như bình thường và nói ngắn vì sao."
   return [
     `${WHY[optIn]}. ${scope}`,
     "Run chạy nền; kết quả về sau trong <thong_bao_desk>. Sau khi gọi desk_run, chỉ báo ngắn là run đang chạy (xem /desk), không tự làm lại việc của run.",
+    "Có gợi ý skill làm cùng việc với một playbook (ví dụ so sánh nhiều mã) thì chạy playbook, thay vì tự điều phối theo skill.",
     list ? `Playbook:\n${list}` : "Chưa có playbook nào.",
   ].join("\n")
 }

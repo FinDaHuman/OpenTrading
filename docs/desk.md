@@ -6,7 +6,20 @@ Ultradesk điều phối nhiều subagent nghiên cứu theo một **playbook**:
 - Server MCP chạy gói free (0,1 CPU), nên mỗi run có cap đồng thời riêng.
 - Kết luận ở dạng kịch bản, không đưa khuyến nghị Mua/Bán.
 
-Trạng thái: engine (PR3) và giao diện (PR4) đã có. Các playbook đóng gói sẵn đến ở PR5–PR6; trước đó `desk_run` chưa có playbook nào để chạy.
+Trạng thái: engine (PR3), giao diện (PR4) và 2 playbook `sang-loc`, `kiem-chung` (PR5) đã có; `tranh-bien` và `nganh` đến ở PR6.
+
+## Playbook có sẵn
+
+Cột là số agent / số request tối đa (tổng `maxSteps`; thực tế thường khoảng 60%). Bậc `unrestricted` = `large`. Trường hợp xấu nhất, agent nào trả kết quả sai schema cần thêm lượt nhắc: tối đa +4 request mỗi agent (`sang-loc` large: ~456 thay vì 276).
+
+| Playbook | Cách chạy | small | medium | large |
+| --- | --- | --- | --- | --- |
+| `sang-loc {tickers, tieu_chi?}` | Mỗi mã một thẻ điểm cơ bản (agent `co-ban`, 6 bước, effort low, schema: P/E, P/B, ROE, tăng trưởng LNST, biên gộp, nợ vay/vốn chủ, OCF/LNST, điểm 0–10 bốn chiều) chạy theo pipeline → code xếp hạng (≤ 10 mã: điểm thẻ có trọng số theo `tieu_chi`; > 10 mã: trộn thêm z-score các chỉ số) → các mã dẫn đầu bị `phan-bien` bác bỏ (effort high, mỗi phiếu một góc nhìn; đa số bác bỏ thì gắn cờ và trừ điểm) → `tong-hop` viết bảng xếp hạng, nhóm dẫn đầu/cuối, kịch bản tích cực/cơ sở/tiêu cực (không khuyến nghị Mua/Bán). Bảng điểm do code tính luôn đi kèm để đối chiếu | 5 mã, không phản biện: **6 / 36** | 10 mã, top 3 × 1 phiếu: 14 / 84 | 30 mã, top 5 × 3 phiếu: 46 / 276 |
+| `kiem-chung {noi_dung, boi_canh?}` | Một agent trích các khẳng định định lượng (2 bước, không cần tool) → xếp theo mức quan trọng → mỗi khẳng định được 1 hoặc 3 phiếu `tra-cuu` (4 bước) đối chiếu dữ liệu, mỗi phiếu một góc nhìn: số liệu gốc / kỳ và đơn vị / bối cảnh → đa số quyết định ✓ đúng / ✘ sai; không đủ phiếu hợp lệ là ? chưa kiểm chứng (lỗi hay hết quota không bao giờ thành "sai"). Báo cáo do code dựng, không tốn thêm agent | 5 khẳng định × 1 phiếu: **6 / 22** | 10 × 3: 31 / 122 | 20 × 3: 61 / 242 |
+
+- Danh sách vượt bậc (mã, khẳng định) bị cắt kèm một dòng log nói rõ bỏ những gì.
+- Lệnh tắt: `/sang-loc FPT MWG HPG VNM` hoặc `/kiem-chung <dán văn bản>` (văn bản nhiều dòng được giữ nguyên). Với `kiem-chung`, model phải chép văn bản vào lời gọi tool: văn bản rất dài tốn token đầu ra, và model lite có thể chép không nguyên văn.
+- `desk_run` chỉ hiện với model khi yêu cầu đã opt-in (keyword, `/desk on`, lệnh playbook): nó không nằm trong danh sách tool hoãn hay kết quả `tool_search`, nên không chen chỗ các tool dữ liệu khi tìm tool.
 
 ## Dùng thế nào
 
@@ -19,7 +32,7 @@ Trạng thái: engine (PR3) và giao diện (PR4) đã có. Các playbook đóng
 | `/desk resume <run>` | Chạy tiếp run bị cắt (hết quota, chạm trần, bị dừng), kể cả sau khi mở lại phiên |
 
 **Thẻ duyệt** hiện trước khi chạy: mô tả, các phase, `◂ quy mô ▸` và `◂ effort ▸` (←→ để đổi, số agent/request cập nhật theo), cảnh báo △ khi vượt `warnRequests`/`maxRequests`. Lựa chọn: Chạy / Chạy, không hỏi lại `<playbook>` / Xem tham số / Không.
-- **Không có opt-in** (model tự tìm ra `desk_run`): thẻ **luôn** hiện, kể cả ở ▸▸ tự động và với playbook đã "không hỏi lại".
+- **Không có opt-in** (chỉ xảy ra khi lịch sử hội thoại đã từng gọi `desk_run`, nên tool còn được khai báo): thẻ **luôn** hiện, kể cả ở ▸▸ tự động và với playbook đã "không hỏi lại".
 - **Có opt-in** (keyword, `/desk on`, `/<playbook>`): playbook đã "không hỏi lại" thì chạy luôn; lần đầu thì hiện thẻ. Ở ▸▸ tự động, "Chạy" lần đầu tự ghi nhớ playbook (`desk.approved`).
 
 **Khi đang chạy**: agent panel có **một dòng cho cả run** (`ultradesk  sang-loc · Thu thập 3/5 · 21 req`), không liệt kê từng agent; enter mở `/desk`, `x` hai lần dừng run. `/tasks` không hiện agent của desk. Khi xong, transcript có một dòng và agent chính nhận **một** `<thong_bao_desk>`.

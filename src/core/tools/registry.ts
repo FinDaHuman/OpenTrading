@@ -164,7 +164,9 @@ export class ToolRegistry {
   toToolSet(opts: ToolSetOptions = {}): BuiltToolSet {
     const flavor = opts.flavor ?? "default"
     const max = opts.maxTools ?? MAX_TOOLS_PER_REQUEST
-    const ordered = this.list().sort((a, b) => (a.priority ?? -1) - (b.priority ?? -1) || a.name.localeCompare(b.name))
+    const ordered = this.list()
+      .filter((d) => !d.onDemand || opts.loaded?.has(d.name))
+      .sort((a, b) => (a.priority ?? -1) - (b.priority ?? -1) || a.name.localeCompare(b.name))
     const isDeferred = (def: ToolDef) => !!opts.defer && !!def.deferrable && !opts.loaded?.has(def.name)
     const visible = ordered.filter((d) => !isDeferred(d))
     const kept = visible.slice(0, max)
