@@ -6,7 +6,7 @@ Ultradesk điều phối nhiều subagent nghiên cứu theo một **playbook**:
 - Server MCP chạy gói free (0,1 CPU), nên mỗi run có cap đồng thời riêng.
 - Kết luận ở dạng kịch bản, không đưa khuyến nghị Mua/Bán.
 
-Trạng thái: engine (PR3), giao diện (PR4) và 4 playbook `sang-loc`, `kiem-chung` (PR5), `tranh-bien`, `nganh` (PR6) đã có.
+Trạng thái: chặng 1 xong — engine, giao diện, 4 playbook và bộ đo đạc. Theo [ADR 0006](../handbook/architecture/adr/0006-measured-multi-agent-playbooks.md) (đang ở trạng thái *proposed*), ultradesk chỉ chạy khi bạn bật; chặng 2 (model tự viết playbook, chạy trong sandbox) chỉ làm khi đo đạc cho thấy desk tốt hơn rõ.
 
 ## Playbook có sẵn
 
@@ -98,6 +98,23 @@ Agent của desk:
   - Không khớp theo thứ tự khởi động như Claude Code, vì pipeline chạy đồng thời làm thứ tự đó thay đổi theo agent nào xong trước.
   - Kết quả phía trước đổi thì prompt phía sau (có trích kết quả đó) cũng đổi, nên các agent phía sau tự chạy lại.
 - Mỗi run gửi **một** thông báo `<thong_bao_desk>` cho agent chính, không có thông báo riêng cho từng agent. Kết quả trong thông báo được cắt ở 20.000 ký tự.
+
+## Đo đạc: desk có đáng không
+
+`scripts/dev/desk-eval.ts` trả lời 20 câu hỏi thật (`test/fixtures/desk-eval/cases.json`, 5 câu mỗi playbook) bằng hai cách. **Mặc định**: agent chính trả lời câu hỏi như người dùng gõ, với mọi tool, kể cả subagent do skill gọi (request của chúng được tính). **Desk**: playbook tương ứng chạy cùng yêu cầu. Trước khi chấm, câu trả lời của cả hai nhánh đều được xoá những chi tiết làm lộ desk (tiêu đề bảng "tính bằng code", ghi chú `/desk resume`…). Câu nào có nhánh lỗi hoặc bị cắt thì không chấm. Một model chấm (LLM-judge) chấm cả hai câu trả lời **mù**: không biết câu nào của desk, vị trí A/B đổi theo từng câu. Có 4 tiêu chí, mỗi tiêu chí 0–1: chính xác, trích dẫn, đầy đủ, có cơ sở dữ liệu. Cách làm theo bài "How we built our multi-agent research system" của Anthropic.
+
+```
+bun scripts/dev/desk-eval.ts --playbook sang-loc            # chỉ in ước tính
+bun scripts/dev/desk-eval.ts --playbook sang-loc --yes      # chạy thật, tốn quota của bạn
+bun scripts/dev/desk-eval.ts --only 1,6,11,16 --judge google/gemini-3.1-pro --yes
+```
+
+- **Không có `--yes` thì không gọi model nào**: script chỉ in số ca và số request dự kiến.
+- Cả bộ ở quy mô small tốn hơn 500 request. Hãy chạy từng playbook, mỗi ngày một phần.
+- Duyệt quyền khi không có người: các lời hỏi chỉ đọc (domain của `web_fetch`) được cho phép một lần, mọi thứ khác bị từ chối, để run không bị treo.
+- Model chấm nên mạnh hơn model trả lời (`--judge`). Kết quả JSON ghi ở `~/.opentrading/exports/desk-eval-<thời điểm>.json`.
+- Model chấm không có tool: với các câu `kiem-chung`, hãy điền `tham_chieu` (số liệu đúng, từ nguồn bạn tin) vào `cases.json`, nếu không thì điểm "chính xác" chỉ phản ánh câu trả lời nghe có chắc chắn hay không.
+- **Ngưỡng của ADR 0006**: điểm trung bình của desk cao hơn đường mặc định ít nhất 0,10 **và** desk thắng ít nhất 60% số câu được chấm. Script in kết luận theo từng playbook kèm số request của mỗi nhánh. Điểm của LLM chỉ là thước đo gần đúng: trước khi chuyển ADR sang *accepted*, cần đọc tay vài câu mỗi playbook.
 
 ## Viết playbook an toàn
 

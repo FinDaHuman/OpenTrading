@@ -1,0 +1,122 @@
+[
+  {
+    "id": 1,
+    "playbook": "sang-loc",
+    "question": "So sánh và xếp hạng 5 ngân hàng VCB, TCB, MBB, ACB, BID theo chất lượng và định giá.",
+    "args": { "tickers": ["VCB", "TCB", "MBB", "ACB", "BID"], "tieu_chi": "chất lượng và định giá" }
+  },
+  {
+    "id": 2,
+    "playbook": "sang-loc",
+    "question": "Trong FPT, CMG, ELC, CTR, VGI mã nào có nền tảng cơ bản tốt nhất?",
+    "args": { "tickers": ["FPT", "CMG", "ELC", "CTR", "VGI"], "tieu_chi": "chất lượng lợi nhuận" }
+  },
+  {
+    "id": 3,
+    "playbook": "sang-loc",
+    "question": "Lọc giúp nhóm thép HPG, HSG, NKG, TLH, SMC theo nợ vay và dòng tiền, mã nào an toàn nhất?",
+    "args": { "tickers": ["HPG", "HSG", "NKG", "TLH", "SMC"], "tieu_chi": "nợ thấp, dòng tiền tốt" }
+  },
+  {
+    "id": 4,
+    "playbook": "sang-loc",
+    "question": "Xếp hạng nhóm bán lẻ MWG, PNJ, FRT, DGW, MSN theo tăng trưởng lợi nhuận.",
+    "args": { "tickers": ["MWG", "PNJ", "FRT", "DGW", "MSN"], "tieu_chi": "tăng trưởng" }
+  },
+  {
+    "id": 5,
+    "playbook": "sang-loc",
+    "question": "Bất động sản VHM, NLG, KDH, DXG, PDR: mã nào định giá rẻ mà vẫn an toàn tài chính?",
+    "args": { "tickers": ["VHM", "NLG", "KDH", "DXG", "PDR"], "tieu_chi": "định giá rẻ, an toàn" }
+  },
+  {
+    "id": 6,
+    "playbook": "kiem-chung",
+    "question": "Kiểm tra giúp các số liệu trong đoạn sau có đúng không: FPT lãi sau thuế năm 2024 khoảng 7.800 tỷ đồng, tăng khoảng 20% so với 2023. Biên lợi nhuận gộp khoảng 38%, ROE trên 28%, P/E hiện quanh 20 lần.",
+    "args": { "noi_dung": "FPT lãi sau thuế năm 2024 khoảng 7.800 tỷ đồng, tăng khoảng 20% so với 2023. Biên lợi nhuận gộp khoảng 38%, ROE trên 28%, P/E hiện quanh 20 lần.", "boi_canh": "mã FPT, số liệu năm 2024" }
+  },
+  {
+    "id": 7,
+    "playbook": "kiem-chung",
+    "question": "Đoạn này có số nào sai không: Vietcombank lãi trước thuế năm 2024 đạt 60.000 tỷ đồng, tỷ lệ nợ xấu dưới 1%, CASA khoảng 35%, P/B khoảng 2,5 lần.",
+    "args": { "noi_dung": "Vietcombank lãi trước thuế năm 2024 đạt 60.000 tỷ đồng, tỷ lệ nợ xấu dưới 1%, CASA khoảng 35%, P/B khoảng 2,5 lần.", "boi_canh": "mã VCB, năm 2024" }
+  },
+  {
+    "id": 8,
+    "playbook": "kiem-chung",
+    "question": "Kiểm chứng giúp: Hòa Phát sản xuất khoảng 8 triệu tấn thép thô năm 2024, lãi sau thuế khoảng 12.000 tỷ, nợ vay/vốn chủ dưới 0,5 lần.",
+    "args": { "noi_dung": "Hòa Phát sản xuất khoảng 8 triệu tấn thép thô năm 2024, lãi sau thuế khoảng 12.000 tỷ, nợ vay/vốn chủ dưới 0,5 lần.", "boi_canh": "mã HPG, năm 2024" }
+  },
+  {
+    "id": 9,
+    "playbook": "kiem-chung",
+    "question": "Các con số này có chuẩn không: MWG doanh thu năm 2024 khoảng 134.000 tỷ, lãi sau thuế khoảng 3.700 tỷ, chuỗi Bách Hóa Xanh đã có lãi cả năm.",
+    "args": { "noi_dung": "MWG doanh thu năm 2024 khoảng 134.000 tỷ, lãi sau thuế khoảng 3.700 tỷ, chuỗi Bách Hóa Xanh đã có lãi cả năm.", "boi_canh": "mã MWG, năm 2024" }
+  },
+  {
+    "id": 10,
+    "playbook": "kiem-chung",
+    "question": "Kiểm tra: VN-Index kết thúc năm 2024 quanh 1.270 điểm, khối ngoại bán ròng hơn 90.000 tỷ đồng trên HOSE trong năm, thanh khoản bình quân khoảng 20.000 tỷ mỗi phiên.",
+    "args": { "noi_dung": "VN-Index kết thúc năm 2024 quanh 1.270 điểm, khối ngoại bán ròng hơn 90.000 tỷ đồng trên HOSE trong năm, thanh khoản bình quân khoảng 20.000 tỷ mỗi phiên.", "boi_canh": "thị trường chung, năm 2024" }
+  },
+  {
+    "id": 11,
+    "playbook": "tranh-bien",
+    "question": "FPT có đáng giữ tiếp không? Nhìn cả mặt tích cực lẫn rủi ro giúp mình.",
+    "args": { "ticker": "FPT", "cau_hoi": "có đáng giữ tiếp không" }
+  },
+  {
+    "id": 12,
+    "playbook": "tranh-bien",
+    "question": "HPG đang có triển vọng thế nào? Cho mình cả phe lạc quan và phe thận trọng.",
+    "args": { "ticker": "HPG", "cau_hoi": "triển vọng 6 tháng tới" }
+  },
+  {
+    "id": 13,
+    "playbook": "tranh-bien",
+    "question": "MWG lúc này rủi ro hay cơ hội nhiều hơn?",
+    "args": { "ticker": "MWG", "cau_hoi": "rủi ro hay cơ hội nhiều hơn" }
+  },
+  {
+    "id": 14,
+    "playbook": "tranh-bien",
+    "question": "VCB có còn đáng tiền khi P/B cao hơn các ngân hàng khác không?",
+    "args": { "ticker": "VCB", "cau_hoi": "P/B cao có còn hợp lý" }
+  },
+  {
+    "id": 15,
+    "playbook": "tranh-bien",
+    "question": "VHM nên nhìn nhận thế nào trước kỳ báo cáo tới?",
+    "args": { "ticker": "VHM", "cau_hoi": "trước kỳ báo cáo tới" }
+  },
+  {
+    "id": 16,
+    "playbook": "nganh",
+    "question": "Ngành ngân hàng Việt Nam đang thế nào, NIM có cải thiện không và mã nào nổi bật?",
+    "args": { "nganh": "ngân hàng", "cau_hoi": "NIM có cải thiện không" }
+  },
+  {
+    "id": 17,
+    "playbook": "nganh",
+    "question": "Ngành thép đang ở đâu trong chu kỳ và chịu tác động gì từ giá quặng, giá thép Trung Quốc?",
+    "args": { "nganh": "thép", "cau_hoi": "vị trí chu kỳ và giá đầu vào" }
+  },
+  {
+    "id": 18,
+    "playbook": "nganh",
+    "question": "Triển vọng nhóm chứng khoán khi thanh khoản thị trường thay đổi?",
+    "args": { "nganh": "chứng khoán", "cau_hoi": "tác động của thanh khoản" }
+  },
+  {
+    "id": 19,
+    "playbook": "nganh",
+    "question": "Ngành bán lẻ tiêu dùng đang phục hồi đến đâu?",
+    "args": { "nganh": "bán lẻ", "cau_hoi": "mức độ phục hồi" }
+  },
+  {
+    "id": 20,
+    "playbook": "nganh",
+    "question": "Nhóm dầu khí chịu gì khi giá dầu biến động mạnh?",
+    "args": { "nganh": "dầu khí", "cau_hoi": "tác động của giá dầu" }
+  }
+]

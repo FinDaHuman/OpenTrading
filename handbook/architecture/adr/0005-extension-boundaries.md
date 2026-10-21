@@ -6,7 +6,8 @@ Status: accepted
 
 Skills, future MCP servers, memory, and future child agents enter through explicit adapters and
 manifests. They declare capabilities and required permissions but cannot grant permissions. The
-single-agent runtime remains the baseline until measurements justify another topology.
+single-agent runtime remains the baseline until measurements justify another topology (ADR 0006:
+multi-agent playbooks, opt-in until their eval meets its thresholds).
 
 ## Consequences
 

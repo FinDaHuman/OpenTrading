@@ -56,14 +56,26 @@ Harness tự tìm model nhỏ, rẻ, gọi được tool từ các provider đã
 
 ## Loại agent
 
-Có 4 loại sẵn trong thư mục `agents/`:
+Có 17 loại sẵn trong thư mục `agents/` (mô tả đầy đủ ở từng file; `/agents` liệt kê cả loại của người dùng và dự án):
 
 | Loại | Tool | Bước tối đa | Dùng khi |
 | --- | --- | --- | --- |
 | `nghien-cuu` (mặc định) | tất cả (tool ghi phải duyệt) | 10 | nghiên cứu nhiều bước, trả tổng kết có nguồn |
 | `tra-cuu` | chỉ tool đọc | 6 | lấy nhanh vài số liệu cụ thể |
-| `phan-bien` | chỉ tool đọc | 8 | phản biện một luận điểm hay một kết quả định giá |
+| `phan-bien` | chỉ tool đọc | 8 | phản biện một luận điểm, kịch bản hay kết quả định giá |
 | `tin-tuc` | `web_search`, `web_fetch`, `*news*`, `*sentiment*`, `current_time` | 8 | gom và tóm tắt tin theo khoảng thời gian |
+| `co-ban` | chỉ tool đọc | 10 | mổ BCTC một mã: chất lượng lợi nhuận, dòng tiền, sức khỏe tài chính |
+| `dinh-gia` | chỉ tool đọc | 10 | định giá sâu một mã: DCF, so sánh cùng ngành, biên an toàn |
+| `ky-thuat` | chỉ tool đọc | 10 | kỹ thuật đa khung, kiểm tra phân kỳ |
+| `vi-mo` | chỉ tool đọc | 8 | vĩ mô VN và thế giới, tác động lên chứng khoán VN |
+| `nganh` | chỉ tool đọc | 8 | so sánh và xếp hạng các mã trong một ngành |
+| `chu-ky-nganh` | 7 tool dòng tiền/chu kỳ | 10 | dòng tiền ngành đang ở đâu, 1 tháng tới đổ vào đâu |
+| `rui-ro-thi-truong` | 7 tool rủi ro thị trường | 10 | rủi ro chung của thị trường theo O'Neil |
+| `tai-san-toan-cau` | chỉ tool đọc | 8 | regime tài sản toàn cầu, tiền đang chảy vào đâu |
+| `du-bao-su-kien` | chỉ tool đọc | 8 | dự báo một sự kiện (Fed, bầu cử, xung đột) và tác động lên VN |
+| `kiem-chien-luoc` | chỉ tool đọc | 10 | backtest một chiến lược |
+| `bull` / `bear` | chỉ tool đọc | 6 | hai phe trong tranh luận (dùng trong playbook `tranh-bien`) |
+| `tong-hop` | chỉ tool đọc | 6 | trọng tài: gộp báo cáo và tranh luận thành kịch bản |
 
 Loại chỉ đọc được bộ lọc tool của harness chặn ở mức tool (`@chi-doc` chỉ đưa tool đọc vào subagent); subagent không có tool shell hay file. Báo cáo cuối của subagent là text trả về cho agent chính (`prompts/subagent.md`).
 
