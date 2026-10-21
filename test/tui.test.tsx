@@ -2138,11 +2138,13 @@ test("prompt: ↑/↓ recall earlier prompts and slash commands, and give the dr
   let frame = await setup.waitForFrame((f) => promptRows(f).includes("nhap 2"))
   expect(promptRows(frame)).toEqual(["nhap 1", "nhap 2"])
   // At the top line, ↑ brings back the last command — without opening the "/" list.
+  // Each ↑ waits for the prompt to change: pressing again on a stale frame (slow CI) would go
+  // past /help to older entries.
   let up = 0
   while (!promptRows(frame).includes("/help") && up++ < 3) {
+    const before = promptRows(frame).join("\n")
     setup.mockInput.pressArrow("up")
-    await Bun.sleep(30)
-    frame = await setup.waitForFrame(() => true)
+    frame = await setup.waitForFrame((f) => promptRows(f).join("\n") !== before)
   }
   frame = await setup.waitForFrame((f) => promptRows(f)[0] === "/help")
   expect(frame).not.toContain("enter chạy · tab điền")
