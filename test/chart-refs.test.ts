@@ -197,3 +197,52 @@ test("bar with a matrix (grouped bars) says which kinds draw several series", as
   await expect(render({ kind: "bar", labels: ["a", "b"], matrix: [[1, 2], [3, 4]] })).rejects.toThrow("không nhận matrix. Nhiều mã theo thời gian: kind=multiline")
   await expect(render({ kind: "bar", series: [] })).rejects.toThrow("cần series ít nhất 1 cột")
 })
+
+test("chart_compare symbols filter the union of refs: r1 holds FPT, r2 holds HPG", async () => {
+  const a = refOf(await callTool(batchTool({ FPT: [100, 110] })))!
+  const b = refOf(await callTool(batchTool({ HPG: [20, 25] })))!
+  const res = (await chartCompareTool().execute({ from_calls: [a, b], symbols: ["FPT", "HPG"] }, ctx())) as ToolResult
+  expect(res.output).toContain("FPT +10%, HPG +25%")
+  // Only a symbol no ref holds is reported.
+  const err = await chartCompareTool()
+    .execute({ from_calls: [a, b], symbols: ["FPT", "VCB"] }, ctx())
+    .catch((e: Error) => e.message)
+  expect(err).toContain("không có mã VCB")
+  expect(err).not.toContain("không có mã FPT")
+})
+
+test("bar from_call over 200 rows keeps each label with its own value (the last 200)", async () => {
+  for (const n of [199, 200, 201, 202, 500]) {
+    clearResults()
+    const rows = Array.from({ length: n }, (_, i) => ({ ten: `Muc-${String(i + 1).padStart(3, "0")}`, gia_tri: i + 1 }))
+    const tool: ToolDef = { ...batchTool({}), execute: async () => JSON.stringify({ data: rows }) }
+    const ref = refOf(await callTool(tool))!
+    const res = await render({ kind: "bar", from_call: ref, label_field: "ten", field: "gia_tri" })
+    const chart = res.chart as { series: number[]; labels: string[] }
+    expect(chart.series).toHaveLength(Math.min(n, 200))
+    expect(chart.labels).toHaveLength(chart.series.length)
+    chart.labels.forEach((label, i) => expect(Number(label.slice(4))).toBe(chart.series[i]!))
+    expect(chart.labels.at(-1)).toBe(`Muc-${String(n).padStart(3, "0")}`)
+  }
+})
+
+test("refs belong to the session they were fetched in; a resumed session never reuses its refs", async () => {
+  const { useResultSession } = await import("../src/core/tools/refs")
+  try {
+    // Session A fetched FPT as r1 in an earlier process; this process opens B first.
+    useResultSession("B")
+    const vcb = refOf(await callTool(candleTool("VCB", [56, 57, 58])))!
+    expect(vcb).toBe("r1")
+    // Resume A, whose history names r1 (FPT) and r4.
+    useResultSession("A", JSON.stringify([{ content: "FPT [ref r1] … [ref r4]" }]))
+    await expect(render({ kind: "line", from_call: "r1" })).rejects.toThrow("hết hạn")
+    expect(recallResult("r1")).toBeUndefined()
+    const next = refOf(await callTool(candleTool("FPT", [100, 101, 102])))!
+    expect(next).toBe("r5")
+    // Back in B, its own r1 still resolves.
+    useResultSession("B")
+    expect(recallResult("r1")!.text).toContain("VCB")
+  } finally {
+    clearResults()
+  }
+})

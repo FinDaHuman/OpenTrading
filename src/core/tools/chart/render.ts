@@ -148,12 +148,19 @@ export function fromCall(input: ChartRenderInput): ChartRenderInput {
     if (!got.bars?.length) throw new Error(`${input.from_call} không có nến hợp lệ.`)
     return { ...base, bars: tail(got.bars, 500), times: tail(got.times, 500) }
   }
-  const series = tail(got.series, 2000) ?? []
+  // bar/pie take at most 200 labels: values and labels are cut at the same index, or a
+  // 201-row result would pair each label with its neighbour's value.
+  const labelled = input.kind === "bar" || input.kind === "pie"
+  const series = tail(got.series, labelled ? 200 : 2000) ?? []
+  const labels = labelled ? tail(got.labels, 200) : undefined
+  if (labels && labels.length !== series.length) {
+    throw new Error(`${input.from_call}: ${labels.length} nhãn nhưng ${series.length} giá trị, không ghép được; chọn label_field/field khác hoặc truyền số tay.`)
+  }
   return {
     ...base,
     series,
     times: tail(got.times, 2000),
-    labels: input.kind === "bar" || input.kind === "pie" ? tail(got.labels, 200) : undefined,
+    labels,
     dirs: input.kind === "sparkcolumn" ? tail(got.dirs, 2000) : undefined,
   }
 }

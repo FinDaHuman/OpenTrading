@@ -73,8 +73,21 @@ export function chartCompareTool(): ToolDef<ChartCompareInput> {
       if ((raw.ymin === undefined) !== (raw.ymax === undefined)) throw new Error("ymin và ymax phải đi cùng nhau.")
       let input = raw as ChartCompareInput & { series: { label: string; values: number[] }[] }
       if (raw.from_calls) {
-        // A batch result gives one series per symbol it holds.
-        const got = raw.from_calls.flatMap((ref) => extractAllFromRef(ref, { field: raw.field, symbols: raw.symbols }))
+        // A batch result gives one series per symbol it holds. `symbols` filters the union of
+        // every ref (r1 holds FPT, r2 holds HPG): a symbol is missing only if no ref has it.
+        const all = raw.from_calls.flatMap((ref) => extractAllFromRef(ref, { field: raw.field }))
+        const wanted = raw.symbols?.map((s) => s.trim().toUpperCase()).filter(Boolean) ?? []
+        let got = all
+        if (wanted.length > 0) {
+          const held = all.map((g) => g.symbol?.toUpperCase())
+          const missing = wanted.filter((s) => !held.includes(s))
+          // A result that names no symbol may be the one asked for: kept, not reported missing.
+          if (missing.length > 0 && !held.includes(undefined)) {
+            const known = [...new Set(held.filter(Boolean))]
+            throw new Error(`Kết quả ${raw.from_calls.join(", ")} không có mã ${missing.join(", ")}.${known.length ? ` Mã có: ${known.join(", ")}.` : ""}`)
+          }
+          got = all.filter((g) => !g.symbol || wanted.includes(g.symbol.toUpperCase()))
+        }
         if (got.length < 2) {
           throw new Error(`Chỉ có ${got.length} chuỗi (${got.map((g) => g.symbol ?? g.ref).join(", ")}); cần 2–5. Thêm kết quả giá của mã khác vào from_calls, hoặc vẽ một mã bằng chart_render kind=line.`)
         }

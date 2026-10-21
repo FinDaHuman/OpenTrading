@@ -5,6 +5,7 @@ import type { Runtime } from "../core/runtime"
 import { listSessions, loadSession, Session } from "../core/session/store"
 import { formatTranscript } from "../core/session/export"
 import { transcriptFromMessages } from "../core/session/transcript"
+import { useResultSession } from "../core/tools/refs"
 import { reconcile } from "solid-js/store"
 import { NO_COMPACTION, providerName, pushLine, setState, state, type Line } from "./state"
 
@@ -69,10 +70,14 @@ export async function transcriptOfCurrent(runtime: Runtime) {
   }
 }
 
-/** Subagent transcripts go next to the session being written. */
-export function attachSubagents(runtime: Runtime) {
+/**
+ * Subagent transcripts go next to the session being written; data refs (`rN`) resolve in it.
+ * `history`: a resumed conversation, whose refs new results must not reuse.
+ */
+export function attachSubagents(runtime: Runtime, history?: string) {
   runtime.subagents.attachSession({ id: current.id, dir: current.dir })
   runtime.desk.attachSession({ id: current.id, dir: current.dir })
+  useResultSession(current.id, history)
 }
 
 /** Start a fresh session (startup, /new, /clear). */
@@ -94,7 +99,7 @@ export async function resumeSession(runtime: Runtime, id: string) {
   const loaded = await loadSession(id)
   await runtime.hooks.emit({ type: "session-end", sessionId: current.id })
   current = Session.continue(loaded.summary)
-  attachSubagents(runtime)
+  attachSubagents(runtime, JSON.stringify(loaded.display))
   setState("agents", reconcile({}))
   setState("deskRuns", reconcile({}))
   setState({ notices: [], noticeHold: false })
