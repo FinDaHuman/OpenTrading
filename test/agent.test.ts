@@ -22,6 +22,7 @@ const CATALOG = {
     models: {
       tooly: { id: "tooly", name: "Tooly", tool_call: true, modalities: text },
       plain: { id: "plain", name: "Plain", tool_call: false, modalities: text },
+      "openai/gpt-oss-20b": { id: "openai/gpt-oss-20b", name: "GPT OSS 20B", tool_call: true, reasoning: true, modalities: text },
     },
   },
 }
@@ -758,6 +759,26 @@ test("the compaction summary is asked with the turn's system prompt and visible 
   expect(toolNames(body)).not.toContain("mcp__big__t003")
   // A model without vision gets the image as a placeholder.
   expect(JSON.stringify(body.messages)).not.toContain("QUJDREVGRw==")
+})
+
+test("the compaction request uses the configured effort, like the turns (review #117)", async () => {
+  const { summarizeConversation } = await import("../src/core/agent")
+  await saveConfig({ provider: "groq", model: "openai/gpt-oss-20b", effort: "low" })
+  try {
+    bodies.length = 0
+    const head: ModelMessage[] = [
+      { role: "user", content: "câu 1" },
+      { role: "assistant", content: "trả lời 1" },
+    ]
+    await summarizeConversation({ head, prompt: "TÓM-TẮT-ĐI", skills: [], registry: registry() })
+    expect((bodies[0] as unknown as { reasoning_effort?: string }).reasoning_effort).toBe("low")
+    // A caller's own effort wins over the config.
+    bodies.length = 0
+    await summarizeConversation({ head, prompt: "TÓM-TẮT-ĐI", skills: [], registry: registry(), effort: "high" })
+    expect((bodies[0] as unknown as { reasoning_effort?: string }).reasoning_effort).toBe("high")
+  } finally {
+    await saveConfig({ provider: "groq", model: "tooly", effort: undefined })
+  }
 })
 
 const threeTurns: ModelMessage[] = [1, 2, 3].flatMap((n): ModelMessage[] => [

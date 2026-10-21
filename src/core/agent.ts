@@ -794,9 +794,12 @@ export async function summarizeConversation(
   opts: Omit<TurnInput, "input"> & { head: ModelMessage[]; prompt: string; signal?: AbortSignal },
 ): Promise<string> {
   let head = opts.head
+  // The same effort as the conversation's turns (config `effort` unless the caller passes one).
+  const configured = (await loadConfig()).effort
+  const effort = opts.effort ?? (isEffort(configured) ? configured : undefined)
   for (let attempt = 0; ; attempt++) {
-    const prepared = await prepare({ ...opts, history: head, input: "" }, {})
-    const { system, request, model, active } = requestFor(prepared, [...head, { role: "user", content: opts.prompt }])
+    const prepared = await prepare({ ...opts, effort, history: head, input: "" }, {})
+    const { system, request, model, active, providerOptions } = requestFor(prepared, [...head, { role: "user", content: opts.prompt }])
     try {
       const result = await generateText({
         model,
@@ -807,6 +810,7 @@ export async function summarizeConversation(
         toolChoice: prepared.tools ? "none" : undefined,
         maxOutputTokens: compactOutputTokens(prepared.target),
         abortSignal: opts.signal,
+        providerOptions,
         // retry.ts retries transient failures; never a daily-quota 429.
         maxRetries: 0,
       })

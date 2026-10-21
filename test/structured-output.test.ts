@@ -163,3 +163,63 @@ test("a run without a schema has no result tool and no data", async () => {
   expect(result.data).toBeUndefined()
   expect(bodies[0]!.tools?.map((t) => t.function.name) ?? []).not.toContain(RESULT_TOOL)
 })
+
+test("a schema with a transform: the SDK's parsed output is the data, transformed once (review #118)", async () => {
+  const schema = z.object({ score: z.string().transform(Number), label: z.string().transform((s) => `[${s}]`) })
+  replies = [{ call: { name: RESULT_TOOL, args: { score: "7", label: "FPT" } } }]
+  const result = await manager().start({ description: "chấm", prompt: "Chấm", schema }).done
+  expect(result.status).toBe("completed")
+  // A second parse would reject the number, or wrap the label twice ("[[FPT]]").
+  expect(result.data).toEqual({ score: 7, label: "[FPT]" })
+})
+
+test("tra_ket_qua is kept under the provider's tool cap, ahead of every other tool (review #118)", async () => {
+  await saveConfig({ provider: "groq", model: "tooly", toolSearch: "off" })
+  try {
+    const registry = new ToolRegistry()
+    registry.register(currentTimeTool(() => new Date("2026-10-21T02:30:00Z")))
+    for (let i = 0; i < 140; i++) {
+      registry.register({ name: `mcp__big__t${String(i).padStart(3, "0")}`, description: "dữ liệu", input: z.object({}), readOnly: true, source: "mcp:big", priority: 0, async execute() { return "x" } })
+    }
+    replies = [{ call: { name: RESULT_TOOL, args: { ticker: "FPT", score: 7 } } }]
+    const result = await new SubagentManager({ parent: registry, skills: () => [] }).start({ description: "chấm", prompt: "Chấm", schema: SCORE }).done
+    const names = bodies[0]!.tools?.map((t) => t.function.name) ?? []
+    expect(names.length).toBeLessThanOrEqual(128)
+    expect(names).toContain(RESULT_TOOL)
+    expect(result.data).toEqual({ ticker: "FPT", score: 7 })
+  } finally {
+    await saveConfig({ toolSearch: undefined })
+  }
+})
+
+test("a continued schema run must produce its own result, never return the previous one (review #118)", async () => {
+  const m = manager()
+  replies = [{ call: { name: RESULT_TOOL, args: { ticker: "FPT", score: 7 } } }]
+  const run = m.start({ description: "chấm", prompt: "Chấm FPT", schema: SCORE, maxSteps: 1 })
+  expect((await run.done).data).toEqual({ ticker: "FPT", score: 7 })
+  // The continuation answers in prose only: no data, not the stale FPT result.
+  bodies.length = 0
+  replies = [{ text: "Không chấm thêm." }]
+  expect(await m.continue(run.id, "Chấm lại với dữ liệu mới", () => ({}))).toBe("resumed")
+  // continue() resumes the same run object: its `done` is the continuation's.
+  const result = await run.done
+  expect(result.data).toBeUndefined()
+  expect(result.failure).toBe("invalid-output")
+})
+
+test("an agent restored from its sidechain keeps its desk run id (review #118)", async () => {
+  const sessionDir = path.join(home, "sessions", "2026", "10", "s-desk")
+  const first = manager()
+  first.attachSession({ id: "s-desk", dir: sessionDir })
+  replies = [{ text: "Báo cáo." }]
+  const run = first.start({ description: "tra cứu", prompt: "Tra FPT", deskRunId: "dk-keep01" })
+  await run.done
+  await first.flush()
+  // A new manager (a resumed session): the agent is rebuilt from disk.
+  const second = manager()
+  second.attachSession({ id: "s-desk", dir: sessionDir })
+  replies = [{ text: "Thêm." }]
+  await second.continue(run.id, "Thêm", () => ({}))
+  expect(second.get(run.id)?.deskRunId).toBe("dk-keep01")
+  await second.flush()
+})

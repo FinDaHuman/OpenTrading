@@ -8,6 +8,9 @@ import type { ToolDef } from "../tools/types"
  */
 export const RESULT_TOOL = "tra_ket_qua"
 
+/** Sorts before native tools (no priority, read as -1) and MCP tools (server order, 0 and up). */
+export const RESULT_PRIORITY = -1000
+
 /** Turns a run may take to produce a valid result (Claude Code: MAX_STRUCTURED_OUTPUT_RETRIES 5). */
 export const MAX_RESULT_ATTEMPTS = 5
 
@@ -27,12 +30,14 @@ export function resultTool(schema: z.ZodObject, sink: (data: unknown) => void): 
       "sau khi gọi thì dừng, không viết thêm.",
     input: schema,
     readOnly: true,
+    // Ahead of every other tool, so a provider's tool cap can never drop it.
+    priority: RESULT_PRIORITY,
     summarize: () => `${RESULT_TOOL}(…)`,
     async execute(input) {
-      // The SDK validated the input already; parse again so defaults and transforms apply.
-      const parsed = schema.safeParse(input)
-      if (!parsed.success) throw new Error(`Kết quả sai schema: ${parsed.error.issues.map((i) => `${i.path.join(".") || "(gốc)"}: ${i.message}`).join("; ")}`)
-      sink(parsed.data)
+      // The SDK validated the call against the schema and hands over its parsed output
+      // (defaults and transforms applied once). Parsing it again would break transforms
+      // such as z.string().transform(Number).
+      sink(input)
       return "Đã nhận kết quả. Dừng tại đây."
     },
   }

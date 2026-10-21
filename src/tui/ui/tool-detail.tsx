@@ -32,7 +32,7 @@ export function ToolDetail(props: { tool: ToolDef; server: string }) {
     const input = t().input
     if (input instanceof z.ZodType) {
       try {
-        return z.toJSONSchema(input) as Record<string, any>
+        return z.toJSONSchema(input, { io: "input" }) as Record<string, any>
       } catch {
         return {}
       }

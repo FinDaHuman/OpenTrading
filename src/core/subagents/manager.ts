@@ -292,6 +292,8 @@ export class SubagentManager {
       return "queued"
     }
     context.parentSignal = undefined
+    // A continuation must produce its own structured result, never return the previous one.
+    context.data = undefined
     Object.assign(run, { status: "queued", background: true, controller: new AbortController(), text: "", error: undefined, endedAt: undefined })
     run.done = this.loop(run, message, false)
     this.emit(run)
@@ -349,6 +351,7 @@ export class SubagentManager {
       messages,
       done: Promise.resolve(undefined as never),
       sessionId: this.session.id,
+      deskRunId: meta.deskRunId,
     }
     this.runs.set(id, run)
     this.owners.set(id, this.session.id)
