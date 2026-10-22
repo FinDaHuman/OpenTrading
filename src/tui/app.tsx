@@ -1612,7 +1612,7 @@ export function App(props: {
         {/* Tall panels below (/mcp, approval) shrink this area; clip it instead of letting
             flexbox squeeze rows on top of each other. */}
         <box flexGrow={1} flexShrink={1} minHeight={0} overflow="hidden" flexDirection="column">
-          <Show when={state.lines.length > 0} fallback={<Show when={!state.dialog}>{<Home />}</Show>}>
+          <Show when={state.lines.length > 0} fallback={<Show when={!state.dialog}>{<Home workspace={props.runtime.workspace.primary} fallback={props.runtime.workspace.fallbackReason} />}</Show>}>
             <Transcript />
           </Show>
         </box>

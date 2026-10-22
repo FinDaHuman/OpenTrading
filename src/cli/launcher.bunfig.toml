@@ -1,0 +1,3 @@
+# Passed with --config by the `opentrading` / `ot` shims (src/cli/install.ts).
+# Bun otherwise reads bunfig.toml from the folder the command is typed in, and a preload there
+# would run that folder's code. Intentionally empty: src/index.tsx registers the Solid transform.
