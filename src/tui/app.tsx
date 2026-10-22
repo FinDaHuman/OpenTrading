@@ -27,7 +27,8 @@ import { loadConfig, saveConfig } from "../core/config"
 import { loadCatalog } from "../core/catalog"
 import type { Runtime } from "../core/runtime"
 import { ensureProfile } from "../core/profile"
-import { loadSkills } from "../core/skills/loader"
+import { loadSkills, skillRoots } from "../core/skills/loader"
+import { FolderTrust, projectExtras } from "../core/folder-trust"
 import { Background } from "./background"
 import { ApprovalPrompt } from "./approval"
 import { AskPrompt } from "./ask"
@@ -73,6 +74,7 @@ import { ShortcutsPane } from "./shortcuts"
 import { loadModelPrefs } from "../core/model-prefs"
 import { AgentPanel, isDeskRow, panelAgents } from "./agent-panel"
 import { AutoOptInDialog } from "./dialogs/auto-optin"
+import { FolderTrustDialog } from "./dialogs/folder-trust"
 import { announceMcp } from "./mcp/notices"
 import { Toasts } from "./toast"
 import { ActivityRow, activeMs, startActivity } from "./activity"
@@ -551,7 +553,7 @@ export function App(props: {
    * Who owns the keyboard instead of the prompt: an approval or a question from the model.
    * Every rule that hides the prompt, closes dialogs or reroutes Esc goes through this.
    */
-  const owner = () => state.approval ?? state.question ?? state.autoOptIn ?? state.deskApproval
+  const owner = () => state.approval ?? state.question ?? state.folderTrust ?? state.autoOptIn ?? state.deskApproval
   /** The subagent panel's rows (ticks once a second so finished agents leave). */
   const panelTick = useNow(1000)
   const panelList = createMemo(() => panelAgents(panelTick()))
@@ -734,7 +736,17 @@ export function App(props: {
 
   onMount(async () => {
     void props.runtime.mcp.start()
-    const [config, skillSet, catalog, modelPrefs] = await Promise.all([loadConfig(), loadSkills(), loadCatalog(), loadModelPrefs()])
+    // The folder's own skills/agents wait for the user to trust it (src/core/folder-trust.ts).
+    const folder = props.runtime.mcp.cwd
+    const extras = await projectExtras(folder)
+    const allowed = !extras || (await new FolderTrust().isTrusted(folder))
+    setState({ projectAllowed: allowed, folderTrust: allowed ? undefined : extras })
+    const [config, skillSet, catalog, modelPrefs] = await Promise.all([
+      loadConfig(),
+      loadSkills(skillRoots(folder, { project: allowed })),
+      loadCatalog(),
+      loadModelPrefs(),
+    ])
     const connected = await connectedProviders()
     // A key from an env var counts as connected even before /connect is used.
     setState({
@@ -1665,7 +1677,11 @@ export function App(props: {
           {(request) => <ApprovalPrompt gate={props.runtime.permissions} request={request} subagents={props.runtime.subagents} />}
         </Show>
         {/* The ▸▸ auto opt-in gives way to an approval or a question (it is asked again later). */}
-        <Show when={state.autoOptIn && !state.approval && !state.question}>
+        {/* Asked once at start, before the ▸▸ auto opt-in; waits behind approvals and questions. */}
+        <Show when={state.folderTrust && !state.approval && !state.question}>
+          <FolderTrustDialog runtime={props.runtime} />
+        </Show>
+        <Show when={state.autoOptIn && !state.approval && !state.question && !state.folderTrust}>
           <AutoOptInDialog gate={props.runtime.permissions} />
         </Show>
         {/* A desk run's approval card waits behind tool approvals and questions. */}

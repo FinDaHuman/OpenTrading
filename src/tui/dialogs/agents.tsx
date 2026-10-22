@@ -1,5 +1,5 @@
 import { createMemo, createSignal, For, Show } from "solid-js"
-import { loadAgents } from "../../core/agents/loader"
+import { agentRoots, loadAgents } from "../../core/agents/loader"
 import { toolFilter, toolSummary } from "../../core/agents/resolve"
 import type { AgentDefinition } from "../../core/agents/schema"
 import { setAgents, type Runtime } from "../../core/runtime"
@@ -16,7 +16,7 @@ const ORDER = ["bundled", "user", "project"]
 
 /** Load agent types and re-register spawn_subagent so its description lists them. */
 export async function reloadAgents(runtime: Runtime) {
-  const { agents, problems } = await loadAgents()
+  const { agents, problems } = await loadAgents(agentRoots(runtime.mcp.cwd, { project: state.projectAllowed }))
   setState({ agentDefs: agents, agentProblems: problems })
   setAgents(runtime, agents)
   return agents.length
@@ -84,6 +84,9 @@ export function AgentsDialog(props: { runtime: Runtime }) {
           </text>
           <Show when={note()}>
             <text fg={color.tang}>{note()}</text>
+          </Show>
+          <Show when={state.projectSkipped?.agents}>
+            {(n) => <text fg={color.tham} marginTop={1} wrapMode="word">{`${n()} agent của thư mục (.opentrading/agents) chưa nạp. Thư mục chưa được tin cậy; mở lại OpenTrading ở đây để được hỏi lại.`}</text>}
           </Show>
           <Show when={state.agentProblems.length > 0}>
             <text fg={color.giam} marginTop={1}>{`Lỗi file agent (${state.agentProblems.length}):`}</text>

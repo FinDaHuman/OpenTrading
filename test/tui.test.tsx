@@ -284,8 +284,9 @@ beforeAll(async () => {
 // cascade into every later test typing into that dialog.
 afterEach(() => {
   if (state.dialog) setState("dialog", undefined)
-  // An opt-in left open would keep every later prompt blocked.
+  // An opt-in or trust dialog left open would keep every later prompt blocked.
   if (state.autoOptIn) setState("autoOptIn", undefined)
+  if (state.folderTrust) setState("folderTrust", undefined)
   // A notification left by one test must not hide a footer hint the next one waits for.
   resetNotifications()
 })
@@ -3202,6 +3203,54 @@ test("/effort: ←→ set each row and save at once; /effort <level>; ctrl+t ste
     await saveConfig({ effort: undefined, subagents: {}, desk: {} })
     setState({ ...saved, effort: undefined })
     setState("catalog", "groq", groq as never)
+  }
+})
+
+test("a folder with its own skills/agents asks for trust first; skip leaves them out, trust loads them", async () => {
+  const { projectExtras } = await import("../src/core/folder-trust")
+  const { reloadAgents } = await import("../src/tui/dialogs/agents")
+  const own = path.join(cwd, ".opentrading")
+  await mkdir(path.join(own, "skills", "ky-nang-thu-muc"), { recursive: true })
+  await writeFile(path.join(own, "skills", "ky-nang-thu-muc", "SKILL.md"), "---\nname: ky-nang-thu-muc\ndescription: Skill của thư mục\n---\nThân\n")
+  await mkdir(path.join(own, "agents"), { recursive: true })
+  await writeFile(path.join(own, "agents", "agent-thu-muc.md"), "---\nname: agent-thu-muc\ndescription: Agent của thư mục\n---\nChỉ dẫn.\n")
+  const saved = { skills: state.skills, skillProblems: state.skillProblems }
+  try {
+    const extras = (await projectExtras(cwd))!
+    expect(extras).toMatchObject({ skills: 1, agents: 1 })
+    // What startup does for an untrusted folder (the app is mounted once for the whole file).
+    setState({ projectAllowed: false, folderTrust: extras })
+    let frame = await setup.waitForFrame((f) => f.includes("Thư mục này có skill/agent riêng") && f.includes("1 skill, 1 agent"))
+    show(frame)
+    expect(frame).toContain("Tin cậy và nạp")
+    expect(frame).not.toContain("Hỏi về thị trường") // the prompt waits
+
+    // Skip: nothing of the folder loads, /skills says why; reloading agents keeps them out.
+    setup.mockInput.pressEscape()
+    await setup.waitFor(() => state.folderTrust === undefined && state.projectSkipped !== undefined)
+    await reloadAgents(runtime)
+    expect(state.agentDefs.some((a) => a.name === "agent-thu-muc")).toBe(false)
+    expect(state.skills.some((s) => s.name === "ky-nang-thu-muc")).toBe(false)
+    await setup.mockInput.typeText("/skills")
+    setup.mockInput.pressEnter()
+    frame = await setup.waitForFrame((f) => f.includes("1 skill của thư mục (.opentrading/skills) chưa nạp"))
+    setup.mockInput.pressEscape()
+    await setup.waitFor(() => state.dialog === undefined)
+
+    // Trust: saved for next time, both load at once.
+    setState({ folderTrust: extras })
+    await setup.waitForFrame((f) => f.includes("Thư mục này có skill/agent riêng"))
+    setup.mockInput.pressEnter()
+    await setup.waitFor(() => state.skills.some((s) => s.name === "ky-nang-thu-muc" && s.source === "project"))
+    await setup.waitFor(() => state.agentDefs.some((a) => a.name === "agent-thu-muc"))
+    expect(state.projectAllowed).toBe(true)
+    expect(state.projectSkipped).toBeUndefined()
+    const { FolderTrust } = await import("../src/core/folder-trust")
+    expect(await new FolderTrust().isTrusted(cwd)).toBe(true)
+  } finally {
+    await rm(own, { recursive: true, force: true })
+    setState({ ...saved, folderTrust: undefined, projectAllowed: true, projectSkipped: undefined })
+    await reloadAgents(runtime)
   }
 })
 

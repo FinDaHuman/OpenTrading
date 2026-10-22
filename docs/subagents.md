@@ -80,7 +80,7 @@ Có 17 loại sẵn trong thư mục `agents/` (mô tả đầy đủ ở từng
 Loại chỉ đọc được bộ lọc tool của harness chặn ở mức tool (`@chi-doc` chỉ đưa tool đọc vào subagent); subagent không có tool shell hay file. Báo cáo cuối của subagent là text trả về cho agent chính (`prompts/subagent.md`).
 
 **Tự định nghĩa loại mới** (theo `.claude/agents/*.md` của Claude Code):
-- Dự án: `.opentrading/agents/<tên>.md`.
+- Dự án: `.opentrading/agents/<tên>.md` (chỉ nạp khi thư mục đã được tin cậy; xem [contracts.md](contracts.md#3-viết-skill-skillstênskillmd)).
 - Cá nhân: `~/.opentrading/agents/<tên>.md`.
 - Thứ tự ưu tiên: dự án > cá nhân > có sẵn. Cùng tên thì bản ưu tiên cao hơn thắng, và `/agents` đánh dấu `ghi đè`.
 

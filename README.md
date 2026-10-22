@@ -71,6 +71,8 @@ opentrading --help           # mọi tuỳ chọn; --version in phiên bản và
 
 Mở ở thư mục home, gốc ổ đĩa hay thư mục hệ thống thì OpenTrading dùng thư mục riêng `~/.opentrading/workspace` thay vì cả ổ đĩa.
 
+Skill và agent riêng của một thư mục (`.opentrading/skills`, `.opentrading/agents`) trở thành chỉ dẫn cho model, nên lần đầu mở thư mục có chúng OpenTrading hỏi **"Thư mục này có skill/agent riêng"**: *Tin cậy và nạp* (lưu ở `~/.opentrading/folder-trust.json`; với thư mục home hay gốc ổ đĩa thì chỉ cho lần chạy này) hoặc *Bỏ qua* (không lưu, lần sau hỏi lại). `.mcp.json` của thư mục vẫn hỏi riêng từng server như trước.
+
 ### Ghi chú
 
 - Mở lại phiên gần nhất **của thư mục đang đứng**: `opentrading -c` (hoặc `bun run dev -- --continue`); một phiên cụ thể, ở thư mục nào cũng được: `opentrading -r <id>`.

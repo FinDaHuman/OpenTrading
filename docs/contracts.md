@@ -90,6 +90,8 @@ version: 1.0.0
 2. Cá nhân: `~/.opentrading/skills/<tên>/SKILL.md`
 3. Có sẵn trong repo: `skills/<tên>/SKILL.md`
 
+Skill (và agent) riêng của một thư mục (`.opentrading/skills`, `.opentrading/agents`) trở thành chỉ dẫn cho model, nên lần đầu mở thư mục có chúng OpenTrading hỏi **"Thư mục này có skill/agent riêng"**: *Tin cậy và nạp* (lưu ở `~/.opentrading/folder-trust.json`; với thư mục home hay gốc ổ đĩa thì chỉ cho lần chạy này) hoặc *Bỏ qua* (không lưu, lần sau hỏi lại). `.mcp.json` của thư mục vẫn hỏi riêng từng server như trước.
+
 **Kích hoạt** (theo cách phân loại rule của Cursor):
 
 | `activation` | Model thấy gì | Dùng cho |

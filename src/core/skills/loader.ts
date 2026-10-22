@@ -8,10 +8,13 @@ export interface SkillRoot {
   source: SkillSource
 }
 
-/** Highest precedence first: project overrides user overrides bundled (same name). */
-export function skillRoots(cwd = process.cwd()): SkillRoot[] {
+/**
+ * Highest precedence first: project overrides user overrides bundled (same name).
+ * `project: false` leaves out the folder's own skills (folder not trusted, src/core/folder-trust.ts).
+ */
+export function skillRoots(cwd = process.cwd(), opts: { project?: boolean } = {}): SkillRoot[] {
   return [
-    { dir: path.join(cwd, ".opentrading", "skills"), source: "project" },
+    ...(opts.project === false ? [] : [{ dir: path.join(cwd, ".opentrading", "skills"), source: "project" as const }]),
     { dir: path.join(dataDir(), "skills"), source: "user" },
     { dir: SKILLS_DIR, source: "bundled" },
   ]

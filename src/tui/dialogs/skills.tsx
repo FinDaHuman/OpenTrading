@@ -43,6 +43,9 @@ export function SkillsDialog() {
           rows={10}
         />
       </Show>
+      <Show when={state.projectSkipped?.skills}>
+        {(n) => <text fg={color.tham} marginTop={1} wrapMode="word">{`${n()} skill của thư mục (.opentrading/skills) chưa nạp. Thư mục chưa được tin cậy; mở lại OpenTrading ở đây để được hỏi lại.`}</text>}
+      </Show>
       <Show when={state.skillProblems.length > 0}>
         <text fg={color.giam} marginTop={1}>{`Lỗi skill (${state.skillProblems.length}):`}</text>
         <For each={state.skillProblems}>
