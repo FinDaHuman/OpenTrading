@@ -73,7 +73,7 @@ Mở ở thư mục home, gốc ổ đĩa hay thư mục hệ thống thì OpenT
 
 ### Ghi chú
 
-- Mở lại phiên gần nhất: `opentrading -c` (hoặc `bun run dev -- --continue`); một phiên cụ thể: `opentrading -r <id>`.
+- Mở lại phiên gần nhất **của thư mục đang đứng**: `opentrading -c` (hoặc `bun run dev -- --continue`); một phiên cụ thể, ở thư mục nào cũng được: `opentrading -r <id>`.
 - Dữ liệu (key, cấu hình, phiên) nằm ở `~/.opentrading/`; đổi chỗ bằng biến `OPENTRADING_HOME`.
 - Thử provider mà không mở TUI (chỉ dùng tool có sẵn): `bun src/core/chat.ts "mấy giờ rồi?"`.
 
@@ -280,7 +280,7 @@ Gắn bằng CLI: `bun src/index.tsx mcp add <tên> <url>` hoặc `mcp add <tên
 
 ## Phiên, nén hội thoại, memory
 
-- Hội thoại được lưu ở `~/.opentrading/sessions/`; `/sessions` mở lại, tiêu đề được đặt tự động sau lượt đầu.
+- Hội thoại được lưu ở `~/.opentrading/sessions/`, gắn với thư mục đã mở; `/sessions` mở lại (mặc định phiên của thư mục này, `tab` xem mọi thư mục), tiêu đề được đặt tự động sau lượt đầu.
 - Gần đầy ngữ cảnh thì tự nén (ngưỡng trong `/config`); `/compact` nén tay.
 - Memory: nói `Ghi nhớ: …` hoặc để model đề xuất, duyệt trong `/memory`. File memory hỏng bị bỏ qua và được báo trong `/memory`, không làm mất các memory khác.
 - Hồ sơ nhà đầu tư `INVESTOR.md` (`/profile`) luôn có trong ngữ cảnh.

@@ -11,6 +11,8 @@ adopt Semantic Versioning when it exposes a stable public API.
 - `opentrading` / `ot` command: `bun run install:global` writes launchers to `~/.local/bin`; the TUI
   opens with the current folder (or `opentrading <folder>`) as its workspace. `--help`, `--version`,
   unknown options are errors. The Home screen shows the workspace.
+- Sessions belong to the folder they were opened in: `--continue` reopens this folder's newest
+  session, `/sessions` lists this folder's sessions (`tab` for every folder).
 
 ## [0.1.0] — 2026-10-22 (pre-release, private)
 

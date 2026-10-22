@@ -1,6 +1,7 @@
 import type { ModelMessage } from "ai"
 import { label, visibleUserText } from "../core/agent"
 import { promptVersion } from "../core/prompt/assemble"
+import { samePathKey } from "../core/fs/path-safety"
 import type { Runtime } from "../core/runtime"
 import { listSessions, loadSession, Session } from "../core/session/store"
 import { formatTranscript } from "../core/session/export"
@@ -125,6 +126,10 @@ export async function resumeSession(runtime: Runtime, id: string) {
     return [item.kind === "user" ? { kind: "user", text: item.text, files: item.files } : { kind: "assistant", text: item.text, done: true }]
   })
   const notes: Line[] = [{ kind: "info", text: `Mở lại phiên "${loaded.summary.title}" · ${loaded.summary.turns} lượt` }]
+  const from = loaded.meta?.cwd
+  if (from && samePathKey(from) !== samePathKey(process.cwd())) {
+    notes.push({ kind: "info", text: `Phiên này tạo ở ${from}; workspace bây giờ là thư mục đang mở (${runtime.workspace.primary}).` })
+  }
   if (loaded.patched > 0) notes.push({ kind: "info", text: `${loaded.patched} lần gọi tool bị ngắt ở phiên trước đã được đánh dấu là lỗi.` })
   const saved = loaded.summary.provider && loaded.summary.model ? `${loaded.summary.provider}/${loaded.summary.model}` : undefined
   if (saved && saved !== `${state.provider}/${state.model}`) {
@@ -141,10 +146,13 @@ export async function resumeSession(runtime: Runtime, id: string) {
   await runtime.hooks.emit({ type: "session-start", sessionId: current.id, source: "resume" })
 }
 
-/** `--continue` → newest session; `--resume <id>` → that one (id prefix is enough). */
+/**
+ * `--continue` → newest session opened in this folder (Claude Code keeps sessions per project);
+ * `--resume <id>` → that one, from any folder (id prefix is enough).
+ */
 export async function resumeFromArgs(runtime: Runtime, target: string) {
-  const id = target === "latest" ? (await listSessions())[0]?.id : target
-  if (!id) return pushLine({ kind: "info", text: "Chưa có phiên nào để mở lại." })
+  const id = target === "latest" ? (await listSessions({ cwd: process.cwd() }))[0]?.id : target
+  if (!id) return pushLine({ kind: "info", text: "Chưa có phiên nào ở thư mục này để mở lại. /sessions → tab để xem phiên ở thư mục khác." })
   try {
     await resumeSession(runtime, id)
   } catch (error) {

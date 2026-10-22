@@ -1513,8 +1513,13 @@ test("/new starts a fresh session; /sessions reopens the previous one with its t
   setup.mockInput.pressEnter()
   // The title shows at once, the list after the sessions are read ("Đang đọc…"): wait for the
   // rows, or Enter lands on an empty list (slow Windows runners, main CI after #103).
-  const list = await setup.waitForFrame((f) => f.includes("Phiên đã lưu") && f.includes("lượt"))
+  // This folder's sessions first (the title names it); tab shows every folder and back.
+  const list = await setup.waitForFrame((f) => f.includes("Phiên ·") && f.includes("lượt") && f.includes("tab mọi thư mục"))
   show(list)
+  setup.mockInput.pressTab()
+  await setup.waitForFrame((f) => f.includes("Phiên · mọi thư mục") && f.includes("lượt"))
+  setup.mockInput.pressTab()
+  await setup.waitForFrame((f) => f.includes("tab mọi thư mục") && f.includes("lượt"))
   setup.mockInput.pressEnter() // newest first: the session we just left
   await setup.waitFor(() => state.dialog === undefined && state.lines.length > 0)
   // The "reopened" note is the first line (may be scrolled out of view): check state.
