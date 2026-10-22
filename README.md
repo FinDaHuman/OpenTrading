@@ -47,7 +47,33 @@ bun install
 bun run dev
 ```
 
-- Mở lại phiên gần nhất: `bun run dev -- --continue`; một phiên cụ thể: `bun run dev -- --resume <id>`.
+### Lệnh `opentrading` (mở ở thư mục bất kỳ)
+
+Cài một lần trong thư mục repo, sau đó gõ `opentrading` (hoặc `ot`) ở thư mục nào thì thư mục đó là workspace (nơi agent đọc/ghi file):
+
+```shell
+bun run install:global
+```
+
+- Script ghi `opentrading` và `ot` vào `~/.local/bin` (Windows: thêm `.cmd` cho PowerShell/cmd và bản không đuôi cho Git Bash); đổi chỗ bằng `bun run install:global -- --dir <thư mục>`. Thư mục đó chưa có trong PATH thì script in lệnh để thêm, không tự sửa PATH. File cùng tên không phải của OpenTrading không bị ghi đè.
+- Lệnh chạy thẳng mã nguồn của repo này: cập nhật = `git pull && bun install`; dời repo sang chỗ khác thì chạy lại `bun run install:global`. Gỡ: `bun run uninstall:global`.
+- Lệnh bỏ qua `bunfig.toml` và `.env` của thư mục đang đứng (chúng có thể chạy code hoặc đổi `OPENTRADING_HOME`).
+  Key để trong file `.env` vì vậy không được nạp: dùng `/connect` hoặc biến môi trường thật.
+- Lệnh chạy đúng bản code đang checkout ở thư mục đã cài. Nếu bạn cũng sửa code hay đổi nhánh trong repo đó, cài từ một bản riêng (`git worktree add ../OpenTrading-ot main`, rồi `bun install` và `bun run install:global` trong đó) để `ot` không chạy theo nhánh đang làm dở.
+
+```shell
+opentrading                  # workspace = thư mục hiện tại
+ot D:\Dau-tu                 # mở ở thư mục khác
+ot -c                        # mở lại phiên mới nhất
+opentrading mcp list         # quản lý MCP không cần mở TUI
+opentrading --help           # mọi tuỳ chọn; --version in phiên bản và nơi cài
+```
+
+Mở ở thư mục home, gốc ổ đĩa hay thư mục hệ thống thì OpenTrading dùng thư mục riêng `~/.opentrading/workspace` thay vì cả ổ đĩa.
+
+### Ghi chú
+
+- Mở lại phiên gần nhất: `opentrading -c` (hoặc `bun run dev -- --continue`); một phiên cụ thể: `opentrading -r <id>`.
 - Dữ liệu (key, cấu hình, phiên) nằm ở `~/.opentrading/`; đổi chỗ bằng biến `OPENTRADING_HOME`.
 - Thử provider mà không mở TUI (chỉ dùng tool có sẵn): `bun src/core/chat.ts "mấy giờ rồi?"`.
 

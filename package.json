@@ -14,6 +14,8 @@
   },
   "scripts": {
     "dev": "bun run ./src/index.tsx",
+    "install:global": "bun ./src/cli/install.ts",
+    "uninstall:global": "bun ./src/cli/install.ts --uninstall",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

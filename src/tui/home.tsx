@@ -1,3 +1,4 @@
+import os from "node:os"
 import { For, Show } from "solid-js"
 import { logo } from "./logo"
 import { state } from "./state"
@@ -12,7 +13,14 @@ const TIPS = [
   ["/help", "tất cả lệnh"],
 ]
 
-export function Home() {
+/** `~` for the home folder, so the workspace line stays short. */
+export function shortPath(p: string, home = os.homedir()) {
+  const lower = (s: string) => (process.platform === "win32" ? s.toLowerCase() : s)
+  return lower(p).startsWith(lower(home)) && /^[\\/]?$/.test(p.charAt(home.length)) ? `~${p.slice(home.length)}` : p
+}
+
+/** `workspace`: where the agent reads and writes; `fallback`: why it is not the folder we opened in. */
+export function Home(props: { workspace?: string; fallback?: string }) {
   return (
     // Shrinks (and clips) when the command list needs the room, never the other way round.
     <box flexGrow={1} flexShrink={1} minHeight={0} overflow="hidden" flexDirection="column" alignItems="center" justifyContent="center">
@@ -47,6 +55,14 @@ export function Home() {
             return `${live > 0 ? `${live} nguồn dữ liệu MCP đã kết nối` : "chưa kết nối nguồn dữ liệu — /mcp để thêm"} · không phải tư vấn đầu tư`
           })()}
         </text>
+
+        <Show when={props.workspace}>
+          {(dir) => (
+            <text fg={color.tx3}>
+              {`workspace ${shortPath(dir())}${props.fallback ? ` (mở ở ${props.fallback} nên dùng thư mục riêng)` : ""}`}
+            </text>
+          )}
+        </Show>
 
         <box marginTop={1} flexDirection="column">
           <For each={TIPS}>

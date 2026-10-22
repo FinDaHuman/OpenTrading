@@ -8,6 +8,9 @@ adopt Semantic Versioning when it exposes a stable public API.
 ### Added
 
 - First public release under the Apache License 2.0, with `NOTICE` and `THIRD_PARTY_NOTICES.md`.
+- `opentrading` / `ot` command: `bun run install:global` writes launchers to `~/.local/bin`; the TUI
+  opens with the current folder (or `opentrading <folder>`) as its workspace. `--help`, `--version`,
+  unknown options are errors. The Home screen shows the workspace.
 
 ## [0.1.0] — 2026-10-22 (pre-release, private)
 
