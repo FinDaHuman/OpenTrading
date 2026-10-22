@@ -195,7 +195,8 @@ Frontmatter gồm `name` (trùng tên file), `description`, `tools`, `disallowed
 - `index.jsonl` có một dòng cho mỗi lần cập nhật phiên; dòng sau cùng của cùng một id thắng.
 - Subagent ghi transcript riêng ở `YYYY/MM/<id>/subagents/agent-<agentId>.jsonl` (các dòng `agent_meta`, `message`, `notice`, `agent_end`) và `.meta.json`. File phiên chính chỉ chứa lời gọi `spawn_subagent` và kết quả (có trailer `<subagent_meta>`). Kết quả của subagent nền vào history dưới dạng tin user `<thong_bao_subagent>`.
 - **Mở lại phiên:**
-  - Dùng `/sessions`, `bun run dev -- --continue` (phiên mới nhất) hoặc `--resume <id>` (chỉ cần phần đầu của id).
+  - Dùng `/sessions`, `opentrading -c` / `--continue` (phiên mới nhất **của thư mục đang mở**) hoặc `-r` / `--resume <id>` (chỉ cần phần đầu của id, mở được phiên của thư mục khác).
+  - Phiên thuộc thư mục OpenTrading được mở (`cwd` trong `meta`, và trong dòng `index.jsonl` từ khi có lệnh `opentrading`; dòng cũ đọc `cwd` từ `meta`). `/sessions` liệt kê phiên của thư mục này, `tab` chuyển sang mọi thư mục. Tool `session_history` vẫn thấy mọi phiên.
   - History được dựng lại; tool-call thiếu kết quả được đóng bằng lỗi "bị ngắt"; đồng hồ phiên được gửi lại ở lượt đầu.
   - Nếu model đang dùng khác model lúc lưu, TUI cảnh báo.
 - **Nén hội thoại** (`src/core/compact.ts`, lệnh `/compact [hướng dẫn]`, tắt hoặc chỉnh ngưỡng trong `/config`):

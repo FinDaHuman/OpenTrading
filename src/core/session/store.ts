@@ -4,6 +4,7 @@ import { splitNotices } from "../subagents/notification"
 import { appendFile, mkdir, readFile } from "node:fs/promises"
 import path from "node:path"
 import type { ModelMessage } from "ai"
+import { samePathKey } from "../fs/path-safety"
 import { dataDir } from "../paths"
 import type { ChartData } from "../tools/chart/data"
 
@@ -52,6 +53,8 @@ export interface SessionSummary {
   provider?: string
   model?: string
   turns: number
+  /** Folder OpenTrading was opened in. Index lines written before it existed lack it (read from the meta line). */
+  cwd?: string
 }
 
 export const sessionsDir = () => path.join(dataDir(), "sessions")
@@ -196,6 +199,7 @@ export class Session {
       provider: info.provider,
       model: info.model,
       turns: this.turns,
+      cwd: info.cwd,
     }
     await mkdir(sessionsDir(), { recursive: true })
     await appendFile(indexFile(), JSON.stringify(summary) + "\n", "utf8")
@@ -203,8 +207,31 @@ export class Session {
   }
 }
 
-/** Newest first. Malformed index lines and sessions whose file is gone are skipped. */
-export async function listSessions(): Promise<SessionSummary[]> {
+/** The folder in a session file's meta line (its first line), for index lines older than `cwd`. */
+async function cwdFromMeta(file: string): Promise<string | undefined> {
+  try {
+    const head = await Bun.file(path.join(sessionsDir(), file)).slice(0, 8192).text()
+    const end = head.indexOf("\n")
+    const entry = JSON.parse(end >= 0 ? head.slice(0, end) : head) as SessionEntry
+    return entry.type === "meta" && typeof entry.cwd === "string" ? entry.cwd : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * Newest first. Malformed index lines and sessions whose file is gone are skipped. With `cwd`,
+ * only sessions opened in that folder (same path rules as the workspace: case-insensitive on
+ * Windows and macOS), like Claude Code's per-project sessions.
+ */
+export async function listSessions(opts: { cwd?: string } = {}): Promise<SessionSummary[]> {
+  const all = await allSessions()
+  if (opts.cwd === undefined) return all
+  const key = samePathKey(opts.cwd)
+  return all.filter((s) => s.cwd !== undefined && samePathKey(s.cwd) === key)
+}
+
+async function allSessions(): Promise<SessionSummary[]> {
   const text = await readFile(indexFile(), "utf8").catch(() => "")
   const byId = new Map<string, SessionSummary>()
   for (const line of text.split("\n")) {
@@ -223,7 +250,8 @@ export async function listSessions(): Promise<SessionSummary[]> {
   // index) comes first, since the sort is stable over the reversed write order.
   const all = [...byId.values()].reverse().sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
   const exists = await Promise.all(all.map((s) => Bun.file(path.join(sessionsDir(), s.file)).exists()))
-  return all.filter((_, i) => exists[i])
+  const kept = all.filter((_, i) => exists[i])
+  return Promise.all(kept.map(async (s) => (s.cwd !== undefined ? s : { ...s, cwd: await cwdFromMeta(s.file) })))
 }
 
 export interface LoadedSession {

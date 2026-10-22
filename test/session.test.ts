@@ -233,3 +233,31 @@ test("a generated title reaches the session list at once, even after a single tu
   await session.setTitle("   ")
   expect((await listSessions()).find((s) => s.id === session.id)!.title).toBe("Lời cảm ơn")
 })
+
+test("sessions are listed per folder; index lines from before `cwd` read it from the meta line", async () => {
+  const here = path.join(home, "Try1")
+  const there = path.join(home, "Khac")
+  const mine = Session.create()
+  await mine.appendTurn(turn2, { ...info, cwd: here })
+  const other = Session.create()
+  await other.appendTurn(turn2, { ...info, cwd: there })
+
+  expect((await listSessions())[0]).toMatchObject({ id: other.id, cwd: there })
+  expect((await listSessions({ cwd: here })).map((s) => s.id)).toEqual([mine.id])
+  // Windows and macOS paths ignore case, as the workspace does.
+  if (process.platform === "win32") expect((await listSessions({ cwd: here.toUpperCase() })).map((s) => s.id)).toEqual([mine.id])
+
+  // An index written before this change has no cwd: it comes from the session file instead.
+  const index = path.join(sessionsDir(), "index.jsonl")
+  const old = (await readFile(index, "utf8"))
+    .split("\n")
+    .filter(Boolean)
+    .map((l) => {
+      const { cwd: _drop, ...rest } = JSON.parse(l)
+      return JSON.stringify(rest)
+    })
+    .join("\n")
+  await writeFile(index, old + "\n")
+  expect((await listSessions({ cwd: here })).map((s) => s.id)).toEqual([mine.id])
+  expect((await listSessions({ cwd: path.join(home, "nowhere") })).length).toBe(0)
+})
