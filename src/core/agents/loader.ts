@@ -9,10 +9,13 @@ export interface AgentRoot {
   source: SkillSource
 }
 
-/** Highest precedence first: project overrides user overrides bundled (same name). */
-export function agentRoots(cwd = process.cwd()): AgentRoot[] {
+/**
+ * Highest precedence first: project overrides user overrides bundled (same name).
+ * `project: false` leaves out the folder's own agents (folder not trusted, src/core/folder-trust.ts).
+ */
+export function agentRoots(cwd = process.cwd(), opts: { project?: boolean } = {}): AgentRoot[] {
   return [
-    { dir: path.join(cwd, ".opentrading", "agents"), source: "project" },
+    ...(opts.project === false ? [] : [{ dir: path.join(cwd, ".opentrading", "agents"), source: "project" as const }]),
     { dir: path.join(dataDir(), "agents"), source: "user" },
     { dir: AGENTS_DIR, source: "bundled" },
   ]

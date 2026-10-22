@@ -17,6 +17,7 @@ import type { SubagentView } from "../core/subagents/types"
 import type { AgentDefinition, AgentProblem } from "../core/agents/schema"
 import type { ShownNotice } from "./notify"
 import type { ModelPrefs } from "../core/model-prefs"
+import type { ProjectExtras } from "../core/folder-trust"
 import { DEFAULT_SCROLL_SPEED } from "./scroll"
 import type { AttachedFile } from "../core/mentions"
 import type { DeskApprovalRequest } from "../core/desk/approval"
@@ -158,6 +159,12 @@ export const [state, setState] = createStore({
   permissionMode: "read-only" as PermissionMode,
   /** The ▸▸ auto opt-in dialog is open; `from` is the mode kept if the user says no. */
   autoOptIn: undefined as { from: PermissionMode } | undefined,
+  /** The folder has its own skills/agents and is not trusted yet: the trust dialog is open. */
+  folderTrust: undefined as ProjectExtras | undefined,
+  /** The folder's own skills/agents (.opentrading/) load; false until its folder is trusted. */
+  projectAllowed: true,
+  /** The user chose not to trust the folder this run: what was left out (/skills, /agents say so). */
+  projectSkipped: undefined as ProjectExtras | undefined,
   /** The user said yes to ▸▸ auto once (config permissions.autoAcknowledged). */
   autoAcknowledged: false,
   /** ▸▸ auto's classifier paused after a quota error, until this time (ms). */
@@ -225,4 +232,4 @@ export function requestExit() {
  * A prompt (approval or question) sits on top. Panels and dialogs stay mounted underneath —
  * nothing typed or chosen is lost — but must not react to keys meanwhile.
  */
-export const blocked = () => Boolean(state.approval || state.question || state.autoOptIn || state.deskApproval)
+export const blocked = () => Boolean(state.approval || state.question || state.folderTrust || state.autoOptIn || state.deskApproval)
