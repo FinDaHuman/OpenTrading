@@ -26,6 +26,8 @@ const GEMINI_BUDGET: Record<Effort, number> = { low: 1024, medium: 4096, high: 8
 interface Scheme {
   levels: Effort[]
   options: (level: Effort) => ProviderOptions
+  /** What the provider receives for `level`, for the effort step of /model. */
+  detail: (level: Effort) => string
 }
 
 /** How a model takes effort, or undefined when it has no knob (or is not a reasoning model). */
@@ -38,11 +40,15 @@ function schemeFor(target: EffortTarget): Scheme | undefined {
     if (/gemini-3/.test(id)) {
       // Gemini 3 Pro takes low/high; Flash and Flash-Lite also take medium.
       const levels: Effort[] = /pro/.test(id) ? ["low", "high"] : UP_TO_HIGH
-      return { levels, options: (level) => ({ google: { thinkingConfig: { thinkingLevel: level } } }) }
+      return { levels, options: (level) => ({ google: { thinkingConfig: { thinkingLevel: level } } }), detail: (level) => `thinkingLevel ${level}` }
     }
     if (/gemini-2\.5/.test(id)) {
       const levels: Effort[] = /pro/.test(id) ? ALL : ["low", "medium", "high", "xhigh"]
-      return { levels, options: (level) => ({ google: { thinkingConfig: { thinkingBudget: GEMINI_BUDGET[level] } } }) }
+      return {
+        levels,
+        options: (level) => ({ google: { thinkingConfig: { thinkingBudget: GEMINI_BUDGET[level] } } }),
+        detail: (level) => `thinkingBudget ${GEMINI_BUDGET[level]}`,
+      }
     }
     return undefined
   }
@@ -60,17 +66,23 @@ function schemeFor(target: EffortTarget): Scheme | undefined {
     return undefined
   }
   if (npm === "@ai-sdk/groq" && /gpt-oss/.test(id)) {
-    return { levels: UP_TO_HIGH, options: (level) => ({ groq: { reasoningEffort: level } }) }
+    return { levels: UP_TO_HIGH, options: (level) => ({ groq: { reasoningEffort: level } }), detail: (level) => `reasoningEffort ${level}` }
   }
   return undefined
 }
 
-const anthropic = (levels: Effort[]): Scheme => ({ levels, options: (level) => ({ anthropic: { effort: level } }) })
-const openai = (levels: Effort[]): Scheme => ({ levels, options: (level) => ({ openai: { reasoningEffort: level } }) })
+const anthropic = (levels: Effort[]): Scheme => ({ levels, options: (level) => ({ anthropic: { effort: level } }), detail: (level) => `effort ${level}` })
+const openai = (levels: Effort[]): Scheme => ({ levels, options: (level) => ({ openai: { reasoningEffort: level } }), detail: (level) => `reasoningEffort ${level}` })
 
 /** Levels the model accepts, lowest first; empty when it has no effort knob. */
 export function supportedEfforts(target: EffortTarget): Effort[] {
   return schemeFor(target)?.levels ?? []
+}
+
+/** The provider's own setting for `level` ("thinkingLevel high", "thinkingBudget 8192"…). */
+export function effortDetail(target: EffortTarget, level: Effort): string | undefined {
+  const scheme = schemeFor(target)
+  return scheme?.levels.includes(level) ? scheme.detail(level) : undefined
 }
 
 /** The level actually sent: the highest supported one at or below `wanted` (else the lowest). */

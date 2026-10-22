@@ -54,9 +54,10 @@ export interface Config {
    * `terminalNotify`, a desktop notification when a turn ends or waits for you while the
    * terminal is in the background, and the tab progress ring. `scrollSpeed`: chat rows per
    * mouse-wheel notch (default 5); `scrollAcceleration`: speed up while the wheel spins fast
-   * (1 row per slow notch, up to 6×) instead.
+   * (1 row per slow notch, up to 6×) instead. `askEffort`: after a model with more than one
+   * effort level is picked in /model, ask for the level before switching (default on).
    */
-  ui?: { tips?: boolean; terminalNotify?: boolean; scrollSpeed?: number; scrollAcceleration?: boolean }
+  ui?: { tips?: boolean; terminalNotify?: boolean; scrollSpeed?: number; scrollAcceleration?: boolean; askEffort?: boolean }
   /**
    * Cap, in tokens, on the context window used for the threshold and ctx %. Unset (default):
    * the model's whole window (models.dev `limit.input`, else `limit.context`). Gemini's free

@@ -6,7 +6,7 @@
 
 | Chỗ | Áp dụng cho |
 | --- | --- |
-| `/effort` → **Phiên chính** (`"effort"` trong `config.json`), hoặc `/effort <mức\|auto>`, hoặc `ctrl+t` | Agent chính |
+| `/effort` → **Phiên chính** (`"effort"` trong `config.json`), hoặc `/effort <mức\|auto>`, hoặc `ctrl+t`, hoặc bước effort sau khi chọn model trong `/model` | Agent chính; và subagent khi chưa đặt riêng |
 | `/effort` → **Subagent** (`"subagents": { "effort": … }`) | Subagent, khi loại agent không tự đặt |
 | `/effort` → **Ultradesk** (`"desk": { "effort": … }`) | Agent trong run ultradesk; mỗi run đổi riêng được trên thẻ duyệt |
 | `effort:` trong frontmatter của `agents/*.md` | Loại agent đó |
@@ -16,7 +16,8 @@ Không đặt gì (`auto`) thì harness không gửi effort, và provider dùng 
 - Trong `/effort`, `←→` đổi một dòng và lưu ngay; dòng **Phiên chính** ghi các mức model đang dùng nhận được, và mức bạn chọn chạy thành gì (`xhigh chạy như high`). Dòng **Quy mô ultradesk** là quy mô mặc định trên thẻ duyệt.
 - `ctrl+t` ở ô nhập xoay vòng `auto` → các mức model nhận được → `auto`. Model không có mức effort thì báo và không đổi.
 - Thanh trạng thái hiện mức thật sự gửi đi, kèm ký hiệu của Claude Code: ○ low · ◐ medium · ● high · ◉ xhigh/max.
-- `/config` chỉ còn một dòng **Effort** tóm tắt ba giá trị; enter mở `/effort`.
+- `/model`: chọn một model có hơn một mức effort thì bảng chọn effort hiện ngay; xem [ui.md](ui.md#model). Enter ngay trên dòng tô sẵn (chưa di chuyển) giữ effort đã lưu. Bước này đổi cùng giá trị `effort` như `/effort`, nên subagent chưa đặt `subagents.effort` cũng đổi theo.
+- `/config` có một dòng **Effort** tóm tắt ba giá trị (enter mở `/effort`) và dòng **Hỏi effort khi chọn model** để tắt bước effort trong `/model` (`"ui": { "askEffort": false }`).
 
 ## Mỗi provider hiểu thế nào
 

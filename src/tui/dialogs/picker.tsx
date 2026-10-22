@@ -40,6 +40,10 @@ export function Picker<T>(props: {
   placeholder?: string
   rows?: number
   initialFilter?: string
+  /** Called with the filter text as the user types (to give it back as initialFilter later). */
+  onFilter?: (text: string) => void
+  /** itemKey of the row highlighted at first (else the first row). */
+  initialKey?: string
   /** Called when the highlighted item changes (for previews). */
   onHighlight?: (value: T | undefined) => void
   /** Row identity: the highlight stays on the same row when the list changes (ctrl+f…). */
@@ -62,6 +66,10 @@ export function Picker<T>(props: {
       (i) => `${i.hint ?? ""} ${i.group ?? ""}`,
     ),
   )
+  if (props.initialKey !== undefined && props.itemKey) {
+    const at = visible().findIndex((i) => props.itemKey!(i) === props.initialKey)
+    if (at >= 0) setIndex(at)
+  }
   // Keep the highlight on the same row when the items change under it (a favourite toggled).
   let highlightedKey: string | undefined
   let seenFilter = filter()
@@ -157,6 +165,7 @@ export function Picker<T>(props: {
           focusedBackgroundColor={color.panel}
           onInput={(v) => {
             setFilter(v)
+            props.onFilter?.(v)
             highlight(0)
           }}
           onSubmit={() => {

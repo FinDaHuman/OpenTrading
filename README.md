@@ -28,7 +28,7 @@ Harness AI phân tích chứng khoán Việt Nam, chạy trong terminal. Viết 
 
 | | |
 | --- | --- |
-| **Hơn 200 provider** | Groq, Gemini, NVIDIA, OpenAI, Anthropic, OpenRouter, DeepSeek… (danh sách từ [models.dev](https://models.dev)); `/model` có yêu thích, dùng gần đây, nhóm theo provider |
+| **Hơn 200 provider** | Groq, Gemini, NVIDIA, OpenAI, Anthropic, OpenRouter, DeepSeek… (danh sách từ [models.dev](https://models.dev)); `/model` có yêu thích, dùng gần đây, nhóm theo provider, và hỏi effort ngay khi model có nhiều mức |
 | **Agent gọi tool** | Tool có sẵn (giờ phiên, chart, watchlist, web, file, shell, todo, hỏi lại người dùng) và tool của MCP server; tool ít dùng được nạp khi cần (`tool_search`) |
 | **Ultradesk** | Chạy một *playbook* nghiên cứu nhiều agent (sàng lọc mã, kiểm chứng số liệu, tranh biện, phân tích ngành) với card tiến độ trực tiếp trong chat và bảng `/desk` |
 | **Effort** | `/effort` và `ctrl+t` chỉnh mức suy luận cho agent chính, subagent và ultradesk; thanh trạng thái hiện mức model thật sự nhận |
@@ -82,8 +82,8 @@ Skill và agent riêng của một thư mục (`.opentrading/skills`, `.opentrad
 ## Bắt đầu trong 5 phút
 
 1. `/connect` → chọn provider, dán API key. Key lưu ở `~/.opentrading/auth.json`, không hiện lại trên màn hình.
-2. `/model` → chọn model (gõ để lọc, `ctrl+f` đánh dấu yêu thích).
-3. `/effort` (tuỳ chọn) → chọn mức suy luận; hoặc bấm `ctrl+t` để đổi nhanh.
+2. `/model` → chọn model (gõ để lọc, `ctrl+f` đánh dấu yêu thích). Model có nhiều mức effort thì chọn luôn mức suy luận ở bước tiếp theo.
+3. `/effort` (tuỳ chọn) → chỉnh mức suy luận cho phiên chính, subagent, ultradesk; hoặc bấm `ctrl+t` để đổi nhanh.
 4. `/mcp` → gắn nguồn dữ liệu thị trường (xem [Dữ liệu thị trường](#dữ-liệu-thị-trường-mcp)).
 5. Hỏi, ví dụ: `phân tích cơ bản FPT`, hoặc thử nhiều agent: `ultradesk so sánh FPT, MWG, VNM theo ROE`.
 
@@ -183,6 +183,7 @@ Effort · Groq · openai/gpt-oss-120b
 
 - `←→` đổi và lưu ngay; lượt hỏi tiếp theo dùng mức mới.
 - `/effort high` (hoặc `low`, `medium`, `xhigh`, `max`, `auto`) đặt thẳng cho phiên chính.
+- `/model`: chọn model có nhiều mức effort thì hiện bảng `auto` + các mức model đó nhận. Enter ngay trên dòng tô sẵn (chưa di chuyển) giữ effort đã lưu; esc quay lại danh sách model. Tắt bước này trong `/config` → **Hỏi effort khi chọn model**.
 - **`ctrl+t`** ở ô nhập: xoay vòng `auto` → các mức model đang dùng nhận được → `auto`.
 - Thanh trạng thái hiện mức model thật sự nhận, ví dụ `Groq · openai/gpt-oss-120b ● high`. Mức model không có thì chạy như mức thấp hơn gần nhất (`xhigh` trên model chỉ tới `high` → `high`); bảng `/effort` ghi rõ điều đó.
 - Model không có mức effort (đa số model không suy luận): `ctrl+t` báo không đổi được; giá trị vẫn lưu cho model khác.
@@ -196,7 +197,7 @@ Gõ `/` để xem danh sách (gõ tiếp để lọc, `tab` điền, enter chạ
 | Lệnh | Việc |
 | --- | --- |
 | `/connect` | Nhập API key cho hơn 200 provider |
-| `/model` | Chọn model từ mọi provider đã kết nối; `ctrl+f` yêu thích, ←→ nhảy nhóm |
+| `/model` | Chọn model từ mọi provider đã kết nối, rồi effort nếu model có nhiều mức; `ctrl+f` yêu thích, ←→ nhảy nhóm |
 | `/effort [mức]` | Effort suy luận: phiên chính, subagent, ultradesk |
 | `/desk [on\|off\|resume <run>]` | Các run ultradesk; bật/tắt cho cả phiên; chạy tiếp run bị cắt |
 | `/sang-loc` `/kiem-chung` `/tranh-bien` `/nganh` | Chạy thẳng một playbook ultradesk |
@@ -216,7 +217,7 @@ Gõ `/` để xem danh sách (gõ tiếp để lọc, `tab` điền, enter chạ
 | `/undo [số] [--force]` | Hoàn tác thay đổi file do agent ghi |
 | `/permissions` | Chế độ quyền, workspace, quy tắc cho phép/chặn, các lần auto mode chặn |
 | `/memory` | Xem, duyệt, xoá memory |
-| `/config` | Cài đặt, có hiệu lực ngay: memory, tìm tool, tự nén, số bước, subagent, model phụ, chế độ quyền khi mở, thông báo, cuộn |
+| `/config` | Cài đặt, có hiệu lực ngay: memory, tìm tool, tự nén, số bước, subagent, model phụ, chế độ quyền khi mở, hỏi effort khi chọn model, thông báo, cuộn |
 | `/clear`, `/help`, `/exit` | Xoá màn hình và bắt đầu phiên mới, trợ giúp, thoát |
 
 MCP server có prompt thì prompt đó cũng thành lệnh `/`.

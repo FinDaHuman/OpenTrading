@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test"
 import { generateText } from "ai"
 import type { CatalogProvider } from "../src/core/catalog"
-import { effectiveEffort, effortOptions, mergeProviderOptions, stepEffort, supportedEfforts, type Effort } from "../src/core/effort"
+import { effectiveEffort, effortDetail, effortOptions, mergeProviderOptions, stepEffort, supportedEfforts, type Effort } from "../src/core/effort"
 import { AgentFrontmatter } from "../src/core/agents/schema"
 import { subagentEffort } from "../src/core/subagents/manager"
 import { thoughtOptions } from "../src/core/agent"
@@ -40,6 +40,15 @@ test("anthropic: above high only on always-thinking models; older models have no
   expect(effectiveEffort(target("@ai-sdk/anthropic", "claude-opus-4-6"), "xhigh")).toBe("high")
   expect(effectiveEffort(target("@ai-sdk/anthropic", "claude-opus-4-5"), "max")).toBe("high")
   expect(supportedEfforts(target("@ai-sdk/anthropic", "claude-sonnet-4-5"))).toEqual([])
+})
+
+test("effortDetail names what the provider receives, only for levels the model takes", () => {
+  expect(effortDetail(target("@ai-sdk/google", "gemini-3.1-flash"), "high")).toBe("thinkingLevel high")
+  expect(effortDetail(target("@ai-sdk/google", "gemini-3.1-pro"), "medium")).toBeUndefined()
+  expect(effortDetail(target("@ai-sdk/google", "gemini-2.5-flash"), "high")).toBe("thinkingBudget 8192")
+  expect(effortDetail(target("@ai-sdk/anthropic", "claude-opus-5-5"), "max")).toBe("effort max")
+  expect(effortDetail(target("@ai-sdk/openai", "gpt-5-mini"), "low")).toBe("reasoningEffort low")
+  expect(effortDetail(target("@ai-sdk/groq", "llama-4"), "low")).toBeUndefined()
 })
 
 test("openai: reasoningEffort on the official endpoint only", () => {

@@ -1751,6 +1751,21 @@ test("/config turns memory off and on without a restart", async () => {
   await setup.waitFor(() => state.dialog === undefined)
 })
 
+test("/config turns the effort step of /model off and on", async () => {
+  await setup.mockInput.typeText("/config")
+  setup.mockInput.pressEnter()
+  await setup.waitForFrame((f) => f.includes("Cài đặt") && f.includes("Hỏi effort khi chọn model"))
+  await setup.mockInput.typeText("hoi effort")
+  setup.mockInput.pressEnter()
+  await setup.waitFor(() => !state.askEffort)
+  expect((await Bun.file(path.join(home, "config.json")).json()).ui?.askEffort).toBe(false)
+  setup.mockInput.pressEnter()
+  await setup.waitFor(() => state.askEffort)
+  expect((await Bun.file(path.join(home, "config.json")).json()).ui?.askEffort).toBe(true)
+  setup.mockInput.pressEscape()
+  await setup.waitFor(() => state.dialog === undefined)
+})
+
 test("/config: the auto-compaction threshold is a preset % and an optional token cap, applied live", async () => {
   const configJson = async () => Bun.file(path.join(home, "config.json")).json()
   await setup.mockInput.typeText("/config")
@@ -3202,6 +3217,44 @@ test("/effort: ←→ set each row and save at once; /effort <level>; ctrl+t ste
   } finally {
     await saveConfig({ effort: undefined, subagents: {}, desk: {} })
     setState({ ...saved, effort: undefined })
+    setState("catalog", "groq", groq as never)
+  }
+})
+
+test("/model → a model with effort levels → the effort step; esc goes back, enter saves both", async () => {
+  await setup.waitFor(() => Object.keys(state.catalog).length > 0)
+  const saved = { provider: state.provider, model: state.model }
+  const prefs = structuredClone(unwrap(state.modelPrefs))
+  const groq = state.catalog.groq ? structuredClone(unwrap(state.catalog.groq)) : undefined
+  const gptOss = { id: "openai/gpt-oss-120b", name: "GPT-OSS 120B", reasoning: true, tool_call: true, modalities: { input: ["text"], output: ["text"] }, limit: { context: 131072 } }
+  setState("catalog", "groq", { ...(groq ?? CATALOG.groq), models: { ...(groq ?? CATALOG.groq).models, "openai/gpt-oss-120b": gptOss } } as never)
+  setState({ effort: undefined })
+  await saveConfig({ effort: undefined })
+  try {
+    await setup.mockInput.typeText("/model")
+    setup.mockInput.pressEnter()
+    await setup.waitForFrame((f) => f.includes("Chọn model"))
+    await setup.mockInput.typeText("gpt-oss")
+    setup.mockInput.pressEnter()
+    let frame = await setup.waitForFrame((f) => f.includes("Effort cho openai/gpt-oss-120b"))
+    show(frame)
+    expect(frame).toMatch(/❯\s+auto\s+đang dùng/)
+    expect(frame).toMatch(/◐ medium\s+reasoningEffort medium/)
+    setup.mockInput.pressEscape()
+    frame = await setup.waitForFrame((f) => f.includes("Chọn model") && f.includes("› gpt-oss"))
+    expect(state.model).toBe(saved.model)
+    setup.mockInput.pressEnter()
+    await setup.waitForFrame((f) => f.includes("Effort cho openai/gpt-oss-120b"))
+    setup.mockInput.pressArrow("up") // auto → high (wraps)
+    setup.mockInput.pressEnter()
+    await setup.waitFor(() => state.dialog === undefined)
+    expect({ provider: state.provider, model: state.model, effort: state.effort }).toEqual({ provider: "groq", model: "openai/gpt-oss-120b", effort: "high" })
+    const config = await loadConfig()
+    expect({ provider: config.provider, model: config.model, effort: config.effort }).toEqual({ provider: "groq", model: "openai/gpt-oss-120b", effort: "high" })
+    await setup.waitForFrame((f) => /gpt-oss-120b ● high/.test(f))
+  } finally {
+    await saveConfig({ ...saved, effort: undefined } as never)
+    setState({ ...saved, effort: undefined, modelPrefs: prefs })
     setState("catalog", "groq", groq as never)
   }
 })
