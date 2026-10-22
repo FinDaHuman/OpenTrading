@@ -15,17 +15,22 @@ async function temp() {
 }
 
 test("Windows gets .cmd shims for cmd/PowerShell and bare sh shims for Git Bash", () => {
-  const files = shimFiles({ root: "D:\\Code\\OpenTrading", dir: "C:\\bin", platform: "win32" })
+  const bun = "C:\\npm\\node_modules\\bun\\bin\\bun.exe"
+  const files = shimFiles({ root: "D:\\Code\\OpenTrading", dir: "C:\\bin", bun, platform: "win32" })
   expect(files.map((f) => path.basename(f.file)).sort()).toEqual(["opentrading", "opentrading.cmd", "ot", "ot.cmd"])
   const cmd = files.find((f) => f.file.endsWith("opentrading.cmd"))!.content
   expect(cmd).toContain("@echo off")
-  expect(cmd).toContain('--config="D:\\Code\\OpenTrading\\src\\cli\\launcher.bunfig.toml"')
+  // The bun.exe that ran the install (npm's bun.cmd would add a batch layer); bun on PATH if it moved.
+  expect(cmd).toContain(`set "OT_BUN=${bun}"`)
+  expect(cmd).toContain('if not exist "%OT_BUN%" set "OT_BUN=bun"')
+  expect(cmd).toContain('"%OT_BUN%" --config="D:\\Code\\OpenTrading\\src\\cli\\launcher.bunfig.toml"')
   expect(cmd).toContain("--no-env-file --no-install")
   expect(cmd).toContain('"D:\\Code\\OpenTrading\\src\\index.tsx" %*')
   expect(cmd).toContain("\r\n")
   const sh = files.find((f) => f.file.endsWith(`${path.sep}ot`))!.content
   expect(sh.startsWith("#!/bin/sh\n")).toBe(true)
-  expect(sh).toContain("exec bun --config='D:/Code/OpenTrading/src/cli/launcher.bunfig.toml' --no-env-file --no-install 'D:/Code/OpenTrading/src/index.tsx' \"$@\"")
+  expect(sh).toContain(`b='C:/npm/node_modules/bun/bin/bun.exe'; [ -x "$b" ] || b=bun`)
+  expect(sh).toContain("exec \"$b\" --config='D:/Code/OpenTrading/src/cli/launcher.bunfig.toml' --no-env-file --no-install 'D:/Code/OpenTrading/src/index.tsx' \"$@\"")
 })
 
 test("macOS/Linux get sh shims only; quotes and % in paths are escaped", () => {

@@ -58,6 +58,8 @@ bun run install:global
 - Script ghi `opentrading` và `ot` vào `~/.local/bin` (Windows: thêm `.cmd` cho PowerShell/cmd và bản không đuôi cho Git Bash); đổi chỗ bằng `bun run install:global -- --dir <thư mục>`. Thư mục đó chưa có trong PATH thì script in lệnh để thêm, không tự sửa PATH. File cùng tên không phải của OpenTrading không bị ghi đè.
 - Lệnh chạy thẳng mã nguồn của repo này: cập nhật = `git pull && bun install`; dời repo sang chỗ khác thì chạy lại `bun run install:global`. Gỡ: `bun run uninstall:global`.
 - Lệnh bỏ qua `bunfig.toml` và `.env` của thư mục đang đứng (chúng có thể chạy code hoặc đổi `OPENTRADING_HOME`).
+  Key để trong file `.env` vì vậy không được nạp: dùng `/connect` hoặc biến môi trường thật.
+- Lệnh chạy đúng bản code đang checkout ở thư mục đã cài. Nếu bạn cũng sửa code hay đổi nhánh trong repo đó, cài từ một bản riêng (`git worktree add ../OpenTrading-ot main`, rồi `bun install` và `bun run install:global` trong đó) để `ot` không chạy theo nhánh đang làm dở.
 
 ```shell
 opentrading                  # workspace = thư mục hiện tại

@@ -22,6 +22,8 @@ export interface InstallOptions {
   root: string
   /** Where the shims go. */
   dir: string
+  /** Bun to run (default: the one running this script, so a bun.cmd shim on PATH is skipped); `bun` on PATH if it is gone. */
+  bun?: string
   platform?: NodeJS.Platform
 }
 
@@ -31,6 +33,7 @@ const shQuote = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`
 export function shimFiles(opts: InstallOptions): ShimFile[] {
   const platform = opts.platform ?? process.platform
   const files: ShimFile[] = []
+  const bun = opts.bun ?? process.execPath
   for (const name of SHIM_NAMES) {
     if (platform === "win32") {
       // `%` starts a variable in a .cmd file, even inside quotes.
@@ -40,7 +43,10 @@ export function shimFiles(opts: InstallOptions): ShimFile[] {
         content: [
           "@echo off",
           `rem ${SHIM_MARK}: written by "bun run install:global" in ${root}; run it again to update.`,
-          `bun --config="${root}\\src\\cli\\launcher.bunfig.toml" --no-env-file --no-install "${root}\\src\\index.tsx" %*`,
+          "setlocal",
+          `set "OT_BUN=${bun.replaceAll("%", "%%")}"`,
+          `if not exist "%OT_BUN%" set "OT_BUN=bun"`,
+          `"%OT_BUN%" --config="${root}\\src\\cli\\launcher.bunfig.toml" --no-env-file --no-install "${root}\\src\\index.tsx" %*`,
           "",
         ].join("\r\n"),
       })
@@ -52,7 +58,8 @@ export function shimFiles(opts: InstallOptions): ShimFile[] {
       content: [
         "#!/bin/sh",
         `# ${SHIM_MARK}: written by "bun run install:global" in ${root}; run it again to update.`,
-        `exec bun --config=${shQuote(`${root}/src/cli/launcher.bunfig.toml`)} --no-env-file --no-install ${shQuote(`${root}/src/index.tsx`)} "$@"`,
+        `b=${shQuote(bun.replaceAll("\\", "/"))}; [ -x "$b" ] || b=bun`,
+        `exec "$b" --config=${shQuote(`${root}/src/cli/launcher.bunfig.toml`)} --no-env-file --no-install ${shQuote(`${root}/src/index.tsx`)} "$@"`,
         "",
       ].join("\n"),
     })
