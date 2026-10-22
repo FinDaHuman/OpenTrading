@@ -86,6 +86,12 @@ Câu trả lời được vẽ bằng markdown (đậm, danh sách, bảng, code
   - **ctrl+f** đánh dấu hoặc bỏ yêu thích;
   - **←/→** nhảy giữa các nhóm khi ô lọc trống;
   - gõ để lọc trên mọi provider.
+- **Bước chọn effort** (giống popup reasoning của Codex): Enter trên một model có hơn một mức effort chưa đổi model ngay. Thay vào đó, bảng `Effort cho <model>` hiện ra.
+  - Bảng gồm `auto` và các mức model đó nhận. Cột phải ghi giá trị gửi đi, ví dụ `thinkingLevel high` hoặc `thinkingBudget 8192`.
+  - Dòng tô sẵn là mức effort đã lưu sẽ chạy thành với model này. **Enter** ngay trên dòng đó (chưa di chuyển) giữ nguyên effort đã lưu, nên `max` vẫn là `max` khi đi qua một model chỉ tới `high`. Chọn dòng khác thì lưu model và effort cùng lúc.
+  - **Esc** quay về danh sách, giữ chữ lọc và dòng đang chọn, không đổi gì.
+  - Model không có mức effort thì đổi ngay như trước.
+  - Tắt bước này trong `/config` → **Hỏi effort khi chọn model** (`"ui": { "askEffort": false }`). Khi tắt, `/model` chỉ đổi model, effort giữ nguyên.
 - Yêu thích không dùng được (provider chưa kết nối, hoặc model không còn trong danh mục) hiện màu xám, kèm lý do.
 - Danh sách yêu thích và gần đây lưu ở `~/.opentrading/model.json`.
 - Các picker model trong `/config` dùng cùng cách nhóm này.

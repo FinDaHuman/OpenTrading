@@ -41,7 +41,7 @@ afterEach(async () => {
   // would land in the next test file's notifications.
   await modelPrefsSaved()
   resetNotifications()
-  setState({ dialog: undefined, modelPrefs: { favorite: [], recent: [] }, provider: undefined, model: undefined })
+  setState({ dialog: undefined, modelPrefs: { favorite: [], recent: [] }, provider: undefined, model: undefined, effort: undefined, askEffort: true })
 })
 afterAll(async () => {
   setState({ catalog: {}, connected: [] })
@@ -158,6 +158,133 @@ test("enter switches the model and puts it first in recent", async () => {
   expect({ provider: state.provider, model: state.model }).toEqual({ provider: "groq", model: "llama-4" })
   expect(state.modelPrefs.recent[0]).toEqual({ provider: "groq", model: "llama-4" })
   expect(state.dialog).toBeUndefined()
+})
+
+const configJson = async () => JSON.parse(await readFile(path.join(home, "config.json"), "utf8"))
+const settle = async () => {
+  for (let i = 0; i < 5; i++) {
+    await new Promise((r) => setTimeout(r, 10))
+    await setup!.renderOnce()
+  }
+}
+
+test("enter on a model with effort levels goes on to the effort step; nothing is saved until a level is picked", async () => {
+  await writeFile(path.join(home, "config.json"), "{}\n")
+  await open()
+  // The first row is Gemini 3.1 Pro: low and high only.
+  setup!.mockInput.pressEnter()
+  let f = await frameWith("Effort cho gemini-3.1-pro")
+  if (process.env.SHOW_FRAME) console.log(f)
+  expect(f).toMatch(/❯\s+auto\s+đang dùng · để provider tự chọn\s+mặc định của model/)
+  expect(f).toMatch(/○ low\s+thinkingLevel low/)
+  expect(f).toMatch(/● high\s+thinkingLevel high/)
+  expect(f).not.toContain("medium")
+  // The same enter did not pick a level on the step it opened.
+  await settle()
+  expect(state.dialog).toBe("model")
+  expect(state.model).toBe("gemini-3.5-flash-lite")
+  expect(await readFile(path.join(home, "config.json"), "utf8")).toBe("{}\n")
+
+  setup!.mockInput.pressArrow("down")
+  setup!.mockInput.pressEnter()
+  for (let i = 0; i < 50 && state.dialog !== undefined; i++) await new Promise((r) => setTimeout(r, 10))
+  expect({ provider: state.provider, model: state.model, effort: state.effort }).toEqual({ provider: "google", model: "gemini-3.1-pro", effort: "low" })
+  expect(await configJson()).toEqual({ provider: "google", model: "gemini-3.1-pro", effort: "low" })
+  expect(state.modelPrefs.recent[0]).toEqual({ provider: "google", model: "gemini-3.1-pro" })
+  expect(state.notification?.text).toContain("Model: Google · gemini-3.1-pro · effort low")
+})
+
+test("esc on the effort step goes back to the list on the same row and filter; nothing changes", async () => {
+  await writeFile(path.join(home, "config.json"), "{}\n")
+  await open()
+  setup!.mockInput.pressArrow("down") // Gemini 3.5 Flash Lite
+  setup!.mockInput.pressEnter()
+  let f = await frameWith("Effort cho gemini-3.5-flash-lite")
+  expect(f).toMatch(/◐ medium\s+thinkingLevel medium/)
+  setup!.mockInput.pressEscape()
+  f = await frameWith("Chọn model")
+  expect(selected(f)).toContain("Gemini 3.5 Flash Lite")
+
+  await setup!.mockInput.typeText("pro")
+  await frameWith("› pro")
+  setup!.mockInput.pressEnter()
+  await frameWith("Effort cho gemini-3.1-pro")
+  setup!.mockInput.pressEscape()
+  f = await frameWith("Chọn model")
+  expect(f).toContain("› pro")
+  expect(selected(f)).toContain("Gemini 3.1 Pro")
+  expect(state.dialog).toBe("model")
+  expect(state.model).toBe("gemini-3.5-flash-lite")
+  expect(await readFile(path.join(home, "config.json"), "utf8")).toBe("{}\n")
+})
+
+test("a saved level the model lacks: the row it runs as is highlighted, and enter on it keeps the saved level", async () => {
+  await writeFile(path.join(home, "config.json"), '{"effort":"max"}\n')
+  setState("effort", "max")
+  await open()
+  setup!.mockInput.pressArrow("down") // Gemini 3.5 Flash Lite: up to high
+  setup!.mockInput.pressEnter()
+  const f = await frameWith("Effort cho gemini-3.5-flash-lite")
+  expect(selected(f)).toMatch(/● high\s+đang dùng · max chạy như high với model này/)
+  setup!.mockInput.pressEnter()
+  for (let i = 0; i < 50 && state.dialog !== undefined; i++) await new Promise((r) => setTimeout(r, 10))
+  expect(await configJson()).toEqual({ effort: "max", provider: "google", model: "gemini-3.5-flash-lite" })
+  expect(state.effort).toBe("max")
+  expect(state.notification?.text).toContain("effort high")
+})
+
+test("moving off the highlighted row and back, then enter, saves that row's level", async () => {
+  await writeFile(path.join(home, "config.json"), '{"effort":"max"}\n')
+  setState("effort", "max")
+  await open()
+  setup!.mockInput.pressArrow("down") // Gemini 3.5 Flash Lite
+  setup!.mockInput.pressEnter()
+  await frameWith("Effort cho gemini-3.5-flash-lite")
+  setup!.mockInput.pressArrow("down") // high → auto (wraps)
+  setup!.mockInput.pressArrow("up") // back to high
+  setup!.mockInput.pressEnter()
+  for (let i = 0; i < 50 && state.dialog !== undefined; i++) await new Promise((r) => setTimeout(r, 10))
+  expect(await configJson()).toEqual({ effort: "high", provider: "google", model: "gemini-3.5-flash-lite" })
+  expect(state.effort).toBe("high")
+})
+
+test("auto clears a saved level", async () => {
+  await writeFile(path.join(home, "config.json"), '{"effort":"high"}\n')
+  setState("effort", "high")
+  await open()
+  setup!.mockInput.pressEnter() // Gemini 3.1 Pro
+  await frameWith("Effort cho gemini-3.1-pro")
+  setup!.mockInput.pressArrow("down") // high → auto (wraps)
+  setup!.mockInput.pressEnter()
+  for (let i = 0; i < 50 && state.dialog !== undefined; i++) await new Promise((r) => setTimeout(r, 10))
+  expect(await configJson()).toEqual({ provider: "google", model: "gemini-3.1-pro" })
+  expect(state.effort).toBeUndefined()
+})
+
+test("with ui.askEffort off, a model with levels switches at once and the effort stays", async () => {
+  await writeFile(path.join(home, "config.json"), '{"effort":"high"}\n')
+  setState({ askEffort: false, effort: "high" })
+  await open()
+  setup!.mockInput.pressEnter() // Gemini 3.1 Pro
+  for (let i = 0; i < 50 && state.dialog !== undefined; i++) await new Promise((r) => setTimeout(r, 10))
+  expect(state.model).toBe("gemini-3.1-pro")
+  expect(await configJson()).toEqual({ effort: "high", provider: "google", model: "gemini-3.1-pro" })
+})
+
+test("manual entry of a model with levels goes on to the effort step too; esc comes back to the entry", async () => {
+  await writeFile(path.join(home, "config.json"), "{}\n")
+  await open()
+  await setup!.mockInput.typeText("thủ công")
+  await frameWith("+ Nhập model id thủ công")
+  setup!.mockInput.pressEnter()
+  await frameWith("Nhập model id")
+  await setup!.mockInput.typeText("google/gemini-3.1-pro")
+  setup!.mockInput.pressEnter()
+  await frameWith("Effort cho gemini-3.1-pro")
+  setup!.mockInput.pressEscape()
+  const f = await frameWith("Nhập model id")
+  expect(f).toContain("Nhập model id")
+  expect(state.model).toBe("gemini-3.5-flash-lite")
 })
 
 test("manual entry with no model id ('groq/', '/', blank) keeps the dialog open with the reason and saves nothing", async () => {

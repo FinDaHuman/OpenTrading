@@ -16,6 +16,9 @@ adopt Semantic Versioning when it exposes a stable public API.
 - Folder trust: a folder's own `.opentrading/skills` and `.opentrading/agents` load only after the
   user trusts the folder once (saved in `~/.opentrading/folder-trust.json`; home and drive roots
   only for the run). `.mcp.json` keeps its per-server approval.
+- `/model` asks for the effort after a model with more than one level: `auto` and the model's
+  levels, saved together with the model; esc goes back to the list. Enter on the highlighted
+  row before moving keeps the saved level. `/config` → "Hỏi effort khi chọn model" (`ui.askEffort`) turns it off.
 
 ## [0.1.0] — 2026-10-22 (pre-release, private)
 

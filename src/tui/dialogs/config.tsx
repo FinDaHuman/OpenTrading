@@ -24,7 +24,7 @@ const COMPACT_PERCENTS = [95, 90, 80, 70]
 
 const DEFAULT_MODE_NEXT: Record<PermissionMode, PermissionMode> = { "read-only": "ask", ask: "auto", auto: "read-only" }
 
-type Setting = "memory" | "toolSearch" | "autoCompact" | "compactLevel" | "maxSteps" | "effort" | "subagentMax" | "subagentModel" | "webModel" | "autoModel" | "defaultMode" | "tips" | "terminalNotify" | "scroll"
+type Setting = "memory" | "toolSearch" | "autoCompact" | "compactLevel" | "maxSteps" | "effort" | "subagentMax" | "subagentModel" | "webModel" | "autoModel" | "defaultMode" | "askEffort" | "tips" | "terminalNotify" | "scroll"
 type SubagentModel = { provider: string; model: string } | "inherit" | "auto"
 
 const TOOL_SEARCH_NEXT = { auto: "on", on: "off", off: "auto" } as const
@@ -194,6 +194,14 @@ export function ConfigDialog(props: { runtime: Runtime }) {
       const next = nextScrollSetting(scrollSetting(current.ui))
       await saveConfig({ ui: { ...current.ui, scrollSpeed: next.speed, scrollAcceleration: next.accelerate } })
       setState("scroll", next)
+      await refetch()
+      return
+    }
+    if (setting === "askEffort") {
+      const current = await loadConfig()
+      const on = current.ui?.askEffort === false
+      await saveConfig({ ui: { ...current.ui, askEffort: on } })
+      setState("askEffort", on)
       await refetch()
       return
     }
@@ -401,6 +409,15 @@ export function ConfigDialog(props: { runtime: Runtime }) {
                 value: "effort" as Setting,
               },
               {
+                label: "Hỏi effort khi chọn model",
+                hint:
+                  config()?.ui?.askEffort === false
+                    ? "Tắt · /model đổi model ngay, giữ effort · enter để bật"
+                    : "Bật · /model hỏi effort sau khi chọn model có nhiều mức",
+                mark: config()?.ui?.askEffort === false ? "○" : "●",
+                value: "askEffort" as Setting,
+              },
+              {
                 label: "Subagent chạy song song",
                 hint: `${maxConcurrent()} cùng lúc (cả chạy nền) · vượt thì xếp hàng · enter để đổi`,
                 mark: "●",
@@ -453,7 +470,7 @@ export function ConfigDialog(props: { runtime: Runtime }) {
               },
             ]}
             onPick={(s) => void toggle(s)}
-            rows={14}
+            rows={15}
           />
           <text fg={color.tx3} marginTop={1}>{`File cấu hình: ${configFile()}`}</text>
         </DialogFrame>

@@ -147,6 +147,8 @@ export const [state, setState] = createStore({
   activity: undefined as Activity | undefined,
   /** Config `ui.tips`: a tip under the working row once a turn runs long. */
   tips: true,
+  /** Config `ui.askEffort`: /model asks for the effort after a model that has levels. */
+  askEffort: true,
   /** Config `ui.terminalNotify`: notifications and the tab progress ring (attention.ts). */
   terminalNotify: true,
   /** Config `ui.scrollSpeed` / `ui.scrollAcceleration`: transcript rows per wheel notch. */

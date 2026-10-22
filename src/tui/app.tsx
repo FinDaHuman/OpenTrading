@@ -759,6 +759,7 @@ export function App(props: {
       compactCap: config.compactWindow,
       compactPercent: clampPercent(config.autoCompactPercent),
       tips: config.ui?.tips !== false,
+      askEffort: config.ui?.askEffort !== false,
       terminalNotify: config.ui?.terminalNotify !== false,
       scroll: scrollSetting(config.ui),
       autoCompactOff: config.autoCompact === "off",
