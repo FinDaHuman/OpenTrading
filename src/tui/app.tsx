@@ -36,6 +36,7 @@ import { McpPanel, STATUS } from "./mcp/panel"
 import { rank, truncate } from "./ui/text"
 import { COMMANDS, parseCommand, parsePromptArgs, promptUsage, withPlaybooks, type CommandInfo } from "./commands"
 import { ConfigDialog } from "./dialogs/config"
+import { announceUpdate } from "./update-notice"
 import { ConnectDialog } from "./dialogs/connect"
 import { ContextDialog } from "./dialogs/context"
 import { HelpDialog } from "./dialogs/help"
@@ -769,6 +770,7 @@ export function App(props: {
       deskMode: deskSettings(config).alwaysOn,
       effort: isEffort(config.effort) ? config.effort : undefined,
     })
+    void announceUpdate(config)
     // Set to open in ▸▸ auto without ever having said yes (config or /config): ask now.
     if (config.permissions?.defaultMode === "auto" && !state.autoAcknowledged) setState("autoOptIn", { from: props.runtime.permissions.mode })
     attachSubagents(props.runtime)

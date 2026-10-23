@@ -24,7 +24,7 @@ const COMPACT_PERCENTS = [95, 90, 80, 70]
 
 const DEFAULT_MODE_NEXT: Record<PermissionMode, PermissionMode> = { "read-only": "ask", ask: "auto", auto: "read-only" }
 
-type Setting = "memory" | "toolSearch" | "autoCompact" | "compactLevel" | "maxSteps" | "effort" | "subagentMax" | "subagentModel" | "webModel" | "autoModel" | "defaultMode" | "askEffort" | "tips" | "terminalNotify" | "scroll"
+type Setting = "memory" | "toolSearch" | "autoCompact" | "compactLevel" | "maxSteps" | "effort" | "subagentMax" | "subagentModel" | "webModel" | "autoModel" | "defaultMode" | "askEffort" | "tips" | "terminalNotify" | "scroll" | "updateCheck"
 type SubagentModel = { provider: string; model: string } | "inherit" | "auto"
 
 const TOOL_SEARCH_NEXT = { auto: "on", on: "off", off: "auto" } as const
@@ -202,6 +202,12 @@ export function ConfigDialog(props: { runtime: Runtime }) {
       const on = current.ui?.askEffort === false
       await saveConfig({ ui: { ...current.ui, askEffort: on } })
       setState("askEffort", on)
+      await refetch()
+      return
+    }
+    if (setting === "updateCheck") {
+      const current = await loadConfig()
+      await saveConfig({ update: { ...current.update, check: current.update?.check === false } })
       await refetch()
       return
     }
@@ -467,6 +473,15 @@ export function ConfigDialog(props: { runtime: Runtime }) {
                 hint: config()?.ui?.tips === false ? "Tắt · enter để bật" : "Bật · một mẹo dưới dòng đang làm khi lượt chạy lâu",
                 mark: config()?.ui?.tips === false ? "○" : "●",
                 value: "tips" as Setting,
+              },
+              {
+                label: "Báo bản mới",
+                hint:
+                  config()?.update?.check === false
+                    ? "Tắt · enter để bật (vẫn cập nhật được bằng ot update)"
+                    : "Bật · khi mở, tối đa 1 lần/ngày, báo có bản mới để chạy ot update",
+                mark: config()?.update?.check === false ? "○" : "●",
+                value: "updateCheck" as Setting,
               },
             ]}
             onPick={(s) => void toggle(s)}

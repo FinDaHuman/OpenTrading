@@ -32,6 +32,12 @@ adopt Semantic Versioning when it exposes a stable public API.
   `opentrading` and `ot` in `~/.opentrading/bin` and add it to PATH (Windows: the user PATH, kept unexpanded;
   Unix: one marked line in the shell's startup file). `--version`, `--binary`, `--no-modify-path`,
   `--uninstall`. CI installs from a local copy of a release on Ubuntu, Windows and macOS.
+- `opentrading update` (alias `upgrade`; `--check`; `update 0.3.0` for a given version): downloads the
+  build for this machine, checks `SHA256SUMS` and the new binary's `--version`, then swaps it in for
+  `opentrading` and `ot` (Windows: the running files are renamed to `.old` and removed on the next start).
+  npm installs get the `npm i -g` command instead; source checkouts get `git pull`. The TUI looks for a new
+  release at most once a day and shows a toast; `/config` → "Báo bản mới" (`update.check`) or
+  `OPENTRADING_DISABLE_UPDATE_CHECK=1` turns it off. `--version` mentions a newer release it already knows.
 
 ## [0.1.0] — 2026-10-22 (pre-release, private)
 
