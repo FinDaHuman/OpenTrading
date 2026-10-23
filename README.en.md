@@ -8,26 +8,6 @@ A terminal AI harness for researching Vietnamese equities. It connects to 200+ L
 
 ![OpenTrading's home screen in Windows Terminal](docs/images/tui-home.png)
 
-## Contents
-
-- [Install](#install)
-- [Update and uninstall](#update-and-uninstall)
-- [Usage](#usage)
-- [Features](#features)
-- [Ultradesk: multi-agent research](#ultradesk-multi-agent-research)
-- [Reasoning effort](#reasoning-effort)
-- [Commands in the TUI](#commands-in-the-tui)
-- [Keyboard shortcuts](#keyboard-shortcuts)
-- [Files, shell commands and permissions](#files-shell-commands-and-permissions)
-- [Subagents](#subagents)
-- [Market data (MCP)](#market-data-mcp)
-- [Providers, models and keys](#providers-models-and-keys)
-- [Sessions, compaction, memory](#sessions-compaction-memory)
-- [Configuration](#configuration)
-- [Run from source](#run-from-source)
-- [Development and tests](#development-and-tests)
-- [Layout](#layout)
-
 ## Install
 
 OpenTrading ships as a single executable with Bun built in; you do not need Bun or Node first. Pick one:
@@ -117,6 +97,26 @@ ot --help                # every option
   A folder's `.mcp.json` still asks about each server separately.
 - Data (keys, settings, sessions) lives in `~/.opentrading/`; set `OPENTRADING_HOME` to move it.
 - No key but want to see ultradesk run? From source: `bun scripts/dev/desk-demo.tsx` (see [Demo without a key](#demo-without-a-key)).
+
+## Contents
+
+- [Install](#install)
+- [Update and uninstall](#update-and-uninstall)
+- [Usage](#usage)
+- [Features](#features)
+- [Ultradesk: multi-agent research](#ultradesk-multi-agent-research)
+- [Reasoning effort](#reasoning-effort)
+- [Commands in the TUI](#commands-in-the-tui)
+- [Keyboard shortcuts](#keyboard-shortcuts)
+- [Files, shell commands and permissions](#files-shell-commands-and-permissions)
+- [Subagents](#subagents)
+- [Market data (MCP)](#market-data-mcp)
+- [Providers, models and keys](#providers-models-and-keys)
+- [Sessions, compaction, memory](#sessions-compaction-memory)
+- [Configuration](#configuration)
+- [Run from source](#run-from-source)
+- [Development and tests](#development-and-tests)
+- [Layout](#layout)
 
 ## Features
 

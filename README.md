@@ -8,26 +8,6 @@ Harness AI phân tích chứng khoán Việt Nam, chạy trong terminal. Kết n
 
 ![Màn hình đầu của OpenTrading trong Windows Terminal](docs/images/tui-home.png)
 
-## Mục lục
-
-- [Cài đặt](#cài-đặt)
-- [Cập nhật và gỡ cài đặt](#cập-nhật-và-gỡ-cài-đặt)
-- [Cách dùng](#cách-dùng)
-- [Tính năng](#tính-năng)
-- [Ultradesk: nghiên cứu nhiều agent](#ultradesk-nghiên-cứu-nhiều-agent)
-- [Effort suy luận](#effort-suy-luận)
-- [Lệnh trong TUI](#lệnh-trong-tui)
-- [Phím tắt](#phím-tắt)
-- [File, lệnh shell và quyền](#file-lệnh-shell-và-quyền)
-- [Subagent](#subagent)
-- [Dữ liệu thị trường (MCP)](#dữ-liệu-thị-trường-mcp)
-- [Provider, model và key](#provider-model-và-key)
-- [Phiên, nén hội thoại, memory](#phiên-nén-hội-thoại-memory)
-- [Cấu hình](#cấu-hình)
-- [Chạy từ mã nguồn](#chạy-từ-mã-nguồn)
-- [Phát triển và kiểm tra](#phát-triển-và-kiểm-tra)
-- [Cấu trúc](#cấu-trúc)
-
 ## Cài đặt
 
 Bản cài là một file chạy duy nhất (Bun nằm sẵn bên trong), không cần cài Bun hay Node trước. Chọn một cách:
@@ -117,6 +97,26 @@ ot --help                # mọi tuỳ chọn
   `.mcp.json` của thư mục vẫn hỏi riêng từng server.
 - Dữ liệu (key, cấu hình, phiên) nằm ở `~/.opentrading/`; đổi chỗ bằng biến `OPENTRADING_HOME`.
 - Không có key mà muốn xem ultradesk chạy? Từ mã nguồn: `bun scripts/dev/desk-demo.tsx` (xem [Demo không cần key](#demo-không-cần-key)).
+
+## Mục lục
+
+- [Cài đặt](#cài-đặt)
+- [Cập nhật và gỡ cài đặt](#cập-nhật-và-gỡ-cài-đặt)
+- [Cách dùng](#cách-dùng)
+- [Tính năng](#tính-năng)
+- [Ultradesk: nghiên cứu nhiều agent](#ultradesk-nghiên-cứu-nhiều-agent)
+- [Effort suy luận](#effort-suy-luận)
+- [Lệnh trong TUI](#lệnh-trong-tui)
+- [Phím tắt](#phím-tắt)
+- [File, lệnh shell và quyền](#file-lệnh-shell-và-quyền)
+- [Subagent](#subagent)
+- [Dữ liệu thị trường (MCP)](#dữ-liệu-thị-trường-mcp)
+- [Provider, model và key](#provider-model-và-key)
+- [Phiên, nén hội thoại, memory](#phiên-nén-hội-thoại-memory)
+- [Cấu hình](#cấu-hình)
+- [Chạy từ mã nguồn](#chạy-từ-mã-nguồn)
+- [Phát triển và kiểm tra](#phát-triển-và-kiểm-tra)
+- [Cấu trúc](#cấu-trúc)
 
 ## Tính năng
 
