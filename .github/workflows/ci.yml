@@ -83,7 +83,11 @@ jobs:
           opentrading --self-check
       - name: PATH written where a new shell reads it (Unix)
         if: runner.os != 'Windows'
-        run: grep -A1 "OpenTrading installer" "$HOME/.bashrc" "$HOME/.bash_profile" "$HOME/.zshrc" "$HOME/.profile" 2>/dev/null | grep -F ".opentrading/bin"
+        run: |
+          # -s: not every startup file exists; the line must be in the one the installer chose.
+          lines=$(grep -sh -A1 "OpenTrading installer" "$HOME/.bashrc" "$HOME/.bash_profile" "$HOME/.zshrc" "$HOME/.profile" || true)
+          echo "$lines"
+          echo "$lines" | grep -F ".opentrading/bin"
       - name: PATH written where a new shell reads it (Windows)
         if: runner.os == 'Windows'
         shell: powershell
