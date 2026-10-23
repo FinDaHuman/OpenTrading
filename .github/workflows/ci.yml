@@ -81,6 +81,15 @@ jobs:
         run: |
           ot --version
           opentrading --self-check
+      - name: ot update to a newer build, run through ot itself
+        run: |
+          OPENTRADING_BUILD_VERSION=9.9.9 bun run build --single
+          bun scripts/package.ts && bun scripts/checksums.ts dist/release
+          bun scripts/dev/serve-release.ts dist/release 8766 &
+          sleep 2
+          OPENTRADING_RELEASE_BASE=http://127.0.0.1:8766 ot update 9.9.9
+          ot --version | grep -F 9.9.9
+          opentrading --version | grep -F 9.9.9
       - name: PATH written where a new shell reads it (Unix)
         if: runner.os != 'Windows'
         run: |

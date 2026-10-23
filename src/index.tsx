@@ -11,6 +11,11 @@ if (cli.kind === "mcp") {
   process.exit(await runMcpCli(cli.args))
 }
 
+if (cli.kind === "update") {
+  const { runUpdateCli } = await import("./cli/update")
+  process.exit(await runUpdateCli(cli.args))
+}
+
 if (cli.kind === "help") {
   process.stdout.write(HELP)
   process.exit(0)
@@ -20,6 +25,9 @@ if (cli.kind === "version") {
   const { build } = await import("./core/build-info")
   if (build) {
     process.stdout.write(`opentrading ${build.version} (${build.commit}, ${build.target})\ncài tại ${process.execPath}\n`)
+    const { cachedLatest, compareVersions } = await import("./core/update")
+    const latest = await cachedLatest()
+    if (latest && compareVersions(latest, build.version) > 0) process.stdout.write(`có bản mới ${latest}: opentrading update\n`)
     process.exit(0)
   }
   const root = path.resolve(import.meta.dir, "..")

@@ -59,6 +59,12 @@ export interface Config {
    */
   ui?: { tips?: boolean; terminalNotify?: boolean; scrollSpeed?: number; scrollAcceleration?: boolean; askEffort?: boolean }
   /**
+   * New versions (binary installs only): `check` (default on) looks up the latest release at most
+   * once a day when the TUI opens and shows a toast to run `opentrading update`.
+   * OPENTRADING_DISABLE_UPDATE_CHECK=1 turns it off too.
+   */
+  update?: { check?: boolean }
+  /**
    * Cap, in tokens, on the context window used for the threshold and ctx %. Unset (default):
    * the model's whole window (models.dev `limit.input`, else `limit.context`). Gemini's free
    * tier takes at most 250k input tokens a minute, so a larger request always fails there:

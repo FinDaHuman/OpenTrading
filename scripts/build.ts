@@ -37,7 +37,9 @@ for (const file of files) {
   assets[file] = text
   hash.update(file).update("\0").update(text).update("\0")
 }
-const assetsId = `${pkg.version}-${hash.digest("hex").slice(0, 8)}`
+// OPENTRADING_BUILD_VERSION: CI builds a "next" version to exercise `opentrading update` end to end.
+const version = process.env.OPENTRADING_BUILD_VERSION ?? pkg.version
+const assetsId = `${version}-${hash.digest("hex").slice(0, 8)}`
 
 const commit = Bun.spawnSync(["git", "rev-parse", "--short", "HEAD"], { cwd: root, stdout: "pipe" }).stdout.toString().trim()
 
@@ -74,7 +76,7 @@ for (const target of targets) {
       outfile: path.join(out, "bin", "opentrading"),
     },
     define: {
-      OPENTRADING_VERSION: JSON.stringify(pkg.version),
+      OPENTRADING_VERSION: JSON.stringify(version),
       OPENTRADING_COMMIT: JSON.stringify(commit),
       OPENTRADING_TARGET: JSON.stringify(targetName(target)),
       OPENTRADING_ASSETS_ID: JSON.stringify(assetsId),

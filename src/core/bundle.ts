@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs"
-import os from "node:os"
 import path from "node:path"
 import { compiled } from "./build-info"
+import { dataDir } from "./home"
 
 /**
  * Where the files OpenTrading ships (skills/, agents/, prompts/, market/) are read from.
@@ -75,6 +75,5 @@ function prune(base: string, keep: string) {
 
 /** Folder holding skills/, agents/, prompts/ and market/. */
 export const BUNDLED_ROOT = compiled
-  ? // dataDir() of ./paths, inlined: paths imports this module.
-    materialize(OPENTRADING_ASSETS!, OPENTRADING_ASSETS_ID!, path.join(process.env.OPENTRADING_HOME ?? path.join(os.homedir(), ".opentrading"), "bundled"))
+  ? materialize(OPENTRADING_ASSETS!, OPENTRADING_ASSETS_ID!, path.join(dataDir(), "bundled"))
   : path.resolve(import.meta.dir, "../..")

@@ -11,6 +11,7 @@ export type Cli =
   /** Hidden: smoke test of a built binary (src/cli/self-check.ts). */
   | { kind: "self-check" }
   | { kind: "mcp"; args: string[] }
+  | { kind: "update"; args: string[] }
   | { kind: "tui"; dir?: string; resume?: string }
   | { kind: "error"; message: string }
 
@@ -20,10 +21,11 @@ export const HELP = `OpenTrading — harness AI phân tích chứng khoán Việ
   opentrading -c, --continue       mở lại phiên mới nhất
   opentrading -r, --resume [id]    mở lại phiên theo id (bỏ trống = mới nhất)
   opentrading mcp …                quản lý MCP server (opentrading mcp --help)
+  opentrading update [--check]     cập nhật lên bản mới (opentrading update --help)
   opentrading -v, --version        phiên bản và nơi cài
   opentrading -h, --help           trợ giúp này
 
-  Lệnh tắt: ot. Thư mục tên "mcp" thì gõ ./mcp.
+  Lệnh tắt: ot. Thư mục tên "mcp" hay "update" thì gõ ./mcp, ./update.
 `
 
 /** A `-r` value is a session id, not a folder: ids never hold a path separator or a dot. */
@@ -31,6 +33,7 @@ const looksLikeId = (arg: string) => !arg.startsWith("-") && !/[\\/.:]/.test(arg
 
 export function parseCli(argv: string[]): Cli {
   if (argv[0] === "mcp") return { kind: "mcp", args: argv.slice(1) }
+  if (argv[0] === "update" || argv[0] === "upgrade") return { kind: "update", args: argv.slice(1) }
   if (argv[0] === "--self-check") return { kind: "self-check" }
   let dir: string | undefined
   let resume: string | undefined
