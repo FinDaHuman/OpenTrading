@@ -4,40 +4,25 @@ import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { createSolidTransformPlugin } from "@opentui/solid/bun-plugin"
 import pkg from "../package.json"
+import { TARGETS, targetName, type Target } from "./targets"
 
 /**
  * Build standalone binaries (Bun runtime inside, nothing else to install) into
  * dist/opentrading-<os>-<arch>[-baseline]/bin/opentrading[.exe].
- * Cách chạy: bun run build [--single]   (--single: only this machine's platform, then smoke-test it)
+ * Cách chạy: bun run build [--single | --targets linux-x64,linux-arm64]
+ *   --single: only this machine's platform; --targets: those (release.yml splits them per runner).
+ * The binary for this machine's platform is smoke-tested (--version, --self-check).
  */
 
 const root = path.resolve(import.meta.dir, "..")
 const single = process.argv.includes("--single")
+const only = process.argv.includes("--targets") ? process.argv[process.argv.indexOf("--targets") + 1]?.split(",") : undefined
 
-export interface Target {
-  os: "windows" | "linux" | "darwin"
-  arch: "x64" | "arm64"
-  /** x64 CPUs without AVX2. */
-  baseline?: boolean
-}
-
-export const TARGETS: Target[] = [
-  { os: "windows", arch: "x64" },
-  { os: "windows", arch: "x64", baseline: true },
-  { os: "windows", arch: "arm64" },
-  { os: "linux", arch: "x64" },
-  { os: "linux", arch: "x64", baseline: true },
-  { os: "linux", arch: "arm64" },
-  { os: "darwin", arch: "x64" },
-  { os: "darwin", arch: "x64", baseline: true },
-  { os: "darwin", arch: "arm64" },
-]
-
-export const targetName = (t: Target) => [t.os, t.arch, t.baseline ? "baseline" : undefined].filter(Boolean).join("-")
 const hostOs = process.platform === "win32" ? "windows" : process.platform
 const isHost = (t: Target) => t.os === hostOs && t.arch === process.arch && !t.baseline
 
-const targets = single ? TARGETS.filter(isHost) : TARGETS
+const targets = single ? TARGETS.filter(isHost) : only ? TARGETS.filter((t) => only.includes(targetName(t))) : TARGETS
+if (only && targets.length !== only.length) throw new Error(`Unknown target in ${only.join(",")}; known: ${TARGETS.map(targetName).join(", ")}`)
 if (targets.length === 0) throw new Error(`No build target for ${process.platform}-${process.arch}`)
 
 // Files read at run time (skills, agents, prompts, market calendar) go inside the binary;

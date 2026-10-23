@@ -24,6 +24,9 @@ adopt Semantic Versioning when it exposes a stable public API.
   (x64, arm64, x64 baseline). Bundled skills, agents, prompts and the market calendar are compiled
   in and written once per version to `~/.opentrading/bundled/`. A hidden `--self-check` verifies a
   build; CI builds and checks it on Ubuntu, Windows and macOS.
+- Release workflow: pushing a tag `vX.Y.Z` builds every binary on Windows, Ubuntu and macOS runners,
+  attaches `.zip`/`.tar.gz` archives and `SHA256SUMS` to a GitHub release (draft first, published when every
+  channel has it), with notes from this file. Steps in `docs/release.md`.
 
 ## [0.1.0] — 2026-10-22 (pre-release, private)
 

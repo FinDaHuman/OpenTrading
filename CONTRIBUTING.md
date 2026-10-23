@@ -14,7 +14,8 @@ bun run typecheck
 bun test
 ```
 
-CI runs the same commands and is the source of truth.
+CI runs the same commands and is the source of truth. It also builds the standalone binary
+(`bun run build --single`). Releases: [docs/release.md](docs/release.md).
 
 ## Review rules
 
