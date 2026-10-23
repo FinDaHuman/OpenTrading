@@ -5,6 +5,21 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-10-23
+
+First public release, and the first one you can install without Bun or a checkout:
+
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://raw.githubusercontent.com/FinDaHuman/OpenTrading/main/install.ps1 | iex"
+```
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/FinDaHuman/OpenTrading/main/install.sh | bash
+npm i -g opentrading
+```
+
+Then open a new terminal and run `ot`. Later versions: `ot update`. Not investment advice.
+
 ### Added
 
 - First public release under the Apache License 2.0, with `NOTICE` and `THIRD_PARTY_NOTICES.md`.
