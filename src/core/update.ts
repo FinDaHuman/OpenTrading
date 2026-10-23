@@ -12,15 +12,17 @@ import { dataDir } from "./home"
  */
 
 export const REPO = "FinDaHuman/OpenTrading"
+/** The npm package (the unscoped name was refused as too close to "opentracing"). */
+export const NPM_PACKAGE = "@findahuman/opentrading"
 const RELEASES_API = `https://api.github.com/repos/${REPO}/releases/latest`
-const NPM_LATEST = "https://registry.npmjs.org/opentrading/latest"
+const NPM_LATEST = `https://registry.npmjs.org/${NPM_PACKAGE.replace("/", "%2f")}/latest`
 const CHECK_EVERY_MS = 24 * 3_600_000
 
 export type Fetch = (url: string, init?: RequestInit) => Promise<Response>
 
 export type Install =
   | { kind: "source" }
-  /** Installed with `npm i -g opentrading`: npm owns the files, so it updates them. */
+  /** Installed with `npm i -g @findahuman/opentrading`: npm owns the files, so it updates them. */
   | { kind: "npm"; dir: string }
   /** Installed by install.sh / install.ps1 (or copied by hand): replaced in place. */
   | { kind: "binary"; dir: string; target: string }

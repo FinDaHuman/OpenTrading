@@ -31,7 +31,7 @@ curl -fsSL https://raw.githubusercontent.com/FinDaHuman/OpenTrading/main/install
 **npm** (mọi hệ điều hành, cần Node 18 trở lên):
 
 ```bash
-npm i -g opentrading
+npm i -g @findahuman/opentrading
 ```
 
 Cài xong, **mở terminal mới** rồi gõ `ot` (hoặc `opentrading`).
@@ -55,7 +55,7 @@ ot update 0.2.0      # cài đúng một bản (kể cả bản cũ hơn)
 
 - Khi mở, OpenTrading kiểm tra bản mới tối đa một lần mỗi ngày và hiện thông báo ở góc phải. Tắt trong `/config` → **Báo bản mới**, hoặc đặt `OPENTRADING_DISABLE_UPDATE_CHECK=1`.
 - `ot update` tải bản mới, kiểm tra checksum và chạy thử trước khi thay; lỗi giữa chừng thì bản đang dùng giữ nguyên. Trên Windows, file đang chạy được đổi tên thành `.old` và bị xoá ở lần mở sau.
-- Cài bằng npm: `ot update` in lệnh `npm i -g opentrading@latest` để bạn tự chạy (đóng OpenTrading trước).
+- Cài bằng npm: `ot update` in lệnh `npm i -g @findahuman/opentrading@latest` để bạn tự chạy (đóng OpenTrading trước).
 - Gỡ cài đặt:
 
   ```powershell
@@ -66,7 +66,7 @@ ot update 0.2.0      # cài đúng một bản (kể cả bản cũ hơn)
   curl -fsSL https://raw.githubusercontent.com/FinDaHuman/OpenTrading/main/install.sh | bash -s -- --uninstall
   ```
 
-  Cài bằng npm thì gỡ bằng `npm rm -g opentrading`. Dữ liệu của bạn ở `~/.opentrading/` (key, phiên, cấu hình) được giữ lại; muốn xoá thì xoá thư mục đó.
+  Cài bằng npm thì gỡ bằng `npm rm -g @findahuman/opentrading`. Dữ liệu của bạn ở `~/.opentrading/` (key, phiên, cấu hình) được giữ lại; muốn xoá thì xoá thư mục đó.
 
 ## Cách dùng
 

@@ -145,7 +145,7 @@ jobs:
       - name: npm i -g from the packed files
         run: |
           prefix="$RUNNER_TEMP/npm-global"
-          main=$(ls dist/npm/opentrading-[0-9]*.tgz)
+          main=$(ls dist/npm/findahuman-opentrading-*.tgz)
           platform=$(ls dist/npm/opentrading-*.tgz | grep -vxF "$main")
           npm i -g --prefix "$prefix" $platform "$main"
           if [ "$RUNNER_OS" = Windows ]; then bin="$prefix"; else bin="$prefix/bin"; fi

@@ -1,12 +1,13 @@
 import { chmod, copyFile, mkdir, readdir, rm } from "node:fs/promises"
 import path from "node:path"
 import pkg from "../package.json"
+import { NPM_PACKAGE } from "../src/core/update"
 import { TARGETS, archiveName, targetName, type Target } from "./targets"
 
 /**
  * npm packages, the way opencode ships its binary: one package per platform
  * (`opentrading-<target>`, with `os`/`cpu` so npm installs only the matching ones) and the
- * `opentrading` package that depends on all of them optionally; its `opentrading` and `ot` commands
+ * `@findahuman/opentrading` package that depends on all of them optionally; its `opentrading` and `ot` commands
  * are a small Node launcher that runs the matching binary (scripts/npm/launcher.cjs). opencode puts
  * the binary in place with postinstall instead, but npm 12 blocks install scripts by default.
  *
@@ -66,13 +67,13 @@ await chmod(path.join(main, "bin", "opentrading.cjs"), 0o755)
 await copyFile(path.join(root, "LICENSE"), path.join(main, "LICENSE"))
 await Bun.write(
   path.join(main, "README.md"),
-  `# OpenTrading\n\nTerminal AI harness for researching Vietnamese equities. See https://github.com/FinDaHuman/OpenTrading#readme\n\n\`\`\`shell\nnpm i -g opentrading\not\n\`\`\`\n`,
+  `# OpenTrading\n\nTerminal AI harness for researching Vietnamese equities. See https://github.com/FinDaHuman/OpenTrading#readme\n\n\`\`\`shell\nnpm i -g @findahuman/opentrading\not\n\`\`\`\n`,
 )
 await Bun.write(
   path.join(main, "package.json"),
   JSON.stringify(
     {
-      name: "opentrading",
+      name: NPM_PACKAGE,
       description: pkg.description,
       ...common,
       bin: { opentrading: "bin/opentrading.cjs", ot: "bin/opentrading.cjs" },
@@ -87,8 +88,8 @@ await Bun.write(
 )
 
 // Platform packages first: the main package must never point at versions npm lacks.
-for (const name of [...Object.keys(platforms), "opentrading"]) {
-  const dir = path.join(out, name)
+for (const name of [...Object.keys(platforms), NPM_PACKAGE]) {
+  const dir = name === NPM_PACKAGE ? main : path.join(out, name)
   const packed = npm(["pack", "--pack-destination", out], dir)
   if (!packed.ok) throw new Error(`npm pack ${name}: ${packed.text}`)
   console.log(`packed ${name}@${version}`)

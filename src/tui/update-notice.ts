@@ -1,6 +1,6 @@
 import { build as currentBuild } from "../core/build-info"
 import type { Config } from "../core/config"
-import { checkForUpdate, detectInstall, removeOldBinaries, updateCheckEnabled, type Fetch, type Install } from "../core/update"
+import { NPM_PACKAGE, checkForUpdate, detectInstall, removeOldBinaries, updateCheckEnabled, type Fetch, type Install } from "../core/update"
 import { notify } from "./notify"
 
 /**
@@ -21,7 +21,7 @@ export async function announceUpdate(config: Config, deps: { install?: Install; 
     toast: true,
     level: "info",
     title: `Có OpenTrading ${latest}`,
-    text: `Đang dùng ${version}. Cập nhật: ${install.kind === "npm" ? "npm i -g opentrading@latest" : "ot update"} (tắt thông báo trong /config)`,
+    text: `Đang dùng ${version}. Cập nhật: ${install.kind === "npm" ? `npm i -g ${NPM_PACKAGE}@latest` : "ot update"} (tắt thông báo trong /config)`,
     timeoutMs: 15_000,
   })
 }

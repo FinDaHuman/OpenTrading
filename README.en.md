@@ -31,7 +31,7 @@ curl -fsSL https://raw.githubusercontent.com/FinDaHuman/OpenTrading/main/install
 **npm** (any OS, Node 18 or later):
 
 ```bash
-npm i -g opentrading
+npm i -g @findahuman/opentrading
 ```
 
 Then **open a new terminal** and run `ot` (or `opentrading`).
@@ -55,7 +55,7 @@ ot update 0.2.0      # install that exact version (older ones too)
 
 - When it opens, OpenTrading checks for a new release at most once a day and shows a notice in the top-right corner. Turn this off in `/config` → **Báo bản mới** ("new version notice"), or set `OPENTRADING_DISABLE_UPDATE_CHECK=1`.
 - `ot update` downloads the new build, checks its checksum and runs it once before swapping it in. If any step fails, the version you have stays in place. On Windows the running files are renamed to `.old` and removed the next time OpenTrading starts.
-- npm installs: `ot update` prints `npm i -g opentrading@latest` for you to run (close OpenTrading first).
+- npm installs: `ot update` prints `npm i -g @findahuman/opentrading@latest` for you to run (close OpenTrading first).
 - Uninstall:
 
   ```powershell
@@ -66,7 +66,7 @@ ot update 0.2.0      # install that exact version (older ones too)
   curl -fsSL https://raw.githubusercontent.com/FinDaHuman/OpenTrading/main/install.sh | bash -s -- --uninstall
   ```
 
-  For npm installs, use `npm rm -g opentrading`. Your data in `~/.opentrading/` (keys, sessions, settings) is kept; delete that folder yourself if you want it gone.
+  For npm installs, use `npm rm -g @findahuman/opentrading`. Your data in `~/.opentrading/` (keys, sessions, settings) is kept; delete that folder yourself if you want it gone.
 
 ## Usage
 
