@@ -1,0 +1,102 @@
+name: Release
+
+# Push a tag vX.Y.Z (equal to package.json "version", with a "## [X.Y.Z]" CHANGELOG section) to
+# build every binary, attach them to a GitHub release and publish it. A pull request touching the
+# build, or a manual run (workflow_dispatch), only builds and uploads the archives as workflow
+# artifacts: the release jobs run for tags only. See docs/release.md.
+
+on:
+  push:
+    tags: ["v*"]
+  pull_request:
+    paths:
+      - .github/workflows/release.yml
+      - scripts/**
+      - package.json
+      - bun.lock
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    timeout-minutes: 30
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - os: windows-latest
+            targets: windows-x64,windows-x64-baseline,windows-arm64
+          - os: ubuntu-latest
+            targets: linux-x64,linux-x64-baseline,linux-arm64
+          - os: macos-latest
+            targets: darwin-arm64,darwin-x64,darwin-x64-baseline
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      - run: bun install --frozen-lockfile
+      - name: Tag matches package.json
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          version=$(bun -e 'console.log(require("./package.json").version)')
+          test "v$version" = "$GITHUB_REF_NAME" || { echo "tag $GITHUB_REF_NAME != package.json $version"; exit 1; }
+          bun scripts/release-notes.ts "$version" > /dev/null
+      - run: bun run build --targets ${{ matrix.targets }}
+      - name: Ad-hoc sign (macOS refuses unsigned arm64 binaries)
+        if: runner.os == 'macOS'
+        run: |
+          for bin in dist/opentrading-darwin-*/bin/opentrading; do codesign --force --sign - "$bin"; done
+          dist/opentrading-darwin-arm64/bin/opentrading --self-check
+      - run: bun scripts/package.ts
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-${{ runner.os }}
+          path: dist/release/*
+          if-no-files-found: error
+
+  release:
+    # Created as a draft: releases/latest (install scripts, `ot update`) never sees it until
+    # every channel has the version; `publish` below takes the draft off.
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: release-*
+          path: release
+          merge-multiple: true
+      - name: Checksums and notes
+        run: |
+          (cd release && sha256sum opentrading-* > SHA256SUMS && cat SHA256SUMS)
+          bun scripts/release-notes.ts "${GITHUB_REF_NAME#v}" > notes.md
+      - name: Draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" release/* --draft --verify-tag --title "OpenTrading ${GITHUB_REF_NAME#v}" --notes-file notes.md
+
+  publish:
+    needs: release
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Publish the draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft=false --latest
