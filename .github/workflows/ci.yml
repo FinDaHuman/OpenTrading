@@ -60,6 +60,14 @@ jobs:
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
       - run: bun run build --single && bun scripts/package.ts && bun scripts/checksums.ts dist/release
+      - name: Seed an unexpanded user PATH entry (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey("Environment", $true)
+          $raw = [string]$key.GetValue("Path", "", "DoNotExpandEnvironmentNames")
+          $key.SetValue("Path", "%TEMP%\ot-probe;$raw", [Microsoft.Win32.RegistryValueKind]::ExpandString)
+          $key.Close()
       - name: Install from the local release
         run: |
           bun scripts/dev/serve-release.ts dist/release 8765 &
@@ -73,6 +81,18 @@ jobs:
         run: |
           ot --version
           opentrading --self-check
+      - name: PATH written where a new shell reads it (Unix)
+        if: runner.os != 'Windows'
+        run: grep -A1 "OpenTrading installer" "$HOME/.bashrc" "$HOME/.bash_profile" "$HOME/.zshrc" "$HOME/.profile" 2>/dev/null | grep -F ".opentrading/bin"
+      - name: PATH written where a new shell reads it (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey("Environment")
+          $raw = [string]$key.GetValue("Path", "", "DoNotExpandEnvironmentNames")
+          if ($key.GetValueKind("Path") -ne "ExpandString") { throw "user PATH is no longer REG_EXPAND_SZ" }
+          if ($raw -notlike "*\.opentrading\bin*") { throw "install folder missing from the user PATH: $raw" }
+          if ($raw -notlike "*%TEMP%\ot-probe*") { throw "the unexpanded entry was rewritten: $raw" }
       - name: Uninstall (Unix)
         if: runner.os != 'Windows'
         run: |
@@ -85,8 +105,10 @@ jobs:
         run: |
           & .\install.ps1 -Uninstall
           if (Test-Path "$HOME\.opentrading\bin\opentrading.exe") { throw "opentrading.exe still there" }
-          $path = [Environment]::GetEnvironmentVariable("Path", "User")
-          if ($path -like "*.opentrading\bin*") { throw "user PATH still has the install folder: $path" }
+          $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey("Environment")
+          $raw = [string]$key.GetValue("Path", "", "DoNotExpandEnvironmentNames")
+          if ($raw -like "*\.opentrading\bin*") { throw "user PATH still has the install folder: $raw" }
+          if ($raw -notlike "*%TEMP%\ot-probe*") { throw "uninstall rewrote the other entries: $raw" }
 
   secrets:
     # Scan every commit, not just the checked-out tree: a key removed later is still public
