@@ -49,7 +49,19 @@ test("help, version, unknown flags and two folders", () => {
   expect(unknown.kind).toBe("error")
   expect(unknown.kind === "error" && unknown.message).toContain("--yolo")
   expect(parseCli(["a", "b"]).kind).toBe("error")
+  // Hidden smoke test of a built binary: only as the first argument.
+  expect(parseCli(["--self-check"]).kind).toBe("self-check")
+  expect(parseCli([".", "--self-check"]).kind).toBe("error")
 })
+
+test("--self-check passes when run from source", () => {
+  const run = Bun.spawnSync([process.execPath, path.join(repo, "src", "index.tsx"), "--self-check"], { cwd: repo, stdout: "pipe", stderr: "pipe" })
+  const out = run.stdout.toString()
+  expect(out).not.toContain("FAIL")
+  expect(out).toMatch(/ok {3}skills: \d+/)
+  expect(out).toContain("ok   tree-sitter")
+  expect(run.exitCode).toBe(0)
+}, 30_000)
 
 test("resolveDir: relative to cwd, missing folder and plain file are errors", async () => {
   const base = await temp()

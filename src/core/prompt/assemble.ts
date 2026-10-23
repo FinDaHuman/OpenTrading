@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto"
 import { existsSync, readdirSync, readFileSync } from "node:fs"
 import path from "node:path"
+import { BUNDLED_ROOT } from "../bundle"
 import { availableSkills, renderCatalog, suggestSkills } from "../skills/catalog"
 import type { Skill } from "../skills/schema"
 import { TODO_WRITE, hasOpenTodos, renderTodos, type Todo } from "../tools/todos"
@@ -86,7 +87,7 @@ export interface Assembled {
   report: LayerReport[]
 }
 
-export const PROMPTS_DIR = path.resolve(import.meta.dir, "../../../prompts")
+export const PROMPTS_DIR = path.join(BUNDLED_ROOT, "prompts")
 
 /** Prompt text lives in prompts/<id>.md so prompt writers never touch code. Read per call: edits apply next turn. */
 export function promptFile(id: string, dir = PROMPTS_DIR): string | undefined {

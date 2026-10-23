@@ -8,6 +8,8 @@ import path from "node:path"
 export type Cli =
   | { kind: "help" }
   | { kind: "version" }
+  /** Hidden: smoke test of a built binary (src/cli/self-check.ts). */
+  | { kind: "self-check" }
   | { kind: "mcp"; args: string[] }
   | { kind: "tui"; dir?: string; resume?: string }
   | { kind: "error"; message: string }
@@ -29,6 +31,7 @@ const looksLikeId = (arg: string) => !arg.startsWith("-") && !/[\\/.:]/.test(arg
 
 export function parseCli(argv: string[]): Cli {
   if (argv[0] === "mcp") return { kind: "mcp", args: argv.slice(1) }
+  if (argv[0] === "--self-check") return { kind: "self-check" }
   let dir: string | undefined
   let resume: string | undefined
   for (let i = 0; i < argv.length; i++) {

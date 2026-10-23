@@ -5,7 +5,8 @@ import { createResource, For, Match, Show, Switch } from "solid-js"
 import { groupDigits } from "../../core/subagents/result"
 import { previewContext } from "../../core/agent"
 import { describeError } from "../../core/chat"
-import type { LayerReport } from "../../core/prompt/assemble"
+import { PROMPTS_DIR, type LayerReport } from "../../core/prompt/assemble"
+import { SKILLS_DIR } from "../../core/paths"
 import type { Runtime } from "../../core/runtime"
 import { currentSession } from "../session"
 import { closeDialog, contextLimits, state } from "../state"
@@ -111,7 +112,7 @@ export function ContextDialog(props: { runtime: Runtime }) {
                   )}
                 </For>
                 <text fg={color.tx3} marginTop={1} wrapMode="word">
-                  Nội dung prompt nằm trong thư mục prompts/, hồ sơ trong INVESTOR.md (/profile), skill trong skills/. Nhắc nhở chỉ gửi khi thay đổi.
+                  {`Nội dung prompt nằm trong ${PROMPTS_DIR}, hồ sơ trong INVESTOR.md (/profile), skill có sẵn trong ${SKILLS_DIR}. Nhắc nhở chỉ gửi khi thay đổi.`}
                 </text>
               </>
             )

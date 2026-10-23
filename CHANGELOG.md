@@ -19,6 +19,11 @@ adopt Semantic Versioning when it exposes a stable public API.
 - `/model` asks for the effort after a model with more than one level: `auto` and the model's
   levels, saved together with the model; esc goes back to the list. Enter on the highlighted
   row before moving keeps the saved level. `/config` → "Hỏi effort khi chọn model" (`ui.askEffort`) turns it off.
+- Standalone binaries: `bun run build` (`--single` for this machine only) compiles
+  `dist/opentrading-<os>-<arch>/bin/opentrading[.exe]` with Bun inside, for Windows, Linux and macOS
+  (x64, arm64, x64 baseline). Bundled skills, agents, prompts and the market calendar are compiled
+  in and written once per version to `~/.opentrading/bundled/`. A hidden `--self-check` verifies a
+  build; CI builds and checks it on Ubuntu, Windows and macOS.
 
 ## [0.1.0] — 2026-10-22 (pre-release, private)
 

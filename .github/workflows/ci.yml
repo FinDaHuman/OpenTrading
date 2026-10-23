@@ -27,6 +27,21 @@ jobs:
       - run: bun run typecheck
       - run: bun test
 
+  build:
+    # The standalone binary (scripts/build.ts) for each runner's own platform; the script itself
+    # runs --version and --self-check (bundled skills/agents/prompts, OpenTUI native, tree-sitter).
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun run build --single
+
   secrets:
     # Scan every commit, not just the checked-out tree: a key removed later is still public
     # in history. Fake keys in tests carry a `gitleaks:allow` comment; known fakes in old
