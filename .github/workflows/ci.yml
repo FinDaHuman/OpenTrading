@@ -42,6 +42,52 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run build --single
 
+  install:
+    # install.sh / install.ps1 against a local copy of a release: download, checksum, PATH, `ot`, uninstall.
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      OPENTRADING_RELEASE_BASE: http://127.0.0.1:8765
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun run build --single && bun scripts/package.ts && bun scripts/checksums.ts dist/release
+      - name: Install from the local release
+        run: |
+          bun scripts/dev/serve-release.ts dist/release 8765 &
+          sleep 2
+          if [ "$RUNNER_OS" = Windows ]; then
+            powershell -NoProfile -ExecutionPolicy Bypass -Command "Get-Content -Raw install.ps1 | Invoke-Expression"
+          else
+            bash install.sh
+          fi
+      - name: ot is on PATH in the next step
+        run: |
+          ot --version
+          opentrading --self-check
+      - name: Uninstall (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          bash install.sh --uninstall
+          test ! -e "$HOME/.opentrading/bin/opentrading"
+          ! grep -rqs "OpenTrading installer" "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.bash_profile" "$HOME/.profile"
+      - name: Uninstall (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          & .\install.ps1 -Uninstall
+          if (Test-Path "$HOME\.opentrading\bin\opentrading.exe") { throw "opentrading.exe still there" }
+          $path = [Environment]::GetEnvironmentVariable("Path", "User")
+          if ($path -like "*.opentrading\bin*") { throw "user PATH still has the install folder: $path" }
+
   secrets:
     # Scan every commit, not just the checked-out tree: a key removed later is still public
     # in history. Fake keys in tests carry a `gitleaks:allow` comment; known fakes in old

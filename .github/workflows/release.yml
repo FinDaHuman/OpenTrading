@@ -82,7 +82,7 @@ jobs:
           merge-multiple: true
       - name: Checksums and notes
         run: |
-          (cd release && sha256sum opentrading-* > SHA256SUMS && cat SHA256SUMS)
+          bun scripts/checksums.ts release
           bun scripts/release-notes.ts "${GITHUB_REF_NAME#v}" > notes.md
       - name: Draft release
         env:
