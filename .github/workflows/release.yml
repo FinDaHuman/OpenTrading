@@ -1,12 +1,19 @@
 name: Release
 
 # Push a tag vX.Y.Z (equal to package.json "version", with a "## [X.Y.Z]" CHANGELOG section) to
-# build every binary, attach them to a GitHub release and publish it. Run by hand
-# (workflow_dispatch) to build and upload the archives as workflow artifacts only. See docs/release.md.
+# build every binary, attach them to a GitHub release and publish it. A pull request touching the
+# build, or a manual run (workflow_dispatch), only builds and uploads the archives as workflow
+# artifacts: the release jobs run for tags only. See docs/release.md.
 
 on:
   push:
     tags: ["v*"]
+  pull_request:
+    paths:
+      - .github/workflows/release.yml
+      - scripts/**
+      - package.json
+      - bun.lock
   workflow_dispatch:
 
 permissions:
