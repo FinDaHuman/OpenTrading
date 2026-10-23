@@ -43,6 +43,8 @@ adopt Semantic Versioning when it exposes a stable public API.
   commands are a small Node launcher (no install script: npm 12 blocks them by default). The release
   workflow publishes them before the GitHub release leaves draft; CI installs the packed files on all
   three systems.
+- README: install per OS, update/uninstall and usage come right after the introduction and a screenshot of
+  the TUI; full English version in `README.en.md`.
 
 ## [0.1.0] — 2026-10-22 (pre-release, private)
 
