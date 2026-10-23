@@ -8,6 +8,10 @@ A terminal AI harness for researching Vietnamese equities. It connects to 200+ L
 
 ![OpenTrading's home screen in Windows Terminal](docs/images/tui-home.png)
 
+![A real answer: P/E versus P/B](docs/images/tui-answer.png)
+
+*A real, unedited answer from Google Gemini 3.5 Flash Lite in the prebuilt binary (asked in Vietnamese: how do P/E and P/B differ, and when to use which).*
+
 ## Install
 
 OpenTrading ships as a single executable with Bun built in; you do not need Bun or Node first. Pick one:

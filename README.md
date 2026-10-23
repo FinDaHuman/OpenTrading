@@ -8,6 +8,10 @@ Harness AI phân tích chứng khoán Việt Nam, chạy trong terminal. Kết n
 
 ![Màn hình đầu của OpenTrading trong Windows Terminal](docs/images/tui-home.png)
 
+![Một câu trả lời thật: so sánh P/E và P/B](docs/images/tui-answer.png)
+
+*Câu trả lời thật của Google Gemini 3.5 Flash Lite trong bản cài sẵn, không chỉnh sửa.*
+
 ## Cài đặt
 
 Bản cài là một file chạy duy nhất (Bun nằm sẵn bên trong), không cần cài Bun hay Node trước. Chọn một cách:
