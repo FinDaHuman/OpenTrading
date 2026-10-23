@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs"
 import path from "node:path"
+import { BUNDLED_ROOT } from "../bundle"
 
 /**
  * Trading-session clock (HarnessPlan §4.2, layer 2). The schedule is data in
@@ -28,7 +29,7 @@ export interface ClockSnapshot {
   phases: Record<string, string>
 }
 
-export const CALENDAR_FILE = path.resolve(import.meta.dir, "../../../market/calendar.json")
+export const CALENDAR_FILE = path.join(BUNDLED_ROOT, "market", "calendar.json")
 
 export function loadCalendar(file = CALENDAR_FILE): Calendar {
   return JSON.parse(readFileSync(file, "utf8")) as Calendar
