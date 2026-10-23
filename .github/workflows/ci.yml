@@ -123,6 +123,36 @@ jobs:
           if ($raw -like "*\.opentrading\bin*") { throw "user PATH still has the install folder: $raw" }
           if ($raw -notlike "*%TEMP%\ot-probe*") { throw "uninstall rewrote the other entries: $raw" }
 
+  npm:
+    # The npm packages for each runner's platform, installed globally into a temp prefix.
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - run: bun install --frozen-lockfile
+      - run: bun run build --single && bun scripts/npm.ts
+      - name: npm i -g from the packed files
+        run: |
+          prefix="$RUNNER_TEMP/npm-global"
+          main=$(ls dist/npm/opentrading-[0-9]*.tgz)
+          platform=$(ls dist/npm/opentrading-*.tgz | grep -vxF "$main")
+          npm i -g --prefix "$prefix" $platform "$main"
+          if [ "$RUNNER_OS" = Windows ]; then bin="$prefix"; else bin="$prefix/bin"; fi
+          "$bin/ot" --version
+          "$bin/opentrading" --self-check
+          "$bin/ot" --version | grep -F node_modules
+
   secrets:
     # Scan every commit, not just the checked-out tree: a key removed later is still public
     # in history. Fake keys in tests carry a `gitleaks:allow` comment; known fakes in old

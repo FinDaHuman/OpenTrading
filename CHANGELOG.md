@@ -38,6 +38,11 @@ adopt Semantic Versioning when it exposes a stable public API.
   npm installs get the `npm i -g` command instead; source checkouts get `git pull`. The TUI looks for a new
   release at most once a day and shows a toast; `/config` → "Báo bản mới" (`update.check`) or
   `OPENTRADING_DISABLE_UPDATE_CHECK=1` turns it off. `--version` mentions a newer release it already knows.
+- npm: `npm i -g opentrading`. One package per platform (`opentrading-<os>-<arch>[-baseline]`, chosen by
+  npm's `os`/`cpu`) holds the binary; `opentrading` depends on them optionally and its `opentrading`/`ot`
+  commands are a small Node launcher (no install script: npm 12 blocks them by default). The release
+  workflow publishes them before the GitHub release leaves draft; CI installs the packed files on all
+  three systems.
 
 ## [0.1.0] — 2026-10-22 (pre-release, private)
 
