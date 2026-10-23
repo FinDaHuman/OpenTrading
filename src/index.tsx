@@ -17,7 +17,7 @@ if (cli.kind === "help") {
 }
 
 if (cli.kind === "version") {
-  const { build } = await import("./core/bundle")
+  const { build } = await import("./core/build-info")
   if (build) {
     process.stdout.write(`opentrading ${build.version} (${build.commit}, ${build.target})\ncài tại ${process.execPath}\n`)
     process.exit(0)
@@ -59,7 +59,7 @@ if (cli.dir !== undefined) {
 // Bun reads bunfig.toml (and its Solid preload) from the current folder only, so started from
 // any other folder the JSX would not compile. Register the transform here instead.
 // A binary is already compiled by scripts/build.ts.
-const { compiled } = await import("./core/bundle")
+const { compiled } = await import("./core/build-info")
 if (!compiled) await import("@opentui/solid/preload")
 const { startTui } = await import("./tui/main")
 await startTui(cli.resume)

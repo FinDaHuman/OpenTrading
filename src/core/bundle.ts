@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs"
 import os from "node:os"
 import path from "node:path"
+import { compiled } from "./build-info"
 
 /**
  * Where the files OpenTrading ships (skills/, agents/, prompts/, market/) are read from.
@@ -14,16 +15,6 @@ import path from "node:path"
 // Set by scripts/build.ts with `define`; absent when running the source.
 declare const OPENTRADING_ASSETS: Record<string, string> | undefined
 declare const OPENTRADING_ASSETS_ID: string | undefined
-declare const OPENTRADING_VERSION: string | undefined
-declare const OPENTRADING_COMMIT: string | undefined
-declare const OPENTRADING_TARGET: string | undefined
-
-export const compiled = typeof OPENTRADING_ASSETS !== "undefined"
-
-/** Build info of a compiled binary; undefined when running the source. */
-export const build = compiled
-  ? { version: OPENTRADING_VERSION!, commit: OPENTRADING_COMMIT!, target: OPENTRADING_TARGET! }
-  : undefined
 
 const MARK = ".complete"
 

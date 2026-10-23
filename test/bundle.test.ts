@@ -3,7 +3,8 @@ import { existsSync, readFileSync, readdirSync, statSync, utimesSync, writeFileS
 import { mkdtemp, rm } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
-import { BUNDLED_ROOT, compiled, materialize } from "../src/core/bundle"
+import { compiled } from "../src/core/build-info"
+import { BUNDLED_ROOT, materialize } from "../src/core/bundle"
 import { AGENTS_DIR, SKILLS_DIR } from "../src/core/paths"
 import { PROMPTS_DIR } from "../src/core/prompt/assemble"
 
