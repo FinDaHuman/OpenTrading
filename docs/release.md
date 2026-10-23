@@ -12,7 +12,15 @@ tảng (`opentrading-windows-x64`, …) chứa binary (`scripts/npm.ts`). Trư�
 1. Tạo tài khoản trên [npmjs.com](https://www.npmjs.com), bật 2FA.
 2. Tạo **Granular Access Token** quyền *Read and write* cho các gói `opentrading` và `opentrading-*`
    (lần đầu các gói chưa có: chọn quyền cho mọi gói của tài khoản, sau đó thu hẹp lại).
+   - Đánh dấu **Bypass two-factor authentication**. Không có nó thì `npm publish` trong CI lỗi `EOTP`, vì tài
+     khoản đã bật 2FA.
+   - Token có quyền ghi sống tối đa **90 ngày** (quy định của npm từ 11/2025). Ghi ngày hết hạn lại; hết hạn thì
+     job `npm` lỗi và release kẹt ở nháp.
 3. GitHub → Settings → Secrets and variables → Actions → **New repository secret** `NPM_TOKEN`.
+4. Về sau nên chuyển sang **trusted publishing** (OIDC, không cần token): sau lần đăng đầu, vào từng gói trên
+   npmjs.com → Settings → Trusted publisher → GitHub Actions, repo `FinDaHuman/OpenTrading`, workflow
+   `release.yml`. Job `npm` đã có `id-token: write`; khi đó bỏ `NODE_AUTH_TOKEN`. Kiểm lại yêu cầu (phiên bản
+   npm CLI, gói chưa tồn tại có dùng được không) trong tài liệu npm trước khi đổi.
 
 Thiếu `NPM_TOKEN` thì job `npm` lỗi và release vẫn là nháp: không ai được báo bản mới.
 
