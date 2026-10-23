@@ -4,6 +4,30 @@ Bản cài cho người dùng là binary build sẵn (Bun nằm trong), đăng �
 [GitHub Releases](https://github.com/FinDaHuman/OpenTrading/releases). Script cài (`install.sh`,
 `install.ps1`) và `opentrading update` luôn lấy bản `releases/latest`.
 
+## Chuẩn bị một lần: npm
+
+Mỗi bản còn được đăng lên npm (`npm i -g opentrading`): gói `opentrading` (launcher Node) và một gói cho mỗi nền
+tảng (`opentrading-windows-x64`, …) chứa binary (`scripts/npm.ts`). Trước tag đầu tiên:
+
+1. Tạo tài khoản trên [npmjs.com](https://www.npmjs.com), bật 2FA.
+2. Tạo **Granular Access Token** quyền *Read and write* cho các gói `opentrading` và `opentrading-*`
+   (lần đầu các gói chưa có: chọn quyền cho mọi gói của tài khoản, sau đó thu hẹp lại).
+   - Đánh dấu **Bypass two-factor authentication**. Không có nó thì `npm publish` trong CI lỗi `EOTP`, vì tài
+     khoản đã bật 2FA.
+   - Phần *Packages and scopes*: chọn **Read and write (publish and stage)** và **All packages** (gói chưa
+     có nên chưa chọn riêng được). "stage only" không dùng được cho CI: bản stage phải duyệt tay trên npmjs.com.
+   - Token có quyền ghi sống tối đa **90 ngày** (quy định của npm từ 11/2025). Ghi ngày hết hạn lại; hết hạn thì
+     job `npm` lỗi và release kẹt ở nháp.
+   - npm báo (23/10/2026): token bypass-2FA đăng thẳng sẽ **bị bỏ vào tháng 01/2027**. Token chỉ dùng cho các bản
+     đầu; trước 01/2027 phải chuyển sang trusted publishing (bước 4).
+3. GitHub → Settings → Secrets and variables → Actions → **New repository secret** `NPM_TOKEN`.
+4. **Trước 01/2027** chuyển sang **trusted publishing** (OIDC, không cần token): sau lần đăng đầu, vào từng gói trên
+   npmjs.com → Settings → Trusted publisher → GitHub Actions, repo `FinDaHuman/OpenTrading`, workflow
+   `release.yml`. Job `npm` đã có `id-token: write`; khi đó bỏ `NODE_AUTH_TOKEN`. Kiểm lại yêu cầu (phiên bản
+   npm CLI, gói chưa tồn tại có dùng được không) trong tài liệu npm trước khi đổi.
+
+Thiếu `NPM_TOKEN` thì job `npm` lỗi và release vẫn là nháp: không ai được báo bản mới.
+
 ## Các bước
 
 1. Mở PR đổi `"version"` trong `package.json` (SemVer, ví dụ `0.2.0`) và đổi mục
@@ -21,7 +45,7 @@ Bản cài cho người dùng là binary build sẵn (Bun nằm trong), đăng �
    - build 9 binary trên runner Windows, Ubuntu, macOS (`bun run build --targets …`), ký ad-hoc bản macOS,
      chạy `--self-check` với bản của chính runner, nén (`scripts/package.ts`);
    - tạo release **nháp** kèm các file nén + `SHA256SUMS`, ghi chú lấy từ CHANGELOG (`scripts/release-notes.ts`);
-   - các kênh khác (npm) phát hành xong mới bỏ nháp. Release còn nháp thì `releases/latest` chưa thấy nó, nên
+   - job `npm` đăng các gói (bản đã có trên npm thì bỏ qua, nên chạy lại được), xong mới bỏ nháp. Release còn nháp thì `releases/latest` chưa thấy nó, nên
      không ai được báo cập nhật lên bản mà một kênh chưa có.
 5. Workflow lỗi giữa chừng: sửa, xoá release nháp và tag (`git push --delete origin v0.2.0`), rồi đẩy tag lại.
 
