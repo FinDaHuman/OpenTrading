@@ -1,16 +1,19 @@
 # OpenTrading
 
-Harness AI phân tích chứng khoán Việt Nam, chạy trong terminal. Viết bằng TypeScript: Bun, [OpenTUI](https://github.com/sst/opentui), SolidJS và Vercel AI SDK.
+[English](README.en.md) · **Tiếng Việt**
 
-*English:* OpenTrading is a terminal AI harness for researching Vietnamese equities. Connect any of 200+ LLM providers, plug in MCP servers for market data, and let the agent call tools, run subagents and multi-agent research playbooks (ultradesk), and cite its sources. The UI, prompts and docs are in Vietnamese. It is not investment advice (see [Disclaimer](#miễn-trừ-trách-nhiệm--disclaimer)). Licensed under Apache-2.0.
+Harness AI phân tích chứng khoán Việt Nam, chạy trong terminal. Kết nối hơn 200 nhà cung cấp LLM, gắn MCP server lấy dữ liệu thị trường, để agent gọi tool, giao việc cho subagent, chạy playbook nghiên cứu nhiều agent (ultradesk) và trích nguồn số liệu. Giao diện, prompt và tài liệu bằng tiếng Việt.
 
-> **Bản demo.** Đã có TUI, kết nối LLM, agent loop gọi tool, MCP client (dữ liệu thị trường qua server `opentrading-mcp`), skills, subagent, ultradesk, effort suy luận, nén hội thoại và lưu phiên. Đây không phải tư vấn đầu tư. Tiến độ: [docs/STATUS.md](docs/STATUS.md).
+> **Bản demo.** Đã có TUI, kết nối LLM, agent loop gọi tool, MCP client (dữ liệu thị trường qua server `opentrading-mcp`), skills, subagent, ultradesk, effort suy luận, nén hội thoại và lưu phiên. Đây không phải tư vấn đầu tư (xem [Miễn trừ trách nhiệm](#miễn-trừ-trách-nhiệm--disclaimer)). Tiến độ: [docs/STATUS.md](docs/STATUS.md).
+
+![Màn hình đầu của OpenTrading trong Windows Terminal](docs/images/tui-home.png)
 
 ## Mục lục
 
+- [Cài đặt](#cài-đặt)
+- [Cập nhật và gỡ cài đặt](#cập-nhật-và-gỡ-cài-đặt)
+- [Cách dùng](#cách-dùng)
 - [Tính năng](#tính-năng)
-- [Cài đặt và chạy](#cài-đặt-và-chạy)
-- [Bắt đầu trong 5 phút](#bắt-đầu-trong-5-phút)
 - [Ultradesk: nghiên cứu nhiều agent](#ultradesk-nghiên-cứu-nhiều-agent)
 - [Effort suy luận](#effort-suy-luận)
 - [Lệnh trong TUI](#lệnh-trong-tui)
@@ -21,8 +24,99 @@ Harness AI phân tích chứng khoán Việt Nam, chạy trong terminal. Viết 
 - [Provider, model và key](#provider-model-và-key)
 - [Phiên, nén hội thoại, memory](#phiên-nén-hội-thoại-memory)
 - [Cấu hình](#cấu-hình)
+- [Chạy từ mã nguồn](#chạy-từ-mã-nguồn)
 - [Phát triển và kiểm tra](#phát-triển-và-kiểm-tra)
 - [Cấu trúc](#cấu-trúc)
+
+## Cài đặt
+
+Bản cài là một file chạy duy nhất (Bun nằm sẵn bên trong), không cần cài Bun hay Node trước. Chọn một cách:
+
+**Windows** (PowerShell):
+
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://raw.githubusercontent.com/FinDaHuman/OpenTrading/main/install.ps1 | iex"
+```
+
+**macOS và Linux**:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/FinDaHuman/OpenTrading/main/install.sh | bash
+```
+
+**npm** (mọi hệ điều hành, cần Node 18 trở lên):
+
+```bash
+npm i -g opentrading
+```
+
+Cài xong, **mở terminal mới** rồi gõ `ot` (hoặc `opentrading`).
+
+- Script cài chọn đúng bản cho máy (Windows/macOS/Linux, x64/arm64, CPU x64 đời cũ không có AVX2) và kiểm tra file tải về với `SHA256SUMS` của bản phát hành. Sau đó nó đặt `opentrading` và `ot` vào `~/.opentrading/bin` rồi thêm thư mục đó vào PATH: Windows sửa PATH của user; macOS/Linux thêm một dòng có ghi chú vào `.zshrc`, `.bashrc` hoặc `config.fish`.
+- Cài một bản cụ thể:
+  - PowerShell: đặt biến trước khi chạy, `$env:OPENTRADING_VERSION="0.2.0"; irm … | iex`.
+  - bash: `curl … | bash -s -- --version 0.2.0`.
+  - Tuỳ chọn khác: `--dir`, `--no-modify-path`, `--uninstall` (xem `install.sh --help`, hoặc phần đầu file `install.ps1`).
+- Binary chưa ký số: lần đầu chạy, Windows SmartScreen có thể cảnh báo. Trên macOS, file nén tải bằng trình duyệt bị Gatekeeper chặn; script cài dùng `curl` nên không bị.
+- Linux dùng musl (Alpine) chưa có bản dựng sẵn: [chạy từ mã nguồn](#chạy-từ-mã-nguồn).
+- Mọi bản phát hành: [GitHub Releases](https://github.com/FinDaHuman/OpenTrading/releases).
+
+## Cập nhật và gỡ cài đặt
+
+```bash
+ot update            # cập nhật lên bản mới nhất
+ot update --check    # chỉ xem có bản mới không
+ot update 0.2.0      # cài đúng một bản (kể cả bản cũ hơn)
+```
+
+- Khi mở, OpenTrading kiểm tra bản mới tối đa một lần mỗi ngày và hiện thông báo ở góc phải. Tắt trong `/config` → **Báo bản mới**, hoặc đặt `OPENTRADING_DISABLE_UPDATE_CHECK=1`.
+- `ot update` tải bản mới, kiểm tra checksum và chạy thử trước khi thay; lỗi giữa chừng thì bản đang dùng giữ nguyên. Trên Windows, file đang chạy được đổi tên thành `.old` và bị xoá ở lần mở sau.
+- Cài bằng npm: `ot update` in lệnh `npm i -g opentrading@latest` để bạn tự chạy (đóng OpenTrading trước).
+- Gỡ cài đặt:
+
+  ```powershell
+  & ([scriptblock]::Create((irm https://raw.githubusercontent.com/FinDaHuman/OpenTrading/main/install.ps1))) -Uninstall
+  ```
+
+  ```bash
+  curl -fsSL https://raw.githubusercontent.com/FinDaHuman/OpenTrading/main/install.sh | bash -s -- --uninstall
+  ```
+
+  Cài bằng npm thì gỡ bằng `npm rm -g opentrading`. Dữ liệu của bạn ở `~/.opentrading/` (key, phiên, cấu hình) được giữ lại; muốn xoá thì xoá thư mục đó.
+
+## Cách dùng
+
+### Bắt đầu trong 5 phút
+
+1. Mở terminal ở thư mục bạn muốn làm việc rồi gõ `ot`. Thư mục đó là **workspace**, nơi agent đọc và ghi file.
+2. `/connect` → chọn provider, dán API key. Key lưu ở `~/.opentrading/auth.json`, không hiện lại trên màn hình.
+3. `/model` → chọn model (gõ để lọc, `ctrl+f` đánh dấu yêu thích). Model có nhiều mức effort thì chọn luôn mức suy luận ở bước tiếp theo.
+4. `/mcp` → gắn nguồn dữ liệu thị trường (xem [Dữ liệu thị trường](#dữ-liệu-thị-trường-mcp)).
+5. Đặt câu hỏi, ví dụ `phân tích cơ bản FPT`. Muốn thử nhiều agent: `ultradesk so sánh FPT, MWG, VNM theo ROE`.
+
+`/effort` (hoặc `ctrl+t`) chỉnh mức suy luận; `/help` liệt kê mọi lệnh; `?` mở bảng phím tắt.
+
+### Lệnh dòng lệnh
+
+```bash
+ot                       # mở TUI, workspace = thư mục hiện tại
+ot D:\Dau-tu             # mở ở thư mục khác
+ot -c                    # mở lại phiên mới nhất của thư mục này
+ot -r <id>               # mở lại một phiên cụ thể
+ot mcp list              # quản lý MCP server không cần mở TUI (ot mcp --help)
+ot update                # cập nhật
+ot --version             # phiên bản và nơi cài
+ot --help                # mọi tuỳ chọn
+```
+
+- Mở ở thư mục home, gốc ổ đĩa hay thư mục hệ thống thì OpenTrading dùng thư mục riêng `~/.opentrading/workspace` thay vì cả ổ đĩa.
+- Skill và agent riêng của một thư mục (`.opentrading/skills`, `.opentrading/agents`) trở thành chỉ dẫn cho model. Vì vậy lần đầu mở thư mục có chúng, OpenTrading hỏi **"Thư mục này có skill/agent riêng"**:
+  - *Tin cậy và nạp*: lưu ở `~/.opentrading/folder-trust.json`. Với thư mục home hay gốc ổ đĩa thì chỉ áp dụng cho lần chạy này.
+  - *Bỏ qua*: không lưu, lần sau hỏi lại.
+
+  `.mcp.json` của thư mục vẫn hỏi riêng từng server.
+- Dữ liệu (key, cấu hình, phiên) nằm ở `~/.opentrading/`; đổi chỗ bằng biến `OPENTRADING_HOME`.
+- Không có key mà muốn xem ultradesk chạy? Từ mã nguồn: `bun scripts/dev/desk-demo.tsx` (xem [Demo không cần key](#demo-không-cần-key)).
 
 ## Tính năng
 
@@ -37,57 +131,6 @@ Harness AI phân tích chứng khoán Việt Nam, chạy trong terminal. Viết 
 | **File và shell** | Đọc text/CSV/PDF/ảnh/Excel/Word, ghi file, chạy lệnh, với 3 chế độ quyền và `/undo` |
 | **Phiên** | Lưu tự động, mở lại, nén khi gần đầy ngữ cảnh, xuất Markdown |
 | **Giao diện kiểu Claude Code** | `❯ ● ⎿`, stream markdown không nháy, `@file`, dán ảnh, hàng đợi tin nhắn, thông báo desktop khi xong việc |
-
-## Cài đặt và chạy
-
-Cần [Bun](https://bun.sh) 1.3 trở lên; chạy trên Windows, macOS và Linux.
-
-```shell
-bun install
-bun run dev
-```
-
-### Lệnh `opentrading` (mở ở thư mục bất kỳ)
-
-Cài một lần trong thư mục repo, sau đó gõ `opentrading` (hoặc `ot`) ở thư mục nào thì thư mục đó là workspace (nơi agent đọc/ghi file):
-
-```shell
-bun run install:global
-```
-
-- Script ghi `opentrading` và `ot` vào `~/.local/bin` (Windows: thêm `.cmd` cho PowerShell/cmd và bản không đuôi cho Git Bash); đổi chỗ bằng `bun run install:global -- --dir <thư mục>`. Thư mục đó chưa có trong PATH thì script in lệnh để thêm, không tự sửa PATH. File cùng tên không phải của OpenTrading không bị ghi đè.
-- Lệnh chạy thẳng mã nguồn của repo này: cập nhật = `git pull && bun install`; dời repo sang chỗ khác thì chạy lại `bun run install:global`. Gỡ: `bun run uninstall:global`.
-- Lệnh bỏ qua `bunfig.toml` và `.env` của thư mục đang đứng (chúng có thể chạy code hoặc đổi `OPENTRADING_HOME`).
-  Key để trong file `.env` vì vậy không được nạp: dùng `/connect` hoặc biến môi trường thật.
-- Lệnh chạy đúng bản code đang checkout ở thư mục đã cài. Nếu bạn cũng sửa code hay đổi nhánh trong repo đó, cài từ một bản riêng (`git worktree add ../OpenTrading-ot main`, rồi `bun install` và `bun run install:global` trong đó) để `ot` không chạy theo nhánh đang làm dở.
-
-```shell
-opentrading                  # workspace = thư mục hiện tại
-ot D:\Dau-tu                 # mở ở thư mục khác
-ot -c                        # mở lại phiên mới nhất
-opentrading mcp list         # quản lý MCP không cần mở TUI
-opentrading --help           # mọi tuỳ chọn; --version in phiên bản và nơi cài
-```
-
-Mở ở thư mục home, gốc ổ đĩa hay thư mục hệ thống thì OpenTrading dùng thư mục riêng `~/.opentrading/workspace` thay vì cả ổ đĩa.
-
-Skill và agent riêng của một thư mục (`.opentrading/skills`, `.opentrading/agents`) trở thành chỉ dẫn cho model, nên lần đầu mở thư mục có chúng OpenTrading hỏi **"Thư mục này có skill/agent riêng"**: *Tin cậy và nạp* (lưu ở `~/.opentrading/folder-trust.json`; với thư mục home hay gốc ổ đĩa thì chỉ cho lần chạy này) hoặc *Bỏ qua* (không lưu, lần sau hỏi lại). `.mcp.json` của thư mục vẫn hỏi riêng từng server như trước.
-
-### Ghi chú
-
-- Mở lại phiên gần nhất **của thư mục đang đứng**: `opentrading -c` (hoặc `bun run dev -- --continue`); một phiên cụ thể, ở thư mục nào cũng được: `opentrading -r <id>`.
-- Dữ liệu (key, cấu hình, phiên) nằm ở `~/.opentrading/`; đổi chỗ bằng biến `OPENTRADING_HOME`.
-- Thử provider mà không mở TUI (chỉ dùng tool có sẵn): `bun src/core/chat.ts "mấy giờ rồi?"`.
-
-## Bắt đầu trong 5 phút
-
-1. `/connect` → chọn provider, dán API key. Key lưu ở `~/.opentrading/auth.json`, không hiện lại trên màn hình.
-2. `/model` → chọn model (gõ để lọc, `ctrl+f` đánh dấu yêu thích). Model có nhiều mức effort thì chọn luôn mức suy luận ở bước tiếp theo.
-3. `/effort` (tuỳ chọn) → chỉnh mức suy luận cho phiên chính, subagent, ultradesk; hoặc bấm `ctrl+t` để đổi nhanh.
-4. `/mcp` → gắn nguồn dữ liệu thị trường (xem [Dữ liệu thị trường](#dữ-liệu-thị-trường-mcp)).
-5. Hỏi, ví dụ: `phân tích cơ bản FPT`, hoặc thử nhiều agent: `ultradesk so sánh FPT, MWG, VNM theo ROE`.
-
-Không có key mà muốn xem ultradesk chạy? `bun scripts/dev/desk-demo.tsx` (xem [Demo không cần key](#demo-không-cần-key)).
 
 ## Ultradesk: nghiên cứu nhiều agent
 
@@ -217,7 +260,7 @@ Gõ `/` để xem danh sách (gõ tiếp để lọc, `tab` điền, enter chạ
 | `/undo [số] [--force]` | Hoàn tác thay đổi file do agent ghi |
 | `/permissions` | Chế độ quyền, workspace, quy tắc cho phép/chặn, các lần auto mode chặn |
 | `/memory` | Xem, duyệt, xoá memory |
-| `/config` | Cài đặt, có hiệu lực ngay: memory, tìm tool, tự nén, số bước, subagent, model phụ, chế độ quyền khi mở, hỏi effort khi chọn model, thông báo, cuộn |
+| `/config` | Cài đặt, có hiệu lực ngay: memory, tìm tool, tự nén, số bước, subagent, model phụ, chế độ quyền khi mở, hỏi effort khi chọn model, thông báo, cuộn, báo bản mới |
 | `/clear`, `/help`, `/exit` | Xoá màn hình và bắt đầu phiên mới, trợ giúp, thoát |
 
 MCP server có prompt thì prompt đó cũng thành lệnh `/`.
@@ -272,7 +315,7 @@ OpenTrading không kèm dữ liệu. Số liệu đến từ MCP server bạn g�
 - Mã nguồn server: [opentrading-mcp](https://github.com/DoanDuyLong212/opentrading-mcp). Bạn có thể tự chạy server này, hoặc gắn bất kỳ MCP server nào khác (stdio, Streamable HTTP, SSE, OAuth).
 - Không có MCP server thì agent chỉ còn các tool có sẵn (web, file, chart, watchlist) để làm việc.
 
-Gắn bằng CLI: `bun src/index.tsx mcp add <tên> <url>` hoặc `mcp add <tên> -- <lệnh>`; `mcp list` để xem. Kết quả dạng bảng số được gắn mã `[ref rN]`: chart đọc số trực tiếp từ đó, model không phải chép lại.
+Gắn bằng CLI: `ot mcp add <tên> <url>` hoặc `ot mcp add <tên> -- <lệnh>`; `ot mcp list` để xem. Kết quả dạng bảng số được gắn mã `[ref rN]`: chart đọc số trực tiếp từ đó, model không phải chép lại.
 
 ## Provider, model và key
 
@@ -294,15 +337,47 @@ Hầu hết cài đặt chỉnh trong TUI (`/config`, `/effort`, `/model`, `/per
 
 | File | Nội dung |
 | --- | --- |
-| `config.json` | Provider/model, `effort`, `subagents`, `desk` (quy mô, trần agent/request, effort, keyword…), tự nén, quyền, giao diện |
+| `config.json` | Provider/model, `effort`, `subagents`, `desk` (quy mô, trần agent/request, effort, keyword…), tự nén, quyền, giao diện, `update` (báo bản mới) |
 | `auth.json` | API key (quyền 600) |
 | `mcp.json` (và `.mcp.json` của project) | MCP server, cùng dạng với Claude Code |
 | `model.json` | Model yêu thích và dùng gần đây |
 | `watchlists.json` | Watchlist cá nhân (khoá file khi ghi, nhiều cửa sổ cùng sửa không mất thay đổi) |
 | `INVESTOR.md` | Hồ sơ nhà đầu tư |
 | `sessions/`, `exports/`, `memory/`, `agents/`, `skills/` | Phiên, file xuất, memory, loại agent và skill của bạn |
+| `bin/` | `opentrading` và `ot` khi cài bằng script (đổi chỗ bằng `OPENTRADING_INSTALL_DIR`) |
+| `bundled/`, `cache/` | Skill/agent/prompt có sẵn mà binary giải ra cho mỗi phiên bản; cache danh sách model, kết quả kiểm tra bản mới |
 
 Khoá của `desk`: [docs/desk.md](docs/desk.md#cài-đặt-configjson--desk).
+
+## Chạy từ mã nguồn
+
+Cần [Bun](https://bun.sh) 1.3 trở lên; chạy trên Windows, macOS và Linux.
+
+```shell
+git clone https://github.com/FinDaHuman/OpenTrading.git
+cd OpenTrading
+bun install
+bun run dev                  # mở lại phiên gần nhất: bun run dev -- --continue
+```
+
+### Lệnh `opentrading` chạy thẳng mã nguồn (cho người phát triển)
+
+```shell
+bun run install:global
+```
+
+- Script ghi `opentrading` và `ot` vào `~/.local/bin`. Trên Windows có thêm bản `.cmd` cho PowerShell/cmd và bản không đuôi cho Git Bash.
+  - Đổi chỗ bằng `bun run install:global -- --dir <thư mục>`.
+  - Thư mục đó chưa có trong PATH thì script in lệnh để thêm, không tự sửa PATH.
+  - File cùng tên không phải của OpenTrading không bị ghi đè.
+- Lệnh chạy thẳng mã nguồn của repo này:
+  - Cập nhật bằng `git pull && bun install`.
+  - Dời repo sang chỗ khác thì chạy lại `bun run install:global`.
+  - Gỡ bằng `bun run uninstall:global`.
+  - Đừng cài cùng lúc với bản dựng sẵn: lệnh `ot` nào đứng trước trong PATH thì được chạy (script cài báo khi gặp trường hợp này).
+- Lệnh bỏ qua `bunfig.toml` và `.env` của thư mục đang đứng, vì chúng có thể chạy code hoặc đổi `OPENTRADING_HOME`. Key để trong file `.env` vì vậy không được nạp: dùng `/connect` hoặc biến môi trường thật.
+- Lệnh chạy đúng bản code đang checkout ở thư mục đã cài. Nếu bạn còn sửa code hay đổi nhánh trong repo đó, cài từ một bản riêng để `ot` không chạy theo nhánh đang làm dở: `git worktree add ../OpenTrading-ot main`, rồi chạy `bun install` và `bun run install:global` trong đó.
+- Thử provider mà không mở TUI (chỉ dùng tool có sẵn): `bun src/core/chat.ts "mấy giờ rồi?"`.
 
 ## Phát triển và kiểm tra
 
@@ -310,7 +385,10 @@ Khoá của `desk`: [docs/desk.md](docs/desk.md#cài-đặt-configjson--desk).
 bun run typecheck
 bun test                     # có smoke test TUI chạy headless; SHOW_FRAME=1 để in khung hình
 bun test test/tui.test.tsx   # chỉ phần giao diện
+bun run build --single       # binary cho máy này: dist/opentrading-<hđh>-<cpu>/bin/
 ```
+
+Phát hành bản mới (binary, GitHub Releases, npm): [docs/release.md](docs/release.md).
 
 Script trong `scripts/dev/`:
 
@@ -337,12 +415,13 @@ src/core/     provider, auth, config, agent loop, hồ sơ nhà đầu tư (khô
   mcp/        MCP client: config, cho phép, đặt tên tool, quản lý kết nối
   permission/ chế độ quyền, quy tắc, model duyệt của ▸▸ tự động
 src/tui/      giao diện: theme, transcript, card ultradesk, panel, dialog
+src/cli/      dòng lệnh: tham số, mcp, update, install:global
 examples/     MCP server mẫu (examples/mcp-demo)
 prompts/      nội dung system prompt theo tầng (identity, tools, citations, style)
 skills/       skill dạng skills/<tên>/SKILL.md (xem docs/contracts.md)
 agents/       loại subagent có sẵn (xem docs/subagents.md)
 market/       lịch phiên giao dịch (dữ liệu, chưa kiểm chứng)
-scripts/dev/  demo, đo đạc, công cụ phát triển
+scripts/      build, đóng gói, ghi chú phát hành, gói npm; scripts/dev/ demo và đo đạc
 handbook/     tài liệu thiết kế
 docs/         hướng dẫn theo chủ đề; docs/decisions/ các quyết định kiến trúc
 ```
