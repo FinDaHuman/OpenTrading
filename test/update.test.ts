@@ -84,7 +84,7 @@ test("the check asks the network at most once a day and never throws", async () 
 test("npm installs read the npm registry, not GitHub", async () => {
   const npm = server({ latest: JSON.stringify({ version: "0.4.0" }) })
   expect(await checkForUpdate("0.2.0", { kind: "npm", dir: "/x" }, { fetch: npm.fetch })).toBe("0.4.0")
-  expect(npm.calls[0]).toContain("registry.npmjs.org/opentrading/latest")
+  expect(npm.calls[0]).toBe("https://registry.npmjs.org/@findahuman%2fopentrading/latest")
 })
 
 test("update CLI: source, npm, up to date, --check, bad arguments", async () => {
@@ -102,7 +102,7 @@ test("update CLI: source, npm, up to date, --check, bad arguments", async () => 
   expect(lines.pop()).toContain("git pull")
 
   expect(await runUpdateCli([], { install: { kind: "npm", dir: "/x" }, current: "0.2.0", fetch: server({ latest: JSON.stringify({ version: "0.3.0" }) }).fetch, out, apply })).toBe(0)
-  expect(lines.pop()).toContain("npm i -g opentrading@latest")
+  expect(lines.pop()).toContain("npm i -g @findahuman/opentrading@latest")
   expect(applied).toBeUndefined()
 
   expect(await runUpdateCli([], { install: binary, current: "0.3.0", fetch: gh.fetch, out, apply })).toBe(0)

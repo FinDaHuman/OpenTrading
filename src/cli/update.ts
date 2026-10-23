@@ -1,5 +1,5 @@
 import { build } from "../core/build-info"
-import { applyUpdate, compareVersions, detectInstall, latestVersion, type Fetch, type Install } from "../core/update"
+import { NPM_PACKAGE, applyUpdate, compareVersions, detectInstall, latestVersion, type Fetch, type Install } from "../core/update"
 
 export const UPDATE_HELP = `opentrading update [phiên bản] [--check]
 
@@ -54,7 +54,7 @@ export async function runUpdateCli(args: string[], deps: UpdateDeps = {}): Promi
     }
     if (install.kind === "npm") {
       // npm replaces the folder this binary runs from, which Windows refuses while it runs.
-      out(`Có OpenTrading ${latest} (đang dùng ${current}). Cài bằng npm nên cập nhật bằng:\n\n  npm i -g opentrading@${wanted ?? "latest"}\n`)
+      out(`Có OpenTrading ${latest} (đang dùng ${current}). Cài bằng npm nên cập nhật bằng:\n\n  npm i -g ${NPM_PACKAGE}@${wanted ?? "latest"}\n`)
       return 0
     }
     if (check) {

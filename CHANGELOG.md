@@ -5,9 +5,11 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ## [Unreleased]
 
-## [0.2.0] — 2026-10-23
+## [0.2.1] — 2026-10-23
 
-First public release, and the first one you can install without Bun or a checkout:
+First public release, and the first one you can install without Bun or a checkout (0.2.0 was
+never published: npm refused the unscoped package name as too close to `opentracing`, so the npm
+package is `@findahuman/opentrading`):
 
 ```powershell
 powershell -ExecutionPolicy ByPass -c "irm https://raw.githubusercontent.com/FinDaHuman/OpenTrading/main/install.ps1 | iex"
@@ -15,7 +17,7 @@ powershell -ExecutionPolicy ByPass -c "irm https://raw.githubusercontent.com/Fin
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/FinDaHuman/OpenTrading/main/install.sh | bash
-npm i -g opentrading
+npm i -g @findahuman/opentrading
 ```
 
 Then open a new terminal and run `ot`. Later versions: `ot update`. Not investment advice.
@@ -53,7 +55,7 @@ Then open a new terminal and run `ot`. Later versions: `ot update`. Not investme
   npm installs get the `npm i -g` command instead; source checkouts get `git pull`. The TUI looks for a new
   release at most once a day and shows a toast; `/config` → "Báo bản mới" (`update.check`) or
   `OPENTRADING_DISABLE_UPDATE_CHECK=1` turns it off. `--version` mentions a newer release it already knows.
-- npm: `npm i -g opentrading`. One package per platform (`opentrading-<os>-<arch>[-baseline]`, chosen by
+- npm: `npm i -g @findahuman/opentrading`. One package per platform (`opentrading-<os>-<arch>[-baseline]`, chosen by
   npm's `os`/`cpu`) holds the binary; `opentrading` depends on them optionally and its `opentrading`/`ot`
   commands are a small Node launcher (no install script: npm 12 blocks them by default). The release
   workflow publishes them before the GitHub release leaves draft; CI installs the packed files on all

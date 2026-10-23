@@ -41,7 +41,7 @@ function find() {
       // not installed
     }
   }
-  fail(`the binary package ${names.join(" / ")} is missing. Reinstall (npm i -g opentrading), or use the installer: https://github.com/FinDaHuman/OpenTrading#readme`)
+  fail(`the binary package ${names.join(" / ")} is missing. Reinstall (npm i -g @findahuman/opentrading), or use the installer: https://github.com/FinDaHuman/OpenTrading#readme`)
 }
 
 const child = spawn(find(), process.argv.slice(2), { stdio: "inherit", windowsHide: false })

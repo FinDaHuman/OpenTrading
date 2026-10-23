@@ -6,11 +6,11 @@ Bản cài cho người dùng là binary build sẵn (Bun nằm trong), đăng �
 
 ## Chuẩn bị một lần: npm
 
-Mỗi bản còn được đăng lên npm (`npm i -g opentrading`): gói `opentrading` (launcher Node) và một gói cho mỗi nền
+Mỗi bản còn được đăng lên npm (`npm i -g @findahuman/opentrading`): gói `@findahuman/opentrading` (launcher Node; tên không scope `opentrading` bị npm từ chối vì quá giống `opentracing`) và một gói cho mỗi nền
 tảng (`opentrading-windows-x64`, …) chứa binary (`scripts/npm.ts`). Trước tag đầu tiên:
 
 1. Tạo tài khoản trên [npmjs.com](https://www.npmjs.com), bật 2FA.
-2. Tạo **Granular Access Token** quyền *Read and write* cho các gói `opentrading` và `opentrading-*`
+2. Tạo **Granular Access Token** quyền *Read and write* cho các gói `@findahuman/opentrading` và `opentrading-*`
    (lần đầu các gói chưa có: chọn quyền cho mọi gói của tài khoản, sau đó thu hẹp lại).
    - Đánh dấu **Bypass two-factor authentication**. Không có nó thì `npm publish` trong CI lỗi `EOTP`, vì tài
      khoản đã bật 2FA.
