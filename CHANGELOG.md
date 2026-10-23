@@ -27,6 +27,11 @@ adopt Semantic Versioning when it exposes a stable public API.
 - Release workflow: pushing a tag `vX.Y.Z` builds every binary on Windows, Ubuntu and macOS runners,
   attaches `.zip`/`.tar.gz` archives and `SHA256SUMS` to a GitHub release (draft first, published when every
   channel has it), with notes from this file. Steps in `docs/release.md`.
+- One-line installers: `install.ps1` (Windows, `irm … | iex`) and `install.sh` (macOS/Linux, `curl … | bash`)
+  pick the build for the machine (arm64, no-AVX2 baseline, Rosetta), check it against `SHA256SUMS`, put
+  `opentrading` and `ot` in `~/.opentrading/bin` and add it to PATH (Windows: the user PATH, kept unexpanded;
+  Unix: one marked line in the shell's startup file). `--version`, `--binary`, `--no-modify-path`,
+  `--uninstall`. CI installs from a local copy of a release on Ubuntu, Windows and macOS.
 
 ## [0.1.0] — 2026-10-22 (pre-release, private)
 

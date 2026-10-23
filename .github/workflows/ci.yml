@@ -42,6 +42,78 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run build --single
 
+  install:
+    # install.sh / install.ps1 against a local copy of a release: download, checksum, PATH, `ot`, uninstall.
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      OPENTRADING_RELEASE_BASE: http://127.0.0.1:8765
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun run build --single && bun scripts/package.ts && bun scripts/checksums.ts dist/release
+      - name: Seed an unexpanded user PATH entry (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey("Environment", $true)
+          $raw = [string]$key.GetValue("Path", "", "DoNotExpandEnvironmentNames")
+          $key.SetValue("Path", "%TEMP%\ot-probe;$raw", [Microsoft.Win32.RegistryValueKind]::ExpandString)
+          $key.Close()
+      - name: Install from the local release
+        run: |
+          bun scripts/dev/serve-release.ts dist/release 8765 &
+          sleep 2
+          if [ "$RUNNER_OS" = Windows ]; then
+            powershell -NoProfile -ExecutionPolicy Bypass -Command "Get-Content -Raw install.ps1 | Invoke-Expression"
+          else
+            bash install.sh
+          fi
+      - name: ot is on PATH in the next step
+        run: |
+          ot --version
+          opentrading --self-check
+      - name: PATH written where a new shell reads it (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          # -s: not every startup file exists; the line must be in the one the installer chose.
+          lines=$(grep -sh -A1 "OpenTrading installer" "$HOME/.bashrc" "$HOME/.bash_profile" "$HOME/.zshrc" "$HOME/.profile" || true)
+          echo "$lines"
+          echo "$lines" | grep -F ".opentrading/bin"
+      - name: PATH written where a new shell reads it (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey("Environment")
+          $raw = [string]$key.GetValue("Path", "", "DoNotExpandEnvironmentNames")
+          if ($key.GetValueKind("Path") -ne "ExpandString") { throw "user PATH is no longer REG_EXPAND_SZ" }
+          if ($raw -notlike "*\.opentrading\bin*") { throw "install folder missing from the user PATH: $raw" }
+          if ($raw -notlike "*%TEMP%\ot-probe*") { throw "the unexpanded entry was rewritten: $raw" }
+      - name: Uninstall (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          bash install.sh --uninstall
+          test ! -e "$HOME/.opentrading/bin/opentrading"
+          ! grep -rqs "OpenTrading installer" "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.bash_profile" "$HOME/.profile"
+      - name: Uninstall (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          & .\install.ps1 -Uninstall
+          if (Test-Path "$HOME\.opentrading\bin\opentrading.exe") { throw "opentrading.exe still there" }
+          $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey("Environment")
+          $raw = [string]$key.GetValue("Path", "", "DoNotExpandEnvironmentNames")
+          if ($raw -like "*\.opentrading\bin*") { throw "user PATH still has the install folder: $raw" }
+          if ($raw -notlike "*%TEMP%\ot-probe*") { throw "uninstall rewrote the other entries: $raw" }
+
   secrets:
     # Scan every commit, not just the checked-out tree: a key removed later is still public
     # in history. Fake keys in tests carry a `gitleaks:allow` comment; known fakes in old
