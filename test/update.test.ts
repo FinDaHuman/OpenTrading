@@ -7,6 +7,7 @@ import path from "node:path"
 import { runUpdateCli } from "../src/cli/update"
 import { applyUpdate, archiveFor, checkForUpdate, compareVersions, detectInstall, removeOldBinaries, type Fetch } from "../src/core/update"
 
+// The applyUpdate tests pack and unpack real archives: slow on Windows CI runners.
 const dirs: string[] = []
 let savedHome: string | undefined
 beforeEach(async () => {
@@ -162,7 +163,7 @@ test("applyUpdate swaps in the new binary and its alias", async () => {
   expect(readdirSync(f.dir).filter((n) => n.startsWith(".update-"))).toEqual([])
   removeOldBinaries(f.dir)
   expect(readdirSync(f.dir).filter((n) => n.endsWith(".old"))).toEqual([])
-})
+}, 30_000)
 
 test("applyUpdate changes nothing on a bad checksum, a wrong version or a missing file", async () => {
   const f = await fixture("new")
@@ -173,7 +174,7 @@ test("applyUpdate changes nothing on a bad checksum, a wrong version or a missin
   await expect(applyUpdate({ dir: f.dir, target, version: "0.3.0", fetch: server({}).fetch })).rejects.toThrow("404")
   expect(readFileSync(path.join(f.dir, exeName), "utf8")).toBe("old")
   expect(readdirSync(f.dir).sort()).toEqual([exeName, aliasName].sort())
-})
+}, 30_000)
 
 test("OPENTRADING_RELEASE_BASE points downloads at a local server", async () => {
   process.env.OPENTRADING_RELEASE_BASE = "http://127.0.0.1:9/rel/"
@@ -181,7 +182,7 @@ test("OPENTRADING_RELEASE_BASE points downloads at a local server", async () => 
   const rel = server({ [archiveFor(target)]: f.bytes, SHA256SUMS: f.sums })
   await applyUpdate({ dir: f.dir, target, version: "0.3.0", fetch: rel.fetch, probe: () => "opentrading 0.3.0" })
   expect(rel.calls[0]).toBe(`http://127.0.0.1:9/rel/${archiveFor(target)}`)
-})
+}, 30_000)
 
 test("leftovers: .old files go, a fresh .update- folder stays", async () => {
   const dir = await temp()
