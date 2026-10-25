@@ -462,8 +462,11 @@ test("reconnect keeps trying past the old five-attempt budget", async () => {
   // Force the drop to be noticed: the dead connection fails the next call.
   first.stop()
   void manager.toolsOf("data")[0]!.execute({ text: "x" }, ctx).catch(() => {})
-  await Bun.sleep(600)
-  expect(states.some((e) => /thử lại lần ([6-9]|\d\d)/.test(e))).toBe(true)
+  // Wait for the attempts, not for a fixed time: each failed attempt also costs a refused
+  // connect (~100 ms on Windows), so 600 ms was only enough for about five.
+  const pastBudget = () => states.some((e) => /thử lại lần ([6-9]|\d\d)/.test(e))
+  for (let i = 0; i < 200 && !pastBudget(); i++) await Bun.sleep(50)
+  expect(pastBudget()).toBe(true)
   const again = startHttpServer({ port: first.port })
   cleanups.push(again.stop)
   for (let i = 0; i < 100 && state(manager, "data").state !== "connected"; i++) await Bun.sleep(50)
