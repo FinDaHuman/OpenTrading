@@ -5,7 +5,7 @@ activation: auto
 requires_tools: [mcp__opentrading__company_events]
 triggers:
   keywords: [trước bctc, sắp ra báo cáo, pre earnings, công bố lợi nhuận, setup bctc]
-version: 1.3.0
+version: 1.4.0
 ---
 
 # Chấm setup trước BCTC
@@ -43,13 +43,13 @@ LOAD `dinh-gia-chuyen-sau` + chạy `scenario_simulate` (−5%) để lấy size
 
 Trình bày kết luận đúng cấu trúc sau:
 
-1. Grade **A/B/C** (rubric: A = ≥5 leg xanh + M-Score sạch + KH rõ; B = 4–5 leg; C = <4 leg hoặc M-Score đỏ > −1.78).
+1. Grade **A/B/C** có nhãn tạm thời khi thiếu dữ liệu (rubric: A = ≥5 leg xanh có bằng chứng, kế hoạch rõ và các mô hình forensic áp dụng đều `complete` mà không có cờ cần rà soát; B = 4–5 leg hoặc thiếu độ chắc để đạt A; C = <4 leg đạt khi cả 6 leg đã được đánh giá). Chỉ diễn giải M-Score khi Beneish 8 biến theo năm đúng kỳ/phạm vi và `status=complete`; ngưỡng nghiên cứu −1.78 là cờ cần rà soát, chưa hiệu chuẩn cho Việt Nam và không tự nó kết luận gian lận hay quyết định grade C. `partial`/`score=null`, `not_applicable`, `unsupported` không tính là leg xanh hoặc đỏ; nêu `passed/evaluated` của F-score thay vì chấm phần thiếu thành 0/9. Với bank/CTCK/bảo hiểm, không dùng Beneish/Piotroski của doanh nghiệp thường để chấm grade.
 2. 1 dòng evidence/leg (6 dòng, mỗi dòng số + trend + provenance).
 3. Size đề xuất (từ `scenario_simulate` −5%).
 4. Unknowns tường minh (liệt kê điều chưa biết).
 5. Kết luận 1 câu: grade + có nên giữ/mua trước BCTC + rủi ro lớn nhất.
 
-Partial data (thiếu positioning hoặc kỳ vọng) → verdict partial + unknowns. `sentiment_score` âm/dương nhẹ thì ghi đúng là heuristic, không nâng thành leg xanh/đỏ.
+Partial data (thiếu positioning, kỳ vọng hoặc forensic) → verdict tạm thời + unknowns. `sentiment_score` âm/dương nhẹ thì ghi đúng là heuristic, không nâng thành leg xanh/đỏ.
 
 ## Ví dụ
 
