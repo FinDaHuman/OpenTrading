@@ -27,7 +27,7 @@ với báo cáo loại ngân hàng), không đọc bằng bộ dòng CTCP chung.
   - Hỏi pha thị trường / luân chuyển ngành / sóng ngành tiếp theo → `dinh-vi-chu-ky-vn`.
   - Phân tích toàn diện một mã (kỹ thuật + định giá + tin) → `phan-tich-chuyen-sau-1-ma`.
   - Chỉ định giá một mã (fair value, vùng P/B) → `dinh-gia-chuyen-sau`.
-  - Chỉ đọc BCTC một mã không có mảng ngành (M-Score, cổ đông) → `co-ban-chuyen-sau`.
+  - Chỉ đọc BCTC/cổ đông một mã không có mảng ngành → `co-ban-chuyen-sau`; Beneish doanh nghiệp thường không áp dụng cho ngân hàng, Piotroski hiện chưa hỗ trợ.
   - Số liệu vĩ mô VN chi tiết (GDP, lãi suất điều hành) → `danh-gia-vi-mo-viet-nam`.
 
 ## Trụ cột driver

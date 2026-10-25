@@ -57,7 +57,7 @@
 | C20 | "Thái Lan đang bất ổn gì" | bat-on-quoc-gia | 4 mức verdict + ≥3 evidence URL, ≤6 calls |
 | C21 | "Polymarket đang nóng gì về kinh tế" | du-doan-polymarket | ≥5 event + cờ liquidity/end-date |
 | C22 | "FPT kỹ thuật sao, có breakout không" | ky-thuat-chuyen-sau | 1-3 calls, `signals_technical` trụ cột (đã verify: 1 call) |
-| C23 | "Đọc BCTC FPT, có dấu hiệu thao túng không" | co-ban-chuyen-sau | M-Score + F-score + 4 quý (wave 1 = 2 calls) |
+| C23 | "Đọc BCTC FPT, có dấu hiệu thao túng không" | co-ban-chuyen-sau | Kiểm tra trạng thái/độ phủ forensic theo năm; chỉ nêu M-Score/F-score khi complete, kèm 4 quý tăng trưởng (wave 1 = 1 auth + 2 data calls) |
 | C24 | "FPT đắt chưa" | dinh-gia-chuyen-sau | UPSIDE % + so lịch sử, ≤7 calls |
 | C25 | "VCB vs BID vs CTG, ngân hàng nào tốt nhất" | so-sanh-cung-nganh | bảng ≥3 mã + 1 dòng luận chọn, ≤8 calls |
 | C26 | "Phố nói gì về FPT" | phan-tich-sentiment | điểm + nhãn heuristic/groq + ≥3 quotes |
