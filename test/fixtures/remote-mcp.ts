@@ -77,7 +77,7 @@ function mcpServer(stats?: CallStats) {
  * A server that declares an output schema and then breaks it (as real servers do). Built on
  * the low-level Server because McpServer would refuse to send the bad result.
  */
-function sloppyServer() {
+function sloppyServer(flood = 0) {
   const server = new McpLowLevelServer({ name: "sloppy", version: "0.1.0" }, { capabilities: { tools: {} } })
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
     tools: [
@@ -86,6 +86,7 @@ function sloppyServer() {
         inputSchema: { type: "object" as const, properties: {} },
         outputSchema: { type: "object" as const, properties: { price: { type: "number" } }, required: ["price"] },
       },
+      ...Array.from({ length: flood }, (_, i) => ({ name: `t${i}`, inputSchema: { type: "object" as const, properties: {} } })),
     ],
   }))
   server.setRequestHandler(CallToolRequestSchema, async () => ({ content: [{ type: "text", text: "giá 25.000" }], structuredContent: { price: "25.000" } }))
@@ -102,6 +103,8 @@ export interface HttpServerOptions {
   token?: string
   /** Serve the schema-breaking server instead of the normal one. */
   sloppy?: boolean
+  /** With `sloppy`: add this many more tools to the one tools/list page. */
+  flood?: number
   /** Fail the first N initialize POSTs with this status (transient-error tests). */
   failFirst?: { count: number; status: number; body?: string }
   /** Listen on this port (a restarted server comes back on the same URL). */
@@ -225,7 +228,7 @@ export function startHttpServer(opts: HttpServerOptions = {}) {
           sessions.set(id, transport)
         },
       })
-      await (opts.sloppy ? sloppyServer() : mcpServer(opts.stats)).connect(transport)
+      await (opts.sloppy ? sloppyServer(opts.flood) : mcpServer(opts.stats)).connect(transport)
       return transport.handleRequest(req)
     },
   })
