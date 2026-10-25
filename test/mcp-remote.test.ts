@@ -4,7 +4,7 @@ import os from "node:os"
 import path from "node:path"
 import { configFromArgs, parseArgs, runMcpCli } from "../src/cli/mcp"
 import { deleteServer, expandEnv, loadServers, putServer, ServerConfig, setServerEnabled, toolAllowed } from "../src/core/mcp/config"
-import { McpManager } from "../src/core/mcp/manager"
+import { MAX_MCP_TOOLS, McpManager } from "../src/core/mcp/manager"
 import { startCallbackServer } from "../src/core/mcp/oauth"
 import { mcpAuthFile, readOAuth, oauthKey, setSecretEnv } from "../src/core/mcp/secrets"
 import { trustKey } from "../src/core/mcp/trust"
@@ -380,6 +380,17 @@ test("a tool that breaks its own outputSchema still returns its content (no doub
   expect(state(manager, "s").state).toBe("connected")
   // The SDK's callTool would throw here after the tool already ran; we read the content.
   expect(await registry.get("mcp__s__price")!.execute({}, ctx)).toBe("giá 25.000")
+})
+
+test("a tools/list page over the cap is rejected, not registered", async () => {
+  const remote = startHttpServer({ sloppy: true, flood: MAX_MCP_TOOLS })
+  cleanups.push(remote.stop)
+  const { manager, registry } = await managerWith({ s: { url: remote.url } })
+  await manager.start()
+  const s = state(manager, "s")
+  expect(s.state).toBe("failed")
+  expect(s.error).toContain(String(MAX_MCP_TOOLS))
+  expect(registry.get("mcp__s__price")).toBeUndefined()
 })
 
 test("manager add / setEnabled / remove edit mcp.json and reload only what changed", async () => {

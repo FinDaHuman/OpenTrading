@@ -78,6 +78,16 @@ export interface McpPromptInfo {
 }
 
 /**
+ * Caps on lists an MCP server sends. They also bound validation work: zod >= 4.6.6 checks
+ * `.max` before parsing the elements, so an oversized array fails fast instead of building
+ * one issue per bad element (GHSA-mrhx-c7xc-m3w5). The list caps also stop the paging loops.
+ */
+export const MAX_MCP_TOOLS = 2048
+export const MAX_MCP_PROMPTS = 512
+export const MAX_MCP_RESOURCES = 1000
+const MAX_MCP_ITEMS = 256
+
+/**
  * `tools/list` parsed loosely: one tool with an odd `outputSchema` (or a missing field)
  * must not make the whole server unusable, as the SDK's strict schema would.
  */
@@ -100,7 +110,7 @@ const LooseToolList = z
             .optional(),
         })
         .passthrough(),
-    ),
+    ).max(MAX_MCP_TOOLS),
     nextCursor: z.string().optional(),
   })
   .passthrough()
@@ -114,10 +124,11 @@ const LoosePromptList = z
           description: z.string().optional(),
           arguments: z
             .array(z.object({ name: z.string(), description: z.string().optional(), required: z.boolean().optional() }).passthrough())
+            .max(MAX_MCP_ITEMS)
             .optional(),
         })
         .passthrough(),
-    ),
+    ).max(MAX_MCP_PROMPTS),
     nextCursor: z.string().optional(),
   })
   .passthrough()
@@ -126,7 +137,7 @@ const LooseResourceList = z
   .object({
     resources: z.array(
       z.object({ uri: z.string(), name: z.string().optional(), description: z.string().optional(), mimeType: z.string().optional() }).passthrough(),
-    ),
+    ).max(MAX_MCP_RESOURCES),
     nextCursor: z.string().optional(),
   })
   .passthrough()
@@ -135,14 +146,14 @@ const LooseReadResource = z
   .object({
     contents: z.array(
       z.object({ uri: z.string(), mimeType: z.string().optional(), text: z.string().optional(), blob: z.string().optional() }).passthrough(),
-    ),
+    ).max(MAX_MCP_ITEMS),
   })
   .passthrough()
 
 const LooseGetPrompt = z
   .object({
     description: z.string().optional(),
-    messages: z.array(z.object({ role: z.string(), content: z.object({ type: z.string() }).passthrough() }).passthrough()),
+    messages: z.array(z.object({ role: z.string(), content: z.object({ type: z.string() }).passthrough() }).passthrough()).max(MAX_MCP_ITEMS),
   })
   .passthrough()
 
@@ -908,7 +919,7 @@ export class McpManager {
       const page = await client.request({ method: "tools/list", params: cursor ? { cursor } : {} }, LooseToolList)
       tools.push(...page.tools)
       cursor = page.nextCursor
-    } while (cursor && tools.length < 2048)
+    } while (cursor && tools.length < MAX_MCP_TOOLS)
 
     this.registry.unregister(serverPrefix(name))
     const taken = new Set(this.registry.list().map((t) => t.name))
@@ -1033,7 +1044,7 @@ export class McpManager {
       const page = await client.request({ method: "prompts/list", params: cursor ? { cursor } : {} }, LoosePromptList)
       for (const p of page.prompts) prompts.push({ name: p.name, description: p.description, arguments: p.arguments ?? [] })
       cursor = page.nextCursor
-    } while (cursor && prompts.length < 512)
+    } while (cursor && prompts.length < MAX_MCP_PROMPTS)
     this.set(name, { prompts })
   }
 
@@ -1097,7 +1108,7 @@ export class McpManager {
         const page = await live.client.request({ method: "resources/list", params: cursor ? { cursor } : {} }, LooseResourceList)
         for (const r of page.resources) out.push({ server: s.name, uri: r.uri, name: r.name, description: r.description, mimeType: r.mimeType })
         cursor = page.nextCursor
-      } while (cursor && out.length < 1000)
+      } while (cursor && out.length < MAX_MCP_RESOURCES)
     }
     return out
   }
