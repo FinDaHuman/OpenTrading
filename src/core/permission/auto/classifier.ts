@@ -15,7 +15,10 @@ import { asJson } from "./transcript"
  * Most actions clear stage 1, so most checks cost one request. An empty or unreadable answer
  * is never "allow": stage 2 runs, and if that fails too the caller asks the user.
  * Thinking is turned down per provider: Gemini thinking models return nothing when their
- * output budget is small (session/title.ts), so stage 1 gets 512 tokens, not 64.
+ * output budget is small (session/title.ts), so stage 1 gets 512 tokens, not 64. A reasoning
+ * model with no setting to turn it down (gpt-oss, R1… behind an OpenAI-compatible endpoint)
+ * gets extra output room instead, so its thinking does not use up the answer.
+ * A transient failure (5xx, overloaded, network) is retried once; a 429 never is.
  */
 
 export type Verdict =
@@ -106,6 +109,8 @@ export { lowThinking }
 export interface ClassifierDeps {
   /** Tests replace the model call. */
   call?: (args: { model: LanguageModel; system: string; prompt: string; maxOutputTokens: number; signal: AbortSignal; providerOptions?: Record<string, Record<string, unknown>> }) => Promise<string>
+  /** Wait before the one retry of a transient failure (tests: 0). */
+  retryDelayMs?: number
 }
 
 async function defaultCall(args: Parameters<NonNullable<ClassifierDeps["call"]>>[0]) {
@@ -115,7 +120,7 @@ async function defaultCall(args: Parameters<NonNullable<ClassifierDeps["call"]>>
     messages: [{ role: "user", content: args.prompt }],
     maxOutputTokens: args.maxOutputTokens,
     temperature: 0,
-    // A safety check must not spend the user's quota on retries; a failure asks the user.
+    // Retries are classify()'s own: once, and never on a 429 (the user's quota).
     maxRetries: 0,
     abortSignal: args.signal,
     ...(args.providerOptions ? { providerOptions: args.providerOptions as never } : {}),
@@ -123,16 +128,41 @@ async function defaultCall(args: Parameters<NonNullable<ClassifierDeps["call"]>>
   return result.text
 }
 
+/** Output room added for a reasoning model that cannot be told to think less. */
+export const THINKING_HEADROOM = 2_048
+const REASONING_ID = /gpt-oss|deepseek-r1|r1|qwq|qwen3|nemotron|thinking|reason/i
+
+/** The model thinks before answering and lowThinking has no setting for it. */
+export function needsHeadroom(target: Pick<Target, "provider" | "model">) {
+  if (lowThinking(target)) return false
+  const info = target.provider.models[target.model] as { reasoning?: boolean } | undefined
+  return info?.reasoning ?? REASONING_ID.test(target.model)
+}
+
+const RETRY_DELAY_MS = 1_000
+
 export async function classify(input: ClassifyInput, target: Target, signal: AbortSignal, deps: ClassifierDeps = {}): Promise<Verdict> {
   const call = deps.call ?? defaultCall
   const model = languageModel(target.provider, target.model, target.apiKey)
   const system = systemPrompt(input)
   const prompt = userContent(input)
   const providerOptions = lowThinking(target)
+  const headroom = needsHeadroom(target) ? THINKING_HEADROOM : 0
   let requests = 0
-  const ask = async (suffix: string, maxOutputTokens: number, ms: number) => {
+  const once = (suffix: string, maxOutputTokens: number, ms: number) => {
     requests++
-    return call({ model, system, prompt: prompt + suffix, maxOutputTokens, signal: AbortSignal.any([signal, AbortSignal.timeout(ms)]), providerOptions })
+    return call({ model, system, prompt: prompt + suffix, maxOutputTokens: maxOutputTokens + headroom, signal: AbortSignal.any([signal, AbortSignal.timeout(ms)]), providerOptions })
+  }
+  const ask = async (suffix: string, maxOutputTokens: number, ms: number) => {
+    try {
+      return await once(suffix, maxOutputTokens, ms)
+    } catch (error) {
+      const kind = classifyFailure(error).kind
+      if (signal.aborted || (kind !== "overloaded" && kind !== "network")) throw error
+      await new Promise((resolve) => setTimeout(resolve, deps.retryDelayMs ?? RETRY_DELAY_MS))
+      if (signal.aborted) throw error
+      return once(suffix, maxOutputTokens, ms)
+    }
   }
   const failed = (error: unknown): Verdict => {
     const kind = classifyFailure(error).kind

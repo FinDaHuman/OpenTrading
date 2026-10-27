@@ -101,8 +101,8 @@ Mỗi hành động cần duyệt được một model thứ hai xét trước k
 - **Hai bước:** bước 1 trả lời nhanh có chặn hay không, tốn 1 request. Chỉ khi bước 1 chặn hoặc không trả lời rõ thì mới chạy bước 2, có suy luận ngắn và nêu tên luật bị vi phạm. Tổng cộng khoảng 1 request cho mỗi hành động, 2 nếu bị nghi ngờ.
 - **Khi bị chặn:** model chính nhận lý do và nhãn luật, ví dụ `[Gửi dữ liệu ra ngoài]`, rồi làm cách khác hoặc dừng lại giải thích.
 - **Quay về hỏi bạn khi:**
-  - bị chặn 3 lần liên tiếp, hoặc 20 lần trong phiên;
-  - model duyệt lỗi hoặc trả lời sai định dạng;
+  - bị chặn 3 lần liên tiếp, hoặc 20 lần trong phiên (một lời gọi chạy được mà không cần model duyệt, như `git status`, cũng cắt chuỗi "liên tiếp"; khi đã chạm giới hạn thì phải chờ bạn trả lời);
+  - model duyệt lỗi hoặc trả lời sai định dạng (lỗi tạm thời như 5xx, quá tải, mất mạng được thử lại 1 lần; 429 thì không);
   - model duyệt hết quota (429): dòng chế độ hiện `tạm hỏi tay tới hh:mm`, kéo dài 10 phút.
 
   Hộp thoại khi đó ghi rõ vì sao nó hiện ra.

@@ -100,6 +100,13 @@ export class AutoReviewer {
     this.emit()
   }
 
+  /** A call ran in ▸▸ without the classifier (rule, session approval, fast path): not "in a row" any more. */
+  ranWithoutBlock() {
+    if (this.consecutive === 0 || this.consecutive >= MAX_CONSECUTIVE) return
+    this.consecutive = 0
+    this.emit()
+  }
+
   /** The user lets one blocked call through (/permissions → r): its next identical call runs. */
   grantRetry(denial: Denial) {
     this.retries.add(denial.key)
