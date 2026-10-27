@@ -1,4 +1,7 @@
-import type { ServerConfig } from "./config"
+import { isRemote, type Scope, type ServerConfig } from "./config"
+
+/** Where the OpenTrading market-data server runs. */
+const DATA_HOST = "opentrading-mcp-web.onrender.com"
 
 /**
  * Popular MCP servers offered in /mcp under "Có sẵn". They are **off by default**: nothing
@@ -113,7 +116,7 @@ export const MCP_CATALOG: CatalogEntry[] = [
     secret: { env: "OPENTRADING_MCP_TOKEN", label: "Token (xin người quản lý server)" },
     build: () => ({
       type: "http",
-      url: "https://opentrading-mcp-web.onrender.com/mcp",
+      url: `https://${DATA_HOST}/mcp`,
       headers: { Authorization: "Bearer ${OPENTRADING_MCP_TOKEN}" },
       // Render free tier cold-starts in 20–40s.
       startupTimeoutMs: 60_000,
@@ -121,6 +124,20 @@ export const MCP_CATALOG: CatalogEntry[] = [
     }),
   },
 ]
+
+/**
+ * The OpenTrading market-data server, configured by the user (global scope) at its known
+ * address: ▸▸ auto mode takes its tools' readOnlyHint at its word. Any other server's hint is
+ * only what that server says about itself, so its "read-only" calls still go to the classifier.
+ */
+export function isDataServer(scope: Scope, config: ServerConfig | undefined) {
+  if (scope !== "global" || !config || !isRemote(config)) return false
+  try {
+    return new URL(config.url).hostname.toLowerCase() === DATA_HOST
+  } catch {
+    return false
+  }
+}
 
 /** Catalog entries the user has not configured yet (by server name). */
 export function availableCatalog(configured: string[]) {

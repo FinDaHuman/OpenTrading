@@ -113,6 +113,11 @@ export interface ToolDef<I = any> {
   preview?(input: I): Promise<ApprovalPreview | undefined>
   /** What deny/ask rules with a `pattern` match: the target path (file tools) or the command (shell). */
   subject?(input: I): string | undefined
+  /**
+   * ▸▸ sends this call to the classifier although it is read-only: the read-only claim is the
+   * tool's own (an MCP server's readOnlyHint), not something OpenTrading checked.
+   */
+  autoReview?: boolean
   /** ▸▸ auto mode may run this call without the classifier (a new file or one this run created; a read-only shell command). */
   autoSafe?(input: I): Promise<boolean>
   /** Session approvals are shared by tools of one group ("this folder, this session" covers write_file and edit_file). */

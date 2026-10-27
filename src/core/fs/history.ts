@@ -31,7 +31,7 @@ export const HISTORY_KEEP_DAYS = 30
 
 export class FileHistory {
   private changes: Change[] = []
-  /** Files this run created (auto mode treats them as the session's own). */
+  /** Files this conversation created (auto mode treats them as the session's own). */
   private createdKeys = new Set<string>()
   readonly dir: string
 
@@ -69,7 +69,15 @@ export class FileHistory {
     return [...this.changes].reverse()
   }
 
-  /** The file was created by write_file during this run. */
+  /**
+   * A new conversation (/new, /clear, resume): files an earlier conversation created are no
+   * longer "the session's own" for auto mode. /undo still has them.
+   */
+  newConversation() {
+    this.createdKeys.clear()
+  }
+
+  /** The file was created by write_file during this conversation. */
   createdThisRun(abs: string) {
     return this.createdKeys.has(samePathKey(abs))
   }

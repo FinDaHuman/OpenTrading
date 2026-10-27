@@ -1030,6 +1030,7 @@ export function App(props: {
       // The classifier reads what the user typed as theirs and the server's template as harness text.
       props.runtime.auto.log.turn(`/${command.name} ${rawArgs}`.trim())
       props.runtime.auto.log.markHarness(text)
+      currentSession().noteHarness(text)
       void send(props.runtime, text)
     } catch (error) {
       say(`/${command.name}: ${error instanceof Error ? error.message : String(error)}`, "error")

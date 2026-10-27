@@ -283,7 +283,7 @@ export class PermissionGate {
     // Deny rules first, from memory: they stop reads too (refreshRules loads them).
     if (this.lists?.deny.some((r) => listMatches(r, def, subject))) return { allow: false, reason: "rule" }
     // Calls that never ask run at once, as before: no await, so parallel calls keep their order.
-    if (!userOnly(scope) && !needsApproval(def, input)) return this.ran()
+    if (!userOnly(scope) && !needsApproval(def, input) && !(this.current === "auto" && def.autoReview)) return this.ran()
     const lists = this.lists ?? (await this.rules.lists?.()) ?? { deny: [], ask: [] }
     if (!this.lists && lists.deny.some((r) => listMatches(r, def, subject))) return { allow: false, reason: "rule" }
     const key = this.keyOf(def, input)

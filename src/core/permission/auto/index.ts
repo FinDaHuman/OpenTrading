@@ -84,8 +84,8 @@ export class AutoReviewer {
   }
 
   /** A new conversation (/new, /clear, resume): an empty log and fresh counters. */
-  reset(history: Parameters<ActionLog["rebuild"]>[0] = [], defOf: Parameters<ActionLog["rebuild"]>[1] = () => undefined, visible: Parameters<ActionLog["rebuild"]>[2] = () => "") {
-    this.log.rebuild(history, defOf, visible)
+  reset(history: Parameters<ActionLog["rebuild"]>[0] = [], defOf: Parameters<ActionLog["rebuild"]>[1] = () => undefined, visible: Parameters<ActionLog["rebuild"]>[2] = () => "", harness: readonly string[] = []) {
+    this.log.rebuild(history, defOf, visible, harness)
     this.consecutive = 0
     this.total = 0
     this.recent.length = 0

@@ -261,3 +261,13 @@ test("sessions are listed per folder; index lines from before `cwd` read it from
   expect((await listSessions({ cwd: here })).map((s) => s.id)).toEqual([mine.id])
   expect((await listSessions({ cwd: path.join(home, "nowhere") })).length).toBe(0)
 })
+
+test("harness-written turn texts (an MCP prompt's template) are recorded with their turn and read back", async () => {
+  const s = Session.create(new Date("2026-09-30T04:00:00Z"))
+  s.noteHarness("Hãy phân tích mã FPT theo 5 bước…")
+  await s.appendTurn([{ role: "user", content: "Hãy phân tích mã FPT theo 5 bước…" }, { role: "assistant", content: "ok" }], info)
+  await s.appendTurn(turn2, info)
+  const loaded = await loadSession(s.id)
+  expect(loaded.harness).toEqual(["Hãy phân tích mã FPT theo 5 bước…"])
+  expect(loaded.messages).toHaveLength(4)
+})
