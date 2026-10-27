@@ -10,9 +10,9 @@ import { FileHistory } from "../src/core/fs/history"
 import { Workspace } from "../src/core/fs/workspace"
 import { PermissionGate, type AllowRule } from "../src/core/permission"
 import { AutoReviewer, MAX_CONSECUTIVE, QUOTA_PAUSE_MS } from "../src/core/permission/auto"
-import { classify, lowThinking, parseBlock, parseTag, systemPrompt } from "../src/core/permission/auto/classifier"
+import { classify, lowThinking, needsHeadroom, parseBlock, parseTag, systemPrompt, THINKING_HEADROOM } from "../src/core/permission/auto/classifier"
 import { DEFAULT_SOFT_DENY, effectiveList, labelOf } from "../src/core/permission/auto/rules"
-import { ActionLog, clip, compactInput } from "../src/core/permission/auto/transcript"
+import { ActionLog, clip, compactInput, MAX_CHARS } from "../src/core/permission/auto/transcript"
 import { readFileTool } from "../src/core/tools/fs/read"
 import { editFileTool, writeFileTool } from "../src/core/tools/fs/write"
 import { childEnv } from "../src/core/tools/shell/run"
@@ -122,6 +122,22 @@ test("long payloads keep head and tail with a marker; old actions drop before an
   expect(out).toContain("omitted_earlier_entries")
 })
 
+test("a long session's user messages never crowd out every action: first and newest kept", () => {
+  const shell = { name: "shell", readOnly: false } as ToolDef
+  const log = new ActionLog()
+  log.turn("nhiệm vụ: phân tích danh mục, đừng xoá gì")
+  for (let i = 0; i < 12; i++) log.turn(`tin nhắn ${i} ${"x".repeat(3_500)}`)
+  log.action({ name: "write_file", readOnly: false } as ToolDef, { path: "s.py", content: "print(1)" })
+  log.action(shell, { command: "python s.py" })
+  const out = log.render()
+  expect(out.length).toBeLessThanOrEqual(MAX_CHARS + 200)
+  expect(out).toContain("nhiệm vụ: phân tích danh mục")
+  expect(out).toContain("tin nhắn 11")
+  expect(out).not.toContain("tin nhắn 0 ")
+  expect(out).toContain('"content":"print(1)"')
+  expect(out).toContain("python s.py")
+})
+
 // ── classifier ──────────────────────────────────────────────────────────────
 
 const input = (tool = "shell", payload = '{"command":"python x.py"}') => ({ transcript: '{"user":"chạy script"}', action: { tool, input: payload }, environment: [] })
@@ -145,9 +161,29 @@ test("an empty or unreadable answer is never 'allow'; errors and 429 make it una
   expect((await classify(input(), target(), signal(), fakeModel(["", "không biết"]))).kind).toBe("unavailable")
   const quota = await classify(input(), target(), signal(), fakeModel([quotaError()]))
   expect(quota).toMatchObject({ kind: "unavailable", quota: true })
-  expect((await classify(input(), target(), signal(), fakeModel([new Error("ECONNRESET")]))).kind).toBe("unavailable")
+  expect((await classify(input(), target(), signal(), { ...fakeModel([new Error("ECONNRESET")]), retryDelayMs: 0 })).kind).toBe("unavailable")
   expect(parseBlock("<thinking><block>no</block></thinking>")).toBeUndefined()
   expect(parseTag("<reason> a </reason>", "reason")).toBe("a")
+})
+
+const overloaded = () => Object.assign(new Error("The model is overloaded"), { name: "AI_APICallError", statusCode: 503 })
+
+test("a transient failure is retried once; a 429 never is", async () => {
+  const flaky = { ...fakeModel([overloaded(), "<block>no</block>"]), retryDelayMs: 0 }
+  expect(await classify(input(), target(), signal(), flaky)).toEqual({ kind: "allow", stage: 1, requests: 2 })
+  const twice = { ...fakeModel([overloaded(), overloaded()]), retryDelayMs: 0 }
+  expect(await classify(input(), target(), signal(), twice)).toMatchObject({ kind: "unavailable", requests: 2 })
+  const quota = { ...fakeModel([quotaError(), "<block>no</block>"]), retryDelayMs: 0 }
+  expect(await classify(input(), target(), signal(), quota)).toMatchObject({ kind: "unavailable", quota: true, requests: 1 })
+})
+
+test("a reasoning model with no low-thinking setting gets extra output room", async () => {
+  const oss = fakeModel(["<block>yes</block>", "<block>no</block>"])
+  await classify(input(), target("@ai-sdk/groq", "deepseek-r1-distill-llama-70b"), signal(), oss)
+  expect(oss.seen.map((s) => s.maxOutputTokens)).toEqual([512 + THINKING_HEADROOM, 4096 + THINKING_HEADROOM])
+  expect(needsHeadroom(target("@ai-sdk/google", "gemini-3.1-flash-lite"))).toBe(false)
+  expect(needsHeadroom(target())).toBe(false)
+  expect(lowThinking(target("@ai-sdk/groq", "openai/gpt-oss-120b"))).toEqual({ groq: { reasoningEffort: "low" } })
 })
 
 test("thinking is turned down per provider", () => {
@@ -260,6 +296,15 @@ test("gate in auto: a read-only shell command skips the classifier but is still 
   expect(auto.log.render()).toContain('"command":"git status"')
   expect(await gate.check(shell, { command: "git push origin main" }, signal())).toEqual({ allow: true })
   expect(model.seen).toHaveLength(1)
+  // A run of blocks is broken by a call that ran without the classifier.
+  auto.consecutive = 2
+  await gate.check(shell, { command: "git status" }, signal())
+  expect(auto.consecutive).toBe(0)
+  // At the limit it is not: the user has to answer first.
+  auto.consecutive = MAX_CONSECUTIVE
+  await gate.check(shell, { command: "git status" }, signal())
+  expect(auto.consecutive).toBe(MAX_CONSECUTIVE)
+  auto.consecutive = 0
   // Not in ▸▸: the fast path does not apply (‖ and ▸ still ask).
   gate.setMode("ask")
   expect((await gate.check(shell, { command: "git status" }, signal())).reason).toBe("headless")

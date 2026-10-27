@@ -26,6 +26,8 @@ export type LogEntry =
 export const FIELD_CHARS = 2_000
 export const MAX_ENTRIES = 40
 export const MAX_CHARS = 20_000
+/** The user's own lines may use this much of MAX_CHARS; the rest is kept for the actions. */
+export const MAX_PINNED_CHARS = 12_000
 
 /** Head and tail of `text` with how much was left out between them. */
 export function clip(text: string, max = FIELD_CHARS) {
@@ -139,8 +141,10 @@ export class ActionLog {
   }
 
   /**
-   * JSONL for the classifier, oldest first: every user message and answer kept (they carry the
-   * intent and the boundaries), then the most recent other entries up to the limits.
+   * JSONL for the classifier, oldest first: the user's messages and answers first (they carry
+   * the intent and the boundaries), then the most recent other entries up to the limits. A very
+   * long session keeps the first user message and the newest ones within MAX_PINNED_CHARS, so
+   * the actions (a script's content that "Session Scripts" relies on) are never crowded out.
    */
   render(): string {
     const line = (e: LogEntry) => {
@@ -161,12 +165,14 @@ export class ActionLog {
     const pinned = (e: LogEntry) => e.kind === "user" || e.kind === "answer"
     const keep = new Set<number>()
     let chars = 0
-    lines.forEach((l, i) => {
-      if (pinned(l.e)) {
-        keep.add(i)
-        chars += l.text.length
-      }
-    })
+    const users = lines.flatMap((l, i) => (pinned(l.e) ? [i] : []))
+    for (const [n, i] of [...users.entries()].reverse()) {
+      const size = lines[i]!.text.length
+      // The first message (the task) always; the others newest first while they fit.
+      if (n > 0 && chars + size > MAX_PINNED_CHARS - (lines[users[0]!]?.text.length ?? 0)) continue
+      keep.add(i)
+      chars += size
+    }
     let others = 0
     for (let i = lines.length - 1; i >= 0; i--) {
       if (keep.has(i)) continue

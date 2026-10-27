@@ -1,7 +1,7 @@
 import { loadConfig, saveConfig } from "../config"
 import { isInside, isSensitiveScope } from "../fs/path-safety"
 import type { AgentOrigin, ApprovalPreview, ToolDef } from "../tools/types"
-import { blockedMessage, type AutoReviewer } from "./auto"
+import { blockedMessage, type AutoReviewer, type Review } from "./auto"
 import type { PermissionMode } from "./mode"
 
 export { cycleMode, MODE_LABEL, modeNote, type PermissionMode } from "./mode"
@@ -265,6 +265,12 @@ export class PermissionGate {
     return !def.effect || this.current !== "read-only"
   }
 
+  /** An allowed call: in ▸▸ it breaks a run of blocks (Claude Code resets the streak on any allowed call). */
+  private ran(): Decision {
+    if (this.current === "auto") this.auto?.ranWithoutBlock()
+    return { allow: true }
+  }
+
   /** Resolve before the tool runs. Waiting here never counts against the tool's timeout. */
   async check(def: ToolDef, input: unknown, signal: AbortSignal, label = def.name, callId?: string, agent?: AgentOrigin): Promise<Decision> {
     const scope = def.askFor?.(input)
@@ -277,21 +283,21 @@ export class PermissionGate {
     // Deny rules first, from memory: they stop reads too (refreshRules loads them).
     if (this.lists?.deny.some((r) => listMatches(r, def, subject))) return { allow: false, reason: "rule" }
     // Calls that never ask run at once, as before: no await, so parallel calls keep their order.
-    if (!userOnly(scope) && !needsApproval(def, input)) return { allow: true }
+    if (!userOnly(scope) && !needsApproval(def, input)) return this.ran()
     const lists = this.lists ?? (await this.rules.lists?.()) ?? { deny: [], ask: [] }
     if (!this.lists && lists.deny.some((r) => listMatches(r, def, subject))) return { allow: false, reason: "rule" }
     const key = this.keyOf(def, input)
     if (userOnly(scope)) {
       if (sessionOk(scope) && this.session.has(key)) return { allow: true }
     } else if (!lists.ask.some((r) => listMatches(r, def, subject))) {
-      if (this.approvalsApply(def) && (this.sessionCovers(def, input, key) || (await this.allowedAlways(def, input)))) return { allow: true }
+      if (this.approvalsApply(def) && (this.sessionCovers(def, input, key) || (await this.allowedAlways(def, input)))) return this.ran()
     }
     let notice: string | undefined
     if (this.current === "auto" && this.auto && !userOnly(scope) && !lists.ask.some((r) => listMatches(r, def, subject))) {
       // A new file, or one this run created, in the workspace (the copy in /undo is the safety
       // net), or a shell command that only reads: no classifier request.
-      if (await def.autoSafe?.(input)) return { allow: true }
-      const review = await this.auto.review(def, input, agent, signal).catch(() => undefined)
+      if (await def.autoSafe?.(input)) return this.ran()
+      const review = await this.auto.review(def, input, agent, signal).catch((error): Review => ({ decision: "ask", why: `model duyệt lỗi: ${error instanceof Error ? error.message : String(error)}` }))
       if (signal.aborted) return { allow: false, reason: "cancelled" }
       if (review?.decision === "allow") return { allow: true }
       if (review?.decision === "block") return { allow: false, reason: "classifier", message: blockedMessage(review.label, review.reason) }

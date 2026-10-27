@@ -151,5 +151,6 @@ export function lowThinking(target: EffortTarget): Record<string, Record<string,
     return undefined
   }
   if (npm === "@ai-sdk/openai" && /^(gpt-5|o\d)/.test(id)) return { openai: { reasoningEffort: "low" } }
+  if (npm === "@ai-sdk/groq" && /gpt-oss/.test(id)) return { groq: { reasoningEffort: "low" } }
   return undefined
 }
