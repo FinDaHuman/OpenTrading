@@ -110,6 +110,43 @@ export function commandPrefix(command: string): string | undefined {
   return [first, ...rest].join(" ")
 }
 
+/** Programs that only list or print state, whatever their arguments (checked below for exceptions). */
+const LISTERS = new Set(["ls", "dir", "gci", "get-childitem", "pwd", "get-location", "where", "which", "get-command", "gcm", "whoami", "hostname", "get-process", "gps", "ps", "tasklist"])
+/** Second words that make these programs only read. */
+const READ_SUB: Record<string, Set<string>> = {
+  git: new Set(["status", "log", "diff", "show", "blame", "rev-parse", "ls-files", "shortlog", "describe"]),
+  pip: new Set(["list", "show", "freeze"]),
+  pip3: new Set(["list", "show", "freeze"]),
+  conda: new Set(["list", "info"]),
+  npm: new Set(["ls", "list"]),
+}
+/** Programs whose `--version` is a plain read. */
+const VERSIONED = new Set(["python", "python3", "py", "node", "bun", "deno", "npm", "pnpm", "yarn", "pip", "pip3", "uv", "conda", "git", "dotnet", "java", "go", "cargo", "rustc", "gh"])
+/**
+ * Arguments that turn a read into something else: git writing a file or running a configured
+ * program (`--output`, `--ext-diff`, `--textconv`), a PowerShell provider drive other than a
+ * disk (`env:` prints API keys, `HKLM:` the registry).
+ */
+const NOT_READ = /^(--output|--ext-diff|--textconv|-o$)|^[a-z]{2,}:/i
+
+/**
+ * One simple command that only lists or prints state (git status, dir, pip list, python
+ * --version): ▸▸ auto mode runs it without asking the classifier, like Claude Code's
+ * read-only shell commands. Anything chained, redirected, naming a key file or reading file
+ * contents is not one.
+ */
+export function readOnlyCommand(command: string): boolean {
+  if (!isSimpleCommand(command) || mentionsSensitive(command)) return false
+  const w = words(command)
+  if (w.length === 0) return false
+  const first = bare(w[0]!)
+  const rest = w.slice(1)
+  if (rest.some((a) => NOT_READ.test(a))) return false
+  if (LISTERS.has(first)) return true
+  if (READ_SUB[first]?.has((rest[0] ?? "").toLowerCase())) return true
+  return VERSIONED.has(first) && rest.length === 1 && /^(--version|-V|version)$/.test(rest[0]!)
+}
+
 /** The command starts an interpreter or a wrapper that runs other commands. */
 export function startsInterpreter(command: string) {
   const w = words(command.trim().replace(/^&\s*/, ""))

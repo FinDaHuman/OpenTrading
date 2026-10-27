@@ -4,7 +4,7 @@ import path from "node:path"
 import { z } from "zod"
 import type { Workspace } from "../../fs/workspace"
 import { LOCAL_SOURCE, type ToolDef } from "../types"
-import { commandPrefix, criticalDelete, mentionsSensitive, startsInterpreter } from "./command"
+import { commandPrefix, criticalDelete, mentionsSensitive, readOnlyCommand, startsInterpreter } from "./command"
 import { detectShell, runShell, SPILL_CAP, type ShellInfo } from "./run"
 
 /**
@@ -76,6 +76,8 @@ export function shellTool(workspace: Workspace, opts: { shell?: ShellInfo } = {}
       return prefix && !startsInterpreter(command) ? `cmd:${prefix}` : `cmd!${command.trim()}`
     },
     subject: (input) => input.command,
+    // ▸▸: a command that only lists or prints state needs no classifier request.
+    autoSafe: async (input) => typeof input.command === "string" && readOnlyCommand(input.command),
     async validate(input) {
       const cwd = cwdOf(input)
       try {

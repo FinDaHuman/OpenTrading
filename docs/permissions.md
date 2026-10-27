@@ -112,6 +112,7 @@ Mỗi hành động cần duyệt được một model thứ hai xét trước k
   - *Ngoại lệ được phép:* lệnh chỉ đọc; chạy script do chính phiên viết trong workspace; cài gói đã khai báo, hoặc gói dữ liệu phổ biến khi bạn cần phân tích; GET trang dữ liệu thị trường công khai; mở file vừa tạo; tool dữ liệu OpenTrading.
   - Ranh giới bạn nói trong chat ("đừng ghi đè bao-cao.md", "không gửi gì ra ngoài") có tác dụng chặn tới khi bạn gỡ.
 - **Đọc, không xét:** `web_search` và `web_fetch` vào các trang tin/tài chính Việt Nam có sẵn trong danh sách chỉ được ghi vào bản ghi cho model duyệt đọc, không bị duyệt.
+- **Chạy luôn, không tốn request:** file mới trong workspace (hoặc file chính phiên tạo), và lệnh shell đơn chỉ liệt kê hay in trạng thái: `git status/log/diff/show`, `dir`/`ls`/`Get-ChildItem`, `pwd`, `where`/`which`, `Get-Process`, `pip list`, `conda list`, `<chương trình> --version`. Lệnh có nối (`;`, `|`, `&&`), chuyển hướng (`>`), đọc nội dung file, nhắc tới file khoá, ổ `env:`/`HKLM:` hay `git diff --output` thì vẫn qua model duyệt. Các lệnh này vẫn được ghi vào bản ghi.
 - **Tuỳ biến** trong `~/.opentrading/config.json` (chỉ đọc file này, không bao giờ đọc từ thư mục dự án, để một repo tải về không tự cấp quyền được):
 
   ```json

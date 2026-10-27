@@ -288,8 +288,9 @@ export class PermissionGate {
     }
     let notice: string | undefined
     if (this.current === "auto" && this.auto && !userOnly(scope) && !lists.ask.some((r) => listMatches(r, def, subject))) {
-      // A new file, or one this run created, in the workspace: the copy in /undo is the safety net.
-      if (def.effect === "file" && (await def.autoSafe?.(input))) return { allow: true }
+      // A new file, or one this run created, in the workspace (the copy in /undo is the safety
+      // net), or a shell command that only reads: no classifier request.
+      if (await def.autoSafe?.(input)) return { allow: true }
       const review = await this.auto.review(def, input, agent, signal).catch(() => undefined)
       if (signal.aborted) return { allow: false, reason: "cancelled" }
       if (review?.decision === "allow") return { allow: true }
