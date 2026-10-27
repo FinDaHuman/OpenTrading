@@ -97,6 +97,8 @@ Mỗi hành động cần duyệt được một model thứ hai xét trước k
   - câu trả lời `ask_user` và lời nhắn bạn gõ khi từ chối;
   - việc agent chính giao cho subagent, có ghi rõ đó là lời của agent, không phải của bạn;
   - các hành động của agent: lệnh, nội dung file ghi, đoạn sửa, URL, truy vấn tìm kiếm.
+  - hồ sơ `INVESTOR.md` của bạn (ràng buộc trong đó tính là ranh giới bạn đặt, nhưng không tự cho phép một việc phá huỷ hay gửi ra ngoài);
+  - nếu workspace là repo git: nhánh hiện tại, số thay đổi chưa commit và các remote. Push lên remote của repo này được coi là trong vùng tin cậy (vẫn chặn nếu trong đó có khoá hay dữ liệu riêng); remote khác là bên ngoài. OpenTrading không đọc chỉ dẫn nào từ thư mục dự án cho model duyệt.
 - **Model duyệt không thấy:** chữ model chính viết, kết quả tool, nội dung trang web hay file. Lý do: lệnh độc giấu trong trang web hay PDF không thuyết phục được model duyệt. Báo cáo của subagent nền và nội dung prompt MCP được đánh dấu là của harness, không phải của bạn (cả khi mở lại phiên bằng `--continue`).
 - **Hai bước:** bước 1 trả lời nhanh có chặn hay không, tốn 1 request. Chỉ khi bước 1 chặn hoặc không trả lời rõ thì mới chạy bước 2, có suy luận ngắn và nêu tên luật bị vi phạm. Tổng cộng khoảng 1 request cho mỗi hành động, 2 nếu bị nghi ngờ.
 - **Khi bị chặn:** model chính nhận lý do và nhãn luật, ví dụ `[Gửi dữ liệu ra ngoài]`, rồi làm cách khác hoặc dừng lại giải thích.
@@ -108,7 +110,7 @@ Mỗi hành động cần duyệt được một model thứ hai xét trước k
   Hộp thoại khi đó ghi rõ vì sao nó hiện ra.
 - **Luật mặc định** (viết bằng tiếng Anh cho model duyệt, nhãn hiện bằng tiếng Việt):
   - *Chặn tuyệt đối:* đọc khoá/mật khẩu (kể cả in toàn bộ biến môi trường), lộ khoá ra ngoài, tự sửa quyền hay cấu hình của OpenTrading, chạy agent khác đã tắt duyệt.
-  - *Chặn trừ khi bạn nêu rõ đúng việc đó:* **đặt, sửa, huỷ lệnh giao dịch thật hay chuyển tiền** (phải nêu mã, chiều, khối lượng, giá); tải code về rồi chạy; xoá hoặc ghi đè file có sẵn; git phá huỷ; gửi dữ liệu ra ngoài (kể cả nhét trong URL); nhắn tin thay bạn; cài thứ tự chạy về sau; hạ bảo mật; dò thông tin đăng nhập; mở máy ra internet; ghi ngoài workspace; đổi cài đặt hệ thống.
+  - *Chặn trừ khi bạn nêu rõ đúng việc đó:* **đặt, sửa, huỷ lệnh giao dịch thật hay chuyển tiền** (phải nêu mã, chiều, khối lượng, giá); tải code về rồi chạy; xoá hoặc ghi đè file có sẵn; git phá huỷ; gửi dữ liệu ra ngoài (kể cả nhét trong URL); nhắn tin thay bạn; cài thứ tự chạy về sau; hạ bảo mật; dò thông tin đăng nhập; mở máy ra internet; ghi ngoài workspace; đổi cài đặt hệ thống; chạy lệnh bị che giấu (`-EncodedCommand`, giải mã base64 rồi `iex`…).
   - *Ngoại lệ được phép:* lệnh chỉ đọc; chạy script do chính phiên viết trong workspace; cài gói đã khai báo, hoặc gói dữ liệu phổ biến khi bạn cần phân tích; GET trang dữ liệu thị trường công khai; mở file vừa tạo; tool dữ liệu OpenTrading.
   - Ranh giới bạn nói trong chat ("đừng ghi đè bao-cao.md", "không gửi gì ra ngoài") có tác dụng chặn tới khi bạn gỡ.
 - **Đọc, không xét:** `web_search` và `web_fetch` vào các trang tin/tài chính Việt Nam có sẵn trong danh sách chỉ được ghi vào bản ghi cho model duyệt đọc, không bị duyệt.

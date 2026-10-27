@@ -42,8 +42,12 @@ export interface ReviewerDeps {
   /** The classifier's model: config autoMode.model, else the session's; undefined = none set up. */
   target: () => Promise<Target | undefined>
   config: () => Promise<AutoModeConfig | undefined>
-  /** Workspace folders, OS and shell, trusted MCP servers. */
-  environment: () => string[]
+  /** Workspace folders, OS and shell, trusted MCP servers, git facts. */
+  environment: () => string[] | Promise<string[]>
+  /** The user's INVESTOR.md for the classifier, if any. */
+  profile?: () => Promise<string | undefined>
+  /** A new conversation: per-conversation context (the git remotes) is taken again. */
+  onReset?: () => void
   classifier?: ClassifierDeps
   now?: () => number
 }
@@ -86,6 +90,7 @@ export class AutoReviewer {
   /** A new conversation (/new, /clear, resume): an empty log and fresh counters. */
   reset(history: Parameters<ActionLog["rebuild"]>[0] = [], defOf: Parameters<ActionLog["rebuild"]>[1] = () => undefined, visible: Parameters<ActionLog["rebuild"]>[2] = () => "", harness: readonly string[] = []) {
     this.log.rebuild(history, defOf, visible, harness)
+    this.deps.onReset?.()
     this.consecutive = 0
     this.total = 0
     this.recent.length = 0
@@ -126,7 +131,13 @@ export class AutoReviewer {
     let verdict: Verdict
     try {
       verdict = await classify(
-        { transcript: this.log.render(), action: { tool: def.name, input: compact, ...(agent ? { agent: `${agent.type}#${agent.id}` } : {}) }, environment: this.deps.environment(), config: await this.deps.config() },
+        {
+          transcript: this.log.render(),
+          action: { tool: def.name, input: compact, ...(agent ? { agent: `${agent.type}#${agent.id}` } : {}) },
+          environment: await this.deps.environment(),
+          config: await this.deps.config(),
+          profile: await this.deps.profile?.().catch(() => undefined),
+        },
         target,
         signal,
         this.deps.classifier,

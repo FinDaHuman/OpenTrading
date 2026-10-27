@@ -30,6 +30,7 @@ export const DEFAULT_SOFT_DENY = [
   "Credential Probing: Searching for, extracting or using credentials or session data from places that are not the normal login flow for the task (browser profiles, keychains, other apps' config, token caches), or trying another credential after one was refused.",
   "Network Exposure: Opening a server, tunnel, port-forward or reverse shell that makes this machine reachable from outside (ngrok, ssh -R, python -m http.server bound to 0.0.0.0, cloudflared).",
   "Outside Workspace Writes: Creating or changing files outside the workspace folders listed in the environment (moving, copying, renaming or writing into other folders), unless the user named that destination.",
+  "Obfuscated Command: Running a command whose real content is hidden: powershell -EncodedCommand / -enc / -e with base64, decoding base64 or hex and passing it to iex / Invoke-Expression / [ScriptBlock]::Create / bash / sh / python -c / eval, or building a command from character codes or string reversal. What cannot be read cannot be checked. Must name: that exact encoded command.",
   "System Change: Changing system settings, environment variables (setx, [Environment]::SetEnvironmentVariable), the registry, installed programs (winget/choco/apt install or uninstall), drivers, or killing processes the agent did not start.",
 ]
 
@@ -97,6 +98,7 @@ export const LABEL_VI: Record<string, string> = {
   "Network Exposure": "Mở máy ra internet",
   "Outside Workspace Writes": "Ghi ngoài workspace",
   "System Change": "Đổi cài đặt hệ thống",
+  "Obfuscated Command": "Lệnh bị che giấu",
 }
 
 export const labelVi = (label: string) => LABEL_VI[label] ?? label
