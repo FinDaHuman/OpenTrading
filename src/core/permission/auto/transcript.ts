@@ -20,7 +20,8 @@ export type LogEntry =
   | { kind: "task"; agent: string; text: string }
   /** Something the harness delivered as a user turn (background subagent results). */
   | { kind: "notice"; text: string }
-  | { kind: "action"; agent?: string; tool: string; input: string }
+  /** `effect`: the tool is not read-only (or only claims to be): worth a sub-agent return check. */
+  | { kind: "action"; agent?: string; tool: string; input: string; effect?: true }
 
 /** Per field, then per entry: long text keeps its head and tail with an explicit marker. */
 export const FIELD_CHARS = 2_000
@@ -120,7 +121,13 @@ export class ActionLog {
     // that needs judging, and dozens per turn would push the scripts out of the log. A tool that
     // only claims to be read-only (another MCP server) is: its arguments go to another program.
     if (def.readOnly && !def.autoReview && !ALWAYS_LOGGED.has(def.name) && def.askFor?.(input) === undefined) return
-    this.entries.push({ kind: "action", tool: def.name, input: compactInput(def, input), ...(agent ? { agent: `${agent.type}#${agent.id}` } : {}) })
+    this.entries.push({
+      kind: "action",
+      tool: def.name,
+      input: compactInput(def, input),
+      ...(agent ? { agent: `${agent.type}#${agent.id}` } : {}),
+      ...(!def.readOnly || def.autoReview ? { effect: true as const } : {}),
+    })
   }
 
   /**
