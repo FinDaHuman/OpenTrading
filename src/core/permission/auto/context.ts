@@ -30,13 +30,16 @@ const runGit: GitRun = async (cwd, args) => {
   }
 }
 
-/** One environment line about the git repo at `root`, or undefined when it is not one. */
-export async function gitFacts(root: string, run: GitRun = runGit): Promise<string | undefined> {
-  const [status, remotes] = await Promise.all([run(root, ["status", "--porcelain=v1", "--branch", "--untracked-files=no"]), run(root, ["remote", "-v"])])
+/**
+ * One environment line about the git repo at `root`, or undefined when it is not one.
+ * `remotes` is `git remote -v` taken earlier (GitContext keeps it per conversation).
+ */
+export async function gitFacts(root: string, run: GitRun = runGit, remotes: Promise<string | undefined> = run(root, ["remote", "-v"])): Promise<string | undefined> {
+  const [status, remoteList] = await Promise.all([run(root, ["status", "--porcelain=v1", "--branch", "--untracked-files=no"]), remotes])
   if (status === undefined) return undefined
   const [head = "", ...changes] = status.split(/\r?\n/).filter((l) => l.trim())
   const branch = head.replace(/^##\s*/, "").trim() || "unknown"
-  const pushTo = [...new Set((remotes ?? "").split(/\r?\n/).filter((l) => l.endsWith("(push)")).map((l) => l.replace(/\s+\(push\)$/, "").replace(/\s+/, " ")))]
+  const pushTo = [...new Set((remoteList ?? "").split(/\r?\n/).filter((l) => l.endsWith("(push)")).map((l) => l.replace(/\s+\(push\)$/, "").replace(/\s+/, " ")))]
   return (
     `Git repository at ${root}: branch ${branch}; ${changes.length} uncommitted change(s) to tracked files` +
     (pushTo.length
@@ -45,18 +48,29 @@ export async function gitFacts(root: string, run: GitRun = runGit): Promise<stri
   )
 }
 
-/** Git facts per workspace root, cached for GIT_CACHE_MS. */
+/**
+ * Git facts per workspace root, cached for GIT_CACHE_MS. The remotes are taken once per
+ * conversation: the trusted repo is what it was when the user started, so a remote the agent
+ * adds later (`git remote add`) never becomes trusted. reset() on /new, /clear, resume.
+ */
 export class GitContext {
   private cache = new Map<string, { at: number; line: Promise<string | undefined> }>()
+  private remotes = new Map<string, Promise<string | undefined>>()
 
   constructor(private run: GitRun = runGit, private now = () => Date.now()) {}
+
+  reset() {
+    this.cache.clear()
+    this.remotes.clear()
+  }
 
   async lines(roots: string[]): Promise<string[]> {
     const out = await Promise.all(
       roots.map((root) => {
         const hit = this.cache.get(root)
         if (hit && this.now() - hit.at < GIT_CACHE_MS) return hit.line
-        const line = gitFacts(root, this.run)
+        if (!this.remotes.has(root)) this.remotes.set(root, this.run(root, ["remote", "-v"]))
+        const line = gitFacts(root, this.run, this.remotes.get(root))
         this.cache.set(root, { at: this.now(), line })
         return line
       }),

@@ -388,7 +388,12 @@ test("git facts: branch, uncommitted changes and push remotes as the trusted rep
   expect(calls).toHaveLength(4) // 2 from gitFacts above, 2 for the first lines() call
   now += GIT_CACHE_MS + 1
   await git.lines(["/w"])
-  expect(calls).toHaveLength(6)
+  // The status is taken again; the remotes are kept for the conversation.
+  expect(calls).toHaveLength(5)
+  expect(calls.at(-1)![0]).toBe("status")
+  git.reset()
+  await git.lines(["/w"])
+  expect(calls).toHaveLength(7)
 })
 
 test("INVESTOR.md reaches the classifier as the user's profile; the Obfuscated Command rule is a default", async () => {

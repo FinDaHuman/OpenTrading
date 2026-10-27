@@ -174,6 +174,7 @@ export function initRuntime(opts: { cwd?: string; home?: string; skills: () => S
       ]
     },
     // INVESTOR.md lives in the data folder (profile.ts), which the agent cannot write.
+    onReset: () => git.reset(),
     profile: async () => profileForClassifier(await readFile(path.join(home, "INVESTOR.md"), "utf8").catch(() => undefined)),
   })
   permissions.auto = auto

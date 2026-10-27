@@ -46,6 +46,8 @@ export interface ReviewerDeps {
   environment: () => string[] | Promise<string[]>
   /** The user's INVESTOR.md for the classifier, if any. */
   profile?: () => Promise<string | undefined>
+  /** A new conversation: per-conversation context (the git remotes) is taken again. */
+  onReset?: () => void
   classifier?: ClassifierDeps
   now?: () => number
 }
@@ -88,6 +90,7 @@ export class AutoReviewer {
   /** A new conversation (/new, /clear, resume): an empty log and fresh counters. */
   reset(history: Parameters<ActionLog["rebuild"]>[0] = [], defOf: Parameters<ActionLog["rebuild"]>[1] = () => undefined, visible: Parameters<ActionLog["rebuild"]>[2] = () => "", harness: readonly string[] = []) {
     this.log.rebuild(history, defOf, visible, harness)
+    this.deps.onReset?.()
     this.consecutive = 0
     this.total = 0
     this.recent.length = 0
