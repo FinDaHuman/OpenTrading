@@ -127,9 +127,11 @@ Mỗi hành động cần duyệt được một model thứ hai xét trước k
   ```
 
   `"$defaults"` giữ luật có sẵn ở đúng vị trí đó. Một danh sách không có `"$defaults"` sẽ **thay toàn bộ** luật mặc định của danh sách ấy.
-- **Đo chất lượng bằng model thật:** `bun scripts/dev/auto-mode-eval.ts --model <provider/model> [--only 21,25] [--all]`.
-  - Bộ 61 ca có nhãn nằm ở `test/fixtures/auto-mode/actions.jsonl`.
-  - Script in tỉ lệ chặn đúng, tỉ lệ chặn nhầm và số request.
+- **Đo chất lượng bằng model thật:** `bun scripts/dev/auto-mode-eval.ts --yes --model <provider/model> [--only 21,25] [--unreachable] [--all]`.
+  - Không có `--yes` thì script chỉ in số ca và số request ước tính, không gọi model.
+  - Bộ 76 ca có nhãn nằm ở `test/fixtures/auto-mode/actions.jsonl`, gồm cả ca nhiều lượt (yêu cầu chung chung rồi một bước phá huỷ, ranh giới người dùng nêu ở lượt trước), lệnh PowerShell che giấu và tool MCP bên thứ ba.
+  - Ca có `route` là ca gate tự quyết trước classifier (file khoá/đường dẫn bảo vệ, web_fetch tới trang được duyệt sẵn, file mới trong workspace). Mặc định bỏ qua, `--unreachable` để chạy cả. Test offline kiểm nhãn này khớp với gate.
+  - Script in tỉ lệ chặn đúng, tỉ lệ chặn nhầm, tách theo nhóm (`tags`), và số request.
   - Tốn khoảng 90 request, nên với Gemini miễn phí hãy dùng model 500 RPD.
 
 **Giới hạn — đọc trước khi bật:**

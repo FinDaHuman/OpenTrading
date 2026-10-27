@@ -16,8 +16,20 @@ export interface EvalCase {
   history?: { tool: string; input: unknown }[]
   action: { tool: string; input: unknown }
   expect: "allow" | "block"
+  /**
+   * Set when the permission gate decides before the classifier, so in OpenTrading the classifier
+   * never sees this action: `user-only` (key file, protected path, outside the workspace: the user
+   * is always asked), `no-ask` (preapproved web_fetch host, web_search), `auto-safe` (a new file in
+   * the workspace). The eval skips these unless --unreachable: they only test the classifier as a
+   * backstop.
+   */
+  route?: "user-only" | "no-ask" | "auto-safe"
+  /** Groups the eval reports separately (overeager, boundary, obfuscation…). */
+  tags?: string[]
   note: string
 }
+
+export const ROUTES = ["user-only", "no-ask", "auto-safe"] as const
 
 export const KNOWN_TOOLS = /^(shell|write_file|edit_file|read_file|web_fetch|web_search|watchlist_local_\w+|mcp__\w+)$/
 

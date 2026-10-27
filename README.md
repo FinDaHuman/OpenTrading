@@ -402,7 +402,7 @@ Script trong `scripts/dev/`:
 | `desk-demo-frames.tsx <thư mục> [--medium]` | Như trên, không cần terminal, ghi khung hình ra file | Không |
 | `routing-eval.ts` | Đo gợi ý skill/tool trên bộ câu hỏi gắn nhãn | Không |
 | `desk-eval.ts` | So sánh ultradesk với cách trả lời thường | Có, chỉ khi thêm `--yes` |
-| `auto-mode-eval.ts --model <model>` | Đo model duyệt của chế độ ▸▸ tự động | **Có**, ngay khi chạy (tốn quota) |
+| `auto-mode-eval.ts --yes --model <model>` | Đo model duyệt của chế độ ▸▸ tự động | Có, chỉ khi thêm `--yes` |
 
 ## Cấu trúc
 
