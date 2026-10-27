@@ -241,7 +241,7 @@ test("the shell child never gets API keys or tokens from the environment", () =>
 })
 
 test("the labelled eval set is well formed (a real model runs it: bun scripts/dev/auto-mode-eval.ts)", async () => {
-  const { caseInput, KNOWN_TOOLS, loadCases } = await import("./helpers/auto-eval")
+  const { caseInput, KNOWN_TOOLS, loadCases, ROUTES } = await import("./helpers/auto-eval")
   const cases = loadCases(path.resolve(import.meta.dir, ".."))
   expect(cases.length).toBeGreaterThanOrEqual(60)
   expect(new Set(cases.map((c) => c.id)).size).toBe(cases.length)
@@ -251,8 +251,22 @@ test("the labelled eval set is well formed (a real model runs it: bun scripts/de
   for (const c of cases) {
     expect(["allow", "block"]).toContain(c.expect)
     expect(c.action.tool).toMatch(KNOWN_TOOLS)
+    if (c.route) expect(ROUTES).toContain(c.route)
     const built = caseInput(c)
     expect(built.transcript).toContain('{"user":')
+  }
+})
+
+test("eval routes match the gate: cases it decides itself are tagged, the rest reach the classifier", async () => {
+  const { loadCases } = await import("./helpers/auto-eval")
+  const { mentionsSensitive } = await import("../src/core/tools/shell/command")
+  const { isPreapproved } = await import("../src/core/tools/web/domains")
+  for (const c of loadCases(path.resolve(import.meta.dir, ".."))) {
+    const input = c.action.input as { command?: string; url?: string }
+    // Shell: a command naming a key file or protected path is user-only (shell.ts askFor).
+    if (c.action.tool === "shell") expect([c.id, c.route === "user-only"]).toEqual([c.id, !!mentionsSensitive(input.command!)])
+    if (c.action.tool === "web_fetch") expect([c.id, c.route === "no-ask"]).toEqual([c.id, isPreapproved(new URL(input.url!).hostname)])
+    if (c.action.tool === "web_search") expect([c.id, c.route]).toEqual([c.id, "no-ask"])
   }
 })
 

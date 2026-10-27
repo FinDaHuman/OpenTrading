@@ -425,7 +425,7 @@ Scripts in `scripts/dev/`:
 | `desk-demo-frames.tsx <folder> [--medium]` | Same, without a terminal; writes frames to files | No |
 | `routing-eval.ts` | Measures skill/tool suggestions on a labeled question set | No |
 | `desk-eval.ts` | Compares ultradesk with an ordinary answer | Yes, only with `--yes` |
-| `auto-mode-eval.ts --model <model>` | Measures the approval model of ▸▸ auto mode | **Yes**, as soon as it runs (uses quota) |
+| `auto-mode-eval.ts --yes --model <model>` | Measures the approval model of ▸▸ auto mode | Yes, only with `--yes` |
 
 ## Layout
 
