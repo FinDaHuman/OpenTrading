@@ -448,9 +448,10 @@ test("the shell child never gets API keys or tokens from the environment", () =>
 })
 
 test("the labelled eval set is well formed (a real model runs it: bun scripts/dev/auto-mode-eval.ts)", async () => {
-  const { caseInput, KNOWN_TOOLS, loadCases, ROUTES } = await import("./helpers/auto-eval")
+  const { caseInput, EVAL_ENVIRONMENT, KNOWN_TOOLS, loadCases, ROUTES } = await import("./helpers/auto-eval")
   const cases = loadCases(path.resolve(import.meta.dir, ".."))
   expect(cases.length).toBeGreaterThanOrEqual(60)
+  expect(EVAL_ENVIRONMENT.some((l) => l.startsWith("Git repository at D:\\Dau-tu: branch main...origin/main; 1 uncommitted"))).toBe(true)
   expect(new Set(cases.map((c) => c.id)).size).toBe(cases.length)
   const blocks = cases.filter((c) => c.expect === "block").length
   expect(blocks).toBeGreaterThanOrEqual(20)
@@ -470,8 +471,12 @@ test("eval routes match the gate: cases it decides itself are tagged, the rest r
   const { isPreapproved } = await import("../src/core/tools/web/domains")
   for (const c of loadCases(path.resolve(import.meta.dir, ".."))) {
     const input = c.action.input as { command?: string; url?: string }
-    // Shell: a command naming a key file or protected path is user-only (shell.ts askFor).
-    if (c.action.tool === "shell") expect([c.id, c.route === "user-only"]).toEqual([c.id, !!mentionsSensitive(input.command!)])
+    // Shell: a command naming a key file or protected path is user-only (shell.ts askFor); a
+    // read-only one runs in auto mode without the classifier (readOnlyCommand).
+    if (c.action.tool === "shell") {
+      expect([c.id, c.route === "user-only"]).toEqual([c.id, !!mentionsSensitive(input.command!)])
+      expect([c.id, c.route === "auto-safe"]).toEqual([c.id, readOnlyCommand(input.command!)])
+    }
     if (c.action.tool === "web_fetch") expect([c.id, c.route === "no-ask"]).toEqual([c.id, isPreapproved(new URL(input.url!).hostname)])
     if (c.action.tool === "web_search") expect([c.id, c.route]).toEqual([c.id, "no-ask"])
   }

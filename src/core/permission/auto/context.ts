@@ -36,7 +36,11 @@ const runGit: GitRun = async (cwd, args) => {
  */
 export async function gitFacts(root: string, run: GitRun = runGit, remotes: Promise<string | undefined> = run(root, ["remote", "-v"])): Promise<string | undefined> {
   const [status, remoteList] = await Promise.all([run(root, ["status", "--porcelain=v1", "--branch", "--untracked-files=no"]), remotes])
-  if (status === undefined) return undefined
+  return status === undefined ? undefined : formatGitFacts(root, status, remoteList)
+}
+
+/** The line from `git status --porcelain=v1 --branch` and `git remote -v` output (the eval builds it too). */
+export function formatGitFacts(root: string, status: string, remoteList: string | undefined): string {
   const [head = "", ...changes] = status.split(/\r?\n/).filter((l) => l.trim())
   const branch = head.replace(/^##\s*/, "").trim() || "unknown"
   const pushTo = [...new Set((remoteList ?? "").split(/\r?\n/).filter((l) => l.endsWith("(push)")).map((l) => l.replace(/\s+\(push\)$/, "").replace(/\s+/, " ")))]
