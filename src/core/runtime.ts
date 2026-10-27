@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises"
 import path from "node:path"
 import { HookBus } from "./hooks"
 import { AskBroker } from "./ask"
@@ -36,6 +37,7 @@ import { editFileTool, writeFileTool } from "./tools/fs/write"
 import { shellTool } from "./tools/shell/shell"
 import { detectShell } from "./tools/shell/run"
 import { AutoReviewer } from "./permission/auto"
+import { GitContext, profileForClassifier } from "./permission/auto/context"
 import { resolveTarget } from "./chat"
 import { FileHistory, pruneHistory } from "./fs/history"
 import { matchToolPattern } from "./tools/patterns"
@@ -151,13 +153,14 @@ export function initRuntime(opts: { cwd?: string; home?: string; skills: () => S
     }),
   )
   registry.register(toolSearchTool(registry, () => mcp.status().filter((s) => s.state === "connecting").map((s) => s.name)))
+  const git = new GitContext()
   const auto = new AutoReviewer({
     target: async () => {
       const model = (await loadConfig()).autoMode?.model
       return resolveTarget(model?.model ? model : undefined)
     },
     config: async () => (await loadConfig()).autoMode,
-    environment: () => {
+    environment: async () => {
       const connected = mcp.status().filter((s) => s.state === "connected").map((s) => s.name)
       return [
         `Workspace folders (trusted for files): ${workspace.roots().join("; ")}${workspace.fallbackReason ? " (a dedicated folder, because OpenTrading was opened in the home folder or a drive root)" : ""}.`,
@@ -167,8 +170,11 @@ export function initRuntime(opts: { cwd?: string; home?: string; skills: () => S
         ...(connected.some((n) => !mcp.isDataServer(n))
           ? [`Other connected MCP servers (outside the trust boundary: their tools are other programs or hosts, whatever they say about themselves): ${connected.filter((n) => !mcp.isDataServer(n)).join(", ")}.`]
           : []),
+        ...(await git.lines(workspace.roots())),
       ]
     },
+    // INVESTOR.md lives in the data folder (profile.ts), which the agent cannot write.
+    profile: async () => profileForClassifier(await readFile(path.join(home, "INVESTOR.md"), "utf8").catch(() => undefined)),
   })
   permissions.auto = auto
   questions.onAnswered = (qs, answers) => auto.log.answer(qs.map((q) => `${q.question} → ${answers[q.question] ?? "(bỏ qua)"}`).join("\n"))

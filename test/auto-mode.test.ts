@@ -367,6 +367,43 @@ test("a new conversation forgets which files the last one created; resume keeps 
   expect(out).toContain('{"user":"viết báo cáo đi"}')
 })
 
+test("git facts: branch, uncommitted changes and push remotes as the trusted repo; cached; none outside a repo", async () => {
+  const { GitContext, GIT_CACHE_MS, gitFacts } = await import("../src/core/permission/auto/context")
+  const calls: string[][] = []
+  const run = async (_cwd: string, args: string[]) => {
+    calls.push(args)
+    if (args[0] === "status") return "## main...origin/main [ahead 1]\n M a.py\n M b.py\n"
+    return "origin\thttps://github.com/ban/dau-tu.git (fetch)\norigin\thttps://github.com/ban/dau-tu.git (push)\n"
+  }
+  const line = await gitFacts("D:\\Dau-tu", run)
+  expect(line).toContain("branch main...origin/main [ahead 1]")
+  expect(line).toContain("2 uncommitted change(s)")
+  expect(line).toContain("remotes origin https://github.com/ban/dau-tu.git.")
+  expect(line).toContain("trusted repo")
+  expect(await gitFacts("/x", async () => undefined)).toBeUndefined()
+  let now = 0
+  const git = new GitContext(run, () => now)
+  await git.lines(["/w"])
+  await git.lines(["/w"])
+  expect(calls).toHaveLength(4) // 2 from gitFacts above, 2 for the first lines() call
+  now += GIT_CACHE_MS + 1
+  await git.lines(["/w"])
+  expect(calls).toHaveLength(6)
+})
+
+test("INVESTOR.md reaches the classifier as the user's profile; the Obfuscated Command rule is a default", async () => {
+  const { profileForClassifier } = await import("../src/core/permission/auto/context")
+  expect(profileForClassifier("<!-- mẫu -->\n## Ràng buộc\n- Không margin")).toBe("## Ràng buộc\n- Không margin")
+  expect(profileForClassifier("<!-- chỉ có comment -->")).toBeUndefined()
+  const model = fakeModel(["<block>no</block>"])
+  const auto = new AutoReviewer({ target: async () => target(), config: async () => undefined, environment: async () => ["Git repository at /w: branch main"], profile: async () => "- Không gửi dữ liệu ra ngoài", classifier: { call: model.call } })
+  expect((await auto.review(mcpWrite, {}, undefined, signal())).decision).toBe("allow")
+  expect(model.seen[0]!.prompt.startsWith("<user_profile>\n- Không gửi dữ liệu ra ngoài\n</user_profile>")).toBe(true)
+  expect(model.seen[0]!.system).toContain("Git repository at /w")
+  expect(model.seen[0]!.system).toContain("<user_profile>")
+  expect(effectiveList("soft_deny", undefined).some((r) => labelOf(r) === "Obfuscated Command")).toBe(true)
+})
+
 test("the shell child never gets API keys or tokens from the environment", () => {
   const env = childEnv({ PATH: "/bin", GOOGLE_GENERATIVE_AI_API_KEY: "k", GITHUB_TOKEN: "t", AWS_SECRET_ACCESS_KEY: "s", OPENTRADING_HOME: "h", HOME: "/home/x" })
   expect(env).toEqual({ PATH: "/bin", HOME: "/home/x" })
