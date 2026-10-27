@@ -42,6 +42,8 @@ export type SessionEntry =
    * input holds just a ref), so the picture is kept here for the transcript on resume.
    */
   | { type: "chart"; ts: string; callId: string; data: ChartData }
+  /** A user turn's text that the harness wrote (an MCP prompt's template): not the user's words for auto mode. */
+  | { type: "harness"; ts: string; text: string }
 
 export interface SessionSummary {
   id: string
@@ -133,6 +135,12 @@ export class Session {
   }
 
   private pendingCharts: { callId: string; data: ChartData }[] = []
+  private pendingHarness: string[] = []
+
+  /** The next turn's user text came from the harness; written with that turn. */
+  noteHarness(text: string) {
+    this.pendingHarness.push(text)
+  }
   /** The index line written last (a new title rewrites it). */
   private lastSummary: SessionSummary | undefined
 
@@ -182,6 +190,7 @@ export class Session {
     // Screenshots would bloat the file by megabytes per turn; keep a text placeholder.
     for (const message of stripImages(messages)) lines.push({ type: "message", ts, message })
     for (const chart of this.pendingCharts.splice(0)) lines.push({ type: "chart", ts, ...chart })
+    for (const text of this.pendingHarness.splice(0)) lines.push({ type: "harness", ts, text })
     lines.push({ type: "turn_end", ts, provider: info.provider, model: info.model, contextTokens: info.contextTokens })
     await appendFile(this.path!, lines.map((l) => JSON.stringify(l)).join("\n") + "\n", "utf8")
 
@@ -263,6 +272,8 @@ export interface LoadedSession {
   display: ModelMessage[]
   /** Charts drawn per tool call id. */
   charts: Map<string, ChartData>
+  /** User turn texts the harness wrote (ActionLog.markHarness on resume). */
+  harness: string[]
   /** Context size after the last turn or compaction, if recorded. */
   contextTokens?: number
   /** Tool calls that had no result and were closed with an "interrupted" result. */
@@ -279,6 +290,7 @@ export async function loadSession(id: string): Promise<LoadedSession> {
   const shown: ModelMessage[] = []
   let contextTokens: number | undefined
   const charts = new Map<string, ChartData>()
+  const harness: string[] = []
   for (const line of text.split("\n")) {
     if (!line.trim()) continue
     try {
@@ -294,12 +306,13 @@ export async function loadSession(id: string): Promise<LoadedSession> {
         contextTokens = entry.after
       } else if (entry.type === "turn_end" && entry.contextTokens !== undefined) contextTokens = entry.contextTokens
       else if (entry.type === "chart" && entry.callId && entry.data) charts.set(entry.callId, entry.data)
+      else if (entry.type === "harness" && typeof entry.text === "string") harness.push(entry.text)
     } catch {
       // skip
     }
   }
   const { messages, patched } = closeDanglingToolCalls(raw)
-  return { summary, meta, messages, display: closeDanglingToolCalls(shown).messages, contextTokens, patched, charts }
+  return { summary, meta, messages, display: closeDanglingToolCalls(shown).messages, contextTokens, patched, charts, harness }
 }
 
 /**

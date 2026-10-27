@@ -310,6 +310,51 @@ test("gate in auto: a read-only shell command skips the classifier but is still 
   expect((await gate.check(shell, { command: "git status" }, signal())).reason).toBe("headless")
 })
 
+test("MCP: only the OpenTrading data server's readOnlyHint skips ▸▸ review; every MCP call is logged", async () => {
+  const { isDataServer } = await import("../src/core/mcp/catalog")
+  const data = { type: "http" as const, url: "https://opentrading-mcp-web.onrender.com/mcp" }
+  expect(isDataServer("global", data)).toBe(true)
+  expect(isDataServer("project", data)).toBe(false)
+  expect(isDataServer("global", { type: "http" as const, url: "https://notes.example.com/mcp" })).toBe(false)
+  expect(isDataServer("global", { command: "npx", args: ["x"] } as never)).toBe(false)
+
+  const search: ToolDef = { name: "mcp__notes__search", source: "mcp:notes", description: "", input: z.object({}), readOnly: true, autoReview: true, execute: async () => "ok" }
+  const quote: ToolDef = { name: "mcp__opentrading__quote", source: "mcp:opentrading", description: "", input: z.object({}), readOnly: true, execute: async () => "ok" }
+  const { auto, model } = reviewer(["<block>yes</block>", "<block>yes</block><rule>Data Exfiltration</rule><reason>Gửi danh mục cho server lạ.</reason>"])
+  const gate = new PermissionGate({ load: async () => [], save: async () => {} })
+  gate.auto = auto
+  // ▸: a read-only MCP call runs without asking, as before, but the classifier's log has it.
+  gate.setMode("ask")
+  expect(await gate.check(search, { query: "FPT 1000 cp" }, signal())).toEqual({ allow: true })
+  expect(auto.log.render()).toContain("mcp__notes__search")
+  gate.setMode("auto")
+  expect(await gate.check(quote, { symbol: "FPT" }, signal())).toEqual({ allow: true })
+  expect(model.seen).toHaveLength(0)
+  expect(await gate.check(search, { query: "danh mục FPT 1000 cp" }, signal())).toMatchObject({ allow: false, reason: "classifier" })
+  expect(model.seen).toHaveLength(2)
+})
+
+test("a new conversation forgets which files the last one created; resume keeps harness text out of the user's words", async () => {
+  const history = new FileHistory(path.join(data, "fh-new"))
+  const file = path.join(project, "tao-moi.md")
+  const step = await history.before(file, undefined)
+  await step.commit(new TextEncoder().encode("x"), "write_file")
+  expect(history.createdThisRun(file)).toBe(true)
+  history.newConversation()
+  expect(history.createdThisRun(file)).toBe(false)
+  expect(history.list()).toHaveLength(1) // /undo still has it
+
+  const log = new ActionLog()
+  const messages: ModelMessage[] = [
+    { role: "user", content: "Hãy phân tích mã FPT theo 5 bước…" },
+    { role: "user", content: "viết báo cáo đi" },
+  ]
+  log.rebuild(messages, () => undefined, (m) => String(m.content), ["Hãy phân tích mã FPT theo 5 bước…"])
+  const out = log.render()
+  expect(out).toContain('{"harness_notice":"Hãy phân tích')
+  expect(out).toContain('{"user":"viết báo cáo đi"}')
+})
+
 test("the shell child never gets API keys or tokens from the environment", () => {
   const env = childEnv({ PATH: "/bin", GOOGLE_GENERATIVE_AI_API_KEY: "k", GITHUB_TOKEN: "t", AWS_SECRET_ACCESS_KEY: "s", OPENTRADING_HOME: "h", HOME: "/home/x" })
   expect(env).toEqual({ PATH: "/bin", HOME: "/home/x" })

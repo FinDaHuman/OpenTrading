@@ -117,13 +117,18 @@ export class ActionLog {
   /** A call about to be checked: logged when it may change something or reach the network. */
   action(def: ToolDef, input: unknown, agent?: AgentOrigin) {
     // A read that runs without asking (a plain read_file) is not an action that needs judging.
-    if (def.readOnly && !ALWAYS_LOGGED.has(def.name) && def.askFor?.(input) === undefined) return
+    // MCP calls always are: their arguments go to another program or host.
+    if (def.readOnly && !ALWAYS_LOGGED.has(def.name) && !def.source?.startsWith("mcp:") && def.askFor?.(input) === undefined) return
     this.entries.push({ kind: "action", tool: def.name, input: compactInput(def, input), ...(agent ? { agent: `${agent.type}#${agent.id}` } : {}) })
   }
 
-  /** Rebuild from a resumed conversation (--continue): user texts and tool calls, not results. */
-  rebuild(history: readonly ModelMessage[], defOf: (name: string) => ToolDef | undefined, visible: (m: ModelMessage) => string) {
+  /**
+   * Rebuild from a resumed conversation (--continue): user texts and tool calls, not results.
+   * `harness` are the turn texts the session recorded as harness-written (an MCP prompt's template).
+   */
+  rebuild(history: readonly ModelMessage[], defOf: (name: string) => ToolDef | undefined, visible: (m: ModelMessage) => string, harness: readonly string[] = []) {
     this.entries = []
+    this.harness = new Set(harness.map((t) => t.trim()))
     for (const m of history) {
       if (m.role === "user") this.turn(visible(m))
       else if (m.role === "assistant" && typeof m.content !== "string") {

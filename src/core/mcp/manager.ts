@@ -35,6 +35,7 @@ import {
   type ServerEntry,
   toolAllowed,
 } from "./config"
+import { isDataServer } from "./catalog"
 import { blockToParts, resultToOutput } from "./convert"
 import { serverPrefix, toolName } from "./naming"
 import { McpOAuthProvider, NeedsAuthError, oauthStatus, openBrowser, startCallbackServer } from "./oauth"
@@ -504,6 +505,12 @@ export class McpManager {
     return oauthStatus(this.opts.home, name, config.url)
   }
 
+  /** The OpenTrading market-data server (its readOnlyHint is trusted in ▸▸), by name. */
+  isDataServer(name: string) {
+    const entry = this.entries.get(name)
+    return !!entry && isDataServer(entry.scope, entry.config)
+  }
+
   /** Configured server entry (raw, unexpanded), for /mcp details. */
   entry(name: string) {
     return this.entries.get(name)
@@ -932,6 +939,7 @@ export class McpManager {
     const entry = this.entries.get(name)
     const where = entry?.scope === "project" ? `project:${path.dirname(entry.file)}` : "global"
     const permissionScope = entry?.config ? `${where}:${name}@${fingerprint(entry.config)}` : `${where}:${name}`
+    const trustedHints = !!entry && isDataServer(entry.scope, entry.config)
     const registered: string[] = []
     let hidden = 0
     for (const tool of tools) {
@@ -951,6 +959,8 @@ export class McpManager {
         // Raw schema; the registry sanitizes it per provider when building a request.
         input: (tool.inputSchema ?? { type: "object", properties: {} }) as JSONSchema7,
         readOnly: tool.annotations?.readOnlyHint ?? false,
+        // Only the OpenTrading data server's word is taken in ▸▸ (catalog.ts isDataServer).
+        ...(tool.annotations?.readOnlyHint && !trustedHints ? { autoReview: true } : {}),
         displayName: `${name} · ${tool.annotations?.title ?? tool.name}`,
         annotations: {
           title: tool.annotations?.title,

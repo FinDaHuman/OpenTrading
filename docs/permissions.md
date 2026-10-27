@@ -97,7 +97,7 @@ Mỗi hành động cần duyệt được một model thứ hai xét trước k
   - câu trả lời `ask_user` và lời nhắn bạn gõ khi từ chối;
   - việc agent chính giao cho subagent, có ghi rõ đó là lời của agent, không phải của bạn;
   - các hành động của agent: lệnh, nội dung file ghi, đoạn sửa, URL, truy vấn tìm kiếm.
-- **Model duyệt không thấy:** chữ model chính viết, kết quả tool, nội dung trang web hay file. Lý do: lệnh độc giấu trong trang web hay PDF không thuyết phục được model duyệt. Báo cáo của subagent nền và nội dung prompt MCP được đánh dấu là của harness, không phải của bạn.
+- **Model duyệt không thấy:** chữ model chính viết, kết quả tool, nội dung trang web hay file. Lý do: lệnh độc giấu trong trang web hay PDF không thuyết phục được model duyệt. Báo cáo của subagent nền và nội dung prompt MCP được đánh dấu là của harness, không phải của bạn (cả khi mở lại phiên bằng `--continue`).
 - **Hai bước:** bước 1 trả lời nhanh có chặn hay không, tốn 1 request. Chỉ khi bước 1 chặn hoặc không trả lời rõ thì mới chạy bước 2, có suy luận ngắn và nêu tên luật bị vi phạm. Tổng cộng khoảng 1 request cho mỗi hành động, 2 nếu bị nghi ngờ.
 - **Khi bị chặn:** model chính nhận lý do và nhãn luật, ví dụ `[Gửi dữ liệu ra ngoài]`, rồi làm cách khác hoặc dừng lại giải thích.
 - **Quay về hỏi bạn khi:**
@@ -112,7 +112,8 @@ Mỗi hành động cần duyệt được một model thứ hai xét trước k
   - *Ngoại lệ được phép:* lệnh chỉ đọc; chạy script do chính phiên viết trong workspace; cài gói đã khai báo, hoặc gói dữ liệu phổ biến khi bạn cần phân tích; GET trang dữ liệu thị trường công khai; mở file vừa tạo; tool dữ liệu OpenTrading.
   - Ranh giới bạn nói trong chat ("đừng ghi đè bao-cao.md", "không gửi gì ra ngoài") có tác dụng chặn tới khi bạn gỡ.
 - **Đọc, không xét:** `web_search` và `web_fetch` vào các trang tin/tài chính Việt Nam có sẵn trong danh sách chỉ được ghi vào bản ghi cho model duyệt đọc, không bị duyệt.
-- **Chạy luôn, không tốn request:** file mới trong workspace (hoặc file chính phiên tạo), và lệnh shell đơn chỉ liệt kê hay in trạng thái: `git status/log/diff/show`, `dir`/`ls`/`Get-ChildItem`, `pwd`, `where`/`which`, `Get-Process`, `pip list`, `conda list`, `<chương trình> --version`. Lệnh có nối (`;`, `|`, `&&`), chuyển hướng (`>`), đọc nội dung file, nhắc tới file khoá, ổ `env:`/`HKLM:` hay `git diff --output` thì vẫn qua model duyệt. Các lệnh này vẫn được ghi vào bản ghi.
+- **Tool MCP tự khai "chỉ đọc":** chỉ server dữ liệu OpenTrading (cấu hình toàn cục, đúng địa chỉ server) được tin lời khai `readOnlyHint` và chạy luôn. Tool "chỉ đọc" của server MCP khác vẫn qua model duyệt trong ▸▸, vì tham số của nó đi tới một chương trình hay host khác. Mọi lời gọi MCP đều được ghi vào bản ghi, ở mọi chế độ.
+- **Chạy luôn, không tốn request:** file mới trong workspace (hoặc file chính hội thoại này tạo; `/new`, `/clear` hay mở lại phiên thì không còn tính), và lệnh shell đơn chỉ liệt kê hay in trạng thái: `git status/log/diff/show`, `dir`/`ls`/`Get-ChildItem`, `pwd`, `where`/`which`, `Get-Process`, `pip list`, `conda list`, `<chương trình> --version`. Lệnh có nối (`;`, `|`, `&&`), chuyển hướng (`>`), đọc nội dung file, nhắc tới file khoá, ổ `env:`/`HKLM:` hay `git diff --output` thì vẫn qua model duyệt. Các lệnh này vẫn được ghi vào bản ghi.
 - **Tuỳ biến** trong `~/.opentrading/config.json` (chỉ đọc file này, không bao giờ đọc từ thư mục dự án, để một repo tải về không tự cấp quyền được):
 
   ```json
