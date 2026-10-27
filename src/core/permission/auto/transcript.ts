@@ -116,9 +116,10 @@ export class ActionLog {
 
   /** A call about to be checked: logged when it may change something or reach the network. */
   action(def: ToolDef, input: unknown, agent?: AgentOrigin) {
-    // A read that runs without asking (a plain read_file) is not an action that needs judging.
-    // MCP calls always are: their arguments go to another program or host.
-    if (def.readOnly && !ALWAYS_LOGGED.has(def.name) && !def.source?.startsWith("mcp:") && def.askFor?.(input) === undefined) return
+    // A read that runs without asking (a plain read_file, a data-server quote) is not an action
+    // that needs judging, and dozens per turn would push the scripts out of the log. A tool that
+    // only claims to be read-only (another MCP server) is: its arguments go to another program.
+    if (def.readOnly && !def.autoReview && !ALWAYS_LOGGED.has(def.name) && def.askFor?.(input) === undefined) return
     this.entries.push({ kind: "action", tool: def.name, input: compactInput(def, input), ...(agent ? { agent: `${agent.type}#${agent.id}` } : {}) })
   }
 

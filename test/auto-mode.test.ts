@@ -334,6 +334,18 @@ test("MCP: only the OpenTrading data server's readOnlyHint skips ▸▸ review; 
   expect(model.seen).toHaveLength(2)
 })
 
+test("dozens of trusted data-server reads do not push the session's script out of the log", () => {
+  const quote = { name: "mcp__opentrading__quote", source: "mcp:opentrading", readOnly: true } as ToolDef
+  const log = new ActionLog()
+  log.turn("tính lợi suất FPT")
+  log.action({ name: "write_file", readOnly: false } as ToolDef, { path: "s.py", content: "print('loi suat')" })
+  for (let i = 0; i < 50; i++) log.action(quote, { symbol: `M${i}` })
+  log.action({ name: "shell", readOnly: false } as ToolDef, { command: "python s.py" })
+  const out = log.render()
+  expect(out).toContain("print('loi suat')")
+  expect(out).not.toContain("mcp__opentrading__quote")
+})
+
 test("a new conversation forgets which files the last one created; resume keeps harness text out of the user's words", async () => {
   const history = new FileHistory(path.join(data, "fh-new"))
   const file = path.join(project, "tao-moi.md")
