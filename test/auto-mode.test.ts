@@ -16,6 +16,7 @@ import { ActionLog, clip, compactInput } from "../src/core/permission/auto/trans
 import { readFileTool } from "../src/core/tools/fs/read"
 import { editFileTool, writeFileTool } from "../src/core/tools/fs/write"
 import { childEnv } from "../src/core/tools/shell/run"
+import { readOnlyCommand } from "../src/core/tools/shell/command"
 import { shellTool } from "../src/core/tools/shell/shell"
 import { loopDef } from "../src/core/tools/loop-guard"
 import type { ToolDef } from "../src/core/tools/types"
@@ -233,6 +234,35 @@ test("gate in auto: new files skip the classifier, edits of old files go through
   expect(model.seen.length).toBe(before + 2)
   // The classifier saw the edit's payload.
   expect(auto.log.render()).toContain('"new_string":"b"')
+})
+
+test("read-only shell commands: a static list, nothing chained, redirected, secret or writing", () => {
+  for (const c of ["git status", "git log --oneline -20", "git diff HEAD~1", "dir", "Get-ChildItem D:\\Dau-tu\\bao-cao -Recurse", "ls -la", "pwd", "where python", "pip list", "conda list", "python --version", "node -V", "go version", "Get-Process python", "npm ls"]) {
+    expect([c, readOnlyCommand(c)]).toEqual([c, true])
+  }
+  const not = [
+    "git status > out.txt", "git status; Remove-Item x", "git log | Out-File x", "git push", "git diff --output=x.patch", "git diff --ext-diff", "git -c core.pager=x log",
+    "Get-ChildItem env:", "dir Env:", "Get-ChildItem HKLM:\\Software", "Get-Content notes.md", "cat a.txt", "python -v", "python x.py --version", "npm version patch",
+    "ls ~/.ssh", "Get-ChildItem .env", "pip install pandas", "$(git status)", "",
+  ]
+  for (const c of not) expect([c, readOnlyCommand(c)]).toEqual([c, false])
+})
+
+test("gate in auto: a read-only shell command skips the classifier but is still logged; others go through it", async () => {
+  const workspace = new Workspace(project, { home: path.join(root, "home"), data })
+  const shell = shellTool(workspace)
+  const { auto, model } = reviewer(["<block>no</block>"])
+  const gate = new PermissionGate({ load: async () => [], save: async () => {} })
+  gate.auto = auto
+  gate.setMode("auto")
+  expect(await gate.check(shell, { command: "git status" }, signal())).toEqual({ allow: true })
+  expect(model.seen).toHaveLength(0)
+  expect(auto.log.render()).toContain('"command":"git status"')
+  expect(await gate.check(shell, { command: "git push origin main" }, signal())).toEqual({ allow: true })
+  expect(model.seen).toHaveLength(1)
+  // Not in ▸▸: the fast path does not apply (‖ and ▸ still ask).
+  gate.setMode("ask")
+  expect((await gate.check(shell, { command: "git status" }, signal())).reason).toBe("headless")
 })
 
 test("the shell child never gets API keys or tokens from the environment", () => {
