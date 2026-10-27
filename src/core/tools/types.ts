@@ -35,6 +35,11 @@ export interface ToolResult {
   images?: ToolImage[]
   /** Structured chart payload the TUI renders as a coloured chart; never sent to the model. */
   chart?: ChartData
+  /**
+   * Where the content came from (web host, MCP server), told to the model in one line after the
+   * output. Metadata only, not a judgement: content is not suspect because it came from there.
+   */
+  provenance?: string
 }
 
 /**

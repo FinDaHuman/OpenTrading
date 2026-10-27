@@ -582,6 +582,13 @@ export class SubagentManager {
       this.emit(run)
     }
 
+    // ▸▸: look back over what the sub-agent did before its result reaches the main agent.
+    const gate = this.deps.parent.gate
+    const warning =
+      run.status === "completed" && gate?.mode === "auto" && gate.auto
+        ? await gate.auto.handoff({ id: run.id, type: run.type, description: run.description }, signal).catch(() => undefined)
+        : undefined
+    if (warning) run.text = `${warning}\n\n${run.text}`
     const result: SubagentResult = {
       status: run.status,
       text: run.text,

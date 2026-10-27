@@ -358,6 +358,38 @@ test("a child's write tool asks in the parent's gate, labelled with the subagent
   expect(ends(events)[0]!.ok).toBe(true)
 })
 
+test("▸▸: a child whose actions the classifier flags on handoff reaches the parent with a warning in front, not blocked", async () => {
+  const { AutoReviewer } = await import("../src/core/permission/auto")
+  const { registry } = setup((r) =>
+    r.register({ name: "watchlist_local_add", description: "add", input: z.object({ symbol: z.string() }), readOnly: false, execute: async () => "đã thêm" }),
+  )
+  const answers = ["<block>no</block>", "<block>yes</block>", "<block>yes</block><rule>Data Exfiltration</rule><reason>Subagent làm việc người dùng không yêu cầu.</reason>"]
+  const prompts: string[] = []
+  const target = { provider: { id: "groq", name: "Groq", npm: "@ai-sdk/groq", env: [], models: { m: { id: "m", name: "m" } } }, model: "m", apiKey: "k" } as never
+  const auto = new AutoReviewer({
+    target: async () => target,
+    config: async () => undefined,
+    environment: () => [],
+    classifier: { call: async (args) => (prompts.push(args.prompt), answers.shift() ?? "") },
+  })
+  const gate = new PermissionGate({ load: async () => [], save: async () => {} })
+  gate.auto = auto
+  gate.setMode("auto")
+  registry.gate = gate
+  parentCalls = [spawn("Thêm FPT")]
+  childCall = { name: "watchlist_local_add", args: { symbol: "FPT" } }
+  const events = await collect(runAgent({ history: [], input: "x", skills: [], registry }))
+  const end = ends(events)[0]!
+  expect(end.ok).toBe(true)
+  expect(String(end.output)).toContain("[Cảnh báo an toàn từ auto mode]")
+  expect(String(end.output)).toContain("Báo cáo: FPT ổn.")
+  expect(prompts).toHaveLength(3)
+  expect(prompts[1]).toContain("handing its result back")
+  // A warning, not a block: the counters do not move.
+  expect(auto.consecutive).toBe(0)
+  expect(auto.total).toBe(0)
+})
+
 test("config subagents.model sends children to another model; a model without tools fails fast", async () => {
   await saveConfig({ provider: "groq", model: "tooly", subagents: { provider: "groq", model: "other" } })
   const { registry } = setup()

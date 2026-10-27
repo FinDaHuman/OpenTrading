@@ -105,6 +105,45 @@ export class AutoReviewer {
     this.emit()
   }
 
+  /**
+   * A sub-agent finished in ▸▸: the classifier looks back over its actions. A flag adds a warning
+   * to the result the main agent reads; nothing is blocked and the block counters do not move
+   * (Claude Code's return check). No verdict → a neutral note. Nothing to review → undefined.
+   */
+  async handoff(agent: AgentOrigin, signal: AbortSignal): Promise<string | undefined> {
+    const tag = `${agent.type}#${agent.id}`
+    // Only reads of trusted data: nothing to look back over (a desk run of research agents costs nothing).
+    if (!this.log.all().some((e) => e.kind === "action" && e.agent === tag && e.effect)) return undefined
+    const unreviewed = (why: string) => `[auto mode] Chưa rà được các hành động của subagent ${tag} (${why}).`
+    if (this.paused()) return unreviewed("model duyệt đang tạm dừng vì hết quota")
+    const target = await this.deps.target().catch(() => undefined)
+    if (!target) return undefined
+    let verdict: Verdict
+    try {
+      verdict = await classify(
+        {
+          transcript: this.log.render(),
+          action: { tool: "subagent_handoff", input: JSON.stringify({ agent: tag }) },
+          environment: await this.deps.environment(),
+          config: await this.deps.config(),
+          profile: await this.deps.profile?.().catch(() => undefined),
+          handoff: tag,
+        },
+        target,
+        signal,
+        this.deps.classifier,
+      )
+    } catch (error) {
+      if (signal.aborted) return undefined
+      return unreviewed(error instanceof Error ? error.message : String(error))
+    }
+    this.requests += verdict.requests
+    this.emit()
+    if (verdict.kind === "allow") return undefined
+    if (verdict.kind === "unavailable") return unreviewed(verdict.why)
+    return handoffWarning(tag, verdict.rule ? labelVi(verdict.rule) : undefined, verdict.reason)
+  }
+
   /** A call ran in ▸▸ without the classifier (rule, session approval, fast path): not "in a row" any more. */
   ranWithoutBlock() {
     if (this.consecutive === 0 || this.consecutive >= MAX_CONSECUTIVE) return
@@ -175,6 +214,14 @@ export class AutoReviewer {
     }
     return { decision: "block", label, reason: verdict.reason }
   }
+}
+
+/** What the main agent reads in front of a sub-agent's result when its actions were flagged (a warning, not a block). */
+export function handoffWarning(agent: string, label: string | undefined, reason: string) {
+  return (
+    `[Cảnh báo an toàn từ auto mode] Model duyệt cho rằng subagent ${agent} đã làm việc vượt yêu cầu${label ? ` [${label}]` : ""}: ${reason}. ` +
+    "Kết quả bên dưới vẫn được giữ nguyên. Kiểm tra lại các thay đổi của subagent trước khi dựa vào nó, và báo người dùng nếu cần."
+  )
 }
 
 /** What the model reads when the classifier blocks. */

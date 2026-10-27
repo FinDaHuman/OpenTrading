@@ -409,6 +409,39 @@ test("INVESTOR.md reaches the classifier as the user's profile; the Obfuscated C
   expect(effectiveList("soft_deny", undefined).some((r) => labelOf(r) === "Obfuscated Command")).toBe(true)
 })
 
+test("sub-agent return check: only agents that changed something are reviewed; flag → warning, no verdict → neutral note", async () => {
+  const agent = { id: "a1", type: "nghien-cuu", description: "x" }
+  const read: ToolDef = { name: "mcp__opentrading__quote", source: "mcp:opentrading", description: "", input: z.object({}), readOnly: true, execute: async () => "" }
+  const { auto, model } = reviewer(["<block>yes</block>", "<block>yes</block><rule>Irreversible Local Destruction</rule><reason>Xoá file có sẵn.</reason>", "<block>no</block>"])
+  auto.log.action(read, { symbol: "FPT" }, agent)
+  expect(await auto.handoff(agent, signal())).toBeUndefined()
+  expect(model.seen).toHaveLength(0)
+  auto.log.action(mcpWrite, { a: 1 }, agent)
+  const warning = await auto.handoff(agent, signal())
+  expect(warning).toContain("[Cảnh báo an toàn từ auto mode]")
+  expect(warning).toContain("[Xoá/ghi đè không hoàn tác]")
+  expect(model.seen[0]!.prompt).toContain('"by": "nghien-cuu#a1"')
+  expect(auto.consecutive).toBe(0)
+  expect(await auto.handoff(agent, signal())).toBeUndefined()
+  // No verdict (the fake has no answers left): a neutral note, not a warning.
+  const note = await auto.handoff(agent, signal())
+  expect(note).toContain("Chưa rà được")
+  expect(note).not.toContain("Cảnh báo")
+})
+
+test("web and MCP results carry a neutral source line for the model; local tools do not", async () => {
+  const { provenanceOf } = await import("../src/core/tools/wrap")
+  const { modelOutput } = await import("../src/core/tools/registry")
+  expect(provenanceOf({ name: "mcp__notes__search", source: "mcp:notes" }, {})).toStartWith("Nguồn: MCP notes;")
+  expect(provenanceOf({ name: "web_fetch" }, { url: "https://cafef.vn/a" })).toStartWith("Nguồn: web cafef.vn;")
+  expect(provenanceOf({ name: "web_search" }, { query: "FPT" })).toStartWith("Nguồn: kết quả tìm kiếm web;")
+  expect(provenanceOf({ name: "read_file" }, { path: "a" })).toBeUndefined()
+  const line = provenanceOf({ name: "web_fetch" }, { url: "https://cafef.vn/a" })!
+  expect(line).not.toMatch(/nguy hiểm|độc hại|đáng ngờ|cảnh báo/i)
+  expect(modelOutput({ output: "nội dung", provenance: line }, false)).toEqual({ type: "text", value: `nội dung\n[${line}]` })
+  expect(modelOutput({ output: "nội dung" }, false)).toEqual({ type: "text", value: "nội dung" })
+})
+
 test("the shell child never gets API keys or tokens from the environment", () => {
   const env = childEnv({ PATH: "/bin", GOOGLE_GENERATIVE_AI_API_KEY: "k", GITHUB_TOKEN: "t", AWS_SECRET_ACCESS_KEY: "s", OPENTRADING_HOME: "h", HOME: "/home/x" })
   expect(env).toEqual({ PATH: "/bin", HOME: "/home/x" })

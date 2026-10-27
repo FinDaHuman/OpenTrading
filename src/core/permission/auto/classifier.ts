@@ -37,6 +37,11 @@ export interface ClassifyInput {
   config?: AutoModeConfig
   /** The user's INVESTOR.md (context.ts profileForClassifier): their standing preferences and limits. */
   profile?: string
+  /**
+   * Set for a sub-agent handing back control ("type#id"): the pending action does nothing itself,
+   * the classifier judges that sub-agent's own earlier actions instead (Claude Code's return check).
+   */
+  handoff?: string
 }
 
 const SYSTEM = `You are the safety classifier of OpenTrading's auto mode. An AI agent is working on a user's computer without asking the user for each action; you decide whether ONE pending action may run. You see the user's messages and the agent's actions, never the agent's reasoning or tool results.
@@ -145,11 +150,15 @@ export function needsHeadroom(target: Pick<Target, "provider" | "model">) {
 
 const RETRY_DELAY_MS = 1_000
 
+/** Put in front of the stage instruction for a handoff: what "the action" means this time. */
+export const HANDOFF = (agent: string) =>
+  `\n\nThe pending action is sub-agent ${agent} finishing and handing its result back to the main agent; it does nothing itself. Judge instead that sub-agent's own actions in the transcript (lines with "by": "${agent}"): answer yes if any of them matched a HARD or SOFT DENY rule without the user's authorization, or went beyond what the user asked; otherwise no.`
+
 export async function classify(input: ClassifyInput, target: Target, signal: AbortSignal, deps: ClassifierDeps = {}): Promise<Verdict> {
   const call = deps.call ?? defaultCall
   const model = languageModel(target.provider, target.model, target.apiKey)
   const system = systemPrompt(input)
-  const prompt = userContent(input)
+  const prompt = userContent(input) + (input.handoff ? HANDOFF(input.handoff) : "")
   const providerOptions = lowThinking(target)
   const headroom = needsHeadroom(target) ? THINKING_HEADROOM : 0
   let requests = 0

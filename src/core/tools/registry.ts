@@ -60,7 +60,7 @@ export function modelOutput(result: ToolResult, images: boolean) {
   const notes = list
     .filter((i) => !sendable.includes(i))
     .map((i) => imageNote(i.mediaType, images ? "quá lớn hoặc quá nhiều ảnh, không gửi cho model" : "model này không xem được ảnh"))
-  const text = [result.output, ...notes].filter(Boolean).join("\n")
+  const text = [result.output, ...notes, ...(result.provenance ? [`[${result.provenance}]`] : [])].filter(Boolean).join("\n")
   if (sendable.length === 0) return { type: "text" as const, value: text }
   return {
     type: "content" as const,
