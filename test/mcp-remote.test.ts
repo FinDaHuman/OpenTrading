@@ -505,6 +505,102 @@ test("a read-only call is retried after a 502 page; a write call is not, and the
   expect(typeof saved === "string" ? saved : saved.output).toContain("saved b")
 }, 20_000)
 
+test("a 429 with retry_after: a read-only call waits that long, not the fixed back-off", async () => {
+  const stats = newStats()
+  const remote = startHttpServer({ stats })
+  cleanups.push(remote.stop)
+  const { manager, registry } = await managerWith({ data: { type: "http", url: remote.url } })
+  ;(manager as unknown as { opts: { callRetryDelaysMs: number[] } }).opts.callRetryDelaysMs = [20, 20]
+  await manager.start()
+  Object.assign(remote.failCalls, { count: 1, status: 429, body: { error: "rate_limited", retry_after: 1 } })
+  const started = Date.now()
+  const ok = await registry.get("mcp__data__slow")!.execute({ ms: 1 }, ctx)
+  expect(typeof ok === "string" ? ok : ok.output).toContain("waited 1")
+  expect(Date.now() - started).toBeGreaterThanOrEqual(900)
+  expect(stats.calls).toBe(1)
+  expect(state(manager, "data").state).toBe("connected")
+}, 20_000)
+
+test("a retry_after over 30s fails at once and says how long to wait; a write is never retried", async () => {
+  const stats = newStats()
+  const remote = startHttpServer({ stats })
+  cleanups.push(remote.stop)
+  const { manager, registry } = await managerWith({ data: { type: "http", url: remote.url } })
+  ;(manager as unknown as { opts: { callRetryDelaysMs: number[] } }).opts.callRetryDelaysMs = [20, 20]
+  await manager.start()
+  Object.assign(remote.failCalls, { count: 3, status: 429, body: { error: "rate_limited", retry_after: 45 } })
+  const started = Date.now()
+  const error = await errorOf(Promise.resolve(registry.get("mcp__data__slow")!.execute({ ms: 1 }, ctx)))
+  expect(Date.now() - started).toBeLessThan(1000)
+  expect(error).toContain("giới hạn tốc độ (HTTP 429)")
+  expect(error).toContain("chờ 45 giây")
+  expect(remote.failCalls.count).toBe(2)
+
+  Object.assign(remote.failCalls, { count: 3, status: 429, body: { error: "rate_limited", retry_after: 1 } })
+  const write = await errorOf(Promise.resolve(registry.get("mcp__data__note")!.execute({ text: "a" }, ctx)))
+  expect(write).toContain("không tự thử lại")
+  expect(remote.failCalls.count).toBe(2)
+  expect(stats.notes).toBe(0)
+}, 20_000)
+
+test("quota_exceeded is not retried, on a tool call or on initialize", async () => {
+  const stats = newStats()
+  const remote = startHttpServer({ stats })
+  cleanups.push(remote.stop)
+  const { manager, registry } = await managerWith({ data: { type: "http", url: remote.url } })
+  ;(manager as unknown as { opts: { callRetryDelaysMs: number[] } }).opts.callRetryDelaysMs = [20, 20]
+  await manager.start()
+  Object.assign(remote.failCalls, { count: 3, status: 429, body: { error: "quota_exceeded", retry_after: 3600 } })
+  const error = await errorOf(Promise.resolve(registry.get("mcp__data__slow")!.execute({ ms: 1 }, ctx)))
+  expect(error).toContain("hết quota trong ngày")
+  expect(error).not.toContain("quota_exceeded")
+  expect(remote.failCalls.count).toBe(2)
+  expect(stats.calls).toBe(0)
+
+  const blocked = startHttpServer({ failFirst: { count: 1, status: 429, body: '{"error":"quota_exceeded","retry_after":3600}' } })
+  cleanups.push(blocked.stop)
+  const second = await managerWith({ q: { type: "http", url: blocked.url } })
+  await second.manager.start()
+  // One retry would have connected: the second initialize is not refused.
+  expect(state(second.manager, "q").state).toBe("failed")
+}, 20_000)
+
+test("a 503 server_busy with retry_after is retried without a reconnect", async () => {
+  const stats = newStats()
+  const remote = startHttpServer({ stats })
+  cleanups.push(remote.stop)
+  const { manager, registry } = await managerWith({ data: { type: "http", url: remote.url } })
+  ;(manager as unknown as { opts: { callRetryDelaysMs: number[] } }).opts.callRetryDelaysMs = [20, 20]
+  await manager.start()
+  const seen: string[] = []
+  manager.onChange((all) => seen.push(all.find((s) => s.name === "data")!.state))
+  Object.assign(remote.failCalls, { count: 1, status: 503, body: { error: "server_busy", retry_after: 1 } })
+  const ok = await registry.get("mcp__data__slow")!.execute({ ms: 1 }, ctx)
+  expect(typeof ok === "string" ? ok : ok.output).toContain("waited 1")
+  expect(seen).not.toContain("connecting")
+}, 20_000)
+
+test("parallel calls share one retry_after cooldown instead of each spending retries on it", async () => {
+  const stats = newStats()
+  const remote = startHttpServer({ stats })
+  cleanups.push(remote.stop)
+  const { manager, registry } = await managerWith({ data: { type: "http", url: remote.url } })
+  ;(manager as unknown as { opts: { callRetryDelaysMs: number[] } }).opts.callRetryDelaysMs = [20, 20]
+  await manager.start()
+  Object.assign(remote.failCalls, { count: 1, status: 429, body: { error: "rate_limited", retry_after: 1 } })
+  const slow = registry.get("mcp__data__slow")!
+  const started = Date.now()
+  const first = slow.execute({ ms: 1 }, ctx)
+  await Bun.sleep(150)
+  // The 429 has come back: this call waits out the same pause instead of going straight in.
+  const later = await slow.execute({ ms: 1 }, ctx)
+  expect(typeof later === "string" ? later : later.output).toContain("waited 1")
+  expect(Date.now() - started).toBeGreaterThanOrEqual(900)
+  await first
+  expect(stats.calls).toBe(2)
+  expect(remote.failCalls.count).toBe(0)
+}, 20_000)
+
 test("the server dies with calls in flight: read-only calls finish after it is back, a write fails fast", async () => {
   const stats = newStats()
   const first = startHttpServer({ stats })

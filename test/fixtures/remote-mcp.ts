@@ -120,8 +120,11 @@ export function startHttpServer(opts: HttpServerOptions = {}) {
   const codes = new Map<string, { challenge: string; redirect: string }>()
   let tokenCounter = 0
   let failuresLeft = opts.failFirst?.count ?? 0
-  /** Answer the next N tools/call POSTs like a PaaS proxy whose app is restarting. */
-  const failCalls = { count: 0, status: 502 }
+  /**
+   * Answer the next N tools/call POSTs like a PaaS proxy whose app is restarting, or, with
+   * `body`, like the app itself refusing them (429 rate limit, 503 load shedding).
+   */
+  const failCalls: { count: number; status: number; body?: unknown } = { count: 0, status: 502 }
   /** While `status` is set, every /mcp request gets that status and an HTML page (the app is down). */
   const down = { status: 0 }
   const page = (status: number) =>
@@ -209,7 +212,7 @@ export function startHttpServer(opts: HttpServerOptions = {}) {
         const body = (await req.clone().json().catch(() => ({}))) as { method?: string }
         if (body.method === "tools/call") {
           failCalls.count--
-          return page(failCalls.status)
+          return failCalls.body === undefined ? page(failCalls.status) : json(failCalls.body, failCalls.status)
         }
       }
       const sid = req.headers.get("mcp-session-id")
