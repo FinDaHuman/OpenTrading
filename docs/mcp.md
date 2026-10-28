@@ -238,11 +238,12 @@ Lệnh nhanh không mở panel: `/mcp enable <tên>`, `/mcp disable <tên>`, `/m
 - Có thể thử mà không cần TUI: `bun src/core/chat.ts "mấy giờ rồi?"`. Lệnh này chỉ dùng các tool có sẵn.
 
 **Tự phục hồi.**
-- Lỗi mạng hoặc server quá tải (429/5xx) lúc kết nối: thử lại 2 lần.
+- Lỗi mạng hoặc server quá tải (429/5xx) lúc kết nối: thử lại 2 lần. Riêng 429 `quota_exceeded` (hết quota ngày) thì không thử lại.
 - Server remote bị rớt kết nối: tự kết nối lại, chờ tăng dần 1s, 2s, 4s… tới tối đa 30s một lần, và thử mãi cho tới khi server sống lại (hoặc bị tắt / xoá / kết nối lại thủ công). Tool của server vẫn hiện cho model trong lúc này.
 - Gọi tool lúc server đang kết nối lại: lệnh gọi chờ tối đa `startupTimeoutMs` thay vì báo lỗi ngay. Server đã `failed` (ví dụ chưa dậy lúc mở app) thì lệnh gọi sẽ khởi động lại việc kết nối.
 - Gặp HTTP 502/503/504: ping server một lần (dùng chung cho mọi lệnh gọi). Ping cũng lỗi thì coi như server đang khởi động lại: các lệnh gọi chờ một lần kết nối lại chung.
 - Tool chỉ đọc (`readOnlyHint`) gặp mất kết nối hoặc HTTP 502/503/504 lúc đang gọi: tự gọi lại tối đa 2 lần (sau 1s, 3s, mỗi lần đều chờ kết nối lại nếu cần). Tool có thể ghi thì không tự gọi lại, vì có thể server đã chạy xong.
+- Server trả 429 hoặc 503 kèm `retry_after` trong body JSON (opentrading-mcp: `rate_limited`, `server_busy`): chờ đúng số giây đó thay cho 1s/3s, và mọi lệnh gọi khác tới server này cũng chờ hết khoảng đó rồi mới gửi. 503 loại này không kích hoạt ping/kết nối lại. `retry_after` quá 30 giây thì báo lỗi ngay, kèm số giây cần chờ. Hết quota ngày (429 `quota_exceeded`) thì không tự gọi lại.
 - Lỗi HTML (trang 502 của Render, Cloudflare) được rút gọn thành một dòng trước khi đưa cho model.
 - Server quên phiên (HTTP 404): gọi tool lại một lần sau khi khởi tạo phiên mới.
 

@@ -223,6 +223,8 @@ function capInstructions(text: string | undefined) {
 }
 const LOGIN_TIMEOUT_MS = 5 * 60_000
 const RETRYABLE_STATUS = new Set([408, 429, 500, 502, 503, 504])
+/** Longest wait a server's retry_after may ask of one call; past it the call fails at once. */
+const MAX_RETRY_AFTER_MS = 30_000
 
 const MAX_ERROR = 1000
 
@@ -265,9 +267,27 @@ function isAuthError(error: unknown) {
   return error instanceof UnauthorizedError || error instanceof NeedsAuthError || status === 401 || status === 403
 }
 
+/** A 429 for the day's quota (opentrading-mcp `quota_exceeded`): no retry helps before it resets. */
+function isQuotaExceeded(error: unknown) {
+  return httpStatus(error) === 429 && /"error"\s*:\s*"quota_exceeded"/.test(errorText(error))
+}
+
+/**
+ * How long a 429/503 asks us to wait, from the JSON body the SDK puts in the message
+ * (`{"error":"rate_limited","retry_after":12}`). The SDK keeps no response headers, so a
+ * server that only sends a Retry-After header gets the usual back-off.
+ */
+function retryAfterMs(error: unknown) {
+  const status = httpStatus(error)
+  if (status !== 429 && status !== 503) return undefined
+  const seconds = errorText(error).match(/"retry_after"\s*:\s*(\d+(?:\.\d+)?)/)?.[1]
+  return seconds === undefined ? undefined : Number(seconds) * 1000
+}
+
 /** Network failures and overloaded servers are worth another try; everything else is not. */
 function isTransient(error: unknown) {
   const status = httpStatus(error)
+  if (isQuotaExceeded(error)) return false
   if (status !== undefined) return RETRYABLE_STATUS.has(status)
   const text = errorText(error)
   return error instanceof TypeError || /ECONNRESET|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|fetch failed|socket/i.test(text)
@@ -290,7 +310,7 @@ function isConnectionLost(error: unknown) {
  * restarting it). Our own timeouts are not here: retrying those would only double the wait.
  */
 function isRetryable(error: unknown) {
-  if (error instanceof TimeoutError) return false
+  if (error instanceof TimeoutError || isQuotaExceeded(error)) return false
   if (error instanceof McpError) return error.code === ErrorCode.ConnectionClosed
   return isConnectionLost(error) || isTransient(error)
 }
@@ -362,6 +382,8 @@ export class McpManager {
   private wakers = new Map<string, () => void>()
   /** One health probe per connection after a 5xx, shared by every call that saw it. */
   private probes = new WeakMap<Live, Promise<void>>()
+  /** Until when a server asked us (retry_after) to send no tool calls; shared by every call. */
+  private cooldowns = new Map<string, number>()
   private stopping = false
   private trustStore: TrustStore
 
@@ -993,11 +1015,22 @@ export class McpManager {
           const limited = async (live: Live) => {
             // Local (stdio) servers are not capped: they share our machine, not a tiny host.
             if (!isRemote(config)) return call(live)
-            const release = await this.limiter(name).acquire(ctx.signal)
-            try {
-              return await call(live)
-            } finally {
-              release()
+            // The server asked for a pause (retry_after): wait it out without holding a slot,
+            // so parallel calls do not each spend a retry on the same 429. Checked again once
+            // a slot is ours: the pause may have started while we were queued.
+            const cooldown = () => (this.cooldowns.get(name) ?? 0) - Date.now()
+            for (;;) {
+              if (cooldown() > 0) await pause(cooldown(), ctx.signal)
+              const release = await this.limiter(name).acquire(ctx.signal)
+              if (cooldown() > 0) {
+                release()
+                continue
+              }
+              try {
+                return await call(live)
+              } finally {
+                release()
+              }
             }
           }
           const retryDelays = this.opts.callRetryDelaysMs ?? [1000, 3000]
@@ -1021,19 +1054,38 @@ export class McpManager {
                 await this.restartShared(name)
                 continue
               }
+              if (isRemote(config) && isQuotaExceeded(error)) {
+                const wait = retryAfterMs(error)
+                const reset = wait === undefined ? "" : ` (khoảng ${new Date(Date.now() + wait).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })})`
+                throw new Error(`MCP server "${name}" đã hết quota trong ngày; không tự thử lại. Gọi lại sau khi quota được đặt lại${reset}.`)
+              }
               if (!isRemote(config) || !isRetryable(error)) throw error
+              const wait = retryAfterMs(error)
+              if (wait !== undefined && wait <= MAX_RETRY_AFTER_MS) {
+                this.cooldowns.set(name, Math.max(this.cooldowns.get(name) ?? 0, Date.now() + wait))
+              }
               // The connection itself died: reconnect in the background; the next attempt
-              // (or the model's next call) waits for it in `ready`.
+              // (or the model's next call) waits for it in `ready`. A 503 with retry_after is
+              // a live server shedding load, not a host restarting: no probe.
               if (isConnectionLost(error)) live.drop?.()
-              else if ([502, 503, 504].includes(httpStatus(error) ?? 0)) await this.probe(live)
-              if (attempt >= retries) {
+              else if ([502, 503, 504].includes(httpStatus(error) ?? 0) && wait === undefined) await this.probe(live)
+              if (attempt >= retries || (wait !== undefined && wait > MAX_RETRY_AFTER_MS)) {
                 const status = httpStatus(error)
                 const why = status ? `HTTP ${status}` : errorText(error)
-                throw new Error(
-                  `MCP server "${name}" lỗi tạm thời (${why}) — có thể đang khởi động lại hoặc quá tải.${retries > 0 ? ` Đã thử lại ${retries} lần.` : tool.annotations?.readOnlyHint ? "" : " Tool này có thể ghi dữ liệu nên không tự thử lại; kiểm tra kết quả trước khi gọi lại."}`,
-                )
+                const what = status === 429 ? `bị giới hạn tốc độ (${why})` : `lỗi tạm thời (${why}) — có thể đang khởi động lại hoặc quá tải`
+                const later = wait === undefined ? "" : ` Server yêu cầu chờ ${Math.ceil(wait / 1000)} giây trước khi gọi lại.`
+                // A retry_after refusal came before the tool ran: nothing was written to check.
+                const tail =
+                  attempt > 0
+                    ? ` Đã thử lại ${attempt} lần.`
+                    : tool.annotations?.readOnlyHint
+                      ? ""
+                      : wait === undefined
+                        ? " Tool này có thể ghi dữ liệu nên không tự thử lại; kiểm tra kết quả trước khi gọi lại."
+                        : " Tool này có thể ghi dữ liệu nên không tự thử lại; server đã từ chối trước khi chạy nên có thể gọi lại sau khi chờ."
+                throw new Error(`MCP server "${name}" ${what}.${later}${tail}`)
               }
-              await pause(retryDelays[attempt]!, ctx.signal)
+              await pause(wait ?? retryDelays[attempt]!, ctx.signal)
               continue
             }
             // Outside the try: an error the tool itself reports (isError) is an answer, not a
