@@ -539,8 +539,25 @@ test("a retry_after over 30s fails at once and says how long to wait; a write is
   Object.assign(remote.failCalls, { count: 3, status: 429, body: { error: "rate_limited", retry_after: 1 } })
   const write = await errorOf(Promise.resolve(registry.get("mcp__data__note")!.execute({ text: "a" }, ctx)))
   expect(write).toContain("không tự thử lại")
+  expect(write).toContain("từ chối trước khi chạy")
   expect(remote.failCalls.count).toBe(2)
   expect(stats.notes).toBe(0)
+}, 20_000)
+
+test("a 429 without a retry_after body keeps the usual short back-off", async () => {
+  const stats = newStats()
+  const remote = startHttpServer({ stats })
+  cleanups.push(remote.stop)
+  const { manager, registry } = await managerWith({ data: { type: "http", url: remote.url } })
+  ;(manager as unknown as { opts: { callRetryDelaysMs: number[] } }).opts.callRetryDelaysMs = [20, 20]
+  await manager.start()
+  remote.failCalls.count = 1
+  remote.failCalls.status = 429
+  const started = Date.now()
+  const ok = await registry.get("mcp__data__slow")!.execute({ ms: 1 }, ctx)
+  expect(typeof ok === "string" ? ok : ok.output).toContain("waited 1")
+  expect(Date.now() - started).toBeLessThan(900)
+  expect(stats.calls).toBe(1)
 }, 20_000)
 
 test("quota_exceeded is not retried, on a tool call or on initialize", async () => {

@@ -1074,7 +1074,15 @@ export class McpManager {
                 const why = status ? `HTTP ${status}` : errorText(error)
                 const what = status === 429 ? `bị giới hạn tốc độ (${why})` : `lỗi tạm thời (${why}) — có thể đang khởi động lại hoặc quá tải`
                 const later = wait === undefined ? "" : ` Server yêu cầu chờ ${Math.ceil(wait / 1000)} giây trước khi gọi lại.`
-                const tail = attempt > 0 ? ` Đã thử lại ${attempt} lần.` : tool.annotations?.readOnlyHint ? "" : " Tool này có thể ghi dữ liệu nên không tự thử lại; kiểm tra kết quả trước khi gọi lại."
+                // A retry_after refusal came before the tool ran: nothing was written to check.
+                const tail =
+                  attempt > 0
+                    ? ` Đã thử lại ${attempt} lần.`
+                    : tool.annotations?.readOnlyHint
+                      ? ""
+                      : wait === undefined
+                        ? " Tool này có thể ghi dữ liệu nên không tự thử lại; kiểm tra kết quả trước khi gọi lại."
+                        : " Tool này có thể ghi dữ liệu nên không tự thử lại; server đã từ chối trước khi chạy nên có thể gọi lại sau khi chờ."
                 throw new Error(`MCP server "${name}" ${what}.${later}${tail}`)
               }
               await pause(wait ?? retryDelays[attempt]!, ctx.signal)
