@@ -115,6 +115,13 @@ export const COMPACT_LEAN_TOKENS = 100_000
 export type CompactVariant = "full" | "lean"
 
 /**
+ * A figure found only in an earlier answer was sourced to a tool on 30/10 (AAA "LNTT +29,3%":
+ * in the answer, in no tool result, summarized with "MCP opentrading" as its source).
+ */
+const OWN_FIGURES =
+  'Số chỉ có trong câu trả lời trước (không có trong kết quả tool nào) thì ghi nguồn là "câu trả lời trước", không ghi tên tool.'
+
+/**
  * Sent after the head when summarizing; the summary must stand in for everything above it.
  * One request, as Claude Code's /compact does: the model first inventories
  * the conversation in an <analysis> scratchpad, then writes the <summary>;
@@ -127,7 +134,7 @@ export function compactPrompt(instructions?: string, variant: CompactVariant = "
           "## Yêu cầu của người dùng",
           "Mục tiêu và từng yêu cầu, giữ sát lời gốc.",
           "## Số liệu đã xác minh",
-          "Bảng: chỉ tiêu | giá trị | đơn vị | nguồn | thời điểm. Chép nguyên văn, không làm tròn. Số nào không có nguồn và thời điểm thì bỏ.",
+          `Bảng: chỉ tiêu | giá trị | đơn vị | nguồn | thời điểm. Chép nguyên văn, không làm tròn. Số nào không có nguồn và thời điểm thì bỏ. ${OWN_FIGURES}`,
           "## Việc đang dở và bước tiếp theo",
           "Việc chưa xong và việc nên làm tiếp.",
         ]
@@ -137,7 +144,7 @@ export function compactPrompt(instructions?: string, variant: CompactVariant = "
           "## Ràng buộc và sở thích",
           "Điều người dùng đã nói về khẩu vị rủi ro, khung thời gian, mã đang quan tâm, cách trình bày mong muốn.",
           "## Số liệu đã xác minh",
-          "Bảng: chỉ tiêu | giá trị | đơn vị | nguồn | thời điểm. Chép nguyên văn từ kết quả tool, không làm tròn, không đổi đơn vị. Số nào không có nguồn và thời điểm thì bỏ.",
+          `Bảng: chỉ tiêu | giá trị | đơn vị | nguồn | thời điểm. Chép nguyên văn từ kết quả tool, không làm tròn, không đổi đơn vị. Số nào không có nguồn và thời điểm thì bỏ. ${OWN_FIGURES}`,
           "## Phân tích và kết luận đã đưa ra",
           "Các nhận định chính, giả định đi kèm, rủi ro đã nêu.",
           "## Việc đang dở và bước tiếp theo",
