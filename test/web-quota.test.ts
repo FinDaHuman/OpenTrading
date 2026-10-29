@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, test } from "bun:test"
 import type { Target } from "../src/core/chat"
-import { extractWithModel, guardedNative, isQuotaError, NATIVE_PAUSE_MS, nativeSearch, nextPacificMidnight, notInPlan, resetNativePause } from "../src/core/tools/web/side-model"
+import { extractWithModel, guardedNative, isQuotaError, NATIVE_PAUSE_MS, nativeSearch, nextPacificMidnight, NOT_IN_PLAN_NOTE, notInPlan, resetNativePause } from "../src/core/tools/web/side-model"
 import { runSearch } from "../src/core/tools/web/search"
 
 const realFetch = globalThis.fetch
@@ -101,7 +101,9 @@ test("grounding not in the key's plan (30/10 body): skipped until Gemini's quota
   let now = Date.parse("2026-10-29T20:23:00Z")
   expect(nextPacificMidnight(now)).toBe(Date.parse("2026-10-30T07:00:00Z"))
   const clock = () => now
-  await expect(guardedNative("google/gemini-3.1-flash-lite", rejected(NOT_IN_PLAN), clock)).rejects.toThrow("gói free Gemini 3 không có")
+  await expect(guardedNative("google/gemini-3.1-flash-lite", rejected(NOT_IN_PLAN), clock)).rejects.toThrow("gói free Gemini 3 của key này")
+  // runSearch keeps 120 chars of a native failure: the whole note fits.
+  expect(NOT_IN_PLAN_NOTE.length).toBeLessThanOrEqual(120)
   let runs = 0
   const count = () => ((runs += 1), Promise.resolve("ok"))
   now += NATIVE_PAUSE_MS + 1

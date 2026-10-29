@@ -149,6 +149,9 @@ export function isQuotaError(error: unknown): boolean {
 export const NATIVE_PAUSE_MS = 10 * 60_000
 const nativePaused = new Map<string, number>()
 
+/** Said once when grounding is not in the key's plan (notInPlan). */
+export const NOT_IN_PLAN_NOTE = "Google Search grounding không có ở gói free Gemini 3 của key này; dùng nguồn khác tới hết ngày quota (đổi ở /config)."
+
 /** Tests only. */
 export function resetNativePause() {
   nativePaused.clear()
@@ -170,9 +173,8 @@ export async function guardedNative<T>(key: string, run: () => Promise<T>, now: 
     if (!isQuotaError(error)) throw error
     if (notInPlan(error)) {
       nativePaused.set(key, nextPacificMidnight(now()))
-      throw new Error(
-        "Tìm kiếm bằng model (Google Search grounding) không dùng được với key này (gói free Gemini 3 không có). Đang dùng nguồn tìm kiếm khác tới hết ngày quota; đổi ở /config → Model cho tìm kiếm / đọc web.",
-      )
+      // Within the 120 chars runSearch keeps of a native failure.
+      throw new Error(NOT_IN_PLAN_NOTE)
     }
     nativePaused.set(key, now() + NATIVE_PAUSE_MS)
     throw new Error(`${describeError(error)} Tìm kiếm của model tạm bỏ qua 10 phút.`)
