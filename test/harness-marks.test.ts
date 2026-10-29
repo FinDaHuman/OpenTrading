@@ -55,3 +55,41 @@ test("the harness's own marks never reach a provider", async () => {
     expect(body).not.toContain("retiredTodos")
   }
 })
+
+test("a past turn reshaped by answerAfterTools (call, result, answer) is accepted by every provider's serializer", async () => {
+  const { answerAfterTools } = await import("../src/core/loop/history-shape")
+  const reshaped = answerAfterTools([
+    { role: "user", content: "phân tích VCB" },
+    {
+      role: "assistant",
+      content: [
+        { type: "text", text: "VCB tốt." },
+        { type: "tool-call", toolCallId: "t1", toolName: "todo_write", input: { todos: [] } },
+      ],
+    },
+    { role: "tool", content: [{ type: "tool-result", toolCallId: "t1", toolName: "todo_write", output: { type: "text", value: "ok" } }] },
+    { role: "user", content: "còn FPT?" },
+  ])
+  const sent: string[] = []
+  const via = async (make: (fetch: typeof globalThis.fetch) => Parameters<typeof streamText>[0]["model"]) => {
+    const c = capture()
+    const result = streamText({ model: make(c.fetch), messages: reshaped, maxRetries: 0, onError: () => {} })
+    for await (const _ of result.fullStream) {
+      // drain
+    }
+    sent.push(...c.bodies)
+  }
+  await via((fetch) => createGoogleGenerativeAI({ apiKey: "x", fetch })("gemini-3.1-flash-lite"))
+  await via((fetch) => createGroq({ apiKey: "x", fetch })("tooly"))
+  await via((fetch) => createAnthropic({ apiKey: "x", fetch })("claude-x"))
+  await via((fetch) => createOpenAI({ apiKey: "x", fetch })("gpt-x"))
+  await via((fetch) => createMistral({ apiKey: "x", fetch })("mistral-x"))
+  await via((fetch) => createOpenAICompatible({ name: "nv", baseURL: "https://x.test/v1", apiKey: "x", fetch })("m"))
+  expect(sent.length).toBeGreaterThanOrEqual(6)
+  for (const body of sent) {
+    expect(body.indexOf("todo_write")).toBeGreaterThan(-1)
+    // Each serializer keeps the answer after the call and before the new question.
+    expect(body.indexOf("VCB tốt.")).toBeGreaterThan(body.indexOf("todo_write"))
+    expect(body.indexOf("còn FPT?")).toBeGreaterThan(body.indexOf("VCB tốt."))
+  }
+})

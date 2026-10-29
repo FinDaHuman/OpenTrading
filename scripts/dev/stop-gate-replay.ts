@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync, statSync } from "node:fs"
 import path from "node:path"
 import type { ModelMessage } from "ai"
-import { isEmptyAnswer, isPromise, PROMISE_MAX_CHARS, stripEchoes } from "../../src/core/loop/stop-gate"
+import { FRAGMENT_MAX_CHARS, isEmptyAnswer, isFragment, isPromise, PROMISE_MAX_CHARS, stripEchoes } from "../../src/core/loop/stop-gate"
 import { sessionsDir } from "../../src/core/session/store"
 
 /**
@@ -42,8 +42,12 @@ let short = 0
 /** Real preambles (text beside a tool call): how many the promise check recognises. */
 let preambles = 0
 const missed: string[] = []
+const fragments: string[] = []
+/** Final answers of turns without any tool call: the group the fragment check judges. */
+let toolless = 0
 for (const file of files(dir)) {
   let last: ModelMessage | undefined
+  let toolsInTurn = false
   for (const line of readFileSync(file, "utf8").split("\n")) {
     if (!line.trim()) continue
     let entry: { type?: string; message?: ModelMessage }
@@ -52,6 +56,7 @@ for (const file of files(dir)) {
     } catch {
       continue
     }
+    if (entry.type === "message" && entry.message?.role === "tool") toolsInTurn = true
     if (entry.type === "message" && entry.message?.role === "assistant") {
       last = entry.message
       const said = textOf(last).trim()
@@ -71,8 +76,13 @@ for (const file of files(dir)) {
       if (stripEchoes(text) !== text) stripped.push(where)
       if (!calls && text.trim().length <= PROMISE_MAX_CHARS) short++
       if (!calls && isPromise(text)) promises.push(where)
+      if (!calls && !toolsInTurn) {
+        toolless++
+        if (isFragment(text)) fragments.push(where)
+      }
     }
     last = undefined
+    toolsInTurn = false
   }
 }
 
@@ -84,6 +94,10 @@ for (const line of stripped.slice(0, show)) console.log(`  ${line}`)
 console.log(`\nBị coi là "hứa mà không làm" (sẽ gửi lại model): ${promises.length}`)
 for (const line of promises.slice(0, show)) console.log(`  ${line}`)
 console.log(`  (trên ${short} câu trả lời cuối ngắn ≤${PROMISE_MAX_CHARS} ký tự, không gọi tool — nhóm dễ báo nhầm nhất)`)
+console.log(`
+Bị coi là "mẩu câu nối tiếp" (sẽ gửi lại model): ${fragments.length}`)
+for (const line of fragments.slice(0, show)) console.log(`  ${line}`)
+console.log(`  (trên ${toolless} câu trả lời cuối của lượt không gọi tool; chỉ xét câu ≤${FRAGMENT_MAX_CHARS} ký tự)`)
 console.log(`
 Câu dạo đầu thật (kèm gọi tool) nhận ra là lời hứa: ${preambles - missed.length}/${preambles}`)
 for (const line of missed.slice(0, show)) console.log(`  sót: ${line}`)

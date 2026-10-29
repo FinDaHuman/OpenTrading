@@ -14,7 +14,7 @@ import { hasOpenTodos, LEGACY_TODO_PREFIX, TODO_PREFIX, TODO_WRITE, type Todo } 
 /** Recovery requests a turn may spend at most: the gate never loops. */
 export const MAX_RECOVERIES = 2
 
-export type RecoveryKind = "malformed" | "length" | "empty" | "promise"
+export type RecoveryKind = "malformed" | "length" | "empty" | "promise" | "fragment"
 
 /** What the last request's final step produced. */
 export interface LastStep {
@@ -30,6 +30,8 @@ export interface LastStep {
   reasoned?: boolean
   /** The step came right after tool results. */
   afterTools?: boolean
+  /** A tool already ran in this turn (a fragment is only judged on a turn without any). */
+  toolsInTurn?: boolean
 }
 
 export type Verdict =
@@ -52,6 +54,8 @@ export const RESCUE_EMPTY =
   "<nhac_nho>\nBạn chưa viết câu trả lời nào cho người dùng. Trả lời ngay dựa trên dữ liệu đã có, hoặc gọi tool nếu còn thiếu dữ liệu. Không viết dòng trạng thái việc cần làm.\n</nhac_nho>"
 export const RESCUE_PROMISE =
   "<nhac_nho>\nBước trước kết thúc mà không gọi tool nào. Thiếu dữ liệu thì gọi tool ngay trong bước này; đủ rồi thì trả lời người dùng.\n</nhac_nho>"
+export const RESCUE_FRAGMENT =
+  "<nhac_nho>\nCâu trả lời vừa rồi bị cụt đầu. Trả lời trực tiếp tin nhắn mới nhất của người dùng; gọi tool nếu cần dữ liệu.\n</nhac_nho>"
 /** Tools off (it brought 2.5-flash-lite's empty answers back). */
 export const RESCUE_EMPTY_FINAL = "Hãy trả lời câu hỏi của người dùng dựa trên kết quả tool ở trên. Không gọi thêm tool."
 
@@ -86,6 +90,12 @@ export function judgeStop(last: LastStep, done: readonly RecoveryKind[]): Verdic
   // Said it would fetch something and stopped without calling a tool: send it back once, tools on.
   if (last.toolNames.length === 0 && (last.finish ?? "stop") === "stop" && isPromise(last.text)) {
     if (left > 0 && used("promise") === 0) return { action: "continue", kind: "promise", nudge: RESCUE_PROMISE, toolChoice: "auto" }
+  }
+  // Continued an earlier sentence instead of answering the new message: send it back once.
+  // After a cut answer the continuation starts mid-sentence on purpose.
+  const continuing = done.includes("length")
+  if (last.toolNames.length === 0 && (last.finish ?? "stop") === "stop" && !last.toolsInTurn && !continuing && isFragment(last.text)) {
+    if (left > 0 && used("fragment") === 0) return { action: "continue", kind: "fragment", nudge: RESCUE_FRAGMENT, toolChoice: "auto" }
   }
   return { action: "accept" }
 }
@@ -174,6 +184,23 @@ export function isPromise(text: string): boolean {
   if (/:\s*$/.test(lastLine)) return true
   const sentences = lastLine.split(/(?<=[.!…])\s+/).filter((s) => s.trim())
   return INTENT.test(sentences.at(-1) ?? lastLine)
+}
+
+/** Above this, the text is an answer of its own, not a stray continuation. */
+export const FRAGMENT_MAX_CHARS = 300
+
+/**
+ * The whole answer is the tail of a sentence: a space then a lowercase word, or a comma,
+ * semicolon, colon, closing bracket or ellipsis first. Seen 30/10 with gemini-3.1-flash-lite,
+ * which answered a new question with " hoặc FPT không, hoặc bạn muốn…" or ", bạn có thể phân
+ * tích thêm cho mình…" (continuing its previous closing line, see loop/history-shape.ts). A
+ * real answer starts a sentence, a ticker, a number or markdown, or a line ("\n\nDưới đây…").
+ */
+export function isFragment(text: string): boolean {
+  const raw = invisible(text).normalize("NFC")
+  const body = stripEchoes(raw).trim()
+  if (!body || body.length > FRAGMENT_MAX_CHARS) return false
+  return /^[ \t]+\p{Ll}/u.test(raw) || /^[,;:)…]/u.test(body)
 }
 
 /** No answer in it: nothing visible once echoed todo lines are gone. */
