@@ -78,3 +78,41 @@ test("the nudge is sent only on routes whose request shape was checked", () => {
   expect(nudgeAfterTools(target("@ai-sdk/openai-compatible", "https://x.test/v1"))).toBe(false)
   expect(nudgeAfterTools(undefined)).toBe(false)
 })
+
+test("google: after answerAfterTools a past turn's tool result no longer shares a turn with the new question", async () => {
+  const { answerAfterTools } = await import("../src/core/loop/history-shape")
+  const history: ModelMessage[] = [
+    { role: "user", content: "Phân tích 3 mã" },
+    {
+      role: "assistant",
+      content: [
+        { type: "text", text: "Phân tích xong." },
+        { type: "tool-call", toolCallId: "t1", toolName: "todo_write", input: {}, providerOptions: { google: { thoughtSignature: "sig" } } },
+      ],
+    },
+    { role: "tool", content: [{ type: "tool-result", toolCallId: "t1", toolName: "todo_write", output: { type: "text", value: "ok" } }] },
+  ]
+  const realFetch = globalThis.fetch
+  let sent: { contents: { role: string; parts: Record<string, unknown>[] }[] } | undefined
+  globalThis.fetch = (async (_url: unknown, init?: RequestInit) => {
+    sent = JSON.parse(String(init?.body))
+    throw new Error("captured")
+  }) as unknown as typeof fetch
+  try {
+    const provider = { id: "google", name: "Google", env: [], npm: "@ai-sdk/google", models: { "gemini-3.1-flash-lite": { id: "gemini-3.1-flash-lite", name: "g" } } }
+    const model = languageModel(provider as unknown as CatalogProvider, "gemini-3.1-flash-lite", "x")
+    await generateText({ model, messages: [...answerAfterTools(history), { role: "user", content: "Đi sâu vào mã VCB" }], maxRetries: 0 }).catch(() => {})
+  } finally {
+    globalThis.fetch = realFetch
+  }
+  const turns = sent!.contents.map((c) => [c.role, ...c.parts.map((p) => Object.keys(p)[0])])
+  expect(turns).toEqual([
+    ["user", "text"],
+    ["model", "functionCall"],
+    ["user", "functionResponse"],
+    ["model", "text"],
+    ["user", "text"],
+  ])
+  // The call keeps its own signature: no validator-skip sentinel is injected.
+  expect(sent!.contents[1]!.parts[0]!.thoughtSignature).toBe("sig")
+})

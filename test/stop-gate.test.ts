@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test"
-import { isEmptyAnswer, judgeStop, MAX_RECOVERIES, stripEchoes, type LastStep } from "../src/core/loop/stop-gate"
+import { isEmptyAnswer, isFragment, judgeStop, MAX_RECOVERIES, stripEchoes, type LastStep } from "../src/core/loop/stop-gate"
 
 const step = (over: Partial<LastStep>): LastStep => ({ text: "", toolNames: [], finish: "stop", ...over })
 
@@ -87,4 +87,37 @@ test("a bare promise to act is sent back once, tools on; offers, questions and r
   expect(judgeStop(promise, [])).toMatchObject({ action: "continue", kind: "promise", toolChoice: "auto" })
   expect(judgeStop(promise, ["promise"])).toEqual({ action: "accept" })
   expect(judgeStop({ ...promise, finish: "length" }, ["length", "length"])).toEqual({ action: "accept" })
+})
+
+test("a fragment continuing an old sentence (30/10) is sent back once, only in a turn without tools", () => {
+  for (const text of [
+    " hay FPT sẽ mang lại góc nhìn rõ hơn về định giá hoặc kỹ thuật nếu bạn quan tâm.",
+    " hoặc FPT không, hoặc bạn muốn mình phản biện lại các số liệu này để tìm rủi ro tiềm ẩn?",
+    ", bạn có thể phân tích thêm cho mình về nợ xấu, khả năng trích lập dự phòng và câu chuyện thoái vốn.",
+    "… và đó là lý do biên lãi giảm.",
+  ])
+    expect([text, isFragment(text)]).toEqual([text, true])
+  for (const text of [
+    "VCB đóng cửa 57.200đ (-0,5%).",
+    "Đã ghi nhớ anh sống ở Việt Nam.",
+    "57.200đ là giá đóng cửa phiên gần nhất.",
+    "**VCB** tăng 0,5%.",
+    "- VCB: tích cực",
+    "Vâng, mình sẽ ghi nhớ.",
+    "Bạn muốn phân tích mã nào?",
+    "\n\nDưới đây là phân tích.",
+    // Lowercase without a leading space is a real (if odd) start: tickers, ids, test data.
+    "m0 m1 m2 HẾT",
+    "iPhone 17 bán chạy.",
+  ])
+    expect([text, isFragment(text)]).toEqual([text, false])
+  // A long text is an answer of its own, whatever its first letter.
+  expect(isFragment(`và ${"x".repeat(400)}`)).toBe(false)
+  const fragment = step({ text: " hoặc FPT không?" })
+  expect(judgeStop(fragment, [])).toMatchObject({ action: "continue", kind: "fragment", toolChoice: "auto" })
+  expect(judgeStop(fragment, ["fragment"])).toEqual({ action: "accept" })
+  expect(judgeStop({ ...fragment, toolsInTurn: true }, [])).toEqual({ action: "accept" })
+  expect(judgeStop(fragment, ["empty", "empty"])).toEqual({ action: "accept" })
+  // The continuation of a cut answer starts mid-sentence on purpose.
+  expect(judgeStop(fragment, ["length"])).toEqual({ action: "accept" })
 })

@@ -1220,3 +1220,36 @@ test("with a step cap, a summary that names what is missing is kept as the answe
     await saveConfig({ provider: "groq", model: "tooly", maxSteps: undefined })
   }
 })
+
+test("next turn: the answer of an 'answer + close todo' step is sent after its tool result (30/10)", async () => {
+  const closed = { todos: [{ content: "Lấy dữ liệu", status: "completed" }] }
+  respond = (_body, n) => (n === 0 ? toolCall("todo_write", closed, "call_t", "Phân tích 3 mã xong.") : n === 1 ? answer("VCB: đi sâu.") : undefined)
+  const r = await todoRegistry()
+  const first = await collect(runAgent({ history: [], input: "Phân tích 3 mã", skills: [], registry: r }))
+  const history = done(first).messages
+  // Stored as streamed: the session file keeps the step's order.
+  expect(history.map((m) => m.role)).toEqual(["user", "assistant", "tool"])
+  await collect(runAgent({ history, input: "Đi sâu vào mã VCB", skills: [], registry: r }))
+  const sent = bodies[1]!.messages.filter((m) => m.role !== "system")
+  expect(sent.map((m) => m.role)).toEqual(["user", "assistant", "tool", "assistant", "user"])
+  expect(JSON.stringify(sent[1])).toContain("tool_calls")
+  expect(JSON.stringify(sent[1])).not.toContain("Phân tích 3 mã xong.")
+  expect(JSON.stringify(sent[3])).toContain("Phân tích 3 mã xong.")
+  expect(JSON.stringify(sent[4])).toContain("Đi sâu vào mã VCB")
+})
+
+test("a fragment answer is sent back once with tools on and never stored", async () => {
+  respond = (_body, n) => (n === 0 ? answer(" hoặc FPT không, hoặc bạn muốn mình phản biện?") : n === 1 ? answer("VCB: phân tích sâu.") : undefined)
+  const events = await collect(runAgent({ history: [], input: "Đi sâu vào mã VCB", skills: [], registry: registry() }))
+  expect(bodies).toHaveLength(2)
+  expect(bodies[1]!.tool_choice).not.toBe("none")
+  // The nudge stands on its own: the dropped fragment is never mentioned to the model.
+  expect(lastSent(1)).toContain("tin nhắn mới nhất của người dùng")
+  expect(lastSent(1)).not.toContain("cụt")
+  expect(events.some((e) => e.type === "notice" && e.text.includes("cụt đầu"))).toBe(true)
+  expect(done(events).recoveries).toEqual([{ kind: "fragment", attempt: 1 }])
+  const stored = JSON.stringify(done(events).messages)
+  expect(stored).not.toContain("hoặc FPT không")
+  expect(stored).toContain("VCB: phân tích sâu.")
+  expect(done(events).messages.map((m) => m.role)).toEqual(["user", "assistant"])
+})

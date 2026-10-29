@@ -36,6 +36,7 @@ import { loadedTools } from "./tools/loaded"
 import { modeNote } from "./permission/mode"
 import { NOTE as NOTICE_NOTE } from "./subagents/notification"
 import { currentTodos, retiredNote, retireLeftTodos, todoMark, TODO_WRITE } from "./tools/todos"
+import { answerAfterTools } from "./loop/history-shape"
 import { answeredAndClosedTodos, isEmptyAnswer, judgeStop, MAX_RECOVERIES, stripEchoes, type RecoveryKind, type Verdict } from "./loop/stop-gate"
 import { MAX_TOOLS_PER_REQUEST, modelOutput, stripImages, type BuiltToolSet, type ToolRegistry, type ToolSetOptions } from "./tools/registry"
 import { describeTool, LOADED_PREFIX, resolveToolName } from "./tools/search"
@@ -249,6 +250,7 @@ const RESCUE_NOTICE: Record<RecoveryKind, string> = {
   length: "Câu trả lời bị cắt vì chạm giới hạn độ dài output.",
   empty: "Model dừng khi chưa viết câu trả lời.",
   promise: "Model nói sẽ lấy thêm dữ liệu nhưng dừng mà chưa làm.",
+  fragment: "Câu trả lời bị cụt đầu (model viết tiếp câu cũ thay vì trả lời tin nhắn mới).",
 }
 
 type AssistantMessage = Extract<ModelMessage, { role: "assistant" }>
@@ -897,7 +899,7 @@ export async function summarizeConversation(
   const effort = opts.effort ?? (isEffort(configured) ? configured : undefined)
   for (let attempt = 0; ; attempt++) {
     const prepared = await prepare({ ...opts, effort, history: head, input: "" }, {})
-    const { system, request, model, active, providerOptions } = requestFor(prepared, [...head, { role: "user", content: opts.prompt }])
+    const { system, request, model, active, providerOptions } = requestFor(prepared, [...answerAfterTools(head), { role: "user", content: opts.prompt }])
     try {
       const result = await generateText({
         model,
@@ -1046,7 +1048,8 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
     stalled = true
     stall.abort()
   }
-  const { system, request, model, providerOptions } = requestFor(prepared, [...opts.history, user], notices.options)
+  // Past turns are sent with answers after their tool results (loop/history-shape.ts).
+  const { system, request, model, providerOptions } = requestFor(prepared, [...answerAfterTools(opts.history), user], notices.options)
   let summarized = false
   /** Tool results pruned mid-turn (undefined: not near the threshold). */
   let midTurnPruned: number | undefined
@@ -1168,6 +1171,7 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
             rawFinish: last.rawFinish,
             reasoned: last.reasoned,
             afterTools: [...base, ...response].findLast((m) => m.role !== "assistant")?.role === "tool",
+            toolsInTurn: [...kept, ...response].some((m) => m.role === "tool"),
           },
           recoveries,
         )
