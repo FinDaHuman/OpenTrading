@@ -1,5 +1,6 @@
 import { LRUCache } from "lru-cache"
 import { z } from "zod"
+import { vnDay } from "../net-dates"
 import { LOCAL_SOURCE, type ToolDef } from "../types"
 import { cleanDomains, hostMatches, PRESETS, type Preset } from "./domains"
 import { guardedNative, nativeSearch, webTarget, type NativeSearch } from "./side-model"
@@ -56,7 +57,7 @@ export function planSearch(input: WebSearchInput, now = new Date()): SearchPlan 
     throw new Error("Không truyền cùng lúc allowed_domains và blocked_domains.")
   }
   const allowed = [...new Set([...cleanDomains(input.allowed_domains), ...(input.preset ? PRESETS[input.preset] : [])])]
-  const since = input.recency_days ? new Date(now.getTime() - input.recency_days * 86_400_000).toISOString().slice(0, 10) : undefined
+  const since = input.recency_days ? vnDay(now.getTime() - input.recency_days * 86_400_000) : undefined
   return { query: input.query.trim(), n: input.num_results ?? 8, allowed, blocked: cleanDomains(input.blocked_domains), since }
 }
 
@@ -239,7 +240,7 @@ const CITE =
   'NHẮC: trích nguồn bằng link markdown [Tiêu đề](URL) ngay cạnh số liệu/khẳng định lấy từ kết quả; cuối câu trả lời có mục "Nguồn:". Ghi ngày đăng với tin tức. Giá và chỉ số thị trường kiểm lại bằng tool dữ liệu MCP khi có.'
 
 export function formatResults(query: string, backend: string, hits: Hit[], summary?: string, notes: string[] = []) {
-  const day = new Date().toISOString().slice(0, 10)
+  const day = vnDay()
   const lines = hits.map((h, i) => {
     const meta = [hostOf(h.url), h.date].filter(Boolean).join(" — ")
     const snippet = h.snippet ? `\n    ${h.snippet.replace(/\s+/g, " ").slice(0, 300)}` : ""
@@ -313,7 +314,7 @@ export async function runSearch(input: WebSearchInput, signal: AbortSignal, deps
 }
 
 export function webSearchTool(deps: SearchDeps = {}): ToolDef<WebSearchInput> {
-  const month = new Date().toISOString().slice(0, 7)
+  const month = vnDay().slice(0, 7)
   return {
     name: "web_search",
     description:

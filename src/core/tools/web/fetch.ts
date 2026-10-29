@@ -1,5 +1,6 @@
 import { LRUCache } from "lru-cache"
 import { z } from "zod"
+import { vnStamp } from "../net-dates"
 import { LOCAL_SOURCE, type ToolDef } from "../types"
 import { decodeText, htmlToMarkdown, isHtml, isPdf, isTextual, pdfToText } from "./convert"
 import { isPreapproved } from "./domains"
@@ -67,7 +68,7 @@ async function load(url: URL, signal: AbortSignal, deps: FetchDeps): Promise<Pag
   const got = await fetchPublic(url, signal, { fetch: deps.fetch, resolve: deps.resolve })
   if (got.kind === "redirect") return { redirect: got.to.href, status: got.status }
   if (got.status >= 400) throw new Error(`HTTP ${got.status} ${got.statusText} khi tải ${got.url.href}.${got.status === 401 || got.status === 403 ? " Trang cần đăng nhập hoặc chặn bot." : ""}`)
-  const base = { url: got.url.href, status: got.status, statusText: got.statusText, contentType: got.contentType.split(";")[0]!.trim(), bytes: got.bytes.byteLength, fetchedAt: new Date().toISOString().slice(0, 19) }
+  const base = { url: got.url.href, status: got.status, statusText: got.statusText, contentType: got.contentType.split(";")[0]!.trim(), bytes: got.bytes.byteLength, fetchedAt: vnStamp() }
   let page: Page
   if (isPdf(got.contentType, got.bytes)) {
     const { text, pages } = await pdfToText(got.bytes)
