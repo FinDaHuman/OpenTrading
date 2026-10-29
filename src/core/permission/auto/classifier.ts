@@ -1,6 +1,6 @@
 import { generateText, type LanguageModel } from "ai"
 import { describeError, type Target } from "../../chat"
-import { lowThinking } from "../../effort"
+import { lowThinking, needsHeadroom, THINKING_HEADROOM } from "../../effort"
 import { languageModel } from "../../providers"
 import { classifyFailure } from "../../retry"
 import { effectiveList, labelOf, type AutoModeConfig } from "./rules"
@@ -113,7 +113,7 @@ export function parseTag(text: string, tag: "rule" | "reason"): string | undefin
   return m?.[1]?.trim() || undefined
 }
 
-export { lowThinking }
+export { lowThinking, needsHeadroom, THINKING_HEADROOM }
 
 export interface ClassifierDeps {
   /** Tests replace the model call. */
@@ -135,17 +135,6 @@ async function defaultCall(args: Parameters<NonNullable<ClassifierDeps["call"]>>
     ...(args.providerOptions ? { providerOptions: args.providerOptions as never } : {}),
   })
   return result.text
-}
-
-/** Output room added for a reasoning model that cannot be told to think less. */
-export const THINKING_HEADROOM = 2_048
-const REASONING_ID = /gpt-oss|deepseek-r1|r1|qwq|qwen3|nemotron|thinking|reason/i
-
-/** The model thinks before answering and lowThinking has no setting for it. */
-export function needsHeadroom(target: Pick<Target, "provider" | "model">) {
-  if (lowThinking(target)) return false
-  const info = target.provider.models[target.model] as { reasoning?: boolean } | undefined
-  return info?.reasoning ?? REASONING_ID.test(target.model)
 }
 
 const RETRY_DELAY_MS = 1_000
