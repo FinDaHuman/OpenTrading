@@ -1243,7 +1243,10 @@ test("a fragment answer is sent back once with tools on and never stored", async
   const events = await collect(runAgent({ history: [], input: "Đi sâu vào mã VCB", skills: [], registry: registry() }))
   expect(bodies).toHaveLength(2)
   expect(bodies[1]!.tool_choice).not.toBe("none")
-  expect(lastSent(1)).toContain("bị cụt đầu")
+  // The nudge stands on its own: the dropped fragment is never mentioned to the model.
+  expect(lastSent(1)).toContain("tin nhắn mới nhất của người dùng")
+  expect(lastSent(1)).not.toContain("cụt")
+  expect(events.some((e) => e.type === "notice" && e.text.includes("cụt đầu"))).toBe(true)
   expect(done(events).recoveries).toEqual([{ kind: "fragment", attempt: 1 }])
   const stored = JSON.stringify(done(events).messages)
   expect(stored).not.toContain("hoặc FPT không")

@@ -35,7 +35,21 @@ export function answerAfterTools(messages: readonly ModelMessage[]): ModelMessag
       continue
     }
     out[out.length - 1] = { ...prev, content: rest }
-    out.push(message, { role: "assistant", content: text })
+    out.push(message, { role: "assistant", content: text.map(plainText) })
   }
   return out
+}
+
+/**
+ * OpenAI's Responses API sends a text part with a stored item id as a reference to that item;
+ * moved away from the reasoning and call items it came with, the reference may be refused.
+ * Without the id it is sent as a plain assistant message, which is always accepted.
+ */
+function plainText(part: Extract<AssistantPart, { type: "text" }>): Extract<AssistantPart, { type: "text" }> {
+  const openai = part.providerOptions?.openai
+  if (!openai || !("itemId" in openai)) return part
+  const { itemId: _, ...kept } = openai
+  const { openai: __, ...others } = part.providerOptions!
+  const providerOptions = Object.keys(kept).length > 0 ? { ...others, openai: kept } : others
+  return Object.keys(providerOptions).length > 0 ? { ...part, providerOptions } : { type: "text", text: part.text }
 }

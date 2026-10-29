@@ -55,7 +55,7 @@ export const RESCUE_EMPTY =
 export const RESCUE_PROMISE =
   "<nhac_nho>\nBước trước kết thúc mà không gọi tool nào. Thiếu dữ liệu thì gọi tool ngay trong bước này; đủ rồi thì trả lời người dùng.\n</nhac_nho>"
 export const RESCUE_FRAGMENT =
-  "<nhac_nho>\nCâu trả lời vừa rồi bị cụt đầu. Trả lời trực tiếp tin nhắn mới nhất của người dùng; gọi tool nếu cần dữ liệu.\n</nhac_nho>"
+  "<nhac_nho>\nTrả lời trực tiếp tin nhắn mới nhất của người dùng ở trên; gọi tool nếu cần dữ liệu.\n</nhac_nho>"
 /** Tools off (it brought 2.5-flash-lite's empty answers back). */
 export const RESCUE_EMPTY_FINAL = "Hãy trả lời câu hỏi của người dùng dựa trên kết quả tool ở trên. Không gọi thêm tool."
 

@@ -93,3 +93,27 @@ test("a past turn reshaped by answerAfterTools (call, result, answer) is accepte
     expect(body.indexOf("còn FPT?")).toBeGreaterThan(body.indexOf("VCB tốt."))
   }
 })
+
+test("openai responses: a moved answer is sent as a plain message, not a reference to its stored item", async () => {
+  const { answerAfterTools } = await import("../src/core/loop/history-shape")
+  const reshaped = answerAfterTools([
+    { role: "user", content: "phân tích VCB" },
+    {
+      role: "assistant",
+      content: [
+        { type: "text", text: "VCB tốt.", providerOptions: { openai: { itemId: "msg_1" } } },
+        { type: "tool-call", toolCallId: "t1", toolName: "todo_write", input: { todos: [] } },
+      ],
+    },
+    { role: "tool", content: [{ type: "tool-result", toolCallId: "t1", toolName: "todo_write", output: { type: "text", value: "ok" } }] },
+    { role: "user", content: "còn FPT?" },
+  ])
+  const c = capture()
+  const result = streamText({ model: createOpenAI({ apiKey: "x", fetch: c.fetch })("gpt-x"), messages: reshaped, maxRetries: 0, onError: () => {} })
+  for await (const _ of result.fullStream) {
+    // drain
+  }
+  const body = c.bodies.join("")
+  expect(body).toContain("VCB tốt.")
+  expect(body).not.toContain("msg_1")
+})

@@ -58,6 +58,27 @@ test("left alone: a call without text, a step in the middle of a turn, a text-on
   expect(answerAfterTools(plain)).toEqual(plain)
 })
 
+test("a moved text drops only OpenAI's stored item id (sent as a plain message, not an item reference)", () => {
+  const history: ModelMessage[] = [
+    { role: "user", content: "x" },
+    {
+      role: "assistant",
+      content: [{ type: "text", text: "Trả lời.", providerOptions: { openai: { itemId: "msg_1", phase: "final" }, other: { k: 1 } } }, call()],
+    },
+    result(),
+  ]
+  expect(answerAfterTools(history).at(-1)).toEqual({
+    role: "assistant",
+    content: [{ type: "text", text: "Trả lời.", providerOptions: { openai: { phase: "final" }, other: { k: 1 } } }],
+  })
+  const only: ModelMessage[] = [
+    { role: "user", content: "x" },
+    { role: "assistant", content: [{ type: "text", text: "Trả lời.", providerOptions: { openai: { itemId: "msg_1" } } }, call()] },
+    result(),
+  ]
+  expect(answerAfterTools(only).at(-1)).toEqual({ role: "assistant", content: [{ type: "text", text: "Trả lời." }] })
+})
+
 test("every past turn is reshaped, the text keeps its own provider options", () => {
   const text = { type: "text" as const, text: "Trả lời 2.", providerOptions: { google: { thoughtSignature: "t" } } }
   const history: ModelMessage[] = [
