@@ -692,7 +692,13 @@ test("a todo_write the tool rejects is recorded as an error, so the list comes f
     { tool: "todo_write", args: { todos: good } },
   ]
   const fixed = await collect(runAgent({ history: [], input: "x", skills: [], registry: r }))
-  expect(currentTodos(done(fixed).messages)).toEqual(good)
+  // The list in force before the answer is the valid call's.
+  expect(currentTodos(done(fixed).messages.slice(0, -1))).toEqual(good)
+  // The model answered with it still open: retired, its items recorded as unconfirmed, never done.
+  const { harnessMarks } = await import("../src/core/tools/todos")
+  expect(currentTodos(done(fixed).messages)).toEqual([])
+  expect(harnessMarks(done(fixed).messages.at(-1)!).retiredTodos).toEqual(good)
+  expect(fixed.some((e) => e.type === "notice" && e.text.includes("CHƯA được xác nhận là xong"))).toBe(true)
 })
 
 test("done carries the context size: provider usage of the last step, else an estimate", async () => {
@@ -836,7 +842,7 @@ test("quota errors that mention tokens never trim the head; a real overflow drop
   expect(users(bodies[1]!)).toBe(users(bodies[0]!) - 1)
 })
 
-test("while todo items are open, the nudge after tool results lists them and asks to close them before answering", async () => {
+test("while todo items are open, the nudge after tool results lists them and asks to close them with the answer", async () => {
   const { toolNudge, TOOL_NUDGE } = await import("../src/core/agent")
   const { todoWriteTool } = await import("../src/core/tools/builtin/todo-write")
   const r = registry()
@@ -850,7 +856,7 @@ test("while todo items are open, the nudge after tool results lists them and ask
   const nudges = bodies.slice(1).map((b) => JSON.stringify(b.messages.at(-1)!.content))
   expect(nudges.length).toBeGreaterThanOrEqual(2)
   for (const n of nudges) expect(n).toContain("[>] So sánh FPT với ngành")
-  expect(nudges.at(-1)).toContain("trước khi viết câu trả lời cuối")
+  expect(nudges.at(-1)).toContain("đóng danh sách trong cùng bước đó")
   // Nothing open: the plain nudge.
   expect(toolNudge([])).toBe(TOOL_NUDGE)
 })

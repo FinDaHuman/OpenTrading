@@ -35,7 +35,7 @@ import { classifyFailure, retryMiddleware, type RetryNotice, type RetryOptions }
 import { loadedTools } from "./tools/loaded"
 import { modeNote } from "./permission/mode"
 import { NOTE as NOTICE_NOTE } from "./subagents/notification"
-import { currentTodos, todoMark } from "./tools/todos"
+import { currentTodos, retireLeftTodos, todoMark, TODO_WRITE } from "./tools/todos"
 import { answeredAndClosedTodos, judgeStop, MAX_RECOVERIES, stripEchoes, type RecoveryKind, type Verdict } from "./loop/stop-gate"
 import { MAX_TOOLS_PER_REQUEST, modelOutput, stripImages, type BuiltToolSet, type ToolRegistry, type ToolSetOptions } from "./tools/registry"
 import { describeTool, LOADED_PREFIX, resolveToolName } from "./tools/search"
@@ -77,19 +77,41 @@ const stallMessage = (ms: number) =>
 export const TOOL_NUDGE =
   "<nhac_nho>\nNếu còn cần dữ liệu, gọi cùng lúc mọi tool không phụ thuộc nhau. Khi trả lời: ngày tuyệt đối, mỗi cột một đơn vị, số dòng khớp lời nói, mỗi số có nguồn.\n</nhac_nho>"
 
+/** Model steps since the last todo_write call in this request: past this, the list is likely behind. */
+export const TODO_BEHIND_STEPS = 2
+
 /**
- * The nudge, plus the open todo items when there are any. Seen with gemini-3.1-flash-lite
- * (06/10): after its last tool call the model wrote the answer and closed the list only on
- * the next turn. This step may be the one that answers, so close the list first.
+ * The nudge, plus the open todo items when there are any. The status update rides on the next
+ * round of tool calls, and the answering step closes the list itself (one step, no extra
+ * request: loop/stop-gate.ts answeredAndClosedTodos). Seen with gemini-3.1-flash-lite (29/10):
+ * a list split per ticker while the tickers were fetched in one parallel round could not be
+ * kept true, so the model closed it all at the end.
  */
 export function toolNudge(messages: readonly ModelMessage[]): string {
   const open = currentTodos(messages).filter((t) => t.status === "pending" || t.status === "in_progress")
   if (open.length === 0) return TOOL_NUDGE
   const items = open.map((t) => `${todoMark(t.status)} ${t.content}`).join("\n")
+  const running = open.find((t) => t.status === "in_progress")
+  const since = stepsSinceTodoWrite(messages)
+  const behind =
+    running && since >= TODO_BEHIND_STEPS ? `\nĐã ${since} bước chưa cập nhật danh sách: nếu dữ liệu cho "${running.content}" đã có ở trên thì đánh completed ngay.` : ""
   return TOOL_NUDGE.replace(
     "\n</nhac_nho>",
-    `\nViệc cần làm còn mở:\n${items}\nViệc nào đã xong thì gọi todo_write đánh dấu completed (hoặc cancelled nếu bỏ) trước khi viết câu trả lời cuối.\n</nhac_nho>`,
+    `\nViệc cần làm còn mở:\n${items}${behind}\nCập nhật trạng thái bằng todo_write CÙNG lượt với các tool tiếp theo. Khi viết câu trả lời cuối, gọi todo_write đóng danh sách trong cùng bước đó.\n</nhac_nho>`,
   )
+}
+
+/** Model steps after the last todo_write call in this turn (all of them when there is none). */
+function stepsSinceTodoWrite(messages: readonly ModelMessage[]): number {
+  let steps = 0
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i]!
+    if (m.role === "user") break
+    if (m.role !== "assistant") continue
+    if (typeof m.content !== "string" && m.content.some((p) => p.type === "tool-call" && p.toolName === TODO_WRITE)) return steps
+    steps++
+  }
+  return steps
 }
 
 /**
@@ -1188,6 +1210,19 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
   if (messages && !outcome.aborted && !outcome.failure) {
     // Echoed todo lines never reach history, so a later turn has nothing to imitate (29/10).
     messages = stripEchoMessages(messages)
+    // Answered with items of this turn's list still open: retire the list (never mark them done
+    // for the model) and say which ones stay unconfirmed. No request is spent on it.
+    if (!unanswered) {
+      const retired = retireLeftTodos([...opts.history, user], messages)
+      messages = retired.messages
+      if (retired.left.length > 0) {
+        const items = retired.left.map((t) => `${todoMark(t.status)} ${t.content}`).join("; ")
+        yield {
+          type: "notice",
+          text: `Model trả lời nhưng chưa đóng ${retired.left.length} việc trong danh sách: ${items}. Đã gỡ danh sách; các việc này CHƯA được xác nhận là xong.`,
+        }
+      }
+    }
     if (summarized) yield { type: "notice", text: `Đã dùng hết ${maxSteps} bước gọi tool; câu trả lời là bản tổng kết.` }
     const tokens = measured ? await lastStepTokens(measured) : undefined
     // Measured on the pruned request: add back what the history still holds, so the next

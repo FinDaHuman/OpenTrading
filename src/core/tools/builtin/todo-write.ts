@@ -1,4 +1,4 @@
-import { TODO_PREFIX, TODO_WRITE, TodoWriteInput, renderTodos, todoProblems, todoProgress } from "../todos"
+import { TODO_PREFIX, TODO_WRITE, TodoWriteInput, todoProblems, todoProgress } from "../todos"
 import type { ToolDef } from "../types"
 
 /**
@@ -11,10 +11,11 @@ export function todoWriteTool(): ToolDef<TodoWriteInput> {
     name: TODO_WRITE,
     description: [
       "Ghi danh sách việc cần làm cho câu hỏi đang trả lời; giao diện ghim danh sách cho người dùng thấy tiến độ.",
-      "Dùng khi: việc cần từ 3 bước trở lên (phân tích nhiều mã, so sánh với ngành, đọc nhiều kỳ BCTC), hoặc người dùng đưa một danh sách việc. Ví dụ: so sánh VCB với TCB — tạo danh sách (lấy BCTC 4 quý VCB) → (lấy BCTC 4 quý TCB) → (so sánh NIM, CIR, CASA) → (viết kết luận), làm tới đâu đánh dấu tới đó.",
-      "Không dùng khi: câu hỏi trả lời được trong một hai bước; danh sách chỉ có một việc (làm thẳng còn hơn).",
-      "Nội dung mỗi việc viết cho người dùng đọc, theo việc cần làm (\"Lấy BCTC 4 quý của FPT\"), không ghi tên tool. Mỗi lần gọi gửi TOÀN BỘ danh sách. Đánh dấu in_progress trước khi bắt đầu một việc (chỉ MỘT việc in_progress tại một thời điểm), completed NGAY khi xong việc đó (không gom), cancelled nếu không làm nữa. CHỈ đánh completed khi việc xong triệt để: còn thiếu dữ liệu, tool còn lỗi hay kết quả chưa kiểm chứng thì giữ in_progress. Có thể gọi cùng lượt với các tool lấy dữ liệu.",
-      "Không kể lại danh sách trong câu trả lời vì giao diện đã hiện. Nếu kết thúc lượt mà còn việc pending, nói rõ vì sao.",
+      "Dùng khi: dự kiến từ 3 lượt gọi tool trở lên, hoặc người dùng đưa một danh sách việc. Không dùng khi: trả lời được trong 1-2 lượt tool; danh sách chỉ có một việc.",
+      "Mỗi việc là một GIAI ĐOẠN, ứng với một lượt gọi tool song song hoặc một bước suy luận — KHÔNG chia theo từng mã khi sẽ lấy dữ liệu các mã cùng lúc. Ví dụ phân tích VCB, FPT, AAA: (Lấy dữ liệu cơ bản 3 mã) → (Phân tích và so sánh) → (Kết luận). Nội dung viết cho người dùng đọc, không ghi tên tool.",
+      "Mỗi lần gọi gửi TOÀN BỘ danh sách. Cập nhật trạng thái CÙNG lượt với các tool của bước kế tiếp (không tốn lượt riêng): việc vừa có đủ dữ liệu → completed, việc kế tiếp → in_progress (chỉ MỘT việc in_progress). Nhiều việc xong trong cùng một lượt thì đóng cùng lúc. CHỈ đánh completed khi việc xong thật: còn thiếu dữ liệu hay tool còn lỗi thì giữ in_progress; bỏ việc thì cancelled.",
+      "Bước trả lời cuối: viết câu trả lời VÀ gọi todo_write đóng danh sách trong cùng bước đó.",
+      "Giao diện đã hiện danh sách: không chép danh sách hay kết quả của tool này vào câu trả lời. Nếu kết thúc lượt mà còn việc chưa làm, nói rõ vì sao.",
     ].join(" "),
     input: TodoWriteInput,
     readOnly: true,
@@ -27,8 +28,11 @@ export function todoWriteTool(): ToolDef<TodoWriteInput> {
       const problems = todoProblems(todos)
       if (problems.length > 0) throw new Error(`Danh sách chưa hợp lệ, gửi lại toàn bộ danh sách đã sửa:\n- ${problems.join("\n- ")}`)
       const { done, total } = todoProgress(todos)
-      if (todos.length === 0) return `${TODO_PREFIX}: danh sách trống.`
-      return `${TODO_PREFIX}: ${done}/${total} xong.\n${renderTodos(todos)}`
+      const note = "Giao diện đang hiện danh sách cho người dùng; KHÔNG chép danh sách hay dòng này vào câu trả lời."
+      if (todos.length === 0) return `${TODO_PREFIX} danh sách trống. ${note}`
+      const running = todos.find((t) => t.status === "in_progress")
+      const next = running ? ` Làm tiếp: ${running.content}.` : done === total ? " Danh sách đã đóng." : ""
+      return `${TODO_PREFIX} (${done}/${total} xong). ${note}${next}`
     },
   }
 }

@@ -92,6 +92,7 @@ import { imagePath, MAX_IMAGE_BASE64, readClipboardImage, readImageFile, type Pr
 import { isLargePaste, offsetSlice, offsetWidth, pasteLabel, PromptParts, type DraftSnapshot, type ExpandedPrompt } from "./prompt/parts"
 import { editInEditor } from "./prompt/editor"
 import { TODO_WRITE, TodoWriteInput } from "../core/tools/todos"
+import { stripEchoes } from "../core/loop/stop-gate"
 
 let abort: AbortController | undefined
 /** /save skips OSC52 above this: megabytes of escape sequence can stall the terminal. */
@@ -401,7 +402,11 @@ async function sendTurn(runtime: Runtime, msg: Outgoing, mode: { recover?: boole
   }
   const closeText = () => {
     flush()
-    edit(current, (l) => (l.done = true))
+    // Echoed todo status lines leave the screen as they leave history (loop/stop-gate.ts).
+    edit(current, (l) => {
+      l.text = stripEchoes(l.text)
+      l.done = true
+    })
     current = -1
   }
 
