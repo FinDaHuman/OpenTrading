@@ -184,3 +184,96 @@ test("DuckDuckGo results are parsed, entities decoded and redirect links unwrapp
     expect(t.source).toBe("local")
   }
 })
+
+// --- web_fetch's side model: its own limit, and the page instead of an error (30/10) ---
+
+const article = () => {
+  const text = "VCB công bố lợi nhuận quý 3 đạt 10.000 tỷ đồng. ".repeat(20)
+  return site({ "https://cafef.vn/vcb": () => new Response(text, { headers: { "content-type": "text/plain; charset=utf-8" } }) })
+}
+
+test("a side model that times out gives the page and a note, not 'The operation timed out.'", async () => {
+  const { deps } = article()
+  const out = await runFetch({ url: "https://cafef.vn/vcb", prompt: "lợi nhuận quý 3?" }, signal(), {
+    ...deps,
+    extract: async () => {
+      throw new DOMException("The operation timed out.", "TimeoutError")
+    },
+  })
+  expect(out).toContain("Ghi chú: model phụ không đọc xong trang (quá 90s)")
+  expect(out).toContain("VCB công bố lợi nhuận quý 3 đạt 10.000 tỷ đồng.")
+  expect(out).not.toContain("timed out")
+})
+
+test("an empty or cut side answer says why; a cut one is kept above the page", async () => {
+  const { deps } = article()
+  const empty = await runFetch({ url: "https://cafef.vn/vcb", prompt: "lợi nhuận quý 3?" }, signal(), {
+    ...deps,
+    extract: async () => ({ text: "  ", finishReason: "length" }),
+  })
+  expect(empty).toContain("model phụ không đọc xong trang (không trả lời, finishReason=length)")
+  expect(empty).toContain("10.000 tỷ đồng")
+  const cut = await runFetch({ url: "https://cafef.vn/vcb", prompt: "lợi nhuận quý 3?" }, signal(), {
+    ...deps,
+    extract: async () => ({ text: "Lợi nhuận quý 3 là", finishReason: "length" }),
+  })
+  expect(cut).toContain("câu trả lời bị cắt (finishReason=length)")
+  expect(cut.indexOf("Trả lời dở của model phụ:\nLợi nhuận quý 3 là")).toBeGreaterThan(-1)
+  expect(cut.indexOf("Lợi nhuận quý 3 là")).toBeLessThan(cut.lastIndexOf("VCB công bố"))
+  const ok = await runFetch({ url: "https://cafef.vn/vcb", prompt: "lợi nhuận quý 3?" }, signal(), {
+    ...deps,
+    extract: async () => ({ text: "10.000 tỷ đồng.", finishReason: "stop" }),
+  })
+  expect(ok).toEndWith("\n\n10.000 tỷ đồng.")
+})
+
+test("the side model's limit fits in what the download left of the call's 125s", async () => {
+  const { deps } = article()
+  let t = 0
+  let called = false
+  // The download took 115s: less than 10s would be left, so the side model is skipped.
+  const out = await runFetch({ url: "https://cafef.vn/vcb", prompt: "lợi nhuận quý 3?" }, signal(), {
+    ...deps,
+    now: () => (t += 115_000) - 115_000,
+    extract: async () => ((called = true), "không tới đây"),
+  })
+  expect(called).toBe(false)
+  expect(out).toContain("model phụ không đọc xong trang (không còn đủ thời gian sau khi tải trang)")
+  expect(out).toContain("10.000 tỷ đồng")
+})
+
+test("the user's Esc and the side model's own errors stay errors", async () => {
+  const { deps } = article()
+  const controller = new AbortController()
+  controller.abort()
+  await expect(
+    runFetch({ url: "https://cafef.vn/vcb", prompt: "x?" }, controller.signal, {
+      ...deps,
+      extract: async () => {
+        throw new DOMException("The operation timed out.", "TimeoutError")
+      },
+    }),
+  ).rejects.toThrow()
+  await expect(
+    runFetch({ url: "https://cafef.vn/vcb", prompt: "x?" }, signal(), {
+      ...deps,
+      extract: async () => {
+        throw new Error("Hết quota trong ngày. Gọi lại web_fetch không kèm prompt để đọc thẳng nội dung trang.")
+      },
+    }),
+  ).rejects.toThrow("Hết quota")
+})
+
+test("a long cut answer beside a long page stays under the tool's 60,000 chars, and start_char stays true", async () => {
+  const long = "Đoạn văn dài về thị trường. ".repeat(4000)
+  const { deps } = site({ "https://cafef.vn/dai2": () => new Response(long, { headers: { "content-type": "text/plain; charset=utf-8" } }) })
+  const partial = "Trả lời rất dài. ".repeat(500)
+  const out = await runFetch({ url: "https://cafef.vn/dai2", prompt: "x?" }, signal(), {
+    ...deps,
+    extract: async () => ({ text: partial, finishReason: "length" }),
+  })
+  expect(out.length).toBeLessThan(60_000)
+  const shown = 50_000 - partial.trim().length
+  expect(out).toContain(`start_char=${shown}`)
+  expect(long.slice(0, shown).endsWith(out.split("\n\n(còn")[0]!.slice(-50))).toBe(true)
+})

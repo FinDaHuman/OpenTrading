@@ -4,7 +4,7 @@ import { LOCAL_SOURCE, type ToolDef } from "../types"
 import { decodeText, htmlToMarkdown, isHtml, isPdf, isTextual, pdfToText } from "./convert"
 import { isPreapproved } from "./domains"
 import { checkUrl, fetchPublic, type Resolver } from "./net"
-import { extractWithModel, webTarget } from "./side-model"
+import { extractWithModel, webTarget, type Extracted } from "./side-model"
 
 /**
  * web_fetch at the level of Claude Code's WebFetch: https only, private addresses refused
@@ -17,7 +17,18 @@ import { extractWithModel, webTarget } from "./side-model"
 export type WebFetchInput = { url: string; prompt?: string; format?: "markdown" | "text" | "html"; start_char?: number; timeoutSeconds?: number }
 
 const PAGE = 50_000
+/** Page part kept beside a cut side answer, however long the answer. */
+const PAGE_MIN = 10_000
 const PROMPT_INPUT = 100_000
+
+/** The whole call's limit (wrap.ts races it): download and the side model share it. */
+export const FETCH_TOOL_TIMEOUT_MS = 125_000
+/** The side model's own limit, inside what the download left of the call's. */
+const EXTRACT_MAX_MS = 90_000
+/** Kept back so the page and a note still come back before the call's limit fires. */
+const EXTRACT_MARGIN_MS = 5_000
+/** Less than this left: the side model is skipped, the page comes back with a note. */
+const EXTRACT_MIN_MS = 10_000
 
 interface Page {
   url: string
@@ -45,7 +56,9 @@ const plain = (md: string) =>
 export interface FetchDeps {
   fetch?: typeof fetch
   resolve?: Resolver
-  extract?: (content: string, prompt: string, url: string, signal: AbortSignal) => Promise<string>
+  extract?: (content: string, prompt: string, url: string, signal: AbortSignal) => Promise<string | Extracted>
+  /** Tests: the clock the side model's budget is measured with. */
+  now?: () => number
 }
 
 async function load(url: URL, signal: AbortSignal, deps: FetchDeps): Promise<Page | { redirect: string; status: number }> {
@@ -84,10 +97,18 @@ async function load(url: URL, signal: AbortSignal, deps: FetchDeps): Promise<Pag
   return page
 }
 
+/**
+ * `signal` is the caller's (the user's Esc). The download gets `timeoutSeconds` (default 60); the
+ * side model gets its own limit from what is left of the call's 125s. On 30/10 one 60s limit
+ * covered both, and gemini-3.8-flash reading a 22k-token page ended in a bare "The operation
+ * timed out." (opencode and Claude Code time only the HTTP request; their summarizer has none).
+ */
 export async function runFetch(input: WebFetchInput, signal: AbortSignal, deps: FetchDeps = {}): Promise<string> {
+  const now = deps.now ?? Date.now
+  const started = now()
   const url = checkUrl(input.url)
   const cachedBefore = cache.has(url.href)
-  const page = await load(url, signal, deps)
+  const page = await load(url, AbortSignal.any([signal, AbortSignal.timeout((input.timeoutSeconds ?? 60) * 1000)]), deps)
   if ("redirect" in page) {
     return [
       "REDIRECT: URL chuyển hướng sang host khác.",
@@ -113,14 +134,45 @@ export async function runFetch(input: WebFetchInput, signal: AbortSignal, deps: 
         if (!target) throw new Error("Chưa có model để đọc trang theo prompt (gõ /model).")
         return extractWithModel(c, p, u, target, s)
       })
-    return `${header}\n\n${await extract(content, input.prompt, page.url, signal)}`
+    const budget = Math.min(EXTRACT_MAX_MS, FETCH_TOOL_TIMEOUT_MS - (now() - started) - EXTRACT_MARGIN_MS)
+    if (budget < EXTRACT_MIN_MS) return withPage(header, body, "không còn đủ thời gian sau khi tải trang")
+    let got: Extracted
+    try {
+      const out = await extract(content, input.prompt, page.url, AbortSignal.any([signal, AbortSignal.timeout(budget)]))
+      got = typeof out === "string" ? { text: out } : out
+    } catch (error) {
+      // The user's Esc and the side model's own errors (quota…) stay errors; its limit does not.
+      if (signal.aborted || (error as { name?: string })?.name !== "TimeoutError") throw error
+      return withPage(header, body, `quá ${Math.round(budget / 1000)}s`)
+    }
+    const text = got.text.trim()
+    if (!text) return withPage(header, body, `không trả lời${got.finishReason ? `, finishReason=${got.finishReason}` : ""}`)
+    if (got.finishReason === "length") return withPage(header, body, "câu trả lời bị cắt (finishReason=length)", text)
+    return `${header}\n\n${text}`
   }
-  const start = Math.max(0, input.start_char ?? 0)
-  if (start >= body.length && body.length > 0) return `${header}\n\n(start_char ${start} vượt quá độ dài ${body.length} ký tự.)`
-  const chunk = body.slice(start, start + PAGE)
+  return `${header}${pageChunk(body, input.start_char)}`
+}
+
+/**
+ * The side model did not read the page through: the page itself, so the model needs no second
+ * call (and no second request) to see it. A cut answer is kept above it, and the page part is
+ * shorter by as much: the whole stays under the tool's 60,000 chars (wrap.ts would cut it and the
+ * start_char hint would be wrong).
+ */
+function withPage(header: string, body: string, why: string, partial?: string): string {
+  const note = `Ghi chú: model phụ không đọc xong trang (${why}); dưới đây là nội dung trang, đọc tiếp bằng start_char.`
+  const size = Math.max(PAGE_MIN, PAGE - (partial?.length ?? 0))
+  return `${header}\n${note}${partial ? `\n\nTrả lời dở của model phụ:\n${partial}` : ""}${pageChunk(body, 0, size)}`
+}
+
+/** `body` from `start_char`, one page at a time, with how to read on. */
+function pageChunk(body: string, startChar: number | undefined, size = PAGE): string {
+  const start = Math.max(0, startChar ?? 0)
+  if (start >= body.length && body.length > 0) return `\n\n(start_char ${start} vượt quá độ dài ${body.length} ký tự.)`
+  const chunk = body.slice(start, start + size)
   const rest = body.length - (start + chunk.length)
   const more = rest > 0 ? `\n\n(còn ${rest} ký tự; gọi lại web_fetch với start_char=${start + chunk.length}, hoặc dùng prompt để hỏi đúng phần cần)` : ""
-  return `${header}${start > 0 ? `\n(từ ký tự ${start})` : ""}\n\n${chunk || "(trang không có nội dung chữ)"}${more}`
+  return `${start > 0 ? `\n(từ ký tự ${start})` : ""}\n\n${chunk || "(trang không có nội dung chữ)"}${more}`
 }
 
 const hostOf = (raw: string) => {
@@ -154,10 +206,10 @@ export function webFetchTool(deps: FetchDeps = {}): ToolDef<WebFetchInput> {
       const host = hostOf((input as WebFetchInput).url)
       return host && isPreapproved(host) ? undefined : `domain:${host ?? "?"}`
     },
-    timeoutMs: 125_000,
+    timeoutMs: FETCH_TOOL_TIMEOUT_MS,
     maxOutputChars: 60_000,
     summarize: (input) => `web_fetch ${input.url.slice(0, 80)}${input.prompt ? ` · "${input.prompt.slice(0, 40)}"` : ""}`,
-    execute: (input, ctx) => runFetch(input, AbortSignal.any([ctx.signal, AbortSignal.timeout((input.timeoutSeconds ?? 60) * 1000)]), deps),
+    execute: (input, ctx) => runFetch(input, ctx.signal, deps),
   }
 }
 
