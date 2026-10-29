@@ -41,6 +41,8 @@ export type SessionEntry =
       recoveries?: { kind: string; attempt: number }[]
       /** The turn ended without an answer. */
       unanswered?: boolean
+      /** Items left open when the model answered (the list was retired, items unconfirmed). */
+      retiredTodos?: number
     }
   /**
    * The history was compacted: `messages` replaces everything before it for the model. The
@@ -100,6 +102,7 @@ export interface TurnInfo {
   contextTokens?: number
   recoveries?: { kind: string; attempt: number }[]
   unanswered?: boolean
+  retiredTodos?: number
 }
 
 export class Session {
@@ -218,6 +221,7 @@ export class Session {
       contextTokens: info.contextTokens,
       ...(info.recoveries ? { recoveries: info.recoveries } : {}),
       ...(info.unanswered ? { unanswered: true } : {}),
+      ...(info.retiredTodos ? { retiredTodos: info.retiredTodos } : {}),
     })
     await appendFile(this.path!, lines.map((l) => JSON.stringify(l)).join("\n") + "\n", "utf8")
 

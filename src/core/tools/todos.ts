@@ -3,8 +3,23 @@ import { z } from "zod"
 import { compactCarry, isCompactMarker } from "../compact-marker"
 
 export const TODO_WRITE = "todo_write"
-/** First line of every successful todo_write result; the TUI keys its one-line summary on it. */
-export const TODO_PREFIX = "Đã cập nhật việc cần làm"
+/**
+ * First words of every successful todo_write result; the TUI keys its one-line summary on it.
+ * The result reads as an instruction, not as prose an answer could reuse: the old "Đã cập nhật
+ * việc cần làm: 1/3 xong" was copied into answers, then became a whole answer (29/10).
+ */
+export const TODO_PREFIX = "[todo_write] Đã lưu"
+/** The prefix before 29/10, still in saved sessions. */
+export const LEGACY_TODO_PREFIX = "Đã cập nhật việc cần làm"
+/**
+ * Set on the turn's last assistant message when the model answered but left items of a list it
+ * touched that turn open (retireLeftTodos). The harness retires the list — no longer recited
+ * or pinned, so the next question is not answered against an old checklist — but never
+ * marks an item done for the model: the items are recorded as unconfirmed, as they were.
+ * A provider ignores a namespace it does not own, so the model never sees it (test/harness-marks.test.ts).
+ */
+export const HARNESS_OPTIONS = "opentrading"
+export type HarnessMarks = { retiredTodos?: Todo[] }
 export const MAX_TODOS = 20
 
 export const TodoStatus = z.enum(["pending", "in_progress", "completed", "cancelled"])
@@ -68,6 +83,7 @@ export function currentTodos(messages: readonly ModelMessage[]): Todo[] {
   let userTurnsSince = 0
   for (const message of messages) {
     if (message.role === "user") userTurnsSince++
+    if (message.role === "assistant" && harnessMarks(message).retiredTodos) current = []
     // The list in force when the history was compacted (its todo_write calls were summarized).
     if (isCompactMarker(message)) {
       const carried = z.array(Todo).safeParse(compactCarry(message).todos)
@@ -90,4 +106,41 @@ export function currentTodos(messages: readonly ModelMessage[]): Todo[] {
     }
   }
   return userTurnsSince >= TODO_STALE_TURNS ? [] : current
+}
+
+/** The harness's own marks on a message (never sent to a provider's model). */
+export function harnessMarks(message: ModelMessage): HarnessMarks {
+  const marks = (message.providerOptions as Record<string, unknown> | undefined)?.[HARNESS_OPTIONS]
+  return marks && typeof marks === "object" ? (marks as HarnessMarks) : {}
+}
+
+/** Whether this turn's messages hold a successful todo_write (the model touched its list). */
+export function touchedTodos(messages: readonly ModelMessage[]): boolean {
+  return messages.some(
+    (m) =>
+      m.role === "tool" &&
+      typeof m.content !== "string" &&
+      (m.content as Part[]).some((p) => p.type === "tool-result" && p.toolName === TODO_WRITE && p.output?.type !== "error-text" && p.output?.type !== "error-json"),
+  )
+}
+
+/**
+ * The turn's messages with the list retired when the model answered but left items open in a
+ * list it touched this turn; `left` is what it left (unconfirmed, not done). Untouched lists from
+ * earlier turns are left alone (TODO_STALE_TURNS retires them).
+ */
+export function retireLeftTodos(history: readonly ModelMessage[], turn: ModelMessage[]): { messages: ModelMessage[]; left: Todo[] } {
+  if (!touchedTodos(turn)) return { messages: turn, left: [] }
+  const left = currentTodos([...history, ...turn]).filter((t) => t.status === "pending" || t.status === "in_progress")
+  const index = turn.findLastIndex((m) => m.role === "assistant")
+  if (left.length === 0 || index < 0) return { messages: turn, left: [] }
+  const last = turn[index]!
+  const marked = { ...last, providerOptions: { ...last.providerOptions, [HARNESS_OPTIONS]: { retiredTodos: left } } } as ModelMessage
+  return { messages: [...turn.slice(0, index), marked, ...turn.slice(index + 1)], left }
+}
+
+/** What the user is told about a retired list: the items stay unconfirmed, never done. */
+export function retiredNote(left: readonly Todo[]): string {
+  const items = left.map((t) => `${MARK[t.status]} ${t.content}`).join("; ")
+  return `Model trả lời nhưng chưa đóng ${left.length} việc trong danh sách: ${items}. Đã gỡ danh sách; các việc này CHƯA được xác nhận là xong.`
 }

@@ -46,4 +46,6 @@ export type AgentEvent =
       recoveries?: { kind: string; attempt: number }[]
       /** Completed without an answer: the stop gate gave up (a notice says why). */
       unanswered?: boolean
+      /** Items the model left open in this turn's list when it answered (the list was retired). */
+      retiredTodos?: number
     }

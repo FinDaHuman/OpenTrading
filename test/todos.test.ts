@@ -27,9 +27,11 @@ const LIST: Todo[] = [
 
 test("todo_write accepts a valid list and reports progress on the first line", async () => {
   const result = await run(LIST)
-  const [first, ...rest] = result.output.split("\n")
-  expect(first).toBe("Đã cập nhật việc cần làm: 1/3 xong.")
-  expect(rest).toEqual(["[x] Lấy giá 30 phiên FPT", "[>] Lấy BCTC 4 quý", "[ ] So sánh với ngành", "[-] Bỏ phần vĩ mô"])
+  // An instruction, not prose an answer could reuse (29/10), and no list to copy.
+  expect(result.output.startsWith("[todo_write] Đã lưu (1/3 xong).")).toBe(true)
+  expect(result.output).toContain("KHÔNG chép")
+  expect(result.output).toContain("Làm tiếp: Lấy BCTC 4 quý.")
+  expect(result.output).not.toContain("[x]")
   expect(todoWriteTool().summarize!({ todos: LIST })).toBe("Cập nhật việc cần làm (1/3 xong)")
 })
 
@@ -111,4 +113,50 @@ test("the panel shows at most 6 rows: doing and waiting first, in the model's or
   expect(items.map((t) => t.content)).toEqual(["V0", "V5", "V6", "V7", "V8"])
   expect(hidden).toBe(4)
   expect(visibleTodos(LIST)).toEqual({ items: LIST, hidden: 0 })
+})
+
+test("an answer that leaves this turn's list open retires it: items unconfirmed, never marked done", async () => {
+  const { retireLeftTodos, harnessMarks } = await import("../src/core/tools/todos")
+  const list: Todo[] = [
+    { content: "Lấy dữ liệu 3 mã", status: "completed" },
+    { content: "Phân tích", status: "in_progress" },
+    { content: "Kết luận", status: "pending" },
+  ]
+  const history: ModelMessage[] = [{ role: "user", content: "phân tích VCB, FPT, AAA" }]
+  const turn: ModelMessage[] = [call("1", list), result("1"), { role: "assistant", content: "VCB tốt." }]
+  const { messages, left } = retireLeftTodos(history, turn)
+  expect(left).toEqual(list.slice(1))
+  expect(harnessMarks(messages.at(-1)!).retiredTodos).toEqual(list.slice(1))
+  // Not recited or pinned any more, and nothing claims the open items were done.
+  expect(currentTodos([...history, ...messages])).toEqual([])
+  expect(JSON.stringify(messages)).not.toContain('"status":"completed","content":"Phân tích"')
+  // A closed list, or a list from an earlier turn the model did not touch, is left alone.
+  const closed = list.map((t) => ({ ...t, status: "completed" as const }))
+  expect(retireLeftTodos(history, [call("2", closed), result("2"), { role: "assistant", content: "Xong." }]).left).toEqual([])
+  const earlier: ModelMessage[] = [...history, call("3", list), result("3"), { role: "assistant", content: "a" }, { role: "user", content: "giá VCB?" }]
+  const untouched = retireLeftTodos(earlier, [{ role: "assistant", content: "57.200đ" }])
+  expect(untouched.left).toEqual([])
+  expect(harnessMarks(untouched.messages[0]!).retiredTodos).toBeUndefined()
+})
+
+test("the nudge names the running item once the list is two steps behind", async () => {
+  const { toolNudge } = await import("../src/core/agent")
+  const list: Todo[] = [{ content: "Lấy dữ liệu 3 mã", status: "in_progress" }, { content: "Kết luận", status: "pending" }]
+  const step = (id: string): ModelMessage[] => [
+    { role: "assistant", content: [{ type: "tool-call", toolCallId: id, toolName: "current_time", input: {} }] },
+    { role: "tool", content: [{ type: "tool-result", toolCallId: id, toolName: "current_time", output: { type: "text", value: "x" } }] },
+  ]
+  const base: ModelMessage[] = [{ role: "user", content: "x" }, call("1", list), result("1")]
+  expect(toolNudge([...base, ...step("a")])).not.toContain("bước chưa cập nhật")
+  expect(toolNudge([...base, ...step("a"), ...step("b")])).toContain('Đã 2 bước chưa cập nhật danh sách: nếu dữ liệu cho "Lấy dữ liệu 3 mã"')
+})
+
+test("a retired list is shown again on resume and in /export: the items stay unconfirmed", async () => {
+  const { retireLeftTodos } = await import("../src/core/tools/todos")
+  const { transcriptFromMessages } = await import("../src/core/session/transcript")
+  const list: Todo[] = [{ content: "Kết luận", status: "in_progress" }]
+  const { messages } = retireLeftTodos([{ role: "user", content: "x" }], [call("1", list), result("1"), { role: "assistant", content: "VCB tốt." }])
+  const notes = transcriptFromMessages([{ role: "user", content: "x" }, ...messages]).filter((i) => i.kind === "note")
+  expect(notes).toEqual([{ kind: "note", text: expect.stringContaining("[>] Kết luận") }])
+  expect(notes[0]!.kind === "note" && notes[0]!.text).toContain("CHƯA được xác nhận là xong")
 })

@@ -1,5 +1,5 @@
 import type { StepResult, ToolSet } from "ai"
-import { hasOpenTodos, TODO_PREFIX, TODO_WRITE, type Todo } from "../tools/todos"
+import { hasOpenTodos, LEGACY_TODO_PREFIX, TODO_PREFIX, TODO_WRITE, type Todo } from "../tools/todos"
 
 /**
  * When a turn may end. Every harness read (Claude Code, Codex, opencode, Gemini CLI) ends a
@@ -89,7 +89,7 @@ export function judgeStop(last: LastStep, done: readonly RecoveryKind[]): Verdic
  * prefix, the TUI's one-line label, "(Đã hoàn thành các việc cần làm)".
  */
 const ECHO_LINE = new RegExp(
-  `^(${escape(TODO_PREFIX)}|Cập nhật việc cần làm|Đã hoàn thành (hết |tất cả |toàn bộ )?(các )?việc cần làm|Đã đóng (danh sách )?việc cần làm)`,
+  `^(${escape(TODO_PREFIX)}|${escape(LEGACY_TODO_PREFIX)}|Cập nhật việc cần làm|Đã hoàn thành (hết |tất cả |toàn bộ )?(các )?việc cần làm|Đã đóng (danh sách )?việc cần làm)`,
   "i",
 )
 /** A rendered todo item (renderTodos): only dropped next to an echoed status line. */

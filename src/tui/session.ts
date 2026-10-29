@@ -16,7 +16,7 @@ let current = Session.create()
 export const currentSession = () => current
 
 /** Persist one finished turn (fire-and-forget: a disk error must not break the chat). */
-export function recordTurn(messages: ModelMessage[], contextTokens?: number, gate?: Pick<TurnInfo, "recoveries" | "unanswered">) {
+export function recordTurn(messages: ModelMessage[], contextTokens?: number, gate?: Pick<TurnInfo, "recoveries" | "unanswered" | "retiredTodos">) {
   if (messages.length === 0) return
   const firstTurn = current.turns === 0
   current
@@ -109,6 +109,7 @@ export async function resumeSession(runtime: Runtime, id: string) {
 
   const lines: Line[] = transcriptFromMessages(loaded.display).flatMap((item): Line[] => {
     if (item.kind === "compact") return [{ kind: "compact", summary: item.text }]
+    if (item.kind === "note") return [{ kind: "info", text: item.text }]
     if (item.kind === "agent-notice") {
       return [{ kind: "agent-notice", agentId: item.agentId, status: item.status, text: `Subagent nền ${item.type} (${item.description}) · ${item.status} · ${item.stats}` }]
     }

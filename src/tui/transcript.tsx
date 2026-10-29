@@ -9,7 +9,7 @@ import { truncate } from "./ui/text"
 import { STREAM_CURSOR, streamView } from "./ui/stream-view"
 import { useSpinner } from "./ui/clock"
 import { fmtElapsed } from "./activity"
-import { TODO_PREFIX } from "../core/tools/todos"
+import { LEGACY_TODO_PREFIX, TODO_PREFIX } from "../core/tools/todos"
 import { LOADED_PREFIX } from "../core/tools/search"
 import { isSpawn, SubagentRow } from "./subagent-row"
 import { DESK_RUN } from "../core/desk/tool"
@@ -46,7 +46,7 @@ function preview(output: string, expanded: boolean, max: number) {
 function summary(line: ToolLine): { tone: "ok" | "denied" | "answers"; lines: string[]; wrap?: boolean } | undefined {
   const out = line.output ?? ""
   // The pinned panel shows the list; the transcript keeps one line (ctrl+o for the list).
-  if (line.status === "ok" && out.startsWith(TODO_PREFIX) && !state.expandTools) return { tone: "ok", lines: [] }
+  if (line.status === "ok" && (out.startsWith(TODO_PREFIX) || out.startsWith(LEGACY_TODO_PREFIX)) && !state.expandTools) return { tone: "ok", lines: [] }
   // A deferred tool called before loading: the call loaded it. One sentence; ctrl+o shows the
   // parameters the model got with it.
   if (line.status === "error" && out.startsWith(LOADED_PREFIX) && !state.expandTools) {

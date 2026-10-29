@@ -156,6 +156,13 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
         headers: { "content-type": "text/event-stream" },
       })
     }
+    // The todo test keeps its turn running (slow tool) right after the list is saved.
+    if (callSlowTool && last.includes("[todo_write] Đã lưu")) {
+      const call = { index: 0, id: "call_slow", type: "function", function: { name: "cho_lau", arguments: "{}" } }
+      return new Response(chunk({ role: "assistant", tool_calls: [call] }) + chunk({}, "tool_calls") + "data: [DONE]\n\n", {
+        headers: { "content-type": "text/event-stream" },
+      })
+    }
     if (last.includes("VIỆC-CẦN-LÀM") && !answeredThisTurn) {
       const todos = [
         { content: "Lấy giá 30 phiên FPT", status: "completed" },
@@ -1871,30 +1878,38 @@ test("/config: subagent limit is a number ≥ 1 applied live; subagent model lis
   runtime.subagents.setMax(10)
 })
 
-test("todo_write: the open list is pinned above the prompt, the transcript keeps one line, /new clears it", async () => {
+test("todo_write: the open list is pinned above the prompt, the transcript keeps one line, an answer left open retires it", async () => {
   await setKey("nvidia", "nvapi-good-key")
+  const gate = await slowTool()
   await setup.mockInput.typeText("VIỆC-CẦN-LÀM cho FPT")
   setup.mockInput.pressEnter()
-  await setup.waitFor(() => !state.streaming && state.lines.some((l) => l.kind === "tool" && l.name === "todo_write" && l.status === "ok"))
+  // Mid-turn (the slow tool runs after the list is saved): the open list is pinned.
+  await setup.waitFor(() => state.lines.some((l) => l.kind === "tool" && l.name === "todo_write" && l.status === "ok"))
   const frame = await setup.waitForFrame((f) => f.includes("Việc cần làm · 1/3") && f.includes("● Cập nhật việc cần làm (1/3 xong)"))
   show(frame)
   expect(frame).toContain("● Cập nhật việc cần làm (1/3 xong)")
   expect(frame).toContain("[>] Lấy BCTC 4 quý")
   expect(frame).toContain("[ ] So sánh với ngành")
-  // The list is in the panel, not repeated under the tool row.
-  expect(frame.split("Lấy BCTC 4 quý").length - 1).toBe(1)
+  // The list is in the panel, not repeated under the tool row (the working row may name the item).
+  expect(frame.split("[>] Lấy BCTC 4 quý").length - 1).toBe(1)
   // The panel sits between the transcript and the prompt.
   const rows = frame.split("\n")
   const panel = rows.findIndex((r) => r.includes("Việc cần làm · 1/3"))
   const prompt = rows.findIndex((r) => r.includes("› "))
   expect(panel).toBeGreaterThan(rows.findIndex((r) => r.includes("❯ VIỆC-CẦN-LÀM")))
   expect(prompt).toBeGreaterThan(panel)
+  callSlowTool = false
+  gate.release()
   await setup.waitFor(() => !state.streaming)
   expect(state.liveTodos).toBeUndefined() // back to history once the turn is saved
+  // The model answered with items open: the list is retired (not pinned, not marked done) and
+  // the transcript names what stays unconfirmed.
+  const after = await setup.waitForFrame((f) => f.includes("CHƯA được xác nhận là xong") && !f.includes("Việc cần làm · 1/3"))
+  expect(after).toContain("[>] Lấy BCTC 4 quý")
 
   await setup.mockInput.typeText("/new")
   setup.mockInput.pressEnter()
-  const cleared = await setup.waitForFrame((f) => !f.includes("Việc cần làm"))
+  const cleared = await setup.waitForFrame((f) => !f.includes("Việc cần làm") && !f.includes("CHƯA được xác nhận"))
   expect(cleared).not.toContain("[>]")
 })
 
