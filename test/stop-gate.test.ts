@@ -75,7 +75,10 @@ test("a bare promise to act is sent back once, tools on; offers, questions and r
   for (const text of [
     "Bạn có muốn mình phân tích sâu hơn về VCB không?",
     "Nếu bạn muốn, mình sẽ lấy thêm dữ liệu dòng tiền khối ngoại.",
-    "VCB đóng cửa 57.200đ (-0,5%). Mình sẽ theo dõi thêm khi có BCTC quý 3",
+    "VCB đóng cửa 57.200đ (-0,5%). Mình sẽ cập nhật khi có BCTC quý 3.",
+    "Thử đặt lệnh mua khi giá điều chỉnh về vùng hỗ trợ.",
+    "Tiếp tục nghiên cứu thêm ngành ngân hàng.",
+    "Thử đặt lệnh mua quanh 55.000đ.",
     "| Mã | Giá |\n|---|---|\n| VCB | 57.200 |\nTiếp theo mình sẽ lấy dữ liệu FPT:",
     "Kết luận: VCB tích cực, rủi ro chính là trích lập dự phòng.",
   ])

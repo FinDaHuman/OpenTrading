@@ -1193,7 +1193,7 @@ test("a promise without a tool call is sent back once with tools on, and the too
   const events = await collect(runAgent({ history: [], input: "mấy giờ rồi", skills: [], registry: registry() }))
   expect(bodies).toHaveLength(3)
   expect(bodies[1]!.tool_choice).not.toBe("none")
-  expect(lastSent(1)).toContain("chưa gọi tool nào")
+  expect(lastSent(1)).toContain("không gọi tool nào")
   expect(tools(events)).toEqual(["current_time"])
   expect(done(events).recoveries).toEqual([{ kind: "promise", attempt: 1 }])
   // The promise is not kept: the answer follows the tool result.
@@ -1205,4 +1205,18 @@ test("an answer that ends with an offer or a question costs exactly one request"
   const events = await collect(runAgent({ history: [], input: "giá VCB", skills: [], registry: registry() }))
   expect(bodies).toHaveLength(1)
   expect(done(events).recoveries).toBeUndefined()
+})
+
+test("with a step cap, a summary that names what is missing is kept as the answer, not sent back", async () => {
+  await saveConfig({ provider: "groq", model: "tooly", maxSteps: 2 })
+  try {
+    respond = (_body, n) => (n === 0 ? toolCall("current_time", {}, "call_c") : n === 1 ? answer("Tôi cần tra cứu thêm BCTC quý 3.") : undefined)
+    const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: registry() }))
+    expect(bodies).toHaveLength(2)
+    expect(JSON.stringify(done(events).messages.at(-1))).toContain("Tôi cần tra cứu thêm BCTC quý 3.")
+    expect(done(events).unanswered).toBeUndefined()
+    expect(done(events).recoveries).toBeUndefined()
+  } finally {
+    await saveConfig({ provider: "groq", model: "tooly", maxSteps: undefined })
+  }
 })

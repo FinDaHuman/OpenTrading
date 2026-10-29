@@ -51,7 +51,7 @@ export const RESCUE_LENGTH =
 export const RESCUE_EMPTY =
   "<nhac_nho>\nBạn chưa viết câu trả lời nào cho người dùng. Trả lời ngay dựa trên dữ liệu đã có, hoặc gọi tool nếu còn thiếu dữ liệu. Không viết dòng trạng thái việc cần làm.\n</nhac_nho>"
 export const RESCUE_PROMISE =
-  "<nhac_nho>\nBạn vừa nói sẽ làm tiếp nhưng chưa gọi tool nào nên chưa có gì chạy. Gọi tool ngay trong bước này, hoặc trả lời người dùng nếu dữ liệu đã đủ.\n</nhac_nho>"
+  "<nhac_nho>\nBước trước kết thúc mà không gọi tool nào. Thiếu dữ liệu thì gọi tool ngay trong bước này; đủ rồi thì trả lời người dùng.\n</nhac_nho>"
 /** Tools off (it brought 2.5-flash-lite's empty answers back). */
 export const RESCUE_EMPTY_FINAL = "Hãy trả lời câu hỏi của người dùng dựa trên kết quả tool ở trên. Không gọi thêm tool."
 
@@ -128,6 +128,12 @@ export function stripEchoes(text: string): string {
 const ACTS =
   "lấy|tải|nạp|kiểm tra|tra cứu|tra|xem|tìm|gọi|phân tích|tổng hợp|truy vấn|so sánh|vẽ|đọc|thu thập|cập nhật|tính|rà soát|đối chiếu|chạy|thử|sử dụng|dùng|gửi|bổ sung|nghiên cứu"
 
+/** What a fetch is about: a promise names data or tools, advice to the user does not. */
+const OBJECTS = "dữ liệu|số liệu|thông tin|tool|công cụ|skill|chúng|nguồn|báo cáo|BCTC|giá|kết quả"
+
+/** Prices, percentages and amounts: a text carrying them already answers something. */
+const FIGURES = /\d{1,3}([.,]\d{3})+|\d+([.,]\d+)?\s*(%|đ(?!\p{L})|đồng|tỷ|triệu|nghìn|lần)/u
+
 /** A promise to act: "mình sẽ lấy…", "để mình kiểm tra", "vui lòng chờ", "let me…", "I'll…". */
 // JS's \b only knows ASCII letters ("Để", "thử" break it): word edges are spelled out.
 const B = String.raw`(?<![\p{L}\p{N}_])`
@@ -135,9 +141,12 @@ const E = String.raw`(?![\p{L}\p{N}_])`
 const INTENT = new RegExp(
   [
     String.raw`${B}(mình|tôi|em)\s+(sẽ|đang|xin phép|cần|tiến hành)\s+(đi\s+)?(${ACTS})${E}`,
-    // Subject-less, at the start of the sentence or clause: "Đang lấy dữ liệu…", "giờ gọi chúng…".
-    String.raw`(^|[,;]\s*)(đang|bây giờ|giờ|tiếp theo|trước tiên|bắt đầu|tiếp tục)\s+(cần\s+)?(${ACTS})${E}`,
-    String.raw`(^|[,;]\s*)(thử|gọi thêm|gọi song song|gọi cùng lúc)${E}`,
+    // Subject-less, at the start of the sentence or clause, about data or tools ("Đang lấy dữ
+    // liệu…", "giờ gọi chúng…", "Thử các nguồn khác"): advice to the user ("Thử đặt lệnh…",
+    // "Tiếp tục nghiên cứu ngành…") names no data or tool.
+    String.raw`(^|[,;]\s*)(đang|bây giờ|giờ|tiếp theo|trước tiên|bắt đầu)\s+(cần\s+)?(${ACTS})${E}.{0,30}${B}(${OBJECTS})${E}`,
+    String.raw`(^|[,;]\s*)thử\s+(lại|các nguồn|nguồn|tool|công cụ|cách khác|dữ liệu|${B}[A-Z]{3,}${E})`,
+    String.raw`(^|[,;]\s*)(gọi thêm|gọi song song|gọi cùng lúc)${E}`,
     String.raw`${B}(để|chờ|đợi)\s+(mình|tôi|em)${E}`,
     String.raw`${B}vui lòng (chờ|đợi)${E}`,
     String.raw`${B}tiếp theo,?\s+(mình|tôi|em)${E}`,
@@ -159,7 +168,7 @@ export const PROMISE_MAX_CHARS = 400
  */
 export function isPromise(text: string): boolean {
   const body = stripEchoes(invisible(text)).trim()
-  if (!body || body.length > PROMISE_MAX_CHARS || /^\s*\|.*\|\s*$/m.test(body)) return false
+  if (!body || body.length > PROMISE_MAX_CHARS || /^\s*\|.*\|\s*$/m.test(body) || FIGURES.test(body)) return false
   const lastLine = bare(body.split("\n").filter((l) => l.trim()).at(-1) ?? "")
   if (OFFER.test(lastLine)) return false
   if (/:\s*$/.test(lastLine)) return true
