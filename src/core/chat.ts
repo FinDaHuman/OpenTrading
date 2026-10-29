@@ -31,15 +31,31 @@ export function describeError(error: unknown): string {
   // When retries run out the SDK wraps the real error ("Failed after 3 attempts…").
   if (e?.name === "AI_RetryError" && e.lastError) return describeError(e.lastError)
   if (e?.name === "AbortError") return "Đã huỷ."
+  // AbortSignal.timeout fired (a tool's or a side request's own limit): its English text says nothing.
+  if (e?.name === "TimeoutError") return "Hết thời gian chờ phản hồi."
   const status = e?.statusCode
   if (status === 401 || status === 403)
     return `API key không hợp lệ hoặc không có quyền (${status}). Gõ /connect để nhập lại.`
-  if (status === 404) return "Model không tồn tại với provider này (404). Gõ /model để chọn lại."
+  if (status === 404) {
+    // The provider says why (Google: "no longer available to new users… use models/gemini-3.8-flash").
+    const said = providerText(e?.message)
+    return `Model không dùng được với provider này (404)${said ? `: ${said}` : ""}. Gõ /model để chọn model khác.`
+  }
   if (status === 429) return describeFailure(error) ?? "Hết quota hoặc bị giới hạn tốc độ (429). Thử lại sau hoặc đổi model."
   if (status === 400 && /tool/i.test(e?.message ?? "") && /support/i.test(e?.message ?? ""))
     return "Model này không hỗ trợ gọi tool (400). Gõ /model để chọn model khác."
   const message = e?.message ?? String(error)
   return status ? `Lỗi ${status}: ${message}` : message
+}
+
+/** Most of a provider's error text an error line keeps (opencode keeps it too, minus HTML pages). */
+const PROVIDER_TEXT_MAX = 300
+
+/** The provider's own words, one line and capped; nothing for an HTML error page. */
+function providerText(message: string | undefined): string {
+  const text = (message ?? "").replace(/\s+/g, " ").trim()
+  if (!text || /^<(!doctype|html|head|body)\b/i.test(text)) return ""
+  return text.length > PROVIDER_TEXT_MAX ? `${text.slice(0, PROVIDER_TEXT_MAX)}…` : text
 }
 
 // Quick manual check without the TUI: `bun src/core/chat.ts "mấy giờ rồi?"`.
