@@ -154,3 +154,59 @@ export function lowThinking(target: EffortTarget): Record<string, Record<string,
   if (npm === "@ai-sdk/groq" && /gpt-oss/.test(id)) return { groq: { reasoningEffort: "low" } }
   return undefined
 }
+
+/** Output room added for a reasoning model that cannot be told to think less. */
+export const THINKING_HEADROOM = 2_048
+const REASONING_ID = /gpt-oss|deepseek-r1|\br1\b|qwq|qwen3|nemotron|thinking|reason/i
+
+/** The model thinks before answering (catalog flag, else its id). */
+const isReasoning = (target: EffortTarget) => target.provider.models[target.model]?.reasoning ?? REASONING_ID.test(target.model)
+
+/** The model thinks before answering and lowThinking has no setting for it. */
+export function needsHeadroom(target: EffortTarget) {
+  if (lowThinking(target)) return false
+  return isReasoning(target)
+}
+
+/** Effort names from lowest to highest, as models.dev and OpenRouter spell them. */
+const EFFORT_ORDER = ["none", "minimal", "low", "medium", "high", "xhigh", "max"]
+
+const lowest = (values: string[]) =>
+  [...values].sort((a, b) => (EFFORT_ORDER.indexOf(a) + 1 || 99) - (EFFORT_ORDER.indexOf(b) + 1 || 99))[0]
+
+/**
+ * Least reasoning a model takes, from its catalog `reasoning_options`: off when it can be turned
+ * off, else its lowest effort. undefined: no setting known (send nothing).
+ */
+function leastReasoning(target: EffortTarget): ProviderOptions | undefined {
+  const options = target.provider.models[target.model]?.reasoning_options ?? []
+  const efforts = options.flatMap((o) => (o.type === "effort" ? o.values : []))
+  const { npm } = sdkOf(target.provider, target.model)
+  if (npm === "@ai-sdk/google") {
+    // Effort levels mean thinkingLevel (Gemini 3 and later, the *-latest aliases): flash-lite's
+    // lowest is minimal, 3.8-flash's is low. Gemini 2.5 lists a token budget: lowThinking.
+    const level = lowest(efforts)
+    return level ? { google: { thinkingConfig: { thinkingLevel: level, includeThoughts: false } } } : (lowThinking(target) as ProviderOptions | undefined)
+  }
+  if (npm === "@openrouter/ai-sdk-provider") {
+    // OpenRouter: effort "none" or enabled:false turn reasoning off; `exclude` only hides it
+    // from the response (still spent). A model with mandatory reasoning lists no "none".
+    if (efforts.includes("none")) return { openrouter: { reasoning: { effort: "none" } } }
+    if (options.some((o) => o.type === "toggle")) return { openrouter: { reasoning: { enabled: false } } }
+    const level = lowest(efforts)
+    return level ? { openrouter: { reasoning: { effort: level } } } : undefined
+  }
+  return lowThinking(target) as ProviderOptions | undefined
+}
+
+/**
+ * A side request's settings (session title, web_fetch's page reader): the least reasoning the
+ * model takes, and room for reasoning on top of the answer's own budget. On 30/10 the title of
+ * openrouter nvidia/nemotron-3.5-lightning:free came back empty: its reasoning took all 256
+ * tokens (finish "length"). maxOutputTokens is a cap, not a charge, so a reasoning model always
+ * gets the headroom: some models ignore the "off" switch, and Gemini's minimal still may think.
+ */
+export function sideRequest(target: EffortTarget, maxOutputTokens: number): { providerOptions?: ProviderOptions; maxOutputTokens: number } {
+  const providerOptions = isReasoning(target) ? leastReasoning(target) : undefined
+  return { ...(providerOptions ? { providerOptions } : {}), maxOutputTokens: maxOutputTokens + (isReasoning(target) ? THINKING_HEADROOM : 0) }
+}

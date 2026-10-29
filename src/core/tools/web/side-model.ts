@@ -4,6 +4,7 @@ import { createOpenAI } from "@ai-sdk/openai"
 import { generateText, type LanguageModel, type ToolSet } from "ai"
 import { describeError, resolveTarget, type Target } from "../../chat"
 import { loadConfig } from "../../config"
+import { sideRequest } from "../../effort"
 import { languageModel, sdkOf } from "../../providers"
 import { classifyFailure } from "../../retry"
 
@@ -115,7 +116,8 @@ export async function extractWithModel(content: string, prompt: string, url: str
     model: languageModel(target.provider, target.model, target.apiKey),
     abortSignal: signal,
     maxRetries: 0,
-    maxOutputTokens: 2000,
+    // Least reasoning, with room for it (effort.ts sideRequest): the answer keeps its 2000 tokens.
+    ...sideRequest(target, 2000),
     prompt: [
       `Nội dung trang ${url}:`,
       "<noi_dung>",

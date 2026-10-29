@@ -14,6 +14,12 @@ export interface CatalogModel {
   /** models.dev release date (YYYY-MM-DD or YYYY-MM). */
   release_date?: string
   reasoning?: boolean
+  /**
+   * How the model's reasoning can be set (models.dev): effort levels, an on/off toggle, a token
+   * budget. Shapes as cached on 30/10: `{type:"effort", values}` (4560 models), `{type:"toggle"}`
+   * (1426), `{type:"budget_tokens", min?, max?}` (606).
+   */
+  reasoning_options?: ReasoningOption[]
   tool_call?: boolean
   status?: "alpha" | "beta" | "deprecated"
   /** `input`: some models accept less input than their context (GPT-5: 400k context, 272k input). */
@@ -21,6 +27,11 @@ export interface CatalogModel {
   modalities?: { input?: string[]; output?: string[] }
   provider?: { npm?: string; api?: string }
 }
+
+export type ReasoningOption =
+  | { type: "effort"; values: string[] }
+  | { type: "toggle" }
+  | { type: "budget_tokens"; min?: number; max?: number }
 
 export interface CatalogProvider {
   id: string
