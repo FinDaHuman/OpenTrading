@@ -189,6 +189,8 @@ test("one request: an <analysis> scratchpad then the <summary>; lean drops the a
   expect(lean).toContain("## Số liệu đã xác minh")
   expect(lean).not.toContain("## Phân tích và kết luận đã đưa ra")
   expect(lean).not.toContain("## Ràng buộc và sở thích")
+  // A figure only an earlier answer gave is not sourced to a tool (30/10, AAA "LNTT +29,3%").
+  for (const prompt of [full, lean]) expect(prompt).toContain('ghi nguồn là "câu trả lời trước", không ghi tên tool')
 })
 
 test("the stored summary drops the scratchpad; a cut-off analysis is no summary", () => {
