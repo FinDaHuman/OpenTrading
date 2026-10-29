@@ -150,3 +150,13 @@ test("the nudge names the running item once the list is two steps behind", async
   expect(toolNudge([...base, ...step("a")])).not.toContain("bước chưa cập nhật")
   expect(toolNudge([...base, ...step("a"), ...step("b")])).toContain('Đã 2 bước chưa cập nhật danh sách: nếu dữ liệu cho "Lấy dữ liệu 3 mã"')
 })
+
+test("a retired list is shown again on resume and in /export: the items stay unconfirmed", async () => {
+  const { retireLeftTodos } = await import("../src/core/tools/todos")
+  const { transcriptFromMessages } = await import("../src/core/session/transcript")
+  const list: Todo[] = [{ content: "Kết luận", status: "in_progress" }]
+  const { messages } = retireLeftTodos([{ role: "user", content: "x" }], [call("1", list), result("1"), { role: "assistant", content: "VCB tốt." }])
+  const notes = transcriptFromMessages([{ role: "user", content: "x" }, ...messages]).filter((i) => i.kind === "note")
+  expect(notes).toEqual([{ kind: "note", text: expect.stringContaining("[>] Kết luận") }])
+  expect(notes[0]!.kind === "note" && notes[0]!.text).toContain("CHƯA được xác nhận là xong")
+})

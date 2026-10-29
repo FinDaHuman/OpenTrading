@@ -35,7 +35,7 @@ import { classifyFailure, retryMiddleware, type RetryNotice, type RetryOptions }
 import { loadedTools } from "./tools/loaded"
 import { modeNote } from "./permission/mode"
 import { NOTE as NOTICE_NOTE } from "./subagents/notification"
-import { currentTodos, retireLeftTodos, todoMark, TODO_WRITE } from "./tools/todos"
+import { currentTodos, retiredNote, retireLeftTodos, todoMark, TODO_WRITE } from "./tools/todos"
 import { answeredAndClosedTodos, judgeStop, MAX_RECOVERIES, stripEchoes, type RecoveryKind, type Verdict } from "./loop/stop-gate"
 import { MAX_TOOLS_PER_REQUEST, modelOutput, stripImages, type BuiltToolSet, type ToolRegistry, type ToolSetOptions } from "./tools/registry"
 import { describeTool, LOADED_PREFIX, resolveToolName } from "./tools/search"
@@ -1212,16 +1212,12 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
     messages = stripEchoMessages(messages)
     // Answered with items of this turn's list still open: retire the list (never mark them done
     // for the model) and say which ones stay unconfirmed. No request is spent on it.
+    let retiredTodos = 0
     if (!unanswered) {
       const retired = retireLeftTodos([...opts.history, user], messages)
+      retiredTodos = retired.left.length
       messages = retired.messages
-      if (retired.left.length > 0) {
-        const items = retired.left.map((t) => `${todoMark(t.status)} ${t.content}`).join("; ")
-        yield {
-          type: "notice",
-          text: `Model trả lời nhưng chưa đóng ${retired.left.length} việc trong danh sách: ${items}. Đã gỡ danh sách; các việc này CHƯA được xác nhận là xong.`,
-        }
-      }
+      if (retired.left.length > 0) yield { type: "notice", text: retiredNote(retired.left) }
     }
     if (summarized) yield { type: "notice", text: `Đã dùng hết ${maxSteps} bước gọi tool; câu trả lời là bản tổng kết.` }
     const tokens = measured ? await lastStepTokens(measured) : undefined
@@ -1239,6 +1235,7 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
       outcome: "completed",
       ...(recoveries.length > 0 ? { recoveries: recoveries.map((kind, i) => ({ kind, attempt: i + 1 })) } : {}),
       ...(unanswered ? { unanswered } : {}),
+      ...(retiredTodos > 0 ? { retiredTodos } : {}),
     }
     if (opts.hooks) void opts.hooks.emit({ type: "turn-end", sessionId, messages: [user, ...messages] })
     return

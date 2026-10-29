@@ -62,6 +62,10 @@ export function formatTranscript(loaded: Pick<LoadedSession, "summary" | "displa
         out.push("> **Đã nén hội thoại** — tóm tắt thay cho phần trước:", item.text.trim().replace(/^/gm, "> "))
         speaker = undefined
         break
+      case "note":
+        out.push(`> ${item.text}`)
+        speaker = undefined
+        break
       case "agent-notice":
         out.push(`> Subagent nền ${item.type} (${item.description}) · ${item.status} · ${item.stats}`)
         speaker = undefined

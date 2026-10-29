@@ -14,9 +14,9 @@ export const LEGACY_TODO_PREFIX = "Đã cập nhật việc cần làm"
 /**
  * Set on the turn's last assistant message when the model answered but left items of a list it
  * touched that turn open (retireLeftTodos). The harness retires the list — no longer recited
- * or pinned, so it cannot pull the next question back to old work (MyToDoList 31a) — but never
+ * or pinned, so the next question is not answered against an old checklist — but never
  * marks an item done for the model: the items are recorded as unconfirmed, as they were.
- * A provider ignores a namespace it does not own, so the model never sees it.
+ * A provider ignores a namespace it does not own, so the model never sees it (test/harness-marks.test.ts).
  */
 export const HARNESS_OPTIONS = "opentrading"
 export type HarnessMarks = { retiredTodos?: Todo[] }
@@ -137,4 +137,10 @@ export function retireLeftTodos(history: readonly ModelMessage[], turn: ModelMes
   const last = turn[index]!
   const marked = { ...last, providerOptions: { ...last.providerOptions, [HARNESS_OPTIONS]: { retiredTodos: left } } } as ModelMessage
   return { messages: [...turn.slice(0, index), marked, ...turn.slice(index + 1)], left }
+}
+
+/** What the user is told about a retired list: the items stay unconfirmed, never done. */
+export function retiredNote(left: readonly Todo[]): string {
+  const items = left.map((t) => `${MARK[t.status]} ${t.content}`).join("; ")
+  return `Model trả lời nhưng chưa đóng ${left.length} việc trong danh sách: ${items}. Đã gỡ danh sách; các việc này CHƯA được xác nhận là xong.`
 }
