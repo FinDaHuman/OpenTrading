@@ -111,7 +111,10 @@ export async function nativeSearch(query: string, target: Target, opts: NativeOp
  * Claude Code's WebFetch step 2: a model reads the page and answers `prompt`, with its
  * quoting rules. Figures, dates and tickers must come through unchanged.
  */
-export async function extractWithModel(content: string, prompt: string, url: string, target: Target, signal: AbortSignal): Promise<string> {
+/** The side model's answer and how it ended (stop, length…); runFetch decides what an empty or cut one means. */
+export type Extracted = { text: string; finishReason?: string }
+
+export async function extractWithModel(content: string, prompt: string, url: string, target: Target, signal: AbortSignal): Promise<Extracted> {
   const result = await generateText({
     model: languageModel(target.provider, target.model, target.apiKey),
     abortSignal: signal,
@@ -132,7 +135,7 @@ export async function extractWithModel(content: string, prompt: string, url: str
     if (!isQuotaError(error)) throw error
     throw new Error(`${describeError(error)} Gọi lại web_fetch không kèm prompt để đọc thẳng nội dung trang.`)
   })
-  return result.text.trim() || "Model không trả lời."
+  return { text: result.text, finishReason: result.finishReason }
 }
 
 /** A 429 / exhausted quota (daily or per-minute), by the same classifier as the turn's retries. */
