@@ -248,6 +248,7 @@ const RESCUE_NOTICE: Record<RecoveryKind, string> = {
   malformed: "Model gọi tool sai định dạng nên lượt dừng khi chưa trả lời.",
   length: "Câu trả lời bị cắt vì chạm giới hạn độ dài output.",
   empty: "Model dừng khi chưa viết câu trả lời.",
+  promise: "Model nói sẽ lấy thêm dữ liệu nhưng dừng mà chưa làm.",
 }
 
 type AssistantMessage = Extract<ModelMessage, { role: "assistant" }>

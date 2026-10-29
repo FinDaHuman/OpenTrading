@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync, statSync } from "node:fs"
 import path from "node:path"
 import type { ModelMessage } from "ai"
-import { isEmptyAnswer, stripEchoes } from "../../src/core/loop/stop-gate"
+import { isEmptyAnswer, isPromise, stripEchoes } from "../../src/core/loop/stop-gate"
 import { sessionsDir } from "../../src/core/session/store"
 
 /**
@@ -36,6 +36,7 @@ const textOf = (message: ModelMessage) =>
 let turns = 0
 const empty: string[] = []
 const stripped: string[] = []
+const promises: string[] = []
 for (const file of files(dir)) {
   let last: ModelMessage | undefined
   for (const line of readFileSync(file, "utf8").split("\n")) {
@@ -51,8 +52,13 @@ for (const file of files(dir)) {
     turns++
     const text = textOf(last)
     const where = `${path.relative(dir, file)}: ${text.replace(/\s+/g, " ").trim().slice(0, 100)}`
+    // Only a final step without tool calls is judged as a promise (the gate's rule).
+    const calls = typeof last.content !== "string" && last.content.some((p) => p.type === "tool-call")
     if (isEmptyAnswer(text)) empty.push(where)
-    else if (stripEchoes(text) !== text) stripped.push(where)
+    else {
+      if (stripEchoes(text) !== text) stripped.push(where)
+      if (!calls && isPromise(text)) promises.push(where)
+    }
     last = undefined
   }
 }
@@ -62,3 +68,5 @@ console.log(`\nCổng dừng sẽ gửi lại model (rỗng hoặc chỉ có dò
 for (const line of empty.slice(0, show)) console.log(`  ${line}`)
 console.log(`\nCâu trả lời thật bị cắt dòng chép todo: ${stripped.length}`)
 for (const line of stripped.slice(0, show)) console.log(`  ${line}`)
+console.log(`\nBị coi là "hứa mà không làm" (sẽ gửi lại model): ${promises.length}`)
+for (const line of promises.slice(0, show)) console.log(`  ${line}`)

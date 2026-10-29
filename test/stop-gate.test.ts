@@ -60,3 +60,28 @@ test("isEmptyAnswer: invisible characters and HTML comments are no answer", () =
   expect(isEmptyAnswer("**(Đã hoàn thành tất cả các việc cần làm)**")).toBe(true)
   expect(isEmptyAnswer("Có.")).toBe(false)
 })
+
+test("a bare promise to act is sent back once, tools on; offers, questions and real answers are not", async () => {
+  const { isPromise } = await import("../src/core/loop/stop-gate")
+  for (const text of [
+    "Mình sẽ lấy BCTC 4 quý gần nhất của VCB:",
+    "Để mình kiểm tra lại giá đóng cửa.",
+    "Đang lấy dữ liệu VIX và S&P 500",
+    "Snapshot giá không trả về trường chi tiết. Thử các nguồn dữ liệu khác.",
+    "Các tool đã nạp, giờ gọi chúng để lấy dữ liệu.",
+    "Let me fetch the quarterly report.",
+  ])
+    expect([text, isPromise(text)]).toEqual([text, true])
+  for (const text of [
+    "Bạn có muốn mình phân tích sâu hơn về VCB không?",
+    "Nếu bạn muốn, mình sẽ lấy thêm dữ liệu dòng tiền khối ngoại.",
+    "VCB đóng cửa 57.200đ (-0,5%). Mình sẽ theo dõi thêm khi có BCTC quý 3",
+    "| Mã | Giá |\n|---|---|\n| VCB | 57.200 |\nTiếp theo mình sẽ lấy dữ liệu FPT:",
+    "Kết luận: VCB tích cực, rủi ro chính là trích lập dự phòng.",
+  ])
+    expect([text, isPromise(text)]).toEqual([text, false])
+  const promise = step({ text: "Mình sẽ lấy BCTC 4 quý gần nhất của VCB:" })
+  expect(judgeStop(promise, [])).toMatchObject({ action: "continue", kind: "promise", toolChoice: "auto" })
+  expect(judgeStop(promise, ["promise"])).toEqual({ action: "accept" })
+  expect(judgeStop({ ...promise, finish: "length" }, ["length", "length"])).toEqual({ action: "accept" })
+})
