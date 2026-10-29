@@ -374,6 +374,8 @@ async function sendTurn(runtime: Runtime, msg: Outgoing, mode: { recover?: boole
   let overflow: "resend" | "continue" | undefined
   // The request asked for ultradesk (keyword, /<playbook>) and the model started a run.
   let deskStarted = false
+  /** The stop gate gave up: the turn ends without an answer (the done line says so). */
+  let unanswered = false
   // Index of the assistant line currently receiving text; -1 after a tool call.
   let current = -1
   const edit = (index: number, fn: (line: any) => void) => {
@@ -489,9 +491,10 @@ async function sendTurn(runtime: Runtime, msg: Outgoing, mode: { recover?: boole
           if (event.usage) setState({ contextTokens: event.usage.contextTokens, contextEstimated: event.usage.estimated })
           if (event.messages.length > 0) {
             setState("history", (history) => [...history, ...event.messages])
-            recordTurn(event.messages, event.usage?.contextTokens)
+            recordTurn(event.messages, event.usage?.contextTokens, { recoveries: event.recoveries, unanswered: event.unanswered })
           }
           if (event.clock) setState("clock", event.clock)
+          if (event.unanswered) unanswered = true
           break
       }
     }
@@ -521,8 +524,8 @@ async function sendTurn(runtime: Runtime, msg: Outgoing, mode: { recover?: boole
         attention?.attention(failed ? "error" : "done", failed ? `Lỗi: ${text}` : text || "Đã trả lời xong")
       }
       // A long turn that ran to the end says how long it took (Claude Code's "Worked for").
-      if (!failed && !controller.signal.aborted && worked >= DONE_LINE_MS) {
-        pushLine({ kind: "done", ms: worked, background: backgroundRunning() || undefined })
+      if (!failed && !controller.signal.aborted && (worked >= DONE_LINE_MS || unanswered)) {
+        pushLine({ kind: "done", ms: worked, background: backgroundRunning() || undefined, ...(unanswered ? { unanswered } : {}) })
       }
       // Tools still marked running never got a result (aborted turn).
       setState(

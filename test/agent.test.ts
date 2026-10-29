@@ -52,6 +52,8 @@ let failAfterTool = 0
 let usage: { prompt_tokens: number; completion_tokens: number } | undefined
 /** Token usage reported on scripted tool-call steps. */
 let toolUsage: { prompt_tokens: number; completion_tokens: number } | undefined
+/** Streamed request n (0-based) answered by hand; undefined falls through to the defaults. */
+let respond: ((body: Body, n: number) => Response | undefined) | undefined
 const NUDGE = "Hãy trả lời câu hỏi của người dùng dựa trên kết quả tool"
 const TOOL_NUDGE_START = "Nếu còn cần dữ liệu, gọi cùng lúc"
 
@@ -74,6 +76,10 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   if (!url.endsWith("/chat/completions")) throw new Error(`unexpected fetch ${url}`)
   const body = JSON.parse(String(init?.body)) as Body & { stream?: boolean }
   bodies.push(body)
+  if (respond && body.stream) {
+    const custom = respond(body, bodies.filter((b) => (b as { stream?: boolean }).stream).length - 1)
+    if (custom) return custom
+  }
   if (answerDelayMs > 0 && body.stream) await new Promise((r) => setTimeout(r, answerDelayMs))
   if (failFirst > 0 && body.stream) {
     failFirst--
@@ -148,6 +154,7 @@ afterAll(async () => {
 
 beforeEach(async () => {
   bodies.length = 0
+  respond = undefined
   plan = undefined
   script = undefined
   emptyAfterTool = undefined
@@ -338,14 +345,19 @@ test("an empty answer after a tool result is retried once with tools disabled", 
   // The nudge is not kept in history; the empty answer is replaced by the real one.
   expect(JSON.stringify(messages)).not.toContain(NUDGE)
   expect(messages.map((m) => m.role)).toEqual(["user", "assistant", "tool", "assistant"])
-  expect(messages.at(-1)!.content).toBe("Kết quả: xong.")
+  expect(JSON.stringify(messages.at(-1)!.content)).toContain("Kết quả: xong.")
+  expect(done(events).recoveries).toEqual([{ kind: "empty", attempt: 1 }])
 })
 
 test("a model that stays silent gets a visible notice, not a blank turn", async () => {
   plan = { tool: "current_time", args: {} }
   emptyAfterTool = "always"
   const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: registry() }))
-  expect(bodies).toHaveLength(3) // one retry only
+  // Two recoveries at most: tools off right after the results, then tools on.
+  expect(bodies).toHaveLength(4)
+  expect(bodies[2]!.tool_choice).toBe("none")
+  expect(bodies[3]!.tool_choice).not.toBe("none")
+  expect(done(events).unanswered).toBe(true)
   expect(events.some((e) => e.type === "notice" && e.text.includes("không trả lời sau khi gọi tool"))).toBe(true)
   expect(done(events).messages.map((m) => m.role)).toEqual(["user", "assistant", "tool", "assistant"])
   // A plain stop has nothing to explain: no "Lý do" on the notice, the plain placeholder saved.
@@ -1050,4 +1062,122 @@ test("read-only sends write_file/edit_file by name only; ask mode declares them;
   expect(toolNames(bodies[0])).toContain("write_file")
   expect(toolNames(bodies[0])).toContain("edit_file")
   expect(userOf(0)).toContain("sửa có hỏi")
+})
+
+// --- Stop gate (loop/stop-gate.ts): a turn never ends without an answer ---
+
+const toolCall = (name: string, args: object, id = "call_x", text?: string) =>
+  sse([
+    ...(text ? [chunk({ role: "assistant", content: text })] : []),
+    chunk({ role: "assistant", tool_calls: [{ index: 0, id, type: "function", function: { name, arguments: "" } }] }),
+    chunk({ tool_calls: [{ index: 0, function: { arguments: JSON.stringify(args) } }] }),
+    chunk({}, "tool_calls"),
+  ])
+const answer = (content: string, finish = "stop") => sse([chunk({ role: "assistant", content }), chunk({}, finish)])
+const lastSent = (n: number) => JSON.stringify(bodies.filter((b) => (b as { stream?: boolean }).stream)[n]!.messages.at(-1))
+
+async function todoRegistry() {
+  const { todoWriteTool } = await import("../src/core/tools/builtin/todo-write")
+  const r = registry()
+  r.register(todoWriteTool())
+  return r
+}
+
+test("a preamble, a tool, then an empty last step: the empty step is recovered (the preamble is no answer)", async () => {
+  respond = (_body, n) =>
+    n === 0 ? toolCall("current_time", {}, "call_1", "Mình sẽ xem giờ trước.") : n === 1 ? answer("") : undefined
+  const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: registry() }))
+  expect(bodies).toHaveLength(3)
+  // Right after tool results: tools off first.
+  expect(bodies[2]!.tool_choice).toBe("none")
+  const messages = done(events).messages
+  expect(JSON.stringify(messages.at(-1))).toContain("Kết quả: xong.")
+  expect(messages.map((m) => m.role)).toEqual(["user", "assistant", "tool", "assistant"])
+  expect(done(events).recoveries).toEqual([{ kind: "empty", attempt: 1 }])
+  expect(events.some((e) => e.type === "notice" && e.text.includes("dừng khi chưa viết câu trả lời"))).toBe(true)
+})
+
+test("an answer that only echoes the todo status (29/10) is recovered, tools allowed, and never stored", async () => {
+  respond = (_body, n) => (n === 0 ? answer("\n*(Đã hoàn thành các việc cần làm)*") : undefined)
+  const events = await collect(runAgent({ history: [], input: "Đi sâu vào mã VCB cho tôi.", skills: [], registry: registry() }))
+  expect(bodies).toHaveLength(2)
+  expect(bodies[1]!.tool_choice).not.toBe("none")
+  expect(lastSent(1)).toContain("chưa viết câu trả lời")
+  // The nudge joins the user message the request ends with: never two user messages in a row.
+  const roles = bodies[1]!.messages.map((m) => m.role).filter((r) => r !== "system")
+  expect(roles).toEqual(["user"])
+  const stored = JSON.stringify(done(events).messages)
+  expect(stored).not.toContain("Đã hoàn thành các việc cần làm")
+  expect(stored).not.toContain("chưa viết câu trả lời")
+  expect(done(events).messages.map((m) => m.role)).toEqual(["user", "assistant"])
+  expect(done(events).unanswered).toBeUndefined()
+})
+
+test("a cut answer (finish length) is continued and joined into one message", async () => {
+  respond = (_body, n) => (n === 0 ? answer("Phần đầu, ", "length") : n === 1 ? answer("phần sau.") : undefined)
+  const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: registry() }))
+  expect(bodies).toHaveLength(2)
+  expect(lastSent(1)).toContain("bị cắt")
+  const messages = done(events).messages
+  expect(messages.map((m) => m.role)).toEqual(["user", "assistant"])
+  expect(JSON.stringify(messages[1])).toContain("Phần đầu, phần sau.")
+  expect(done(events).recoveries).toEqual([{ kind: "length", attempt: 1 }])
+})
+
+test("answering and closing the todo list in one step ends the turn: no extra request", async () => {
+  const done3 = { todos: [{ content: "Lấy dữ liệu", status: "completed" }, { content: "Kết luận", status: "completed" }] }
+  respond = (_body, n) => (n === 0 ? toolCall("todo_write", done3, "call_t", "Câu trả lời thật.") : undefined)
+  const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: await todoRegistry() }))
+  expect(bodies).toHaveLength(1)
+  expect(done(events).messages.map((m) => m.role)).toEqual(["user", "assistant", "tool"])
+  expect(done(events).recoveries).toBeUndefined()
+})
+
+test("a preamble that opens a todo list goes on (the early stop is only for a closing call)", async () => {
+  const open = { todos: [{ content: "Lấy dữ liệu", status: "in_progress" }, { content: "Kết luận", status: "pending" }] }
+  respond = (_body, n) => (n === 0 ? toolCall("todo_write", open, "call_t", "Để mình lấy dữ liệu.") : undefined)
+  const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: await todoRegistry() }))
+  expect(bodies).toHaveLength(2)
+  expect(JSON.stringify(done(events).messages.at(-1))).toContain("Kết quả: xong.")
+})
+
+test("echoed todo lines are cut from a real answer before it is stored", async () => {
+  respond = (_body, n) => (n === 0 ? answer("Câu trả lời thật.\n\n*(Đã cập nhật việc cần làm: 1/3 xong)*\n") : undefined)
+  const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: registry() }))
+  expect(bodies).toHaveLength(1)
+  const stored = JSON.stringify(done(events).messages)
+  expect(stored).toContain("Câu trả lời thật.")
+  expect(stored).not.toContain("Đã cập nhật việc cần làm")
+})
+
+test("with a step cap, a recovery run gets only the steps left and the summary still comes last", async () => {
+  await saveConfig({ provider: "groq", model: "tooly", maxSteps: 2 })
+  try {
+    respond = (_body, n) => (n === 0 ? answer("") : undefined)
+    const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: registry() }))
+    // Request 1 is empty, the recovery run has one step left: the forced summary.
+    expect(bodies).toHaveLength(2)
+    expect(bodies[1]!.tool_choice).toBe("none")
+    expect(JSON.stringify(done(events).messages.at(-1))).toContain("Kết quả: xong.")
+  } finally {
+    await saveConfig({ provider: "groq", model: "tooly", maxSteps: undefined })
+  }
+})
+
+test("a malformed Gemini call is sent back with tools on, and the tool then runs", async () => {
+  respond = (_body, n) => (n === 0 ? answer("", "MALFORMED_FUNCTION_CALL") : n === 1 ? toolCall("current_time", {}, "call_m") : undefined)
+  const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: registry() }))
+  expect(bodies).toHaveLength(3)
+  expect(bodies[1]!.tool_choice).not.toBe("none")
+  expect(tools(events)).toEqual(["current_time"])
+  expect(done(events).recoveries).toEqual([{ kind: "malformed", attempt: 1 }])
+  expect(JSON.stringify(done(events).messages.at(-1))).toContain("Kết quả: xong.")
+})
+
+test("a provider filter gives up at once: no request spent asking again", async () => {
+  respond = (_body, n) => (n === 0 ? answer("", "content_filter") : undefined)
+  const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: registry() }))
+  expect(bodies).toHaveLength(1)
+  expect(done(events).unanswered).toBe(true)
+  expect(events.some((e) => e.type === "notice" && e.text.includes("rỗng"))).toBe(true)
 })

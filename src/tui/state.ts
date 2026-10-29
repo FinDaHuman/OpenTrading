@@ -53,7 +53,7 @@ export type Line =
   /** A background subagent finished; its result went (or goes) to the model as a notification. */
   | { kind: "agent-notice"; agentId: string; text: string; status: string }
   /** "✻ Xong sau 1m 23s": a long turn finished (`background` subagents still running). */
-  | { kind: "done"; ms: number; background?: number }
+  | { kind: "done"; ms: number; background?: number; unanswered?: boolean }
 
 /** The turn (or compaction) being worked on, for the row above the prompt (activity.tsx). */
 export interface Activity {

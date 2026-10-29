@@ -31,7 +31,17 @@ export type SessionEntry =
       skills?: { name: string; version?: string }[]
     }
   | { type: "message"; ts: string; message: ModelMessage }
-  | { type: "turn_end"; ts: string; provider?: string; model?: string; contextTokens?: number }
+  | {
+      type: "turn_end"
+      ts: string
+      provider?: string
+      model?: string
+      contextTokens?: number
+      /** The stop gate sent the model back (loop/stop-gate.ts); absent when it never did. */
+      recoveries?: { kind: string; attempt: number }[]
+      /** The turn ended without an answer. */
+      unanswered?: boolean
+    }
   /**
    * The history was compacted: `messages` replaces everything before it for the model. The
    * earlier `message` entries stay in the file, so the transcript can still show them.
@@ -81,6 +91,15 @@ export interface SessionInfo {
   cwd: string
   promptVersion?: string
   skills?: { name: string; version?: string }[]
+}
+
+/** What one turn's turn_end entry records. */
+export interface TurnInfo {
+  provider?: string
+  model?: string
+  contextTokens?: number
+  recoveries?: { kind: string; attempt: number }[]
+  unanswered?: boolean
 }
 
 export class Session {
@@ -165,12 +184,12 @@ export class Session {
   }
 
   /** Append one completed turn. Writes are serialised so turns never interleave. */
-  appendTurn(messages: ModelMessage[], info: SessionInfo & { provider?: string; model?: string; contextTokens?: number }) {
+  appendTurn(messages: ModelMessage[], info: SessionInfo & TurnInfo) {
     this.writing = this.writing.then(() => this.write(messages, info))
     return this.writing
   }
 
-  private async write(messages: ModelMessage[], info: SessionInfo & { provider?: string; model?: string; contextTokens?: number }) {
+  private async write(messages: ModelMessage[], info: SessionInfo & TurnInfo) {
     const ts = new Date().toISOString()
     const lines: SessionEntry[] = []
     if (!this.file) {
@@ -191,7 +210,15 @@ export class Session {
     for (const message of stripImages(messages)) lines.push({ type: "message", ts, message })
     for (const chart of this.pendingCharts.splice(0)) lines.push({ type: "chart", ts, ...chart })
     for (const text of this.pendingHarness.splice(0)) lines.push({ type: "harness", ts, text })
-    lines.push({ type: "turn_end", ts, provider: info.provider, model: info.model, contextTokens: info.contextTokens })
+    lines.push({
+      type: "turn_end",
+      ts,
+      provider: info.provider,
+      model: info.model,
+      contextTokens: info.contextTokens,
+      ...(info.recoveries ? { recoveries: info.recoveries } : {}),
+      ...(info.unanswered ? { unanswered: true } : {}),
+    })
     await appendFile(this.path!, lines.map((l) => JSON.stringify(l)).join("\n") + "\n", "utf8")
 
     this.turns++
