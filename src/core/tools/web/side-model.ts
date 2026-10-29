@@ -7,6 +7,7 @@ import { loadConfig } from "../../config"
 import { sideRequest } from "../../effort"
 import { languageModel, sdkOf } from "../../providers"
 import { classifyFailure } from "../../retry"
+import { vnDay } from "../net-dates"
 
 /**
  * Side model calls for the web tools, the way Claude Code runs its WebSearch: a separate
@@ -89,7 +90,7 @@ export function nativeSearchSetup(target: Target, opts: NativeOptions): { backen
 export async function nativeSearch(query: string, target: Target, opts: NativeOptions, signal: AbortSignal): Promise<NativeSearch | undefined> {
   const setup = nativeSearchSetup(target, opts)
   if (!setup) return undefined
-  const today = new Date().toISOString().slice(0, 10)
+  const today = vnDay()
   const result = await generateText({
     model: setup.model,
     tools: setup.tools,
@@ -148,6 +149,9 @@ export function isQuotaError(error: unknown): boolean {
 export const NATIVE_PAUSE_MS = 10 * 60_000
 const nativePaused = new Map<string, number>()
 
+/** Said once when grounding is not in the key's plan (notInPlan). */
+export const NOT_IN_PLAN_NOTE = "Google Search grounding không có ở gói free Gemini 3 của key này; dùng nguồn khác tới hết ngày quota (đổi ở /config)."
+
 /** Tests only. */
 export function resetNativePause() {
   nativePaused.clear()
@@ -167,7 +171,39 @@ export async function guardedNative<T>(key: string, run: () => Promise<T>, now: 
     return await run()
   } catch (error) {
     if (!isQuotaError(error)) throw error
+    if (notInPlan(error)) {
+      nativePaused.set(key, nextPacificMidnight(now()))
+      // Within the 120 chars runSearch keeps of a native failure.
+      throw new Error(NOT_IN_PLAN_NOTE)
+    }
     nativePaused.set(key, now() + NATIVE_PAUSE_MS)
     throw new Error(`${describeError(error)} Tìm kiếm của model tạm bỏ qua 10 phút.`)
   }
+}
+
+/**
+ * Google's 429 for a feature the key's tier lacks: RESOURCE_EXHAUSTED with no RetryInfo (a
+ * per-minute limit says when to retry) and no QuotaFailure (a spent quota names its metric).
+ * Seen 30/10: grounding with gemini-3.1-flash-lite on a free key, while the same model's chat
+ * requests got 200; Google's pricing page lists Search grounding as "Not available" on the free
+ * tier for Gemini 3. One body only so far: any other 429 keeps the 10-minute pause.
+ */
+export function notInPlan(error: unknown): boolean {
+  const body = (error as { responseBody?: unknown })?.responseBody
+  if (typeof body !== "string" || !body.includes("RESOURCE_EXHAUSTED")) return false
+  return !body.includes("google.rpc.RetryInfo") && !body.includes("google.rpc.QuotaFailure")
+}
+
+/** Next midnight in Pacific time, when Gemini quotas reset (a DST day is an hour off). */
+export function nextPacificMidnight(ms: number): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Los_Angeles",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(new Date(ms))
+  const get = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? 0)
+  const elapsed = ((get("hour") * 60 + get("minute")) * 60 + get("second")) * 1000 + (ms % 1000)
+  return ms - elapsed + 86_400_000
 }

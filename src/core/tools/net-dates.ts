@@ -23,6 +23,21 @@ export function isoFromNetDate(ms: number): string | undefined {
   return h === 0 && m === 0 && s === 0 ? day : `${day}T${pad(h)}:${pad(m)}:${pad(s)}+07:00`
 }
 
+/** A moment in Vietnam time, "YYYY-MM-DDTHH:MM:SS+07:00" (web sources: when a page was read). */
+export function vnStamp(ms = Date.now()): string {
+  const vn = new Date(ms + VN_OFFSET_MS)
+  return `${vnDay(ms)}T${pad(vn.getUTCHours())}:${pad(vn.getUTCMinutes())}:${pad(vn.getUTCSeconds())}+07:00`
+}
+
+/**
+ * The day in Vietnam, "YYYY-MM-DD". Web tools used the UTC day: at 03:23 on 30/10 in Vietnam
+ * a search header said "2026-10-29".
+ */
+export function vnDay(ms = Date.now()): string {
+  const vn = new Date(ms + VN_OFFSET_MS)
+  return `${vn.getUTCFullYear()}-${pad(vn.getUTCMonth() + 1)}-${pad(vn.getUTCDate())}`
+}
+
 /** Every quoted .NET date in a tool's text output, rewritten; anything else unchanged. */
 export function normalizeNetDates(text: string): string {
   if (!text.includes("Date(")) return text
