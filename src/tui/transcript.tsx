@@ -257,7 +257,8 @@ function Row(props: { line: Line; prev?: Line; index: number; width: number }) {
         {(line) => {
           const l = line() as Extract<Line, { kind: "done" }>
           const bg = l.background ? ` · ${l.background} subagent nền vẫn chạy` : ""
-          return <Hanging glyph="✻" glyphColor={color.tx3} text={`Xong sau ${fmtElapsed(l.ms)}${bg}`} fg={color.tx3} />
+          const head = l.unanswered ? "Dừng khi chưa có câu trả lời" : "Xong"
+          return <Hanging glyph="✻" glyphColor={l.unanswered ? color.tham : color.tx3} text={`${head} sau ${fmtElapsed(l.ms)}${bg}`} fg={color.tx3} />
         }}
       </Match>
       <Match when={props.line.kind === "error"}>

@@ -36,6 +36,7 @@ import { loadedTools } from "./tools/loaded"
 import { modeNote } from "./permission/mode"
 import { NOTE as NOTICE_NOTE } from "./subagents/notification"
 import { currentTodos, todoMark } from "./tools/todos"
+import { answeredAndClosedTodos, judgeStop, MAX_RECOVERIES, stripEchoes, type RecoveryKind, type Verdict } from "./loop/stop-gate"
 import { MAX_TOOLS_PER_REQUEST, modelOutput, stripImages, type BuiltToolSet, type ToolRegistry, type ToolSetOptions } from "./tools/registry"
 import { describeTool, LOADED_PREFIX, resolveToolName } from "./tools/search"
 import { cleanToolErrors, toolErrorText } from "./tools/errors"
@@ -49,13 +50,6 @@ export const DEFAULT_MAX_STEPS = Number.POSITIVE_INFINITY
 
 const SUMMARY_PROMPT =
   "Đã hết số lượt gọi tool cho câu hỏi này. Không gọi thêm tool. Hãy tổng kết câu trả lời dựa trên dữ liệu đã có, nói rõ phần nào còn thiếu."
-
-/**
- * Some models (seen with gemini-2.5-flash-lite) end a turn with an empty answer right
- * after a tool result: finish reason STOP, zero output tokens. The request is well formed —
- * it is a model quirk — so we ask once more, with tools still declared but disabled.
- */
-const NUDGE_PROMPT = "Hãy trả lời câu hỏi của người dùng dựa trên kết quả tool ở trên. Không gọi thêm tool."
 
 /**
  * No stream part at all for this long: the request is stalled, not slow. Codex and opencode
@@ -213,14 +207,67 @@ function chartOf(value: unknown): ChartData | undefined {
   return (value as { chart?: ChartData }).chart
 }
 
+/** A recovery run's nudge (never stored) and whether its first step may call tools. */
+type Rescue = { nudge: string; toolChoice: "auto" | "none" }
+
+/** What the user is told when the stop gate sends the model back. */
+const RESCUE_NOTICE: Record<RecoveryKind, string> = {
+  malformed: "Model gọi tool sai định dạng nên lượt dừng khi chưa trả lời.",
+  length: "Câu trả lời bị cắt vì chạm giới hạn độ dài output.",
+  empty: "Model dừng khi chưa viết câu trả lời.",
+}
+
+type AssistantMessage = Extract<ModelMessage, { role: "assistant" }>
+type AssistantPart = Exclude<AssistantMessage["content"], string>[number]
+
+const assistantParts = (message: AssistantMessage): AssistantPart[] =>
+  typeof message.content === "string" ? (message.content ? [{ type: "text", text: message.content }] : []) : message.content
+
 /**
- * Assistant messages with no answer (the empty answer itself, thoughts at most) are dropped
- * from history; the retried answer follows instead, so two model turns never sit side by side.
+ * A recovered run's broken final step leaves history: its text (empty, or only echoed todo
+ * lines) is dropped, and the message with it unless it carries tool calls. The answer that
+ * follows takes its place, so two model turns never sit side by side.
  */
-function isEmptyAssistant(message: ModelMessage) {
-  if (message.role !== "assistant") return false
-  if (typeof message.content === "string") return message.content.trim() === ""
-  return message.content.every((part) => part.type === "reasoning" || (part.type === "text" && part.text.trim() === ""))
+export function dropFinalText(messages: ModelMessage[]): ModelMessage[] {
+  const index = messages.findLastIndex((m) => m.role === "assistant")
+  if (index < 0 || index !== messages.length - 1) return messages
+  const message = messages[index] as AssistantMessage
+  const parts = assistantParts(message).filter((part) => part.type !== "text")
+  if (!parts.some((part) => part.type === "tool-call")) return messages.slice(0, index)
+  return [...messages.slice(0, index), { ...message, content: parts }]
+}
+
+/** A cut answer and its continuation become one assistant message (the nudge between is not kept). */
+export function continueAnswer(kept: ModelMessage[], more: ModelMessage[]): ModelMessage[] {
+  const prev = kept.at(-1)
+  const next = more[0]
+  if (prev?.role !== "assistant" || next?.role !== "assistant") return [...kept, ...more]
+  const parts = [...assistantParts(prev), ...assistantParts(next)]
+  const joined: typeof parts = []
+  for (const part of parts) {
+    const tail = joined.at(-1)
+    if (part.type === "text" && tail?.type === "text") joined[joined.length - 1] = { ...tail, text: tail.text + part.text }
+    else joined.push(part)
+  }
+  return [...kept.slice(0, -1), { ...prev, content: joined }, ...more.slice(1)]
+}
+
+/** Echoed todo status lines out of every assistant text (stop-gate.ts stripEchoes). */
+export function stripEchoMessages(messages: ModelMessage[]): ModelMessage[] {
+  return messages.flatMap((message): ModelMessage[] => {
+    if (message.role !== "assistant") return [message]
+    if (typeof message.content === "string") {
+      const text = stripEchoes(message.content)
+      return text === message.content ? [message] : text ? [{ ...message, content: text }] : []
+    }
+    const parts: AssistantPart[] = message.content.flatMap((part): AssistantPart[] => {
+      if (part.type !== "text") return [part]
+      const text = stripEchoes(part.text)
+      return text === part.text ? [part] : text ? [{ ...part, text }] : []
+    })
+    if (parts.length === message.content.length && parts.every((p, i) => p === message.content[i])) return [message]
+    return parts.some((p) => p.type !== "reasoning") ? [{ ...message, content: parts }] : []
+  })
 }
 
 /**
@@ -349,6 +396,11 @@ interface Outcome {
   finishMessage?: string
   /** The model streamed reasoning (thoughts) in this run. */
   reasoned?: boolean
+  /** Text and tool calls of the step running or last finished (the stop gate reads the final step). */
+  stepText?: string
+  stepTools?: string[]
+  /** The SDK's unified finish reason of the last step (stop, length…). */
+  finish?: string
   /** Completed steps of this turn (assistant calls + their tool results), for aborted turns. */
   progress: ModelMessage[]
 }
@@ -454,6 +506,8 @@ async function* relay(
       switch (part.type) {
         case "start-step":
           outcome.steps++
+          outcome.stepText = ""
+          outcome.stepTools = []
           break
         case "reasoning-delta":
           outcome.reasoned = true
@@ -462,6 +516,7 @@ async function* relay(
         case "finish-step": {
           flushProgress()
           outcome.rawFinish = part.rawFinishReason
+          outcome.finish = part.finishReason
           const note = (part.providerMetadata?.google as { finishMessage?: unknown } | undefined)?.finishMessage
           outcome.finishMessage = typeof note === "string" && note.trim() ? note.trim().slice(0, 300) : undefined
           // Every finished step is one model request, usage reported or not (quota counts requests).
@@ -475,10 +530,12 @@ async function* relay(
         }
         case "text-delta":
           outcome.text += part.text
+          outcome.stepText = (outcome.stepText ?? "") + part.text
           stepText += part.text
           yield { type: "text-delta", text: part.text }
           break
         case "tool-call":
+          outcome.stepTools = [...(outcome.stepTools ?? []), part.toolName]
           started.set(part.toolCallId, Date.now())
           stepCalls.push({
             toolCallId: part.toolCallId,
@@ -965,140 +1022,176 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
   // Visible tools at the current step; deferred tools join once loaded (tool search).
   let active = activeFor(built, request)
   let loaded = loadedTools(request)
-  const result = streamText({
-    model,
-    instructions: system,
-    messages: request,
-    tools,
-    stopWhen: opts.finalTool ? [isStepCount(maxSteps), hasToolCall(opts.finalTool)] : isStepCount(maxSteps),
-    // Every step exposes what the conversation has loaded so far, so a tool found by
-    // tool_search is callable at the very next step.
-    // Last allowed step: keep tools declared (some providers reject tool history otherwise)
-    // but forbid calling them, so the turn always ends with an answer.
-    // Message overrides carry forward to later steps, so every step rebuilds its messages from
-    // the request plus what the model and tools produced: a nudge stays a one-step addition.
-    prepareStep: ({ stepNumber, steps, initialMessages, responseMessages }) => {
-      if (!tools) return undefined
-      // Clean before activeFor reads them: the model never sees the SDK's raw error strings.
-      let messages = cleanToolErrors([...initialMessages, ...responseMessages])
-      // Near the threshold mid-turn: prune old tool results, and keep doing so for the rest of
-      // the turn (switching back would grow past it again and break the provider's cache).
-      if (midTurnPruned === undefined && opts.compactAt !== undefined && stepSize(steps.at(-1)?.usage, messages) >= opts.compactAt) midTurnPruned = 0
-      if (midTurnPruned !== undefined) {
-        const tools = pruneToolResults(messages)
-        const files = pruneAttachments(tools.messages, 0)
-        midTurnPruned = Math.max(midTurnPruned, tools.pruned + files.pruned)
-        midTurnSaved = Math.max(0, tokensOf(messages) - tokensOf(files.messages))
-        messages = files.messages
-      }
-      active = activeFor(built, messages)
-      loaded = loadedTools(messages)
-      if (stepNumber < maxSteps - 1) {
-        if (!nudge || messages.at(-1)?.role !== "tool") return { ...(active ? { activeTools: active } : {}), messages }
-        return { ...(active ? { activeTools: active } : {}), messages: [...messages, { role: "user", content: toolNudge(messages) }] }
-      }
-      if (opts.finalTool && registryHas(built, opts.finalTool)) {
-        const prompt = opts.finalPrompt ?? SUMMARY_PROMPT
-        return { toolChoice: { type: "tool", toolName: opts.finalTool }, activeTools: [opts.finalTool], messages: [...messages, { role: "user", content: prompt }] }
-      }
-      summarized = true
-      return { toolChoice: "none", activeTools: active, messages: [...messages, { role: "user", content: SUMMARY_PROMPT }] }
-    },
-    experimental_repairToolCall: async ({ toolCall, error }) => repairCall(opts.registry, built, active, loaded, toolCall, error),
-    abortSignal,
-    providerOptions,
-    // The model is wrapped with retry.ts (by kind of failure, shown to the user, Esc
-    // cancels the wait); the SDK's blind retry would repeat a daily-quota 429.
-    maxRetries: 0,
-    onError: () => {}, // errors are read from the stream
-  })
+  // Steps used by earlier runs of this turn: a recovery run counts from 0 again, but the step
+  // cap (and its forced summary) is for the whole turn.
+  let stepsUsed = 0
 
+  /** One streamText run over `base`; `rescue` is a nudge (never stored) on its first step. */
+  const run = (base: ModelMessage[], rescue?: Rescue) =>
+    streamText({
+      model,
+      instructions: system,
+      messages: base,
+      tools,
+      // A step that answers and closes the todo list ends the turn: no request after it.
+      stopWhen: [isStepCount(Math.max(1, maxSteps - stepsUsed)), answeredAndClosedTodos, ...(opts.finalTool ? [hasToolCall(opts.finalTool)] : [])],
+      // Every step exposes what the conversation has loaded so far, so a tool found by
+      // tool_search is callable at the very next step.
+      // Last allowed step: keep tools declared (some providers reject tool history otherwise)
+      // but forbid calling them, so the turn always ends with an answer.
+      // Message overrides carry forward to later steps, so every step rebuilds its messages from
+      // the request plus what the model and tools produced: a nudge stays a one-step addition.
+      prepareStep: ({ stepNumber, steps, initialMessages, responseMessages }) => {
+        const rescueNow = stepNumber === 0 ? rescue : undefined
+        if (!tools) return rescueNow ? { messages: [...initialMessages, ...responseMessages, { role: "user", content: rescueNow.nudge }] } : undefined
+        // Clean before activeFor reads them: the model never sees the SDK's raw error strings.
+        let messages = cleanToolErrors([...initialMessages, ...responseMessages])
+        // Near the threshold mid-turn: prune old tool results, and keep doing so for the rest of
+        // the turn (switching back would grow past it again and break the provider's cache).
+        if (midTurnPruned === undefined && opts.compactAt !== undefined && stepSize(steps.at(-1)?.usage, messages) >= opts.compactAt) midTurnPruned = 0
+        if (midTurnPruned !== undefined) {
+          const tools = pruneToolResults(messages)
+          const files = pruneAttachments(tools.messages, 0)
+          midTurnPruned = Math.max(midTurnPruned, tools.pruned + files.pruned)
+          midTurnSaved = Math.max(0, tokensOf(messages) - tokensOf(files.messages))
+          messages = files.messages
+        }
+        active = activeFor(built, messages)
+        loaded = loadedTools(messages)
+        if (stepsUsed + stepNumber < maxSteps - 1) {
+          const tail = rescueNow?.nudge ?? (nudge && messages.at(-1)?.role === "tool" ? toolNudge(messages) : undefined)
+          const choice = rescueNow?.toolChoice === "none" ? { toolChoice: "none" as const } : {}
+          if (!tail) return { ...(active ? { activeTools: active } : {}), messages }
+          return { ...(active ? { activeTools: active } : {}), ...choice, messages: [...messages, { role: "user", content: tail }] }
+        }
+        if (opts.finalTool && registryHas(built, opts.finalTool)) {
+          const prompt = opts.finalPrompt ?? SUMMARY_PROMPT
+          return { toolChoice: { type: "tool", toolName: opts.finalTool }, activeTools: [opts.finalTool], messages: [...messages, { role: "user", content: prompt }] }
+        }
+        summarized = true
+        return { toolChoice: "none", activeTools: active, messages: [...messages, { role: "user", content: SUMMARY_PROMPT }] }
+      },
+      experimental_repairToolCall: async ({ toolCall, error }) => repairCall(opts.registry, built, active, loaded, toolCall, error),
+      abortSignal,
+      providerOptions,
+      // The model is wrapped with retry.ts (by kind of failure, shown to the user, Esc
+      // cancels the wait); the SDK's blind retry would repeat a daily-quota 429.
+      maxRetries: 0,
+      onError: () => {}, // errors are read from the stream
+    })
+
+  /** The whole turn: text and usage summed over its runs. */
   const outcome: Outcome = { text: "", aborted: false, steps: 0, progress: [] }
-  yield* relay(result, opts.registry, opts.signal, outcome, notices, { ms: stallMs, onStall }, prepared.images)
-  if (stalled) {
-    outcome.aborted = false
-    outcome.failure = new Error(stallMessage(stallMs))
+  /** Response messages kept so far (a recovered run's broken final step is dropped). */
+  let kept: ModelMessage[] = []
+  const recoveries: RecoveryKind[] = []
+  let rescue: Rescue | undefined
+  // The request whose usage measures the context (the last run).
+  let measured: { steps: PromiseLike<{ usage: LanguageModelUsage }[]> } | undefined
+  let messages: ModelMessage[] | undefined
+  /** The stop gate gave up: the turn ends without an answer. */
+  let unanswered = false
+
+  for (;;) {
+    const base = [...request, ...kept]
+    const result = run(base, rescue)
+    const last: Outcome = { text: "", aborted: false, steps: 0, progress: [] }
+    yield* relay(result, opts.registry, opts.signal, last, notices, { ms: stallMs, onStall }, prepared.images)
+    stepsUsed += last.steps
+    outcome.text += last.text
+    outcome.steps += last.steps
+    outcome.reasoned ||= last.reasoned
+    outcome.rawFinish = last.rawFinish
+    outcome.finishMessage = last.finishMessage
+    if (last.usage) outcome.usage = { input: (outcome.usage?.input ?? 0) + last.usage.input, output: (outcome.usage?.output ?? 0) + last.usage.output }
+    outcome.aborted = last.aborted
+    outcome.failure = last.failure
+    if (stalled) {
+      outcome.aborted = false
+      outcome.failure = new Error(stallMessage(stallMs))
+    }
+    outcome.progress = [...kept, ...last.progress]
+    if (outcome.aborted || outcome.failure) break
+    let response: ModelMessage[]
+    try {
+      response = cleanToolErrors(await result.responseMessages)
+    } catch (error) {
+      outcome.failure = error
+      break
+    }
+    measured = result
+
+    // A run with a final tool is judged by its caller (the subagent manager forces the tool).
+    const verdict: Verdict = opts.finalTool
+      ? { action: "accept" }
+      : judgeStop(
+          {
+            text: last.stepText ?? "",
+            toolNames: last.stepTools ?? [],
+            finish: last.finish,
+            rawFinish: last.rawFinish,
+            reasoned: last.reasoned,
+            afterTools: [...base, ...response].findLast((m) => m.role !== "assistant")?.role === "tool",
+          },
+          recoveries,
+        )
+    // No step left for another run: the cap's summary step had the last word.
+    const capped = stepsUsed >= maxSteps
+    const continuing = recoveries.at(-1) === "length"
+    if (verdict.action === "accept" || (verdict.action === "continue" && verdict.kind === "length" && capped)) {
+      messages = continuing ? continueAnswer(kept, response) : [...kept, ...response]
+      break
+    }
+    if (verdict.action === "continue" && !capped) {
+      recoveries.push(verdict.kind)
+      // A cut answer stays and the rest is joined onto it; any other broken step is dropped.
+      kept = verdict.kind === "length" ? (continuing ? continueAnswer(kept, response) : [...kept, ...response]) : [...kept, ...dropFinalText(response)]
+      rescue = { nudge: verdict.nudge, toolChoice: verdict.toolChoice }
+      yield { type: "notice", text: `${RESCUE_NOTICE[verdict.kind]} Đã nhắc model trả lời tiếp (${recoveries.length}/${MAX_RECOVERIES}).` }
+      continue
+    }
+    // Gave up: say why, and keep a placeholder so the session file shows what happened.
+    unanswered = true
+    const why = emptyReason(outcome)
+    const reason = why ? ` Lý do từ provider: ${why}.` : ""
+    const usedTools = [...kept, ...response].some((m) => m.role === "tool")
+    yield {
+      type: "notice",
+      text: usedTools
+        ? `Model không trả lời sau khi gọi tool (câu trả lời rỗng).${reason} Kết quả tool ở phía trên; thử hỏi lại hoặc đổi model.`
+        : `Model trả về câu trả lời rỗng.${reason} Thử hỏi lại hoặc đổi model.`,
+    }
+    messages = [...kept, ...dropFinalText(response), { role: "assistant", content: `(không có câu trả lời${why ? ` — ${why}` : ""})` }]
+    break
   }
+
   if (midTurnPruned) {
     yield {
       type: "notice",
       text: `Context gần ngưỡng tự nén giữa lượt: các bước sau gửi kèm ${midTurnPruned} kết quả tool cũ đã dọn. Lượt sau sẽ nén hội thoại.`,
     }
   }
-  // The request whose usage measures the context (the empty-answer retry replaces it).
-  let measured: { steps: PromiseLike<{ usage: LanguageModelUsage }[]> } = result
-
-  let messages: ModelMessage[] | undefined
-  if (!outcome.aborted && !outcome.failure) {
-    try {
-      messages = cleanToolErrors(await result.responseMessages)
-    } catch (error) {
-      outcome.failure = error
-    }
-  }
-
-  // Completed, but the model said nothing: ask once more for the actual answer. Not for a run
-  // with a final tool: the retry forbids tools, so it could never bring the result (the
-  // subagent manager asks again with the tool forced instead).
-  if (messages && !outcome.text.trim() && !opts.finalTool) {
-    const usedTools = messages.some((m) => m.role === "tool")
-    const kept = messages.filter((m) => !isEmptyAssistant(m))
-    const retry = streamText({
-      model,
-      instructions: system,
-      // The nudge is only for this request; it is not kept in history.
-      messages: [...request, ...kept, { role: "user", content: NUDGE_PROMPT }],
-      tools,
-      activeTools: activeFor(built, [...request, ...kept]),
-      toolChoice: tools ? "none" : undefined,
-      abortSignal,
-      providerOptions,
-      maxRetries: 0,
-      onError: () => {},
-    })
-    const second: Outcome = { text: "", aborted: false, steps: 0, progress: [] }
-    yield* relay(retry, opts.registry, opts.signal, second, notices, { ms: stallMs, onStall }, prepared.images)
-    if (stalled) {
-      second.aborted = false
-      second.failure = new Error(stallMessage(stallMs))
-    }
-    measured = retry
-    // That request carries the unpruned history.
-    midTurnSaved = 0
-    if (second.usage) {
-      outcome.usage = { input: (outcome.usage?.input ?? 0) + second.usage.input, output: (outcome.usage?.output ?? 0) + second.usage.output }
-    }
-    outcome.aborted = second.aborted
-    outcome.failure = second.failure
-    outcome.text = second.text
-    if (!second.aborted && !second.failure) {
-      if (second.text.trim()) messages = [...kept, { role: "assistant", content: second.text }]
-      else {
-        // What the provider said, for both attempts: the first one is what went wrong.
-        const why = [emptyReason(outcome), emptyReason(second)].filter(Boolean)
-        const reason = why.length > 0 ? ` Lý do từ provider: ${[...new Set(why)].join("; lần thử lại: ")}.` : ""
-        yield {
-          type: "notice",
-          text: usedTools
-            ? `Model không trả lời sau khi gọi tool (câu trả lời rỗng).${reason} Kết quả tool ở phía trên; thử hỏi lại hoặc đổi model.`
-            : `Model trả về câu trả lời rỗng.${reason} Thử hỏi lại hoặc đổi model.`,
-        }
-        // Kept in the session file, so the cause can be read back later.
-        messages = [...kept, { role: "assistant", content: `(không có câu trả lời${why.length > 0 ? ` — ${why[0]}` : ""})` }]
-      }
-    }
-  }
 
   if (messages && !outcome.aborted && !outcome.failure) {
+    // Echoed todo lines never reach history, so a later turn has nothing to imitate (29/10).
+    messages = stripEchoMessages(messages)
     if (summarized) yield { type: "notice", text: `Đã dùng hết ${maxSteps} bước gọi tool; câu trả lời là bản tổng kết.` }
-    const tokens = await lastStepTokens(measured)
+    const tokens = measured ? await lastStepTokens(measured) : undefined
     // Measured on the pruned request: add back what the history still holds, so the next
     // turn sees the real size and compacts.
     const usage =
       tokens !== undefined
         ? { contextTokens: tokens + midTurnSaved, estimated: false, total: outcome.usage }
         : { contextTokens: estimateRequest(system, [...request, ...messages], built?.tokens), estimated: true, total: outcome.usage }
-    yield { type: "done", messages: [user, ...messages], clock: assembled.clock, usage, outcome: "completed" }
+    yield {
+      type: "done",
+      messages: [user, ...messages],
+      clock: assembled.clock,
+      usage,
+      outcome: "completed",
+      ...(recoveries.length > 0 ? { recoveries: recoveries.map((kind, i) => ({ kind, attempt: i + 1 })) } : {}),
+      ...(unanswered ? { unanswered } : {}),
+    }
     if (opts.hooks) void opts.hooks.emit({ type: "turn-end", sessionId, messages: [user, ...messages] })
     return
   }
@@ -1113,19 +1206,19 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
   // partial text. The user message keeps its reminders, so the clock it carried still counts
   // as sent.
   const text = outcome.text
-  const kept = closeDanglingToolCalls(outcome.progress, "Tool bị ngắt vì lượt bị dừng giữa chừng.").messages
+  const progress = closeDanglingToolCalls(outcome.progress, "Tool bị ngắt vì lượt bị dừng giữa chừng.").messages
   // No square brackets: the markdown renderer read "[Đã dừng]" as a link. The closed steps
   // already carry their text, so the trailing note appears only when nothing else closes the
   // turn — a resumed session must not show a step's text twice.
   const marker = outcome.aborted ? "(đã dừng)" : "(lỗi)"
   const closing: ModelMessage[] =
-    kept.length === 0 ? [{ role: "assistant", content: text || marker }] : kept.at(-1)!.role === "tool" ? [{ role: "assistant", content: marker }] : []
+    progress.length === 0 ? [{ role: "assistant", content: text || marker }] : progress.at(-1)!.role === "tool" ? [{ role: "assistant", content: marker }] : []
   yield {
     type: "done",
-    messages: [user, ...kept, ...closing],
+    messages: [user, ...progress, ...closing],
     clock: assembled.clock,
     usage: {
-      contextTokens: estimateRequest(system, [...request, ...kept, ...closing], built?.tokens),
+      contextTokens: estimateRequest(system, [...request, ...progress, ...closing], built?.tokens),
       estimated: true,
       total: outcome.usage,
     },
