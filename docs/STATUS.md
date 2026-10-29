@@ -64,6 +64,21 @@ Contract cho đồng nghiệp: [docs/contracts.md](contracts.md).
 | **Subagent** (`src/core/subagents/`, `src/core/agents/`, PR #32–#34) | Xong. `spawn_subagent` chạy song song, giới hạn trong `/config` (mặc định 10, xếp hàng); khối tiến độ kiểu Claude Code; tool ghi hỏi ở UI chính (chỉ Enter); 4 loại có sẵn + `.opentrading/agents/*.md`; chạy nền, `<thong_bao_subagent>`, `send_message`/`stop_agent`, `/agents`, `/tasks`; transcript riêng trong `sessions/…/subagents/` |
 | Test: typecheck + bộ test (tool, MCP qua stdio/HTTP/SSE/OAuth giả, schema thật, agent loop, subagent, TUI headless, quyền, file, shell, auto mode) | Xong; số test hiện tại: `bun test` |
 
+### Memory v5.1 (đang làm, nhánh `feat/memory`)
+
+Trạng thái: **`specified`**. Kiến trúc và quyết định đã chốt, **chưa có code**. Bản mẫu `FileMemory` ở trên giữ nguyên; provider v5.1 sẽ là một lựa chọn mới trong `/config`.
+
+- Kiến trúc: [docs/memory/ra-soat-v5.md](memory/ra-soat-v5.md), phần C.
+- Quyết định: ADR [0002](decisions/0002-memory-ban-ghi-co-nhan.md) (bản ghi có nhãn trong hội thoại), [0003](decisions/0003-memory-kho-sqlite-va-dinh-danh.md) (kho SQLite và định danh), [0004](decisions/0004-memory-muc-luc-va-model-tu-doc.md) (mục lục, model tự đọc bài học), [0005](decisions/0005-memory-rang-buoc-co-cau-truc.md) (ràng buộc có cấu trúc), [0006](decisions/0006-memory-ranh-gioi-theo-loai.md) (bảng chính sách, agent con không đọc lịch sử phiên).
+- Lộ trình và trạng thái từng spec: [docs/memory/specs/README.md](memory/specs/README.md).
+- **Thay đổi lõi dự kiến** (cần chủ repo duyệt, nằm chung PR `feat/memory`; mỗi spec một commit, thân commit liệt kê từng file lõi đã sửa kèm lý do, mô tả PR có bảng "Thay đổi lõi cần chủ repo duyệt"):
+  - sửa lỗi ghi phiên và khoá file;
+  - agent con không có tool lịch sử phiên;
+  - thêm lựa chọn provider;
+  - lệnh và form memory trong TUI;
+  - gửi ràng buộc cho agent con;
+  - che khối memory trong lịch sử khi xoá.
+
 **Chưa kiểm tra:**
 - Đã thử với key Gemini thật, gồm cả subagent (người dùng xác nhận ngày 07/10/2026). Anthropic và OpenAI chưa thử bằng key thật.
 - Chưa mở trong Windows Terminal thật.
