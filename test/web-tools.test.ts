@@ -263,3 +263,17 @@ test("the user's Esc and the side model's own errors stay errors", async () => {
     }),
   ).rejects.toThrow("Hết quota")
 })
+
+test("a long cut answer beside a long page stays under the tool's 60,000 chars, and start_char stays true", async () => {
+  const long = "Đoạn văn dài về thị trường. ".repeat(4000)
+  const { deps } = site({ "https://cafef.vn/dai2": () => new Response(long, { headers: { "content-type": "text/plain; charset=utf-8" } }) })
+  const partial = "Trả lời rất dài. ".repeat(500)
+  const out = await runFetch({ url: "https://cafef.vn/dai2", prompt: "x?" }, signal(), {
+    ...deps,
+    extract: async () => ({ text: partial, finishReason: "length" }),
+  })
+  expect(out.length).toBeLessThan(60_000)
+  const shown = 50_000 - partial.trim().length
+  expect(out).toContain(`start_char=${shown}`)
+  expect(long.slice(0, shown).endsWith(out.split("\n\n(còn")[0]!.slice(-50))).toBe(true)
+})

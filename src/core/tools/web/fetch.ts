@@ -17,6 +17,8 @@ import { extractWithModel, webTarget, type Extracted } from "./side-model"
 export type WebFetchInput = { url: string; prompt?: string; format?: "markdown" | "text" | "html"; start_char?: number; timeoutSeconds?: number }
 
 const PAGE = 50_000
+/** Page part kept beside a cut side answer, however long the answer. */
+const PAGE_MIN = 10_000
 const PROMPT_INPUT = 100_000
 
 /** The whole call's limit (wrap.ts races it): download and the side model share it. */
@@ -153,18 +155,21 @@ export async function runFetch(input: WebFetchInput, signal: AbortSignal, deps: 
 
 /**
  * The side model did not read the page through: the page itself, so the model needs no second
- * call (and no second request) to see it. A cut answer is kept above it.
+ * call (and no second request) to see it. A cut answer is kept above it, and the page part is
+ * shorter by as much: the whole stays under the tool's 60,000 chars (wrap.ts would cut it and the
+ * start_char hint would be wrong).
  */
 function withPage(header: string, body: string, why: string, partial?: string): string {
   const note = `Ghi chú: model phụ không đọc xong trang (${why}); dưới đây là nội dung trang, đọc tiếp bằng start_char.`
-  return `${header}\n${note}${partial ? `\n\nTrả lời dở của model phụ:\n${partial}` : ""}${pageChunk(body, 0)}`
+  const size = Math.max(PAGE_MIN, PAGE - (partial?.length ?? 0))
+  return `${header}\n${note}${partial ? `\n\nTrả lời dở của model phụ:\n${partial}` : ""}${pageChunk(body, 0, size)}`
 }
 
 /** `body` from `start_char`, one page at a time, with how to read on. */
-function pageChunk(body: string, startChar: number | undefined): string {
+function pageChunk(body: string, startChar: number | undefined, size = PAGE): string {
   const start = Math.max(0, startChar ?? 0)
   if (start >= body.length && body.length > 0) return `\n\n(start_char ${start} vượt quá độ dài ${body.length} ký tự.)`
-  const chunk = body.slice(start, start + PAGE)
+  const chunk = body.slice(start, start + size)
   const rest = body.length - (start + chunk.length)
   const more = rest > 0 ? `\n\n(còn ${rest} ký tự; gọi lại web_fetch với start_char=${start + chunk.length}, hoặc dùng prompt để hỏi đúng phần cần)` : ""
   return `${start > 0 ? `\n(từ ký tự ${start})` : ""}\n\n${chunk || "(trang không có nội dung chữ)"}${more}`
