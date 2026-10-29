@@ -82,7 +82,8 @@ function manager() {
   return new SubagentManager({ parent: registry, skills: () => [] })
 }
 
-const lastUser = (body: Body) => [...body.messages].reverse().find((m) => m.role === "user")?.content
+// The text of the last user message (a nudge joins it when the request already ends with one).
+const lastUser = (body: Body) => JSON.stringify([...body.messages].reverse().find((m) => m.role === "user")?.content ?? "")
 
 test("a valid tra_ket_qua call ends the run with its data, without another request", async () => {
   replies = [{ call: { name: RESULT_TOOL, args: { ticker: "FPT", score: 7 } } }]

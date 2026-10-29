@@ -207,6 +207,17 @@ function chartOf(value: unknown): ChartData | undefined {
   return (value as { chart?: ChartData }).chart
 }
 
+/**
+ * The nudge as the request's last user words: joined onto the user message it ends with (two
+ * user messages in a row are rejected or mishandled by some providers), else a new message.
+ */
+export function withNudge(messages: ModelMessage[], text: string): ModelMessage[] {
+  const last = messages.at(-1)
+  if (last?.role !== "user") return [...messages, { role: "user", content: text }]
+  const parts = typeof last.content === "string" ? [{ type: "text" as const, text: last.content }] : last.content
+  return [...messages.slice(0, -1), { ...last, content: [...parts, { type: "text", text }] }]
+}
+
 /** A recovery run's nudge (never stored) and whether its first step may call tools. */
 type Rescue = { nudge: string; toolChoice: "auto" | "none" }
 
@@ -1043,7 +1054,7 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
       // the request plus what the model and tools produced: a nudge stays a one-step addition.
       prepareStep: ({ stepNumber, steps, initialMessages, responseMessages }) => {
         const rescueNow = stepNumber === 0 ? rescue : undefined
-        if (!tools) return rescueNow ? { messages: [...initialMessages, ...responseMessages, { role: "user", content: rescueNow.nudge }] } : undefined
+        if (!tools) return rescueNow ? { messages: withNudge([...initialMessages, ...responseMessages], rescueNow.nudge) } : undefined
         // Clean before activeFor reads them: the model never sees the SDK's raw error strings.
         let messages = cleanToolErrors([...initialMessages, ...responseMessages])
         // Near the threshold mid-turn: prune old tool results, and keep doing so for the rest of
@@ -1059,17 +1070,19 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
         active = activeFor(built, messages)
         loaded = loadedTools(messages)
         if (stepsUsed + stepNumber < maxSteps - 1) {
-          const tail = rescueNow?.nudge ?? (nudge && messages.at(-1)?.role === "tool" ? toolNudge(messages) : undefined)
-          const choice = rescueNow?.toolChoice === "none" ? { toolChoice: "none" as const } : {}
-          if (!tail) return { ...(active ? { activeTools: active } : {}), messages }
-          return { ...(active ? { activeTools: active } : {}), ...choice, messages: [...messages, { role: "user", content: tail }] }
+          const afterTool = messages.at(-1)?.role === "tool"
+          // A route that rejects user words after tool results (nudgeAfterTools) gets the
+          // rescue without its text: tools off still makes the model answer.
+          const tail = rescueNow ? (afterTool && !nudge ? undefined : rescueNow.nudge) : nudge && afterTool ? toolNudge(messages) : undefined
+          const choice = rescueNow?.toolChoice === "none" || (rescueNow && !tail) ? { toolChoice: "none" as const } : {}
+          return { ...(active ? { activeTools: active } : {}), ...choice, messages: tail ? withNudge(messages, tail) : messages }
         }
         if (opts.finalTool && registryHas(built, opts.finalTool)) {
           const prompt = opts.finalPrompt ?? SUMMARY_PROMPT
-          return { toolChoice: { type: "tool", toolName: opts.finalTool }, activeTools: [opts.finalTool], messages: [...messages, { role: "user", content: prompt }] }
+          return { toolChoice: { type: "tool", toolName: opts.finalTool }, activeTools: [opts.finalTool], messages: withNudge(messages, prompt) }
         }
         summarized = true
-        return { toolChoice: "none", activeTools: active, messages: [...messages, { role: "user", content: SUMMARY_PROMPT }] }
+        return { toolChoice: "none", activeTools: active, messages: withNudge(messages, SUMMARY_PROMPT) }
       },
       experimental_repairToolCall: async ({ toolCall, error }) => repairCall(opts.registry, built, active, loaded, toolCall, error),
       abortSignal,

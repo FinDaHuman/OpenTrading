@@ -1103,6 +1103,9 @@ test("an answer that only echoes the todo status (29/10) is recovered, tools all
   expect(bodies).toHaveLength(2)
   expect(bodies[1]!.tool_choice).not.toBe("none")
   expect(lastSent(1)).toContain("chưa viết câu trả lời")
+  // The nudge joins the user message the request ends with: never two user messages in a row.
+  const roles = bodies[1]!.messages.map((m) => m.role).filter((r) => r !== "system")
+  expect(roles).toEqual(["user"])
   const stored = JSON.stringify(done(events).messages)
   expect(stored).not.toContain("Đã hoàn thành các việc cần làm")
   expect(stored).not.toContain("chưa viết câu trả lời")
@@ -1149,10 +1152,32 @@ test("echoed todo lines are cut from a real answer before it is stored", async (
 
 test("with a step cap, a recovery run gets only the steps left and the summary still comes last", async () => {
   await saveConfig({ provider: "groq", model: "tooly", maxSteps: 2 })
-  respond = (_body, n) => (n === 0 ? answer("") : undefined)
+  try {
+    respond = (_body, n) => (n === 0 ? answer("") : undefined)
+    const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: registry() }))
+    // Request 1 is empty, the recovery run has one step left: the forced summary.
+    expect(bodies).toHaveLength(2)
+    expect(bodies[1]!.tool_choice).toBe("none")
+    expect(JSON.stringify(done(events).messages.at(-1))).toContain("Kết quả: xong.")
+  } finally {
+    await saveConfig({ provider: "groq", model: "tooly", maxSteps: undefined })
+  }
+})
+
+test("a malformed Gemini call is sent back with tools on, and the tool then runs", async () => {
+  respond = (_body, n) => (n === 0 ? answer("", "MALFORMED_FUNCTION_CALL") : n === 1 ? toolCall("current_time", {}, "call_m") : undefined)
   const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: registry() }))
-  // Request 1 is empty, the recovery run has one step left: the forced summary.
-  expect(bodies).toHaveLength(2)
-  expect(bodies[1]!.tool_choice).toBe("none")
+  expect(bodies).toHaveLength(3)
+  expect(bodies[1]!.tool_choice).not.toBe("none")
+  expect(tools(events)).toEqual(["current_time"])
+  expect(done(events).recoveries).toEqual([{ kind: "malformed", attempt: 1 }])
   expect(JSON.stringify(done(events).messages.at(-1))).toContain("Kết quả: xong.")
+})
+
+test("a provider filter gives up at once: no request spent asking again", async () => {
+  respond = (_body, n) => (n === 0 ? answer("", "content_filter") : undefined)
+  const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: registry() }))
+  expect(bodies).toHaveLength(1)
+  expect(done(events).unanswered).toBe(true)
+  expect(events.some((e) => e.type === "notice" && e.text.includes("rỗng"))).toBe(true)
 })

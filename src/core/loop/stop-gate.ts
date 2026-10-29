@@ -61,7 +61,7 @@ export function judgeStop(last: LastStep, done: readonly RecoveryKind[]): Verdic
   const left = MAX_RECOVERIES - done.length
   const used = (kind: RecoveryKind) => done.filter((k) => k === kind).length
 
-  if (empty && BLOCKED.test(raw)) return { action: "give-up", kind: "blocked" }
+  if (empty && (BLOCKED.test(raw) || last.finish === "content-filter")) return { action: "give-up", kind: "blocked" }
   if (MALFORMED.test(raw) && empty) {
     if (left > 0 && used("malformed") === 0) return { action: "continue", kind: "malformed", nudge: RESCUE_MALFORMED, toolChoice: "auto" }
     return { action: "give-up", kind: "malformed" }
@@ -105,7 +105,7 @@ function invisible(text: string) {
 }
 
 /** A line stripped of markdown emphasis and wrapping parentheses. */
-const bare = (line: string) => line.trim().replace(/^[\s*_()]+|[\s*_()]+$/g, "")
+const bare = (line: string) => line.normalize("NFC").trim().replace(/^[\s*_()]+|[\s*_()]+$/g, "")
 
 /** The text without echoed todo status lines (and the item list printed under one). */
 export function stripEchoes(text: string): string {
