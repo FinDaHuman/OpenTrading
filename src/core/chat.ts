@@ -53,7 +53,8 @@ const PROVIDER_TEXT_MAX = 300
 
 /** The provider's own words, one line and capped; nothing for an HTML error page. */
 function providerText(message: string | undefined): string {
-  const text = (message ?? "").replace(/\s+/g, " ").trim()
+  // The caller ends the sentence itself.
+  const text = (message ?? "").replace(/\s+/g, " ").trim().replace(/\.+$/, "")
   if (!text || /^<(!doctype|html|head|body)\b/i.test(text)) return ""
   return text.length > PROVIDER_TEXT_MAX ? `${text.slice(0, PROVIDER_TEXT_MAX)}…` : text
 }

@@ -11,7 +11,8 @@ test("404 keeps the provider's reason (Google, 30/10: gemini-2.5-flash closed to
   const text = describeError(apiError(404, google))
   expect(text).toStartWith("Model không dùng được với provider này (404): This model models/gemini-2.5-flash is no longer available to new users.")
   expect(text).toContain("gemini-3.8-flash")
-  expect(text).toEndWith("Gõ /model để chọn model khác.")
+  expect(text).toEndWith("get-started). Gõ /model để chọn model khác.")
+  expect(text).not.toContain("..")
 })
 
 test("404 with an HTML page or no text gives the plain line; a long reason is capped", () => {
