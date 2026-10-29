@@ -14,7 +14,7 @@ import { hasOpenTodos, LEGACY_TODO_PREFIX, TODO_PREFIX, TODO_WRITE, type Todo } 
 /** Recovery requests a turn may spend at most: the gate never loops. */
 export const MAX_RECOVERIES = 2
 
-export type RecoveryKind = "malformed" | "length" | "empty"
+export type RecoveryKind = "malformed" | "length" | "empty" | "promise"
 
 /** What the last request's final step produced. */
 export interface LastStep {
@@ -50,6 +50,8 @@ export const RESCUE_LENGTH =
 /** Gemini CLI's nudge after an empty answer: the answer, or a tool when data is missing. */
 export const RESCUE_EMPTY =
   "<nhac_nho>\nBạn chưa viết câu trả lời nào cho người dùng. Trả lời ngay dựa trên dữ liệu đã có, hoặc gọi tool nếu còn thiếu dữ liệu. Không viết dòng trạng thái việc cần làm.\n</nhac_nho>"
+export const RESCUE_PROMISE =
+  "<nhac_nho>\nBước trước kết thúc mà không gọi tool nào. Thiếu dữ liệu thì gọi tool ngay trong bước này; đủ rồi thì trả lời người dùng.\n</nhac_nho>"
 /** Tools off (it brought 2.5-flash-lite's empty answers back). */
 export const RESCUE_EMPTY_FINAL = "Hãy trả lời câu hỏi của người dùng dựa trên kết quả tool ở trên. Không gọi thêm tool."
 
@@ -80,6 +82,10 @@ export function judgeStop(last: LastStep, done: readonly RecoveryKind[]): Verdic
     return off
       ? { action: "continue", kind: "empty", nudge: RESCUE_EMPTY_FINAL, toolChoice: "none" }
       : { action: "continue", kind: "empty", nudge: RESCUE_EMPTY, toolChoice: "auto" }
+  }
+  // Said it would fetch something and stopped without calling a tool: send it back once, tools on.
+  if (last.toolNames.length === 0 && (last.finish ?? "stop") === "stop" && isPromise(last.text)) {
+    if (left > 0 && used("promise") === 0) return { action: "continue", kind: "promise", nudge: RESCUE_PROMISE, toolChoice: "auto" }
   }
   return { action: "accept" }
 }
@@ -116,6 +122,58 @@ export function stripEchoes(text: string): string {
     return !ECHO_LINE.test(b) && !TODO_ITEM.test(line.trim())
   })
   return kept.join("\n").replace(/\n{3,}/g, "\n\n").trim()
+}
+
+/** Verbs of fetching or working that a promise names. */
+const ACTS =
+  "lấy|tải|nạp|kiểm tra|tra cứu|tra|xem|tìm|gọi|phân tích|tổng hợp|truy vấn|so sánh|vẽ|đọc|thu thập|cập nhật|tính|rà soát|đối chiếu|chạy|thử|sử dụng|dùng|gửi|bổ sung|nghiên cứu"
+
+/** What a fetch is about: a promise names data or tools, advice to the user does not. */
+const OBJECTS = "dữ liệu|số liệu|thông tin|tool|công cụ|skill|chúng|nguồn|báo cáo|BCTC|giá|kết quả"
+
+/** Prices, percentages and amounts: a text carrying them already answers something. */
+const FIGURES = /\d{1,3}([.,]\d{3})+|\d+([.,]\d+)?\s*(%|đ(?!\p{L})|đồng|tỷ|triệu|nghìn|lần)/u
+
+/** A promise to act: "mình sẽ lấy…", "để mình kiểm tra", "vui lòng chờ", "let me…", "I'll…". */
+// JS's \b only knows ASCII letters ("Để", "thử" break it): word edges are spelled out.
+const B = String.raw`(?<![\p{L}\p{N}_])`
+const E = String.raw`(?![\p{L}\p{N}_])`
+const INTENT = new RegExp(
+  [
+    String.raw`${B}(mình|tôi|em)\s+(sẽ|đang|xin phép|cần|tiến hành)\s+(đi\s+)?(${ACTS})${E}`,
+    // Subject-less, at the start of the sentence or clause, about data or tools ("Đang lấy dữ
+    // liệu…", "giờ gọi chúng…", "Thử các nguồn khác"): advice to the user ("Thử đặt lệnh…",
+    // "Tiếp tục nghiên cứu ngành…") names no data or tool.
+    String.raw`(^|[,;]\s*)(đang|bây giờ|giờ|tiếp theo|trước tiên|bắt đầu)\s+(cần\s+)?(${ACTS})${E}.{0,30}${B}(${OBJECTS})${E}`,
+    String.raw`(^|[,;]\s*)thử\s+(lại|các nguồn|nguồn|tool|công cụ|cách khác|dữ liệu|${B}[A-Z]{3,}${E})`,
+    String.raw`(^|[,;]\s*)(gọi thêm|gọi song song|gọi cùng lúc)${E}`,
+    String.raw`${B}(để|chờ|đợi)\s+(mình|tôi|em)${E}`,
+    String.raw`${B}vui lòng (chờ|đợi)${E}`,
+    String.raw`${B}tiếp theo,?\s+(mình|tôi|em)${E}`,
+    String.raw`${B}let me${E}`,
+    String.raw`${B}I('ll| will| am going to)${E}`,
+    String.raw`${B}next,? I${E}`,
+  ].join("|"),
+  "iu",
+)
+/** The model offers or asks: the user speaks next, so it is not a broken promise. */
+const OFFER = /\?\s*$|^(nếu bạn|nếu cần|bạn có muốn|bạn muốn|if you|would you|do you want)/iu
+/** Above this, the text is an answer that happens to end on a plan, not a bare promise. */
+export const PROMISE_MAX_CHARS = 400
+
+/**
+ * The step only promised to act and stopped: short, no table, and its last sentence says the
+ * model is about to do something (or it ends on ":"), without offering it to the user. Gemini
+ * CLI asks a model "who speaks next" for this; here it is a check in code (no request).
+ */
+export function isPromise(text: string): boolean {
+  const body = stripEchoes(invisible(text)).trim()
+  if (!body || body.length > PROMISE_MAX_CHARS || /^\s*\|.*\|\s*$/m.test(body) || FIGURES.test(body)) return false
+  const lastLine = bare(body.split("\n").filter((l) => l.trim()).at(-1) ?? "")
+  if (OFFER.test(lastLine)) return false
+  if (/:\s*$/.test(lastLine)) return true
+  const sentences = lastLine.split(/(?<=[.!…])\s+/).filter((s) => s.trim())
+  return INTENT.test(sentences.at(-1) ?? lastLine)
 }
 
 /** No answer in it: nothing visible once echoed todo lines are gone. */

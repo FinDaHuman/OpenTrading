@@ -1187,3 +1187,36 @@ test("a provider filter gives up at once: no request spent asking again", async 
   expect(done(events).unanswered).toBe(true)
   expect(events.some((e) => e.type === "notice" && e.text.includes("rỗng"))).toBe(true)
 })
+
+test("a promise without a tool call is sent back once with tools on, and the tool then runs", async () => {
+  respond = (_body, n) => (n === 0 ? answer("Mình sẽ lấy giờ hiện tại:") : n === 1 ? toolCall("current_time", {}, "call_p") : undefined)
+  const events = await collect(runAgent({ history: [], input: "mấy giờ rồi", skills: [], registry: registry() }))
+  expect(bodies).toHaveLength(3)
+  expect(bodies[1]!.tool_choice).not.toBe("none")
+  expect(lastSent(1)).toContain("không gọi tool nào")
+  expect(tools(events)).toEqual(["current_time"])
+  expect(done(events).recoveries).toEqual([{ kind: "promise", attempt: 1 }])
+  // The promise is not kept: the answer follows the tool result.
+  expect(JSON.stringify(done(events).messages)).not.toContain("Mình sẽ lấy giờ hiện tại")
+})
+
+test("an answer that ends with an offer or a question costs exactly one request", async () => {
+  respond = (_body, n) => (n === 0 ? answer("VCB đóng cửa 57.200đ.\n\nBạn có muốn mình lấy thêm dữ liệu khối ngoại không?") : undefined)
+  const events = await collect(runAgent({ history: [], input: "giá VCB", skills: [], registry: registry() }))
+  expect(bodies).toHaveLength(1)
+  expect(done(events).recoveries).toBeUndefined()
+})
+
+test("with a step cap, a summary that names what is missing is kept as the answer, not sent back", async () => {
+  await saveConfig({ provider: "groq", model: "tooly", maxSteps: 2 })
+  try {
+    respond = (_body, n) => (n === 0 ? toolCall("current_time", {}, "call_c") : n === 1 ? answer("Tôi cần tra cứu thêm BCTC quý 3.") : undefined)
+    const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: registry() }))
+    expect(bodies).toHaveLength(2)
+    expect(JSON.stringify(done(events).messages.at(-1))).toContain("Tôi cần tra cứu thêm BCTC quý 3.")
+    expect(done(events).unanswered).toBeUndefined()
+    expect(done(events).recoveries).toBeUndefined()
+  } finally {
+    await saveConfig({ provider: "groq", model: "tooly", maxSteps: undefined })
+  }
+})

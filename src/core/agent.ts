@@ -36,7 +36,7 @@ import { loadedTools } from "./tools/loaded"
 import { modeNote } from "./permission/mode"
 import { NOTE as NOTICE_NOTE } from "./subagents/notification"
 import { currentTodos, retiredNote, retireLeftTodos, todoMark, TODO_WRITE } from "./tools/todos"
-import { answeredAndClosedTodos, judgeStop, MAX_RECOVERIES, stripEchoes, type RecoveryKind, type Verdict } from "./loop/stop-gate"
+import { answeredAndClosedTodos, isEmptyAnswer, judgeStop, MAX_RECOVERIES, stripEchoes, type RecoveryKind, type Verdict } from "./loop/stop-gate"
 import { MAX_TOOLS_PER_REQUEST, modelOutput, stripImages, type BuiltToolSet, type ToolRegistry, type ToolSetOptions } from "./tools/registry"
 import { describeTool, LOADED_PREFIX, resolveToolName } from "./tools/search"
 import { cleanToolErrors, toolErrorText } from "./tools/errors"
@@ -248,6 +248,7 @@ const RESCUE_NOTICE: Record<RecoveryKind, string> = {
   malformed: "Model gọi tool sai định dạng nên lượt dừng khi chưa trả lời.",
   length: "Câu trả lời bị cắt vì chạm giới hạn độ dài output.",
   empty: "Model dừng khi chưa viết câu trả lời.",
+  promise: "Model nói sẽ lấy thêm dữ liệu nhưng dừng mà chưa làm.",
 }
 
 type AssistantMessage = Extract<ModelMessage, { role: "assistant" }>
@@ -1173,7 +1174,8 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
     // No step left for another run: the cap's summary step had the last word.
     const capped = stepsUsed >= maxSteps
     const continuing = recoveries.at(-1) === "length"
-    if (verdict.action === "accept" || (verdict.action === "continue" && verdict.kind === "length" && capped)) {
+    // Capped, a step with text is the turn's last word (the summary may well say what is missing).
+    if (verdict.action === "accept" || (verdict.action === "continue" && capped && !isEmptyAnswer(last.stepText ?? ""))) {
       messages = continuing ? continueAnswer(kept, response) : [...kept, ...response]
       break
     }
