@@ -978,6 +978,57 @@ test("a deferred tool loaded by its first call reads as a grey note, wrapped, no
   }
 })
 
+test("an auto-mode block reads as one line with its rule and reason; ctrl+o shows what the model was told", async () => {
+  const { blockedMessage, deniedMessage } = await import("../src/core/permission")
+  const blocked = blockedMessage("shell", { label: "Git phá huỷ", reason: "Xoá nhánh remote khi người dùng chưa nêu tên NHÁNH-X" })
+  const refused = deniedMessage({ reason: "user", auto: { label: "Gửi dữ liệu ra ngoài", reason: "Gửi file ra HOST-LẠ" } }, { tool: "mcp__x__create" })
+  const before = state.lines.length
+  setState("lines", (lines) => [
+    ...lines,
+    { kind: "tool", callId: "c-block", name: "shell", label: "shell git push origin --delete x", status: "error", output: blocked },
+    { kind: "tool", callId: "c-refused", name: "mcp__x__create", label: "x · create", status: "error", output: refused },
+  ])
+  try {
+    let frame = await setup.waitForFrame((f) => f.includes("NHÁNH-X") && f.includes("HOST-LẠ"))
+    show(frame)
+    expect(frame).toContain("✘ Auto mode chặn shell [Git phá huỷ]")
+    expect(frame).toContain("/permissions để cho thử lại")
+    expect(frame).toContain("✘ Đã từ chối (auto mode đã chặn [Gửi dữ liệu ra ngoài]")
+    // The guidance for the model stays out of the collapsed view.
+    expect(frame).not.toContain("Đừng làm đúng việc này")
+    setState("expandTools", true)
+    frame = await setup.waitForFrame((f) => f.includes("Đừng làm đúng việc này"))
+    show(frame)
+  } finally {
+    setState("expandTools", false)
+    setState("lines", (lines) => lines.slice(0, before))
+  }
+})
+
+test("a new auto-mode block raises one toast; a block handed to the user, or a count change, does not", async () => {
+  const { watchAutoBlocks, AUTO_BLOCK_KEY } = await import("../src/tui/auto-notice")
+  const listeners = new Set<() => void>()
+  const auto = {
+    recent: [] as { tool: string }[],
+    consecutive: 0,
+    total: 0,
+    onChange: (l: () => void) => (listeners.add(l), () => listeners.delete(l)),
+  }
+  const seen: { key: string; text: string }[] = []
+  const off = watchAutoBlocks(auto as never, (n) => seen.push(n))
+  const fire = () => listeners.forEach((l) => l())
+  fire() // request counter only
+  auto.recent.unshift({ tool: "shell" })
+  auto.consecutive = 1
+  fire()
+  fire() // the same block again (e.g. a pause notice)
+  auto.recent.unshift({ tool: "write_file" })
+  auto.consecutive = 3 // reached the limit: the approval dialog says it
+  fire()
+  off()
+  expect(seen).toEqual([expect.objectContaining({ key: AUTO_BLOCK_KEY, text: "shell bị auto mode chặn · /permissions" })])
+})
+
 test("the context size follows each step's usage while a turn is still running", async () => {
   await setKey("nvidia", "nvapi-good-key")
   let release = () => {}

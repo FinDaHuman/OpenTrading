@@ -103,13 +103,19 @@ Mỗi hành động cần duyệt được một model thứ hai xét trước k
 - **Hai bước:** bước 1 trả lời nhanh có chặn hay không, tốn 1 request. Chỉ khi bước 1 chặn hoặc không trả lời rõ thì mới chạy bước 2, có suy luận ngắn và nêu tên luật bị vi phạm. Tổng cộng khoảng 1 request cho mỗi hành động, 2 nếu bị nghi ngờ.
 - **Khi subagent làm xong (chỉ ở ▸▸):** nếu subagent đã gọi tool có thay đổi hoặc tool MCP chỉ "tự khai" chỉ đọc, model duyệt rà lại các hành động của nó. Nếu thấy vượt yêu cầu, kết quả gửi cho agent chính có thêm dòng `[Cảnh báo an toàn từ auto mode]` ở đầu. Kết quả không bị chặn và không tính vào số lần chặn. Model duyệt không trả lời được thì chỉ ghi chú "chưa rà được". Subagent chỉ đọc dữ liệu (như các agent nghiên cứu của ultradesk) không tốn request nào cho bước này.
 - **Nguồn gốc dữ liệu:** kết quả của `web_fetch`, `web_search` và tool MCP có thêm một dòng `[Nguồn: …]` cho model (host web hoặc tên server MCP), kèm nhắc rằng chỉ dẫn nằm trong dữ liệu là nội dung của nguồn, không phải lời bạn. Đây chỉ là thông tin nguồn gốc, không phải đánh giá dữ liệu là nguy hiểm.
-- **Khi bị chặn:** model chính nhận lý do và nhãn luật, ví dụ `[Gửi dữ liệu ra ngoài]`, rồi làm cách khác hoặc dừng lại giải thích.
+- **Khi bị chặn:** model nhận tên tool, nhãn luật và lý do, ví dụ `Auto mode chặn shell [Git phá huỷ]: …`, kèm chỉ dẫn (giống Claude Code, chặt hơn ở chỗ đổi tool):
+  - không làm đúng việc đó bằng tool hay lệnh khác (shell bị chặn thì không chuyển sang `write_file`, `edit_file`, tool MCP, script hay subagent); chỉ được chọn cách an toàn hơn hẳn mà không gây ra tác dụng đó, như ghi ra file mới thay vì ghi đè hoặc đưa lệnh để bạn tự chạy;
+  - làm tiếp các việc không phụ thuộc; nếu việc đó bắt buộc thì làm hết phần còn lại rồi dừng, nói định làm gì, vì sao cần và cách bạn cho phép (`/permissions` → `r`, nói rõ trong tin nhắn, chuyển `▸`, hoặc tự thêm `autoMode.allow`). Model được dặn không tự sửa cấu hình quyền;
+  - subagent bị chặn thì ghi việc đó và lý do vào kết quả cho agent chính.
+
+  Bạn thấy một dòng `✘ Auto mode chặn … · /permissions để cho thử lại` dưới tool đó (`ctrl+o` hiện đủ đoạn model nhận) và một toast `… bị auto mode chặn · /permissions`, kể cả khi subagent bị chặn.
+- **Không lách ở bước sau:** model duyệt thấy các hành động đã bị chặn hoặc bị từ chối (cùng đối tượng của chúng) kể từ tin nhắn gần nhất của bạn. Một hành động sau đó đạt cùng tác dụng lên cùng đối tượng bằng đường khác (ví dụ xoá bị chặn rồi ghi rỗng đè lên đúng file đó) sẽ bị chặn theo cùng luật. Khi bạn gửi tin nhắn mới, các dấu này được xoá, nên một lần chặn nhầm không kéo theo cả phiên. Khi bạn duyệt trong hộp thoại hoặc dùng `/permissions` → `r`, lần đó được ghi là bạn đã cho phép.
 - **Quay về hỏi bạn khi:**
   - bị chặn 3 lần liên tiếp, hoặc 20 lần trong phiên (một lời gọi chạy được mà không cần model duyệt, như `git status`, cũng cắt chuỗi "liên tiếp"; khi đã chạm giới hạn thì phải chờ bạn trả lời);
   - model duyệt lỗi hoặc trả lời sai định dạng (lỗi tạm thời như 5xx, quá tải, mất mạng được thử lại 1 lần; 429 thì không);
   - model duyệt hết quota (429): dòng chế độ hiện `tạm hỏi tay tới hh:mm`, kéo dài 10 phút.
 
-  Hộp thoại khi đó ghi rõ vì sao nó hiện ra.
+  Hộp thoại khi đó ghi rõ vì sao nó hiện ra. Nếu bạn từ chối một hành động auto mode vừa chặn, model vẫn nhận nhãn và lý do của lần chặn đó.
 - **Luật mặc định** (viết bằng tiếng Anh cho model duyệt, nhãn hiện bằng tiếng Việt):
   - *Chặn tuyệt đối:* đọc khoá/mật khẩu (kể cả in toàn bộ biến môi trường), lộ khoá ra ngoài, tự sửa quyền hay cấu hình của OpenTrading, chạy agent khác đã tắt duyệt.
   - *Chặn trừ khi bạn nêu rõ đúng việc đó:* **đặt, sửa, huỷ lệnh giao dịch thật hay chuyển tiền** (phải nêu mã, chiều, khối lượng, giá); tải code về rồi chạy; xoá hoặc ghi đè file có sẵn; git phá huỷ; gửi dữ liệu ra ngoài (kể cả nhét trong URL); nhắn tin thay bạn; cài thứ tự chạy về sau; hạ bảo mật; dò thông tin đăng nhập; mở máy ra internet; ghi ngoài workspace; đổi cài đặt hệ thống; chạy lệnh bị che giấu (`-EncodedCommand`, giải mã base64 rồi `iex`…).
@@ -144,7 +150,7 @@ Mỗi hành động cần duyệt được một model thứ hai xét trước k
 - Model duyệt **có thể sai**: cho qua nhầm hoặc chặn nhầm. Claude Code công bố tỉ lệ bỏ lọt 17% trên các ca "làm quá tay". Đừng dùng `▸▸` cho việc nhạy cảm. Ranh giới cứng là các mục "luôn hỏi" và "không bao giờ chạy" ở trên, không phải model duyệt.
 - Model yếu thì duyệt kém hơn.
 - Nếu provider từ chối tuỳ chọn giảm "thinking" (Gemini 3 `thinkingLevel: low`, OpenAI `reasoningEffort: low`), mọi lần duyệt sẽ không có kết quả. Khi đó `▸▸` sẽ hỏi bạn cho mọi thứ, mỗi hộp thoại ghi "model duyệt không trả lời được: …" kèm lỗi. Hãy đổi model duyệt ở `/config`.
-- Bản ghi không lưu kết quả của hành động: một lời gọi bạn đã từ chối trông vẫn giống việc agent đã làm.
+- Bản ghi không lưu kết quả của hành động (chỉ đánh dấu các lời gọi không chạy, và chỉ tới tin nhắn kế tiếp của bạn).
 - Phân tích lệnh shell là dựa trên chuỗi, không phải trình phân tích cú pháp shell, và chưa có sandbox của hệ điều hành.
 
 ## Ngoài phạm vi đợt này

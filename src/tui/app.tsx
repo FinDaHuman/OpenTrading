@@ -68,7 +68,8 @@ import { resolveExportPath, writeExport } from "../core/session/export"
 import { cycleMode } from "../core/permission/mode"
 
 import { armExit, type Queued, closeDialog, contextLimits, EXIT_WINDOW_MS, onExitRequest, providerName, pushLine, setState, state, type Line } from "./state"
-import { flash, say } from "./notify"
+import { flash, notify, say } from "./notify"
+import { watchAutoBlocks } from "./auto-notice"
 import { ModeLine } from "./mode-line"
 import { terminalAttention, type Attention } from "./attention"
 import { ShortcutsPane } from "./shortcuts"
@@ -715,7 +716,11 @@ export function App(props: {
   })
   setState("permissionMode", props.runtime.permissions.mode)
   const offAuto = props.runtime.auto.onChange(() => setState("autoPausedUntil", props.runtime.auto.paused()))
-  onCleanup(() => offAuto())
+  const offAutoBlocks = watchAutoBlocks(props.runtime.auto, notify)
+  onCleanup(() => {
+    offAuto()
+    offAutoBlocks()
+  })
   const offMode = props.runtime.permissions.onModeChange((mode) => setState("permissionMode", mode))
   onCleanup(() => offMode())
   createEffect(
