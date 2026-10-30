@@ -278,7 +278,8 @@ test("protected and outside writes ask each time with no session option; odd pat
   expect(again.asked).toBeDefined()
   const denied = await viaGate(gate, s.write, { path: path.join(project, "khoa", "a.md"), content: "x" })
   expect(denied.asked).toBeUndefined()
-  expect(denied.result.output).toContain("quy tắc chặn")
+  expect(denied.result.output).toContain("Quy tắc chặn của người dùng")
+  expect(denied.result.output).toContain("Đừng làm đúng việc này bằng tool hay lệnh khác")
   if (process.platform === "win32") {
     const odd = await viaGate(gate, s.write, { path: `${path.join(project, "a.md")}:stream`, content: "x" })
     expect(odd.asked).toBeUndefined()

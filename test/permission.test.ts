@@ -47,7 +47,11 @@ test("a denied call becomes a tool error the model reads, with the user's note",
   const head = gate.head()!
   expect(head.label).toBe("gh · create_issue")
   await gate.respond(head.id, "deny", "dùng repo khác")
-  expect(await running).toBe("Người dùng từ chối chạy tool này. Lời nhắn của người dùng: dùng repo khác")
+  const text = String(await running)
+  expect(text.split("\n")[0]).toBe("Người dùng từ chối chạy tool này. Lời nhắn của người dùng: dùng repo khác")
+  expect(text).toContain("Đừng làm đúng việc này bằng tool hay lệnh khác")
+  // A plain "no" asks the user what to do instead; it never says "go on with other work".
+  expect(text).not.toContain("làm tiếp")
 })
 
 test("waiting for the user does not count against the tool timeout", async () => {
