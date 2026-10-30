@@ -81,6 +81,7 @@ import { announceMcp } from "./mcp/notices"
 import { Toasts } from "./toast"
 import { ActivityRow, activeMs, startActivity } from "./activity"
 import { now, useNow } from "./ui/clock"
+import { pruneOldScratch, scratchCommand, scratchTurnStart, scratchTurnWarning } from "./scratch"
 import { color, promptStyle } from "./theme"
 import { cleanSelection, writeClipboard } from "./clipboard"
 import { ArgumentHint, commandItem, Suggestions } from "./suggestions"
@@ -417,9 +418,9 @@ async function sendTurn(runtime: Runtime, msg: Outgoing, mode: { recover?: boole
   const controller = new AbortController()
   abort = controller
   setState({ streaming: true, activity: startActivity() })
-  // Made on the first turn (no empty folder for a session that never chats), and again after
-  // the OS emptied the temp dir.
-  await runtime.workspace.scratch?.ensure()
+  // The temp folder is made on the first turn (no empty folder for a session that never
+  // chats), and again after the OS emptied the temp dir; its size is measured now and then.
+  await scratchTurnStart(runtime)
   try {
     // @-mentions in what the user typed (not in pasted text: code there is full of "@").
     const attached = msg.notice ? undefined : await mentionsOf(runtime, msg.display ?? msg.text)
@@ -536,6 +537,9 @@ async function sendTurn(runtime: Runtime, msg: Outgoing, mode: { recover?: boole
       if (!failed && !controller.signal.aborted && (worked >= DONE_LINE_MS || unanswered)) {
         pushLine({ kind: "done", ms: worked, background: backgroundRunning() || undefined, ...(unanswered ? { unanswered } : {}) })
       }
+      // The temp folder passed a size step: said under this answer, once per step.
+      const scratchWarning = await scratchTurnWarning(runtime)
+      if (scratchWarning && live()) pushLine({ kind: "warning", text: scratchWarning })
       // Tools still marked running never got a result (aborted turn).
       setState(
         produce((s) => {
@@ -798,6 +802,8 @@ export function App(props: {
     setState("agentSlots", props.runtime.subagents.limiter.stats())
     if (props.resume) await resumeFromArgs(props.runtime, props.resume)
     else await props.runtime.hooks.emit({ type: "session-start", sessionId: currentSession().id, source: "startup" })
+    // After the session is known: a resumed one keeps its temp folder however old it is.
+    void pruneOldScratch(props.runtime)
     if (skillSet.problems.length > 0) {
       pushLine({ kind: "error", text: `${skillSet.problems.length} skill bị lỗi và không được nạp. Xem /skills.` })
     }
@@ -1420,6 +1426,8 @@ export function App(props: {
         return void addDirCommand(cmd.args)
       case "undo":
         return void undoCommand(cmd.args)
+      case "scratch":
+        return void scratchCommand(props.runtime, cmd.args).then((r) => (r.level === "error" ? say(r.text, "error") : pushLine({ kind: "info", text: r.text })))
       case "exit":
       case "quit":
         return void exit()

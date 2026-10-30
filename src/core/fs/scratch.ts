@@ -47,7 +47,8 @@ export class Scratchpad {
   private session?: string
   /** As built, before resolving: the ownership check looks at this one, not at a link's target. */
   private readonly rawBase: string
-  private readonly base: string
+  /** `<tmp>/opentrading`, resolved: the folder old sessions are pruned from. */
+  readonly base: string
   private readonly platform: NodeJS.Platform
   /** The base folder failed the ownership check (POSIX shared /tmp): stay off for the process. */
   private unsafe = false
@@ -76,7 +77,12 @@ export class Scratchpad {
   }
 
   get active() {
-    return this.enabled && !this.unsafe && this.session !== undefined
+    return this.usable && this.session !== undefined
+  }
+
+  /** On, and the base folder passed the ownership check. */
+  get usable() {
+    return this.enabled && !this.unsafe
   }
 
   /** This session's folder, or undefined when off. */

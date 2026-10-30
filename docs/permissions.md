@@ -53,6 +53,18 @@ Quyền:
 - Khác Claude Code: lệnh shell có ghi vào thư mục tạm (ví dụ `python x.py > out.txt`) vẫn được duyệt như mọi lệnh khác, vì OpenTrading không tách đường dẫn ra khỏi tham số của lệnh.
 - Tắt tính năng ở `/config → Thư mục tạm của phiên` (lưu `scratchpad.enabled: false`). Khi tắt: không tạo thư mục, model không được báo, không có ngoại lệ quyền.
 
+Dung lượng và dọn dẹp (Claude Code không dọn thư mục tạm của nó và không cảnh báo):
+
+- **Cảnh báo:** lúc một lượt bắt đầu, OpenTrading đo thư mục tạm của dự án ở nền, tối đa 30 phút một lần.
+  - Vượt ngưỡng `scratchpad.warnMB` (mặc định 1024 MB; 0 = không báo) thì có một dòng `▲` ngay dưới câu trả lời, kèm đường dẫn và lệnh `/scratch`.
+  - Mỗi nấc chỉ báo một lần: 1 GB, rồi 2 GB… Xuống dưới ngưỡng rồi vượt lại thì báo lại.
+  - Mỗi lần đo xem tối đa 50.000 mục; nhiều hơn thì dòng báo ghi "hơn …".
+- **Tự dọn:** khi mở OpenTrading, thư mục phiên (của mọi dự án) không có thay đổi nào trong `scratchpad.keepDays` ngày (mặc định 30; 0 = không dọn) bị xoá. Dự án hết phiên thì xoá luôn thư mục dự án.
+- **`/scratch`:** đường dẫn, dung lượng phiên này và cả dự án, số phiên.
+  - `/scratch clear` xoá thư mục của các phiên khác trong dự án, trừ phiên vừa có thay đổi trong 1 giờ qua (có thể là một cửa sổ OpenTrading khác đang mở cùng thư mục).
+  - `/scratch clear all` xoá cả phiên này (thư mục được tạo lại rỗng).
+- Khi đo và khi xoá, symlink/junction chỉ bị gỡ như một liên kết: không đếm, không đi vào và không xoá thư mục nó trỏ tới.
+
 ## Luôn hỏi bạn, không quy tắc hay model nào duyệt thay
 
 - **Đọc file chứa khoá/mật khẩu:**

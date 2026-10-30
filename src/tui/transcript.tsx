@@ -268,6 +268,9 @@ function Row(props: { line: Line; prev?: Line; index: number; width: number }) {
           return <Hanging glyph="✻" glyphColor={l.unanswered ? color.tham : color.tx3} text={`${head} sau ${fmtElapsed(l.ms)}${bg}`} fg={color.tx3} />
         }}
       </Match>
+      <Match when={props.line.kind === "warning"}>
+        <Hanging glyph="▲" glyphColor={color.tham} text={(props.line as Extract<Line, { kind: "warning" }>).text} fg={color.tx2} />
+      </Match>
       <Match when={props.line.kind === "error"}>
         <Hanging glyph="✘" glyphColor={color.giam} text={(props.line as Extract<Line, { kind: "error" }>).text} fg={color.giam} />
       </Match>

@@ -124,8 +124,12 @@ export interface Config {
   }
   /** Extra workspace folders kept across sessions (`/add-dir <thư mục> --luu`). */
   workspace?: { dirs?: string[] }
-  /** The session's temp folder in %TEMP% (core/fs/scratch.ts); on unless `enabled: false`. */
-  scratchpad?: { enabled?: boolean }
+  /**
+   * The session's temp folder in %TEMP% (core/fs/scratch.ts); on unless `enabled: false`.
+   * `warnMB`: the size warning under an answer (default 1024, 0 = never); `keepDays`: session
+   * folders untouched this long are deleted at startup (default 30, 0 = never).
+   */
+  scratchpad?: { enabled?: boolean; warnMB?: number; keepDays?: number }
 }
 
 export const loadConfig = () => readJson<Config>(configFile(), {})
