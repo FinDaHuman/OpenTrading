@@ -1779,6 +1779,37 @@ test("/add-dir lists the workspace, adds a folder for the session or for good (-
   }
 })
 
+test("the session's temp folder: a size warning sits under the answer, /scratch shows the folder", async () => {
+  const { Scratchpad } = await import("../src/core/fs/scratch")
+  const pad = new Scratchpad(cwd, { tmp: path.join(home, "tmp") })
+  pad.attach("tui-scratch")
+  runtime.workspace.scratch = pad
+  await saveConfig({ scratchpad: { warnMB: 0.001 } })
+  try {
+    const dir = pad.dir()!
+    await mkdir(dir, { recursive: true })
+    await writeFile(path.join(dir, "lon.csv"), "x".repeat(5000))
+    await setup.mockInput.typeText("Tính thử trong thư mục tạm")
+    setup.mockInput.pressEnter()
+    await setup.waitFor(() => !state.streaming && state.lines.some((l) => l.kind === "warning"))
+    const warning = state.lines.findLast((l) => l.kind === "warning") as { text: string }
+    expect(warning.text).toContain("Thư mục tạm của dự án đã 5 KB")
+    expect(warning.text).toContain(pad.project)
+    // Under the answer: nothing but the done line between them.
+    const at = state.lines.lastIndexOf(warning as never)
+    expect(state.lines.slice(0, at).findLast((l) => l.kind !== "done")?.kind).toBe("assistant")
+    const frame = await setup.waitForFrame((f) => f.includes("▲ Thư mục tạm của dự án"))
+    show(frame)
+    const line = await command("/scratch")
+    expect(line.kind).toBe("info")
+    expect(line.text).toContain(dir)
+    expect(line.text).toContain("1 phiên")
+  } finally {
+    runtime.workspace.scratch = undefined
+    await saveConfig({ scratchpad: undefined })
+  }
+})
+
 test("/memory: a model proposal is pending until approved with 'a'", async () => {
   await memory.add("Người dùng không giao dịch margin", { status: "pending", via: "model" })
   await setup.mockInput.typeText("/memory")

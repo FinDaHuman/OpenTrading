@@ -50,6 +50,8 @@ export type Line =
   /** History was compacted here. `summary` is absent when only old tool results were pruned. */
   | { kind: "compact"; summary?: string; before?: number; after?: number; pruned?: number }
   | { kind: "error"; text: string }
+  /** Something to act on, not a failure (the temp folder grew past its size). */
+  | { kind: "warning"; text: string }
   /** A background subagent finished; its result went (or goes) to the model as a notification. */
   | { kind: "agent-notice"; agentId: string; text: string; status: string }
   /** "✻ Xong sau 1m 23s": a long turn finished (`background` subagents still running). */
