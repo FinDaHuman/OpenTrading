@@ -1038,6 +1038,29 @@ test("<quyen_tep> names the workspace, goes out once and again when /add-dir cha
   expect(userOf(0)).toContain(JSON.stringify(extra).slice(1, -1))
 })
 
+test("<quyen_tep> names the session's temp folder to an agent with only shell, and again after /new", async () => {
+  const { Workspace } = await import("../src/core/fs/workspace")
+  const { Scratchpad } = await import("../src/core/fs/scratch")
+  const { shellTool } = await import("../src/core/tools/shell/shell")
+  const { mkdir } = await import("node:fs/promises")
+  const project = path.join(home, "du-an-tam")
+  await mkdir(project, { recursive: true })
+  const r = registry()
+  const workspace = new Workspace(project, { data: path.join(home, "data") })
+  workspace.scratch = new Scratchpad(project, { tmp: path.join(home, "tmp") })
+  workspace.scratch.attach("phien-1")
+  r.workspace = workspace
+  r.register(shellTool(workspace))
+  const userOf = (i: number) => JSON.stringify(bodies[i]!.messages.filter((m) => m.role === "user").at(-1))
+  const first = done(await collect(runAgent({ history: [], input: "tính thử", skills: [], registry: r })))
+  expect(userOf(0)).toContain("Thư mục tạm của phiên")
+  expect(userOf(0)).toContain(JSON.stringify(workspace.scratch.dir()).slice(1, -1))
+  workspace.scratch.attach("phien-2")
+  bodies.length = 0
+  await collect(runAgent({ history: first.messages, input: "tiếp", skills: [], registry: r, prevClock: first.clock }))
+  expect(userOf(0)).toContain(JSON.stringify(path.join("phien-2", "scratchpad")).slice(1, -1))
+})
+
 test("read-only sends write_file/edit_file by name only; ask mode declares them; <quyen_tep> says the mode", async () => {
   const { Workspace } = await import("../src/core/fs/workspace")
   const { FileState } = await import("../src/core/fs/file-state")

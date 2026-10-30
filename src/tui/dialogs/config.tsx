@@ -24,7 +24,7 @@ const COMPACT_PERCENTS = [95, 90, 80, 70]
 
 const DEFAULT_MODE_NEXT: Record<PermissionMode, PermissionMode> = { "read-only": "ask", ask: "auto", auto: "read-only" }
 
-type Setting = "memory" | "toolSearch" | "autoCompact" | "compactLevel" | "maxSteps" | "effort" | "subagentMax" | "subagentModel" | "webModel" | "autoModel" | "defaultMode" | "askEffort" | "tips" | "terminalNotify" | "scroll" | "updateCheck"
+type Setting = "memory" | "toolSearch" | "autoCompact" | "compactLevel" | "maxSteps" | "effort" | "subagentMax" | "subagentModel" | "webModel" | "autoModel" | "defaultMode" | "askEffort" | "tips" | "terminalNotify" | "scroll" | "updateCheck" | "scratchpad"
 type SubagentModel = { provider: string; model: string } | "inherit" | "auto"
 
 const TOOL_SEARCH_NEXT = { auto: "on", on: "off", off: "auto" } as const
@@ -208,6 +208,14 @@ export function ConfigDialog(props: { runtime: Runtime }) {
     if (setting === "updateCheck") {
       const current = await loadConfig()
       await saveConfig({ update: { ...current.update, check: current.update?.check === false } })
+      await refetch()
+      return
+    }
+    if (setting === "scratchpad") {
+      const current = await loadConfig()
+      const on = current.scratchpad?.enabled === false
+      await saveConfig({ scratchpad: { ...current.scratchpad, enabled: on } })
+      if (props.runtime.workspace.scratch) props.runtime.workspace.scratch.enabled = on
       await refetch()
       return
     }
@@ -463,6 +471,15 @@ export function ConfigDialog(props: { runtime: Runtime }) {
                 value: "terminalNotify" as Setting,
               },
               {
+                label: "Thư mục tạm của phiên",
+                hint:
+                  config()?.scratchpad?.enabled === false
+                    ? "Tắt · enter để bật"
+                    : `Bật · agent ghi file tạm vào đây không cần hỏi (trừ chỉ-đọc): ${props.runtime.workspace.scratch?.project ?? "%TEMP%/opentrading"}`,
+                mark: config()?.scratchpad?.enabled === false ? "○" : "●",
+                value: "scratchpad" as Setting,
+              },
+              {
                 label: "Tốc độ lăn chuột",
                 hint: `${describeScroll(scrollSetting(config()?.ui))} · enter để đổi (3 → 5 → 8 → tăng tốc)`,
                 mark: "●",
@@ -485,7 +502,7 @@ export function ConfigDialog(props: { runtime: Runtime }) {
               },
             ]}
             onPick={(s) => void toggle(s)}
-            rows={15}
+            rows={16}
           />
           <text fg={color.tx3} marginTop={1}>{`File cấu hình: ${configFile()}`}</text>
         </DialogFrame>

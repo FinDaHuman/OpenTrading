@@ -52,6 +52,7 @@ const defOf = (name: string): ToolDef => ({ name, description: "", input: {}, re
 /** What runtime.ts gives the classifier in production, for the workspace D:\\Dau-tu (a git repo). */
 export const EVAL_ENVIRONMENT = [
   "Workspace folders (trusted for files): D:\\Dau-tu.",
+  "Session temp folders (scratchpad; the agent writes files here without asking, like its own workspace): C:\\Users\\ban\\AppData\\Local\\Temp\\opentrading\\D--Dau-tu.",
   "OpenTrading data folder (protected: keys, config, rules): C:\\Users\\ban\\.opentrading.",
   "Machine: Windows, shell powershell.",
   "Connected OpenTrading data servers (MCP, trusted for market data): opentrading.",

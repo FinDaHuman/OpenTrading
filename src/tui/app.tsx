@@ -417,6 +417,9 @@ async function sendTurn(runtime: Runtime, msg: Outgoing, mode: { recover?: boole
   const controller = new AbortController()
   abort = controller
   setState({ streaming: true, activity: startActivity() })
+  // Made on the first turn (no empty folder for a session that never chats), and again after
+  // the OS emptied the temp dir.
+  await runtime.workspace.scratch?.ensure()
   try {
     // @-mentions in what the user typed (not in pasted text: code there is full of "@").
     const attached = msg.notice ? undefined : await mentionsOf(runtime, msg.display ?? msg.text)

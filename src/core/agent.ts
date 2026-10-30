@@ -752,6 +752,9 @@ interface TurnExtras {
 const cap = (text: string | undefined, max: number) =>
   text && text.length > max ? text.slice(0, max) + "\n[… đã cắt bớt]" : text
 
+/** Any of these sent: the `<quyen_tep>` reminder (workspace, temp folder, mode) rides along. */
+const FILE_TOOLS = ["read_file", "write_file", "shell"]
+
 async function assembleFor(opts: TurnInput, target: Target | undefined, extras: TurnExtras = {}) {
   const info = target?.provider.models[target.model]
   const supportsTools = info?.tool_call !== false
@@ -785,7 +788,7 @@ async function assembleFor(opts: TurnInput, target: Target | undefined, extras: 
     declaredTools: built ? Object.keys(built.tools) : undefined,
     mcpInstructions: opts.serverInstructions?.(),
     todos: currentTodos(opts.history ?? []),
-    fileAccess: toolNames.includes("read_file") && opts.registry.workspace ? `${opts.registry.workspace.describe()}\n${modeNote(mode)}` : undefined,
+    fileAccess: FILE_TOOLS.some((t) => toolNames.includes(t)) && opts.registry.workspace ? `${opts.registry.workspace.describe()}\n${modeNote(mode)}` : undefined,
     prevFileAccess: lastReminder(opts.history ?? [], "quyen_tep"),
   })
   if (built && built.names.length > 0) {

@@ -23,6 +23,36 @@ Agent đọc được file bạn đưa (PDF báo cáo, Excel, CSV, ghi chú, ả
 - `/add-dir <thư mục>` thêm thư mục cho phiên này; thêm `--luu` để giữ cho các phiên sau (`config.workspace.dirs`). `/add-dir` không có tham số thì liệt kê workspace.
 - Đường dẫn tương đối tính từ thư mục workspace đầu tiên. Đọc thì được ở mọi nơi, ghi ra ngoài workspace thì luôn hỏi.
 
+## Thư mục tạm của phiên (scratchpad)
+
+Mỗi phiên có một thư mục riêng trong thư mục tạm của hệ thống, để agent để script, kết quả trung gian và file xuất không thuộc dự án của bạn, giống Claude Code:
+
+```
+%TEMP%\opentrading\<thư mục đang mở>\<mã phiên>\scratchpad      (Windows)
+/tmp/opentrading-<uid>/<thư mục đang mở>/<mã phiên>/scratchpad    (macOS, Linux)
+```
+
+- Phần `<thư mục đang mở>` là đường dẫn workspace, thay mọi ký tự không phải chữ/số bằng `-` (ví dụ `D--Dau-tu`). Dài quá 60 ký tự thì cắt bớt và thêm mã băm, để đường dẫn trên Windows không vượt 260 ký tự.
+- Biến môi trường `OPENTRADING_TMPDIR` đổi thư mục gốc.
+- Thư mục được tạo ở lượt chat đầu tiên của phiên (phiên không chat thì không có thư mục), và được tạo lại nếu hệ thống đã dọn `%TEMP%`.
+- `/new`, `/clear` chuyển sang thư mục của phiên mới. Mở lại một phiên (`-c`, `--resume`, `/sessions`) dùng thư mục `<mã phiên>` dưới thư mục bạn **đang** mở OpenTrading: `-c` luôn về đúng thư mục cũ; mở phiên của thư mục khác thì được một thư mục tạm mới. Subagent và ultradesk dùng chung thư mục của phiên.
+- Model biết đường dẫn qua khối `<quyen_tep>`, được dặn dùng nó thay cho `%TEMP%` hay `/tmp`; file bạn muốn giữ thì vẫn đặt trong workspace.
+
+Quyền:
+
+| Chế độ | Ghi file vào thư mục tạm | Lệnh `shell` chạy trong thư mục tạm |
+| --- | --- | --- |
+| `‖ chỉ đọc` | hỏi từng lần (như mọi thao tác ghi) | hỏi từng lần |
+| `▸ sửa có hỏi` | **chạy luôn, không hỏi** | hỏi như lệnh trong workspace (không còn bị coi là "ngoài workspace") |
+| `▸▸ tự động` | **chạy luôn**, không tốn request model duyệt | model duyệt; ghi vào thư mục tạm không bị coi là ghi ra ngoài |
+
+- Quy tắc chặn (`deny`) và quy tắc hỏi (`ask`) của bạn vẫn được áp dụng trước.
+- File chứa khoá (`.env`, `*.key`…) trong thư mục tạm vẫn hỏi như ở mọi nơi khác.
+- Được ghi tự do là cả thư mục của dự án (`%TEMP%\opentrading\<thư mục đang mở>`), không chỉ thư mục của phiên hiện tại. Nhờ vậy subagent chạy nền từ trước `/new` vẫn ghi tiếp được.
+- Symlink hay junction nằm trong thư mục tạm nhưng trỏ ra ngoài thì không được tính là thư mục tạm: kiểm theo cả đường dẫn thật.
+- Khác Claude Code: lệnh shell có ghi vào thư mục tạm (ví dụ `python x.py > out.txt`) vẫn được duyệt như mọi lệnh khác, vì OpenTrading không tách đường dẫn ra khỏi tham số của lệnh.
+- Tắt tính năng ở `/config → Thư mục tạm của phiên` (lưu `scratchpad.enabled: false`). Khi tắt: không tạo thư mục, model không được báo, không có ngoại lệ quyền.
+
 ## Luôn hỏi bạn, không quy tắc hay model nào duyệt thay
 
 - **Đọc file chứa khoá/mật khẩu:**

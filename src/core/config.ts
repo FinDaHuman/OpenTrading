@@ -124,6 +124,8 @@ export interface Config {
   }
   /** Extra workspace folders kept across sessions (`/add-dir <thư mục> --luu`). */
   workspace?: { dirs?: string[] }
+  /** The session's temp folder in %TEMP% (core/fs/scratch.ts); on unless `enabled: false`. */
+  scratchpad?: { enabled?: boolean }
 }
 
 export const loadConfig = () => readJson<Config>(configFile(), {})
