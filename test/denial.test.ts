@@ -123,3 +123,67 @@ test("headless: a block handed to the user is a block; a quota hand-off carries 
   expect(decision.auto).toBeUndefined()
   expect(deniedMessage(decision, { tool: "mcp__x__create" })).not.toContain("auto mode đã chặn")
 })
+
+// ── the classifier's log: what did not run, until the user's next message ─────
+
+test("refused calls are marked in the classifier's log with their target, and cleared by the user's next message", async () => {
+  const { ActionLog } = await import("../src/core/permission/auto/transcript")
+  const shell = { name: "shell" }
+  const log = new ActionLog()
+  log.turn("Dọn thư mục du-lieu")
+  log.denied(shell, { command: "Remove-Item du-lieu/gia.csv" }, "auto_mode", "Irreversible Local Destruction")
+  const line = log.render().split("\n").find((l) => l.includes("denied_previous_action"))!
+  expect(JSON.parse(line)).toEqual({ denied_previous_action: { shell: { command: "Remove-Item du-lieu/gia.csv" } }, stopped_by: "auto_mode", rule: "Irreversible Local Destruction" })
+  // A subagent's task is not the user speaking: the mark stays.
+  log.turn("tra cứu giá", { agent: { type: "tra-cuu", id: "a1", description: "" } })
+  expect(log.render()).toContain("denied_previous_action")
+  log.turn("thôi, vẽ biểu đồ FPT đi")
+  expect(log.render()).not.toContain("denied_previous_action")
+})
+
+test("the gate marks auto-mode blocks, user refusals and deny rules; approving a hand-off or a retry is the user's answer", async () => {
+  const gate = autoGate([...BLOCK, ...BLOCK, ...BLOCK])
+  gate.interactive = true
+  const log = gate.auto!.log
+  await gate.check(mcpWrite, { a: 1 }, signal())
+  expect(log.all().at(-1)).toMatchObject({ kind: "denied", tool: "mcp__x__create", by: "auto_mode", rule: "Data Exfiltration" })
+  await gate.check(mcpWrite, { a: 2 }, signal())
+  const pending = gate.check(mcpWrite, { a: 3 }, signal())
+  await tick()
+  await gate.respond(gate.head()!.id, "deny")
+  await pending
+  expect(log.all().at(-1)).toMatchObject({ kind: "denied", by: "user" })
+  // The user lets the newest block run once: the classifier reads that they allowed it.
+  gate.auto!.grantRetry(gate.auto!.recent[0]!)
+  expect(log.all().at(-1)).toMatchObject({ kind: "answer", text: expect.stringContaining("cho phép chạy lại mcp__x__create") })
+
+  const ruled = new PermissionGate({ load: async () => [], save: async () => {}, lists: async () => ({ deny: [{ tool: "mcp__x__*" }], ask: [] }) })
+  ruled.auto = autoGate([]).auto
+  await ruled.refreshRules()
+  expect((await ruled.check(mcpWrite, {}, signal())).reason).toBe("rule")
+  expect(ruled.auto!.log.all().at(-1)).toMatchObject({ kind: "denied", by: "deny_rule" })
+})
+
+test("a hand-off the user approves is logged as their answer", async () => {
+  const gate = autoGate([new Error("boom")])
+  gate.interactive = true
+  const pending = gate.check(mcpWrite, { x: 1 }, signal())
+  await tick()
+  await gate.respond(gate.head()!.id, "once")
+  expect((await pending).allow).toBe(true)
+  expect(gate.auto!.log.all().at(-1)).toMatchObject({ kind: "answer", text: expect.stringContaining("(cho phép mcp__x__create)") })
+})
+
+test("the classifier is told what a denied line means and to block workarounds; the eval cases carry them", async () => {
+  const { systemPrompt, HANDOFF } = await import("../src/core/permission/auto/classifier")
+  const system = systemPrompt({ environment: [] })
+  expect(system).toContain("denied_previous_action")
+  expect(system).toContain("same effect on the same target")
+  expect(HANDOFF("tra-cuu#a1")).toContain("did not run")
+  const path = await import("node:path")
+  const { caseInput, loadCases } = await import("./helpers/auto-eval")
+  const cases = loadCases(path.resolve(import.meta.dir, "..")).filter((c) => c.tags?.includes("workaround"))
+  expect(cases.filter((c) => c.expect === "block").length).toBeGreaterThanOrEqual(3)
+  expect(cases.filter((c) => c.expect === "allow").length).toBeGreaterThanOrEqual(3)
+  for (const c of cases) expect(caseInput(c).transcript).toContain("denied_previous_action")
+})

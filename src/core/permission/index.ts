@@ -2,6 +2,7 @@ import { loadConfig, saveConfig } from "../config"
 import { isInside, isSensitiveScope } from "../fs/path-safety"
 import type { AgentOrigin, ApprovalPreview, ToolDef } from "../tools/types"
 import type { AutoReviewer, Review } from "./auto"
+import { compactInput } from "./auto/transcript"
 import type { AutoBlock, DenyInfo } from "./denial"
 import type { PermissionMode } from "./mode"
 
@@ -274,6 +275,12 @@ export class PermissionGate {
     return { allow: true }
   }
 
+  /** A deny rule matched: the classifier's log marks the call as not run. */
+  private refused(def: ToolDef, input: unknown, agent?: AgentOrigin): Decision {
+    this.auto?.log.denied(def, input, "deny_rule", undefined, agent)
+    return { allow: false, reason: "rule" }
+  }
+
   /** Resolve before the tool runs. Waiting here never counts against the tool's timeout. */
   async check(def: ToolDef, input: unknown, signal: AbortSignal, label = def.name, callId?: string, agent?: AgentOrigin): Promise<Decision> {
     const scope = def.askFor?.(input)
@@ -284,11 +291,11 @@ export class PermissionGate {
     if (blocked) return { allow: false, reason: "blocked", message: blocked }
     const subject = def.subject?.(input)
     // Deny rules first, from memory: they stop reads too (refreshRules loads them).
-    if (this.lists?.deny.some((r) => listMatches(r, def, subject))) return { allow: false, reason: "rule" }
+    if (this.lists?.deny.some((r) => listMatches(r, def, subject))) return this.refused(def, input, agent)
     // Calls that never ask run at once, as before: no await, so parallel calls keep their order.
     if (!userOnly(scope) && !needsApproval(def, input) && !(this.current === "auto" && def.autoReview)) return this.ran()
     const lists = this.lists ?? (await this.rules.lists?.()) ?? { deny: [], ask: [] }
-    if (!this.lists && lists.deny.some((r) => listMatches(r, def, subject))) return { allow: false, reason: "rule" }
+    if (!this.lists && lists.deny.some((r) => listMatches(r, def, subject))) return this.refused(def, input, agent)
     const key = this.keyOf(def, input)
     if (userOnly(scope)) {
       if (sessionOk(scope) && this.session.has(key)) return { allow: true }
@@ -356,6 +363,7 @@ export class PermissionGate {
       if (choice === "deny") {
         // The user's note is their own words: the classifier reads it too.
         if (message?.trim()) this.auto?.log.answer(`(từ chối ${pending!.def.name}) ${message.trim()}`)
+        this.auto?.log.denied(pending!.def, pending!.request.input, "user", undefined, pending!.request.agent)
         pending!.resolve({ allow: false, reason: "user", message: message?.trim() || undefined, ...(pending!.auto ? { auto: pending!.auto } : {}) })
         return
       }
@@ -371,6 +379,8 @@ export class PermissionGate {
           return
         }
       }
+      // Auto mode handed this one over and the user let it run: their decision, in their log.
+      if (pending!.request.mode === "auto" && pending!.request.notice) this.auto?.log.answer(`(cho phép ${pending!.def.name}) ${compactInput(pending!.def, pending!.request.input)}`)
       if (choice === "mode") this.setMode("ask")
       if (choice === "session" || choice === "always") {
         this.session.add(pending!.key)

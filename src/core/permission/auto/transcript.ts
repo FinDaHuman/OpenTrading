@@ -10,6 +10,11 @@ import type { AgentOrigin, ToolDef } from "../../tools/types"
  * starts from a task the main agent wrote, and parallel calls of one step are missing there.
  * One log for the whole session (subagents included); /compact does not touch it, so a "don't
  * overwrite X" said at the start still counts. Bounded when rendered.
+ *
+ * Calls that did not run (auto mode blocked them, the user or a deny rule refused) are marked,
+ * so a later call reaching the same effect another way is judged against that. The marks last
+ * until the user's next message only: a wrong block must not follow the work for the session
+ * (and a workaround in a later turn still meets the ordinary rules).
  */
 
 export type LogEntry =
@@ -22,9 +27,15 @@ export type LogEntry =
   | { kind: "notice"; text: string }
   /** `effect`: the tool is not read-only (or only claims to be): worth a sub-agent return check. */
   | { kind: "action"; agent?: string; tool: string; input: string; effect?: true }
+  /** A call that did not run, and who stopped it (`rule`: the auto-mode rule's label, when it was auto mode). */
+  | { kind: "denied"; agent?: string; tool: string; input: string; by: DeniedBy; rule?: string }
+
+export type DeniedBy = "auto_mode" | "user" | "deny_rule"
 
 /** Per field, then per entry: long text keeps its head and tail with an explicit marker. */
 export const FIELD_CHARS = 2_000
+/** A denied call's input: enough to name its target. */
+export const DENIED_CHARS = 300
 export const MAX_ENTRIES = 40
 export const MAX_CHARS = 20_000
 /** The user's own lines may use this much of MAX_CHARS; the rest is kept for the actions. */
@@ -108,7 +119,11 @@ export class ActionLog {
     if (!rest) return
     // Checked after the reports are split off: they may ride in front of the prompt's text.
     if (this.harness.delete(rest)) this.entries.push({ kind: "notice", text: clip(rest, 1_500) })
-    else this.entries.push({ kind: "user", text: clip(rest, 4_000) })
+    else {
+      // The user spoke again: earlier refusals stop counting (see the header).
+      this.entries = this.entries.filter((e) => e.kind !== "denied")
+      this.entries.push({ kind: "user", text: clip(rest, 4_000) })
+    }
   }
 
   answer(text: string) {
@@ -127,6 +142,18 @@ export class ActionLog {
       input: compactInput(def, input),
       ...(agent ? { agent: `${agent.type}#${agent.id}` } : {}),
       ...(!def.readOnly || def.autoReview ? { effect: true as const } : {}),
+    })
+  }
+
+  /** The call just checked did not run: who stopped it, and the auto-mode rule if it was auto mode. */
+  denied(def: Pick<ToolDef, "name" | "subject">, input: unknown, by: DeniedBy, rule?: string, agent?: AgentOrigin) {
+    this.entries.push({
+      kind: "denied",
+      tool: def.name,
+      input: clip(compactInput(def, input), DENIED_CHARS),
+      by,
+      ...(rule ? { rule } : {}),
+      ...(agent ? { agent: `${agent.type}#${agent.id}` } : {}),
     })
   }
 
@@ -172,10 +199,13 @@ export class ActionLog {
           return JSON.stringify({ harness_notice: e.text })
         case "action":
           return JSON.stringify({ [e.tool]: asJson(e.input), ...(e.agent ? { by: e.agent } : {}) })
+        case "denied":
+          return JSON.stringify({ denied_previous_action: { [e.tool]: asJson(e.input) }, stopped_by: e.by, ...(e.rule ? { rule: e.rule } : {}), ...(e.agent ? { by: e.agent } : {}) })
       }
     }
     const lines = this.entries.map((e) => ({ e, text: line(e) }))
-    const pinned = (e: LogEntry) => e.kind === "user" || e.kind === "answer"
+    // Refusals are short and only live until the user's next message: kept with the user's words.
+    const pinned = (e: LogEntry) => e.kind === "user" || e.kind === "answer" || e.kind === "denied"
     const keep = new Set<number>()
     let chars = 0
     const users = lines.flatMap((l, i) => (pinned(l.e) ? [i] : []))
