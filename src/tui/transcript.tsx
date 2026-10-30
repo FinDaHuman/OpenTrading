@@ -11,7 +11,7 @@ import { useSpinner } from "./ui/clock"
 import { fmtElapsed } from "./activity"
 import { LEGACY_TODO_PREFIX, TODO_PREFIX } from "../core/tools/todos"
 import { LOADED_PREFIX } from "../core/tools/search"
-import { USER_DENY_PREFIX, userNoteOf } from "../core/permission/denial"
+import { AUTO_BLOCK_PREFIX, USER_DENY_PREFIX, userNoteOf } from "../core/permission/denial"
 import { isSpawn, SubagentRow } from "./subagent-row"
 import { DESK_RUN } from "../core/desk/tool"
 import { DeskCard, deskRunIdOf, isLiveRun, runSummary } from "./desk-card"
@@ -55,9 +55,15 @@ function summary(line: ToolLine): { tone: "ok" | "denied" | "answers"; lines: st
   }
   // The live card under the row says the rest.
   if (line.name === DESK_RUN && line.status === "ok" && deskRunIdOf(out)) return { tone: "ok", lines: [out.split("\n")[0] ?? out] }
+  // Auto mode's block: its summary line; ctrl+o shows what the model was told.
+  if (line.status === "error" && out.startsWith(AUTO_BLOCK_PREFIX) && !state.expandTools) {
+    return { tone: "denied", lines: [`✘ ${out.split("\n")[0]} · /permissions để cho thử lại`], wrap: true }
+  }
   if (line.status === "error" && out.startsWith(USER_DENY_PREFIX)) {
     const note = userNoteOf(out)
-    return { tone: "denied", lines: [`✘ Đã từ chối${note ? ` — "${note}"` : ""}`] }
+    // A hand-off the user refused keeps auto mode's reason: "(auto mode đã chặn [nhãn]: lý do)".
+    const auto = /^ \(auto mode đã chặn[^\n]*\)(?=\.)/.exec(out.slice(USER_DENY_PREFIX.length))?.[0] ?? ""
+    return { tone: "denied", lines: [`✘ Đã từ chối${auto}${note ? ` — "${note}"` : ""}`], wrap: Boolean(auto) }
   }
   if (line.status === "ok" && out.startsWith("Người dùng đã trả lời:")) {
     const pairs = [...out.matchAll(/("(?:[^"\\]|\\.)*")=("(?:[^"\\]|\\.)*")/g)].map((m) => `· ${JSON.parse(m[1]!)} → ${JSON.parse(m[2]!)}`)
