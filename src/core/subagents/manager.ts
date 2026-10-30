@@ -589,6 +589,8 @@ export class SubagentManager {
         ? await gate.auto.handoff({ id: run.id, type: run.type, description: run.description }, signal).catch(() => undefined)
         : undefined
     if (warning) run.text = `${warning}\n\n${run.text}`
+    // Its refusals and approvals no longer count against later calls.
+    gate?.auto?.log.agentDone({ id: run.id, type: run.type, description: run.description })
     const result: SubagentResult = {
       status: run.status,
       text: run.text,

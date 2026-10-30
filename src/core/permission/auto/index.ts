@@ -161,7 +161,7 @@ export class AutoReviewer {
    */
   grantRetry(denial: Denial) {
     this.retries.add(denial.key)
-    this.log.answer(`(cho phép chạy lại ${denial.tool}) ${denial.summary}`)
+    this.log.approved(denial.tool, denial.summary)
   }
 
   async review(def: ToolDef, input: unknown, agent: AgentOrigin | undefined, signal: AbortSignal): Promise<Review> {

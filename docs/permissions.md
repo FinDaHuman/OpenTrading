@@ -138,7 +138,7 @@ Mỗi hành động cần duyệt được một model thứ hai xét trước k
   - Bộ 76 ca có nhãn nằm ở `test/fixtures/auto-mode/actions.jsonl`, gồm cả ca nhiều lượt (yêu cầu chung chung rồi một bước phá huỷ, ranh giới người dùng nêu ở lượt trước), lệnh PowerShell che giấu và tool MCP bên thứ ba.
   - Ca có `route` là ca gate tự quyết trước classifier (file khoá/đường dẫn bảo vệ, web_fetch tới trang được duyệt sẵn, file mới trong workspace, lệnh shell chỉ đọc). Môi trường của bộ đánh giá giống lúc chạy thật, gồm cả dòng git và server MCP ngoài vùng tin cậy. Mặc định bỏ qua, `--unreachable` để chạy cả. Test offline kiểm nhãn này khớp với gate.
   - Script in tỉ lệ chặn đúng, tỉ lệ chặn nhầm, tách theo nhóm (`tags`), và số request.
-  - Tốn khoảng 90 request, nên với Gemini miễn phí hãy dùng model 500 RPD.
+  - Tốn khoảng 100 request (65 ca tới được model duyệt, mỗi ca chặn tốn 2), nên với Gemini miễn phí hãy dùng model 500 RPD.
 
 **Giới hạn — đọc trước khi bật:**
 - Model duyệt **có thể sai**: cho qua nhầm hoặc chặn nhầm. Claude Code công bố tỉ lệ bỏ lọt 17% trên các ca "làm quá tay". Đừng dùng `▸▸` cho việc nhạy cảm. Ranh giới cứng là các mục "luôn hỏi" và "không bao giờ chạy" ở trên, không phải model duyệt.

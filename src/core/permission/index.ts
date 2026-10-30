@@ -380,7 +380,7 @@ export class PermissionGate {
         }
       }
       // Auto mode handed this one over and the user let it run: their decision, in their log.
-      if (pending!.request.mode === "auto" && pending!.request.notice) this.auto?.log.answer(`(cho phép ${pending!.def.name}) ${compactInput(pending!.def, pending!.request.input)}`)
+      if (pending!.request.mode === "auto" && pending!.request.notice) this.auto?.log.approved(pending!.def.name, compactInput(pending!.def, pending!.request.input), pending!.request.agent)
       if (choice === "mode") this.setMode("ask")
       if (choice === "session" || choice === "always") {
         this.session.add(pending!.key)
