@@ -35,7 +35,7 @@ Mỗi phiên có một thư mục riêng trong thư mục tạm của hệ thố
 - Phần `<thư mục đang mở>` là đường dẫn workspace, thay mọi ký tự không phải chữ/số bằng `-` (ví dụ `D--Dau-tu`). Dài quá 60 ký tự thì cắt bớt và thêm mã băm, để đường dẫn trên Windows không vượt 260 ký tự.
 - Biến môi trường `OPENTRADING_TMPDIR` đổi thư mục gốc.
 - Thư mục được tạo ở lượt chat đầu tiên của phiên (phiên không chat thì không có thư mục), và được tạo lại nếu hệ thống đã dọn `%TEMP%`.
-- `/new`, `/clear` chuyển sang thư mục của phiên mới. `-c` / `--resume` quay lại đúng thư mục cũ. Subagent và ultradesk dùng chung thư mục của phiên.
+- `/new`, `/clear` chuyển sang thư mục của phiên mới. Mở lại một phiên (`-c`, `--resume`, `/sessions`) dùng thư mục `<mã phiên>` dưới thư mục bạn **đang** mở OpenTrading: `-c` luôn về đúng thư mục cũ; mở phiên của thư mục khác thì được một thư mục tạm mới. Subagent và ultradesk dùng chung thư mục của phiên.
 - Model biết đường dẫn qua khối `<quyen_tep>`, được dặn dùng nó thay cho `%TEMP%` hay `/tmp`; file bạn muốn giữ thì vẫn đặt trong workspace.
 
 Quyền:

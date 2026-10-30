@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto"
+import { lstatSync } from "node:fs"
 import { lstat, mkdir } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
@@ -44,6 +45,8 @@ export class Scratchpad {
   /** Off in /config: no folder, no prompt line, no approval shortcut. */
   enabled = true
   private session?: string
+  /** As built, before resolving: the ownership check looks at this one, not at a link's target. */
+  private readonly rawBase: string
   private readonly base: string
   private readonly platform: NodeJS.Platform
   /** The base folder failed the ownership check (POSIX shared /tmp): stay off for the process. */
@@ -51,8 +54,20 @@ export class Scratchpad {
 
   constructor(cwd: string, opts: ScratchOptions = {}) {
     this.platform = opts.platform ?? process.platform
-    this.base = realish(scratchBase(opts.tmp, this.platform))
+    this.rawBase = scratchBase(opts.tmp, this.platform)
+    try {
+      this.unsafe = !this.owned(lstatSync(this.rawBase))
+    } catch {
+      // not there yet: ensure() makes it
+    }
+    this.base = realish(this.rawBase)
     this.project = path.join(this.base, scratchFolderName(path.resolve(cwd)))
+  }
+
+  /** POSIX: a real folder of ours (a shared /tmp lets anyone plant a link there first). */
+  private owned(info: { isSymbolicLink(): boolean; isDirectory(): boolean; uid: number }) {
+    if (this.platform === "win32") return true
+    return !info.isSymbolicLink() && info.isDirectory() && (!process.getuid || info.uid === process.getuid())
   }
 
   /** The conversation now writing (startup, /new, /clear, resume). */
@@ -82,13 +97,10 @@ export class Scratchpad {
     const dir = this.dir()
     if (!dir) return undefined
     try {
-      await mkdir(this.base, { recursive: true, mode: 0o700 })
-      if (this.platform !== "win32") {
-        const info = await lstat(this.base)
-        if (info.isSymbolicLink() || !info.isDirectory() || (process.getuid && info.uid !== process.getuid())) {
-          this.unsafe = true
-          return undefined
-        }
+      await mkdir(this.rawBase, { recursive: true, mode: 0o700 })
+      if (!this.owned(await lstat(this.rawBase))) {
+        this.unsafe = true
+        return undefined
       }
       await mkdir(dir, { recursive: true, mode: 0o700 })
       return dir

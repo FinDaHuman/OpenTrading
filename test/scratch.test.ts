@@ -73,7 +73,7 @@ test("session folder: <project>/<session id>/scratchpad, follows /new, off when 
   const pad = new Scratchpad(project, { tmp })
   expect(pad.dir()).toBeUndefined()
   pad.attach("s1")
-  expect(pad.project).toBe(path.join(realish(tmp), "opentrading", scratchFolderName(project)))
+  expect(pad.project).toBe(path.join(realish(scratchBase(tmp)), scratchFolderName(project)))
   expect(pad.dir()).toBe(path.join(pad.project, "s1", "scratchpad"))
   pad.attach("s2")
   expect(pad.dir()).toBe(path.join(pad.project, "s2", "scratchpad"))
@@ -83,6 +83,19 @@ test("session folder: <project>/<session id>/scratchpad, follows /new, off when 
   expect(pad.dir()).toBeUndefined()
   expect(pad.contains(path.join(pad.project, "s2", "scratchpad", "a.py"))).toBe(false)
   expect(await pad.ensure()).toBeUndefined()
+})
+
+test.skipIf(process.platform === "win32")("POSIX: a base folder planted as a symlink turns the scratchpad off", async () => {
+  const planted = path.join(root, "planted")
+  const other = path.join(root, "tmp-link")
+  mkdirSync(planted, { recursive: true })
+  mkdirSync(other, { recursive: true })
+  symlinkSync(planted, scratchBase(other), "dir")
+  const pad = new Scratchpad(project, { tmp: other })
+  pad.attach("s")
+  expect(await pad.ensure()).toBeUndefined()
+  expect(pad.dir()).toBeUndefined()
+  expect(pad.contains(path.join(planted, "x"))).toBe(false)
 })
 
 test("ensure creates the folder lazily and again after the OS emptied the temp dir", async () => {
