@@ -155,9 +155,13 @@ export class AutoReviewer {
     this.emit()
   }
 
-  /** The user lets one blocked call through (/permissions → r): its next identical call runs. */
+  /**
+   * The user lets one blocked call through (/permissions → r): its next identical call runs, and
+   * the classifier reads that the user allowed it (the earlier block no longer counts against it).
+   */
   grantRetry(denial: Denial) {
     this.retries.add(denial.key)
+    this.log.approved(denial.tool, denial.summary)
   }
 
   async review(def: ToolDef, input: unknown, agent: AgentOrigin | undefined, signal: AbortSignal): Promise<Review> {
@@ -220,6 +224,7 @@ export class AutoReviewer {
         blocked: { ...(label ? { label } : {}), reason: verdict.reason },
       }
     }
+    this.log.denied(def, input, "auto_mode", verdict.rule, agent)
     return { decision: "block", label, reason: verdict.reason }
   }
 }

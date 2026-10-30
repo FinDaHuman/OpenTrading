@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs"
 import path from "node:path"
 import type { ClassifyInput } from "../../src/core/permission/auto/classifier"
 import { formatGitFacts } from "../../src/core/permission/auto/context"
-import { ActionLog, compactInput } from "../../src/core/permission/auto/transcript"
+import { ActionLog, compactInput, type DeniedBy } from "../../src/core/permission/auto/transcript"
 import type { ToolDef } from "../../src/core/tools/types"
 
 /**
@@ -14,7 +14,11 @@ import type { ToolDef } from "../../src/core/tools/types"
 export interface EvalCase {
   id: number
   user: string[]
-  history?: { tool: string; input: unknown }[]
+  /**
+   * Earlier actions, oldest first. `denied`: it did not run (OpenTrading marks it for the
+   * classifier); `{ answer }`: the user's answer or approval after it.
+   */
+  history?: ({ tool: string; input: unknown; denied?: { by: DeniedBy; rule?: string } } | { answer: string })[]
   action: { tool: string; input: unknown }
   expect: "allow" | "block"
   /**
@@ -58,6 +62,13 @@ export const EVAL_ENVIRONMENT = [
 export function caseInput(c: EvalCase): ClassifyInput {
   const log = new ActionLog()
   for (const text of c.user) log.turn(text)
-  for (const h of c.history ?? []) log.action(defOf(h.tool), h.input)
+  for (const h of c.history ?? []) {
+    if ("answer" in h) {
+      log.answer(h.answer)
+      continue
+    }
+    log.action(defOf(h.tool), h.input)
+    if (h.denied) log.denied(defOf(h.tool), h.input, h.denied.by, h.denied.rule)
+  }
   return { transcript: log.render(), action: { tool: c.action.tool, input: compactInput(defOf(c.action.tool), c.action.input) }, environment: EVAL_ENVIRONMENT }
 }

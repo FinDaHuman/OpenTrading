@@ -10,6 +10,13 @@ import type { AgentOrigin, ToolDef } from "../../tools/types"
  * starts from a task the main agent wrote, and parallel calls of one step are missing there.
  * One log for the whole session (subagents included); /compact does not touch it, so a "don't
  * overwrite X" said at the start still counts. Bounded when rendered.
+ *
+ * Calls that did not run (auto mode blocked them, the user or a deny rule refused) are marked,
+ * so a later call reaching the same effect another way is judged against that; so are calls the
+ * user let through after auto mode handed them over (that exact call only: its input is the
+ * agent's text, never the user's words). The marks last until the user's next message, or for a
+ * subagent's calls until it hands back: a wrong block must not follow the work for the session
+ * (and a workaround in a later turn still meets the ordinary rules).
  */
 
 export type LogEntry =
@@ -22,9 +29,17 @@ export type LogEntry =
   | { kind: "notice"; text: string }
   /** `effect`: the tool is not read-only (or only claims to be): worth a sub-agent return check. */
   | { kind: "action"; agent?: string; tool: string; input: string; effect?: true }
+  /** A call that did not run, and who stopped it (`rule`: the auto-mode rule's label, when it was auto mode). */
+  | { kind: "denied"; agent?: string; tool: string; input: string; by: DeniedBy; rule?: string }
+  /** A call auto mode handed to the user, who let it run (or a /permissions retry). */
+  | { kind: "approved"; agent?: string; tool: string; input: string }
+
+export type DeniedBy = "auto_mode" | "user" | "deny_rule"
 
 /** Per field, then per entry: long text keeps its head and tail with an explicit marker. */
 export const FIELD_CHARS = 2_000
+/** A denied call's input: enough to name its target. */
+export const DENIED_CHARS = 300
 export const MAX_ENTRIES = 40
 export const MAX_CHARS = 20_000
 /** The user's own lines may use this much of MAX_CHARS; the rest is kept for the actions. */
@@ -77,6 +92,9 @@ const ALWAYS_LOGGED = new Set(["web_fetch", "web_search"])
 /** A background subagent's report as delivered to the main agent (subagents/notification.ts). */
 const NOTICE_BLOCK = /<thong_bao_subagent>[\s\S]*?<\/thong_bao_subagent>/g
 
+/** The harness's marks on calls (refused, or approved by the user after a hand-off). */
+const isMark = (e: LogEntry): e is Extract<LogEntry, { kind: "denied" | "approved" }> => e.kind === "denied" || e.kind === "approved"
+
 export class ActionLog {
   private entries: LogEntry[] = []
   /** Turn texts the harness sends in the user's name (an MCP prompt's expansion): not the user's words. */
@@ -108,7 +126,11 @@ export class ActionLog {
     if (!rest) return
     // Checked after the reports are split off: they may ride in front of the prompt's text.
     if (this.harness.delete(rest)) this.entries.push({ kind: "notice", text: clip(rest, 1_500) })
-    else this.entries.push({ kind: "user", text: clip(rest, 4_000) })
+    else {
+      // The user spoke again: earlier marks stop counting (see the header); a subagent still at work keeps its own.
+      this.entries = this.entries.filter((e) => !isMark(e) || e.agent !== undefined)
+      this.entries.push({ kind: "user", text: clip(rest, 4_000) })
+    }
   }
 
   answer(text: string) {
@@ -128,6 +150,29 @@ export class ActionLog {
       ...(agent ? { agent: `${agent.type}#${agent.id}` } : {}),
       ...(!def.readOnly || def.autoReview ? { effect: true as const } : {}),
     })
+  }
+
+  /** The call just checked did not run: who stopped it, and the auto-mode rule if it was auto mode. */
+  denied(def: Pick<ToolDef, "name" | "subject">, input: unknown, by: DeniedBy, rule?: string, agent?: AgentOrigin) {
+    this.entries.push({
+      kind: "denied",
+      tool: def.name,
+      input: clip(compactInput(def, input), DENIED_CHARS),
+      by,
+      ...(rule ? { rule } : {}),
+      ...(agent ? { agent: `${agent.type}#${agent.id}` } : {}),
+    })
+  }
+
+  /** The user let this call run after auto mode handed it over. `input` is compact already. */
+  approved(tool: string, input: string, agent?: AgentOrigin) {
+    this.entries.push({ kind: "approved", tool, input: clip(input, DENIED_CHARS), ...(agent ? { agent: `${agent.type}#${agent.id}` } : {}) })
+  }
+
+  /** A subagent handed back: its marks stop counting. */
+  agentDone(agent: AgentOrigin) {
+    const tag = `${agent.type}#${agent.id}`
+    this.entries = this.entries.filter((e) => !isMark(e) || e.agent !== tag)
   }
 
   /**
@@ -172,10 +217,15 @@ export class ActionLog {
           return JSON.stringify({ harness_notice: e.text })
         case "action":
           return JSON.stringify({ [e.tool]: asJson(e.input), ...(e.agent ? { by: e.agent } : {}) })
+        case "denied":
+          return JSON.stringify({ denied_previous_action: { [e.tool]: asJson(e.input) }, stopped_by: e.by, ...(e.rule ? { rule: e.rule } : {}), ...(e.agent ? { by: e.agent } : {}) })
+        case "approved":
+          return JSON.stringify({ user_approved_action: { [e.tool]: asJson(e.input) }, ...(e.agent ? { by: e.agent } : {}) })
       }
     }
     const lines = this.entries.map((e) => ({ e, text: line(e) }))
-    const pinned = (e: LogEntry) => e.kind === "user" || e.kind === "answer"
+    // Marks are short and only live until the user's next message: kept with the user's words.
+    const pinned = (e: LogEntry) => e.kind === "user" || e.kind === "answer" || isMark(e)
     const keep = new Set<number>()
     let chars = 0
     const users = lines.flatMap((l, i) => (pinned(l.e) ? [i] : []))
