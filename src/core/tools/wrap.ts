@@ -138,7 +138,7 @@ export async function runTool(def: ToolDef, input: unknown, ctx: ToolContext, lo
       if (!decision.allow) throw new Error(decision.reason === "cancelled" ? deniedMessage(decision) : loopDenied(def, repeats, decision.message))
     }
     const decision = await gate.check(def, input, ctx.signal, def.displayName, ctx.callId, ctx.agent)
-    if (!decision.allow) throw new Error(deniedMessage(decision))
+    if (!decision.allow) throw new Error(deniedMessage(decision, { tool: def.name, agent: ctx.agent }))
   }
   const release = def.unlocked ? () => {} : await lock.acquire(!def.readOnly, ctx.signal)
   // Cancelled while approval or the lock was pending: no side effect may start now.

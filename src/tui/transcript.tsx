@@ -11,6 +11,7 @@ import { useSpinner } from "./ui/clock"
 import { fmtElapsed } from "./activity"
 import { LEGACY_TODO_PREFIX, TODO_PREFIX } from "../core/tools/todos"
 import { LOADED_PREFIX } from "../core/tools/search"
+import { USER_DENY_PREFIX, userNoteOf } from "../core/permission/denial"
 import { isSpawn, SubagentRow } from "./subagent-row"
 import { DESK_RUN } from "../core/desk/tool"
 import { DeskCard, deskRunIdOf, isLiveRun, runSummary } from "./desk-card"
@@ -54,9 +55,9 @@ function summary(line: ToolLine): { tone: "ok" | "denied" | "answers"; lines: st
   }
   // The live card under the row says the rest.
   if (line.name === DESK_RUN && line.status === "ok" && deskRunIdOf(out)) return { tone: "ok", lines: [out.split("\n")[0] ?? out] }
-  if (line.status === "error" && out.startsWith("Người dùng từ chối chạy tool này")) {
-    const note = /Lời nhắn của người dùng: (.*)$/s.exec(out)?.[1]
-    return { tone: "denied", lines: [`✘ Đã từ chối${note ? ` — "${note.trim()}"` : ""}`] }
+  if (line.status === "error" && out.startsWith(USER_DENY_PREFIX)) {
+    const note = userNoteOf(out)
+    return { tone: "denied", lines: [`✘ Đã từ chối${note ? ` — "${note}"` : ""}`] }
   }
   if (line.status === "ok" && out.startsWith("Người dùng đã trả lời:")) {
     const pairs = [...out.matchAll(/("(?:[^"\\]|\\.)*")=("(?:[^"\\]|\\.)*")/g)].map((m) => `· ${JSON.parse(m[1]!)} → ${JSON.parse(m[2]!)}`)

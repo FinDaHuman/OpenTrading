@@ -9,7 +9,8 @@ export { ActionLog } from "./transcript"
 /**
  * ▸▸ auto mode's reviewer: for each action that would otherwise ask, the classifier decides.
  * Rules from Claude Code's auto mode:
- * - a block is a tool error the model reads and works around ("deny and continue");
+ * - a block is a tool error the model reads ("deny and continue"; denial.ts: no workaround
+ *   by another tool, independent work goes on, then stop and explain);
  * - 3 blocks in a row, or 20 in the session, stop deciding: the user is asked (that action
  *   and the next ones) until they answer one prompt;
  * - no verdict (error, timeout, unreadable) → ask the user; a quota error (429) also pauses
@@ -24,8 +25,11 @@ export const QUOTA_PAUSE_MS = 10 * 60_000
 export type Review =
   | { decision: "allow" }
   | { decision: "block"; label?: string; reason: string }
-  /** Ask the user instead, and say why (shown in the prompt). */
-  | { decision: "ask"; why: string }
+  /**
+   * Ask the user instead, and say why (shown in the prompt). `blocked`: this call was blocked
+   * (the one that reached the limit), so a "no" from the user keeps the classifier's reason.
+   */
+  | { decision: "ask"; why: string; blocked?: { label?: string; reason: string } }
 
 export interface Denial {
   at: number
@@ -210,7 +214,11 @@ export class AutoReviewer {
     this.emit()
     // At the limit this block is not final: the user decides, so a run of false blocks ends here.
     if (this.consecutive >= MAX_CONSECUTIVE || this.total >= MAX_TOTAL) {
-      return { decision: "ask", why: `auto mode chặn ${label ? `[${label}] ` : ""}${verdict.reason} — đã chặn ${this.consecutive >= MAX_CONSECUTIVE ? `${this.consecutive} lần liên tiếp` : `${this.total} lần`}, bạn quyết định` }
+      return {
+        decision: "ask",
+        why: `auto mode chặn ${label ? `[${label}] ` : ""}${verdict.reason} — đã chặn ${this.consecutive >= MAX_CONSECUTIVE ? `${this.consecutive} lần liên tiếp` : `${this.total} lần`}, bạn quyết định`,
+        blocked: { ...(label ? { label } : {}), reason: verdict.reason },
+      }
     }
     return { decision: "block", label, reason: verdict.reason }
   }
@@ -221,14 +229,5 @@ export function handoffWarning(agent: string, label: string | undefined, reason:
   return (
     `[Cảnh báo an toàn từ auto mode] Model duyệt cho rằng subagent ${agent} đã làm việc vượt yêu cầu${label ? ` [${label}]` : ""}: ${reason}. ` +
     "Kết quả bên dưới vẫn được giữ nguyên. Kiểm tra lại các thay đổi của subagent trước khi dựa vào nó, và báo người dùng nếu cần."
-  )
-}
-
-/** What the model reads when the classifier blocks. */
-export function blockedMessage(label: string | undefined, reason: string) {
-  return (
-    `Auto mode chặn lời gọi này${label ? ` [${label}]` : ""}: ${reason}. ` +
-    "Nếu còn việc khác không phụ thuộc vào nó thì làm tiếp. Được làm cách khác an toàn hơn, nhưng không tìm cách lách. " +
-    "Nếu bắt buộc phải làm, dừng lại và giải thích cho người dùng: người dùng có thể nói rõ cho phép đúng hành động này (và đối tượng của nó), hoặc chuyển sang ▸ sửa có hỏi để tự duyệt."
   )
 }
