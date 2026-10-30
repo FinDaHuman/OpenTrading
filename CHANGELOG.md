@@ -5,6 +5,67 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-10-31
+
+Auto mode (▸▸) reviewed end to end, turns that always end with an answer, a per-session temp
+folder for the agent, and fixes from real-key testing. Update with `ot update` (npm:
+`npm i -g @findahuman/opentrading@latest`).
+
+### Added
+
+- Session temp folder (scratchpad): `<system temp>/opentrading/<folder>/<session>/scratchpad`
+  (`OPENTRADING_TMPDIR` moves the base) for scripts, intermediate results and exports that do
+  not belong in the user's project. In ▸ and ▸▸ the agent writes there without asking (no
+  classifier request); ‖ read-only still asks; deny/ask rules and secret files are checked first,
+  and links inside cannot lead writes out. Shell commands are still reviewed as usual.
+  `/config` → "Thư mục tạm của phiên" turns it off. Details in `docs/permissions.md`.
+- Scratchpad size and cleanup: a `▲` line under an answer when the project's temp folders pass
+  1 GB (`scratchpad.warnMB`; measured in the background at most every 30 minutes, once per step);
+  session folders untouched for 30 days are deleted at startup (`scratchpad.keepDays`);
+  `/scratch` shows the folder and sizes, `/scratch clear [all]` deletes other sessions' (and
+  this one's) folders.
+- Auto mode: read-only shell commands (`dir`, `git status`, `git log`, …) skip the classifier;
+  the classifier sees the workspace's git branch, uncommitted changes and push remotes (pushing
+  to the repo's own remote is no longer treated as external), `INVESTOR.md`, and an "Obfuscated
+  Command" rule.
+- Auto mode: when a sub-agent finishes, the classifier checks what it changed and puts a safety
+  warning in front of its result when something looks wrong; web and MCP results are marked as
+  outside data.
+- Auto mode blocks: one transcript line with the rule and reason (`ctrl+o` for the rest), a
+  toast, and `/permissions` to let the call be retried. The model is told not to reach the same
+  effect another way and to stop and explain; the classifier sees what was refused since the
+  user's last message.
+- Todo lists by phase, with their status shown to the model on the next tool round; a list left
+  open when the answer ends is retired.
+
+### Changed
+
+- Stop gate: a turn never ends without an answer. An empty final step, a copied todo status
+  line, or a short "I'll fetch…" promise without a tool call is sent back to the model once.
+- A past turn's answer is sent after its tool results, so Gemini no longer answers a new question
+  with a fragment that continues its old answer.
+- Side requests (session title, the `web_fetch` reader) use the least reasoning a model allows and
+  leave room for it, so reasoning models no longer return an empty title.
+- `web_fetch`: the side model has its own time limit, and the model gets the page itself when the
+  side model fails instead of an error.
+- Web sources are dated in Vietnam time; Gemini search grounding that the key's plan lacks pauses
+  until the quota day resets instead of retrying every 10 minutes.
+- `/compact` sources a figure that only an earlier answer gave as "câu trả lời trước", not a tool.
+- MCP: `retry_after` on 429/503 is honoured; `quota_exceeded` is not retried.
+- Auto-mode classifier: one retry on a transient error (never on 429), output room for reasoning
+  models, a bounded transcript; untrusted MCP servers' read-only hints go to the classifier.
+- OpenTUI 0.6.6 and dependency updates.
+
+### Fixed
+
+- Provider errors: a 404 keeps the provider's reason (for example a model closed to new users and
+  its suggested replacement); timeouts read in Vietnamese.
+
+### Security
+
+- zod 4.6.6 (GHSA-mrhx-c7xc-m3w5): a hostile MCP server could exhaust memory with a huge invalid
+  array. MCP list responses are also capped in size.
+
 ## [0.2.1] — 2026-10-23
 
 First public release, and the first one you can install without Bun or a checkout (0.2.0 was

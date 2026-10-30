@@ -1,6 +1,6 @@
 {
   "name": "opentrading",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "description": "OpenTrading — AI harness TUI for Vietnamese equity research (demo v0)",
