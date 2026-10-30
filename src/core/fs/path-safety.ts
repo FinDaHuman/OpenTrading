@@ -233,11 +233,18 @@ export type WriteCheck = { block: string } | { scope: string }
 
 /**
  * The approval scope for writing `abs`: `block` (never: odd Windows spelling, network path),
- * `protected:` / `outside:` (the user decides each time, nothing can pre-approve it), or
+ * `protected:` / `outside:` (the user decides each time, nothing can pre-approve it),
+ * `scratch:<folder>` (the session's temp folder: runs without asking outside ‖ read-only), or
  * `edit:<folder>` (an ordinary write in the workspace; "this session" covers the folder).
- * `real` resolves symlinks; `inWorkspace` is Workspace.contains.
+ * `real` resolves symlinks; `inWorkspace` is Workspace.contains, `inScratch` Workspace.inScratch.
  */
-export function writeCheck(abs: string, inWorkspace: (p: string) => boolean, e?: SafetyEnv, real: (p: string) => string = (p) => p): WriteCheck {
+export function writeCheck(
+  abs: string,
+  inWorkspace: (p: string) => boolean,
+  e?: SafetyEnv,
+  real: (p: string) => string = (p) => p,
+  inScratch: (p: string) => boolean = () => false,
+): WriteCheck {
   const platform = e?.platform ?? process.platform
   if (isUncPath(abs)) return { block: "không ghi lên đường dẫn mạng (\\\\server\\share)" }
   const odd = suspiciousWindowsPath(abs, platform, { shortNames: false })
@@ -248,6 +255,9 @@ export function writeCheck(abs: string, inWorkspace: (p: string) => boolean, e?:
   if (oddReal) return { block: `đường dẫn dạng lạ: ${oddReal}` }
   const { home, data } = env(e)
   const realEnv: SafetyEnv = { home: real(home), data: real(data), platform }
+  // Before the protected names (`git init`, a .venv in the temp folder are fine), after key
+  // files. Both spellings must be inside: a junction in the folder may point at home.
+  if (inScratch(abs) && inScratch(resolved) && !secretReason(abs, e) && !secretReason(resolved, realEnv)) return { scope: `scratch:${pathFor(platform).dirname(abs)}` }
   if (protectedWriteReason(abs, e) || (resolved !== abs && (protectedWriteReason(resolved, e) || protectedWriteReason(resolved, realEnv)))) return { scope: `protected:${abs}` }
   if (!inWorkspace(abs)) return { scope: `outside:${abs}` }
   return { scope: `edit:${pathFor(platform).dirname(abs)}` }

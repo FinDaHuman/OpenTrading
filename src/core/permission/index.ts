@@ -27,7 +27,8 @@ export { AUTO_BLOCK_PREFIX, blockedMessage, deniedMessage, RULE_DENY_PREFIX, USE
  * 2. A user-only scope (key file, network path, protected folder, outside the workspace,
  *    loop guard): asked every time (a key file may be allowed for the session); no rule or
  *    "always" covers it.
- * 3. A user ask rule forces the prompt; an allow rule ("always") lets it run.
+ * 3. A user ask rule forces the prompt; a write in the session's temp folder (`scratch:`) runs
+ *    outside ‖ read-only; an allow rule ("always") lets it run.
  * 4. The permission mode: ‖ read-only asks local file/shell effects with "switch to ▸";
  *    ▸ ask prompts as before.
  */
@@ -300,6 +301,7 @@ export class PermissionGate {
     if (userOnly(scope)) {
       if (sessionOk(scope) && this.session.has(key)) return { allow: true }
     } else if (!lists.ask.some((r) => listMatches(r, def, subject))) {
+      if (scope?.startsWith("scratch:") && this.approvalsApply(def)) return this.ran()
       if (this.approvalsApply(def) && (this.sessionCovers(def, input, key) || (await this.allowedAlways(def, input)))) return this.ran()
     }
     let notice: string | undefined

@@ -30,6 +30,7 @@ import { webSearchTool } from "./tools/web/search"
 import { localWatchlistTools } from "./tools/watchlist/local"
 import { ToolRegistry } from "./tools/registry"
 import { FileState } from "./fs/file-state"
+import { Scratchpad, type ScratchOptions } from "./fs/scratch"
 import { Workspace } from "./fs/workspace"
 import { readFileTool } from "./tools/fs/read"
 import { globFilesTool, grepFilesTool } from "./tools/fs/search"
@@ -89,13 +90,22 @@ export function createMemory(choice: MemoryChoice | undefined, home = dataDir())
  * (never on import), so tests can build their own runtime against temporary directories. This
  * is the seam where a daemon would later live.
  */
-export function initRuntime(opts: { cwd?: string; home?: string; skills: () => Skill[]; memory?: MemoryProvider; workspaceDirs?: string[] }): Runtime {
+export function initRuntime(opts: {
+  cwd?: string
+  home?: string
+  skills: () => Skill[]
+  memory?: MemoryProvider
+  workspaceDirs?: string[]
+  /** The session's temp folder (scratch.ts): the TUI turns it on; tests and evals leave it off. */
+  scratchpad?: ScratchOptions | false
+}): Runtime {
   const home = opts.home ?? dataDir()
   const registry = new ToolRegistry()
   const permissions = new PermissionGate()
   registry.gate = permissions
   const workspace = new Workspace(opts.cwd ?? process.cwd(), { data: home, dirs: opts.workspaceDirs })
   registry.workspace = workspace
+  if (opts.scratchpad) workspace.scratch = new Scratchpad(opts.cwd ?? process.cwd(), opts.scratchpad)
   const files = new FileState()
   const historyRoot = path.join(home, "file-history")
   const history = new FileHistory(historyRoot)
@@ -164,6 +174,7 @@ export function initRuntime(opts: { cwd?: string; home?: string; skills: () => S
       const connected = mcp.status().filter((s) => s.state === "connected").map((s) => s.name)
       return [
         `Workspace folders (trusted for files): ${workspace.roots().join("; ")}${workspace.fallbackReason ? " (a dedicated folder, because OpenTrading was opened in the home folder or a drive root)" : ""}.`,
+        ...(workspace.scratch?.enabled ? [`Session temp folders (scratchpad; the agent writes files here without asking, like its own workspace): ${workspace.scratch.project}.`] : []),
         `OpenTrading data folder (protected: keys, config, rules): ${home}.`,
         `Machine: ${process.platform === "win32" ? "Windows" : process.platform}, shell ${detectShell().kind}.`,
         `Connected OpenTrading data servers (MCP, trusted for market data): ${connected.filter((n) => mcp.isDataServer(n)).join(", ") || "none"}.`,
