@@ -46,7 +46,7 @@
     "solid-js": "1.9.12",
     "turndown": "7.2.4",
     "turndown-plugin-gfm": "1.0.2",
-    "unpdf": "1.8.1",
+    "unpdf": "1.9.1",
     "zod": "4.6.6"
   },
   "devDependencies": {
