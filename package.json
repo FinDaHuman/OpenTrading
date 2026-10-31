@@ -33,7 +33,7 @@
     "@ai-sdk/perplexity": "5.0.17",
     "@ai-sdk/togetherai": "3.0.68",
     "@ai-sdk/vercel": "3.0.30",
-    "@ai-sdk/xai": "5.0.20",
+    "@ai-sdk/xai": "5.0.32",
     "@crafter/charts": "0.2.5",
     "@modelcontextprotocol/sdk": "1.32.1",
     "@mozilla/readability": "0.6.0",
