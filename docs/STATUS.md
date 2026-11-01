@@ -66,14 +66,14 @@ Contract cho đồng nghiệp: [docs/contracts.md](contracts.md).
 
 ### Memory v5.1 (đang làm, nhánh `feat/memory`)
 
-Trạng thái: **`specified`**. Kiến trúc và quyết định đã chốt, **chưa có code**. Bản mẫu `FileMemory` ở trên giữ nguyên; provider v5.1 sẽ là một lựa chọn mới trong `/config`.
+Trạng thái: kiến trúc và quyết định đã chốt. Spec 004 (sửa lỗi lõi) **`implemented`**: test chạy trên máy, chưa chạy CI, chưa qua duyệt code. Các spec còn lại **`specified`**, chưa có code. Bản mẫu `FileMemory` ở trên giữ nguyên; provider v5.1 sẽ là một lựa chọn mới trong `/config`.
 
 - Kiến trúc: [docs/memory/ra-soat-v5.md](memory/ra-soat-v5.md), phần C.
 - Quyết định: ADR [0002](decisions/0002-memory-ban-ghi-co-nhan.md) (bản ghi có nhãn trong hội thoại), [0003](decisions/0003-memory-kho-sqlite-va-dinh-danh.md) (kho SQLite và định danh), [0004](decisions/0004-memory-muc-luc-va-model-tu-doc.md) (mục lục, model tự đọc bài học), [0005](decisions/0005-memory-rang-buoc-co-cau-truc.md) (ràng buộc có cấu trúc), [0006](decisions/0006-memory-ranh-gioi-theo-loai.md) (bảng chính sách, agent con không đọc lịch sử phiên).
 - Lộ trình và trạng thái từng spec: [docs/memory/specs/README.md](memory/specs/README.md).
 - **Thay đổi lõi dự kiến** (cần chủ repo duyệt, nằm chung PR `feat/memory`; mỗi spec một commit, thân commit liệt kê từng file lõi đã sửa kèm lý do, mô tả PR có bảng "Thay đổi lõi cần chủ repo duyệt"):
-  - sửa lỗi ghi phiên và khoá file;
-  - agent con không có tool lịch sử phiên;
+  - sửa lỗi ghi phiên và khoá file (spec 004, đã code);
+  - agent con không có tool lịch sử phiên (spec 004, đã code);
   - thêm lựa chọn provider;
   - lệnh và form memory trong TUI;
   - gửi ràng buộc cho agent con;

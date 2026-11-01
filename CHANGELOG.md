@@ -5,6 +5,27 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ## [Unreleased]
 
+### Fixed
+
+- Saving a session recovers from a failed write instead of repeating the first error forever. The
+  failed turn stays queued and is written, in order and once, with the next one; the session's
+  first line is written by the first write that succeeds, so a session whose first turn failed
+  still shows in `/sessions`. A write cut halfway is cut back, and a torn last line no longer
+  swallows the first line of the next turn. The TUI says which turns are not saved yet and when
+  they are caught up.
+- Switching sessions (`/new`, `/clear`, resume), `/save`, `/export` and exit wait up to 2 s for the
+  session's writes; a session left while still writing finishes in the background, and resuming it
+  reuses the same writer.
+- Local watchlist file lock: the holder refreshes the lock, so a slow but live holder is never taken
+  over; taking over and releasing check the owner's token; the holder checks it still owns the lock
+  right before each rename attempt; creating the lock waits through Windows' delete-pending errors.
+- `writeJson` removes its temp file on every failure (for `auth.json` it holds the key).
+
+### Changed
+
+- Subagents no longer get the session history tools (`session_list`, `session_get`); the main agent
+  keeps them and quotes what a task needs.
+
 ## [0.2.1] — 2026-10-23
 
 First public release, and the first one you can install without Bun or a checkout (0.2.0 was

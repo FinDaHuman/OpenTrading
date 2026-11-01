@@ -63,7 +63,17 @@ import { KeywordMark } from "./prompt/keyword"
 import { fmtSeconds, fmtTokens } from "../core/subagents/result"
 import { ToolsDialog } from "./dialogs/tools"
 import { Home } from "./home"
-import { attachSubagents, currentSession, recordCompact, recordTurn, resumeFromArgs, startSession, transcriptOfCurrent } from "./session"
+import {
+  attachSubagents,
+  currentSession,
+  exitTimeoutText,
+  recordCompact,
+  recordTurn,
+  resumeFromArgs,
+  settleForExit,
+  startSession,
+  transcriptOfCurrent,
+} from "./session"
 import { resolveExportPath, writeExport } from "../core/session/export"
 import { cycleMode } from "../core/permission/mode"
 
@@ -582,9 +592,16 @@ export function App(props: {
     abort?.abort()
     props.runtime.desk.stopAll()
     props.runtime.subagents.stopAll()
+    const deadline = Date.now() + 2000
+    // Said after the terminal is restored; set when the session's writes did not all land.
+    let unsaved: string | undefined = exitTimeoutText(currentSession())
     await Promise.race([
       Promise.all([
-        inflight ?? Promise.resolve(),
+        // Waits for the aborted answer too: it queues its turn when it ends, so the wait for
+        // writes starts after it.
+        (inflight ?? Promise.resolve()).then(async () => {
+          unsaved = await settleForExit(Math.max(100, deadline - Date.now() - 50))
+        }),
         props.runtime.subagents.flush(),
         props.runtime.desk.flush(),
         props.runtime.hooks.emit({ type: "session-end", sessionId: currentSession().id }),
@@ -594,6 +611,7 @@ export function App(props: {
     ])
     attention?.clear()
     renderer.destroy()
+    if (unsaved) process.stderr.write(unsaved + "\n")
     process.exit(0)
   }
   onExitRequest(() => void exit())
@@ -922,6 +940,8 @@ export function App(props: {
     if (state.streaming) return void say("Đang trả lời; chờ xong rồi lưu hội thoại.", "warning")
     const transcript = await transcriptOfCurrent(props.runtime)
     if (!transcript) say("Chưa có lượt nào để lưu.")
+    // Turns still unsaved are missing from what was read back: say so next to the result.
+    else if (transcript.unsaved) say(`${transcript.unsaved} Bản lưu thiếu phần đó.`, "warning", 8000)
     return transcript
   }
 

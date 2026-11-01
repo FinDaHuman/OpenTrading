@@ -82,7 +82,9 @@ export function sessionHistoryTools(): ToolDef[] {
       ].join("\n")
     },
   }
-  return [list, get]
+  // Marked here, for every tool of the group, so a history tool added later is kept from
+  // subagents without anyone having to list its name.
+  return [list, get].map((def): ToolDef => ({ ...def, mainAgentOnly: true }))
 }
 
 /** Health check of this machine's harness, as opposed to the MCP server's own `doctor`. */

@@ -1,7 +1,7 @@
 import { stripImages } from "../tools/registry"
 import { isCompactMarker } from "../compact-marker"
 import { splitNotices } from "../subagents/notification"
-import { appendFile, mkdir, readFile } from "node:fs/promises"
+import { appendFile, mkdir, open, readFile, stat, truncate } from "node:fs/promises"
 import path from "node:path"
 import type { ModelMessage } from "ai"
 import { samePathKey } from "../fs/path-safety"
@@ -11,7 +11,9 @@ import type { ChartData } from "../tools/chart/data"
 /**
  * Session transcripts as append-only JSONL, one file per session (the Claude Code / Codex
  * approach): crash-safe, human-readable, and the file is only created once a real turn
- * happens. `index.jsonl` lists sessions for the picker; the last record per id wins.
+ * happens. `index.jsonl` lists sessions for the picker; the last record per id wins. No line
+ * reported saved is ever changed; the one exception is a failed append, cut back to where it
+ * started (or, when that fails too, the file takes no more writes).
  *
  *   ~/.opentrading/sessions/2026/09/20260930-101500-a1b2.jsonl
  *   ~/.opentrading/sessions/index.jsonl
@@ -83,20 +85,170 @@ export interface SessionInfo {
   skills?: { name: string; version?: string }[]
 }
 
+/**
+ * The disk operations the session writer uses, gathered so tests can make one of them fail
+ * (a full disk, a file another process holds on Windows) on any OS.
+ */
+export const sessionFiles = {
+  append: (file: string, text: string) => appendFile(file, text, "utf8"),
+  /** 0 when the file does not exist yet. */
+  size: (file: string) =>
+    stat(file).then(
+      (s) => s.size,
+      (error) => {
+        if ((error as { code?: string }).code === "ENOENT") return 0
+        throw error
+      },
+    ),
+  async lastByte(file: string, size: number): Promise<number | undefined> {
+    return (await sessionFiles.readRange(file, size - 1, size))[0]
+  },
+  /** Bytes [start, end) of the file (fewer when it is shorter). */
+  async readRange(file: string, start: number, end: number): Promise<Buffer> {
+    const handle = await open(file, "r")
+    try {
+      const buffer = Buffer.alloc(end - start)
+      const { bytesRead } = await handle.read(buffer, 0, end - start, start)
+      return buffer.subarray(0, bytesRead)
+    } finally {
+      await handle.close()
+    }
+  },
+  truncate: (file: string, size: number) => truncate(file, size),
+  mkdir: async (dir: string) => {
+    await mkdir(dir, { recursive: true })
+  },
+}
+
+/** What a write call achieved. Writes never reject: the TUI reports from this instead. */
+export interface SaveReceipt {
+  /** Turns this call wrote, including earlier ones it caught up on. */
+  saved: number[]
+  /** Turns still waiting, oldest first. */
+  pending: number[]
+  /** Compactions still waiting. */
+  pendingCompactions: number
+  /** The index line could not be written; retried on the next write. */
+  indexPending: boolean
+  /**
+   * A failed write could not be cut back (truncating failed, or the file had lines from another
+   * writer after ours): nothing more goes into this file.
+   */
+  stopped: boolean
+  /** The latest attempt's error, when anything is still pending or stopped. */
+  error?: Error
+}
+
+export type TurnInfo = SessionInfo & { provider?: string; model?: string; contextTokens?: number }
+
+/**
+ * One write waiting in a session's queue: a turn or a compaction, its lines built when it was
+ * queued. A turn keeps its first user text (the fallback title), not its messages.
+ */
+type Part =
+  | { kind: "turn"; turn: number; ts: string; firstText: string; info: TurnInfo; lines: SessionEntry[] }
+  | { kind: "compact"; lines: SessionEntry[] }
+
+/** A failed append could not be cut back: the file may end in a partial write we cannot remove. */
+class StoppedError extends Error {
+  constructor(readonly cause: Error) {
+    super(cause.message)
+  }
+}
+
+const asError = (error: unknown) => (error instanceof Error ? error : new Error(String(error)))
+
+/**
+ * A read right after a failed write, retried briefly: the same moment a scanner or sync client
+ * holds the file for the write tends to hold it for the read too. Undefined when it kept failing.
+ */
+async function retried<T>(read: () => Promise<T>): Promise<T | undefined> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await read()
+    } catch {
+      if (attempt >= 3) return undefined
+      await new Promise((r) => setTimeout(r, 20 * (attempt + 1)))
+    }
+  }
+}
+
+/**
+ * After a failed append: remove what of it landed, but only when the bytes after `size` are a
+ * prefix of what we sent. Another writer's lines there (a second window on the same session)
+ * are never cut; the file then takes no more writes from us. A size we cannot read is the same:
+ * we cannot tell what landed, so we cut nothing.
+ */
+async function cutBack(file: string, size: number, body: string, error: Error) {
+  const after = await retried(() => sessionFiles.size(file))
+  if (after === size) return
+  if (after === undefined) throw new StoppedError(new Error(`${error.message}; không đọc lại được file phiên để cắt`))
+  const sent = Buffer.from(body, "utf8")
+  const tail = after > size ? await retried(() => sessionFiles.readRange(file, size, after)) : undefined
+  if (after > size && !tail) throw new StoppedError(new Error(`${error.message}; không đọc lại được file phiên để cắt`))
+  if (!tail || tail.length > sent.length || !tail.equals(sent.subarray(0, tail.length))) {
+    throw new StoppedError(new Error(`${error.message}; file phiên có dữ liệu ghi xen từ nơi khác nên không cắt`))
+  }
+  try {
+    await sessionFiles.truncate(file, size)
+  } catch (truncateError) {
+    throw new StoppedError(asError(truncateError))
+  }
+}
+
+/**
+ * Append `text` as whole lines. A file left ending mid-line (a crash during an earlier write)
+ * gets a newline first, so the torn line stays alone and unreadable instead of swallowing the
+ * first line of this write. With `truncateOnError`, a failed append is cut back to the size
+ * before it, so no line that was never reported saved stays in the file.
+ */
+async function appendLines(file: string, text: string, truncateOnError: boolean) {
+  await sessionFiles.mkdir(path.dirname(file))
+  const size = await sessionFiles.size(file)
+  const torn = size > 0 && (await sessionFiles.lastByte(file, size)) !== 0x0a
+  const body = torn ? "\n" + text : text
+  try {
+    await sessionFiles.append(file, body)
+  } catch (error) {
+    if (truncateOnError) await cutBack(file, size, body, asError(error))
+    throw error
+  }
+}
+
 export class Session {
+  /** Turns on disk. */
   turns: number
   title: string
   private createdAt: string
-  private writing: Promise<void> = Promise.resolve()
+  /** Turns queued so far (on disk or waiting): the next turn's number is this plus one. */
+  private queuedTurns: number
+  private queue: Part[] = []
+  /** The writes, one after another; never rejects, so a failed write never blocks the next. */
+  private chain: Promise<unknown> = Promise.resolve()
+  /**
+   * Requests to (re)write the index line (a turn landed, the title changed) and the latest one
+   * a written line covers. Counted, not a flag: a title that arrives while a line is being
+   * written must not be cleared by that older line.
+   */
+  private indexWanted = 0
+  private indexWritten = 0
+  private get indexPending() {
+    return this.indexWanted > this.indexWritten
+  }
+  /** What the index line says besides the counts, from the last turn on disk. */
+  private indexInfo: { updatedAt: string; provider?: string; model?: string; cwd: string } | undefined
+  private stopped = false
+  private lastError: Error | undefined
 
   private constructor(
     readonly id: string,
-    /** Relative path; undefined until the first turn is written. */
+    /** Relative path; undefined until the first turn is on disk. */
     public file: string | undefined,
     summary?: SessionSummary,
     createdAt = new Date(),
   ) {
     this.turns = summary?.turns ?? 0
+    this.queuedTurns = this.turns
     this.title = summary?.title ?? ""
     // The folder (YYYY/MM) must agree with the id's timestamp, so both come from one clock.
     this.createdAt = summary?.createdAt ?? createdAt.toISOString()
@@ -112,17 +264,21 @@ export class Session {
   }
 
   /** Replace the fallback title with a generated one, written to the index right away. */
-  setTitle(title: string): Promise<void> {
+  setTitle(title: string): Promise<SaveReceipt> {
     const clean = title.trim()
-    if (!clean) return Promise.resolve()
+    if (!clean) return Promise.resolve(this.receipt([]))
     this.title = clean
-    this.writing = this.writing.then(async () => {
-      // Before the first turn is written there is no index line yet; that write uses this title.
-      if (!this.lastSummary) return
-      this.lastSummary = { ...this.lastSummary, title: clean }
-      await appendFile(indexFile(), JSON.stringify(this.lastSummary) + "\n", "utf8")
-    })
-    return this.writing
+    // Always queued, even while the first index line is being written: that line may already
+    // carry the fallback title. Before any turn landed there is nothing to write yet, and the
+    // first turn's index line uses this title.
+    this.indexWanted++
+    // Also writes whatever else waits: the receipt says so, like any other write.
+    return this.drain()
+  }
+
+  /** Number of the last turn queued, on disk or waiting. */
+  get lastTurn() {
+    return this.queuedTurns
   }
 
   get path() {
@@ -141,78 +297,135 @@ export class Session {
   noteHarness(text: string) {
     this.pendingHarness.push(text)
   }
-  /** The index line written last (a new title rewrites it). */
-  private lastSummary: SessionSummary | undefined
 
   /** A chart drawn during the current turn; written with the turn. */
   noteChart(callId: string, data: ChartData) {
     this.pendingCharts.push({ callId, data })
   }
 
-  /** Record a compaction. Nothing to do before the first turn created the file. */
-  appendCompact(entry: Omit<Extract<SessionEntry, { type: "compact" }>, "type" | "ts">) {
-    this.writing = this.writing.then(async () => {
-      if (!this.path) return
-      const line: SessionEntry = { type: "compact", ts: new Date().toISOString(), ...entry, messages: stripImages(entry.messages) }
-      await appendFile(this.path, JSON.stringify(line) + "\n", "utf8")
-    })
-    return this.writing
+  /** Record a compaction. Nothing to do before any turn was queued (nothing to compact). */
+  appendCompact(entry: Omit<Extract<SessionEntry, { type: "compact" }>, "type" | "ts">): Promise<SaveReceipt> {
+    if (!this.file && this.queuedTurns === 0) return Promise.resolve(this.receipt([]))
+    const ts = new Date().toISOString()
+    const line: SessionEntry = { type: "compact", ts, ...entry, messages: stripImages(entry.messages) }
+    // A stopped session never writes again: count the compaction, keep none of its content.
+    this.queue.push({ kind: "compact", lines: this.stopped ? [] : [line] })
+    return this.drain()
   }
 
-  /** Resolves once every queued write has finished (a failed earlier write is not rethrown). */
-  flush(): Promise<void> {
-    return this.writing.catch(() => {})
+  /** Writes whatever is waiting; resolves when the attempt is over. */
+  flush(): Promise<SaveReceipt> {
+    return this.drain()
   }
 
-  /** Append one completed turn. Writes are serialised so turns never interleave. */
-  appendTurn(messages: ModelMessage[], info: SessionInfo & { provider?: string; model?: string; contextTokens?: number }) {
-    this.writing = this.writing.then(() => this.write(messages, info))
-    return this.writing
-  }
-
-  private async write(messages: ModelMessage[], info: SessionInfo & { provider?: string; model?: string; contextTokens?: number }) {
+  /** Queue one completed turn and write the queue. Turns are written in order, each once. */
+  appendTurn(messages: ModelMessage[], info: TurnInfo): Promise<SaveReceipt> {
     const ts = new Date().toISOString()
     const lines: SessionEntry[] = []
-    if (!this.file) {
-      const [year, month] = [this.createdAt.slice(0, 4), this.createdAt.slice(5, 7)]
-      this.file = path.join(year, month, `${this.id}.jsonl`)
-      await mkdir(path.dirname(this.path!), { recursive: true })
-      lines.push({
-        type: "meta",
-        format: SESSION_FORMAT,
-        id: this.id,
-        createdAt: this.createdAt,
-        cwd: info.cwd,
-        promptVersion: info.promptVersion,
-        skills: info.skills,
-      })
-    }
     // Screenshots would bloat the file by megabytes per turn; keep a text placeholder.
     for (const message of stripImages(messages)) lines.push({ type: "message", ts, message })
     for (const chart of this.pendingCharts.splice(0)) lines.push({ type: "chart", ts, ...chart })
     for (const text of this.pendingHarness.splice(0)) lines.push({ type: "harness", ts, text })
     lines.push({ type: "turn_end", ts, provider: info.provider, model: info.model, contextTokens: info.contextTokens })
-    await appendFile(this.path!, lines.map((l) => JSON.stringify(l)).join("\n") + "\n", "utf8")
+    const firstText = messages.map(userText).find((t) => t.trim()) ?? ""
+    // A stopped session never writes again: keep the turn's number for the receipt, not its content.
+    this.queue.push({ kind: "turn", turn: ++this.queuedTurns, ts, firstText, info, lines: this.stopped ? [] : lines })
+    return this.drain()
+  }
 
-    this.turns++
-    if (!this.title) {
-      const first = messages.map(userText).find((t) => t.trim())
-      this.title = (first ?? "").replace(/\s+/g, " ").trim().slice(0, 60) || "(không tiêu đề)"
+  private drain(): Promise<SaveReceipt> {
+    const run = this.chain.then(() => this.write())
+    this.chain = run.catch(() => {})
+    return run.catch((error) => this.receipt([], asError(error)))
+  }
+
+  /** An index line that could be written but is not yet (none can be before a turn landed). */
+  private get indexWaiting() {
+    return this.indexPending && this.file !== undefined && this.indexInfo !== undefined
+  }
+
+  private receipt(saved: number[], error?: Error): SaveReceipt {
+    const pending = this.queue.flatMap((p) => (p.kind === "turn" ? [p.turn] : []))
+    const pendingCompactions = this.queue.length - pending.length
+    const failing = this.stopped || this.indexWaiting || this.queue.length > 0
+    return {
+      saved,
+      pending,
+      pendingCompactions,
+      indexPending: this.indexWaiting,
+      stopped: this.stopped,
+      error: failing ? (error ?? this.lastError) : undefined,
     }
-    const summary: SessionSummary = {
-      id: this.id,
-      file: this.file.split(path.sep).join("/"),
-      title: this.title,
-      createdAt: this.createdAt,
-      updatedAt: ts,
-      provider: info.provider,
-      model: info.model,
-      turns: this.turns,
-      cwd: info.cwd,
+  }
+
+  private async write(): Promise<SaveReceipt> {
+    const saved: number[] = []
+    let error: Error | undefined
+    // Once a failed write could not be cut back, appending more would build on a partial line.
+    while (!this.stopped && this.queue.length > 0) {
+      const part = this.queue[0]!
+      const lines = [...part.lines]
+      const file = this.file ?? path.join(this.createdAt.slice(0, 4), this.createdAt.slice(5, 7), `${this.id}.jsonl`)
+      // The meta line goes with the first write that succeeds, so the file always starts with it.
+      if (!this.file && part.kind === "turn") {
+        const { info } = part
+        lines.unshift({
+          type: "meta",
+          format: SESSION_FORMAT,
+          id: this.id,
+          createdAt: this.createdAt,
+          cwd: info.cwd,
+          promptVersion: info.promptVersion,
+          skills: info.skills,
+        })
+      }
+      try {
+        await appendLines(path.join(sessionsDir(), file), lines.map((l) => JSON.stringify(l)).join("\n") + "\n", true)
+      } catch (caught) {
+        if (caught instanceof StoppedError) {
+          this.stopped = true
+          error = caught.cause
+          for (const waiting of this.queue) waiting.lines = []
+        } else error = asError(caught)
+        break
+      }
+      this.file = file
+      this.queue.shift()
+      if (part.kind === "turn") {
+        this.turns++
+        saved.push(part.turn)
+        if (!this.title) this.title = part.firstText.replace(/\s+/g, " ").trim().slice(0, 60) || "(không tiêu đề)"
+        const { provider, model, cwd } = part.info
+        this.indexInfo = { updatedAt: part.ts, provider, model, cwd }
+        this.indexWanted++
+      }
     }
-    await mkdir(sessionsDir(), { recursive: true })
-    await appendFile(indexFile(), JSON.stringify(summary) + "\n", "utf8")
-    this.lastSummary = summary
+    // Written even when a later part failed, so the turns already on disk show in /sessions.
+    if (this.indexPending && this.file && this.indexInfo) {
+      const covers = this.indexWanted
+      const summary: SessionSummary = {
+        id: this.id,
+        file: this.file.split(path.sep).join("/"),
+        title: this.title,
+        createdAt: this.createdAt,
+        ...this.indexInfo,
+        turns: this.turns,
+      }
+      try {
+        // Not cut back on failure: a duplicate index line is harmless (the last one per id wins).
+        // Limit: two windows appending to index.jsonl at once, A may read the last byte while B
+        // is mid-line and put a newline into B's line. That line heals on B's next turn, since
+        // every turn writes its index line again.
+        await appendLines(indexFile(), JSON.stringify(summary) + "\n", false)
+        this.indexWritten = covers
+      } catch (caught) {
+        error ??= asError(caught)
+      }
+    }
+    if (error) this.lastError = error
+    // Nothing left failing: an old error must not show up in a later receipt.
+    else if (!this.stopped && !this.indexWaiting && this.queue.length === 0) this.lastError = undefined
+    return this.receipt(saved, error)
   }
 }
 
