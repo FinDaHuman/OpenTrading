@@ -14,6 +14,11 @@ updates:
           - "ai"
           - "@ai-sdk/*"
           - "@openrouter/ai-sdk-provider"
+      # @opentui/solid pins an exact @opentui/core; bumping core alone splits
+      # KeyEvent and renderable types into two copies (#193).
+      opentui:
+        patterns:
+          - "@opentui/*"
   - package-ecosystem: github-actions
     directory: /
     schedule:
