@@ -64,7 +64,8 @@ test("a past turn reshaped by answerAfterTools (call, result, answer) is accepte
       role: "assistant",
       content: [
         { type: "text", text: "VCB tốt." },
-        { type: "tool-call", toolCallId: "t1", toolName: "todo_write", input: { todos: [] } },
+        // As streamed from a Gemini 3 model: the call carries its thought signature.
+        { type: "tool-call", toolCallId: "t1", toolName: "todo_write", input: { todos: [] }, providerOptions: { google: { thoughtSignature: "sig-1" } } },
       ],
     },
     { role: "tool", content: [{ type: "tool-result", toolCallId: "t1", toolName: "todo_write", output: { type: "text", value: "ok" } }] },
@@ -86,6 +87,9 @@ test("a past turn reshaped by answerAfterTools (call, result, answer) is accepte
   await via((fetch) => createMistral({ apiKey: "x", fetch })("mistral-x"))
   await via((fetch) => createOpenAICompatible({ name: "nv", baseURL: "https://x.test/v1", apiKey: "x", fetch })("m"))
   expect(sent.length).toBeGreaterThanOrEqual(6)
+  // The reshaped call keeps its signature for Gemini (no validator-skip sentinel).
+  expect(sent[0]).toContain('"thoughtSignature":"sig-1"')
+  expect(sent[0]).not.toContain("skip_thought_signature_validator")
   for (const body of sent) {
     expect(body.indexOf("todo_write")).toBeGreaterThan(-1)
     // Each serializer keeps the answer after the call and before the new question.

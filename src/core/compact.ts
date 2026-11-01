@@ -193,8 +193,10 @@ export const IMAGE_TOKENS = 1600
 export const tokensOf = (messages: readonly ModelMessage[]) => {
   let images = 0
   const text = JSON.stringify(messages, function (this: Record<string, unknown>, key, value) {
-    // Only the base64 of an image part (user image, tool image-data/media/file), not any long "data".
-    const imagePart = this.type === "image" || this.type === "image-data" || this.type === "media" || this.type === "file" || "mediaType" in this
+    // Only the base64 of an image part (user image, tool image-data/media/file, a file part's
+    // tagged `{ type: "data", data }`), not any long "data".
+    const imagePart =
+      this.type === "image" || this.type === "image-data" || this.type === "media" || this.type === "file" || this.type === "data" || "mediaType" in this
     if (imagePart && (key === "image" || key === "data") && typeof value === "string" && value.length > 1000) {
       images++
       return ""

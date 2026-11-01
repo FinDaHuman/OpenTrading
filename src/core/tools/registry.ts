@@ -66,7 +66,7 @@ export function modelOutput(result: ToolResult, images: boolean) {
     type: "content" as const,
     value: [
       { type: "text" as const, text },
-      ...sendable.map((i) => ({ type: "image-data" as const, data: i.data, mediaType: i.mediaType })),
+      ...sendable.map((i) => ({ type: "file" as const, mediaType: i.mediaType, data: { type: "data" as const, data: i.data } })),
     ],
   }
 }

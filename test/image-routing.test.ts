@@ -22,7 +22,7 @@ const history: ModelMessage[] = [
         type: "tool-result",
         toolCallId: "c1",
         toolName: "shot",
-        output: { type: "content", value: [{ type: "text", text: "đã chụp" }, { type: "image-data", data: B64, mediaType: "image/png" }] },
+        output: { type: "content", value: [{ type: "text", text: "đã chụp" }, { type: "file", mediaType: "image/png", data: { type: "data", data: B64 } }] },
       },
     ],
   },
