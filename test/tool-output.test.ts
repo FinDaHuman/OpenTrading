@@ -7,7 +7,7 @@ const png = { data: "iVBORw0KGgo=", mediaType: "image/png" }
 test("tool results carry images only to models that can see them", () => {
   expect(modelOutput({ output: "chụp xong", images: [png] }, true)).toEqual({
     type: "content",
-    value: [{ type: "text", text: "chụp xong" }, { type: "image-data", data: png.data, mediaType: "image/png" }],
+    value: [{ type: "text", text: "chụp xong" }, { type: "file", mediaType: "image/png", data: { type: "data", data: png.data } }],
   })
   expect(modelOutput({ output: "chụp xong", images: [png] }, false)).toEqual({
     type: "text",
@@ -28,7 +28,7 @@ test("stripImages turns stored image results into text", () => {
           type: "tool-result" as const,
           toolCallId: "1",
           toolName: "shot",
-          output: { type: "content" as const, value: [{ type: "text" as const, text: "ok" }, { type: "image-data" as const, ...png }] },
+          output: { type: "content" as const, value: [{ type: "text" as const, text: "ok" }, { type: "file" as const, mediaType: png.mediaType, data: { type: "data" as const, data: png.data } }] },
         },
       ],
     },

@@ -334,7 +334,7 @@ export function userMessage(input: string, reminders: string[], images: RunOptio
       ...(reminders.length > 0 ? [{ type: "text" as const, text: `<${REMINDER_TAG}>\n${reminders.join("\n\n")}\n</${REMINDER_TAG}>` }] : []),
       { type: "text" as const, text: input },
       ...attachments.map((text) => ({ type: "text" as const, text })),
-      ...images.map((i) => ({ type: "image" as const, image: i.data, mediaType: i.mediaType })),
+      ...images.map((i) => ({ type: "file" as const, data: i.data, mediaType: i.mediaType })),
     ],
   }
 }

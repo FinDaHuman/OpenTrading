@@ -27,7 +27,11 @@ const turn1: ModelMessage[] = [
       { type: "text", text: "Mấy giờ rồi?" },
     ],
   },
-  { role: "assistant", content: [{ type: "tool-call", toolCallId: "c1", toolName: "current_time", input: {} }] },
+  // A Gemini 3 call's thought signature must survive the round trip (else it is replayed unsigned).
+  {
+    role: "assistant",
+    content: [{ type: "tool-call", toolCallId: "c1", toolName: "current_time", input: {}, providerOptions: { google: { thoughtSignature: "sig-c1" } } }],
+  },
   {
     role: "tool",
     content: [{ type: "tool-result", toolCallId: "c1", toolName: "current_time", output: { type: "text", value: "10:00" } }],
