@@ -64,6 +64,8 @@ interface RunState {
   occurrences: Map<string, number>
   phase: string
   paused?: { promise: Promise<void>; release: () => void }
+  /** The effort was chosen for this run (not inherited from desk.effort): resume keeps it. */
+  effortOverride: boolean
   /** Per prompt prefix: released once the first agent of that prefix has a response. */
   stagger: Map<string, { promise: Promise<void>; release: () => void }>
   done: Promise<DeskRunView>
@@ -85,6 +87,8 @@ export class DeskEngine {
   private listeners = new Set<(view: DeskRunView) => void>()
   private finished = new Set<(view: DeskRunView) => void>()
   private session?: { id: string; dir: string }
+  /** Resumes being set up, by run id: a second resume of the same run gets the same handle. */
+  private resuming = new Map<string, Promise<{ id: string; done: Promise<DeskRunView> }>>()
   onPersistError?: (error: unknown) => void
 
   constructor(private deps: DeskDeps) {}
@@ -134,8 +138,20 @@ export class DeskEngine {
     return this.launch(newId(), playbook, parsed, opts, new Map())
   }
 
-  /** Runs a stopped or cut run again: answered agents come back from its journal. */
-  async resume(id: string): Promise<{ id: string; done: Promise<DeskRunView> }> {
+  /**
+   * Runs a stopped or cut run again: answered agents come back from its journal.
+   * Idempotent while it sets up: the check below and launch() are separated by file reads, so
+   * two resumes of one run (a double r, the model and the user at once) share one launch.
+   */
+  resume(id: string): Promise<{ id: string; done: Promise<DeskRunView> }> {
+    const pending = this.resuming.get(id)
+    if (pending) return pending
+    const started = this.resumeOnce(id).finally(() => this.resuming.delete(id))
+    this.resuming.set(id, started)
+    return started
+  }
+
+  private async resumeOnce(id: string): Promise<{ id: string; done: Promise<DeskRunView> }> {
     const live = this.runs.get(id)
     if (live && (live.view.status === "running" || live.view.status === "paused")) throw new Error(`Run ${id} vẫn đang chạy.`)
     if (!this.session) throw new Error("Chưa có phiên nào để tìm run.")
@@ -144,7 +160,10 @@ export class DeskEngine {
     if (!meta) throw new Error(`Không tìm thấy run ${id} trong phiên này.`)
     const playbook = this.require(meta.playbook)
     const cache = await journal.load()
-    const handle = await this.launch(id, playbook, parseArgs(playbook, meta.args), { size: meta.size, effort: meta.effort }, cache, meta)
+    // An effort inherited from desk.effort follows the config as it is now (the user may have
+    // raised it after the quota ran out); only one chosen for this run is kept.
+    const effort = meta.effortOverride ? meta.effort : undefined
+    const handle = await this.launch(id, playbook, parseArgs(playbook, meta.args), { size: meta.size, effort }, cache, meta)
     if (meta.version !== playbook.meta.version) this.log(this.runs.get(id)!, `Playbook đã đổi phiên bản (${meta.version} → ${playbook.meta.version}): mọi agent chạy lại.`)
     return handle
   }
@@ -228,6 +247,7 @@ export class DeskEngine {
       view,
       playbook,
       settings: { ...settings, effort },
+      effortOverride: opts.effort !== undefined,
       concurrency: settings.maxConcurrent,
       rateLimited: 0,
       controller: new AbortController(),
@@ -364,12 +384,14 @@ export class DeskEngine {
     try {
       if (state.paused) await state.paused.promise
       release = await state.limiter.acquire(state.controller.signal)
+      release = await this.holdWhilePaused(state, release)
       // Caps are checked when the agent would actually start (cached ones cost nothing).
       if (view.cut) throw new DeskCut(view.cut)
       if (view.counters.agents >= settings.maxAgents) this.cut(state, "agents")
       else if (settings.maxRequests !== undefined && view.counters.requests >= settings.maxRequests) this.cut(state, "requests")
       if (view.cut) throw new DeskCut(view.cut)
       leads = await this.staggered(state, prefix)
+      release = await this.holdWhilePaused(state, release)
       if (view.cut) throw new DeskCut(view.cut)
 
       const spec = typeSpec(this.deps.agents(), type)
@@ -392,25 +414,23 @@ export class DeskEngine {
         background: false,
         parentSignal: state.controller.signal,
       }
-      const run = this.deps.starter.start(startSpec)
+      let run = this.deps.starter.start(startSpec)
       entry.agentId = run.id
       if (leads) this.releaseOnAnswer(state, prefix, run.id)
       leads = false
       this.emit(state)
       let result = await run.done
       // A per-minute limit that outlasted the request retries: slow the whole run down to one
-      // agent at a time and try this agent once more; a second one stops the run (resumable).
-      if (result.failure === "rate-limit" && !view.cut) {
-        state.rateLimited++
-        if (state.rateLimited === 1) {
-          state.concurrency = 1
-          this.log(state, "Bị giới hạn tốc độ (429): chạy từng agent một và thử lại agent này.")
-          this.addRequests(view, entry, result)
-          const again = this.deps.starter.start(startSpec)
-          entry.agentId = again.id
-          this.emit(state)
-          result = await again.done
-        } else this.cut(state, "rate")
+      // agent at a time and try this agent once more; a second one, the retry's included,
+      // stops the run (resumable).
+      if (this.rateLimited(state, result)) {
+        this.log(state, "Bị giới hạn tốc độ (429): chạy từng agent một và thử lại agent này.")
+        this.addRequests(view, entry, result)
+        run = this.deps.starter.start(startSpec)
+        entry.agentId = run.id
+        this.emit(state)
+        result = await run.done
+        this.rateLimited(state, result)
       }
       this.addRequests(view, entry, result)
       if (result.status === "completed") {
@@ -450,6 +470,35 @@ export class DeskEngine {
       release?.()
       this.emit(state)
     }
+  }
+
+  /**
+   * Counts a rate-limit failure: the first slows the run to one agent at a time and says
+   * "retry" (true); any later one, a retry's included, cuts the run.
+   */
+  private rateLimited(state: RunState, result: SubagentResult): boolean {
+    if (result.failure !== "rate-limit" || state.view.cut) return false
+    state.rateLimited++
+    if (state.rateLimited === 1) {
+      state.concurrency = 1
+      return true
+    }
+    this.cut(state, "rate")
+    return false
+  }
+
+  /**
+   * A pause that came while this agent waited for its slot (or its stagger) holds it too:
+   * the slot goes back while paused, so a stop or unpause never waits on it.
+   */
+  private async holdWhilePaused(state: RunState, release: () => void): Promise<() => void> {
+    while (state.paused && !state.view.cut) {
+      release()
+      await state.paused.promise
+      if (state.view.cut) return () => {}
+      release = await state.limiter.acquire(state.controller.signal)
+    }
+    return release
   }
 
   /**
@@ -521,6 +570,7 @@ export class DeskEngine {
         args: view.args,
         size: view.size,
         effort: view.effort,
+        ...(state.effortOverride ? { effortOverride: true } : {}),
         status: view.status,
         cut: view.cut,
         createdAt: new Date(view.createdAt).toISOString(),
