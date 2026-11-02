@@ -991,9 +991,7 @@ export function App(props: {
     if ("error" in added) return say(added.error, "error")
     if (keep) {
       try {
-        const config = await loadConfig()
-        const dirs = [...new Set([...(config.workspace?.dirs ?? []), added.dir])]
-        await saveConfig({ workspace: { ...config.workspace, dirs } })
+        await saveConfig((config) => ({ workspace: { ...config.workspace, dirs: [...new Set([...(config.workspace?.dirs ?? []), added.dir])] } }))
       } catch (error) {
         return say(`Đã thêm ${added.dir} cho phiên này nhưng không lưu được cấu hình: ${error instanceof Error ? error.message : String(error)}`, "error")
       }

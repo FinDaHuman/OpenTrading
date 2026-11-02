@@ -54,18 +54,17 @@ export function EffortDialog() {
     r === "main" ? c?.effort : r === "subagent" ? c?.subagents?.effort : r === "desk" ? c?.desk?.effort : deskSettings(c ?? {}).size
 
   async function change(r: Row, dir: 1 | -1) {
-    const c = config() ?? (await loadConfig())
+    // Stepped from the config as it is inside the save's lock: the dialog's copy may be stale.
     if (r === "deskSize") {
       const list = DESK_SIZES
-      const next = list[(list.indexOf(deskSettings(c).size) + dir + list.length) % list.length]!
-      await saveConfig({ desk: { ...c.desk, size: next } })
+      await saveConfig((c) => ({ desk: { ...c.desk, size: list[(list.indexOf(deskSettings(c).size) + dir + list.length) % list.length]! } }))
     } else {
-      const next = stepEffort(value(r, c) as Effort | undefined, CHOICES, dir)
+      const step = (c: Config) => stepEffort(value(r, c) as Effort | undefined, CHOICES, dir)
       if (r === "main") {
-        await saveConfig({ effort: next })
-        setState("effort", next)
-      } else if (r === "subagent") await saveConfig({ subagents: { ...c.subagents, effort: next } })
-      else await saveConfig({ desk: { ...c.desk, effort: next } })
+        const saved = await saveConfig((c) => ({ effort: step(c) }))
+        setState("effort", saved.effort)
+      } else if (r === "subagent") await saveConfig((c) => ({ subagents: { ...c.subagents, effort: step(c) } }))
+      else await saveConfig((c) => ({ desk: { ...c.desk, effort: step(c) } }))
     }
     await refetch()
   }

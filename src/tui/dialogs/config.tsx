@@ -86,8 +86,7 @@ export function ConfigDialog(props: { runtime: Runtime }) {
   async function saveMax(text: string) {
     const n = Number(text.trim())
     if (!Number.isInteger(n) || n < 1) return setError("Nhập một số nguyên từ 1 trở lên.")
-    const current = await loadConfig()
-    await saveConfig({ subagents: { ...current.subagents, maxConcurrent: n } })
+    await saveConfig((current) => ({ subagents: { ...current.subagents, maxConcurrent: n } }))
     props.runtime.subagents.setMax(n)
     setState("agentSlots", props.runtime.subagents.limiter.stats())
     setError("")
@@ -141,17 +140,16 @@ export function ConfigDialog(props: { runtime: Runtime }) {
   }
 
   async function saveAutoModel(choice: Exclude<SubagentModel, "auto">) {
-    const current = await loadConfig()
-    await saveConfig({ autoMode: { ...current.autoMode, model: choice === "inherit" ? undefined : choice } })
+    await saveConfig((current) => ({ autoMode: { ...current.autoMode, model: choice === "inherit" ? undefined : choice } }))
     setEditing(undefined)
     await refetch()
   }
 
   async function saveModel(choice: SubagentModel) {
-    const current = await loadConfig()
-    const { provider: _p, model: _m, ...rest } = current.subagents ?? {}
-    const next = choice === "inherit" ? rest : choice === "auto" ? { ...rest, provider: undefined, model: AUTO_MODEL } : { ...rest, ...choice }
-    await saveConfig({ subagents: next })
+    await saveConfig((current) => {
+      const { provider: _p, model: _m, ...rest } = current.subagents ?? {}
+      return { subagents: choice === "inherit" ? rest : choice === "auto" ? { ...rest, provider: undefined, model: AUTO_MODEL } : { ...rest, ...choice } }
+    })
     setEditing(undefined)
     await refetch()
   }
@@ -167,9 +165,8 @@ export function ConfigDialog(props: { runtime: Runtime }) {
     )
       return setEditing(setting)
     if (setting === "defaultMode") {
-      const current = await loadConfig()
       const next = DEFAULT_MODE_NEXT[defaultMode()]
-      await saveConfig({ permissions: { ...current.permissions, defaultMode: next } })
+      await saveConfig((current) => ({ permissions: { ...current.permissions, defaultMode: next } }))
       await refetch()
       return
     }
@@ -182,48 +179,41 @@ export function ConfigDialog(props: { runtime: Runtime }) {
       return
     }
     if (setting === "terminalNotify") {
-      const current = await loadConfig()
-      const on = current.ui?.terminalNotify === false
-      await saveConfig({ ui: { ...current.ui, terminalNotify: on } })
-      setState("terminalNotify", on)
+      const saved = await saveConfig((current) => ({ ui: { ...current.ui, terminalNotify: current.ui?.terminalNotify === false } }))
+      setState("terminalNotify", saved.ui?.terminalNotify === true)
       await refetch()
       return
     }
     if (setting === "scroll") {
-      const current = await loadConfig()
-      const next = nextScrollSetting(scrollSetting(current.ui))
-      await saveConfig({ ui: { ...current.ui, scrollSpeed: next.speed, scrollAcceleration: next.accelerate } })
+      let next!: ReturnType<typeof nextScrollSetting>
+      await saveConfig((current) => {
+        next = nextScrollSetting(scrollSetting(current.ui))
+        return { ui: { ...current.ui, scrollSpeed: next.speed, scrollAcceleration: next.accelerate } }
+      })
       setState("scroll", next)
       await refetch()
       return
     }
     if (setting === "askEffort") {
-      const current = await loadConfig()
-      const on = current.ui?.askEffort === false
-      await saveConfig({ ui: { ...current.ui, askEffort: on } })
-      setState("askEffort", on)
+      const saved = await saveConfig((current) => ({ ui: { ...current.ui, askEffort: current.ui?.askEffort === false } }))
+      setState("askEffort", saved.ui?.askEffort === true)
       await refetch()
       return
     }
     if (setting === "updateCheck") {
-      const current = await loadConfig()
-      await saveConfig({ update: { ...current.update, check: current.update?.check === false } })
+      await saveConfig((current) => ({ update: { ...current.update, check: current.update?.check === false } }))
       await refetch()
       return
     }
     if (setting === "scratchpad") {
-      const current = await loadConfig()
-      const on = current.scratchpad?.enabled === false
-      await saveConfig({ scratchpad: { ...current.scratchpad, enabled: on } })
-      if (props.runtime.workspace.scratch) props.runtime.workspace.scratch.enabled = on
+      const saved = await saveConfig((current) => ({ scratchpad: { ...current.scratchpad, enabled: current.scratchpad?.enabled === false } }))
+      if (props.runtime.workspace.scratch) props.runtime.workspace.scratch.enabled = saved.scratchpad?.enabled === true
       await refetch()
       return
     }
     if (setting === "tips") {
-      const current = await loadConfig()
-      const on = current.ui?.tips === false
-      await saveConfig({ ui: { ...current.ui, tips: on } })
-      setState("tips", on)
+      const saved = await saveConfig((current) => ({ ui: { ...current.ui, tips: current.ui?.tips === false } }))
+      setState("tips", saved.ui?.tips === true)
       await refetch()
       return
     }
