@@ -31,6 +31,12 @@ Fixes for the QA reports of 23, 25 and 27 October 2026.
   shortened tool name never collides with another tool's name.
 - Sessions: a malformed index line or message is skipped instead of breaking `/sessions` or
   resume; `/export` without `--force` never overwrites a file created meanwhile.
+- Memory: a memory file edited by hand without dates no longer silently disables every memory;
+  `/desk`: a damaged `meta.json` no longer breaks the list of the session's runs.
+- `/config`, `/effort` and other settings dialogs no longer overwrite a nested setting saved
+  meanwhile (for example a playbook approved with "không hỏi lại").
+- `ot update` on Windows: a work folder still locked for a moment after the swap no longer
+  reports a finished update as failed.
 
 ## [0.3.0] — 2026-10-31
 
