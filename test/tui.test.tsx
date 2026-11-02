@@ -3084,6 +3084,48 @@ test("ultradesk: the keyword is hinted while typed; /desk on|off shows on the mo
   await setup.waitFor(() => state.dialog === undefined)
 })
 
+test("/desk: a run of an earlier sitting (only on disk) resumes with r from its detail view, as the text there says", async () => {
+  const { DeskJournal } = await import("../src/core/desk/journal")
+  const { currentSession } = await import("../src/tui/session")
+  const id = "dk-disk01"
+  const journal = new DeskJournal(currentSession().dir, id)
+  await journal.writeMeta({
+    format: 1,
+    id,
+    playbook: "sang-loc",
+    version: "1",
+    args: { tickers: ["FPT", "VCB"] },
+    size: "small",
+    status: "partial",
+    cut: "quota",
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    counters: { agents: 1, cached: 0, requests: 3, input: 10, output: 5 },
+  })
+  const resumed: string[] = []
+  const real = runtime.desk.resume.bind(runtime.desk)
+  runtime.desk.resume = async (runId: string) => {
+    resumed.push(runId)
+    throw new Error("không chạy thật trong test")
+  }
+  try {
+    await setup.mockInput.typeText("/desk")
+    setup.mockInput.pressEnter()
+    await setup.waitForFrame((f) => f.includes(`sang-loc · ${id}`))
+    setup.mockInput.pressEnter()
+    const frame = await setup.waitForFrame((f) => f.includes(`Ultradesk · ${id}`) && f.includes("Run của lần mở trước"))
+    show(frame)
+    setup.mockInput.pressKey("r")
+    await setup.waitFor(() => resumed.length > 0)
+    expect(resumed).toEqual([id])
+  } finally {
+    runtime.desk.resume = real
+    setup.mockInput.pressEscape()
+    await setup.waitFor(() => state.dialog === undefined)
+    await rm(journal.dir, { recursive: true, force: true })
+  }
+})
+
 test("ultradesk card: ←→ change the size and its cost, a large run warns, enter runs with what was chosen", async () => {
   const estimates = { small: { agents: 6, requests: 36 }, medium: { agents: 14, requests: 84 }, large: { agents: 46, requests: 276 }, unrestricted: { agents: 46, requests: 276 } }
   const asking = runtime.deskApprovals.ask({

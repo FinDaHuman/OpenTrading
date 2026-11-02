@@ -368,7 +368,8 @@ export class DeskEngine {
     phaseOf(view, phase).total++
 
     const cached = state.cache.get(key)
-    if (cached) {
+    // A journal answer the playbook no longer accepts (written before the check existed) runs again.
+    if (cached && opts.accept?.(cached.value) === undefined) {
       entry.status = "cached"
       entry.agentId = cached.agentId
       view.counters.cached++
@@ -433,8 +434,13 @@ export class DeskEngine {
         this.rateLimited(state, result)
       }
       this.addRequests(view, entry, result)
+      const value = result.status === "completed" ? (opts.schema ? result.data : result.text) : undefined
+      const rejected = result.status === "completed" ? opts.accept?.(value) : undefined
+      if (rejected !== undefined) {
+        entry.error = `Kết quả không dùng được: ${rejected}`
+        throw new Error(entry.error)
+      }
       if (result.status === "completed") {
-        const value = opts.schema ? result.data : result.text
         entry.status = "done"
         phaseOf(view, phase).done++
         state.journal?.append(

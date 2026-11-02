@@ -558,3 +558,28 @@ test("journal: a line cut by a crash does not swallow the next result", async ()
   expect(text.endsWith("\n")).toBe(true)
   expect(text.includes("\n\n")).toBe(false)
 })
+
+test("accept: a rejected answer fails the agent and is not journaled; a journal answer that fails the check runs again", async () => {
+  const session = path.join(home, "s-accept")
+  let wrong = true
+  const pb = playbook("p", (ctx) => ctx.parallel([() => ctx.agent("thẻ FPT", { accept: (v: string) => (v === "FPT" ? undefined : `mã ${v}`) })]))
+  const fake1 = starter(() => ok(wrong ? "HPG" : "FPT"))
+  const e1 = engine(fake1, [pb], {}, session)
+  const run1 = await (await e1.start("p", {})).done
+  await e1.flush()
+  expect(run1.result).toEqual([null])
+  expect(run1.agents[0]).toMatchObject({ status: "failed", error: "Kết quả không dùng được: mã HPG" })
+  expect((await new DeskJournal(session, run1.id).load()).size).toBe(0)
+
+  // A journal written before the check existed (same call, no accept): its wrong answer is kept...
+  const unchecked = engine(starter(() => ok("HPG")), [playbook("p", (ctx) => ctx.agent("thẻ FPT"))], {}, session)
+  await (await unchecked.resume(run1.id)).done
+  await unchecked.flush()
+  expect([...(await new DeskJournal(session, run1.id).load()).values()].map((e) => e.value)).toEqual(["HPG"])
+  // ...and not reused once the playbook checks it.
+  wrong = false
+  const fake2 = starter(() => ok("FPT"))
+  const run2 = await (await engine(fake2, [pb], {}, session).resume(run1.id)).done
+  expect(fake2.specs).toHaveLength(1)
+  expect(run2.result).toEqual(["FPT"])
+})

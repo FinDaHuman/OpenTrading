@@ -1,7 +1,7 @@
 import { z } from "zod"
 import { EVIDENCE_NOTE, evidence } from "../sanitize"
-import type { DeskContext, DeskSize, Playbook } from "../types"
-import { capList, listSummary, num, table, Ticker, tierOf } from "./common"
+import { DeskNoData, type DeskContext, type DeskSize, type Playbook } from "../types"
+import { capList, cardFor, listSummary, num, table, Ticker, tierOf } from "./common"
 
 /**
  * sang-loc: screen and rank several tickers. Every ticker gets a fundamentals scorecard
@@ -181,13 +181,13 @@ async function run(ctx: DeskContext<Args>): Promise<string> {
 
   ctx.phase("Thu thập")
   const cards = (await ctx.pipeline(tickers, (t: string) =>
-    ctx.agent<Scorecard>(cardPrompt(t, ctx.args.tieu_chi), { label: `thẻ điểm ${t}`, type: "co-ban", schema: SCORECARD, effort: "low", maxSteps: STEPS.card }),
+    ctx.agent<Scorecard>(cardPrompt(t, ctx.args.tieu_chi), { label: `thẻ điểm ${t}`, type: "co-ban", schema: SCORECARD, effort: "low", maxSteps: STEPS.card, accept: cardFor(t) }),
   )) as (Scorecard | null)[]
   const valid = cards.flatMap((c, i) => (c ? [{ ...c, ticker: tickers[i]! }] : []))
   const missing = tickers.filter((_, i) => !cards[i])
   if (missing.length > 0) ctx.log(`Không lấy được thẻ điểm: ${missing.join(", ")}`)
   if (valid.length < 2) {
-    return `Không đủ dữ liệu để sàng lọc: chỉ lấy được ${valid.length}/${tickers.length} thẻ điểm${missing.length ? ` (thiếu ${missing.join(", ")})` : ""}. Có thể do hết quota hoặc nguồn dữ liệu lỗi; chạy tiếp bằng /desk resume.`
+    throw new DeskNoData(`Không đủ dữ liệu để sàng lọc: chỉ lấy được ${valid.length}/${tickers.length} thẻ điểm${missing.length ? ` (thiếu ${missing.join(", ")})` : ""}. Có thể do hết quota hoặc nguồn dữ liệu lỗi; chạy tiếp bằng /desk resume.`)
   }
 
   let ranked = rank(valid, ctx.args.tieu_chi)

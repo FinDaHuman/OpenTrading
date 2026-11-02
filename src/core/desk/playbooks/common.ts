@@ -8,6 +8,17 @@ export const Ticker = z
   .transform((s) => s.toUpperCase())
   .pipe(z.string().regex(/^[A-Z0-9]{3,5}$/, "mã chứng khoán 3–5 ký tự, ví dụ FPT"))
 
+/**
+ * For AgentOpts.accept on a scorecard: the card must be about the ticker that was asked for
+ * (case and spaces aside). A card for another ticker is rejected, never relabelled.
+ */
+export function cardFor(ticker: string) {
+  return (card: { ticker?: unknown } | null | undefined): string | undefined => {
+    const got = typeof card?.ticker === "string" ? Ticker.safeParse(card.ticker) : undefined
+    return got?.success && got.data === ticker ? undefined : `thẻ điểm của mã ${String(card?.ticker ?? "(trống)")}, không phải ${ticker}`
+  }
+}
+
 /** Typed playbooks treat "unrestricted" as their largest tier. */
 export const tierOf = (size: DeskSize): "small" | "medium" | "large" => (size === "unrestricted" ? "large" : size)
 

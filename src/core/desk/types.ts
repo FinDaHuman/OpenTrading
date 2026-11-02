@@ -25,6 +25,23 @@ export interface AgentOpts {
   effort?: Effort
   model?: { provider?: string; model?: string }
   maxSteps?: number
+  /**
+   * Checks the answer before it counts (and before the journal keeps it): a reason string
+   * rejects it, so the agent fails with that reason and runs again on resume. Answers taken
+   * from the journal are checked too. Not part of the call's identity.
+   */
+  accept?: (value: any) => string | undefined
+}
+
+/**
+ * A playbook got too little to produce its result (every agent failed, too few answers): the
+ * run ends "failed" with this message, so /desk shows it as unfinished and r resumes it.
+ */
+export class DeskNoData extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = "DeskNoData"
+  }
 }
 
 /** A rough cost before running: agents started and model requests (sum of maxSteps). */

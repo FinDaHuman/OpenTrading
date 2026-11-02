@@ -156,11 +156,16 @@ export function DeskDialog(props: { runtime: Runtime }) {
   }
 
   useKeys((evt) => {
-    if (evt.eventType !== "release" && evt.name === "escape") {
+    if (evt.eventType === "release") return
+    if (evt.name === "escape") {
       if (agentKey()) return setAgentKey(undefined)
       if (open() && runs().length > 1) return setOpen(undefined)
-      closeDialog()
+      return closeDialog()
     }
+    // The agent list takes run keys through its Picker. A run with nothing to list (one known
+    // only from disk, or one whose agents have not started) has no Picker, so they come here.
+    const r = run()
+    if (r && !agent() && !(r.phases.length > 0 && r.agents.length > 0)) runKey(evt, r.id)
   })
 
   const keysHint = (r: DeskRunView) =>
