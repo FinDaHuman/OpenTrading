@@ -155,8 +155,7 @@ export const configRuleStore: RuleStore = {
     return (await loadConfig()).permissions?.allow ?? []
   },
   async save(allow) {
-    const config = await loadConfig()
-    await saveConfig({ permissions: { ...config.permissions, allow } })
+    await saveConfig((config) => ({ permissions: { ...config.permissions, allow } }))
   },
   async lists() {
     const p = (await loadConfig()).permissions

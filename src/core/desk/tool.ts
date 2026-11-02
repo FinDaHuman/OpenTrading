@@ -116,9 +116,7 @@ export function deskRunTool(deps: DeskToolDeps): ToolDef<Input> {
       const name = playbook.meta.name
       if (!decision.run) return `Người dùng không cho chạy playbook ${name}. Trả lời bằng cách thông thường hoặc hỏi người dùng muốn làm gì.`
       if (decision.remember) {
-        const current = await (deps.config ?? loadConfig)()
-        const approved = [...new Set([...(current.desk?.approved ?? []), name])]
-        await saveConfig({ desk: { ...current.desk, approved } })
+        await saveConfig((current) => ({ desk: { ...current.desk, approved: [...new Set([...(current.desk?.approved ?? []), name])] } }))
       }
       // The card proposes desk.effort; only a level the user changed there belongs to this run
       // (an inherited one follows desk.effort on resume).
