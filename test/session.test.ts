@@ -275,3 +275,33 @@ test("harness-written turn texts (an MCP prompt's template) are recorded with th
   expect(loaded.harness).toEqual(["Hãy phân tích mã FPT theo 5 bước…"])
   expect(loaded.messages).toHaveLength(4)
 })
+
+// Regression tests for the QA reports of 27/10/2026.
+
+test("an index line without updatedAt (valid JSON, wrong shape) is skipped; the good sessions still list (BUG-OT-20261027-006)", async () => {
+  const s = Session.create()
+  await s.appendTurn(turn2, info)
+  const index = path.join(sessionsDir(), "index.jsonl")
+  await appendFile(index, `${JSON.stringify({ id: "broken-1", file: s.file })}\n${JSON.stringify({ id: "broken-2", file: s.file, createdAt: 1, updatedAt: null })}\nnull\n42\n`)
+  const listed = await listSessions()
+  expect(listed.some((x) => x.id === s.id)).toBe(true)
+  expect(listed.some((x) => x.id.startsWith("broken"))).toBe(false)
+})
+
+test("a stored message with the wrong shape is dropped alone; resume keeps the rest (BUG-OT-20261027-007)", async () => {
+  const s = Session.create()
+  await s.appendTurn(turn2, info)
+  const file = path.join(sessionsDir(), s.file!)
+  const bad = [
+    { type: "message", ts: "x", message: null },
+    { type: "message", ts: "x", message: { role: "assistant" } },
+    { type: "message", ts: "x", message: { role: "tool", content: "text" } },
+    { type: "message", ts: "x", message: { role: "hacker", content: "x" } },
+    { type: "message", ts: "x", message: { role: "assistant", content: [null] } },
+    { type: "turn_end", ts: "x" },
+  ]
+  await appendFile(file, bad.map((e) => JSON.stringify(e)).join("\n") + "\n")
+  await s.appendTurn([{ role: "user", content: "Tiếp" }], info)
+  const loaded = await loadSession(s.id)
+  expect(loaded.messages).toEqual([...turn2, { role: "user", content: "Tiếp" }])
+})
