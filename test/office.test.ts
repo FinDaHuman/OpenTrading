@@ -137,3 +137,62 @@ test("docx: headings, list items, paragraphs and tables as markdown; old .doc/.x
   writeFileSync(path.join(project, "hong.xlsx"), "không phải zip")
   await expect(readFileTool(ws()).execute({ path: "hong.xlsx" }, ctx())).rejects.toThrow("Không đọc được")
 })
+
+// Regression tests for the QA reports of 25/10/2026.
+const MAIN = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+const REL = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+const RELS = '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Target="worksheets/sheet2.xml"/></Relationships>'
+
+test("docx: two paragraphs in one table cell stay apart (100 and 200 never read as 100200)", () => {
+  const cell = (...ps: string[]) => `<w:tc>${ps.map((p) => `<w:p><w:r><w:t>${p}</w:t></w:r></w:p>`).join("")}</w:tc>`
+  const body = `<w:tbl><w:tr>${cell("Năm")}${cell("Giá trị")}</w:tr><w:tr>${cell("2025")}${cell("100", "200")}</w:tr><w:tr>${cell("2026")}${cell("")}</w:tr></w:tbl>`
+  const docx = zip({ "word/document.xml": `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${body}</w:body></w:document>` })
+  const out = readDocx(docx)
+  expect(out).toContain("| 2025 | 100<br>200 |")
+  expect(out).not.toContain("100200")
+  expect(out).toContain("| 2026 |  |")
+})
+
+test("docx: a document whose WordprocessingML prefix is not w: is read the same", () => {
+  const docx = zip({
+    "word/document.xml": '<?xml version="1.0"?><ns0:document xmlns:ns0="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><ns0:body><ns0:p><ns0:r><ns0:t>Xin chào</ns0:t></ns0:r></ns0:p></ns0:body></ns0:document>',
+  })
+  expect(readDocx(docx)).toBe("Xin chào")
+})
+
+test("xlsx: a sheet named like a number is picked by its name first, then by position", () => {
+  const book = zip({
+    "xl/workbook.xml": `<?xml version="1.0"?><workbook xmlns="${MAIN}" xmlns:r="${REL}"><sheets><sheet name="Overview" sheetId="1" r:id="rId1"/><sheet name="2026" sheetId="2" r:id="rId2"/></sheets></workbook>`,
+    "xl/_rels/workbook.xml.rels": RELS,
+    "xl/worksheets/sheet1.xml": `<?xml version="1.0"?><worksheet xmlns="${MAIN}"><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>OVERVIEW</t></is></c></row></sheetData></worksheet>`,
+    "xl/worksheets/sheet2.xml": `<?xml version="1.0"?><worksheet xmlns="${MAIN}"><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>YEAR2026_QA</t></is></c></row></sheetData></worksheet>`,
+  })
+  expect(readXlsx(book, "2026").rows).toEqual([["YEAR2026_QA"]])
+  expect(readXlsx(book, "2").rows).toEqual([["YEAR2026_QA"]])
+  expect(readXlsx(book, "1").rows).toEqual([["OVERVIEW"]])
+  expect(() => readXlsx(book, "3")).toThrow('không có sheet "3"')
+})
+
+test("xlsx: SpreadsheetML written with a namespace prefix (x:workbook, x:sheet) reads like the default-namespace one", () => {
+  const prefixed = zip({
+    "xl/workbook.xml": `<?xml version="1.0"?><x:workbook xmlns:x="${MAIN}" xmlns:rel="${REL}"><x:sheets><x:sheet name="Data" sheetId="1" rel:id="rId1"/></x:sheets></x:workbook>`,
+    "xl/_rels/workbook.xml.rels": '<?xml version="1.0"?><p:Relationships xmlns:p="http://schemas.openxmlformats.org/package/2006/relationships"><p:Relationship Id="rId1" Target="worksheets/sheet1.xml"/></p:Relationships>',
+    "xl/sharedStrings.xml": `<?xml version="1.0"?><x:sst xmlns:x="${MAIN}"><x:si><x:t>PREFIX_QA</x:t></x:si></x:sst>`,
+    "xl/worksheets/sheet1.xml": `<?xml version="1.0"?><x:worksheet xmlns:x="${MAIN}"><x:sheetData><x:row r="1"><x:c r="A1" t="s"><x:v>0</x:v></x:c><x:c r="B1"><x:v>42</x:v></x:c></x:row></x:sheetData></x:worksheet>`,
+  })
+  const book = readXlsx(prefixed)
+  expect(book.sheets).toEqual([{ name: "Data", rows: 1 }])
+  expect(book.rows).toEqual([["PREFIX_QA", "42"]])
+})
+
+test("read_file on a sparse sheet with a cell in the last Excel row pages without overflowing the stack", async () => {
+  const book = zip({
+    "xl/workbook.xml": `<?xml version="1.0"?><workbook xmlns="${MAIN}" xmlns:r="${REL}"><sheets><sheet name="Tall" sheetId="1" r:id="rId1"/></sheets></workbook>`,
+    "xl/_rels/workbook.xml.rels": RELS,
+    "xl/worksheets/sheet1.xml": `<?xml version="1.0"?><worksheet xmlns="${MAIN}"><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>FIRST</t></is></c></row><row r="1048576"><c r="A1048576" t="inlineStr"><is><t>LAST</t></is></c></row></sheetData></worksheet>`,
+  })
+  writeFileSync(path.join(project, "tall.xlsx"), book)
+  const out = text(await readFileTool(ws()).execute({ path: "tall.xlsx", offset: 1, limit: 1 }, ctx()))
+  expect(out).toContain("1\tFIRST")
+  expect(out).not.toContain("LAST")
+}, 30_000)
