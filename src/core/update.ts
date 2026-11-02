@@ -124,6 +124,10 @@ export interface ApplyOptions {
   platform?: NodeJS.Platform
   /** Runs the new binary with --version; returns its first line (tests stub it). */
   probe?: (file: string) => string
+  /** Removes the work folder (tests make it fail as Windows does). */
+  removeWork?: (dir: string) => void
+  /** Waits between removal attempts (tests skip the wait). */
+  sleep?: (ms: number) => Promise<void>
 }
 
 /**
@@ -174,7 +178,26 @@ export async function applyUpdate(opts: ApplyOptions): Promise<string> {
     swapIn(opts.dir, fresh, windows)
     return line
   } finally {
-    rmSync(work, { recursive: true, force: true })
+    await removeWork(work, opts)
+  }
+}
+
+/**
+ * Removes the update's work folder. On Windows the just-run and just-copied .exe inside can stay
+ * locked for a moment (antivirus, indexer): EBUSY/EPERM. Retry briefly, then leave it: the update
+ * is already in place, and removeOldBinaries clears an .update- folder older than an hour at a
+ * later start. A cleanup must never turn a finished update into a reported failure.
+ */
+async function removeWork(work: string, opts: Pick<ApplyOptions, "removeWork" | "sleep">) {
+  const remove = opts.removeWork ?? ((dir: string) => rmSync(dir, { recursive: true, force: true }))
+  const sleep = opts.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)))
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return remove(work)
+    } catch {
+      if (attempt >= 8) return
+      await sleep(100 * attempt)
+    }
   }
 }
 
