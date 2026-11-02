@@ -8,7 +8,7 @@ import { decodeFile, encodeFile, isBinary } from "../src/core/fs/text"
 import { unsafeRoot, Workspace } from "../src/core/fs/workspace"
 import { PermissionGate } from "../src/core/permission"
 import { MAX_LINES, MAX_TEXT_CHARS, parsePages, readFileTool } from "../src/core/tools/fs/read"
-import { globFilesTool, grepFilesTool } from "../src/core/tools/fs/search"
+import { GREP_MAX_FILE_BYTES, globFilesTool, grepFilesTool } from "../src/core/tools/fs/search"
 import type { ToolResult } from "../src/core/tools/types"
 import { RwLock, runTool } from "../src/core/tools/wrap"
 
@@ -264,6 +264,27 @@ test("glob_files matches names at any depth, newest first, and skips .git, node_
   expect(text(await tool.execute({ pattern: "*.xlsx", path: dir }, ctx()))).toContain("Không có file nào")
   await expect(tool.execute({ pattern: "*", path: path.join(dir, "a.csv") }, ctx())).rejects.toThrow("không phải thư mục")
 })
+
+test("grep_files: a CSV over 2 MiB is searched like read_file reads it; a file over the cap is reported, never a bare not-found", async () => {
+  const dir = path.join(root, "grep-big")
+  mkdirSync(dir, { recursive: true })
+  const filler = "2026-10-25,FPT,123.45,1000000\n".repeat(Math.ceil(2_450_013 / 30))
+  writeFileSync(path.join(dir, "big.csv"), `QA_TARGET_25\n${filler}`)
+  const tool = grepFilesTool(ws())
+  const found = text(await tool.execute({ pattern: "QA_TARGET_25", path: dir, output_mode: "content" }, ctx()))
+  expect(found).toContain(`${path.join(dir, "big.csv")}:1:QA_TARGET_25`)
+
+  const huge = path.join(dir, "huge.log")
+  writeFileSync(huge, Buffer.alloc(GREP_MAX_FILE_BYTES + 1, "a"))
+  const missing = text(await tool.execute({ pattern: "NOT_THERE", path: dir }, ctx()))
+  expect(missing).toContain("Không tìm thấy")
+  expect(missing).toContain("bỏ qua 1 file lớn hơn 20 MiB")
+  expect(missing).toContain("huge.log")
+  const alongside = text(await tool.execute({ pattern: "QA_TARGET_25", path: dir }, ctx()))
+  expect(alongside).toContain("big.csv")
+  expect(alongside).toContain("kết quả có thể thiếu")
+  await expect(tool.execute({ pattern: "x", path: huge }, ctx())).rejects.toThrow("bỏ qua 1 file lớn hơn 20 MiB")
+}, 30_000)
 
 test("grep_files: files, content with context and count; key files and binaries are never opened", async () => {
   const dir = path.join(root, "grep")

@@ -15,7 +15,8 @@ import { LOCAL_SOURCE, type ToolDef } from "../types"
 
 export const GLOB_LIMIT = 100
 export const GREP_HEAD_LIMIT = 250
-const GREP_MAX_FILE_BYTES = 2 * 1024 * 1024
+/** The same cap as read_file's text files: whatever it can read, grep can search. */
+export const GREP_MAX_FILE_BYTES = 20 * 1024 * 1024
 const GREP_MAX_LINE = 500
 
 /** Root to search: the given folder or the workspace; asks first when it is a secret tree. */
@@ -149,14 +150,21 @@ export function grepFilesTool(workspace: Workspace): ToolDef<GrepInput> {
       const limit = input.head_limit ?? GREP_HEAD_LIMIT
       const around = mode === "content" ? (input.context ?? 0) : 0
       const hits: { file: WalkEntry; count: number; rows: string[] }[] = []
+      // Files not searched are always said: "not found" must never mean "not looked at".
+      const tooBig: string[] = []
+      const unreadable: string[] = []
       for (const file of files) {
         if (ctx.signal.aborted) throw new Error("Đã huỷ.")
         let bytes: Uint8Array
         try {
           const size = (await stat(file.abs)).size
-          if (size > GREP_MAX_FILE_BYTES) continue
+          if (size > GREP_MAX_FILE_BYTES) {
+            tooBig.push(file.abs)
+            continue
+          }
           bytes = new Uint8Array(await Bun.file(file.abs).arrayBuffer())
         } catch {
+          unreadable.push(file.abs)
           continue
         }
         if (isBinary(file.abs, bytes)) continue
@@ -181,7 +189,11 @@ export function grepFilesTool(workspace: Workspace): ToolDef<GrepInput> {
         }
         hits.push({ file, count: matched.length, rows })
       }
-      if (hits.length === 0) return `Không tìm thấy "${input.pattern}" trong ${target}.${capped ? " (Thư mục quá lớn, đã dừng giữa chừng: thu hẹp path.)" : ""}`
+      const skipped = skippedNote(tooBig, unreadable)
+      if (hits.length === 0) {
+        if (info.isFile() && skipped) throw new Error(`Không tìm được trong ${target}: ${skipped}`)
+        return [`Không tìm thấy "${input.pattern}" trong ${target}.${capped ? " (Thư mục quá lớn, đã dừng giữa chừng: thu hẹp path.)" : ""}`, ...(skipped ? [`(${skipped})`] : [])].join("\n")
+      }
       const ordered = mode === "content" ? hits : await byMtimeHits(hits)
       const out =
         mode === "files_with_matches"
@@ -195,9 +207,20 @@ export function grepFilesTool(workspace: Workspace): ToolDef<GrepInput> {
         `${total} dòng khớp trong ${hits.length} file${out.length > shown.length ? ` (hiện ${shown.length}/${out.length} dòng kết quả; tăng head_limit hoặc thu hẹp path/glob)` : ""}:`,
         ...shown,
         ...(capped ? ["(Thư mục quá lớn, đã dừng giữa chừng: kết quả có thể thiếu; thu hẹp path.)"] : []),
+        ...(skipped ? [`(${skipped})`] : []),
       ].join("\n")
     },
   }
+}
+
+/** "Bỏ qua 2 file lớn hơn 20 MiB: a.csv, b.csv; kết quả có thể thiếu." (undefined when none). */
+function skippedNote(tooBig: string[], unreadable: string[]): string | undefined {
+  const list = (files: string[]) => `${files.slice(0, 5).join(", ")}${files.length > 5 ? `, … (+${files.length - 5})` : ""}`
+  const parts = [
+    tooBig.length ? `bỏ qua ${tooBig.length} file lớn hơn ${GREP_MAX_FILE_BYTES / 1024 / 1024} MiB: ${list(tooBig)}` : "",
+    unreadable.length ? `không đọc được ${unreadable.length} file: ${list(unreadable)}` : "",
+  ].filter(Boolean)
+  return parts.length ? `${parts.join("; ")}; kết quả có thể thiếu (đọc phần cần thiết bằng read_file với offset/limit).` : undefined
 }
 
 async function byMtimeHits<T extends { file: WalkEntry }>(hits: T[]) {
