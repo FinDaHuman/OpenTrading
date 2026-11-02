@@ -50,6 +50,8 @@ export interface SearchPlan {
   blocked: string[]
   /** ISO date: results published on or after it. */
   since?: string
+  /** The window asked for (recency_days), for backends that take a number of days or a bucket. */
+  days?: number
 }
 
 export function planSearch(input: WebSearchInput, now = new Date()): SearchPlan {
@@ -58,7 +60,7 @@ export function planSearch(input: WebSearchInput, now = new Date()): SearchPlan 
   }
   const allowed = [...new Set([...cleanDomains(input.allowed_domains), ...(input.preset ? PRESETS[input.preset] : [])])]
   const since = input.recency_days ? vnDay(now.getTime() - input.recency_days * 86_400_000) : undefined
-  return { query: input.query.trim(), n: input.num_results ?? 8, allowed, blocked: cleanDomains(input.blocked_domains), since }
+  return { query: input.query.trim(), n: input.num_results ?? 8, allowed, blocked: cleanDomains(input.blocked_domains), since, ...(since ? { days: input.recency_days } : {}) }
 }
 
 /** `site:` operators for backends without a domain filter (Brave, DuckDuckGo, Gemini). */
@@ -68,14 +70,29 @@ export function withSiteOperators(plan: SearchPlan) {
   return `${plan.query}${allow}${block}`
 }
 
-/** Drop hits outside the allow list or inside the block list (backends do not all honour them). */
+/** A hit's publication day when it is a real date ("2026-10-01…"); Brave's "2 days ago" is not. */
+const hitDay = (h: Hit) => (h.date && /^\d{4}-\d{2}-\d{2}/.test(h.date) ? h.date.slice(0, 10) : undefined)
+
+/**
+ * Drop hits outside the allow list, inside the block list, or dated before the recency window
+ * (backends do not all honour them, and some only round the window to a week/month/year).
+ * An undated hit is kept: formatResults says the date is unknown.
+ */
 export function filterHits(hits: Hit[], plan: SearchPlan) {
   return hits.filter((h) => {
     const host = hostOf(h.url)
     if (!host) return false
     if (plan.allowed.length > 0 && !plan.allowed.some((d) => hostMatches(host, d))) return false
-    return !plan.blocked.some((d) => hostMatches(host, d))
+    if (plan.blocked.some((d) => hostMatches(host, d))) return false
+    const day = hitDay(h)
+    return !(plan.since && day && day < plan.since)
   })
+}
+
+/** A recency window in days as the coarse buckets DuckDuckGo (df) and Brave (freshness) take, rounded up. */
+export function freshnessBucket(days: number | undefined): "d" | "w" | "m" | "y" | undefined {
+  if (!days) return undefined
+  return days <= 1 ? "d" : days <= 7 ? "w" : days <= 31 ? "m" : days <= 366 ? "y" : undefined
 }
 
 type Backend = { name: string; run: (plan: SearchPlan, signal: AbortSignal) => Promise<Hit[]> }
@@ -124,7 +141,14 @@ export const BACKENDS: Record<string, (key: string) => Backend> = {
           search_queries: [plan.query],
           max_results: plan.n,
           ...(plan.allowed.length || plan.blocked.length
-            ? { source_policy: { ...(plan.allowed.length ? { include_domains: plan.allowed } : {}), ...(plan.blocked.length ? { exclude_domains: plan.blocked } : {}) } }
+            || plan.since
+            ? {
+                source_policy: {
+                  ...(plan.allowed.length ? { include_domains: plan.allowed } : {}),
+                  ...(plan.blocked.length ? { exclude_domains: plan.blocked } : {}),
+                  ...(plan.since ? { after_date: plan.since } : {}),
+                },
+              }
             : {}),
         },
         { "x-api-key": key },
@@ -141,7 +165,7 @@ export const BACKENDS: Record<string, (key: string) => Backend> = {
   tavily: (key) => ({
     name: "tavily",
     async run(plan, signal) {
-      const days = plan.since ? Math.max(1, Math.round((Date.now() - Date.parse(plan.since)) / 86_400_000)) : undefined
+      const days = plan.days
       const data = await postJson(
         "https://api.tavily.com/search",
         {
@@ -166,8 +190,9 @@ export const BACKENDS: Record<string, (key: string) => Backend> = {
   brave: (key) => ({
     name: "brave",
     async run(plan, signal) {
-      const days = plan.since ? (Date.now() - Date.parse(plan.since)) / 86_400_000 : undefined
-      const freshness = days === undefined ? "" : days <= 1 ? "&freshness=pd" : days <= 7 ? "&freshness=pw" : days <= 31 ? "&freshness=pm" : "&freshness=py"
+      // Longer than a year has no bucket: the post-filter on dates does the rest.
+      const bucket = freshnessBucket(plan.days)
+      const freshness = bucket ? `&freshness=p${bucket}` : ""
       const url = `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(withSiteOperators(plan))}&count=${Math.min(plan.n, 20)}${freshness}`
       const res = await fetch(url, { signal, headers: { Accept: "application/json", "X-Subscription-Token": key } })
       if (!res.ok) throw new Error(`Brave HTTP ${res.status}`)
@@ -214,7 +239,8 @@ export function parseDuckDuckGo(html: string, n: number): Hit[] {
 const duckduckgo: Backend = {
   name: "duckduckgo",
   async run(plan, signal) {
-    const res = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(withSiteOperators(plan))}&kl=vn-vi`, {
+    const bucket = freshnessBucket(plan.days)
+    const res = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(withSiteOperators(plan))}&kl=vn-vi${bucket ? `&df=${bucket}` : ""}`, {
       signal,
       headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/128.0 Safari/537.36" },
     })
@@ -239,10 +265,12 @@ export function keyedBackends(env: Record<string, string | undefined> = process.
 const CITE =
   'NHẮC: trích nguồn bằng link markdown [Tiêu đề](URL) ngay cạnh số liệu/khẳng định lấy từ kết quả; cuối câu trả lời có mục "Nguồn:". Ghi ngày đăng với tin tức. Giá và chỉ số thị trường kiểm lại bằng tool dữ liệu MCP khi có.'
 
-export function formatResults(query: string, backend: string, hits: Hit[], summary?: string, notes: string[] = []) {
+export function formatResults(query: string, backend: string, hits: Hit[], summary?: string, notes: string[] = [], since?: string) {
   const day = vnDay()
   const lines = hits.map((h, i) => {
-    const meta = [hostOf(h.url), h.date].filter(Boolean).join(" — ")
+    // With a recency window, an undated hit says so: it passed the date filter unchecked.
+    const date = h.date ?? (since ? "không rõ ngày" : undefined)
+    const meta = [hostOf(h.url), date].filter(Boolean).join(" — ")
     const snippet = h.snippet ? `\n    ${h.snippet.replace(/\s+/g, " ").slice(0, 300)}` : ""
     return `[${i + 1}] ${h.title || "(không tiêu đề)"}${meta ? ` — ${meta}` : ""}\n    ${h.url}${snippet}`
   })
@@ -285,12 +313,17 @@ export async function runSearch(input: WebSearchInput, signal: AbortSignal, deps
     return undefined
   })
   if (native && native.sources.length > 0) {
-    const hits = filterHits(native.sources.map((s) => ({ title: s.title, url: s.url })), plan).slice(0, plan.n)
-    if (hits.length > 0 || plan.allowed.length === 0) {
-      const out = formatResults(plan.query, native.backend, hits, native.text)
+    const kept = filterHits(native.sources.map((s) => ({ title: s.title, url: s.url })), plan)
+    if (kept.length > 0) {
+      // The provider's summary may quote any source it used: once one is filtered out (a
+      // blocked or off-list domain), the summary goes too and only the kept sources remain.
+      const filtered = kept.length < native.sources.length
+      const notes = filtered ? ["(Đã bỏ các nguồn ngoài bộ lọc domain và cả phần tóm tắt của bộ tìm kiếm, vì nó có thể trích từ các nguồn đó.)"] : []
+      const out = formatResults(plan.query, native.backend, kept.slice(0, plan.n), filtered ? undefined : native.text, notes, plan.since)
       cache.set(key, out)
       return out
     }
+    failures.push("tìm kiếm của model: mọi nguồn đều bị bộ lọc domain loại")
   }
   for (const backend of (deps.backends ?? keyedBackends)()) {
     try {
@@ -300,7 +333,7 @@ export async function runSearch(input: WebSearchInput, signal: AbortSignal, deps
         continue
       }
       const notes = failures.length > 0 ? [`(đã thử: ${failures.join("; ")})`] : []
-      const out = formatResults(plan.query, backend.name, hits, undefined, notes)
+      const out = formatResults(plan.query, backend.name, hits, undefined, notes, plan.since)
       cache.set(key, out)
       return out
     } catch (error) {

@@ -2,7 +2,7 @@ import { beforeEach, expect, test } from "bun:test"
 import { PermissionGate } from "../src/core/permission"
 import { clearFetchCache, runFetch, webFetchTool, type FetchDeps } from "../src/core/tools/web/fetch"
 import { checkUrl, fetchPublic, isPrivateAddress, isPrivateHost } from "../src/core/tools/web/net"
-import { clearSearchCache, filterHits, parseDuckDuckGo, planSearch, runSearch, webSearchTool } from "../src/core/tools/web/search"
+import { clearSearchCache, filterHits, freshnessBucket, keyedBackends, parseDuckDuckGo, planSearch, runSearch, webSearchTool } from "../src/core/tools/web/search"
 
 const signal = () => new AbortController().signal
 const publicDns = async () => ["93.184.216.34"]
@@ -171,6 +171,74 @@ test("search: provider search first, with numbered sources and the citation remi
   await expect(
     runSearch({ query: "không ra gì" }, signal(), { native: async () => undefined, backends: () => [{ name: "duckduckgo", run: async () => { throw new Error("HTTP 403") } }] }),
   ).rejects.toThrow("duckduckgo: HTTP 403")
+})
+
+test("recency_days: a hit dated before the window is dropped whatever the backend; undated ones are kept and marked (BUG-OT-20261027-001)", async () => {
+  const plan = planSearch({ query: "FPT", recency_days: 1 }, new Date("2026-10-27T03:00:00Z"))
+  expect(plan.since).toBe("2026-10-26")
+  const hits = filterHits(
+    [
+      { url: "https://cafef.vn/cu", date: "2020-01-15" },
+      { url: "https://cafef.vn/moi", date: "2026-10-27" },
+      { url: "https://cafef.vn/khong-ngay" },
+      { url: "https://cafef.vn/brave", date: "2 days ago" },
+    ],
+    plan,
+  )
+  expect(hits.map((h) => h.url)).toEqual(["https://cafef.vn/moi", "https://cafef.vn/khong-ngay", "https://cafef.vn/brave"])
+
+  const out = await runSearch({ query: "FPT tin trong ngày", recency_days: 1 }, signal(), {
+    native: async () => undefined,
+    backends: () => [
+      { name: "duckduckgo", run: async () => [{ title: "Tin 2020", url: "https://vneconomy.vn/2020", date: "2020-01-15" }] },
+      { name: "parallel", run: async () => [{ title: "Không ngày", url: "https://vneconomy.vn/x" }] },
+    ],
+  })
+  expect(out).not.toContain("Tin 2020")
+  expect(out).toContain("duckduckgo: không có kết quả")
+  expect(out).toContain("[1] Không ngày — vneconomy.vn — không rõ ngày")
+})
+
+test("recency_days reaches DuckDuckGo (df) and Parallel (after_date), rounded up to their buckets", async () => {
+  expect([1, 7, 30, 365, 2000].map((d) => freshnessBucket(d))).toEqual(["d", "w", "m", "y", undefined])
+  const urls: string[] = []
+  const bodies: unknown[] = []
+  const real = globalThis.fetch
+  globalThis.fetch = (async (url: string | URL, init?: RequestInit) => {
+    urls.push(String(url))
+    if (init?.body) bodies.push(JSON.parse(String(init.body)))
+    return new Response(String(url).includes("duckduckgo") ? "" : JSON.stringify({ results: [] }), { status: 200 })
+  }) as typeof fetch
+  try {
+    const plan = planSearch({ query: "FPT", recency_days: 7 })
+    for (const backend of keyedBackends({ PARALLEL_API_KEY: "k" })) await backend.run(plan, signal()).catch(() => [])
+  } finally {
+    globalThis.fetch = real
+  }
+  expect(urls.find((u) => u.includes("duckduckgo"))).toContain("&df=w")
+  expect(bodies[0]).toMatchObject({ source_policy: { after_date: planSearch({ query: "FPT", recency_days: 7 }).since } })
+})
+
+test("blocked_domains: a provider search whose every source is blocked falls back, and its summary never shows (BUG-OT-20261027-002)", async () => {
+  let fallbackCalls = 0
+  const out = await runSearch({ query: "tin chặn", blocked_domains: ["blocked.test"] }, signal(), {
+    native: async () => ({ backend: "gemini-grounding", text: "NỘI DUNG TỪ BLOCKED", sources: [{ url: "https://blocked.test/a", title: "Bị chặn" }] }),
+    backends: () => [{ name: "exa", run: async () => (fallbackCalls++, [{ title: "Được phép", url: "https://allowed.test/b" }]) }],
+  })
+  expect(fallbackCalls).toBe(1)
+  expect(out).toContain("(nguồn: exa")
+  expect(out).toContain("allowed.test")
+  expect(out).not.toContain("NỘI DUNG TỪ BLOCKED")
+  expect(out).not.toContain("blocked.test")
+
+  // Some sources blocked: the kept ones stay, the summary (which may quote the others) goes.
+  const mixed = await runSearch({ query: "tin trộn", blocked_domains: ["blocked.test"] }, signal(), {
+    native: async () => ({ backend: "gemini-grounding", text: "TÓM TẮT TRỘN", sources: [{ url: "https://blocked.test/a", title: "Bị chặn" }, { url: "https://cafef.vn/b", title: "CafeF" }] }),
+    backends: () => [],
+  })
+  expect(mixed).toContain("[1] CafeF — cafef.vn")
+  expect(mixed).not.toContain("TÓM TẮT TRỘN")
+  expect(mixed).not.toContain("blocked.test")
 })
 
 test("DuckDuckGo results are parsed, entities decoded and redirect links unwrapped; web tools are deferred local tools", () => {
