@@ -184,15 +184,22 @@ test("OPENTRADING_RELEASE_BASE points downloads at a local server", async () => 
   expect(rel.calls[0]).toBe(`http://127.0.0.1:9/rel/${archiveFor(target)}`)
 }, 30_000)
 
-test("leftovers: .old files go, a fresh .update- folder stays", async () => {
+test("leftovers: the updater's .old files go, a fresh .update- folder stays, the user's files stay", async () => {
   const dir = await temp()
-  writeFileSync(path.join(dir, "opentrading.exe.old"), "x")
+  for (const name of ["opentrading.exe.old", "ot.exe.old", "opentrading.exe.1730000000.old", "ot.1730000000.old"]) writeFileSync(path.join(dir, name), "x")
+  // Not the updater's: a user's notes, a backup, a folder that happens to end in .old.
+  writeFileSync(path.join(dir, "research-notes.old"), "keep")
+  writeFileSync(path.join(dir, "research-notes.bak"), "keep")
+  mkdirSync(path.join(dir, "notes.old"))
+  writeFileSync(path.join(dir, "notes.old", "a.txt"), "keep")
   mkdirSync(path.join(dir, ".update-fresh"))
   mkdirSync(path.join(dir, ".update-stale"))
   const old = new Date(Date.now() - 2 * 3_600_000)
   utimesSync(path.join(dir, ".update-stale"), old, old)
   removeOldBinaries(dir)
-  expect(readdirSync(dir)).toEqual([".update-fresh"])
+  expect(readdirSync(dir).sort()).toEqual([".update-fresh", "notes.old", "research-notes.bak", "research-notes.old"])
+  expect(readFileSync(path.join(dir, "research-notes.old"), "utf8")).toBe("keep")
+  expect(existsSync(path.join(dir, "notes.old", "a.txt"))).toBe(true)
   expect(existsSync(path.join(dir, ".update-fresh")) && statSync(path.join(dir, ".update-fresh")).isDirectory()).toBe(true)
 })
 

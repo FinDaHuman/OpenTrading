@@ -251,16 +251,32 @@ function freeName(file: string): string {
   }
 }
 
+/**
+ * Names the updater and install.ps1 give a binary they move aside: `opentrading.exe.old`,
+ * `ot.exe.old`, or with a timestamp when that name was still in use (`ot.exe.1730000000.old`).
+ * The install folder can hold the user's own files: anything else ending in .old is theirs.
+ */
+export const OWN_OLD_BINARY = /^(opentrading|ot)(\.exe)?(\.\d+)?\.old$/i
+
 /** Remove the `.old` files a Windows update left behind (they were running then). */
 export function removeOldBinaries(dir: string) {
+  let names: string[]
   try {
-    for (const name of readdirSync(dir)) {
-      const file = path.join(dir, name)
-      // An .update- folder younger than an hour may belong to an update running right now.
-      const stale = name.endsWith(".old") || (name.startsWith(".update-") && Date.now() - statSync(file).mtimeMs > 3_600_000)
-      if (stale) rmSync(file, { recursive: true, force: true })
-    }
+    names = readdirSync(dir)
   } catch {
-    // still in use, or not ours: next start tries again
+    return
+  }
+  for (const name of names) {
+    const file = path.join(dir, name)
+    try {
+      if (OWN_OLD_BINARY.test(name)) {
+        if (lstatSync(file).isFile()) rmSync(file, { force: true })
+      } else if (name.startsWith(".update-") && lstatSync(file).isDirectory() && Date.now() - statSync(file).mtimeMs > 3_600_000) {
+        // An .update- folder younger than an hour may belong to an update running right now.
+        rmSync(file, { recursive: true, force: true })
+      }
+    } catch {
+      // still in use: next start tries again
+    }
   }
 }
