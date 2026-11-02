@@ -56,6 +56,8 @@ export interface McpServerStatus {
   tools: string[]
   /** Tools the server offers but `enabledTools`/`disabledTools` hide. */
   hiddenTools: number
+  /** Lists the server returned past OpenTrading's caps (MAX_MCP_TOOLS / MAX_MCP_PROMPTS): cut there. */
+  capped?: ("tools" | "prompts")[]
   /** Config file the server came from. */
   file: string
   /** What it runs or connects to — shown before the user approves a project server. */
@@ -426,6 +428,13 @@ export class McpManager {
     if (patch.error) patch = { ...patch, error: cleanErrorText(patch.error) }
     this.statuses.set(name, { ...prev, ...patch })
     this.emit()
+  }
+
+  /** The server's `capped` list with `kind` added or removed. */
+  private withCap(name: string, kind: "tools" | "prompts", capped: boolean): McpServerStatus["capped"] {
+    const rest = (this.statuses.get(name)?.capped ?? []).filter((k) => k !== kind)
+    const next = capped ? [...rest, kind] : rest
+    return next.length ? next : undefined
   }
 
   private bump(name: string) {
@@ -944,10 +953,14 @@ export class McpManager {
   private async syncTools(name: string, client: Client, config: ServerConfig) {
     const tools: z.infer<typeof LooseToolList>["tools"] = []
     let cursor: string | undefined
+    let toolsCapped = false
     do {
       const page = await client.request({ method: "tools/list", params: cursor ? { cursor } : {} }, LooseToolList)
-      tools.push(...page.tools)
+      // Only what still fits under the cap: a big last page must not push the list past it.
+      const room = MAX_MCP_TOOLS - tools.length
+      tools.push(...page.tools.slice(0, room))
       cursor = page.nextCursor
+      toolsCapped = page.tools.length > room || (tools.length >= MAX_MCP_TOOLS && !!cursor)
     } while (cursor && tools.length < MAX_MCP_TOOLS)
 
     this.registry.unregister(serverPrefix(name))
@@ -1095,19 +1108,22 @@ export class McpManager {
         },
       })
     }
-    this.set(name, { tools: registered, hiddenTools: hidden })
+    this.set(name, { tools: registered, hiddenTools: hidden, capped: this.withCap(name, "tools", toolsCapped) })
   }
 
   private async syncPrompts(name: string, client: Client) {
     if (!client.getServerCapabilities()?.prompts) return this.set(name, { prompts: [] })
     const prompts: McpPromptInfo[] = []
     let cursor: string | undefined
+    let capped = false
     do {
       const page = await client.request({ method: "prompts/list", params: cursor ? { cursor } : {} }, LoosePromptList)
-      for (const p of page.prompts) prompts.push({ name: p.name, description: p.description, arguments: p.arguments ?? [] })
+      const room = MAX_MCP_PROMPTS - prompts.length
+      for (const p of page.prompts.slice(0, room)) prompts.push({ name: p.name, description: p.description, arguments: p.arguments ?? [] })
       cursor = page.nextCursor
+      capped = page.prompts.length > room || (prompts.length >= MAX_MCP_PROMPTS && !!cursor)
     } while (cursor && prompts.length < MAX_MCP_PROMPTS)
-    this.set(name, { prompts })
+    this.set(name, { prompts, capped: this.withCap(name, "prompts", capped) })
   }
 
   /** Every prompt of every connected server, for slash-command suggestions. */
@@ -1166,11 +1182,12 @@ export class McpManager {
       const live = this.live.get(s.name)
       if (!live) continue
       let cursor: string | undefined
-      do {
+      while (out.length < MAX_MCP_RESOURCES) {
         const page = await live.client.request({ method: "resources/list", params: cursor ? { cursor } : {} }, LooseResourceList)
-        for (const r of page.resources) out.push({ server: s.name, uri: r.uri, name: r.name, description: r.description, mimeType: r.mimeType })
+        for (const r of page.resources.slice(0, MAX_MCP_RESOURCES - out.length)) out.push({ server: s.name, uri: r.uri, name: r.name, description: r.description, mimeType: r.mimeType })
         cursor = page.nextCursor
-      } while (cursor && out.length < MAX_MCP_RESOURCES)
+        if (!cursor) break
+      }
     }
     return out
   }

@@ -185,3 +185,54 @@ test("disabled servers are not started", async () => {
   await manager.start()
   expect(manager.status()[0]!.state).toBe("disabled")
 })
+
+// Regression tests for the QA reports of 27/10/2026.
+const PAGED = path.resolve(import.meta.dir, "fixtures/mcp-paged-server.ts")
+const paged = (env: Record<string, string>) => ({ command: process.execPath, args: [PAGED], env })
+
+test("pagination stops at the caps: 1500+1500 tools → 2048, 400+400 prompts → 512, 700+700 resources → 1000 (BUG-OT-20261027-003)", async () => {
+  const { manager } = await setup({ big: paged({ PAGES: "1500,1500" }) })
+  await manager.start()
+  const status = manager.status()[0]!
+  expect(status.state).toBe("connected")
+  expect(status.tools).toHaveLength(2048)
+  expect(status.capped).toEqual(["tools"])
+  await manager.stop()
+
+  const prompts = await setup({ big: paged({ PAGES: "400,400" }) })
+  await prompts.manager.start()
+  expect(prompts.manager.allPrompts()).toHaveLength(512)
+  expect(prompts.manager.status()[0]!.capped).toEqual(["prompts"])
+  await prompts.manager.stop()
+
+  const resources = await setup({ big: paged({ PAGES: "700,700" }) })
+  await resources.manager.start()
+  expect(await resources.manager.listResources()).toHaveLength(1000)
+  await resources.manager.stop()
+}, 60_000)
+
+test("pagination at the cap boundary: cap-1 and cap exactly are not marked capped, cap+1 is", async () => {
+  for (const [pages, tools, capped] of [["2047", 2047, undefined], ["2000,48", 2048, undefined], ["2000,49", 2048, ["tools"]]] as const) {
+    const { manager } = await setup({ edge: paged({ PAGES: pages }) })
+    await manager.start()
+    expect(manager.status()[0]!.tools).toHaveLength(tools)
+    expect(manager.status()[0]!.capped).toEqual(capped ? [...capped] : undefined)
+    await manager.stop()
+  }
+}, 60_000)
+
+test("a raw tool name equal to another tool's shortened name never makes them share one (BUG-OT-20261027-004)", async () => {
+  const long = "x".repeat(100)
+  const shortened = toolName("paged", long)
+  const raw = shortened.slice("mcp__paged__".length)
+  // The unit case: a shortened name that is taken gets a different hash.
+  expect(toolName("paged", long, new Set([shortened]))).not.toBe(shortened)
+  // Through McpManager: the short raw name registers first and takes the name as is.
+  const { registry, manager } = await setup({ paged: paged({ NAME_CLASH: JSON.stringify([raw, long]) }) })
+  await manager.start()
+  const names = manager.status()[0]!.tools
+  expect(names).toHaveLength(2)
+  expect(new Set(names).size).toBe(2)
+  expect(names.every((n) => n.length <= MAX_TOOL_NAME)).toBe(true)
+  expect(registry.list().filter((t) => t.name.startsWith("mcp__paged__"))).toHaveLength(2)
+}, 30_000)
