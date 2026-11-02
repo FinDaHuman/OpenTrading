@@ -5,6 +5,19 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ## [Unreleased]
 
+### Added
+
+- Memory v5.1 store (`src/core/memory/store/`), not wired into the app yet: one SQLite file opened
+  from an explicit path; schema version 1 with step-by-step migrations; a store from a newer build,
+  another program's file or a damaged file is refused and left untouched. Versioned constraints and
+  presentation style, subjects with internal ids and alias history, thesis versions that are never
+  renumbered, lessons, and an append-only decision log tied to the thesis version the user saw.
+  Every change checks the version it was read from; ids are never reused; deleting removes the
+  content and keeps ids and version numbers. Texts are length-checked (never cut), and text shaped
+  like an API key is refused.
+- Memory policy table (`src/core/memory/policy.ts`) and the one policy-checked read path over the
+  store: sub-agents get constraints only, and no model-facing read ever returns a decision.
+
 ### Fixed
 
 - Saving a session recovers from a failed write instead of repeating the first error forever. The
