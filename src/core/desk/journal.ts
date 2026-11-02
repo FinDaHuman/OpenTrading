@@ -84,10 +84,11 @@ export class DeskJournal {
     return out
   }
 
+  /** The run's meta.json, or undefined when it is missing, damaged or not one /desk can show. */
   async readMeta(): Promise<DeskMeta | undefined> {
     try {
       const meta = JSON.parse(await readFile(this.metaFile, "utf8")) as DeskMeta
-      return meta.format === 1 ? meta : undefined
+      return isMeta(meta) ? meta : undefined
     } catch {
       return undefined
     }
@@ -139,6 +140,19 @@ export class DeskJournal {
     this.writing = this.writing.then(work).catch((error) => onError?.(error))
     return this.writing
   }
+}
+
+/**
+ * What /desk and resume read without further checks: ids, dates and counters. A meta.json
+ * edited by hand or cut short is skipped alone; it never breaks the list of the other runs.
+ */
+function isMeta(value: unknown): value is DeskMeta {
+  if (!value || typeof value !== "object") return false
+  const m = value as Record<string, unknown>
+  const text = (v: unknown) => typeof v === "string" && v.length > 0
+  const c = m.counters as Record<string, unknown> | undefined
+  const counters = !!c && typeof c === "object" && ["agents", "cached", "requests", "input", "output"].every((k) => typeof c[k] === "number")
+  return m.format === 1 && text(m.id) && text(m.playbook) && text(m.version) && text(m.status) && text(m.createdAt) && typeof m.updatedAt === "string" && counters
 }
 
 /** Runs recorded in a session folder, newest first. */

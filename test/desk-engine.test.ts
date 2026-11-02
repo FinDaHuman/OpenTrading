@@ -583,3 +583,18 @@ test("accept: a rejected answer fails the agent and is not journaled; a journal 
   expect(fake2.specs).toHaveLength(1)
   expect(run2.result).toEqual(["FPT"])
 })
+
+test("/desk list: a meta.json missing fields (edited by hand, cut short) is skipped; the other runs still list", async () => {
+  const session = path.join(home, "s-bad-meta")
+  const { mkdir, writeFile } = await import("node:fs/promises")
+  const { listDeskRuns } = await import("../src/core/desk/journal")
+  const good = new DeskJournal(session, "dk-good")
+  await good.writeMeta({ format: 1, id: "dk-good", playbook: "p", version: "1", args: {}, size: "small", status: "done", createdAt: "2026-10-01T00:00:00Z", updatedAt: "2026-10-01T00:00:00Z", counters: { agents: 1, cached: 0, requests: 1, input: 1, output: 1 } })
+  await good.flush()
+  for (const [id, meta] of [["dk-a", { format: 1, id: "dk-a" }], ["dk-b", { format: 1, id: "dk-b", playbook: "p", version: "1", status: "done", createdAt: "2026-10-02T00:00:00Z", updatedAt: "" }], ["dk-c", null]] as const) {
+    await mkdir(path.join(session, "desk", id), { recursive: true })
+    await writeFile(path.join(session, "desk", id, "meta.json"), JSON.stringify(meta))
+  }
+  expect((await listDeskRuns(session)).map((m) => m.id)).toEqual(["dk-good"])
+  await expect(engine(starter(() => ok("x")), [], {}, session).resume("dk-a")).rejects.toThrow("Không tìm thấy run dk-a")
+})
