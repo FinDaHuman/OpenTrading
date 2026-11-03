@@ -35,7 +35,7 @@ export interface AgentOpts {
 
 /**
  * A playbook got too little to produce its result (every agent failed, too few answers): the
- * run ends "failed" with this message, so /desk shows it as unfinished and r resumes it.
+ * run ends "failed" with this message, so /desk shows it as unfinished and ctrl+r resumes it.
  */
 export class DeskNoData extends Error {
   constructor(message: string) {

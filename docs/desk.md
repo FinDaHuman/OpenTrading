@@ -31,7 +31,7 @@ Cột là số agent / số request tối đa (tổng `maxSteps`; thực tế th
 | Gõ `ultradesk` trong câu hỏi | Yêu cầu đó được chạy playbook (giống `ultracode` của Claude Code). Chữ được tô màu trong ô nhập và dòng chế độ ghi "ultradesk: yêu cầu này được chạy playbook". Chỉ tính chữ bạn gõ, không tính text dán, nội dung @file, prompt MCP hay thông báo của harness. Tắt bằng `"desk": { "keyword": false }` |
 | `/desk on` / `/desk off` | Bật/tắt cho cả phiên: yêu cầu nghiên cứu lớn có thể chạy playbook. Dòng chế độ hiện `desk ●`. `"desk": { "alwaysOn": true }` để phiên mới tự bật |
 | `/<playbook> <yêu cầu>` | Nhờ model chạy đúng playbook đó cho yêu cầu (vd. `/sang-loc FPT MWG HPG`) |
-| `/desk` | Danh sách run → một run: card tiến độ (thanh tổng, thanh từng phase) và mọi agent xếp theo phase (việc đang làm, request, thời gian, token) → chi tiết một agent (yêu cầu, tool đã gọi, kết quả). `p` tạm dừng/chạy tiếp, `x` hai lần (hoặc `ctrl+x`) dừng, `r` chạy tiếp run bị cắt |
+| `/desk` | Danh sách run → một run: card tiến độ (thanh tổng, thanh từng phase) và mọi agent xếp theo phase (việc đang làm, request, thời gian, token) → chi tiết một agent (yêu cầu, tool đã gọi, kết quả). `ctrl+p` tạm dừng/chạy tiếp, `ctrl+x` dừng (một lần nhấn), `ctrl+r` chạy tiếp run bị cắt hoặc bị dừng. Có `ctrl` vì danh sách lọc theo chữ khi gõ |
 | `/desk resume <run>` | Chạy tiếp run bị cắt (hết quota, chạm trần, bị dừng), kể cả sau khi mở lại phiên |
 
 **Thẻ duyệt** hiện trước khi chạy: mô tả, các phase, `◂ quy mô ▸` và `◂ effort ▸` (←→ để đổi, số agent/request cập nhật theo), cảnh báo △ khi vượt `warnRequests`/`maxRequests`. Lựa chọn: Chạy / Chạy, không hỏi lại `<playbook>` / Xem tham số / Không.
