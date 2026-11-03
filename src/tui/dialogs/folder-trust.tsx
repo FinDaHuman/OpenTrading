@@ -4,7 +4,7 @@ import { FolderTrust } from "../../core/folder-trust"
 import type { Runtime } from "../../core/runtime"
 import { loadSkills, skillRoots } from "../../core/skills/loader"
 import { shortPath } from "../home"
-import { say } from "../notify"
+import { say, saySaveFailure } from "../notify"
 import { setState, state } from "../state"
 import { color } from "../theme"
 import { reloadAgents } from "./agents"
@@ -45,7 +45,7 @@ export function extrasText(e: { skills: number; agents: number }) {
 
 export function FolderTrustDialog(props: { runtime: Runtime }) {
   const [selected, setSelected] = createSignal(0)
-  const choose = (i: number) => void answerFolderTrust(props.runtime, CHOICES[i]!.value)
+  const choose = (i: number) => saySaveFailure(answerFolderTrust(props.runtime, CHOICES[i]!.value))
 
   useKeyboard((evt) => {
     if (evt.eventType === "release") return

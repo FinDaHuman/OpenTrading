@@ -1,9 +1,8 @@
 import type { DeskSize } from "./desk/types"
 import type { Effort } from "./effort"
-import { withFileLock } from "./file-lock"
 import { configFile } from "./paths"
 import type { ProviderId } from "./providers"
-import { readJson, writeJson } from "./store"
+import { readJson, updateJson } from "./store"
 import type { AutoModeConfig } from "./permission/auto/rules"
 
 export interface Config {
@@ -135,8 +134,6 @@ export interface Config {
 
 export const loadConfig = () => readJson<Config>(configFile(), {})
 
-let saving: Promise<unknown> = Promise.resolve()
-
 /**
  * Merges `patch` into config.json. Read-modify-write runs in order within this process and
  * under a lock file across processes (file-lock.ts): concurrent saves of different keys all
@@ -146,17 +143,6 @@ let saving: Promise<unknown> = Promise.resolve()
  * change saved since the caller last read the file.
  */
 export function saveConfig(patch: Partial<Config> | ((current: Config) => Partial<Config>)): Promise<Config> {
-  const file = configFile()
-  const run = saving
-    .catch(() => {})
-    .then(() =>
-      withFileLock(file, async () => {
-        const current = await loadConfig()
-        const next = { ...current, ...(typeof patch === "function" ? patch(current) : patch) }
-        await writeJson(file, next)
-        return next
-      }),
-    )
-  saving = run
-  return run
+  // A config.json that exists but cannot be read is refused, not replaced by the patch alone.
+  return updateJson<Config>(configFile(), {}, (current) => ({ ...current, ...(typeof patch === "function" ? patch(current) : patch) }))
 }

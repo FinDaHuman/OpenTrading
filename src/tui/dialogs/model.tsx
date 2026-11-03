@@ -5,7 +5,7 @@ import { saveConfig } from "../../core/config"
 import { EFFORT_SYMBOL, effectiveEffort, effortDetail, supportedEfforts, type Effort } from "../../core/effort"
 import { saveModelPrefs, sameModel, toggleFavorite, withRecent, type ModelRef } from "../../core/model-prefs"
 import type { ProviderId } from "../../core/providers"
-import { say } from "../notify"
+import { say, saySaveFailure } from "../notify"
 import { blocked, closeDialog, providerName, setState, state } from "../state"
 import { color } from "../theme"
 import { DialogFrame } from "./frame"
@@ -171,7 +171,7 @@ export function ModelDialog() {
         </DialogFrame>
       </Match>
       <Match when={effortFor()}>
-        {(ref) => <EffortStep model={ref()} onPick={(effort) => void apply(ref(), effort)} />}
+        {(ref) => <EffortStep model={ref()} onPick={(effort) => saySaveFailure(apply(ref(), effort))} />}
       </Match>
       <Match when={manual()}>
         <DialogFrame title="Nhập model id" hint="enter lưu · esc quay lại">
@@ -183,7 +183,7 @@ export function ModelDialog() {
             focusedTextColor={color.tx}
             backgroundColor={color.panel2}
             focusedBackgroundColor={color.panel2}
-            onSubmit={(v: unknown) => typeof v === "string" && chooseManual(v)}
+            onSubmit={(v: unknown) => typeof v === "string" && saySaveFailure(Promise.resolve(chooseManual(v)))}
           />
           <Show when={manualError()}>
             <text fg={color.giam} marginTop={1} wrapMode="word">
@@ -199,7 +199,7 @@ export function ModelDialog() {
             onPick={(c) => {
               const item = items().find((i) => i.value === c)
               listKey = item ? choiceKey(item) : "manual"
-              void choose(c)
+              saySaveFailure(Promise.resolve(choose(c)))
             }}
             rows={14}
             initialFilter={listFilter}

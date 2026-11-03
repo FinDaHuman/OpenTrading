@@ -137,8 +137,10 @@ async function readForEdit(file: string): Promise<Record<string, unknown> & { mc
   let text: string
   try {
     text = await readFile(file, "utf8")
-  } catch {
-    return { mcpServers: {} }
+  } catch (error) {
+    // Only a missing file is empty: one that is locked or unreadable is not overwritten.
+    if ((error as { code?: string }).code === "ENOENT") return { mcpServers: {} }
+    throw new Error(`Không đọc được ${file} (${(error as { code?: string }).code ?? (error as Error).message}). Thử lại; chưa ghi gì.`)
   }
   let raw: unknown
   try {

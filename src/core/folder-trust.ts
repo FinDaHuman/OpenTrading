@@ -2,7 +2,7 @@ import { readdir, realpath, stat } from "node:fs/promises"
 import path from "node:path"
 import { samePathKey } from "./fs/path-safety"
 import { dataDir } from "./paths"
-import { readJson, writeJson } from "./store"
+import { readJson, updateJson } from "./store"
 
 /**
  * A folder's own `.opentrading/skills` and `.opentrading/agents` become part of the prompt, so
@@ -66,8 +66,6 @@ export class FolderTrust {
     const key = await this.key(cwd)
     this.session.add(key)
     if (!remember) return
-    const data = await readJson<TrustFile>(this.file, {})
-    data[key] = { trustedAt: new Date().toISOString() }
-    await writeJson(this.file, data)
+    await updateJson<TrustFile>(this.file, {}, (data) => ({ ...data, [key]: { trustedAt: new Date().toISOString() } }))
   }
 }

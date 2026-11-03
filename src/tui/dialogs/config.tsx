@@ -11,7 +11,7 @@ import { isEffort } from "../../core/effort"
 import { clampPercent, DEFAULT_COMPACT_PERCENT, MIN_COMPACT_WINDOW } from "../../core/compact"
 import { fmtTokens, groupDigits } from "../../core/subagents/result"
 import { blocked, closeDialog, contextLimits, providerName, setState, state } from "../state"
-import { say } from "../notify"
+import { say, saySaveFailure } from "../notify"
 import { color } from "../theme"
 import { DialogFrame } from "./frame"
 import { Picker, type PickerItem } from "./picker"
@@ -249,7 +249,7 @@ export function ConfigDialog(props: { runtime: Runtime }) {
             focusedTextColor={color.tx}
             backgroundColor={color.panel2}
             focusedBackgroundColor={color.panel2}
-            onSubmit={(v: unknown) => typeof v === "string" && void saveMax(v)}
+            onSubmit={(v: unknown) => typeof v === "string" && saySaveFailure(saveMax(v))}
           />
           <text fg={color.giam}>{error()}</text>
         </DialogFrame>
@@ -274,7 +274,7 @@ export function ConfigDialog(props: { runtime: Runtime }) {
               },
               ...(state.compactCap ? [{ label: "Bỏ trần token", hint: "dùng hết cửa sổ của model", mark: " ", value: "uncap" as CompactLevel }] : []),
             ]}
-            onPick={(level) => void saveLevel(level)}
+            onPick={(level) => saySaveFailure(saveLevel(level))}
           />
         </DialogFrame>
       </Match>
@@ -293,7 +293,7 @@ export function ConfigDialog(props: { runtime: Runtime }) {
             focusedTextColor={color.tx}
             backgroundColor={color.panel2}
             focusedBackgroundColor={color.panel2}
-            onSubmit={(v: unknown) => typeof v === "string" && void saveCap(v)}
+            onSubmit={(v: unknown) => typeof v === "string" && saySaveFailure(saveCap(v))}
           />
           <text fg={color.giam}>{error()}</text>
         </DialogFrame>
@@ -309,7 +309,7 @@ export function ConfigDialog(props: { runtime: Runtime }) {
             focusedTextColor={color.tx}
             backgroundColor={color.panel2}
             focusedBackgroundColor={color.panel2}
-            onSubmit={(v: unknown) => typeof v === "string" && void saveSteps(v)}
+            onSubmit={(v: unknown) => typeof v === "string" && saySaveFailure(saveSteps(v))}
           />
           <text fg={color.giam}>{error()}</text>
         </DialogFrame>
@@ -322,7 +322,7 @@ export function ConfigDialog(props: { runtime: Runtime }) {
               { label: "Theo model của phiên (mặc định)", mark: webModel() ? " " : "●", value: "inherit" as SubagentModel },
               ...toolModels(config()?.webModel),
             ]}
-            onPick={(c) => usable(c) && void saveWebModel(c as Exclude<SubagentModel, "auto">)}
+            onPick={(c) => usable(c) && saySaveFailure(saveWebModel(c as Exclude<SubagentModel, "auto">))}
             groupJump
             rows={12}
             placeholder="gõ tên model để lọc…"
@@ -339,7 +339,7 @@ export function ConfigDialog(props: { runtime: Runtime }) {
               { label: "Theo model của phiên (mặc định)", mark: autoModel() ? " " : "●", value: "inherit" as SubagentModel },
               ...toolModels(config()?.autoMode?.model),
             ]}
-            onPick={(c) => usable(c) && void saveAutoModel(c as Exclude<SubagentModel, "auto">)}
+            onPick={(c) => usable(c) && saySaveFailure(saveAutoModel(c as Exclude<SubagentModel, "auto">))}
             groupJump
             rows={12}
             placeholder="gõ tên model để lọc…"
@@ -359,7 +359,7 @@ export function ConfigDialog(props: { runtime: Runtime }) {
               },
               ...toolModels(config()?.subagents),
             ]}
-            onPick={(c) => usable(c) && void saveModel(c)}
+            onPick={(c) => usable(c) && saySaveFailure(saveModel(c))}
             groupJump
             rows={12}
             placeholder="gõ tên model để lọc… (chỉ model gọi được tool)"
@@ -491,7 +491,7 @@ export function ConfigDialog(props: { runtime: Runtime }) {
                 value: "updateCheck" as Setting,
               },
             ]}
-            onPick={(s) => void toggle(s)}
+            onPick={(s) => saySaveFailure(toggle(s))}
             rows={16}
           />
           <text fg={color.tx3} marginTop={1}>{`File cấu hình: ${configFile()}`}</text>

@@ -145,9 +145,14 @@ export function choicesFor(def: ToolDef, scope: string | undefined, mode: Permis
 export interface RuleStore {
   load(): Promise<AllowRule[]>
   save(rules: AllowRule[]): Promise<void>
+  /** Add one rule against the stored list as it is when written (no lost update); else load + save. */
+  add?(rule: AllowRule): Promise<void>
   /** Deny and ask rules (config `permissions.deny` / `permissions.ask`); none when absent. */
   lists?(): Promise<{ deny: ListRule[]; ask: ListRule[] }>
 }
+
+/** An "always allow" rule the prompt would add again: same tool and scope, no pattern. */
+const sameRule = (r: AllowRule, rule: { tool: string; scope?: string }) => r.tool === rule.tool && r.scope === rule.scope && !r.pattern
 
 /** "Always allow" rules live in ~/.opentrading/config.json → permissions.allow (deny/ask beside it). */
 export const configRuleStore: RuleStore = {
@@ -156,6 +161,13 @@ export const configRuleStore: RuleStore = {
   },
   async save(allow) {
     await saveConfig((config) => ({ permissions: { ...config.permissions, allow } }))
+  },
+  async add(rule) {
+    await saveConfig((config) => {
+      const allow = config.permissions?.allow ?? []
+      if (allow.some((r) => sameRule(r, rule))) return {}
+      return { permissions: { ...config.permissions, allow: [...allow, rule] } }
+    })
   },
   async lists() {
     const p = (await loadConfig()).permissions
@@ -371,9 +383,12 @@ export class PermissionGate {
       // The rule is saved before anything is granted: a failed save grants nothing, not even the session.
       if (choice === "always") {
         try {
-          const rules = await this.rules.load()
           const rule = { tool: pending!.def.name, scope: scopeOf(pending!.def, pending!.request.input) }
-          if (!rules.some((r) => r.tool === rule.tool && r.scope === rule.scope && !r.pattern)) await this.rules.save([...rules, rule])
+          if (this.rules.add) await this.rules.add(rule)
+          else {
+            const rules = await this.rules.load()
+            if (!rules.some((r) => sameRule(r, rule))) await this.rules.save([...rules, rule])
+          }
         } catch (error) {
           const why = error instanceof Error ? error.message : String(error)
           pending!.resolve({ allow: false, reason: "unsaved", message: `không lưu được quyền "luôn cho phép" (${why}); chưa cấp quyền nào, người dùng có thể duyệt lại "chỉ lần này" hoặc "cả phiên"` })

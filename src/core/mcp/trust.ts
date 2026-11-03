@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto"
 import path from "node:path"
-import { readJson, writeJson } from "../store"
+import { readJson, updateJson } from "../store"
 import type { ServerConfig } from "./config"
 
 /**
@@ -48,8 +48,6 @@ export class TrustStore {
   }
 
   async trust(key: string) {
-    const data = await readJson<TrustFile>(this.file, {})
-    data[key] = { approvedAt: new Date().toISOString() }
-    await writeJson(this.file, data)
+    await updateJson<TrustFile>(this.file, {}, (data) => ({ ...data, [key]: { approvedAt: new Date().toISOString() } }))
   }
 }
