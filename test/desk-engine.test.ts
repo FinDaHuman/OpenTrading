@@ -174,6 +174,62 @@ test("maxAgents: the run is cut, the rest are skipped, the status is partial", a
   expect(view.result).toEqual(["a1", "a2", null, null])
 })
 
+test("maxAgents holds when more agents run at once than the cap (QA 23-002: 2 agents, 3 at once, stagger)", async () => {
+  for (const staggerMs of [0, 3000]) {
+    const fake = starter((s) => ok(s.prompt))
+    const pb = playbook("p", (ctx) => ctx.parallel(["FPT", "VCB", "HPG", "MWG"].map((t) => () => ctx.agent(t))))
+    const view = await (await engine(fake, [pb], { maxAgents: 2, maxConcurrent: 3, staggerMs }).start("p", {})).done
+    expect(fake.specs).toHaveLength(2)
+    expect(view.counters.agents).toBe(2)
+    expect(view.cut).toBe("agents")
+    expect(view.status).toBe("partial")
+    expect(view.agents.filter((a) => a.status === "skipped")).toHaveLength(2)
+  }
+})
+
+test("maxAgents counts the retry after a 429: it is one more agent start", async () => {
+  let limited = 0
+  const fake = starter((s) => (s.prompt === "a1" && limited++ < 1 ? fail("rate-limit") : ok(s.prompt)))
+  const pb = playbook("p", (ctx) => ctx.pipeline([1, 2, 3], (n: number) => ctx.agent(`a${n}`)))
+  const view = await (await engine(fake, [pb], { maxAgents: 2, maxConcurrent: 1 }).start("p", {})).done
+  expect(fake.specs.map((s) => s.prompt)).toEqual(["a1", "a1"])
+  expect(view.counters.agents).toBe(2)
+  expect(view.cut).toBe("agents")
+  expect(view.result).toEqual(["a1", null, null])
+})
+
+test("maxAgents is the run's own cap: subagents.maxConcurrent queueing below it changes nothing", async () => {
+  // The starter takes one agent at a time, as SubagentManager does with subagents.maxConcurrent: 1,
+  // while the run itself allows 3 at once.
+  let queue = Promise.resolve()
+  const fake = starter((s) => {
+    const turn = queue.then(() => Bun.sleep(2)).then(() => ok(s.prompt))
+    queue = turn.then(() => {})
+    return turn
+  })
+  const pb = playbook("p", (ctx) => ctx.parallel(["A", "B", "C", "D", "E"].map((t) => () => ctx.agent(t))))
+  const view = await (await engine(fake, [pb], { maxAgents: 3, maxConcurrent: 3 }).start("p", {})).done
+  expect(fake.specs).toHaveLength(3)
+  expect(view.cut).toBe("agents")
+})
+
+test("resume applies desk.maxAgents as configured now, counting only the agents it starts", async () => {
+  const session = await mkdtemp(path.join(home, "cap-resume-"))
+  const pb = playbook("p", (ctx) => ctx.parallel(["A", "B", "C", "D"].map((t) => () => ctx.agent(t))))
+  const e1 = engine(starter((s) => ok(s.prompt)), [pb], { maxAgents: 2, maxConcurrent: 3 }, session)
+  const first = await (await e1.start("p", {})).done
+  await e1.flush()
+  expect(first.cut).toBe("agents")
+  // desk.maxAgents lowered to 1 since: the 2 answered agents come from the journal for free.
+  const fake = starter((s) => ok(s.prompt))
+  const e = engine(fake, [pb], { maxAgents: 1, maxConcurrent: 3 }, session)
+  const view = await (await e.resume(first.id)).done
+  expect(fake.specs).toHaveLength(1)
+  expect(view.counters.cached).toBe(2)
+  expect(view.counters.agents).toBe(1)
+  expect(view.cut).toBe("agents")
+})
+
 test("maxRequests: no agent starts once the run's requests reach the cap", async () => {
   const e = engine(starter((s) => ok(s.prompt, undefined, 5)), [playbook("p", (ctx) => ctx.pipeline([1, 2, 3], (n: number) => ctx.agent(`a${n}`)))], { maxRequests: 8, maxConcurrent: 1 })
   const view = await (await e.start("p", {})).done
@@ -438,4 +494,163 @@ test("a bug in a playbook stage is logged, not silently nulled; agent failures a
   const view = await (await e.start("p", {})).done
   expect(view.result).toEqual([null, null])
   expect(view.logs.filter((l) => l.startsWith("Lỗi trong code playbook"))).toHaveLength(1)
+})
+
+// Regression tests for the QA reports of 23/10/2026.
+
+test("pause also holds agents already queued for a slot: after the running one ends, none of them starts", async () => {
+  const first = defer()
+  const fake = starter(async (s) => {
+    if (s.prompt === "A") await first.promise
+    return ok(s.prompt)
+  })
+  const e = engine(fake, [playbook("p", (ctx) => ctx.parallel(["A", "B", "C"].map((t) => () => ctx.agent(t))))], { maxConcurrent: 1 })
+  const { id, done } = await e.start("p", {})
+  while (fake.specs.length < 1) await Bun.sleep(1)
+  expect(e.pause(id)).toBe(true)
+  first.resolve()
+  await Bun.sleep(30)
+  expect(fake.specs.map((s) => s.prompt)).toEqual(["A"])
+  expect(e.get(id)?.status).toBe("paused")
+  expect(e.unpause(id)).toBe(true)
+  const view = await done
+  expect(view.result).toEqual(["A", "B", "C"])
+  expect(fake.peak()).toBe(1)
+})
+
+test("stop while queued agents are held by a pause ends the run without hanging", async () => {
+  const first = defer()
+  const fake = starter(async (s) => {
+    if (s.prompt === "A") await first.promise
+    return ok(s.prompt)
+  })
+  const e = engine(fake, [playbook("p", (ctx) => ctx.parallel(["A", "B"].map((t) => () => ctx.agent(t))))], { maxConcurrent: 1 })
+  const { id, done } = await e.start("p", {})
+  while (fake.specs.length < 1) await Bun.sleep(1)
+  e.pause(id)
+  first.resolve()
+  await Bun.sleep(10)
+  expect(e.stop(id)).toBe(true)
+  const view = await done
+  expect(view.status).toBe("stopped")
+  expect(fake.specs.map((s) => s.prompt)).toEqual(["A"])
+})
+
+test("a rate limit on the retry itself cuts the run before anything else starts", async () => {
+  const fake = starter((s, index) => (index < 2 ? fail("rate-limit") : ok(s.prompt)))
+  const pb = playbook("p", async (ctx) => {
+    const cards = await ctx.pipeline(["A", "B", "C"], (t: string) => ctx.agent(t))
+    if (ctx.stopping()) return "cut"
+    return ctx.agent(`tổng hợp ${cards.join(",")}`)
+  })
+  const view = await (await engine(fake, [pb], { maxConcurrent: 1 }).start("p", {})).done
+  expect(fake.specs.map((s) => s.prompt)).toEqual(["A", "A"])
+  expect(view.status).toBe("partial")
+  expect(view.cut).toBe("rate")
+  expect(view.agents.find((a) => a.label === "A")).toMatchObject({ status: "failed", failure: "rate-limit" })
+})
+
+test("two resumes of one run at once share one launch: one handle, never two agents in parallel", async () => {
+  const session = path.join(home, "s-double-resume")
+  let quota = true
+  const hold = defer()
+  const respond: Responder = async (spec) => {
+    if (quota) return fail("daily-quota")
+    await hold.promise
+    return ok(spec.prompt)
+  }
+  const pb = playbook("p", async (ctx) => ctx.agent("a"))
+  const e1 = engine(starter(respond), [pb], { maxConcurrent: 1 }, session)
+  const run1 = await (await e1.start("p", {})).done
+  await e1.flush()
+  expect(run1.status).toBe("partial")
+
+  quota = false
+  const fake = starter(respond)
+  const e2 = engine(fake, [pb], { maxConcurrent: 1 }, session)
+  const [h1, h2] = await Promise.all([e2.resume(run1.id), e2.resume(run1.id)])
+  expect(h2.done).toBe(h1.done)
+  while (fake.specs.length < 1) await Bun.sleep(1)
+  await Bun.sleep(10)
+  expect(fake.specs).toHaveLength(1)
+  hold.resolve()
+  expect((await h1.done).status).toBe("done")
+  expect(e2.list()).toHaveLength(1)
+})
+
+test("resume: an effort inherited from desk.effort follows the config now; one chosen for the run is kept", async () => {
+  const pb = playbook("p", async (ctx) => [await ctx.agent("a"), await ctx.agent("b")])
+  const run = async (session: string, chosen?: "low") => {
+    const fake1 = starter((s) => (s.prompt === "b" ? fail("daily-quota") : ok(s.prompt)))
+    const e1 = engine(fake1, [pb], { effort: "low" }, session)
+    const run1 = await (await e1.start("p", {}, chosen ? { effort: chosen } : {})).done
+    await e1.flush()
+    expect(fake1.specs[0]?.effort).toBe("low")
+    const fake2 = starter((s) => ok(s.prompt))
+    const e2 = engine(fake2, [pb], { effort: "high" }, session)
+    await (await e2.resume(run1.id)).done
+    return fake2.specs.map((s) => s.effort)
+  }
+  expect(await run(path.join(home, "s-effort-inherited"))).toEqual(["high"])
+  expect(await run(path.join(home, "s-effort-chosen"), "low")).toEqual(["low"])
+})
+
+test("journal: a line cut by a crash does not swallow the next result", async () => {
+  const session = path.join(home, "s-torn")
+  const journal = new DeskJournal(session, "dk-torn")
+  const entry = (key: string) => ({ type: "result" as const, key, label: key, phase: "x", value: key, requests: 1, tokens: { input: 1, output: 1 }, ts: "2026-10-23T00:00:00Z" })
+  await journal.append(entry("ok#0"))
+  await journal.flush()
+  const { appendFile } = await import("node:fs/promises")
+  await appendFile(journal.file, '{"type":"result","key":"cut#0","val', "utf8")
+  const after = new DeskJournal(session, "dk-torn")
+  await after.append(entry("new#0"))
+  await after.flush()
+  expect([...(await after.load()).keys()].sort()).toEqual(["new#0", "ok#0"])
+  // Intact journals get no blank lines.
+  await after.append(entry("next#0"))
+  await after.flush()
+  const text = await Bun.file(journal.file).text()
+  expect(text.endsWith("\n")).toBe(true)
+  expect(text.includes("\n\n")).toBe(false)
+})
+
+test("accept: a rejected answer fails the agent and is not journaled; a journal answer that fails the check runs again", async () => {
+  const session = path.join(home, "s-accept")
+  let wrong = true
+  const pb = playbook("p", (ctx) => ctx.parallel([() => ctx.agent("thẻ FPT", { accept: (v: string) => (v === "FPT" ? undefined : `mã ${v}`) })]))
+  const fake1 = starter(() => ok(wrong ? "HPG" : "FPT"))
+  const e1 = engine(fake1, [pb], {}, session)
+  const run1 = await (await e1.start("p", {})).done
+  await e1.flush()
+  expect(run1.result).toEqual([null])
+  expect(run1.agents[0]).toMatchObject({ status: "failed", error: "Kết quả không dùng được: mã HPG" })
+  expect((await new DeskJournal(session, run1.id).load()).size).toBe(0)
+
+  // A journal written before the check existed (same call, no accept): its wrong answer is kept...
+  const unchecked = engine(starter(() => ok("HPG")), [playbook("p", (ctx) => ctx.agent("thẻ FPT"))], {}, session)
+  await (await unchecked.resume(run1.id)).done
+  await unchecked.flush()
+  expect([...(await new DeskJournal(session, run1.id).load()).values()].map((e) => e.value)).toEqual(["HPG"])
+  // ...and not reused once the playbook checks it.
+  wrong = false
+  const fake2 = starter(() => ok("FPT"))
+  const run2 = await (await engine(fake2, [pb], {}, session).resume(run1.id)).done
+  expect(fake2.specs).toHaveLength(1)
+  expect(run2.result).toEqual(["FPT"])
+})
+
+test("/desk list: a meta.json missing fields (edited by hand, cut short) is skipped; the other runs still list", async () => {
+  const session = path.join(home, "s-bad-meta")
+  const { mkdir, writeFile } = await import("node:fs/promises")
+  const { listDeskRuns } = await import("../src/core/desk/journal")
+  const good = new DeskJournal(session, "dk-good")
+  await good.writeMeta({ format: 1, id: "dk-good", playbook: "p", version: "1", args: {}, size: "small", status: "done", createdAt: "2026-10-01T00:00:00Z", updatedAt: "2026-10-01T00:00:00Z", counters: { agents: 1, cached: 0, requests: 1, input: 1, output: 1 } })
+  await good.flush()
+  for (const [id, meta] of [["dk-a", { format: 1, id: "dk-a" }], ["dk-b", { format: 1, id: "dk-b", playbook: "p", version: "1", status: "done", createdAt: "2026-10-02T00:00:00Z", updatedAt: "" }], ["dk-c", null]] as const) {
+    await mkdir(path.join(session, "desk", id), { recursive: true })
+    await writeFile(path.join(session, "desk", id, "meta.json"), JSON.stringify(meta))
+  }
+  expect((await listDeskRuns(session)).map((m) => m.id)).toEqual(["dk-good"])
+  await expect(engine(starter(() => ok("x")), [], {}, session).resume("dk-a")).rejects.toThrow("Không tìm thấy run dk-a")
 })

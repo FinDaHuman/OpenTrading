@@ -44,16 +44,20 @@ function serialize(item: MemoryItem) {
 function parse(text: string): MemoryItem | undefined {
   const match = text.replace(/\r\n/g, "\n").match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/)
   if (!match) return undefined
-  const meta = Bun.YAML.parse(match[1]!) as Record<string, string>
-  if (!meta?.id) return undefined
+  const meta = Bun.YAML.parse(match[1]!) as Record<string, unknown> | null
+  if (!meta || typeof meta !== "object" || !meta.id) return undefined
+  // A file edited by hand may lack the dates or write them unquoted (a YAML date, a number):
+  // every field the list sorts or shows is a string, so one such file never breaks the others.
+  const str = (v: unknown) => (v instanceof Date ? v.toISOString() : v === undefined || v === null ? "" : String(v))
+  const createdAt = str(meta.createdAt)
   return {
-    id: meta.id,
+    id: str(meta.id),
     text: match[2]!.trim(),
     scope: (meta.scope as MemoryScope) ?? "user",
     status: (meta.status as MemoryStatus) ?? "pending",
-    source: { via: meta.via === "model" ? "model" : "user", sessionId: meta.sessionId || undefined },
-    createdAt: meta.createdAt,
-    updatedAt: meta.updatedAt,
+    source: { via: meta.via === "model" ? "model" : "user", sessionId: str(meta.sessionId) || undefined },
+    createdAt,
+    updatedAt: str(meta.updatedAt) || createdAt,
   }
 }
 

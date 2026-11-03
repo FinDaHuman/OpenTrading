@@ -31,7 +31,7 @@ Cột là số agent / số request tối đa (tổng `maxSteps`; thực tế th
 | Gõ `ultradesk` trong câu hỏi | Yêu cầu đó được chạy playbook (giống `ultracode` của Claude Code). Chữ được tô màu trong ô nhập và dòng chế độ ghi "ultradesk: yêu cầu này được chạy playbook". Chỉ tính chữ bạn gõ, không tính text dán, nội dung @file, prompt MCP hay thông báo của harness. Tắt bằng `"desk": { "keyword": false }` |
 | `/desk on` / `/desk off` | Bật/tắt cho cả phiên: yêu cầu nghiên cứu lớn có thể chạy playbook. Dòng chế độ hiện `desk ●`. `"desk": { "alwaysOn": true }` để phiên mới tự bật |
 | `/<playbook> <yêu cầu>` | Nhờ model chạy đúng playbook đó cho yêu cầu (vd. `/sang-loc FPT MWG HPG`) |
-| `/desk` | Danh sách run → một run: card tiến độ (thanh tổng, thanh từng phase) và mọi agent xếp theo phase (việc đang làm, request, thời gian, token) → chi tiết một agent (yêu cầu, tool đã gọi, kết quả). `p` tạm dừng/chạy tiếp, `x` hai lần (hoặc `ctrl+x`) dừng, `r` chạy tiếp run bị cắt |
+| `/desk` | Danh sách run → một run: card tiến độ (thanh tổng, thanh từng phase) và mọi agent xếp theo phase (việc đang làm, request, thời gian, token) → chi tiết một agent (yêu cầu, tool đã gọi, kết quả). `ctrl+p` tạm dừng/chạy tiếp, `ctrl+x` dừng (một lần nhấn), `ctrl+r` chạy tiếp run bị cắt hoặc bị dừng. Có `ctrl` vì danh sách lọc theo chữ khi gõ |
 | `/desk resume <run>` | Chạy tiếp run bị cắt (hết quota, chạm trần, bị dừng), kể cả sau khi mở lại phiên |
 
 **Thẻ duyệt** hiện trước khi chạy: mô tả, các phase, `◂ quy mô ▸` và `◂ effort ▸` (←→ để đổi, số agent/request cập nhật theo), cảnh báo △ khi vượt `warnRequests`/`maxRequests`. Lựa chọn: Chạy / Chạy, không hỏi lại `<playbook>` / Xem tham số / Không.
@@ -70,7 +70,7 @@ Một playbook gồm `meta` và một hàm `run(ctx)` (`src/core/desk/types.ts`)
 | `playbook(name, args)` | Chạy playbook khác ngay trong run (chỉ 1 cấp), dùng chung trần và journal |
 | `stopping()` | Run đang bị cắt (hết quota, chạm trần, bị dừng): vòng lặp dài nên dừng sớm |
 
-`opts` của `agent()`: `label`, `phase`, `type` (mặc định `tra-cuu`), `schema`, `effort`, `model`, `maxSteps`.
+`opts` của `agent()`: `label`, `phase`, `type` (mặc định `tra-cuu`), `schema`, `effort`, `model`, `maxSteps`, `accept` (kiểm tra kết quả trước khi nhận; trả về lý do để từ chối). Không đủ dữ liệu để ra kết quả thì `throw new DeskNoData(lời nhắn)`.
 
 Agent của desk:
 - **Chỉ có tool đọc**, dù loại agent cho phép nhiều hơn. Playbook không nới được quyền người dùng đã cho (ADR 0005).
@@ -82,7 +82,7 @@ Agent của desk:
 | Key | Mặc định | Ý nghĩa |
 | --- | --- | --- |
 | `size` | `small` | `small` / `medium` / `large` / `unrestricted`. Playbook có kiểu tự chọn bậc riêng theo giá trị này |
-| `maxAgents` | 100 | **Trần cứng** số agent mỗi run. Chạm trần thì các agent còn lại không chạy, run thành `partial` |
+| `maxAgents` | 100 | **Trần cứng** số agent mỗi run tự khởi chạy, kể cả lượt chạy lại sau 429; agent lấy từ journal không tính. Kiểm và đếm cùng lúc ngay trước khi khởi chạy, nên đúng cả khi `maxConcurrent` lớn hơn trần. Chạm trần thì các agent còn lại không chạy, run thành `partial`. Là trần riêng của desk: `spawn_subagent` ở chế độ thường không có trần này, còn `subagents.maxConcurrent` chỉ xếp hàng agent đã được đếm |
 | `maxConcurrent` | 3 | Số agent của một run chạy cùng lúc. Nằm trong `subagents.maxConcurrent` chung, và ≤ 4 slot MCP để server free không sập |
 | `maxRequests` | không đặt | **Trần cứng** số request model mỗi run. Kiểm khi agent sắp bắt đầu: các agent đang chạy được làm nốt, nên có thể vượt thêm khoảng `maxConcurrent × (maxSteps + 4)` |
 | `warnRequests` | 150 | Thẻ duyệt cảnh báo khi số request dự kiến vượt mức này |
@@ -93,11 +93,15 @@ Agent của desk:
 ## Hết quota, dừng, chạy tiếp
 
 - Một agent hết **quota ngày** → run bị cắt (`cut: "quota"`): không agent mới nào chạy, agent đang chạy được làm nốt, kết quả là `partial`.
-- Một agent bị **giới hạn tốc độ** (429 theo phút) sau khi đã hết lượt thử lại của request → run giảm còn 1 agent mỗi lúc và chạy lại agent đó một lần. Lần 429 thứ hai → run bị cắt (`cut: "rate"`), chạy tiếp sau bằng `/desk resume`.
+- Một agent bị **giới hạn tốc độ** (429 theo phút) sau khi đã hết lượt thử lại của request → run giảm còn 1 agent mỗi lúc và chạy lại agent đó một lần. Lần 429 thứ hai, kể cả khi đó chính là lượt chạy lại → run bị cắt (`cut: "rate"`), không agent mới nào chạy, chạy tiếp sau bằng `/desk resume`.
+- **Tạm dừng** (`ctrl+p` trong `/desk`): agent đang chạy được làm nốt; agent đang chờ lượt (kể cả đã xếp hàng trước lúc tạm dừng) không bắt đầu cho tới khi chạy tiếp. Dừng (`ctrl+x`) khi đang tạm dừng kết thúc run ngay.
+- Playbook không lấy được dữ liệu đủ dùng (mọi agent lỗi, quá ít thẻ điểm) → run là **`failed`** với lời nhắn đó (không phải `done`), nên `/desk` hiện là chưa xong và `ctrl+r` chạy tiếp được.
+- Một `agent()` có thể kèm `accept`: kết quả bị từ chối (ví dụ thẻ điểm của mã khác mã được hỏi) làm agent đó lỗi, không vào journal, và được chạy lại khi resume. `sang-loc` và `nganh` dùng nó để không bao giờ gắn số liệu của mã khác vào mã đang xét.
 - Lỗi trong chính code của playbook (không phải agent lỗi) được ghi vào log của run, không bị nuốt thành `null` một cách im lặng.
 - Agent không chạy được được ghi là **chưa kiểm chứng**, không phải "sai" (bài học từ deep-research của Claude Code).
 - Mỗi run ghi `sessions/…/<phiên>/desk/<run>/journal.jsonl` (mỗi agent đã trả lời một dòng) và `meta.json`.
-- `/desk resume <run>` (kể cả sau khi tắt mở lại TUI) chạy lại playbook. Agent nào đã có trong journal thì lấy lại kết quả, không tốn request.
+- `/desk resume <run>` (kể cả sau khi tắt mở lại TUI) chạy lại playbook. Agent nào đã có trong journal thì lấy lại kết quả, không tốn request. Hai lệnh resume cùng một run cùng lúc chỉ chạy một lần. Một dòng journal bị cắt dở khi máy tắt chỉ mất chính dòng đó.
+- Effort khi resume: mức chọn riêng trên thẻ duyệt được giữ; mức lấy theo `desk.effort` thì đọc lại cấu hình lúc resume (đổi `desk.effort` sau khi hết quota có tác dụng).
 - Khoá của mỗi lời gọi là hash của (phiên bản playbook, prompt, loại, schema, và effort/model/maxSteps **do playbook đặt**) cộng số lần xuất hiện của lời gọi giống hệt. Đổi `desk.model` hay `desk.effort` (ví dụ chuyển model khi hết quota) không làm mất kết quả đã có; các agent còn lại chạy bằng cài đặt mới.
   - Không khớp theo thứ tự khởi động như Claude Code, vì pipeline chạy đồng thời làm thứ tự đó thay đổi theo agent nào xong trước.
   - Kết quả phía trước đổi thì prompt phía sau (có trích kết quả đó) cũng đổi, nên các agent phía sau tự chạy lại.

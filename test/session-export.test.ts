@@ -106,3 +106,14 @@ test("writeExport: creates folders, keeps an existing file unless allowed", asyn
   expect(await readFile(file, "utf8")).toBe("hai\n")
   await writeFile(file, "")
 })
+
+test("writeExport without --force never overwrites a file created while it was getting ready (BUG-OT-20261027-005)", async () => {
+  const fs = await import("node:fs")
+  const file = path.join(home, "race", "b.md")
+  // writeExport runs until its first await (making the folder); another process then creates the file.
+  const writing = writeExport(file, "bản xuất", { overwrite: false })
+  fs.mkdirSync(path.dirname(file), { recursive: true })
+  fs.writeFileSync(file, "của người khác")
+  await expect(writing).rejects.toThrow("--force")
+  expect(await readFile(file, "utf8")).toBe("của người khác")
+})

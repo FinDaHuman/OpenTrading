@@ -1,7 +1,7 @@
 import { z } from "zod"
 import { EVIDENCE_NOTE, evidence } from "../sanitize"
-import type { DeskContext, DeskSize, Playbook } from "../types"
-import { capList, Ticker, tierOf } from "./common"
+import { DeskNoData, type DeskContext, type DeskSize, type Playbook } from "../types"
+import { capList, cardFor, Ticker, tierOf } from "./common"
 import { rank, rankingTable, SCORECARD, type Scorecard } from "./sang-loc"
 
 /**
@@ -161,14 +161,14 @@ async function run(ctx: DeskContext<Args>): Promise<string> {
   const [themeResults, cardResults] = await Promise.all([
     ctx.parallel(tier.themes.map((t) => () => ctx.agent<string>(themePrompt(t, ctx.args, scope), { label: `${t.type} ${ctx.args.nganh}`, type: t.type, phase: "Bối cảnh", maxSteps: tier.steps }))),
     ctx.pipeline(companies, (m: string) =>
-      ctx.agent<Scorecard>(cardPrompt(m, ctx.args, scope?.chi_tieu_nganh ?? []), { label: `thẻ điểm ${m}`, type: "co-ban", phase: "Doanh nghiệp", schema: SCORECARD, effort: "low", maxSteps: tier.steps }),
+      ctx.agent<Scorecard>(cardPrompt(m, ctx.args, scope?.chi_tieu_nganh ?? []), { label: `thẻ điểm ${m}`, type: "co-ban", phase: "Doanh nghiệp", schema: SCORECARD, effort: "low", maxSteps: tier.steps, accept: cardFor(m) }),
     ) as Promise<(Scorecard | null)[]>,
   ])
   const themes = tier.themes.flatMap((t, i) => (themeResults[i] ? [{ type: t.type, text: themeResults[i]! }] : []))
   const cards = cardResults.flatMap((c, i) => (c ? [{ ...c, ticker: companies[i]! }] : []))
   const missing = [...tier.themes.filter((_, i) => !themeResults[i]).map((t) => `báo cáo ${t.type}`), ...companies.filter((_, i) => !cardResults[i])]
   if (missing.length > 0) ctx.log(`Thiếu: ${missing.join(", ")}`)
-  if (cards.length === 0 && themes.length === 0) return `Không lấy được dữ liệu nào cho ngành ${ctx.args.nganh}. Chạy tiếp bằng /desk resume.`
+  if (cards.length === 0 && themes.length === 0) throw new DeskNoData(`Không lấy được dữ liệu nào cho ngành ${ctx.args.nganh}. Chạy tiếp bằng /desk resume.`)
   const ranked = rank(cards, ctx.args.cau_hoi)
 
   const extra: { q: string; a: string }[] = []

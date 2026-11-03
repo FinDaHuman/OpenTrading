@@ -154,12 +154,38 @@ test("sang-loc small: more tickers than the tier are cut with a log line, no ref
   expect(view.logs.some((l) => l.includes("bỏ 2: FFF, GGG"))).toBe(true)
 })
 
-test("sang-loc: too few scorecards ends early with a resumable note, no referee", async () => {
+test("sang-loc: too few scorecards ends early as failed with a resumable note, no referee", async () => {
   const { view, specs } = await runPlaybook(sangLoc, { tickers: ["AAA", "BBB", "CCC"] }, "small", (spec) =>
     spec.schema === SCORECARD && tickerIn(spec.prompt) === "AAA" ? ok("", card("AAA", flat(5))) : fail(),
   )
-  expect(String(view.result)).toContain("Không đủ dữ liệu")
+  // Not "done": /desk must show it unfinished, and r must resume it as the note says.
+  expect(view.status).toBe("failed")
+  expect(view.error).toContain("Không đủ dữ liệu")
+  expect(view.error).toContain("/desk resume")
   expect(specs.some((s) => s.type === "tong-hop")).toBe(false)
+})
+
+test("sang-loc: no scorecard at all (0/2) ends failed, not done", async () => {
+  const { view } = await runPlaybook(sangLoc, { tickers: ["FPT", "VCB"] }, "small", () => fail())
+  expect(view.status).toBe("failed")
+  expect(view.error).toContain("0/2 thẻ điểm")
+})
+
+test("sang-loc: a card about another ticker is rejected, never relabelled as the ticker asked for", async () => {
+  const { view, specs } = await runPlaybook(sangLoc, { tickers: ["FPT", "VCB", "MWG"] }, "small", (spec) => {
+    if (spec.schema !== SCORECARD) return ok("BẢNG XẾP HẠNG")
+    const t = tickerIn(spec.prompt)
+    // The agent for FPT answers with HPG's card (P/E 999); the others answer for their own ticker, in lower case.
+    return t === "FPT" ? ok("", card("HPG", flat(9), { pe: 999 })) : ok("", card(t.toLowerCase(), flat(5), { pe: 10 }))
+  })
+  expect(view.status).toBe("done")
+  const fpt = view.agents.find((a) => a.label === "thẻ điểm FPT")!
+  expect(fpt.status).toBe("failed")
+  expect(fpt.error).toContain("HPG")
+  const referee = specs.find((s) => s.type === "tong-hop")!.prompt
+  expect(referee).not.toContain("999")
+  expect(referee).toContain("không lấy được dữ liệu của FPT")
+  expect(String(view.result)).not.toMatch(/FPT[^\n]*999/)
 })
 
 test("tally: majority of the votes; no valid vote is unchecked, never wrong", () => {
@@ -280,7 +306,8 @@ test("tranh-bien: a failed analyst is logged and named to the referee; no report
   expect(partial.view.logs.some((l) => l.includes("Thiếu báo cáo: tin-tuc"))).toBe(true)
   expect(partial.specs.find((s) => s.type === "tong-hop")!.prompt).toContain("thiếu báo cáo tin-tuc")
   const none = await runPlaybook(tranhBien, { ticker: "FPT" }, "small", () => fail())
-  expect(String(none.view.result)).toContain("Không lấy được báo cáo nào")
+  expect(none.view.status).toBe("failed")
+  expect(none.view.error).toContain("Không lấy được báo cáo nào")
   expect(none.specs.some((s) => s.type === "bull")).toBe(false)
 })
 

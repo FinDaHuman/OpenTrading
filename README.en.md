@@ -185,7 +185,7 @@ While a run is going, a card under the `desk_run` line updates live. This frame 
   │ ✓ co-ban     thẻ điểm ACB                                                     2 req · 4s · ↓2,3k │
   │ ✓ co-ban     thẻ điểm VCB                                                     2 req · 3s · ↓1,9k │
   │ » Xếp hạng 6 mã theo điểm thẻ có trọng số.                                                       │
-  │ 12 request · ↑85,6k ↓12,1k token · /desk chi tiết (p tạm dừng · x×2 dừng)                        │
+  │ 12 request · ↑85,6k ↓12,1k token · /desk chi tiết (ctrl+p tạm dừng · ctrl+x dừng)                │
   ╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
@@ -201,9 +201,9 @@ The session's runs → one run: the same card (progress, phases) plus **every ag
 
 | Key | Action |
 | --- | --- |
-| `p` | Pause / resume (running agents finish, new ones wait) |
-| `x` twice, `ctrl+x` | Stop the run |
-| `r` | Resume a run that was cut short (quota, cap, stopped) from its journal, also after reopening the session; or `/desk resume <run>` |
+| `ctrl+p` | Pause / resume (running agents finish, new ones wait) |
+| `ctrl+x` | Stop the run |
+| `ctrl+r` | Resume a run that was cut short (quota, cap, stopped) from its journal, also after reopening the session; or `/desk resume <run>` |
 
 ### Demo without a key
 

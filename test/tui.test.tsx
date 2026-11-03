@@ -3195,6 +3195,104 @@ test("ultradesk: the keyword is hinted while typed; /desk on|off shows on the mo
   await setup.waitFor(() => state.dialog === undefined)
 })
 
+test("/desk: a run of an earlier sitting (only on disk) resumes with ctrl+r from its detail view, as the text there says", async () => {
+  const { DeskJournal } = await import("../src/core/desk/journal")
+  const { currentSession } = await import("../src/tui/session")
+  const id = "dk-disk01"
+  const journal = new DeskJournal(currentSession().dir, id)
+  await journal.writeMeta({
+    format: 1,
+    id,
+    playbook: "sang-loc",
+    version: "1",
+    args: { tickers: ["FPT", "VCB"] },
+    size: "small",
+    status: "partial",
+    cut: "quota",
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    counters: { agents: 1, cached: 0, requests: 3, input: 10, output: 5 },
+  })
+  const resumed: string[] = []
+  const real = runtime.desk.resume.bind(runtime.desk)
+  runtime.desk.resume = async (runId: string) => {
+    resumed.push(runId)
+    throw new Error("không chạy thật trong test")
+  }
+  try {
+    await setup.mockInput.typeText("/desk")
+    setup.mockInput.pressEnter()
+    await setup.waitForFrame((f) => f.includes(`sang-loc · ${id}`))
+    setup.mockInput.pressEnter()
+    const frame = await setup.waitForFrame((f) => f.includes(`Ultradesk · ${id}`) && f.includes("Run của lần mở trước"))
+    show(frame)
+    expect(frame).toContain("ctrl+r chạy tiếp · esc")
+    setup.mockInput.pressKey("r", { ctrl: true })
+    await setup.waitFor(() => resumed.length > 0)
+    expect(resumed).toEqual([id])
+  } finally {
+    runtime.desk.resume = real
+    setup.mockInput.pressEscape()
+    await setup.waitFor(() => state.dialog === undefined)
+    await rm(journal.dir, { recursive: true, force: true })
+  }
+})
+
+test("/desk: ctrl+p/ctrl+x act on the run and leave the filter alone; a plain p or x only filters the agents", async () => {
+  const agent = (key: string, label: string) => ({ key, label, phase: "Thu thập", type: "phan-tich", status: "running" as const, requests: 1, tokens: { input: 10, output: 5 } })
+  const run = {
+    id: "dk-keys01",
+    playbook: "phan-bien",
+    version: "1",
+    args: {},
+    size: "small" as const,
+    status: "running" as const,
+    phases: [{ title: "Thu thập", total: 2, done: 0, failed: 0 }],
+    agents: [agent("k1", "thẻ điểm FPT"), agent("k2", "phản biện HPG")],
+    logs: [],
+    createdAt: Date.now(),
+    counters: { agents: 2, cached: 0, requests: 2, input: 10, output: 5 },
+    sessionId: undefined,
+  }
+  const calls: string[] = []
+  const real = { pause: runtime.desk.pause, stop: runtime.desk.stop, resume: runtime.desk.resume }
+  runtime.desk.pause = (id: string) => (calls.push(`pause ${id}`), true)
+  runtime.desk.stop = (id: string) => (calls.push(`stop ${id}`), true)
+  runtime.desk.resume = async (id: string) => {
+    calls.push(`resume ${id}`)
+    throw new Error("không chạy thật trong test")
+  }
+  setState("deskRuns", "dk-keys01", run)
+  try {
+    await setup.mockInput.typeText("/desk")
+    setup.mockInput.pressEnter()
+    let frame = await setup.waitForFrame((f) => f.includes("Ultradesk · dk-keys01") && f.includes("phản biện HPG"))
+    expect(frame).toContain("ctrl+p tạm dừng · ctrl+x dừng")
+    // Plain letters are the filter's: nothing happens to the run.
+    await setup.mockInput.typeText("px")
+    frame = await setup.waitForFrame((f) => f.includes("› px"))
+    expect(calls).toEqual([])
+    setup.mockInput.pressBackspace()
+    setup.mockInput.pressBackspace()
+    await setup.waitForFrame((f) => f.includes("gõ để lọc"))
+    // ctrl+p, ctrl+x: the run acts, the filter stays empty. ctrl+r does nothing on a live run.
+    setup.mockInput.pressKey("p", { ctrl: true })
+    setup.mockInput.pressKey("x", { ctrl: true })
+    setup.mockInput.pressKey("r", { ctrl: true })
+    await setup.waitFor(() => calls.length >= 2)
+    frame = await setup.waitForFrame((f) => f.includes("Ultradesk · dk-keys01"))
+    show(frame)
+    expect(calls).toEqual(["pause dk-keys01", "stop dk-keys01"])
+    expect(frame).toContain("gõ để lọc")
+    expect(frame).toContain("phản biện HPG")
+  } finally {
+    Object.assign(runtime.desk, real)
+    setup.mockInput.pressEscape()
+    await setup.waitFor(() => state.dialog === undefined)
+    setState("deskRuns", reconcile({}))
+  }
+})
+
 test("ultradesk card: ←→ change the size and its cost, a large run warns, enter runs with what was chosen", async () => {
   const estimates = { small: { agents: 6, requests: 36 }, medium: { agents: 14, requests: 84 }, large: { agents: 46, requests: 276 }, unrestricted: { agents: 46, requests: 276 } }
   const asking = runtime.deskApprovals.ask({

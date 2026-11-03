@@ -5,17 +5,58 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ## [Unreleased]
 
+Fixes for the QA reports of 23, 25 and 27 October 2026.
+
 ### Changed
 
+- Ultradesk: a run with no usable data now ends `failed` instead of `done`. Playbooks get
+  `agent(…, { accept })` to reject an answer before it is kept, and `DeskNoData` to end a run as
+  `failed` (`sang-loc`, `nganh` and `tranh-bien` use both).
+- Ultradesk: the retry after a 429 counts as one more agent against `desk.maxAgents`.
+- `/desk`: pause, stop and resume are `ctrl+p`, `ctrl+x` (one press) and `ctrl+r`, as in `/tasks` and
+  `/agents`. A plain `p`, `x` or `r` typed in the run or agent list now only filters it; before, it
+  both acted on the run and landed in the filter.
 - `/permissions`: an auto-mode block is let through once with `ctrl+r` (was `r`). The retry
   puts the list back at once, and a plain `r` landed in its filter. Same convention as `/desk`,
   `/tasks` and `/agents`.
 
 ### Fixed
 
+- Update: startup cleanup removes only the `opentrading.exe`/`ot.exe` `.old` files the updater (and
+  `install.ps1`) moved aside, never the user's own `*.old` files in the install folder.
+- Ultradesk: `desk.maxAgents` holds when a run starts more agents at once than the cap (for example
+  `maxAgents: 2`, `maxConcurrent: 3`): agents waiting for a slot, the stagger or a pause no longer
+  all start.
+- `read_file` on Word: paragraphs inside one table cell stay apart (`100<br>200`, not `100200`).
+- `read_file` on Excel: a sheet named like a number ("2026") is found by its name first; files
+  written with a namespace prefix (`x:sheet`) are read; a cell in the last Excel row no longer
+  overflows the stack.
+- `grep_files` searches files up to 20 MiB (read_file's limit, was 2 MiB) and lists the files it
+  skipped instead of answering a bare "not found".
+- Ultradesk: pause also holds agents already queued; a 429 on the retry cuts the run; two
+  resumes of one run share one launch; an effort inherited from `desk.effort` follows the config
+  on resume; a journal line cut by a crash no longer swallows the next result.
+- Ultradesk: `sang-loc`/`nganh` reject a scorecard about another ticker instead of relabelling it;
+  a run with no usable data ends `failed` (resumable with `ctrl+r`), not `done`; `ctrl+r` works in the detail
+  view of a run from an earlier sitting.
+- Config: concurrent saves no longer lose each other's changes (in-process queue + lock file).
+- `web_search`: `recency_days` is applied after every backend (DuckDuckGo and Parallel get it
+  too); a provider search whose sources were all blocked falls back, and its summary is dropped
+  whenever a source was filtered out.
+- MCP: tool/prompt/resource lists stop at their caps (a cut server is marked in `/mcp`); a
+  shortened tool name never collides with another tool's name.
+- Sessions: a malformed index line or message is skipped instead of breaking `/sessions` or
+  resume; `/export` without `--force` never overwrites a file created meanwhile.
+- Memory: a memory file edited by hand without dates no longer silently disables every memory;
+  `/desk`: a damaged `meta.json` no longer breaks the list of the session's runs.
+- `/config`, `/effort` and other settings dialogs no longer overwrite a nested setting saved
+  meanwhile (for example a playbook approved with "không hỏi lại").
+- `ot update` on Windows: a work folder still locked for a moment after the swap no longer
+  reports a finished update as failed.
 - `/watchlist <a name that is no list>`: `r` is typed into the lists' filter again (it was
   swallowed as "refresh"), and one esc closes the dialog.
 - `docs/mcp.md`: logging out of a server is the **Đăng xuất** row of its menu; there is no `x` key.
+
 
 ## [0.3.0] — 2026-10-31
 

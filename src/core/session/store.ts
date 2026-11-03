@@ -71,6 +71,34 @@ export interface SessionSummary {
   cwd?: string
 }
 
+/**
+ * An index line that can be listed: id, file and both dates are strings (they are sorted and
+ * sliced), a missing title or turn count gets a default. Anything else is skipped, so one bad
+ * line never takes the whole /sessions list down.
+ */
+function asSummary(value: unknown): SessionSummary | undefined {
+  if (!value || typeof value !== "object") return undefined
+  const s = value as Record<string, unknown>
+  const text = (v: unknown) => typeof v === "string" && v.length > 0
+  if (!text(s.id) || !text(s.file) || !text(s.createdAt) || !text(s.updatedAt)) return undefined
+  return { ...(s as unknown as SessionSummary), title: typeof s.title === "string" ? s.title : "", turns: typeof s.turns === "number" ? s.turns : 0 }
+}
+
+const ROLES = new Set(["system", "user", "assistant", "tool"])
+
+/**
+ * A stored message the loader can hand on: a known role, and content that is text or a list of
+ * typed parts (tool results always a list). A structural check only, on purpose: the AI SDK's
+ * own schema would also reject older but valid shapes (image parts before SDK v7).
+ */
+export function isStoredMessage(value: unknown): value is ModelMessage {
+  if (!value || typeof value !== "object") return false
+  const { role, content } = value as { role?: unknown; content?: unknown }
+  if (typeof role !== "string" || !ROLES.has(role)) return false
+  if (typeof content === "string") return role !== "tool"
+  return Array.isArray(content) && content.every((p) => !!p && typeof p === "object" && typeof (p as { type?: unknown }).type === "string")
+}
+
 export const sessionsDir = () => path.join(dataDir(), "sessions")
 const indexFile = () => path.join(sessionsDir(), "index.jsonl")
 
@@ -277,8 +305,8 @@ async function allSessions(): Promise<SessionSummary[]> {
   for (const line of text.split("\n")) {
     if (!line.trim()) continue
     try {
-      const summary = JSON.parse(line) as SessionSummary
-      if (!summary.id || !summary.file) continue
+      const summary = asSummary(JSON.parse(line))
+      if (!summary) continue
       // Re-insert so the map's order is the order of the last write.
       byId.delete(summary.id)
       byId.set(summary.id, summary)
@@ -328,9 +356,12 @@ export async function loadSession(id: string): Promise<LoadedSession> {
       const entry = JSON.parse(line) as SessionEntry
       if (entry.type === "meta") meta = entry
       else if (entry.type === "message") {
+        // A damaged message is dropped alone; the rest of the session still loads.
+        if (!isStoredMessage(entry.message)) continue
         raw.push(entry.message)
         shown.push(entry.message)
       } else if (entry.type === "compact" && Array.isArray(entry.messages)) {
+        entry.messages = entry.messages.filter(isStoredMessage)
         raw = [...entry.messages]
         // The marker and summary (absent when only tool results were pruned).
         if (entry.messages[0] && isCompactMarker(entry.messages[0])) shown.push(...entry.messages.slice(0, 2))

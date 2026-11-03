@@ -6,7 +6,7 @@ import { readScope } from "../../fs/path-safety"
 import { decodeFile, isBinary, splitLines } from "../../fs/text"
 import { realish, type Workspace } from "../../fs/workspace"
 import type { ToolDef, ToolResult } from "../types"
-import { readDocx, readXlsx, toCsvRow } from "../../fs/office"
+import { maxLength, readDocx, readXlsx, toCsvRow } from "../../fs/office"
 
 /**
  * read_file: what the user hands over by path (a broker's PDF report, an Excel export saved
@@ -161,7 +161,7 @@ function readSheet(abs: string, bytes: Uint8Array, input: ReadOptions) {
   if (book.sheets.length === 0) return `Excel ${abs} · không có sheet nào.`
   const list =
     book.sheets.length > 1 ? `\nCác sheet: ${book.sheets.map((s, i) => `${i + 1}. ${s.name} (${s.rows} dòng)${i === book.index ? " ← đang đọc" : ""}`).join(" · ")}; chọn sheet khác bằng tham số sheet.` : ""
-  const width = Math.max(0, ...book.rows.map((r) => r.length))
+  const width = maxLength(book.rows)
   const head =
     `Excel ${abs} · sheet "${book.sheets[book.index]!.name}" · ${width} cột (dạng CSV, số đầu dòng là số dòng Excel; giá trị là số gốc, không theo định dạng hiển thị: ô phần trăm là phân số, 0,12 = 12%; ngày có thể là số seri Excel, 45658 = 2025-01-01)` +
     list
@@ -243,7 +243,7 @@ export function readFileTool(workspace: Workspace, state?: FileState): ToolDef<R
       offset: z.number().int().min(1).optional().describe("Dòng bắt đầu (từ 1), cho file text dài"),
       limit: z.number().int().min(1).max(MAX_LINES).optional().describe(`Số dòng đọc (mặc định và tối đa ${MAX_LINES})`),
       pages: z.string().optional().describe('Trang PDF cần đọc, ví dụ "3", "1-5", "2,4-6"'),
-      sheet: z.string().optional().describe("Sheet Excel cần đọc: tên hoặc số thứ tự (mặc định sheet đầu)"),
+      sheet: z.string().optional().describe("Sheet Excel cần đọc: tên (ưu tiên khi trùng, ví dụ sheet tên \"2026\") hoặc số thứ tự (mặc định sheet đầu)"),
     }),
     readOnly: true,
     timeoutMs: 60_000,

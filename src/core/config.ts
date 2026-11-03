@@ -1,5 +1,6 @@
 import type { DeskSize } from "./desk/types"
 import type { Effort } from "./effort"
+import { withFileLock } from "./file-lock"
 import { configFile } from "./paths"
 import type { ProviderId } from "./providers"
 import { readJson, writeJson } from "./store"
@@ -134,8 +135,28 @@ export interface Config {
 
 export const loadConfig = () => readJson<Config>(configFile(), {})
 
-export async function saveConfig(patch: Partial<Config>) {
-  const next = { ...(await loadConfig()), ...patch }
-  await writeJson(configFile(), next)
-  return next
+let saving: Promise<unknown> = Promise.resolve()
+
+/**
+ * Merges `patch` into config.json. Read-modify-write runs in order within this process and
+ * under a lock file across processes (file-lock.ts): concurrent saves of different keys all
+ * land; the atomic rename in writeJson alone only prevents a half-written file.
+ * A function patch is computed from the config as it is inside the lock: use it to change
+ * part of a nested object (`(c) => ({ desk: { ...c.desk, approved } })`) without losing a
+ * change saved since the caller last read the file.
+ */
+export function saveConfig(patch: Partial<Config> | ((current: Config) => Partial<Config>)): Promise<Config> {
+  const file = configFile()
+  const run = saving
+    .catch(() => {})
+    .then(() =>
+      withFileLock(file, async () => {
+        const current = await loadConfig()
+        const next = { ...current, ...(typeof patch === "function" ? patch(current) : patch) }
+        await writeJson(file, next)
+        return next
+      }),
+    )
+  saving = run
+  return run
 }
