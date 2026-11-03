@@ -166,13 +166,22 @@ export class Session {
     const clean = title.trim()
     if (!clean) return Promise.resolve()
     this.title = clean
-    this.writing = this.writing.then(async () => {
+    return this.enqueue(async () => {
       // Before the first turn is written there is no index line yet; that write uses this title.
       if (!this.lastSummary) return
       this.lastSummary = { ...this.lastSummary, title: clean }
       await appendFile(indexFile(), JSON.stringify(this.lastSummary) + "\n", "utf8")
     })
-    return this.writing
+  }
+
+  /**
+   * Queue a write after the ones before it. A failed write rejects for its caller (who shows
+   * "Không lưu được phiên") but does not stop the writes queued after it.
+   */
+  private enqueue(work: () => Promise<void>): Promise<void> {
+    const run = this.writing.catch(() => {}).then(work)
+    this.writing = run
+    return run
   }
 
   get path() {
@@ -201,12 +210,11 @@ export class Session {
 
   /** Record a compaction. Nothing to do before the first turn created the file. */
   appendCompact(entry: Omit<Extract<SessionEntry, { type: "compact" }>, "type" | "ts">) {
-    this.writing = this.writing.then(async () => {
+    return this.enqueue(async () => {
       if (!this.path) return
       const line: SessionEntry = { type: "compact", ts: new Date().toISOString(), ...entry, messages: stripImages(entry.messages) }
       await appendFile(this.path, JSON.stringify(line) + "\n", "utf8")
     })
-    return this.writing
   }
 
   /** Resolves once every queued write has finished (a failed earlier write is not rethrown). */
@@ -216,17 +224,17 @@ export class Session {
 
   /** Append one completed turn. Writes are serialised so turns never interleave. */
   appendTurn(messages: ModelMessage[], info: SessionInfo & TurnInfo) {
-    this.writing = this.writing.then(() => this.write(messages, info))
-    return this.writing
+    return this.enqueue(() => this.write(messages, info))
   }
 
   private async write(messages: ModelMessage[], info: SessionInfo & TurnInfo) {
     const ts = new Date().toISOString()
     const lines: SessionEntry[] = []
+    // Kept only once the first write landed: after a failed one the next write starts the file again, meta line included.
+    const file = this.file ?? path.join(this.createdAt.slice(0, 4), this.createdAt.slice(5, 7), `${this.id}.jsonl`)
+    const full = path.join(sessionsDir(), file)
     if (!this.file) {
-      const [year, month] = [this.createdAt.slice(0, 4), this.createdAt.slice(5, 7)]
-      this.file = path.join(year, month, `${this.id}.jsonl`)
-      await mkdir(path.dirname(this.path!), { recursive: true })
+      await mkdir(path.dirname(full), { recursive: true })
       lines.push({
         type: "meta",
         format: SESSION_FORMAT,
@@ -239,8 +247,11 @@ export class Session {
     }
     // Screenshots would bloat the file by megabytes per turn; keep a text placeholder.
     for (const message of stripImages(messages)) lines.push({ type: "message", ts, message })
-    for (const chart of this.pendingCharts.splice(0)) lines.push({ type: "chart", ts, ...chart })
-    for (const text of this.pendingHarness.splice(0)) lines.push({ type: "harness", ts, text })
+    // Dropped from the queues only once written; what is noted meanwhile belongs to the next turn.
+    const charts = this.pendingCharts.length
+    const harness = this.pendingHarness.length
+    for (const chart of this.pendingCharts.slice(0, charts)) lines.push({ type: "chart", ts, ...chart })
+    for (const text of this.pendingHarness.slice(0, harness)) lines.push({ type: "harness", ts, text })
     lines.push({
       type: "turn_end",
       ts,
@@ -251,7 +262,10 @@ export class Session {
       ...(info.unanswered ? { unanswered: true } : {}),
       ...(info.retiredTodos ? { retiredTodos: info.retiredTodos } : {}),
     })
-    await appendFile(this.path!, lines.map((l) => JSON.stringify(l)).join("\n") + "\n", "utf8")
+    await appendFile(full, lines.map((l) => JSON.stringify(l)).join("\n") + "\n", "utf8")
+    this.file = file
+    this.pendingCharts.splice(0, charts)
+    this.pendingHarness.splice(0, harness)
 
     this.turns++
     if (!this.title) {

@@ -1,5 +1,5 @@
 import { afterAll, expect, test } from "bun:test"
-import { appendFile, mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
+import { appendFile, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import type { ModelMessage } from "ai"
@@ -304,4 +304,26 @@ test("a stored message with the wrong shape is dropped alone; resume keeps the r
   await s.appendTurn([{ role: "user", content: "Tiếp" }], info)
   const loaded = await loadSession(s.id)
   expect(loaded.messages).toEqual([...turn2, { role: "user", content: "Tiếp" }])
+})
+
+test("one failed write does not stop later turns from being saved; the meta line and the turn's chart still land (0s2)", async () => {
+  const created = new Date("2026-11-03T05:00:00Z")
+  const s = Session.create(created)
+  // A folder where the session file goes: the first append fails, on Linux and Windows alike.
+  const blocker = path.join(sessionsDir(), "2026", "11", `${s.id}.jsonl`)
+  await mkdir(blocker, { recursive: true })
+  s.noteChart("call_1", { kind: "line", symbol: "VCB", series: [1, 2] })
+  await expect(s.appendTurn(turn1, info)).rejects.toThrow()
+  expect(s.path).toBeUndefined()
+
+  await rm(blocker, { recursive: true, force: true })
+  await s.appendTurn(turn2, info)
+  const lines = (await readFile(s.path!, "utf8")).trim().split("\n").map((l) => JSON.parse(l))
+  expect(lines[0]).toMatchObject({ type: "meta", id: s.id, cwd: "/w" })
+  const loaded = await loadSession(s.id)
+  expect(loaded.messages).toEqual(turn2)
+  expect(loaded.charts.get("call_1")).toEqual({ kind: "line", symbol: "VCB", series: [1, 2] })
+  // Later writers of the queue (title, compaction) run too.
+  await s.setTitle("Phiên VCB")
+  expect((await listSessions()).find((x) => x.id === s.id)?.title).toBe("Phiên VCB")
 })
