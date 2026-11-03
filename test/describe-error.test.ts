@@ -31,3 +31,13 @@ test("an AbortSignal.timeout error reads in Vietnamese, not 'The operation timed
   // The user's own cancel stays as it was.
   expect(describeError(new DOMException("The operation was aborted.", "AbortError"))).toBe("Đã huỷ.")
 })
+
+test("OpenRouter 403 for a harness-only model says so instead of blaming the key (32f)", () => {
+  const said = "thinkingmachines/inkling-small:free is only available on agentic harnesses. Try plugging it into a coding agent or productivity app listed on https://openrouter.ai/apps"
+  const text = describeError(apiError(403, said))
+  expect(text).toStartWith("Model này chỉ dùng được qua các app OpenRouter công nhận")
+  expect(text).toContain("only available on agentic harnesses")
+  expect(text).not.toContain("API key")
+  // A plain 403 still points at the key.
+  expect(describeError(apiError(403, "Forbidden"))).toStartWith("API key không hợp lệ")
+})
