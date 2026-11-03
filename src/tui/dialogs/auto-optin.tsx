@@ -3,7 +3,7 @@ import { createSignal, For } from "solid-js"
 import { saveConfig } from "../../core/config"
 import type { PermissionGate } from "../../core/permission"
 import { MODE_LABEL } from "../../core/permission/mode"
-import { say } from "../notify"
+import { say, saySaveFailure } from "../notify"
 import { setState, state } from "../state"
 import { color } from "../theme"
 import { DialogFrame } from "./frame"
@@ -44,7 +44,7 @@ export async function answerAutoOptIn(gate: PermissionGate, choice: Choice) {
 export function AutoOptInDialog(props: { gate: PermissionGate }) {
   const [selected, setSelected] = createSignal(0)
   const from = () => MODE_LABEL[state.autoOptIn?.from ?? "ask"]
-  const choose = (i: number) => void answerAutoOptIn(props.gate, CHOICES[i]!.value)
+  const choose = (i: number) => saySaveFailure(answerAutoOptIn(props.gate, CHOICES[i]!.value))
 
   useKeyboard((evt) => {
     if (evt.eventType === "release") return

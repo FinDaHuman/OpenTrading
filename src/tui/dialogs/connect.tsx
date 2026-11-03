@@ -20,7 +20,12 @@ export function ConnectDialog() {
     const value = key().trim()
     if (!id || !value || saving()) return
     setSaving(true)
-    await setKey(id, value)
+    try {
+      await setKey(id, value)
+    } catch (error) {
+      setSaving(false)
+      return say(`Không lưu được key: ${error instanceof Error ? error.message : String(error)}`, "error")
+    }
     setState("connected", await connectedProviders())
     // First provider becomes the default; later ones just add their models to /model.
     if (!state.provider) {

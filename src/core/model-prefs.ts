@@ -1,6 +1,6 @@
 import path from "node:path"
 import { dataDir } from "./paths"
-import { readJson, writeJson } from "./store"
+import { readJson, updateJson } from "./store"
 
 /**
  * Favourite and recently used models (opencode's model.json): `~/.opentrading/model.json`,
@@ -35,7 +35,8 @@ export async function loadModelPrefs(): Promise<ModelPrefs> {
   return { favorite: refs(raw.favorite), recent: refs(raw.recent).slice(0, MAX_RECENT) }
 }
 
-export const saveModelPrefs = (prefs: ModelPrefs) => writeJson(modelPrefsFile(), prefs)
+/** The TUI's copy is the whole truth, but a model.json that exists and cannot be read is not replaced. */
+export const saveModelPrefs = (prefs: ModelPrefs) => updateJson<Partial<ModelPrefs>>(modelPrefsFile(), {}, () => prefs)
 
 /** `ref` becomes the most recent model. */
 export function withRecent(prefs: ModelPrefs, ref: ModelRef): ModelPrefs {

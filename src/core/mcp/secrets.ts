@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto"
 import path from "node:path"
 import type { OAuthClientInformationMixed, OAuthTokens } from "@modelcontextprotocol/sdk/shared/auth.js"
-import { readJson, writeJson } from "../store"
+import { readJson, updateJson } from "../store"
 
 /**
  * `~/.opentrading/mcp-auth.json` (mode 0600 off Windows): everything secret about MCP.
@@ -30,25 +30,21 @@ export function oauthKey(name: string, url: string) {
   return `${name}|${createHash("sha256").update(url).digest("hex").slice(0, 16)}`
 }
 
-/** Writes from parallel OAuth flows / refreshes must not lose each other's changes. */
-const queues = new Map<string, Promise<unknown>>()
-function serial<T>(file: string, fn: () => Promise<T>): Promise<T> {
-  const run = (queues.get(file) ?? Promise.resolve()).then(fn, fn)
-  queues.set(file, run.catch(() => {}))
-  return run
-}
-
 async function read(home: string) {
   return readJson<McpAuthFile>(mcpAuthFile(home), {})
 }
 
+/** Parallel OAuth flows / refreshes must not lose each other's changes, nor a file that failed to read. */
 async function update(home: string, change: (data: McpAuthFile) => void) {
-  const file = mcpAuthFile(home)
-  return serial(file, async () => {
-    const data = await read(home)
-    change(data)
-    await writeJson(file, data, true)
-  })
+  await updateJson<McpAuthFile>(
+    mcpAuthFile(home),
+    {},
+    (data) => {
+      change(data)
+      return data
+    },
+    { secret: true },
+  )
 }
 
 export async function secretEnv(home: string): Promise<Record<string, string>> {

@@ -1,7 +1,7 @@
 import { loadCatalog } from "./catalog"
 import { authFile } from "./paths"
 import type { ProviderId } from "./providers"
-import { readJson, writeJson } from "./store"
+import { readJson, updateJson } from "./store"
 
 /** Same shape as opencode's auth.json so the format is familiar. */
 export type ApiAuth = { type: "api"; key: string }
@@ -16,10 +16,9 @@ export async function getKey(provider: ProviderId): Promise<string | undefined> 
   return undefined
 }
 
+/** Under the same lock and strict read as config.json: a failed read must never drop the other keys. */
 export async function setKey(provider: ProviderId, key: string) {
-  const file = await readJson<AuthFile>(authFile(), {})
-  file[provider] = { type: "api", key: key.trim() }
-  await writeJson(authFile(), file, true)
+  await updateJson<AuthFile>(authFile(), {}, (file) => ({ ...file, [provider]: { type: "api", key: key.trim() } }), { secret: true })
 }
 
 /** Providers with a usable key, in catalog order: stored keys, then env vars. */
