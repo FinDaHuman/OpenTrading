@@ -5,7 +5,11 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ## [Unreleased]
 
-Fixes for the QA reports of 23, 25 and 27 October 2026.
+## [0.3.1] — 2026-11-03
+
+Fixes for the QA reports of 23, 25 and 27 October 2026, and run keys that no longer land in a
+list's filter (`/desk`, `/permissions`). Update with `ot update` (npm:
+`npm i -g @findahuman/opentrading@latest`).
 
 ### Changed
 
