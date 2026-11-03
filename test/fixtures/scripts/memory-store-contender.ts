@@ -1,8 +1,9 @@
-// Child process for memory-store-concurrency.test.ts.
+// Child process for memory-store-concurrency.test.ts and memory-notebook-*.test.ts.
 //   revise <file> <go> [waitMs]  open the store, print "ready", wait for the <go> file (at most waitMs,
 //                       default 15 s, then print "timeout" and exit), revise constraint #1 from
 //                       version 1, print "ok" or the error kind.
 //   hold <file> <ms>    take the write lock (BEGIN IMMEDIATE), print "held", keep it <ms>, commit.
+//   lock <file> <ms>    same, on any file, even a new empty one: BEGIN IMMEDIATE with no write.
 import { Database } from "bun:sqlite"
 import { existsSync } from "node:fs"
 import { MemoryStoreError } from "../../../src/core/memory/store/errors"
@@ -32,7 +33,7 @@ if (mode === "revise") {
 } else {
   const db = new Database(file, { strict: true })
   db.run("BEGIN IMMEDIATE")
-  db.run("UPDATE counters SET value = value WHERE name = 'constraint_set'")
+  if (mode === "hold") db.run("UPDATE counters SET value = value WHERE name = 'constraint_set'")
   console.log("held")
   await Bun.sleep(Number(arg))
   db.run("COMMIT")

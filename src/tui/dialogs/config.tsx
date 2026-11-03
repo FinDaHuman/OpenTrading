@@ -3,7 +3,7 @@ import { MODE_LABEL, type PermissionMode } from "../../core/permission/mode"
 import { createResource, createSignal, Match, Switch } from "solid-js"
 import { loadConfig, saveConfig } from "../../core/config"
 import { configFile } from "../../core/paths"
-import { createMemory, switchMemory, type Runtime } from "../../core/runtime"
+import { closeMemory, createMemory, switchMemory, type MemoryChoice, type Runtime } from "../../core/runtime"
 import { DEFAULT_MAX_CONCURRENT } from "../../core/subagents/manager"
 import { AUTO_MODEL } from "../../core/subagents/model-pick"
 import { DEFAULT_MAX_STEPS } from "../../core/agent"
@@ -29,6 +29,23 @@ type SubagentModel = { provider: string; model: string } | "inherit" | "auto"
 
 const TOOL_SEARCH_NEXT = { auto: "on", on: "off", off: "auto" } as const
 
+/** The memory choices, in the order listed; the label is what the user picks by. */
+const MEMORY_CHOICES: { value: MemoryChoice; label: string; hint: string; said: string }[] = [
+  { value: "none", label: "Tắt", hint: "không dùng memory", said: "Đã tắt memory. Dữ liệu đã lưu vẫn còn trên đĩa và sẽ dùng lại khi bật." },
+  {
+    value: "file",
+    label: "Memory cũ",
+    hint: "lưu file ở ~/.opentrading/memory; nói \"Ghi nhớ: …\" để lưu",
+    said: "Đã bật memory cũ (lưu file ở ~/.opentrading/memory). Nói \"Ghi nhớ: …\" để lưu; xem và duyệt bằng /memory.",
+  },
+  {
+    value: "notebook",
+    label: "Sổ ghi nhớ",
+    hint: "ràng buộc, luận điểm, bài học trong memory.db; xem, xoá bằng /memory",
+    said: "Đã bật sổ ghi nhớ (memory.db trong thư mục dữ liệu). Xem, xoá bằng /memory; model đọc bằng memory_read.",
+  },
+]
+
 const TOOL_SEARCH_HINT = {
   auto: "Tự động · hoãn tool khi > 40 tool hoặc > 10% context; model nạp bằng tool_search",
   on: "Luôn hoãn tool (MCP và tool có sẵn) · model nạp bằng tool_search",
@@ -39,7 +56,9 @@ const TOOL_SEARCH_HINT = {
 export function ConfigDialog(props: { runtime: Runtime }) {
   const [config, { refetch }] = createResource(loadConfig)
   /** A setting with its own sub-view (number entry, model list); undefined = the list. */
-  const [editing, setEditing] = createSignal<"maxSteps" | "subagentMax" | "subagentModel" | "webModel" | "autoModel" | "compactLevel" | "compactWindow">()
+  const [editing, setEditing] = createSignal<
+    "memory" | "maxSteps" | "subagentMax" | "subagentModel" | "webModel" | "autoModel" | "compactLevel" | "compactWindow"
+  >()
   const [error, setError] = createSignal("")
 
   useKeys((evt) => {
@@ -156,8 +175,33 @@ export function ConfigDialog(props: { runtime: Runtime }) {
     await refetch()
   }
 
+  /**
+   * Choosing the notebook again reopens it only when it failed to open (the retry path): a healthy one is
+   * kept, since a new provider would forget what this session already sent the model.
+   */
+  async function saveMemory(choice: MemoryChoice) {
+    await saveConfig({ memory: { provider: choice } })
+    if (choice === props.runtime.memory.id && !(props.runtime.memory.problems?.() ?? []).length) {
+      say(`Đang chọn «${MEMORY_CHOICES.find((c) => c.value === choice)!.label}»; không đổi gì.`, "info")
+      setEditing(undefined)
+      return
+    }
+    // The old store is closed before the new one opens: never two connections of this window on memory.db.
+    closeMemory(props.runtime)
+    switchMemory(props.runtime, createMemory(choice, props.runtime.home))
+    const problem = props.runtime.memory.problems?.()[0]
+    if (choice === "notebook" && problem) say(problem, "error", 15000)
+    else say(MEMORY_CHOICES.find((c) => c.value === choice)!.said, "success", 8000)
+    setEditing(undefined)
+    await refetch()
+  }
+  const memoryChoice = () => (config()?.memory?.provider ?? props.runtime.memory.id) as MemoryChoice
+  const memoryProblem = () =>
+    props.runtime.memory.id === "notebook" ? props.runtime.memory.problems?.()[0] : undefined
+
   async function toggle(setting: Setting) {
     if (
+      setting === "memory" ||
       setting === "maxSteps" ||
       setting === "subagentMax" ||
       setting === "subagentModel" ||
@@ -225,21 +269,31 @@ export function ConfigDialog(props: { runtime: Runtime }) {
       await refetch()
       return
     }
-    const next = props.runtime.memory.id === "file" ? "none" : "file"
-    await saveConfig({ memory: { provider: next } })
-    switchMemory(props.runtime, createMemory(next))
-    say(
-      next === "file"
-        ? "Đã bật memory (lưu file ở ~/.opentrading/memory). Nói \"Ghi nhớ: …\" để lưu; xem và duyệt bằng /memory."
-        : "Đã tắt memory. Các memory đã lưu vẫn còn trên đĩa và sẽ dùng lại khi bật.",
-      "success",
-      8000,
-    )
-    await refetch()
   }
 
   return (
     <Switch>
+      <Match when={editing() === "memory"}>
+        <DialogFrame title="Memory" hint="enter chọn · esc quay lại">
+          <text fg={color.tx3} wrapMode="word">
+            Có hiệu lực ngay, không cần mở lại OpenTrading. Dữ liệu của lựa chọn khác vẫn giữ nguyên trên đĩa.
+          </text>
+          {memoryProblem() && (
+            <text fg={color.tham} wrapMode="word">
+              {memoryProblem()}
+            </text>
+          )}
+          <Picker
+            items={MEMORY_CHOICES.map((c) => ({
+              label: c.label,
+              hint: c.hint,
+              mark: props.runtime.memory.id === c.value ? "●" : " ",
+              value: c.value,
+            }))}
+            onPick={(c) => void saveMemory(c)}
+          />
+        </DialogFrame>
+      </Match>
       <Match when={editing() === "subagentMax"}>
         <DialogFrame title="Subagent chạy song song" hint="enter lưu · esc quay lại">
           <text fg={color.tx3}>{`Số subagent chạy cùng lúc (cả chạy nền), hiện tại ${maxConcurrent()}. Vượt quá thì xếp hàng chờ.`}</text>
@@ -375,10 +429,14 @@ export function ConfigDialog(props: { runtime: Runtime }) {
               {
                 label: "Memory",
                 hint:
-                  (config()?.memory?.provider ?? props.runtime.memory.id) === "file"
-                    ? "Bật · lưu file ở ~/.opentrading/memory"
-                    : "Tắt · enter để bật",
-                mark: props.runtime.memory.id === "file" ? "●" : "○",
+                  memoryChoice() === "notebook"
+                    ? memoryProblem()
+                      ? "Sổ ghi nhớ · chưa mở được, enter để xem"
+                      : "Sổ ghi nhớ · memory.db"
+                    : memoryChoice() === "file"
+                      ? "Memory cũ · lưu file ở ~/.opentrading/memory"
+                      : "Tắt · enter để chọn",
+                mark: props.runtime.memory.id === "none" ? "○" : "●",
                 value: "memory" as Setting,
               },
               {

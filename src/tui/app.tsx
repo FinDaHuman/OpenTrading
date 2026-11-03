@@ -25,7 +25,7 @@ import { describeError } from "../core/chat"
 import type { AgentEvent } from "../core/events"
 import { loadConfig, saveConfig } from "../core/config"
 import { loadCatalog } from "../core/catalog"
-import type { Runtime } from "../core/runtime"
+import { closeMemory, type Runtime } from "../core/runtime"
 import { ensureProfile } from "../core/profile"
 import { loadSkills, skillRoots } from "../core/skills/loader"
 import { FolderTrust, projectExtras } from "../core/folder-trust"
@@ -609,6 +609,8 @@ export function App(props: {
       ]),
       new Promise((r) => setTimeout(r, 2000)),
     ])
+    // The notebook's store stays locked on Windows while open; session-end also fires on /clear, so not there.
+    closeMemory(props.runtime)
     attention?.clear()
     renderer.destroy()
     if (unsaved) process.stderr.write(unsaved + "\n")
@@ -802,6 +804,11 @@ export function App(props: {
     else await props.runtime.hooks.emit({ type: "session-start", sessionId: currentSession().id, source: "startup" })
     if (skillSet.problems.length > 0) {
       pushLine({ kind: "error", text: `${skillSet.problems.length} skill bị lỗi và không được nạp. Xem /skills.` })
+    }
+    // A notebook that did not open says why at once (chat still works); it is also in /config and /memory.
+    // Only the notebook: the legacy file memory keeps reporting its broken files in /memory alone.
+    if (props.runtime.memory.id === "notebook") {
+      for (const problem of props.runtime.memory.problems?.() ?? []) pushLine({ kind: "error", text: problem })
     }
   })
 

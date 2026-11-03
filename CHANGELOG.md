@@ -17,6 +17,23 @@ adopt Semantic Versioning when it exposes a stable public API.
   like an API key is refused.
 - Memory policy table (`src/core/memory/policy.ts`) and the one policy-checked read path over the
   store: sub-agents get constraints only, and no model-facing read ever returns a decision.
+- Memory v5.1 read path, the "Sổ ghi nhớ" (notebook) choice in `/config` next to "Tắt" and the legacy
+  file memory (`src/core/memory/notebook/`). Constraints and presentation style go into the system
+  part of every main-agent request, word for word with id and version, never cut. The notebook's
+  index (subjects with a thesis, lesson titles) goes into the context part. When the user names a
+  subject that has a thesis (aliases, any case or diacritics, whole words, the user's typed words
+  only), its labelled block is injected once per session; a newer version replaces it with a "thay
+  cho bản N" label, and a change, state change or deletion of something already sent is noted once.
+  Everything stays under the smallest tier's memory budget, so the core never cuts a block; a block
+  that does not fit gets a one-line pointer instead. `memory_read` is the model's only memory tool and
+  only reads (a subject's thesis, a lesson by number, lessons by keyword); decisions never reach the
+  model. Stored text is escaped and never starts a line. A store that fails to open says why at
+  startup, in `/config` and `/memory`, and in the system part; chat keeps working. `/memory` shows the
+  five groups and deletes the version on screen after asking. The store is closed when switching
+  away and on exit. Known limits of this minimal version: what was sent is tracked in RAM per session
+  (compaction, a resumed session after a restart, or switching memory off and on can repeat or miss a
+  block), deleting does not mask old blocks in the history yet, and sub-agents do not get constraints
+  yet.
 
 ### Fixed
 

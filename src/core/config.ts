@@ -8,8 +8,8 @@ import type { AutoModeConfig } from "./permission/auto/rules"
 export interface Config {
   provider?: ProviderId
   model?: string
-  /** Memory implementation: "none" (default) or "file" (reference FileMemory). */
-  memory?: { provider?: "none" | "file" }
+  /** Memory implementation: "none" (default), "file" (reference FileMemory) or "notebook" (memory v5.1, memory.db). */
+  memory?: { provider?: "none" | "file" | "notebook" }
   /**
    * Permissions (core/permission): `allow` = "always allow" answers; `deny` / `ask` = rules the
    * user writes by hand (tool name with `*`, optional `pattern` on the path or command);

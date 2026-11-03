@@ -7,7 +7,8 @@
  * this table later without reshaping it:
  * - role: who reads the store. History tools never read it; they read session files, which other
  *   code guards.
- * - action: where the content goes. "propose" and "activate" carry no data, only permission.
+ * - action: where the content goes. "propose" and "activate" carry no data, only permission. "match"
+ *   goes nowhere: it is what spotting subjects in the user's words compares against.
  * - kind: which memory.
  * - shared: a rule with `shared` set applies only in that context; without it, in any. No rule
  *   lets a model role see decisions yet; sharing them is a later feature.
@@ -15,7 +16,7 @@
  */
 
 export type MemoryRole = "user" | "main_agent" | "subagent"
-export type MemoryAction = "system" | "index" | "block" | "memory_read" | "propose" | "activate"
+export type MemoryAction = "system" | "index" | "block" | "match" | "memory_read" | "propose" | "activate"
 export type MemoryKind = "constraint" | "style" | "thesis" | "lesson" | "decision"
 
 export interface PolicyContext {
@@ -50,6 +51,7 @@ const LESSON_FULL = [
   "title",
   "summary",
   "appliesTo",
+  "appliesToDisplay",
   "exceptions",
   "detail",
   "tags",
@@ -73,6 +75,9 @@ export const MEMORY_POLICY: readonly PolicyRule[] = Object.freeze([
   // A thesis is injected as a labelled block when its subject is in focus, naming its sector so the block
   // can point to the sector's own thesis; its detail only on request.
   rule("main_agent", "block", "thesis", THESIS_BLOCK),
+  // Which subjects the user named: the aliases in use of subjects that have a thesis (nothing else would be
+  // injected). Compared only, never rendered into a prompt.
+  rule("main_agent", "match", "thesis", ["subjectId", "aliases", "uppercaseOnly"]),
   rule("main_agent", "memory_read", "constraint", CONSTRAINT),
   rule("main_agent", "memory_read", "style", STYLE),
   rule("main_agent", "memory_read", "thesis", [...THESIS_BLOCK, "detail"]),

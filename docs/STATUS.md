@@ -66,7 +66,12 @@ Contract cho đồng nghiệp: [docs/contracts.md](contracts.md).
 
 ### Memory v5.1 (đang làm, nhánh `feat/memory`)
 
-Trạng thái: kiến trúc và quyết định đã chốt. Spec 004 (sửa lỗi lõi) **`implemented`**: test chạy trên máy, chưa chạy CI. Spec 001 (kho `memory.db` và bảng chính sách theo loại) **`implemented`**: test chạy trên máy, chưa chạy CI, chưa qua duyệt code; kho **chưa được nối vào app** (spec 002 làm việc đó), nên người dùng chưa thấy thay đổi. Các spec còn lại **`specified`**, chưa có code. Bản mẫu `FileMemory` ở trên giữ nguyên; provider v5.1 sẽ là một lựa chọn mới trong `/config`.
+Trạng thái: kiến trúc và quyết định đã chốt. Spec 004 (sửa lỗi lõi) **`implemented`**: test chạy trên máy, chưa chạy CI. Spec 001 (kho `memory.db` và bảng chính sách theo loại) **`implemented`**: test chạy trên máy, chưa chạy CI, chưa qua duyệt code. Spec 002 (provider v5.1, đường đọc) **`implemented`**: test chạy trên máy, chưa chạy CI, chưa qua duyệt code, chưa thử tay trên TUI và chưa thử với model thật. Người dùng chọn **"Sổ ghi nhớ"** trong `/config` (bên cạnh "Tắt" và "Memory cũ"); ràng buộc và cách trình bày vào phần hệ thống của mọi request, không bị cắt; mục lục sổ vào phần bối cảnh; khi người dùng nhắc một mã có luận điểm, khối luận điểm có nhãn được chèn một lần trong phiên; model đọc thêm bằng `memory_read` (chỉ đọc); `/memory` cho xem năm nhóm và xoá có hỏi lại. **Chưa có đường ghi** từ giao diện (spec 003), nên sổ chỉ có dữ liệu khi spec 003 xong. Các spec còn lại **`specified`**, chưa có code. Bản mẫu `FileMemory` ở trên giữ nguyên.
+
+Ba giới hạn của bản tối thiểu (spec 002), **chưa được gỡ**:
+- Provider tự nhớ trong RAM khối nào đã gửi trong phiên. Sau khi nén hội thoại, mở lại phiên sau khi khởi động lại app, hoặc tắt rồi bật memory, RAM không khớp lịch sử: khối có thể bị chèn lại hoặc thiếu, và mở lại phiên thì không có dòng nhắc cho mục đã xoá hay đã có bản mới. Một lượt bị dừng hoặc lỗi có thể làm khối bị chèn lặp ở lượt sau. Gỡ ở spec 006.
+- Xoá chỉ báo "đã ngừng dùng" và dặn model bằng dòng nhắc; nội dung cũ vẫn còn trong lịch sử và file phiên. Gỡ ở spec 006.
+- Ràng buộc chỉ có hiệu lực khi sổ ghi nhớ đang bật, chưa tới agent con; kho đọc lỗi thì báo nhưng chưa hoãn lượt. Gỡ ở spec 005.
 
 - Kiến trúc: [docs/memory/ra-soat-v5.md](memory/ra-soat-v5.md), phần C.
 - Quyết định: ADR [0002](decisions/0002-memory-ban-ghi-co-nhan.md) (bản ghi có nhãn trong hội thoại), [0003](decisions/0003-memory-kho-sqlite-va-dinh-danh.md) (kho SQLite và định danh), [0004](decisions/0004-memory-muc-luc-va-model-tu-doc.md) (mục lục, model tự đọc bài học), [0005](decisions/0005-memory-rang-buoc-co-cau-truc.md) (ràng buộc có cấu trúc), [0006](decisions/0006-memory-ranh-gioi-theo-loai.md) (bảng chính sách, agent con không đọc lịch sử phiên).
@@ -74,7 +79,7 @@ Trạng thái: kiến trúc và quyết định đã chốt. Spec 004 (sửa l�
 - **Thay đổi lõi dự kiến** (cần chủ repo duyệt, nằm chung PR `feat/memory`; mỗi spec một commit, thân commit liệt kê từng file lõi đã sửa kèm lý do, mô tả PR có bảng "Thay đổi lõi cần chủ repo duyệt"):
   - sửa lỗi ghi phiên và khoá file (spec 004, đã code);
   - agent con không có tool lịch sử phiên (spec 004, đã code);
-  - thêm lựa chọn provider;
+  - thêm lựa chọn provider "Sổ ghi nhớ" (spec 002, đã code): `src/core/config.ts`, `src/core/runtime.ts` (mở kho, `closeMemory`), `src/tui/dialogs/config.tsx` (màn con ba lựa chọn), `src/tui/app.tsx` (báo lỗi mở kho lúc khởi động, đóng kho khi thoát), `src/tui/dialogs/memory.tsx` và file mới `src/tui/dialogs/notebook.tsx` (màn `/memory` của sổ ghi nhớ);
   - lệnh và form memory trong TUI;
   - gửi ràng buộc cho agent con;
   - che khối memory trong lịch sử khi xoá.

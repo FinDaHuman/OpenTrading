@@ -7,6 +7,7 @@ import { McpManager } from "./mcp/manager"
 import { askUserTool } from "./tools/builtin/ask-user"
 import { PermissionGate } from "./permission"
 import { FileMemory } from "./memory/file-memory"
+import { openNotebook } from "./memory/notebook/lifecycle"
 import { NoopMemory, type MemoryProvider } from "./memory/types"
 import { dataDir } from "./paths"
 import type { Skill } from "./skills/schema"
@@ -77,11 +78,25 @@ export interface Runtime {
   auto: AutoReviewer
 }
 
-export type MemoryChoice = "none" | "file"
+export type MemoryChoice = "none" | "file" | "notebook"
 
-/** Pick the memory implementation named in config (`memory.provider`). Default: off. */
+/**
+ * Pick the memory implementation named in config (`memory.provider`). Default: off. The notebook opens
+ * <home>/memory.db now; a store that fails to open still yields a provider that says why.
+ */
 export function createMemory(choice: MemoryChoice | undefined, home = dataDir()): MemoryProvider {
-  return choice === "file" ? new FileMemory(path.join(home, "memory")) : new NoopMemory()
+  if (choice === "file") return new FileMemory(path.join(home, "memory"))
+  if (choice === "notebook") return openNotebook(path.join(home, "memory.db"))
+  return new NoopMemory()
+}
+
+/**
+ * Run the current provider's cleanup (unhooks it; the notebook also closes its store, which Windows
+ * keeps locked while open). For the exit path: session-end also fires on /clear, so it cannot close it.
+ */
+export function closeMemory(runtime: Runtime) {
+  runtime.detachMemory?.()
+  runtime.detachMemory = undefined
 }
 
 /**

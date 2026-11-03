@@ -54,11 +54,14 @@ const EXPECTED: Record<string, readonly string[]> = {
     "title",
     "summary",
     "appliesTo",
+    "appliesToDisplay",
     "exceptions",
     "detail",
     "tags",
     "createdAt",
   ],
+  // Spotting subjects in what the user typed: aliases are compared, never put in a prompt.
+  "main_agent/match/thesis": ["subjectId", "aliases", "uppercaseOnly"],
   "main_agent/propose/constraint": [],
   "main_agent/propose/style": [],
   "main_agent/propose/lesson": [],
@@ -70,7 +73,7 @@ const EXPECTED: Record<string, readonly string[]> = {
 }
 
 const ROLES: MemoryRole[] = ["user", "main_agent", "subagent"]
-const ACTIONS: MemoryAction[] = ["system", "index", "block", "memory_read", "propose", "activate"]
+const ACTIONS: MemoryAction[] = ["system", "index", "block", "match", "memory_read", "propose", "activate"]
 const KINDS: MemoryKind[] = ["constraint", "style", "thesis", "lesson", "decision"]
 
 /** One entry of every kind, every optional field filled so a projection shows all its fields. */
@@ -216,6 +219,28 @@ test("deleted entries never come out of the gate", () => {
   expect(everything).not.toContain("margin")
   expect(everything).not.toContain("đầu tư công")
   expect(everything).not.toContain("Định giá ngân hàng")
+})
+
+test("matching sees the aliases in use of subjects with a thesis, and the uppercase-only flag", () => {
+  const { store, hpg } = oneOfEach()
+  const w = store.writer
+  w.addAlias(hpg, "Hòa Phát")
+  w.addAlias(hpg, "HPG cũ")
+  w.retireAlias(hpg, "HPG cũ")
+  const tin = w.createSubject({ kind: "ticker", alias: "TIN", uppercaseOnly: true }).id
+  w.saveThesis(tin, null, { text: "Tín dụng tăng", conditions: [] })
+  // A subject without a thesis is never looked for: nothing would be injected.
+  w.createSubject({ kind: "ticker", alias: "VCB" })
+  expect(store.gate.read("main_agent", "match").map((i) => i.fields)).toEqual([
+    { subjectId: hpg, aliases: ["HPG", "Hòa Phát"], uppercaseOnly: false },
+    { subjectId: tin, aliases: ["TIN"], uppercaseOnly: true },
+  ])
+})
+
+test("memory_read names the subjects a lesson applies to, so a keyword search finds the sector", () => {
+  const { store } = oneOfEach()
+  const lesson = store.gate.read("main_agent", "memory_read").find((i) => i.kind === "lesson")!
+  expect(lesson.fields.appliesToDisplay).toEqual(["Ngân hàng"])
 })
 
 test("the gate and the reader have no write, and all three capabilities are frozen", () => {
