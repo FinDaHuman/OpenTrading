@@ -183,7 +183,7 @@ export function ModelDialog() {
             focusedTextColor={color.tx}
             backgroundColor={color.panel2}
             focusedBackgroundColor={color.panel2}
-            onSubmit={(v: unknown) => typeof v === "string" && chooseManual(v)}
+            onSubmit={(v: unknown) => typeof v === "string" && saySaveFailure(Promise.resolve(chooseManual(v)))}
           />
           <Show when={manualError()}>
             <text fg={color.giam} marginTop={1} wrapMode="word">

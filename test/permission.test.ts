@@ -188,3 +188,23 @@ test("startMode: a session opens in the configured mode, but never in ▸▸ aut
   expect(startMode({ defaultMode: "auto", autoAcknowledged: true })).toBe("auto")
   expect(startMode({ defaultMode: "nonsense" })).toBe("read-only")
 })
+
+test("'always' with a store that can add: the rule goes through add (inside the save's lock), not load + save of a stale list", async () => {
+  const store = memoryStore([{ tool: "x", scope: "1" }])
+  const added: AllowRule[] = []
+  let loads = 0
+  let saves = 0
+  const gate = new PermissionGate({
+    load: async () => (loads++, store.rules),
+    save: async () => void saves++,
+    add: async (rule) => void added.push(rule),
+  })
+  gate.interactive = true
+  const first = runTool(write(), {}, ctx(), new RwLock(), gate)
+  await tick()
+  loads = 0
+  await gate.respond(gate.head()!.id, "always")
+  expect(await first).toEqual({ output: "đã tạo" })
+  expect(added).toEqual([{ tool: "mcp__gh__create_issue", scope: "gh@abc" }])
+  expect([loads, saves]).toEqual([0, 0])
+})
