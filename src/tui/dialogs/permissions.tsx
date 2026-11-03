@@ -86,8 +86,12 @@ export function PermissionsDialog(props: { mode: PermissionMode; workspace: Work
     if (evt.name === "escape") return open() ? setOpen(undefined) : closeDialog()
     const row = selected()
     if (row && evt.name === "d") void remove(row)
+    // ctrl+r, as in /agents: the retry puts the list back at once, and its filter would take a plain r.
     const d = denial()
-    if (d && evt.name === "r") retry(d)
+    if (d && evt.ctrl && !evt.meta && evt.name === "r") {
+      evt.preventDefault()
+      retry(d)
+    }
   })
 
   const autoLine = () => {
@@ -101,13 +105,13 @@ export function PermissionsDialog(props: { mode: PermissionMode; workspace: Work
     <Switch>
       <Match when={denial()}>
         {(d) => (
-          <DialogFrame title={`Auto mode đã chặn${d().label ? ` · ${d().label}` : ""}`} hint="r cho thử lại một lần · esc quay lại">
+          <DialogFrame title={`Auto mode đã chặn${d().label ? ` · ${d().label}` : ""}`} hint="ctrl+r cho thử lại một lần · esc quay lại">
             <text fg={color.tx}>{`${d().tool}  ${truncate(d().summary, 90)}`}</text>
             <text fg={color.tx2} wrapMode="word" marginTop={1}>
               {d().reason}
             </text>
             <text fg={color.tx3} marginTop={1} wrapMode="word">
-              {"r: lần sau model gọi đúng lời gọi này thì chạy luôn (một lần). Muốn cho phép lâu dài: nói rõ trong tin nhắn, hoặc thêm luật autoMode.allow trong config.json."}
+              {"ctrl+r: lần sau model gọi đúng lời gọi này thì chạy luôn (một lần). Muốn cho phép lâu dài: nói rõ trong tin nhắn, hoặc thêm luật autoMode.allow trong config.json."}
             </text>
           </DialogFrame>
         )}

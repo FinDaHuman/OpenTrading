@@ -5,6 +5,18 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ## [Unreleased]
 
+### Changed
+
+- `/permissions`: an auto-mode block is let through once with `ctrl+r` (was `r`). The retry
+  puts the list back at once, and a plain `r` landed in its filter. Same convention as `/desk`,
+  `/tasks` and `/agents`.
+
+### Fixed
+
+- `/watchlist <a name that is no list>`: `r` is typed into the lists' filter again (it was
+  swallowed as "refresh"), and one esc closes the dialog.
+- `docs/mcp.md`: logging out of a server is the **Đăng xuất** row of its menu; there is no `x` key.
+
 ## [0.3.0] — 2026-10-31
 
 Auto mode (▸▸) reviewed end to end, turns that always end with an answer, a per-session temp

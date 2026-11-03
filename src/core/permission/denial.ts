@@ -45,7 +45,7 @@ const THEN_REPORT =
   "Bạn là subagent, không hỏi được người dùng: làm tiếp phần việc không phụ thuộc vào hành động này, rồi ghi rõ trong kết quả việc nào bị chặn, lý do, và vì sao cần nó, để agent chính báo người dùng."
 
 const ALLOW_AUTO =
-  "Cách cho phép (người dùng tự làm; bạn đừng tự sửa cấu hình quyền): /permissions → chọn lần chặn → r để chạy lại một lần; nói rõ trong tin nhắn đúng hành động và đối tượng của nó; chuyển sang ▸ sửa có hỏi (Shift+Tab) để tự duyệt; hoặc thêm luật autoMode.allow trong ~/.opentrading/config.json."
+  "Cách cho phép (người dùng tự làm; bạn đừng tự sửa cấu hình quyền): /permissions → chọn lần chặn → ctrl+r để chạy lại một lần; nói rõ trong tin nhắn đúng hành động và đối tượng của nó; chuyển sang ▸ sửa có hỏi (Shift+Tab) để tự duyệt; hoặc thêm luật autoMode.allow trong ~/.opentrading/config.json."
 
 const ALLOW_RULE = "Cách cho phép (người dùng tự làm; bạn đừng tự sửa cấu hình quyền): bỏ hoặc sửa luật đó trong /permissions."
 
