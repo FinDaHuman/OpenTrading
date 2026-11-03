@@ -108,3 +108,16 @@ test("one broken memory file is skipped and reported; the valid ones still reach
   expect(await m.index()).toContain("margin")
   expect((await m.recall("có dùng margin không")).map((i) => i.text)).toEqual(["Người dùng không dùng margin"])
 })
+
+test("a hand-edited memory file without dates (or with an unquoted YAML date) is listed and recalled with the others", async () => {
+  const { dir, memory: m } = await memory()
+  const { writeFile } = await import("node:fs/promises")
+  await writeFile(path.join(dir, "a.md"), '---\nid: "a"\nscope: "user"\nstatus: "active"\ncreatedAt: "2026-10-01T00:00:00Z"\nupdatedAt: "2026-10-01T00:00:00Z"\n---\nTôi theo dõi cổ phiếu FPT\n')
+  await writeFile(path.join(dir, "hand.md"), "---\nid: hand1\nstatus: active\n---\nTôi thích báo cáo ngắn về FPT\n")
+  await writeFile(path.join(dir, "date.md"), "---\nid: 42\nstatus: active\ncreatedAt: 2026-10-02\n---\nTôi giữ FPT dài hạn\n")
+  const items = await m.list()
+  expect(items.map((i) => i.id).sort()).toEqual(["42", "a", "hand1"])
+  expect(items.every((i) => typeof i.createdAt === "string" && typeof i.updatedAt === "string")).toBe(true)
+  // recall() is what every turn uses: one such file must not silently hide every memory.
+  expect((await m.recall("FPT")).length).toBe(3)
+})

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, test } from "bun:test"
 import { createHash } from "node:crypto"
-import { existsSync, readdirSync, readFileSync, statSync, utimesSync, writeFileSync, mkdirSync, linkSync, symlinkSync, lstatSync } from "node:fs"
+import { existsSync, readdirSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync, mkdirSync, linkSync, symlinkSync, lstatSync } from "node:fs"
 import { mkdtemp, rm } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
@@ -165,6 +165,51 @@ test("applyUpdate swaps in the new binary and its alias", async () => {
   expect(readdirSync(f.dir).filter((n) => n.endsWith(".old"))).toEqual([])
 }, 30_000)
 
+test("applyUpdate: a work folder Windows keeps locked (EBUSY) is retried, then left; the update still succeeds", async () => {
+  const busy = () => {
+    throw Object.assign(new Error("EBUSY: resource busy or locked, rm '.update-x'"), { code: "EBUSY" })
+  }
+  const f = await fixture("new")
+  const rel = server({ [archiveFor(target)]: f.bytes, SHA256SUMS: f.sums })
+  let tries = 0
+  const waits: number[] = []
+  const line = await applyUpdate({
+    dir: f.dir,
+    target,
+    version: "0.3.0",
+    fetch: rel.fetch,
+    probe: () => "opentrading 0.3.0 (abc)",
+    removeWork: () => (tries++, busy()),
+    sleep: async (ms) => void waits.push(ms),
+  })
+  expect(line).toBe("opentrading 0.3.0 (abc)")
+  expect(readFileSync(path.join(f.dir, exeName), "utf8")).toBe("new")
+  expect(tries).toBe(8)
+  expect(waits).toEqual([100, 200, 300, 400, 500, 600, 700])
+  // Left behind for a later start: removeOldBinaries clears it once it is an hour old.
+  const [left] = readdirSync(f.dir).filter((n) => n.startsWith(".update-"))
+  expect(left).toBeDefined()
+  const old = new Date(Date.now() - 2 * 3_600_000)
+  utimesSync(path.join(f.dir, left!), old, old)
+  removeOldBinaries(f.dir)
+  expect(readdirSync(f.dir).filter((n) => n.startsWith(".update-"))).toEqual([])
+
+  // A lock that clears on the second try: removed, no leftovers.
+  const g = await fixture("new")
+  const rel2 = server({ [archiveFor(target)]: g.bytes, SHA256SUMS: g.sums })
+  let second = 0
+  await applyUpdate({
+    dir: g.dir,
+    target,
+    version: "0.3.0",
+    fetch: rel2.fetch,
+    probe: () => "opentrading 0.3.0 (abc)",
+    removeWork: (dir) => (second++ === 0 ? busy() : rmSync(dir, { recursive: true, force: true })),
+    sleep: async () => {},
+  })
+  expect(readdirSync(g.dir).filter((n) => n.startsWith(".update-"))).toEqual([])
+}, 30_000)
+
 test("applyUpdate changes nothing on a bad checksum, a wrong version or a missing file", async () => {
   const f = await fixture("new")
   const bad = server({ [archiveFor(target)]: f.bytes, SHA256SUMS: f.sums.replace(/^./, (c) => (c === "0" ? "1" : "0")) })
@@ -184,15 +229,24 @@ test("OPENTRADING_RELEASE_BASE points downloads at a local server", async () => 
   expect(rel.calls[0]).toBe(`http://127.0.0.1:9/rel/${archiveFor(target)}`)
 }, 30_000)
 
-test("leftovers: .old files go, a fresh .update- folder stays", async () => {
+test("leftovers: the updater's .old files go, a fresh .update- folder stays, the user's files stay", async () => {
   const dir = await temp()
-  writeFileSync(path.join(dir, "opentrading.exe.old"), "x")
+  for (const name of ["opentrading.exe.old", "ot.exe.old", "opentrading.exe.1730000000.old", "ot.exe.1730000000.old"]) writeFileSync(path.join(dir, name), "x")
+  // Not the updater's: a user's notes, a backup, a folder that happens to end in .old, and
+  // names the updater never makes (it only moves aside .exe files).
+  writeFileSync(path.join(dir, "research-notes.old"), "keep")
+  for (const name of ["ot.old", "opentrading.1730000000.old"]) writeFileSync(path.join(dir, name), "keep")
+  writeFileSync(path.join(dir, "research-notes.bak"), "keep")
+  mkdirSync(path.join(dir, "notes.old"))
+  writeFileSync(path.join(dir, "notes.old", "a.txt"), "keep")
   mkdirSync(path.join(dir, ".update-fresh"))
   mkdirSync(path.join(dir, ".update-stale"))
   const old = new Date(Date.now() - 2 * 3_600_000)
   utimesSync(path.join(dir, ".update-stale"), old, old)
   removeOldBinaries(dir)
-  expect(readdirSync(dir)).toEqual([".update-fresh"])
+  expect(readdirSync(dir).sort()).toEqual([".update-fresh", "notes.old", "opentrading.1730000000.old", "ot.old", "research-notes.bak", "research-notes.old"])
+  expect(readFileSync(path.join(dir, "research-notes.old"), "utf8")).toBe("keep")
+  expect(existsSync(path.join(dir, "notes.old", "a.txt"))).toBe(true)
   expect(existsSync(path.join(dir, ".update-fresh")) && statSync(path.join(dir, ".update-fresh")).isDirectory()).toBe(true)
 })
 

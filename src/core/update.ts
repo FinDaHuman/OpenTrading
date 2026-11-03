@@ -124,6 +124,10 @@ export interface ApplyOptions {
   platform?: NodeJS.Platform
   /** Runs the new binary with --version; returns its first line (tests stub it). */
   probe?: (file: string) => string
+  /** Removes the work folder (tests make it fail as Windows does). */
+  removeWork?: (dir: string) => void
+  /** Waits between removal attempts (tests skip the wait). */
+  sleep?: (ms: number) => Promise<void>
 }
 
 /**
@@ -174,7 +178,26 @@ export async function applyUpdate(opts: ApplyOptions): Promise<string> {
     swapIn(opts.dir, fresh, windows)
     return line
   } finally {
-    rmSync(work, { recursive: true, force: true })
+    await removeWork(work, opts)
+  }
+}
+
+/**
+ * Removes the update's work folder. On Windows the just-run and just-copied .exe inside can stay
+ * locked for a moment (antivirus, indexer): EBUSY/EPERM. Retry briefly, then leave it: the update
+ * is already in place, and removeOldBinaries clears an .update- folder older than an hour at a
+ * later start. A cleanup must never turn a finished update into a reported failure.
+ */
+async function removeWork(work: string, opts: Pick<ApplyOptions, "removeWork" | "sleep">) {
+  const remove = opts.removeWork ?? ((dir: string) => rmSync(dir, { recursive: true, force: true }))
+  const sleep = opts.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)))
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return remove(work)
+    } catch {
+      if (attempt >= 8) return
+      await sleep(100 * attempt)
+    }
   }
 }
 
@@ -251,16 +274,34 @@ function freeName(file: string): string {
   }
 }
 
+/**
+ * Names the updater and install.ps1 give a binary they move aside: `opentrading.exe.old`,
+ * `ot.exe.old`, or with a timestamp when that name was still in use (`ot.exe.1730000000.old`).
+ * Only Windows moves binaries aside (Unix renames over them), so `.exe` is required, as in
+ * install.ps1. The install folder can hold the user's own files: anything else ending in .old
+ * (`ot.old`, `opentrading.old`) is theirs.
+ */
+export const OWN_OLD_BINARY = /^(opentrading|ot)\.exe(\.\d+)?\.old$/i
+
 /** Remove the `.old` files a Windows update left behind (they were running then). */
 export function removeOldBinaries(dir: string) {
+  let names: string[]
   try {
-    for (const name of readdirSync(dir)) {
-      const file = path.join(dir, name)
-      // An .update- folder younger than an hour may belong to an update running right now.
-      const stale = name.endsWith(".old") || (name.startsWith(".update-") && Date.now() - statSync(file).mtimeMs > 3_600_000)
-      if (stale) rmSync(file, { recursive: true, force: true })
-    }
+    names = readdirSync(dir)
   } catch {
-    // still in use, or not ours: next start tries again
+    return
+  }
+  for (const name of names) {
+    const file = path.join(dir, name)
+    try {
+      if (OWN_OLD_BINARY.test(name)) {
+        if (lstatSync(file).isFile()) rmSync(file, { force: true })
+      } else if (name.startsWith(".update-") && lstatSync(file).isDirectory() && Date.now() - statSync(file).mtimeMs > 3_600_000) {
+        // An .update- folder younger than an hour may belong to an update running right now.
+        rmSync(file, { recursive: true, force: true })
+      }
+    } catch {
+      // still in use: next start tries again
+    }
   }
 }

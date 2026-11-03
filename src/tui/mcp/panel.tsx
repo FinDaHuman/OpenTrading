@@ -3,7 +3,7 @@ import { useKeys, usePasteWhenFree } from "../ui/keys"
 import { createMemo, createResource, createSignal, For, Match, onCleanup, Show, Switch, type JSX } from "solid-js"
 import { availableCatalog, MCP_CATALOG, missingRequirement } from "../../core/mcp/catalog"
 import { isRemote, type ServerConfig } from "../../core/mcp/config"
-import { cleanErrorText, type McpManager, type McpServerStatus, type McpState } from "../../core/mcp/manager"
+import { cleanErrorText, MAX_MCP_TOOLS, type McpManager, type McpServerStatus, type McpState } from "../../core/mcp/manager"
 import type { ToolDef } from "../../core/tools/types"
 import { blocked, closeDialog, state } from "../state"
 import { say } from "../notify"
@@ -515,7 +515,7 @@ export function McpPanel(props: { mcp: McpManager; cwd: string }) {
                   <Field label="Khả năng">
                     {["tools", s().resources ? "resources" : "", s().prompts.length ? "prompts" : ""].filter(Boolean).join(" · ")}
                   </Field>
-                  <Field label="Tool">{`${s().tools.length}${s().hiddenTools ? ` (ẩn ${s().hiddenTools} bằng enabledTools/disabledTools)` : ""}`}</Field>
+                  <Field label="Tool">{`${s().tools.length}${s().hiddenTools ? ` (ẩn ${s().hiddenTools} bằng enabledTools/disabledTools)` : ""}${s().capped?.includes("tools") ? ` (server trả hơn ${MAX_MCP_TOOLS} tool, chỉ lấy ${MAX_MCP_TOOLS})` : ""}`}</Field>
                   <Show when={s().prompts.length > 0}>
                     <Field label="Prompt" wrap>{promptLines(s())}</Field>
                   </Show>

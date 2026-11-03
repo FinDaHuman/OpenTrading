@@ -16,6 +16,14 @@ export const serverPrefix = (server: string) => `mcp__${sanitize(server)}__`
 export function toolName(server: string, tool: string, taken: ReadonlySet<string> = new Set()) {
   const base = serverPrefix(server) + sanitize(tool)
   if (base.length <= MAX_TOOL_NAME && !taken.has(base)) return base
-  const hash = createHash("sha1").update(`${server}\u0000${tool}`).digest("hex").slice(0, 8)
-  return `${base.slice(0, MAX_TOOL_NAME - hash.length - 1)}_${hash}`
+  // The shortened name can itself be taken (another tool's raw name may equal it): salt the
+  // hash with a counter until it is free. Deterministic for the same set of names.
+  for (let n = 0; ; n++) {
+    const hash = createHash("sha1")
+      .update(`${server}\u0000${tool}${n ? `\u0000${n}` : ""}`)
+      .digest("hex")
+      .slice(0, 8)
+    const name = `${base.slice(0, MAX_TOOL_NAME - hash.length - 1)}_${hash}`
+    if (!taken.has(name)) return name
+  }
 }

@@ -185,7 +185,7 @@ Khi run chạy, ngay dưới dòng `desk_run` là một card cập nhật liên 
   │ ✓ co-ban     thẻ điểm ACB                                                     2 req · 4s · ↓2,3k │
   │ ✓ co-ban     thẻ điểm VCB                                                     2 req · 3s · ↓1,9k │
   │ » Xếp hạng 6 mã theo điểm thẻ có trọng số.                                                       │
-  │ 12 request · ↑85,6k ↓12,1k token · /desk chi tiết (p tạm dừng · x×2 dừng)                        │
+  │ 12 request · ↑85,6k ↓12,1k token · /desk chi tiết (ctrl+p tạm dừng · ctrl+x dừng)                │
   ╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
@@ -201,9 +201,9 @@ Danh sách run của phiên → một run: cùng card ở trên (thanh tiến đ
 
 | Phím | Việc |
 | --- | --- |
-| `p` | Tạm dừng / chạy tiếp (agent đang chạy làm nốt, agent mới chờ) |
-| `x` hai lần, `ctrl+x` | Dừng run |
-| `r` | Chạy tiếp run bị cắt (hết quota, chạm trần, bị dừng) từ journal, kể cả sau khi mở lại phiên; hoặc `/desk resume <run>` |
+| `ctrl+p` | Tạm dừng / chạy tiếp (agent đang chạy làm nốt, agent mới chờ) |
+| `ctrl+x` | Dừng run |
+| `ctrl+r` | Chạy tiếp run bị cắt (hết quota, chạm trần, bị dừng) từ journal, kể cả sau khi mở lại phiên; hoặc `/desk resume <run>` |
 
 ### Demo không cần key
 

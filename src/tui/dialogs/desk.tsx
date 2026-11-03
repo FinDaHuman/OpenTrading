@@ -5,7 +5,7 @@ import { listDeskRuns, type DeskMeta } from "../../core/desk/journal"
 import type { DeskAgentView, DeskRunStatus, DeskRunView } from "../../core/desk/types"
 import type { Runtime } from "../../core/runtime"
 import { fmtSeconds, fmtTokens, groupDigits } from "../../core/subagents/result"
-import { flash, say } from "../notify"
+import { say } from "../notify"
 import { currentSession } from "../session"
 import { closeDialog, setState, state } from "../state"
 import { color } from "../theme"
@@ -18,8 +18,9 @@ import { Picker } from "./picker"
 
 /**
  * /desk (the user picked "cây phase → agent", 21/10; Claude Code's /workflows): runs of this
- * session → a run's phases with counts → a phase's agents → one agent. p pauses or resumes,
- * x twice (or ctrl+x) stops, r runs a cut or stopped run again from its journal.
+ * session → a run's phases with counts → a phase's agents → one agent. ctrl+p pauses or
+ * resumes, ctrl+x stops, ctrl+r runs a cut or stopped run again from its journal. With ctrl, as
+ * in /tasks and /agents: the lists filter as you type, so a plain p, x or r is a letter there.
  */
 
 export const DESK_STATUS: Record<DeskRunStatus, string> = {
@@ -59,7 +60,6 @@ function agentItems(run: DeskRunView) {
       return { label: `${a.type} · ${truncate(a.label, 40)}`, group: a.phase, hint, mark: AGENT_GLYPH[a.status], markColor: AGENT_COLOR[a.status], value: a.key }
     })
 }
-const STOP_WINDOW_MS = 2000
 
 export const isLive = (run: Pick<DeskRunView, "status">) => run.status === "running" || run.status === "paused"
 
@@ -109,7 +109,6 @@ export function DeskDialog(props: { runtime: Runtime }) {
   setState("deskFocus", undefined)
   const [agentKey, setAgentKey] = createSignal<string>()
   const [highlighted, setHighlighted] = createSignal<string>()
-  let stopArmed: { id: string; at: number } | undefined
 
   const dims = useTerminalDimensions()
   const cardWidth = () => Math.max(40, dims().width - 4)
@@ -125,46 +124,40 @@ export function DeskDialog(props: { runtime: Runtime }) {
     }
   }
 
-  function stop(id: string, force: boolean) {
-    const confirmed = force || (stopArmed?.id === id && Date.now() - stopArmed.at <= STOP_WINDOW_MS)
-    if (!confirmed) {
-      stopArmed = { id, at: Date.now() }
-      return flash("Nhấn x lần nữa để dừng run", STOP_WINDOW_MS, "warning")
-    }
-    stopArmed = undefined
-    if (props.runtime.desk.stop(id)) say(`Đã dừng run ${id}`, "success")
-  }
-
-  /** Run-level keys, wherever the view is; true when handled. */
+  /**
+   * Run-level keys, wherever the view is; true when handled. The key never reaches the list's
+   * filter: preventDefault, even when the run is in no state to take it.
+   */
   function runKey(evt: KeyEvent, id: string | undefined): boolean {
+    if (!evt.ctrl || evt.meta || (evt.name !== "p" && evt.name !== "x" && evt.name !== "r")) return false
+    evt.preventDefault()
     const target = runs().find((r) => r.id === id)
-    if (!target) return false
-    if (evt.name === "p" && !evt.ctrl) {
+    if (!target) return true
+    if (evt.name === "p") {
       if (target.status === "paused") props.runtime.desk.unpause(target.id)
       else if (target.status === "running") props.runtime.desk.pause(target.id)
-      return true
-    }
-    if (evt.name === "x") {
-      if (isLive(target)) stop(target.id, evt.ctrl)
-      return true
-    }
-    if (evt.name === "r" && !evt.ctrl && !isLive(target) && target.status !== "done") {
-      void resume(target.id)
-      return true
-    }
-    return false
+    } else if (evt.name === "x") {
+      // One press, as ctrl+x in /tasks: a stopped run resumes from its journal with ctrl+r.
+      if (isLive(target) && props.runtime.desk.stop(target.id)) say(`Đã dừng run ${target.id}`, "success")
+    } else if (!isLive(target) && target.status !== "done") void resume(target.id)
+    return true
   }
 
   useKeys((evt) => {
-    if (evt.eventType !== "release" && evt.name === "escape") {
+    if (evt.eventType === "release") return
+    if (evt.name === "escape") {
       if (agentKey()) return setAgentKey(undefined)
       if (open() && runs().length > 1) return setOpen(undefined)
-      closeDialog()
+      return closeDialog()
     }
+    // The agent list takes run keys through its Picker. A run with nothing to list (one known
+    // only from disk, or one whose agents have not started) has no Picker, so they come here.
+    const r = run()
+    if (r && !agent() && !(r.phases.length > 0 && r.agents.length > 0)) runKey(evt, r.id)
   })
 
   const keysHint = (r: DeskRunView) =>
-    [isLive(r) ? (r.status === "paused" ? "p chạy tiếp" : "p tạm dừng") : "", isLive(r) ? "x×2 dừng" : "", !isLive(r) && r.status !== "done" ? "r chạy tiếp" : "", "esc"]
+    [isLive(r) ? (r.status === "paused" ? "ctrl+p chạy tiếp" : "ctrl+p tạm dừng") : "", isLive(r) ? "ctrl+x dừng" : "", !isLive(r) && r.status !== "done" ? "ctrl+r chạy tiếp" : "", "esc"]
       .filter(Boolean)
       .join(" · ")
 
@@ -172,7 +165,7 @@ export function DeskDialog(props: { runtime: Runtime }) {
     <Show
       when={run()}
       fallback={
-        <DialogFrame title={`Ultradesk · ${runs().length} run`} hint="enter xem · p tạm dừng · x×2 dừng · r chạy tiếp · esc đóng">
+        <DialogFrame title={`Ultradesk · ${runs().length} run`} hint="enter xem · ctrl+p tạm dừng · ctrl+x dừng · ctrl+r chạy tiếp · esc đóng">
           <Show when={runs().length > 0} fallback={<text fg={color.tx3}>Chưa có run ultradesk nào trong phiên này. Gõ ultradesk trong câu hỏi, hoặc /desk on.</text>}>
             <Picker
               items={runs().map((r) => ({
@@ -198,7 +191,7 @@ export function DeskDialog(props: { runtime: Runtime }) {
             <DialogFrame title={`Ultradesk · ${r().id}`} hint={`↑↓ chọn agent · enter xem · ${keysHint(r())}`}>
               <Show
                 when={r().phases.length > 0}
-                fallback={<text fg={color.tx3}>{`${r().playbook} · ${DESK_STATUS[r().status]} · ${runStats(r())}. Run của lần mở trước; r để chạy tiếp từ journal.`}</text>}
+                fallback={<text fg={color.tx3}>{`${r().playbook} · ${DESK_STATUS[r().status]} · ${runStats(r())}. Run của lần mở trước; ctrl+r để chạy tiếp từ journal.`}</text>}
               >
                 {/* The same live card as in the chat (bar, phases), then every agent by phase. */}
                 <DeskCard run={r()} width={cardWidth()} rows={0} footer={`${runStats(r())}${r().logs.length > 1 ? ` · ${r().logs.length} dòng log` : ""}`} />

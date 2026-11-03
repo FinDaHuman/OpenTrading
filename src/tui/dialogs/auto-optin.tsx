@@ -1,6 +1,6 @@
 import { useKeyboard } from "@opentui/solid"
 import { createSignal, For } from "solid-js"
-import { loadConfig, saveConfig } from "../../core/config"
+import { saveConfig } from "../../core/config"
 import type { PermissionGate } from "../../core/permission"
 import { MODE_LABEL } from "../../core/permission/mode"
 import { say } from "../notify"
@@ -37,8 +37,7 @@ export async function answerAutoOptIn(gate: PermissionGate, choice: Choice) {
   if (choice === "back") return gate.setMode(from === "auto" ? "ask" : from)
   gate.setMode("auto")
   setState("autoAcknowledged", true)
-  const config = await loadConfig()
-  await saveConfig({ permissions: { ...config.permissions, autoAcknowledged: true, ...(choice === "default" ? { defaultMode: "auto" as const } : {}) } })
+  await saveConfig((config) => ({ permissions: { ...config.permissions, autoAcknowledged: true, ...(choice === "default" ? { defaultMode: "auto" as const } : {}) } }))
   if (choice === "default") say("Đã bật ▸▸ tự động và đặt làm mặc định cho các phiên sau", "success")
 }
 
