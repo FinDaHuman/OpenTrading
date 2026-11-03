@@ -63,5 +63,5 @@ test("spawn_subagent holds no lock, has no timeout, and reports an empty tool se
   const spawn = spawnSubagentTool(new SubagentManager({ parent }))
   expect(spawn.unlocked).toBe(true)
   expect(spawn.timeoutMs).toBe(0)
-  await expect(spawn.execute({ description: "t", prompt: "ask" }, ctx())).rejects.toThrow("không có tool nào")
+  await expect(spawn.execute({ description: "t", task: "x", purpose: "x", questions: ["x"], output: "x" }, ctx())).rejects.toThrow("không có tool nào")
 })

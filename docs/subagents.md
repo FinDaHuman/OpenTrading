@@ -5,6 +5,20 @@ Subagent là một agent riêng, bắt đầu với ngữ cảnh trống. Agent 
 ## Dùng thế nào
 
 - **Agent chính tự quyết định khi nào giao việc**: việc nhiều bước, hoặc nhiều việc độc lập chạy song song (ví dụ định giá 3 mã, mỗi mã một subagent). Bạn cũng có thể yêu cầu trực tiếp, ví dụ "dùng subagent tra-cuu lấy giá FPT".
+- **Brief có cấu trúc cố định** (`src/core/subagents/brief.ts`): agent chính không viết prompt tự do mà điền các trường `task`, `depth` (`quick`/`medium`/`thorough`), `purpose`, `context`, `questions` (1–10 mục), `scope`, `output`, `done_when`. Harness ghép chúng thành một khung cố định mà subagent nhận (ctrl+o hiện đúng khung này):
+
+  ```
+  <task> (mức kỹ: nhanh|vừa|rất kỹ).
+  Mục đích: …
+  Bối cảnh đã có: …
+  Việc cần làm:
+  - …
+  Phạm vi: …
+  Trả về: … Ghi [suy luận] cho ý không lấy từ kết quả tool.
+  Xong khi: …
+  ```
+
+  Mục để trống thì bỏ dòng. Các trường theo hướng dẫn giao việc cho Agent tool của Claude Code (mục đích, đã biết/đã loại trừ, câu hỏi cụ thể, độ dài muốn nhận, mức kỹ). Claude Code, opencode và Codex để prompt tự do; OT ép khung để model nhỏ (Flash-Lite) không giao việc cụt. `send_message` vẫn là văn bản tự do. Ultradesk không dùng tool này: prompt của nó dựng bằng template trong từng playbook.
 - **Giao diện**:
   - Các subagent spawn trong cùng một bước hiện thành một khối `● Chạy N subagent…` với cây `├─ └─`. Mỗi dòng có tool đang chạy, số tool, token, hoặc "đang chờ slot (r/max)".
   - Xong thì hiện `Xong (N tool · Xk token · Ns)`.

@@ -201,7 +201,9 @@ async function collect(gen: AsyncGenerator<AgentEvent>) {
   return events
 }
 const ends = (events: AgentEvent[]) => events.filter((e) => e.type === "tool-end") as Extract<AgentEvent, { type: "tool-end" }>[]
-const spawn = (description: string) => ({ name: "spawn_subagent", args: { description, prompt: `Phân tích ${description}` } })
+/** The brief fields spawn_subagent takes (brief.ts); the child gets them laid out by renderBrief. */
+const brief = (task: string) => ({ task, purpose: "trả lời người dùng", questions: ["Số liệu chính?"], output: "≤ 5 dòng" })
+const spawn = (description: string) => ({ name: "spawn_subagent", args: { description, ...brief(`Phân tích ${description}`) } })
 
 test("end to end: the child runs its own loop and the parent gets its report with a metadata trailer", async () => {
   const { registry, manager } = setup()
@@ -230,6 +232,9 @@ test("end to end: the child runs its own loop and the parent gets its report wit
   expect(childTools).not.toContain("spawn_subagent")
   expect(child.messages.at(-1)).toMatchObject({ role: "user" })
   expect(JSON.stringify(child.messages)).toContain("Phân tích Định giá FPT")
+  // The brief arrives in its fixed layout (brief.ts), not as the raw fields.
+  const laidOut = ["Phân tích Định giá FPT (mức kỹ: vừa).", "Mục đích: trả lời người dùng", "Việc cần làm:", "- Số liệu chính?"].join("\n")
+  expect(JSON.stringify(child.messages)).toContain(JSON.stringify(laidOut).slice(1, -1))
   // The parent's system prompt is untouched by the subagent role.
   expect(parentBodies[0]!.messages[0]!.content as string).toContain("<identity>")
 
@@ -487,7 +492,7 @@ test("an agent type brings its instructions, tool filter, step limit and model",
       }),
     [thu],
   )
-  parentCalls = [{ name: "spawn_subagent", args: { description: "Giá FPT", prompt: "giá FPT", subagent_type: "thu" } }]
+  parentCalls = [{ name: "spawn_subagent", args: { description: "Giá FPT", ...brief("giá FPT"), subagent_type: "thu" } }]
   childCall = { name: "current_time", args: {} }
   const events = await collect(runAgent({ history: [], input: "x", skills: [], registry }))
   expect(ends(events)[0]!.ok).toBe(true)
@@ -516,7 +521,7 @@ test("background: the call returns at once with the id; the result arrives throu
   manager.onFinished((v) => finished.push(`${v.id}:${v.status}:${v.text}`))
   let release!: () => void
   childGate = new Promise((r) => (release = r))
-  parentCalls = [{ name: "spawn_subagent", args: { description: "Định giá FPT", prompt: "định giá", run_in_background: true } }]
+  parentCalls = [{ name: "spawn_subagent", args: { description: "Định giá FPT", ...brief("định giá"), run_in_background: true } }]
   const controller = new AbortController()
   const events = await collect(runAgent({ history: [], input: "x", skills: [], registry, signal: controller.signal }))
   const [end] = ends(events)
@@ -770,6 +775,6 @@ test("the auto-mode log gets the user's words from the main turn and the task as
   await collect(runAgent({ history: [], input: "phân tích HPG giúp mình", skills: [], registry }))
   const log = gate.auto.log.render()
   expect(log).toContain('{"user":"phân tích HPG giúp mình"}')
-  expect(log).toContain('"main_agent_task":"Phân tích Kỹ thuật HPG"')
+  expect(log).toContain('"main_agent_task":"Phân tích Kỹ thuật HPG (mức kỹ: vừa).')
   expect(log).not.toContain('{"user":"Phân tích Kỹ thuật HPG"}')
 })
