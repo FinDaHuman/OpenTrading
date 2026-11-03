@@ -246,7 +246,7 @@ const cwd = await mkdtemp(path.join(os.tmpdir(), "opentrading-cwd-"))
 const DEMO = path.resolve(import.meta.dir, "../examples/mcp-demo/server.ts")
 await writeFile(path.join(home, "mcp.json"), JSON.stringify({ mcpServers: { demo: { command: process.execPath, args: [DEMO] } } }))
 
-const { App } = await import("../src/tui/app")
+const { App, idleTimerForTests } = await import("../src/tui/app")
 const { state, setState } = await import("../src/tui/state")
 const { LOADED_PREFIX } = await import("../src/core/tools/search")
 const { resetNotifications, say } = await import("../src/tui/notify")
@@ -2800,6 +2800,62 @@ async function waitFrameMs(pred: (frame: string) => boolean) {
   }
   throw new Error(`frame never matched ${pred}:\n${frame}`)
 }
+
+test("idle compaction (33d): a big conversation left idle is summarized once; never while a subagent works or auto-compaction is off", async () => {
+  const saved = { provider: state.provider, model: state.model, idleCompactMinTokens: state.idleCompactMinTokens, idleCompactMinutes: state.idleCompactMinutes }
+  await setKey("groq", "gsk-good-key")
+  await setup.mockInput.typeText("/new")
+  setup.mockInput.pressEnter()
+  await setup.waitFor(() => state.history.length === 0)
+  expect(idleTimerForTests().armed).toBe(false) // nothing to compact yet
+  setState({ provider: "groq", model: "test-model" })
+  try {
+    for (const text of ["rảnh một", "rảnh hai", "rảnh ba"]) {
+      await setup.mockInput.typeText(text)
+      setup.mockInput.pressEnter()
+      await setup.waitFor(() => state.lines.some((l) => l.kind === "user" && l.text === text))
+      await waitMcp(() => !state.streaming)
+    }
+    // Armed after the turn; a small conversation is left alone when it fires.
+    await setup.waitFor(() => idleTimerForTests().armed)
+    expect(idleTimerForTests().fireNow()).toBe(true)
+    await new Promise((r) => setTimeout(r, 20))
+    expect(state.lines.some((l) => l.kind === "compact")).toBe(false)
+
+    // Over the floor (lowered for the test) while a background subagent still works: wait.
+    // A small conversation waits for the next turn; changing the setting (/config) re-arms at once.
+    setState({ idleCompactMinTokens: 1_000, contextTokens: 5_000, idleCompactMinutes: 30 })
+    const busy = { id: "ag-idle", type: "nghien-cuu", description: "Nền", prompt: "", background: true, model: "", status: "running" as const, createdAt: Date.now(), startedAt: Date.now(), tools: [], toolCount: 0, usage: { input: 0, output: 0 }, text: "" }
+    setState("agents", reconcile({ [busy.id]: busy }))
+    await setup.waitFor(() => idleTimerForTests().armed)
+    idleTimerForTests().fireNow()
+    await new Promise((r) => setTimeout(r, 20))
+    expect(state.lines.some((l) => l.kind === "compact")).toBe(false)
+    expect(idleTimerForTests().armed).toBe(true) // tries again after another idle spell
+    setState("agents", reconcile({}))
+
+    // Auto-compaction off: idle compaction is off too (nothing pending).
+    setState("autoCompactOff", true)
+    expect(idleTimerForTests().fireNow()).toBe(false)
+    await new Promise((r) => setTimeout(r, 20))
+    expect(state.lines.some((l) => l.kind === "compact")).toBe(false)
+    setState("autoCompactOff", false)
+
+    await setup.waitFor(() => idleTimerForTests().armed)
+    idleTimerForTests().fireNow()
+    await waitMcp(() => state.lines.some((l) => l.kind === "compact") && !state.streaming)
+    expect(state.lines.some((l) => l.kind === "info" && l.text.startsWith(`Bạn vắng ${state.idleCompactMinutes} phút`))).toBe(true)
+    expect(JSON.stringify(state.history[0])).toContain("tom_tat_hoi_thoai")
+    // Once per idle spell: not armed again until the next turn.
+    await new Promise((r) => setTimeout(r, 20))
+    expect(idleTimerForTests().armed).toBe(false)
+    const frame = await setup.waitForFrame((f) => f.includes("Đã nén hội thoại"))
+    show(frame)
+  } finally {
+    setState({ ...saved, autoCompactOff: false })
+    setState("agents", reconcile({}))
+  }
+})
 
 test("prompt: a message typed during /compact is sent once the compaction ends", async () => {
   // Enough turns that /compact has something to summarize (the last two stay verbatim).

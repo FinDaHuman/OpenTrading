@@ -1,5 +1,6 @@
 import type { ModelMessage } from "ai"
 import { contextLimits as limitsOf, DEFAULT_COMPACT_PERCENT, type ContextLimits } from "../core/compact"
+import { IDLE_COMPACT_MIN_TOKENS, IDLE_COMPACT_MINUTES } from "../core/idle-compact"
 import type { Todo } from "../core/tools/todos"
 import type { ChartData } from "../core/tools/chart/data"
 import { createStore } from "solid-js/store"
@@ -137,6 +138,9 @@ export const [state, setState] = createStore({
   compactCap: undefined as number | undefined,
   /** Config `autoCompactPercent`: compact at this share of (window − reserve). */
   compactPercent: DEFAULT_COMPACT_PERCENT,
+  /** Config `idleCompact` (idle-compact.ts): summarize a big conversation after this many idle minutes (0 = off). */
+  idleCompactMinutes: IDLE_COMPACT_MINUTES as number,
+  idleCompactMinTokens: IDLE_COMPACT_MIN_TOKENS as number,
   /** Subagents of this session by id (live progress from the SubagentManager). */
   agents: {} as Record<string, SubagentView>,
   /** The row of the subagent panel that has the keyboard (↓ from the prompt); undefined = the prompt. */

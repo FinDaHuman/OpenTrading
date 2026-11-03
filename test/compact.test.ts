@@ -304,3 +304,33 @@ test("a harness reminder sent as the whole user message (continue after an overf
   expect(visibleUserText(reminder)).toBe("")
   expect(transcriptFromMessages([{ role: "user", content: "hỏi" }])).toEqual([{ kind: "user", text: "hỏi" }])
 })
+
+test("idle (summarizeAbove): 200k on a 1M window is summarized though far below the auto threshold (33d)", async () => {
+  // Small tool results (nothing to prune): the conversation itself is what is big.
+  const history = [...turn(1, "x", "1"), ...turn(2, "x", "2"), ...turn(3, "x", "3"), ...turn(4, "x", "4")]
+  let asked = 0
+  const result = await compactHistory(history, {
+    contextTokens: 210_000,
+    limits: limits(1_000_000, 900_000),
+    summarizeAbove: 200_000,
+    summarize: async () => (asked++, "## Yêu cầu của người dùng\nTÓM-TẮT"),
+  })
+  expect(asked).toBe(1)
+  expect(result.summary).toContain("TÓM-TẮT")
+  // The same history with only the auto threshold: no request.
+  const auto = await compactHistory(history, { contextTokens: 210_000, limits: limits(1_000_000, 900_000), summarize: neverSummarize })
+  expect(auto.summary).toBeUndefined()
+})
+
+test("idle: pruning alone brings it under summarizeAbove → no request; too short to summarize → nothing, no error", async () => {
+  const history = [...turn(1), ...turn(2), ...turn(3), ...turn(4)]
+  // Two old 2 000-character results are cleared (~1k tokens): just enough to get under 200k.
+  const pruned = await compactHistory(history, { contextTokens: 200_400, limits: limits(1_000_000, 900_000), summarizeAbove: 200_000, summarize: neverSummarize })
+  expect(pruned.summary).toBeUndefined()
+  expect(pruned.error).toBeUndefined()
+  expect(pruned.after).toBeLessThan(200_000)
+  // One huge turn: nothing to summarize, and it is not a failure (only a manual /compact says so).
+  const one = await compactHistory(turn(1, "x", "1"), { contextTokens: 250_000, limits: limits(1_000_000, 900_000), summarizeAbove: 200_000, summarize: neverSummarize })
+  expect(one.summary).toBeUndefined()
+  expect(one.error).toBeUndefined()
+})
