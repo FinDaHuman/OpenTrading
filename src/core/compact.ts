@@ -277,6 +277,11 @@ export interface CompactOptions {
   limits?: ContextLimits
   /** Manual /compact: summarize even below the threshold. */
   manual?: boolean
+  /**
+   * Summarize when the pruned history is still at least this big, in place of the auto
+   * threshold (idle compaction: 200k on a 1M window is far below it).
+   */
+  summarizeAbove?: number
   instructions?: string
   /** Summarize the head (everything but the kept turns). Throws on failure. */
   summarize: (head: ModelMessage[], instructions?: string) => Promise<string>
@@ -352,7 +357,8 @@ export async function compactHistory(history: readonly ModelMessage[], opts: Com
   const pruned = tools.pruned + files.pruned
   const afterPrune = scaled(before, history, prunedMessages)
   const base: CompactResult = { messages: prunedMessages, before, after: afterPrune, pruned }
-  if (!opts.manual && opts.limits && afterPrune < opts.limits.threshold) return base
+  const summarizeAbove = opts.summarizeAbove ?? opts.limits?.threshold
+  if (!opts.manual && summarizeAbove !== undefined && afterPrune < summarizeAbove) return base
 
   const turns = splitTurns(prunedMessages)
   let keep = KEEP_TURNS

@@ -9,6 +9,7 @@ import { AUTO_MODEL } from "../../core/subagents/model-pick"
 import { DEFAULT_MAX_STEPS } from "../../core/agent"
 import { isEffort } from "../../core/effort"
 import { clampPercent, DEFAULT_COMPACT_PERCENT, MIN_COMPACT_WINDOW } from "../../core/compact"
+import { IDLE_COMPACT_CHOICES } from "../../core/idle-compact"
 import { fmtTokens, groupDigits } from "../../core/subagents/result"
 import { blocked, closeDialog, contextLimits, providerName, setState, state } from "../state"
 import { say, saySaveFailure } from "../notify"
@@ -24,7 +25,7 @@ const COMPACT_PERCENTS = [95, 90, 80, 70]
 
 const DEFAULT_MODE_NEXT: Record<PermissionMode, PermissionMode> = { "read-only": "ask", ask: "auto", auto: "read-only" }
 
-type Setting = "memory" | "toolSearch" | "autoCompact" | "compactLevel" | "maxSteps" | "effort" | "subagentMax" | "subagentModel" | "webModel" | "autoModel" | "defaultMode" | "askEffort" | "tips" | "terminalNotify" | "scroll" | "updateCheck" | "scratchpad"
+type Setting = "memory" | "toolSearch" | "autoCompact" | "idleCompact" | "compactLevel" | "maxSteps" | "effort" | "subagentMax" | "subagentModel" | "webModel" | "autoModel" | "defaultMode" | "askEffort" | "tips" | "terminalNotify" | "scroll" | "updateCheck" | "scratchpad"
 type SubagentModel = { provider: string; model: string } | "inherit" | "auto"
 
 const TOOL_SEARCH_NEXT = { auto: "on", on: "off", off: "auto" } as const
@@ -171,6 +172,15 @@ export function ConfigDialog(props: { runtime: Runtime }) {
       return
     }
     if (setting === "effort") return setState("dialog", "effort")
+    if (setting === "idleCompact") {
+      // 15 → 30 → 54 → off → 15; the timer picks it up after the next turn.
+      const at = IDLE_COMPACT_CHOICES.indexOf(state.idleCompactMinutes as (typeof IDLE_COMPACT_CHOICES)[number])
+      const next = IDLE_COMPACT_CHOICES[(at + 1) % IDLE_COMPACT_CHOICES.length]!
+      await saveConfig((current) => ({ idleCompact: { ...current.idleCompact, minutes: next } }))
+      setState("idleCompactMinutes", next)
+      await refetch()
+      return
+    }
     if (setting === "autoCompact") {
       const off = config()?.autoCompact !== "off"
       await saveConfig({ autoCompact: off ? "off" : "auto" })
@@ -393,6 +403,15 @@ export function ConfigDialog(props: { runtime: Runtime }) {
                     : `Tự động · ${compactAt()}: dọn kết quả tool cũ, rồi tóm tắt nếu cần (1 request)`,
                 mark: config()?.autoCompact === "off" ? "○" : "●",
                 value: "autoCompact" as Setting,
+              },
+              {
+                label: "Tự nén khi rảnh",
+                hint:
+                  config()?.autoCompact === "off" || state.idleCompactMinutes <= 0
+                    ? "Tắt"
+                    : `Sau ${state.idleCompactMinutes} phút không dùng, hội thoại từ ${fmtTokens(state.idleCompactMinTokens)} token được tóm tắt (1 request) · enter để đổi`,
+                mark: config()?.autoCompact === "off" || state.idleCompactMinutes <= 0 ? "○" : "●",
+                value: "idleCompact" as Setting,
               },
               {
                 label: "Ngưỡng tự nén",

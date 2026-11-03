@@ -24,6 +24,7 @@ import { connectedProviders } from "../core/auth"
 import { describeError } from "../core/chat"
 import type { AgentEvent } from "../core/events"
 import { loadConfig, saveConfig } from "../core/config"
+import { idleCompactSettings, IdleTimer } from "../core/idle-compact"
 import { loadCatalog } from "../core/catalog"
 import type { Runtime } from "../core/runtime"
 import { ensureProfile } from "../core/profile"
@@ -120,9 +121,11 @@ function lineIndex(predicate: (line: Line) => boolean) {
 
 /**
  * Compact the conversation (see core/compact.ts). Runs like a turn: esc stops it, /new
- * discards it. On failure the history is left as is (or only pruned).
+ * discards it. On failure the history is left as is (or only pruned). "idle": the user has
+ * been away (idleCompact); it summarizes above `state.idleCompactMinTokens` rather than the
+ * auto threshold, and is recorded and counted as an auto compaction.
  */
-export async function compact(runtime: Runtime, trigger: "auto" | "manual", instructions?: string, projected?: number, force = false): Promise<boolean> {
+export async function compact(runtime: Runtime, trigger: "auto" | "manual" | "idle", instructions?: string, projected?: number, force = false): Promise<boolean> {
   if (state.history.length === 0) {
     if (trigger === "manual") say("Chưa có hội thoại để nén.")
     return true
@@ -139,11 +142,17 @@ export async function compact(runtime: Runtime, trigger: "auto" | "manual", inst
       onSummarize: () =>
         pushLine({
           kind: "info",
-          text: trigger === "auto" ? "Context gần đầy: đang tóm tắt phần đầu hội thoại (dùng 1 request)…" : "Đang tóm tắt hội thoại (dùng 1 request)…",
+          text:
+            trigger === "auto"
+              ? "Context gần đầy: đang tóm tắt phần đầu hội thoại (dùng 1 request)…"
+              : trigger === "idle"
+                ? `Bạn vắng ${state.idleCompactMinutes} phút: đang tóm tắt phần đầu hội thoại để tin nhắn sau không phải gửi lại toàn bộ (dùng 1 request)…`
+                : "Đang tóm tắt hội thoại (dùng 1 request)…",
         }),
       limits,
       // Forced after a context-overflow error: summarize even if the estimate is below the threshold.
       manual: trigger === "manual" || force,
+      summarizeAbove: trigger === "idle" ? state.idleCompactMinTokens : undefined,
       instructions,
       summarize: async (head, extra) => {
         // One request: <analysis> scratchpad then <summary> (Claude Code); lean when the head is huge.
@@ -172,12 +181,12 @@ export async function compact(runtime: Runtime, trigger: "auto" | "manual", inst
     if (result.summary !== undefined || result.pruned > 0) {
       // The clock reminder lived in the dropped turns: send it again next turn.
       setState({ history: result.messages, contextTokens: result.after, contextEstimated: true, clock: undefined })
-      recordCompact({ trigger, before: result.before, after: result.after, messages: result.messages })
+      recordCompact({ trigger: trigger === "manual" ? "manual" : "auto", before: result.before, after: result.after, messages: result.messages })
       pushLine({ kind: "compact", summary: result.summary, before: result.before, after: result.after, pruned: result.pruned })
     }
     if (result.error) {
       pushLine({ kind: "error", text: `Không tóm tắt được hội thoại: ${result.error}` })
-      if (trigger === "auto") {
+      if (trigger !== "manual") {
         setState("compactFailures", (n) => n + 1)
         if (state.compactFailures >= MAX_AUTO_FAILURES) {
           pushLine({ kind: "info", text: `Tự nén lỗi ${MAX_AUTO_FAILURES} lần liên tiếp nên đã tắt cho phiên này; gõ /compact để thử lại.` })
@@ -195,6 +204,46 @@ export async function compact(runtime: Runtime, trigger: "auto" | "manual", inst
 
 /** The turn being answered, so exit can wait for it to be saved. */
 let inflight: Promise<void> | undefined
+
+/** Idle compaction (core/idle-compact.ts): armed while nothing runs, at most once per idle spell. */
+const idleTimer = new IdleTimer()
+let idleSpent = false
+let armedMinutes = 0
+
+/** Tests fire the pending idle compaction at once instead of waiting minutes. */
+export function idleTimerForTests() {
+  return idleTimer
+}
+
+/** Keep the idle timer in step with the app: armed while idle with a conversation, else not. */
+function syncIdleTimer(runtime: Runtime) {
+  const idle = !state.streaming && !state.compacting && state.history.length > 0
+  if (!idle || idleSpent || state.autoCompactOff || state.idleCompactMinutes <= 0) return idleTimer.disarm()
+  // A new setting from /config takes effect at once.
+  if (!idleTimer.armed || armedMinutes !== state.idleCompactMinutes) {
+    armedMinutes = state.idleCompactMinutes
+    idleTimer.arm(armedMinutes * 60_000, () => void idleCompact(runtime))
+  }
+}
+
+/**
+ * The user has been away `idleCompactMinutes`: summarize a big conversation now, so the next
+ * message does not resend it all to a provider whose prompt cache has expired. Waits instead
+ * while something needs the user (a prompt, a dialog) or work is still running in the
+ * background; a conversation that is small, or too short to summarize, is left alone.
+ */
+async function idleCompact(runtime: Runtime) {
+  if (state.streaming || state.compacting || state.history.length === 0) return
+  if (state.autoCompactOff || state.compactFailures >= MAX_AUTO_FAILURES) return
+  const busy =
+    state.dialog || state.approval || state.question || state.deskApproval || inflight || state.queue.length > 0 || state.notices.length > 0
+  const working = Object.values(state.agents).some((a) => a.status === "running" || a.status === "queued")
+  // Not now: try again after another idle spell.
+  if (busy || working) return syncIdleTimer(runtime)
+  if ((state.contextTokens ?? tokensOf(state.history)) < state.idleCompactMinTokens) return
+  idleSpent = true
+  await compact(runtime, "idle")
+}
 
 /** A message to send: the text for the model, what the transcript shows, pasted images. */
 type Outgoing = { text: string; display?: string; images?: PromptImage[]; notice?: boolean; desk?: DeskOptIn }
@@ -214,6 +263,9 @@ export function deliverNotices(runtime: Runtime) {
 }
 
 function send(runtime: Runtime, message: string | Outgoing) {
+  // Any turn (a typed message, a queued one, a background result) ends the idle wait.
+  idleTimer.disarm()
+  idleSpent = false
   let msg: Outgoing = typeof message === "string" ? { text: message } : message
   // Undelivered subagent results ride in front of what the user typed.
   if (!msg.notice && state.notices.length > 0) {
@@ -784,6 +836,8 @@ export function App(props: {
       terminalNotify: config.ui?.terminalNotify !== false,
       scroll: scrollSetting(config.ui),
       autoCompactOff: config.autoCompact === "off",
+      idleCompactMinutes: idleCompactSettings(config).minutes,
+      idleCompactMinTokens: idleCompactSettings(config).minTokens,
       autoAcknowledged: config.permissions?.autoAcknowledged === true,
       modelPrefs,
       deskKeywordOn: deskSettings(config).keyword,
@@ -1529,8 +1583,14 @@ export function App(props: {
     }
   }
 
+  // Idle compaction: armed after each turn (and on a resumed session) while nothing runs.
+  createEffect(() => syncIdleTimer(props.runtime))
+  onCleanup(() => idleTimer.disarm())
+
   useKeyboard((evt) => {
     if (evt.eventType === "release") return
+    // Typing is not being away.
+    idleTimer.poke()
     if (search() && !owner() && !state.dialog) return searchKey(evt)
     if (evt.ctrl && (evt.name === "c" || evt.name === "d")) return onQuitKey(evt.name)
     if (evt.ctrl && evt.name === "o") return void setState("expandTools", (v) => !v)

@@ -50,6 +50,13 @@ export interface Config {
    */
   autoCompactPercent?: number
   /**
+   * Compaction while you are away (Claude Code's idle compaction): a conversation of at least
+   * `minTokens` (default 200 000) left idle for `minutes` (default 15, 0 = off) is summarized in
+   * the background (1 request), so the next message does not send it all again once the
+   * provider's prompt cache has expired. Off when `autoCompact` is "off".
+   */
+  idleCompact?: { minutes?: number; minTokens?: number }
+  /**
    * TUI details (default on): `tips`, a tip under the working row during long turns;
    * `terminalNotify`, a desktop notification when a turn ends or waits for you while the
    * terminal is in the background, and the tab progress ring. `scrollSpeed`: chat rows per
