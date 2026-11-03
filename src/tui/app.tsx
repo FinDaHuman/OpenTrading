@@ -209,6 +209,8 @@ let inflight: Promise<void> | undefined
 const idleTimer = new IdleTimer()
 let idleSpent = false
 let armedMinutes = 0
+/** The session the timer and idleSpent belong to: another one (/resume, /clear) starts afresh. */
+let armedFor: string | undefined
 
 /** Tests fire the pending idle compaction at once instead of waiting minutes. */
 export function idleTimerForTests() {
@@ -217,6 +219,12 @@ export function idleTimerForTests() {
 
 /** Keep the idle timer in step with the app: armed while idle with a conversation, else not. */
 function syncIdleTimer(runtime: Runtime) {
+  const session = currentSession().id
+  if (armedFor !== session) {
+    armedFor = session
+    idleSpent = false
+    idleTimer.disarm()
+  }
   const idle = !state.streaming && !state.compacting && state.history.length > 0
   if (!idle || idleSpent || state.autoCompactOff || state.idleCompactMinutes <= 0) return idleTimer.disarm()
   // A new setting from /config takes effect at once.
@@ -836,8 +844,9 @@ export function App(props: {
       terminalNotify: config.ui?.terminalNotify !== false,
       scroll: scrollSetting(config.ui),
       autoCompactOff: config.autoCompact === "off",
-      idleCompactMinutes: idleCompactSettings(config).minutes,
-      idleCompactMinTokens: idleCompactSettings(config).minTokens,
+      // The raw setting: "Tự nén hội thoại" off is state.autoCompactOff, which the timer follows.
+      idleCompactMinutes: idleCompactSettings({ idleCompact: config.idleCompact }).minutes,
+      idleCompactMinTokens: idleCompactSettings({ idleCompact: config.idleCompact }).minTokens,
       autoAcknowledged: config.permissions?.autoAcknowledged === true,
       modelPrefs,
       deskKeywordOn: deskSettings(config).keyword,
