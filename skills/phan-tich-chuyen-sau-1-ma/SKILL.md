@@ -39,7 +39,7 @@ Chạy `vn_company` · `vs_company_info` · `vs_industry_tree`. Lấy ngành GIC
 
 Khi có tool `desk_run` (người dùng đã bật ultradesk) → gọi `desk_run` với key `tranh_bien` cho mã ở Bước 1 thay cho Bước 3–5; kết quả về sau, báo ngắn là run đang chạy.
 
-Gọi `spawn_subagent` hai lần trong cùng một lượt (loại `nghien-cuu`): một subagent nạp `ky-thuat-chuyen-sau`, một subagent nạp `dinh-gia-chuyen-sau`, cùng mã ở Bước 1. Yêu cầu mỗi subagent trả về 5–8 dòng có số, khung thời gian và tên tool nguồn. Không gọi trực tiếp `signals_technical` / `valuation_run` / `stock_forensic` ở lượt chính.
+Gọi `spawn_subagent` hai lần trong cùng một lượt (loại `nghien-cuu`): một subagent nạp `ky-thuat-chuyen-sau`, một subagent nạp `dinh-gia-chuyen-sau`, cùng mã ở Bước 1. Mỗi brief: `task` nêu mã và skill cần nạp, `questions` là các câu hỏi cụ thể của skill đó, `output` "5–8 dòng có số, khung thời gian và tên tool nguồn". Không gọi trực tiếp `signals_technical` / `valuation_run` / `stock_forensic` ở lượt chính.
 
 **Bước 4: Lợi nhuận quý + tin + sự kiện (song song, cùng lượt với Bước 3 nếu được).**
 

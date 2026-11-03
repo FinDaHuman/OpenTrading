@@ -99,8 +99,8 @@ test("spawn_subagent lists the types in its description and rejects an unknown t
   expect(spawn.description).toContain("Các loại subagent (tham số subagent_type, mặc định nghien-cuu):")
   expect(spawn.description).toMatch(/- tra-cuu: Dùng khi cần tra cứu nhanh .* \(Tool: chỉ đọc\)/)
   expect(spawn.description).toMatch(/- tin-tuc: .*\(Tool: web_search, web_fetch, \*news\*, \*sentiment\*, current_time\)/)
-  expect(spawn.summarize!({ description: "Giá FPT", prompt: "x", subagent_type: "tra-cuu" })).toBe("tra-cuu(Giá FPT)")
+  expect(spawn.summarize!({ description: "Giá FPT", task: "x", purpose: "x", questions: ["x"], output: "x", subagent_type: "tra-cuu" })).toBe("tra-cuu(Giá FPT)")
   await expect(
-    spawn.execute({ description: "x", prompt: "x", subagent_type: "khong-co" }, { signal: new AbortController().signal, callId: "c" }),
+    spawn.execute({ description: "x", task: "x", purpose: "x", questions: ["x"], output: "x", subagent_type: "khong-co" }, { signal: new AbortController().signal, callId: "c" }),
   ).rejects.toThrow('Không có loại subagent "khong-co". Các loại hiện có: bear, bull, chu-ky-nganh, co-ban, dinh-gia, du-bao-su-kien, kiem-chien-luoc, ky-thuat, nganh, nghien-cuu, phan-bien, rui-ro-thi-truong, tai-san-toan-cau, tin-tuc, tong-hop, tra-cuu, vi-mo.')
 })

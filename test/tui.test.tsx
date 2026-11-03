@@ -187,7 +187,7 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
         index,
         id: `call_sub_${index}_${chatBodies.length}`,
         type: "function",
-        function: { name: "spawn_subagent", arguments: JSON.stringify({ description, prompt, ...(background ? { run_in_background: true } : {}) }) },
+        function: { name: "spawn_subagent", arguments: JSON.stringify({ description, task: prompt, purpose: "trả lời", questions: [prompt], output: "ngắn", ...(background ? { run_in_background: true } : {}) }) },
       }))
       return sseOf(chunk({ role: "assistant", tool_calls: calls }) + chunk({}, "tool_calls") + "data: [DONE]\n\n")
     }
@@ -2915,8 +2915,11 @@ test("subagents: parallel spawns are one line in the transcript and one row each
     show(frame)
     expect(frame).not.toContain("⎿ Xong (0 tool")
     setState("expandTools", true)
-    frame = await setup.waitForFrame((f) => /├─ nghien-cuu \(Định giá FPT\)[^\n]*\n\s*│  ⎿ Xong \(0 tool · /.test(f))
-    expect(frame).toMatch(/└─ nghien-cuu \(Định giá CMG\)[^\n]*\n\s*⎿ Xong \(0 tool · /)
+    frame = await setup.waitForFrame((f) => /└─ nghien-cuu \(Định giá CMG\)[^\n]*\n\s*⎿ Xong \(0 tool · /.test(f))
+    // Each expanded row carries its whole brief (several lines): the first row is one page up.
+    setup.mockInput.pressKey("\x1b[5~") // PgUp
+    await setup.waitForFrame((f) => /├─ nghien-cuu \(Định giá FPT\)[^\n]*\n\s*│  ⎿ Xong \(0 tool · /.test(f))
+    setup.mockInput.pressKey("\x1b[6~") // PgDn: back down
     // The parent model got both reports with their trailers.
     const results = state.history.filter((m) => m.role === "tool").slice(-2)
     for (const r of results) expect(JSON.stringify(r.content)).toContain("BÁO-CÁO-CON")

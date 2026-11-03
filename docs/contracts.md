@@ -196,6 +196,7 @@ Frontmatter gồm `name` (trùng tên file), `description`, `tools`, `disallowed
   - `compact`: hội thoại vừa được nén (`trigger` auto/manual, `before`/`after` token, `messages` là history mới). Khi mở lại, model chỉ nhận history từ entry `compact` cuối cùng trở đi; transcript vẫn hiện các lượt cũ cùng một dòng "Đã nén hội thoại".
 - `index.jsonl` có một dòng cho mỗi lần cập nhật phiên; dòng sau cùng của cùng một id thắng.
 - Subagent ghi transcript riêng ở `YYYY/MM/<id>/subagents/agent-<agentId>.jsonl` (các dòng `agent_meta`, `message`, `notice`, `agent_end`) và `.meta.json`. File phiên chính chỉ chứa lời gọi `spawn_subagent` và kết quả (có trailer `<subagent_meta>`). Kết quả của subagent nền vào history dưới dạng tin user `<thong_bao_subagent>`.
+- Skill nào bảo agent chính gọi `spawn_subagent` thì viết theo các trường của brief (`task`, `purpose`, `questions`, `output`…, xem [subagents.md](subagents.md)), không viết "prompt": tool không còn trường đó.
 - **Mở lại phiên:**
   - Dùng `/sessions`, `opentrading -c` / `--continue` (phiên mới nhất **của thư mục đang mở**) hoặc `-r` / `--resume <id>` (chỉ cần phần đầu của id, mở được phiên của thư mục khác).
   - Phiên thuộc thư mục OpenTrading được mở (`cwd` trong `meta`, và trong dòng `index.jsonl` từ khi có lệnh `opentrading`; dòng cũ đọc `cwd` từ `meta`). `/sessions` liệt kê phiên của thư mục này, `tab` chuyển sang mọi thư mục. Tool `session_history` vẫn thấy mọi phiên.
