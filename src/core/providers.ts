@@ -71,9 +71,32 @@ const SDK: Record<string, Factory> = {
   "@ai-sdk/vercel": (o) => createVercel(o),
   "@ai-sdk/alibaba": (o) => createAlibaba(o),
   "@openrouter/ai-sdk-provider": (o) => {
-    const sdk = createOpenRouter(o)
+    const sdk = createOpenRouter({ ...o, ...(isOpenRouter(o.baseURL) ? OPENROUTER_APP : {}) })
     return (id) => sdk.chat(id)
   },
+}
+
+/**
+ * OpenRouter app attribution (openrouter.ai/docs/app-attribution): HTTP-Referer identifies
+ * the app, X-OpenRouter-Title names it (X-Title is the older name), and the category files
+ * it with the coding agents. Some free models only answer apps it can attribute
+ * ("only available on agentic harnesses"); opencode and Cline send the same headers.
+ */
+const OPENROUTER_APP = {
+  appName: "OpenTrading",
+  appUrl: "https://github.com/FinDaHuman/OpenTrading",
+  headers: { "X-Title": "OpenTrading", "X-OpenRouter-Categories": "cli-agent" },
+}
+
+/** Other gateways reuse the OpenRouter SDK (models.dev: standardcompute); they get no OpenRouter headers. */
+function isOpenRouter(baseURL: string | undefined) {
+  if (!baseURL) return true
+  try {
+    const host = new URL(baseURL).hostname
+    return host === "openrouter.ai" || host.endsWith(".openrouter.ai")
+  } catch {
+    return false
+  }
 }
 
 const COMPATIBLE = "@ai-sdk/openai-compatible"

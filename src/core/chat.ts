@@ -34,6 +34,9 @@ export function describeError(error: unknown): string {
   // AbortSignal.timeout fired (a tool's or a side request's own limit): its English text says nothing.
   if (e?.name === "TimeoutError") return "Hết thời gian chờ phản hồi."
   const status = e?.statusCode
+  // OpenRouter: a model offered only to apps it recognises, not a key problem.
+  if (status === 403 && /agentic harness/i.test(e?.message ?? ""))
+    return `Model này chỉ dùng được qua các app OpenRouter công nhận, OpenTrading chưa nằm trong danh sách đó (403): ${providerText(e?.message)}. Gõ /model để chọn model khác.`
   if (status === 401 || status === 403)
     return `API key không hợp lệ hoặc không có quyền (${status}). Gõ /connect để nhập lại.`
   if (status === 404) {
