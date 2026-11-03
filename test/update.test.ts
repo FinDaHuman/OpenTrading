@@ -231,9 +231,11 @@ test("OPENTRADING_RELEASE_BASE points downloads at a local server", async () => 
 
 test("leftovers: the updater's .old files go, a fresh .update- folder stays, the user's files stay", async () => {
   const dir = await temp()
-  for (const name of ["opentrading.exe.old", "ot.exe.old", "opentrading.exe.1730000000.old", "ot.1730000000.old"]) writeFileSync(path.join(dir, name), "x")
-  // Not the updater's: a user's notes, a backup, a folder that happens to end in .old.
+  for (const name of ["opentrading.exe.old", "ot.exe.old", "opentrading.exe.1730000000.old", "ot.exe.1730000000.old"]) writeFileSync(path.join(dir, name), "x")
+  // Not the updater's: a user's notes, a backup, a folder that happens to end in .old, and
+  // names the updater never makes (it only moves aside .exe files).
   writeFileSync(path.join(dir, "research-notes.old"), "keep")
+  for (const name of ["ot.old", "opentrading.1730000000.old"]) writeFileSync(path.join(dir, name), "keep")
   writeFileSync(path.join(dir, "research-notes.bak"), "keep")
   mkdirSync(path.join(dir, "notes.old"))
   writeFileSync(path.join(dir, "notes.old", "a.txt"), "keep")
@@ -242,7 +244,7 @@ test("leftovers: the updater's .old files go, a fresh .update- folder stays, the
   const old = new Date(Date.now() - 2 * 3_600_000)
   utimesSync(path.join(dir, ".update-stale"), old, old)
   removeOldBinaries(dir)
-  expect(readdirSync(dir).sort()).toEqual([".update-fresh", "notes.old", "research-notes.bak", "research-notes.old"])
+  expect(readdirSync(dir).sort()).toEqual([".update-fresh", "notes.old", "opentrading.1730000000.old", "ot.old", "research-notes.bak", "research-notes.old"])
   expect(readFileSync(path.join(dir, "research-notes.old"), "utf8")).toBe("keep")
   expect(existsSync(path.join(dir, "notes.old", "a.txt"))).toBe(true)
   expect(existsSync(path.join(dir, ".update-fresh")) && statSync(path.join(dir, ".update-fresh")).isDirectory()).toBe(true)

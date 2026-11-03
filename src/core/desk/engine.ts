@@ -386,11 +386,9 @@ export class DeskEngine {
       if (state.paused) await state.paused.promise
       release = await state.limiter.acquire(state.controller.signal)
       release = await this.holdWhilePaused(state, release)
-      // Caps are checked when the agent would actually start (cached ones cost nothing).
-      if (view.cut) throw new DeskCut(view.cut)
-      if (view.counters.agents >= settings.maxAgents) this.cut(state, "agents")
-      else if (settings.maxRequests !== undefined && view.counters.requests >= settings.maxRequests) this.cut(state, "requests")
-      if (view.cut) throw new DeskCut(view.cut)
+      // Caps are checked when the agent would actually start (cached ones cost nothing). This
+      // early check only spares a capped agent the stagger wait; claimAgent below decides.
+      this.checkCaps(state)
       leads = await this.staggered(state, prefix)
       release = await this.holdWhilePaused(state, release)
       if (view.cut) throw new DeskCut(view.cut)
@@ -398,7 +396,7 @@ export class DeskEngine {
       const spec = typeSpec(this.deps.agents(), type)
       if (!spec) throw new Error(`Không có loại agent "${type}".`)
       const narrowed = spec.toolFilter
-      view.counters.agents++
+      this.claimAgent(state)
       entry.status = "running"
       const startSpec: StartSpec = {
         ...spec,
@@ -427,6 +425,8 @@ export class DeskEngine {
       if (this.rateLimited(state, result)) {
         this.log(state, "Bị giới hạn tốc độ (429): chạy từng agent một và thử lại agent này.")
         this.addRequests(view, entry, result)
+        // The retry is one more agent start: it counts against desk.maxAgents like any other.
+        this.claimAgent(state)
         run = this.deps.starter.start(startSpec)
         entry.agentId = run.id
         this.emit(state)
@@ -476,6 +476,27 @@ export class DeskEngine {
       release?.()
       this.emit(state)
     }
+  }
+
+  /** Cuts the run once it has reached desk.maxAgents or desk.maxRequests; throws if it is cut. */
+  private checkCaps(state: RunState) {
+    const { view, settings } = state
+    if (!view.cut) {
+      if (view.counters.agents >= settings.maxAgents) this.cut(state, "agents")
+      else if (settings.maxRequests !== undefined && view.counters.requests >= settings.maxRequests) this.cut(state, "requests")
+    }
+    if (view.cut) throw new DeskCut(view.cut)
+  }
+
+  /**
+   * Checks the caps and counts one agent start, with no await in between: siblings that passed
+   * an earlier check while they waited (for a slot, the stagger or a pause) must not all start.
+   * The run's own caps only (desk.*): subagents.maxConcurrent, shared with spawn_subagent, may
+   * queue the agent after this, but it is counted here, when the run asks for it.
+   */
+  private claimAgent(state: RunState) {
+    this.checkCaps(state)
+    state.view.counters.agents++
   }
 
   /**

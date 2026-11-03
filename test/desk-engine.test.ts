@@ -174,6 +174,62 @@ test("maxAgents: the run is cut, the rest are skipped, the status is partial", a
   expect(view.result).toEqual(["a1", "a2", null, null])
 })
 
+test("maxAgents holds when more agents run at once than the cap (QA 23-002: 2 agents, 3 at once, stagger)", async () => {
+  for (const staggerMs of [0, 3000]) {
+    const fake = starter((s) => ok(s.prompt))
+    const pb = playbook("p", (ctx) => ctx.parallel(["FPT", "VCB", "HPG", "MWG"].map((t) => () => ctx.agent(t))))
+    const view = await (await engine(fake, [pb], { maxAgents: 2, maxConcurrent: 3, staggerMs }).start("p", {})).done
+    expect(fake.specs).toHaveLength(2)
+    expect(view.counters.agents).toBe(2)
+    expect(view.cut).toBe("agents")
+    expect(view.status).toBe("partial")
+    expect(view.agents.filter((a) => a.status === "skipped")).toHaveLength(2)
+  }
+})
+
+test("maxAgents counts the retry after a 429: it is one more agent start", async () => {
+  let limited = 0
+  const fake = starter((s) => (s.prompt === "a1" && limited++ < 1 ? fail("rate-limit") : ok(s.prompt)))
+  const pb = playbook("p", (ctx) => ctx.pipeline([1, 2, 3], (n: number) => ctx.agent(`a${n}`)))
+  const view = await (await engine(fake, [pb], { maxAgents: 2, maxConcurrent: 1 }).start("p", {})).done
+  expect(fake.specs.map((s) => s.prompt)).toEqual(["a1", "a1"])
+  expect(view.counters.agents).toBe(2)
+  expect(view.cut).toBe("agents")
+  expect(view.result).toEqual(["a1", null, null])
+})
+
+test("maxAgents is the run's own cap: subagents.maxConcurrent queueing below it changes nothing", async () => {
+  // The starter takes one agent at a time, as SubagentManager does with subagents.maxConcurrent: 1,
+  // while the run itself allows 3 at once.
+  let queue = Promise.resolve()
+  const fake = starter((s) => {
+    const turn = queue.then(() => Bun.sleep(2)).then(() => ok(s.prompt))
+    queue = turn.then(() => {})
+    return turn
+  })
+  const pb = playbook("p", (ctx) => ctx.parallel(["A", "B", "C", "D", "E"].map((t) => () => ctx.agent(t))))
+  const view = await (await engine(fake, [pb], { maxAgents: 3, maxConcurrent: 3 }).start("p", {})).done
+  expect(fake.specs).toHaveLength(3)
+  expect(view.cut).toBe("agents")
+})
+
+test("resume applies desk.maxAgents as configured now, counting only the agents it starts", async () => {
+  const session = await mkdtemp(path.join(home, "cap-resume-"))
+  const pb = playbook("p", (ctx) => ctx.parallel(["A", "B", "C", "D"].map((t) => () => ctx.agent(t))))
+  const e1 = engine(starter((s) => ok(s.prompt)), [pb], { maxAgents: 2, maxConcurrent: 3 }, session)
+  const first = await (await e1.start("p", {})).done
+  await e1.flush()
+  expect(first.cut).toBe("agents")
+  // desk.maxAgents lowered to 1 since: the 2 answered agents come from the journal for free.
+  const fake = starter((s) => ok(s.prompt))
+  const e = engine(fake, [pb], { maxAgents: 1, maxConcurrent: 3 }, session)
+  const view = await (await e.resume(first.id)).done
+  expect(fake.specs).toHaveLength(1)
+  expect(view.counters.cached).toBe(2)
+  expect(view.counters.agents).toBe(1)
+  expect(view.cut).toBe("agents")
+})
+
 test("maxRequests: no agent starts once the run's requests reach the cap", async () => {
   const e = engine(starter((s) => ok(s.prompt, undefined, 5)), [playbook("p", (ctx) => ctx.pipeline([1, 2, 3], (n: number) => ctx.agent(`a${n}`)))], { maxRequests: 8, maxConcurrent: 1 })
   const view = await (await e.start("p", {})).done

@@ -7,10 +7,20 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 Fixes for the QA reports of 23, 25 and 27 October 2026.
 
+### Changed
+
+- Ultradesk: a run with no usable data now ends `failed` instead of `done`. Playbooks get
+  `agent(…, { accept })` to reject an answer before it is kept, and `DeskNoData` to end a run as
+  `failed` (`sang-loc`, `nganh` and `tranh-bien` use both).
+- Ultradesk: the retry after a 429 counts as one more agent against `desk.maxAgents`.
+
 ### Fixed
 
-- Update: startup cleanup removes only the `.old` binaries the updater (and `install.ps1`) moved
-  aside, never the user's own `*.old` files in the install folder.
+- Update: startup cleanup removes only the `opentrading.exe`/`ot.exe` `.old` files the updater (and
+  `install.ps1`) moved aside, never the user's own `*.old` files in the install folder.
+- Ultradesk: `desk.maxAgents` holds when a run starts more agents at once than the cap (for example
+  `maxAgents: 2`, `maxConcurrent: 3`): agents waiting for a slot, the stagger or a pause no longer
+  all start.
 - `read_file` on Word: paragraphs inside one table cell stay apart (`100<br>200`, not `100200`).
 - `read_file` on Excel: a sheet named like a number ("2026") is found by its name first; files
   written with a namespace prefix (`x:sheet`) are read; a cell in the last Excel row no longer

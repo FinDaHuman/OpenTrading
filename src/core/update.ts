@@ -277,9 +277,11 @@ function freeName(file: string): string {
 /**
  * Names the updater and install.ps1 give a binary they move aside: `opentrading.exe.old`,
  * `ot.exe.old`, or with a timestamp when that name was still in use (`ot.exe.1730000000.old`).
- * The install folder can hold the user's own files: anything else ending in .old is theirs.
+ * Only Windows moves binaries aside (Unix renames over them), so `.exe` is required, as in
+ * install.ps1. The install folder can hold the user's own files: anything else ending in .old
+ * (`ot.old`, `opentrading.old`) is theirs.
  */
-export const OWN_OLD_BINARY = /^(opentrading|ot)(\.exe)?(\.\d+)?\.old$/i
+export const OWN_OLD_BINARY = /^(opentrading|ot)\.exe(\.\d+)?\.old$/i
 
 /** Remove the `.old` files a Windows update left behind (they were running then). */
 export function removeOldBinaries(dir: string) {

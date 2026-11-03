@@ -82,7 +82,7 @@ Agent của desk:
 | Key | Mặc định | Ý nghĩa |
 | --- | --- | --- |
 | `size` | `small` | `small` / `medium` / `large` / `unrestricted`. Playbook có kiểu tự chọn bậc riêng theo giá trị này |
-| `maxAgents` | 100 | **Trần cứng** số agent mỗi run. Chạm trần thì các agent còn lại không chạy, run thành `partial` |
+| `maxAgents` | 100 | **Trần cứng** số agent mỗi run tự khởi chạy, kể cả lượt chạy lại sau 429; agent lấy từ journal không tính. Kiểm và đếm cùng lúc ngay trước khi khởi chạy, nên đúng cả khi `maxConcurrent` lớn hơn trần. Chạm trần thì các agent còn lại không chạy, run thành `partial`. Là trần riêng của desk: `spawn_subagent` ở chế độ thường không có trần này, còn `subagents.maxConcurrent` chỉ xếp hàng agent đã được đếm |
 | `maxConcurrent` | 3 | Số agent của một run chạy cùng lúc. Nằm trong `subagents.maxConcurrent` chung, và ≤ 4 slot MCP để server free không sập |
 | `maxRequests` | không đặt | **Trần cứng** số request model mỗi run. Kiểm khi agent sắp bắt đầu: các agent đang chạy được làm nốt, nên có thể vượt thêm khoảng `maxConcurrent × (maxSteps + 4)` |
 | `warnRequests` | 150 | Thẻ duyệt cảnh báo khi số request dự kiến vượt mức này |
