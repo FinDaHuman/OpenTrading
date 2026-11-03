@@ -13,6 +13,9 @@ Fixes for the QA reports of 23, 25 and 27 October 2026.
   `agent(…, { accept })` to reject an answer before it is kept, and `DeskNoData` to end a run as
   `failed` (`sang-loc`, `nganh` and `tranh-bien` use both).
 - Ultradesk: the retry after a 429 counts as one more agent against `desk.maxAgents`.
+- `/desk`: pause, stop and resume are `ctrl+p`, `ctrl+x` (one press) and `ctrl+r`, as in `/tasks` and
+  `/agents`. A plain `p`, `x` or `r` typed in the run or agent list now only filters it; before, it
+  both acted on the run and landed in the filter.
 
 ### Fixed
 
@@ -31,7 +34,7 @@ Fixes for the QA reports of 23, 25 and 27 October 2026.
   resumes of one run share one launch; an effort inherited from `desk.effort` follows the config
   on resume; a journal line cut by a crash no longer swallows the next result.
 - Ultradesk: `sang-loc`/`nganh` reject a scorecard about another ticker instead of relabelling it;
-  a run with no usable data ends `failed` (resumable with `r`), not `done`; `r` works in the detail
+  a run with no usable data ends `failed` (resumable with `ctrl+r`), not `done`; `ctrl+r` works in the detail
   view of a run from an earlier sitting.
 - Config: concurrent saves no longer lose each other's changes (in-process queue + lock file).
 - `web_search`: `recency_days` is applied after every backend (DuckDuckGo and Parallel get it

@@ -94,8 +94,8 @@ Agent của desk:
 
 - Một agent hết **quota ngày** → run bị cắt (`cut: "quota"`): không agent mới nào chạy, agent đang chạy được làm nốt, kết quả là `partial`.
 - Một agent bị **giới hạn tốc độ** (429 theo phút) sau khi đã hết lượt thử lại của request → run giảm còn 1 agent mỗi lúc và chạy lại agent đó một lần. Lần 429 thứ hai, kể cả khi đó chính là lượt chạy lại → run bị cắt (`cut: "rate"`), không agent mới nào chạy, chạy tiếp sau bằng `/desk resume`.
-- **Tạm dừng** (`p`): agent đang chạy được làm nốt; agent đang chờ lượt (kể cả đã xếp hàng trước lúc tạm dừng) không bắt đầu cho tới khi chạy tiếp. Dừng (`x`) khi đang tạm dừng kết thúc run ngay.
-- Playbook không lấy được dữ liệu đủ dùng (mọi agent lỗi, quá ít thẻ điểm) → run là **`failed`** với lời nhắn đó (không phải `done`), nên `/desk` hiện là chưa xong và `r` chạy tiếp được.
+- **Tạm dừng** (`ctrl+p` trong `/desk`): agent đang chạy được làm nốt; agent đang chờ lượt (kể cả đã xếp hàng trước lúc tạm dừng) không bắt đầu cho tới khi chạy tiếp. Dừng (`ctrl+x`) khi đang tạm dừng kết thúc run ngay.
+- Playbook không lấy được dữ liệu đủ dùng (mọi agent lỗi, quá ít thẻ điểm) → run là **`failed`** với lời nhắn đó (không phải `done`), nên `/desk` hiện là chưa xong và `ctrl+r` chạy tiếp được.
 - Một `agent()` có thể kèm `accept`: kết quả bị từ chối (ví dụ thẻ điểm của mã khác mã được hỏi) làm agent đó lỗi, không vào journal, và được chạy lại khi resume. `sang-loc` và `nganh` dùng nó để không bao giờ gắn số liệu của mã khác vào mã đang xét.
 - Lỗi trong chính code của playbook (không phải agent lỗi) được ghi vào log của run, không bị nuốt thành `null` một cách im lặng.
 - Agent không chạy được được ghi là **chưa kiểm chứng**, không phải "sai" (bài học từ deep-research của Claude Code).
