@@ -115,7 +115,7 @@ Notion, Linear, Sentry, Atlassian… dùng OAuth: không cần token, chỉ cầ
   - Trình duyệt mở trang đăng nhập của nhà cung cấp. Link luôn được in ra để bạn tự mở nếu trình duyệt không bật lên.
   - Sau khi bạn đồng ý, trình duyệt quay về `http://127.0.0.1:<port>/callback` trên máy bạn. Chờ tối đa 5 phút; Esc để huỷ.
 - Token được lưu trong `mcp-auth.json` và tự làm mới khi hết hạn.
-- Đăng xuất: `/mcp` → chọn server → `x`, hoặc `opentrading mcp logout <tên>`.
+- Đăng xuất: `/mcp` → chọn server → **Đăng xuất**, hoặc `opentrading mcp logout <tên>`.
 - Server có header `Authorization` cố định, hoặc khai `"oauth": false`, thì không bao giờ dùng OAuth.
 - Server không cho đăng ký ứng dụng tự động (DCR): tạo OAuth app trên trang của nhà cung cấp và khai `"oauth": { "clientId": "..." }`.
 - Kết nối có vấn đề: `opentrading mcp debug <tên>` in phản hồi thô của server, header `WWW-Authenticate`, máy chủ OAuth và việc có hỗ trợ DCR hay không.

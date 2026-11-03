@@ -16,6 +16,9 @@ Fixes for the QA reports of 23, 25 and 27 October 2026.
 - `/desk`: pause, stop and resume are `ctrl+p`, `ctrl+x` (one press) and `ctrl+r`, as in `/tasks` and
   `/agents`. A plain `p`, `x` or `r` typed in the run or agent list now only filters it; before, it
   both acted on the run and landed in the filter.
+- `/permissions`: an auto-mode block is let through once with `ctrl+r` (was `r`). The retry
+  puts the list back at once, and a plain `r` landed in its filter. Same convention as `/desk`,
+  `/tasks` and `/agents`.
 
 ### Fixed
 
@@ -50,6 +53,10 @@ Fixes for the QA reports of 23, 25 and 27 October 2026.
   meanwhile (for example a playbook approved with "không hỏi lại").
 - `ot update` on Windows: a work folder still locked for a moment after the swap no longer
   reports a finished update as failed.
+- `/watchlist <a name that is no list>`: `r` is typed into the lists' filter again (it was
+  swallowed as "refresh"), and one esc closes the dialog.
+- `docs/mcp.md`: logging out of a server is the **Đăng xuất** row of its menu; there is no `x` key.
+
 
 ## [0.3.0] — 2026-10-31
 

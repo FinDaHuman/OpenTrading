@@ -156,7 +156,7 @@ export class AutoReviewer {
   }
 
   /**
-   * The user lets one blocked call through (/permissions → r): its next identical call runs, and
+   * The user lets one blocked call through (/permissions → ctrl+r): its next identical call runs, and
    * the classifier reads that the user allowed it (the earlier block no longer counts against it).
    */
   grantRetry(denial: Denial) {

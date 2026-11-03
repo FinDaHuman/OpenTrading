@@ -112,7 +112,7 @@ Trước mỗi lần `write_file` hoặc `edit_file`, bản cũ được chép v
 - chế độ hiện tại và workspace;
 - model duyệt và số request đã dùng;
 - các quy tắc đã lưu: luôn cho phép, chặn, luôn hỏi (`d` để xoá);
-- các lần auto mode chặn gần đây: `r` cho phép đúng lời gọi đó chạy một lần, rồi bạn nhắn model "thử lại".
+- các lần auto mode chặn gần đây: `ctrl+r` cho phép đúng lời gọi đó chạy một lần, rồi bạn nhắn model "thử lại".
 
 Bạn tự viết quy tắc trong `~/.opentrading/config.json`:
 
@@ -147,11 +147,11 @@ Mỗi hành động cần duyệt được một model thứ hai xét trước k
 - **Nguồn gốc dữ liệu:** kết quả của `web_fetch`, `web_search` và tool MCP có thêm một dòng `[Nguồn: …]` cho model (host web hoặc tên server MCP), kèm nhắc rằng chỉ dẫn nằm trong dữ liệu là nội dung của nguồn, không phải lời bạn. Đây chỉ là thông tin nguồn gốc, không phải đánh giá dữ liệu là nguy hiểm.
 - **Khi bị chặn:** model nhận tên tool, nhãn luật và lý do, ví dụ `Auto mode chặn shell [Git phá huỷ]: …`, kèm chỉ dẫn (giống Claude Code, chặt hơn ở chỗ đổi tool):
   - không làm đúng việc đó bằng tool hay lệnh khác (shell bị chặn thì không chuyển sang `write_file`, `edit_file`, tool MCP, script hay subagent); chỉ được chọn cách an toàn hơn hẳn mà không gây ra tác dụng đó, như ghi ra file mới thay vì ghi đè hoặc đưa lệnh để bạn tự chạy;
-  - làm tiếp các việc không phụ thuộc; nếu việc đó bắt buộc thì làm hết phần còn lại rồi dừng, nói định làm gì, vì sao cần và cách bạn cho phép (`/permissions` → `r`, nói rõ trong tin nhắn, chuyển `▸`, hoặc tự thêm `autoMode.allow`). Model được dặn không tự sửa cấu hình quyền;
+  - làm tiếp các việc không phụ thuộc; nếu việc đó bắt buộc thì làm hết phần còn lại rồi dừng, nói định làm gì, vì sao cần và cách bạn cho phép (`/permissions` → `ctrl+r`, nói rõ trong tin nhắn, chuyển `▸`, hoặc tự thêm `autoMode.allow`). Model được dặn không tự sửa cấu hình quyền;
   - subagent bị chặn thì ghi việc đó và lý do vào kết quả cho agent chính.
 
   Bạn thấy một dòng `✘ Auto mode chặn … · /permissions để cho thử lại` dưới tool đó (`ctrl+o` hiện đủ đoạn model nhận) và một toast `… bị auto mode chặn · /permissions`, kể cả khi subagent bị chặn.
-- **Không lách ở bước sau:** model duyệt thấy các hành động đã bị chặn hoặc bị từ chối (cùng đối tượng của chúng) kể từ tin nhắn gần nhất của bạn. Một hành động sau đó đạt cùng tác dụng lên cùng đối tượng bằng đường khác (ví dụ xoá bị chặn rồi ghi rỗng đè lên đúng file đó) sẽ bị chặn theo cùng luật. Khi bạn gửi tin nhắn mới, các dấu này được xoá (của subagent nền thì giữ tới khi nó xong), nên một lần chặn nhầm không kéo theo cả phiên. Khi bạn duyệt trong hộp thoại hoặc dùng `/permissions` → `r`, model duyệt chỉ ghi là bạn cho phép đúng lời gọi đó; chữ trong nội dung lời gọi không được coi là lời bạn.
+- **Không lách ở bước sau:** model duyệt thấy các hành động đã bị chặn hoặc bị từ chối (cùng đối tượng của chúng) kể từ tin nhắn gần nhất của bạn. Một hành động sau đó đạt cùng tác dụng lên cùng đối tượng bằng đường khác (ví dụ xoá bị chặn rồi ghi rỗng đè lên đúng file đó) sẽ bị chặn theo cùng luật. Khi bạn gửi tin nhắn mới, các dấu này được xoá (của subagent nền thì giữ tới khi nó xong), nên một lần chặn nhầm không kéo theo cả phiên. Khi bạn duyệt trong hộp thoại hoặc dùng `/permissions` → `ctrl+r`, model duyệt chỉ ghi là bạn cho phép đúng lời gọi đó; chữ trong nội dung lời gọi không được coi là lời bạn.
 - **Quay về hỏi bạn khi:**
   - bị chặn 3 lần liên tiếp, hoặc 20 lần trong phiên (một lời gọi chạy được mà không cần model duyệt, như `git status`, cũng cắt chuỗi "liên tiếp"; khi đã chạm giới hạn thì phải chờ bạn trả lời);
   - model duyệt lỗi hoặc trả lời sai định dạng (lỗi tạm thời như 5xx, quá tải, mất mạng được thử lại 1 lần; 429 thì không);

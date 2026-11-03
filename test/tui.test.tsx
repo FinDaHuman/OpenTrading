@@ -715,6 +715,10 @@ test("/mcp: enabling an OAuth catalog entry connects, then starts the login (no 
     expect(state.mcp.find((s) => s.name === "notion")?.state).toBe("needs-auth")
     const frame = await setup.waitForFrame((f) => f.includes("Đang đăng nhập notion") && f.includes("login.example"))
     show(frame)
+    // c copies the link; the login view has no input for it to land in.
+    expect(frame).toContain("(c để copy)")
+    setup.mockInput.pressKey("c")
+    await setup.waitForFrame((f) => f.includes("Đang đăng nhập notion") && !f.includes("› c"))
     // Esc cancels the login and returns to the server screen.
     setup.mockInput.pressEscape()
     await setup.waitForFrame((f) => f.includes("notion · MCP server"))
@@ -734,6 +738,26 @@ test("/mcp: enabling an OAuth catalog entry connects, then starts the login (no 
     remote.stop()
   }
 }, 30_000)
+
+test("/mcp: r reconnects the highlighted server; the panel has no filter and the prompt gets nothing", async () => {
+  const restarted: string[] = []
+  const realRestart = runtime.mcp.restart.bind(runtime.mcp)
+  runtime.mcp.restart = async (name) => void restarted.push(name)
+  try {
+    await setup.mockInput.typeText("/mcp")
+    setup.mockInput.pressEnter()
+    await setup.waitForFrame((f) => f.includes("❯ demo"))
+    setup.mockInput.pressKey("r")
+    await setup.waitFor(() => restarted.length > 0)
+    expect(restarted).toEqual(["demo"])
+    setup.mockInput.pressEscape()
+    await setup.waitFor(() => state.dialog === undefined)
+    // Nothing was typed into the prompt under the panel.
+    await setup.waitForFrame((f) => f.includes("Hỏi về thị trường"))
+  } finally {
+    runtime.mcp.restart = realRestart
+  }
+})
 
 test("/mcp: a pasted token is never shown on screen", async () => {
   await setup.mockInput.typeText("/mcp")
@@ -1822,6 +1846,81 @@ test("/memory: a model proposal is pending until approved with 'a'", async () =>
   await setup.waitForFrame((f) => f.includes("đang dùng"))
   setup.mockInput.pressEscape()
   await setup.waitFor(() => state.dialog === undefined)
+})
+
+test("/memory: a, r and d act only in a memory's view; in the list they are letters of the filter", async () => {
+  const pending = await memory.add("Không mua cổ phiếu penny", { status: "pending", via: "model" })
+  const active = await memory.add("Ưu tiên cổ tức tiền mặt", { status: "active", via: "user" })
+  const status = async (id: string) => (await memory.list()).find((i) => i.id === id)?.status
+  await setup.mockInput.typeText("/memory")
+  setup.mockInput.pressEnter()
+  await setup.waitForFrame((f) => f.includes("Không mua cổ phiếu penny") && f.includes("gõ để lọc"))
+  // In the list a, r and d only filter: nothing is approved, rejected or removed.
+  await setup.mockInput.typeText("ard")
+  let frame = await setup.waitForFrame((f) => f.includes("› ard"))
+  show(frame)
+  expect(await status(pending.id)).toBe("pending")
+  expect(await status(active.id)).toBe("active")
+  for (let i = 0; i < 3; i++) setup.mockInput.pressBackspace()
+  // The memory's view has no filter: r rejects, and the list comes back with an empty filter.
+  await setup.mockInput.typeText("penny")
+  await setup.waitForFrame((f) => f.includes("› penny"))
+  setup.mockInput.pressEnter()
+  await setup.waitForFrame((f) => f.includes("a duyệt · r bỏ"))
+  setup.mockInput.pressKey("r")
+  await setup.waitFor(async () => (await status(pending.id)) !== "pending")
+  frame = await setup.waitForFrame((f) => f.includes("Memory · ") && f.includes("Ưu tiên cổ tức"))
+  expect(frame).toContain("gõ để lọc")
+  expect(frame).not.toContain("› r")
+  await setup.mockInput.typeText("cổ tức")
+  await setup.waitForFrame((f) => f.includes("› cổ tức"))
+  setup.mockInput.pressEnter()
+  await setup.waitForFrame((f) => f.includes("d xoá · esc"))
+  setup.mockInput.pressKey("d")
+  await setup.waitFor(async () => (await status(active.id)) === undefined)
+  frame = await setup.waitForFrame((f) => f.includes("Memory · ") && !f.includes("cổ tức tiền mặt  đang dùng"))
+  show(frame)
+  expect(frame).toContain("gõ để lọc")
+  expect(frame).not.toContain("› d")
+  setup.mockInput.pressEscape()
+  await setup.waitFor(() => state.dialog === undefined)
+})
+
+test("/permissions: ctrl+r on an auto-mode block grants the retry and never lands in the list's filter; in the list r is a letter", async () => {
+  const granted: string[] = []
+  const realGrant = runtime.auto.grantRetry.bind(runtime.auto)
+  runtime.auto.grantRetry = (d) => void granted.push(d.key)
+  runtime.auto.recent.unshift({ at: Date.now(), tool: "shell", summary: "curl https://host-la.example", reason: "Gửi dữ liệu ra ngoài", key: "k-retry" })
+  try {
+    await setup.mockInput.typeText("/permissions")
+    setup.mockInput.pressEnter()
+    await setup.waitForFrame((f) => f.includes("1 lần auto mode chặn") && f.includes("gõ để lọc"))
+    // In the list r and d only filter.
+    await setup.mockInput.typeText("rd")
+    let frame = await setup.waitForFrame((f) => f.includes("› rd"))
+    expect(granted).toEqual([])
+    setup.mockInput.pressBackspace()
+    setup.mockInput.pressBackspace()
+    await setup.waitForFrame((f) => f.includes("gõ để lọc"))
+    setup.mockInput.pressEnter()
+    frame = await setup.waitForFrame((f) => f.includes("ctrl+r cho thử lại một lần"))
+    // A plain r does nothing here; ctrl+r grants the retry.
+    setup.mockInput.pressKey("r")
+    await new Promise((r) => setTimeout(r, 100))
+    expect(granted).toEqual([])
+    setup.mockInput.pressKey("r", { ctrl: true })
+    await setup.waitFor(() => granted.length > 0)
+    frame = await setup.waitForFrame((f) => f.includes("1 lần auto mode chặn"))
+    show(frame)
+    expect(granted).toEqual(["k-retry"])
+    expect(frame).toContain("gõ để lọc")
+    expect(frame).not.toContain("› r")
+    setup.mockInput.pressEscape()
+    await setup.waitFor(() => state.dialog === undefined)
+  } finally {
+    runtime.auto.grantRetry = realGrant
+    runtime.auto.recent.shift()
+  }
 })
 
 test("/config turns memory off and on without a restart", async () => {
@@ -3059,6 +3158,18 @@ test("/watchlist: edits by command, opens a list and shows live quotes from the 
   } finally {
     runtime.registry.unregister("mcp__fakewl__")
   }
+})
+
+test("/watchlist <a name that is no list>: the lists open and r is a letter of their filter", async () => {
+  await setup.mockInput.typeText("/watchlist khong-co")
+  setup.mockInput.pressEnter()
+  await setup.waitForFrame((f) => f.includes("Watchlist cá nhân · ") && f.includes("gõ để lọc"))
+  await setup.mockInput.typeText("r")
+  const frame = await setup.waitForFrame((f) => f.includes("› r"))
+  show(frame)
+  // One esc closes the dialog: there is no list view to step back from.
+  setup.mockInput.pressEscape()
+  await setup.waitFor(() => state.dialog === undefined)
 })
 
 test("ultradesk: the keyword is hinted while typed; /desk on|off shows on the mode line; /desk without runs", async () => {
