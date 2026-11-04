@@ -234,10 +234,11 @@ describe("the /memory handle (admin)", () => {
     expect(admin.remove("lesson", { id: 7, version: 1 })).toMatchObject({ ok: false, reason: "failed" })
   })
 
-  test("outside the notebook's own folder, only the /memory dialogs import the admin handle", () => {
+  test("outside the notebook's own folder, only the /memory dialogs and the notebook forms import the admin handle", () => {
     const root = path.resolve(import.meta.dir, "..", "src")
     const admin = path.join(root, "core", "memory", "notebook", "admin")
     const own = path.join("core", "memory", "notebook") + path.sep
+    const forms = path.join("tui", "dialogs", "notebook-form") + path.sep
     const allowed = [path.join("tui", "dialogs", "memory.tsx"), path.join("tui", "dialogs", "notebook.tsx")]
     const importers: string[] = []
     // Every relative import (static or dynamic) resolved to a file, so "./admin" and "../core/…/admin" both count.
@@ -254,6 +255,8 @@ describe("the /memory handle (admin)", () => {
     }
     walk(root)
     expect(importers.length).toBeGreaterThan(0)
-    expect(importers.filter((f) => !f.startsWith(own) && !allowed.includes(f))).toEqual([])
+    expect(importers.filter((f) => !f.startsWith(own) && !f.startsWith(forms) && !allowed.includes(f))).toEqual([])
+    // The command dispatcher opens a form through notebook-form/open.ts; it never holds the write handle itself.
+    expect(importers).not.toContain(path.join("tui", "app.tsx"))
   })
 })

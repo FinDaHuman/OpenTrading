@@ -94,6 +94,15 @@ export function seedExample(store: MemoryStore) {
   return { steel, hpg, hsg, vcb, banks }
 }
 
+/** Spec 003's subject #9: a ticker whose code changed from ABC to XYZ (ABC retired, so free to reuse). No thesis. */
+export function seedRenamed(store: MemoryStore) {
+  const w = store.writer
+  const id = w.createSubject({ kind: "ticker", alias: "ABC" }).id
+  w.addAlias(id, "XYZ")
+  w.retireAlias(id, "ABC")
+  return id
+}
+
 export const HPG_V3 = {
   text: "Hưởng lợi từ đầu tư công",
   detail: "Đầu tư công giải ngân mạnh năm 2026",

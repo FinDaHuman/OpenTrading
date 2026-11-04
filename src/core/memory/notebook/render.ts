@@ -15,7 +15,7 @@ const stateLabel = (state: string) => THESIS_STATE_LABEL[state] ?? escapeMemoryL
 
 // Vietnam has no daylight saving time, so a fixed offset gives the same day on every machine, with no
 // dependence on the time zone data a runtime ships.
-const VIETNAM_OFFSET_MS = 7 * 3_600_000
+export const VIETNAM_OFFSET_MS = 7 * 3_600_000
 
 /**
  * dd/mm/yyyy: a stored instant as the Vietnamese calendar day, or a stored calendar day as is. A value

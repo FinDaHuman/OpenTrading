@@ -81,7 +81,15 @@ export interface Activity {
  */
 export type Queued = { text: string; display: string; images: PromptImage[]; saved: Omit<DraftSnapshot, "text">; desk?: DeskOptIn }
 
-export type DialogName = "connect" | "model" | "skills" | "help" | "mcp" | "tools" | "context" | "sessions" | "memory" | "config" | "agents" | "tasks" | "watchlist" | "permissions" | "shortcuts" | "desk" | "effort"
+export type DialogName = "connect" | "model" | "skills" | "help" | "mcp" | "tools" | "context" | "sessions" | "memory" | "config" | "agents" | "tasks" | "watchlist" | "permissions" | "shortcuts" | "desk" | "effort" | "notebook-form"
+
+/** Which notebook form is open, and for what: a notebook command's arguments, or an entry picked in /memory. */
+export type NotebookFormRequest =
+  | { group: "constraint"; text?: string; edit?: { id: number }; kind?: "constraint" | "style"; fromLesson?: boolean }
+  | { group: "thesis"; alias?: string }
+  | { group: "lesson"; title?: string; edit?: { id: number } }
+  | { group: "decision"; alias?: string }
+  | { group: "export" }
 
 export const [state, setState] = createStore({
   lines: [] as Line[],
@@ -107,6 +115,11 @@ export const [state, setState] = createStore({
   /** Show full tool output instead of the first lines (ctrl+o). */
   expandTools: false,
   dialog: undefined as DialogName | undefined,
+  notebookForm: undefined as NotebookFormRequest | undefined,
+  /** The open notebook form differs from what it opened with: Ctrl+C asks before dropping it. */
+  notebookFormDirty: false,
+  /** Set by Ctrl+C on a changed notebook form (instead of closing it); the form asks, then clears it. */
+  notebookFormAskLeave: false,
   /** Tool call waiting for the user's yes/no (head of the permission queue). */
   approval: undefined as ApprovalRequest | undefined,
   /** The footer notification showing now (see notify.ts); the rest wait in its queue. */

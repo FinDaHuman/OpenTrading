@@ -41,6 +41,9 @@ import { ConnectDialog } from "./dialogs/connect"
 import { ContextDialog } from "./dialogs/context"
 import { HelpDialog } from "./dialogs/help"
 import { MemoryDialog } from "./dialogs/memory"
+import { NotebookFormDialog } from "./dialogs/notebook-form/forms"
+import { openNotebookForm } from "./dialogs/notebook-form/open"
+import { notebookCommandOf } from "../core/memory/notebook/commands"
 import { PermissionsDialog } from "./dialogs/permissions"
 import { SessionsDialog } from "./dialogs/sessions"
 import { ModelDialog } from "./dialogs/model"
@@ -1098,6 +1101,9 @@ export function App(props: {
   /** Remember what is in the box (with the pastes behind its pills) before clearing it. */
   function rememberDraft() {
     const snap = parts.snapshot()
+    // A notebook command's arguments (a pasted key, a private thesis) never reach the history file.
+    const notebook = notebookCommandOf(snap.text)
+    if (notebook) return addHistory(`/${notebook}`)
     addHistory(snap.text, snap.pastes)
   }
 
@@ -1289,6 +1295,10 @@ export function App(props: {
       // An approval or question answers Ctrl+C itself (like Esc: deny / skip).
       if (owner()) {
         // handled by the prompt's own keyboard hook
+      } else if (state.dialog === "notebook-form" && state.notebookFormDirty) {
+        // A changed notebook form asks first, like Esc: Ctrl+C is also Windows' copy key, a long thesis typed
+        // so far must not go on one press. A second press within the window still exits.
+        setState("notebookFormAskLeave", true)
       } else if (state.dialog) closeDialog()
       else if (draft()) {
         // Cleared, not lost: ↑ brings it back (Codex, Claude Code).
@@ -1335,6 +1345,16 @@ export function App(props: {
       return restoreStash()
     }
     if (!text && images.length === 0) return setInput("")
+    // A notebook command is recognised before the history is written: only its name is kept there.
+    const notebook = notebookCommandOf(text)
+    if (notebook) {
+      addHistory(`/${notebook}`)
+      const problem = openNotebookForm(props.runtime.memory, notebook, parseCommand(text)!.args)
+      // Not saved anywhere: keep what was typed in the box so it is not lost.
+      if (problem) return say(problem, "warning")
+      setInput("")
+      return restoreStash()
+    }
     // Every line sent or run is remembered for ↑ — typos in a command name too, to fix them.
     addHistory(shown, expanded?.pastes)
     const cmd = parseCommand(text)
@@ -1401,6 +1421,15 @@ export function App(props: {
       case "agents":
       case "tasks":
         return setState("dialog", cmd.name)
+      case "nho":
+      case "luandiem":
+      case "baihoc":
+      case "quyetdinh": {
+        // Picked in the "/" list: the box held only the name, so clearing it lost nothing.
+        const problem = openNotebookForm(props.runtime.memory, cmd.name, cmd.args)
+        if (problem) say(problem, "warning")
+        return
+      }
       case "profile":
         return void ensureProfile().then(({ file, created }) =>
           pushLine({
@@ -1782,6 +1811,9 @@ export function App(props: {
             </Match>
             <Match when={state.dialog === "memory"}>
               <MemoryDialog memory={props.runtime.memory} />
+            </Match>
+            <Match when={state.dialog === "notebook-form"}>
+              <NotebookFormDialog memory={props.runtime.memory} />
             </Match>
           </Switch>
         </box>

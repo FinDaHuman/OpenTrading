@@ -34,6 +34,19 @@ adopt Semantic Versioning when it exposes a stable public API.
   (compaction, a resumed session after a restart, or switching memory off and on can repeat or miss a
   block), deleting does not mask old blocks in the history yet, and sub-agents do not get constraints
   yet.
+- Memory v5.1 write path: `/nho` (a constraint or a presentation style, no section chosen by
+  default), `/luandiem <code>` (a new thesis version; a code not in the notebook creates the subject),
+  `/baihoc` and `/quyetdinh <code>` open forms that run on this machine only, with no model call and
+  no chat turn. Nothing is written until the user confirms. The prompt history keeps only the command
+  name (on send, Esc Esc and Ctrl+C), so a pasted key or a private thesis never lands there. Forms show
+  each field's length against its limit and refuse to save over it (nothing is cut); warn, without
+  blocking, on a hard rule saved as a lesson (with a way to save it as a constraint instead), on a
+  price or forecast, and on a duplicate; show the field-by-field changes before an edit is saved; and,
+  when another window saved first, show what differs and let the user keep theirs as the next
+  version, take the other one, or keep editing. A decision rests on the thesis version the form
+  showed; a newer one saved meanwhile is asked about, never attached silently. Ctrl+C on a changed
+  form asks like Esc. `/memory` adds edit, a thesis state change, and a Markdown export to the app's
+  exports folder, decisions left out unless asked for on that export.
 
 ### Fixed
 

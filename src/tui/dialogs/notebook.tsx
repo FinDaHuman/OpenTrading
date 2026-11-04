@@ -1,12 +1,14 @@
 import { useKeys } from "../ui/keys"
 import { createMemo, createSignal, Match, Show, Switch } from "solid-js"
-import type { NotebookAdmin, NotebookEntry, NotebookGroup } from "../../core/memory/notebook/admin"
-import { formatDate } from "../../core/memory/notebook/render"
+import type { NotebookAdmin, NotebookEntry, NotebookGroup, ThesisStateChoice } from "../../core/memory/notebook/admin"
+import { formatDate, THESIS_STATE_LABEL } from "../../core/memory/notebook/render"
 import { closeDialog } from "../state"
 import { say } from "../notify"
 import { color } from "../theme"
 import { DialogFrame } from "./frame"
 import { Picker } from "./picker"
+import { showNotebookForm } from "./notebook-form/open"
+import type { NotebookFormRequest } from "../state"
 
 const GROUPS: { group: NotebookGroup; name: string }[] = [
   { group: "constraint", name: "Ràng buộc" },
@@ -29,10 +31,28 @@ const hint = (e: NotebookEntry) =>
   e.group === "decision" ? formatDate(e.createdAt) : [`bản ${e.version}`, e.state].filter(Boolean).join(" · ")
 
 /**
- * /memory for the notebook: the five groups the user stored, the full text of one, and deleting it.
- * Deleting asks first and names the version on screen, so a version saved meanwhile in another window is
- * never deleted by mistake.
+ * /memory for the notebook: the five groups the user stored, the full text of one, deleting it, editing it
+ * in its form (decisions are appended, never edited), a thesis's state, and exporting to Markdown.
+ * Deleting and changing a state ask first and name the version on screen, so a version saved meanwhile in
+ * another window is never changed by mistake.
  */
+
+const STATES: ThesisStateChoice[] = ["watching", "refuted", "closed"]
+
+/** The form that edits an entry, opened exactly as its notebook command would open it. */
+function editRequest(e: NotebookEntry): NotebookFormRequest | undefined {
+  switch (e.group) {
+    case "constraint":
+    case "style":
+      return { group: "constraint", edit: { id: e.id } }
+    case "thesis":
+      return { group: "thesis", alias: e.title }
+    case "lesson":
+      return { group: "lesson", edit: { id: e.id } }
+    case "decision":
+      return undefined
+  }
+}
 export function NotebookDialog(props: { admin: NotebookAdmin }) {
   const [entries, setEntries] = createSignal(props.admin.entries())
   // Read right after each listing: an unreadable store must show as such, never as an empty notebook.
@@ -43,6 +63,9 @@ export function NotebookDialog(props: { admin: NotebookAdmin }) {
   }
   const [open, setOpen] = createSignal<string>()
   const [confirming, setConfirming] = createSignal(false)
+  // Changing a thesis state: picking one of the three, then confirming it.
+  const [stating, setStating] = createSignal(false)
+  const [nextState, setNextState] = createSignal<ThesisStateChoice>()
   const selected = createMemo(() => entries().find((e) => keyOf(e) === open()))
 
   function remove(entry: NotebookEntry) {
@@ -53,17 +76,70 @@ export function NotebookDialog(props: { admin: NotebookAdmin }) {
     reload()
   }
 
+  function changeState(entry: NotebookEntry, to: ThesisStateChoice) {
+    const result = props.admin.setThesisState(entry.id, entry.version!, to)
+    say(result.message, result.ok ? "success" : "error")
+    setNextState(undefined)
+    if (result.ok || (!result.ok && result.reason === "deleted")) setOpen(undefined)
+    reload()
+  }
+
   useKeys((evt) => {
     if (evt.eventType === "release") return
     if (evt.name === "escape") {
       if (confirming()) return setConfirming(false)
+      if (nextState()) return setNextState(undefined)
+      if (stating()) return setStating(false)
       return open() ? setOpen(undefined) : closeDialog()
     }
     const entry = selected()
-    if (!entry) return
+    if (!entry) {
+      // The list's filter takes typed letters, so export is on Ctrl+X.
+      if (evt.ctrl && evt.name === "x") {
+        evt.preventDefault()
+        showNotebookForm({ group: "export" })
+      }
+      return
+    }
+    const to = nextState()
+    if (to) {
+      if (evt.name === "return") {
+        // The list comes back under this key press: its filter must not take the same Enter.
+        evt.preventDefault()
+        changeState(entry, to)
+      }
+      return
+    }
+    if (stating()) {
+      const pick = STATES[Number(evt.sequence) - 1]
+      if (pick) {
+        setStating(false)
+        setNextState(pick)
+      }
+      return
+    }
     if (confirming() && evt.name === "return") remove(entry)
-    else if (!confirming() && evt.name === "d") setConfirming(true)
+    else if (confirming()) return
+    else if (evt.name === "d") setConfirming(true)
+    else if (evt.name === "s") {
+      const request = editRequest(entry)
+      if (!request) return
+      // The form's first field takes focus under this key press: it must not also get the "s".
+      evt.preventDefault()
+      showNotebookForm(request)
+    } else if (evt.name === "t" && entry.group === "thesis") setStating(true)
   })
+
+  const detailHint = (e: NotebookEntry) =>
+    confirming() || nextState()
+      ? "enter xác nhận · esc huỷ"
+      : stating()
+        ? "số để chọn · esc huỷ"
+        : e.group === "decision"
+          ? "d xoá · esc quay lại"
+          : e.group === "thesis"
+            ? "s sửa · t đổi trạng thái · d xoá · esc quay lại"
+            : "s sửa · d xoá · esc quay lại"
 
   const items = () =>
     GROUPS.flatMap(({ group, name }) => {
@@ -78,11 +154,25 @@ export function NotebookDialog(props: { admin: NotebookAdmin }) {
         {(entry) => (
           <DialogFrame
             title={`Sổ ghi nhớ · ${ONE[entry().group]} · ${label(entry())}`}
-            hint={confirming() ? "enter xoá · esc huỷ" : "d xoá · esc quay lại"}
+            hint={detailHint(entry())}
           >
             <text fg={color.tx} wrapMode="word">
               {entry().detail}
             </text>
+            <Show when={stating()}>
+              <text fg={color.tham} marginTop={1} wrapMode="word">
+                {`Đổi trạng thái luận điểm ${entry().title} (đang xem bản ${entry().version}): ` +
+                  STATES.map((st, i) => `[${i + 1}] ${THESIS_STATE_LABEL[st]}`).join("   ")}
+              </text>
+            </Show>
+            <Show when={nextState()}>
+              {(to) => (
+                <text fg={color.tham} marginTop={1} wrapMode="word">
+                  {`Đổi trạng thái sang «${THESIS_STATE_LABEL[to()]}»? Không tạo bản mới. ` +
+                    "Nếu nơi khác vừa lưu bản mới hơn thì không đổi."}
+                </text>
+              )}
+            </Show>
             <Show when={confirming()}>
               <text fg={color.tham} marginTop={1} wrapMode="word">
                 {entry().version === undefined
@@ -94,7 +184,7 @@ export function NotebookDialog(props: { admin: NotebookAdmin }) {
         )}
       </Match>
       <Match when={true}>
-        <DialogFrame title={`Sổ ghi nhớ · ${entries().length}`} hint="enter xem · esc đóng">
+        <DialogFrame title={`Sổ ghi nhớ · ${entries().length}`} hint="enter xem · ctrl+x xuất Markdown · esc đóng">
           <Show when={problem()}>
             <text fg={color.tham} wrapMode="word" marginBottom={1}>
               {`△ ${problem()}`}
@@ -104,7 +194,7 @@ export function NotebookDialog(props: { admin: NotebookAdmin }) {
             when={entries().length > 0 || problem()}
             fallback={
               <text fg={color.tx2} wrapMode="word">
-                Sổ ghi nhớ còn trống. Lệnh ghi (ràng buộc, luận điểm, bài học, quyết định) sẽ có ở bản sau.
+                Sổ ghi nhớ còn trống. Ghi bằng /nho (ràng buộc, cách trình bày), /luandiem {"<mã>"}, /baihoc, /quyetdinh {"<mã>"}.
               </text>
             }
           >

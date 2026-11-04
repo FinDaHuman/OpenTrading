@@ -6,6 +6,8 @@ import {
   type MemoryRole,
   type PolicyRule,
 } from "../src/core/memory/policy"
+import { readFileSync } from "node:fs"
+import { createNotebookAdmin } from "../src/core/memory/notebook/admin"
 import { useTempStores } from "./helpers/memory-store"
 
 const t = useTempStores()
@@ -260,4 +262,28 @@ test("the store has no proposal state: nothing waits for approval inside it", ()
   t.open()
   const schema = JSON.stringify(t.raw().query("SELECT sql FROM sqlite_master").all())
   expect(schema).not.toMatch(/propos|pending|draft/i)
+})
+
+test("exporting to Markdown is the user's own read: decisions only when asked; no model role ever activates", async () => {
+  const { store } = oneOfEach()
+  const admin = createNotebookAdmin({
+    path: store.path,
+    reader: () => store.reader,
+    writer: () => store.writer,
+    problem: () => undefined,
+    closed: () => false,
+  })
+  // The export's output is what is checked: the table holds rules for model roles and the user's
+  // "activate" only, and has no rule for the user reading or exporting their own notebook.
+  const plain = await admin.exportMarkdown({ decisions: false })
+  const withLog = await admin.exportMarkdown({ decisions: true })
+  if (!plain.ok || !withLog.ok) throw new Error("export failed")
+  expect(readFileSync(plain.file, "utf8")).not.toContain("Lý do riêng tư của tôi")
+  expect(readFileSync(withLog.file, "utf8")).toContain("Lý do riêng tư của tôi")
+  for (const role of ["main_agent", "subagent"] as const) {
+    for (const kind of ["constraint", "style", "thesis", "lesson", "decision"] as const) {
+      expect(EXPECTED[`${role}/activate/${kind}`]).toBeUndefined()
+      expect(MEMORY_POLICY.some((r: PolicyRule) => r.role === role && r.action === "activate" && r.kind === kind)).toBe(false)
+    }
+  }
 })
