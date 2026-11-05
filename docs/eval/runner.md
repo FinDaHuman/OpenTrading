@@ -52,7 +52,7 @@ Each question has an `id`, a `group` (A–F), the `question`, and `now`, the mom
 | `todo` | No `todo_write`. |
 | `tool-deferral` | `toolSearch: off`: every tool is declared, up to the 128-tool cap. |
 
-Every run already goes without the investor profile, so a "no domain instructions" run is `citations-prompt,skills`. `answerAfterTools` has no switch: it reshapes past turns, and every question here is a first turn.
+`identity.md` and `style.md` have no switch, so `citations-prompt,skills` removes the citation rules and the skills, not every domain instruction. Every run also goes without the investor profile, while the thesis's "same domain instructions" baseline adds it: decide how to compare the two before reporting that row. `answerAfterTools` has no switch: it reshapes past turns, and every question here is a first turn.
 
 ## Request cap
 

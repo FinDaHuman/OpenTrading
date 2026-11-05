@@ -13,7 +13,7 @@ process.env.GROQ_API_KEY = "test-key"
 const { resolveTarget } = await import("../src/core/chat")
 const { initRuntime } = await import("../src/core/runtime")
 const { rememberResult, recallResult } = await import("../src/core/tools/refs")
-const { parseAblations, parseQuestions, prepareHome, runEval } = await import("../scripts/eval/runner")
+const { parseAblations, parseQuestions, prepareHome, runEval, skillsFor } = await import("../scripts/eval/runner")
 const { TRACE_VERSION } = await import("../scripts/eval/trace")
 const { ledgerFile, RequestLedger, spentToday } = await import("../scripts/eval/ledger")
 type TraceEvent = import("../scripts/eval/trace").TraceEvent
@@ -234,6 +234,12 @@ test("setup ablations take their tools away and reach the config", async () => {
   await prepareHome(to, to, { provider: "groq", model: "tooly" }, parseAblations(["tool-deferral"]))
   expect(JSON.parse(await readFile(path.join(to, "config.json"), "utf8"))).toMatchObject({ toolSearch: "off" })
   await rm(to, { recursive: true, force: true })
+})
+
+test("without skills, the runtime that feeds subagents has none either", () => {
+  const skills = [{ name: "a" }] as never[]
+  expect(skillsFor(skills)).toBe(skills)
+  expect(skillsFor(skills, parseAblations(["skills"]))).toEqual([])
 })
 
 test("a mistyped ablation stops the run instead of measuring the full harness", () => {

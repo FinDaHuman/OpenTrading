@@ -63,6 +63,12 @@ export function parseAblations(list: string[]): Ablated {
   }
 }
 
+/**
+ * The skills of an ablated run. It has to go through the runtime too: subagents read skills
+ * from it, so taking them from the main agent alone would leave the catalog in every child.
+ */
+export const skillsFor = (skills: Skill[], ablated?: Ablated) => (ablated?.setup.has("skills") ? [] : skills)
+
 /** A run's own home: same model and connections as `from`, none of the user's other state. */
 export async function prepareHome(from: string, to: string, target: { provider: string; model: string }, ablated?: Ablated) {
   await mkdir(path.join(to, "cache"), { recursive: true })
@@ -213,7 +219,7 @@ async function ask(run: EvalRun, question: EvalQuestion, asked: Asked, now: Date
     for await (const event of runAgent({
       history: [],
       input: question.question,
-      skills: run.ablated?.setup.has("skills") ? [] : run.skills,
+      skills: skillsFor(run.skills, run.ablated),
       registry: runtime.registry,
       serverInstructions: () => runtime.mcp.instructions(),
       target: run.target,

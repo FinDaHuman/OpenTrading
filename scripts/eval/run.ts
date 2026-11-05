@@ -10,7 +10,7 @@ import { loadSkills, skillRoots } from "../../src/core/skills/loader"
 import pkg from "../../package.json"
 import { Cassette } from "./cassette"
 import { ledgerFile, RequestLedger, spentToday } from "./ledger"
-import { parseAblations, parseQuestions, prepareHome, runEval } from "./runner"
+import { parseAblations, parseQuestions, prepareHome, runEval, skillsFor } from "./runner"
 import { traceFile } from "./trace"
 
 /**
@@ -86,7 +86,7 @@ process.on("SIGINT", () => {
 })
 
 const { skills } = await loadSkills(skillRoots(work, { project: false }))
-const runtime = initRuntime({ home, cwd: work, skills: () => skills, mcpTransport: cassette && ((server, real) => cassette.transport(server, real)) })
+const runtime = initRuntime({ home, cwd: work, skills: () => skillsFor(skills, ablated), mcpTransport: cassette && ((server, real) => cassette.transport(server, real)) })
 try {
   setAgents(runtime, (await loadAgents(agentRoots(work, { project: false }))).agents)
   await runtime.mcp.start()
