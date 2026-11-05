@@ -38,7 +38,7 @@ import { NOTE as NOTICE_NOTE } from "./subagents/notification"
 import { currentTodos, retiredNote, retireLeftTodos, todoMark, TODO_WRITE } from "./tools/todos"
 import { FAILURE_STREAK_FINAL, FAILURE_STREAK_STOP, failureNudge, turnFailures } from "./loop/failures"
 import { answerAfterTools } from "./loop/history-shape"
-import { answeredAndClosedTodos, isEmptyAnswer, judgeStop, MAX_RECOVERIES, stripEchoes, type RecoveryKind, type Verdict } from "./loop/stop-gate"
+import { answeredAndClosedTodos, figureSources, isEmptyAnswer, isUnfetched, judgeStop, MAX_RECOVERIES, ranDataTool, stripEchoes, unfetchedFigures, type RecoveryKind, type Verdict } from "./loop/stop-gate"
 import { MAX_TOOLS_PER_REQUEST, modelOutput, stripImages, type BuiltToolSet, type ToolRegistry, type ToolSetOptions } from "./tools/registry"
 import { describeTool, LOADED_PREFIX, resolveToolName } from "./tools/search"
 import { cleanToolErrors, toolErrorText } from "./tools/errors"
@@ -258,6 +258,7 @@ const RESCUE_NOTICE: Record<RecoveryKind, string> = {
   empty: "Model dừng khi chưa viết câu trả lời.",
   promise: "Model nói sẽ lấy thêm dữ liệu nhưng dừng mà chưa làm.",
   fragment: "Câu trả lời bị cụt đầu (model viết tiếp câu cũ thay vì trả lời tin nhắn mới).",
+  unfetched: "Câu trả lời trên ghi số liệu kèm nguồn nhưng chưa gọi tool nào: đừng dùng các số đó.",
 }
 
 type AssistantMessage = Extract<ModelMessage, { role: "assistant" }>
@@ -1177,6 +1178,9 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
     }
     measured = result
 
+    // Only a turn where no data tool ran is checked: the sources are the conversation itself.
+    const sources = ranDataTool([...kept, ...response]) ? undefined : figureSources([...opts.history, user])
+    const unfetched = sources === undefined ? 0 : unfetchedFigures(last.stepText ?? "", `${assembled.context ?? ""}\n${sources}`).length
     // A run with a final tool is judged by its caller (the subagent manager forces the tool).
     const verdict: Verdict = opts.finalTool
       ? { action: "accept" }
@@ -1189,6 +1193,7 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
             reasoned: last.reasoned,
             afterTools: [...base, ...response].findLast((m) => m.role !== "assistant")?.role === "tool",
             toolsInTurn: [...kept, ...response].some((m) => m.role === "tool"),
+            unfetched,
           },
           recoveries,
         )
@@ -1198,6 +1203,8 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
     // Capped, a step with text is the turn's last word (the summary may well say what is missing).
     if (verdict.action === "accept" || (verdict.action === "continue" && capped && !isEmptyAnswer(last.stepText ?? ""))) {
       messages = continuing ? continueAnswer(kept, response) : [...kept, ...response]
+      // Out of recoveries, the answer stands: the user still hears that nothing backs its figures.
+      if (!opts.finalTool && !continuing && isUnfetched({ unfetched })) yield { type: "notice", text: "Câu trả lời ghi số liệu kèm nguồn nhưng lượt này không có tool nào chạy: các số đó chưa được kiểm chứng." }
       break
     }
     if (verdict.action === "continue" && !capped) {

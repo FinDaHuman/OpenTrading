@@ -1353,6 +1353,56 @@ test("next turn: the answer of an 'answer + close todo' step is sent after its t
   expect(JSON.stringify(sent[4])).toContain("Đi sâu vào mã VCB")
 })
 
+const INVENTED = "Tôi đã lấy dữ liệu tài chính của FPT.\n\nNguồn: `financial_ratios` · 05/11/2026.\n\nP/E 19,5 lần, ROE 27,2%."
+
+test("figures no tool fetched are sent back once with tools on and never stored", async () => {
+  respond = (_body, n) => (n === 0 ? answer(INVENTED) : n === 1 ? toolCall("current_time", {}, "call_u") : n === 2 ? answer("Không có dữ liệu tài chính của FPT.") : undefined)
+  const events = await collect(runAgent({ history: [], input: "Phân tích FPT", skills: [], registry: registry() }))
+  expect(bodies).toHaveLength(3)
+  expect(bodies[1]!.tool_choice).not.toBe("none")
+  expect(lastSent(1)).toContain("chưa có tool nào chạy")
+  // The nudge stands on its own: the dropped answer is never mentioned to the model.
+  expect(lastSent(1)).not.toContain("bị bỏ")
+  expect(tools(events)).toEqual(["current_time"])
+  expect(events.some((e) => e.type === "notice" && e.text.includes("đừng dùng các số đó"))).toBe(true)
+  expect(done(events).recoveries).toEqual([{ kind: "unfetched", attempt: 1 }])
+  expect(JSON.stringify(done(events).messages)).not.toContain("19,5")
+})
+
+test("figures still unfetched after the retry stay, and the user is told", async () => {
+  respond = (_body, n) => (n <= 1 ? answer(INVENTED) : undefined)
+  const events = await collect(runAgent({ history: [], input: "Phân tích FPT", skills: [], registry: registry() }))
+  expect(bodies).toHaveLength(2)
+  expect(events.some((e) => e.type === "notice" && e.text.includes("chưa được kiểm chứng"))).toBe(true)
+  expect(done(events).recoveries).toEqual([{ kind: "unfetched", attempt: 1 }])
+  expect(JSON.stringify(done(events).messages)).toContain("19,5")
+})
+
+test("figures from an earlier turn cost no request when the answer cites them again", async () => {
+  respond = (_body, n) => (n === 0 ? answer(INVENTED) : undefined)
+  const history: ModelMessage[] = [
+    { role: "user", content: "Phân tích FPT" },
+    { role: "assistant", content: "P/E 19,5 lần, ROE 27,2% (Vietstock)." },
+  ]
+  const events = await collect(runAgent({ history, input: "Nhắc lại số vừa rồi", skills: [], registry: registry() }))
+  expect(bodies).toHaveLength(1)
+  expect(done(events).recoveries).toBeUndefined()
+})
+
+test("a continued answer gets no warning: its figures sit in the part before the cut", async () => {
+  respond = (_body, n) => (n === 0 ? answer("FPT: doanh thu", "length") : n === 1 ? answer(INVENTED) : undefined)
+  const events = await collect(runAgent({ history: [], input: "Phân tích FPT", skills: [], registry: registry() }))
+  expect(bodies).toHaveLength(2)
+  expect(events.some((e) => e.type === "notice" && e.text.includes("chưa được kiểm chứng"))).toBe(false)
+})
+
+test("figures beside a real tool result cost no request", async () => {
+  respond = (_body, n) => (n === 0 ? toolCall("current_time", {}, "call_d") : n === 1 ? answer(INVENTED) : undefined)
+  const events = await collect(runAgent({ history: [], input: "Phân tích FPT", skills: [], registry: registry() }))
+  expect(bodies).toHaveLength(2)
+  expect(done(events).recoveries).toBeUndefined()
+})
+
 test("a fragment answer is sent back once with tools on and never stored", async () => {
   respond = (_body, n) => (n === 0 ? answer(" hoặc FPT không, hoặc bạn muốn mình phản biện?") : n === 1 ? answer("VCB: phân tích sâu.") : undefined)
   const events = await collect(runAgent({ history: [], input: "Đi sâu vào mã VCB", skills: [], registry: registry() }))
