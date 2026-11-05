@@ -13,7 +13,7 @@ process.env.GROQ_API_KEY = "test-key"
 const { resolveTarget } = await import("../src/core/chat")
 const { initRuntime } = await import("../src/core/runtime")
 const { rememberResult, recallResult } = await import("../src/core/tools/refs")
-const { parseQuestions, prepareHome, runEval } = await import("../scripts/eval/runner")
+const { parseAblations, parseQuestions, prepareHome, runEval, skillsFor } = await import("../scripts/eval/runner")
 const { TRACE_VERSION } = await import("../scripts/eval/trace")
 const { ledgerFile, RequestLedger, spentToday } = await import("../scripts/eval/ledger")
 type TraceEvent = import("../scripts/eval/trace").TraceEvent
@@ -85,7 +85,7 @@ beforeEach(() => {
 const LONG = "x".repeat(40_000)
 const INVENTED = "Tôi đã lấy dữ liệu. P/E 12,3 lần, ROE 24,1%.\nNguồn: financial_ratios"
 
-async function run(questions: ReturnType<typeof parseQuestions>, repeat = 1, ledger?: import("../scripts/eval/ledger").RequestLedger, timeoutMs?: number) {
+async function run(questions: ReturnType<typeof parseQuestions>, repeat = 1, ledger?: import("../scripts/eval/ledger").RequestLedger, ablated?: import("../scripts/eval/runner").Ablated, timeoutMs?: number) {
   const runtime = initRuntime({ home, cwd: home, skills: () => [] })
   runtime.registry.register({
     name: "fake_quote",
@@ -99,7 +99,7 @@ async function run(questions: ReturnType<typeof parseQuestions>, repeat = 1, led
   })
   const events: TraceEvent[] = []
   const target = await resolveTarget({ provider: "groq", model: "tooly" })
-  await runEval({ runtime, skills: [], target, questions, repeat, write: (e) => events.push(e), version: "0.0.0", ledger, timeoutMs })
+  await runEval({ runtime, skills: [], target, questions, repeat, write: (e) => events.push(e), version: "0.0.0", ledger, timeoutMs, ablated })
   return { events, runtime }
 }
 
@@ -199,13 +199,51 @@ test("a side model on another provider does not spend the cap, and is booked apa
 
 test("a timed-out question says so, apart from a cap", async () => {
   hang = true
-  const { events } = await run([question("q1")], 1, undefined, 20)
+  const { events } = await run([question("q1")], 1, undefined, undefined, 20)
   expect(of(events, "answer")[0]).toMatchObject({ outcome: "aborted", abort: "timeout" })
 })
 
 test("the gate goes back to refusing when the run ends", async () => {
   const { runtime } = await run([question("q1")])
   expect(runtime.permissions.interactive).toBe(false)
+})
+
+test("a rule switched off stays off, notice included, and the rest still run", async () => {
+  invent = true
+  const { events } = await run([question("q1")], 1, undefined, parseAblations(["gate-unfetched"]))
+  const [answer] = of(events, "answer")
+  expect(answer!.recoveries).toEqual([])
+  expect(answer!.text).toContain("12,3")
+  expect(of(events, "notice")).toEqual([])
+})
+
+test("the nudge after tool results can go, alone or with only its todo part", async () => {
+  const sent = () => JSON.stringify(bodies.at(-1)!.messages)
+  await run([question("q1")])
+  expect(sent()).toContain("Nếu còn cần dữ liệu, gọi cùng lúc")
+  bodies.length = 0
+  await run([question("q1")], 1, undefined, parseAblations(["tool-nudge"]))
+  expect(sent()).not.toContain("Nếu còn cần dữ liệu, gọi cùng lúc")
+})
+
+test("setup ablations take their tools away and reach the config", async () => {
+  const { runtime } = await run([question("q1")], 1, undefined, parseAblations(["todo", "skills"]))
+  expect(runtime.registry.get("todo_write")).toBeUndefined()
+  expect(runtime.registry.get("load_skill")).toBeUndefined()
+  const to = await mkdtemp(path.join(os.tmpdir(), "ot-eval-to-"))
+  await prepareHome(to, to, { provider: "groq", model: "tooly" }, parseAblations(["tool-deferral"]))
+  expect(JSON.parse(await readFile(path.join(to, "config.json"), "utf8"))).toMatchObject({ toolSearch: "off" })
+  await rm(to, { recursive: true, force: true })
+})
+
+test("without skills, the runtime that feeds subagents has none either", () => {
+  const skills = [{ name: "a" }] as never[]
+  expect(skillsFor(skills)).toBe(skills)
+  expect(skillsFor(skills, parseAblations(["skills"]))).toEqual([])
+})
+
+test("a mistyped ablation stops the run instead of measuring the full harness", () => {
+  expect(() => parseAblations(["gate-unfetchd"])).toThrow("gate-unfetchd")
 })
 
 test("a failed question is traced and the run goes on", async () => {

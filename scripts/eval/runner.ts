@@ -2,6 +2,7 @@ import { copyFile, mkdir, writeFile } from "node:fs/promises"
 import path from "node:path"
 import type { ModelMessage } from "ai"
 import { z } from "zod"
+import { ABLATIONS, type Ablation, type Ablations } from "../../src/core/ablation"
 import { runAgent } from "../../src/core/agent"
 import type { Target } from "../../src/core/chat"
 import { promptVersion } from "../../src/core/prompt/assemble"
@@ -10,6 +11,7 @@ import type { Runtime } from "../../src/core/runtime"
 import type { Skill } from "../../src/core/skills/schema"
 import { currentTimeTool } from "../../src/core/tools/builtin/current-time"
 import { clearResults, useResultSession } from "../../src/core/tools/refs"
+import { TODO_WRITE } from "../../src/core/tools/todos"
 import type { ToolDef, ToolResult } from "../../src/core/tools/types"
 import type { ToolRegistry } from "../../src/core/tools/registry"
 import { answerUnattended } from "./approvals"
@@ -41,11 +43,37 @@ const WEB_TOOLS = ["web_fetch", "web_search"]
 /** Copied so MCP and side calls work; everything else (profile, memory, skills) stays out. */
 const HOME_FILES = ["auth.json", "mcp.json", "mcp-auth.json", path.join("cache", "models.json")]
 
+/** Parts a run can go without that are set up rather than switched in the loop. */
+const SETUP_ABLATIONS = ["todo", "tool-deferral", "skills"] as const
+type SetupAblation = (typeof SETUP_ABLATIONS)[number]
+
+export interface Ablated {
+  loop: Ablations
+  setup: ReadonlySet<SetupAblation>
+}
+
+/** `--ablate` values, or an error naming what is on offer: a typo must not run as the full harness. */
+export function parseAblations(list: string[]): Ablated {
+  const known = new Set<string>([...ABLATIONS, ...SETUP_ABLATIONS])
+  const wrong = list.filter((name) => !known.has(name))
+  if (wrong.length > 0) throw new Error(`--ablate không biết: ${wrong.join(", ")}. Có: ${[...known].join(", ")}.`)
+  return {
+    loop: new Set(list.filter((name): name is Ablation => (ABLATIONS as readonly string[]).includes(name))),
+    setup: new Set(list.filter((name): name is SetupAblation => (SETUP_ABLATIONS as readonly string[]).includes(name))),
+  }
+}
+
+/**
+ * The skills of an ablated run. It has to go through the runtime too: subagents read skills
+ * from it, so taking them from the main agent alone would leave the catalog in every child.
+ */
+export const skillsFor = (skills: Skill[], ablated?: Ablated) => (ablated?.setup.has("skills") ? [] : skills)
+
 /** A run's own home: same model and connections as `from`, none of the user's other state. */
-export async function prepareHome(from: string, to: string, target: { provider: string; model: string }) {
+export async function prepareHome(from: string, to: string, target: { provider: string; model: string }, ablated?: Ablated) {
   await mkdir(path.join(to, "cache"), { recursive: true })
   for (const file of HOME_FILES) await copyFile(path.join(from, file), path.join(to, file)).catch(() => {})
-  await writeFile(path.join(to, "config.json"), JSON.stringify(target))
+  await writeFile(path.join(to, "config.json"), JSON.stringify({ ...target, ...(ablated?.setup.has("tool-deferral") ? { toolSearch: "off" } : {}) }))
 }
 
 interface Asked {
@@ -102,6 +130,7 @@ export interface EvalRun {
   settings?: Record<string, unknown>
   /** Stops the run at its cap. Reaching it mid-question aborts that question. */
   ledger?: RequestLedger
+  ablated?: Ablated
 }
 
 const DEFAULT_TIMEOUT_MS = 15 * 60_000
@@ -112,6 +141,9 @@ export async function runEval(run: EvalRun) {
   const { registry } = runtime
   const web = WEB_TOOLS.flatMap((name) => registry.get(name) ?? [])
   const stopAnswering = answerUnattended(runtime.permissions, "eval")
+  runtime.subagents.disabled = run.ablated?.loop
+  if (run.ablated?.setup.has("todo")) registry.unregister(TODO_WRITE)
+  if (run.ablated?.setup.has("skills")) registry.unregister("load_skill")
   write({
     type: "run",
     trace_version: TRACE_VERSION,
@@ -187,11 +219,12 @@ async function ask(run: EvalRun, question: EvalQuestion, asked: Asked, now: Date
     for await (const event of runAgent({
       history: [],
       input: question.question,
-      skills: run.skills,
+      skills: skillsFor(run.skills, run.ablated),
       registry: runtime.registry,
       serverInstructions: () => runtime.mcp.instructions(),
       target: run.target,
       now,
+      disabled: run.ablated?.loop,
       signal: AbortSignal.any([timeout, meter.capped.signal]),
     })) {
       if (event.type === "text-delta") result.streamed += event.text

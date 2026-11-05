@@ -1,3 +1,4 @@
+import type { Ablations } from "../ablation"
 import { createHash } from "node:crypto"
 import { existsSync, readdirSync, readFileSync } from "node:fs"
 import path from "node:path"
@@ -51,6 +52,8 @@ export interface AssembleInput {
   hookContext?: string[]
   /** The ultradesk reminder for a request that opted into desk runs. */
   desk?: string
+  /** What an eval switched off (ablation.ts). */
+  disabled?: Ablations
   /** The user's message, for trigger matching. */
   input: string
   now: Date
@@ -164,7 +167,7 @@ export function assemble(input: AssembleInput, promptsDir = PROMPTS_DIR): Assemb
     add(system, "subagent", 1, "system", [promptFile("subagent", promptsDir), rules].filter(Boolean).join("\n\n") || undefined, "identity")
   } else add(system, "identity", 1, "system", promptFile("identity", promptsDir))
   if (input.tools.length > 0) add(system, "tools", 7, "system", promptFile("tools", promptsDir))
-  add(system, "citations", 1, "system", promptFile("citations", promptsDir))
+  if (!input.disabled?.has("citations-prompt")) add(system, "citations", 1, "system", promptFile("citations", promptsDir))
   // Investor profile rides the static system prefix (cache-marked on Anthropic) like
   // CLAUDE.md at boot. Re-read per request but byte-identical while the file is unchanged,
   // so it caches the same — while an edit still applies the very next request.
@@ -224,7 +227,7 @@ ${m.text}
   }
   for (const context of input.hookContext ?? []) add(reminders, "hook_context", 4, "reminder", context)
   add(reminders, "ultradesk", 6, "reminder", input.desk)
-  if (input.tools.includes("load_skill")) {
+  if (input.tools.includes("load_skill") && !input.disabled?.has("skill-hints")) {
     const hits = suggestSkills(input.input, visible).filter((s) => !input.sticky.includes(s.name) && s.activation === "auto")
     if (hits.length > 0) {
       add(
