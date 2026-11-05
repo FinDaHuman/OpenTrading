@@ -7,7 +7,7 @@ import { suggestSkills } from "../src/core/skills/catalog"
 import { loadSkillTool } from "../src/core/tools/builtin/load-skill"
 import type { Skill } from "../src/core/skills/schema"
 import { lintSkills } from "./helpers/skill-lint"
-import { copiedResultHit, decisionTreeIssues } from "./helpers/skill-lint"
+import { copiedResultHit, decisionTreeIssues, issuerFigure } from "./helpers/skill-lint"
 
 const root = path.join(import.meta.dir, "..")
 const ctx = { signal: new AbortController().signal, callId: "c1" }
@@ -31,6 +31,19 @@ test("catalog lines fit 250 characters, headings are Vietnamese, write tools are
 
 test("references giữ luật/ngưỡng, không chép kết quả bảng (docs/contracts.md §3)", () => {
   expect(report.copiedResults).toEqual([])
+})
+
+test("agents and prompts hold no issuer figures: every number must come from a tool", async () => {
+  const hits: string[] = []
+  for (const dir of ["agents", "prompts"]) {
+    for await (const file of new Bun.Glob("**/*.md").scan({ cwd: path.join(root, dir) })) {
+      const text = await Bun.file(path.join(root, dir, file)).text()
+      for (const line of text.split("\n")) if (issuerFigure(line)) hits.push(`${dir}/${file}: ${line.slice(0, 90)}`)
+    }
+  }
+  expect(hits).toEqual([])
+  expect(issuerFigure("VD: HPG Q1/2026 chuyển nhượng cổ phần, ~3.800–4.900 tỷ")).toBe(true)
+  expect(issuerFigure("VD: XYZ thu về M tỷ")).toBe(false)
 })
 
 test("copiedResults bắt đúng các dạng kết quả bảng, và không bắt luật/ngưỡng", () => {
