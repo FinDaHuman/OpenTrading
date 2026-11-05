@@ -52,6 +52,13 @@ test("select: takes full names, server/tool and unambiguous short names", async 
   expect(out).toContain("- days (integer, mặc định 365)")
 })
 
+test("a `::` separator resolves like the real one", () => {
+  const r = registry()
+  expect(resolveToolName(r, "mcp__ot::money_flow")).toEqual(["mcp__ot__money_flow"])
+  expect(resolveToolName(r, "ot::money_flow")).toEqual(["mcp__ot__money_flow"])
+  expect(resolveToolName(r, "nope::money_flow")).toEqual([])
+})
+
 test("select: an ambiguous or unknown name is explained, the rest still loads", async () => {
   const r = registry()
   expect(resolveToolName(r, "market_snapshot")).toHaveLength(2)

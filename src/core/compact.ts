@@ -106,6 +106,9 @@ export const ATTACHMENT_PRUNE_TOKENS = 20_000
 export const MAX_AUTO_FAILURES = 3
 
 export const PRUNED_TEXT = "(đã dọn kết quả cũ để tiết kiệm context; gọi lại tool nếu cần số liệu này)"
+/** After the first line of a failed call: there was no data to fetch again. */
+export const PRUNED_ERROR_TEXT = "(lần gọi cũ này đã lỗi, chi tiết đã được dọn; lần gọi đó không trả về số liệu)"
+const PRUNED_ERROR_HEAD_CHARS = 200
 /** Their results are small and carry state the harness or the model still needs. */
 const PROTECTED = new Set(["todo_write", "load_skill", "ask_user"])
 
@@ -121,6 +124,8 @@ export type CompactVariant = "full" | "lean"
 const OWN_FIGURES =
   'Số chỉ có trong câu trả lời trước (không có trong kết quả tool nào) thì ghi nguồn là "câu trả lời trước", không ghi tên tool.'
 
+const MISSING_DATA = "Tool hoặc nguồn nào đã lỗi, đã xử lý thế nào, và số liệu nào vẫn chưa lấy được. Không điền số thay cho phần thiếu."
+
 /**
  * Sent after the head when summarizing; the summary must stand in for everything above it.
  * One request, as Claude Code's /compact does: the model first inventories
@@ -135,6 +140,8 @@ export function compactPrompt(instructions?: string, variant: CompactVariant = "
           "Mục tiêu và từng yêu cầu, giữ sát lời gốc.",
           "## Số liệu đã xác minh",
           `Bảng: chỉ tiêu | giá trị | đơn vị | nguồn | thời điểm. Chép nguyên văn, không làm tròn. Số nào không có nguồn và thời điểm thì bỏ. ${OWN_FIGURES}`,
+          "## Lỗi và dữ liệu còn thiếu",
+          MISSING_DATA,
           "## Việc đang dở và bước tiếp theo",
           "Việc chưa xong và việc nên làm tiếp.",
         ]
@@ -147,13 +154,15 @@ export function compactPrompt(instructions?: string, variant: CompactVariant = "
           `Bảng: chỉ tiêu | giá trị | đơn vị | nguồn | thời điểm. Chép nguyên văn từ kết quả tool, không làm tròn, không đổi đơn vị. Số nào không có nguồn và thời điểm thì bỏ. ${OWN_FIGURES}`,
           "## Phân tích và kết luận đã đưa ra",
           "Các nhận định chính, giả định đi kèm, rủi ro đã nêu.",
+          "## Lỗi và dữ liệu còn thiếu",
+          MISSING_DATA,
           "## Việc đang dở và bước tiếp theo",
           "Việc chưa xong và việc nên làm tiếp nếu người dùng muốn.",
         ]
   return [
     "Tóm tắt toàn bộ cuộc hội thoại ở trên để tiếp tục làm việc mà không cần đọc lại nó. Chỉ trả lời bằng chữ, không gọi tool. Viết bằng ngôn ngữ của cuộc hội thoại.",
     "",
-    "Trước hết viết một khối <analysis> ngắn để kiểm kê, không nhận định: mỗi tool đã gọi và số lần; chuỗi số liệu đã lấy (mã, kỳ, nguồn); từng câu hỏi của người dùng; skill đã nạp. Khối này chỉ là nháp và sẽ bị bỏ.",
+    "Trước hết viết một khối <analysis> ngắn để kiểm kê, không nhận định: mỗi tool đã gọi và số lần; tool nào lỗi và vì sao; chuỗi số liệu đã lấy (mã, kỳ, nguồn); từng câu hỏi của người dùng; skill đã nạp. Khối này chỉ là nháp và sẽ bị bỏ.",
     "Sau đó viết bản tóm tắt trong khối <summary>, giữ đúng các mục sau, mục nào không có thì ghi \"(không có)\":",
     "",
     ...sections,
@@ -218,6 +227,8 @@ function firstLine(output: ResultPart["output"]): string | undefined {
   return undefined
 }
 
+const isPrunedError = (output: ResultPart["output"]) => typeof output?.value === "string" && output.value.endsWith(PRUNED_ERROR_TEXT)
+
 /** Replace large tool results outside the last `keepTurns` turns with a placeholder. */
 /** The `<subagent_meta>` block of a spawn_subagent result, if any. */
 function subagentMeta(output: unknown): string | undefined {
@@ -239,13 +250,19 @@ export function pruneToolResults(messages: readonly ModelMessage[], keepTurns = 
         if (p.type !== "tool-result" || (p.toolName && PROTECTED.has(p.toolName))) return part
         const size = JSON.stringify(p.output ?? "").length
         const head = firstLine(p.output)
-        if (size < PRUNE_MIN_CHARS || head === PRUNED_TEXT) return part
+        if (size < PRUNE_MIN_CHARS || head === PRUNED_TEXT || isPrunedError(p.output)) return part
         pruned++
         // The loaded-tools line is how later turns know which deferred tools are callable;
         // a subagent's metadata block keeps its agent_id reachable for send_message.
         const meta = subagentMeta(p.output)
-        const value = head?.startsWith(LOADED_PREFIX) ? `${head}\n${PRUNED_TEXT}` : meta ? `${PRUNED_TEXT}\n${meta}` : PRUNED_TEXT
         const failed = p.output?.type === "error-text" || p.output?.type === "error-json"
+        const value = head?.startsWith(LOADED_PREFIX)
+          ? `${head}\n${PRUNED_TEXT}`
+          : meta
+            ? `${PRUNED_TEXT}\n${meta}`
+            : failed
+              ? `${head ? `${head.slice(0, PRUNED_ERROR_HEAD_CHARS)}\n` : ""}${PRUNED_ERROR_TEXT}`
+              : PRUNED_TEXT
         return { ...part, output: { type: failed ? "error-text" : "text", value } } as typeof part
       })
       return { ...message, content } as ModelMessage
