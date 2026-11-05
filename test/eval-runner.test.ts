@@ -147,6 +147,11 @@ test("the answer is what the harness kept, and the thrown-away draft stays visib
   expect(answer!.streamed).toContain("12,3")
 })
 
+test("the gate goes back to refusing when the run ends", async () => {
+  const { runtime } = await run([question("q1")])
+  expect(runtime.permissions.interactive).toBe(false)
+})
+
 test("a failed question is traced and the run goes on", async () => {
   failStatus = 400
   const { events } = await run([question("q1"), question("q2")])

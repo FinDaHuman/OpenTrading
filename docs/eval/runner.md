@@ -32,4 +32,4 @@ Each question has an `id`, a `group` (A–F), the `question`, and `now`, the mom
 
 - `model_steps` counts finished model steps. Retries and side calls (web side model, classifier) are not in it.
 - The runner does not compact. A question that outgrows the context fails and is traced as failed.
-- Tools that need approval are refused, as in any run with no UI. The refusal is in the trace.
+- Nobody approves anything: `web_fetch` is allowed once per call, because a gate with no UI would refuse every new domain, and everything else that asks is refused (`scripts/eval/approvals.ts`). This is a list, not "read-only": `read_file` also asks, for paths outside the workspace. A refusal is in the trace.

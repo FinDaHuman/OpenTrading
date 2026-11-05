@@ -11,6 +11,7 @@ import { currentTimeTool } from "../../src/core/tools/builtin/current-time"
 import { clearResults, useResultSession } from "../../src/core/tools/refs"
 import type { ToolDef, ToolResult } from "../../src/core/tools/types"
 import type { ToolRegistry } from "../../src/core/tools/registry"
+import { answerUnattended } from "./approvals"
 import { TRACE_VERSION, type TraceEvent, type TraceWriter } from "./trace"
 
 const QUESTIONS = z
@@ -106,6 +107,7 @@ export async function runEval(run: EvalRun) {
   const { runtime, write } = run
   const { registry } = runtime
   const web = WEB_TOOLS.flatMap((name) => registry.get(name) ?? [])
+  const stopAnswering = answerUnattended(runtime.permissions, "eval")
   write({
     type: "run",
     trace_version: TRACE_VERSION,
@@ -121,24 +123,28 @@ export async function runEval(run: EvalRun) {
   })
   const seen = new WeakSet<ToolDef>()
   let asked: Asked = { q: "", rep: 0 }
-  for (let rep = 1; rep <= (run.repeat ?? 1); rep++) {
-    for (const question of run.questions) {
-      const now = new Date(question.now)
-      registry.register(currentTimeTool(() => now))
-      for (const def of web) {
-        if (WEB_GROUPS.has(question.group)) registry.register(def)
-        // By prefix: also drops any later tool named web_fetch_…, which replay would not cover.
-        else registry.unregister(def.name)
+  try {
+    for (let rep = 1; rep <= (run.repeat ?? 1); rep++) {
+      for (const question of run.questions) {
+        const now = new Date(question.now)
+        registry.register(currentTimeTool(() => now))
+        for (const def of web) {
+          if (WEB_GROUPS.has(question.group)) registry.register(def)
+          // By prefix: also drops any later tool named web_fetch_…, which replay would not cover.
+          else registry.unregister(def.name)
+        }
+        asked = { q: question.id, rep }
+        observeTools(
+          registry,
+          seen,
+          () => asked,
+          (tag, { callId, ...call }) => write({ type: "tool_raw", ...tag, call_id: callId, ...call }),
+        )
+        await ask(run, question, asked, now)
       }
-      asked = { q: question.id, rep }
-      observeTools(
-        registry,
-        seen,
-        () => asked,
-        (tag, { callId, ...call }) => write({ type: "tool_raw", ...tag, call_id: callId, ...call }),
-      )
-      await ask(run, question, asked, now)
     }
+  } finally {
+    stopAnswering()
   }
 }
 
