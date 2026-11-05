@@ -7,6 +7,8 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ### Fixed
 
+- The `co-ban` agent prompt no longer carries a real HPG divestment figure, which could leak
+  into answers. `skill-routing-live-eval.ts` calls a model only with `--yes`.
 - Stop gate: an answer that claims fetched data (a tool name, `Nguồn:`, "đã lấy dữ liệu") with
   figures the conversation does not hold, in a turn where no data tool ran, is sent back once
   with tools on. If the retry does the same, the answer stays and the user is told its figures
