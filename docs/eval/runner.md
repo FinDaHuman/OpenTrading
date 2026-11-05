@@ -30,7 +30,7 @@ Each question has an `id`, a `group` (A–F), the `question`, and `now`, the mom
 
 ## Request cap
 
-Every model request is counted at the provider's fetch and added to `<home>/usage/YYYY-MM-DD.json`, by `provider/model`, in the real home. `--max-requests` (default 500) is a cap for that model for the day, across runs. The run stops before the next question at the cap, and a question that reaches it mid-way is aborted; a `stopped` line records it. The ledger counts only eval runs, not requests made in the TUI, and the day is the local day, while a provider's quota may reset at another hour.
+Every model request is counted at the provider's fetch and added to `<home>/usage/YYYY-MM-DD.json`, by the `provider/model` it went to, in the real home. `--max-requests` (default 500) is a cap for the `--model` model for the day, across runs; a side model on another provider is booked under its own name and does not spend it. The run stops before the next question at the cap, and a question that reaches it mid-way is aborted; a `stopped` line records it. The ledger counts only eval runs, not requests made in the TUI, and the day is the local day, while a provider's quota may reset at another hour.
 
 ## Limits
 

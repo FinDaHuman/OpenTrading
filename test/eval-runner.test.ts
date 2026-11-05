@@ -34,6 +34,8 @@ const bodies: Body[] = []
 let failStatus: number | undefined
 /** The first answer invents figures with no tool call, so the stop gate sends it back. */
 let invent = false
+/** Requests get no answer until they are aborted. */
+let hang = false
 /** Streamed requests fail with 429 this many times, then work. */
 let failFirst = 0
 
@@ -47,6 +49,9 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   if (url.endsWith("/api.json")) return Response.json(CATALOG)
   const body = JSON.parse(String(init?.body)) as Body
   bodies.push(body)
+  if (hang) {
+    await new Promise((_, reject) => init?.signal?.addEventListener("abort", () => reject(init.signal!.reason)))
+  }
   if (failStatus) return Response.json({ error: { message: "bad request" } }, { status: failStatus })
   if (failFirst > 0) {
     failFirst--
@@ -74,12 +79,13 @@ beforeEach(() => {
   failStatus = undefined
   invent = false
   failFirst = 0
+  hang = false
 })
 
 const LONG = "x".repeat(40_000)
 const INVENTED = "Tôi đã lấy dữ liệu. P/E 12,3 lần, ROE 24,1%.\nNguồn: financial_ratios"
 
-async function run(questions: ReturnType<typeof parseQuestions>, repeat = 1, ledger?: import("../scripts/eval/ledger").RequestLedger) {
+async function run(questions: ReturnType<typeof parseQuestions>, repeat = 1, ledger?: import("../scripts/eval/ledger").RequestLedger, timeoutMs?: number) {
   const runtime = initRuntime({ home, cwd: home, skills: () => [] })
   runtime.registry.register({
     name: "fake_quote",
@@ -93,7 +99,7 @@ async function run(questions: ReturnType<typeof parseQuestions>, repeat = 1, led
   })
   const events: TraceEvent[] = []
   const target = await resolveTarget({ provider: "groq", model: "tooly" })
-  await runEval({ runtime, skills: [], target, questions, repeat, write: (e) => events.push(e), version: "0.0.0", ledger })
+  await runEval({ runtime, skills: [], target, questions, repeat, write: (e) => events.push(e), version: "0.0.0", ledger, timeoutMs })
   return { events, runtime }
 }
 
@@ -177,8 +183,24 @@ test("reaching the cap mid-question aborts it, and the requests still reach the 
   const file = ledgerFile(await mkdtemp(path.join(os.tmpdir(), "ot-eval-usage-")))
   const { events } = await run([question("q1")], 1, await RequestLedger.open(file, "groq/tooly", 1))
   const [answer] = of(events, "answer")
-  expect(answer!.outcome).not.toBe("completed")
+  expect(answer).toMatchObject({ outcome: "aborted", abort: "cap" })
   expect(await spentToday(file, "groq/tooly")).toBe(1)
+})
+
+test("a side model on another provider does not spend the cap, and is booked apart", async () => {
+  const file = ledgerFile(await mkdtemp(path.join(os.tmpdir(), "ot-eval-usage-")))
+  const ledger = await RequestLedger.open(file, "groq/tooly", 1)
+  ledger.note("google/side")
+  expect(ledger.exhausted).toBe(false)
+  await ledger.flush()
+  expect(await spentToday(file, "google/side")).toBe(1)
+  expect(await spentToday(file, "groq/tooly")).toBe(0)
+})
+
+test("a timed-out question says so, apart from a cap", async () => {
+  hang = true
+  const { events } = await run([question("q1")], 1, undefined, 20)
+  expect(of(events, "answer")[0]).toMatchObject({ outcome: "aborted", abort: "timeout" })
 })
 
 test("the gate goes back to refusing when the run ends", async () => {

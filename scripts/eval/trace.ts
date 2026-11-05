@@ -46,6 +46,8 @@ export type TraceEvent =
       /** Everything the user saw stream, drafts the stop gate threw away included. */
       streamed?: string
       outcome: string
+      /** Why it was cut. A cap says nothing about the harness; a timeout does. */
+      abort?: "cap" | "timeout"
       unanswered: boolean
       recoveries: { kind: string; attempt: number }[]
       data_gaps: string[]

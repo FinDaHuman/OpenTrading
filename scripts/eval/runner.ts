@@ -128,9 +128,9 @@ export async function runEval(run: EvalRun) {
   const seen = new WeakSet<ToolDef>()
   let asked: Asked = { q: "", rep: 0 }
   const meter = { requests: 0, capped: new AbortController() }
-  const stopMeter = onModelRequest(() => {
+  const stopMeter = onModelRequest((request) => {
     meter.requests++
-    ledger?.note()
+    ledger?.note(`${request.provider}/${request.model}`)
     if (ledger?.exhausted) meter.capped.abort()
   })
   try {
@@ -182,6 +182,7 @@ async function ask(run: EvalRun, question: EvalQuestion, asked: Asked, now: Date
   const started = Date.now()
   const result = { text: "", streamed: "", steps: 0, input: 0, output: 0, outcome: "failed", unanswered: false, recoveries: [] as { kind: string; attempt: number }[], gaps: [] as string[] }
   const say = (event: TraceEvent) => write(event)
+  const timeout = AbortSignal.timeout(run.timeoutMs ?? DEFAULT_TIMEOUT_MS)
   try {
     for await (const event of runAgent({
       history: [],
@@ -191,7 +192,7 @@ async function ask(run: EvalRun, question: EvalQuestion, asked: Asked, now: Date
       serverInstructions: () => runtime.mcp.instructions(),
       target: run.target,
       now,
-      signal: AbortSignal.any([AbortSignal.timeout(run.timeoutMs ?? DEFAULT_TIMEOUT_MS), meter.capped.signal]),
+      signal: AbortSignal.any([timeout, meter.capped.signal]),
     })) {
       if (event.type === "text-delta") result.streamed += event.text
       else if (event.type === "tool-start") say({ type: "tool_call", ...asked, call_id: event.callId, tool: event.name, input: event.input, step: event.step })
@@ -229,6 +230,7 @@ async function ask(run: EvalRun, question: EvalQuestion, asked: Asked, now: Date
     text: result.text.trim(),
     streamed: result.streamed.trim(),
     outcome: result.outcome,
+    ...(meter.capped.signal.aborted ? { abort: "cap" as const } : timeout.aborted ? { abort: "timeout" as const } : {}),
     unanswered: result.unanswered,
     recoveries: result.recoveries,
     data_gaps: result.gaps,

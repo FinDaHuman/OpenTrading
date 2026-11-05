@@ -19,8 +19,12 @@ export async function spentToday(file: string, key: string) {
   return (JSON.parse(text) as Day)[key] ?? 0
 }
 
+/**
+ * The cap is on one model's quota. Other models a run calls (a side model on another provider)
+ * are booked under their own key and do not spend it.
+ */
 export class RequestLedger {
-  private pending = 0
+  private pending = new Map<string, number>()
 
   private constructor(
     private file: string,
@@ -34,23 +38,27 @@ export class RequestLedger {
   }
 
   get spent() {
-    return this.spentBefore + this.pending
+    return this.spentBefore + (this.pending.get(this.key) ?? 0)
   }
 
   get exhausted() {
     return this.spent >= this.cap
   }
 
-  note() {
-    this.pending++
+  note(key: string) {
+    this.pending.set(key, (this.pending.get(key) ?? 0) + 1)
   }
 
   /** Written per question rather than per request: a request must not wait on a file lock. */
   async flush() {
-    const count = this.pending
-    if (count === 0) return
-    this.pending = 0
-    const day = await updateJson<Day>(this.file, {}, (current) => ({ ...current, [this.key]: (current[this.key] ?? 0) + count }))
+    const counts = [...this.pending]
+    if (counts.length === 0) return
+    this.pending.clear()
+    const day = await updateJson<Day>(this.file, {}, (current) => {
+      const next = { ...current }
+      for (const [key, count] of counts) next[key] = (next[key] ?? 0) + count
+      return next
+    })
     this.spentBefore = day[this.key] ?? 0
   }
 }

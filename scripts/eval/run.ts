@@ -64,8 +64,14 @@ const commit = (await Bun.$`git rev-parse --short HEAD`.cwd(import.meta.dir).qui
 await mkdir(work)
 await prepareHome(realHome, home, model)
 process.env.OPENTRADING_HOME = home
-// The home holds a copy of the keys: it goes even when the run is interrupted.
-process.on("SIGINT", () => rm(home, { recursive: true, force: true }).finally(() => process.exit(130)))
+const requests = await RequestLedger.open(ledger, pick, cap)
+// The home holds a copy of the keys, and requests already sent are spent quota.
+process.on("SIGINT", () => {
+  void requests
+    .flush()
+    .finally(() => rm(home, { recursive: true, force: true }))
+    .finally(() => process.exit(130))
+})
 
 const { skills } = await loadSkills(skillRoots(work, { project: false }))
 const runtime = initRuntime({ home, cwd: work, skills: () => skills })
@@ -77,7 +83,7 @@ try {
   const target = await resolveTarget(model)
   const { effort, toolSearch, maxSteps } = await loadConfig()
   const settings = { effort, toolSearch, maxSteps }
-  await runEval({ runtime, skills, target, questions, repeat, timeoutMs: minutes * 60_000, write: traceFile(out), version: pkg.version, commit, settings, ledger: await RequestLedger.open(ledger, pick, cap) })
+  await runEval({ runtime, skills, target, questions, repeat, timeoutMs: minutes * 60_000, write: traceFile(out), version: pkg.version, commit, settings, ledger: requests })
   console.log(`Trace: ${out}`)
 } finally {
   await runtime.mcp.stop()
