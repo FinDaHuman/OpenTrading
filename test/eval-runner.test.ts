@@ -15,6 +15,7 @@ const { initRuntime } = await import("../src/core/runtime")
 const { rememberResult, recallResult } = await import("../src/core/tools/refs")
 const { parseQuestions, prepareHome, runEval } = await import("../scripts/eval/runner")
 const { TRACE_VERSION } = await import("../scripts/eval/trace")
+const { ledgerFile, RequestLedger, spentToday } = await import("../scripts/eval/ledger")
 type TraceEvent = import("../scripts/eval/trace").TraceEvent
 
 const CATALOG = {
@@ -33,6 +34,8 @@ const bodies: Body[] = []
 let failStatus: number | undefined
 /** The first answer invents figures with no tool call, so the stop gate sends it back. */
 let invent = false
+/** Streamed requests fail with 429 this many times, then work. */
+let failFirst = 0
 
 const sse = (chunks: object[]) =>
   new Response(chunks.map((c) => `data: ${JSON.stringify(c)}\n\n`).join("") + "data: [DONE]\n\n", { headers: { "content-type": "text/event-stream" } })
@@ -45,6 +48,10 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   const body = JSON.parse(String(init?.body)) as Body
   bodies.push(body)
   if (failStatus) return Response.json({ error: { message: "bad request" } }, { status: failStatus })
+  if (failFirst > 0) {
+    failFirst--
+    return Response.json({ error: { message: "rate limited" } }, { status: 429 })
+  }
   if (invent) {
     const first = bodies.length === 1
     return sse([chunk({ role: "assistant", content: first ? INVENTED : "Không có dữ liệu." }), chunk({}, "stop")])
@@ -66,12 +73,13 @@ beforeEach(() => {
   bodies.length = 0
   failStatus = undefined
   invent = false
+  failFirst = 0
 })
 
 const LONG = "x".repeat(40_000)
 const INVENTED = "Tôi đã lấy dữ liệu. P/E 12,3 lần, ROE 24,1%.\nNguồn: financial_ratios"
 
-async function run(questions: ReturnType<typeof parseQuestions>, repeat = 1) {
+async function run(questions: ReturnType<typeof parseQuestions>, repeat = 1, ledger?: import("../scripts/eval/ledger").RequestLedger) {
   const runtime = initRuntime({ home, cwd: home, skills: () => [] })
   runtime.registry.register({
     name: "fake_quote",
@@ -85,7 +93,7 @@ async function run(questions: ReturnType<typeof parseQuestions>, repeat = 1) {
   })
   const events: TraceEvent[] = []
   const target = await resolveTarget({ provider: "groq", model: "tooly" })
-  await runEval({ runtime, skills: [], target, questions, repeat, write: (e) => events.push(e), version: "0.0.0" })
+  await runEval({ runtime, skills: [], target, questions, repeat, write: (e) => events.push(e), version: "0.0.0", ledger })
   return { events, runtime }
 }
 
@@ -145,6 +153,32 @@ test("the answer is what the harness kept, and the thrown-away draft stays visib
   expect(answer!.recoveries.map((r) => r.kind)).toEqual(["unfetched"])
   expect(answer!.text).toBe("Không có dữ liệu.")
   expect(answer!.streamed).toContain("12,3")
+})
+
+test("requests count retries, which model steps do not", async () => {
+  failFirst = 1
+  const { events } = await run([question("q1")])
+  const [answer] = of(events, "answer")
+  expect(answer).toMatchObject({ model_steps: 2, requests: 3 })
+  expect(answer!.requests).toBe(bodies.length)
+})
+
+test("the ledger adds up across runs and the cap stops the run before the next question", async () => {
+  const file = ledgerFile(await mkdtemp(path.join(os.tmpdir(), "ot-eval-usage-")))
+  await run([question("q1")], 1, await RequestLedger.open(file, "groq/tooly", 100))
+  expect(await spentToday(file, "groq/tooly")).toBe(2)
+  const { events } = await run([question("q2"), question("q3")], 1, await RequestLedger.open(file, "groq/tooly", 4))
+  expect(of(events, "answer").map((a) => a.q)).toEqual(["q2"])
+  expect(of(events, "stopped")).toEqual([{ type: "stopped", reason: "request-cap", spent: 4, cap: 4 }])
+  expect(await spentToday(file, "groq/tooly")).toBe(4)
+})
+
+test("reaching the cap mid-question aborts it, and the requests still reach the ledger", async () => {
+  const file = ledgerFile(await mkdtemp(path.join(os.tmpdir(), "ot-eval-usage-")))
+  const { events } = await run([question("q1")], 1, await RequestLedger.open(file, "groq/tooly", 1))
+  const [answer] = of(events, "answer")
+  expect(answer!.outcome).not.toBe("completed")
+  expect(await spentToday(file, "groq/tooly")).toBe(1)
 })
 
 test("the gate goes back to refusing when the run ends", async () => {
