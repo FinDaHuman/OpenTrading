@@ -40,11 +40,12 @@ let cached: { file: string; size: number; records: Evidence[] } | undefined
 
 /** A line cut by a crash is skipped; the ones before it stay good. */
 export function readEvidence(file: string): Evidence[] {
-  const size = statSync(file, { throwIfNoEntry: false })?.size
-  if (size === undefined) return []
-  if (cached?.file === file && cached.size === size) return cached.records
+  let size: number
   let text: string
   try {
+    // ENOTDIR on Linux when a parent is a file: this must not stop a session from opening.
+    size = statSync(file).size
+    if (cached?.file === file && cached.size === size) return cached.records
     text = readFileSync(file, "utf8")
   } catch {
     return []
