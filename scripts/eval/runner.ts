@@ -1,5 +1,6 @@
 import { copyFile, mkdir, writeFile } from "node:fs/promises"
 import path from "node:path"
+import type { ModelMessage } from "ai"
 import { z } from "zod"
 import { runAgent } from "../../src/core/agent"
 import type { Target } from "../../src/core/chat"
@@ -46,25 +47,32 @@ export async function prepareHome(from: string, to: string, target: { provider: 
 
 /**
  * Report what each tool returned before the output cap. Definitions are changed in place, so
- * the registries subagents build from them report too; calling this again is safe.
+ * the registries subagents build from them report too; calling this again is safe. `asked` is
+ * read when a call starts: a call that outlives its question stays with that question.
  */
-export function observeTools(registry: ToolRegistry, seen: WeakSet<ToolDef>, report: (call: Observed) => void) {
+export function observeTools(registry: ToolRegistry, seen: WeakSet<ToolDef>, asked: () => Asked, report: (asked: Asked, call: Observed) => void) {
   for (const def of registry.list()) {
     if (seen.has(def)) continue
     seen.add(def)
     const execute = def.execute.bind(def)
     def.execute = async (input, ctx) => {
+      const tag = asked()
       const base = { callId: ctx.callId, tool: def.name, input, ...(ctx.agent ? { agent: ctx.agent.type } : {}) }
       try {
         const result: string | ToolResult = await execute(input, ctx)
-        report({ ...base, ok: true, raw: typeof result === "string" ? result : result.output })
+        report(tag, { ...base, ok: true, raw: typeof result === "string" ? result : result.output })
         return result
       } catch (error) {
-        report({ ...base, ok: false, raw: error instanceof Error ? error.message : String(error) })
+        report(tag, { ...base, ok: false, raw: error instanceof Error ? error.message : String(error) })
         throw error
       }
     }
   }
+}
+
+interface Asked {
+  q: string
+  rep: number
 }
 
 interface Observed {
@@ -87,6 +95,8 @@ export interface EvalRun {
   write: TraceWriter
   version: string
   commit?: string
+  /** What must stay fixed between runs to compare them (effort, tool search, step limit). */
+  settings?: Record<string, unknown>
 }
 
 const DEFAULT_TIMEOUT_MS = 15 * 60_000
@@ -107,24 +117,39 @@ export async function runEval(run: EvalRun) {
     model: run.target.model,
     started_at: new Date().toISOString(),
     tools: registry.list().length,
+    ...(run.settings ? { settings: run.settings } : {}),
   })
   const seen = new WeakSet<ToolDef>()
+  let asked: Asked = { q: "", rep: 0 }
   for (let rep = 1; rep <= (run.repeat ?? 1); rep++) {
     for (const question of run.questions) {
       const now = new Date(question.now)
       registry.register(currentTimeTool(() => now))
       for (const def of web) {
         if (WEB_GROUPS.has(question.group)) registry.register(def)
+        // By prefix: also drops any later tool named web_fetch_…, which replay would not cover.
         else registry.unregister(def.name)
       }
-      const asked = { q: question.id, rep }
-      observeTools(registry, seen, ({ callId, ...call }) => write({ type: "tool_raw", ...asked, call_id: callId, ...call }))
+      asked = { q: question.id, rep }
+      observeTools(
+        registry,
+        seen,
+        () => asked,
+        (tag, { callId, ...call }) => write({ type: "tool_raw", ...tag, call_id: callId, ...call }),
+      )
       await ask(run, question, asked, now)
     }
   }
 }
 
-async function ask(run: EvalRun, question: EvalQuestion, asked: { q: string; rep: number }, now: Date) {
+/** The answer the turn kept: a draft the stop gate sent back is streamed but not in it. */
+function finalText(messages: ModelMessage[]) {
+  const content = messages.findLast((m) => m.role === "assistant")?.content
+  if (typeof content === "string") return content
+  return (content ?? []).flatMap((part) => (part.type === "text" ? [part.text] : [])).join("")
+}
+
+async function ask(run: EvalRun, question: EvalQuestion, asked: Asked, now: Date) {
   const { runtime, write } = run
   clearResults()
   useResultSession(`${asked.q}#${asked.rep}`)
@@ -132,7 +157,7 @@ async function ask(run: EvalRun, question: EvalQuestion, asked: { q: string; rep
   write({ type: "question", ...asked, group: question.group, question: question.question, now: question.now })
   const before = new Set(runtime.subagents.list().map((v) => v.id))
   const started = Date.now()
-  const result = { text: "", steps: 0, input: 0, output: 0, outcome: "failed", unanswered: false, recoveries: [] as { kind: string; attempt: number }[], gaps: [] as string[] }
+  const result = { text: "", streamed: "", steps: 0, input: 0, output: 0, outcome: "failed", unanswered: false, recoveries: [] as { kind: string; attempt: number }[], gaps: [] as string[] }
   const say = (event: TraceEvent) => write(event)
   try {
     for await (const event of runAgent({
@@ -145,7 +170,7 @@ async function ask(run: EvalRun, question: EvalQuestion, asked: { q: string; rep
       now,
       signal: AbortSignal.timeout(run.timeoutMs ?? DEFAULT_TIMEOUT_MS),
     })) {
-      if (event.type === "text-delta") result.text += event.text
+      if (event.type === "text-delta") result.streamed += event.text
       else if (event.type === "tool-start") say({ type: "tool_call", ...asked, call_id: event.callId, tool: event.name, input: event.input, step: event.step })
       else if (event.type === "tool-end") say({ type: "tool_result", ...asked, call_id: event.callId, ok: event.ok, visible: event.output, duration_ms: event.durationMs })
       else if (event.type === "retry") say({ type: "retry", ...asked, attempt: event.attempt, delay_ms: event.delayMs, label: event.label })
@@ -156,6 +181,7 @@ async function ask(run: EvalRun, question: EvalQuestion, asked: { q: string; rep
         result.input += event.inputTokens
         result.output += event.outputTokens
       } else if (event.type === "done") {
+        result.text = finalText(event.messages)
         result.outcome = event.outcome ?? "completed"
         result.unanswered = event.unanswered ?? false
         result.recoveries = event.recoveries ?? []
@@ -178,6 +204,7 @@ async function ask(run: EvalRun, question: EvalQuestion, asked: { q: string; rep
     type: "answer",
     ...asked,
     text: result.text.trim(),
+    streamed: result.streamed.trim(),
     outcome: result.outcome,
     unanswered: result.unanswered,
     recoveries: result.recoveries,

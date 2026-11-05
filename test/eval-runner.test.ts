@@ -31,6 +31,8 @@ type Body = { stream?: boolean; messages: { role: string; content?: unknown }[];
 const bodies: Body[] = []
 /** Streamed requests fail with this status instead of answering. */
 let failStatus: number | undefined
+/** The first answer invents figures with no tool call, so the stop gate sends it back. */
+let invent = false
 
 const sse = (chunks: object[]) =>
   new Response(chunks.map((c) => `data: ${JSON.stringify(c)}\n\n`).join("") + "data: [DONE]\n\n", { headers: { "content-type": "text/event-stream" } })
@@ -43,6 +45,10 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   const body = JSON.parse(String(init?.body)) as Body
   bodies.push(body)
   if (failStatus) return Response.json({ error: { message: "bad request" } }, { status: failStatus })
+  if (invent) {
+    const first = bodies.length === 1
+    return sse([chunk({ role: "assistant", content: first ? INVENTED : "Không có dữ liệu." }), chunk({}, "stop")])
+  }
   if (body.messages.some((m) => m.role === "tool")) return sse([chunk({ role: "assistant", content: "Giá là 64,27." }), chunk({}, "stop")])
   return sse([
     chunk({ role: "assistant", tool_calls: [{ index: 0, id: `call_${bodies.length}`, type: "function", function: { name: "fake_quote", arguments: "" } }] }),
@@ -59,9 +65,11 @@ afterAll(async () => {
 beforeEach(() => {
   bodies.length = 0
   failStatus = undefined
+  invent = false
 })
 
 const LONG = "x".repeat(40_000)
+const INVENTED = "Tôi đã lấy dữ liệu. P/E 12,3 lần, ROE 24,1%.\nNguồn: financial_ratios"
 
 async function run(questions: ReturnType<typeof parseQuestions>, repeat = 1) {
   const runtime = initRuntime({ home, cwd: home, skills: () => [] })
@@ -120,6 +128,23 @@ test("questions share nothing: refs restart and each repeat is traced on its own
   expect(bodies.filter((b) => b.messages.filter((m) => m.role === "user").length > 2)).toEqual([])
   // Stored by the last question's tool, under that question's session.
   expect(recallResult("r1")?.session).toBe("q2#2")
+})
+
+test("every tool_raw belongs to the question that made the call", async () => {
+  const { events } = await run([question("q1"), question("q2")], 2)
+  const raws = of(events, "tool_raw")
+  expect(raws.map((r) => `${r.q}#${r.rep}`)).toEqual(["q1#1", "q2#1", "q1#2", "q2#2"])
+  const calls = of(events, "tool_call")
+  for (const raw of raws) expect(calls.find((c) => c.call_id === raw.call_id)).toMatchObject({ q: raw.q, rep: raw.rep })
+})
+
+test("the answer is what the harness kept, and the thrown-away draft stays visible apart", async () => {
+  invent = true
+  const { events } = await run([question("q1")])
+  const [answer] = of(events, "answer")
+  expect(answer!.recoveries.map((r) => r.kind)).toEqual(["unfetched"])
+  expect(answer!.text).toBe("Không có dữ liệu.")
+  expect(answer!.streamed).toContain("12,3")
 })
 
 test("a failed question is traced and the run goes on", async () => {

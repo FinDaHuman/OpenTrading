@@ -3,6 +3,7 @@ import os from "node:os"
 import path from "node:path"
 import { agentRoots, loadAgents } from "../../src/core/agents/loader"
 import { resolveTarget } from "../../src/core/chat"
+import { loadConfig } from "../../src/core/config"
 import { dataDir } from "../../src/core/paths"
 import { initRuntime, setAgents } from "../../src/core/runtime"
 import { loadSkills, skillRoots } from "../../src/core/skills/loader"
@@ -59,17 +60,19 @@ process.env.OPENTRADING_HOME = home
 // The home holds a copy of the keys: it goes even when the run is interrupted.
 process.on("SIGINT", () => rm(home, { recursive: true, force: true }).finally(() => process.exit(130)))
 
+const { skills } = await loadSkills(skillRoots(work, { project: false }))
+const runtime = initRuntime({ home, cwd: work, skills: () => skills })
 try {
-  const { skills } = await loadSkills(skillRoots(work, { project: false }))
-  const runtime = initRuntime({ home, cwd: work, skills: () => skills })
   setAgents(runtime, (await loadAgents(agentRoots(work, { project: false }))).agents)
   await runtime.mcp.start()
   // A run with no data server only measures the model: stop before spending anything.
   if (!runtime.registry.list().some((t) => t.source?.startsWith("mcp:"))) throw new Error("Không có tool MCP nào: kiểm tra kết nối MCP.")
   const target = await resolveTarget(model)
-  await runEval({ runtime, skills, target, questions, repeat, timeoutMs: minutes * 60_000, write: traceFile(out), version: pkg.version, commit })
-  await runtime.mcp.stop()
+  const { effort, toolSearch, maxSteps } = await loadConfig()
+  const settings = { effort, toolSearch, maxSteps }
+  await runEval({ runtime, skills, target, questions, repeat, timeoutMs: minutes * 60_000, write: traceFile(out), version: pkg.version, commit, settings })
   console.log(`Trace: ${out}`)
 } finally {
+  await runtime.mcp.stop()
   await rm(home, { recursive: true, force: true })
 }

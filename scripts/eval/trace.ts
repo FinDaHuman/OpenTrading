@@ -26,6 +26,7 @@ export type TraceEvent =
       model: string
       started_at: string
       tools: number
+      settings?: Record<string, unknown>
     }
   | (Asked & { type: "question"; group: string; question: string; now: string })
   | (Asked & { type: "tool_call"; call_id: string; tool: string; input: unknown; step: number })
@@ -38,7 +39,10 @@ export type TraceEvent =
   | (Asked & { type: "error"; message: string; kind?: string })
   | (Asked & {
       type: "answer"
+      /** The answer the harness kept. */
       text: string
+      /** Everything the user saw stream, drafts the stop gate threw away included. */
+      streamed?: string
       outcome: string
       unanswered: boolean
       recoveries: { kind: string; attempt: number }[]

@@ -24,7 +24,9 @@ Each question has an `id`, a `group` (A–F), the `question`, and `now`, the mom
 
 `scripts/eval/trace.ts` defines the format. One `run` line opens the file, then each question writes `question`, its events, and one `answer`.
 
-`tool_result.visible` is what the model saw, after notices and the output cap. `tool_raw.raw` is what the tool returned. Use `visible` to ask whether the model invented a figure, and `raw` to check a figure against the data. Subagent calls have only `tool_raw`, with `agent` set.
+`tool_result.visible` is what the model saw, after notices and the output cap. `tool_raw.raw` is what the tool returned. Use `visible` to ask whether the model invented a figure, and `raw` to check a figure against the data. Subagent calls have only `tool_raw`, with `agent` set. `raw` is taken before date normalization, so it can hold `/Date(ms)/` where `visible` shows an ISO date.
+
+`answer.text` is the answer the harness kept. `answer.streamed` is everything the user saw, including a draft the stop gate sent back.
 
 ## Limits
 
