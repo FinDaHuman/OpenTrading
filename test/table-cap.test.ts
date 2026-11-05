@@ -37,15 +37,17 @@ test("a result without a ref says how to get less instead", () => {
 
 test("as many rows as fit are kept", () => {
   const out = capTable(envelope(5000), 3000)!
-  const one = JSON.stringify(rows(5000)[2500]).length + 1
-  expect(out.length).toBeGreaterThan(3000 - 3 * one)
+  expect(out.length).toBeGreaterThan(2700)
 })
 
-test("several long arrays shorten one after another", () => {
-  const text = JSON.stringify({ a: rows(3000), b: rows(3000) })
-  const out = capTable(text, 2000)!
-  expect(out.length).toBeLessThanOrEqual(2000)
-  expect(out.match(/đã lược/g)).toHaveLength(2)
+test("a batch of symbols keeps an even number of rows of each", () => {
+  const batch = Object.fromEntries(["FPT", "VCB", "MWG", "HPG"].map((s) => [s, rows(3000)]))
+  const out = capTable(JSON.stringify(batch), 6000)!
+  expect(out.length).toBeLessThanOrEqual(6000)
+  const value = JSON.parse(out) as Record<string, unknown[]>
+  const sizes = Object.values(value).map((list) => list.length)
+  expect(new Set(sizes).size).toBe(1)
+  expect(sizes[0]!).toBeGreaterThan(10)
 })
 
 test("what rows cannot fix is left to the plain cut", () => {
