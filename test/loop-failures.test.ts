@@ -78,6 +78,14 @@ test("a failed source or connection is a gap; a repeat that works clears it", ()
   expect(turnFailures(messages).gaps).toEqual(["b"])
 })
 
+test("an alternative the server named clears the gap once it works, in any order", () => {
+  const failed = `${SOURCE_FAILED_PREFIX} a: lỗi. Gọi b ngay ở bước kế tiếp. Nếu vẫn không có, báo phần còn thiếu.\n{}\n[Nguồn: MCP ot]`
+  expect(turnFailures(turn(step({ tool: "mcp__ot__a", text: failed }), step({ tool: "mcp__ot__b" }))).gaps).toEqual([])
+  expect(turnFailures(turn(step({ tool: "mcp__ot__b" }, { tool: "mcp__ot__a", text: failed }))).gaps).toEqual([])
+  expect(turnFailures(turn(step({ tool: "mcp__ot__a", text: failed }), step({ tool: "mcp__ot__c" }))).gaps).toEqual(["a"])
+  expect(turnFailures(turn(step({ tool: "mcp__ot__a", text: failed }), step({ tool: "mcp__ot__b", error: DOWN }))).gaps).toEqual(["a", "b"])
+})
+
 test("the same tool with other arguments does not clear a gap", () => {
   const messages = turn(step({ tool: "mcp__ot__a", input: { s: "FPT" }, error: DOWN }), step({ tool: "mcp__ot__a", input: { s: "VCB" } }))
   expect(turnFailures(messages).gaps).toEqual(["a"])

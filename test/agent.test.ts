@@ -360,6 +360,21 @@ test("a repeat that works clears the gap", async () => {
   expect(done(events).dataGaps).toBeUndefined()
 })
 
+test("an alternative the server named clears the gap, through the output the model really gets", async () => {
+  const r = registry()
+  const data = { description: "a data tool", input: z.object({}), readOnly: true, source: "mcp:ot", sourceEnvelope: true }
+  r.register({ ...data, name: "mcp__ot__source", execute: async () => JSON.stringify({ data: {}, availability: "unavailable", alternatives: ["other"] }) })
+  r.register({ ...data, name: "mcp__ot__other", execute: async () => "98.5" })
+  script = [
+    { tool: "mcp__ot__source", args: {} },
+    { tool: "mcp__ot__other", args: {} },
+  ]
+  const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: r }))
+  expect(lastUserText(bodies[1]!)).toContain("chưa lấy được dữ liệu từ: source")
+  expect(lastUserText(bodies[2]!)).not.toContain("chưa lấy được dữ liệu")
+  expect(done(events).dataGaps).toBeUndefined()
+})
+
 test("a run of failed steps is told once, then tools go off and the turn answers", async () => {
   plan = { tool: "boom", args: {}, always: true }
   const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: registry() }))
