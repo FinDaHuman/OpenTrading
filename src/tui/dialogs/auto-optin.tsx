@@ -1,9 +1,9 @@
 import { useKeyboard } from "@opentui/solid"
 import { createSignal, For } from "solid-js"
-import { loadConfig, saveConfig } from "../../core/config"
+import { saveConfig } from "../../core/config"
 import type { PermissionGate } from "../../core/permission"
 import { MODE_LABEL } from "../../core/permission/mode"
-import { say } from "../notify"
+import { say, saySaveFailure } from "../notify"
 import { setState, state } from "../state"
 import { color } from "../theme"
 import { DialogFrame } from "./frame"
@@ -37,15 +37,14 @@ export async function answerAutoOptIn(gate: PermissionGate, choice: Choice) {
   if (choice === "back") return gate.setMode(from === "auto" ? "ask" : from)
   gate.setMode("auto")
   setState("autoAcknowledged", true)
-  const config = await loadConfig()
-  await saveConfig({ permissions: { ...config.permissions, autoAcknowledged: true, ...(choice === "default" ? { defaultMode: "auto" as const } : {}) } })
+  await saveConfig((config) => ({ permissions: { ...config.permissions, autoAcknowledged: true, ...(choice === "default" ? { defaultMode: "auto" as const } : {}) } }))
   if (choice === "default") say("Đã bật ▸▸ tự động và đặt làm mặc định cho các phiên sau", "success")
 }
 
 export function AutoOptInDialog(props: { gate: PermissionGate }) {
   const [selected, setSelected] = createSignal(0)
   const from = () => MODE_LABEL[state.autoOptIn?.from ?? "ask"]
-  const choose = (i: number) => void answerAutoOptIn(props.gate, CHOICES[i]!.value)
+  const choose = (i: number) => saySaveFailure(answerAutoOptIn(props.gate, CHOICES[i]!.value))
 
   useKeyboard((evt) => {
     if (evt.eventType === "release") return

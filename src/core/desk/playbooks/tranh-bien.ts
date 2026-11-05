@@ -1,6 +1,6 @@
 import { z } from "zod"
 import { EVIDENCE_NOTE, evidence } from "../sanitize"
-import type { DeskContext, DeskSize, Playbook } from "../types"
+import { DeskNoData, type DeskContext, type DeskSize, type Playbook } from "../types"
 import { Ticker, tierOf } from "./common"
 import { kiemChung } from "./kiem-chung"
 
@@ -108,7 +108,7 @@ async function run(ctx: DeskContext<Args>): Promise<string> {
   const reports = tier.analysts.flatMap((a, i) => (results[i] ? [{ a, text: results[i]! }] : []))
   const missing = tier.analysts.filter((_, i) => !results[i]).map((a) => a.type)
   if (missing.length > 0) ctx.log(`Thiếu báo cáo: ${missing.join(", ")}`)
-  if (reports.length === 0) return `Không lấy được báo cáo nào về ${ticker}: không đủ bằng chứng để tranh biện. Chạy tiếp bằng /desk resume.`
+  if (reports.length === 0) throw new DeskNoData(`Không lấy được báo cáo nào về ${ticker}: không đủ bằng chứng để tranh biện. Chạy tiếp bằng /desk resume.`)
   const block = reportsBlock(reports)
 
   ctx.phase("Tranh luận")

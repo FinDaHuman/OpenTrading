@@ -155,3 +155,21 @@ test("a stored desk notice becomes a transcript notice on resume, not user text"
   expect(notices).toEqual([{ agentId: "dk-abc123", type: "ultradesk", description: "sang-loc", status: "xong", stats: expect.stringContaining("3 agent") }])
   expect(rest).toBe("Câu hỏi tiếp")
 })
+
+test("desk_run passes an effort to the run only when the user changed it on the card (an inherited one follows desk.effort on resume)", async () => {
+  await saveConfig({ desk: { effort: "low" } })
+  const h = harness()
+  const opts: unknown[] = []
+  const start = h.engine.start.bind(h.engine)
+  h.engine.start = (name, args, o) => (opts.push(o), start(name, args, o))
+  for (const effort of ["low", "high"] as const) {
+    const deciding = h.prepare({ sang_loc: { tickers: ["FPT"] } })
+    expect((await h.card())?.effort).toBe("low")
+    h.approvals.answer({ run: true, size: "small", effort, remember: false })
+    await h.tool.execute({ sang_loc: { tickers: ["FPT"] } }, { ...h.ctx, prepared: await deciding })
+  }
+  expect(opts).toEqual([
+    { size: "small", effort: undefined },
+    { size: "small", effort: "high" },
+  ])
+})

@@ -42,4 +42,10 @@ export type AgentEvent =
       usage?: { contextTokens: number; estimated: boolean; total?: { input: number; output: number } }
       /** How the turn ended. Hook-blocked turns count as completed. */
       outcome?: "completed" | "failed" | "aborted"
+      /** The stop gate sent the model back this many times, and why (loop/stop-gate.ts). */
+      recoveries?: { kind: string; attempt: number }[]
+      /** Completed without an answer: the stop gate gave up (a notice says why). */
+      unanswered?: boolean
+      /** Items the model left open in this turn's list when it answered (the list was retired). */
+      retiredTodos?: number
     }

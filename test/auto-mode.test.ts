@@ -255,7 +255,7 @@ test("gate in auto: new files skip the classifier, edits of old files go through
   // A wildcard allow rule does not let an MCP write skip it; a block reaches the model as text.
   const blocked = await gate.check(mcpWrite, {}, signal())
   expect(blocked).toMatchObject({ allow: false, reason: "classifier" })
-  expect(blocked.message).toContain("[Xoá/ghi đè không hoàn tác]")
+  expect(blocked.auto).toEqual({ label: "Xoá/ghi đè không hoàn tác", reason: expect.any(String) })
   // Key files, protected writes and the loop guard are the user's (headless here: denied).
   writeFileSync(path.join(data, "auth.json"), "{}")
   expect((await gate.check(read, { path: path.join(data, "auth.json") }, signal())).reason).toBe("headless")

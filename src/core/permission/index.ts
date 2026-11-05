@@ -1,10 +1,13 @@
 import { loadConfig, saveConfig } from "../config"
 import { isInside, isSensitiveScope } from "../fs/path-safety"
 import type { AgentOrigin, ApprovalPreview, ToolDef } from "../tools/types"
-import { blockedMessage, type AutoReviewer, type Review } from "./auto"
+import type { AutoReviewer, Review } from "./auto"
+import { compactInput } from "./auto/transcript"
+import type { AutoBlock, DenyInfo } from "./denial"
 import type { PermissionMode } from "./mode"
 
 export { cycleMode, MODE_LABEL, modeNote, type PermissionMode } from "./mode"
+export { AUTO_BLOCK_PREFIX, blockedMessage, deniedMessage, RULE_DENY_PREFIX, USER_DENY_PREFIX, userNoteOf, type AutoBlock } from "./denial"
 
 /**
  * Asking the user before a tool with side effects runs (writes a file, creates an issue,
@@ -13,7 +16,8 @@ export { cycleMode, MODE_LABEL, modeNote, type PermissionMode } from "./mode"
  * - The user can allow once, for the session, or always; "always" is stored per server
  *   identity (URL or command), so another server reusing a trusted name must ask again.
  * - No UI attached (scripts, tests) → deny, never silently allow (deepseek user-approval).
- * - A denial is a tool error the model reads and works around; the turn goes on.
+ * - A denial is a tool error the model reads (denial.ts: never the same effect by another tool);
+ *   the turn goes on.
  * - Requests queue: the UI shows one at a time; when it advances, calls the user just
  *   allowed for the session go through without a second prompt.
  *
@@ -23,7 +27,8 @@ export { cycleMode, MODE_LABEL, modeNote, type PermissionMode } from "./mode"
  * 2. A user-only scope (key file, network path, protected folder, outside the workspace,
  *    loop guard): asked every time (a key file may be allowed for the session); no rule or
  *    "always" covers it.
- * 3. A user ask rule forces the prompt; an allow rule ("always") lets it run.
+ * 3. A user ask rule forces the prompt; a write in the session's temp folder (`scratch:`) runs
+ *    outside ‖ read-only; an allow rule ("always") lets it run.
  * 4. The permission mode: ‖ read-only asks local file/shell effects with "switch to ▸";
  *    ▸ ask prompts as before.
  */
@@ -73,15 +78,13 @@ export interface ApprovalRequest {
   notice?: string
 }
 
-export interface Decision {
+/**
+ * `reason` says why a call did not run: the user said no, the turn was cancelled, nobody could
+ * be asked, a deny rule matched, auto mode blocked it, it can never run (`blocked`), or an
+ * "always" rule could not be saved (`unsaved`).
+ */
+export interface Decision extends DenyInfo {
   allow: boolean
-  /**
-   * Why a call did not run: the user said no, the turn was cancelled, nobody could be asked,
-   * a deny rule matched, or it can never run (`blocked`).
-   */
-  reason?: "user" | "cancelled" | "headless" | "rule" | "blocked" | "classifier"
-  /** The user's note when denying, or why it is blocked. */
-  message?: string
 }
 
 interface Pending {
@@ -90,6 +93,8 @@ interface Pending {
   def: ToolDef
   resolve: (d: Decision) => void
   cleanup: () => void
+  /** Auto mode blocked this call before handing it to the user: a "no" keeps the reason. */
+  auto?: AutoBlock
 }
 
 const NATIVE_SCOPE = "native"
@@ -140,9 +145,14 @@ export function choicesFor(def: ToolDef, scope: string | undefined, mode: Permis
 export interface RuleStore {
   load(): Promise<AllowRule[]>
   save(rules: AllowRule[]): Promise<void>
+  /** Add one rule against the stored list as it is when written (no lost update); else load + save. */
+  add?(rule: AllowRule): Promise<void>
   /** Deny and ask rules (config `permissions.deny` / `permissions.ask`); none when absent. */
   lists?(): Promise<{ deny: ListRule[]; ask: ListRule[] }>
 }
+
+/** An "always allow" rule the prompt would add again: same tool and scope, no pattern. */
+const sameRule = (r: AllowRule, rule: { tool: string; scope?: string }) => r.tool === rule.tool && r.scope === rule.scope && !r.pattern
 
 /** "Always allow" rules live in ~/.opentrading/config.json → permissions.allow (deny/ask beside it). */
 export const configRuleStore: RuleStore = {
@@ -150,8 +160,14 @@ export const configRuleStore: RuleStore = {
     return (await loadConfig()).permissions?.allow ?? []
   },
   async save(allow) {
-    const config = await loadConfig()
-    await saveConfig({ permissions: { ...config.permissions, allow } })
+    await saveConfig((config) => ({ permissions: { ...config.permissions, allow } }))
+  },
+  async add(rule) {
+    await saveConfig((config) => {
+      const allow = config.permissions?.allow ?? []
+      if (allow.some((r) => sameRule(r, rule))) return {}
+      return { permissions: { ...config.permissions, allow: [...allow, rule] } }
+    })
   },
   async lists() {
     const p = (await loadConfig()).permissions
@@ -271,6 +287,12 @@ export class PermissionGate {
     return { allow: true }
   }
 
+  /** A deny rule matched: the classifier's log marks the call as not run. */
+  private refused(def: ToolDef, input: unknown, agent?: AgentOrigin): Decision {
+    this.auto?.log.denied(def, input, "deny_rule", undefined, agent)
+    return { allow: false, reason: "rule" }
+  }
+
   /** Resolve before the tool runs. Waiting here never counts against the tool's timeout. */
   async check(def: ToolDef, input: unknown, signal: AbortSignal, label = def.name, callId?: string, agent?: AgentOrigin): Promise<Decision> {
     const scope = def.askFor?.(input)
@@ -281,18 +303,20 @@ export class PermissionGate {
     if (blocked) return { allow: false, reason: "blocked", message: blocked }
     const subject = def.subject?.(input)
     // Deny rules first, from memory: they stop reads too (refreshRules loads them).
-    if (this.lists?.deny.some((r) => listMatches(r, def, subject))) return { allow: false, reason: "rule" }
+    if (this.lists?.deny.some((r) => listMatches(r, def, subject))) return this.refused(def, input, agent)
     // Calls that never ask run at once, as before: no await, so parallel calls keep their order.
     if (!userOnly(scope) && !needsApproval(def, input) && !(this.current === "auto" && def.autoReview)) return this.ran()
     const lists = this.lists ?? (await this.rules.lists?.()) ?? { deny: [], ask: [] }
-    if (!this.lists && lists.deny.some((r) => listMatches(r, def, subject))) return { allow: false, reason: "rule" }
+    if (!this.lists && lists.deny.some((r) => listMatches(r, def, subject))) return this.refused(def, input, agent)
     const key = this.keyOf(def, input)
     if (userOnly(scope)) {
       if (sessionOk(scope) && this.session.has(key)) return { allow: true }
     } else if (!lists.ask.some((r) => listMatches(r, def, subject))) {
+      if (scope?.startsWith("scratch:") && this.approvalsApply(def)) return this.ran()
       if (this.approvalsApply(def) && (this.sessionCovers(def, input, key) || (await this.allowedAlways(def, input)))) return this.ran()
     }
     let notice: string | undefined
+    let handedOver: AutoBlock | undefined
     if (this.current === "auto" && this.auto && !userOnly(scope) && !lists.ask.some((r) => listMatches(r, def, subject))) {
       // A new file, or one this run created, in the workspace (the copy in /undo is the safety
       // net), or a shell command that only reads: no classifier request.
@@ -300,10 +324,11 @@ export class PermissionGate {
       const review = await this.auto.review(def, input, agent, signal).catch((error): Review => ({ decision: "ask", why: `model duyệt lỗi: ${error instanceof Error ? error.message : String(error)}` }))
       if (signal.aborted) return { allow: false, reason: "cancelled" }
       if (review?.decision === "allow") return { allow: true }
-      if (review?.decision === "block") return { allow: false, reason: "classifier", message: blockedMessage(review.label, review.reason) }
+      if (review?.decision === "block") return { allow: false, reason: "classifier", auto: { ...(review.label ? { label: review.label } : {}), reason: review.reason } }
       notice = review?.why ?? "model duyệt lỗi"
+      handedOver = review?.blocked
     }
-    if (!this.interactive) return { allow: false, reason: "headless" }
+    if (!this.interactive) return { allow: false, reason: "headless", ...(handedOver ? { auto: handedOver } : {}) }
     if (signal.aborted) return { allow: false, reason: "cancelled" }
     const preview = await def.preview?.(input).catch(() => undefined)
 
@@ -330,7 +355,7 @@ export class PermissionGate {
         this.emit()
       }
       signal.addEventListener("abort", onAbort, { once: true })
-      this.queue.push({ request, key, def, resolve, cleanup: () => signal.removeEventListener("abort", onAbort) })
+      this.queue.push({ request, key, def, resolve, cleanup: () => signal.removeEventListener("abort", onAbort), ...(handedOver ? { auto: handedOver } : {}) })
       if (this.queue.length === 1) this.emit()
       else this.emitPending()
     })
@@ -351,21 +376,27 @@ export class PermissionGate {
       if (choice === "deny") {
         // The user's note is their own words: the classifier reads it too.
         if (message?.trim()) this.auto?.log.answer(`(từ chối ${pending!.def.name}) ${message.trim()}`)
-        pending!.resolve({ allow: false, reason: "user", message: message?.trim() || undefined })
+        this.auto?.log.denied(pending!.def, pending!.request.input, "user", undefined, pending!.request.agent)
+        pending!.resolve({ allow: false, reason: "user", message: message?.trim() || undefined, ...(pending!.auto ? { auto: pending!.auto } : {}) })
         return
       }
       // The rule is saved before anything is granted: a failed save grants nothing, not even the session.
       if (choice === "always") {
         try {
-          const rules = await this.rules.load()
           const rule = { tool: pending!.def.name, scope: scopeOf(pending!.def, pending!.request.input) }
-          if (!rules.some((r) => r.tool === rule.tool && r.scope === rule.scope && !r.pattern)) await this.rules.save([...rules, rule])
+          if (this.rules.add) await this.rules.add(rule)
+          else {
+            const rules = await this.rules.load()
+            if (!rules.some((r) => sameRule(r, rule))) await this.rules.save([...rules, rule])
+          }
         } catch (error) {
           const why = error instanceof Error ? error.message : String(error)
-          pending!.resolve({ allow: false, reason: "blocked", message: `không lưu được quyền "luôn cho phép" (${why}); chưa cấp quyền nào, người dùng có thể duyệt lại "chỉ lần này" hoặc "cả phiên"` })
+          pending!.resolve({ allow: false, reason: "unsaved", message: `không lưu được quyền "luôn cho phép" (${why}); chưa cấp quyền nào, người dùng có thể duyệt lại "chỉ lần này" hoặc "cả phiên"` })
           return
         }
       }
+      // Auto mode handed this one over and the user let it run: their decision, in their log.
+      if (pending!.request.mode === "auto" && pending!.request.notice) this.auto?.log.approved(pending!.def.name, compactInput(pending!.def, pending!.request.input), pending!.request.agent)
       if (choice === "mode") this.setMode("ask")
       if (choice === "session" || choice === "always") {
         this.session.add(pending!.key)
@@ -399,16 +430,4 @@ export class PermissionGate {
     this.queue = []
     this.emit()
   }
-}
-
-/** The error the model reads when the user says no. */
-export function deniedMessage(decision: Decision) {
-  if (decision.reason === "cancelled") return "Lời gọi tool đã bị huỷ."
-  if (decision.reason === "headless") return "Lời gọi này cần người dùng xác nhận, nhưng không có giao diện để hỏi. Không chạy."
-  if (decision.reason === "blocked") return `Không chạy được: ${decision.message ?? "lời gọi này bị chặn"}. Đừng thử lại cùng cách.`
-  if (decision.reason === "classifier") return decision.message ?? "Auto mode chặn lời gọi này."
-  if (decision.reason === "rule") return "Người dùng đã đặt quy tắc chặn lời gọi này (cấu hình permissions.deny). Đừng thử lại; làm cách khác hoặc hỏi người dùng."
-  return decision.message
-    ? `Người dùng từ chối chạy tool này. Lời nhắn của người dùng: ${decision.message}`
-    : "Người dùng từ chối chạy tool này. Đừng thử lại cùng lời gọi; hỏi người dùng muốn làm gì khác."
 }

@@ -9,9 +9,10 @@ import { AUTO_MODEL } from "../../core/subagents/model-pick"
 import { DEFAULT_MAX_STEPS } from "../../core/agent"
 import { isEffort } from "../../core/effort"
 import { clampPercent, DEFAULT_COMPACT_PERCENT, MIN_COMPACT_WINDOW } from "../../core/compact"
+import { IDLE_COMPACT_CHOICES } from "../../core/idle-compact"
 import { fmtTokens, groupDigits } from "../../core/subagents/result"
 import { blocked, closeDialog, contextLimits, providerName, setState, state } from "../state"
-import { say } from "../notify"
+import { say, saySaveFailure } from "../notify"
 import { color } from "../theme"
 import { DialogFrame } from "./frame"
 import { Picker, type PickerItem } from "./picker"
@@ -24,7 +25,7 @@ const COMPACT_PERCENTS = [95, 90, 80, 70]
 
 const DEFAULT_MODE_NEXT: Record<PermissionMode, PermissionMode> = { "read-only": "ask", ask: "auto", auto: "read-only" }
 
-type Setting = "memory" | "toolSearch" | "autoCompact" | "compactLevel" | "maxSteps" | "effort" | "subagentMax" | "subagentModel" | "webModel" | "autoModel" | "defaultMode" | "askEffort" | "tips" | "terminalNotify" | "scroll" | "updateCheck"
+type Setting = "memory" | "toolSearch" | "autoCompact" | "idleCompact" | "compactLevel" | "maxSteps" | "effort" | "subagentMax" | "subagentModel" | "webModel" | "autoModel" | "defaultMode" | "askEffort" | "tips" | "terminalNotify" | "scroll" | "updateCheck" | "scratchpad"
 type SubagentModel = { provider: string; model: string } | "inherit" | "auto"
 
 const TOOL_SEARCH_NEXT = { auto: "on", on: "off", off: "auto" } as const
@@ -105,8 +106,7 @@ export function ConfigDialog(props: { runtime: Runtime }) {
   async function saveMax(text: string) {
     const n = Number(text.trim())
     if (!Number.isInteger(n) || n < 1) return setError("Nhập một số nguyên từ 1 trở lên.")
-    const current = await loadConfig()
-    await saveConfig({ subagents: { ...current.subagents, maxConcurrent: n } })
+    await saveConfig((current) => ({ subagents: { ...current.subagents, maxConcurrent: n } }))
     props.runtime.subagents.setMax(n)
     setState("agentSlots", props.runtime.subagents.limiter.stats())
     setError("")
@@ -160,17 +160,16 @@ export function ConfigDialog(props: { runtime: Runtime }) {
   }
 
   async function saveAutoModel(choice: Exclude<SubagentModel, "auto">) {
-    const current = await loadConfig()
-    await saveConfig({ autoMode: { ...current.autoMode, model: choice === "inherit" ? undefined : choice } })
+    await saveConfig((current) => ({ autoMode: { ...current.autoMode, model: choice === "inherit" ? undefined : choice } }))
     setEditing(undefined)
     await refetch()
   }
 
   async function saveModel(choice: SubagentModel) {
-    const current = await loadConfig()
-    const { provider: _p, model: _m, ...rest } = current.subagents ?? {}
-    const next = choice === "inherit" ? rest : choice === "auto" ? { ...rest, provider: undefined, model: AUTO_MODEL } : { ...rest, ...choice }
-    await saveConfig({ subagents: next })
+    await saveConfig((current) => {
+      const { provider: _p, model: _m, ...rest } = current.subagents ?? {}
+      return { subagents: choice === "inherit" ? rest : choice === "auto" ? { ...rest, provider: undefined, model: AUTO_MODEL } : { ...rest, ...choice } }
+    })
     setEditing(undefined)
     await refetch()
   }
@@ -180,7 +179,7 @@ export function ConfigDialog(props: { runtime: Runtime }) {
    * kept, since a new provider would forget what this session already sent the model.
    */
   async function saveMemory(choice: MemoryChoice) {
-    await saveConfig({ memory: { provider: choice } })
+    await saveConfig((current) => ({ memory: { ...current.memory, provider: choice } }))
     if (choice === props.runtime.memory.id && !(props.runtime.memory.problems?.() ?? []).length) {
       say(`Đang chọn «${MEMORY_CHOICES.find((c) => c.value === choice)!.label}»; không đổi gì.`, "info")
       setEditing(undefined)
@@ -211,13 +210,21 @@ export function ConfigDialog(props: { runtime: Runtime }) {
     )
       return setEditing(setting)
     if (setting === "defaultMode") {
-      const current = await loadConfig()
       const next = DEFAULT_MODE_NEXT[defaultMode()]
-      await saveConfig({ permissions: { ...current.permissions, defaultMode: next } })
+      await saveConfig((current) => ({ permissions: { ...current.permissions, defaultMode: next } }))
       await refetch()
       return
     }
     if (setting === "effort") return setState("dialog", "effort")
+    if (setting === "idleCompact") {
+      // 15 → 30 → 54 → off → 15; the timer picks it up after the next turn.
+      const at = IDLE_COMPACT_CHOICES.indexOf(state.idleCompactMinutes as (typeof IDLE_COMPACT_CHOICES)[number])
+      const next = IDLE_COMPACT_CHOICES[(at + 1) % IDLE_COMPACT_CHOICES.length]!
+      await saveConfig((current) => ({ idleCompact: { ...current.idleCompact, minutes: next } }))
+      setState("idleCompactMinutes", next)
+      await refetch()
+      return
+    }
     if (setting === "autoCompact") {
       const off = config()?.autoCompact !== "off"
       await saveConfig({ autoCompact: off ? "off" : "auto" })
@@ -226,40 +233,41 @@ export function ConfigDialog(props: { runtime: Runtime }) {
       return
     }
     if (setting === "terminalNotify") {
-      const current = await loadConfig()
-      const on = current.ui?.terminalNotify === false
-      await saveConfig({ ui: { ...current.ui, terminalNotify: on } })
-      setState("terminalNotify", on)
+      const saved = await saveConfig((current) => ({ ui: { ...current.ui, terminalNotify: current.ui?.terminalNotify === false } }))
+      setState("terminalNotify", saved.ui?.terminalNotify === true)
       await refetch()
       return
     }
     if (setting === "scroll") {
-      const current = await loadConfig()
-      const next = nextScrollSetting(scrollSetting(current.ui))
-      await saveConfig({ ui: { ...current.ui, scrollSpeed: next.speed, scrollAcceleration: next.accelerate } })
+      let next!: ReturnType<typeof nextScrollSetting>
+      await saveConfig((current) => {
+        next = nextScrollSetting(scrollSetting(current.ui))
+        return { ui: { ...current.ui, scrollSpeed: next.speed, scrollAcceleration: next.accelerate } }
+      })
       setState("scroll", next)
       await refetch()
       return
     }
     if (setting === "askEffort") {
-      const current = await loadConfig()
-      const on = current.ui?.askEffort === false
-      await saveConfig({ ui: { ...current.ui, askEffort: on } })
-      setState("askEffort", on)
+      const saved = await saveConfig((current) => ({ ui: { ...current.ui, askEffort: current.ui?.askEffort === false } }))
+      setState("askEffort", saved.ui?.askEffort === true)
       await refetch()
       return
     }
     if (setting === "updateCheck") {
-      const current = await loadConfig()
-      await saveConfig({ update: { ...current.update, check: current.update?.check === false } })
+      await saveConfig((current) => ({ update: { ...current.update, check: current.update?.check === false } }))
+      await refetch()
+      return
+    }
+    if (setting === "scratchpad") {
+      const saved = await saveConfig((current) => ({ scratchpad: { ...current.scratchpad, enabled: current.scratchpad?.enabled === false } }))
+      if (props.runtime.workspace.scratch) props.runtime.workspace.scratch.enabled = saved.scratchpad?.enabled === true
       await refetch()
       return
     }
     if (setting === "tips") {
-      const current = await loadConfig()
-      const on = current.ui?.tips === false
-      await saveConfig({ ui: { ...current.ui, tips: on } })
-      setState("tips", on)
+      const saved = await saveConfig((current) => ({ ui: { ...current.ui, tips: current.ui?.tips === false } }))
+      setState("tips", saved.ui?.tips === true)
       await refetch()
       return
     }
@@ -305,7 +313,7 @@ export function ConfigDialog(props: { runtime: Runtime }) {
             focusedTextColor={color.tx}
             backgroundColor={color.panel2}
             focusedBackgroundColor={color.panel2}
-            onSubmit={(v: unknown) => typeof v === "string" && void saveMax(v)}
+            onSubmit={(v: unknown) => typeof v === "string" && saySaveFailure(saveMax(v))}
           />
           <text fg={color.giam}>{error()}</text>
         </DialogFrame>
@@ -330,7 +338,7 @@ export function ConfigDialog(props: { runtime: Runtime }) {
               },
               ...(state.compactCap ? [{ label: "Bỏ trần token", hint: "dùng hết cửa sổ của model", mark: " ", value: "uncap" as CompactLevel }] : []),
             ]}
-            onPick={(level) => void saveLevel(level)}
+            onPick={(level) => saySaveFailure(saveLevel(level))}
           />
         </DialogFrame>
       </Match>
@@ -349,7 +357,7 @@ export function ConfigDialog(props: { runtime: Runtime }) {
             focusedTextColor={color.tx}
             backgroundColor={color.panel2}
             focusedBackgroundColor={color.panel2}
-            onSubmit={(v: unknown) => typeof v === "string" && void saveCap(v)}
+            onSubmit={(v: unknown) => typeof v === "string" && saySaveFailure(saveCap(v))}
           />
           <text fg={color.giam}>{error()}</text>
         </DialogFrame>
@@ -365,7 +373,7 @@ export function ConfigDialog(props: { runtime: Runtime }) {
             focusedTextColor={color.tx}
             backgroundColor={color.panel2}
             focusedBackgroundColor={color.panel2}
-            onSubmit={(v: unknown) => typeof v === "string" && void saveSteps(v)}
+            onSubmit={(v: unknown) => typeof v === "string" && saySaveFailure(saveSteps(v))}
           />
           <text fg={color.giam}>{error()}</text>
         </DialogFrame>
@@ -378,7 +386,7 @@ export function ConfigDialog(props: { runtime: Runtime }) {
               { label: "Theo model của phiên (mặc định)", mark: webModel() ? " " : "●", value: "inherit" as SubagentModel },
               ...toolModels(config()?.webModel),
             ]}
-            onPick={(c) => usable(c) && void saveWebModel(c as Exclude<SubagentModel, "auto">)}
+            onPick={(c) => usable(c) && saySaveFailure(saveWebModel(c as Exclude<SubagentModel, "auto">))}
             groupJump
             rows={12}
             placeholder="gõ tên model để lọc…"
@@ -395,7 +403,7 @@ export function ConfigDialog(props: { runtime: Runtime }) {
               { label: "Theo model của phiên (mặc định)", mark: autoModel() ? " " : "●", value: "inherit" as SubagentModel },
               ...toolModels(config()?.autoMode?.model),
             ]}
-            onPick={(c) => usable(c) && void saveAutoModel(c as Exclude<SubagentModel, "auto">)}
+            onPick={(c) => usable(c) && saySaveFailure(saveAutoModel(c as Exclude<SubagentModel, "auto">))}
             groupJump
             rows={12}
             placeholder="gõ tên model để lọc…"
@@ -415,7 +423,7 @@ export function ConfigDialog(props: { runtime: Runtime }) {
               },
               ...toolModels(config()?.subagents),
             ]}
-            onPick={(c) => usable(c) && void saveModel(c)}
+            onPick={(c) => usable(c) && saySaveFailure(saveModel(c))}
             groupJump
             rows={12}
             placeholder="gõ tên model để lọc… (chỉ model gọi được tool)"
@@ -453,6 +461,15 @@ export function ConfigDialog(props: { runtime: Runtime }) {
                     : `Tự động · ${compactAt()}: dọn kết quả tool cũ, rồi tóm tắt nếu cần (1 request)`,
                 mark: config()?.autoCompact === "off" ? "○" : "●",
                 value: "autoCompact" as Setting,
+              },
+              {
+                label: "Tự nén khi rảnh",
+                hint:
+                  config()?.autoCompact === "off" || state.idleCompactMinutes <= 0
+                    ? "Tắt"
+                    : `Sau ${state.idleCompactMinutes} phút không dùng, hội thoại từ ${fmtTokens(state.idleCompactMinTokens)} token được tóm tắt (1 request) · enter để đổi`,
+                mark: config()?.autoCompact === "off" || state.idleCompactMinutes <= 0 ? "○" : "●",
+                value: "idleCompact" as Setting,
               },
               {
                 label: "Ngưỡng tự nén",
@@ -521,6 +538,15 @@ export function ConfigDialog(props: { runtime: Runtime }) {
                 value: "terminalNotify" as Setting,
               },
               {
+                label: "Thư mục tạm của phiên",
+                hint:
+                  config()?.scratchpad?.enabled === false
+                    ? "Tắt · enter để bật"
+                    : `Bật · agent ghi file tạm vào đây không cần hỏi (trừ chỉ-đọc): ${props.runtime.workspace.scratch?.project ?? "%TEMP%/opentrading"}`,
+                mark: config()?.scratchpad?.enabled === false ? "○" : "●",
+                value: "scratchpad" as Setting,
+              },
+              {
                 label: "Tốc độ lăn chuột",
                 hint: `${describeScroll(scrollSetting(config()?.ui))} · enter để đổi (3 → 5 → 8 → tăng tốc)`,
                 mark: "●",
@@ -542,8 +568,8 @@ export function ConfigDialog(props: { runtime: Runtime }) {
                 value: "updateCheck" as Setting,
               },
             ]}
-            onPick={(s) => void toggle(s)}
-            rows={15}
+            onPick={(s) => saySaveFailure(toggle(s))}
+            rows={16}
           />
           <text fg={color.tx3} marginTop={1}>{`File cấu hình: ${configFile()}`}</text>
         </DialogFrame>

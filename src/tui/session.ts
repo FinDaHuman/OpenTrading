@@ -3,7 +3,7 @@ import { label, visibleUserText } from "../core/agent"
 import { promptVersion } from "../core/prompt/assemble"
 import { samePathKey } from "../core/fs/path-safety"
 import type { Runtime } from "../core/runtime"
-import { listSessions, loadSession, Session, type SaveReceipt } from "../core/session/store"
+import { listSessions, loadSession, Session, type SaveReceipt, type TurnInfo } from "../core/session/store"
 import { formatTranscript } from "../core/session/export"
 import { transcriptFromMessages } from "../core/session/transcript"
 import { useResultSession } from "../core/tools/refs"
@@ -173,7 +173,11 @@ export async function settleForExit(ms = SETTLE_MS, session = current): Promise<
 }
 
 /** Persist one finished turn (fire-and-forget: a disk error must not break the chat; the receipt is reported). */
-export function recordTurn(messages: ModelMessage[], contextTokens?: number) {
+export function recordTurn(
+  messages: ModelMessage[],
+  contextTokens?: number,
+  gate?: Pick<TurnInfo, "recoveries" | "unanswered" | "retiredTodos">,
+) {
   if (messages.length === 0) return
   const session = current
   const firstTurn = session.turns === 0 && !retitled.has(session)
@@ -185,6 +189,7 @@ export function recordTurn(messages: ModelMessage[], contextTokens?: number) {
       promptVersion: promptVersion(),
       skills: state.skills.map((s) => ({ name: s.name, version: s.version })),
       contextTokens,
+      ...gate,
     })
     .then((receipt) => report(session, receipt))
   // After the first turn, replace the 60-char fallback title with a generated
@@ -303,6 +308,7 @@ export async function transcriptOfCurrent(runtime: Runtime, session = current) {
  */
 export function attachSubagents(runtime: Runtime, history?: string) {
   runtime.subagents.attachSession({ id: current.id, dir: current.dir })
+  runtime.workspace.scratch?.attach(current.id)
   runtime.desk.attachSession({ id: current.id, dir: current.dir })
   useResultSession(current.id, history)
 }
@@ -340,6 +346,7 @@ export async function resumeSession(runtime: Runtime, id: string) {
 
   const lines: Line[] = transcriptFromMessages(loaded.display).flatMap((item): Line[] => {
     if (item.kind === "compact") return [{ kind: "compact", summary: item.text }]
+    if (item.kind === "note") return [{ kind: "info", text: item.text }]
     if (item.kind === "agent-notice") {
       return [{ kind: "agent-notice", agentId: item.agentId, status: item.status, text: `Subagent nền ${item.type} (${item.description}) · ${item.status} · ${item.stats}` }]
     }

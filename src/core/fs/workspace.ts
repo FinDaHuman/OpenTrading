@@ -3,6 +3,7 @@ import os from "node:os"
 import path from "node:path"
 import { dataDir } from "../paths"
 import { isInside, pathFor, resolveUserPath, samePathKey, type SafetyEnv } from "./path-safety"
+import type { Scratchpad } from "./scratch"
 
 /**
  * Where the agent works: the folder OpenTrading was opened in, plus folders the user adds
@@ -64,6 +65,8 @@ export class Workspace {
   readonly primary: string
   /** Why cwd was replaced by `<data>/workspace`, or undefined when cwd is the workspace. */
   readonly fallbackReason?: string
+  /** The session's temp folder (scratch.ts), set by the runtime; undefined in tests and evals. */
+  scratch?: Scratchpad
   private extra: string[] = []
   private readonly platform: NodeJS.Platform
   private readonly home: string
@@ -109,6 +112,11 @@ export class Workspace {
     return this.roots().some((root) => isInside(real, realish(root), this.platform))
   }
 
+  /** In the scratchpad's project folder, symlinks resolved on both sides (writes there skip approval). */
+  inScratch(abs: string): boolean {
+    return this.scratch?.contains(abs) ?? false
+  }
+
   /** The directory to add, or an error message. */
   validate(raw: string): string | { error: string } {
     const dir = resolveUserPath(raw, this.primary, this.home)
@@ -139,6 +147,12 @@ export class Workspace {
       ...(this.extra.length > 0 ? [`Thư mục thêm: ${this.extra.join("; ")}.`] : []),
       "Đường dẫn tương đối tính từ workspace. File/thư mục người dùng đưa (kể cả ngoài workspace) đọc bằng read_file; tìm file bằng glob_files, tìm chữ trong file bằng grep_files.",
     ]
+    const scratch = this.scratch?.dir()
+    if (scratch) {
+      lines.push(
+        `Thư mục tạm của phiên: ${scratch}. Dùng cho file tạm (script, kết quả trung gian, file xuất không thuộc dự án của người dùng) thay cho %TEMP% hay /tmp (file người dùng muốn giữ thì vẫn đặt trong workspace); ghi file vào đây không cần hỏi (trừ chế độ chỉ-đọc), lệnh shell vẫn duyệt như thường. Chỉ dùng thư mục tạm khác khi người dùng yêu cầu.`,
+      )
+    }
     return lines.join("\n")
   }
 }

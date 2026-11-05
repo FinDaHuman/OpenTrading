@@ -115,6 +115,13 @@ export const COMPACT_LEAN_TOKENS = 100_000
 export type CompactVariant = "full" | "lean"
 
 /**
+ * A figure found only in an earlier answer was sourced to a tool on 30/10 (AAA "LNTT +29,3%":
+ * in the answer, in no tool result, summarized with "MCP opentrading" as its source).
+ */
+const OWN_FIGURES =
+  'Số chỉ có trong câu trả lời trước (không có trong kết quả tool nào) thì ghi nguồn là "câu trả lời trước", không ghi tên tool.'
+
+/**
  * Sent after the head when summarizing; the summary must stand in for everything above it.
  * One request, as Claude Code's /compact does: the model first inventories
  * the conversation in an <analysis> scratchpad, then writes the <summary>;
@@ -127,7 +134,7 @@ export function compactPrompt(instructions?: string, variant: CompactVariant = "
           "## Yêu cầu của người dùng",
           "Mục tiêu và từng yêu cầu, giữ sát lời gốc.",
           "## Số liệu đã xác minh",
-          "Bảng: chỉ tiêu | giá trị | đơn vị | nguồn | thời điểm. Chép nguyên văn, không làm tròn. Số nào không có nguồn và thời điểm thì bỏ.",
+          `Bảng: chỉ tiêu | giá trị | đơn vị | nguồn | thời điểm. Chép nguyên văn, không làm tròn. Số nào không có nguồn và thời điểm thì bỏ. ${OWN_FIGURES}`,
           "## Việc đang dở và bước tiếp theo",
           "Việc chưa xong và việc nên làm tiếp.",
         ]
@@ -137,7 +144,7 @@ export function compactPrompt(instructions?: string, variant: CompactVariant = "
           "## Ràng buộc và sở thích",
           "Điều người dùng đã nói về khẩu vị rủi ro, khung thời gian, mã đang quan tâm, cách trình bày mong muốn.",
           "## Số liệu đã xác minh",
-          "Bảng: chỉ tiêu | giá trị | đơn vị | nguồn | thời điểm. Chép nguyên văn từ kết quả tool, không làm tròn, không đổi đơn vị. Số nào không có nguồn và thời điểm thì bỏ.",
+          `Bảng: chỉ tiêu | giá trị | đơn vị | nguồn | thời điểm. Chép nguyên văn từ kết quả tool, không làm tròn, không đổi đơn vị. Số nào không có nguồn và thời điểm thì bỏ. ${OWN_FIGURES}`,
           "## Phân tích và kết luận đã đưa ra",
           "Các nhận định chính, giả định đi kèm, rủi ro đã nêu.",
           "## Việc đang dở và bước tiếp theo",
@@ -186,8 +193,10 @@ export const IMAGE_TOKENS = 1600
 export const tokensOf = (messages: readonly ModelMessage[]) => {
   let images = 0
   const text = JSON.stringify(messages, function (this: Record<string, unknown>, key, value) {
-    // Only the base64 of an image part (user image, tool image-data/media/file), not any long "data".
-    const imagePart = this.type === "image" || this.type === "image-data" || this.type === "media" || this.type === "file" || "mediaType" in this
+    // Only the base64 of an image part (user image, tool image-data/media/file, a file part's
+    // tagged `{ type: "data", data }`), not any long "data".
+    const imagePart =
+      this.type === "image" || this.type === "image-data" || this.type === "media" || this.type === "file" || this.type === "data" || "mediaType" in this
     if (imagePart && (key === "image" || key === "data") && typeof value === "string" && value.length > 1000) {
       images++
       return ""
@@ -268,6 +277,11 @@ export interface CompactOptions {
   limits?: ContextLimits
   /** Manual /compact: summarize even below the threshold. */
   manual?: boolean
+  /**
+   * Summarize when the pruned history is still at least this big, in place of the auto
+   * threshold (idle compaction: 200k on a 1M window is far below it).
+   */
+  summarizeAbove?: number
   instructions?: string
   /** Summarize the head (everything but the kept turns). Throws on failure. */
   summarize: (head: ModelMessage[], instructions?: string) => Promise<string>
@@ -343,7 +357,8 @@ export async function compactHistory(history: readonly ModelMessage[], opts: Com
   const pruned = tools.pruned + files.pruned
   const afterPrune = scaled(before, history, prunedMessages)
   const base: CompactResult = { messages: prunedMessages, before, after: afterPrune, pruned }
-  if (!opts.manual && opts.limits && afterPrune < opts.limits.threshold) return base
+  const summarizeAbove = opts.summarizeAbove ?? opts.limits?.threshold
+  if (!opts.manual && summarizeAbove !== undefined && afterPrune < summarizeAbove) return base
 
   const turns = splitTurns(prunedMessages)
   let keep = KEEP_TURNS

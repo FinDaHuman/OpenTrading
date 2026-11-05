@@ -9,8 +9,9 @@ import { truncate } from "./ui/text"
 import { STREAM_CURSOR, streamView } from "./ui/stream-view"
 import { useSpinner } from "./ui/clock"
 import { fmtElapsed } from "./activity"
-import { TODO_PREFIX } from "../core/tools/todos"
+import { LEGACY_TODO_PREFIX, TODO_PREFIX } from "../core/tools/todos"
 import { LOADED_PREFIX } from "../core/tools/search"
+import { AUTO_BLOCK_PREFIX, USER_DENY_PREFIX, userNoteOf } from "../core/permission/denial"
 import { isSpawn, SubagentRow } from "./subagent-row"
 import { DESK_RUN } from "../core/desk/tool"
 import { DeskCard, deskRunIdOf, isLiveRun, runSummary } from "./desk-card"
@@ -46,7 +47,7 @@ function preview(output: string, expanded: boolean, max: number) {
 function summary(line: ToolLine): { tone: "ok" | "denied" | "answers"; lines: string[]; wrap?: boolean } | undefined {
   const out = line.output ?? ""
   // The pinned panel shows the list; the transcript keeps one line (ctrl+o for the list).
-  if (line.status === "ok" && out.startsWith(TODO_PREFIX) && !state.expandTools) return { tone: "ok", lines: [] }
+  if (line.status === "ok" && (out.startsWith(TODO_PREFIX) || out.startsWith(LEGACY_TODO_PREFIX)) && !state.expandTools) return { tone: "ok", lines: [] }
   // A deferred tool called before loading: the call loaded it. One sentence; ctrl+o shows the
   // parameters the model got with it.
   if (line.status === "error" && out.startsWith(LOADED_PREFIX) && !state.expandTools) {
@@ -54,9 +55,15 @@ function summary(line: ToolLine): { tone: "ok" | "denied" | "answers"; lines: st
   }
   // The live card under the row says the rest.
   if (line.name === DESK_RUN && line.status === "ok" && deskRunIdOf(out)) return { tone: "ok", lines: [out.split("\n")[0] ?? out] }
-  if (line.status === "error" && out.startsWith("Người dùng từ chối chạy tool này")) {
-    const note = /Lời nhắn của người dùng: (.*)$/s.exec(out)?.[1]
-    return { tone: "denied", lines: [`✘ Đã từ chối${note ? ` — "${note.trim()}"` : ""}`] }
+  // Auto mode's block: its summary line; ctrl+o shows what the model was told.
+  if (line.status === "error" && out.startsWith(AUTO_BLOCK_PREFIX) && !state.expandTools) {
+    return { tone: "denied", lines: [`✘ ${out.split("\n")[0]} · /permissions để cho thử lại`], wrap: true }
+  }
+  if (line.status === "error" && out.startsWith(USER_DENY_PREFIX)) {
+    const note = userNoteOf(out)
+    // A hand-off the user refused keeps auto mode's reason: "(auto mode đã chặn [nhãn]: lý do)".
+    const auto = /^ \(auto mode đã chặn[^\n]*\)(?=\.)/.exec(out.slice(USER_DENY_PREFIX.length))?.[0] ?? ""
+    return { tone: "denied", lines: [`✘ Đã từ chối${auto}${note ? ` — "${note}"` : ""}`], wrap: Boolean(auto) }
   }
   if (line.status === "ok" && out.startsWith("Người dùng đã trả lời:")) {
     const pairs = [...out.matchAll(/("(?:[^"\\]|\\.)*")=("(?:[^"\\]|\\.)*")/g)].map((m) => `· ${JSON.parse(m[1]!)} → ${JSON.parse(m[2]!)}`)
@@ -257,8 +264,12 @@ function Row(props: { line: Line; prev?: Line; index: number; width: number }) {
         {(line) => {
           const l = line() as Extract<Line, { kind: "done" }>
           const bg = l.background ? ` · ${l.background} subagent nền vẫn chạy` : ""
-          return <Hanging glyph="✻" glyphColor={color.tx3} text={`Xong sau ${fmtElapsed(l.ms)}${bg}`} fg={color.tx3} />
+          const head = l.unanswered ? "Dừng khi chưa có câu trả lời" : "Xong"
+          return <Hanging glyph="✻" glyphColor={l.unanswered ? color.tham : color.tx3} text={`${head} sau ${fmtElapsed(l.ms)}${bg}`} fg={color.tx3} />
         }}
+      </Match>
+      <Match when={props.line.kind === "warning"}>
+        <Hanging glyph="▲" glyphColor={color.tham} text={(props.line as Extract<Line, { kind: "warning" }>).text} fg={color.tx2} />
       </Match>
       <Match when={props.line.kind === "error"}>
         <Hanging glyph="✘" glyphColor={color.giam} text={(props.line as Extract<Line, { kind: "error" }>).text} fg={color.giam} />

@@ -79,8 +79,10 @@ function Move-Aside([string]$File) {
   Move-Item -LiteralPath $File -Destination $old -Force
 }
 
+# Only what Move-Aside left: the install folder may hold the user's own *.old files.
 function Remove-Old {
-  Get-ChildItem -LiteralPath $InstallDir -Filter "*.old" -ErrorAction SilentlyContinue |
+  Get-ChildItem -LiteralPath $InstallDir -File -Filter "*.old" -ErrorAction SilentlyContinue |
+    Where-Object { $_.Name -match '^(opentrading|ot)\.exe(\.\d+)?\.old$' } |
     ForEach-Object { Remove-Item -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue }
 }
 

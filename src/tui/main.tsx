@@ -9,7 +9,8 @@ import { color } from "./theme"
 /** Boot the TUI. Kept out of src/index.tsx so `opentrading mcp …` never needs a JSX runtime. */
 export async function startTui(resume: string | undefined) {
   const config = await loadConfig()
-  const runtime = initRuntime({ skills: () => state.skills, memory: createMemory(config.memory?.provider), workspaceDirs: config.workspace?.dirs })
+  const runtime = initRuntime({ skills: () => state.skills, memory: createMemory(config.memory?.provider), workspaceDirs: config.workspace?.dirs, scratchpad: {} })
+  if (runtime.workspace.scratch) runtime.workspace.scratch.enabled = config.scratchpad?.enabled !== false
   // ▸▸ auto never accepted (set by hand or in /config) opens as ▸; the app asks first.
   runtime.permissions.setMode(startMode(config.permissions))
   await runtime.permissions.refreshRules()

@@ -1,5 +1,6 @@
 import { generateText } from "ai"
 import { resolveTarget, type Target } from "../chat"
+import { sideRequest } from "../effort"
 import { promptFile } from "../prompt/assemble"
 import { languageModel } from "../providers"
 import { webTarget } from "../tools/web/side-model"
@@ -34,9 +35,10 @@ export async function generateTitleText(target: Target, firstText: string): Prom
       model: languageModel(target.provider, target.model, target.apiKey),
       system: titlePrompt(),
       messages: [{ role: "user", content: input }],
-      // Room for a thinking model's reasoning before the few words of the title
-      // (Gemini 2.5/3 count thoughts as output; 30 tokens came back empty).
-      maxOutputTokens: 256,
+      // 256 for the title's few words (Gemini 2.5/3 count thoughts as output; 30 came back
+      // empty), plus the least reasoning and room for it on a reasoning model: an OpenRouter
+      // free model's reasoning took all 256 on 30/10 (effort.ts sideRequest).
+      ...sideRequest(target, 256),
       // A side request: a failure keeps the fallback title, never spends more quota.
       maxRetries: 0,
     })

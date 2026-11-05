@@ -24,6 +24,7 @@ import { connectedProviders } from "../core/auth"
 import { describeError } from "../core/chat"
 import type { AgentEvent } from "../core/events"
 import { loadConfig, saveConfig } from "../core/config"
+import { idleCompactSettings, IdleTimer } from "../core/idle-compact"
 import { loadCatalog } from "../core/catalog"
 import { closeMemory, type Runtime } from "../core/runtime"
 import { ensureProfile } from "../core/profile"
@@ -81,7 +82,8 @@ import { resolveExportPath, writeExport } from "../core/session/export"
 import { cycleMode } from "../core/permission/mode"
 
 import { armExit, type Queued, closeDialog, contextLimits, EXIT_WINDOW_MS, onExitRequest, providerName, pushLine, setState, state, type Line } from "./state"
-import { flash, say } from "./notify"
+import { flash, notify, say } from "./notify"
+import { watchAutoBlocks } from "./auto-notice"
 import { ModeLine } from "./mode-line"
 import { terminalAttention, type Attention } from "./attention"
 import { ShortcutsPane } from "./shortcuts"
@@ -93,6 +95,7 @@ import { announceMcp } from "./mcp/notices"
 import { Toasts } from "./toast"
 import { ActivityRow, activeMs, startActivity } from "./activity"
 import { now, useNow } from "./ui/clock"
+import { pruneOldScratch, scratchCommand, scratchTurnStart, scratchTurnWarning } from "./scratch"
 import { color, promptStyle } from "./theme"
 import { cleanSelection, writeClipboard } from "./clipboard"
 import { ArgumentHint, commandItem, Suggestions } from "./suggestions"
@@ -105,6 +108,7 @@ import { imagePath, MAX_IMAGE_BASE64, readClipboardImage, readImageFile, type Pr
 import { isLargePaste, offsetSlice, offsetWidth, pasteLabel, PromptParts, type DraftSnapshot, type ExpandedPrompt } from "./prompt/parts"
 import { editInEditor } from "./prompt/editor"
 import { TODO_WRITE, TodoWriteInput } from "../core/tools/todos"
+import { stripEchoes } from "../core/loop/stop-gate"
 
 let abort: AbortController | undefined
 /** /save skips OSC52 above this: megabytes of escape sequence can stall the terminal. */
@@ -130,9 +134,11 @@ function lineIndex(predicate: (line: Line) => boolean) {
 
 /**
  * Compact the conversation (see core/compact.ts). Runs like a turn: esc stops it, /new
- * discards it. On failure the history is left as is (or only pruned).
+ * discards it. On failure the history is left as is (or only pruned). "idle": the user has
+ * been away (idleCompact); it summarizes above `state.idleCompactMinTokens` rather than the
+ * auto threshold, and is recorded and counted as an auto compaction.
  */
-export async function compact(runtime: Runtime, trigger: "auto" | "manual", instructions?: string, projected?: number, force = false): Promise<boolean> {
+export async function compact(runtime: Runtime, trigger: "auto" | "manual" | "idle", instructions?: string, projected?: number, force = false): Promise<boolean> {
   if (state.history.length === 0) {
     if (trigger === "manual") say("Chưa có hội thoại để nén.")
     return true
@@ -149,11 +155,17 @@ export async function compact(runtime: Runtime, trigger: "auto" | "manual", inst
       onSummarize: () =>
         pushLine({
           kind: "info",
-          text: trigger === "auto" ? "Context gần đầy: đang tóm tắt phần đầu hội thoại (dùng 1 request)…" : "Đang tóm tắt hội thoại (dùng 1 request)…",
+          text:
+            trigger === "auto"
+              ? "Context gần đầy: đang tóm tắt phần đầu hội thoại (dùng 1 request)…"
+              : trigger === "idle"
+                ? `Bạn vắng ${state.idleCompactMinutes} phút: đang tóm tắt phần đầu hội thoại để tin nhắn sau không phải gửi lại toàn bộ (dùng 1 request)…`
+                : "Đang tóm tắt hội thoại (dùng 1 request)…",
         }),
       limits,
       // Forced after a context-overflow error: summarize even if the estimate is below the threshold.
       manual: trigger === "manual" || force,
+      summarizeAbove: trigger === "idle" ? state.idleCompactMinTokens : undefined,
       instructions,
       summarize: async (head, extra) => {
         // One request: <analysis> scratchpad then <summary> (Claude Code); lean when the head is huge.
@@ -182,12 +194,12 @@ export async function compact(runtime: Runtime, trigger: "auto" | "manual", inst
     if (result.summary !== undefined || result.pruned > 0) {
       // The clock reminder lived in the dropped turns: send it again next turn.
       setState({ history: result.messages, contextTokens: result.after, contextEstimated: true, clock: undefined })
-      recordCompact({ trigger, before: result.before, after: result.after, messages: result.messages })
+      recordCompact({ trigger: trigger === "manual" ? "manual" : "auto", before: result.before, after: result.after, messages: result.messages })
       pushLine({ kind: "compact", summary: result.summary, before: result.before, after: result.after, pruned: result.pruned })
     }
     if (result.error) {
       pushLine({ kind: "error", text: `Không tóm tắt được hội thoại: ${result.error}` })
-      if (trigger === "auto") {
+      if (trigger !== "manual") {
         setState("compactFailures", (n) => n + 1)
         if (state.compactFailures >= MAX_AUTO_FAILURES) {
           pushLine({ kind: "info", text: `Tự nén lỗi ${MAX_AUTO_FAILURES} lần liên tiếp nên đã tắt cho phiên này; gõ /compact để thử lại.` })
@@ -205,6 +217,54 @@ export async function compact(runtime: Runtime, trigger: "auto" | "manual", inst
 
 /** The turn being answered, so exit can wait for it to be saved. */
 let inflight: Promise<void> | undefined
+
+/** Idle compaction (core/idle-compact.ts): armed while nothing runs, at most once per idle spell. */
+const idleTimer = new IdleTimer()
+let idleSpent = false
+let armedMinutes = 0
+/** The session the timer and idleSpent belong to: another one (/resume, /clear) starts afresh. */
+let armedFor: string | undefined
+
+/** Tests fire the pending idle compaction at once instead of waiting minutes. */
+export function idleTimerForTests() {
+  return idleTimer
+}
+
+/** Keep the idle timer in step with the app: armed while idle with a conversation, else not. */
+function syncIdleTimer(runtime: Runtime) {
+  const session = currentSession().id
+  if (armedFor !== session) {
+    armedFor = session
+    idleSpent = false
+    idleTimer.disarm()
+  }
+  const idle = !state.streaming && !state.compacting && state.history.length > 0
+  if (!idle || idleSpent || state.autoCompactOff || state.idleCompactMinutes <= 0) return idleTimer.disarm()
+  // A new setting from /config takes effect at once.
+  if (!idleTimer.armed || armedMinutes !== state.idleCompactMinutes) {
+    armedMinutes = state.idleCompactMinutes
+    idleTimer.arm(armedMinutes * 60_000, () => void idleCompact(runtime))
+  }
+}
+
+/**
+ * The user has been away `idleCompactMinutes`: summarize a big conversation now, so the next
+ * message does not resend it all to a provider whose prompt cache has expired. Waits instead
+ * while something needs the user (a prompt, a dialog) or work is still running in the
+ * background; a conversation that is small, or too short to summarize, is left alone.
+ */
+async function idleCompact(runtime: Runtime) {
+  if (state.streaming || state.compacting || state.history.length === 0) return
+  if (state.autoCompactOff || state.compactFailures >= MAX_AUTO_FAILURES) return
+  const busy =
+    state.dialog || state.approval || state.question || state.deskApproval || inflight || state.queue.length > 0 || state.notices.length > 0
+  const working = Object.values(state.agents).some((a) => a.status === "running" || a.status === "queued")
+  // Not now: try again after another idle spell.
+  if (busy || working) return syncIdleTimer(runtime)
+  if ((state.contextTokens ?? tokensOf(state.history)) < state.idleCompactMinTokens) return
+  idleSpent = true
+  await compact(runtime, "idle")
+}
 
 /** A message to send: the text for the model, what the transcript shows, pasted images. */
 type Outgoing = { text: string; display?: string; images?: PromptImage[]; notice?: boolean; desk?: DeskOptIn }
@@ -224,6 +284,9 @@ export function deliverNotices(runtime: Runtime) {
 }
 
 function send(runtime: Runtime, message: string | Outgoing) {
+  // Any turn (a typed message, a queued one, a background result) ends the idle wait.
+  idleTimer.disarm()
+  idleSpent = false
   let msg: Outgoing = typeof message === "string" ? { text: message } : message
   // Undelivered subagent results ride in front of what the user typed.
   if (!msg.notice && state.notices.length > 0) {
@@ -387,6 +450,8 @@ async function sendTurn(runtime: Runtime, msg: Outgoing, mode: { recover?: boole
   let overflow: "resend" | "continue" | undefined
   // The request asked for ultradesk (keyword, /<playbook>) and the model started a run.
   let deskStarted = false
+  /** The stop gate gave up: the turn ends without an answer (the done line says so). */
+  let unanswered = false
   // Index of the assistant line currently receiving text; -1 after a tool call.
   let current = -1
   const edit = (index: number, fn: (line: any) => void) => {
@@ -412,7 +477,11 @@ async function sendTurn(runtime: Runtime, msg: Outgoing, mode: { recover?: boole
   }
   const closeText = () => {
     flush()
-    edit(current, (l) => (l.done = true))
+    // Echoed todo status lines leave the screen as they leave history (loop/stop-gate.ts).
+    edit(current, (l) => {
+      l.text = stripEchoes(l.text)
+      l.done = true
+    })
     current = -1
   }
 
@@ -422,6 +491,9 @@ async function sendTurn(runtime: Runtime, msg: Outgoing, mode: { recover?: boole
   const controller = new AbortController()
   abort = controller
   setState({ streaming: true, activity: startActivity() })
+  // The temp folder is made on the first turn (no empty folder for a session that never
+  // chats), and again after the OS emptied the temp dir; its size is measured now and then.
+  await scratchTurnStart(runtime)
   try {
     // @-mentions in what the user typed (not in pasted text: code there is full of "@").
     const attached = msg.notice ? undefined : await mentionsOf(runtime, msg.display ?? msg.text)
@@ -502,9 +574,10 @@ async function sendTurn(runtime: Runtime, msg: Outgoing, mode: { recover?: boole
           if (event.usage) setState({ contextTokens: event.usage.contextTokens, contextEstimated: event.usage.estimated })
           if (event.messages.length > 0) {
             setState("history", (history) => [...history, ...event.messages])
-            recordTurn(event.messages, event.usage?.contextTokens)
+            recordTurn(event.messages, event.usage?.contextTokens, { recoveries: event.recoveries, unanswered: event.unanswered, retiredTodos: event.retiredTodos })
           }
           if (event.clock) setState("clock", event.clock)
+          if (event.unanswered) unanswered = true
           break
       }
     }
@@ -534,9 +607,12 @@ async function sendTurn(runtime: Runtime, msg: Outgoing, mode: { recover?: boole
         attention?.attention(failed ? "error" : "done", failed ? `Lỗi: ${text}` : text || "Đã trả lời xong")
       }
       // A long turn that ran to the end says how long it took (Claude Code's "Worked for").
-      if (!failed && !controller.signal.aborted && worked >= DONE_LINE_MS) {
-        pushLine({ kind: "done", ms: worked, background: backgroundRunning() || undefined })
+      if (!failed && !controller.signal.aborted && (worked >= DONE_LINE_MS || unanswered)) {
+        pushLine({ kind: "done", ms: worked, background: backgroundRunning() || undefined, ...(unanswered ? { unanswered } : {}) })
       }
+      // The temp folder passed a size step: said under this answer, once per step.
+      const scratchWarning = await scratchTurnWarning(runtime)
+      if (scratchWarning && live()) pushLine({ kind: "warning", text: scratchWarning })
       // Tools still marked running never got a result (aborted turn).
       setState(
         produce((s) => {
@@ -730,7 +806,11 @@ export function App(props: {
   })
   setState("permissionMode", props.runtime.permissions.mode)
   const offAuto = props.runtime.auto.onChange(() => setState("autoPausedUntil", props.runtime.auto.paused()))
-  onCleanup(() => offAuto())
+  const offAutoBlocks = watchAutoBlocks(props.runtime.auto, notify)
+  onCleanup(() => {
+    offAuto()
+    offAutoBlocks()
+  })
   const offMode = props.runtime.permissions.onModeChange((mode) => setState("permissionMode", mode))
   onCleanup(() => offMode())
   createEffect(
@@ -787,6 +867,9 @@ export function App(props: {
       terminalNotify: config.ui?.terminalNotify !== false,
       scroll: scrollSetting(config.ui),
       autoCompactOff: config.autoCompact === "off",
+      // The raw setting: "Tự nén hội thoại" off is state.autoCompactOff, which the timer follows.
+      idleCompactMinutes: idleCompactSettings({ idleCompact: config.idleCompact }).minutes,
+      idleCompactMinTokens: idleCompactSettings({ idleCompact: config.idleCompact }).minTokens,
       autoAcknowledged: config.permissions?.autoAcknowledged === true,
       modelPrefs,
       deskKeywordOn: deskSettings(config).keyword,
@@ -805,6 +888,8 @@ export function App(props: {
     setState("agentSlots", props.runtime.subagents.limiter.stats())
     if (props.resume) await resumeFromArgs(props.runtime, props.resume)
     else await props.runtime.hooks.emit({ type: "session-start", sessionId: currentSession().id, source: "startup" })
+    // After the session is known: a resumed one keeps its temp folder however old it is.
+    void pruneOldScratch(props.runtime)
     if (skillSet.problems.length > 0) {
       pushLine({ kind: "error", text: `${skillSet.problems.length} skill bị lỗi và không được nạp. Xem /skills.` })
     }
@@ -999,9 +1084,7 @@ export function App(props: {
     if ("error" in added) return say(added.error, "error")
     if (keep) {
       try {
-        const config = await loadConfig()
-        const dirs = [...new Set([...(config.workspace?.dirs ?? []), added.dir])]
-        await saveConfig({ workspace: { ...config.workspace, dirs } })
+        await saveConfig((config) => ({ workspace: { ...config.workspace, dirs: [...new Set([...(config.workspace?.dirs ?? []), added.dir])] } }))
       } catch (error) {
         return say(`Đã thêm ${added.dir} cho phiên này nhưng không lưu được cấu hình: ${error instanceof Error ? error.message : String(error)}`, "error")
       }
@@ -1460,6 +1543,8 @@ export function App(props: {
         return void addDirCommand(cmd.args)
       case "undo":
         return void undoCommand(cmd.args)
+      case "scratch":
+        return void scratchCommand(props.runtime, cmd.args).then((r) => (r.level === "error" ? say(r.text, "error") : pushLine({ kind: "info", text: r.text })))
       case "exit":
       case "quit":
         return void exit()
@@ -1563,8 +1648,14 @@ export function App(props: {
     }
   }
 
+  // Idle compaction: armed after each turn (and on a resumed session) while nothing runs.
+  createEffect(() => syncIdleTimer(props.runtime))
+  onCleanup(() => idleTimer.disarm())
+
   useKeyboard((evt) => {
     if (evt.eventType === "release") return
+    // Typing is not being away.
+    idleTimer.poke()
     if (search() && !owner() && !state.dialog) return searchKey(evt)
     if (evt.ctrl && (evt.name === "c" || evt.name === "d")) return onQuitKey(evt.name)
     if (evt.ctrl && evt.name === "o") return void setState("expandTools", (v) => !v)

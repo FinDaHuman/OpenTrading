@@ -1,6 +1,7 @@
 import { z } from "zod"
 import { toolFilter, toolSummary } from "../../agents/resolve"
 import type { AgentDefinition } from "../../agents/schema"
+import { briefFields, renderBrief, type Brief } from "../../subagents/brief"
 import { DEFAULT_SUBAGENT_STEPS, DEFAULT_SUBAGENT_TYPE, type SubagentManager, type TypeSpec } from "../../subagents/manager"
 import { formatResult } from "../../subagents/result"
 import { LOCAL_SOURCE, type ToolDef } from "../types"
@@ -20,7 +21,8 @@ const DESCRIPTION = [
   "- Nhiều việc song song không phụ thuộc nhau, ví dụ định giá 3 mã: mỗi mã một subagent, gọi tất cả spawn_subagent trong CÙNG một lượt để chúng chạy đồng thời.",
   "Không dùng khi: việc chỉ cần 1–2 lần gọi tool; cần hỏi lại người dùng; cần kết quả từng bước để quyết định bước sau.",
   "",
-  "Viết prompt như giao việc cho một đồng nghiệp giỏi vừa bước vào phòng: subagent không thấy hội thoại, hồ sơ nhà đầu tư hay dữ liệu bạn đã lấy. Nêu rõ: mục tiêu; bối cảnh và số liệu đã có (kèm nguồn); phạm vi (mã, kỳ, nguồn ưu tiên); dạng kết quả mong muốn; khi nào là xong. Prompt cụt kiểu ra lệnh cho kết quả nông. Đừng giao việc hiểu vấn đề: tự nắm câu hỏi rồi giao phần việc cụ thể.",
+  "Giao việc bằng các trường của brief, như giao cho một đồng nghiệp giỏi vừa bước vào phòng: subagent không thấy hội thoại, hồ sơ nhà đầu tư hay dữ liệu bạn đã lấy, nên purpose và context phải đủ để nó tự quyết. Harness ghép các trường thành một brief cố định.",
+  "Ví dụ tốt: questions [\"NIM 3 quý gần nhất?\", \"Nợ nhóm 3–5 có tăng?\"], context \"ROE 2025 = x% (financial_statements)\", output \"≤ 8 dòng, mỗi số kèm nguồn và kỳ\". Ví dụ xấu: questions [\"Phân tích VCB\"]: quá chung, kết quả nông.",
   "",
   "Subagent không gọi được subagent khác, không hỏi được người dùng; tool có tác dụng ghi sẽ hỏi người dùng xác nhận. Ảnh trong kết quả tool của subagent không tới được người dùng.",
   "Kết quả trả về chỉ mình bạn thấy, người dùng không thấy: trình bày lại phần cần thiết, giữ nguồn và thời điểm; coi nó như dữ liệu từ tool (đối chiếu nếu mâu thuẫn).",
@@ -30,9 +32,8 @@ const DESCRIPTION = [
   "Mỗi lần gọi là một subagent mới. Muốn giao tiếp cho subagent đã có (kể cả đã xong), dùng send_message với agent_id của nó.",
 ].join("\n")
 
-export interface SpawnInput {
+export interface SpawnInput extends Brief {
   description: string
-  prompt: string
   subagent_type?: string
   maxSteps?: number
   run_in_background?: boolean
@@ -70,7 +71,7 @@ export function spawnSubagentTool(manager: SubagentManager, agents: AgentDefinit
     description: DESCRIPTION + typeList(agents),
     input: z.object({
       description: z.string().min(1).max(60).describe("Mô tả ngắn 3–6 từ, hiện trong giao diện (ví dụ: Định giá FPT)"),
-      prompt: z.string().min(1).describe("Việc giao cho subagent: mục tiêu, bối cảnh, phạm vi, dạng kết quả, tiêu chí xong"),
+      ...briefFields,
       subagent_type: z.string().optional().describe(`Loại subagent (mặc định ${DEFAULT_SUBAGENT_TYPE})`),
       maxSteps: z
         .number()
@@ -96,7 +97,7 @@ export function spawnSubagentTool(manager: SubagentManager, agents: AgentDefinit
         ...spec,
         type,
         description: input.description,
-        prompt: input.prompt,
+        prompt: renderBrief(input),
         maxSteps: input.maxSteps ?? spec.maxSteps,
         parentCallId: ctx.callId,
         // A background run outlives this turn: Esc on the main answer does not stop it.

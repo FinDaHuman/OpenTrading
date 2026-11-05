@@ -62,6 +62,10 @@ export function formatTranscript(loaded: Pick<LoadedSession, "summary" | "displa
         out.push("> **Đã nén hội thoại** — tóm tắt thay cho phần trước:", item.text.trim().replace(/^/gm, "> "))
         speaker = undefined
         break
+      case "note":
+        out.push(`> ${item.text}`)
+        speaker = undefined
+        break
       case "agent-notice":
         out.push(`> Subagent nền ${item.type} (${item.description}) · ${item.status} · ${item.stats}`)
         speaker = undefined
@@ -93,7 +97,13 @@ export function resolveExportPath(args: string, ctx: { cwd: string; id: string }
 
 /** Write the export (UTF-8, LF), creating parent folders. Refuses to replace a file unless allowed. */
 export async function writeExport(file: string, text: string, opts: { overwrite: boolean }) {
-  if (!opts.overwrite && existsSync(file)) throw new Error(`File đã tồn tại: ${file}. Thêm --force để ghi đè.`)
   await mkdir(path.dirname(file), { recursive: true })
-  await writeFile(file, text, "utf8")
+  // Without --force the file is created exclusively ("wx"): checking first and writing after
+  // would overwrite a file another process created in between.
+  try {
+    await writeFile(file, text, { encoding: "utf8", flag: opts.overwrite ? "w" : "wx" })
+  } catch (error) {
+    if ((error as { code?: string }).code === "EEXIST") throw new Error(`File đã tồn tại: ${file}. Thêm --force để ghi đè.`)
+    throw error
+  }
 }

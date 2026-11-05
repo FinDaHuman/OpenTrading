@@ -4,7 +4,7 @@ import { MODE_LABEL, type PermissionMode } from "../../core/permission/mode"
 import type { Workspace } from "../../core/fs/workspace"
 import type { AutoReviewer, Denial } from "../../core/permission/auto"
 import { closeDialog, state } from "../state"
-import { say } from "../notify"
+import { say, saySaveFailure } from "../notify"
 import { color } from "../theme"
 import { useKeys } from "../ui/keys"
 import { truncate } from "../ui/text"
@@ -69,12 +69,20 @@ export function PermissionsDialog(props: { mode: PermissionMode; workspace: Work
   }
 
   async function remove(row: Row) {
-    const current = await loadConfig()
-    const p = { ...current.permissions }
-    if (row.kind === "allow") p.allow = (p.allow ?? []).filter((_, i) => i !== row.index)
-    if (row.kind === "deny") p.deny = (p.deny ?? []).filter((_, i) => i !== row.index)
-    if (row.kind === "ask") p.ask = (p.ask ?? []).filter((_, i) => i !== row.index)
-    await saveConfig({ permissions: p })
+    // Against the rules as stored when written, and by value: a rule added meanwhile ("Luôn cho
+    // phép" from a subagent) survives, and a shifted index cannot remove the wrong one.
+    const same = (r: { tool: string; scope?: string; pattern?: string }) => r.tool === row.tool && r.scope === row.scope && r.pattern === row.pattern
+    await saveConfig((current) => {
+      const p = { ...current.permissions }
+      const without = <T extends { tool: string; scope?: string; pattern?: string }>(list: T[] | undefined) => {
+        const i = (list ?? []).findIndex(same)
+        return i < 0 ? list : list!.filter((_, j) => j !== i)
+      }
+      if (row.kind === "allow") p.allow = without(p.allow)
+      if (row.kind === "deny") p.deny = without(p.deny)
+      if (row.kind === "ask") p.ask = without(p.ask)
+      return { permissions: p }
+    })
     await props.onChanged?.()
     say(`Đã xoá quy tắc ${KIND[row.kind]}: ${row.tool}${coverage(row) ? ` (${coverage(row)})` : ""}`, "success")
     setOpen(undefined)
@@ -85,9 +93,13 @@ export function PermissionsDialog(props: { mode: PermissionMode; workspace: Work
     if (evt.eventType === "release") return
     if (evt.name === "escape") return open() ? setOpen(undefined) : closeDialog()
     const row = selected()
-    if (row && evt.name === "d") void remove(row)
+    if (row && evt.name === "d") saySaveFailure(remove(row))
+    // ctrl+r, as in /agents: the retry puts the list back at once, and its filter would take a plain r.
     const d = denial()
-    if (d && evt.name === "r") retry(d)
+    if (d && evt.ctrl && !evt.meta && evt.name === "r") {
+      evt.preventDefault()
+      retry(d)
+    }
   })
 
   const autoLine = () => {
@@ -101,13 +113,13 @@ export function PermissionsDialog(props: { mode: PermissionMode; workspace: Work
     <Switch>
       <Match when={denial()}>
         {(d) => (
-          <DialogFrame title={`Auto mode đã chặn${d().label ? ` · ${d().label}` : ""}`} hint="r cho thử lại một lần · esc quay lại">
+          <DialogFrame title={`Auto mode đã chặn${d().label ? ` · ${d().label}` : ""}`} hint="ctrl+r cho thử lại một lần · esc quay lại">
             <text fg={color.tx}>{`${d().tool}  ${truncate(d().summary, 90)}`}</text>
             <text fg={color.tx2} wrapMode="word" marginTop={1}>
               {d().reason}
             </text>
             <text fg={color.tx3} marginTop={1} wrapMode="word">
-              {"r: lần sau model gọi đúng lời gọi này thì chạy luôn (một lần). Muốn cho phép lâu dài: nói rõ trong tin nhắn, hoặc thêm luật autoMode.allow trong config.json."}
+              {"ctrl+r: lần sau model gọi đúng lời gọi này thì chạy luôn (một lần). Muốn cho phép lâu dài: nói rõ trong tin nhắn, hoặc thêm luật autoMode.allow trong config.json."}
             </text>
           </DialogFrame>
         )}

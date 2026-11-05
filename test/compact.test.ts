@@ -189,6 +189,8 @@ test("one request: an <analysis> scratchpad then the <summary>; lean drops the a
   expect(lean).toContain("## Số liệu đã xác minh")
   expect(lean).not.toContain("## Phân tích và kết luận đã đưa ra")
   expect(lean).not.toContain("## Ràng buộc và sở thích")
+  // A figure only an earlier answer gave is not sourced to a tool (30/10, AAA "LNTT +29,3%").
+  for (const prompt of [full, lean]) expect(prompt).toContain('ghi nguồn là "câu trả lời trước", không ghi tên tool')
 })
 
 test("the stored summary drops the scratchpad; a cut-off analysis is no summary", () => {
@@ -270,9 +272,24 @@ test("loaded skills survive a second compaction (read back from the first marker
 test("tokensOf counts an image as IMAGE_TOKENS, but a long non-image `data` string as text", async () => {
   const { tokensOf, IMAGE_TOKENS } = await import("../src/core/compact")
   const base64 = "A".repeat(400_000)
-  const withImage: ModelMessage[] = [{ role: "user", content: [{ type: "text", text: "xem" }, { type: "image", image: base64, mediaType: "image/png" }] }]
+  const withImage: ModelMessage[] = [{ role: "user", content: [{ type: "text", text: "xem" }, { type: "file", data: base64, mediaType: "image/png" }] }]
   expect(tokensOf(withImage)).toBeLessThan(IMAGE_TOKENS + 100)
   expect(tokensOf(withImage)).toBeGreaterThanOrEqual(IMAGE_TOKENS)
+  const toolImage: ModelMessage[] = [
+    {
+      role: "tool",
+      content: [
+        {
+          type: "tool-result",
+          toolCallId: "1",
+          toolName: "read_file",
+          output: { type: "content", value: [{ type: "text", text: "ảnh" }, { type: "file", mediaType: "image/png", data: { type: "data", data: base64 } }] },
+        },
+      ],
+    },
+  ]
+  expect(tokensOf(toolImage)).toBeLessThan(IMAGE_TOKENS + 100)
+  expect(tokensOf(toolImage)).toBeGreaterThanOrEqual(IMAGE_TOKENS)
   const csv = "x".repeat(40_000)
   const withData: ModelMessage[] = [
     { role: "tool", content: [{ type: "tool-result", toolCallId: "1", toolName: "t", output: { type: "json", value: { data: csv } } }] },
@@ -286,4 +303,34 @@ test("a harness reminder sent as the whole user message (continue after an overf
   expect(transcriptFromMessages([reminder, { role: "assistant", content: "xong" }])).toEqual([{ kind: "assistant", text: "xong" }])
   expect(visibleUserText(reminder)).toBe("")
   expect(transcriptFromMessages([{ role: "user", content: "hỏi" }])).toEqual([{ kind: "user", text: "hỏi" }])
+})
+
+test("idle (summarizeAbove): 200k on a 1M window is summarized though far below the auto threshold (33d)", async () => {
+  // Small tool results (nothing to prune): the conversation itself is what is big.
+  const history = [...turn(1, "x", "1"), ...turn(2, "x", "2"), ...turn(3, "x", "3"), ...turn(4, "x", "4")]
+  let asked = 0
+  const result = await compactHistory(history, {
+    contextTokens: 210_000,
+    limits: limits(1_000_000, 900_000),
+    summarizeAbove: 200_000,
+    summarize: async () => (asked++, "## Yêu cầu của người dùng\nTÓM-TẮT"),
+  })
+  expect(asked).toBe(1)
+  expect(result.summary).toContain("TÓM-TẮT")
+  // The same history with only the auto threshold: no request.
+  const auto = await compactHistory(history, { contextTokens: 210_000, limits: limits(1_000_000, 900_000), summarize: neverSummarize })
+  expect(auto.summary).toBeUndefined()
+})
+
+test("idle: pruning alone brings it under summarizeAbove → no request; too short to summarize → nothing, no error", async () => {
+  const history = [...turn(1), ...turn(2), ...turn(3), ...turn(4)]
+  // Two old 2 000-character results are cleared (~1k tokens): just enough to get under 200k.
+  const pruned = await compactHistory(history, { contextTokens: 200_400, limits: limits(1_000_000, 900_000), summarizeAbove: 200_000, summarize: neverSummarize })
+  expect(pruned.summary).toBeUndefined()
+  expect(pruned.error).toBeUndefined()
+  expect(pruned.after).toBeLessThan(200_000)
+  // One huge turn: nothing to summarize, and it is not a failure (only a manual /compact says so).
+  const one = await compactHistory(turn(1, "x", "1"), { contextTokens: 250_000, limits: limits(1_000_000, 900_000), summarizeAbove: 200_000, summarize: neverSummarize })
+  expect(one.summary).toBeUndefined()
+  expect(one.error).toBeUndefined()
 })

@@ -196,6 +196,7 @@ Frontmatter gồm `name` (trùng tên file), `description`, `tools`, `disallowed
   - `compact`: hội thoại vừa được nén (`trigger` auto/manual, `before`/`after` token, `messages` là history mới). Khi mở lại, model chỉ nhận history từ entry `compact` cuối cùng trở đi; transcript vẫn hiện các lượt cũ cùng một dòng "Đã nén hội thoại".
 - `index.jsonl` có một dòng cho mỗi lần cập nhật phiên; dòng sau cùng của cùng một id thắng.
 - Subagent ghi transcript riêng ở `YYYY/MM/<id>/subagents/agent-<agentId>.jsonl` (các dòng `agent_meta`, `message`, `notice`, `agent_end`) và `.meta.json`. File phiên chính chỉ chứa lời gọi `spawn_subagent` và kết quả (có trailer `<subagent_meta>`). Kết quả của subagent nền vào history dưới dạng tin user `<thong_bao_subagent>`.
+- Skill nào bảo agent chính gọi `spawn_subagent` thì viết theo các trường của brief (`task`, `purpose`, `questions`, `output`…, xem [subagents.md](subagents.md)), không viết "prompt": tool không còn trường đó.
 - **Mở lại phiên:**
   - Dùng `/sessions`, `opentrading -c` / `--continue` (phiên mới nhất **của thư mục đang mở**) hoặc `-r` / `--resume <id>` (chỉ cần phần đầu của id, mở được phiên của thư mục khác).
   - Phiên thuộc thư mục OpenTrading được mở (`cwd` trong `meta`, và trong dòng `index.jsonl` từ khi có lệnh `opentrading`; dòng cũ đọc `cwd` từ `meta`). `/sessions` liệt kê phiên của thư mục này, `tab` chuyển sang mọi thư mục. Tool `session_history` vẫn thấy mọi phiên.
@@ -207,6 +208,8 @@ Frontmatter gồm `name` (trùng tên file), `description`, `tools`, `disallowed
   - Giữa các bước gọi tool của một lượt: nếu request tiếp theo sẽ chạm ngưỡng, các bước còn lại gửi kèm kết quả tool cũ đã dọn (không tốn request, history không đổi); lượt sau mới nén thật.
   - Provider báo request quá dài: harness nén (kể cả khi ước lượng còn dưới ngưỡng) rồi thử lại một lần. Lượt hỏng trước khi có tool chạy thì gửi lại đúng câu hỏi; lượt đã chạy tool thì giữ lại và nhắn model làm tiếp, để không tool nào chạy hai lần.
   - Gemini báo 429 vì quota token/phút mà riêng request đã lớn hơn quota đó: báo ngay (đặt trần token trong `/config`), không chờ thử lại.
+  - **Tự nén khi rảnh** (`src/core/idle-compact.ts`, config `idleCompact`, dòng "Tự nén khi rảnh" trong `/config`): phiên từ `minTokens` (mặc định 200 000) để yên `minutes` phút (mặc định 15; 15 → 30 → 54 → tắt) thì được tóm tắt ngay lúc đó (1 request), dù còn xa ngưỡng tự nén. Lý do: cache prompt của provider đã hết (Gemini, OpenAI giữ vài phút), tin nhắn tiếp theo sẽ gửi lại toàn bộ context. Mỗi lần rảnh nén tối đa một lần; gõ phím tính là còn ngồi đó; không nén khi đang có hộp hỏi/duyệt hay subagent/desk đang chạy (đợi lần rảnh sau); dọn kết quả tool cũ đã đủ xuống dưới `minTokens` thì không tóm tắt; tắt khi `autoCompact: "off"`. Ghi vào phiên như một lần tự nén.
+    Theo idle compaction của Claude Code 2.1.299 (khoảng 54 phút vì cache của nó sống 1 giờ).
   1. Kết quả tool cũ (ngoài 2 lượt cuối, dài hơn 500 ký tự) được thay bằng một dòng "đã dọn"; không tốn request.
   2. Nếu vẫn cần, model tóm tắt phần đầu theo mẫu có mục "Số liệu đã xác minh" (giá trị, đơn vị, nguồn, thời điểm chép nguyên văn); 2 lượt cuối giữ nguyên.
   - History mới mở đầu bằng một `<nhac_nho><tom_tat_hoi_thoai>` do harness ghi: danh sách tool đã nạp, skill đã nạp, danh sách việc cần làm còn dở.

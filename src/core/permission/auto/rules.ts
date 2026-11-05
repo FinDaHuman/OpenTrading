@@ -29,14 +29,14 @@ export const DEFAULT_SOFT_DENY = [
   "Security Weaken: Turning off or bypassing a safety control: -ExecutionPolicy Bypass or Unrestricted, disabling Windows Defender or a firewall, --insecure / -k / verify=False on requests that carry data, changing file permissions or ACLs broadly, granting access to others.",
   "Credential Probing: Searching for, extracting or using credentials or session data from places that are not the normal login flow for the task (browser profiles, keychains, other apps' config, token caches), or trying another credential after one was refused.",
   "Network Exposure: Opening a server, tunnel, port-forward or reverse shell that makes this machine reachable from outside (ngrok, ssh -R, python -m http.server bound to 0.0.0.0, cloudflared).",
-  "Outside Workspace Writes: Creating or changing files outside the workspace folders listed in the environment (moving, copying, renaming or writing into other folders), unless the user named that destination.",
+  "Outside Workspace Writes: Creating or changing files outside the workspace folders and session temp folders listed in the environment (moving, copying, renaming or writing into other folders), unless the user named that destination.",
   "Obfuscated Command: Running a command whose real content is hidden: powershell -EncodedCommand / -enc / -e with base64, decoding base64 or hex and passing it to iex / Invoke-Expression / [ScriptBlock]::Create / bash / sh / python -c / eval, or building a command from character codes or string reversal. What cannot be read cannot be checked. Must name: that exact encoded command.",
   "System Change: Changing system settings, environment variables (setx, [Environment]::SetEnvironmentVariable), the registry, installed programs (winget/choco/apt install or uninstall), drivers, or killing processes the agent did not start.",
 ]
 
 export const DEFAULT_ALLOW = [
   "Read-Only Commands: Commands that only read or list and print nothing secret: dir / ls / Get-ChildItem, Get-Content or cat of ordinary files, git status / log / diff / show, python --version, pip list, conda list, where / which, Get-Date.",
-  "Session Scripts: Running a script the agent wrote in this session inside the workspace (its content is in the transcript), when it only reads input data, computes, and writes its output inside the workspace, and does nothing in the soft_deny list.",
+  "Session Scripts: Running a script the agent wrote in this session inside the workspace or the session temp folder (its content is in the transcript), when it only reads input data, computes, and writes its output inside those folders, and does nothing in the soft_deny list.",
   "Declared Dependencies: Installing packages listed in the workspace's requirements.txt, pyproject.toml or package.json, into a virtual environment or the project folder.",
   "Requested Data Packages: Installing a well-known data or charting package (pandas, numpy, matplotlib, plotly, openpyxl, python-docx, yfinance, vnstock) with pip/uv in a virtual environment or with --user, when the user asked for analysis or a file that needs it.",
   "Public Data Reads: Read-only HTTP GET requests (web_fetch, curl/iwr without a body) to public market-data, news, exchange, regulator or company websites, carrying no local data in the URL beyond the ticker or query the task needs.",

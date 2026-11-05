@@ -39,3 +39,11 @@ test("an MCP result reaches the model and the chart ref with ISO dates; a local 
   const local = (await runTool(tool("local"), {}, ctx, new RwLock())).output
   expect(local).toContain("/Date(1791532464487)/")
 })
+
+test("web sources are dated in Vietnam time (30/10 03:23 VN was printed as 2026-10-29)", async () => {
+  const { vnDay, vnStamp } = await import("../src/core/tools/net-dates")
+  const at = Date.parse("2026-10-29T20:23:33Z")
+  expect(vnDay(at)).toBe("2026-10-30")
+  expect(vnStamp(at)).toBe("2026-10-30T03:23:33+07:00")
+  expect(vnDay(Date.parse("2026-10-29T16:59:59Z"))).toBe("2026-10-29")
+})

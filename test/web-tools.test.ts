@@ -2,7 +2,7 @@ import { beforeEach, expect, test } from "bun:test"
 import { PermissionGate } from "../src/core/permission"
 import { clearFetchCache, runFetch, webFetchTool, type FetchDeps } from "../src/core/tools/web/fetch"
 import { checkUrl, fetchPublic, isPrivateAddress, isPrivateHost } from "../src/core/tools/web/net"
-import { clearSearchCache, filterHits, parseDuckDuckGo, planSearch, runSearch, webSearchTool } from "../src/core/tools/web/search"
+import { clearSearchCache, filterHits, freshnessBucket, keyedBackends, parseDuckDuckGo, planSearch, runSearch, webSearchTool } from "../src/core/tools/web/search"
 
 const signal = () => new AbortController().signal
 const publicDns = async () => ["93.184.216.34"]
@@ -173,6 +173,74 @@ test("search: provider search first, with numbered sources and the citation remi
   ).rejects.toThrow("duckduckgo: HTTP 403")
 })
 
+test("recency_days: a hit dated before the window is dropped whatever the backend; undated ones are kept and marked (BUG-OT-20261027-001)", async () => {
+  const plan = planSearch({ query: "FPT", recency_days: 1 }, new Date("2026-10-27T03:00:00Z"))
+  expect(plan.since).toBe("2026-10-26")
+  const hits = filterHits(
+    [
+      { url: "https://cafef.vn/cu", date: "2020-01-15" },
+      { url: "https://cafef.vn/moi", date: "2026-10-27" },
+      { url: "https://cafef.vn/khong-ngay" },
+      { url: "https://cafef.vn/brave", date: "2 days ago" },
+    ],
+    plan,
+  )
+  expect(hits.map((h) => h.url)).toEqual(["https://cafef.vn/moi", "https://cafef.vn/khong-ngay", "https://cafef.vn/brave"])
+
+  const out = await runSearch({ query: "FPT tin trong ngày", recency_days: 1 }, signal(), {
+    native: async () => undefined,
+    backends: () => [
+      { name: "duckduckgo", run: async () => [{ title: "Tin 2020", url: "https://vneconomy.vn/2020", date: "2020-01-15" }] },
+      { name: "parallel", run: async () => [{ title: "Không ngày", url: "https://vneconomy.vn/x" }] },
+    ],
+  })
+  expect(out).not.toContain("Tin 2020")
+  expect(out).toContain("duckduckgo: không có kết quả")
+  expect(out).toContain("[1] Không ngày — vneconomy.vn — không rõ ngày")
+})
+
+test("recency_days reaches DuckDuckGo (df) and Parallel (after_date), rounded up to their buckets", async () => {
+  expect([1, 7, 30, 365, 2000].map((d) => freshnessBucket(d))).toEqual(["d", "w", "m", "y", undefined])
+  const urls: string[] = []
+  const bodies: unknown[] = []
+  const real = globalThis.fetch
+  globalThis.fetch = (async (url: string | URL, init?: RequestInit) => {
+    urls.push(String(url))
+    if (init?.body) bodies.push(JSON.parse(String(init.body)))
+    return new Response(String(url).includes("duckduckgo") ? "" : JSON.stringify({ results: [] }), { status: 200 })
+  }) as typeof fetch
+  try {
+    const plan = planSearch({ query: "FPT", recency_days: 7 })
+    for (const backend of keyedBackends({ PARALLEL_API_KEY: "k" })) await backend.run(plan, signal()).catch(() => [])
+  } finally {
+    globalThis.fetch = real
+  }
+  expect(urls.find((u) => u.includes("duckduckgo"))).toContain("&df=w")
+  expect(bodies[0]).toMatchObject({ source_policy: { after_date: planSearch({ query: "FPT", recency_days: 7 }).since } })
+})
+
+test("blocked_domains: a provider search whose every source is blocked falls back, and its summary never shows (BUG-OT-20261027-002)", async () => {
+  let fallbackCalls = 0
+  const out = await runSearch({ query: "tin chặn", blocked_domains: ["blocked.test"] }, signal(), {
+    native: async () => ({ backend: "gemini-grounding", text: "NỘI DUNG TỪ BLOCKED", sources: [{ url: "https://blocked.test/a", title: "Bị chặn" }] }),
+    backends: () => [{ name: "exa", run: async () => (fallbackCalls++, [{ title: "Được phép", url: "https://allowed.test/b" }]) }],
+  })
+  expect(fallbackCalls).toBe(1)
+  expect(out).toContain("(nguồn: exa")
+  expect(out).toContain("allowed.test")
+  expect(out).not.toContain("NỘI DUNG TỪ BLOCKED")
+  expect(out).not.toContain("blocked.test")
+
+  // Some sources blocked: the kept ones stay, the summary (which may quote the others) goes.
+  const mixed = await runSearch({ query: "tin trộn", blocked_domains: ["blocked.test"] }, signal(), {
+    native: async () => ({ backend: "gemini-grounding", text: "TÓM TẮT TRỘN", sources: [{ url: "https://blocked.test/a", title: "Bị chặn" }, { url: "https://cafef.vn/b", title: "CafeF" }] }),
+    backends: () => [],
+  })
+  expect(mixed).toContain("[1] CafeF — cafef.vn")
+  expect(mixed).not.toContain("TÓM TẮT TRỘN")
+  expect(mixed).not.toContain("blocked.test")
+})
+
 test("DuckDuckGo results are parsed, entities decoded and redirect links unwrapped; web tools are deferred local tools", () => {
   const page =
     '<a rel="nofollow" class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fcafef.vn%2Fa.html&rut=x">VCB <b>l&#227;i</b> kỷ lục</a>' +
@@ -183,4 +251,97 @@ test("DuckDuckGo results are parsed, entities decoded and redirect links unwrapp
     expect(t.deferrable).toBe(true)
     expect(t.source).toBe("local")
   }
+})
+
+// --- web_fetch's side model: its own limit, and the page instead of an error (30/10) ---
+
+const article = () => {
+  const text = "VCB công bố lợi nhuận quý 3 đạt 10.000 tỷ đồng. ".repeat(20)
+  return site({ "https://cafef.vn/vcb": () => new Response(text, { headers: { "content-type": "text/plain; charset=utf-8" } }) })
+}
+
+test("a side model that times out gives the page and a note, not 'The operation timed out.'", async () => {
+  const { deps } = article()
+  const out = await runFetch({ url: "https://cafef.vn/vcb", prompt: "lợi nhuận quý 3?" }, signal(), {
+    ...deps,
+    extract: async () => {
+      throw new DOMException("The operation timed out.", "TimeoutError")
+    },
+  })
+  expect(out).toContain("Ghi chú: model phụ không đọc xong trang (quá 90s)")
+  expect(out).toContain("VCB công bố lợi nhuận quý 3 đạt 10.000 tỷ đồng.")
+  expect(out).not.toContain("timed out")
+})
+
+test("an empty or cut side answer says why; a cut one is kept above the page", async () => {
+  const { deps } = article()
+  const empty = await runFetch({ url: "https://cafef.vn/vcb", prompt: "lợi nhuận quý 3?" }, signal(), {
+    ...deps,
+    extract: async () => ({ text: "  ", finishReason: "length" }),
+  })
+  expect(empty).toContain("model phụ không đọc xong trang (không trả lời, finishReason=length)")
+  expect(empty).toContain("10.000 tỷ đồng")
+  const cut = await runFetch({ url: "https://cafef.vn/vcb", prompt: "lợi nhuận quý 3?" }, signal(), {
+    ...deps,
+    extract: async () => ({ text: "Lợi nhuận quý 3 là", finishReason: "length" }),
+  })
+  expect(cut).toContain("câu trả lời bị cắt (finishReason=length)")
+  expect(cut.indexOf("Trả lời dở của model phụ:\nLợi nhuận quý 3 là")).toBeGreaterThan(-1)
+  expect(cut.indexOf("Lợi nhuận quý 3 là")).toBeLessThan(cut.lastIndexOf("VCB công bố"))
+  const ok = await runFetch({ url: "https://cafef.vn/vcb", prompt: "lợi nhuận quý 3?" }, signal(), {
+    ...deps,
+    extract: async () => ({ text: "10.000 tỷ đồng.", finishReason: "stop" }),
+  })
+  expect(ok).toEndWith("\n\n10.000 tỷ đồng.")
+})
+
+test("the side model's limit fits in what the download left of the call's 125s", async () => {
+  const { deps } = article()
+  let t = 0
+  let called = false
+  // The download took 115s: less than 10s would be left, so the side model is skipped.
+  const out = await runFetch({ url: "https://cafef.vn/vcb", prompt: "lợi nhuận quý 3?" }, signal(), {
+    ...deps,
+    now: () => (t += 115_000) - 115_000,
+    extract: async () => ((called = true), "không tới đây"),
+  })
+  expect(called).toBe(false)
+  expect(out).toContain("model phụ không đọc xong trang (không còn đủ thời gian sau khi tải trang)")
+  expect(out).toContain("10.000 tỷ đồng")
+})
+
+test("the user's Esc and the side model's own errors stay errors", async () => {
+  const { deps } = article()
+  const controller = new AbortController()
+  controller.abort()
+  await expect(
+    runFetch({ url: "https://cafef.vn/vcb", prompt: "x?" }, controller.signal, {
+      ...deps,
+      extract: async () => {
+        throw new DOMException("The operation timed out.", "TimeoutError")
+      },
+    }),
+  ).rejects.toThrow()
+  await expect(
+    runFetch({ url: "https://cafef.vn/vcb", prompt: "x?" }, signal(), {
+      ...deps,
+      extract: async () => {
+        throw new Error("Hết quota trong ngày. Gọi lại web_fetch không kèm prompt để đọc thẳng nội dung trang.")
+      },
+    }),
+  ).rejects.toThrow("Hết quota")
+})
+
+test("a long cut answer beside a long page stays under the tool's 60,000 chars, and start_char stays true", async () => {
+  const long = "Đoạn văn dài về thị trường. ".repeat(4000)
+  const { deps } = site({ "https://cafef.vn/dai2": () => new Response(long, { headers: { "content-type": "text/plain; charset=utf-8" } }) })
+  const partial = "Trả lời rất dài. ".repeat(500)
+  const out = await runFetch({ url: "https://cafef.vn/dai2", prompt: "x?" }, signal(), {
+    ...deps,
+    extract: async () => ({ text: partial, finishReason: "length" }),
+  })
+  expect(out.length).toBeLessThan(60_000)
+  const shown = 50_000 - partial.trim().length
+  expect(out).toContain(`start_char=${shown}`)
+  expect(long.slice(0, shown).endsWith(out.split("\n\n(còn")[0]!.slice(-50))).toBe(true)
 })

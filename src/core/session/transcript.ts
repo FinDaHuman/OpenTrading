@@ -1,5 +1,6 @@
 import type { ModelMessage } from "ai"
 import { isCompactMarker } from "../compact-marker"
+import { harnessMarks, retiredNote } from "../tools/todos"
 import { toolErrorText } from "../tools/errors"
 import { splitNotices, type ParsedNotice } from "../subagents/notification"
 import { attachedFromTag, attachmentsOf, isAttachmentText, type AttachedFile } from "../mentions"
@@ -18,6 +19,8 @@ export type TranscriptItem =
   | { kind: "compact"; text: string }
   /** A background subagent's result was delivered here. */
   | ({ kind: "agent-notice" } & ParsedNotice)
+  /** What the harness did to the turn, kept on its messages (todos.ts harnessMarks). */
+  | { kind: "note"; text: string }
 
 function outputText(output: unknown): { ok: boolean; text: string } {
   const o = output as { type?: string; value?: unknown }
@@ -70,6 +73,8 @@ export function transcriptFromMessages(messages: ModelMessage[]): TranscriptItem
     } else if (m.role === "assistant") {
       if (typeof m.content === "string") {
         if (m.content.trim()) items.push({ kind: "assistant", text: m.content })
+        const retired = harnessMarks(m).retiredTodos
+        if (retired?.length) items.push({ kind: "note", text: retiredNote(retired) })
         continue
       }
       let text = ""
@@ -83,6 +88,10 @@ export function transcriptFromMessages(messages: ModelMessage[]): TranscriptItem
         }
       }
       if (text.trim()) items.push({ kind: "assistant", text })
+    }
+    if (m.role === "assistant") {
+      const retired = harnessMarks(m).retiredTodos
+      if (retired?.length) items.push({ kind: "note", text: retiredNote(retired) })
     }
   }
   return items

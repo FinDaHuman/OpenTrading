@@ -120,3 +120,84 @@ test("wire: Gemini thinkingConfig, Anthropic effort, OpenAI and Groq reasoning e
   expect(JSON.stringify(await wire("@ai-sdk/openai", "gpt-5-mini", "low"))).toMatch(/"(reasoning_effort|effort)":"low"/)
   expect((await wire("@ai-sdk/groq", "openai/gpt-oss-120b", "medium")).reasoning_effort).toBe("medium")
 })
+
+// --- Side requests (title, web_fetch's page reader): least reasoning plus room for it ---
+
+const withOptions = (npm: string, model: string, reasoning_options: unknown[] | undefined, reasoning = true) => {
+  const t = target(npm, model, { reasoning })
+  const info = t.provider.models[model] as unknown as Record<string, unknown>
+  if (reasoning_options) info.reasoning_options = reasoning_options
+  return t
+}
+
+test("sideRequest: OpenRouter reasoning is turned off when the model allows it, else its lowest effort", async () => {
+  const { sideRequest, THINKING_HEADROOM } = await import("../src/core/effort")
+  const or = "@openrouter/ai-sdk-provider"
+  // nvidia/nemotron-3.5-lightning:free (30/10: reasoning took all 256 title tokens).
+  expect(sideRequest(withOptions(or, "nvidia/nemotron-3.5-lightning:free", [{ type: "toggle" }]), 256)).toEqual({
+    providerOptions: { openrouter: { reasoning: { enabled: false } } },
+    maxOutputTokens: 256 + THINKING_HEADROOM,
+  })
+  // thinkingmachines/inkling-small:free lists "none".
+  const inkling = [{ type: "effort", values: ["none", "minimal", "low", "medium", "high", "max"] }]
+  expect(sideRequest(withOptions(or, "thinkingmachines/inkling-small:free", inkling), 256).providerOptions).toEqual({ openrouter: { reasoning: { effort: "none" } } })
+  // Mandatory reasoning (no "none", no toggle): the lowest level it lists.
+  const mandatory = [{ type: "effort", values: ["high", "medium"] }]
+  expect(sideRequest(withOptions(or, "x/thinker", mandatory), 256).providerOptions).toEqual({ openrouter: { reasoning: { effort: "medium" } } })
+  // openrouter/free lists nothing: no setting, but the headroom.
+  expect(sideRequest(withOptions(or, "openrouter/free", []), 256)).toEqual({ maxOutputTokens: 256 + THINKING_HEADROOM })
+})
+
+test("sideRequest: Gemini 3 takes its lowest catalog level (flash-lite minimal), 2.5 keeps a zero budget", async () => {
+  const { sideRequest, THINKING_HEADROOM } = await import("../src/core/effort")
+  const g = "@ai-sdk/google"
+  expect(sideRequest(withOptions(g, "gemini-3.1-flash-lite", [{ type: "effort", values: ["minimal", "low", "medium", "high"] }]), 2000)).toEqual({
+    providerOptions: { google: { thinkingConfig: { thinkingLevel: "minimal", includeThoughts: false } } },
+    maxOutputTokens: 2000 + THINKING_HEADROOM,
+  })
+  expect(sideRequest(withOptions(g, "gemini-3.8-flash", [{ type: "effort", values: ["low", "medium", "high"] }]), 256).providerOptions).toEqual({
+    google: { thinkingConfig: { thinkingLevel: "low", includeThoughts: false } },
+  })
+  expect(sideRequest(withOptions(g, "gemini-2.5-flash-lite", [{ type: "toggle" }, { type: "budget_tokens", min: 512, max: 24576 }]), 256).providerOptions).toEqual({
+    google: { thinkingConfig: { thinkingBudget: 0, includeThoughts: false } },
+  })
+})
+
+test("sideRequest: a model that does not reason is sent as before", async () => {
+  const { sideRequest } = await import("../src/core/effort")
+  expect(sideRequest(withOptions("@ai-sdk/groq", "llama-x", undefined, false), 256)).toEqual({ maxOutputTokens: 256 })
+})
+
+test("needsHeadroom: an 'r1' id counts as reasoning (the regex once held backspace bytes, not \\b)", async () => {
+  const { needsHeadroom } = await import("../src/core/effort")
+  const plain = (model: string) => ({ provider: { id: "p", name: "P", env: [], npm: "@ai-sdk/openai-compatible", models: {} } as unknown as CatalogProvider, model })
+  expect(needsHeadroom(plain("deepseek/r1"))).toBe(true)
+  expect(needsHeadroom(plain("vendor/r1-distill"))).toBe(true)
+  expect(needsHeadroom(plain("carrier1"))).toBe(false)
+})
+
+test("wire: OpenRouter sends the side request's reasoning setting in the body", async () => {
+  const { sideRequest } = await import("../src/core/effort")
+  const realFetch = globalThis.fetch
+  let sent: Record<string, unknown> = {}
+  globalThis.fetch = (async (_url: unknown, init?: RequestInit) => {
+    sent = JSON.parse(String(init?.body))
+    throw new Error("captured")
+  }) as unknown as typeof fetch
+  try {
+    const t = withOptions("@openrouter/ai-sdk-provider", "nvidia/nemotron-3.5-lightning:free", [{ type: "toggle" }])
+    const side = sideRequest(t, 256)
+    await generateText({ model: languageModel(t.provider, t.model, "x"), prompt: "hi", maxRetries: 0, ...side } as never).catch(() => {})
+  } finally {
+    globalThis.fetch = realFetch
+  }
+  expect(sent.reasoning).toEqual({ enabled: false })
+  expect(sent.max_tokens).toBe(256 + 2048)
+})
+
+test("sideRequest: any Google model with effort levels gets its lowest thinkingLevel (gemini-4, *-latest)", async () => {
+  const { sideRequest } = await import("../src/core/effort")
+  expect(sideRequest(withOptions("@ai-sdk/google", "gemini-4-argon", [{ type: "effort", values: ["low", "medium", "high"] }]), 256).providerOptions).toEqual({
+    google: { thinkingConfig: { thinkingLevel: "low", includeThoughts: false } },
+  })
+})

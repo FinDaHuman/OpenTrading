@@ -20,7 +20,7 @@ import { pad, truncate, width as cells } from "./ui/text"
  *   │ ⠹ Xếp hạng     ━━━━━╺────  3/6                                      │
  *   │ ⠹ phan-tich  MWG · vn_financials(MWG)          23s · ↓1,2k          │
  *   │ ✓ tra-cuu VNM xong · 4 req · 12s                                    │
- *   ╰─ 48 request · ↑182k ↓21k token · /desk chi tiết · p tạm dừng · x×2 dừng ╯
+ *   ╰─ 48 request · ↑182k ↓21k token · /desk · ctrl+p tạm dừng · ctrl+x dừng ╯
  *
  * Finished, it folds to one line; ctrl+o opens the final card. /desk shows the same card
  * with every agent listed.
@@ -205,7 +205,7 @@ export function DeskCard(props: { run: DeskRunView; width: number; rows?: number
   const meta = () => [props.run.size, props.run.effort ? `effort ${props.run.effort}` : "", argsLine(props.run)].filter(Boolean).join(" · ")
   const footer = () =>
     props.footer ??
-    `${groupDigits(c().requests)} request · ↑${fmtTokens(c().input)} ↓${fmtTokens(c().output)} token${live() ? " · /desk chi tiết (p tạm dừng · x×2 dừng)" : " · /desk chi tiết"}`
+    `${groupDigits(c().requests)} request · ↑${fmtTokens(c().input)} ↓${fmtTokens(c().output)} token${live() ? " · /desk chi tiết (ctrl+p tạm dừng · ctrl+x dừng)" : " · /desk chi tiết"}`
 
   return (
     <box

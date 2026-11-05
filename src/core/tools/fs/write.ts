@@ -50,7 +50,14 @@ function notReadYet(abs: string, bytes: Uint8Array, state: FileState, whole: boo
   return undefined
 }
 
-const scopeOf = (deps: WriteDeps, raw: string) => writeCheck(deps.workspace.resolve(raw), (p) => deps.workspace.contains(p), deps.workspace.env(), realish)
+const scopeOf = (deps: WriteDeps, raw: string) =>
+  writeCheck(
+    deps.workspace.resolve(raw),
+    (p) => deps.workspace.contains(p),
+    deps.workspace.env(),
+    realish,
+    (p) => deps.workspace.inScratch(p),
+  )
 
 /** The gate hooks both tools share: where (askFor/blockFor), what for rules (subject), one session group. */
 function gateHooks(deps: WriteDeps) {

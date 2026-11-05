@@ -91,6 +91,8 @@ function hintOf(choice: Choice, req: ApprovalRequest): string {
       if (scope.startsWith("cmd:")) return `không hỏi lại lệnh \`${truncate(scope.slice("cmd:".length), 30)} …\` tới khi thoát`
       if (scope.startsWith("cmd!")) return "không hỏi lại đúng lệnh này tới khi thoát"
       if (scope.startsWith("edit:")) return `không hỏi lại khi ghi file trong ${truncate(scope.slice("edit:".length), 40)} (cả thư mục con) tới khi thoát`
+      // Asked only under a user ask rule (‖ offers "mode" instead): the key is the folder.
+      if (scope.startsWith("scratch:")) return `không hỏi lại khi ghi file thẳng trong ${truncate(scope.slice("scratch:".length), 40)} tới khi thoát`
       return "không hỏi lại tool này tới khi thoát"
     case "always":
       if (scope.startsWith("cmd:")) return `lưu vào cấu hình: lệnh \`${truncate(scope.slice("cmd:".length), 30)} …\``

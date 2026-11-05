@@ -47,7 +47,11 @@ test("a denied call becomes a tool error the model reads, with the user's note",
   const head = gate.head()!
   expect(head.label).toBe("gh · create_issue")
   await gate.respond(head.id, "deny", "dùng repo khác")
-  expect(await running).toBe("Người dùng từ chối chạy tool này. Lời nhắn của người dùng: dùng repo khác")
+  const text = String(await running)
+  expect(text.split("\n")[0]).toBe("Người dùng từ chối chạy tool này. Lời nhắn của người dùng: dùng repo khác")
+  expect(text).toContain("Đừng làm đúng việc này bằng tool hay lệnh khác")
+  // A plain "no" asks the user what to do instead; it never says "go on with other work".
+  expect(text).not.toContain("làm tiếp")
 })
 
 test("waiting for the user does not count against the tool timeout", async () => {
@@ -183,4 +187,24 @@ test("startMode: a session opens in the configured mode, but never in ▸▸ aut
   expect(startMode({ defaultMode: "auto", autoAcknowledged: false })).toBe("ask")
   expect(startMode({ defaultMode: "auto", autoAcknowledged: true })).toBe("auto")
   expect(startMode({ defaultMode: "nonsense" })).toBe("read-only")
+})
+
+test("'always' with a store that can add: the rule goes through add (inside the save's lock), not load + save of a stale list", async () => {
+  const store = memoryStore([{ tool: "x", scope: "1" }])
+  const added: AllowRule[] = []
+  let loads = 0
+  let saves = 0
+  const gate = new PermissionGate({
+    load: async () => (loads++, store.rules),
+    save: async () => void saves++,
+    add: async (rule) => void added.push(rule),
+  })
+  gate.interactive = true
+  const first = runTool(write(), {}, ctx(), new RwLock(), gate)
+  await tick()
+  loads = 0
+  await gate.respond(gate.head()!.id, "always")
+  expect(await first).toEqual({ output: "đã tạo" })
+  expect(added).toEqual([{ tool: "mcp__gh__create_issue", scope: "gh@abc" }])
+  expect([loads, saves]).toEqual([0, 0])
 })

@@ -60,8 +60,9 @@ export function WatchlistDialog(props: { runtime: Runtime }) {
 
   useKeys((evt) => {
     if (evt.eventType === "release") return
-    if (evt.name === "escape") return focus() ? setFocus(undefined) : closeDialog()
-    if (evt.name === "r" && focus() && !quotes.loading) {
+    // opened(), not focus(): `/watchlist <a name that is no list>` shows the lists, whose filter takes r.
+    if (evt.name === "escape") return opened() ? setFocus(undefined) : closeDialog()
+    if (evt.name === "r" && opened() && !quotes.loading) {
       evt.preventDefault()
       void reloadLists()
       void refetch()

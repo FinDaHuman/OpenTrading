@@ -2,7 +2,7 @@ import type { DeskSize } from "./desk/types"
 import type { Effort } from "./effort"
 import { configFile } from "./paths"
 import type { ProviderId } from "./providers"
-import { readJson, writeJson } from "./store"
+import { readJson, updateJson } from "./store"
 import type { AutoModeConfig } from "./permission/auto/rules"
 
 export interface Config {
@@ -49,6 +49,13 @@ export interface Config {
    * (min(output limit, 20k)). 50–95, default 95: about 93% of a 1M window.
    */
   autoCompactPercent?: number
+  /**
+   * Compaction while you are away (Claude Code's idle compaction): a conversation of at least
+   * `minTokens` (default 200 000) left idle for `minutes` (default 15, 0 = off) is summarized in
+   * the background (1 request), so the next message does not send it all again once the
+   * provider's prompt cache has expired. Off when `autoCompact` is "off".
+   */
+  idleCompact?: { minutes?: number; minTokens?: number }
   /**
    * TUI details (default on): `tips`, a tip under the working row during long turns;
    * `terminalNotify`, a desktop notification when a turn ends or waits for you while the
@@ -124,12 +131,25 @@ export interface Config {
   }
   /** Extra workspace folders kept across sessions (`/add-dir <thư mục> --luu`). */
   workspace?: { dirs?: string[] }
+  /**
+   * The session's temp folder in %TEMP% (core/fs/scratch.ts); on unless `enabled: false`.
+   * `warnMB`: the size warning under an answer (default 1024, 0 = never); `keepDays`: session
+   * folders untouched this long are deleted at startup (default 30, 0 = never).
+   */
+  scratchpad?: { enabled?: boolean; warnMB?: number; keepDays?: number }
 }
 
 export const loadConfig = () => readJson<Config>(configFile(), {})
 
-export async function saveConfig(patch: Partial<Config>) {
-  const next = { ...(await loadConfig()), ...patch }
-  await writeJson(configFile(), next)
-  return next
+/**
+ * Merges `patch` into config.json. Read-modify-write runs in order within this process and
+ * under a lock file across processes (file-lock.ts): concurrent saves of different keys all
+ * land; the atomic rename in writeJson alone only prevents a half-written file.
+ * A function patch is computed from the config as it is inside the lock: use it to change
+ * part of a nested object (`(c) => ({ desk: { ...c.desk, approved } })`) without losing a
+ * change saved since the caller last read the file.
+ */
+export function saveConfig(patch: Partial<Config> | ((current: Config) => Partial<Config>)): Promise<Config> {
+  // A config.json that exists but cannot be read is refused, not replaced by the patch alone.
+  return updateJson<Config>(configFile(), {}, (current) => ({ ...current, ...(typeof patch === "function" ? patch(current) : patch) }))
 }

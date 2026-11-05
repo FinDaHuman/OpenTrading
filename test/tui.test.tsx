@@ -156,6 +156,13 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
         headers: { "content-type": "text/event-stream" },
       })
     }
+    // The todo test keeps its turn running (slow tool) right after the list is saved.
+    if (callSlowTool && last.includes("[todo_write] Đã lưu")) {
+      const call = { index: 0, id: "call_slow", type: "function", function: { name: "cho_lau", arguments: "{}" } }
+      return new Response(chunk({ role: "assistant", tool_calls: [call] }) + chunk({}, "tool_calls") + "data: [DONE]\n\n", {
+        headers: { "content-type": "text/event-stream" },
+      })
+    }
     if (last.includes("VIỆC-CẦN-LÀM") && !answeredThisTurn) {
       const todos = [
         { content: "Lấy giá 30 phiên FPT", status: "completed" },
@@ -180,7 +187,7 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
         index,
         id: `call_sub_${index}_${chatBodies.length}`,
         type: "function",
-        function: { name: "spawn_subagent", arguments: JSON.stringify({ description, prompt, ...(background ? { run_in_background: true } : {}) }) },
+        function: { name: "spawn_subagent", arguments: JSON.stringify({ description, task: prompt, purpose: "trả lời", questions: [prompt], output: "ngắn", ...(background ? { run_in_background: true } : {}) }) },
       }))
       return sseOf(chunk({ role: "assistant", tool_calls: calls }) + chunk({}, "tool_calls") + "data: [DONE]\n\n")
     }
@@ -239,7 +246,7 @@ const cwd = await mkdtemp(path.join(os.tmpdir(), "opentrading-cwd-"))
 const DEMO = path.resolve(import.meta.dir, "../examples/mcp-demo/server.ts")
 await writeFile(path.join(home, "mcp.json"), JSON.stringify({ mcpServers: { demo: { command: process.execPath, args: [DEMO] } } }))
 
-const { App } = await import("../src/tui/app")
+const { App, idleTimerForTests } = await import("../src/tui/app")
 const { state, setState } = await import("../src/tui/state")
 const { LOADED_PREFIX } = await import("../src/core/tools/search")
 const { resetNotifications, say } = await import("../src/tui/notify")
@@ -708,6 +715,10 @@ test("/mcp: enabling an OAuth catalog entry connects, then starts the login (no 
     expect(state.mcp.find((s) => s.name === "notion")?.state).toBe("needs-auth")
     const frame = await setup.waitForFrame((f) => f.includes("Đang đăng nhập notion") && f.includes("login.example"))
     show(frame)
+    // c copies the link; the login view has no input for it to land in.
+    expect(frame).toContain("(c để copy)")
+    setup.mockInput.pressKey("c")
+    await setup.waitForFrame((f) => f.includes("Đang đăng nhập notion") && !f.includes("› c"))
     // Esc cancels the login and returns to the server screen.
     setup.mockInput.pressEscape()
     await setup.waitForFrame((f) => f.includes("notion · MCP server"))
@@ -727,6 +738,26 @@ test("/mcp: enabling an OAuth catalog entry connects, then starts the login (no 
     remote.stop()
   }
 }, 30_000)
+
+test("/mcp: r reconnects the highlighted server; the panel has no filter and the prompt gets nothing", async () => {
+  const restarted: string[] = []
+  const realRestart = runtime.mcp.restart.bind(runtime.mcp)
+  runtime.mcp.restart = async (name) => void restarted.push(name)
+  try {
+    await setup.mockInput.typeText("/mcp")
+    setup.mockInput.pressEnter()
+    await setup.waitForFrame((f) => f.includes("❯ demo"))
+    setup.mockInput.pressKey("r")
+    await setup.waitFor(() => restarted.length > 0)
+    expect(restarted).toEqual(["demo"])
+    setup.mockInput.pressEscape()
+    await setup.waitFor(() => state.dialog === undefined)
+    // Nothing was typed into the prompt under the panel.
+    await setup.waitForFrame((f) => f.includes("Hỏi về thị trường"))
+  } finally {
+    runtime.mcp.restart = realRestart
+  }
+})
 
 test("/mcp: a pasted token is never shown on screen", async () => {
   await setup.mockInput.typeText("/mcp")
@@ -969,6 +1000,57 @@ test("a deferred tool loaded by its first call reads as a grey note, wrapped, no
   } finally {
     setState("lines", (lines) => lines.slice(0, before))
   }
+})
+
+test("an auto-mode block reads as one line with its rule and reason; ctrl+o shows what the model was told", async () => {
+  const { blockedMessage, deniedMessage } = await import("../src/core/permission")
+  const blocked = blockedMessage("shell", { label: "Git phá huỷ", reason: "Xoá nhánh remote khi người dùng chưa nêu tên NHÁNH-X" })
+  const refused = deniedMessage({ reason: "user", auto: { label: "Gửi dữ liệu ra ngoài", reason: "Gửi file ra HOST-LẠ" } }, { tool: "mcp__x__create" })
+  const before = state.lines.length
+  setState("lines", (lines) => [
+    ...lines,
+    { kind: "tool", callId: "c-block", name: "shell", label: "shell git push origin --delete x", status: "error", output: blocked },
+    { kind: "tool", callId: "c-refused", name: "mcp__x__create", label: "x · create", status: "error", output: refused },
+  ])
+  try {
+    let frame = await setup.waitForFrame((f) => f.includes("NHÁNH-X") && f.includes("HOST-LẠ"))
+    show(frame)
+    expect(frame).toContain("✘ Auto mode chặn shell [Git phá huỷ]")
+    expect(frame).toContain("/permissions để cho thử lại")
+    expect(frame).toContain("✘ Đã từ chối (auto mode đã chặn [Gửi dữ liệu ra ngoài]")
+    // The guidance for the model stays out of the collapsed view.
+    expect(frame).not.toContain("Đừng làm đúng việc này")
+    setState("expandTools", true)
+    frame = await setup.waitForFrame((f) => f.includes("Đừng làm đúng việc này"))
+    show(frame)
+  } finally {
+    setState("expandTools", false)
+    setState("lines", (lines) => lines.slice(0, before))
+  }
+})
+
+test("a new auto-mode block raises one toast; a block handed to the user, or a count change, does not", async () => {
+  const { watchAutoBlocks, AUTO_BLOCK_KEY } = await import("../src/tui/auto-notice")
+  const listeners = new Set<() => void>()
+  const auto = {
+    recent: [] as { tool: string }[],
+    consecutive: 0,
+    total: 0,
+    onChange: (l: () => void) => (listeners.add(l), () => listeners.delete(l)),
+  }
+  const seen: { key: string; text: string }[] = []
+  const off = watchAutoBlocks(auto as never, (n) => seen.push(n))
+  const fire = () => listeners.forEach((l) => l())
+  fire() // request counter only
+  auto.recent.unshift({ tool: "shell" })
+  auto.consecutive = 1
+  fire()
+  fire() // the same block again (e.g. a pause notice)
+  auto.recent.unshift({ tool: "write_file" })
+  auto.consecutive = 3 // reached the limit: the approval dialog says it
+  fire()
+  off()
+  expect(seen).toEqual([expect.objectContaining({ key: AUTO_BLOCK_KEY, text: "shell bị auto mode chặn · /permissions" })])
 })
 
 test("the context size follows each step's usage while a turn is still running", async () => {
@@ -1721,6 +1803,37 @@ test("/add-dir lists the workspace, adds a folder for the session or for good (-
   }
 })
 
+test("the session's temp folder: a size warning sits under the answer, /scratch shows the folder", async () => {
+  const { Scratchpad } = await import("../src/core/fs/scratch")
+  const pad = new Scratchpad(cwd, { tmp: path.join(home, "tmp") })
+  pad.attach("tui-scratch")
+  runtime.workspace.scratch = pad
+  await saveConfig({ scratchpad: { warnMB: 0.001 } })
+  try {
+    const dir = pad.dir()!
+    await mkdir(dir, { recursive: true })
+    await writeFile(path.join(dir, "lon.csv"), "x".repeat(5000))
+    await setup.mockInput.typeText("Tính thử trong thư mục tạm")
+    setup.mockInput.pressEnter()
+    await setup.waitFor(() => !state.streaming && state.lines.some((l) => l.kind === "warning"))
+    const warning = state.lines.findLast((l) => l.kind === "warning") as { text: string }
+    expect(warning.text).toContain("Thư mục tạm của dự án đã 5 KB")
+    expect(warning.text).toContain(pad.project)
+    // Under the answer: nothing but the done line between them.
+    const at = state.lines.lastIndexOf(warning as never)
+    expect(state.lines.slice(0, at).findLast((l) => l.kind !== "done")?.kind).toBe("assistant")
+    const frame = await setup.waitForFrame((f) => f.includes("▲ Thư mục tạm của dự án"))
+    show(frame)
+    const line = await command("/scratch")
+    expect(line.kind).toBe("info")
+    expect(line.text).toContain(dir)
+    expect(line.text).toContain("1 phiên")
+  } finally {
+    runtime.workspace.scratch = undefined
+    await saveConfig({ scratchpad: undefined })
+  }
+})
+
 test("/memory: a model proposal is pending until approved with 'a'", async () => {
   await memory.add("Người dùng không giao dịch margin", { status: "pending", via: "model" })
   await setup.mockInput.typeText("/memory")
@@ -1733,6 +1846,81 @@ test("/memory: a model proposal is pending until approved with 'a'", async () =>
   await setup.waitForFrame((f) => f.includes("đang dùng"))
   setup.mockInput.pressEscape()
   await setup.waitFor(() => state.dialog === undefined)
+})
+
+test("/memory: a, r and d act only in a memory's view; in the list they are letters of the filter", async () => {
+  const pending = await memory.add("Không mua cổ phiếu penny", { status: "pending", via: "model" })
+  const active = await memory.add("Ưu tiên cổ tức tiền mặt", { status: "active", via: "user" })
+  const status = async (id: string) => (await memory.list()).find((i) => i.id === id)?.status
+  await setup.mockInput.typeText("/memory")
+  setup.mockInput.pressEnter()
+  await setup.waitForFrame((f) => f.includes("Không mua cổ phiếu penny") && f.includes("gõ để lọc"))
+  // In the list a, r and d only filter: nothing is approved, rejected or removed.
+  await setup.mockInput.typeText("ard")
+  let frame = await setup.waitForFrame((f) => f.includes("› ard"))
+  show(frame)
+  expect(await status(pending.id)).toBe("pending")
+  expect(await status(active.id)).toBe("active")
+  for (let i = 0; i < 3; i++) setup.mockInput.pressBackspace()
+  // The memory's view has no filter: r rejects, and the list comes back with an empty filter.
+  await setup.mockInput.typeText("penny")
+  await setup.waitForFrame((f) => f.includes("› penny"))
+  setup.mockInput.pressEnter()
+  await setup.waitForFrame((f) => f.includes("a duyệt · r bỏ"))
+  setup.mockInput.pressKey("r")
+  await setup.waitFor(async () => (await status(pending.id)) !== "pending")
+  frame = await setup.waitForFrame((f) => f.includes("Memory · ") && f.includes("Ưu tiên cổ tức"))
+  expect(frame).toContain("gõ để lọc")
+  expect(frame).not.toContain("› r")
+  await setup.mockInput.typeText("cổ tức")
+  await setup.waitForFrame((f) => f.includes("› cổ tức"))
+  setup.mockInput.pressEnter()
+  await setup.waitForFrame((f) => f.includes("d xoá · esc"))
+  setup.mockInput.pressKey("d")
+  await setup.waitFor(async () => (await status(active.id)) === undefined)
+  frame = await setup.waitForFrame((f) => f.includes("Memory · ") && !f.includes("cổ tức tiền mặt  đang dùng"))
+  show(frame)
+  expect(frame).toContain("gõ để lọc")
+  expect(frame).not.toContain("› d")
+  setup.mockInput.pressEscape()
+  await setup.waitFor(() => state.dialog === undefined)
+})
+
+test("/permissions: ctrl+r on an auto-mode block grants the retry and never lands in the list's filter; in the list r is a letter", async () => {
+  const granted: string[] = []
+  const realGrant = runtime.auto.grantRetry.bind(runtime.auto)
+  runtime.auto.grantRetry = (d) => void granted.push(d.key)
+  runtime.auto.recent.unshift({ at: Date.now(), tool: "shell", summary: "curl https://host-la.example", reason: "Gửi dữ liệu ra ngoài", key: "k-retry" })
+  try {
+    await setup.mockInput.typeText("/permissions")
+    setup.mockInput.pressEnter()
+    await setup.waitForFrame((f) => f.includes("1 lần auto mode chặn") && f.includes("gõ để lọc"))
+    // In the list r and d only filter.
+    await setup.mockInput.typeText("rd")
+    let frame = await setup.waitForFrame((f) => f.includes("› rd"))
+    expect(granted).toEqual([])
+    setup.mockInput.pressBackspace()
+    setup.mockInput.pressBackspace()
+    await setup.waitForFrame((f) => f.includes("gõ để lọc"))
+    setup.mockInput.pressEnter()
+    frame = await setup.waitForFrame((f) => f.includes("ctrl+r cho thử lại một lần"))
+    // A plain r does nothing here; ctrl+r grants the retry.
+    setup.mockInput.pressKey("r")
+    await new Promise((r) => setTimeout(r, 100))
+    expect(granted).toEqual([])
+    setup.mockInput.pressKey("r", { ctrl: true })
+    await setup.waitFor(() => granted.length > 0)
+    frame = await setup.waitForFrame((f) => f.includes("1 lần auto mode chặn"))
+    show(frame)
+    expect(granted).toEqual(["k-retry"])
+    expect(frame).toContain("gõ để lọc")
+    expect(frame).not.toContain("› r")
+    setup.mockInput.pressEscape()
+    await setup.waitFor(() => state.dialog === undefined)
+  } finally {
+    runtime.auto.grantRetry = realGrant
+    runtime.auto.recent.shift()
+  }
 })
 
 test("/config turns memory off and on without a restart", async () => {
@@ -1879,30 +2067,38 @@ test("/config: subagent limit is a number ≥ 1 applied live; subagent model lis
   runtime.subagents.setMax(10)
 })
 
-test("todo_write: the open list is pinned above the prompt, the transcript keeps one line, /new clears it", async () => {
+test("todo_write: the open list is pinned above the prompt, the transcript keeps one line, an answer left open retires it", async () => {
   await setKey("nvidia", "nvapi-good-key")
+  const gate = await slowTool()
   await setup.mockInput.typeText("VIỆC-CẦN-LÀM cho FPT")
   setup.mockInput.pressEnter()
-  await setup.waitFor(() => !state.streaming && state.lines.some((l) => l.kind === "tool" && l.name === "todo_write" && l.status === "ok"))
+  // Mid-turn (the slow tool runs after the list is saved): the open list is pinned.
+  await setup.waitFor(() => state.lines.some((l) => l.kind === "tool" && l.name === "todo_write" && l.status === "ok"))
   const frame = await setup.waitForFrame((f) => f.includes("Việc cần làm · 1/3") && f.includes("● Cập nhật việc cần làm (1/3 xong)"))
   show(frame)
   expect(frame).toContain("● Cập nhật việc cần làm (1/3 xong)")
   expect(frame).toContain("[>] Lấy BCTC 4 quý")
   expect(frame).toContain("[ ] So sánh với ngành")
-  // The list is in the panel, not repeated under the tool row.
-  expect(frame.split("Lấy BCTC 4 quý").length - 1).toBe(1)
+  // The list is in the panel, not repeated under the tool row (the working row may name the item).
+  expect(frame.split("[>] Lấy BCTC 4 quý").length - 1).toBe(1)
   // The panel sits between the transcript and the prompt.
   const rows = frame.split("\n")
   const panel = rows.findIndex((r) => r.includes("Việc cần làm · 1/3"))
   const prompt = rows.findIndex((r) => r.includes("› "))
   expect(panel).toBeGreaterThan(rows.findIndex((r) => r.includes("❯ VIỆC-CẦN-LÀM")))
   expect(prompt).toBeGreaterThan(panel)
+  callSlowTool = false
+  gate.release()
   await setup.waitFor(() => !state.streaming)
   expect(state.liveTodos).toBeUndefined() // back to history once the turn is saved
+  // The model answered with items open: the list is retired (not pinned, not marked done) and
+  // the transcript names what stays unconfirmed.
+  const after = await setup.waitForFrame((f) => f.includes("CHƯA được xác nhận là xong") && !f.includes("Việc cần làm · 1/3"))
+  expect(after).toContain("[>] Lấy BCTC 4 quý")
 
   await setup.mockInput.typeText("/new")
   setup.mockInput.pressEnter()
-  const cleared = await setup.waitForFrame((f) => !f.includes("Việc cần làm"))
+  const cleared = await setup.waitForFrame((f) => !f.includes("Việc cần làm") && !f.includes("CHƯA được xác nhận"))
   expect(cleared).not.toContain("[>]")
 })
 
@@ -2613,6 +2809,62 @@ async function waitFrameMs(pred: (frame: string) => boolean) {
   throw new Error(`frame never matched ${pred}:\n${frame}`)
 }
 
+test("idle compaction (33d): a big conversation left idle is summarized once; never while a subagent works or auto-compaction is off", async () => {
+  const saved = { provider: state.provider, model: state.model, idleCompactMinTokens: state.idleCompactMinTokens, idleCompactMinutes: state.idleCompactMinutes }
+  await setKey("groq", "gsk-good-key")
+  await setup.mockInput.typeText("/new")
+  setup.mockInput.pressEnter()
+  await setup.waitFor(() => state.history.length === 0)
+  expect(idleTimerForTests().armed).toBe(false) // nothing to compact yet
+  setState({ provider: "groq", model: "test-model" })
+  try {
+    for (const text of ["rảnh một", "rảnh hai", "rảnh ba"]) {
+      await setup.mockInput.typeText(text)
+      setup.mockInput.pressEnter()
+      await setup.waitFor(() => state.lines.some((l) => l.kind === "user" && l.text === text))
+      await waitMcp(() => !state.streaming)
+    }
+    // Armed after the turn; a small conversation is left alone when it fires.
+    await setup.waitFor(() => idleTimerForTests().armed)
+    expect(idleTimerForTests().fireNow()).toBe(true)
+    await new Promise((r) => setTimeout(r, 20))
+    expect(state.lines.some((l) => l.kind === "compact")).toBe(false)
+
+    // Over the floor (lowered for the test) while a background subagent still works: wait.
+    // A small conversation waits for the next turn; changing the setting (/config) re-arms at once.
+    setState({ idleCompactMinTokens: 1_000, contextTokens: 5_000, idleCompactMinutes: 30 })
+    const busy = { id: "ag-idle", type: "nghien-cuu", description: "Nền", prompt: "", background: true, model: "", status: "running" as const, createdAt: Date.now(), startedAt: Date.now(), tools: [], toolCount: 0, usage: { input: 0, output: 0 }, text: "" }
+    setState("agents", reconcile({ [busy.id]: busy }))
+    await setup.waitFor(() => idleTimerForTests().armed)
+    idleTimerForTests().fireNow()
+    await new Promise((r) => setTimeout(r, 20))
+    expect(state.lines.some((l) => l.kind === "compact")).toBe(false)
+    expect(idleTimerForTests().armed).toBe(true) // tries again after another idle spell
+    setState("agents", reconcile({}))
+
+    // Auto-compaction off: idle compaction is off too (nothing pending).
+    setState("autoCompactOff", true)
+    expect(idleTimerForTests().fireNow()).toBe(false)
+    await new Promise((r) => setTimeout(r, 20))
+    expect(state.lines.some((l) => l.kind === "compact")).toBe(false)
+    setState("autoCompactOff", false)
+
+    await setup.waitFor(() => idleTimerForTests().armed)
+    idleTimerForTests().fireNow()
+    await waitMcp(() => state.lines.some((l) => l.kind === "compact") && !state.streaming)
+    expect(state.lines.some((l) => l.kind === "info" && l.text.startsWith(`Bạn vắng ${state.idleCompactMinutes} phút`))).toBe(true)
+    expect(JSON.stringify(state.history[0])).toContain("tom_tat_hoi_thoai")
+    // Once per idle spell: not armed again until the next turn.
+    await new Promise((r) => setTimeout(r, 20))
+    expect(idleTimerForTests().armed).toBe(false)
+    const frame = await setup.waitForFrame((f) => f.includes("Đã nén hội thoại"))
+    show(frame)
+  } finally {
+    setState({ ...saved, autoCompactOff: false })
+    setState("agents", reconcile({}))
+  }
+})
+
 test("prompt: a message typed during /compact is sent once the compaction ends", async () => {
   // Enough turns that /compact has something to summarize (the last two stay verbatim).
   for (const text of ["nén một", "nén hai", "nén ba"]) {
@@ -2671,8 +2923,11 @@ test("subagents: parallel spawns are one line in the transcript and one row each
     show(frame)
     expect(frame).not.toContain("⎿ Xong (0 tool")
     setState("expandTools", true)
-    frame = await setup.waitForFrame((f) => /├─ nghien-cuu \(Định giá FPT\)[^\n]*\n\s*│  ⎿ Xong \(0 tool · /.test(f))
-    expect(frame).toMatch(/└─ nghien-cuu \(Định giá CMG\)[^\n]*\n\s*⎿ Xong \(0 tool · /)
+    frame = await setup.waitForFrame((f) => /└─ nghien-cuu \(Định giá CMG\)[^\n]*\n\s*⎿ Xong \(0 tool · /.test(f))
+    // Each expanded row carries its whole brief (several lines): the first row is one page up.
+    setup.mockInput.pressKey("\x1b[5~") // PgUp
+    await setup.waitForFrame((f) => /├─ nghien-cuu \(Định giá FPT\)[^\n]*\n\s*│  ⎿ Xong \(0 tool · /.test(f))
+    setup.mockInput.pressKey("\x1b[6~") // PgDn: back down
     // The parent model got both reports with their trailers.
     const results = state.history.filter((m) => m.role === "tool").slice(-2)
     for (const r of results) expect(JSON.stringify(r.content)).toContain("BÁO-CÁO-CON")
@@ -2972,6 +3227,18 @@ test("/watchlist: edits by command, opens a list and shows live quotes from the 
   }
 })
 
+test("/watchlist <a name that is no list>: the lists open and r is a letter of their filter", async () => {
+  await setup.mockInput.typeText("/watchlist khong-co")
+  setup.mockInput.pressEnter()
+  await setup.waitForFrame((f) => f.includes("Watchlist cá nhân · ") && f.includes("gõ để lọc"))
+  await setup.mockInput.typeText("r")
+  const frame = await setup.waitForFrame((f) => f.includes("› r"))
+  show(frame)
+  // One esc closes the dialog: there is no list view to step back from.
+  setup.mockInput.pressEscape()
+  await setup.waitFor(() => state.dialog === undefined)
+})
+
 test("ultradesk: the keyword is hinted while typed; /desk on|off shows on the mode line; /desk without runs", async () => {
   await setup.mockInput.typeText("ultradesk so sánh FPT")
   let frame = await setup.waitForFrame((f) => f.includes("ultradesk: yêu cầu này được chạy playbook"))
@@ -2993,6 +3260,104 @@ test("ultradesk: the keyword is hinted while typed; /desk on|off shows on the mo
   show(frame)
   setup.mockInput.pressEscape()
   await setup.waitFor(() => state.dialog === undefined)
+})
+
+test("/desk: a run of an earlier sitting (only on disk) resumes with ctrl+r from its detail view, as the text there says", async () => {
+  const { DeskJournal } = await import("../src/core/desk/journal")
+  const { currentSession } = await import("../src/tui/session")
+  const id = "dk-disk01"
+  const journal = new DeskJournal(currentSession().dir, id)
+  await journal.writeMeta({
+    format: 1,
+    id,
+    playbook: "sang-loc",
+    version: "1",
+    args: { tickers: ["FPT", "VCB"] },
+    size: "small",
+    status: "partial",
+    cut: "quota",
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    counters: { agents: 1, cached: 0, requests: 3, input: 10, output: 5 },
+  })
+  const resumed: string[] = []
+  const real = runtime.desk.resume.bind(runtime.desk)
+  runtime.desk.resume = async (runId: string) => {
+    resumed.push(runId)
+    throw new Error("không chạy thật trong test")
+  }
+  try {
+    await setup.mockInput.typeText("/desk")
+    setup.mockInput.pressEnter()
+    await setup.waitForFrame((f) => f.includes(`sang-loc · ${id}`))
+    setup.mockInput.pressEnter()
+    const frame = await setup.waitForFrame((f) => f.includes(`Ultradesk · ${id}`) && f.includes("Run của lần mở trước"))
+    show(frame)
+    expect(frame).toContain("ctrl+r chạy tiếp · esc")
+    setup.mockInput.pressKey("r", { ctrl: true })
+    await setup.waitFor(() => resumed.length > 0)
+    expect(resumed).toEqual([id])
+  } finally {
+    runtime.desk.resume = real
+    setup.mockInput.pressEscape()
+    await setup.waitFor(() => state.dialog === undefined)
+    await rm(journal.dir, { recursive: true, force: true })
+  }
+})
+
+test("/desk: ctrl+p/ctrl+x act on the run and leave the filter alone; a plain p or x only filters the agents", async () => {
+  const agent = (key: string, label: string) => ({ key, label, phase: "Thu thập", type: "phan-tich", status: "running" as const, requests: 1, tokens: { input: 10, output: 5 } })
+  const run = {
+    id: "dk-keys01",
+    playbook: "phan-bien",
+    version: "1",
+    args: {},
+    size: "small" as const,
+    status: "running" as const,
+    phases: [{ title: "Thu thập", total: 2, done: 0, failed: 0 }],
+    agents: [agent("k1", "thẻ điểm FPT"), agent("k2", "phản biện HPG")],
+    logs: [],
+    createdAt: Date.now(),
+    counters: { agents: 2, cached: 0, requests: 2, input: 10, output: 5 },
+    sessionId: undefined,
+  }
+  const calls: string[] = []
+  const real = { pause: runtime.desk.pause, stop: runtime.desk.stop, resume: runtime.desk.resume }
+  runtime.desk.pause = (id: string) => (calls.push(`pause ${id}`), true)
+  runtime.desk.stop = (id: string) => (calls.push(`stop ${id}`), true)
+  runtime.desk.resume = async (id: string) => {
+    calls.push(`resume ${id}`)
+    throw new Error("không chạy thật trong test")
+  }
+  setState("deskRuns", "dk-keys01", run)
+  try {
+    await setup.mockInput.typeText("/desk")
+    setup.mockInput.pressEnter()
+    let frame = await setup.waitForFrame((f) => f.includes("Ultradesk · dk-keys01") && f.includes("phản biện HPG"))
+    expect(frame).toContain("ctrl+p tạm dừng · ctrl+x dừng")
+    // Plain letters are the filter's: nothing happens to the run.
+    await setup.mockInput.typeText("px")
+    frame = await setup.waitForFrame((f) => f.includes("› px"))
+    expect(calls).toEqual([])
+    setup.mockInput.pressBackspace()
+    setup.mockInput.pressBackspace()
+    await setup.waitForFrame((f) => f.includes("gõ để lọc"))
+    // ctrl+p, ctrl+x: the run acts, the filter stays empty. ctrl+r does nothing on a live run.
+    setup.mockInput.pressKey("p", { ctrl: true })
+    setup.mockInput.pressKey("x", { ctrl: true })
+    setup.mockInput.pressKey("r", { ctrl: true })
+    await setup.waitFor(() => calls.length >= 2)
+    frame = await setup.waitForFrame((f) => f.includes("Ultradesk · dk-keys01"))
+    show(frame)
+    expect(calls).toEqual(["pause dk-keys01", "stop dk-keys01"])
+    expect(frame).toContain("gõ để lọc")
+    expect(frame).toContain("phản biện HPG")
+  } finally {
+    Object.assign(runtime.desk, real)
+    setup.mockInput.pressEscape()
+    await setup.waitFor(() => state.dialog === undefined)
+    setState("deskRuns", reconcile({}))
+  }
 })
 
 test("ultradesk card: ←→ change the size and its cost, a large run warns, enter runs with what was chosen", async () => {

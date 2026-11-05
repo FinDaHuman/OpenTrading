@@ -63,6 +63,9 @@ for (const target of targets) {
     entrypoints: ["./src/index.tsx", workerFile],
     files: { [workerFile]: worker },
     plugins: [createSolidTransformPlugin()],
+    // OpenTUI loads these only when OPENTUI_LIBC=musl; our Linux binaries target glibc, and
+    // `bun install` skips musl packages on a glibc runner, so they would not resolve.
+    external: ["@opentui/core-linux-x64-musl", "@opentui/core-linux-arm64-musl"],
     conditions: ["bun", "node"],
     format: "esm",
     minify: true,

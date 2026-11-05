@@ -70,7 +70,8 @@ export function shellTool(workspace: Workspace, opts: { shell?: ShellInfo } = {}
       const { command } = input as ShellInput
       if (typeof command !== "string") return undefined
       const cwd = cwdOf(input as ShellInput)
-      if (!workspace.contains(cwd)) return `outside:${cwd}`
+      // The session's temp folder is a fine place to run a script; the command still asks.
+      if (!workspace.contains(cwd) && !workspace.inScratch(cwd)) return `outside:${cwd}`
       if (mentionsSensitive(command)) return `protected:${command.trim()}`
       const prefix = commandPrefix(command)
       return prefix && !startsInterpreter(command) ? `cmd:${prefix}` : `cmd!${command.trim()}`

@@ -151,6 +151,14 @@ export function say(text: string, level: NoticeLevel = "info", ms?: number) {
   notify({ key: "say", text, level, priority: "immediate", timeoutMs, toast: false })
 }
 
+/**
+ * Run a save started from a key press and say why it failed (a config file that cannot be
+ * read is refused, not overwritten); a rejection left unhandled would end the TUI.
+ */
+export function saySaveFailure(work: Promise<unknown>): void {
+  work.catch((error) => say(`Không lưu được: ${error instanceof Error ? error.message : String(error)}`, "error"))
+}
+
 /** Remove a notification wherever it is (footer, queue or toast). */
 export function dismiss(key: string) {
   queue = queue.filter((q) => q.key !== key)

@@ -41,6 +41,7 @@
   - Retry xong thì dòng trở lại bình thường, không để lại gì trong lịch sử chat.
   - Nếu hết số lần thử thì lỗi của lượt mới được ghi vào lịch sử.
 - Lượt dài từ 5 giây trở lên kết thúc bằng `✻ Xong sau 1m 23s` trong lịch sử.
+- Khi thư mục tạm của dự án vượt ngưỡng (mặc định 1 GB), ngay dưới câu trả lời có dòng `▲ Thư mục tạm của dự án đã 1,3 GB (phiên này 820 MB, 9 phiên): <đường dẫn> · /scratch để xem, /scratch clear để xoá các phiên khác`. Chi tiết ở [permissions.md](permissions.md#thư-mục-tạm-của-phiên-scratchpad).
 
 ## Câu trả lời đang stream
 

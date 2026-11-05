@@ -20,12 +20,17 @@ export function ConnectDialog() {
     const value = key().trim()
     if (!id || !value || saving()) return
     setSaving(true)
-    await setKey(id, value)
-    setState("connected", await connectedProviders())
-    // First provider becomes the default; later ones just add their models to /model.
-    if (!state.provider) {
-      await saveConfig({ provider: id })
-      setState("provider", id)
+    try {
+      await setKey(id, value)
+      setState("connected", await connectedProviders())
+      // First provider becomes the default; later ones just add their models to /model.
+      if (!state.provider) {
+        await saveConfig({ provider: id })
+        setState("provider", id)
+      }
+    } catch (error) {
+      setSaving(false)
+      return say(`Không lưu được: ${error instanceof Error ? error.message : String(error)}`, "error")
     }
     say(`Đã lưu key ${providerName(id)} (${maskKey(value)}) vào ~/.opentrading/auth.json`, "success", 6000)
     setState({ modelFilter: providerName(id), dialog: "model" })

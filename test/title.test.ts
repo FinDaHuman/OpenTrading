@@ -17,6 +17,7 @@ const CATALOG = {
     models: {
       big: { id: "big", name: "Big", tool_call: true, modalities: text },
       small: { id: "small", name: "Small", tool_call: true, modalities: text },
+      thinker: { id: "thinker", name: "Thinker", tool_call: true, reasoning: true, modalities: text },
     },
   },
 }
@@ -74,4 +75,11 @@ test("the title uses the side model (webModel) with room for a thinking model", 
   await saveConfig({ webModel: undefined })
   await generateTitle("Giá FPT")
   expect(sent.at(-1)!.model).toBe("big")
+})
+
+test("a reasoning model gets room for its reasoning on top of the title's 256 tokens (30/10)", async () => {
+  await saveConfig({ provider: "groq", model: "thinker", webModel: undefined })
+  await generateTitle("Giá FPT")
+  expect(sent.at(-1)!.model).toBe("thinker")
+  expect(sent.at(-1)!.max_tokens ?? sent.at(-1)!.max_completion_tokens).toBe(256 + 2048)
 })

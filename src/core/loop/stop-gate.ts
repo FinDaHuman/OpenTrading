@@ -1,0 +1,233 @@
+import type { StepResult, ToolSet } from "ai"
+import { hasOpenTodos, LEGACY_TODO_PREFIX, TODO_PREFIX, TODO_WRITE, type Todo } from "../tools/todos"
+
+/**
+ * When a turn may end. Every harness read (Claude Code, Codex, opencode, Gemini CLI) ends a
+ * turn when the model calls no tool; what differs is the gate at that point. This one is code
+ * only — no model call judges the answer (quota) — and spends a request only on a final step
+ * that is already broken, never on a valid answer.
+ *
+ * Seen 29/10 with gemini-3.1-flash-lite: a turn whose whole answer was
+ * "*(Đã hoàn thành các việc cần làm)*" (the model echoing its own todo status) ended as done.
+ */
+
+/** Recovery requests a turn may spend at most: the gate never loops. */
+export const MAX_RECOVERIES = 2
+
+export type RecoveryKind = "malformed" | "length" | "empty" | "promise" | "fragment"
+
+/** What the last request's final step produced. */
+export interface LastStep {
+  /** Text of that step only (an earlier step's preamble is not an answer). */
+  text: string
+  /** Tools it called. */
+  toolNames: string[]
+  /** The SDK's unified finish reason (stop, length, content-filter…). */
+  finish?: string
+  /** The provider's own (Gemini: MALFORMED_FUNCTION_CALL, SAFETY…). */
+  rawFinish?: string
+  /** It streamed reasoning. */
+  reasoned?: boolean
+  /** The step came right after tool results. */
+  afterTools?: boolean
+  /** A tool already ran in this turn (a fragment is only judged on a turn without any). */
+  toolsInTurn?: boolean
+}
+
+export type Verdict =
+  | { action: "accept" }
+  | { action: "continue"; kind: RecoveryKind; nudge: string; toolChoice: "auto" | "none" }
+  /** Broken and no recovery left (or none would help): end the turn and say so. */
+  | { action: "give-up"; kind: RecoveryKind | "blocked" }
+
+/** A call the model meant but sent malformed, or a call where none was allowed. */
+const MALFORMED = /^(MALFORMED_FUNCTION_CALL|UNEXPECTED_TOOL_CALL)$/i
+/** Stopped by the provider's filters: asking again gets the same answer. */
+const BLOCKED = /^(SAFETY|RECITATION|BLOCKLIST|PROHIBITED_CONTENT|SPII|IMAGE_SAFETY|LANGUAGE)$/i
+
+export const RESCUE_MALFORMED =
+  "<nhac_nho>\nLời gọi tool vừa rồi sai định dạng nên không chạy. Gọi lại tool đúng tham số, hoặc trả lời người dùng nếu đã đủ dữ liệu.\n</nhac_nho>"
+export const RESCUE_LENGTH =
+  "<nhac_nho>\nCâu trả lời bị cắt vì chạm giới hạn độ dài output. Viết tiếp ngay từ chỗ dừng: không xin lỗi, không tóm tắt lại phần đã viết.\n</nhac_nho>"
+/** Gemini CLI's nudge after an empty answer: the answer, or a tool when data is missing. */
+export const RESCUE_EMPTY =
+  "<nhac_nho>\nBạn chưa viết câu trả lời nào cho người dùng. Trả lời ngay dựa trên dữ liệu đã có, hoặc gọi tool nếu còn thiếu dữ liệu. Không viết dòng trạng thái việc cần làm.\n</nhac_nho>"
+export const RESCUE_PROMISE =
+  "<nhac_nho>\nBước trước kết thúc mà không gọi tool nào. Thiếu dữ liệu thì gọi tool ngay trong bước này; đủ rồi thì trả lời người dùng.\n</nhac_nho>"
+export const RESCUE_FRAGMENT =
+  "<nhac_nho>\nTrả lời trực tiếp tin nhắn mới nhất của người dùng ở trên; gọi tool nếu cần dữ liệu.\n</nhac_nho>"
+/** Tools off (it brought 2.5-flash-lite's empty answers back). */
+export const RESCUE_EMPTY_FINAL = "Hãy trả lời câu hỏi của người dùng dựa trên kết quả tool ở trên. Không gọi thêm tool."
+
+export function judgeStop(last: LastStep, done: readonly RecoveryKind[]): Verdict {
+  // Still calling tools: the step cap ended the run, and its summary step has its own rules.
+  if (last.toolNames.some((name) => name !== TODO_WRITE)) return { action: "accept" }
+  const raw = last.rawFinish ?? ""
+  const empty = isEmptyAnswer(last.text)
+  const left = MAX_RECOVERIES - done.length
+  const used = (kind: RecoveryKind) => done.filter((k) => k === kind).length
+
+  if (empty && (BLOCKED.test(raw) || last.finish === "content-filter")) return { action: "give-up", kind: "blocked" }
+  if (MALFORMED.test(raw) && empty) {
+    if (left > 0 && used("malformed") === 0) return { action: "continue", kind: "malformed", nudge: RESCUE_MALFORMED, toolChoice: "auto" }
+    return { action: "give-up", kind: "malformed" }
+  }
+  if (!empty && last.finish === "length") {
+    // A cut answer is still an answer: out of budget, keep it as it is.
+    if (left > 0) return { action: "continue", kind: "length", nudge: RESCUE_LENGTH, toolChoice: "auto" }
+    return { action: "accept" }
+  }
+  if (empty) {
+    if (left <= 0) return { action: "give-up", kind: "empty" }
+    // Right after tool results the data is there: tools off first, the fix that brought
+    // 2.5-flash-lite's empty answers back. Otherwise the model may still lack data, so it may
+    // call a tool first (Gemini CLI). The second try is the other one.
+    const off = !!last.afterTools !== (used("empty") > 0)
+    return off
+      ? { action: "continue", kind: "empty", nudge: RESCUE_EMPTY_FINAL, toolChoice: "none" }
+      : { action: "continue", kind: "empty", nudge: RESCUE_EMPTY, toolChoice: "auto" }
+  }
+  // Said it would fetch something and stopped without calling a tool: send it back once, tools on.
+  if (last.toolNames.length === 0 && (last.finish ?? "stop") === "stop" && isPromise(last.text)) {
+    if (left > 0 && used("promise") === 0) return { action: "continue", kind: "promise", nudge: RESCUE_PROMISE, toolChoice: "auto" }
+  }
+  // Continued an earlier sentence instead of answering the new message: send it back once.
+  // After a cut answer the continuation starts mid-sentence on purpose.
+  const continuing = done.includes("length")
+  if (last.toolNames.length === 0 && (last.finish ?? "stop") === "stop" && !last.toolsInTurn && !continuing && isFragment(last.text)) {
+    if (left > 0 && used("fragment") === 0) return { action: "continue", kind: "fragment", nudge: RESCUE_FRAGMENT, toolChoice: "auto" }
+  }
+  return { action: "accept" }
+}
+
+/**
+ * Lines a model writes when it echoes the todo tool instead of answering: the tool's result
+ * prefix, the TUI's one-line label, "(Đã hoàn thành các việc cần làm)".
+ */
+const ECHO_LINE = new RegExp(
+  `^(${escape(TODO_PREFIX)}|${escape(LEGACY_TODO_PREFIX)}|Cập nhật việc cần làm|Đã hoàn thành (hết |tất cả |toàn bộ )?(các )?việc cần làm|Đã đóng (danh sách )?việc cần làm)`,
+  "i",
+)
+/** A rendered todo item (renderTodos): only dropped next to an echoed status line. */
+const TODO_ITEM = /^\[[x> -]\] /
+
+function escape(text: string) {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+}
+
+/** Zero-width characters and HTML comments carry no answer (Gemini CLI strips them too). */
+function invisible(text: string) {
+  return text.replace(/[​-‍﻿‎‏]/g, "").replace(/<!--[\s\S]*?-->/g, "")
+}
+
+/** A line stripped of markdown emphasis and wrapping parentheses. */
+const bare = (line: string) => line.normalize("NFC").trim().replace(/^[\s*_()]+|[\s*_()]+$/g, "")
+
+/** The text without echoed todo status lines (and the item list printed under one). */
+export function stripEchoes(text: string): string {
+  const lines = text.split("\n")
+  if (!lines.some((line) => ECHO_LINE.test(bare(line)))) return text
+  const kept = lines.filter((line) => {
+    const b = bare(line)
+    return !ECHO_LINE.test(b) && !TODO_ITEM.test(line.trim())
+  })
+  return kept.join("\n").replace(/\n{3,}/g, "\n\n").trim()
+}
+
+/** Verbs of fetching or working that a promise names. */
+const ACTS =
+  "lấy|tải|nạp|kiểm tra|tra cứu|tra|xem|tìm|gọi|phân tích|tổng hợp|truy vấn|so sánh|vẽ|đọc|thu thập|cập nhật|tính|rà soát|đối chiếu|chạy|thử|sử dụng|dùng|gửi|bổ sung|nghiên cứu"
+
+/** What a fetch is about: a promise names data or tools, advice to the user does not. */
+const OBJECTS = "dữ liệu|số liệu|thông tin|tool|công cụ|skill|chúng|nguồn|báo cáo|BCTC|giá|kết quả"
+
+/** Prices, percentages and amounts: a text carrying them already answers something. */
+const FIGURES = /\d{1,3}([.,]\d{3})+|\d+([.,]\d+)?\s*(%|đ(?!\p{L})|đồng|tỷ|triệu|nghìn|lần)/u
+
+/** A promise to act: "mình sẽ lấy…", "để mình kiểm tra", "vui lòng chờ", "let me…", "I'll…". */
+// JS's \b only knows ASCII letters ("Để", "thử" break it): word edges are spelled out.
+const B = String.raw`(?<![\p{L}\p{N}_])`
+const E = String.raw`(?![\p{L}\p{N}_])`
+const INTENT = new RegExp(
+  [
+    String.raw`${B}(mình|tôi|em)\s+(sẽ|đang|xin phép|cần|tiến hành)\s+(đi\s+)?(${ACTS})${E}`,
+    // Subject-less, at the start of the sentence or clause, about data or tools ("Đang lấy dữ
+    // liệu…", "giờ gọi chúng…", "Thử các nguồn khác"): advice to the user ("Thử đặt lệnh…",
+    // "Tiếp tục nghiên cứu ngành…") names no data or tool.
+    String.raw`(^|[,;]\s*)(đang|bây giờ|giờ|tiếp theo|trước tiên|bắt đầu)\s+(cần\s+)?(${ACTS})${E}.{0,30}${B}(${OBJECTS})${E}`,
+    String.raw`(^|[,;]\s*)thử\s+(lại|các nguồn|nguồn|tool|công cụ|cách khác|dữ liệu|${B}[A-Z]{3,}${E})`,
+    String.raw`(^|[,;]\s*)(gọi thêm|gọi song song|gọi cùng lúc)${E}`,
+    String.raw`${B}(để|chờ|đợi)\s+(mình|tôi|em)${E}`,
+    String.raw`${B}vui lòng (chờ|đợi)${E}`,
+    String.raw`${B}tiếp theo,?\s+(mình|tôi|em)${E}`,
+    String.raw`${B}let me${E}`,
+    String.raw`${B}I('ll| will| am going to)${E}`,
+    String.raw`${B}next,? I${E}`,
+  ].join("|"),
+  "iu",
+)
+/** The model offers or asks: the user speaks next, so it is not a broken promise. */
+const OFFER = /\?\s*$|^(nếu bạn|nếu cần|bạn có muốn|bạn muốn|if you|would you|do you want)/iu
+/** Above this, the text is an answer that happens to end on a plan, not a bare promise. */
+export const PROMISE_MAX_CHARS = 400
+
+/**
+ * The step only promised to act and stopped: short, no table, and its last sentence says the
+ * model is about to do something (or it ends on ":"), without offering it to the user. Gemini
+ * CLI asks a model "who speaks next" for this; here it is a check in code (no request).
+ */
+export function isPromise(text: string): boolean {
+  const body = stripEchoes(invisible(text)).trim()
+  if (!body || body.length > PROMISE_MAX_CHARS || /^\s*\|.*\|\s*$/m.test(body) || FIGURES.test(body)) return false
+  const lastLine = bare(body.split("\n").filter((l) => l.trim()).at(-1) ?? "")
+  if (OFFER.test(lastLine)) return false
+  if (/:\s*$/.test(lastLine)) return true
+  const sentences = lastLine.split(/(?<=[.!…])\s+/).filter((s) => s.trim())
+  return INTENT.test(sentences.at(-1) ?? lastLine)
+}
+
+/** Above this, the text is an answer of its own, not a stray continuation. */
+export const FRAGMENT_MAX_CHARS = 300
+
+/**
+ * The whole answer is the tail of a sentence: a space then a lowercase word, or a comma,
+ * semicolon, colon, closing bracket or ellipsis first. Seen 30/10 with gemini-3.1-flash-lite,
+ * which answered a new question with " hoặc FPT không, hoặc bạn muốn…" or ", bạn có thể phân
+ * tích thêm cho mình…" (continuing its previous closing line, see loop/history-shape.ts). A
+ * real answer starts a sentence, a ticker, a number or markdown, or a line ("\n\nDưới đây…").
+ */
+export function isFragment(text: string): boolean {
+  const raw = invisible(text).normalize("NFC")
+  const body = stripEchoes(raw).trim()
+  if (!body || body.length > FRAGMENT_MAX_CHARS) return false
+  return /^[ \t]+\p{Ll}/u.test(raw) || /^[,;:)…]/u.test(body)
+}
+
+/** No answer in it: nothing visible once echoed todo lines are gone. */
+export function isEmptyAnswer(text: string): boolean {
+  return stripEchoes(invisible(text)).trim() === ""
+}
+
+function resultText(output: unknown): string {
+  if (typeof output === "string") return output
+  const text = output && typeof output === "object" && "output" in output ? (output as { output: unknown }).output : undefined
+  return typeof text === "string" ? text : ""
+}
+
+/**
+ * Stop condition: the step wrote the answer and closed the todo list in the same step. Without
+ * it the SDK runs one more request after todo_write, which comes back empty (29/10). A step
+ * that opens a list ("Để mình lấy dữ liệu…" + todo_write with pending items) goes on.
+ */
+export function answeredAndClosedTodos({ steps }: { steps: StepResult<ToolSet>[] }): boolean {
+  const step = steps.at(-1)
+  // An echoed status line is no answer: the SDK runs the next step as it would anyway.
+  if (!step || isEmptyAnswer(step.text) || step.toolCalls.length === 0) return false
+  return step.toolCalls.every((call) => {
+    if (call.toolName !== TODO_WRITE) return false
+    // The registry wraps a tool's text as { output } (ToolResult).
+    const ok = step.toolResults.some((r) => r.toolCallId === call.toolCallId && resultText(r.output).startsWith(TODO_PREFIX))
+    const todos = (call.input as { todos?: Todo[] } | undefined)?.todos
+    return ok && Array.isArray(todos) && !hasOpenTodos(todos)
+  })
+}
