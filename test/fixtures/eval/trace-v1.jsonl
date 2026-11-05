@@ -10,4 +10,4 @@
 {"type":"tool_result","q":"bad","rep":1,"call_id":"c2","ok":true,"visible":"{\"units\":{\"o, h, l, c, last, high, low\":\"nghìn đồng/cổ phiếu (64,27 = 64.270 đ)\"},\"data\":{\"symbol\":\"FPT\",\"candles\":[{\"t\":\"2026-10-09\",\"c\":64.27}]}}","duration_ms":100}
 {"type":"answer","q":"bad","rep":1,"text":"FPT đóng cửa 64,27 đ, tăng 3,5% và P/E 12,3 lần.","outcome":"completed","unanswered":false,"recoveries":[],"data_gaps":[],"model_steps":2,"requests":3,"input_tokens":100,"output_tokens":20,"duration_ms":3000}
 {"type":"question","q":"cut","rep":1,"group":"B","question":"Tăng trưởng LNST VCB 2025?","now":"2026-10-11T10:00:00+07:00"}
-{"type":"answer","q":"cut","rep":1,"text":"","outcome":"aborted","unanswered":false,"recoveries":[],"data_gaps":[],"model_steps":0,"requests":0,"input_tokens":0,"output_tokens":0,"duration_ms":5}
+{"type":"answer","q":"cut","rep":1,"text":"","outcome":"aborted","abort":"cap","unanswered":false,"recoveries":[],"data_gaps":[],"model_steps":0,"requests":0,"input_tokens":0,"output_tokens":0,"duration_ms":5}

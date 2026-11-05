@@ -48,7 +48,14 @@ Every model request is counted at the provider's fetch and added to `<home>/usag
 bun scripts/eval/score.ts trace.jsonl --labels set.json --against other.jsonl --out score.json
 ```
 
-Labels sit beside each question in the same file, as `expected`; the runner never sends them. `kind` is `number` (`value` in plain units and `tolerance_pct`), `order` (`items`), `contains` (`any`) or `no_figures`. Group F has no label: a report needs human rubric scoring.
+Labels sit beside each question in the same file, as `expected`; the runner never sends them. Group F has no label: a report needs human rubric scoring.
+
+| `kind` | Correct when |
+|---|---|
+| `number` | A figure equals `value` (plain units, so `2.5e9` for "2,5 tỷ") within `tolerance_pct`. Without `line_has` this means only that the answer contains the value, which a table can do by chance. With it, only lines holding that text count, such as a date. |
+| `order` | `items` appear in this order. |
+| `contains` | One of `any` appears. |
+| `no_figures` | The answer states no figure. For data that does not exist: an unpublished period, an unknown ticker. Not for "nên mua không", where scenarios with fetched figures are the right answer. |
 
 | Measure | How it is read |
 |---|---|
@@ -60,7 +67,7 @@ Labels sit beside each question in the same file, as `expected`; the runner neve
 
 - Intervals are 95% bootstrap over questions, because repeats of a question are not independent. They are seeded, so a trace always gives the same interval.
 - `--against` pairs two traces on questions, with the majority of repeats as each verdict, and gives an exact McNemar p.
-- An aborted or unfinished attempt is counted as unscored, not as wrong.
+- An attempt stopped by the request cap or by a killed run is counted as unscored. An attempt that timed out is wrong, and the report counts them: a harness that hangs on hard questions must not gain from it.
 - A figure counts as traced at scales of 100 and powers of 1000, so "24,1%" matches `0.241` and a wrong figure can match by chance; a factor of 10 is not accepted. Untraced is a lower bound on invention, and a traced figure can still be the wrong one, which is what Correct is for.
 
 The reader refuses a trace of another version or with a broken line. A new optional field needs no new version; removing or renaming a field does, and `test/fixtures/eval/trace-v1.jsonl` fails until it is done on purpose.

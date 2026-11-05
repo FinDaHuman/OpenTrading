@@ -4,8 +4,11 @@ import { answerFigures, plainValues, sourceNumbers, thousandDongPrices, tracesTo
 import type { Attempt, Trace } from "./read-trace"
 
 const EXPECTED = z.discriminatedUnion("kind", [
-  /** One value, in plain units (2.5e9 for "2,5 tỷ"), within `tolerance_pct`. */
-  z.object({ kind: z.literal("number"), value: z.number(), tolerance_pct: z.number().min(0) }),
+  /**
+   * One value, in plain units (2.5e9 for "2,5 tỷ"), within `tolerance_pct`. Any figure of the
+   * answer counts, so a table holds it by chance; `line_has` limits it to lines with this text.
+   */
+  z.object({ kind: z.literal("number"), value: z.number(), tolerance_pct: z.number().min(0), line_has: z.string().optional() }),
   /** Names that must appear in this order (a ranking). */
   z.object({ kind: z.literal("order"), items: z.array(z.string()).min(2) }),
   /** At least one of these strings (a period, a name). */
@@ -28,7 +31,8 @@ export function parseLabels(text: string) {
 function isCorrect(expected: Expected, text: string, figures: Figure[]) {
   if (expected.kind === "number") {
     const margin = (Math.abs(expected.value) * expected.tolerance_pct) / 100
-    return figures.some((f) => plainValues(f).some((v) => Math.abs(v - expected.value) <= margin))
+    const anchored = expected.line_has === undefined ? figures : figures.filter((f) => f.line.includes(expected.line_has!))
+    return anchored.some((f) => plainValues(f).some((v) => Math.abs(v - expected.value) <= margin))
   }
   if (expected.kind === "contains") return expected.any.some((s) => text.includes(s))
   if (expected.kind === "no_figures") return figures.every((f) => f.derived)
@@ -54,6 +58,7 @@ export interface Score {
   tokens: number
   ms: number
   replayMisses: number
+  timedOut: boolean
 }
 
 /** What the model could have read: what it saw, and for subagents what their tools returned. */
@@ -67,8 +72,9 @@ function received(attempt: Attempt) {
 
 export function scoreAttempt(attempt: Attempt, labels: Map<string, Expected>): Score | undefined {
   const { answer } = attempt
-  // A cut-off question says nothing about the harness: it is reported, not scored.
-  if (!answer || answer.outcome === "aborted") return undefined
+  // Cut off by the run's own request cap, or by a killed run: nothing about the harness. A
+  // timeout is the harness failing to answer, and scores as wrong.
+  if (!answer || answer.abort === "cap") return undefined
   const figures = answerFigures(answer.text)
   const numbers = received(attempt)
   const prices = new Set(attempt.raws.flatMap((r) => [...thousandDongPrices(r.raw)]))
@@ -87,6 +93,7 @@ export function scoreAttempt(attempt: Attempt, labels: Map<string, Expected>): S
     tokens: answer.input_tokens + answer.output_tokens,
     ms: answer.duration_ms,
     replayMisses: attempt.raws.filter((r) => r.raw.includes(REPLAY_MISS)).length,
+    timedOut: answer.abort === "timeout",
   }
 }
 
@@ -161,6 +168,7 @@ export function summarize(scores: Score[]) {
     tokens: mean(scores.map((s) => s.tokens)),
     seconds: mean(scores.map((s) => s.ms)) / 1000,
     replay_misses: scores.reduce((sum, s) => sum + s.replayMisses, 0),
+    timeouts: scores.filter((s) => s.timedOut).length,
   }
 }
 
@@ -170,7 +178,7 @@ export function scoreTrace(trace: Trace, labels: Map<string, Expected>) {
   return {
     harness: trace.run.harness,
     model: `${trace.run.provider}/${trace.run.model}`,
-    /** Questions asked and not scored, because they were cut off. Not the same as wrong. */
+    /** Questions asked and not scored: stopped by the cap or by a killed run. Not the same as wrong. */
     unscored: trace.attempts.length - scores.length,
     stopped: trace.stopped,
     all: summarize(scores),

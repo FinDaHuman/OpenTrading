@@ -58,6 +58,24 @@ test("sources: JSON stays JSON, so a compact array does not glue its numbers", (
   expect(tracesTo(answerFigures("64,5 đ")[0]!, numbers)).toBe(true)
 })
 
+test("sources: a capped table and a result after a notice keep their numbers apart", () => {
+  const capped = sourceNumbers('[ref r1] {"c":[64.27,64.5,65.1,[... đã lược 900 ký tự ...]66.2,1.5e3]}')
+  for (const n of [64.27, 64.5, 65.1, 66.2, 1500]) expect(capped.has(n)).toBe(true)
+  expect(capped.has(6427.64)).toBe(false)
+  const noticed = sourceNumbers('[Dữ liệu một phần] FPT: thiếu một phần\n[ref r2] {"data":{"c":[64.27,64.5]}}')
+  expect([...noticed].sort()).toEqual([64.27, 64.5])
+})
+
+test("sources: a Vietnamese page keeps its grouped numbers", () => {
+  const numbers = sourceNumbers("Doanh thu đạt 1.234,5 tỷ, biên 24,1%.")
+  expect(numbers.has(1234.5)).toBe(true)
+  expect(numbers.has(24.1)).toBe(true)
+})
+
+test("a fall traces to a negative number, the sign is in the words", () => {
+  expect(tracesTo(answerFigures("giảm 3,2%")[0]!, new Set([-3.2]))).toBe(true)
+})
+
 test("tracing allows rounding and scale, but not a factor of ten", () => {
   const numbers = new Set([0.241, 18.2174, 195])
   expect(tracesTo(answerFigures("ROE 24,1%")[0]!, numbers)).toBe(true)
@@ -69,6 +87,24 @@ test("a thousand-dong price written as dong is a unit error, the right form is n
   const prices = new Set([62.2])
   expect(wrongDong(answerFigures("giá 62,2 đ"), prices).map((f) => f.text)).toEqual(["62,2 đ"])
   expect(wrongDong(answerFigures("giá 62.200 đ"), prices)).toEqual([])
+})
+
+test("a timeout is wrong and counted; a cap stop is not scored", () => {
+  const timedOut = golden.replace('"outcome":"aborted","abort":"cap"', '"outcome":"aborted","abort":"timeout"')
+  const report = scoreTrace(readTrace(timedOut), parseLabels(JSON.stringify([{ id: "cut", expected: { kind: "contains", any: ["x"] } }])))
+  expect(report.unscored).toBe(0)
+  expect(report.scores.find((s) => s.q === "cut")).toMatchObject({ correct: false, timedOut: true })
+  expect(report.all.timeouts).toBe(1)
+})
+
+test("line_has keeps a table from answering by chance", () => {
+  const trace = (answer: string) => golden.split("\n").slice(0, 1).concat(
+    JSON.stringify({ type: "question", q: "x", rep: 1, group: "A", question: "q", now: "n" }),
+    JSON.stringify({ type: "answer", q: "x", rep: 1, text: answer, outcome: "completed", model_steps: 1, input_tokens: 0, output_tokens: 0, duration_ms: 0 }),
+  ).join("\n")
+  const label = parseLabels(JSON.stringify([{ id: "x", expected: { kind: "number", value: 64270, tolerance_pct: 0, line_has: "09/10" } }]))
+  expect(scoreTrace(readTrace(trace("09/10: 64.270 đ\n08/10: 64.500 đ")), label).scores[0]!.correct).toBe(true)
+  expect(scoreTrace(readTrace(trace("09/10: 64.500 đ\n08/10: 64.270 đ")), label).scores[0]!.correct).toBe(false)
 })
 
 test("labels: order, contains and no figures", () => {

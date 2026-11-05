@@ -33,6 +33,7 @@ for (const [name, s] of [["Tất cả", report.all], ...Object.entries(report.gr
   console.log(`  có nguồn        ${percent(s.cited)}`)
   console.log(`  sai đơn vị      ${s.wrong_unit} / ${s.figures} số`)
   console.log(`  mỗi lượt        ${s.requests.toFixed(1)} request · ${Math.round(s.tokens)} token · ${s.seconds.toFixed(1)}s`)
+  if (s.timeouts) console.log(`  quá thời gian   ${s.timeouts} lượt, tính là sai`)
   if (s.replay_misses) console.log(`  thiếu bản ghi   ${s.replay_misses}: không hoàn toàn trên dữ liệu cố định`)
 }
 

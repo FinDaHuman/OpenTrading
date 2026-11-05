@@ -13,6 +13,8 @@ export interface Figure {
   unit?: "%" | "đ" | "tỷ" | "triệu" | "nghìn" | "lần"
   /** Marked as the model's own arithmetic (prompts/citations.md). */
   derived: boolean
+  /** The line it stands on: a label can ask for the figure of one row. */
+  line: string
 }
 
 const B = String.raw`(?<![\p{L}\p{N}])`
@@ -50,13 +52,19 @@ export function answerFigures(text: string): Figure[] {
       if (!token || !isFigure(token, unit)) continue
       const { values, decimals } = readings(token)
       const scaled = unit === "nghìn tỷ" ? values.map((v) => v * 1000) : values
-      figures.push({ text: whole.trim(), values: scaled, decimals, unit: unitOf(unit), derived })
+      figures.push({ text: whole.trim(), values: scaled, decimals, unit: unitOf(unit), derived, line })
     }
   }
   return figures
 }
 
 const REF = /^\[ref r\d+\]\s*/
+/** Notice lines the harness puts before a result: `[Dữ liệu một phần] …`. */
+const NOTICES = /^(?:\[[^\]\n]*\p{L}[^\n]*\n)+(?=\[ref |[[{])/u
+/** The numbers of JSON too long to parse whole, or of plain text. */
+const JSON_NUMBER = /-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/g
+/** Numbers as a Vietnamese web page writes them: 1.234,5 and 24,1. */
+const VIETNAMESE_NUMBER = /\d{1,3}(?:\.\d{3})+(?:,\d+)?|\d+,\d{1,2}(?!\d)/g
 
 function walk(value: unknown, out: Set<number>) {
   if (typeof value === "number") out.add(value)
@@ -70,16 +78,14 @@ function walk(value: unknown, out: Set<number>) {
 /** The numbers of a tool result. JSON is read as JSON, so `[64.27,64.5]` stays two numbers. */
 export function sourceNumbers(text: string): Set<number> {
   const out = new Set<number>()
-  const body = text.replace(REF, "")
-  const start = body.search(/[[{]/)
-  // A notice line may come first, and a capped result does not parse.
-  if (start >= 0) {
-    try {
-      walk(JSON.parse(body.slice(start)), out)
-      return out
-    } catch {}
-  }
-  for (const match of body.matchAll(/\d+(?:\.\d+)?(?:,\d{3})*(?:,\d{1,2}(?!\d))?/g)) for (const value of readings(match[0]).values) out.add(value)
+  const body = text.replace(NOTICES, "").replace(REF, "")
+  try {
+    walk(JSON.parse(body), out)
+    return out
+  } catch {}
+  // A capped result does not parse, and it is the long tables that get capped.
+  for (const match of body.matchAll(JSON_NUMBER)) out.add(Number(match[0]))
+  for (const match of body.matchAll(VIETNAMESE_NUMBER)) for (const value of readings(match[0]).values) out.add(value)
   return out
 }
 
@@ -91,7 +97,8 @@ export function tracesTo(figure: Figure, numbers: Set<number>) {
   const near = 0.5 * 10 ** -figure.decimals + 1e-9
   for (const value of figure.values) {
     for (const number of numbers) {
-      if (SCALES.some((scale) => Math.abs(number * scale - value) <= near)) return true
+      // "giảm 3,2%" writes the sign in words.
+      if (SCALES.some((scale) => Math.abs(Math.abs(number) * scale - value) <= near)) return true
     }
   }
   return false
