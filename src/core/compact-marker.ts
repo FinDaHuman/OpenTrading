@@ -13,7 +13,7 @@ const TODOS_TAG = "viec_can_lam_luu"
 const SKILLS_PREFIX = "Skill đã nạp: "
 
 const COMPACT_HEADER =
-  "Phần đầu cuộc hội thoại đã được nén thành bản tóm tắt ở tin nhắn ngay sau. Số liệu trong tóm tắt giữ nguyên nguồn và thời điểm; cần số mới hơn hoặc chi tiết đã lược thì gọi lại tool."
+  "Phần đầu cuộc hội thoại đã được nén thành bản tóm tắt ở tin nhắn ngay sau. Số liệu trong tóm tắt giữ nguyên nguồn và thời điểm. Chi tiết đã lược: đọc bằng read_result nếu tóm tắt có id; cần số mới hơn thì gọi lại tool."
 
 interface CarriedTodo {
   content: string
