@@ -86,6 +86,10 @@ const COPIED_RESULT_RULES: { name: string; res: RegExp[] }[] = [
 ]
 const ALLOW_RESULT = /<!--\s*lint:allow-result\s*-->/
 
+/** A ticker with an amount on one line: a real figure that would leak into answers as fact. */
+export const issuerFigure = (line: string) =>
+  !ALLOW_RESULT.test(line) && /\b[A-Z]{3}\b[^\n]{0,200}?\d[\d.,]*\s*(?:nghìn tỷ|tỷ|triệu)/.test(line)
+
 /** Tên rule vi phạm trong một dòng references, hoặc null nếu dòng đó sạch. */
 export function copiedResultHit(line: string): string | null {
   if (ALLOW_RESULT.test(line)) return null
