@@ -183,6 +183,8 @@ export interface McpManagerOptions {
   callRetryDelaysMs?: number[]
   /** How long calls to a failing server are refused before one tests it (breaker.ts). */
   breakerOpenMs?: number
+  /** The breaker's clock; tests replace it. */
+  breakerNow?: () => number
   /** Delays between initialize retries on transient errors (network, 429, 5xx). */
   retryDelaysMs?: number[]
   /** Opens the OAuth URL; tests replace it. */
@@ -807,7 +809,7 @@ export class McpManager {
 
   private breaker(name: string) {
     let breaker = this.breakers.get(name)
-    if (!breaker) this.breakers.set(name, (breaker = new ServerBreaker(this.opts.breakerOpenMs)))
+    if (!breaker) this.breakers.set(name, (breaker = new ServerBreaker(this.opts.breakerOpenMs, this.opts.breakerNow)))
     return breaker
   }
 
@@ -1090,6 +1092,7 @@ export class McpManager {
                 continue
               }
               if (isRemote(config) && isQuotaExceeded(error)) {
+                breaker?.success()
                 const wait = retryAfterMs(error)
                 const reset = wait === undefined ? "" : ` (khoảng ${new Date(Date.now() + wait).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })})`
                 throw new Error(`MCP server "${name}" đã hết quota trong ngày; không tự thử lại. Gọi lại sau khi quota được đặt lại${reset}.`)
@@ -1107,7 +1110,8 @@ export class McpManager {
               if (attempt >= retries || (wait !== undefined && wait > MAX_RETRY_AFTER_MS)) {
                 const status = httpStatus(error)
                 // A rate limit or a pause the server asked for comes from a server that is up.
-                if (status !== 429 && wait === undefined) breaker?.failure()
+                if (status === 429 || wait !== undefined) breaker?.success()
+                else breaker?.failure()
                 const why = status ? `HTTP ${status}` : errorText(error)
                 const what = status === 429 ? `bị giới hạn tốc độ (${why})` : `lỗi tạm thời (${why}) — có thể đang khởi động lại hoặc quá tải`
                 const later = wait === undefined ? "" : ` Server yêu cầu chờ ${Math.ceil(wait / 1000)} giây trước khi gọi lại.`

@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test"
 import { BREAKER_THRESHOLD, ServerBreaker } from "../src/core/mcp/breaker"
+import { fetchQuotes } from "../src/core/tools/watchlist/quotes"
+import type { ToolRegistry } from "../src/core/tools/registry"
 
 function breaker() {
   const clock = { now: 1_000 }
@@ -77,4 +79,17 @@ test("a reconnect means nothing while it is closed", () => {
   b.failure()
   b.failure()
   expect(b.admit()).toBe(60_000)
+})
+
+test("the watchlist panel shows the refusal without the advice meant for the model", async () => {
+  const tool = {
+    name: "mcp__ot__vn_equity_quote_batch",
+    source: "mcp:ot",
+    execute: async () => {
+      throw new Error('MCP server "ot" đang lỗi kết nối liên tiếp nên lần gọi này chưa được gửi đi. Thử lại sau 42 giây; lúc này đừng gọi tool của server này.')
+    },
+  }
+  const registry = { list: () => [tool] } as unknown as ToolRegistry
+  const { error } = await fetchQuotes(registry, ["FPT"], new AbortController().signal)
+  expect(error).toBe('MCP server "ot" đang lỗi kết nối liên tiếp nên lần gọi này chưa được gửi đi. Thử lại sau 42 giây')
 })

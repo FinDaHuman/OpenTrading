@@ -510,9 +510,11 @@ test("after three connection failures calls are refused without being sent, then
   const remote = startHttpServer({ stats })
   cleanups.push(remote.stop)
   const { manager, registry } = await managerWith({ data: { type: "http", url: remote.url } })
-  const opts = (manager as unknown as { opts: { callRetryDelaysMs: number[]; breakerOpenMs: number } }).opts
+  const clock = { now: 1_000 }
+  const opts = (manager as unknown as { opts: { callRetryDelaysMs: number[]; breakerOpenMs: number; breakerNow: () => number } }).opts
   opts.callRetryDelaysMs = []
-  opts.breakerOpenMs = 300
+  opts.breakerOpenMs = 60_000
+  opts.breakerNow = () => clock.now
   await manager.start()
   const slow = () => Promise.resolve(registry.get("mcp__data__slow")!.execute({ ms: 1 }, ctx))
 
@@ -528,14 +530,14 @@ test("after three connection failures calls are refused without being sent, then
   expect(remote.failCalls.count).toBe(7)
 
   // A failed test opens it again.
-  await Bun.sleep(320)
+  clock.now += 60_000
   expect(await errorOf(slow())).toContain("HTTP 502")
   expect(remote.failCalls.count).toBe(6)
   expect(await errorOf(slow())).toContain("chưa được gửi đi")
 
   // A test that succeeds closes it.
   remote.failCalls.count = 0
-  await Bun.sleep(320)
+  clock.now += 60_000
   expect(await slow()).toBeDefined()
   expect(await slow()).toBeDefined()
   expect(stats.calls).toBe(2)
@@ -552,6 +554,22 @@ test("rate limits do not trip the breaker", async () => {
   for (let i = 0; i < 4; i++) expect(await errorOf(Promise.resolve(registry.get("mcp__data__slow")!.execute({ ms: 1 }, ctx)))).toContain("HTTP 429")
   expect(remote.failCalls.count).toBe(0)
   expect(await registry.get("mcp__data__slow")!.execute({ ms: 1 }, ctx)).toBeDefined()
+}, 20_000)
+
+test("a rate limit between connection failures shows the server is up", async () => {
+  const remote = startHttpServer({ stats: newStats() })
+  cleanups.push(remote.stop)
+  const { manager, registry } = await managerWith({ data: { type: "http", url: remote.url } })
+  ;(manager as unknown as { opts: { callRetryDelaysMs: number[] } }).opts.callRetryDelaysMs = []
+  await manager.start()
+  const slow = () => Promise.resolve(registry.get("mcp__data__slow")!.execute({ ms: 1 }, ctx))
+  Object.assign(remote.failCalls, { count: 2, status: 502, body: undefined })
+  for (let i = 0; i < 2; i++) await errorOf(slow())
+  Object.assign(remote.failCalls, { count: 1, status: 429, body: { error: "rate_limited", retry_after: 45 } })
+  expect(await errorOf(slow())).toContain("HTTP 429")
+  Object.assign(remote.failCalls, { count: 1, status: 502, body: undefined })
+  expect(await errorOf(slow())).toContain("HTTP 502")
+  expect(await slow()).toBeDefined()
 }, 20_000)
 
 test("two failures and an answer start the count again", async () => {
