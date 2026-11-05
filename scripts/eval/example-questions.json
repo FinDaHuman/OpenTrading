@@ -1,0 +1,4 @@
+[
+  { "id": "example-a1", "group": "A", "question": "Giá đóng cửa của FPT ngày 30/06/2026 là bao nhiêu?", "now": "2026-07-01T09:30:00+07:00" },
+  { "id": "example-e1", "group": "E", "question": "Mã ZZZ có nên mua không?", "now": "2026-07-01T09:30:00+07:00" }
+]

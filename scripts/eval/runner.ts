@@ -1,0 +1,190 @@
+import { copyFile, mkdir, writeFile } from "node:fs/promises"
+import path from "node:path"
+import { z } from "zod"
+import { runAgent } from "../../src/core/agent"
+import type { Target } from "../../src/core/chat"
+import { promptVersion } from "../../src/core/prompt/assemble"
+import type { Runtime } from "../../src/core/runtime"
+import type { Skill } from "../../src/core/skills/schema"
+import { currentTimeTool } from "../../src/core/tools/builtin/current-time"
+import { clearResults, useResultSession } from "../../src/core/tools/refs"
+import type { ToolDef, ToolResult } from "../../src/core/tools/types"
+import type { ToolRegistry } from "../../src/core/tools/registry"
+import { TRACE_VERSION, type TraceEvent, type TraceWriter } from "./trace"
+
+const QUESTIONS = z
+  .array(
+    z.object({
+      id: z.string().min(1),
+      /** OT-VNBench group, A–F (thesis plan). */
+      group: z.enum(["A", "B", "C", "D", "E", "F"]),
+      question: z.string().min(1),
+      /** The moment the question is asked at: the prompt's date and `current_time` use it. */
+      now: z.iso.datetime({ offset: true }),
+    }),
+  )
+  .min(1)
+  .refine((list) => new Set(list.map((q) => q.id)).size === list.length, "id trùng nhau")
+
+export type EvalQuestion = z.infer<typeof QUESTIONS>[number]
+
+export const parseQuestions = (text: string): EvalQuestion[] => QUESTIONS.parse(JSON.parse(text))
+
+/** Replay has no web results, so only long reports may search; others answer from MCP data. */
+const WEB_GROUPS = new Set(["F"])
+const WEB_TOOLS = ["web_fetch", "web_search"]
+
+/** Copied so MCP and side calls work; everything else (profile, memory, skills) stays out. */
+const HOME_FILES = ["auth.json", "mcp.json", "mcp-auth.json", path.join("cache", "models.json")]
+
+/** A run's own home: same model and connections as `from`, none of the user's other state. */
+export async function prepareHome(from: string, to: string, target: { provider: string; model: string }) {
+  await mkdir(path.join(to, "cache"), { recursive: true })
+  for (const file of HOME_FILES) await copyFile(path.join(from, file), path.join(to, file)).catch(() => {})
+  await writeFile(path.join(to, "config.json"), JSON.stringify(target))
+}
+
+/**
+ * Report what each tool returned before the output cap. Definitions are changed in place, so
+ * the registries subagents build from them report too; calling this again is safe.
+ */
+export function observeTools(registry: ToolRegistry, seen: WeakSet<ToolDef>, report: (call: Observed) => void) {
+  for (const def of registry.list()) {
+    if (seen.has(def)) continue
+    seen.add(def)
+    const execute = def.execute.bind(def)
+    def.execute = async (input, ctx) => {
+      const base = { callId: ctx.callId, tool: def.name, input, ...(ctx.agent ? { agent: ctx.agent.type } : {}) }
+      try {
+        const result: string | ToolResult = await execute(input, ctx)
+        report({ ...base, ok: true, raw: typeof result === "string" ? result : result.output })
+        return result
+      } catch (error) {
+        report({ ...base, ok: false, raw: error instanceof Error ? error.message : String(error) })
+        throw error
+      }
+    }
+  }
+}
+
+interface Observed {
+  callId: string
+  tool: string
+  input: unknown
+  ok: boolean
+  raw: string
+  agent?: string
+}
+
+export interface EvalRun {
+  runtime: Runtime
+  skills: Skill[]
+  target: Target
+  questions: EvalQuestion[]
+  repeat?: number
+  /** Limit per question; a question past it ends as aborted and the run goes on. */
+  timeoutMs?: number
+  write: TraceWriter
+  version: string
+  commit?: string
+}
+
+const DEFAULT_TIMEOUT_MS = 15 * 60_000
+
+/** Every question, one fresh conversation each. Nothing a question does reaches the next. */
+export async function runEval(run: EvalRun) {
+  const { runtime, write } = run
+  const { registry } = runtime
+  const web = WEB_TOOLS.flatMap((name) => registry.get(name) ?? [])
+  write({
+    type: "run",
+    trace_version: TRACE_VERSION,
+    harness: "opentrading",
+    harness_version: run.version,
+    ...(run.commit ? { commit: run.commit } : {}),
+    prompt_version: promptVersion(),
+    provider: run.target.provider.id,
+    model: run.target.model,
+    started_at: new Date().toISOString(),
+    tools: registry.list().length,
+  })
+  const seen = new WeakSet<ToolDef>()
+  for (let rep = 1; rep <= (run.repeat ?? 1); rep++) {
+    for (const question of run.questions) {
+      const now = new Date(question.now)
+      registry.register(currentTimeTool(() => now))
+      for (const def of web) {
+        if (WEB_GROUPS.has(question.group)) registry.register(def)
+        else registry.unregister(def.name)
+      }
+      const asked = { q: question.id, rep }
+      observeTools(registry, seen, ({ callId, ...call }) => write({ type: "tool_raw", ...asked, call_id: callId, ...call }))
+      await ask(run, question, asked, now)
+    }
+  }
+}
+
+async function ask(run: EvalRun, question: EvalQuestion, asked: { q: string; rep: number }, now: Date) {
+  const { runtime, write } = run
+  clearResults()
+  useResultSession(`${asked.q}#${asked.rep}`)
+  runtime.subagents.clock = () => now
+  write({ type: "question", ...asked, group: question.group, question: question.question, now: question.now })
+  const before = new Set(runtime.subagents.list().map((v) => v.id))
+  const started = Date.now()
+  const result = { text: "", steps: 0, input: 0, output: 0, outcome: "failed", unanswered: false, recoveries: [] as { kind: string; attempt: number }[], gaps: [] as string[] }
+  const say = (event: TraceEvent) => write(event)
+  try {
+    for await (const event of runAgent({
+      history: [],
+      input: question.question,
+      skills: run.skills,
+      registry: runtime.registry,
+      serverInstructions: () => runtime.mcp.instructions(),
+      target: run.target,
+      now,
+      signal: AbortSignal.timeout(run.timeoutMs ?? DEFAULT_TIMEOUT_MS),
+    })) {
+      if (event.type === "text-delta") result.text += event.text
+      else if (event.type === "tool-start") say({ type: "tool_call", ...asked, call_id: event.callId, tool: event.name, input: event.input, step: event.step })
+      else if (event.type === "tool-end") say({ type: "tool_result", ...asked, call_id: event.callId, ok: event.ok, visible: event.output, duration_ms: event.durationMs })
+      else if (event.type === "retry") say({ type: "retry", ...asked, attempt: event.attempt, delay_ms: event.delayMs, label: event.label })
+      else if (event.type === "notice") say({ type: "notice", ...asked, text: event.text })
+      else if (event.type === "error") say({ type: "error", ...asked, message: event.message, ...(event.kind ? { kind: event.kind } : {}) })
+      else if (event.type === "step") result.steps++
+      else if (event.type === "step-usage") {
+        result.input += event.inputTokens
+        result.output += event.outputTokens
+      } else if (event.type === "done") {
+        result.outcome = event.outcome ?? "completed"
+        result.unanswered = event.unanswered ?? false
+        result.recoveries = event.recoveries ?? []
+        result.gaps = event.dataGaps ?? []
+      }
+    }
+  } catch (error) {
+    say({ type: "error", ...asked, message: error instanceof Error ? error.message : String(error) })
+  }
+  // A background subagent must not write into the next question's trace.
+  runtime.subagents.stopAll()
+  await runtime.subagents.flush()
+  for (const view of runtime.subagents.list()) {
+    if (before.has(view.id)) continue
+    result.steps += view.requests ?? 0
+    result.input += view.usage.input
+    result.output += view.usage.output
+  }
+  write({
+    type: "answer",
+    ...asked,
+    text: result.text.trim(),
+    outcome: result.outcome,
+    unanswered: result.unanswered,
+    recoveries: result.recoveries,
+    data_gaps: result.gaps,
+    model_steps: result.steps,
+    input_tokens: result.input,
+    output_tokens: result.output,
+    duration_ms: Date.now() - started,
+  })
+}
