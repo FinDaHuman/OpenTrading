@@ -562,8 +562,7 @@ test("tool search: a deferred tool written with a :: separator loads like its re
   const r = bigRegistry(60)
   script = [{ tool: "mcp__big::t005", args: { symbol: "HPG" } }]
   const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: r }))
-  expect(ends(events)[0]!.output.startsWith("Đã nạp tool: mcp__big__t005
-")).toBe(true)
+  expect(ends(events)[0]!.output.startsWith("Đã nạp tool: mcp__big__t005\n")).toBe(true)
   expect(toolNames(bodies[1])).toContain("mcp__big__t005")
 })
 
