@@ -5,6 +5,11 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ## [Unreleased]
 
+### Added
+
+- Every MCP result is kept in full in `<session>/evidence/results.jsonl`. A `[ref rN]` now outlives
+  a restart and the 40 most recent results.
+
 ### Fixed
 
 - `desk-eval.ts` can read pages again: its approval responder never ran, so every `web_fetch` to
