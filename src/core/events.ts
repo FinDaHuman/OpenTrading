@@ -50,4 +50,6 @@ export type AgentEvent =
       retiredTodos?: number
       /** Tools whose data the turn did not get (loop/failures.ts). */
       dataGaps?: string[]
+      /** Figures of the answer that no tool result held (stop-gate.ts ungroundedInTurn): measured only. */
+      ungrounded?: string[]
     }

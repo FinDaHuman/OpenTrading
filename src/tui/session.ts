@@ -16,7 +16,7 @@ let current = Session.create()
 export const currentSession = () => current
 
 /** Persist one finished turn (fire-and-forget: a disk error must not break the chat). */
-export function recordTurn(messages: ModelMessage[], contextTokens?: number, gate?: Pick<TurnInfo, "recoveries" | "unanswered" | "retiredTodos" | "dataGaps">) {
+export function recordTurn(messages: ModelMessage[], contextTokens?: number, gate?: Pick<TurnInfo, "recoveries" | "unanswered" | "retiredTodos" | "dataGaps" | "ungrounded">) {
   if (messages.length === 0) return
   const firstTurn = current.turns === 0
   current
