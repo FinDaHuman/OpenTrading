@@ -170,6 +170,9 @@ export class SubagentManager {
     this.limiter = new Limiter(() => this.max)
   }
 
+  /** The moment runs believe it is; undefined = the real clock. An eval replays a past date. */
+  clock?: () => Date
+
   /** Session each run belongs to: only runs of the attached session notify (/clear, /new, resume). */
   private owners = new Map<string, string | undefined>()
 
@@ -475,6 +478,7 @@ export class SubagentManager {
           stallMs: this.idleConfigured === undefined ? undefined : this.idleConfigured + 2 * watchdogTick(this.idleConfigured),
           role: "subagent",
           target,
+          now: this.clock?.(),
           agentPrompt: spec.agentPrompt,
           serverInstructions: this.deps.serverInstructions,
           effort,
