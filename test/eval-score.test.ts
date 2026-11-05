@@ -66,6 +66,11 @@ test("sources: a capped table and a result after a notice keep their numbers apa
   expect([...noticed].sort()).toEqual([64.27, 64.5])
 })
 
+test("sources: cut JSON is read as JSON, so no number comes from a separator", () => {
+  const numbers = sourceNumbers('{"c":[1.234,5.6,64.27,64.5, [... đã lược')
+  expect([...numbers].sort((a, b) => a - b)).toEqual([1.234, 5.6, 64.27, 64.5])
+})
+
 test("sources: a Vietnamese page keeps its grouped numbers", () => {
   const numbers = sourceNumbers("Doanh thu đạt 1.234,5 tỷ, biên 24,1%.")
   expect(numbers.has(1234.5)).toBe(true)

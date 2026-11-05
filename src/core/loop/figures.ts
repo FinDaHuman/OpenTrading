@@ -86,8 +86,10 @@ export function sourceNumbers(text: string): Set<number> {
     walk(JSON.parse(body), out)
     return out
   } catch {}
-  // A capped result does not parse, and it is the long tables that get capped.
-  scan(body, out)
+  // A capped result does not parse. It is still JSON text, where "64.27,64.5" is two numbers
+  // and must not also read as the Vietnamese 6.427,64.
+  if (/^\s*[[{]/.test(body)) for (const match of body.matchAll(JSON_NUMBER)) out.add(Number(match[0]))
+  else scan(body, out)
   return out
 }
 
