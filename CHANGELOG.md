@@ -5,6 +5,13 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ## [Unreleased]
 
+### Fixed
+
+- Stop gate: an answer that claims fetched data (a tool name, `Nguồn:`, "đã lấy dữ liệu") with
+  figures the conversation does not hold, in a turn where no data tool ran, is sent back once
+  with tools on. If the retry does the same, the answer stays and the user is told its figures
+  are unverified.
+
 ## [0.3.1] — 2026-11-03
 
 Fixes for the QA reports of 23, 25 and 27 October 2026, and run keys that no longer land in a

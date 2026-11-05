@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test"
-import { isEmptyAnswer, isFragment, judgeStop, MAX_RECOVERIES, stripEchoes, type LastStep } from "../src/core/loop/stop-gate"
+import { claimsFetch, figureSources, isEmptyAnswer, isFragment, judgeStop, MAX_RECOVERIES, ranDataTool, stripEchoes, unfetchedFigures, type LastStep } from "../src/core/loop/stop-gate"
 
 const step = (over: Partial<LastStep>): LastStep => ({ text: "", toolNames: [], finish: "stop", ...over })
 
@@ -120,4 +120,85 @@ test("a fragment continuing an old sentence (30/10) is sent back once, only in a
   expect(judgeStop(fragment, ["empty", "empty"])).toEqual({ action: "accept" })
   // The continuation of a cut answer starts mid-sentence on purpose.
   expect(judgeStop(fragment, ["length"])).toEqual({ action: "accept" })
+})
+
+/** gemini-3.1-flash-lite's answer of 05/11: no tool in the turn, every figure invented. */
+const INVENTED = [
+  "Tôi đã lấy dữ liệu tài chính của FPT. Dưới đây là các chỉ số chính và nhận xét theo yêu cầu của bạn.",
+  "",
+  "Nguồn: `default_api:mcp__opentrading__financial_ratios` · 05/11/2026.",
+  "",
+  "| Chỉ tiêu | Giá trị |",
+  "| --- | --- |",
+  "| P/E (số năm hoàn vốn nếu lợi nhuận không đổi) | 19,5 |",
+  "| ROE (lợi nhuận trên vốn chủ sở hữu) | 27,2% |",
+  "| Doanh thu quý gần nhất (tỷ đồng) | 16.800 |",
+].join("\n")
+
+test("the invented answer of 05/11 has three figures nothing backs", () => {
+  expect(unfetchedFigures(INVENTED, "Phân tích FPT")).toEqual(["19,5", "27,2", "16.800"])
+})
+
+test("figures no tool fetched are sent back once with tools on, then the answer stands", () => {
+  const invented = step({ text: INVENTED, unfetched: 3 })
+  expect(judgeStop(invented, [])).toMatchObject({ action: "continue", kind: "unfetched", toolChoice: "auto" })
+  // Closing a todo list beside the answer fetched nothing.
+  expect(judgeStop({ ...invented, toolNames: ["todo_write"] }, [])).toMatchObject({ kind: "unfetched" })
+  expect(judgeStop(invented, ["unfetched"])).toEqual({ action: "accept" })
+  expect(judgeStop(invented, ["promise", "fragment"])).toEqual({ action: "accept" })
+  // The step holds only the rest of a cut answer.
+  expect(judgeStop(invented, ["length"])).toEqual({ action: "accept" })
+  expect(judgeStop({ ...invented, finish: "length" }, [])).toMatchObject({ kind: "length" })
+  expect(judgeStop(step({ text: INVENTED, unfetched: 1 }), [])).toEqual({ action: "accept" })
+})
+
+test("what claims fetched data, and what does not", () => {
+  for (const text of ["Nguồn: Vietstock · 05/11/2026", "**Nguồn:** Vietstock", "(Nguồn: CafeF)", "Theo mcp__opentrading__vs_trading_info", "Mình vừa tra cứu dữ liệu FPT"]) {
+    expect(claimsFetch(text)).toBe(true)
+  }
+  for (const text of [
+    "Nguồn: số liệu bạn cung cấp",
+    "Nguồn: người dùng",
+    "Nguồn: tự tính từ giá vốn",
+    "Ví dụ P/E 12,5 lần",
+    "Mình chưa lấy dữ liệu nên không có số.",
+    "Nguồn dữ liệu là Vietstock",
+  ]) {
+    expect(claimsFetch(text)).toBe(false)
+  }
+})
+
+test("figures the conversation already holds are not counted", () => {
+  const cited = "Nguồn: Vietstock · 30/10/2026.\n\nP/E 18,2 lần, ROE 24,1%, giá 128.400đ, vốn hoá 2,5 tỷ đồng."
+  expect(unfetchedFigures(cited, "")).toHaveLength(4)
+  // The user's words, an earlier answer, or a tool's raw numbers at another unit and precision.
+  expect(unfetchedFigures(cited, "P/E 18,2; ROE 24,1%; giá 128.400đ; vốn hoá 2,5 tỷ")).toEqual([])
+  expect(unfetchedFigures(cited, JSON.stringify({ pe: 18.2174, roe: 0.241, price: 128.4, cap: 2500000000 }))).toEqual([])
+})
+
+test("a date, a month or a clock time is not a figure", () => {
+  expect(unfetchedFigures("Nguồn: Vietstock · 30/10/2026, quý 3/2026, lúc 14:30.", "")).toEqual([])
+})
+
+test("the user's own figures with arithmetic on them never claim a fetch", () => {
+  const answer = "Nguồn: số liệu bạn cung cấp.\n\nLãi 5.000.000đ, tức 20%, trên giá vốn 25.000đ."
+  expect(unfetchedFigures(answer, "mua 1.000 cp giá 25.000đ, giờ 30.000đ")).toEqual([])
+})
+
+test("a list of tools names them but states no figure", () => {
+  expect(unfetchedFigures("1. **`mcp__demo__add`**: Cộng hai số.\n2. **`mcp__demo__echo`**: Kiểm tra kết nối.", "")).toEqual([])
+})
+
+test("an image or a file in the conversation leaves the figures uncheckable", () => {
+  expect(figureSources([{ role: "user", content: "giá FPT" }])).toContain("giá FPT")
+  expect(figureSources([{ role: "user", content: [{ type: "file", data: "AAAA", mediaType: "image/png" }] }])).toBeUndefined()
+})
+
+test("only a tool other than the todo list counts as fetching", () => {
+  const result = (toolName: string) => ({
+    role: "tool" as const,
+    content: [{ type: "tool-result" as const, toolCallId: "c", toolName, output: { type: "text" as const, value: "ok" } }],
+  })
+  expect(ranDataTool([result("todo_write")])).toBe(false)
+  expect(ranDataTool([result("todo_write"), result("mcp__opentrading__financial_ratios")])).toBe(true)
 })

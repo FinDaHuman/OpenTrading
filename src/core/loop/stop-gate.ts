@@ -1,4 +1,4 @@
-import type { StepResult, ToolSet } from "ai"
+import type { ModelMessage, StepResult, ToolSet } from "ai"
 import { hasOpenTodos, LEGACY_TODO_PREFIX, TODO_PREFIX, TODO_WRITE, type Todo } from "../tools/todos"
 
 /**
@@ -14,7 +14,7 @@ import { hasOpenTodos, LEGACY_TODO_PREFIX, TODO_PREFIX, TODO_WRITE, type Todo } 
 /** Recovery requests a turn may spend at most: the gate never loops. */
 export const MAX_RECOVERIES = 2
 
-export type RecoveryKind = "malformed" | "length" | "empty" | "promise" | "fragment"
+export type RecoveryKind = "malformed" | "length" | "empty" | "promise" | "fragment" | "unfetched"
 
 /** What the last request's final step produced. */
 export interface LastStep {
@@ -32,6 +32,8 @@ export interface LastStep {
   afterTools?: boolean
   /** A tool already ran in this turn (a fragment is only judged on a turn without any). */
   toolsInTurn?: boolean
+  /** Figures presented as fetched data with nothing behind them (see unfetchedFigures). */
+  unfetched?: number
 }
 
 export type Verdict =
@@ -56,6 +58,8 @@ export const RESCUE_PROMISE =
   "<nhac_nho>\nBước trước kết thúc mà không gọi tool nào. Thiếu dữ liệu thì gọi tool ngay trong bước này; đủ rồi thì trả lời người dùng.\n</nhac_nho>"
 export const RESCUE_FRAGMENT =
   "<nhac_nho>\nTrả lời trực tiếp tin nhắn mới nhất của người dùng ở trên; gọi tool nếu cần dữ liệu.\n</nhac_nho>"
+export const RESCUE_UNFETCHED =
+  "<nhac_nho>\nBước trước đã viết số liệu kèm nguồn trong khi lượt này chưa có tool nào chạy, nên câu trả lời đó đã bị bỏ. Gọi tool lấy dữ liệu ngay trong bước này rồi trả lời bằng kết quả tool. Không lấy được thì nói rõ là thiếu dữ liệu và không viết số.\n</nhac_nho>"
 /** Tools off (it brought 2.5-flash-lite's empty answers back). */
 export const RESCUE_EMPTY_FINAL = "Hãy trả lời câu hỏi của người dùng dựa trên kết quả tool ở trên. Không gọi thêm tool."
 
@@ -91,9 +95,13 @@ export function judgeStop(last: LastStep, done: readonly RecoveryKind[]): Verdic
   if (last.toolNames.length === 0 && (last.finish ?? "stop") === "stop" && isPromise(last.text)) {
     if (left > 0 && used("promise") === 0) return { action: "continue", kind: "promise", nudge: RESCUE_PROMISE, toolChoice: "auto" }
   }
-  // Continued an earlier sentence instead of answering the new message: send it back once.
-  // After a cut answer the continuation starts mid-sentence on purpose.
+  // After a cut answer the step holds only the rest of it, so neither check below can judge it.
   const continuing = done.includes("length")
+  // Presented figures as fetched data with no tool behind them: send it back once, tools on.
+  if (last.toolNames.every((name) => name === TODO_WRITE) && (last.finish ?? "stop") === "stop" && !continuing && isUnfetched(last)) {
+    if (left > 0 && used("unfetched") === 0) return { action: "continue", kind: "unfetched", nudge: RESCUE_UNFETCHED, toolChoice: "auto" }
+  }
+  // Continued an earlier sentence instead of answering the new message: send it back once.
   if (last.toolNames.length === 0 && (last.finish ?? "stop") === "stop" && !last.toolsInTurn && !continuing && isFragment(last.text)) {
     if (left > 0 && used("fragment") === 0) return { action: "continue", kind: "fragment", nudge: RESCUE_FRAGMENT, toolChoice: "auto" }
   }
@@ -201,6 +209,80 @@ export function isFragment(text: string): boolean {
   const body = stripEchoes(raw).trim()
   if (!body || body.length > FRAGMENT_MAX_CHARS) return false
   return /^[ \t]+\p{Ll}/u.test(raw) || /^[,;:)…]/u.test(body)
+}
+
+/** Figures an answer must lack a source for before the gate spends a request on it. */
+export const UNFETCHED_MIN_FIGURES = 2
+
+/** The step's answer carries figures no tool, user or earlier turn gave. */
+export const isUnfetched = (last: Pick<LastStep, "unfetched">) => (last.unfetched ?? 0) >= UNFETCHED_MIN_FIGURES
+
+/** A tool's own name: a harness or provider identifier the model copied into the answer. */
+const TOOL_NAME = /mcp__\w+|default_api:/
+/** The answer says it fetched the data. "Chưa lấy dữ liệu" and offers do not match. */
+const FETCH_CLAIM = new RegExp(String.raw`${B}(đã|vừa)\s+(lấy|tra cứu|truy xuất|tải)\s+(được\s+)?(dữ liệu|số liệu)${E}`, "iu")
+/** A `Nguồn:` line, wherever markdown or a bracket puts it, and what follows it. */
+const SOURCE_LINE = new RegExp(String.raw`${B}nguồn\s*[:：]([^\n]*)`, "giu")
+/** The source is the user, the model's own arithmetic or an example: no fetch is claimed. */
+const NOT_FETCHED = new RegExp(String.raw`${B}(bạn|người dùng|tự tính|tính từ|ví dụ|giả định|minh họa|minh hoạ)${E}`, "iu")
+
+/** The answer claims its data was fetched: it names a tool, says so, or cites a data source. */
+export function claimsFetch(text: string): boolean {
+  const body = text.normalize("NFC")
+  if (TOOL_NAME.test(body) || FETCH_CLAIM.test(body)) return true
+  return [...body.matchAll(SOURCE_LINE)].some((source) => !NOT_FETCHED.test(source[1] ?? ""))
+}
+
+/** Dates, month/year and clock times: they say when, not how much. */
+const DATES = /(?<![\d.,/-])\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}(?![\d/-])|(?<![\d.,/])\d{1,2}\/\d{4}(?!\d)|(?<![\d.,:])\d{1,2}:\d{2}(?![\d:])/g
+/** A market figure: thousands groups, a decimal, or a whole number with a unit. */
+const FIGURE = /\d{1,3}(?:[.,]\d{3})+(?:[.,]\d+)?|\d+[.,]\d+|\d+(?=\s*(?:%|đ(?!\p{L})|đồng|tỷ|triệu|nghìn|lần))/gu
+const NUMBER = /\d+(?:[.,]\d+)*/g
+/** A tool may give a ratio or thousands where the answer writes a percent or dong. */
+const SCALES = [1, 100, 0.01, 1e3, 1e-3, 1e6, 1e-6, 1e9, 1e-9]
+
+/** Both readings of a number: "16.800" is 16800 in Vietnamese and 16.8 in JSON. */
+function readings(token: string): { value: number; decimals: number }[] {
+  const groups = token.split(/[.,]/)
+  const tail = groups.at(-1) ?? ""
+  if (groups.length === 1) return [{ value: Number(token), decimals: 0 }]
+  const decimal = { value: Number(`${groups.slice(0, -1).join("")}.${tail}`), decimals: tail.length }
+  return groups.slice(1).every((g) => g.length === 3) ? [{ value: Number(groups.join("")), decimals: 0 }, decimal] : [decimal]
+}
+
+/**
+ * Figures of an answer that claims fetched data but that `known` (see figureSources) does not
+ * hold, at any common scale and rounded as the answer writes them. Seen 05/11 with
+ * gemini-3.1-flash-lite: no tool in the turn, "Tôi đã lấy dữ liệu" and a `Nguồn:` naming a tool
+ * over an invented P/E, ROE and revenue. An answer that claims nothing is never judged: it may
+ * be a worked example or the user's own numbers, and a misfire costs a request.
+ */
+export function unfetchedFigures(text: string, known: string): string[] {
+  if (!claimsFetch(text)) return []
+  const figures = [...new Set(text.replace(DATES, " ").match(FIGURE) ?? [])]
+  if (figures.length === 0) return []
+  const values = [...new Set((known.match(NUMBER) ?? []).flatMap((token) => readings(token).map((r) => r.value)))]
+  return figures.filter(
+    (figure) =>
+      !readings(figure).some(({ value, decimals }) => {
+        const near = 0.5 * 10 ** -decimals + 1e-9
+        return values.some((v) => SCALES.some((scale) => Math.abs(v * scale - value) <= near))
+      }),
+  )
+}
+
+/**
+ * Everything a turn may take figures from, as text; undefined when the turn has an image or a
+ * file (figures read from one cannot be checked here).
+ */
+export function figureSources(messages: readonly ModelMessage[]): string | undefined {
+  const opaque = messages.some((m) => typeof m.content !== "string" && m.content.some((part) => part.type === "image" || part.type === "file"))
+  return opaque ? undefined : JSON.stringify(messages)
+}
+
+/** A tool other than the todo list ran: a todo_write fetches nothing. */
+export function ranDataTool(messages: readonly ModelMessage[]): boolean {
+  return messages.some((m) => m.role === "tool" && m.content.some((part) => part.type === "tool-result" && part.toolName !== TODO_WRITE))
 }
 
 /** No answer in it: nothing visible once echoed todo lines are gone. */
