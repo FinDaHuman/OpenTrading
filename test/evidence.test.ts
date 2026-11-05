@@ -3,6 +3,9 @@ import { appendFileSync, mkdtempSync, readFileSync, rmSync } from "node:fs"
 import os from "node:os"
 import path from "node:path"
 import { z } from "zod"
+import type { ModelMessage } from "ai"
+import { pruneToolResults } from "../src/core/compact"
+import { readResultTool } from "../src/core/tools/builtin/read-result"
 import { evidenceFile, readEvidence } from "../src/core/tools/evidence"
 import { extractFromRef } from "../src/core/tools/chart/extract"
 import { clearResults, recallResult, useResultSession } from "../src/core/tools/refs"
@@ -138,4 +141,47 @@ test("a folder that cannot be written does not fail the tool", async () => {
   const result = await call(mcpTool(candles(1)))
   expect(result.output).toStartWith("[ref r1]")
   expect(readFileSync(blocked, "utf8")).toBe("x")
+})
+
+const read = (input: { id: string; offset?: number }) => readResultTool().execute(input, { signal: new AbortController().signal, callId: "r" }) as Promise<string>
+
+test("read_result gives a result back as fetched, by ref or by call id", async () => {
+  const dir = sessionDir()
+  useResultSession("s", undefined, dir)
+  await call(mcpTool(candles(64)), "call-1")
+  await call(mcpTool(JSON.stringify({ data: { price: 7 } })), "call-2")
+  restart("s", dir)
+  expect(await read({ id: "r1" })).toContain("[ref r1]")
+  expect(await read({ id: "call-1" })).toContain('"c":64')
+  expect(await read({ id: "call-2" })).toContain('"price":7')
+  expect(await read({ id: "nope" })).toContain("Không còn kết quả")
+})
+
+test("read_result pages a long result, and a headless run reads from RAM", async () => {
+  useResultSession("")
+  await call(mcpTool(JSON.stringify({ data: { rows: Array.from({ length: 9000 }, (_, i) => ({ i, c: i / 7 })) } })))
+  const first = await read({ id: "r1" })
+  const offset = Number(/offset (\d+)/.exec(first)![1])
+  const rest = await read({ id: "r1", offset })
+  expect(rest).not.toContain("[ref r1]")
+  expect(rest.length).toBeGreaterThan(100)
+})
+
+test("a pruned data result names the way back, and that way works", async () => {
+  const dir = sessionDir()
+  useResultSession("s", undefined, dir)
+  const big = JSON.stringify({ data: { rows: Array.from({ length: 100 }, (_, i) => ({ i, c: 64.27 })) } })
+  await call(mcpTool(big), "old-call")
+  const turn = (id: string, value: string): ModelMessage[] => [
+    { role: "user", content: "hỏi" },
+    { role: "assistant", content: [{ type: "tool-call", toolCallId: id, toolName: "mcp__data__quote", input: {} }] },
+    { role: "tool", content: [{ type: "tool-result", toolCallId: id, toolName: "mcp__data__quote", output: { type: "text", value } }] },
+  ]
+  const first = pruneToolResults([...turn("old-call", big), ...turn("b", "x"), ...turn("c", "y")])
+  const text = JSON.stringify(first.messages)
+  expect(first.pruned).toBe(1)
+  expect(text).toContain("read_result")
+  expect(pruneToolResults(first.messages).pruned).toBe(0)
+  const id = /read_result id=\\"([^\\]+)\\"/.exec(text)![1]!
+  expect(await read({ id })).toContain("64.27")
 })

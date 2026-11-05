@@ -74,6 +74,14 @@ export function recallResult(ref: string): StoredResult | undefined {
   return saved && { ref: id, tool: saved.tool, text: saved.text, at: Date.parse(saved.at), session }
 }
 
+/** A result of the open session by ref or call id: the evidence file, or RAM in a headless run. */
+export function findResult(id: string): Pick<Evidence, "ref" | "tool" | "text" | "at"> | undefined {
+  const saved = evidence ? readEvidence(evidence).find((e) => e.ref === id || e.callId === id) : undefined
+  if (saved) return saved
+  const stored = recallResult(id)
+  return stored && { ref: stored.ref, tool: stored.tool, text: stored.text, at: new Date(stored.at).toISOString() }
+}
+
 /** Refs of the current session still stored, oldest first. */
 export function storedResults(): StoredResult[] {
   return [...store.values()].filter((r) => r.session === session)

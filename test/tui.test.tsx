@@ -788,7 +788,7 @@ test("/tools lists built-in and MCP tools", async () => {
     // 6 core built-ins (current_time, load_skill, ask_user, todo_write, tool_search, read_file)
     // + 24 local tools (glob_files, grep_files, write_file, edit_file, shell, chart, session, watchlist, web, spawn_subagent, send_message, stop_agent, doctor_local, desk_run)
     // + propose_memory + 4 from the demo MCP server
-    frame = await setup.waitForFrame((f) => f.includes("Tool · 35") && f.includes("25 tool hoãn"))
+    frame = await setup.waitForFrame((f) => f.includes("Tool · 36") && f.includes("25 tool hoãn"))
     show(frame)
     // Regression for the 01/10 screenshot: every tool is exactly one line, long descriptions
     // end in "…" instead of wrapping mid-word, and the mark column is straight.
@@ -810,13 +810,13 @@ test("/tools lists built-in and MCP tools", async () => {
     expect(rows.find((r) => r.includes(" chart_render "))).toContain("hoãn · ")
     // ↑ from the first row wraps to the last: the Memory and MCP groups sit below the fold.
     setup.mockInput.pressArrow("up")
-    frame = await setup.waitForFrame((f) => f.includes("MCP · demo") && f.includes("35/35"))
+    frame = await setup.waitForFrame((f) => f.includes("MCP · demo") && f.includes("36/36"))
     show(frame)
     expect(frame).toContain("Memory")
     const tail = frame.split("\n").filter((l) => /^ {2}(❯ |  )[◇◆] \S/.test(l))
     expect(tail.find((r) => r.includes(" echo "))).toContain("hoãn · ")
     setup.mockInput.pressArrow("down")
-    await setup.waitForFrame((f) => f.includes("1/35"))
+    await setup.waitForFrame((f) => f.includes("1/36"))
   } finally {
     await saveConfig({ toolSearch: undefined })
   }
@@ -827,7 +827,7 @@ test("/tools lists built-in and MCP tools", async () => {
   expect(frame).toContain("ask_user")
   expect(frame).toMatch(/• questions \(bắt buộc\): array/)
   setup.mockInput.pressEscape()
-  await setup.waitForFrame((f) => f.includes("Tool · 35"))
+  await setup.waitForFrame((f) => f.includes("Tool · 36"))
   setup.mockInput.pressEscape()
   await setup.waitFor(() => state.dialog === undefined)
 })

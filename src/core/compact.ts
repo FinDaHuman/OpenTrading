@@ -107,6 +107,13 @@ export const ATTACHMENT_PRUNE_TOKENS = 20_000
 export const MAX_AUTO_FAILURES = 3
 
 export const PRUNED_TEXT = "(đã dọn kết quả cũ để tiết kiệm context; gọi lại tool nếu cần số liệu này)"
+/**
+ * For a data result, whose full text is in the session's evidence. A fresh fetch of market data
+ * differs from the figures already cited, so the way back must not be calling the tool again.
+ */
+export const prunedEvidence = (id: string) =>
+  `(đã dọn kết quả cũ để tiết kiệm context; bản đúng như lúc lấy: read_result id="${id}". Cần số mới hơn mới gọi lại tool.)`
+const PRUNED_PREFIX = "(đã dọn kết quả cũ"
 /** After the first line of a failed call: there was no data to fetch again. */
 export const PRUNED_ERROR_TEXT = "(lần gọi cũ này đã lỗi, chi tiết đã được dọn; lần gọi đó không trả về số liệu)"
 const PRUNED_ERROR_HEAD_CHARS = 200
@@ -123,7 +130,7 @@ export type CompactVariant = "full" | "lean"
  * in the answer, in no tool result, summarized with "MCP opentrading" as its source).
  */
 const OWN_FIGURES =
-  'Số chỉ có trong câu trả lời trước (không có trong kết quả tool nào) thì ghi nguồn là "câu trả lời trước", không ghi tên tool.'
+  'Số chỉ có trong câu trả lời trước (không có trong kết quả tool nào) thì ghi nguồn là "câu trả lời trước", không ghi tên tool. Kết quả đã dọn có id read_result thì ghi id đó vào cột nguồn.'
 
 const MISSING_DATA = "Tool hoặc nguồn nào đã lỗi, đã xử lý thế nào, và số liệu nào vẫn chưa lấy được. Không điền số thay cho phần thiếu."
 
@@ -216,7 +223,7 @@ export const tokensOf = (messages: readonly ModelMessage[]) => {
   return estimateTokens(text) + images * IMAGE_TOKENS
 }
 
-type ResultPart = { type: string; toolName?: string; output?: { type?: string; value?: unknown } }
+type ResultPart = { type: string; toolName?: string; toolCallId?: string; output?: { type?: string; value?: unknown } }
 
 function firstLine(output: ResultPart["output"]): string | undefined {
   const value = output?.value
@@ -251,7 +258,7 @@ export function pruneToolResults(messages: readonly ModelMessage[], keepTurns = 
         if (p.type !== "tool-result" || (p.toolName && PROTECTED.has(p.toolName))) return part
         const size = JSON.stringify(p.output ?? "").length
         const head = firstLine(p.output)
-        if (size < PRUNE_MIN_CHARS || head === PRUNED_TEXT || isPrunedError(p.output)) return part
+        if (size < PRUNE_MIN_CHARS || head?.startsWith(PRUNED_PREFIX) || isPrunedError(p.output)) return part
         pruned++
         // The loaded-tools line is how later turns know which deferred tools are callable;
         // a subagent's metadata block keeps its agent_id reachable for send_message.
@@ -263,7 +270,9 @@ export function pruneToolResults(messages: readonly ModelMessage[], keepTurns = 
             ? `${PRUNED_TEXT}\n${meta}`
             : failed || head?.startsWith(SOURCE_FAILED_PREFIX)
               ? `${head ? `${head.slice(0, PRUNED_ERROR_HEAD_CHARS)}\n` : ""}${PRUNED_ERROR_TEXT}`
-              : PRUNED_TEXT
+              : p.toolName?.startsWith("mcp__") && p.toolCallId
+                ? prunedEvidence(p.toolCallId)
+                : PRUNED_TEXT
         return { ...part, output: { type: failed ? "error-text" : "text", value } } as typeof part
       })
       return { ...message, content } as ModelMessage

@@ -8,6 +8,7 @@ import {
   MAX_AUTO_FAILURES,
   PRUNED_ERROR_TEXT,
   PRUNED_TEXT,
+  prunedEvidence,
   formatCompactSummary,
   compactHistory,
   compactPrompt,
@@ -57,7 +58,7 @@ test("pruning empties large old tool results, keeps the last two turns and the l
   expect(outputOf(messages, "c1")).toBe(`Đã nạp tool: mcp__ot__quote, mcp__ot__bctc\n${PRUNED_TEXT}`)
   expect(outputOf(messages, "c2")).toBe(BIG) // todo_write is protected
   expect(outputOf(messages, "c3")).toBe("98.500") // small results stay
-  expect(outputOf(messages, "c4")).toBe(PRUNED_TEXT)
+  expect(outputOf(messages, "c4")).toBe(prunedEvidence("c4")) // a data result: its evidence is the way back
   expect(outputOf(messages, "c5")).toBe(`${BIG}5`) // last two turns verbatim
   expect(outputOf(messages, "c6")).toBe(`${BIG}6`)
   expect(pruned).toBe(2)
