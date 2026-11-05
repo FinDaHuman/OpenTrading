@@ -38,17 +38,16 @@ Ký hiệu:
 | 3 | [001](001-kho-memory-db/spec.md) | Kho `memory.db` và bảng chính sách | Lược đồ bản 1 cùng migration; từ chối lược đồ mới hơn bản app; repository cho ràng buộc, cách trình bày, chủ đề và bí danh, bản luận điểm, bài học, quyết định ghi nối; chống ghi đè theo phiên bản; ID không dùng lại; xoá logic; WAL và đóng kết nối đúng lúc; bảng chính sách theo loại và test duyệt bảng | [M] | 0 | Q2, Q4, Q6, Q7; T4, T5 | `implemented` (test chạy trên máy; chưa nối vào app, việc đó thuộc 002; chờ duyệt code, CI) |
 | 4 | [002](002-provider-duong-doc/spec.md) | Provider v5.1: đường đọc | Ràng buộc và cách trình bày ở phần hệ thống; mục lục ở phần bối cảnh; chủ đề từ chữ người dùng gõ; khối có nhãn chỉ chèn khi phiên chưa có, dòng "thay cho bản N"; `memory_read` chỉ đọc; xem và xoá trong `/memory`. Lõi: thêm lựa chọn provider vào `/config`, đóng kho khi thoát, báo lỗi mở kho lúc khởi động, màn `/memory` của sổ ghi nhớ | [M] + [LÕI] nhỏ | 001 | Q1 (bản tối thiểu), Q3, K1, K2, K8 | `implemented` (test chạy trên máy; chưa duyệt code, chưa CI; chưa thử tay trên TUI, chưa thử với model thật) |
 | 5 | [003](003-duong-ghi-lenh-form/spec.md) | Đường ghi: lệnh và form | `/nho`, `/luandiem`, `/baihoc`, `/quyetdinh`; `/memory` xem, sửa, xoá, xuất Markdown; cảnh báo lệch ngăn; xung đột phiên bản hiện diff; lịch sử ô nhập chỉ lưu tên lệnh | [M] + [LÕI] vừa | 001, 002 | C4, T6, K7 | `implemented` (test chạy trên máy; chưa duyệt code, chưa CI; chưa thử tay trên TUI) |
-| 6 | 005 | Ràng buộc tới agent con và hồ sơ | Host gửi ràng buộc có cấu trúc cho agent con; ràng buộc độc lập với công tắc memory; đọc lỗi thì hoãn lượt (T7); file mẫu `INVESTOR.md` đưa ví dụ vào chú thích (T8) | **[LÕI]** | 001 | Q4, T7, T8 | `specified` |
+| 6 | [005](005-rang-buoc-agent-con/spec.md) | Ràng buộc tới agent con và hồ sơ | Host gửi ràng buộc có cấu trúc cho agent con; ràng buộc độc lập với công tắc memory; đọc lỗi thì hoãn lượt (T7); file mẫu `INVESTOR.md` đưa ví dụ vào chú thích (T8) | **[LÕI]** | 001 | Q4, T7, T8 | `implemented` (test chạy trên máy; phần lõi `blocked-by-core` tới khi chủ repo duyệt; chưa duyệt code, chưa CI; chưa thử tay trên TUI, chưa thử với model thật) |
 | 7 | 006 | Phương án Y đầy đủ trong lõi | Lõi đưa danh sách nhãn đang có trong lịch sử cho memory; che khối khi xoá; dòng che trong file phiên; mã lượt; bản tóm tắt khi nén chỉ giữ nhãn | **[LÕI]** | 002, 004 | K3, K5 | `specified` |
-| 8 | 007 | Thẻ gợi ý (tuỳ chọn) | Tách thẻ khỏi câu trả lời; dòng thẻ trong file phiên; thẻ mở form của 003 | **[LÕI]** | 003, 006 | Thẻ gợi ý | `deferred` cho tới khi người dùng chọn làm |
+| 8 | 007 | Nén hội thoại, gỡ memory cũ, thẻ gợi ý | Ba việc: (1) nén hội thoại chỉ giữ nhãn memory, không chép nội dung khối, nên xoá thì che được; (2) gỡ memory cũ (lựa chọn "Memory cũ", tool `propose_memory`, hook "Ghi nhớ:"), có đường chuyển cho cấu hình cũ, không xoá dữ liệu người dùng; (3) thẻ gợi ý: tách thẻ khỏi câu trả lời, dòng thẻ trong file phiên, thẻ mở form của 003 | **[LÕI]** | 003, 006 | K3, K5; thẻ gợi ý | `specified` |
 
-**Mốc dùng được:** sau 001, 002 và 003, memory v5.1 chạy trọn vòng ghi và đọc. Bản này có ba giới hạn:
+**Mốc dùng được:** sau 001, 002 và 003, memory v5.1 chạy trọn vòng ghi và đọc. Sau 005, ràng buộc tới agent chính và mọi agent con ở cả ba lựa chọn memory. Còn hai giới hạn:
 
 | Giới hạn | Được gỡ ở |
 | --- | --- |
 | Sau nén hoặc mở lại phiên, khối memory có thể bị chèn lại hoặc thiếu | 006 |
 | Xoá chỉ báo "đã ngừng dùng", chưa che nội dung cũ trong lịch sử đang mở | 006 |
-| Agent con chưa nhận ràng buộc | 005 |
 
 ## Ngoài lộ trình này
 

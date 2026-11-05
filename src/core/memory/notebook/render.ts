@@ -1,3 +1,5 @@
+import type { ConstraintLine } from "../binding/constraints"
+import { labelledList } from "../binding/render"
 import { escapeMemoryLine, escapeMemoryText } from "./escape"
 
 /**
@@ -29,35 +31,14 @@ export function formatDate(value: string): string {
   return `${d}/${m}/${y}`
 }
 
-export interface ConstraintLine {
-  id: number
-  version: number
-  text: string
-}
-
-export const UNLOADED_NOTE =
-  "Kho memory của người dùng không mở được; ràng buộc đã lưu chưa được nạp. Không giả định người dùng không có ràng buộc."
-
-const listed = (heading: string, items: readonly ConstraintLine[]) =>
-  items.length === 0
-    ? []
-    : [heading, ...items.map((c) => escapeMemoryText(`- [#${c.id} · bản ${c.version}] `, c.text))]
+export type { ConstraintLine }
 
 /**
- * The system part: the guide, then constraints and style in full. With no constraint there is no
- * heading at all: an empty list could read as "the user set no limits".
+ * The system part: the guide, then style in full. The constraints are not here: memory/binding sends
+ * them to every agent in their own block, whatever memory is switched to, so they go out exactly once.
  */
-export function renderInstructions(
-  guide: string,
-  data: { constraints: readonly ConstraintLine[]; styles: readonly ConstraintLine[] } | "unloaded",
-): string {
-  const body =
-    data === "unloaded"
-      ? [UNLOADED_NOTE]
-      : [
-          ...listed("Ràng buộc của người dùng (người dùng tự ghi, luôn áp dụng):", data.constraints),
-          ...listed("Cách trình bày người dùng muốn:", data.styles),
-        ]
+export function renderInstructions(guide: string, styles: readonly ConstraintLine[]): string {
+  const body = labelledList("Cách trình bày người dùng muốn:", styles)
   return body.length === 0 ? guide : `${guide}\n\n${body.join("\n")}`
 }
 

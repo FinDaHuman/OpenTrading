@@ -137,7 +137,6 @@ const KIND_OPTIONS = [
   { value: "style", label: "Cách trình bày", hint: "bạn muốn câu trả lời trông thế nào" },
 ] as const
 const KIND_NAME: Record<ConstraintKind, string> = { constraint: "ràng buộc", style: "cách trình bày" }
-const AGENT_NOTE = "Hiện ràng buộc chỉ gửi cho agent chính; agent con chưa nhận (sẽ có ở bản sau)."
 
 function ConstraintForm(props: { admin: NotebookAdmin; req: Request<"constraint"> }) {
   const admin = props.admin
@@ -203,7 +202,6 @@ function ConstraintForm(props: { admin: NotebookAdmin; req: Request<"constraint"
     ]
     const sum = total()
     if (draft.kind && sum) out.push(`Tổng ${KIND_NAME[draft.kind]} sau khi lưu: ${countText(sum)} ký tự`)
-    if (draft.kind === "constraint") out.push(AGENT_NOTE)
     if (!draft.kind) out.push("Chọn ngăn trước khi xác nhận.")
     if (props.req.fromLesson) out.push("Mở từ form bài học: chỉ giữ câu này; các ô khác của bài học không được lưu.")
     out.push(FIGURE_GUIDE)

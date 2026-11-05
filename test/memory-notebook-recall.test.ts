@@ -3,7 +3,6 @@ import { packRecall, recallCharLimit, recalledLength, indexCharLimit, type PackB
 import { Ledgers, SessionLedger } from "../src/core/memory/notebook/session-ledger"
 import { BUDGETS } from "../src/core/prompt/budget"
 import { MEMORY_INDEX_MAX_CHARS, MEMORY_RECALL_MAX_CHARS, MEMORY_RECALL_MAX_ITEMS } from "../src/core/memory/types"
-import { UNLOADED_NOTE } from "../src/core/memory/notebook/render"
 import { promptFile } from "../src/core/prompt/assemble"
 import { DECISION_MARKER, HPG_BLOCK_V3, HPG_V3, seedExample, useNotebookDir } from "./helpers/memory-notebook"
 import { HookBus } from "../src/core/hooks"
@@ -220,19 +219,13 @@ const nb = useNotebookDir()
 const SID = { sessionId: "s1" }
 
 describe("system part (Story 1)", () => {
-  test("the guide, then both constraints and the style, word for word with id and version", () => {
+  test("the guide, then the style word for word with id and version; the constraints have their own block", () => {
     seedExample(nb.store())
     const text = nb.notebook().instructions()!
-    expect(text.startsWith(promptFile("memory")!)).toBe(true)
-    expect(text.endsWith(
-      [
-        "Ràng buộc của người dùng (người dùng tự ghi, luôn áp dụng):",
-        "- [#1 · bản 2] Không dùng margin, kể cả T+0",
-        "- [#4 · bản 1] Tối đa 20% danh mục cho một mã",
-        "Cách trình bày người dùng muốn:",
-        "- [#2 · bản 1] Trả lời ngắn, có bảng",
-      ].join("\n"),
-    )).toBe(true)
+    expect(text).toBe(
+      [promptFile("memory")!, "", "Cách trình bày người dùng muốn:", "- [#2 · bản 1] Trả lời ngắn, có bảng"].join("\n"),
+    )
+    expect(text).not.toContain("Không dùng margin")
   })
 
   test("the guide ships with the app (prompts/memory.md) and says how to use memory", () => {
@@ -247,36 +240,36 @@ describe("system part (Story 1)", () => {
     expect(nb.notebook().instructions()).toBe(promptFile("memory")!)
   })
 
-  test("another window revises constraint #1: the next call carries version 3, not 2", () => {
+  test("another window revises style #2: the next call carries version 2, not 1", () => {
     const other = nb.store()
     seedExample(other)
     const notebook = nb.notebook()
-    expect(notebook.instructions()).toContain("[#1 · bản 2]")
-    other.writer.reviseConstraint(1, 2, { text: "Không dùng margin, kể cả T+0 và ký quỹ" })
+    expect(notebook.instructions()).toContain("[#2 · bản 1]")
+    other.writer.reviseConstraint(2, 1, { text: "Trả lời ngắn, có bảng và nguồn" })
     const text = notebook.instructions()!
-    expect(text).toContain("- [#1 · bản 3] Không dùng margin, kể cả T+0 và ký quỹ")
-    expect(text).not.toContain("[#1 · bản 2]")
+    expect(text).toContain("- [#2 · bản 2] Trả lời ngắn, có bảng và nguồn")
+    expect(text).not.toContain("[#2 · bản 1]")
   })
 
-  test("never throws: a store broken under it, or closed, gives the 'not loaded' sentence", () => {
+  test("never throws: a store broken under it, or closed, gives the guide alone (the turn is held elsewhere)", () => {
     seedExample(nb.store())
     const notebook = nb.notebook()
-    expect(notebook.instructions()).toContain("[#1 · bản 2]")
+    expect(notebook.instructions()).toContain("[#2 · bản 1]")
     nb.raw().run("DROP TABLE constraint_versions")
-    expect(notebook.instructions()).toContain(UNLOADED_NOTE)
+    expect(notebook.instructions()).toBe(promptFile("memory")!)
     expect(notebook.problems()[0]).toContain("Kho memory")
     notebook.close()
     expect(() => notebook.instructions()).not.toThrow()
   })
 
-  test("a store from a newer app: reason and path told, file kept, 'not loaded' in the system part", async () => {
+  test("a store from a newer app: reason and path told, file kept, the guide alone in the system part", async () => {
     nb.store().close()
     nb.raw().run("PRAGMA user_version = 99")
     const before = await Bun.file(nb.file()).bytes()
     const notebook = nb.notebook()
     expect(notebook.problems()).toEqual([expect.stringContaining("mới hơn")])
     expect(notebook.problems()[0]).toContain(nb.file())
-    expect(notebook.instructions()).toContain(UNLOADED_NOTE)
+    expect(notebook.instructions()).toBe(promptFile("memory")!)
     expect(await notebook.index(SID)).toBeUndefined()
     notebook.close()
     expect(await Bun.file(nb.file()).bytes()).toEqual(before)

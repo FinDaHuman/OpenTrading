@@ -1,3 +1,5 @@
+import type { ConstraintReader } from "../../../core/memory/binding/constraints"
+import { stillApplyLine } from "../../../core/memory/binding/render"
 import type { NotebookCommand } from "../../../core/memory/notebook/commands"
 import { notebookAdmin } from "../../../core/memory/notebook/admin"
 import type { MemoryProvider } from "../../../core/memory/types"
@@ -39,6 +41,22 @@ export function openNotebookRequest(memory: MemoryProvider, request: NotebookFor
   if (problem) return problem
   showNotebookForm(request)
   return undefined
+}
+
+/**
+ * The notebook-off message plus, when the store still holds constraints, that they still apply: they
+ * reach every agent whatever memory is set to. Undefined when the notebook is on or there is none to
+ * mention. Asynchronous, so the caller shows `message` first and this right after.
+ */
+export async function offWithConstraints(
+  memory: MemoryProvider,
+  reader: ConstraintReader,
+  message: string,
+): Promise<string | undefined> {
+  if (notebookAdmin(memory)) return undefined
+  const read = await reader.read("main_agent")
+  if (read.state !== "loaded" || read.lines.length === 0) return undefined
+  return `${message}\n${stillApplyLine(read.lines.length)}`
 }
 
 /** Opens a form from /memory, which already holds a working notebook. */

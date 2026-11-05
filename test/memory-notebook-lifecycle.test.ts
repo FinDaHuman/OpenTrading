@@ -6,7 +6,7 @@ import { describe, expect, test } from "bun:test"
 import { HookBus } from "../src/core/hooks"
 import { FileMemory } from "../src/core/memory/file-memory"
 import { notebookAdmin } from "../src/core/memory/notebook/admin"
-import { UNLOADED_NOTE } from "../src/core/memory/notebook/render"
+import { promptFile } from "../src/core/prompt/assemble"
 import { NoopMemory } from "../src/core/memory/types"
 import { closeMemory, createMemory, switchMemory, type Runtime } from "../src/core/runtime"
 import { ToolRegistry } from "../src/core/tools/registry"
@@ -51,14 +51,17 @@ describe("a store that cannot be opened", () => {
     expect(notebook.problems()[0]).toContain(nb.file())
     expect(notebook.problems()[0]).toContain("chọn lại «Sổ ghi nhớ» trong /config")
     expect(await turn(notebook, hooks, "Hòa Phát?")).toEqual([line])
-    expect(notebook.instructions()).toContain(UNLOADED_NOTE)
+    // Unreadable: the guide only (the turn itself is held before any request, memory/binding).
+    expect(notebook.instructions()).toBe(promptFile("memory")!)
     expect(await turn(notebook, hooks, "Còn gì?")).toEqual([])
-    expect(notebook.instructions()).toContain(UNLOADED_NOTE)
+    // Unreadable: the guide only (the turn itself is held before any request, memory/binding).
+    expect(notebook.instructions()).toBe(promptFile("memory")!)
     expect(await turn(notebook, hooks, "Phiên mới", "s2")).toEqual([line])
     // Fixed behind its back, it still waits for the user to choose it again: no retry for this kind.
     nb.raw().run("PRAGMA user_version = 1")
     expect(await turn(notebook, hooks, "Thử lại?")).toEqual([])
-    expect(notebook.instructions()).toContain(UNLOADED_NOTE)
+    // Unreadable: the guide only (the turn itself is held before any request, memory/binding).
+    expect(notebook.instructions()).toBe(promptFile("memory")!)
     expect(await notebook.index(SID)).toBeUndefined()
   })
 
@@ -76,7 +79,6 @@ describe("a store that cannot be opened", () => {
       await child.exited
       expect(await turn(notebook, hooks, "b")).toEqual([])
       expect(notebook.problems()).toEqual([])
-      expect(notebook.instructions()).not.toContain(UNLOADED_NOTE)
       // A different failure later in the same session is told again.
       nb.raw().run("DROP TABLE constraints")
       expect(await turn(notebook, hooks, "c")).toEqual(["[Memory · lỗi] Kho memory không mở được: kho báo lỗi khi đọc."])
@@ -93,7 +95,8 @@ describe("a store that cannot be opened", () => {
     nb.raw().run("DROP TABLE thesis_versions")
     const items = await notebook.recall("Hòa Phát?", { sessionId: "s2" })
     expect(items.map((i) => i.text)).toEqual(["[Memory · lỗi] Kho memory không mở được: kho báo lỗi khi đọc."])
-    expect(notebook.instructions()).toContain(UNLOADED_NOTE)
+    // Unreadable: the guide only (the turn itself is held before any request, memory/binding).
+    expect(notebook.instructions()).toBe(promptFile("memory")!)
     expect(notebook.problems()[0]).toContain(nb.file())
   })
 })

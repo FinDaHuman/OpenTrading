@@ -3,6 +3,7 @@ import { MODE_LABEL, type PermissionMode } from "../../core/permission/mode"
 import { createResource, createSignal, Match, Switch } from "solid-js"
 import { loadConfig, saveConfig } from "../../core/config"
 import { configFile } from "../../core/paths"
+import { stillApplyLine } from "../../core/memory/binding/render"
 import { closeMemory, createMemory, switchMemory, type MemoryChoice, type Runtime } from "../../core/runtime"
 import { DEFAULT_MAX_CONCURRENT } from "../../core/subagents/manager"
 import { AUTO_MODEL } from "../../core/subagents/model-pick"
@@ -197,6 +198,19 @@ export function ConfigDialog(props: { runtime: Runtime }) {
   const memoryChoice = () => (config()?.memory?.provider ?? props.runtime.memory.id) as MemoryChoice
   const memoryProblem = () =>
     props.runtime.memory.id === "notebook" ? props.runtime.memory.problems?.()[0] : undefined
+  /**
+   * With the notebook off, constraints in the store still reach every agent: say so, and how to manage
+   * them. Read again each time the screen opens (a new source object), and shown only while the current
+   * choice, a reactive value, is not the notebook: a resource keeps its last value when its source empties.
+   */
+  const [stillApplies] = createResource(
+    () => (editing() === "memory" && memoryChoice() !== "notebook" ? { choice: memoryChoice() } : undefined),
+    async () => {
+      const read = await props.runtime.constraints.read("main_agent")
+      if (read.state === "failed") return `Không đọc được ràng buộc trong kho memory (${read.failure.file}): ${read.failure.reason}.`
+      return read.state === "loaded" && read.lines.length > 0 ? stillApplyLine(read.lines.length) : undefined
+    },
+  )
 
   async function toggle(setting: Setting) {
     if (
@@ -289,6 +303,11 @@ export function ConfigDialog(props: { runtime: Runtime }) {
           {memoryProblem() && (
             <text fg={color.tham} wrapMode="word">
               {memoryProblem()}
+            </text>
+          )}
+          {memoryChoice() !== "notebook" && stillApplies() && (
+            <text fg={color.tham} wrapMode="word">
+              {stillApplies()}
             </text>
           )}
           <Picker

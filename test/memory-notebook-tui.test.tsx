@@ -39,6 +39,7 @@ const { loadConfig, saveConfig } = await import("../src/core/config")
 const { openMemoryStore } = await import("../src/core/memory/store/open")
 const { FileMemory } = await import("../src/core/memory/file-memory")
 const { NoopMemory } = await import("../src/core/memory/types")
+const { promptFile } = await import("../src/core/prompt/assemble")
 
 const STORE = path.join(home, "memory.db")
 const contender = path.join(import.meta.dir, "fixtures", "scripts", "memory-store-contender.ts")
@@ -175,7 +176,7 @@ describe("/config: three memory choices", () => {
     expect(f).toMatch(/● Tắt/)
   })
 
-  test("a store from a newer app: the reason and what to do, chat keeps working", async () => {
+  test("a store from a newer app: the reason and what to do; the notebook's system part is the guide alone", async () => {
     otherWindow().close()
     opened.length = 0
     const raw = new Database(STORE)
@@ -187,7 +188,8 @@ describe("/config: three memory choices", () => {
     expect(state.notification?.level).toBe("error")
     expect(state.notification?.text).toContain("mới hơn")
     expect(state.notification?.text).toContain("chọn lại «Sổ ghi nhớ» trong /config")
-    expect(runtime!.memory.instructions?.()).toContain("ràng buộc đã lưu chưa được nạp")
+    // No "not loaded" sentence any more: a turn is held before any request (memory/binding).
+    expect(runtime!.memory.instructions?.()).toBe(promptFile("memory")!)
   })
 })
 

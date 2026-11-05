@@ -22,6 +22,8 @@ import { attachMentions, mentionText } from "../core/mentions"
 import { FileIndex, INDEX_MISS_MS, matchPaths } from "../core/fs/file-index"
 import { connectedProviders } from "../core/auth"
 import { describeError } from "../core/chat"
+import { TurnHeldError, type BoundSource, type Waiver } from "../core/memory/binding/bind"
+import { waiveLabel } from "../core/memory/binding/render"
 import type { AgentEvent } from "../core/events"
 import { loadConfig, saveConfig } from "../core/config"
 import { idleCompactSettings, IdleTimer } from "../core/idle-compact"
@@ -43,7 +45,7 @@ import { ContextDialog } from "./dialogs/context"
 import { HelpDialog } from "./dialogs/help"
 import { MemoryDialog } from "./dialogs/memory"
 import { NotebookFormDialog } from "./dialogs/notebook-form/forms"
-import { openNotebookForm } from "./dialogs/notebook-form/open"
+import { offWithConstraints, openNotebookForm } from "./dialogs/notebook-form/open"
 import { notebookCommandOf } from "../core/memory/notebook/commands"
 import { PermissionsDialog } from "./dialogs/permissions"
 import { SessionsDialog } from "./dialogs/sessions"
@@ -60,6 +62,7 @@ import { deskSettings } from "../core/desk/settings"
 import { DESK_RUN } from "../core/desk/tool"
 import { PLAYBOOKS } from "../core/desk/playbooks"
 import { DeskApprovalCard } from "./dialogs/desk-approval"
+import { HoldCard } from "./hold-card"
 import { DESK_STATUS, DeskDialog, runStats } from "./dialogs/desk"
 import { currentTarget, EffortDialog, effortText, supportNote } from "./dialogs/effort"
 import { EFFORT_LEVELS, EFFORT_SYMBOL, effectiveEffort, isEffort, stepEffort, supportedEfforts, type Effort } from "../core/effort"
@@ -81,7 +84,7 @@ import {
 import { resolveExportPath, writeExport } from "../core/session/export"
 import { cycleMode } from "../core/permission/mode"
 
-import { armExit, type Queued, closeDialog, contextLimits, EXIT_WINDOW_MS, onExitRequest, providerName, pushLine, setState, state, type Line } from "./state"
+import { armExit, type HoldChoice, type Queued, closeDialog, contextLimits, EXIT_WINDOW_MS, onExitRequest, providerName, pushLine, setState, state, type Line } from "./state"
 import { flash, notify, say } from "./notify"
 import { watchAutoBlocks } from "./auto-notice"
 import { ModeLine } from "./mode-line"
@@ -119,6 +122,8 @@ let epoch = 0
 /** /clear and /new: stop any running turn and start a fresh session. */
 export async function clearTranscript(runtime: Runtime) {
   epoch++
+  // A held turn's card belongs to the old session: answering it after epoch++ gives nothing back.
+  state.turnHold?.choose("cancel")
   setState("queue", [])
   abort?.abort()
   // Desk runs first: cut as stopped, they start no new agent while their agents stop.
@@ -178,6 +183,8 @@ export async function compact(runtime: Runtime, trigger: "auto" | "manual" | "id
           registry: runtime.registry,
           sessionId: currentSession().id,
           memory: runtime.memory,
+          // Read leniently there: compaction never holds, and shares the turn's system prefix.
+          constraints: runtime.constraints,
           serverInstructions: () => runtime.mcp.instructions(),
           signal: controller.signal,
         })
@@ -267,7 +274,17 @@ async function idleCompact(runtime: Runtime) {
 }
 
 /** A message to send: the text for the model, what the transcript shows, pasted images. */
-type Outgoing = { text: string; display?: string; images?: PromptImage[]; notice?: boolean; desk?: DeskOptIn }
+type Outgoing = {
+  text: string
+  display?: string
+  images?: PromptImage[]
+  notice?: boolean
+  desk?: DeskOptIn
+  /** The box's pills (pastes, images), to put back if the turn is held and then cancelled. */
+  saved?: Queued["saved"]
+  /** The background results this message carries, to queue again if it is held and then cancelled. */
+  noticeTexts?: string[]
+}
 
 /**
  * Background subagent results go to the model on their own turn when nothing else is
@@ -280,7 +297,7 @@ export function deliverNotices(runtime: Runtime) {
   if (state.approval || state.question || state.deskApproval || inflight || state.queue.length > 0) return
   const texts = [...state.notices]
   setState("notices", [])
-  void send(runtime, { text: noticesMessage(texts), notice: true })
+  void send(runtime, { text: noticesMessage(texts), notice: true, noticeTexts: texts })
 }
 
 function send(runtime: Runtime, message: string | Outgoing) {
@@ -290,7 +307,7 @@ function send(runtime: Runtime, message: string | Outgoing) {
   let msg: Outgoing = typeof message === "string" ? { text: message } : message
   // Undelivered subagent results ride in front of what the user typed.
   if (!msg.notice && state.notices.length > 0) {
-    msg = { ...msg, display: msg.display ?? msg.text, text: `${noticesMessage(state.notices)}\n\n${msg.text}` }
+    msg = { ...msg, display: msg.display ?? msg.text, text: `${noticesMessage(state.notices)}\n\n${msg.text}`, noticeTexts: [...state.notices] }
     setState("notices", [])
   }
   if (!msg.notice) setState("noticeHold", false)
@@ -313,7 +330,7 @@ function send(runtime: Runtime, message: string | Outgoing) {
       disabled: config.autoCompact === "off",
     })
     if (auto) await compact(runtime, "auto", undefined, projected)
-    const first = await sendTurn(runtime, msg, { recover: config.autoCompact !== "off" })
+    const first = await turnWithHolds(runtime, msg, { recover: config.autoCompact !== "off" })
     if (typeof first === "boolean") return first
     return recoverOverflow(runtime, msg, first)
   })()
@@ -352,11 +369,84 @@ async function recoverOverflow(runtime: Runtime, msg: Outgoing, how: "resend" | 
     pushLine({ kind: "info", text: "Không nén được hội thoại để gửi lại: gõ /compact với hướng dẫn ngắn hơn, hoặc /new để bắt đầu phiên mới." })
     return false
   }
-  const again = how === "resend" ? await sendTurn(runtime, msg, { resend: true }) : await sendTurn(runtime, { text: CONTINUE_AFTER_OVERFLOW, notice: true })
+  const again =
+    how === "resend"
+      ? await turnWithHolds(runtime, msg, { resend: true })
+      : await turnWithHolds(runtime, { text: CONTINUE_AFTER_OVERFLOW, notice: true }, {})
   return again === true
 }
 
 let returnQueue: ((items: Queued[]) => void) | undefined
+/** Puts messages back into the box, ahead of its draft, without the "queued messages" flash. */
+let restoreInput: ((items: Queued[]) => void) | undefined
+
+/**
+ * A turn, and its card when it is held before sending (memory/binding: the profile or the constraints
+ * could not be read): try again, run without the failed sources (this turn and the sub-agents it
+ * starts only), or cancel. A retry after compacting goes through here too, so it gets the same card.
+ */
+async function turnWithHolds(runtime: Runtime, msg: Outgoing, mode: { recover?: boolean; resend?: boolean }): Promise<boolean | "resend" | "continue"> {
+  const mine = epoch
+  let waive: Waiver | undefined
+  let resend = mode.resend
+  for (;;) {
+    const result = await sendTurn(runtime, msg, { ...mode, resend, waive })
+    // Stopped while reading: nothing was sent, so it goes back like a cancel ("Đã dừng." is on screen).
+    if (result === "held-stopped") {
+      giveBack(msg)
+      return false
+    }
+    if (!(result instanceof TurnHeldError)) return result
+    if (epoch !== mine) return false
+    // Too large for the model: no choice would help (the constraints are never cut); the line says why.
+    if (result.hold.kind === "too-large") {
+      giveBack(msg)
+      return false
+    }
+    const hold = result.hold
+    const sources: BoundSource[] = []
+    if (hold.profile) sources.push("profile")
+    if (hold.constraints) sources.push("constraints")
+    const choice = await new Promise<HoldChoice>((resolve) =>
+      setState("turnHold", {
+        text: result.message,
+        waive: waiveLabel(sources),
+        choose: (c: HoldChoice) => {
+          setState("turnHold", undefined)
+          resolve(c)
+        },
+      }),
+    )
+    if (epoch !== mine) return false
+    if (choice === "cancel") {
+      giveBack(msg)
+      return false
+    }
+    // Only what failed is left out; a source that reads again next time is sent.
+    if (choice === "waive") waive = { profile: waive?.profile || !!hold.profile, constraints: waive?.constraints || !!hold.constraints }
+    // The question's line is on screen already.
+    resend = true
+  }
+}
+
+/**
+ * A held turn that will not be sent: its line leaves the screen (the model never saw it) and its words
+ * go back to the box once, ahead of what was typed meanwhile and of the draft. Background results it
+ * carried wait again for the next message.
+ */
+function giveBack(msg: Outgoing) {
+  if (!msg.notice) {
+    const at = lineIndex((l) => l.kind === "user" && l.text === (msg.display ?? msg.text))
+    if (at >= 0) setState("lines", (lines) => lines.filter((_, i) => i !== at))
+  }
+  if (msg.noticeTexts && msg.noticeTexts.length > 0) setState("notices", (n) => [...msg.noticeTexts!, ...n])
+  const items: Queued[] = msg.notice
+    ? []
+    : [{ text: msg.text, display: msg.display ?? msg.text, images: msg.images ?? [], saved: msg.saved ?? {}, ...(msg.desk ? { desk: msg.desk } : {}) }]
+  items.push(...state.queue)
+  setState("queue", [])
+  if (items.length > 0) restoreInput?.(items)
+}
 
 /**
  * A turn ended. Messages typed meanwhile go next, one per turn; after a stop or an error
@@ -440,13 +530,21 @@ function mentionsOf(runtime: Runtime, text: string) {
  * instead of false; a turn that failed before any tool ran is then left out of history.
  * `resend`: the same message again, its line is already in the transcript.
  */
-async function sendTurn(runtime: Runtime, msg: Outgoing, mode: { recover?: boolean; resend?: boolean } = {}): Promise<boolean | "resend" | "continue"> {
+async function sendTurn(
+  runtime: Runtime,
+  msg: Outgoing,
+  mode: { recover?: boolean; resend?: boolean; waive?: Waiver } = {},
+): Promise<boolean | "resend" | "continue" | TurnHeldError | "held-stopped"> {
   // A notification turn already has its "◆ Subagent nền …" lines.
   if (!msg.notice && !mode.resend) pushLine({ kind: "user", text: msg.display ?? msg.text })
   const userLine = msg.notice || mode.resend ? -1 : state.lines.length - 1
   const mine = epoch
   const live = () => epoch === mine
   let failed = false
+  /** Held before sending (memory/binding): turnWithHolds shows the card. */
+  let held: TurnHeldError | undefined
+  /** Held, but the user had already stopped the turn while the sources were read: no card. */
+  let heldStopped = false
   let overflow: "resend" | "continue" | undefined
   // The request asked for ultradesk (keyword, /<playbook>) and the model started a run.
   let deskStarted = false
@@ -502,6 +600,8 @@ async function sendTurn(runtime: Runtime, msg: Outgoing, mode: { recover?: boole
     // Desk runs are allowed by what the user did (keyword, /desk on, /<playbook>), never by a notice.
     const optIn: DeskOptIn | undefined = msg.notice || PLAYBOOKS.length === 0 ? undefined : (msg.desk ?? (state.deskMode ? "session" : undefined))
     runtime.deskOptIn = optIn
+    // Sub-agents started in this turn take the same choice (SubagentManager reads it at start).
+    runtime.turnWaiver = mode.waive
     const turn = runAgent({
       history: state.history,
       input: msg.text,
@@ -517,6 +617,8 @@ async function sendTurn(runtime: Runtime, msg: Outgoing, mode: { recover?: boole
       // A notification is harness text, not the user's: no user-prompt hooks on it.
       hooks: msg.notice ? undefined : runtime.hooks,
       memory: runtime.memory,
+      constraints: runtime.constraints,
+      waive: mode.waive,
       serverInstructions: () => runtime.mcp.instructions(),
       compactAt: state.autoCompactOff ? undefined : contextLimits()?.threshold,
     })
@@ -587,8 +689,16 @@ async function sendTurn(runtime: Runtime, msg: Outgoing, mode: { recover?: boole
     // Setup problems (no provider, model or key) are thrown before the turn starts.
     failed = true
     flush()
-    if (live()) pushLine({ kind: "error", text: describeError(error) })
+    if (error instanceof TurnHeldError && error.role === "main" && controller.signal.aborted) {
+      heldStopped = true
+      if (live()) pushLine({ kind: "info", text: "Đã dừng." })
+    } else if (error instanceof TurnHeldError && error.role === "main") {
+      held = error
+      // Unreadable: the card says it. Too large: no card, this line says it.
+      if (live() && error.hold.kind === "too-large") pushLine({ kind: "error", text: error.message })
+    } else if (live()) pushLine({ kind: "error", text: describeError(error) })
   } finally {
+    runtime.turnWaiver = undefined
     // After /clear the buffer belongs to nothing; never let its timer fire into a later turn.
     clearTimeout(flushTimer)
     if (!live()) pending = ""
@@ -601,7 +711,9 @@ async function sendTurn(runtime: Runtime, msg: Outgoing, mode: { recover?: boole
         pushLine({ kind: "info", text: deskSkippedNote(msg.desk, PLAYBOOKS) })
       }
       // Someone looking at another window hears that the answer (or the error) is in.
-      if (!controller.signal.aborted && !msg.notice && !overflow) {
+      // A held turn says why it waits (the last line on screen is the previous answer).
+      if (held && !msg.notice) attention?.attention("error", held.message.replace(/\s+/g, " ").trim().slice(0, 120))
+      else if (!controller.signal.aborted && !msg.notice && !overflow) {
         const last = state.lines.findLast((l) => l.kind === "assistant" || l.kind === "error")
         const text = last && "text" in last ? last.text.replace(/\s+/g, " ").trim().slice(0, 120) : ""
         attention?.attention(failed ? "error" : "done", failed ? `Lỗi: ${text}` : text || "Đã trả lời xong")
@@ -625,6 +737,8 @@ async function sendTurn(runtime: Runtime, msg: Outgoing, mode: { recover?: boole
     setState({ streaming: false, activity: undefined })
     if (abort === controller) abort = undefined
   }
+  if (heldStopped && live()) return "held-stopped"
+  if (held && live()) return held
   if (overflow && live() && !controller.signal.aborted) return overflow
   return live() && !failed && !controller.signal.aborted
 }
@@ -643,7 +757,7 @@ export function App(props: {
    * Who owns the keyboard instead of the prompt: an approval or a question from the model.
    * Every rule that hides the prompt, closes dialogs or reroutes Esc goes through this.
    */
-  const owner = () => state.approval ?? state.question ?? state.folderTrust ?? state.autoOptIn ?? state.deskApproval
+  const owner = () => state.approval ?? state.question ?? state.folderTrust ?? state.autoOptIn ?? state.deskApproval ?? state.turnHold
   /** The subagent panel's rows (ticks once a second so finished agents leave). */
   const panelTick = useNow(1000)
   const panelList = createMemo(() => panelAgents(panelTick()))
@@ -1281,7 +1395,11 @@ export function App(props: {
     pullBack(items)
     flash("Tin đang chờ đã được trả về ô nhập", 4000, "warning")
   }
-  onCleanup(() => (returnQueue = undefined))
+  restoreInput = pullBack
+  onCleanup(() => {
+    returnQueue = undefined
+    restoreInput = undefined
+  })
 
   /** Ctrl+S: put the draft aside (or bring it back); it also returns after the next send. */
   let stash: DraftSnapshot | undefined
@@ -1434,7 +1552,7 @@ export function App(props: {
       addHistory(`/${notebook}`)
       const problem = openNotebookForm(props.runtime.memory, notebook, parseCommand(text)!.args)
       // Not saved anywhere: keep what was typed in the box so it is not lost.
-      if (problem) return say(problem, "warning")
+      if (problem) return sayOff(problem)
       setInput("")
       return restoreStash()
     }
@@ -1454,7 +1572,7 @@ export function App(props: {
       // Typed while an answer is streaming: sent when it ends (Claude Code), ↑ to edit it.
       const desk = state.deskKeywordOn && hasDeskKeyword(shown) ? ("keyword" as const) : undefined
       if (state.streaming) return void setState("queue", (q) => [...q, { text, display: shown, images, saved, desk }])
-      void send(props.runtime, { text, display: shown, images, desk })
+      void send(props.runtime, { text, display: shown, images, desk, saved })
       return
     }
     const known = allCommands().some((c) => c.name.toLowerCase() === cmd.name) || cmd.name === "quit"
@@ -1465,6 +1583,15 @@ export function App(props: {
     setInput("")
     runCommand(cmd.name, cmd.args)
     restoreStash()
+  }
+
+  /** Why a notebook command did not open, said at once; then, read from the store, the constraints that still apply. */
+  function sayOff(problem: string) {
+    say(problem, "warning")
+    void offWithConstraints(props.runtime.memory, props.runtime.constraints, problem).then((text) => {
+      // Only if nothing newer replaced the message meanwhile.
+      if (text && state.notification?.text === problem) say(text, "warning")
+    })
   }
 
   function runCommand(name: string, args: string) {
@@ -1510,7 +1637,7 @@ export function App(props: {
       case "quyetdinh": {
         // Picked in the "/" list: the box held only the name, so clearing it lost nothing.
         const problem = openNotebookForm(props.runtime.memory, cmd.name, cmd.args)
-        if (problem) say(problem, "warning")
+        if (problem) sayOff(problem)
         return
       }
       case "profile":
@@ -1838,6 +1965,10 @@ export function App(props: {
         {/* A desk run's approval card waits behind tool approvals and questions. */}
         <Show when={!state.approval && !state.question ? state.deskApproval : undefined} keyed>
           {(request) => <DeskApprovalCard request={request} approvals={props.runtime.deskApprovals} />}
+        </Show>
+        {/* A held turn's card waits behind tool approvals and questions. */}
+        <Show when={!state.approval && !state.question ? state.turnHold : undefined} keyed>
+          {(card) => <HoldCard card={card} />}
         </Show>
         {/* A question stays mounted (answers kept) while an approval covers it. */}
         <Show when={state.question} keyed>

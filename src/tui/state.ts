@@ -84,6 +84,15 @@ export interface Activity {
  */
 export type Queued = { text: string; display: string; images: PromptImage[]; saved: Omit<DraftSnapshot, "text">; desk?: DeskOptIn }
 
+/** What the user may do with a turn held before sending (memory/binding: a source failed to read). */
+export type HoldChoice = "retry" | "waive" | "cancel"
+/** The card of a held turn: why, the run-anyway button's label, and where the answer goes. */
+export interface TurnHoldCard {
+  text: string
+  waive: string
+  choose(choice: HoldChoice): void
+}
+
 export type DialogName = "connect" | "model" | "skills" | "help" | "mcp" | "tools" | "context" | "sessions" | "memory" | "config" | "agents" | "tasks" | "watchlist" | "permissions" | "shortcuts" | "desk" | "effort" | "notebook-form"
 
 /** Which notebook form is open, and for what: a notebook command's arguments, or an entry picked in /memory. */
@@ -207,6 +216,8 @@ export const [state, setState] = createStore({
   deskKeywordOn: true,
   /** The approval card of a desk run waiting for the user. */
   deskApproval: undefined as DeskApprovalRequest | undefined,
+  /** A turn held before sending, waiting for the user's choice. */
+  turnHold: undefined as TurnHoldCard | undefined,
   /** Run /desk opens on (enter on a panel row). */
   deskFocus: undefined as string | undefined,
 })
@@ -253,4 +264,5 @@ export function requestExit() {
  * A prompt (approval or question) sits on top. Panels and dialogs stay mounted underneath —
  * nothing typed or chosen is lost — but must not react to keys meanwhile.
  */
-export const blocked = () => Boolean(state.approval || state.question || state.folderTrust || state.autoOptIn || state.deskApproval)
+export const blocked = () =>
+  Boolean(state.approval || state.question || state.folderTrust || state.autoOptIn || state.deskApproval || state.turnHold)

@@ -17,7 +17,8 @@ import {
 import { ChatSetupError, describeError, resolveTarget, type Target } from "./chat"
 import { effortOptions, isEffort, mergeProviderOptions, type Effort } from "./effort"
 import type { AgentEvent } from "./events"
-import { loadProfile } from "./profile"
+import { bindLenient, bindTurn, checkFits, type Bound, type Waiver } from "./memory/binding/bind"
+import type { ConstraintReader } from "./memory/binding/constraints"
 import { assemble, type Assembled } from "./prompt/assemble"
 import { estimateTokens, tierOf, type Tier } from "./prompt/budget"
 import type { ClockSnapshot } from "./prompt/market-clock"
@@ -185,6 +186,13 @@ export interface RunOptions {
   preload?: string[]
   /** The <ultradesk> reminder (desk/keyword.ts deskReminder). */
   desk?: string
+  /**
+   * The user's constraints (memory/binding), read at the start of every turn for both roles,
+   * whatever `memory` is. Undefined: no constraint is sent and none can hold the turn.
+   */
+  constraints?: ConstraintReader
+  /** The user's choice for this turn: run without the sources that failed to read. Only the UI sets it. */
+  waive?: Waiver
 }
 
 export function label(registry: ToolRegistry, name: string, input: unknown) {
@@ -755,7 +763,7 @@ const cap = (text: string | undefined, max: number) =>
 /** Any of these sent: the `<quyen_tep>` reminder (workspace, temp folder, mode) rides along. */
 const FILE_TOOLS = ["read_file", "write_file", "shell"]
 
-async function assembleFor(opts: TurnInput, target: Target | undefined, extras: TurnExtras = {}) {
+async function assembleFor(opts: TurnInput, target: Target | undefined, bound: Bound, extras: TurnExtras = {}) {
   const info = target?.provider.models[target.model]
   const supportsTools = info?.tool_call !== false
   const tier = tierOf(info?.limit?.context)
@@ -774,8 +782,10 @@ async function assembleFor(opts: TurnInput, target: Target | undefined, extras: 
     sticky: opts.sticky ?? [],
     role: opts.role,
     agentPrompt: opts.agentPrompt,
-    // A subagent works for the main agent: no investor profile, no memory about the user.
-    investorProfile: opts.role === "subagent" ? undefined : await loadProfile(),
+    // A subagent works for the main agent: no investor profile (bindTurn never reads it for one).
+    investorProfile: bound.profile,
+    constraints: bound.constraints,
+    unread: bound.unread,
     memoryInstructions: opts.memory?.instructions?.(),
     memoryIndex: cap(await opts.memory?.index?.({ sessionId: opts.sessionId ?? "" }).catch(() => undefined), MEMORY_INDEX_MAX_CHARS),
     recalled: extras.recalled,
@@ -810,9 +820,9 @@ async function assembleFor(opts: TurnInput, target: Target | undefined, extras: 
   return { tier, supportsTools, toolNames, built, assembled }
 }
 
-async function prepare(opts: TurnInput, extras: TurnExtras): Promise<Prepared> {
+async function prepare(opts: TurnInput, bound: Bound, extras: TurnExtras): Promise<Prepared> {
   const target = opts.target ?? (await resolveTarget())
-  const { tier, supportsTools, toolNames, built, assembled } = await assembleFor(opts, target, extras)
+  const { tier, supportsTools, toolNames, built, assembled } = await assembleFor(opts, target, bound, extras)
   return {
     target,
     tier,
@@ -900,8 +910,11 @@ export async function summarizeConversation(
   // The same effort as the conversation's turns (config `effort` unless the caller passes one).
   const configured = (await loadConfig()).effort
   const effort = opts.effort ?? (isEffort(configured) ? configured : undefined)
+  // Not an answer turn, and idle compaction runs while the user is away: a failed source is left out,
+  // never held. A readable one is sent, so the summary request shares the turn's system prefix.
+  const bound = await bindLenient({ role: opts.role ?? "main", constraints: opts.constraints })
   for (let attempt = 0; ; attempt++) {
-    const prepared = await prepare({ ...opts, effort, history: head, input: "" }, {})
+    const prepared = await prepare({ ...opts, effort, history: head, input: "" }, bound, {})
     const { system, request, model, active, providerOptions } = requestFor(prepared, [...answerAfterTools(head), { role: "user", content: opts.prompt }])
     try {
       const result = await generateText({
@@ -953,7 +966,8 @@ export async function previewContext(opts: TurnInput) {
   } catch (error) {
     if (!(error instanceof ChatSetupError)) throw error
   }
-  const { assembled, tier, built } = await assembleFor(opts, target)
+  const bound = await bindLenient({ role: opts.role ?? "main", constraints: opts.constraints })
+  const { assembled, tier, built } = await assembleFor(opts, target, bound)
   const loaded = new Set(loadedTools(opts.history ?? []))
   return {
     report: assembled.report,
@@ -962,6 +976,8 @@ export async function previewContext(opts: TurnInput) {
     deferred: built?.deferred ?? [],
     loaded: built ? Object.keys(built.tools).filter((n) => loaded.has(n) && opts.registry.get(n)?.deferrable && !built.deferred.includes(n)) : [],
     model: target ? `${target.provider.name} · ${target.model}` : "chưa chọn model (giả định hạng B)",
+    /** Sources the next turn could not read: it would be held (the preview just leaves them out). */
+    unreadable: bound.unreadable ?? [],
   }
 }
 
@@ -975,9 +991,16 @@ export async function previewContext(opts: TurnInput) {
  */
 export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
   const sessionId = opts.sessionId ?? ""
+  const role = opts.role ?? "main"
+  // The profile and the constraints first: a source that failed to read holds the turn (TurnHeldError)
+  // before the model is resolved and before any hook runs, so a retry after the user chooses does not
+  // run the hooks twice. Read once per turn: the stop gate's reruns reuse this turn's system part.
+  const bound = await bindTurn({ role, constraints: opts.constraints, waive: opts.waive })
   // Fail fast on setup problems before any hook side effects run.
   const target0 = opts.target ?? (await resolveTarget())
   opts = { ...opts, target: target0 }
+  // Never cut the constraints to fit: a model too small for them whole gets no request.
+  checkFits(bound, role, target0)
   // The auto-mode classifier reads the user's words (or, for a subagent, its task as the main
   // agent's words), never the answers.
   opts.registry.gate?.auto?.log.turn(opts.input, { agent: opts.role === "subagent" ? opts.registry.origin : undefined, note: NOTICE_NOTE })
@@ -1005,7 +1028,7 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
   const config = await loadConfig()
   // The main agent's effort comes from config; a subagent's is resolved by its manager.
   if (opts.role !== "subagent" && opts.effort === undefined && isEffort(config.effort)) opts = { ...opts, effort: config.effort }
-  const prepared = await prepare(opts, extras)
+  const prepared = await prepare(opts, bound, extras)
   const { target, tools, built, assembled, supportsTools } = prepared
   const configured = config.maxSteps
   const maxSteps = opts.maxSteps ?? (Number.isInteger(configured) && configured! >= 2 ? configured! : DEFAULT_MAX_STEPS)

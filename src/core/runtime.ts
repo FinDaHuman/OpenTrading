@@ -6,6 +6,8 @@ import { loadConfig } from "./config"
 import { McpManager } from "./mcp/manager"
 import { askUserTool } from "./tools/builtin/ask-user"
 import { PermissionGate } from "./permission"
+import type { Waiver } from "./memory/binding/bind"
+import { createConstraintReader, type ConstraintReader } from "./memory/binding/constraints"
 import { FileMemory } from "./memory/file-memory"
 import { openNotebook } from "./memory/notebook/lifecycle"
 import { NoopMemory, type MemoryProvider } from "./memory/types"
@@ -65,6 +67,13 @@ export interface Runtime {
   deskApprovals: DeskApprovals
   /** How the request being answered opted into desk runs (set by the UI per turn). */
   deskOptIn?: DeskOptIn
+  /**
+   * The user's constraints in <home>/memory.db, read at the start of every turn of every agent,
+   * whatever `memory` is. It holds no connection between reads, so nothing to close on exit or switch.
+   */
+  constraints: ConstraintReader
+  /** The waiver of the main turn now running (set by the UI per turn, like deskOptIn). */
+  turnWaiver?: Waiver
   /** Agent types loaded by setAgents (desk agents resolve their type here). */
   agents: AgentDefinition[]
   /** Data directory this runtime reads and writes (OPENTRADING_HOME or the test's temp dir). */
@@ -205,14 +214,27 @@ export function initRuntime(opts: {
   })
   permissions.auto = auto
   questions.onAnswered = (qs, answers) => auto.log.answer(qs.map((q) => `${q.question} → ${answers[q.question] ?? "(bỏ qua)"}`).join("\n"))
-  const subagents = new SubagentManager({ parent: registry, skills: opts.skills, serverInstructions: () => mcp.instructions() })
+  const constraints = createConstraintReader(path.join(home, "memory.db"))
+  const subagents = new SubagentManager({
+    parent: registry,
+    skills: opts.skills,
+    serverInstructions: () => mcp.instructions(),
+    constraints,
+    // Read lazily: the UI sets it around each turn, after the runtime exists.
+    waiver: () => runtime.turnWaiver,
+  })
   registry.register(spawnSubagentTool(subagents))
   registry.register(sendMessageTool(subagents))
   registry.register(stopAgentTool(subagents))
   // Read lazily: setAgents replaces the list once agent types load.
-  const desk = new DeskEngine({ starter: subagents, agents: () => runtime.agents, playbooks: () => PLAYBOOKS })
+  const desk = new DeskEngine({
+    starter: subagents,
+    agents: () => runtime.agents,
+    playbooks: () => PLAYBOOKS,
+    waiver: () => runtime.turnWaiver,
+  })
   const deskApprovals = new DeskApprovals()
-  const runtime: Runtime = { registry, permissions, questions, mcp, hooks: new HookBus(), memory: new NoopMemory(), subagents, desk, deskApprovals, agents: [], home, workspace, files, history, auto }
+  const runtime: Runtime = { registry, permissions, questions, mcp, hooks: new HookBus(), memory: new NoopMemory(), constraints, subagents, desk, deskApprovals, agents: [], home, workspace, files, history, auto }
   registry.register(deskRunTool({ engine: desk, approvals: deskApprovals, playbooks: () => PLAYBOOKS, optIn: () => runtime.deskOptIn, mode: () => permissions.mode }))
   switchMemory(runtime, opts.memory ?? new NoopMemory())
   return runtime

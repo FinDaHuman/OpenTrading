@@ -361,8 +361,9 @@ describe("/nho: the remember form", () => {
     await command("/nho Không bán khống", "Ghi nhớ")
     tab()
     key("1")
-    const f = await frameWith("agent con chưa nhận")
-    expect(f).toContain("Hiện ràng buộc chỉ gửi cho agent chính; agent con chưa nhận (sẽ có ở bản sau).")
+    // Sub-agents now get every constraint too: the form no longer says they do not.
+    const f = await frameWith("Tổng ràng buộc sau khi lưu")
+    expect(f).not.toContain("agent con chưa nhận")
     await confirm(1)
     await until(() => state.dialog === undefined)
     expect(notice()).toBe("Đã lưu ràng buộc #5 (bản 1). Có hiệu lực từ lượt hỏi kế tiếp.")

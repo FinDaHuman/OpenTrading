@@ -67,7 +67,9 @@ const { currentTimeTool } = await import("../src/core/tools/builtin/current-time
 const { saveConfig } = await import("../src/core/config")
 const { setKey } = await import("../src/core/auth")
 const { HookBus } = await import("../src/core/hooks")
-const { childRegistry } = await import("../src/core/subagents/manager")
+const { childRegistry, SubagentManager } = await import("../src/core/subagents/manager")
+const { spawnSubagentTool } = await import("../src/core/tools/subagent/spawn")
+const { createConstraintReader } = await import("../src/core/memory/binding/constraints")
 type AgentEvent = import("../src/core/events").AgentEvent
 
 beforeAll(async () => {
@@ -99,7 +101,11 @@ function wired() {
   const turn = async (input: string) => {
     const from = bodies.length
     const events: AgentEvent[] = []
-    for await (const e of runAgent({ history, input, skills: [], registry, memory: notebook, hooks, sessionId: "s1" })) events.push(e)
+    // The constraints reach the model through the turn binding, as runtime.constraints wires it.
+    const constraints = createConstraintReader(nb.file())
+    for await (const e of runAgent({ history, input, skills: [], registry, memory: notebook, hooks, sessionId: "s1", constraints })) {
+      events.push(e)
+    }
     const done = events.find((e) => e.type === "done") as Extract<AgentEvent, { type: "done" }>
     history = [...history, ...done.messages]
     return { events, requests: bodies.slice(from) }
@@ -148,7 +154,12 @@ describe("what the core actually sends (three tiers)", () => {
       const { requests } = await turn("So sánh HPG, AAA, BBB, CCC, DDD và EEE")
       const body = requests[0]!
       const system = systemOf(body)
-      for (const [i, c] of constraints.entries()) expect(system).toContain(`- [#${i + 1} · bản 1] ${c}`)
+      const block = between(system, "rang_buoc")!
+      const policy = between(system, "memory_policy")!
+      for (const [i, c] of constraints.entries()) {
+        expect(block).toContain(`- [#${i + 1} · bản 1] ${c}`)
+        expect(policy).not.toContain(c)
+      }
       expect(JSON.stringify(body)).not.toContain("cắt bớt")
       expect(lastUserText(body)).toContain("[Memory · luận điểm · HPG · bản 1")
       for (const code of ["AAA", "BBB", "CCC", "DDD", "EEE"]) {
@@ -225,6 +236,31 @@ describe("stored text stays data (Story 8)", () => {
     for (let i = 0; i < 4; i++) await turn(`VCB có rẻ không? lần ${i}`)
     expect(bodies.length).toBeGreaterThanOrEqual(11)
     expect(JSON.stringify(bodies)).not.toContain(DECISION_MARKER)
+  })
+
+  test("the sub-agent path of the policy table: one entry of every kind, the sub-agent gets the constraints only", async () => {
+    seedExample(nb.store())
+    const { registry, turn } = wired()
+    const manager = new SubagentManager({ parent: registry, skills: () => [], constraints: createConstraintReader(nb.file()) })
+    registry.register(spawnSubagentTool(manager))
+    calls = [
+      {
+        tool: "spawn_subagent",
+        args: { description: "HPG", task: "Phân tích HPG", purpose: "trả lời", questions: ["Số liệu chính?"], output: "ngắn" },
+      },
+    ]
+    await turn("Phân tích Hòa Phát giúp tôi")
+    const children = bodies.filter((b) => systemOf(b).startsWith("<subagent>"))
+    expect(children.length).toBeGreaterThanOrEqual(1)
+    for (const body of children) {
+      const all = JSON.stringify(body)
+      // constraint: yes; style, thesis, lesson (index or block), decision: never (policy table, "subagent" role).
+      expect(between(systemOf(body), "rang_buoc")).toContain("- [#1 · bản 2] Không dùng margin, kể cả T+0")
+      for (const absent of ["Trả lời ngắn, có bảng", "Hưởng lợi từ đầu tư công", "Định giá ngân hàng", "[Sổ ghi nhớ", DECISION_MARKER]) {
+        expect(all).not.toContain(absent)
+      }
+      expect((body.tools ?? []).some((t) => t.function?.name === "memory_read")).toBe(false)
+    }
   })
 })
 

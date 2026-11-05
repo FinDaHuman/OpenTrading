@@ -47,6 +47,22 @@ adopt Semantic Versioning when it exposes a stable public API.
   showed; a newer one saved meanwhile is asked about, never attached silently. Ctrl+C on a changed
   form asks like Esc. `/memory` adds edit, a thesis state change, and a Markdown export to the app's
   exports folder, decisions left out unless asked for on that export.
+- The user's constraints reach every agent, whatever memory is set to in `/config`: the host reads
+  them from `memory.db` at the start of every turn of the main agent and of every sub-agent (new
+  task, continued task, ultradesk) and sends them word for word with id and version, exactly once,
+  never cut. With the notebook off the store is opened read-only (never created, never migrated, no
+  connection kept); `/config` and the notebook-off message say how many constraints still apply. A
+  model too small for them is not sent the turn.
+- A turn is held, before anything is sent and before any hook runs, when `INVESTOR.md` or the
+  constraint store exists but cannot be read (reads have a deadline and retry passing locks for
+  under a second). The TUI shows a card: retry, run this turn without the failed source (the model
+  is told what is missing; a source that read is still sent; sub-agents started in that turn, and
+  every agent of an ultradesk run started in it, follow the same choice), or cancel (the question goes
+  back to the box, before anything typed meanwhile; stopping the turn while it reads does the same).
+  `/context` says which source could not be read and that the next turn will be held.
+  A store from a newer build, another file or damaged data gets a way out in the message; the app
+  never deletes or repairs it. The provider check from the command line prints the reason and exits
+  with code 1. Compaction and `/context` leave a failed source out instead of holding.
 
 ### Fixed
 
@@ -68,6 +84,12 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 - Subagents no longer get the session history tools (`session_list`, `session_get`); the main agent
   keeps them and quotes what a task needs.
+- `/profile` writes a template whose examples are comments. What goes to the model from
+  `INVESTOR.md` leaves out comments, lines equal to an example of the old template (an edited one is
+  kept) and empty sections, and is escaped so no text can close its block. A profile that is only
+  headings and comments sends nothing.
+- The notebook no longer lists the constraints in its own system part (they have their own block);
+  the `/nho` form no longer says sub-agents do not get them.
 
 ## [0.3.1] — 2026-11-03
 

@@ -877,8 +877,9 @@ test("/profile creates INVESTOR.md from a template", async () => {
 test("/context shows each prompt layer with its token estimate", async () => {
   await setup.mockInput.typeText("/context")
   setup.mockInput.pressEnter()
-  const frame = await setup.waitForFrame((f) => f.includes("Danh tính & bất biến") && f.includes("Hồ sơ nhà đầu tư"))
-  expect(frame).toContain("Danh sách skill")
+  const frame = await setup.waitForFrame((f) => f.includes("Danh tính & bất biến") && f.includes("Danh sách skill"))
+  // INVESTOR.md is still the untouched template /profile wrote: its examples are comments, nothing is sent.
+  expect(frame).not.toContain("Hồ sơ nhà đầu tư")
   expect(frame).toContain("hạng B")
   show(frame)
   setup.mockInput.pressEscape()
