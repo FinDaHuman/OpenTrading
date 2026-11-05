@@ -12,6 +12,7 @@ import { dataDir } from "./paths"
 import type { Skill } from "./skills/schema"
 import { currentTimeTool } from "./tools/builtin/current-time"
 import { readResultTool } from "./tools/builtin/read-result"
+import { computeTool } from "./tools/compute"
 import { loadSkillTool } from "./tools/builtin/load-skill"
 import { chartDepthTool, chartRenderTool } from "./tools/chart/render"
 import { chartCompareTool } from "./tools/chart/compare"
@@ -137,6 +138,7 @@ export function initRuntime(opts: {
       () => new Set(registry.list().map((d) => d.name)),
     ),
   )
+  registry.register(computeTool())
   registry.register(chartRenderTool())
   registry.register(chartCompareTool())
   registry.register(chartDepthTool())

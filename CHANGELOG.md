@@ -12,6 +12,8 @@ adopt Semantic Versioning when it exposes a stable public API.
   the 40 most recent results.
 - `read_result` reads a saved result as it was fetched. Compaction now points old data results to
   it instead of telling the model to fetch them again, which could return other numbers.
+- `compute` does fixed arithmetic on fetched results by ref (returns, means, TTM, relative
+  strength, ranks), so the model stops doing it by hand. Its result has a ref of its own.
 ### Changed
 
 - The source line after a data server's result names the provider and, when the server gives it,
