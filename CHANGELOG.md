@@ -16,11 +16,17 @@ adopt Semantic Versioning when it exposes a stable public API.
   strength, ranks), so the model stops doing it by hand. Its result has a ref of its own.
 ### Changed
 
+- Each turn with tools records figures that no result held, in the session and the eval trace.
+  Nothing is sent back to the model yet: the check first has to prove its precision.
+- A long MCP table is cut by rows, not characters: it stays valid JSON with every key and its
+  first and latest rows, and says how many rows went and where to read them.
 - The source line after a data server's result names the provider and, when the server gives it,
   how far the data goes, so an answer can cite them.
 
 ### Fixed
 
+- Stop gate: a figure in a compact JSON array counts as known, and "tính từ đầu năm" no longer
+  reads as the model's own arithmetic.
 - `desk-eval.ts` can read pages again: its approval responder never ran, so every `web_fetch` to
   a new domain was refused. Expect more requests than its estimate, because `web_fetch` calls a
   side model.
