@@ -290,6 +290,26 @@ test("parallel spawns beyond subagents.maxConcurrent wait for a slot instead of 
   expect(manager.limiter.stats()).toEqual({ running: 0, waiting: 0, max: 2 })
 })
 
+test("the parent's report says which data the child did not get", async () => {
+  const { registry } = setup((r) =>
+    r.register({
+      name: "mcp__ot__source",
+      description: "a data tool",
+      input: z.object({}),
+      readOnly: true,
+      async execute() {
+        throw new Error('MCP server "ot" lỗi tạm thời (HTTP 502). Đã thử lại 2 lần.')
+      },
+    }),
+  )
+  parentCalls = [spawn("FPT")]
+  childCall = { name: "mcp__ot__source", args: {} }
+  const events = await collect(runAgent({ history: [], input: "x", skills: [], registry }))
+  const [end] = ends(events)
+  expect(end!.ok).toBe(true)
+  expect(end!.output).toContain("! 1 nguồn lỗi chưa khắc phục trong lượt này: source")
+})
+
 test("a child that fails with nothing to show fails the call; the error reaches the parent model", async () => {
   const { registry } = setup()
   parentCalls = [spawn("FPT")]

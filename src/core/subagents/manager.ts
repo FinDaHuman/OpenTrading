@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises"
 import type { z } from "zod"
 import { runAgent } from "../agent"
+import { gapsLine } from "../loop/failures"
 import { describeError, resolveTarget, type Target } from "../chat"
 import { loadConfig, type Config } from "../config"
 import { isEffort, type Effort } from "../effort"
@@ -536,6 +537,8 @@ export class SubagentManager {
               if (event.outcome === "completed") {
                 const text = lastAssistantText(event.messages)
                 run.text = text === "(không có câu trả lời)" ? "" : text
+                // The parent only reads the report: what the child did not get must be in it.
+                if (event.dataGaps && !spec.schema) run.text = `${run.text}\n\n${gapsLine(event.dataGaps)}`.trim()
                 run.status = "completed"
               } else if (missedTool && event.outcome === "failed") {
                 run.text = streamed.trim()
