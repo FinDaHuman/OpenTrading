@@ -562,7 +562,7 @@ async function sendTurn(runtime: Runtime, msg: Outgoing, mode: { recover?: boole
           if (event.usage) setState({ contextTokens: event.usage.contextTokens, contextEstimated: event.usage.estimated })
           if (event.messages.length > 0) {
             setState("history", (history) => [...history, ...event.messages])
-            recordTurn(event.messages, event.usage?.contextTokens, { recoveries: event.recoveries, unanswered: event.unanswered, retiredTodos: event.retiredTodos, dataGaps: event.dataGaps })
+            recordTurn(event.messages, event.usage?.contextTokens, { recoveries: event.recoveries, unanswered: event.unanswered, retiredTodos: event.retiredTodos, dataGaps: event.dataGaps, ungrounded: event.ungrounded })
           }
           if (event.dataGaps) {
             closeText()

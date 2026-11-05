@@ -45,6 +45,7 @@ export type SessionEntry =
       retiredTodos?: number
       /** Tools whose data the turn did not get (loop/failures.ts). */
       dataGaps?: string[]
+      ungrounded?: string[]
     }
   /**
    * The history was compacted: `messages` replaces everything before it for the model. The
@@ -134,6 +135,7 @@ export interface TurnInfo {
   unanswered?: boolean
   retiredTodos?: number
   dataGaps?: string[]
+  ungrounded?: string[]
 }
 
 export class Session {
@@ -265,6 +267,7 @@ export class Session {
       ...(info.unanswered ? { unanswered: true } : {}),
       ...(info.retiredTodos ? { retiredTodos: info.retiredTodos } : {}),
       ...(info.dataGaps ? { dataGaps: info.dataGaps } : {}),
+      ...(info.ungrounded?.length ? { ungrounded: info.ungrounded } : {}),
     })
     await appendFile(full, lines.map((l) => JSON.stringify(l)).join("\n") + "\n", "utf8")
     this.file = file

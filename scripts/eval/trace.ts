@@ -51,6 +51,8 @@ export type TraceEvent =
       unanswered: boolean
       recoveries: { kind: string; attempt: number }[]
       data_gaps: string[]
+      /** What the harness itself measured, to compare with the scorer's untraced figures. */
+      ungrounded?: string[]
       /** Finished model steps, subagents included. */
       model_steps: number
       /** HTTP requests to a model: retries, subagents and side calls included. */

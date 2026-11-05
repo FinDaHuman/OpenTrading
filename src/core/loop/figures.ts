@@ -1,7 +1,6 @@
 /**
- * Figures of an answer and the numbers of what the harness fetched, for scoring only. The stop
- * gate has its own check, tuned to send back as little as possible; this one counts everything,
- * and keeps a separate list of what it could not read rather than guessing.
+ * Figures of an answer and the numbers of what the harness fetched: the eval scorer, the stop
+ * gate and the per-turn measure all read them the same way.
  */
 
 export interface Figure {
@@ -20,7 +19,7 @@ export interface Figure {
 const B = String.raw`(?<![\p{L}\p{N}])`
 const E = String.raw`(?![\p{L}\p{N}])`
 /** "tính từ đầu năm" means "since": a period, not arithmetic. */
-const DERIVED = new RegExp(String.raw`${B}(tự tính|tính từ(?!\s+(đầu|đáy|đỉnh|cuối|ngày|năm|tháng|quý|phiên|lúc|khi|thời|\d{1,2}\/)))${E}`, "iu")
+export const DERIVED = new RegExp(String.raw`${B}(tự tính|tính từ(?!\s+(đầu|đáy|đỉnh|cuối|ngày|năm|tháng|quý|phiên|lúc|khi|thời|\d{1,2}\/)))${E}`, "iu")
 const DATES = /(?<![\d.,/-])\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}(?![\d/-])|(?<![\d.,/])\d{1,2}\/\d{4}(?!\d)|(?<![\d.,:])\d{1,2}:\d{2}(?![\d:])/g
 const PERIODS = /\b[QH]\d(?:\/\d{2,4})?\b|\b(?:quý|năm|tháng|phiên|ngày)\s+\d+/giu
 const FIGURE = /(?<![\p{L}\d.,])(\d{1,3}(?:[.,]\d{3})+(?:[.,]\d+)?|\d+[.,]\d+|\d+)(?:\s*(%|đồng|đ(?!\p{L})|nghìn tỷ|tỷ|triệu|nghìn|lần))?/gu
@@ -66,12 +65,16 @@ const JSON_NUMBER = /-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/g
 /** Numbers as a Vietnamese web page writes them: 1.234,5 and 24,1. */
 const VIETNAMESE_NUMBER = /\d{1,3}(?:\.\d{3})+(?:,\d+)?|\d+,\d{1,2}(?!\d)/g
 
+function scan(text: string, out: Set<number>) {
+  for (const match of text.matchAll(JSON_NUMBER)) out.add(Number(match[0]))
+  for (const match of text.matchAll(VIETNAMESE_NUMBER)) for (const value of readings(match[0]).values) out.add(value)
+}
+
 function walk(value: unknown, out: Set<number>) {
   if (typeof value === "number") out.add(value)
-  else if (typeof value === "string") {
-    const n = Number(value)
-    if (value.trim() && Number.isFinite(n)) out.add(n)
-  } else if (Array.isArray(value)) for (const item of value) walk(item, out)
+  // A number in words counts too: a message's text, a note in a result.
+  else if (typeof value === "string") scan(value, out)
+  else if (Array.isArray(value)) for (const item of value) walk(item, out)
   else if (value && typeof value === "object") for (const item of Object.values(value)) walk(item, out)
 }
 
@@ -84,10 +87,15 @@ export function sourceNumbers(text: string): Set<number> {
     return out
   } catch {}
   // A capped result does not parse, and it is the long tables that get capped.
-  for (const match of body.matchAll(JSON_NUMBER)) out.add(Number(match[0]))
-  for (const match of body.matchAll(VIETNAMESE_NUMBER)) for (const value of readings(match[0]).values) out.add(value)
+  scan(body, out)
   return out
 }
+
+/** Stated figures found in none of `numbers`: what a turn could not have read anywhere. */
+export const ungroundedFigures = (text: string, numbers: Set<number>) =>
+  answerFigures(text)
+    .filter((f) => !f.derived && !tracesTo(f, numbers))
+    .map((f) => f.text)
 
 /** A tool may give a ratio or thousands where the answer writes a percent or dong. */
 const SCALES = [1, 100, 0.01, 1e3, 1e-3, 1e6, 1e-6, 1e9, 1e-9]

@@ -212,7 +212,7 @@ async function ask(run: EvalRun, question: EvalQuestion, asked: Asked, now: Date
   write({ type: "question", ...asked, group: question.group, question: question.question, now: question.now })
   const before = new Set(runtime.subagents.list().map((v) => v.id))
   const started = Date.now()
-  const result = { text: "", streamed: "", steps: 0, input: 0, output: 0, outcome: "failed", unanswered: false, recoveries: [] as { kind: string; attempt: number }[], gaps: [] as string[] }
+  const result = { text: "", streamed: "", steps: 0, input: 0, output: 0, outcome: "failed", unanswered: false, recoveries: [] as { kind: string; attempt: number }[], gaps: [] as string[], ungrounded: [] as string[] }
   const say = (event: TraceEvent) => write(event)
   const timeout = AbortSignal.timeout(run.timeoutMs ?? DEFAULT_TIMEOUT_MS)
   try {
@@ -243,6 +243,7 @@ async function ask(run: EvalRun, question: EvalQuestion, asked: Asked, now: Date
         result.unanswered = event.unanswered ?? false
         result.recoveries = event.recoveries ?? []
         result.gaps = event.dataGaps ?? []
+        result.ungrounded = event.ungrounded ?? []
       }
     }
   } catch (error) {
@@ -267,6 +268,7 @@ async function ask(run: EvalRun, question: EvalQuestion, asked: Asked, now: Date
     unanswered: result.unanswered,
     recoveries: result.recoveries,
     data_gaps: result.gaps,
+    ungrounded: result.ungrounded,
     model_steps: result.steps,
     requests: meter.requests,
     input_tokens: result.input,
