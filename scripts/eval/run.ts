@@ -8,6 +8,7 @@ import { dataDir } from "../../src/core/paths"
 import { initRuntime, setAgents } from "../../src/core/runtime"
 import { loadSkills, skillRoots } from "../../src/core/skills/loader"
 import pkg from "../../package.json"
+import { ledgerFile, RequestLedger, spentToday } from "./ledger"
 import { parseQuestions, prepareHome, runEval } from "./runner"
 import { traceFile } from "./trace"
 
@@ -16,10 +17,14 @@ import { traceFile } from "./trace"
  * quota, so it calls a model only with --yes, and it is never run by the tests.
  *
  * Cách chạy: bun scripts/eval/run.ts --questions file.json --model provider/model
- *            [--only id1,id2] [--repeat 1] [--timeout-min 15] [--out trace.jsonl] [--yes]
+ *            [--only id1,id2] [--repeat 1] [--timeout-min 15] [--max-requests 500]
+ *            [--out trace.jsonl] [--yes]
+ *   --max-requests  trần request của model này trong ngày, cộng dồn qua các lần chạy
  */
 
 const REQUESTS_PER_QUESTION = 5
+/** The free daily quota of the models this is usually run on. */
+const DEFAULT_MAX_REQUESTS = 500
 
 const arg = (name: string) => {
   const i = process.argv.indexOf(name)
@@ -38,18 +43,20 @@ const model = { provider: pick.slice(0, slash), model: pick.slice(slash + 1) }
 const only = arg("--only")?.split(",")
 const repeat = Number(arg("--repeat") ?? 1)
 const minutes = Number(arg("--timeout-min") ?? 15)
+const cap = Number(arg("--max-requests") ?? DEFAULT_MAX_REQUESTS)
 const questions = parseQuestions(await readFile(file, "utf8")).filter((q) => !only || only.includes(q.id))
 if (questions.length === 0) stop("Không còn câu hỏi nào sau --only.")
 
 console.log(`${questions.length} câu × ${repeat} lần · ${pick}`)
-console.log(`Dự kiến khoảng ${questions.length * repeat * REQUESTS_PER_QUESTION} request.`)
+const realHome = dataDir()
+const ledger = ledgerFile(realHome)
+console.log(`Dự kiến khoảng ${questions.length * repeat * REQUESTS_PER_QUESTION} request. Hôm nay đã dùng ${await spentToday(ledger, pick)}/${cap}.`)
 // Never spends quota by accident: without --yes it only prints the plan above.
 if (!process.argv.includes("--yes")) {
   console.log("Chỉ in ước tính. Thêm --yes để chạy thật (tốn quota của bạn).")
   process.exit(0)
 }
 
-const realHome = dataDir()
 const out = path.resolve(arg("--out") ?? path.join(realHome, "exports", `eval-${new Date().toISOString().replace(/[:.]/g, "-")}.jsonl`))
 const home = await mkdtemp(path.join(os.tmpdir(), "ot-eval-"))
 const work = path.join(home, "work")
@@ -57,8 +64,14 @@ const commit = (await Bun.$`git rev-parse --short HEAD`.cwd(import.meta.dir).qui
 await mkdir(work)
 await prepareHome(realHome, home, model)
 process.env.OPENTRADING_HOME = home
-// The home holds a copy of the keys: it goes even when the run is interrupted.
-process.on("SIGINT", () => rm(home, { recursive: true, force: true }).finally(() => process.exit(130)))
+const requests = await RequestLedger.open(ledger, pick, cap)
+// The home holds a copy of the keys, and requests already sent are spent quota.
+process.on("SIGINT", () => {
+  void requests
+    .flush()
+    .finally(() => rm(home, { recursive: true, force: true }))
+    .finally(() => process.exit(130))
+})
 
 const { skills } = await loadSkills(skillRoots(work, { project: false }))
 const runtime = initRuntime({ home, cwd: work, skills: () => skills })
@@ -70,7 +83,7 @@ try {
   const target = await resolveTarget(model)
   const { effort, toolSearch, maxSteps } = await loadConfig()
   const settings = { effort, toolSearch, maxSteps }
-  await runEval({ runtime, skills, target, questions, repeat, timeoutMs: minutes * 60_000, write: traceFile(out), version: pkg.version, commit, settings })
+  await runEval({ runtime, skills, target, questions, repeat, timeoutMs: minutes * 60_000, write: traceFile(out), version: pkg.version, commit, settings, ledger: requests })
   console.log(`Trace: ${out}`)
 } finally {
   await runtime.mcp.stop()

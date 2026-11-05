@@ -5,6 +5,7 @@ import { z } from "zod"
 import { runAgent } from "../../src/core/agent"
 import type { Target } from "../../src/core/chat"
 import { promptVersion } from "../../src/core/prompt/assemble"
+import { onModelRequest } from "../../src/core/requests"
 import type { Runtime } from "../../src/core/runtime"
 import type { Skill } from "../../src/core/skills/schema"
 import { currentTimeTool } from "../../src/core/tools/builtin/current-time"
@@ -12,6 +13,7 @@ import { clearResults, useResultSession } from "../../src/core/tools/refs"
 import type { ToolDef, ToolResult } from "../../src/core/tools/types"
 import type { ToolRegistry } from "../../src/core/tools/registry"
 import { answerUnattended } from "./approvals"
+import type { RequestLedger } from "./ledger"
 import { TRACE_VERSION, type TraceEvent, type TraceWriter } from "./trace"
 
 const QUESTIONS = z
@@ -46,6 +48,20 @@ export async function prepareHome(from: string, to: string, target: { provider: 
   await writeFile(path.join(to, "config.json"), JSON.stringify(target))
 }
 
+interface Asked {
+  q: string
+  rep: number
+}
+
+interface Observed {
+  callId: string
+  tool: string
+  input: unknown
+  ok: boolean
+  raw: string
+  agent?: string
+}
+
 /**
  * Report what each tool returned before the output cap. Definitions are changed in place, so
  * the registries subagents build from them report too; calling this again is safe. `asked` is
@@ -71,20 +87,6 @@ export function observeTools(registry: ToolRegistry, seen: WeakSet<ToolDef>, ask
   }
 }
 
-interface Asked {
-  q: string
-  rep: number
-}
-
-interface Observed {
-  callId: string
-  tool: string
-  input: unknown
-  ok: boolean
-  raw: string
-  agent?: string
-}
-
 export interface EvalRun {
   runtime: Runtime
   skills: Skill[]
@@ -98,13 +100,15 @@ export interface EvalRun {
   commit?: string
   /** What must stay fixed between runs to compare them (effort, tool search, step limit). */
   settings?: Record<string, unknown>
+  /** Stops the run at its cap. Reaching it mid-question aborts that question. */
+  ledger?: RequestLedger
 }
 
 const DEFAULT_TIMEOUT_MS = 15 * 60_000
 
 /** Every question, one fresh conversation each. Nothing a question does reaches the next. */
 export async function runEval(run: EvalRun) {
-  const { runtime, write } = run
+  const { runtime, write, ledger } = run
   const { registry } = runtime
   const web = WEB_TOOLS.flatMap((name) => registry.get(name) ?? [])
   const stopAnswering = answerUnattended(runtime.permissions, "eval")
@@ -123,9 +127,19 @@ export async function runEval(run: EvalRun) {
   })
   const seen = new WeakSet<ToolDef>()
   let asked: Asked = { q: "", rep: 0 }
+  const meter = { requests: 0, capped: new AbortController() }
+  const stopMeter = onModelRequest((request) => {
+    meter.requests++
+    ledger?.note(`${request.provider}/${request.model}`)
+    if (ledger?.exhausted) meter.capped.abort()
+  })
   try {
     for (let rep = 1; rep <= (run.repeat ?? 1); rep++) {
       for (const question of run.questions) {
+        if (ledger?.exhausted) {
+          write({ type: "stopped", reason: "request-cap", spent: ledger.spent, cap: ledger.cap })
+          return
+        }
         const now = new Date(question.now)
         registry.register(currentTimeTool(() => now))
         for (const def of web) {
@@ -140,10 +154,13 @@ export async function runEval(run: EvalRun) {
           () => asked,
           (tag, { callId, ...call }) => write({ type: "tool_raw", ...tag, call_id: callId, ...call }),
         )
-        await ask(run, question, asked, now)
+        meter.requests = 0
+        await ask(run, question, asked, now, meter)
+        await ledger?.flush()
       }
     }
   } finally {
+    stopMeter()
     stopAnswering()
   }
 }
@@ -155,7 +172,7 @@ function finalText(messages: ModelMessage[]) {
   return (content ?? []).flatMap((part) => (part.type === "text" ? [part.text] : [])).join("")
 }
 
-async function ask(run: EvalRun, question: EvalQuestion, asked: Asked, now: Date) {
+async function ask(run: EvalRun, question: EvalQuestion, asked: Asked, now: Date, meter: { requests: number; capped: AbortController }) {
   const { runtime, write } = run
   clearResults()
   useResultSession(`${asked.q}#${asked.rep}`)
@@ -165,6 +182,7 @@ async function ask(run: EvalRun, question: EvalQuestion, asked: Asked, now: Date
   const started = Date.now()
   const result = { text: "", streamed: "", steps: 0, input: 0, output: 0, outcome: "failed", unanswered: false, recoveries: [] as { kind: string; attempt: number }[], gaps: [] as string[] }
   const say = (event: TraceEvent) => write(event)
+  const timeout = AbortSignal.timeout(run.timeoutMs ?? DEFAULT_TIMEOUT_MS)
   try {
     for await (const event of runAgent({
       history: [],
@@ -174,7 +192,7 @@ async function ask(run: EvalRun, question: EvalQuestion, asked: Asked, now: Date
       serverInstructions: () => runtime.mcp.instructions(),
       target: run.target,
       now,
-      signal: AbortSignal.timeout(run.timeoutMs ?? DEFAULT_TIMEOUT_MS),
+      signal: AbortSignal.any([timeout, meter.capped.signal]),
     })) {
       if (event.type === "text-delta") result.streamed += event.text
       else if (event.type === "tool-start") say({ type: "tool_call", ...asked, call_id: event.callId, tool: event.name, input: event.input, step: event.step })
@@ -212,10 +230,12 @@ async function ask(run: EvalRun, question: EvalQuestion, asked: Asked, now: Date
     text: result.text.trim(),
     streamed: result.streamed.trim(),
     outcome: result.outcome,
+    ...(meter.capped.signal.aborted ? { abort: "cap" as const } : timeout.aborted ? { abort: "timeout" as const } : {}),
     unanswered: result.unanswered,
     recoveries: result.recoveries,
     data_gaps: result.gaps,
     model_steps: result.steps,
+    requests: meter.requests,
     input_tokens: result.input,
     output_tokens: result.output,
     duration_ms: Date.now() - started,

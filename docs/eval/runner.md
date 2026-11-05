@@ -28,8 +28,12 @@ Each question has an `id`, a `group` (A–F), the `question`, and `now`, the mom
 
 `answer.text` is the answer the harness kept. `answer.streamed` is everything the user saw, including a draft the stop gate sent back.
 
+## Request cap
+
+Every model request is counted at the provider's fetch and added to `<home>/usage/YYYY-MM-DD.json`, by the `provider/model` it went to, in the real home. `--max-requests` (default 500) is a cap for the `--model` model for the day, across runs; a side model on another provider is booked under its own name and does not spend it. The run stops before the next question at the cap, and a question that reaches it mid-way is aborted; a `stopped` line records it. The ledger counts only eval runs, not requests made in the TUI, and the day is the local day, while a provider's quota may reset at another hour.
+
 ## Limits
 
-- `model_steps` counts finished model steps. Retries and side calls (web side model, classifier) are not in it.
+- `answer.requests` counts HTTP requests to a model, with retries, subagents and side calls. `model_steps` counts finished steps only. Tokens of side calls are not in the trace.
 - The runner does not compact. A question that outgrows the context fails and is traced as failed.
 - Nobody approves anything: `web_fetch` is allowed once per call, because a gate with no UI would refuse every new domain, and everything else that asks is refused (`scripts/eval/approvals.ts`). This is a list, not "read-only": `read_file` also asks, for paths outside the workspace. A refusal is in the trace.

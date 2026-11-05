@@ -37,6 +37,8 @@ export type TraceEvent =
   | (Asked & { type: "retry"; attempt: number; delay_ms: number; label: string })
   | (Asked & { type: "notice"; text: string })
   | (Asked & { type: "error"; message: string; kind?: string })
+  /** The run ended early: questions after this one were not asked. */
+  | { type: "stopped"; reason: "request-cap"; spent: number; cap: number }
   | (Asked & {
       type: "answer"
       /** The answer the harness kept. */
@@ -44,11 +46,15 @@ export type TraceEvent =
       /** Everything the user saw stream, drafts the stop gate threw away included. */
       streamed?: string
       outcome: string
+      /** Why it was cut. A cap says nothing about the harness; a timeout does. */
+      abort?: "cap" | "timeout"
       unanswered: boolean
       recoveries: { kind: string; attempt: number }[]
       data_gaps: string[]
-      /** Finished model steps, subagents included. Retries and side calls are not in it. */
+      /** Finished model steps, subagents included. */
       model_steps: number
+      /** HTTP requests to a model: retries, subagents and side calls included. */
+      requests?: number
       input_tokens: number
       output_tokens: number
       duration_ms: number
