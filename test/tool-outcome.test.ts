@@ -36,7 +36,7 @@ test("without server fields the notice leaves a repeat open and states no wait",
   const state = readSourceState(envelope({ availability: "unavailable", warnings: ["x briefly unavailable (recent timeout), retry shortly"] }))!
   const notice = sourceNotice("mcp__ot__vn_fundamentals", state)
   expect(notice.startsWith(`${SOURCE_FAILED_PREFIX} vn_fundamentals: x briefly unavailable`)).toBe(true)
-  expect(notice).toContain("Có thể thử lại một lần ở bước sau")
+  expect(notice).toContain("Gọi lại đúng lời gọi này một lần ở bước kế tiếp")
   expect(notice).toContain("không tự điền số")
   expect(notice).not.toMatch(/\d+s\b/)
 })
@@ -44,7 +44,7 @@ test("without server fields the notice leaves a repeat open and states no wait",
 test("a wait and alternatives appear only when the server gave them", () => {
   const state = readSourceState(envelope({ availability: "unavailable", reason: "recent_failure", retryable: true, retry_after_s: 34.2, alternatives: ["financial_ratios"] }))!
   expect(sourceNotice("mcp__ot__vn_fundamentals", state)).toBe(
-    `${SOURCE_FAILED_PREFIX} vn_fundamentals: nguồn vừa lỗi. Thử lại sau 35s, hoặc dùng financial_ratios; nếu vẫn không có, báo phần còn thiếu, không tự điền số.`,
+    `${SOURCE_FAILED_PREFIX} vn_fundamentals: nguồn vừa lỗi. Gọi financial_ratios ngay ở bước kế tiếp. Nguồn này thử lại được sau 35s. Nếu vẫn không có, báo phần còn thiếu, không tự điền số.`,
   )
 })
 
@@ -53,7 +53,13 @@ test("a failure the server calls permanent says a repeat will not help", () => {
   const notice = sourceNotice("mcp__ot__x", state)
   expect(notice).toContain("nguồn chưa được cấu hình")
   expect(notice).toContain("Gọi lại không giúp được")
-  expect(notice).not.toContain("Thử lại sau")
+  expect(notice).not.toContain("thử lại được sau")
+})
+
+test("a wait without an alternative is a fact, not an order to repeat now", () => {
+  const notice = sourceNotice("mcp__ot__x", readSourceState(envelope({ availability: "unavailable", retry_after_s: 20 }))!)
+  expect(notice).toContain("Nguồn này thử lại được sau 20s.")
+  expect(notice).not.toContain("Gọi lại đúng lời gọi này")
 })
 
 test("an unknown reason falls back to the server's warning", () => {

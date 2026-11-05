@@ -1,7 +1,7 @@
 import type { ModelMessage } from "ai"
 import { AUTO_BLOCK_PREFIX, RULE_DENY_PREFIX, USER_DENY_PREFIX } from "../permission/denial"
 import { stableJson } from "../tools/loop-guard"
-import { SOURCE_FAILED_PREFIX } from "../tools/outcome"
+import { noticeAlternatives, SOURCE_FAILED_PREFIX } from "../tools/outcome"
 import { LOADED_PREFIX } from "../tools/search"
 
 /**
@@ -84,7 +84,8 @@ export interface TurnFailures {
 export function turnFailures(messages: readonly ModelMessage[]): TurnFailures {
   const start = messages.findLastIndex((m) => m.role === "user")
   const inputs = new Map<string, unknown>()
-  const missing = new Map<string, string>()
+  const missing = new Map<string, { name: string; alternatives: string[] }>()
+  const worked = new Set<string>()
   let streak = 0
   for (const message of messages.slice(start + 1)) {
     if (message.role === "assistant" && Array.isArray(message.content)) {
@@ -101,15 +102,19 @@ export function turnFailures(messages: readonly ModelMessage[]): TurnFailures {
       if (outcome === "ok") {
         succeeded = true
         missing.delete(key)
+        worked.add(shortName(part.toolName))
       } else if (!NEUTRAL.has(outcome)) {
         failed = true
-        if (DATA_LOST.has(outcome) && bringsData(part.toolName)) missing.set(key, shortName(part.toolName))
+        if (DATA_LOST.has(outcome) && bringsData(part.toolName)) {
+          missing.set(key, { name: shortName(part.toolName), alternatives: outcome === "source-unavailable" ? noticeAlternatives(resultText(output)) : [] })
+        }
       }
     }
     if (succeeded) streak = 0
     else if (failed) streak++
   }
-  return { gaps: [...new Set(missing.values())], streak }
+  const gaps = [...missing.values()].filter((gap) => !gap.alternatives.some((name) => worked.has(name))).map((gap) => gap.name)
+  return { gaps: [...new Set(gaps)], streak }
 }
 
 const remind = (text: string) => `<nhac_nho>\n${text}\n</nhac_nho>`
