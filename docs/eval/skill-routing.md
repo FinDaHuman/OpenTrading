@@ -11,17 +11,17 @@ PR116 adds exact-set regressions (Q278–Q291), including all nine reported misr
 
 ## Opt-in live smoke test
 
-The evaluator issues one bounded model request per question and tier (default 10 questions × A/B = 20). It uses the configured OpenTrading provider/model, or `--model provider/model`. It consumes provider quota. It never runs in CI or calls finance/data tools: the model can select `load_skill` or `no_skill`, with execution disabled.
+The evaluator issues one bounded model request per question and tier (default 10 questions × A/B = 20). It uses the configured OpenTrading provider/model, or `--model provider/model`. It consumes provider quota, so it calls the model only with `--yes`; without it the script behaves like `--dry-run`. It never runs in CI or calls finance/data tools: the model can select `load_skill` or `no_skill`, with execution disabled.
 
 ```sh
 # Inspect exact submitted prompts without resolving credentials or network calls.
 bun scripts/dev/skill-routing-live-eval.ts --dry-run --out /tmp/routing-plan.json
 # Harness behavior: real tiered catalog plus deterministic skill reminders.
-bun scripts/dev/skill-routing-live-eval.ts --out /tmp/routing-live.json
+bun scripts/dev/skill-routing-live-eval.ts --yes --out /tmp/routing-live.json
 # Catalog comprehension alone: remove skill reminders; retain other assembled context.
-bun scripts/dev/skill-routing-live-eval.ts --catalog-only --out /tmp/routing-catalog-live.json
+bun scripts/dev/skill-routing-live-eval.ts --yes --catalog-only --out /tmp/routing-catalog-live.json
 # Small reproducible subset, one tier and explicit model.
-bun scripts/dev/skill-routing-live-eval.ts --model provider/model --only 278,288,284 --tiers B --catalog-only --out /tmp/routing-subset.json
+bun scripts/dev/skill-routing-live-eval.ts --yes --model provider/model --only 278,288,284 --tiers B --catalog-only --out /tmp/routing-subset.json
 ```
 
 Evidence contains the questions, exact prompts, selected model, generation settings, provider thinking options, commit, tracked diff/evaluator/payload SHA256, prompt version, expected sets, tool-call trace, token usage, timing and errors. It omits credentials and provider configuration. Keep output outside the repository unless deliberately publishing a reviewed artifact.
