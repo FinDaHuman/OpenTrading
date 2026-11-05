@@ -8,6 +8,7 @@ import { dataDir } from "../../src/core/paths"
 import { initRuntime, setAgents } from "../../src/core/runtime"
 import { loadSkills, skillRoots } from "../../src/core/skills/loader"
 import pkg from "../../package.json"
+import { Cassette } from "./cassette"
 import { ledgerFile, RequestLedger, spentToday } from "./ledger"
 import { parseQuestions, prepareHome, runEval } from "./runner"
 import { traceFile } from "./trace"
@@ -19,7 +20,10 @@ import { traceFile } from "./trace"
  * Cách chạy: bun scripts/eval/run.ts --questions file.json --model provider/model
  *            [--only id1,id2] [--repeat 1] [--timeout-min 15] [--max-requests 500]
  *            [--out trace.jsonl] [--yes]
+ *            [--mcp-record tape.jsonl | --mcp-replay tape.jsonl]
  *   --max-requests  trần request của model này trong ngày, cộng dồn qua các lần chạy
+ *   --mcp-record    ghi câu trả lời MCP; câu đã có trong file thì không gọi server nữa
+ *   --mcp-replay    chỉ dùng file đã ghi, không gọi server MCP
  */
 
 const REQUESTS_PER_QUESTION = 5
@@ -44,6 +48,10 @@ const only = arg("--only")?.split(",")
 const repeat = Number(arg("--repeat") ?? 1)
 const minutes = Number(arg("--timeout-min") ?? 15)
 const cap = Number(arg("--max-requests") ?? DEFAULT_MAX_REQUESTS)
+const record = arg("--mcp-record")
+const replay = arg("--mcp-replay")
+if (record && replay) stop("Chỉ dùng một trong --mcp-record và --mcp-replay.")
+const tape = record ?? replay
 const questions = parseQuestions(await readFile(file, "utf8")).filter((q) => !only || only.includes(q.id))
 if (questions.length === 0) stop("Không còn câu hỏi nào sau --only.")
 
@@ -58,6 +66,7 @@ if (!process.argv.includes("--yes")) {
 }
 
 const out = path.resolve(arg("--out") ?? path.join(realHome, "exports", `eval-${new Date().toISOString().replace(/[:.]/g, "-")}.jsonl`))
+const cassette = tape ? await Cassette.open(path.resolve(tape), record ? "record" : "replay") : undefined
 const home = await mkdtemp(path.join(os.tmpdir(), "ot-eval-"))
 const work = path.join(home, "work")
 const commit = (await Bun.$`git rev-parse --short HEAD`.cwd(import.meta.dir).quiet().nothrow().text()).trim()
@@ -74,7 +83,7 @@ process.on("SIGINT", () => {
 })
 
 const { skills } = await loadSkills(skillRoots(work, { project: false }))
-const runtime = initRuntime({ home, cwd: work, skills: () => skills })
+const runtime = initRuntime({ home, cwd: work, skills: () => skills, mcpTransport: cassette && ((server, real) => cassette.transport(server, real)) })
 try {
   setAgents(runtime, (await loadAgents(agentRoots(work, { project: false }))).agents)
   await runtime.mcp.start()
@@ -82,9 +91,10 @@ try {
   if (!runtime.registry.list().some((t) => t.source?.startsWith("mcp:"))) throw new Error("Không có tool MCP nào: kiểm tra kết nối MCP.")
   const target = await resolveTarget(model)
   const { effort, toolSearch, maxSteps } = await loadConfig()
-  const settings = { effort, toolSearch, maxSteps }
+  const settings = { effort, toolSearch, maxSteps, mcp: cassette?.mode ?? "live", ...(tape ? { mcp_tape: path.basename(tape), mcp_answers: cassette!.size } : {}) }
   await runEval({ runtime, skills, target, questions, repeat, timeoutMs: minutes * 60_000, write: traceFile(out), version: pkg.version, commit, settings, ledger: requests })
   console.log(`Trace: ${out}`)
+  if (cassette?.misses) console.log(`${cassette.misses} yêu cầu MCP không có trong bản ghi: lần chạy này không hoàn toàn trên dữ liệu cố định.`)
 } finally {
   await runtime.mcp.stop()
   await rm(home, { recursive: true, force: true })

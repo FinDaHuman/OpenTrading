@@ -28,6 +28,14 @@ Each question has an `id`, a `group` (A–F), the `question`, and `now`, the mom
 
 `answer.text` is the answer the harness kept. `answer.streamed` is everything the user saw, including a draft the stop gate sent back.
 
+## Fixed data
+
+`--mcp-record tape.jsonl` keeps each MCP answer. A request already in the file is answered from it, so the first answer stays and a second run only adds what is new. `--mcp-replay tape.jsonl` uses the file alone and never reaches the server.
+
+- A failed call, or an envelope that is `unavailable` and retryable, is passed on but not kept: an outage must not become the data.
+- A request the tape does not hold fails as a tool error starting with `[replay]`, so it shows in the trace. The run also prints how many there were. A model free to change its arguments can reach these, so record with the model you will replay with, and treat the count as part of the result.
+- The tape holds MCP results only, no tokens. It keeps the day it was recorded on: `now` in a question does not change the data.
+
 ## Request cap
 
 Every model request is counted at the provider's fetch and added to `<home>/usage/YYYY-MM-DD.json`, by the `provider/model` it went to, in the real home. `--max-requests` (default 500) is a cap for the `--model` model for the day, across runs; a side model on another provider is booked under its own name and does not spend it. The run stops before the next question at the cap, and a question that reaches it mid-way is aborted; a `stopped` line records it. The ledger counts only eval runs, not requests made in the TUI, and the day is the local day, while a provider's quota may reset at another hour.
