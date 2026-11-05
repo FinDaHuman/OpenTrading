@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, statSync } from "node:fs"
+import { readFileSync } from "node:fs"
 import path from "node:path"
 import type { ModelMessage } from "ai"
 import {
@@ -15,6 +15,7 @@ import {
   unfetchedFigures,
 } from "../../src/core/loop/stop-gate"
 import { sessionsDir } from "../../src/core/session/store"
+import { sessionFiles } from "./session-files"
 
 /**
  * Run the stop gate's text checks over every saved turn's final answer, offline: no model, no
@@ -38,13 +39,6 @@ const flag = (name: string) => {
 }
 const dir = flag("--dir") ?? sessionsDir()
 const show = Number(flag("--show") ?? 20)
-
-function files(root: string): string[] {
-  return readdirSync(root).flatMap((name) => {
-    const full = path.join(root, name)
-    return statSync(full).isDirectory() ? files(full) : name.endsWith(".jsonl") && name !== "index.jsonl" ? [full] : []
-  })
-}
 
 const textOf = (message: ModelMessage) =>
   typeof message.content === "string"
@@ -71,7 +65,7 @@ let caught = 0
 const misfired: string[] = []
 /** Final answers of turns without any tool call: the group the fragment check judges. */
 let toolless = 0
-for (const file of files(dir)) {
+for (const file of sessionFiles(dir)) {
   let last: ModelMessage | undefined
   let toolsInTurn = false
   /** Earlier turns, then this turn's messages so far. */

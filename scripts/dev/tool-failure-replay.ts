@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, statSync } from "node:fs"
+import { readFileSync } from "node:fs"
 import path from "node:path"
 import type { ModelMessage } from "ai"
 import { classifyOutcome, FAILURE_STREAK_NUDGE, FAILURE_STREAK_STOP, turnFailures, type ToolOutcome } from "../../src/core/loop/failures"
@@ -6,6 +6,7 @@ import { sessionsDir } from "../../src/core/session/store"
 import { cleanToolErrors } from "../../src/core/tools/errors"
 import { stableJson } from "../../src/core/tools/loop-guard"
 import { readSourceState, SOURCE_FAILED_PREFIX } from "../../src/core/tools/outcome"
+import { sessionFiles } from "./session-files"
 
 /**
  * Run the tool failure rules over every saved turn, offline: no model, no key, no quota. Shows how
@@ -25,13 +26,6 @@ const flag = (name: string) => {
   return i >= 0 ? args[i + 1] : undefined
 }
 const dir = flag("--dir") ?? sessionsDir()
-
-function files(root: string): string[] {
-  return readdirSync(root).flatMap((name) => {
-    const full = path.join(root, name)
-    return statSync(full).isDirectory() ? files(full) : name.endsWith(".jsonl") && name !== "index.jsonl" ? [full] : []
-  })
-}
 
 type Output = { type?: string; value?: unknown }
 
@@ -85,7 +79,7 @@ let nudged = 0
 let stopped = 0
 let withGaps = 0
 
-for (const file of files(dir)) {
+for (const file of sessionFiles(dir)) {
   const turns = turnsOf(sessionMessages(file))
   if (turns.length > 0) sessions++
   for (const turn of turns) {

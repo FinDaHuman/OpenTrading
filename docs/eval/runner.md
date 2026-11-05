@@ -40,6 +40,38 @@ Each question has an `id`, a `group` (A–F), the `question`, and `now`, the mom
 
 Every model request is counted at the provider's fetch and added to `<home>/usage/YYYY-MM-DD.json`, by the `provider/model` it went to, in the real home. `--max-requests` (default 500) is a cap for the `--model` model for the day, across runs; a side model on another provider is booked under its own name and does not spend it. The run stops before the next question at the cap, and a question that reaches it mid-way is aborted; a `stopped` line records it. The ledger counts only eval runs, not requests made in the TUI, and the day is the local day, while a provider's quota may reset at another hour.
 
+## Scoring
+
+`scripts/eval/score.ts` scores a trace in code, offline. It uses no model, so a score is repeatable.
+
+```sh
+bun scripts/eval/score.ts trace.jsonl --labels set.json --against other.jsonl --out score.json
+```
+
+Labels sit beside each question in the same file, as `expected`; the runner never sends them. Group F has no label: a report needs human rubric scoring.
+
+| `kind` | Correct when |
+|---|---|
+| `number` | A figure equals `value` (plain units, so `2.5e9` for "2,5 tỷ") within `tolerance_pct`. Without `line_has` this means only that the answer contains the value, which a table can do by chance. With it, only lines holding that text count, such as a date. |
+| `order` | `items` appear in this order. |
+| `contains` | One of `any` appears. |
+| `no_figures` | The answer states no figure. For data that does not exist: an unpublished period, an unknown ticker. Not for "nên mua không", where scenarios with fetched figures are the right answer. |
+
+| Measure | How it is read |
+|---|---|
+| Correct | The label holds. A failed turn is wrong. Without a label there is no verdict. |
+| Untraced | Figures that are not marked as computed and are in nothing the model received: tool output as it saw it, subagent tool output, the question. Share per question. |
+| Cited | The answer has a `Nguồn:` line or a tool name. Only answers with figures count. |
+| Wrong unit | A price in thousand dong, per `units`, written as dong: "62,2 đ". A scale check cannot see this. |
+| Cost | Requests, tokens and seconds per attempt. |
+
+- Intervals are 95% bootstrap over questions, because repeats of a question are not independent. They are seeded, so a trace always gives the same interval.
+- `--against` pairs two traces on questions, with the majority of repeats as each verdict, and gives an exact McNemar p.
+- An attempt stopped by the request cap or by a killed run is counted as unscored. An attempt that timed out is wrong, and the report counts them: a harness that hangs on hard questions must not gain from it.
+- A figure counts as traced at scales of 100 and powers of 1000, so "24,1%" matches `0.241` and a wrong figure can match by chance; a factor of 10 is not accepted. Untraced is a lower bound on invention, and a traced figure can still be the wrong one, which is what Correct is for.
+
+The reader refuses a trace of another version or with a broken line. A new optional field needs no new version; removing or renaming a field does, and `test/fixtures/eval/trace-v1.jsonl` fails until it is done on purpose.
+
 ## Limits
 
 - `answer.requests` counts HTTP requests to a model, with retries, subagents and side calls. `model_steps` counts finished steps only. Tokens of side calls are not in the trace.
