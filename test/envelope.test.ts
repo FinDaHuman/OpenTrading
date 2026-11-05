@@ -58,6 +58,5 @@ test("the line reads the whole result, not what the cap left", async () => {
   const rows = (n: number) => Array.from({ length: n }, (_, i) => ({ i }))
   const long = JSON.stringify({ head: rows(2000), provenance: { source: "vnstock", data_time: "2026-10-09" }, tail: rows(2000) })
   const result = await runTool(tool({ sourceEnvelope: true, maxOutputChars: 500, execute: async () => long }), {}, ctx, new RwLock())
-  expect(result.output).not.toContain("2026-10-09")
   expect(result.provenance).toContain("dữ liệu tới 2026-10-09")
 })

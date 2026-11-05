@@ -3,6 +3,7 @@ import { readEnvelope } from "./envelope"
 import { loopDef, loopDenied } from "./loop-guard"
 import { normalizeNetDates } from "./net-dates"
 import { readSourceState, sourceNotice } from "./outcome"
+import { capTable } from "./table-cap"
 import { hasDataArray, keepEvidence, parseResult, REF_PREFIX, rememberResult } from "./refs"
 import { DEFAULT_MAX_OUTPUT_CHARS, DEFAULT_TIMEOUT_MS, type ToolContext, type ToolDef, type ToolResult } from "./types"
 
@@ -96,6 +97,12 @@ export function truncate(text: string, max: number): string {
   return `${text.slice(0, head)}\n\n[... đã lược ${omitted} ký tự ...]\n\n${text.slice(text.length - tail)}`
 }
 
+function capOutput(def: ToolDef, output: string) {
+  const max = def.maxOutputChars ?? DEFAULT_MAX_OUTPUT_CHARS
+  if (output.length <= max) return output
+  return (def.source?.startsWith("mcp:") ? capTable(output, max) : undefined) ?? truncate(output, max)
+}
+
 export class ToolTimeoutError extends Error {
   constructor(name: string, ms: number, readOnly = true) {
     const next = readOnly
@@ -187,7 +194,7 @@ export async function runTool(def: ToolDef, input: unknown, ctx: ToolContext, lo
     const chart = typeof result === "string" ? undefined : result.chart
     const provenance = provenanceOf(def, input, raw)
     return {
-      output: notice + truncate(output, def.maxOutputChars ?? DEFAULT_MAX_OUTPUT_CHARS),
+      output: notice + capOutput(def, output),
       ...(images?.length ? { images } : {}),
       ...(chart ? { chart } : {}),
       ...(provenance ? { provenance } : {}),
