@@ -5,7 +5,7 @@ import path from "node:path"
  * Every MCP result of a session, in full, next to the session file. Market data fetched again
  * differs from what an answer already cited, so the numbers an answer rests on have to stay
  * readable after a restart or a compaction. Outside the session's own JSONL, which keeps the
- * capped text, and one JSON line per result, so `read_file` and `grep_files` can reach it.
+ * capped text, and one JSON line per result, so a killed process keeps what it wrote.
  */
 export interface Evidence {
   /** `rN` when the result got one; a single-row result has none. */
@@ -35,15 +35,21 @@ export function appendEvidence(file: string, record: Evidence) {
   } catch {}
 }
 
+/** Parsed once per size: a skill reads the same refs many times, and this runs on the UI thread. */
+let cached: { file: string; size: number; records: Evidence[] } | undefined
+
 /** A line cut by a crash is skipped; the ones before it stay good. */
 export function readEvidence(file: string): Evidence[] {
+  const size = statSync(file, { throwIfNoEntry: false })?.size
+  if (size === undefined) return []
+  if (cached?.file === file && cached.size === size) return cached.records
   let text: string
   try {
     text = readFileSync(file, "utf8")
   } catch {
     return []
   }
-  return text.split("\n").flatMap((line) => {
+  const records = text.split("\n").flatMap((line) => {
     if (!line) return []
     try {
       return [JSON.parse(line) as Evidence]
@@ -51,4 +57,6 @@ export function readEvidence(file: string): Evidence[] {
       return []
     }
   })
+  cached = { file, size, records }
+  return records
 }

@@ -7,8 +7,9 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ### Added
 
-- Every MCP result is kept in full in `<session>/evidence/results.jsonl`. A `[ref rN]` now outlives
-  a restart and the 40 most recent results.
+- Every MCP result, from any server, is kept in full in `<session>/evidence/results.jsonl`, up to
+  64 MiB per session and for as long as the session is. A `[ref rN]` now outlives a restart and
+  the 40 most recent results.
 
 ### Fixed
 

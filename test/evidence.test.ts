@@ -113,6 +113,16 @@ test("a line cut by a crash does not cost the others", async () => {
   expect(readEvidence(evidenceFile(dir)).map((e) => e.ref)).toEqual(["r1"])
 })
 
+test("reading again after a new result sees it", async () => {
+  const dir = sessionDir()
+  useResultSession("s", undefined, dir)
+  await call(mcpTool(candles(1)), "a")
+  expect(readEvidence(evidenceFile(dir))).toHaveLength(1)
+  expect(readEvidence(evidenceFile(dir))).toBe(readEvidence(evidenceFile(dir)))
+  await call(mcpTool(candles(2)), "b")
+  expect(readEvidence(evidenceFile(dir))).toHaveLength(2)
+})
+
 test("a session with no folder (headless) keeps working from RAM", async () => {
   useResultSession("")
   const result = await call(mcpTool(candles(1)))
