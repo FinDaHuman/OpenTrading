@@ -558,6 +558,14 @@ test("tool search: keyword search finds tools by description, ignoring diacritic
   expect(toolNames(bodies[1])).toContain("mcp__big__t007")
 })
 
+test("tool search: a deferred tool written with a :: separator loads like its real name", async () => {
+  const r = bigRegistry(60)
+  script = [{ tool: "mcp__big::t005", args: { symbol: "HPG" } }]
+  const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: r }))
+  expect(ends(events)[0]!.output.startsWith("Đã nạp tool: mcp__big__t005\n")).toBe(true)
+  expect(toolNames(bodies[1])).toContain("mcp__big__t005")
+})
+
 test("tool search: calling a deferred tool before loading it loads it — the error says call again, with its parameters", async () => {
   const r = bigRegistry(60)
   // A short name from <tool_hoan>: it cannot run at this step (only active tools can), but

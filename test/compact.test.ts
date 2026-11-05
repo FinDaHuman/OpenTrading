@@ -6,6 +6,7 @@ import {
   contextLimits,
   isContextOverflow,
   MAX_AUTO_FAILURES,
+  PRUNED_ERROR_TEXT,
   PRUNED_TEXT,
   formatCompactSummary,
   compactHistory,
@@ -63,6 +64,28 @@ test("pruning empties large old tool results, keeps the last two turns and the l
   // Loaded tools are still derived correctly, and pruning twice changes nothing.
   expect(loadedTools(messages)).toEqual(loadedTools(history))
   expect(pruneToolResults(messages).pruned).toBe(0)
+})
+
+test("a pruned failed call keeps its error line and does not invite calling for its data again", () => {
+  const failed = turn(1)
+  const tool = failed[2] as Extract<ModelMessage, { role: "tool" }>
+  const part = tool.content[0] as { output: unknown }
+  part.output = { type: "error-text", value: `MCP server "ot" lỗi tạm thời (HTTP 502).\n${BIG}` }
+  const { messages } = pruneToolResults([...failed, ...turn(2), ...turn(3)])
+  expect(outputOf(messages, "c1")).toBe(`MCP server "ot" lỗi tạm thời (HTTP 502).\n${PRUNED_ERROR_TEXT}`)
+  expect(outputOf(messages, "c1")).not.toContain(PRUNED_TEXT)
+  const pruned = messages.find((m) => m.role === "tool") as Extract<ModelMessage, { role: "tool" }>
+  expect((pruned.content[0] as { output: { type: string } }).output.type).toBe("error-text")
+  // A second pass leaves it alone.
+  expect(pruneToolResults(messages).pruned).toBe(0)
+})
+
+test("a pruned failed call with a very long first line keeps only its start", () => {
+  const failed = turn(1)
+  const tool = failed[2] as Extract<ModelMessage, { role: "tool" }>
+  ;(tool.content[0] as { output: unknown }).output = { type: "error-text", value: BIG }
+  const { messages } = pruneToolResults([...failed, ...turn(2), ...turn(3)])
+  expect(outputOf(messages, "c1")).toBe(`${"x".repeat(200)}\n${PRUNED_ERROR_TEXT}`)
 })
 
 const neverSummarize = async () => {
@@ -187,6 +210,8 @@ test("one request: an <analysis> scratchpad then the <summary>; lean drops the a
   expect(full).toContain("## Phân tích và kết luận đã đưa ra")
   const lean = compactPrompt(undefined, "lean")
   expect(lean).toContain("## Số liệu đã xác minh")
+  expect(lean).toContain("## Lỗi và dữ liệu còn thiếu")
+  expect(full).toContain("## Lỗi và dữ liệu còn thiếu")
   expect(lean).not.toContain("## Phân tích và kết luận đã đưa ra")
   expect(lean).not.toContain("## Ràng buộc và sở thích")
   // A figure only an earlier answer gave is not sourced to a tool (30/10, AAA "LNTT +29,3%").

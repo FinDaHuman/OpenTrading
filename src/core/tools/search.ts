@@ -26,12 +26,18 @@ function paramNames(schema: JSONSchema7): string[] {
   return Object.keys(props).flatMap((k) => [k, ...words(k.replace(/[_-]/g, " "))])
 }
 
+/** Some models write `::` for a separator: `mcp__server::tool`, `server::tool`. */
+function normalizeSeparator(name: string) {
+  if (!name.includes("::")) return name
+  return name.replaceAll("::", name.startsWith("mcp__") ? "__" : "/")
+}
+
 /**
  * Full names for what a model wrote: the full name itself, `server/tool`, or just the tool
  * name an MCP server uses (as listed in <tool_hoan>). Several matches = ambiguous.
  */
 export function resolveToolName(registry: ToolRegistry, raw: string): string[] {
-  const name = raw.trim()
+  const name = normalizeSeparator(raw.trim())
   if (!name) return []
   if (registry.get(name)) return [name]
   const slash = name.indexOf("/")
