@@ -24,7 +24,7 @@ export class LoopGuard {
   }
 }
 
-function stableJson(value: unknown): string {
+export function stableJson(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`
   if (value && typeof value === "object") {
     const entries = Object.entries(value as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b))

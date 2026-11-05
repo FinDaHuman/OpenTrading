@@ -1,6 +1,7 @@
 import { connectedProviders, getKey } from "./auth"
 import { loadConfig } from "./config"
 import { loadCatalog, type CatalogProvider } from "./catalog"
+import { gapsLine } from "./loop/failures"
 import { describeFailure } from "./retry"
 import { SOURCE_FAILED_PREFIX } from "./tools/outcome"
 
@@ -104,6 +105,7 @@ if (import.meta.main) {
       else if (event.type === "tool-start") process.stdout.write(`\n⚙ ${event.label}\n`)
       else if (event.type === "tool-end") process.stdout.write(`${!event.ok ? "✕" : event.output.startsWith(SOURCE_FAILED_PREFIX) ? "!" : "✓"} ${event.output.slice(0, 200)}\n`)
       else if (event.type === "notice") console.error(event.text)
+      else if (event.type === "done" && event.dataGaps) console.error(gapsLine(event.dataGaps))
       else if (event.type === "error") console.error(event.message)
     }
     process.stdout.write("\n")

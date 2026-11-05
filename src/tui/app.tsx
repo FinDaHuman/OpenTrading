@@ -95,6 +95,7 @@ import { imagePath, MAX_IMAGE_BASE64, readClipboardImage, readImageFile, type Pr
 import { isLargePaste, offsetSlice, offsetWidth, pasteLabel, PromptParts, type DraftSnapshot, type ExpandedPrompt } from "./prompt/parts"
 import { editInEditor } from "./prompt/editor"
 import { TODO_WRITE, TodoWriteInput } from "../core/tools/todos"
+import { gapsLine } from "../core/loop/failures"
 import { stripEchoes } from "../core/loop/stop-gate"
 
 let abort: AbortController | undefined
@@ -561,7 +562,11 @@ async function sendTurn(runtime: Runtime, msg: Outgoing, mode: { recover?: boole
           if (event.usage) setState({ contextTokens: event.usage.contextTokens, contextEstimated: event.usage.estimated })
           if (event.messages.length > 0) {
             setState("history", (history) => [...history, ...event.messages])
-            recordTurn(event.messages, event.usage?.contextTokens, { recoveries: event.recoveries, unanswered: event.unanswered, retiredTodos: event.retiredTodos })
+            recordTurn(event.messages, event.usage?.contextTokens, { recoveries: event.recoveries, unanswered: event.unanswered, retiredTodos: event.retiredTodos, dataGaps: event.dataGaps })
+          }
+          if (event.dataGaps) {
+            closeText()
+            pushLine({ kind: "info", text: gapsLine(event.dataGaps) })
           }
           if (event.clock) setState("clock", event.clock)
           if (event.unanswered) unanswered = true
