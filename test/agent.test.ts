@@ -1269,6 +1269,8 @@ test("figures no tool fetched are sent back once with tools on and never stored"
   expect(bodies).toHaveLength(3)
   expect(bodies[1]!.tool_choice).not.toBe("none")
   expect(lastSent(1)).toContain("chưa có tool nào chạy")
+  // The nudge stands on its own: the dropped answer is never mentioned to the model.
+  expect(lastSent(1)).not.toContain("bị bỏ")
   expect(tools(events)).toEqual(["current_time"])
   expect(events.some((e) => e.type === "notice" && e.text.includes("đừng dùng các số đó"))).toBe(true)
   expect(done(events).recoveries).toEqual([{ kind: "unfetched", attempt: 1 }])
@@ -1293,6 +1295,13 @@ test("figures from an earlier turn cost no request when the answer cites them ag
   const events = await collect(runAgent({ history, input: "Nhắc lại số vừa rồi", skills: [], registry: registry() }))
   expect(bodies).toHaveLength(1)
   expect(done(events).recoveries).toBeUndefined()
+})
+
+test("a continued answer gets no warning: its figures sit in the part before the cut", async () => {
+  respond = (_body, n) => (n === 0 ? answer("FPT: doanh thu", "length") : n === 1 ? answer(INVENTED) : undefined)
+  const events = await collect(runAgent({ history: [], input: "Phân tích FPT", skills: [], registry: registry() }))
+  expect(bodies).toHaveLength(2)
+  expect(events.some((e) => e.type === "notice" && e.text.includes("chưa được kiểm chứng"))).toBe(false)
 })
 
 test("figures beside a real tool result cost no request", async () => {

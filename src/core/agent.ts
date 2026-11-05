@@ -1190,7 +1190,7 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
     if (verdict.action === "accept" || (verdict.action === "continue" && capped && !isEmptyAnswer(last.stepText ?? ""))) {
       messages = continuing ? continueAnswer(kept, response) : [...kept, ...response]
       // Out of recoveries, the answer stands: the user still hears that nothing backs its figures.
-      if (!opts.finalTool && isUnfetched({ unfetched })) yield { type: "notice", text: "Câu trả lời ghi số liệu kèm nguồn nhưng lượt này không có tool nào chạy: các số đó chưa được kiểm chứng." }
+      if (!opts.finalTool && !continuing && isUnfetched({ unfetched })) yield { type: "notice", text: "Câu trả lời ghi số liệu kèm nguồn nhưng lượt này không có tool nào chạy: các số đó chưa được kiểm chứng." }
       break
     }
     if (verdict.action === "continue" && !capped) {

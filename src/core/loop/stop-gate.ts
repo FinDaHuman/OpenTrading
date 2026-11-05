@@ -59,7 +59,7 @@ export const RESCUE_PROMISE =
 export const RESCUE_FRAGMENT =
   "<nhac_nho>\nTrả lời trực tiếp tin nhắn mới nhất của người dùng ở trên; gọi tool nếu cần dữ liệu.\n</nhac_nho>"
 export const RESCUE_UNFETCHED =
-  "<nhac_nho>\nBước trước đã viết số liệu kèm nguồn trong khi lượt này chưa có tool nào chạy, nên câu trả lời đó đã bị bỏ. Gọi tool lấy dữ liệu ngay trong bước này rồi trả lời bằng kết quả tool. Không lấy được thì nói rõ là thiếu dữ liệu và không viết số.\n</nhac_nho>"
+  "<nhac_nho>\nLượt này chưa có tool nào chạy. Gọi tool lấy dữ liệu ngay trong bước này rồi mới viết số liệu; không lấy được thì nói rõ là thiếu dữ liệu và không viết số.\n</nhac_nho>"
 /** Tools off (it brought 2.5-flash-lite's empty answers back). */
 export const RESCUE_EMPTY_FINAL = "Hãy trả lời câu hỏi của người dùng dựa trên kết quả tool ở trên. Không gọi thêm tool."
 
@@ -233,6 +233,9 @@ export function claimsFetch(text: string): boolean {
   return [...body.matchAll(SOURCE_LINE)].some((source) => !NOT_FETCHED.test(source[1] ?? ""))
 }
 
+/** The model's own arithmetic, marked as prompts/citations.md asks: nothing to fetch. */
+const DERIVED = new RegExp(String.raw`${B}(tính từ|tự tính)${E}`, "iu")
+
 /** Dates, month/year and clock times: they say when, not how much. */
 const DATES = /(?<![\d.,/-])\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}(?![\d/-])|(?<![\d.,/])\d{1,2}\/\d{4}(?!\d)|(?<![\d.,:])\d{1,2}:\d{2}(?![\d:])/g
 /** A market figure: thousands groups, a decimal, or a whole number with a unit. */
@@ -255,20 +258,28 @@ function readings(token: string): { value: number; decimals: number }[] {
  * hold, at any common scale and rounded as the answer writes them. Seen 05/11 with
  * gemini-3.1-flash-lite: no tool in the turn, "Tôi đã lấy dữ liệu" and a `Nguồn:` naming a tool
  * over an invented P/E, ROE and revenue. An answer that claims nothing is never judged: it may
- * be a worked example or the user's own numbers, and a misfire costs a request.
+ * be a worked example or the user's own numbers, and a misfire costs a request. For the same
+ * reason figures marked as computed do not count, and an answer whose figures are mostly known
+ * is a follow-up on fetched data: empty result.
  */
 export function unfetchedFigures(text: string, known: string): string[] {
   if (!claimsFetch(text)) return []
-  const figures = [...new Set(text.replace(DATES, " ").match(FIGURE) ?? [])]
+  const stated = text
+    .normalize("NFC")
+    .split("\n")
+    .filter((line) => !DERIVED.test(line))
+    .join("\n")
+  const figures = [...new Set(stated.replace(DATES, " ").match(FIGURE) ?? [])]
   if (figures.length === 0) return []
   const values = [...new Set((known.match(NUMBER) ?? []).flatMap((token) => readings(token).map((r) => r.value)))]
-  return figures.filter(
+  const missing = figures.filter(
     (figure) =>
       !readings(figure).some(({ value, decimals }) => {
         const near = 0.5 * 10 ** -decimals + 1e-9
         return values.some((v) => SCALES.some((scale) => Math.abs(v * scale - value) <= near))
       }),
   )
+  return missing.length * 2 >= figures.length ? missing : []
 }
 
 /**

@@ -176,6 +176,15 @@ test("figures the conversation already holds are not counted", () => {
   expect(unfetchedFigures(cited, JSON.stringify({ pe: 18.2174, roe: 0.241, price: 128.4, cap: 2500000000 }))).toEqual([])
 })
 
+test("a follow-up computing on fetched figures is not judged as invented", () => {
+  const known = "Giá FPT 100.000đ, giá mục tiêu 125.000đ, EPS 5.000đ."
+  const marked = "Nguồn: Vietstock · 30/10/2026.\n\nGiá 100.000đ, mục tiêu 125.000đ.\n- Upside 25,0% (tính từ giá mục tiêu và giá hiện tại).\n- P/E 20,0 lần, tính từ giá và EPS."
+  expect(unfetchedFigures(marked, known)).toEqual([])
+  // Unmarked, but most of its figures are the ones already fetched.
+  const mostly = "Nguồn: Vietstock.\n\nGiá 100.000đ, mục tiêu 125.000đ, EPS 5.000đ, upside 25,0%, P/E 20,0 lần."
+  expect(unfetchedFigures(mostly, known)).toEqual([])
+})
+
 test("a date, a month or a clock time is not a figure", () => {
   expect(unfetchedFigures("Nguồn: Vietstock · 30/10/2026, quý 3/2026, lúc 14:30.", "")).toEqual([])
 })
