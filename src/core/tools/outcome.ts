@@ -64,11 +64,30 @@ export function readSourceState(text: string): SourceState | undefined {
 /** The tool's name as the server has it: `mcp__server__tool` → `tool`. */
 const shortName = (name: string) => name.replace(/^mcp__.+?__/, "")
 
+/**
+ * What to do, as an order naming the call: seen 05/11 on gemini-3.1-flash-lite, "có thể thử lại"
+ * got a repeat in 1 of 3 runs where a repeat would have worked. A model has no way to wait, so a
+ * wait is said as a fact about the source, after the step it can take now.
+ */
 function nextStep(state: SourceState) {
-  const other = state.alternatives.length > 0 ? `dùng ${state.alternatives.join(", ")}` : "dùng nguồn khác"
-  if (state.retryable === false) return `Gọi lại không giúp được; ${other}`
-  if (state.retryAfterS !== undefined) return `Thử lại sau ${state.retryAfterS}s, hoặc ${other}`
-  return `Có thể thử lại một lần ở bước sau, hoặc ${other}`
+  const alternatives = state.alternatives.join(", ")
+  if (alternatives) {
+    const later = state.retryable !== false && state.retryAfterS !== undefined ? ` Nguồn này thử lại được sau ${state.retryAfterS}s.` : ""
+    return `Gọi ${alternatives} ngay ở bước kế tiếp.${later}`
+  }
+  if (state.retryable === false) return "Gọi lại không giúp được."
+  if (state.retryAfterS !== undefined) return `Nguồn này thử lại được sau ${state.retryAfterS}s.`
+  return "Gọi lại đúng lời gọi này một lần ở bước kế tiếp trước khi kết luận thiếu dữ liệu."
+}
+
+const ALTERNATIVES = /Gọi (.+?) ngay ở bước kế tiếp/
+
+/**
+ * The tools a stored notice named. Read from the notice because it is always the first line:
+ * the envelope below it is followed by the provenance line, so the text as a whole is not JSON.
+ */
+export function noticeAlternatives(text: string): string[] {
+  return ALTERNATIVES.exec(text.split("\n", 1)[0]!)?.[1]?.split(", ") ?? []
 }
 
 /** The line put before the result, so it is read before the envelope. */
@@ -77,5 +96,5 @@ export function sourceNotice(toolName: string, state: SourceState): string {
   if (state.availability === "partial") return `[Dữ liệu một phần]${detail || ": kết quả chưa đầy đủ"}. Nêu rõ giới hạn này khi dùng số liệu.`
   if (state.availability === "stale") return `[Dữ liệu cũ]${detail || ": kết quả không phải mới nhất"}. Nêu rõ thời điểm của số liệu khi dùng.`
   const why = (state.reason && REASONS[state.reason]) ?? state.warning ?? "nguồn tạm không khả dụng"
-  return `${SOURCE_FAILED_PREFIX} ${shortName(toolName)}: ${why}. ${nextStep(state)}; nếu vẫn không có, báo phần còn thiếu, không tự điền số.`
+  return `${SOURCE_FAILED_PREFIX} ${shortName(toolName)}: ${why}. ${nextStep(state)} Nếu vẫn không có, báo phần còn thiếu, không tự điền số.`
 }
