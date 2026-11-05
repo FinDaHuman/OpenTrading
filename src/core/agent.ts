@@ -18,7 +18,7 @@ import { ChatSetupError, describeError, resolveTarget, type Target } from "./cha
 import { effortOptions, isEffort, mergeProviderOptions, type Effort } from "./effort"
 import type { AgentEvent } from "./events"
 import { loadProfile } from "./profile"
-import { assemble, type Assembled } from "./prompt/assemble"
+import { assemble, validatePromptDir, type Assembled } from "./prompt/assemble"
 import { estimateTokens, tierOf, type Tier } from "./prompt/budget"
 import type { ClockSnapshot } from "./prompt/market-clock"
 import { languageModel } from "./providers"
@@ -150,6 +150,10 @@ export interface RunOptions {
   /** Market-clock snapshot last sent in this conversation; undefined = send it. */
   prevClock?: ClockSnapshot
   now?: Date
+  /** Trusted caller configuration; absolute directory with a complete bounded prompt set. */
+  promptDir?: string
+  /** Default live; snapshot suppresses the live-session reminder without fabricating prevClock. */
+  clockPolicy?: "live" | "snapshot"
   signal?: AbortSignal
   /**
    * How long a request may stream nothing before it is cut (default LLM_STALL_MS). A subagent
@@ -791,6 +795,7 @@ async function assembleFor(opts: TurnInput, target: Target | undefined, extras: 
     desk: opts.desk,
     input: opts.input,
     now: opts.now ?? new Date(),
+    clockPolicy: opts.clockPolicy,
     prevClock: opts.prevClock,
     deferredTools: built && built.deferred.length > 0 ? deferredByServer(opts.registry, built.deferred) : undefined,
     declaredTools: built ? Object.keys(built.tools) : undefined,
@@ -798,7 +803,7 @@ async function assembleFor(opts: TurnInput, target: Target | undefined, extras: 
     todos: currentTodos(opts.history ?? []),
     fileAccess: FILE_TOOLS.some((t) => toolNames.includes(t)) && opts.registry.workspace ? `${opts.registry.workspace.describe()}\n${modeNote(mode)}` : undefined,
     prevFileAccess: lastReminder(opts.history ?? [], "quyen_tep"),
-  })
+  }, opts.promptDir === undefined ? undefined : validatePromptDir(opts.promptDir))
   if (built && built.names.length > 0) {
     const share = info?.limit?.context ? built.tokens / info.limit.context : 0
     assembled.report.push({
