@@ -35,6 +35,7 @@ import {
   type ServerEntry,
   toolAllowed,
 } from "./config"
+import { ServerBreaker } from "./breaker"
 import { isDataServer } from "./catalog"
 import { blockToParts, resultToOutput } from "./convert"
 import { serverPrefix, toolName } from "./naming"
@@ -180,6 +181,10 @@ export interface McpManagerOptions {
   reconnectDelaysMs?: number[]
   /** Delays between retries of a read-only tool call that failed on a dropped or overloaded server. */
   callRetryDelaysMs?: number[]
+  /** How long calls to a failing server are refused before one tests it (breaker.ts). */
+  breakerOpenMs?: number
+  /** The breaker's clock; tests replace it. */
+  breakerNow?: () => number
   /** Delays between initialize retries on transient errors (network, 429, 5xx). */
   retryDelaysMs?: number[]
   /** Opens the OAuth URL; tests replace it. */
@@ -386,6 +391,7 @@ export class McpManager {
   private probes = new WeakMap<Live, Promise<void>>()
   /** Until when a server asked us (retry_after) to send no tool calls; shared by every call. */
   private cooldowns = new Map<string, number>()
+  private breakers = new Map<string, ServerBreaker>()
   private stopping = false
   private trustStore: TrustStore
 
@@ -691,6 +697,7 @@ export class McpManager {
         resources: Boolean(client.getServerCapabilities()?.resources),
         instructions: capInstructions(client.getInstructions()),
       })
+      this.breakers.get(name)?.reconnected()
       this.syncResourceTools()
     } catch (error) {
       await this.disconnect(name)
@@ -798,6 +805,12 @@ export class McpManager {
       this.probes.set(live, pending)
     }
     return pending
+  }
+
+  private breaker(name: string) {
+    let breaker = this.breakers.get(name)
+    if (!breaker) this.breakers.set(name, (breaker = new ServerBreaker(this.opts.breakerOpenMs, this.opts.breakerNow)))
+    return breaker
   }
 
   private limiter(name: string) {
@@ -1047,11 +1060,22 @@ export class McpManager {
               }
             }
           }
+          const breaker = isRemote(config) ? this.breaker(name) : undefined
+          const refused = breaker?.admit()
+          if (refused !== undefined) {
+            throw new Error(
+              `MCP server "${name}" đang lỗi kết nối liên tiếp nên lần gọi này chưa được gửi đi. Thử lại sau ${Math.ceil(refused / 1000)} giây; lúc này đừng gọi tool của server này, hãy trả lời bằng dữ liệu đã có và nêu phần còn thiếu.`,
+            )
+          }
           const retryDelays = this.opts.callRetryDelaysMs ?? [1000, 3000]
           // Only read-only calls are retried: a write may already have run on the server.
           const retries = isRemote(config) && tool.annotations?.readOnlyHint ? retryDelays.length : 0
           for (let attempt = 0; ; attempt++) {
-            const live = await this.ready(name, startupTimeoutMs, ctx.signal)
+            const live = await this.ready(name, startupTimeoutMs, ctx.signal).catch((error: unknown) => {
+              // Still down after the wait for a reconnect, not a server that needs the user.
+              if (!ctx.signal.aborted && this.reconnecting.has(name)) breaker?.failure()
+              throw error
+            })
             let result: Awaited<ReturnType<typeof call>>
             try {
               result = await limited(live)
@@ -1069,6 +1093,7 @@ export class McpManager {
                 continue
               }
               if (isRemote(config) && isQuotaExceeded(error)) {
+                breaker?.success()
                 const wait = retryAfterMs(error)
                 const reset = wait === undefined ? "" : ` (khoảng ${new Date(Date.now() + wait).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })})`
                 throw new Error(`MCP server "${name}" đã hết quota trong ngày; không tự thử lại. Gọi lại sau khi quota được đặt lại${reset}.`)
@@ -1085,15 +1110,19 @@ export class McpManager {
               else if ([502, 503, 504].includes(httpStatus(error) ?? 0) && wait === undefined) await this.probe(live)
               if (attempt >= retries || (wait !== undefined && wait > MAX_RETRY_AFTER_MS)) {
                 const status = httpStatus(error)
+                // A rate limit or a pause the server asked for comes from a server that is up.
+                if (status === 429 || wait !== undefined) breaker?.success()
+                else breaker?.failure()
                 const why = status ? `HTTP ${status}` : errorText(error)
                 const what = status === 429 ? `bị giới hạn tốc độ (${why})` : `lỗi tạm thời (${why}) — có thể đang khởi động lại hoặc quá tải`
                 const later = wait === undefined ? "" : ` Server yêu cầu chờ ${Math.ceil(wait / 1000)} giây trước khi gọi lại.`
                 // A retry_after refusal came before the tool ran: nothing was written to check.
+                const next = wait === undefined ? " Gọi lại ngay thường không giúp được; dùng nguồn khác hoặc trả lời bằng dữ liệu đã có và nêu phần còn thiếu." : ""
                 const tail =
                   attempt > 0
-                    ? ` Đã thử lại ${attempt} lần.`
+                    ? ` Đã thử lại ${attempt} lần.${next}`
                     : tool.annotations?.readOnlyHint
-                      ? ""
+                      ? next
                       : wait === undefined
                         ? " Tool này có thể ghi dữ liệu nên không tự thử lại; kiểm tra kết quả trước khi gọi lại."
                         : " Tool này có thể ghi dữ liệu nên không tự thử lại; server đã từ chối trước khi chạy nên có thể gọi lại sau khi chờ."
@@ -1104,6 +1133,7 @@ export class McpManager {
             }
             // Outside the try: an error the tool itself reports (isError) is an answer, not a
             // dead connection, even when its text says "ECONNRESET".
+            breaker?.success()
             return resultToOutput(result)
           }
         },
