@@ -2,22 +2,24 @@ import { deniedMessage, type PermissionGate } from "../permission"
 import { loopDef, loopDenied } from "./loop-guard"
 import { normalizeNetDates } from "./net-dates"
 import { readSourceState, sourceNotice } from "./outcome"
-import { hasDataArray, parseResult, REF_PREFIX, rememberResult } from "./refs"
+import { hasDataArray, keepEvidence, parseResult, REF_PREFIX, rememberResult } from "./refs"
 import { DEFAULT_MAX_OUTPUT_CHARS, DEFAULT_TIMEOUT_MS, type ToolContext, type ToolDef, type ToolResult } from "./types"
 
 /**
  * An MCP result holding a data array gets `[ref rN]` up front, and its full text is kept
  * (refs.ts) before the output cap: charts read the numbers by ref, the model never re-types them.
+ * Every MCP result also goes to the session's evidence, with or without a ref.
  * ASP.NET dates (/Date(ms)/) in MCP results become ISO first (net-dates.ts).
  */
-function stampRef(def: ToolDef, raw: string) {
+function stampRef(def: ToolDef, raw: string, input: unknown, callId: string) {
   if (!def.source?.startsWith("mcp:")) return raw
   // Before the ref is kept, so charts read the same dates as the model.
   const output = normalizeNetDates(raw)
   if (output.length > 5_000_000) return output
   const parsed = parseResult(output)
-  if (parsed === undefined || !hasDataArray(parsed)) return output
-  return `${REF_PREFIX}${rememberResult(def.name, output)}] ${output}`
+  const ref = parsed !== undefined && hasDataArray(parsed) ? rememberResult(def.name, output) : undefined
+  keepEvidence({ ...(ref ? { ref } : {}), callId, tool: def.name, input, text: output })
+  return ref ? `${REF_PREFIX}${ref}] ${output}` : output
 }
 
 /**
@@ -171,7 +173,7 @@ export async function runTool(def: ToolDef, input: unknown, ctx: ToolContext, lo
     })
     const result = await Promise.race([def.execute(input, { ...ctx, signal }), expired, aborted])
     const raw = typeof result === "string" ? result : result.output
-    const output = stampRef(def, raw)
+    const output = stampRef(def, raw, input, ctx.callId)
     const state = def.sourceEnvelope ? readSourceState(raw) : undefined
     const notice = state ? `${sourceNotice(def.name, state)}\n` : ""
     const images = typeof result === "string" ? undefined : result.images
