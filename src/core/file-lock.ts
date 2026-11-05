@@ -9,6 +9,10 @@ import path from "node:path"
  *
  * A lock left by a process that died is taken over: its pid is gone, or it is older than
  * `staleMs`. Waiting longer than `timeoutMs` is an error, never a silent overwrite.
+ *
+ * On Windows a lock its owner is deleting stays in the directory for a moment, and opening it
+ * then fails with EPERM (sometimes EACCES) instead of EEXIST. A real permission problem gives
+ * the same codes, so both wait, and only one that outlasts `timeoutMs` is reported as such.
  */
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
@@ -38,6 +42,10 @@ async function staleContent(lock: string, staleMs: number): Promise<string | und
   return pid && pid !== process.pid && !alive(pid) ? text : undefined
 }
 
+function contended(code: string | undefined) {
+  return code === "EEXIST" || (process.platform === "win32" && (code === "EPERM" || code === "EACCES"))
+}
+
 export async function withFileLock<T>(file: string, run: () => Promise<T>, opts: { timeoutMs?: number; staleMs?: number } = {}): Promise<T> {
   const lock = `${file}.lock`
   const timeoutMs = opts.timeoutMs ?? 10_000
@@ -45,6 +53,8 @@ export async function withFileLock<T>(file: string, run: () => Promise<T>, opts:
   const deadline = Date.now() + timeoutMs
   await mkdir(path.dirname(file), { recursive: true })
   for (;;) {
+    // What stopped this attempt, when it is not simply another process holding the lock.
+    let blocked: Error | undefined
     try {
       const handle = await open(lock, "wx")
       try {
@@ -54,16 +64,20 @@ export async function withFileLock<T>(file: string, run: () => Promise<T>, opts:
       }
       break
     } catch (error) {
-      if ((error as { code?: string }).code !== "EEXIST") throw error
+      const code = (error as { code?: string }).code
+      if (!contended(code)) throw error
+      if (code !== "EEXIST") blocked = error as Error
     }
     const stale = await staleContent(lock, staleMs)
     if (stale !== undefined) {
       // Only the dead owner's lock goes: one another process just created is left alone.
       const now = await readFile(lock, "utf8").catch(() => undefined)
-      if (now === stale) await rm(lock, { force: true })
-      continue
+      // Losing the takeover to another process can fail here too (Bun on Windows: EFAULT), so a
+      // failure waits like any other attempt, and the deadline below still ends it.
+      if (now === stale) await rm(lock, { force: true }).catch((error: Error) => (blocked = error))
     }
     if (Date.now() > deadline) {
+      if (blocked) throw blocked
       throw new Error(
         `Không ghi được ${file}: một tiến trình OpenTrading khác đang giữ khoá ${lock} quá ${Math.round(timeoutMs / 1000)}s. Thử lại sau; nếu không còn OpenTrading nào chạy thì xoá file khoá đó.`,
       )
