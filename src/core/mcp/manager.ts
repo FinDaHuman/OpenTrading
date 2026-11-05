@@ -189,6 +189,8 @@ export interface McpManagerOptions {
   retryDelaysMs?: number[]
   /** Opens the OAuth URL; tests replace it. */
   openBrowser?: (url: string) => boolean
+  /** Stands in for a server's connection (an eval's recorded answers); `real` builds the normal one. */
+  transport?: (server: string, real: () => Transport) => Transport
 }
 
 /**
@@ -829,7 +831,8 @@ export class McpManager {
     const attempt = async (kind: McpTransportKind) => {
       const delays = this.opts.retryDelaysMs ?? [250, 1000]
       for (let i = 0; ; i++) {
-        const transport = this.transport(entry, config, kind, stderr)
+        const real = () => this.transport(entry, config, kind, stderr)
+        const transport = this.opts.transport?.(entry.name, real) ?? real()
         const client = new Client({ name: "opentrading", version: "0.1.0" }, { capabilities: {} })
         try {
           const left = Math.max(1, deadline - Date.now())
