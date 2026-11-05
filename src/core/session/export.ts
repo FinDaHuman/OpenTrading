@@ -3,6 +3,7 @@ import { mkdir, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { dataDir } from "../paths"
+import { SOURCE_FAILED_PREFIX } from "../tools/outcome"
 import type { LoadedSession } from "./store"
 import { transcriptFromMessages } from "./transcript"
 
@@ -50,7 +51,7 @@ export function formatTranscript(loaded: Pick<LoadedSession, "summary" | "displa
         answer()
         const input = JSON.stringify(item.input ?? {}, null, 2)
         out.push(
-          `#### ${item.ok ? "✓" : "✗"} ${opts.label(item.name, item.input)}`,
+          `#### ${!item.ok ? "✗" : item.output.startsWith(SOURCE_FAILED_PREFIX) ? "!" : "✓"} ${opts.label(item.name, item.input)}`,
           "**Input**",
           fence(input, "json"),
           item.ok ? "**Output**" : "**Lỗi**",
