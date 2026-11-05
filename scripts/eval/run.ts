@@ -10,7 +10,7 @@ import { loadSkills, skillRoots } from "../../src/core/skills/loader"
 import pkg from "../../package.json"
 import { Cassette } from "./cassette"
 import { ledgerFile, RequestLedger, spentToday } from "./ledger"
-import { parseQuestions, prepareHome, runEval } from "./runner"
+import { parseAblations, parseQuestions, prepareHome, runEval } from "./runner"
 import { traceFile } from "./trace"
 
 /**
@@ -20,10 +20,11 @@ import { traceFile } from "./trace"
  * Cách chạy: bun scripts/eval/run.ts --questions file.json --model provider/model
  *            [--only id1,id2] [--repeat 1] [--timeout-min 15] [--max-requests 500]
  *            [--out trace.jsonl] [--yes]
- *            [--mcp-record tape.jsonl | --mcp-replay tape.jsonl]
+ *            [--mcp-record tape.jsonl | --mcp-replay tape.jsonl] [--ablate a,b]
  *   --max-requests  trần request của model này trong ngày, cộng dồn qua các lần chạy
  *   --mcp-record    ghi câu trả lời MCP; câu đã có trong file thì không gọi server nữa
  *   --mcp-replay    chỉ dùng file đã ghi, không gọi server MCP
+ *   --ablate        tắt từng phần của harness để đo (xem docs/eval/runner.md)
  */
 
 const REQUESTS_PER_QUESTION = 5
@@ -52,6 +53,8 @@ const record = arg("--mcp-record")
 const replay = arg("--mcp-replay")
 if (record && replay) stop("Chỉ dùng một trong --mcp-record và --mcp-replay.")
 const tape = record ?? replay
+const ablate = arg("--ablate")?.split(",") ?? []
+const ablated = parseAblations(ablate)
 const questions = parseQuestions(await readFile(file, "utf8")).filter((q) => !only || only.includes(q.id))
 if (questions.length === 0) stop("Không còn câu hỏi nào sau --only.")
 
@@ -71,7 +74,7 @@ const home = await mkdtemp(path.join(os.tmpdir(), "ot-eval-"))
 const work = path.join(home, "work")
 const commit = (await Bun.$`git rev-parse --short HEAD`.cwd(import.meta.dir).quiet().nothrow().text()).trim()
 await mkdir(work)
-await prepareHome(realHome, home, model)
+await prepareHome(realHome, home, model, ablated)
 process.env.OPENTRADING_HOME = home
 const requests = await RequestLedger.open(ledger, pick, cap)
 // The home holds a copy of the keys, and requests already sent are spent quota.
@@ -91,8 +94,8 @@ try {
   if (!runtime.registry.list().some((t) => t.source?.startsWith("mcp:"))) throw new Error("Không có tool MCP nào: kiểm tra kết nối MCP.")
   const target = await resolveTarget(model)
   const { effort, toolSearch, maxSteps } = await loadConfig()
-  const settings = { effort, toolSearch, maxSteps, mcp: cassette?.mode ?? "live", ...(tape ? { mcp_tape: path.basename(tape), mcp_answers: cassette!.size } : {}) }
-  await runEval({ runtime, skills, target, questions, repeat, timeoutMs: minutes * 60_000, write: traceFile(out), version: pkg.version, commit, settings, ledger: requests })
+  const settings = { effort, toolSearch, maxSteps, ablate, mcp: cassette?.mode ?? "live", ...(tape ? { mcp_tape: path.basename(tape), mcp_answers: cassette!.size } : {}) }
+  await runEval({ runtime, skills, target, questions, repeat, timeoutMs: minutes * 60_000, write: traceFile(out), version: pkg.version, commit, settings, ledger: requests, ablated })
   console.log(`Trace: ${out}`)
   if (cassette?.misses) console.log(`${cassette.misses} yêu cầu MCP không có trong bản ghi: lần chạy này không hoàn toàn trên dữ liệu cố định.`)
 } finally {

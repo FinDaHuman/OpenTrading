@@ -36,6 +36,24 @@ Each question has an `id`, a `group` (A–F), the `question`, and `now`, the mom
 - A request the tape does not hold fails as a tool error starting with `[replay]`, so it shows in the trace. The run also prints how many there were. A model free to change its arguments can reach these, so record with the model you will replay with, and treat the count as part of the result.
 - The tape holds MCP results only, no tokens. It keeps the day it was recorded on: `now` in a question does not change the data.
 
+## Ablation
+
+`--ablate a,b` runs without those parts, and the header's `settings.ablate` records it. A name that does not exist stops the run. No config reaches these switches, so a user's run always has every part.
+
+| Name | Without it |
+|---|---|
+| `gate-empty`, `gate-length`, `gate-malformed`, `gate-promise`, `gate-unfetched`, `gate-fragment` | That stop-gate rule never sends the model back. An empty or malformed answer ends the turn unanswered. |
+| `strip-echoes` | Echoed todo lines stay in the saved messages. The gate's own reading of an answer still strips them. |
+| `tool-nudge`, `todo-nudge` | The reminder after tool results, or only its open-todo part. |
+| `failure-nudge` | The reminder about failed tools. The stop after a long failure streak stays. |
+| `skill-hints` | The per-question skill suggestion. The catalog stays. |
+| `citations-prompt` | The citation rules in the system prompt. |
+| `skills` | No skills and no `load_skill`. |
+| `todo` | No `todo_write`. |
+| `tool-deferral` | `toolSearch: off`: every tool is declared, up to the 128-tool cap. |
+
+Every run already goes without the investor profile, so a "no domain instructions" run is `citations-prompt,skills`. `answerAfterTools` has no switch: it reshapes past turns, and every question here is a first turn.
+
 ## Request cap
 
 Every model request is counted at the provider's fetch and added to `<home>/usage/YYYY-MM-DD.json`, by the `provider/model` it went to, in the real home. `--max-requests` (default 500) is a cap for the `--model` model for the day, across runs; a side model on another provider is booked under its own name and does not spend it. The run stops before the next question at the cap, and a question that reaches it mid-way is aborted; a `stopped` line records it. The ledger counts only eval runs, not requests made in the TUI, and the day is the local day, while a provider's quota may reset at another hour.
