@@ -48,4 +48,6 @@ export type AgentEvent =
       unanswered?: boolean
       /** Items the model left open in this turn's list when it answered (the list was retired). */
       retiredTodos?: number
+      /** Tools whose data the turn did not get (loop/failures.ts). */
+      dataGaps?: string[]
     }

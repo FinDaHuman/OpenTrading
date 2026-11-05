@@ -320,6 +320,75 @@ test("each round of tool results gets one unstored nudge; the last step gets onl
   expect(JSON.stringify(done(events).messages)).not.toContain(TOOL_NUDGE_START)
 })
 
+const lastUserText = (b: Body) => JSON.stringify(b.messages.at(-1)?.content ?? "")
+
+function failingSource(failures = Infinity) {
+  const r = registry()
+  let calls = 0
+  r.register({
+    name: "mcp__ot__source",
+    description: "a data tool",
+    input: z.object({}),
+    readOnly: true,
+    async execute() {
+      if (++calls > failures) return "98.5"
+      throw new Error('MCP server "ot" lỗi tạm thời (HTTP 502). Đã thử lại 2 lần.')
+    },
+  })
+  return r
+}
+
+test("a data gap reaches the model in the one tail of the step, is never stored, and ends the turn on record", async () => {
+  script = [{ tool: "mcp__ot__source", args: {} }]
+  const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: failingSource() }))
+  const tail = bodies[1]!.messages.at(-1)!
+  expect(tail.role).toBe("user")
+  expect(lastUserText(bodies[1]!)).toContain("chưa lấy được dữ liệu từ: source")
+  expect(lastUserText(bodies[1]!)).toContain(TOOL_NUDGE_START)
+  expect(bodies[1]!.messages.filter((m) => m.role === "user")).toHaveLength(2)
+  expect(done(events).dataGaps).toEqual(["source"])
+  expect(JSON.stringify(done(events).messages)).not.toContain("chưa lấy được dữ liệu")
+})
+
+test("a repeat that works clears the gap", async () => {
+  script = [
+    { tool: "mcp__ot__source", args: {} },
+    { tool: "mcp__ot__source", args: {} },
+  ]
+  const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: failingSource(1) }))
+  expect(lastUserText(bodies[2]!)).not.toContain("chưa lấy được dữ liệu")
+  expect(done(events).dataGaps).toBeUndefined()
+})
+
+test("a run of failed steps is told once, then tools go off and the turn answers", async () => {
+  plan = { tool: "boom", args: {}, always: true }
+  const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: registry() }))
+  expect(bodies).toHaveLength(9)
+  expect(bodies.filter((b) => lastUserText(b).includes("bước liên tiếp chỉ toàn lỗi. Đổi cách khác"))).toHaveLength(1)
+  expect(lastUserText(bodies[4]!)).toContain("4 bước liên tiếp")
+  expect(bodies[7]!.tool_choice).not.toBe("none")
+  expect(bodies[8]!.tool_choice).toBe("none")
+  expect(lastUserText(bodies[8]!)).toContain("tool đã tắt")
+  expect(done(events).outcome).toBe("completed")
+  expect(JSON.stringify(done(events).messages)).not.toContain("tool đã tắt")
+})
+
+test("a run that must end in its final tool still can when its steps keep failing", async () => {
+  plan = { tool: "boom", args: {}, always: true }
+  respond = (_body, n) =>
+    n === 8
+      ? sse([
+          chunk({ role: "assistant", tool_calls: [{ index: 0, id: "final", type: "function", function: { name: "current_time", arguments: "" } }] }),
+          chunk({ tool_calls: [{ index: 0, function: { arguments: "{}" } }] }),
+          chunk({}, "tool_calls"),
+        ])
+      : undefined
+  const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: registry(), finalTool: "current_time" }))
+  expect(bodies[8]!.tool_choice).toMatchObject({ type: "function" })
+  expect(tools(events).at(-1)).toBe("current_time")
+  expect(done(events).outcome).toBe("completed")
+})
+
 test("aborting mid-tool leaves no dangling tool call in history", async () => {
   plan = { tool: "hang", args: {} }
   const controller = new AbortController()

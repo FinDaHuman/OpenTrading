@@ -36,6 +36,7 @@ import { loadedTools } from "./tools/loaded"
 import { modeNote } from "./permission/mode"
 import { NOTE as NOTICE_NOTE } from "./subagents/notification"
 import { currentTodos, retiredNote, retireLeftTodos, todoMark, TODO_WRITE } from "./tools/todos"
+import { FAILURE_STREAK_FINAL, FAILURE_STREAK_STOP, failureNudge, turnFailures } from "./loop/failures"
 import { answerAfterTools } from "./loop/history-shape"
 import { answeredAndClosedTodos, isEmptyAnswer, judgeStop, MAX_RECOVERIES, stripEchoes, type RecoveryKind, type Verdict } from "./loop/stop-gate"
 import { MAX_TOOLS_PER_REQUEST, modelOutput, stripImages, type BuiltToolSet, type ToolRegistry, type ToolSetOptions } from "./tools/registry"
@@ -239,6 +240,12 @@ export function withNudge(messages: ModelMessage[], text: string): ModelMessage[
   if (last?.role !== "user") return [...messages, { role: "user", content: text }]
   const parts = typeof last.content === "string" ? [{ type: "text" as const, text: last.content }] : last.content
   return [...messages.slice(0, -1), { ...last, content: [...parts, { type: "text", text }] }]
+}
+
+/** The `done` field for a turn's messages, left out when nothing is missing. */
+function dataGaps(messages: readonly ModelMessage[]) {
+  const { gaps } = turnFailures(messages)
+  return gaps.length > 0 ? { dataGaps: gaps } : {}
 }
 
 /** A recovery run's nudge (never stored) and whether its first step may call tools. */
@@ -1098,12 +1105,19 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
         }
         active = activeFor(built, messages)
         loaded = loadedTools(messages)
-        if (stepsUsed + stepNumber < maxSteps - 1) {
+        const failures = turnFailures(messages)
+        const stopped = failures.streak >= FAILURE_STREAK_STOP
+        // A run that must end in its final tool ends there: with tools off it could not.
+        const finalNow = stopped && !!opts.finalTool && registryHas(built, opts.finalTool)
+        if (stepsUsed + stepNumber < maxSteps - 1 && !finalNow) {
           const afterTool = messages.at(-1)?.role === "tool"
           // A route that rejects user words after tool results (nudgeAfterTools) gets the
           // rescue without its text: tools off still makes the model answer.
-          const tail = rescueNow ? (afterTool && !nudge ? undefined : rescueNow.nudge) : nudge && afterTool ? toolNudge(messages) : undefined
-          const choice = rescueNow?.toolChoice === "none" || (rescueNow && !tail) ? { toolChoice: "none" as const } : {}
+          const base = rescueNow ? (afterTool && !nudge ? undefined : rescueNow.nudge) : nudge && afterTool ? toolNudge(messages) : undefined
+          // One tail: the rescue or tool nudge, then what the failures add (same routes only).
+          const added = nudge && afterTool ? (stopped ? FAILURE_STREAK_FINAL : failureNudge(failures)) : undefined
+          const tail = [base, added].filter(Boolean).join("\n") || undefined
+          const choice = stopped || rescueNow?.toolChoice === "none" || (rescueNow && !tail) ? { toolChoice: "none" as const } : {}
           return { ...(active ? { activeTools: active } : {}), ...choice, messages: tail ? withNudge(messages, tail) : messages }
         }
         if (opts.finalTool && registryHas(built, opts.finalTool)) {
@@ -1245,6 +1259,7 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
       ...(recoveries.length > 0 ? { recoveries: recoveries.map((kind, i) => ({ kind, attempt: i + 1 })) } : {}),
       ...(unanswered ? { unanswered } : {}),
       ...(retiredTodos > 0 ? { retiredTodos } : {}),
+      ...dataGaps([user, ...messages]),
     }
     if (opts.hooks) void opts.hooks.emit({ type: "turn-end", sessionId, messages: [user, ...messages] })
     return
@@ -1277,5 +1292,6 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
       total: outcome.usage,
     },
     outcome: outcome.aborted ? "aborted" : "failed",
+    ...dataGaps([user, ...progress, ...closing]),
   }
 }
