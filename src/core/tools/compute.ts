@@ -60,6 +60,16 @@ function lastPeriods(series: number[], periods: number | undefined) {
   return periods === undefined ? series : series.slice(-periods)
 }
 
+/**
+ * Two returns compare only over the same window. Results fetched apart can end on different
+ * days (one has today's candle, one came from cache), and positions alone would hide that.
+ */
+function sameWindow(a: Read, b: Read, steps: number) {
+  if (!a.times?.length || !b.times?.length) return
+  const window = (d: Read) => `${d.times!.at(-1 - steps)} → ${d.times!.at(-1)}`
+  if (window(a) !== window(b)) throw new Error(`Hai chuỗi lệch ngày: ${a.ref} ${window(a)}, ${b.ref} ${window(b)}. Lấy lại để cùng ngày cuối.`)
+}
+
 const needOther = (input: Input) => {
   if (!input.other) throw new Error(`${input.op} cần chuỗi thứ hai ở other.`)
   return read(input.other)
@@ -104,6 +114,7 @@ function calculate(input: Input) {
       const other = needOther(input)
       const mine = change(data.series, input.periods)
       const theirs = change(other.series, input.periods)
+      sameWindow(data, other, mine.steps)
       return { result: round(mine.value - theirs.value), unit: "điểm %", inputs: [inputOf(data, mine.steps + 1), inputOf(other, theirs.steps + 1)] }
     }
     case "rank": {

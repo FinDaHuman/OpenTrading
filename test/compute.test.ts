@@ -1,4 +1,6 @@
 import { afterEach, expect, test } from "bun:test"
+import { loadSkills, skillRoots } from "../src/core/skills/loader"
+import { loadSkillTool } from "../src/core/tools/builtin/load-skill"
 import { computeTool } from "../src/core/tools/compute"
 import { clearResults, rememberResult, useResultSession } from "../src/core/tools/refs"
 
@@ -56,6 +58,19 @@ test("relative strength is the gap between two returns over the same periods", a
   expect(out.result).toBe(10)
   expect(out.unit).toBe("điểm %")
   expect(out.inputs.map((i) => i.ref)).toEqual([a, b])
+})
+
+test("two series that end on different days are refused, not compared", async () => {
+  const a = candles("VNFIN", [100, 105, 120, 125])
+  const b = candles("VNINDEX", [100, 102, 110])
+  expect(await failure({ op: "relative_strength", from_call: a, periods: 2, other: { from_call: b } })).toContain("lệch ngày")
+})
+
+test("the skill that relies on compute makes it callable under tool search", async () => {
+  const { skills } = await loadSkills(skillRoots().filter((r) => r.source === "bundled"))
+  const tool = loadSkillTool(() => skills, () => ["compute"], () => new Set(["compute", "mcp__opentrading__valuation_run"]))
+  const out = await tool.execute({ name: "dinh-gia-chuyen-sau" }, ctx)
+  expect(String(typeof out === "string" ? out : out.output).split("\n", 1)[0]).toContain("compute")
 })
 
 test("ratio takes the last values, and refuses two different units", async () => {
