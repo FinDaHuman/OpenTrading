@@ -1,6 +1,7 @@
 import { deniedMessage, type PermissionGate } from "../permission"
 import { loopDef, loopDenied } from "./loop-guard"
 import { normalizeNetDates } from "./net-dates"
+import { readSourceState, sourceNotice } from "./outcome"
 import { hasDataArray, parseResult, REF_PREFIX, rememberResult } from "./refs"
 import { DEFAULT_MAX_OUTPUT_CHARS, DEFAULT_TIMEOUT_MS, type ToolContext, type ToolDef, type ToolResult } from "./types"
 
@@ -93,8 +94,11 @@ export function truncate(text: string, max: number): string {
 }
 
 export class ToolTimeoutError extends Error {
-  constructor(name: string, ms: number) {
-    super(`Tool ${name} quá thời gian (${Math.round(ms / 1000)}s).`)
+  constructor(name: string, ms: number, readOnly = true) {
+    const next = readOnly
+      ? "Nguồn có thể vẫn đang xử lý nên gọi lại ngay thường không giúp được; dùng nguồn khác hoặc báo phần còn thiếu."
+      : "Lệnh có thể đã chạy một phần; kiểm tra kết quả trước khi gọi lại."
+    super(`Tool ${name} quá thời gian (${Math.round(ms / 1000)}s). ${next}`)
   }
 }
 
@@ -157,7 +161,7 @@ export async function runTool(def: ToolDef, input: unknown, ctx: ToolContext, lo
       if (ms <= 0) return
       timer = setTimeout(() => {
         timeout.abort()
-        reject(new ToolTimeoutError(def.name, ms))
+        reject(new ToolTimeoutError(def.name, ms, def.readOnly))
       }, ms)
     })
     const aborted = new Promise<never>((_, reject) => {
@@ -166,12 +170,15 @@ export async function runTool(def: ToolDef, input: unknown, ctx: ToolContext, lo
       else ctx.signal.addEventListener("abort", onAbort, { once: true })
     })
     const result = await Promise.race([def.execute(input, { ...ctx, signal }), expired, aborted])
-    const output = stampRef(def, typeof result === "string" ? result : result.output)
+    const raw = typeof result === "string" ? result : result.output
+    const output = stampRef(def, raw)
+    const state = def.sourceEnvelope ? readSourceState(raw) : undefined
+    const notice = state ? `${sourceNotice(def.name, state)}\n` : ""
     const images = typeof result === "string" ? undefined : result.images
     const chart = typeof result === "string" ? undefined : result.chart
     const provenance = provenanceOf(def, input)
     return {
-      output: truncate(output, def.maxOutputChars ?? DEFAULT_MAX_OUTPUT_CHARS),
+      output: notice + truncate(output, def.maxOutputChars ?? DEFAULT_MAX_OUTPUT_CHARS),
       ...(images?.length ? { images } : {}),
       ...(chart ? { chart } : {}),
       ...(provenance ? { provenance } : {}),

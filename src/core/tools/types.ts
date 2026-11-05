@@ -65,6 +65,8 @@ export interface ToolDef<I = any> {
   maxOutputChars?: number
   /** Where the tool came from, shown in /tools. */
   source?: string
+  /** Results follow the data server's envelope, and its word on them is trusted (outcome.ts). */
+  sourceEnvelope?: boolean
   /**
    * Order when the provider's tool limit forces some out: lower comes first. Native tools
    * have none (always first); MCP tools get their server's position in the config.

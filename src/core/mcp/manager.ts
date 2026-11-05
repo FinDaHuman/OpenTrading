@@ -996,6 +996,7 @@ export class McpManager {
         readOnly: tool.annotations?.readOnlyHint ?? false,
         // Only the OpenTrading data server's word is taken in ▸▸ (catalog.ts isDataServer).
         ...(tool.annotations?.readOnlyHint && !trustedHints ? { autoReview: true } : {}),
+        ...(trustedHints ? { sourceEnvelope: true } : {}),
         displayName: `${name} · ${tool.annotations?.title ?? tool.name}`,
         annotations: {
           title: tool.annotations?.title,

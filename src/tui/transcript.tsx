@@ -11,6 +11,7 @@ import { useSpinner } from "./ui/clock"
 import { fmtElapsed } from "./activity"
 import { LEGACY_TODO_PREFIX, TODO_PREFIX } from "../core/tools/todos"
 import { LOADED_PREFIX } from "../core/tools/search"
+import { SOURCE_FAILED_PREFIX } from "../core/tools/outcome"
 import { AUTO_BLOCK_PREFIX, USER_DENY_PREFIX, userNoteOf } from "../core/permission/denial"
 import { isSpawn, SubagentRow } from "./subagent-row"
 import { DESK_RUN } from "../core/desk/tool"
@@ -43,9 +44,13 @@ function preview(output: string, expanded: boolean, max: number) {
   return { lines: lines.slice(0, max), hidden: lines.length - max }
 }
 
+const sourceFailed = (line: ToolLine) => line.status === "ok" && (line.output ?? "").startsWith(SOURCE_FAILED_PREFIX)
+
 /** What a tool row says under its header, besides raw output. */
-function summary(line: ToolLine): { tone: "ok" | "denied" | "answers"; lines: string[]; wrap?: boolean } | undefined {
+function summary(line: ToolLine): { tone: "ok" | "denied" | "answers" | "warning"; lines: string[]; wrap?: boolean } | undefined {
   const out = line.output ?? ""
+  // The source failed though the call worked: the notice, not the envelope (ctrl+o shows it).
+  if (sourceFailed(line) && !state.expandTools) return { tone: "warning", lines: [out.split("\n", 1)[0]!], wrap: true }
   // The pinned panel shows the list; the transcript keeps one line (ctrl+o for the list).
   if (line.status === "ok" && (out.startsWith(TODO_PREFIX) || out.startsWith(LEGACY_TODO_PREFIX)) && !state.expandTools) return { tone: "ok", lines: [] }
   // A deferred tool called before loading: the call loaded it. One sentence; ctrl+o shows the
@@ -85,7 +90,7 @@ function ToolRow(props: { line: ToolLine; first: boolean; width: number }) {
           : undefined
       : undefined
   const dot = () => (waiting() ? "△" : props.line.status === "running" ? frame() : "●")
-  const dotColor = () => (waiting() ? color.tham : props.line.status === "running" ? color.tham : props.line.status === "ok" ? color.tang : color.giam)
+  const dotColor = () => (waiting() ? color.tham : props.line.status === "running" || sourceFailed(props.line) ? color.tham : props.line.status === "ok" ? color.tang : color.giam)
   const special = () => summary(props.line)
   const out = () =>
     preview(props.line.output ?? "", state.expandTools, props.line.status === "error" ? COLLAPSED_ERROR_LINES : COLLAPSED_LINES)
@@ -118,7 +123,7 @@ function ToolRow(props: { line: ToolLine; first: boolean; width: number }) {
             <For each={s().lines}>
               {(row, i) =>
                 s().wrap ? (
-                  <ResultLine prefix={prefix(i() === 0)} text={row} fg={color.tx2} wrap />
+                  <ResultLine prefix={prefix(i() === 0)} text={row} fg={s().tone === "warning" ? color.tham : color.tx2} wrap />
                 ) : (
                   <ResultLine prefix={prefix(i() === 0)} text={truncate(row, textWidth())} fg={s().tone === "denied" ? color.giam : color.tx2} />
                 )

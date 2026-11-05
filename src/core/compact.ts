@@ -2,6 +2,7 @@ import type { ModelMessage } from "ai"
 import { estimateTokens } from "./prompt/budget"
 import { loadedTools } from "./tools/loaded"
 import { compactCarry, compactPair, isCompactMarker } from "./compact-marker"
+import { SOURCE_FAILED_PREFIX } from "./tools/outcome"
 import { LOADED_PREFIX } from "./tools/search"
 import { currentTodos } from "./tools/todos"
 import { attachmentAttrs, attachmentKey, attachmentsOf, clearedAttachment, withoutOrphanStubs } from "./mentions"
@@ -260,7 +261,7 @@ export function pruneToolResults(messages: readonly ModelMessage[], keepTurns = 
           ? `${head}\n${PRUNED_TEXT}`
           : meta
             ? `${PRUNED_TEXT}\n${meta}`
-            : failed
+            : failed || head?.startsWith(SOURCE_FAILED_PREFIX)
               ? `${head ? `${head.slice(0, PRUNED_ERROR_HEAD_CHARS)}\n` : ""}${PRUNED_ERROR_TEXT}`
               : PRUNED_TEXT
         return { ...part, output: { type: failed ? "error-text" : "text", value } } as typeof part
