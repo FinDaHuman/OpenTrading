@@ -87,6 +87,7 @@ export async function fetchQuotes(registry: ToolRegistry, symbols: string[], sig
     const out = await tool.execute({ symbols }, { signal, callId: "watchlist-panel" })
     return parseQuotes(typeof out === "string" ? out : out.output, symbols)
   } catch (error) {
-    return { rows: [], missing: symbols, error: error instanceof Error ? error.message : String(error) }
+    // What follows the `;` in a tool error tells the model what to do next.
+    return { rows: [], missing: symbols, error: (error instanceof Error ? error.message : String(error)).split(";", 1)[0] }
   }
 }

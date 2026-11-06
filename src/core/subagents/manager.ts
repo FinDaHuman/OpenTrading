@@ -1,6 +1,8 @@
+import type { Ablations } from "../ablation"
 import { readFile } from "node:fs/promises"
 import type { z } from "zod"
 import { runAgent } from "../agent"
+import { gapsLine } from "../loop/failures"
 import { describeError, resolveTarget, type Target } from "../chat"
 import { loadConfig, type Config } from "../config"
 import type { Waiver } from "../memory/binding/bind"
@@ -188,6 +190,11 @@ export class SubagentManager {
   constructor(private deps: ManagerDeps) {
     this.limiter = new Limiter(() => this.max)
   }
+
+  /** The moment runs believe it is; undefined = the real clock. An eval replays a past date. */
+  clock?: () => Date
+  /** What an eval switched off (ablation.ts). */
+  disabled?: Ablations
 
   /** Session each run belongs to: only runs of the attached session notify (/clear, /new, resume). */
   private owners = new Map<string, string | undefined>()
@@ -496,6 +503,8 @@ export class SubagentManager {
           stallMs: this.idleConfigured === undefined ? undefined : this.idleConfigured + 2 * watchdogTick(this.idleConfigured),
           role: "subagent",
           target,
+          now: this.clock?.(),
+          disabled: this.disabled,
           agentPrompt: spec.agentPrompt,
           serverInstructions: this.deps.serverInstructions,
           // The host reads the constraints itself for every turn, whatever the main agent's brief says.
@@ -563,6 +572,8 @@ export class SubagentManager {
               if (event.outcome === "completed") {
                 const text = lastAssistantText(event.messages)
                 run.text = text === "(không có câu trả lời)" ? "" : text
+                // The parent only reads the report: what the child did not get must be in it.
+                if (event.dataGaps && !spec.schema) run.text = `${run.text}\n\n${gapsLine(event.dataGaps)}`.trim()
                 run.status = "completed"
               } else if (missedTool && event.outcome === "failed") {
                 run.text = streamed.trim()

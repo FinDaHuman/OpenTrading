@@ -320,6 +320,90 @@ test("each round of tool results gets one unstored nudge; the last step gets onl
   expect(JSON.stringify(done(events).messages)).not.toContain(TOOL_NUDGE_START)
 })
 
+const lastUserText = (b: Body) => JSON.stringify(b.messages.at(-1)?.content ?? "")
+
+function failingSource(failures = Infinity) {
+  const r = registry()
+  let calls = 0
+  r.register({
+    name: "mcp__ot__source",
+    description: "a data tool",
+    input: z.object({}),
+    readOnly: true,
+    async execute() {
+      if (++calls > failures) return "98.5"
+      throw new Error('MCP server "ot" lỗi tạm thời (HTTP 502). Đã thử lại 2 lần.')
+    },
+  })
+  return r
+}
+
+test("a data gap reaches the model in the one tail of the step, is never stored, and ends the turn on record", async () => {
+  script = [{ tool: "mcp__ot__source", args: {} }]
+  const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: failingSource() }))
+  const tail = bodies[1]!.messages.at(-1)!
+  expect(tail.role).toBe("user")
+  expect(lastUserText(bodies[1]!)).toContain("chưa lấy được dữ liệu từ: source")
+  expect(lastUserText(bodies[1]!)).toContain(TOOL_NUDGE_START)
+  expect(bodies[1]!.messages.filter((m) => m.role === "user")).toHaveLength(2)
+  expect(done(events).dataGaps).toEqual(["source"])
+  expect(JSON.stringify(done(events).messages)).not.toContain("chưa lấy được dữ liệu")
+})
+
+test("a repeat that works clears the gap", async () => {
+  script = [
+    { tool: "mcp__ot__source", args: {} },
+    { tool: "mcp__ot__source", args: {} },
+  ]
+  const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: failingSource(1) }))
+  expect(lastUserText(bodies[2]!)).not.toContain("chưa lấy được dữ liệu")
+  expect(done(events).dataGaps).toBeUndefined()
+})
+
+test("an alternative the server named clears the gap, through the output the model really gets", async () => {
+  const r = registry()
+  const data = { description: "a data tool", input: z.object({}), readOnly: true, source: "mcp:ot", sourceEnvelope: true }
+  r.register({ ...data, name: "mcp__ot__source", execute: async () => JSON.stringify({ data: {}, availability: "unavailable", alternatives: ["other"] }) })
+  r.register({ ...data, name: "mcp__ot__other", execute: async () => "98.5" })
+  script = [
+    { tool: "mcp__ot__source", args: {} },
+    { tool: "mcp__ot__other", args: {} },
+  ]
+  const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: r }))
+  expect(lastUserText(bodies[1]!)).toContain("chưa lấy được dữ liệu từ: source")
+  expect(lastUserText(bodies[2]!)).not.toContain("chưa lấy được dữ liệu")
+  expect(done(events).dataGaps).toBeUndefined()
+})
+
+test("a run of failed steps is told once, then tools go off and the turn answers", async () => {
+  plan = { tool: "boom", args: {}, always: true }
+  const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: registry() }))
+  expect(bodies).toHaveLength(9)
+  expect(bodies.filter((b) => lastUserText(b).includes("bước liên tiếp chỉ toàn lỗi. Đổi cách khác"))).toHaveLength(1)
+  expect(lastUserText(bodies[4]!)).toContain("4 bước liên tiếp")
+  expect(bodies[7]!.tool_choice).not.toBe("none")
+  expect(bodies[8]!.tool_choice).toBe("none")
+  expect(lastUserText(bodies[8]!)).toContain("tool đã tắt")
+  expect(done(events).outcome).toBe("completed")
+  expect(JSON.stringify(done(events).messages)).not.toContain("tool đã tắt")
+})
+
+test("a run that must end in its final tool still can when its steps keep failing", async () => {
+  plan = { tool: "boom", args: {}, always: true }
+  respond = (_body, n) =>
+    n === 8
+      ? sse([
+          chunk({ role: "assistant", tool_calls: [{ index: 0, id: "final", type: "function", function: { name: "current_time", arguments: "" } }] }),
+          chunk({ tool_calls: [{ index: 0, function: { arguments: "{}" } }] }),
+          chunk({}, "tool_calls"),
+        ])
+      : undefined
+  const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: registry(), finalTool: "current_time" }))
+  expect(bodies[8]!.tool_choice).toMatchObject({ type: "function" })
+  expect(tools(events).at(-1)).toBe("current_time")
+  expect(done(events).outcome).toBe("completed")
+})
+
 test("aborting mid-tool leaves no dangling tool call in history", async () => {
   plan = { tool: "hang", args: {} }
   const controller = new AbortController()
@@ -556,6 +640,14 @@ test("tool search: keyword search finds tools by description, ignoring diacritic
   expect(ends(events)[0]!.output.split("\n")[0]).toBe("Đã nạp tool: mcp__big__t007")
   expect(ends(events)[0]!.output).toContain("- symbol (string)")
   expect(toolNames(bodies[1])).toContain("mcp__big__t007")
+})
+
+test("tool search: a deferred tool written with a :: separator loads like its real name", async () => {
+  const r = bigRegistry(60)
+  script = [{ tool: "mcp__big::t005", args: { symbol: "HPG" } }]
+  const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: r }))
+  expect(ends(events)[0]!.output.startsWith("Đã nạp tool: mcp__big__t005\n")).toBe(true)
+  expect(toolNames(bodies[1])).toContain("mcp__big__t005")
 })
 
 test("tool search: calling a deferred tool before loading it loads it — the error says call again, with its parameters", async () => {
@@ -1259,6 +1351,56 @@ test("next turn: the answer of an 'answer + close todo' step is sent after its t
   expect(JSON.stringify(sent[1])).not.toContain("Phân tích 3 mã xong.")
   expect(JSON.stringify(sent[3])).toContain("Phân tích 3 mã xong.")
   expect(JSON.stringify(sent[4])).toContain("Đi sâu vào mã VCB")
+})
+
+const INVENTED = "Tôi đã lấy dữ liệu tài chính của FPT.\n\nNguồn: `financial_ratios` · 05/11/2026.\n\nP/E 19,5 lần, ROE 27,2%."
+
+test("figures no tool fetched are sent back once with tools on and never stored", async () => {
+  respond = (_body, n) => (n === 0 ? answer(INVENTED) : n === 1 ? toolCall("current_time", {}, "call_u") : n === 2 ? answer("Không có dữ liệu tài chính của FPT.") : undefined)
+  const events = await collect(runAgent({ history: [], input: "Phân tích FPT", skills: [], registry: registry() }))
+  expect(bodies).toHaveLength(3)
+  expect(bodies[1]!.tool_choice).not.toBe("none")
+  expect(lastSent(1)).toContain("chưa có tool nào chạy")
+  // The nudge stands on its own: the dropped answer is never mentioned to the model.
+  expect(lastSent(1)).not.toContain("bị bỏ")
+  expect(tools(events)).toEqual(["current_time"])
+  expect(events.some((e) => e.type === "notice" && e.text.includes("đừng dùng các số đó"))).toBe(true)
+  expect(done(events).recoveries).toEqual([{ kind: "unfetched", attempt: 1 }])
+  expect(JSON.stringify(done(events).messages)).not.toContain("19,5")
+})
+
+test("figures still unfetched after the retry stay, and the user is told", async () => {
+  respond = (_body, n) => (n <= 1 ? answer(INVENTED) : undefined)
+  const events = await collect(runAgent({ history: [], input: "Phân tích FPT", skills: [], registry: registry() }))
+  expect(bodies).toHaveLength(2)
+  expect(events.some((e) => e.type === "notice" && e.text.includes("chưa được kiểm chứng"))).toBe(true)
+  expect(done(events).recoveries).toEqual([{ kind: "unfetched", attempt: 1 }])
+  expect(JSON.stringify(done(events).messages)).toContain("19,5")
+})
+
+test("figures from an earlier turn cost no request when the answer cites them again", async () => {
+  respond = (_body, n) => (n === 0 ? answer(INVENTED) : undefined)
+  const history: ModelMessage[] = [
+    { role: "user", content: "Phân tích FPT" },
+    { role: "assistant", content: "P/E 19,5 lần, ROE 27,2% (Vietstock)." },
+  ]
+  const events = await collect(runAgent({ history, input: "Nhắc lại số vừa rồi", skills: [], registry: registry() }))
+  expect(bodies).toHaveLength(1)
+  expect(done(events).recoveries).toBeUndefined()
+})
+
+test("a continued answer gets no warning: its figures sit in the part before the cut", async () => {
+  respond = (_body, n) => (n === 0 ? answer("FPT: doanh thu", "length") : n === 1 ? answer(INVENTED) : undefined)
+  const events = await collect(runAgent({ history: [], input: "Phân tích FPT", skills: [], registry: registry() }))
+  expect(bodies).toHaveLength(2)
+  expect(events.some((e) => e.type === "notice" && e.text.includes("chưa được kiểm chứng"))).toBe(false)
+})
+
+test("figures beside a real tool result cost no request", async () => {
+  respond = (_body, n) => (n === 0 ? toolCall("current_time", {}, "call_d") : n === 1 ? answer(INVENTED) : undefined)
+  const events = await collect(runAgent({ history: [], input: "Phân tích FPT", skills: [], registry: registry() }))
+  expect(bodies).toHaveLength(2)
+  expect(done(events).recoveries).toBeUndefined()
 })
 
 test("a fragment answer is sent back once with tools on and never stored", async () => {

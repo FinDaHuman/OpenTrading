@@ -45,6 +45,8 @@ export type SessionEntry =
       unanswered?: boolean
       /** Items left open when the model answered (the list was retired, items unconfirmed). */
       retiredTodos?: number
+      /** Tools whose data the turn did not get (loop/failures.ts). */
+      dataGaps?: string[]
     }
   /**
    * The history was compacted: `messages` replaces everything before it for the model. The
@@ -190,6 +192,7 @@ export interface TurnInfo {
   unanswered?: boolean
   /** Items left open when the model answered (the list was retired, items unconfirmed). */
   retiredTodos?: number
+  dataGaps?: string[]
 }
 
 /**
@@ -386,6 +389,7 @@ export class Session {
       ...(info.recoveries ? { recoveries: info.recoveries } : {}),
       ...(info.unanswered ? { unanswered: true } : {}),
       ...(info.retiredTodos ? { retiredTodos: info.retiredTodos } : {}),
+      ...(info.dataGaps ? { dataGaps: info.dataGaps } : {}),
     })
     const firstText = messages.map(userText).find((t) => t.trim()) ?? ""
     // A stopped session never writes again: keep the turn's number for the receipt, not its content.

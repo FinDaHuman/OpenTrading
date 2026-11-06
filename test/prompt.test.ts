@@ -66,6 +66,18 @@ test("the market clock is re-sent only when a phase changes", () => {
   expect(sameSnapshot(first.clock, next.clock)).toBe(false)
 })
 
+test("an eval can drop the skill hint and the citation rules, and nothing else", () => {
+  const skills = [skill({ name: "devil", triggers: { keywords: ["phản biện"] } })]
+  const input = { skills, tools: ["load_skill"], input: "phản biện giúp tôi" }
+  const full = assemble(base(input))
+  expect(full.reminders.some((r) => r.startsWith("<goi_y_skill>"))).toBe(true)
+  expect(full.system).toContain("<citations>")
+  const less = assemble(base({ ...input, disabled: new Set(["skill-hints", "citations-prompt"]) }))
+  expect(less.reminders.some((r) => r.startsWith("<goi_y_skill>"))).toBe(false)
+  expect(less.system).not.toContain("<citations>")
+  expect(less.system).toContain("<skill_catalog>")
+})
+
 test("trigger hits add a skill hint reminder; manual and sticky skills behave", () => {
   const skills = [
     skill({ name: "devil", triggers: { keywords: ["phản biện"] } }),

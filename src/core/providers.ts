@@ -15,10 +15,11 @@ import { createXai } from "@ai-sdk/xai"
 import { createOpenRouter } from "@openrouter/ai-sdk-provider"
 import type { LanguageModel } from "ai"
 import type { Catalog, CatalogModel, CatalogProvider } from "./catalog"
+import { countedFetch } from "./requests"
 
 export type ProviderId = string
 
-type Options = { apiKey: string; baseURL?: string; name: string }
+type Options = { apiKey: string; baseURL?: string; name: string; fetch: typeof globalThis.fetch }
 
 type GeminiContent = { role?: string; parts?: unknown[] }
 
@@ -38,7 +39,7 @@ export function mergeGeminiTurns(contents: GeminiContent[]): GeminiContent[] {
   return merged
 }
 
-const geminiFetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+const geminiFetch = (base: typeof globalThis.fetch) => (async (input: RequestInfo | URL, init?: RequestInit) => {
   if (typeof init?.body === "string" && init.body.includes('"contents"')) {
     try {
       const body = JSON.parse(init.body) as { contents?: GeminiContent[] }
@@ -47,7 +48,7 @@ const geminiFetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
       // not JSON: send as is
     }
   }
-  return globalThis.fetch(input, init)
+  return base(input, init)
 }) as typeof globalThis.fetch
 type Factory = (o: Options) => (modelId: string) => Exclude<LanguageModel, string>
 
@@ -59,7 +60,7 @@ const SDK: Record<string, Factory> = {
     return o.baseURL ? (id) => sdk.chat(id) : (id) => sdk(id)
   },
   "@ai-sdk/anthropic": (o) => createAnthropic(o),
-  "@ai-sdk/google": (o) => createGoogleGenerativeAI({ ...o, fetch: geminiFetch }),
+  "@ai-sdk/google": (o) => createGoogleGenerativeAI({ ...o, fetch: geminiFetch(o.fetch) }),
   "@ai-sdk/groq": (o) => createGroq(o),
   "@ai-sdk/mistral": (o) => createMistral(o),
   "@ai-sdk/xai": (o) => createXai(o),
@@ -161,5 +162,5 @@ export function isChatModel(m: CatalogModel): boolean {
 export function languageModel(provider: CatalogProvider, modelId: string, apiKey: string): Exclude<LanguageModel, string> {
   const target = route(provider, provider.models[modelId])
   if (!target) throw new Error(`Provider ${provider.name} chưa được hỗ trợ trong bản này.`)
-  return target.factory({ apiKey, baseURL: target.baseURL, name: provider.id })(modelId)
+  return target.factory({ apiKey, baseURL: target.baseURL, name: provider.id, fetch: countedFetch(provider.id, modelId) })(modelId)
 }

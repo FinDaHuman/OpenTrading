@@ -249,6 +249,7 @@ await writeFile(path.join(home, "mcp.json"), JSON.stringify({ mcpServers: { demo
 const { App, idleTimerForTests } = await import("../src/tui/app")
 const { state, setState } = await import("../src/tui/state")
 const { LOADED_PREFIX } = await import("../src/core/tools/search")
+const { SOURCE_FAILED_PREFIX } = await import("../src/core/tools/outcome")
 const { resetNotifications, say } = await import("../src/tui/notify")
 const { reconcile, unwrap } = await import("solid-js/store")
 const { readJson } = await import("../src/core/store")
@@ -998,6 +999,19 @@ test("a deferred tool loaded by its first call reads as a grey note, wrapped, no
   try {
     const frame = await setup.waitForFrame((f) => f.includes("● market_movers()") && f.includes("CUỐI-CÂU"))
     show(frame)
+  } finally {
+    setState("lines", (lines) => lines.slice(0, before))
+  }
+})
+
+test("a source that failed shows its notice, not the envelope, and no green dot", async () => {
+  const notice = `${SOURCE_FAILED_PREFIX} vn_fundamentals: nguồn quá thời gian. Có thể thử lại một lần ở bước sau. CUỐI-CÂU`
+  const output = `${notice}\n{"availability":"unavailable","ENVELOPE":1}`
+  const before = state.lines.length
+  setState("lines", (lines) => [...lines, { kind: "tool", callId: "c-source", name: "vn_fundamentals", label: "vn_fundamentals()", status: "ok", output }])
+  try {
+    const frame = await setup.waitForFrame((f) => f.includes("● vn_fundamentals()") && f.includes("CUỐI-CÂU"))
+    expect(frame).not.toContain("ENVELOPE")
   } finally {
     setState("lines", (lines) => lines.slice(0, before))
   }

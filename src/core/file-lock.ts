@@ -17,6 +17,11 @@ import path from "node:path"
  * What is left: an owner that stops refreshing (a frozen process) can lose the lock while it
  * still runs. `HeldLock.assertHeld` lets it check right before it commits, so it fails
  * instead of overwriting; only the moment between that check and the commit stays open.
+ *
+ * On Windows a lock its owner is deleting stays in the directory for a moment, and opening it
+ * then fails with EPERM (sometimes EACCES or EBUSY) instead of EEXIST. A real permission problem
+ * gives the same codes, so on Windows both wait, and only one that outlasts `timeoutMs` is
+ * reported as such. Elsewhere those codes are real errors and are thrown at once.
  */
 
 export interface HeldLock {
@@ -88,6 +93,10 @@ async function staleLock(lock: string, staleMs: number): Promise<{ text: string;
   return pid && pid !== process.pid && !alive(pid) ? { text, mtimeMs } : undefined
 }
 
+function contended(code: string | undefined) {
+  return code === "EEXIST" || (process.platform === "win32" && (code === "EPERM" || code === "EACCES" || code === "EBUSY"))
+}
+
 export async function withFileLock<T>(
   file: string,
   run: (lock: HeldLock) => Promise<T>,
@@ -106,6 +115,8 @@ export async function withFileLock<T>(
   // The last refusal that was not "the lock exists": reported as is if the wait runs out.
   let refused: unknown
   for (;;) {
+    // A takeover of a stale lock that failed in this attempt: reported if the wait runs out on it.
+    let blocked: Error | undefined
     try {
       const handle = await lockFiles.create(lock)
       try {
@@ -123,11 +134,10 @@ export async function withFileLock<T>(
       break
     } catch (error) {
       const code = (error as { code?: string }).code
+      if (!contended(code)) throw error
       // Windows: a lock just removed while another process still has it open stays "delete
-      // pending" for a moment, and creating it again fails with EPERM/EACCES (EBUSY likewise).
-      if (code === "EPERM" || code === "EACCES" || code === "EBUSY") refused = error
-      else if (code !== "EEXIST") throw error
-      else refused = undefined
+      // pending" for a moment, and creating it again fails with EPERM/EACCES/EBUSY.
+      refused = code === "EEXIST" ? undefined : error
     }
     const stale = refused === undefined ? await staleLock(lock, staleMs) : undefined
     if (stale !== undefined) {
@@ -135,11 +145,19 @@ export async function withFileLock<T>(
       // late owner just refreshed (newer mtime, read after the content) is left alone.
       const now = await lockFiles.read(lock).catch(() => undefined)
       const touched = await stat(lock).then((s) => s.mtimeMs, () => undefined)
-      if (now === stale.text && touched === stale.mtimeMs) await rm(lock, { force: true })
-      continue
+      if (now === stale.text && touched === stale.mtimeMs) {
+        // Losing the takeover to another process can fail here too (Bun on Windows: EFAULT): that
+        // attempt waits like any other, so the deadline below still ends the loop.
+        const removed = await rm(lock, { force: true }).then(
+          () => true,
+          (error: Error) => ((blocked = error), false),
+        )
+        if (removed) continue
+      }
     }
     if (Date.now() > deadline) {
       if (refused !== undefined) throw refused
+      if (blocked) throw blocked
       throw new Error(
         `Không ghi được ${file}: một tiến trình OpenTrading khác đang giữ khoá ${lock} quá ${Math.round(timeoutMs / 1000)}s. Thử lại sau; nếu không còn OpenTrading nào chạy thì xoá file khoá đó.`,
       )

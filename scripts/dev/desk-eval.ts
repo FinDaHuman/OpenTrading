@@ -10,6 +10,7 @@ import { dataDir } from "../../src/core/paths"
 import { languageModel } from "../../src/core/providers"
 import { initRuntime, setAgents } from "../../src/core/runtime"
 import { loadSkills } from "../../src/core/skills/loader"
+import { answerUnattended } from "../eval/approvals"
 import {
   caseProblems,
   loadDeskCases,
@@ -25,8 +26,8 @@ import {
  * Ultradesk eval for ADR 0006: each case is answered by today's default path (the main agent
  * with every tool, subagents included, on the question as typed) and by its playbook (the same
  * request as desk_run args), then an LLM judge scores both blind. Spends the user's quota — about 50 requests per case at the small size — and
- * is never run by the tests. Approvals: read-only per-call prompts (web_fetch domains) are
- * allowed once, anything else is denied, so an unattended run never hangs.
+ * is never run by the tests. Approvals: web_fetch domains are allowed once, anything else is
+ * denied, so an unattended run never hangs (../eval/approvals.ts).
  *
  * Cách chạy: bun scripts/dev/desk-eval.ts [--only 1,6,11] [--playbook sang-loc] [--size small]
  *            [--arm both|desk|single] [--judge provider/model] [--out file.json] [--yes]
@@ -71,12 +72,7 @@ if (!process.argv.includes("--yes")) {
 const { skills } = await loadSkills()
 const runtime = initRuntime({ skills: () => skills })
 setAgents(runtime, (await loadAgents()).agents)
-// Unattended: read-only per-call approvals (web_fetch domains) once, everything else denied.
-runtime.permissions.onChange((head) => {
-  if (!head) return
-  const def = runtime.registry.get(head.tool)
-  void runtime.permissions.respond(head.id, def?.readOnly && head.choices.includes("once") ? "once" : "deny", "desk-eval: không có người duyệt")
-})
+answerUnattended(runtime.permissions, "desk-eval")
 await runtime.mcp.start()
 
 async function single(c: DeskEvalCase): Promise<ArmResult> {

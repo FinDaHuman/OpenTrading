@@ -3,7 +3,7 @@ import path from "node:path"
 import { HookBus } from "./hooks"
 import { AskBroker } from "./ask"
 import { loadConfig } from "./config"
-import { McpManager } from "./mcp/manager"
+import { McpManager, type McpManagerOptions } from "./mcp/manager"
 import { askUserTool } from "./tools/builtin/ask-user"
 import { PermissionGate } from "./permission"
 import type { Waiver } from "./memory/binding/bind"
@@ -122,6 +122,8 @@ export function initRuntime(opts: {
   workspaceDirs?: string[]
   /** The session's temp folder (scratch.ts): the TUI turns it on; tests and evals leave it off. */
   scratchpad?: ScratchOptions | false
+  /** See `McpManagerOptions.transport`. */
+  mcpTransport?: McpManagerOptions["transport"]
 }): Runtime {
   const home = opts.home ?? dataDir()
   const registry = new ToolRegistry()
@@ -169,6 +171,7 @@ export function initRuntime(opts: {
     home,
     cwd: opts.cwd ?? process.cwd(),
     trustFile: path.join(home, "mcp-trust.json"),
+    transport: opts.mcpTransport,
   })
   registry.register(
     doctorLocalTool({

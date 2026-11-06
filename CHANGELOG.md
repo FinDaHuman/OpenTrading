@@ -79,6 +79,15 @@ adopt Semantic Versioning when it exposes a stable public API.
   over; taking over and releasing check the owner's token; the holder checks it still owns the lock
   right before each rename attempt; creating the lock waits through Windows' delete-pending errors.
 - `writeJson` removes its temp file on every failure (for `auth.json` it holds the key).
+- `desk-eval.ts` can read pages again: its approval responder never ran, so every `web_fetch` to
+  a new domain was refused. Expect more requests than its estimate, because `web_fetch` calls a
+  side model.
+- The `co-ban` agent prompt no longer carries a real HPG divestment figure, which could leak
+  into answers. `skill-routing-live-eval.ts` calls a model only with `--yes`.
+- Stop gate: an answer that claims fetched data (a tool name, `Nguồn:`, "đã lấy dữ liệu") with
+  figures the conversation does not hold, in a turn where no data tool ran, is sent back once
+  with tools on. If the retry does the same, the answer stays and the user is told its figures
+  are unverified.
 
 ### Changed
 
