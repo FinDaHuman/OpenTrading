@@ -7,6 +7,7 @@ import path from "node:path"
 import { testRender } from "@opentui/solid"
 import { seedExample } from "./helpers/memory-notebook"
 import { testClock } from "./helpers/memory-store"
+import { pastEnterGrace, realClock } from "./helpers/clock"
 
 // Config, the store, sessions and the prompt history go to a scratch home, never ~/.opentrading.
 const home = await mkdtemp(path.join(os.tmpdir(), "ot-turn-hold-"))
@@ -77,6 +78,7 @@ beforeEach(async () => {
   setState({ lines: [], queue: [], notices: [], noticeHold: false, turnHold: undefined })
 })
 afterEach(async () => {
+  realClock()
   for (const r of restores.splice(0)) r()
   // A card left open would keep its turn waiting: answer it before the session goes.
   state.turnHold?.choose("cancel")
@@ -143,10 +145,9 @@ async function ask(text: string) {
   await setup!.mockInput.typeText(text)
   setup!.mockInput.pressEnter()
 }
-/** The card ignores Enter for a moment after it appears (it was meant for the prompt). */
-const pastGrace = () => new Promise((r) => setTimeout(r, 450))
 async function choose(row: 0 | 1 | 2) {
-  await pastGrace()
+  // The card ignores Enter for a moment after it appears (it was meant for the prompt).
+  pastEnterGrace()
   for (let i = 0; i < row; i++) setup!.mockInput.pressArrow("down")
   setup!.mockInput.pressEnter()
   await until(() => state.turnHold === undefined)

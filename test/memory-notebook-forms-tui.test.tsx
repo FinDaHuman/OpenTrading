@@ -7,6 +7,7 @@ import path from "node:path"
 import { testRender } from "@opentui/solid"
 import { DECISION_MARKER, HPG_V3, seedExample, seedRenamed } from "./helpers/memory-notebook"
 import { testClock } from "./helpers/memory-store"
+import { pastEnterGrace, realClock } from "./helpers/clock"
 
 // Config, the store, sessions and the prompt history go to a scratch home, never ~/.opentrading.
 const home = await mkdtemp(path.join(os.tmpdir(), "ot-notebook-forms-"))
@@ -79,6 +80,7 @@ beforeEach(async () => {
   reply = "Đã rõ."
 })
 afterEach(async () => {
+  realClock()
   setup?.renderer.destroy()
   setup = undefined
   if (runtime) {
@@ -1354,7 +1356,7 @@ describe("suggestion cards (spec 007)", () => {
     await type("/goiy")
     enter()
     await until(() => state.cardFocus === cardLine()!.card.id)
-    await new Promise((r) => setTimeout(r, 450))
+    pastEnterGrace()
     enter()
     await until(() => state.dialog === "notebook-form")
     const form = flat(await frameWith("Câu bạn đã gõ"))
@@ -1439,7 +1441,7 @@ describe("suggestion cards (spec 007)", () => {
     await type("/goiy")
     enter()
     await until(() => state.cardFocus === cardLine()!.card.id)
-    await new Promise((r) => setTimeout(r, 450))
+    pastEnterGrace()
     enter()
     await until(() => state.dialog === "notebook-form")
     const form = flat(await frameWith("Không mua đuổi"))
@@ -1460,7 +1462,7 @@ describe("suggestion cards (spec 007)", () => {
     await type("/goiy")
     enter()
     await until(() => state.cardFocus === cardLine()!.card.id)
-    await new Promise((r) => setTimeout(r, 450))
+    pastEnterGrace()
     enter()
     await until(() => state.dialog === "notebook-form")
     await frameWith("Câu bạn đã gõ")
