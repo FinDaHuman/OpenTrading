@@ -1,4 +1,4 @@
-import { copyFile, mkdir, writeFile } from "node:fs/promises"
+import { copyFile, mkdir, rm, writeFile } from "node:fs/promises"
 import path from "node:path"
 import type { ModelMessage } from "ai"
 import { z } from "zod"
@@ -7,7 +7,7 @@ import { runAgent } from "../../src/core/agent"
 import type { Target } from "../../src/core/chat"
 import { promptVersion } from "../../src/core/prompt/assemble"
 import { onModelRequest } from "../../src/core/requests"
-import type { Runtime } from "../../src/core/runtime"
+import { closeMemory, createMemory, switchMemory, type MemoryChoice, type Runtime } from "../../src/core/runtime"
 import type { Skill } from "../../src/core/skills/schema"
 import { currentTimeTool } from "../../src/core/tools/builtin/current-time"
 import { clearResults, useResultSession } from "../../src/core/tools/refs"
@@ -133,6 +133,18 @@ export interface EvalRun {
   ablated?: Ablated
   /** --yolo: ▸▸▸ bypass instead of the narrow unattended list (approvals.ts). */
   yolo?: boolean
+  /**
+   * --memory: "notebook" gives every question its own empty notebook in the run's home (the guide
+   * and memory_read reach the prompt, nothing carries over); "none" (the product default) has none.
+   */
+  memory?: MemoryChoice
+}
+
+/** A fresh empty notebook for the next question: the last one is closed (Windows locks it) and its files removed. */
+async function freshMemory(runtime: Runtime, choice: MemoryChoice) {
+  closeMemory(runtime)
+  if (choice === "notebook") for (const suffix of ["", "-wal", "-shm"]) await rm(path.join(runtime.home, `memory.db${suffix}`), { force: true })
+  switchMemory(runtime, createMemory(choice, runtime.home))
 }
 
 const DEFAULT_TIMEOUT_MS = 15 * 60_000
@@ -161,6 +173,7 @@ export async function runEval(run: EvalRun) {
     provider: run.target.provider.id,
     model: run.target.model,
     started_at: new Date().toISOString(),
+    memory: run.memory ?? "none",
     tools: registry.list().length,
     // Bypass declares the write tools in full (~850 tokens a turn): the prompt differs, not only approvals.
     permission_mode: runtime.permissions.mode,
@@ -196,6 +209,7 @@ export async function runEval(run: EvalRun) {
           (tag, { callId, ...call }) => write({ type: "tool_raw", ...tag, call_id: callId, ...call }),
         )
         meter.requests = 0
+        await freshMemory(runtime, run.memory ?? "none")
         await ask(run, question, asked, now, meter)
         await ledger?.flush()
       }
@@ -203,6 +217,7 @@ export async function runEval(run: EvalRun) {
   } finally {
     stopMeter()
     stopAnswering()
+    closeMemory(runtime)
     if (run.yolo) {
       runtime.permissions.setMode("read-only")
       runtime.permissions.bypassAvailable = false
@@ -234,6 +249,9 @@ async function ask(run: EvalRun, question: EvalQuestion, asked: Asked, now: Date
       input: question.question,
       skills: skillsFor(run.skills, run.ablated),
       registry: runtime.registry,
+      memory: runtime.memory,
+      constraints: runtime.constraints,
+      redaction: runtime.redaction,
       serverInstructions: () => runtime.mcp.instructions(),
       target: run.target,
       now,

@@ -4,16 +4,17 @@
 
 ```sh
 # Prints the question count and a request estimate, then exits. Needs no key.
-bun scripts/eval/run.ts --questions scripts/eval/example-questions.json --model google/gemini-3.1-flash-lite
+bun scripts/eval/run.ts --questions scripts/eval/example-questions.json --model google/gemini-3.1-flash-lite --memory none
 # Real run.
-bun scripts/eval/run.ts --questions set.json --model provider/model --repeat 3 --out trace.jsonl --yes
+bun scripts/eval/run.ts --questions set.json --model provider/model --memory notebook --repeat 3 --out trace.jsonl --yes
 ```
 
 Each question has an `id`, a `group` (A–F), the `question`, and `now`, the moment it is asked at, with a UTC offset.
 
 ## What a run isolates
 
-- A temporary home holds only `auth.json`, the MCP files and the model catalog, plus a `config.json` naming the model. The investor profile, memory and user skills stay out. The home is deleted at the end, because it holds a copy of the keys.
+- A temporary home holds only `auth.json`, the MCP files and the model catalog, plus a `config.json` naming the model. The investor profile, the user's memory and user skills stay out.
+- `--memory notebook|none` is required, like `--model`. `notebook` opens an empty notebook in the run's home before each question: the memory guide goes into the system prompt and `memory_read` is offered, and nothing a question leaves in it reaches the next. Suggestion cards stay off. `none` is the product default. The header records `memory`, and so do the `settings`. Since memory changes the prompt and the tools, record a baseline per setting and never compare across them. The home is deleted at the end, because it holds a copy of the keys.
 - The working folder is empty, so project skills, agents and `.mcp.json` do not apply.
 - `now` reaches the prompt's date, `current_time` and subagents. Web tools still use the real date.
 - Refs are cleared before each question, and each question starts with no history.
