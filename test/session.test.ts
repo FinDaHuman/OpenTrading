@@ -313,17 +313,33 @@ test("one failed write does not stop later turns from being saved; the meta line
   const blocker = path.join(sessionsDir(), "2026", "11", `${s.id}.jsonl`)
   await mkdir(blocker, { recursive: true })
   s.noteChart("call_1", { kind: "line", symbol: "VCB", series: [1, 2] })
-  await expect(s.appendTurn(turn1, info)).rejects.toThrow()
+  // Writes never reject: the receipt says the turn is still waiting, and why.
+  const failed = await s.appendTurn(turn1, info)
+  expect(failed.saved).toEqual([])
+  expect(failed.pending).toEqual([1])
+  expect(failed.error).toBeInstanceOf(Error)
   expect(s.path).toBeUndefined()
 
   await rm(blocker, { recursive: true, force: true })
-  await s.appendTurn(turn2, info)
+  // The next turn is saved, and the waiting one is caught up first (not dropped).
+  expect((await s.appendTurn(turn2, info)).saved).toEqual([1, 2])
   const lines = (await readFile(s.path!, "utf8")).trim().split("\n").map((l) => JSON.parse(l))
   expect(lines[0]).toMatchObject({ type: "meta", id: s.id, cwd: "/w" })
+  expect(lines.filter((l) => l.type === "meta")).toHaveLength(1)
   const loaded = await loadSession(s.id)
-  expect(loaded.messages).toEqual(turn2)
+  expect(loaded.messages).toEqual([...turn1, ...turn2])
   expect(loaded.charts.get("call_1")).toEqual({ kind: "line", symbol: "VCB", series: [1, 2] })
   // Later writers of the queue (title, compaction) run too.
   await s.setTitle("Phiên VCB")
   expect((await listSessions()).find((x) => x.id === s.id)?.title).toBe("Phiên VCB")
+})
+
+test("turn_end records the stop gate's recoveries, an unanswered turn and retired todos; absent when unset", async () => {
+  const s = Session.create()
+  await s.appendTurn(turn1, { ...info, recoveries: [{ kind: "empty", attempt: 1 }], unanswered: true, retiredTodos: 2 })
+  await s.appendTurn(turn2, { ...info, unanswered: false, retiredTodos: 0 })
+  const lines = (await readFile(s.path!, "utf8")).trim().split("\n").map((l) => JSON.parse(l))
+  const ends = lines.filter((l) => l.type === "turn_end")
+  expect(ends[0]).toMatchObject({ recoveries: [{ kind: "empty", attempt: 1 }], unanswered: true, retiredTodos: 2 })
+  for (const key of ["recoveries", "unanswered", "retiredTodos"]) expect(Object.keys(ends[1])).not.toContain(key)
 })

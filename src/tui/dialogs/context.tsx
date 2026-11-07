@@ -1,3 +1,4 @@
+import { cardsSwitchOn, loadConfig } from "../../core/config"
 import { pad } from "../ui/text"
 import { tokensOf } from "../../core/compact"
 import { useKeys } from "../ui/keys"
@@ -30,11 +31,14 @@ const LAYER_NAME: Record<string, string> = {
   skills_always: "Skill luôn bật",
   skill_catalog: "Danh sách skill",
   ho_so_nha_dau_tu: "Hồ sơ nhà đầu tư",
+  rang_buoc: "Ràng buộc",
+  nguon_chua_nap: "Nguồn chưa nạp",
   memory: "Memory",
   skill_dang_bat: "Skill bật tay",
   phien_giao_dich: "Đồng hồ phiên",
   goi_y_skill: "Gợi ý skill",
   memory_policy: "Cách dùng memory",
+  memory_cards: "Thẻ gợi ý lưu memory",
   memory_lien_quan: "Memory liên quan",
   hook_context: "Ngữ cảnh từ hook",
   viec_can_lam: "Việc cần làm",
@@ -43,15 +47,20 @@ const LAYER_NAME: Record<string, string> = {
 
 /** What the next request would carry, layer by layer (HarnessPlan §10.2 observability). */
 export function ContextDialog(props: { runtime: Runtime }) {
-  const [preview] = createResource(() =>
+  const [preview] = createResource(async () =>
     previewContext({
       input: "",
+      // The card guide as the next turn would send it (spec 007).
+      cards: props.runtime.memory.id === "notebook" && cardsSwitchOn(await loadConfig()),
       skills: state.skills,
       sticky: state.activeSkills,
       prevClock: state.clock,
       history: state.history,
       registry: props.runtime.registry,
       memory: props.runtime.memory,
+      // The constraints block as the next turn would send it; a source that fails to read is listed
+      // apart (the next turn would be held, not sent without it).
+      constraints: props.runtime.constraints,
       serverInstructions: () => props.runtime.mcp.instructions(),
       sessionId: currentSession().id,
     }),
@@ -99,6 +108,13 @@ export function ContextDialog(props: { runtime: Runtime }) {
                 <Show when={Object.keys(state.agents).length > 0}>
                   <text fg={color.tx2} wrapMode="none">{subagentLine()}</text>
                 </Show>
+                <For each={p().unreadable}>
+                  {(line) => (
+                    <text fg={color.tham} wrapMode="word">
+                      {line}
+                    </text>
+                  )}
+                </For>
                 <text fg={color.tham} marginTop={1} wrapMode="none">
                   {`${pad("Tầng", 6)}${pad("Nội dung", 22)}${pad("Kênh", 11)}${pad("Token", 8)}Ghi chú`}
                 </text>

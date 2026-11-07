@@ -1,63 +1,28 @@
-import { afterEach, expect, test } from "bun:test"
-import { mkdtemp, readFile, rm } from "node:fs/promises"
+import { afterAll, afterEach, expect, test } from "bun:test"
+import { createHash } from "node:crypto"
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
-import { HookBus } from "../src/core/hooks"
-import { FileMemory } from "../src/core/memory/file-memory"
+import { z } from "zod"
 
-const dirs: string[] = []
+// Isolated state dir before core modules read it.
+const home = await mkdtemp(path.join(os.tmpdir(), "ot-memory-"))
+const savedHome = process.env.OPENTRADING_HOME
+process.env.OPENTRADING_HOME = home
+
+const { HookBus } = await import("../src/core/hooks")
+const { cardsEnabled, loadConfig, memoryChoiceOf, saveConfig } = await import("../src/core/config")
+const { migrateLegacyMemory } = await import("../src/core/memory/legacy")
+const { createMemory } = await import("../src/core/runtime")
+type MemoryProvider = import("../src/core/memory/types").MemoryProvider
+
 afterEach(async () => {
-  await Promise.all(dirs.splice(0).map((d) => rm(d, { recursive: true, force: true })))
+  for (const name of await readdir(home)) await rm(path.join(home, name), { recursive: true, force: true })
 })
-
-async function memory() {
-  const dir = await mkdtemp(path.join(os.tmpdir(), "ot-memory-"))
-  dirs.push(dir)
-  return { dir, memory: new FileMemory(dir) }
-}
-
-const ctx = { signal: new AbortController().signal, callId: "c" }
-
-test("proposals stay pending and invisible until approved", async () => {
-  const { memory: m } = await memory()
-  const propose = m.tools().find((t) => t.name === "propose_memory")!
-  expect(await propose.execute({ text: "Người dùng không giao dịch margin." }, ctx)).toContain("duyệt")
-  const [item] = await m.list()
-  expect(item).toMatchObject({ status: "pending", source: { via: "model" } })
-  expect(await m.index()).toBeUndefined()
-  expect(await m.recall("có nên dùng margin không")).toEqual([])
-
-  await m.approve(item!.id)
-  expect(await m.index()).toBe("- Người dùng không giao dịch margin.")
-  expect((await m.recall("có nên dùng margin không")).map((i) => i.text)).toEqual(["Người dùng không giao dịch margin."])
-})
-
-test("reject and remove delete the file", async () => {
-  const { memory: m } = await memory()
-  const a = await m.add("A thích ngân hàng", { status: "pending", via: "model" })
-  const b = await m.add("B tránh bất động sản", { status: "active", via: "user" })
-  await m.reject(a.id)
-  await m.remove(b.id)
-  expect(await m.list()).toEqual([])
-})
-
-test("memories are readable markdown files", async () => {
-  const { dir, memory: m } = await memory()
-  const item = await m.add("Tôi nắm giữ 6–24 tháng", { status: "active", via: "user" })
-  const text = await readFile(path.join(dir, `${item.id}.md`), "utf8")
-  expect(text).toContain('status: "active"')
-  expect(text.trim().endsWith("Tôi nắm giữ 6–24 tháng")).toBe(true)
-})
-
-test('"Ghi nhớ: …" saves an active memory through the user-prompt hook', async () => {
-  const { memory: m } = await memory()
-  const hooks = new HookBus()
-  m.register(hooks)
-  const outcome = await hooks.emit({ type: "user-prompt", sessionId: "s1", prompt: "Ghi nhớ: tôi không mua cổ phiếu UPCoM" })
-  expect(outcome.context[0]).toContain("tôi không mua cổ phiếu UPCoM")
-  expect(await m.list()).toMatchObject([{ status: "active", text: "tôi không mua cổ phiếu UPCoM", source: { via: "user", sessionId: "s1" } }])
-  const plain = await hooks.emit({ type: "user-prompt", sessionId: "s1", prompt: "giá FPT hôm nay?" })
-  expect(plain.context).toEqual([])
+afterAll(async () => {
+  await rm(home, { recursive: true, force: true })
+  if (savedHome === undefined) delete process.env.OPENTRADING_HOME
+  else process.env.OPENTRADING_HOME = savedHome
 })
 
 test("hook bus: block wins, context is collected, a failing hook is reported not thrown", async () => {
@@ -78,46 +43,97 @@ test("hook bus: block wins, context is collected, a failing hook is reported not
   expect((await hooks.emit({ type: "session-end", sessionId: "s" })).context).toEqual([])
 })
 
+/** A provider with one read-only tool and one hook, to watch switchMemory attach and detach them. */
+function fakeProvider(): MemoryProvider & { heard: string[] } {
+  const heard: string[] = []
+  return {
+    id: "fake",
+    heard,
+    tools: () => [
+      { name: "fake_read", description: "đọc", input: z.object({}), readOnly: true, execute: async () => "ok" },
+    ],
+    register: (hooks) =>
+      hooks.on("user-prompt", (e) => {
+        heard.push(e.prompt)
+        return undefined
+      }),
+  }
+}
+
 test("switching memory live swaps its tools and hooks", async () => {
   const { initRuntime, switchMemory } = await import("../src/core/runtime")
   const { NoopMemory } = await import("../src/core/memory/types")
-  const { memory: m } = await memory()
+  const m = fakeProvider()
   const runtime = initRuntime({ skills: () => [], memory: m })
-  expect(runtime.registry.get("propose_memory")).toBeDefined()
-  expect((await runtime.hooks.emit({ type: "user-prompt", sessionId: "s", prompt: "Ghi nhớ: A" })).context).toHaveLength(1)
+  expect(runtime.registry.get("fake_read")).toBeDefined()
+  await runtime.hooks.emit({ type: "user-prompt", sessionId: "s", prompt: "A" })
 
   switchMemory(runtime, new NoopMemory())
   expect(runtime.memory.id).toBe("none")
-  expect(runtime.registry.get("propose_memory")).toBeUndefined()
-  // The old provider's hook is detached: "Ghi nhớ" no longer saves anything.
-  expect((await runtime.hooks.emit({ type: "user-prompt", sessionId: "s", prompt: "Ghi nhớ: B" })).context).toEqual([])
-  expect((await m.list()).map((i) => i.text)).toEqual(["A"])
+  expect(runtime.registry.get("fake_read")).toBeUndefined()
+  // The old provider's hook is detached.
+  await runtime.hooks.emit({ type: "user-prompt", sessionId: "s", prompt: "B" })
+  expect(m.heard).toEqual(["A"])
 
   switchMemory(runtime, m)
-  expect(runtime.registry.get("propose_memory")).toBeDefined()
+  expect(runtime.registry.get("fake_read")).toBeDefined()
 })
 
-test("one broken memory file is skipped and reported; the valid ones still reach index and recall", async () => {
-  const { dir, memory: m } = await memory()
-  await m.add("Người dùng không dùng margin", { status: "active", via: "user" })
-  await Bun.write(path.join(dir, "corrupt.md"), '---\nid: "x\nscope: [user\n---\nhỏng')
-  const items = await m.list()
-  expect(items.map((i) => i.text)).toEqual(["Người dùng không dùng margin"])
-  expect(m.problems()).toHaveLength(1)
-  expect(m.problems()[0]).toContain("corrupt.md")
-  expect(await m.index()).toContain("margin")
-  expect((await m.recall("có dùng margin không")).map((i) => i.text)).toEqual(["Người dùng không dùng margin"])
+test("memoryChoiceOf: the removed legacy memory reads as the notebook, anything else unknown is off", () => {
+  expect(memoryChoiceOf({})).toBe("none")
+  expect(memoryChoiceOf({ memory: { provider: "none" } })).toBe("none")
+  expect(memoryChoiceOf({ memory: { provider: "notebook" } })).toBe("notebook")
+  expect(memoryChoiceOf({ memory: { provider: "file" } })).toBe("notebook")
+  expect(memoryChoiceOf({ memory: { provider: "sqlite" as never } })).toBe("none")
 })
 
-test("a hand-edited memory file without dates (or with an unquoted YAML date) is listed and recalled with the others", async () => {
-  const { dir, memory: m } = await memory()
-  const { writeFile } = await import("node:fs/promises")
-  await writeFile(path.join(dir, "a.md"), '---\nid: "a"\nscope: "user"\nstatus: "active"\ncreatedAt: "2026-10-01T00:00:00Z"\nupdatedAt: "2026-10-01T00:00:00Z"\n---\nTôi theo dõi cổ phiếu FPT\n')
-  await writeFile(path.join(dir, "hand.md"), "---\nid: hand1\nstatus: active\n---\nTôi thích báo cáo ngắn về FPT\n")
-  await writeFile(path.join(dir, "date.md"), "---\nid: 42\nstatus: active\ncreatedAt: 2026-10-02\n---\nTôi giữ FPT dài hạn\n")
-  const items = await m.list()
-  expect(items.map((i) => i.id).sort()).toEqual(["42", "a", "hand1"])
-  expect(items.every((i) => typeof i.createdAt === "string" && typeof i.updatedAt === "string")).toBe(true)
-  // recall() is what every turn uses: one such file must not silently hide every memory.
-  expect((await m.recall("FPT")).length).toBe(3)
+test("cardsEnabled: on with the notebook unless switched off; never without the notebook", () => {
+  expect(cardsEnabled({ memory: { provider: "notebook" } })).toBe(true)
+  expect(cardsEnabled({ memory: { provider: "file" } })).toBe(true)
+  expect(cardsEnabled({ memory: { provider: "notebook", cards: false } })).toBe(false)
+  expect(cardsEnabled({ memory: { provider: "none", cards: true } })).toBe(false)
+  expect(cardsEnabled({})).toBe(false)
+})
+
+test("createMemory: only off and the notebook exist; no legacy tool or hook is left", () => {
+  expect(createMemory("none").id).toBe("none")
+  const notebook = createMemory("notebook", home)
+  expect(notebook.id).toBe("notebook")
+  expect((notebook.tools?.() ?? []).map((t) => t.name)).toEqual(["memory_read"])
+  notebook.register?.(new HookBus())?.()
+})
+
+const digest = async (file: string) => createHash("sha1").update(await readFile(file)).digest("hex")
+
+test("migrateLegacyMemory: a config naming the legacy memory is written back as the notebook, said once; old files untouched", async () => {
+  await saveConfig({ memory: { provider: "file" } })
+  const folder = path.join(home, "memory")
+  await mkdir(folder, { recursive: true })
+  const files = ["a.md", "b.md", "c.md"].map((f) => path.join(folder, f))
+  for (const [i, f] of files.entries()) await writeFile(f, `---\nid: "${i}"\nstatus: "active"\n---\nGhi chú ${i}\n`)
+  const before = await Promise.all(files.map(digest))
+
+  const notice = await migrateLegacyMemory(home)
+  expect(notice).toContain("Memory cũ đã được gỡ")
+  expect(notice).toContain(folder)
+  expect(notice).toContain("/nho")
+  expect(notice).toContain("/baihoc")
+  expect((await loadConfig()).memory?.provider).toBe("notebook")
+  expect(await Promise.all(files.map(digest))).toEqual(before)
+
+  // Second start: nothing to move, nothing said.
+  expect(await migrateLegacyMemory(home)).toBeUndefined()
+})
+
+test("migrateLegacyMemory: no old folder → moved, notice without a path; other configs untouched", async () => {
+  await saveConfig({ memory: { provider: "file", cards: false } })
+  const notice = await migrateLegacyMemory(home)
+  expect(notice).toContain("Memory cũ đã được gỡ")
+  expect(notice).not.toContain(path.join(home, "memory"))
+  // Only the provider changes: the card switch the user set stays.
+  expect((await loadConfig()).memory).toEqual({ provider: "notebook", cards: false })
+
+  await saveConfig({ memory: { provider: "none" } })
+  expect(await migrateLegacyMemory(home)).toBeUndefined()
+  expect((await loadConfig()).memory?.provider).toBe("none")
 })

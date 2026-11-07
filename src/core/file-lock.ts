@@ -1,21 +1,67 @@
-import { mkdir, open, readFile, rm, stat } from "node:fs/promises"
+import { randomUUID } from "node:crypto"
+import { mkdir, open, readFile, rm, stat, utimes, type FileHandle } from "node:fs/promises"
 import path from "node:path"
 
 /**
  * A lock on `file` shared by every OpenTrading process: `<file>.lock`, created exclusively
- * ("wx"), holding the owner's pid. Two TUIs (or a TUI and a headless run) that read-modify-write
- * the same JSON file would otherwise each read the old copy and overwrite the other's change;
- * the atomic rename in writeJson only prevents a half-written file, not a lost update.
+ * ("wx"), holding the owner's pid and a token unique to this hold. Two TUIs (or a TUI and a
+ * headless run) that read-modify-write the same JSON file would otherwise each read the old
+ * copy and overwrite the other's change; the atomic rename in writeJson only prevents a
+ * half-written file, not a lost update.
  *
- * A lock left by a process that died is taken over: its pid is gone, or it is older than
- * `staleMs`. Waiting longer than `timeoutMs` is an error, never a silent overwrite.
+ * The owner touches the lock every `refreshMs` while it holds it. A lock is taken over when
+ * its pid is gone, or when nobody touched it for `staleMs` (a reused pid, a machine that
+ * slept): a slow owner that keeps refreshing is never taken over. Waiting longer than
+ * `timeoutMs` is an error, never a silent overwrite.
+ *
+ * What is left: an owner that stops refreshing (a frozen process) can lose the lock while it
+ * still runs. `HeldLock.assertHeld` lets it check right before it commits, so it fails
+ * instead of overwriting; only the moment between that check and the commit stays open.
  *
  * On Windows a lock its owner is deleting stays in the directory for a moment, and opening it
- * then fails with EPERM (sometimes EACCES) instead of EEXIST. A real permission problem gives
- * the same codes, so both wait, and only one that outlasts `timeoutMs` is reported as such.
+ * then fails with EPERM (sometimes EACCES or EBUSY) instead of EEXIST. A real permission problem
+ * gives the same codes, so on Windows both wait, and only one that outlasts `timeoutMs` is
+ * reported as such. Elsewhere those codes are real errors and are thrown at once.
  */
 
+export interface HeldLock {
+  /** Throws when another process took the lock over since it was acquired. */
+  assertHeld(): Promise<void>
+}
+
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+
+/** The holder's reads and the lock's content write, gathered so tests can make one fail (EBUSY) on any OS. */
+export const lockFiles = {
+  create: (lock: string) => open(lock, "wx"),
+  read: (lock: string) => readFile(lock, "utf8"),
+  write: (handle: FileHandle, text: string) => handle.writeFile(text),
+}
+
+/**
+ * Is the lock still this holder's? "unknown" when the file could not be read for another
+ * reason than being gone (an antivirus scan or indexer holding it for a moment): that is no
+ * proof another process took it over.
+ */
+async function check(lock: string, token: string): Promise<"ours" | "lost" | "unknown"> {
+  try {
+    return tokenOf(await lockFiles.read(lock)) === token ? "ours" : "lost"
+  } catch (error) {
+    return (error as { code?: string }).code === "ENOENT" ? "lost" : "unknown"
+  }
+}
+
+/** `check`, retried briefly while the answer is "unknown". */
+async function checkSettled(lock: string, token: string) {
+  let state = await check(lock, token)
+  for (let attempt = 0; state === "unknown" && attempt < 3; attempt++) {
+    await sleep(20 * (attempt + 1))
+    state = await check(lock, token)
+  }
+  return state
+}
+
+const tokenOf = (text: string | undefined) => (text ? /"token":"([^"]+)"/.exec(text)?.[1] : undefined)
 
 function alive(pid: number) {
   try {
@@ -27,8 +73,11 @@ function alive(pid: number) {
   }
 }
 
-/** The lock's content when it is stale, so the takeover can check nobody replaced it meanwhile. */
-async function staleContent(lock: string, staleMs: number): Promise<string | undefined> {
+/**
+ * The lock's content and mtime when it is stale, so the takeover can check nobody replaced it
+ * (content) or refreshed it (mtime) meanwhile.
+ */
+async function staleLock(lock: string, staleMs: number): Promise<{ text: string; mtimeMs: number } | undefined> {
   let text: string
   let mtimeMs: number
   try {
@@ -36,47 +85,78 @@ async function staleContent(lock: string, staleMs: number): Promise<string | und
   } catch {
     return undefined // gone already: the next attempt creates it
   }
-  if (Date.now() - mtimeMs > staleMs) return text
+  // A live owner touches the lock every refreshMs, so this age means it stopped long ago.
+  if (Date.now() - mtimeMs > staleMs) return { text, mtimeMs }
+  // Read by regex: a lock written before tokens existed still parses.
   const pid = Number(/"pid":(\d+)/.exec(text)?.[1])
   // An empty file is a lock being written right now, not a dead one.
-  return pid && pid !== process.pid && !alive(pid) ? text : undefined
+  return pid && pid !== process.pid && !alive(pid) ? { text, mtimeMs } : undefined
 }
 
 function contended(code: string | undefined) {
-  return code === "EEXIST" || (process.platform === "win32" && (code === "EPERM" || code === "EACCES"))
+  return code === "EEXIST" || (process.platform === "win32" && (code === "EPERM" || code === "EACCES" || code === "EBUSY"))
 }
 
-export async function withFileLock<T>(file: string, run: () => Promise<T>, opts: { timeoutMs?: number; staleMs?: number } = {}): Promise<T> {
+export async function withFileLock<T>(
+  file: string,
+  run: (lock: HeldLock) => Promise<T>,
+  opts: { timeoutMs?: number; staleMs?: number; refreshMs?: number } = {},
+): Promise<T> {
   const lock = `${file}.lock`
   const timeoutMs = opts.timeoutMs ?? 10_000
+  // Six refresh periods: a live owner is never this late, and a dead one whose pid was reused
+  // blocks writers no longer than before the refresh existed.
   const staleMs = opts.staleMs ?? 30_000
+  // Well within staleMs, also when a caller shortens it (refresh only touches the mtime).
+  const refreshMs = opts.refreshMs ?? Math.min(5_000, staleMs / 6)
+  const token = randomUUID()
   const deadline = Date.now() + timeoutMs
   await mkdir(path.dirname(file), { recursive: true })
+  // The last refusal that was not "the lock exists": reported as is if the wait runs out.
+  let refused: unknown
   for (;;) {
-    // What stopped this attempt, when it is not simply another process holding the lock.
+    // A takeover of a stale lock that failed in this attempt: reported if the wait runs out on it.
     let blocked: Error | undefined
     try {
-      const handle = await open(lock, "wx")
+      const handle = await lockFiles.create(lock)
       try {
-        await handle.writeFile(JSON.stringify({ pid: process.pid, at: Date.now() }))
-      } finally {
-        await handle.close()
+        await lockFiles.write(handle, JSON.stringify({ pid: process.pid, at: Date.now(), token }))
+      } catch (error) {
+        // An empty lock reads as "being written" to everyone else: remove it rather than block them.
+        try {
+          await handle.close()
+        } finally {
+          await rm(lock, { force: true })
+        }
+        throw error
       }
+      await handle.close()
       break
     } catch (error) {
       const code = (error as { code?: string }).code
       if (!contended(code)) throw error
-      if (code !== "EEXIST") blocked = error as Error
+      // Windows: a lock just removed while another process still has it open stays "delete
+      // pending" for a moment, and creating it again fails with EPERM/EACCES/EBUSY.
+      refused = code === "EEXIST" ? undefined : error
     }
-    const stale = await staleContent(lock, staleMs)
+    const stale = refused === undefined ? await staleLock(lock, staleMs) : undefined
     if (stale !== undefined) {
-      // Only the dead owner's lock goes: one another process just created is left alone.
-      const now = await readFile(lock, "utf8").catch(() => undefined)
-      // Losing the takeover to another process can fail here too (Bun on Windows: EFAULT), so a
-      // failure waits like any other attempt, and the deadline below still ends it.
-      if (now === stale) await rm(lock, { force: true }).catch((error: Error) => (blocked = error))
+      // Only the dead owner's lock goes: one another process just created (other content) or a
+      // late owner just refreshed (newer mtime, read after the content) is left alone.
+      const now = await lockFiles.read(lock).catch(() => undefined)
+      const touched = await stat(lock).then((s) => s.mtimeMs, () => undefined)
+      if (now === stale.text && touched === stale.mtimeMs) {
+        // Losing the takeover to another process can fail here too (Bun on Windows: EFAULT): that
+        // attempt waits like any other, so the deadline below still ends the loop.
+        const removed = await rm(lock, { force: true }).then(
+          () => true,
+          (error: Error) => ((blocked = error), false),
+        )
+        if (removed) continue
+      }
     }
     if (Date.now() > deadline) {
+      if (refused !== undefined) throw refused
       if (blocked) throw blocked
       throw new Error(
         `Không ghi được ${file}: một tiến trình OpenTrading khác đang giữ khoá ${lock} quá ${Math.round(timeoutMs / 1000)}s. Thử lại sau; nếu không còn OpenTrading nào chạy thì xoá file khoá đó.`,
@@ -84,9 +164,47 @@ export async function withFileLock<T>(file: string, run: () => Promise<T>, opts:
     }
     await sleep(10 + Math.random() * 40)
   }
+
+  let lost = false
+  let refreshing = false
+  const timer = setInterval(async () => {
+    if (refreshing || lost) return
+    refreshing = true
+    try {
+      const state = await check(lock, token)
+      // "unknown": skip this tick, the next one tries again.
+      if (state === "lost") {
+        lost = true
+        clearInterval(timer)
+      } else if (state === "ours") {
+        const now = new Date()
+        await utimes(lock, now, now).catch(() => {})
+      }
+    } finally {
+      refreshing = false
+    }
+  }, refreshMs)
+  // The refresh must not keep a process alive that is otherwise done.
+  timer.unref?.()
+
+  const held: HeldLock = {
+    assertHeld: async () => {
+      const state = lost ? "lost" : await checkSettled(lock, token)
+      if (state === "ours") return
+      if (state === "unknown") {
+        // Not proof of a takeover, but not proof of ownership either: refuse rather than overwrite.
+        throw new Error(`Không ghi được ${file}: không đọc được khoá ${lock} để kiểm, thay đổi chưa được lưu. Thử lại.`)
+      }
+      lost = true
+      throw new Error(`Không ghi được ${file}: khoá ${lock} đã bị tiến trình khác chiếm, thay đổi chưa được lưu. Thử lại.`)
+    },
+  }
   try {
-    return await run()
+    return await run(held)
   } finally {
-    await rm(lock, { force: true })
+    clearInterval(timer)
+    // Another process's lock (it took ours over) is left alone; one still unreadable after the
+    // retries is left too, and goes once it is no longer refreshed (staleMs).
+    if ((await checkSettled(lock, token)) === "ours") await rm(lock, { force: true })
   }
 }

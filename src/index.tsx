@@ -64,10 +64,16 @@ if (cli.dir !== undefined) {
   process.chdir(dir.path)
 }
 
+// One turn without the TUI: no Solid transform needed (src/cli/print.ts has no JSX).
+if (cli.kind === "print") {
+  const { runPrint } = await import("./cli/print")
+  process.exit(await runPrint(cli))
+}
+
 // Bun reads bunfig.toml (and its Solid preload) from the current folder only, so started from
 // any other folder the JSX would not compile. Register the transform here instead.
 // A binary is already compiled by scripts/build.ts.
 const { compiled } = await import("./core/build-info")
 if (!compiled) await import("@opentui/solid/preload")
 const { startTui } = await import("./tui/main")
-await startTui(cli.resume)
+await startTui(cli.resume, { yolo: cli.yolo === true })
