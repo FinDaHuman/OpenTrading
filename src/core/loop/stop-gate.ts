@@ -16,7 +16,7 @@ import { hasOpenTodos, LEGACY_TODO_PREFIX, TODO_PREFIX, TODO_WRITE, type Todo } 
 /** Recovery requests a turn may spend at most: the gate never loops. */
 export const MAX_RECOVERIES = 2
 
-export type RecoveryKind = "malformed" | "length" | "empty" | "promise" | "fragment" | "unfetched"
+export type RecoveryKind = "malformed" | "length" | "empty" | "promise" | "fragment" | "unfetched" | "draft"
 
 /** What the last request's final step produced. */
 export interface LastStep {
@@ -34,6 +34,8 @@ export interface LastStep {
   afterTools?: boolean
   /** A tool already ran in this turn (a fragment is only judged on a turn without any). */
   toolsInTurn?: boolean
+  /** A tool other than todo_write ran in this turn: there is data to answer from. */
+  dataInTurn?: boolean
   /** Figures presented as fetched data with nothing behind them (see unfetchedFigures). */
   unfetched?: number
 }
@@ -62,6 +64,11 @@ export const RESCUE_FRAGMENT =
   "<nhac_nho>\nTrả lời trực tiếp tin nhắn mới nhất của người dùng ở trên; gọi tool nếu cần dữ liệu.\n</nhac_nho>"
 export const RESCUE_UNFETCHED =
   "<nhac_nho>\nLượt này chưa có tool nào chạy. Gọi tool lấy dữ liệu ngay trong bước này rồi mới viết số liệu; không lấy được thì nói rõ là thiếu dữ liệu và không viết số.\n</nhac_nho>"
+export const RESCUE_DRAFT =
+  "<nhac_nho>\nBạn chưa viết câu trả lời cho người dùng. Viết ngay câu trả lời hoàn chỉnh từ kết quả tool ở trên, theo cấu trúc của skill đã nạp; mục nào chưa có dữ liệu thì ghi rõ là thiếu. Không viết dàn ý, kế hoạch hay tên tool.\n</nhac_nho>"
+/** A draft written before any data came: fetch first, or answer. */
+export const RESCUE_DRAFT_FETCH =
+  "<nhac_nho>\nBạn chưa viết câu trả lời cho người dùng và lượt này chưa lấy dữ liệu nào. Gọi tool lấy dữ liệu ngay trong bước này rồi trả lời; không viết dàn ý, kế hoạch hay tên tool.\n</nhac_nho>"
 /** Tools off (it brought 2.5-flash-lite's empty answers back). */
 export const RESCUE_EMPTY_FINAL = "Hãy trả lời câu hỏi của người dùng dựa trên kết quả tool ở trên. Không gọi thêm tool."
 
@@ -72,7 +79,7 @@ export function judgeStop(last: LastStep, done: readonly RecoveryKind[], disable
   const empty = isEmptyAnswer(last.text)
   const left = MAX_RECOVERIES - done.length
   const used = (kind: RecoveryKind) => done.filter((k) => k === kind).length
-  const once = (kind: Extract<RecoveryKind, "malformed" | "promise" | "unfetched" | "fragment">) => left > 0 && used(kind) === 0 && !disabled?.has(`gate-${kind}`)
+  const once = (kind: Extract<RecoveryKind, "malformed" | "promise" | "unfetched" | "fragment" | "draft">) => left > 0 && used(kind) === 0 && !disabled?.has(`gate-${kind}`)
 
   if (empty && (BLOCKED.test(raw) || last.finish === "content-filter")) return { action: "give-up", kind: "blocked" }
   if (MALFORMED.test(raw) && empty) {
@@ -94,14 +101,24 @@ export function judgeStop(last: LastStep, done: readonly RecoveryKind[], disable
       ? { action: "continue", kind: "empty", nudge: RESCUE_EMPTY_FINAL, toolChoice: "none" }
       : { action: "continue", kind: "empty", nudge: RESCUE_EMPTY, toolChoice: "auto" }
   }
+  // After a cut answer the step holds only the rest of it, so the checks below cannot judge it.
+  const continuing = done.includes("length")
+  // The step ended on its own: no tool, or only a todo_write beside the answer. That one finishes
+  // as "tool-calls" (the SDK's name for Gemini's STOP with a function call), not "stop".
+  const finished = last.toolNames.every((name) => name === TODO_WRITE) && ["stop", "tool-calls"].includes(last.finish ?? "stop")
+  // Wrote its own working notes (an outline, "chưa lấy… sẽ", a todo_write to call) as the answer,
+  // once. With data fetched, tools off: write the answer from it. Without, it may fetch first.
+  if (finished && !continuing && isDraft(last.text) && once("draft")) {
+    return last.dataInTurn
+      ? { action: "continue", kind: "draft", nudge: RESCUE_DRAFT, toolChoice: "none" }
+      : { action: "continue", kind: "draft", nudge: RESCUE_DRAFT_FETCH, toolChoice: "auto" }
+  }
   // Said it would fetch something and stopped without calling a tool: send it back once, tools on.
   if (last.toolNames.length === 0 && (last.finish ?? "stop") === "stop" && isPromise(last.text)) {
     if (once("promise")) return { action: "continue", kind: "promise", nudge: RESCUE_PROMISE, toolChoice: "auto" }
   }
-  // After a cut answer the step holds only the rest of it, so neither check below can judge it.
-  const continuing = done.includes("length")
   // Presented figures as fetched data with no tool behind them: send it back once, tools on.
-  if (last.toolNames.every((name) => name === TODO_WRITE) && (last.finish ?? "stop") === "stop" && !continuing && isUnfetched(last)) {
+  if (finished && !continuing && isUnfetched(last)) {
     if (once("unfetched")) return { action: "continue", kind: "unfetched", nudge: RESCUE_UNFETCHED, toolChoice: "auto" }
   }
   // Continued an earlier sentence instead of answering the new message: send it back once.
@@ -195,6 +212,30 @@ export function isPromise(text: string): boolean {
   if (/:\s*$/.test(lastLine)) return true
   const sentences = lastLine.split(/(?<=[.!…])\s+/).filter((s) => s.trim())
   return INTENT.test(sentences.at(-1) ?? lastLine)
+}
+
+/** A harness tool named in prose: an answer for the user has no use for these names. */
+const HARNESS_TOOL = /(?<![\w])(todo_write|load_skill|tool_search|spawn_subagent)(?![\w])/
+/** A line the model writes to itself: what it fetched, what it must still do, how it will answer. */
+const SELF_NOTE = /^(cấu trúc (câu )?trả lời|cần phân tích (tiếp|thêm)|đã đủ dữ liệu để|kết quả đã lấy\s*:|todo close)/iu
+/** A section it means to fill later: "Kỹ thuật (chưa lấy - sẽ dựa trên…)". */
+const PLANNED = new RegExp(String.raw`${B}chưa (lấy|có dữ liệu)${E}[^\n]{0,40}${B}sẽ${E}`, "iu")
+/** Signals a step must show at least this many kinds of before it counts as a draft. */
+export const DRAFT_MIN_SIGNALS = 2
+
+/**
+ * The step is the model's working notes, not an answer. Seen 08/11 with gemini-3.1-flash-lite:
+ * "Kết quả đã lấy: …", "Cần phân tích tiếp", "Cấu trúc trả lời (theo yêu cầu): 1. … 3. Kỹ thuật
+ * (chưa lấy - sẽ dựa trên…)", "Todo close: Gọi `todo_write`", then a todo_write closing the list.
+ * Each signal alone also turns up in real answers (a list of tools, a company's "Kế hoạch:"), so
+ * two kinds are needed: over 596 stored assistant texts (sessions and docs/eval) only that one
+ * matched.
+ */
+export function isDraft(text: string): boolean {
+  const body = stripEchoes(invisible(text)).normalize("NFC")
+  const lines = body.split("\n").map(bare)
+  const signals = [HARNESS_TOOL.test(body), lines.some((line) => SELF_NOTE.test(line)), PLANNED.test(body)]
+  return signals.filter(Boolean).length >= DRAFT_MIN_SIGNALS
 }
 
 /** Above this, the text is an answer of its own, not a stray continuation. */

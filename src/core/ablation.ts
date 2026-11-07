@@ -9,6 +9,7 @@ export const ABLATIONS = [
   "gate-malformed",
   "gate-promise",
   "gate-unfetched",
+  "gate-draft",
   "strip-echoes",
   "tool-nudge",
   "todo-nudge",
