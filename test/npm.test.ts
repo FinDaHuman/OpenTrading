@@ -5,12 +5,15 @@ import { TARGETS, targetName } from "../scripts/targets"
 // CI's `npm` job packs and installs the packages for real; this checks the parts it cannot.
 const launcher = path.resolve(import.meta.dir, "../scripts/npm/launcher.cjs")
 
-test("the npm launcher is plain Node that parses", () => {
+test("the npm launcher is plain Node that parses", async () => {
   const node = Bun.which("node")
   if (!node) return
-  const run = Bun.spawnSync([node, "--check", launcher], { stdout: "pipe", stderr: "pipe" })
-  expect(run.stderr.toString()).toBe("")
-  expect(run.exitCode).toBe(0)
+  // Async, with no stdin and its own limit: under --parallel on the Windows runner a spawnSync
+  // of node once never returned within 20 s, while the check itself takes well under a second.
+  const run = Bun.spawn([node, "--check", launcher], { stdin: "ignore", stdout: "pipe", stderr: "pipe", timeout: 15_000 })
+  const [stderr, code] = await Promise.all([new Response(run.stderr).text(), run.exited])
+  expect(stderr).toBe("")
+  expect(code).toBe(0)
 })
 
 test("the launcher asks for the package names scripts/npm.ts publishes", async () => {
