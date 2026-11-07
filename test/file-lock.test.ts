@@ -209,7 +209,8 @@ test("review 2 #7: the refresh period follows a short staleMs, so a live holder 
   expect(await a).toBe("A")
 })
 
-test("R40: creating the lock while Windows still deletes the old one (EPERM, EACCES, EBUSY) waits, not fails", async () => {
+// Windows-only behaviour since main's df31792; off Windows the permission error is real, covered by the test below.
+test.skipIf(!windows)("R40: creating the lock while Windows still deletes the old one (EPERM, EACCES, EBUSY) waits, not fails", async () => {
   const file = path.join(home, "x.json")
   const create = spyOn(lockModule.lockFiles, "create")
   try {
