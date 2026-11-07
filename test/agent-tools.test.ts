@@ -27,7 +27,7 @@ test("a subagent gets the parent's tools minus spawn/ask/todo/memory, the same g
     tool("load_skill", true),
     tool("ask_user", true),
     tool("todo_write", false),
-    tool("propose_memory", false, { source: "memory:file" }),
+    tool("memory_read", true, { source: "memory:notebook" }),
     tool("current_time", true),
     tool("watchlist_local_delete", false),
     tool("mcp__data__quote", true, { deferrable: true, source: "mcp:data" }),

@@ -203,7 +203,7 @@ test("the summary prompt asks for verbatim sourced figures and carries the user'
   expect(compactPrompt()).not.toContain("Yêu cầu thêm")
 })
 
-test("one request: an <analysis> scratchpad then the <summary>; lean drops the analysis section", () => {
+test("one request: an <analysis> scratchpad then the <summary>; lean drops the analysis section, keeps preferences", () => {
   const full = compactPrompt()
   expect(full).toContain("<analysis>")
   expect(full).toContain("<summary>")
@@ -214,7 +214,14 @@ test("one request: an <analysis> scratchpad then the <summary>; lean drops the a
   expect(lean).toContain("## Lỗi và dữ liệu còn thiếu")
   expect(full).toContain("## Lỗi và dữ liệu còn thiếu")
   expect(lean).not.toContain("## Phân tích và kết luận đã đưa ra")
-  expect(lean).not.toContain("## Ràng buộc và sở thích")
+  // Spec 007 (design.md L7): the lean variant keeps what the user said about risk, horizon and style too.
+  for (const prompt of [full, lean]) {
+    expect(prompt).toContain("## Ràng buộc và sở thích")
+    expect(prompt).toContain("Điều người dùng đã nói trong hội thoại này")
+    // Memory, saved constraints and the profile are sent again with every request: labels only.
+    expect(prompt).toContain('Không chép nội dung khối memory ("[Memory · …]"), ràng buộc đã lưu hay hồ sơ nhà đầu tư')
+    expect(prompt).toContain('"bài học #7"')
+  }
   // A figure only an earlier answer gave is not sourced to a tool (30/10, AAA "LNTT +29,3%").
   for (const prompt of [full, lean]) expect(prompt).toContain('ghi nguồn là "câu trả lời trước", không ghi tên tool')
 })
