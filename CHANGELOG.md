@@ -133,6 +133,10 @@ adopt Semantic Versioning when it exposes a stable public API.
   the 40 most recent results.
 - `read_result` reads a saved result as it was fetched. Compaction now points old data results to
   it instead of telling the model to fetch them again, which could return other numbers.
+### Changed
+
+- The source line after a data server's result names the provider and, when the server gives it,
+  how far the data goes, so an answer can cite them.
 
 ### Fixed
 
