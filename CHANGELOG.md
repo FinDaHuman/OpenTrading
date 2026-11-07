@@ -16,6 +16,7 @@ adopt Semantic Versioning when it exposes a stable public API.
   - `--model provider/model` picks the model; `--output-format json` prints one result object; `--yolo` runs in bypass.
   - Calls that would ask are refused. A folder's own skills/agents load only if the folder is already trusted.
   - Exit code is 0 with an answer, 1 otherwise.
+- `scripts/eval/run.ts --memory notebook|none` (required): `notebook` gives each question an empty notebook (guide in the prompt, `memory_read`), and the trace header records `memory`.
 - `scripts/eval/run.ts --yolo` runs the eval in bypass instead of the narrow unattended list; the trace header records `permission_mode`.
 
 ### Changed (memory, spec 007)

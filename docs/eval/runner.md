@@ -13,7 +13,8 @@ Each question has an `id`, a `group` (A–F), the `question`, and `now`, the mom
 
 ## What a run isolates
 
-- A temporary home holds only `auth.json`, the MCP files and the model catalog, plus a `config.json` naming the model. The investor profile, memory and user skills stay out. The home is deleted at the end, because it holds a copy of the keys.
+- A temporary home holds only `auth.json`, the MCP files and the model catalog, plus a `config.json` naming the model. The investor profile, the user's memory and user skills stay out.
+- `--memory notebook|none` is required, like `--model`. `notebook` opens an empty notebook in the run's home before each question: the memory guide goes into the system prompt and `memory_read` is offered, and nothing a question leaves in it reaches the next. Suggestion cards stay off. `none` is the product default. The header records `memory`, and so do the `settings`. Since memory changes the prompt and the tools, record a baseline per setting and never compare across them. The home is deleted at the end, because it holds a copy of the keys.
 - The working folder is empty, so project skills, agents and `.mcp.json` do not apply.
 - `now` reaches the prompt's date, `current_time` and subagents. Web tools still use the real date.
 - Refs are cleared before each question, and each question starts with no history.

@@ -226,6 +226,31 @@ test("--yolo: a tool that would ask runs unanswered, and the header records the 
   }
 })
 
+test("--memory notebook: each question gets an empty notebook (guide in the prompt, memory_read offered); none has neither", async () => {
+  for (const memory of ["none", "notebook"] as const) {
+    bodies.length = 0
+    const runtime = initRuntime({ home, cwd: home, skills: () => [] })
+    runtime.registry.register({ name: "fake_quote", description: "Giá giả", input: z.object({}), readOnly: true, execute: async () => "64,27" })
+    const events: TraceEvent[] = []
+    const target = await resolveTarget({ provider: "groq", model: "tooly" })
+    const opened: string[] = []
+    const questions = parseQuestions(JSON.stringify([question("q1"), question("q2")]))
+    await runEval({ runtime, skills: [], target, questions, write: (e) => (e.type === "question" && opened.push(runtime.memory.id), events.push(e)), version: "0.0.0", memory })
+    expect(of(events, "run")[0]!.memory).toBe(memory)
+    const streamed = bodies.filter((b) => b.stream)
+    const system = streamed.map((b) => JSON.stringify(b.messages.find((m) => m.role === "system")?.content ?? ""))
+    const offered = streamed.map((b) => (b.tools ?? []).some((t) => t.function.name === "memory_read"))
+    if (memory === "notebook") {
+      expect(system.every((s) => s.includes("Sổ ghi nhớ là ghi chép"))).toBe(true)
+      expect(offered.some(Boolean)).toBe(true)
+    } else {
+      expect(system.some((s) => s.includes("Sổ ghi nhớ là ghi chép"))).toBe(false)
+      expect(offered.some(Boolean)).toBe(false)
+    }
+    expect(opened).toEqual([memory, memory])
+  }
+})
+
 test("a rule switched off stays off, notice included, and the rest still run", async () => {
   invent = true
   const { events } = await run([question("q1")], 1, undefined, parseAblations(["gate-unfetched"]))
