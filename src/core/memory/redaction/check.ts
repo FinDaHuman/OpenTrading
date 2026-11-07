@@ -11,9 +11,11 @@ import { openStoreReadOnly } from "../store/read-only"
  * open without creating, read, close at once. It runs whatever /config chose for memory.
  *
  * A mask written to a session file can never be taken back, so "deleted" is said only when the store proves
- * it: the item or version is marked deleted, or the store has no such item or version. A block whose item
- * and version are there but whose content differs (a store re-created with the same numbers, a later build
- * that formats a line differently) is "mismatch": masked in what is sent, never in the file. A block cut
+ * it: the item's or version's row is still there and marked deleted (deletes are logical; ids and version
+ * numbers are never reused). A store with no such item or version at all (re-created empty on another
+ * machine, reset, restored from an older backup) proves nothing, and a block whose item and version are
+ * there but whose content differs (a store re-created with the same numbers, a later build that formats a
+ * line differently) proves nothing either: both are "mismatch", masked in what is sent, never in the file. A block cut
  * short by the core is never compared, and a block whose label may be stored text (it starts right after the
  * output cap's mark) is never "deleted". The result carries verdicts only, never stored text.
  */
@@ -84,14 +86,18 @@ function refOf(b: HistoryBlock): PresenceRef {
     : { kind: "thesis", name: b.ref as string, version: b.version }
 }
 
-function verdictOf(block: HistoryBlock, present: readonly PresenceVersion[]): BlockVerdict {
+const sameRef = (a: PresenceRef, b: PresenceRef) =>
+  a.kind === b.kind && a.version === b.version && (a.kind === "lesson" ? a.id === (b as typeof a).id : a.name === (b as typeof a).name)
+
+function verdictOf(block: HistoryBlock, present: readonly PresenceVersion[], tombstones: readonly PresenceRef[]): BlockVerdict {
   const versions = present.filter((p) =>
     block.kind === "lesson"
       ? p.kind === "lesson" && p.id === block.ref && p.version === block.version
       : p.kind === "thesis" && p.name === block.ref && p.version === block.version,
   )
   // An unsure label (right after the output cap's mark) may be stored text, not a block: never proof of deletion.
-  if (versions.length === 0) return block.labelSure ? "deleted" : "mismatch"
+  // Only a recorded delete is proof: a store that never had the item may not be the store that sent it.
+  if (versions.length === 0) return block.labelSure && tombstones.some((t) => sameRef(t, refOf(block))) ? "deleted" : "mismatch"
   if (!block.complete) return "live"
   const mine = fixedLines(block.kind, block.lines)
   const withDetail = block.lines.some((l) => l.startsWith(DETAIL))
@@ -111,13 +117,16 @@ export function createRedactionCheck(file: string, opts: RedactionCheckOptions =
     // A file with no schema yet proves nothing about what was deleted: hold, never mask for good.
     if (store.state === "empty") return { state: "failed", reason: "kho memory chưa có dữ liệu" }
     let present: PresenceVersion[]
+    let tombstones: PresenceRef[]
     try {
-      present = store.presence(blocks.map(refOf))
+      const refs = blocks.map(refOf)
+      present = store.presence(refs)
+      tombstones = store.tombstones(refs)
     } finally {
       store.close()
     }
     // Verdicts are decided here, so nothing read from the store outlives this call.
-    const verdicts = new Map(blocks.map((b) => [b, verdictOf(b, present)]))
+    const verdicts = new Map(blocks.map((b) => [b, verdictOf(b, present, tombstones)]))
     // A block that was not asked about is never masked.
     return { state: "checked", verdict: (b) => verdicts.get(b) ?? "live" }
   }

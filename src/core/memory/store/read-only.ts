@@ -3,7 +3,7 @@ import { existsSync } from "node:fs"
 import { MemoryStoreError, openError } from "./errors"
 import { memoryGate } from "./gate"
 import { createStoreContext, type MemoryGate } from "./open"
-import { readPresence, type PresenceRef, type PresenceVersion } from "./presence"
+import { readPresence, readTombstones, type PresenceRef, type PresenceVersion } from "./presence"
 import { APPLICATION_ID, SCHEMA_VERSION } from "./schema"
 
 /**
@@ -24,6 +24,8 @@ export type ReadOnlyStore =
       gate: MemoryGate
       /** For the redaction check only (presence.ts); not the policy-checked path. */
       presence(refs: readonly PresenceRef[]): PresenceVersion[]
+      /** For the redaction check only: the refs whose deletion the store recorded (presence.ts). */
+      tombstones(refs: readonly PresenceRef[]): PresenceRef[]
       close(): void
     }
 
@@ -87,6 +89,7 @@ export function openStoreReadOnly(file: string, opts: { busyTimeoutMs?: number }
     state: "open" as const,
     gate: Object.freeze(memoryGate(ctx)),
     presence: (refs: readonly PresenceRef[]) => ctx.read(() => readPresence(conn, refs)),
+    tombstones: (refs: readonly PresenceRef[]) => ctx.read(() => readTombstones(conn, refs)),
     close() {
       if (closed) return
       closed = true

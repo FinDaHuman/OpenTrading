@@ -148,9 +148,13 @@ interface MemoryProvider {
   register?(hooks: HookBus): void                        // nghe session-start, user-prompt, turn-end, session-end
   list?(); approve?(id); reject?(id); remove?(id)        // cho /memory
 }
-interface MemoryItem { id; text; scope: "user" | "workspace"; status: "pending" | "active"; source?; createdAt; updatedAt }
-interface MemoryContext { sessionId: string; history?: readonly ModelMessage[] }
+interface MemoryItem { id; text; title?; scope: "user" | "workspace"; status: "pending" | "active"; source?; createdAt; updatedAt }
+interface MemoryContext { sessionId: string; history?: readonly ModelMessage[]; tier?: "A" | "B" | "C" }
 ```
+
+`ctx.tier` là hạng của model nhận lượt; provider dùng nó để giữ phần trả về trong ngân sách memory của hạng đó (vắng: hạng nhỏ nhất). `MemoryItem.title` là vài chữ gọi tên mục trong câu báo "Dùng N memory: …" cho người dùng (vắng: đầu văn bản của mục).
+
+**Định dạng lõi in ra là hợp đồng với Sổ ghi nhớ.** `src/core/memory/notebook/history-blocks.ts` đọc lại khối, dòng nhắc và dòng che từ văn bản lịch sử bằng mẫu sinh từ chính các hàm đã viết ra chúng: `render.ts` (nhãn khối, các dòng nhắc), `tools/wrap.ts` `truncate` (dấu cắt kết quả tool), `prompt/budget.ts` `fit` (dấu cắt ngân sách), `REMINDER_TAG` và `REMINDER_CAP_MARK` (`reminder-tag.ts`), và cách `agent.ts` in mục recalled (`- ` trước mỗi mục, một dòng mới giữa hai mục, khối `<memory_lien_quan>` trong `<nhac_nho>`). Đổi bất kỳ chỗ nào trong số đó thì phải chạy `test/memory-history-blocks.test.ts` và `test/memory-redaction*.test.ts`: lệch định dạng làm khối bị chèn lặp hay che sai mà không báo lỗi.
 
 `ctx.history` là lịch sử lượt này sẽ gửi, trước tin nhắn của người dùng, đã áp phần che. Provider đọc từ đó những gì model đã có trong tầm nhìn, thay vì tự nhớ trong RAM. Tool nhận `ToolContext.messages`: danh sách tin nhắn model được gửi ở đúng bước đó (kết quả tool cũ có thể đã bị dọn).
 

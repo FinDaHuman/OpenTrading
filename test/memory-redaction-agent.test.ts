@@ -194,12 +194,31 @@ describe("Story 1: a resumed session neither repeats nor misses blocks", () => {
     const ids = seedExample(other)
     const s = session()
     await s.turn("Hòa Phát?")
+    // Two typed turns later HPG has left the focus window (this turn and the two before), restart or not.
+    await s.turn("VCB có rẻ không?")
+    await s.turn("Còn ACB?")
     other.writer.saveThesis(ids.hpg, 3, HPG_V4)
     s.restart()
     const note = reminders.thesisNewVersion("HPG", 4, 3)
-    expect(memoryPart((await s.turn("VCB có rẻ không?")).requests)).toContain(note)
+    expect(memoryPart((await s.turn("MBB thì sao?")).requests)).toContain(note)
     s.restart()
-    expect(memoryPart((await s.turn("Còn ACB?")).requests)).not.toContain(note)
+    expect(memoryPart((await s.turn("Còn TCB?")).requests)).not.toContain(note)
+  })
+
+  test("restarted: a follow-up keeps the subjects of the turns before it (the window is rebuilt from the history)", async () => {
+    const other = nb.store()
+    const ids = seedExample(other)
+    const a = session()
+    const b = session()
+    await a.turn("Hòa Phát?")
+    await b.turn("Hòa Phát?")
+    other.writer.saveThesis(ids.hpg, 3, HPG_V4)
+    b.restart()
+    // Nothing in these words names HPG: only the window carries it.
+    const ta = memoryPart((await a.turn("Điều kiện thứ hai thì sao?")).requests)
+    const tb = memoryPart((await b.turn("Điều kiện thứ hai thì sao?")).requests)
+    expect(tb).toContain("bản 4 · ghi 20/10/2026 · người dùng tự ghi · thay cho bản 3 đã gửi trước đó trong phiên")
+    expect(tb).toBe(ta)
   })
 
   test("5: a turn dropped and sent again carries the block", async () => {

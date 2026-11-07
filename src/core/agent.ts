@@ -812,7 +812,7 @@ async function assembleFor(opts: TurnInput, target: Target | undefined, bound: B
     constraints: bound.constraints,
     unread: bound.unread,
     memoryInstructions: opts.memory?.instructions?.(),
-    memoryIndex: cap(await opts.memory?.index?.({ sessionId: opts.sessionId ?? "" }).catch(() => undefined), MEMORY_INDEX_MAX_CHARS),
+    memoryIndex: cap(await opts.memory?.index?.({ sessionId: opts.sessionId ?? "", tier }).catch(() => undefined), MEMORY_INDEX_MAX_CHARS),
     recalled: extras.recalled,
     hookContext: extras.hookContext,
     desk: opts.desk,
@@ -1053,11 +1053,11 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
     extras.hookContext = hooked.context
   }
   // Memory relevant to this message (active items only; the provider filters pending ones).
-  const recalled = (await opts.memory?.recall?.(opts.input, { sessionId, history: opts.history ?? [] }).catch(() => []))?.slice(0, MEMORY_RECALL_MAX_ITEMS) ?? []
+  const recalled = (await opts.memory?.recall?.(opts.input, { sessionId, history: opts.history ?? [], tier: tierOf(target0.provider.models[target0.model]?.limit?.context) }).catch(() => []))?.slice(0, MEMORY_RECALL_MAX_ITEMS) ?? []
   if (recalled.length > 0) {
     extras.recalled = cap(recalled.map((m) => `- ${m.text}`).join("\n"), MEMORY_RECALL_MAX_CHARS)
     // Never invisible (the lesson from Cursor's memories): say what was used.
-    yield { type: "notice", text: `Dùng ${recalled.length} memory: ${recalled.map((m) => m.text.slice(0, 40)).join("; ")}` }
+    yield { type: "notice", text: `Dùng ${recalled.length} memory: ${recalled.map((m) => m.title ?? m.text.slice(0, 40)).join(", ")}` }
   }
 
   const config = await loadConfig()

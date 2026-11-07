@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| **Trạng thái** | Đã duyệt lộ trình (28/10/2026). Chưa spec nào được implement |
+| **Trạng thái** | Đã duyệt lộ trình (28/10/2026). Spec 004, 001, 002, 003, 005, 006 đã implement (PR #229, CI xanh); spec 007 chưa làm |
 | **Kiến trúc** | [ra-soat-v5.md](../ra-soat-v5.md) phần C, các quyết định Q1–Q7 trong bảng "Đã chốt" (§B10) |
 | **Quyết định** | ADR [0002](../../decisions/0002-memory-ban-ghi-co-nhan.md) · [0003](../../decisions/0003-memory-kho-sqlite-va-dinh-danh.md) · [0004](../../decisions/0004-memory-muc-luc-va-model-tu-doc.md) · [0005](../../decisions/0005-memory-rang-buoc-co-cau-truc.md) · [0006](../../decisions/0006-memory-ranh-gioi-theo-loai.md) |
 | **Nhánh** | `feat/memory`, một PR vào `main` |
@@ -14,7 +14,7 @@
   - `plan.md`: làm thế nào; kèm `research.md`, `data-model.md` khi cần;
   - `tasks.md`: danh sách việc, gói theo phiên làm việc.
 - **Một nhánh, một PR.** Mọi spec, kể cả spec sửa lõi, làm trên `feat/memory`. PR nháp `feat/memory` → `main` được mở sau spec 004 (spec 0 và spec 004 cùng được push lần đầu), để CI chạy typecheck và test trên Windows và Ubuntu sau mỗi lần push.
-- **Mỗi spec một commit, push một lần**, sau khi spec đã được duyệt code.
+- **Mỗi spec một commit, push một lần**, sau khi typecheck và `bun test` qua ở máy. Duyệt code làm trên PR sau khi push (vì thế các spec ghi "chờ duyệt code"); sửa sau duyệt là commit nối tiếp trên `feat/memory`.
 - **Giữ phần lõi dễ duyệt trong một PR lớn:**
   - tiêu đề commit `feat(memory): spec NNN …` (spec 0 dùng `docs(memory): …`);
   - thân commit liệt kê từng file lõi đã sửa, kèm lý do một dòng;

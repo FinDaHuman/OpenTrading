@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| **Trạng thái** | Đã duyệt (06/11/2026, qua cổng 1 vòng 2). Có [plan](plan.md) bản nháp, chờ cổng 2 |
+| **Trạng thái** | Đã duyệt (06/11/2026, qua cổng 1 vòng 2). Đã implement theo [plan](plan.md), [tasks](tasks.md) xong; chờ duyệt code trên PR #229 |
 | **Ngày tạo** | 05/11/2026 |
 | **Nhánh** | `feat/memory` |
 | **Mô tả gốc** | "Phương án Y đầy đủ trong lõi: lõi đưa memory danh sách nhãn đang có trong lịch sử; xoá thì che khối trong lịch sử đang mở; dòng che trong file phiên, áp khi mở lại phiên; mã lượt" (lộ trình `specs/README.md`, thứ tự 7) |

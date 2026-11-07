@@ -426,7 +426,7 @@ export async function resumeSession(runtime: Runtime, id: string) {
     }
     return [item.kind === "user" ? { kind: "user", text: item.text, files: item.files } : { kind: "assistant", text: item.text, done: true }]
   })
-  const notes: Line[] = [...left, { kind: "info", text: `Mở lại phiên "${loaded.summary.title}" · ${loaded.summary.turns} lượt` }]
+  const notes: Line[] = [...left, { kind: "info", text: `Mở lại phiên "${loaded.summary.title}" · ${session.turns} lượt` }]
   const from = loaded.meta?.cwd
   if (from && samePathKey(from) !== samePathKey(process.cwd())) {
     notes.push({ kind: "info", text: `Phiên này tạo ở ${from}; workspace bây giờ là thư mục đang mở (${runtime.workspace.primary}).` })

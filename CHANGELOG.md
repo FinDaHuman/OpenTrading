@@ -5,6 +5,22 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ## [Unreleased]
 
+### Fixed (memory, PR #229 review)
+
+- A memory block is masked for good (a `redact` line) only when `memory.db` still holds the item's or version's
+  row marked deleted. A store that does not know the item (re-created empty, a session folder copied to another
+  machine, an old backup restored) only masks it in what is sent, so restoring the store brings it back.
+- The notebook sizes its injected blocks and its index to the tier of the model the turn goes to
+  (`MemoryContext.tier`), not to the smallest tier for every model. The thesis form warns when a thesis is too
+  long to be injected. An index over its budget drops the oldest entries first, so the newest stay in view.
+- The index is pinned per session: saving, editing or changing the state of an entry no longer changes the
+  context part of every request (no cache miss); a new entry is announced once in that turn's reminder. It is
+  rendered again only when one of its entries is deleted or the model tier changes.
+- After a restart or a resumed session, the subjects in focus are rebuilt from the user's typed turns in the
+  history, so a follow-up question keeps the subjects of the turns before it.
+- The "Dùng N memory" notice names items shortly ("HPG bản 3, bài học #7 bản 2", `MemoryItem.title`).
+- "Mở lại phiên … · N lượt" counts the session file's turns, as `/save` and `/export` do.
+
 ### Added
 
 - Memory blocks are tracked and masked through the session history (`src/core/memory/notebook/history-blocks.ts`,

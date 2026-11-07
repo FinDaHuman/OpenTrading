@@ -1,20 +1,25 @@
-import { BUDGETS } from "../../prompt/budget"
+import { BUDGETS, type Tier } from "../../prompt/budget"
 import { MEMORY_INDEX_MAX_CHARS, MEMORY_RECALL_MAX_CHARS, MEMORY_RECALL_MAX_ITEMS } from "../types"
 
 /**
- * Fits the reminder part of a turn under the memory budget of the smallest model tier, so the core never
- * cuts a labelled block, a note or the index on any tier (the MemoryProvider contract stays as it is).
+ * Fits the reminder part of a turn under the memory budget of the tier the turn is sent to (the smallest
+ * tier when it is not known), so the core never cuts a labelled block, a note or the index.
  * Lengths are measured exactly as the core prints recalled items: "- " before each, one new line between.
  */
 
-/** The smallest memory budget over the tiers, in characters (the core estimates 4 characters a token). */
-function smallestMemoryChars() {
+/**
+ * The memory budget of `tier` in characters (the core estimates 4 characters a token); with no tier, the
+ * smallest budget over the tiers, which fits every model.
+ */
+function memoryChars(tier?: Tier) {
+  const own = tier === undefined ? undefined : BUDGETS.memory?.[tier]
+  if (own !== undefined) return own * 4
   const budgets = Object.values(BUDGETS.memory ?? {}).filter((b): b is number => b !== undefined)
   return budgets.length > 0 ? Math.min(...budgets) * 4 : MEMORY_RECALL_MAX_CHARS
 }
 
-export const recallCharLimit = () => Math.min(smallestMemoryChars(), MEMORY_RECALL_MAX_CHARS)
-export const indexCharLimit = () => Math.min(smallestMemoryChars(), MEMORY_INDEX_MAX_CHARS)
+export const recallCharLimit = (tier?: Tier) => Math.min(memoryChars(tier), MEMORY_RECALL_MAX_CHARS)
+export const indexCharLimit = (tier?: Tier) => Math.min(memoryChars(tier), MEMORY_INDEX_MAX_CHARS)
 
 export const recalledLength = (items: readonly string[]) =>
   items.length === 0 ? 0 : items.reduce((n, item) => n + 2 + item.length, 0) + items.length - 1

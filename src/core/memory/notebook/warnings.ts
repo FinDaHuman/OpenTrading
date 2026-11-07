@@ -1,5 +1,7 @@
 import type { NotebookEntry, NotebookGroup } from "./admin"
-import type { AnyDraft, ConstraintDraft, LessonDraft } from "./drafts"
+import { recalledLength, recallCharLimit } from "./pack"
+import { renderThesisBlock } from "./render"
+import type { AnyDraft, ConstraintDraft, LessonDraft, ThesisDraft } from "./drafts"
 import { draftFields, type FormGroup } from "./form-model"
 import { foldName } from "./topics"
 
@@ -9,7 +11,7 @@ import { foldName } from "./topics"
  * fixed list; adding a pattern is one line plus one test case. Messages name the pattern, never the text.
  */
 
-export type WarningKind = "hard_rule" | "figure" | "duplicate"
+export type WarningKind = "hard_rule" | "figure" | "duplicate" | "too_long"
 
 export interface DraftWarning {
   kind: WarningKind
@@ -111,6 +113,27 @@ function duplicate(
  * Warnings for a draft against the notebook's active entries. `self` is the entry being edited, which is
  * not its own duplicate.
  */
+/**
+ * A thesis whose block is longer than a turn can carry is never injected on that tier: the model only gets
+ * a pointer and must call memory_read. Measured as the reminder sends it (no detail; a short code, a sector).
+ */
+function tooLong(d: ThesisDraft): DraftWarning | undefined {
+  const block = renderThesisBlock(
+    { subjectId: 0, display: "MÃ", version: 1, text: d.text, conditions: d.conditions, reviewBy: d.reviewBy, state: "watching", validFrom: "" },
+    { sector: { display: "Ngành", version: 1 } },
+  )
+  const length = recalledLength([block])
+  if (length <= recallCharLimit()) return undefined
+  const everywhere = length > recallCharLimit("A")
+  return {
+    kind: "too_long",
+    field: "text",
+    message: everywhere
+      ? `Luận điểm dài ${length} ký tự, quá giới hạn tự chèn của mọi model: model chỉ thấy tên và phải tự đọc bằng memory_read. Rút gọn luận điểm hoặc chuyển bớt sang Chi tiết.`
+      : `Luận điểm dài ${length} ký tự: model nhỏ (ngữ cảnh dưới 64k) không được tự chèn, chỉ thấy tên và phải tự đọc bằng memory_read. Rút gọn hoặc chuyển bớt sang Chi tiết nếu dùng model nhỏ.`,
+  }
+}
+
 export function draftWarnings(
   group: FormGroup,
   draft: AnyDraft,
@@ -128,6 +151,10 @@ export function draftWarnings(
   for (const f of draftFields(group, draft)) {
     if (f.field === "appliesTo" || f.field === "tags" || f.field === "confidence") continue
     if (isFigure(f.value)) out.push({ kind: "figure", field: f.field, message: FIGURE_MESSAGE })
+  }
+  if (group === "thesis") {
+    const long = tooLong(draft as ThesisDraft)
+    if (long) out.push(long)
   }
   const compared =
     group === "constraint" ? (draft as ConstraintDraft).text : group === "lesson" ? (draft as LessonDraft).title : undefined

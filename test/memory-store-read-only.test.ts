@@ -56,8 +56,8 @@ describe("openStoreReadOnly", () => {
       ])
       // The main agent's rules also let style out; the gate, not this module, decides.
       expect(store.gate.read("main_agent", "system").map((i) => i.kind)).toEqual(["constraint", "constraint", "style"])
-      // No writer and no connection handle on the result (presence is a read for the redaction check).
-      expect(Object.keys(store).sort()).toEqual(["close", "gate", "presence", "state"])
+      // No writer and no connection handle on the result (presence and tombstones are reads for the redaction check).
+      expect(Object.keys(store).sort()).toEqual(["close", "gate", "presence", "state", "tombstones"])
     } finally {
       store.close()
     }

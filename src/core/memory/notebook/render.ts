@@ -66,10 +66,10 @@ function thesisName(t: IndexThesis) {
 
 function indexText(theses: readonly IndexThesis[], lessons: readonly IndexLesson[], t: number, l: number) {
   const lines = [INDEX_HEADER]
-  if (t > 0) lines.push(`Luận điểm: ${theses.slice(0, t).map(thesisName).join(" · ")}`)
+  if (t > 0) lines.push(`Luận điểm: ${theses.slice(theses.length - t).map(thesisName).join(" · ")}`)
   if (t < theses.length) lines.push(`… còn ${theses.length - t} luận điểm`)
   if (l > 0) {
-    const names = lessons.slice(0, l).map((x) => `#${x.id} ${escapeMemoryLine(x.title)}`)
+    const names = lessons.slice(lessons.length - l).map((x) => `#${x.id} ${escapeMemoryLine(x.title)}`)
     lines.push(`Bài học: ${names.join(" · ")}`)
   }
   if (l < lessons.length) lines.push(`… còn ${lessons.length - l} bài, tìm bằng memory_read`)
@@ -78,8 +78,9 @@ function indexText(theses: readonly IndexThesis[], lessons: readonly IndexLesson
 }
 
 /**
- * Names only, by id. Over `maxChars` the longer list loses its last entry until it fits, and the rest
- * is counted: the core never has to cut the index mid-entry.
+ * Names only, by id. Over `maxChars` the longer list loses its oldest entry (lowest id, listed first) until
+ * it fits, and the rest is counted: the newest entries stay in view and the core never has to cut the
+ * index mid-entry.
  */
 export function renderIndex(
   theses: readonly IndexThesis[],
@@ -184,6 +185,9 @@ export const reminders = {
     `${NOTE} Luận điểm ${escapeMemoryLine(name)} (bản ${version}) chưa chèn ở lượt này vì hết chỗ; đọc bằng memory_read.`,
   tooLong: (name: string, version: number) =>
     `${NOTE} Luận điểm ${escapeMemoryLine(name)} (bản ${version}) dài hơn giới hạn tự chèn; đọc bằng memory_read.`,
+  indexThesisAdded: (name: string) =>
+    `${NOTE} Sổ có thêm luận điểm ${escapeMemoryLine(name)}, chưa có trong mục lục; đọc bằng memory_read nếu cần.`,
+  indexLessonAdded: (id: number) => `${NOTE} Sổ có thêm bài học #${id}, chưa có trong mục lục; đọc bằng memory_read nếu cần.`,
   storeError: (reason: string) => `[Memory · lỗi] Kho memory không mở được: ${reason}.`,
 }
 
@@ -192,7 +196,7 @@ export const reminders = {
  * printed it (already escaped), since the mask is built from the history, never from the store.
  */
 
-/** A block of an item the store confirmed deleted or absent: replaces it in the history for good. */
+/** A block of an item the store confirmed deleted: replaces it in the history for good. */
 export const maskedLesson = (id: number) => `[Memory · bài học #${id} đã bị người dùng xoá]`
 export const maskedThesis = (name: string) => `[Memory · luận điểm ${name} đã bị người dùng xoá]`
 

@@ -109,7 +109,7 @@ describe("createRedactionCheck", () => {
     expect((text as { reason: string }).reason.length).toBeGreaterThan(0)
   })
 
-  test("a readable store: deleted lesson and absent lesson are deleted, live versions live", async () => {
+  test("a readable store: a deleted lesson is deleted, an absent one only mismatch, live versions live", async () => {
     const store = t.open()
     const ids = seed(store)
     const history = [
@@ -120,7 +120,7 @@ describe("createRedactionCheck", () => {
       ["thesis", "HPG", 3, "live"],
       ["lesson", ids.b, 1, "deleted"],
       ["lesson", ids.a, 1, "live"],
-      ["lesson", 99, 1, "deleted"],
+      ["lesson", 99, 1, "mismatch"],
     ])
   })
 
@@ -130,7 +130,32 @@ describe("createRedactionCheck", () => {
     const history = [remind([thesisBlock("HPGX", 2, "Bản 2"), thesisBlock("HPGX", 7, "Không có bản này")])]
     expect(await verdicts(createRedactionCheck(t.file()), history)).toEqual([
       ["thesis", "HPGX", 2, "live"],
-      ["thesis", "HPGX", 7, "deleted"],
+      ["thesis", "HPGX", 7, "mismatch"],
+    ])
+  })
+
+  test("a deleted thesis is deleted under every name it had", async () => {
+    const store = t.open()
+    const ids = seed(store)
+    store.writer.deleteThesis(ids.hpg, 3)
+    const history = [remind([HPG3(), thesisBlock("HPGX", 2, "Bản 2")])]
+    expect(await verdicts(createRedactionCheck(t.file()), history)).toEqual([
+      ["thesis", "HPG", 3, "deleted"],
+      ["thesis", "HPGX", 2, "deleted"],
+    ])
+  })
+
+  test("a store re-created empty (another machine, a reset, an old backup) proves no delete: mismatch", async () => {
+    const old = t.open({}, "old.db")
+    const ids = seed(old)
+    old.close()
+    const fresh = t.open({}, "fresh.db")
+    fresh.writer.addLesson(lessonInput("Bài mới"))
+    const history = [remind([HPG3(), lessonBlock(ids.b, 1, "Đuổi giá")]), toolResult(lessonBlock(ids.a, 2, "Cắt lỗ", "Cắt lỗ sớm hơn", LIVE_MARKER))]
+    expect((await verdicts(createRedactionCheck(t.file("fresh.db")), history)).map((v) => v[3])).toEqual([
+      "mismatch",
+      "mismatch",
+      "mismatch",
     ])
   })
 

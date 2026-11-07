@@ -151,13 +151,13 @@ describe("index", () => {
     expect(renderIndex(theses, [], 1200)).not.toContain("Bài học:")
   })
 
-  test("over the cap: the first entries by id are kept and the rest counted, never cut mid-entry", () => {
+  test("over the cap: the newest entries by id are kept and the rest counted, never cut mid-entry", () => {
     const many = Array.from({ length: 40 }, (_, i) => ({ id: i + 1, title: `Bài học số ${i + 1} về quản trị rủi ro` }))
     const text = renderIndex(theses, many, 1200)!
     expect(text.length).toBeLessThanOrEqual(1200)
     const kept = [...text.matchAll(/#(\d+) Bài học số \1 về quản trị rủi ro/g)].map((m) => Number(m[1]))
     expect(kept.length).toBeGreaterThan(0)
-    expect(kept).toEqual(Array.from({ length: kept.length }, (_, i) => i + 1))
+    expect(kept).toEqual(Array.from({ length: kept.length }, (_, i) => 40 - kept.length + i + 1))
     expect(text).toContain(`… còn ${40 - kept.length} bài, tìm bằng memory_read`)
     expect(text.split("\n").at(-1)).toBe("Đọc nội dung: memory_read")
     expect(renderIndex(theses, many, 1200)).toBe(text)

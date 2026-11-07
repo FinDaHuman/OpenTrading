@@ -37,23 +37,10 @@ export type PresenceVersion =
       detail?: string
     }
 
-const optional = <K extends string>(key: K, value: string | null) =>
-  (value === null ? {} : { [key]: value }) as Partial<Record<K, string>>
-
-/** Live versions matching `refs`, in the order of `refs`; a thesis name used by several subjects gives each. */
-export function readPresence(db: Database, refs: readonly PresenceRef[]): PresenceVersion[] {
-  const lesson = db.query(
-    `SELECT v.title, v.summary, v.exceptions, v.detail, v.tags FROM lessons l
-     JOIN lesson_versions v ON v.lesson_id = l.id
-     WHERE l.id = ? AND v.version = ? AND l.deleted_at IS NULL`,
-  )
-  const thesis = db.query(
-    `SELECT text, conditions, review_by, detail FROM thesis_versions
-     WHERE subject_id = ? AND version = ? AND deleted_at IS NULL`,
-  )
+/** Every alias ever used, retired included, keyed as a label prints it; read once, on first use. */
+function aliasIndex(db: Database): (name: string) => number[] {
   let names: Map<string, number[]> | undefined
-  // Every alias ever used, retired included, keyed as a label prints it; read once per call.
-  const subjectsNamed = (name: string) => {
+  return (name) => {
     if (!names) {
       names = new Map()
       const rows = db.query("SELECT subject_id, alias FROM subject_aliases ORDER BY subject_id, id").all() as {
@@ -69,6 +56,42 @@ export function readPresence(db: Database, refs: readonly PresenceRef[]): Presen
     }
     return names.get(name) ?? []
   }
+}
+
+/**
+ * The refs whose deletion this store recorded: the version's row is still there (deletes are logical, ids
+ * and version numbers are never reused) and carries the delete. A ref the store has no row for is not here:
+ * the store may simply not be the one that wrote it (re-created empty, restored from an older backup).
+ */
+export function readTombstones(db: Database, refs: readonly PresenceRef[]): PresenceRef[] {
+  const lesson = db.query(
+    `SELECT 1 FROM lessons l JOIN lesson_versions v ON v.lesson_id = l.id
+     WHERE l.id = ? AND v.version = ? AND l.deleted_at IS NOT NULL`,
+  )
+  const thesis = db.query("SELECT 1 FROM thesis_versions WHERE subject_id = ? AND version = ? AND deleted_at IS NOT NULL")
+  const subjectsNamed = aliasIndex(db)
+  return refs.filter((ref) =>
+    ref.kind === "lesson"
+      ? lesson.get(ref.id, ref.version) !== null
+      : subjectsNamed(ref.name).some((id) => thesis.get(id, ref.version) !== null),
+  )
+}
+
+const optional =<K extends string>(key: K, value: string | null) =>
+  (value === null ? {} : { [key]: value }) as Partial<Record<K, string>>
+
+/** Live versions matching `refs`, in the order of `refs`; a thesis name used by several subjects gives each. */
+export function readPresence(db: Database, refs: readonly PresenceRef[]): PresenceVersion[] {
+  const lesson = db.query(
+    `SELECT v.title, v.summary, v.exceptions, v.detail, v.tags FROM lessons l
+     JOIN lesson_versions v ON v.lesson_id = l.id
+     WHERE l.id = ? AND v.version = ? AND l.deleted_at IS NULL`,
+  )
+  const thesis = db.query(
+    `SELECT text, conditions, review_by, detail FROM thesis_versions
+     WHERE subject_id = ? AND version = ? AND deleted_at IS NULL`,
+  )
+  const subjectsNamed = aliasIndex(db)
 
   const out: PresenceVersion[] = []
   for (const ref of refs) {

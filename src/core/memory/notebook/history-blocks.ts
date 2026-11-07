@@ -101,6 +101,8 @@ function compile() {
     one("note", "thesisDeleted", reminders.thesisDeleted(NAME), ["name"]),
     one("note", "thesisNewVersion", reminders.thesisNewVersion(NAME, VERSION, OLD), ["name", "version", "old"]),
     one("note", "thesisState", reminders.thesisState(NAME, VERSION, STATE), ["name", "version", "state"]),
+    one("note", "indexThesisAdded", reminders.indexThesisAdded(NAME), ["name"]),
+    one("note", "indexLessonAdded", reminders.indexLessonAdded(ID), ["id"]),
     one("pointer", "roomless", reminders.roomless(NAME, VERSION), ["name", "version"]),
     one("pointer", "tooLong", reminders.tooLong(NAME, VERSION), ["name", "version"]),
   ]
@@ -119,6 +121,13 @@ function compile() {
   }
 }
 const patterns = () => (compiled ??= compile())
+
+/** A short name for a block's label line, for the user's "Dùng N memory" notice: "HPG bản 3", "bài học #7 bản 2". */
+export function labelTitle(text: string): string | undefined {
+  const label = parseLabel(text.split("\n", 1)[0] ?? "")
+  if (!label) return undefined
+  return label.kind === "lesson" ? `bài học #${label.ref} bản ${label.version}` : `${label.ref} bản ${label.version}`
+}
 
 function parseLabel(line: string): { kind: BlockKind; ref: number | string; version: number } | undefined {
   for (const { kind, re } of patterns().labels) {

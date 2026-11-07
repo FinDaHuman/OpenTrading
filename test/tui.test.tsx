@@ -266,6 +266,7 @@ const osc52: string[] = []
 /** What it handed to the OS clipboard command (stubbed; CI never runs powershell). */
 const copied: string[] = []
 const { setClipboardSpawn } = await import("../src/tui/clipboard")
+const { currentSession } = await import("../src/tui/session")
 setClipboardSpawn(async (_command, text) => {
   copied.push(text)
   return true
@@ -885,6 +886,22 @@ test("/context shows each prompt layer with its token estimate", async () => {
   show(frame)
   setup.mockInput.pressEscape()
   await setup.waitFor(() => state.dialog === undefined)
+})
+
+test("/context shows the investor profile layer once INVESTOR.md has real content", async () => {
+  const file = path.join(home, "INVESTOR.md")
+  const template = await Bun.file(file).text()
+  try {
+    await Bun.write(file, "# Hồ sơ nhà đầu tư\n\nKhẩu vị rủi ro: thấp. Chỉ mua cổ phiếu ngân hàng, giữ trên 1 năm.\n")
+    await setup.mockInput.typeText("/context")
+    setup.mockInput.pressEnter()
+    const frame = await setup.waitForFrame((f) => f.includes("Danh tính & bất biến") && f.includes("Hồ sơ nhà đầu tư"))
+    expect(frame).toContain("Hồ sơ nhà đầu tư")
+    setup.mockInput.pressEscape()
+    await setup.waitFor(() => state.dialog === undefined)
+  } finally {
+    await Bun.write(file, template)
+  }
 })
 
 test("a retried request waits on the working row (with its deadline) and leaves nothing in the transcript", async () => {
@@ -1623,6 +1640,9 @@ test("/new starts a fresh session; /sessions reopens the previous one with its t
   // The "reopened" note is the first line (may be scrolled out of view): check state.
   expect(state.lines[0]).toMatchObject({ kind: "info" })
   expect((state.lines[0] as { text: string }).text).toContain("Mở lại phiên")
+  // The count is the session's own (its file's turn lines), the same /save and /export show.
+  const told = Number(/· (\d+) lượt$/.exec((state.lines[0] as { text: string }).text)?.[1])
+  expect(told).toBe(currentSession().turns)
   // Tool rows come back (the older ones may be scrolled out of view: check state too).
   expect(state.lines.some((l) => l.kind === "tool" && l.label.includes("current_time"))).toBe(true)
   const frame = await setup.waitForFrame((f) => f.includes("● "))

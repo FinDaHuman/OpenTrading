@@ -4,11 +4,11 @@ import { promptFile } from "../../prompt/assemble"
 import type { ToolDef } from "../../tools/types"
 import type { MemoryStoreError } from "../store/errors"
 import type { MemoryGate } from "../store/open"
-import type { MemoryContext, MemoryItem, MemoryProvider } from "../types"
+import { MEMORY_RECALL_MAX_ITEMS, type MemoryContext, type MemoryItem, type MemoryProvider } from "../types"
 import { escapeMemoryLine } from "./escape"
-import { memoryLines, type HistoryBlock } from "./history-blocks"
+import { labelTitle, memoryLines, type HistoryBlock } from "./history-blocks"
 import { rankLessons } from "./lesson-search"
-import { indexCharLimit, packRecall, type PackBlock, type PackLine } from "./pack"
+import { indexCharLimit, packRecall, recallCharLimit, type PackBlock, type PackLine } from "./pack"
 import {
   alreadyShown,
   reminders,
@@ -23,7 +23,7 @@ import {
   type IndexThesis,
   type ThesisBlockData,
 } from "./render"
-import { Ledgers } from "./session-ledger"
+import { Ledgers, typedTurns, type PinnedIndex } from "./session-ledger"
 import { memoryReadTool, type NotebookReads } from "./read-tool"
 import { detectSubjects, foldName, typedText, type MatchEntry } from "./topics"
 
@@ -56,7 +56,9 @@ const FALLBACK_GUIDE =
 /** What every request needs, rebuilt only when the store changed. */
 interface Snapshot {
   styles: ConstraintLine[]
-  index?: string
+  /** The index's entries; rendered per turn, to the budget of the tier the turn is sent to. */
+  indexTheses: IndexThesis[]
+  indexLessons: IndexLesson[]
   match: MatchEntry[]
   /** Retired aliases by subject, only to tell which subject a block sent under an old code belongs to. */
   past: { subjectId: number; aliases: string[] }[]
@@ -85,7 +87,8 @@ function snapshot(gate: MemoryGate): Snapshot {
     .map(({ fields: f }) => ({ id: num(f, "id"), title: str(f, "title") }))
   return {
     styles: system.filter((i) => i.kind === "style").map((i) => line(i.fields)),
-    index: renderIndex(theses, lessons, indexCharLimit()),
+    indexTheses: theses,
+    indexLessons: lessons,
     match: match.map(({ fields: f }) => ({
       subjectId: num(f, "subjectId"),
       aliases: f.aliases as string[],
@@ -141,6 +144,7 @@ const reasonOf = (error: MemoryStoreError) => REASON[error.kind] ?? "kho báo l�
 const asItem = (text: string, i: number, at: string): MemoryItem => ({
   id: `notebook:${i}`,
   text,
+  title: labelTitle(text) ?? "ghi chú của sổ",
   scope: "user",
   status: "active",
   createdAt: at,
@@ -281,8 +285,18 @@ export class NotebookMemory implements MemoryProvider {
     return renderInstructions(guide, this.refresh()?.styles ?? [])
   }
 
-  async index(_ctx: MemoryContext): Promise<string | undefined> {
-    return this.refresh()?.index
+  async index(ctx: MemoryContext): Promise<string | undefined> {
+    const s = this.refresh()
+    if (!s) return undefined
+    const ledger = this.ledgers.session(ctx.sessionId)
+    const theses = new Set(s.indexTheses.map((t) => t.subjectId))
+    const lessons = new Set(s.indexLessons.map((l) => l.id))
+    const pin = ledger.pinnedIndex
+    const gone = pin && ([...pin.theses].some((id) => !theses.has(id)) || [...pin.lessons].some((id) => !lessons.has(id)))
+    if (!pin || gone || pin.tier !== ctx.tier) {
+      ledger.pinnedIndex = { tier: ctx.tier, theses, lessons, text: renderIndex(s.indexTheses, s.indexLessons, indexCharLimit(ctx.tier)) }
+    }
+    return ledger.pinnedIndex!.text
   }
 
   /**
@@ -300,11 +314,18 @@ export class NotebookMemory implements MemoryProvider {
     this.source.retryIfBusy()
     const data = this.refresh()
     const detected = data && !typed.noticeOnly ? detectSubjects(typed.text, data.match) : []
+    if (data && ledger.fresh()) {
+      const past = typedTurns(history)
+        .map(typedText)
+        .filter((t) => !t.noticeOnly)
+        .map((t) => t.text)
+      ledger.seed(past, (text) => detectSubjects(text, data.match))
+    }
     ledger.beginTurn(typed, detected, history.length)
     const view = viewOf(history)
     let texts: string[]
     try {
-      texts = data ? this.compose(ledger.focus(), view, data) : this.errorLine(view)
+      texts = data ? this.compose(ledger.focus(), view, data, recallCharLimit(ctx.tier), ledger.pinnedIndex) : this.errorLine(view)
     } catch (error) {
       this.cache = undefined
       this.source.fail(error)
@@ -324,7 +345,7 @@ export class NotebookMemory implements MemoryProvider {
   }
 
   /** Blocks for the subjects in focus, notes for what changed since it was sent, packed under the cap. */
-  private compose(focus: { subjectId: number }[], view: HistoryView, data: Snapshot): string[] {
+  private compose(focus: { subjectId: number }[], view: HistoryView, data: Snapshot, chars: number, pinned?: PinnedIndex): string[] {
     const gate = this.source.gate()!
     const inFocus = new Set(focus.map((f) => f.subjectId))
     // A thesis label carries the display name it had when sent: the subject is found through the aliases in
@@ -401,6 +422,13 @@ export class NotebookMemory implements MemoryProvider {
       }
     }
     for (const id of view.maskedLessons) if (!view.lessons.has(id)) say(`lessonDeleted:${id}`, reminders.lessonDeleted(id))
+    // Entries saved after this session's index was pinned: said once, so the index itself never changes.
+    if (pinned) {
+      for (const t of data.indexTheses) {
+        if (!pinned.theses.has(t.subjectId) && !inFocus.has(t.subjectId)) say(`indexThesisAdded:${escapeMemoryLine(t.display)}`, reminders.indexThesisAdded(t.display))
+      }
+      for (const l of data.indexLessons) if (!pinned.lessons.has(l.id)) say(`indexLessonAdded:${l.id}`, reminders.indexLessonAdded(l.id))
+    }
 
     const blocks: PackBlock[] = []
     for (const { subjectId } of focus) {
@@ -428,7 +456,7 @@ export class NotebookMemory implements MemoryProvider {
       blocks.push({ key: `thesis:${subjectId}`, text, ifRoomless: unplaced("roomless"), ifTooLong: unplaced("tooLong") })
     }
 
-    return packRecall({ lines, blocks }).items
+    return packRecall({ lines, blocks }, { chars, items: MEMORY_RECALL_MAX_ITEMS }).items
   }
 
   tools(): ToolDef[] {

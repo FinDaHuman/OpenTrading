@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| **Trạng thái** | Đã duyệt (05/11/2026, qua cổng 1 vòng 2). Có [plan](plan.md) bản nháp, chờ cổng 2 |
+| **Trạng thái** | Đã duyệt (05/11/2026, qua cổng 1 vòng 2). Đã implement theo [plan](plan.md), [tasks](tasks.md) xong; chờ duyệt code trên PR #229 |
 | **Ngày tạo** | 05/11/2026 |
 | **Nhánh** | `feat/memory` |
 | **Mô tả gốc** | "Ràng buộc tới agent con và hồ sơ: host gửi ràng buộc có cấu trúc cho agent con; ràng buộc độc lập với công tắc memory; đọc lỗi thì hoãn lượt (T7); file mẫu `INVESTOR.md` đưa ví dụ vào chú thích (T8)" (lộ trình `specs/README.md`, thứ tự 6) |

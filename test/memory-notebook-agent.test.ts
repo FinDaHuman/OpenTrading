@@ -162,10 +162,17 @@ describe("what the core actually sends (three tiers)", () => {
       }
       expect(JSON.stringify(body)).not.toContain("cắt bớt")
       expect(lastUserText(body)).toContain("[Memory · luận điểm · HPG · bản 1")
+      // A ~1,700-character thesis is longer than the small tier's budget, not the others': there the first
+      // one is injected and the rest wait for room (a pointer now, or on a later turn).
       for (const code of ["AAA", "BBB", "CCC", "DDD", "EEE"]) {
-        expect(lastUserText(body)).toContain(`Luận điểm ${code} (bản 1) dài hơn giới hạn tự chèn`)
+        if (tier === "small") expect(lastUserText(body)).toContain(`Luận điểm ${code} (bản 1) dài hơn giới hạn tự chèn`)
+        else expect(lastUserText(body)).not.toContain(`Luận điểm ${code} (bản 1) dài hơn giới hạn tự chèn`)
       }
-      expect(texts(body).join("\n")).toMatch(/… còn \d+ bài, tìm bằng memory_read/)
+      if (tier !== "small") expect(lastUserText(body)).toContain("[Memory · luận điểm · AAA · bản 1")
+      // The big tier's index has room for all 60 lessons; the others count the oldest left out.
+      if (tier === "big") expect(texts(body).join("\n")).toContain("#1 Bài học số 1 ")
+      else expect(texts(body).join("\n")).toMatch(/… còn \d+ bài, tìm bằng memory_read/)
+      expect(texts(body).join("\n")).toContain("#60 Bài học số 60 ")
     })
   }
 })
@@ -187,11 +194,33 @@ describe("across turns", () => {
     expect(JSON.stringify(t2).split("[Memory · luận điểm · HPG · bản 3").length - 1).toBe(1)
   })
 
+  test("an entry saved mid-session leaves the index byte-identical, is noted once; a delete renders it again", async () => {
+    seedExample(nb.store())
+    const { turn } = wired()
+    const index = (r: { requests: Body[] }) => between(texts(r.requests[0]!).join("\n"), "memory")
+    const lastUser = (r: { requests: Body[] }) => lastUserText(r.requests[0]!)
+    const t1 = await turn("Luận điểm Hòa Phát của tôi còn đúng không?")
+    const w = nb.store().writer
+    const added = w.addLesson({ title: "Không bình quân giá xuống", summary: "x" }).id
+    const t2 = await turn("Điều kiện thứ hai thì sao?")
+    expect(index(t2)).toBe(index(t1))
+    expect(index(t2)).not.toContain("Không bình quân giá xuống")
+    expect(lastUser(t2)).toContain(`Sổ có thêm bài học #${added}, chưa có trong mục lục`)
+    const t3 = await turn("Còn gì nữa không?")
+    expect(index(t3)).toBe(index(t1))
+    expect(lastUser(t3)).not.toContain(`bài học #${added}, chưa có trong mục lục`)
+    // Deleting an entry the index shows renders it again, with the entry added since.
+    w.deleteLesson(3, 1)
+    const t4 = await turn("Tóm tắt lại giúp tôi.")
+    expect(index(t4)).not.toContain("#3 Quản trị rủi ro khi giải ngân")
+    expect(index(t4)).toContain(`#${added} Không bình quân giá xuống`)
+  })
+
   test("the core tells the user which memory was used", async () => {
     seedExample(nb.store())
     const { turn } = wired()
     const { events } = await turn("Hòa Phát?")
-    expect(events.some((e) => e.type === "notice" && e.text.startsWith("Dùng 1 memory: [Memory · luận điểm · HPG"))).toBe(true)
+    expect(events.some((e) => e.type === "notice" && e.text === "Dùng 1 memory: HPG bản 3")).toBe(true)
   })
 })
 

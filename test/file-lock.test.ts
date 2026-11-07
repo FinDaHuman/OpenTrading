@@ -210,25 +210,49 @@ test("review 2 #7: the refresh period follows a short staleMs, so a live holder 
 })
 
 // Windows-only behaviour since main's df31792; off Windows the permission error is real, covered by the test below.
-test.skipIf(!windows)("R40: creating the lock while Windows still deletes the old one (EPERM, EACCES, EBUSY) waits, not fails", async () => {
-  const file = path.join(home, "x.json")
-  const create = spyOn(lockModule.lockFiles, "create")
+/** Runs `body` as if on `platform`: the lock reads process.platform when an error arrives. */
+async function asPlatform<T>(platform: NodeJS.Platform, body: () => Promise<T>): Promise<T> {
+  const real = Object.getOwnPropertyDescriptor(process, "platform")!
+  Object.defineProperty(process, "platform", { ...real, value: platform })
   try {
-    for (const code of ["EPERM", "EACCES", "EBUSY"]) {
-      create.mockImplementationOnce(async () => {
-        throw Object.assign(new Error(`${code}: operation not permitted`), { code })
-      })
-      expect(await withFileLock(file, async () => "ok")).toBe("ok")
-    }
-    // Still refused after the wait: the real error, not "another process holds the lock".
-    create.mockImplementation(async () => {
-      throw Object.assign(new Error("EACCES: permission denied"), { code: "EACCES" })
-    })
-    await expect(withFileLock(file, async () => "ok", { timeoutMs: 150 })).rejects.toThrow("permission denied")
+    return await body()
   } finally {
-    create.mockRestore()
+    Object.defineProperty(process, "platform", real)
   }
-})
+}
+
+// Both branches run on every OS (the platform is simulated), so neither is checked by one CI runner only.
+for (const platform of ["win32", "linux"] as const) {
+  const onWindows = platform === "win32"
+  test(`R40 (${platform}): creating the lock fails with EPERM, EACCES, EBUSY: ${onWindows ? "waits (Windows still deletes the old one), not fails" : "the real error at once, no wait"}`, async () => {
+    const file = path.join(home, "x.json")
+    const create = spyOn(lockModule.lockFiles, "create")
+    try {
+      await asPlatform(platform, async () => {
+        for (const code of ["EPERM", "EACCES", "EBUSY"]) {
+          create.mockImplementationOnce(async () => {
+            throw Object.assign(new Error(`${code}: operation not permitted`), { code })
+          })
+          if (onWindows) expect(await withFileLock(file, async () => "ok")).toBe("ok")
+          else {
+            const started = Date.now()
+            await expect(withFileLock(file, async () => "ok", { timeoutMs: 5_000 })).rejects.toThrow(code)
+            expect(Date.now() - started).toBeLessThan(1_000)
+          }
+        }
+        if (onWindows) {
+          // Still refused after the wait: the real error, not "another process holds the lock".
+          create.mockImplementation(async () => {
+            throw Object.assign(new Error("EACCES: permission denied"), { code: "EACCES" })
+          })
+          await expect(withFileLock(file, async () => "ok", { timeoutMs: 150 })).rejects.toThrow("permission denied")
+        }
+      })
+    } finally {
+      create.mockRestore()
+    }
+  })
+}
 
 test("R47: a rename that keeps failing leaves no temp file behind (auth.json's would hold a key)", async () => {
   const file = path.join(home, "auth.json")

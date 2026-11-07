@@ -309,3 +309,23 @@ describe("guessKind: an unknown 'applies to' name", () => {
     expect(guessKind(name)).toBe("sector")
   })
 })
+
+describe("draftWarnings: a thesis too long to be injected", () => {
+  const thesis = (text: string, conditions: string[] = []) => ({ text, conditions })
+  const longOf = (d: ReturnType<typeof thesis>) => draftWarnings("thesis", d, []).filter((w) => w.kind === "too_long")
+
+  test("a short thesis: no warning", () => {
+    expect(longOf(thesis("Hưởng lợi từ đầu tư công", ["biên gộp dưới 10%"]))).toEqual([])
+  })
+
+  test("longer than the small tier's budget only: says small models get a pointer", () => {
+    const [w] = longOf(thesis("t".repeat(350), Array.from({ length: 8 }, () => "c".repeat(160))))
+    expect(w?.field).toBe("text")
+    expect(w?.message).toContain("model nhỏ")
+  })
+
+  test("longer than every tier's budget: says no model gets it injected", () => {
+    const [w] = longOf(thesis("t".repeat(2_000), Array.from({ length: 12 }, () => "c".repeat(200))))
+    expect(w?.message).toContain("mọi model")
+  })
+})

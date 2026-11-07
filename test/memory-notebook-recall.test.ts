@@ -227,13 +227,14 @@ describe("index (Story 2)", () => {
     expect(await notebook.index(SID)).toBe((await notebook.index(SID))!)
   })
 
-  test("too many lessons: first ones by id, the rest counted, under the cap", async () => {
+  test("too many lessons: the newest by id, the rest counted, under the cap", async () => {
     const w = nb.store().writer
     for (let i = 1; i <= 60; i++) w.addLesson({ title: `Bài học số ${i} về quản trị rủi ro danh mục`, summary: "x" })
     const index = (await nb.notebook().index(SID))!
     expect(index.length).toBeLessThanOrEqual(indexCharLimit())
     expect(index).toMatch(/… còn \d+ bài, tìm bằng memory_read/)
-    expect(index).toContain("#1 Bài học số 1 ")
+    expect(index).toContain("#60 Bài học số 60 ")
+    expect(index).not.toContain("#1 Bài học số 1 ")
   })
 
   test("an empty store has no index", async () => {
