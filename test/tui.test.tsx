@@ -266,6 +266,7 @@ const osc52: string[] = []
 /** What it handed to the OS clipboard command (stubbed; CI never runs powershell). */
 const copied: string[] = []
 const { setClipboardSpawn } = await import("../src/tui/clipboard")
+const { currentSession } = await import("../src/tui/session")
 setClipboardSpawn(async (_command, text) => {
   copied.push(text)
   return true
@@ -878,12 +879,29 @@ test("/profile creates INVESTOR.md from a template", async () => {
 test("/context shows each prompt layer with its token estimate", async () => {
   await setup.mockInput.typeText("/context")
   setup.mockInput.pressEnter()
-  const frame = await setup.waitForFrame((f) => f.includes("Danh tính & bất biến") && f.includes("Hồ sơ nhà đầu tư"))
-  expect(frame).toContain("Danh sách skill")
+  const frame = await setup.waitForFrame((f) => f.includes("Danh tính & bất biến") && f.includes("Danh sách skill"))
+  // INVESTOR.md is still the untouched template /profile wrote: its examples are comments, nothing is sent.
+  expect(frame).not.toContain("Hồ sơ nhà đầu tư")
   expect(frame).toContain("hạng B")
   show(frame)
   setup.mockInput.pressEscape()
   await setup.waitFor(() => state.dialog === undefined)
+})
+
+test("/context shows the investor profile layer once INVESTOR.md has real content", async () => {
+  const file = path.join(home, "INVESTOR.md")
+  const template = await Bun.file(file).text()
+  try {
+    await Bun.write(file, "# Hồ sơ nhà đầu tư\n\nKhẩu vị rủi ro: thấp. Chỉ mua cổ phiếu ngân hàng, giữ trên 1 năm.\n")
+    await setup.mockInput.typeText("/context")
+    setup.mockInput.pressEnter()
+    const frame = await setup.waitForFrame((f) => f.includes("Danh tính & bất biến") && f.includes("Hồ sơ nhà đầu tư"))
+    expect(frame).toContain("Hồ sơ nhà đầu tư")
+    setup.mockInput.pressEscape()
+    await setup.waitFor(() => state.dialog === undefined)
+  } finally {
+    await Bun.write(file, template)
+  }
 })
 
 test("a retried request waits on the working row (with its deadline) and leaves nothing in the transcript", async () => {
@@ -1622,6 +1640,9 @@ test("/new starts a fresh session; /sessions reopens the previous one with its t
   // The "reopened" note is the first line (may be scrolled out of view): check state.
   expect(state.lines[0]).toMatchObject({ kind: "info" })
   expect((state.lines[0] as { text: string }).text).toContain("Mở lại phiên")
+  // The count is the session's own (its file's turn lines), the same /save and /export show.
+  const told = Number(/· (\d+) lượt$/.exec((state.lines[0] as { text: string }).text)?.[1])
+  expect(told).toBe(currentSession().turns)
   // Tool rows come back (the older ones may be scrolled out of view: check state too).
   expect(state.lines.some((l) => l.kind === "tool" && l.label.includes("current_time"))).toBe(true)
   const frame = await setup.waitForFrame((f) => f.includes("● "))
@@ -1942,10 +1963,18 @@ test("/config turns memory off and on without a restart", async () => {
   await setup.mockInput.typeText("/config")
   setup.mockInput.pressEnter()
   await setup.waitForFrame((f) => f.includes("Cài đặt") && f.includes("Memory"))
+  // Memory has three choices (off, the legacy file memory, the notebook): enter opens them, type to pick.
+  setup.mockInput.pressEnter()
+  await setup.waitForFrame((f) => f.includes("Sổ ghi nhớ"))
+  await setup.mockInput.typeText("tat")
   setup.mockInput.pressEnter()
   await setup.waitFor(() => runtime.memory.id === "none")
   expect(runtime.registry.get("propose_memory")).toBeUndefined()
   expect((await Bun.file(path.join(home, "config.json")).json()).memory).toEqual({ provider: "none" })
+  await setup.waitForFrame((f) => f.includes("Cài đặt"))
+  setup.mockInput.pressEnter()
+  await setup.waitForFrame((f) => f.includes("Sổ ghi nhớ"))
+  await setup.mockInput.typeText("memory cu")
   setup.mockInput.pressEnter()
   await setup.waitFor(() => runtime.memory.id === "file")
   expect(runtime.registry.get("propose_memory")).toBeDefined()
@@ -3702,4 +3731,18 @@ test("the third identical call asks before it runs; esc stops the loop and the t
   expect(rows).toHaveLength(3)
   expect(rows.map((l) => l.kind === "tool" && l.status)).toEqual(["ok", "ok", "error"])
   expect(turn.some((l) => l.kind === "assistant" && l.text.includes("HẾT-CÂU-TRẢ-LỜI"))).toBe(true)
+})
+
+test("/agents lists exactly the tools a subagent gets: never the main agent's own (session history)", async () => {
+  const { resolvedTools } = await import("../src/tui/dialogs/agents")
+  const { childRegistry } = await import("../src/core/subagents/manager")
+  const def = { name: "tat-ca", description: "x", tools: undefined, disallowedTools: undefined }
+  const listed = resolvedTools(runtime, def as never)
+  expect(listed).not.toContain("session_list")
+  expect(listed).not.toContain("session_get")
+  const child = childRegistry(runtime.registry, { id: "ag-x", type: "tat-ca", description: "x" })
+    .list()
+    .map((t) => t.name)
+    .filter((n) => n !== "tool_search")
+  expect([...listed].sort()).toEqual([...child].sort())
 })

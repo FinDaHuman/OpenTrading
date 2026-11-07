@@ -2,17 +2,23 @@ import { truncate } from "../ui/text"
 import { useKeys } from "../ui/keys"
 import { createMemo, createResource, createSignal, Match, Show, Switch } from "solid-js"
 import type { MemoryItem, MemoryProvider } from "../../core/memory/types"
+import { notebookAdmin } from "../../core/memory/notebook/admin"
+import type { RedactionCheck } from "../../core/memory/redaction/check"
 import { closeDialog } from "../state"
 import { say } from "../notify"
 import { color } from "../theme"
 import { DialogFrame } from "./frame"
 import { Picker } from "./picker"
+import { NotebookDialog } from "./notebook"
 
 /**
  * Review memory: proposals from the model stay "pending" (never used) until approved here —
  * the propose → approve flow Cursor used, so no memory becomes an invisible instruction.
  */
-export function MemoryDialog(props: { memory: MemoryProvider }) {
+export function MemoryDialog(props: { memory: MemoryProvider; redaction?: RedactionCheck }) {
+  // The notebook (memory v5.1) has its own screen; the legacy file memory keeps this one.
+  const admin = notebookAdmin(props.memory)
+  if (admin) return <NotebookDialog admin={admin} redaction={props.redaction} />
   const [items, { refetch }] = createResource(async () => (await props.memory.list?.()) ?? [])
   const [open, setOpen] = createSignal<string>()
   const selected = createMemo(() => items()?.find((i) => i.id === open()))

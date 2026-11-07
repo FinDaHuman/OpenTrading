@@ -30,6 +30,8 @@ const LAYER_NAME: Record<string, string> = {
   skills_always: "Skill luôn bật",
   skill_catalog: "Danh sách skill",
   ho_so_nha_dau_tu: "Hồ sơ nhà đầu tư",
+  rang_buoc: "Ràng buộc",
+  nguon_chua_nap: "Nguồn chưa nạp",
   memory: "Memory",
   skill_dang_bat: "Skill bật tay",
   phien_giao_dich: "Đồng hồ phiên",
@@ -52,6 +54,9 @@ export function ContextDialog(props: { runtime: Runtime }) {
       history: state.history,
       registry: props.runtime.registry,
       memory: props.runtime.memory,
+      // The constraints block as the next turn would send it; a source that fails to read is listed
+      // apart (the next turn would be held, not sent without it).
+      constraints: props.runtime.constraints,
       serverInstructions: () => props.runtime.mcp.instructions(),
       sessionId: currentSession().id,
     }),
@@ -99,6 +104,13 @@ export function ContextDialog(props: { runtime: Runtime }) {
                 <Show when={Object.keys(state.agents).length > 0}>
                   <text fg={color.tx2} wrapMode="none">{subagentLine()}</text>
                 </Show>
+                <For each={p().unreadable}>
+                  {(line) => (
+                    <text fg={color.tham} wrapMode="word">
+                      {line}
+                    </text>
+                  )}
+                </For>
                 <text fg={color.tham} marginTop={1} wrapMode="none">
                   {`${pad("Tầng", 6)}${pad("Nội dung", 22)}${pad("Kênh", 11)}${pad("Token", 8)}Ghi chú`}
                 </text>

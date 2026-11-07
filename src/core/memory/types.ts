@@ -1,5 +1,7 @@
 import type { HookBus } from "../hooks"
 import type { ToolDef } from "../tools/types"
+import type { ModelMessage } from "ai"
+import type { Tier } from "../prompt/budget"
 
 /**
  * Memory contract for teammates. The harness decides WHERE memory goes in the prompt and
@@ -17,6 +19,8 @@ export type MemoryStatus = "pending" | "active"
 export interface MemoryItem {
   id: string
   text: string
+  /** A few words naming the item in the user's notice (what was used this turn); absent: its text's start. */
+  title?: string
   scope: MemoryScope
   status: MemoryStatus
   /** Where it came from, for the /memory list and audits. */
@@ -27,6 +31,16 @@ export interface MemoryItem {
 
 export interface MemoryContext {
   sessionId: string
+  /**
+   * The history this turn sends, before the user's message, with masks applied. A provider decides from it
+   * what the model already has in view, instead of keeping its own record. Absent: none.
+   */
+  history?: readonly ModelMessage[]
+  /**
+   * The tier of the model this turn is sent to, so a provider can size what it returns to the core's
+   * memory budget for that tier. Absent: the provider assumes the smallest tier.
+   */
+  tier?: Tier
 }
 
 export interface MemoryProvider {
