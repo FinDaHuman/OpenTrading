@@ -14,6 +14,7 @@ import { NoopMemory, type MemoryProvider } from "./memory/types"
 import { dataDir } from "./paths"
 import type { Skill } from "./skills/schema"
 import { currentTimeTool } from "./tools/builtin/current-time"
+import { readResultTool } from "./tools/builtin/read-result"
 import { loadSkillTool } from "./tools/builtin/load-skill"
 import { chartDepthTool, chartRenderTool } from "./tools/chart/render"
 import { chartCompareTool } from "./tools/chart/compare"
@@ -144,6 +145,7 @@ export function initRuntime(opts: {
   void pruneHistory(path.join(home, "tool-output"), 7)
   const questions = new AskBroker()
   registry.register(currentTimeTool())
+  registry.register(readResultTool())
   registry.register(askUserTool(questions))
   registry.register(todoWriteTool())
   registry.register(readFileTool(workspace, files))

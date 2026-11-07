@@ -131,6 +131,8 @@ adopt Semantic Versioning when it exposes a stable public API.
 - Every MCP result, from any server, is kept in full in `<session>/evidence/results.jsonl`, up to
   64 MiB per session and for as long as the session is. A `[ref rN]` now outlives a restart and
   the 40 most recent results.
+- `read_result` reads a saved result as it was fetched. Compaction now points old data results to
+  it instead of telling the model to fetch them again, which could return other numbers.
 
 ### Fixed
 
