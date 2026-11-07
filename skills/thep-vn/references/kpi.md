@@ -11,7 +11,7 @@
 |---|---|---|
 | Doanh thu | `financial_detail` | Tách phần tăng do giá và do khối lượng nếu công bố cho phép; cùng mức doanh thu có thể là giá lên hoặc khối lượng lên |
 | Giá vốn hàng bán | `financial_detail` | Nơi chứa giá nguyên liệu. Tăng nhanh hơn doanh thu = biên đang nén |
-| Biên lãi gộp | `financial_detail` (hoặc tự tính, ghi rõ) | Đọc theo quý liên tiếp; một quý nén có thể là giãn tồn kho, không phải xấu |
+| Biên lãi gộp | `financial_detail` (hoặc tính bằng `calculate`, ghi rõ) | Đọc theo quý liên tiếp; một quý nén có thể là giãn tồn kho, không phải xấu |
 | Chi phí tài chính phục vụ tồn kho | `financial_detail` | Tồn kho lớn + lãi suất cao = chi phí mang vốn nặng, đặc biệt khi nguyên liệu nhập |
 
 ## 2. Nhóm đầu vào

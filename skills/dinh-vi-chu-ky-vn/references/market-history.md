@@ -27,7 +27,7 @@ Bảng trên là ghi chú định tính, chưa kiểm chứng bằng tool. Muố
 
 Cách đọc:
 - Số đáy đủ dữ liệu ít (coverage từ 2018-10) — **nêu số đáy theo kết quả tool** và coi là mẫu nhỏ.
-- Chỉ mảng **top 3 ở mọi đáy** mới coi là nhóm dẫn sau đáy. Xếp hạng tự tính từ lợi suất 3 tháng sau đáy mà tool trả (tool không có cột rank).
+- Chỉ mảng **top 3 ở mọi đáy** mới coi là nhóm dẫn sau đáy. Xếp hạng bằng `compute` (op rank) trên lợi suất 3 tháng sau đáy mà tool trả (tool không có cột rank).
 - "Thứ hạng lệch rõ" = một đáy vào top 3 nhưng đáy khác nằm ngoài top 5 → mảng đó không dùng làm kinh nghiệm bắt đáy.
 - Cột `vin` đọc như mọi cột: thứ hạng lệch giữa các đáy thì không dùng.
 - **Dưới 3 đáy: chỉ nêu dạng quan sát, không chốt nhóm dẫn.**

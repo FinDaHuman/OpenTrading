@@ -1,4 +1,5 @@
 import { computeTool } from "../src/core/tools/compute"
+import { calculateTool } from "../src/core/tools/calculate"
 import { readResultTool } from "../src/core/tools/builtin/read-result"
 import { expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
@@ -144,6 +145,8 @@ function builtin(name: string): ToolDef<never> {
       return readResultTool() as ToolDef<never>
     case "compute":
       return computeTool() as ToolDef<never>
+    case "calculate":
+      return calculateTool() as ToolDef<never>
     case "chart_compare":
       return chartCompareTool() as ToolDef<never>
     case "chart_render":
@@ -175,7 +178,7 @@ const NO_NOT_USE = new Set(["current_time", "tool_search", "load_skill", "chart_
 
 test("builtin tools follow the Claude standard: purpose + when + (when not) + bounded length", () => {
   const problems: string[] = []
-  for (const name of ["todo_write", "ask_user", "load_skill", "tool_search", "current_time", "read_result", "compute", "chart_compare", "chart_render", "spawn_subagent", "read_file", "glob_files", "grep_files", "write_file", "edit_file", "shell", "desk_run"]) {
+  for (const name of ["todo_write", "ask_user", "load_skill", "tool_search", "current_time", "read_result", "compute", "calculate", "chart_compare", "chart_render", "spawn_subagent", "read_file", "glob_files", "grep_files", "write_file", "edit_file", "shell", "desk_run"]) {
     const d = (builtin(name).description ?? "").replace(/\s+/g, " ").trim()
     if (!hasUse(d)) problems.push(`${name}: thiếu "Dùng khi/Khi nào"`)
     if (!NO_NOT_USE.has(name) && !hasNotUse(d)) problems.push(`${name}: thiếu "Không dùng khi"`)

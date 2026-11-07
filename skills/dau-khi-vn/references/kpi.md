@@ -25,7 +25,7 @@ và đọc cả các nhánh, không chọn một vòng đại diện.
 | Doanh thu hợp nhất | `financial_detail` | Đọc kèm cơ cấu mảng: doanh thu tăng nhưng không nói được vòng nào kéo là vô nghĩa |
 | Biên lãi gộp theo mảng (nếu công bố) | `financial_detail` | Chỉ báo cốt lõi. Biên hợp nhất che sự dịch chuyển giữa các vòng |
 | Chi phí thăm dò | `financial_detail` | Xu hướng 4 quý: chi tiêu tăng báo hiệu sản lượng tương lai; chi tiêu cắt báo hiệu suy giảm về sau |
-| Tỷ lệ chi phí | `financial_detail` (tự tính, ghi rõ) | Tỷ lệ thấp khi giá dầu cao không phải năng lực — đo lại ở vùng giá thấp |
+| Tỷ lệ chi phí | `financial_detail` (tính bằng `calculate`, ghi rõ) | Tỷ lệ thấp khi giá dầu cao không phải năng lực — đo lại ở vùng giá thấp |
 
 ## 3. Nhóm khối lượng và trữ lượng
 

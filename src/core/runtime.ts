@@ -16,6 +16,7 @@ import type { Skill } from "./skills/schema"
 import { currentTimeTool } from "./tools/builtin/current-time"
 import { readResultTool } from "./tools/builtin/read-result"
 import { computeTool } from "./tools/compute"
+import { calculateTool } from "./tools/calculate"
 import { loadSkillTool } from "./tools/builtin/load-skill"
 import { chartDepthTool, chartRenderTool } from "./tools/chart/render"
 import { chartCompareTool } from "./tools/chart/compare"
@@ -167,6 +168,7 @@ export function initRuntime(opts: {
     ),
   )
   registry.register(computeTool())
+  registry.register(calculateTool())
   registry.register(chartRenderTool())
   registry.register(chartCompareTool())
   registry.register(chartDepthTool())

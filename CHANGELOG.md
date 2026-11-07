@@ -5,6 +5,16 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ## [Unreleased]
 
+### Added (calculate)
+
+- `calculate`, a core built-in tool (never deferred): a calculator with units.
+  - It evaluates an expression (`+ - * / ^`, brackets, `sqrt abs min max sum avg ln log10 exp`) over named values.
+  - Each value carries a unit (`nghìn đồng/cổ phiếu`, `tỷ đồng`, `cổ phiếu`, `%`, `lần`…) or is read straight from a ref, with the unit the data server publishes.
+  - Adding across dimensions, or converting into a unit of another dimension, is an error rather than a wrong number. Magnitudes (nghìn, triệu, tỷ, nghìn tỷ) convert.
+  - The expression is parsed by hand, never run as code. The result gets a ref like a data result.
+  - Data figures typed into the expression get a warning.
+- `prompts/tools.md`: no mental arithmetic. Every computed figure comes from `calculate` (or `compute` for whole series by ref), with a unit for each value.
+
 ### Added (permissions)
 
 - `ot --yolo` (alias `--dangerously-skip-permissions`): the `▸▸▸ bỏ qua quyền` mode.
