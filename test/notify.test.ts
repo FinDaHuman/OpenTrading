@@ -5,17 +5,25 @@ import { state } from "../src/tui/state"
 
 const shown = () => state.notification?.text
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+/** Wait for a condition, not a fixed time: under CI load a 20 ms timer can fire much later. */
+async function until(ok: () => boolean, ms = 2000) {
+  const end = Date.now() + ms
+  while (!ok()) {
+    if (Date.now() > end) throw new Error("condition not met in time")
+    await sleep(5)
+  }
+}
 
 afterEach(() => resetNotifications())
 
 test("one notice shows at a time; the next waits and shows when the first times out", async () => {
   notify({ key: "a", text: "một", timeoutMs: 20 })
-  notify({ key: "b", text: "hai", timeoutMs: 20 })
+  // Long enough that polling cannot miss it, however late the first timer fires.
+  notify({ key: "b", text: "hai", timeoutMs: 300 })
   expect(shown()).toBe("một")
-  await sleep(40)
+  await until(() => shown() !== "một")
   expect(shown()).toBe("hai")
-  await sleep(40)
-  expect(state.notification).toBeUndefined()
+  await until(() => state.notification === undefined)
 })
 
 test("waiting notices come out by priority, first come first served within one", () => {
@@ -79,8 +87,7 @@ test("warnings and errors at high priority are toasts (newest first, at most thr
 
   notify({ key: "short", text: "ngắn", level: "warning", timeoutMs: 20 })
   expect(state.toasts[0]!.key).toBe("short")
-  await sleep(40)
-  expect(state.toasts.some((t) => t.key === "short")).toBe(false)
+  await until(() => !state.toasts.some((t) => t.key === "short"))
 })
 
 test("the level glyph is added once", () => {
