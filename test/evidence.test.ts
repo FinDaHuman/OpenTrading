@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test"
-import { appendFileSync, mkdtempSync, readFileSync, rmSync } from "node:fs"
+import { appendFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import os from "node:os"
 import path from "node:path"
 import { z } from "zod"
@@ -184,4 +184,34 @@ test("a pruned data result names the way back, and that way works", async () => 
   expect(pruneToolResults(first.messages).pruned).toBe(0)
   const id = /read_result id=\\"([^\\]+)\\"/.exec(text)![1]!
   expect(await read({ id })).toContain("64.27")
+})
+
+test("after the first read only appended bytes are parsed; a line being written counts once it ends", async () => {
+  const dir = sessionDir()
+  const file = evidenceFile(dir)
+  useResultSession("s", undefined, dir)
+  await call(mcpTool(candles(1)), "a")
+  expect(readEvidence(file).map((e) => e.callId)).toEqual(["a"])
+  // Half of a line, then the rest of it: invisible, then read.
+  const line = JSON.stringify({ callId: "b", tool: "t", input: {}, at: "2026-11-08T00:00:00Z", text: "Giá đóng cửa 12.500 đ" })
+  appendFileSync(file, line.slice(0, 20))
+  expect(readEvidence(file).map((e) => e.callId)).toEqual(["a"])
+  appendFileSync(file, `${line.slice(20)}\n`)
+  expect(readEvidence(file).map((e) => e.callId)).toEqual(["a", "b"])
+  expect(readEvidence(file).at(-1)!.text).toBe("Giá đóng cửa 12.500 đ")
+  // The same records a parse of the whole file gives.
+  const whole = readFileSync(file, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l).callId)
+  expect(readEvidence(file).map((e) => e.callId)).toEqual(whole)
+})
+
+test("a file that got shorter is read again from the start", async () => {
+  const dir = sessionDir()
+  const file = evidenceFile(dir)
+  useResultSession("s", undefined, dir)
+  await call(mcpTool(candles(1)), "a")
+  await call(mcpTool(candles(2)), "b")
+  expect(readEvidence(file)).toHaveLength(2)
+  const first = readFileSync(file, "utf8").split("\n")[0]!
+  writeFileSync(file, `${first}\n`)
+  expect(readEvidence(file).map((e) => e.callId)).toEqual(["a"])
 })
