@@ -17,7 +17,7 @@ import { width as cells } from "./ui/text"
 
 export const NOTICE_COLOR: Record<NoticeLevel, string> = { info: color.tx2, success: color.tang, warning: color.tham, error: color.giam }
 
-export const MODE_COLOR = { "read-only": color.tx3, ask: color.tham, auto: color.tang } as const
+export const MODE_COLOR = { "read-only": color.tx3, ask: color.tham, auto: color.tang, bypass: color.giam } as const
 
 // Desk agents count as their run, not one by one.
 const running = () => Object.values(state.agents).filter((a) => !a.deskRunId && (a.status === "running" || a.status === "queued"))
@@ -28,11 +28,12 @@ const time = (ms: number) => new Date(ms).toLocaleTimeString("vi-VN", { timeZone
 export function ModeLine(props: { hint?: string }) {
   const dims = useTerminalDimensions()
   const mode = () => {
+    if (state.yoloWarning) return `${MODE_LABEL.bypass} (chờ xác nhận)`
     if (state.autoOptIn) return `${MODE_LABEL.auto} (chờ xác nhận)`
     const paused = state.permissionMode === "auto" && state.autoPausedUntil ? ` · tạm hỏi tay tới ${time(state.autoPausedUntil)}` : ""
     return `${MODE_LABEL[state.permissionMode]}${paused}`
   }
-  const modeColor = () => (state.autoOptIn ? color.tham : MODE_COLOR[state.permissionMode])
+  const modeColor = () => (state.yoloWarning ? color.giam : state.autoOptIn ? color.tham : MODE_COLOR[state.permissionMode])
   /** Subagents at work (Claude Code's tasks pill): "2 subagent · 1 nền · ↓ quản lý". */
   const pills = () => {
     const list = running()
@@ -48,7 +49,7 @@ export function ModeLine(props: { hint?: string }) {
     return out
   }
   /** Claude Code drops the cycle hint once the line has more than the mode on it. */
-  const cycleHint = () => (pills().length === 0 && !state.autoOptIn ? " (shift+tab đổi)" : "")
+  const cycleHint = () => (pills().length === 0 && !state.autoOptIn && !state.yoloWarning ? " (shift+tab đổi)" : "")
   const left = () => [...pills(), ...(props.hint ? [props.hint] : [])].map((p) => ` · ${p}`).join("")
 
   const right = (): { text: string; fg: string } | undefined => {
