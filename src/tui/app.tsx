@@ -74,7 +74,7 @@ import { Home } from "./home"
 import {
   attachSubagents,
   currentSession,
-  exitTimeoutText,
+  exitTimeoutLine,
   recordCompact,
   recordRedaction,
   heldLine,
@@ -817,13 +817,15 @@ export function App(props: {
     props.runtime.subagents.stopAll()
     const deadline = Date.now() + 2000
     // Said after the terminal is restored; set when the session's writes did not all land.
-    let unsaved: string | undefined = exitTimeoutText(currentSession())
+    let unsaved: string | undefined
+    let settled = false
     await Promise.race([
       Promise.all([
         // Waits for the aborted answer too: it queues its turn when it ends, so the wait for
         // writes starts after it.
         (inflight ?? Promise.resolve()).then(async () => {
           unsaved = await settleForExit(Math.max(100, deadline - Date.now() - 50))
+          settled = true
         }),
         props.runtime.subagents.flush(),
         props.runtime.desk.flush(),
@@ -832,6 +834,9 @@ export function App(props: {
       ]),
       new Promise((r) => setTimeout(r, 2000)),
     ])
+    // The wait ran out before the writes were looked at (an aborted answer slow to end): say so only
+    // when the session does have something waiting.
+    if (!settled) unsaved = exitTimeoutLine(currentSession())
     // The notebook's store stays locked on Windows while open; session-end also fires on /clear, so not there.
     closeMemory(props.runtime)
     attention?.clear()

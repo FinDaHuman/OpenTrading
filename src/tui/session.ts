@@ -129,6 +129,11 @@ export function leavingLine(session: Session, receipt: SaveReceipt): Notice | un
 export const exitTimeoutText = (session: Session) =>
   `Phiên "${sessionName(session)}": chưa ghi xong trong ${SETTLE_MS / 1000} giây khi thoát; lượt cuối có thể chưa được lưu.`
 
+/** What exit prints when the wait ran out: only for a session that still has writes waiting. */
+export function exitTimeoutLine(session = current): string | undefined {
+  return session.hasPending ? exitTimeoutText(session) : undefined
+}
+
 const report = (session: Session, receipt: SaveReceipt) => {
   for (const line of receiptLines(session, receipt)) pushLine(line)
 }
@@ -302,8 +307,18 @@ async function refuseUnsaved(session: Session, ms: number) {
 export async function openForResume(old: Session, id: string, ms = SETTLE_MS, check?: RedactionCheck) {
   track(old)
   const matches = (s: { id: string }) => s.id === id || s.id.startsWith(id)
-  const summary = (await listSessions()).find(matches)
-  const live = opened.get(summary?.id ?? "") ?? [...opened.values()].find(matches)
+  const listed = (await listSessions()).filter(matches)
+  // A session opened in this run may be missing from the list (its index line not written yet).
+  const ids = [...new Set([...listed.map((s) => s.id), ...[...opened.values()].filter(matches).map((s) => s.id)])]
+  // A prefix that matches several sessions picks none, as session_get does: guessing could show one
+  // session's history and append to another's file.
+  if (ids.length > 1 && !ids.includes(id)) {
+    throw new Error(`Tiền tố "${id}" khớp ${ids.length} phiên: ${ids.slice(0, 5).join(", ")}. Dùng id dài hơn.`)
+  }
+  const target = ids.includes(id) ? id : ids[0]
+  const summary = listed.find((s) => s.id === target)
+  // The open writer of that very session; the open ones are looked at only for it, never for another match.
+  const live = target === undefined ? undefined : opened.get(target)
   if (!summary && !live) throw new Error(`Không tìm thấy phiên "${id}". Gõ /sessions để xem danh sách.`)
   if (live && live !== old) await refuseUnsaved(live, ms)
   const left = await leave(old, ms)
@@ -341,7 +356,8 @@ export async function transcriptOfCurrent(runtime: Runtime, session = current) {
   if (held) pushLine(held)
   return {
     id: session.id,
-    turns: loaded.summary.turns,
+    // The session's own count: the index line is one write behind when its last write failed.
+    turns: session.turns,
     text: formatTranscript(loaded, { label: (name, input) => label(runtime.registry, name, input) }),
     unsaved,
   }

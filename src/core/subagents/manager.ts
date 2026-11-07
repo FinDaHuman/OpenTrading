@@ -51,15 +51,16 @@ export const EXCLUDED_TOOLS = new Set(["spawn_subagent", "send_message", "stop_a
  * back. Every way a subagent starts (start, continue, the ultradesk) goes through here.
  * It shares the parent's lock (writes exclude each other across agents) and gate (approvals reach the main UI).
  */
+/** Whether a subagent may ever get this tool, before its type's own list; /agents shows the same. */
+export const childMayUse = (t: ToolDef) => !EXCLUDED_TOOLS.has(t.name) && !t.source?.startsWith("memory:") && !t.mainAgentOnly
+
 export function childRegistry(parent: ToolRegistry, origin: AgentOrigin, filter?: (def: ToolDef) => boolean, skills?: () => Skill[]) {
   const child = new ToolRegistry({ lock: parent.lock, origin })
   child.gate = parent.gate
   child.workspace = parent.workspace
   const candidates = parent
     .list()
-    .filter(
-      (t) => !EXCLUDED_TOOLS.has(t.name) && !t.source?.startsWith("memory:") && !t.mainAgentOnly && (!filter || filter(t)),
-    )
+    .filter((t) => childMayUse(t) && (!filter || filter(t)))
   if (candidates.length === 0) throw new Error("Subagent không có tool nào để dùng (danh sách tool rỗng hoặc không khớp).")
   for (const def of candidates) child.register(def)
   if (candidates.some((t) => t.deferrable)) child.register(toolSearchTool(child))

@@ -561,3 +561,46 @@ test("R46: a stopped session keeps no compaction content in memory", async () =>
   const queue = (s as unknown as { queue: { kind: string; lines: unknown[] }[] }).queue
   expect(queue.filter((p) => p.kind === "compact").map((p) => p.lines)).toEqual([[]])
 })
+
+test("a /resume prefix that matches two sessions, one of them open: told to use a longer id, nothing switched or written", async () => {
+  const at = new Date("2026-09-20T03:04:05Z")
+  const a = Session.create(at)
+  const b = Session.create(at)
+  expect(a.id.slice(0, 15)).toBe(b.id.slice(0, 15))
+  await a.appendTurn(turn(1), info)
+  await b.appendTurn(turn(1), info)
+  // b is the session being written (opened in this run), a is only in the list.
+  const before = [await readFile(fileOf(a)), await readFile(fileOf(b))]
+  const prefix = a.id.slice(0, 15)
+  await expect(tui.openForResume(b, prefix, 50)).rejects.toThrow(`Tiền tố "${prefix}" khớp 2 phiên:`)
+  await expect(tui.openForResume(b, prefix, 50)).rejects.toThrow("Dùng id dài hơn.")
+  const after = [await readFile(fileOf(a)), await readFile(fileOf(b))]
+  expect(after[0]!.equals(before[0]!)).toBe(true)
+  expect(after[1]!.equals(before[1]!)).toBe(true)
+  // The full id still opens the one asked for, and its own writer.
+  const opened = await tui.openForResume(b, a.id, 50)
+  expect(opened.session.id).toBe(a.id)
+})
+
+test("/save and /export give the session's own turn count, not the index line's (one write behind)", async () => {
+  const s = await sessionWith(1)
+  const realAppend = store.sessionFiles.append
+  // The turn lands, its index line does not.
+  spy("append").mockImplementation(async (file: string, text: string) => {
+    if (file.endsWith("index.jsonl")) throw fail("index bị khoá", "EBUSY")
+    return realAppend(file, text)
+  })
+  expect((await s.appendTurn(turn(2), info)).indexPending).toBe(true)
+  const transcript = await tui.transcriptOfCurrent({ registry: new ToolRegistry() } as never, s)
+  expect(transcript?.turns).toBe(2)
+})
+
+test("on exit, 'not written within 2 seconds' only for a session that still has writes waiting", async () => {
+  const s = await sessionWith(1)
+  expect(tui.exitTimeoutLine(s)).toBeUndefined()
+  spy("append").mockImplementation(async () => {
+    throw fail("ổ đầy", "ENOSPC")
+  })
+  await s.appendTurn(turn(2), info)
+  expect(tui.exitTimeoutLine(s)).toBe(tui.exitTimeoutText(s))
+})

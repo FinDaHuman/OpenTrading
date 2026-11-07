@@ -3712,3 +3712,17 @@ test("the third identical call asks before it runs; esc stops the loop and the t
   expect(rows.map((l) => l.kind === "tool" && l.status)).toEqual(["ok", "ok", "error"])
   expect(turn.some((l) => l.kind === "assistant" && l.text.includes("HẾT-CÂU-TRẢ-LỜI"))).toBe(true)
 })
+
+test("/agents lists exactly the tools a subagent gets: never the main agent's own (session history)", async () => {
+  const { resolvedTools } = await import("../src/tui/dialogs/agents")
+  const { childRegistry } = await import("../src/core/subagents/manager")
+  const def = { name: "tat-ca", description: "x", tools: undefined, disallowedTools: undefined }
+  const listed = resolvedTools(runtime, def as never)
+  expect(listed).not.toContain("session_list")
+  expect(listed).not.toContain("session_get")
+  const child = childRegistry(runtime.registry, { id: "ag-x", type: "tat-ca", description: "x" })
+    .list()
+    .map((t) => t.name)
+    .filter((n) => n !== "tool_search")
+  expect([...listed].sort()).toEqual([...child].sort())
+})

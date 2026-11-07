@@ -349,6 +349,11 @@ export class Session {
     return this.drain()
   }
 
+  /** Something is still to be written: a turn, a compaction or a redact line queued, or the index line. */
+  get hasPending(): boolean {
+    return this.queue.length > 0 || this.indexWaiting
+  }
+
   /** Number of the last turn queued, on disk or waiting. */
   get lastTurn() {
     return this.queuedTurns
