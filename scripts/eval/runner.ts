@@ -203,6 +203,10 @@ export async function runEval(run: EvalRun) {
   } finally {
     stopMeter()
     stopAnswering()
+    if (run.yolo) {
+      runtime.permissions.setMode("read-only")
+      runtime.permissions.bypassAvailable = false
+    }
   }
 }
 

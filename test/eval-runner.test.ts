@@ -219,6 +219,10 @@ test("--yolo: a tool that would ask runs unanswered, and the header records the 
     await runEval({ runtime, skills: [], target, questions: parseQuestions(JSON.stringify([question("q1")])), write: (e) => events.push(e), version: "0.0.0", yolo })
     expect(of(events, "run")[0]!.permission_mode).toBe(yolo ? "bypass" : "read-only")
     expect(ran).toBe(yolo ? 1 : 0)
+    // The gate goes back to refusing when the run ends, --yolo or not.
+    expect(runtime.permissions.mode).toBe("read-only")
+    runtime.permissions.setMode("bypass")
+    expect(runtime.permissions.mode).toBe("read-only")
   }
 })
 

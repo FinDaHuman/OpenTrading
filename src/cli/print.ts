@@ -69,6 +69,8 @@ async function readStdin(): Promise<string> {
 }
 
 const err = (line: string) => process.stderr.write(`${line}\n`)
+/** stdout, flushed before the caller exits: a runner reads it through a pipe. */
+const print = (text: string) => new Promise<void>((resolve) => process.stdout.write(text, () => resolve()))
 
 /** Run one turn and print it. Returns the exit code. */
 export async function runPrint(opts: PrintOptions, deps: { runtime?: Runtime; target?: Target; stdin?: () => Promise<string> } = {}): Promise<number> {
@@ -78,6 +80,14 @@ export async function runPrint(opts: PrintOptions, deps: { runtime?: Runtime; ta
     return 1
   }
   const config = await loadConfig()
+  // A folder's own skills and agents only once the user trusted it in the TUI: --yolo is about
+  // approvals, not about letting a downloaded repo steer the prompt. Project `.mcp.json` servers
+  // keep their own per-server approval (mcp/trust.ts): untrusted ones never start here.
+  const folder = deps.runtime?.mcp.cwd ?? process.cwd()
+  const extras = await projectExtras(folder)
+  const trusted = !extras || (await new FolderTrust().isTrusted(folder))
+  if (!trusted) err(`Bỏ qua skill/agent riêng của ${extras!.dir}: thư mục chưa được tin (mở bằng TUI một lần để chọn).`)
+  const { skills } = await loadSkills(skillRoots(folder, { project: trusted }))
   const runtime =
     deps.runtime ?? initRuntime({ skills: () => skills, memory: createMemory(memoryChoiceOf(config)), workspaceDirs: config.workspace?.dirs, scratchpad: false })
   const gate = runtime.permissions
@@ -89,13 +99,6 @@ export async function runPrint(opts: PrintOptions, deps: { runtime?: Runtime; ta
     err(`${MODE_LABEL.bypass} (--yolo): ghi file, chạy lệnh và tool ghi chạy luôn, không ai duyệt. Vẫn chặn: luật deny/ask, file khoá, .git/.opentrading/.ssh, ngoài workspace.`)
   }
   await gate.refreshRules()
-  // A folder's own skills and agents only once the user trusted it in the TUI: --yolo is about
-  // approvals, not about letting a downloaded repo steer the prompt.
-  const folder = runtime.mcp.cwd
-  const extras = await projectExtras(folder)
-  const trusted = !extras || (await new FolderTrust().isTrusted(folder))
-  if (!trusted) err(`Bỏ qua skill/agent riêng của ${extras!.dir}: thư mục chưa được tin (mở bằng TUI một lần để chọn).`)
-  const { skills } = await loadSkills(skillRoots(folder, { project: trusted }))
   setAgents(runtime, (await loadAgents(agentRoots(folder, { project: trusted }))).agents)
 
   const errors: string[] = []
@@ -201,8 +204,8 @@ export async function runPrint(opts: PrintOptions, deps: { runtime?: Runtime; ta
       data_gaps: result.gaps,
       errors,
     }
-    process.stdout.write(`${JSON.stringify(out)}\n`)
-  } else if (result.text) process.stdout.write(`${result.text}\n`)
+    await print(`${JSON.stringify(out)}\n`)
+  } else if (result.text) await print(`${result.text}\n`)
   if (!deps.runtime) closeMemory(runtime)
   return answered ? 0 : 1
 }

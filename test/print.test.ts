@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeEach, expect, setDefaultTimeout, spyOn, test } from "bun:test"
-import { existsSync, readFileSync } from "node:fs"
+import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { mkdtemp, rm } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
@@ -56,7 +56,7 @@ beforeEach(async () => {
   seen.length = 0
   out = []
   errOut = []
-  const o = spyOn(process.stdout, "write").mockImplementation(((s: string) => (out.push(String(s)), true)) as never)
+  const o = spyOn(process.stdout, "write").mockImplementation(((s: string, done?: () => void) => (out.push(String(s)), done?.(), true)) as never)
   const e = spyOn(process.stderr, "write").mockImplementation(((s: string) => (errOut.push(String(s)), true)) as never)
   restores.push(() => o.mockRestore(), () => e.mockRestore())
 })
@@ -126,6 +126,20 @@ test("--yolo still refuses what bypass keeps for the user: a write into .git", a
   expect(existsSync(path.join(work, ".git", "hooks", "pre-commit"))).toBe(false)
   // Refused by the gate (nobody to ask), not failed for some other reason.
   expect(readFileSync(JSON.parse(out.join("")).session_file, "utf8")).toContain("không có giao diện để hỏi")
+})
+
+test("--yolo never starts an untrusted project .mcp.json server", async () => {
+  const marker = path.join(work, "spawned.txt")
+  writeFileSync(path.join(work, ".mcp.json"), JSON.stringify({ mcpServers: { repo: { command: process.execPath, args: ["-e", `require("fs").writeFileSync(${JSON.stringify(marker)}, "x")`] } } }))
+  try {
+    replies = [{ text: "Xong." }]
+    const rt = runtime()
+    await runPrint({ prompt: "Chào", format: "json", yolo: true }, { runtime: rt })
+    expect(rt.mcp.status().find((s) => s.name === "repo")?.state).toBe("untrusted")
+    expect(existsSync(marker)).toBe(false)
+  } finally {
+    rmSync(path.join(work, ".mcp.json"), { force: true })
+  }
 })
 
 test("no question (empty stdin): exit 1 before any request", async () => {

@@ -105,6 +105,7 @@ ot --help                # mọi tuỳ chọn
   - Skill/agent riêng của thư mục chỉ được nạp nếu thư mục đã được tin trong TUI.
   - stdout chỉ chứa câu trả lời, hoặc một dòng JSON với `--output-format json`: `answer`, `outcome`, `session_file`, `requests`, token, `permission_mode`, `errors`. Tiến trình in ra stderr.
   - Mã thoát: 0 khi có câu trả lời, 1 trong mọi trường hợp khác.
+  - `ot -p` dùng home thật `~/.opentrading`: memory, ràng buộc, luật deny/ask, `defaultMode`, và ghi một file phiên mỗi lần chạy. Khi chạy benchmark, đặt `OPENTRADING_HOME` trỏ tới một home sạch (chỉ chép `auth.json` và cấu hình MCP sang), để kết quả không phụ thuộc máy và không ghi vào memory của bạn. Không có `--yolo` mà config lại mở ở `▸▸ tự động` (đã đồng ý) thì model duyệt vẫn tốn request; trường `permission_mode` trong JSON cho biết chế độ đã dùng.
 
   `.mcp.json` của thư mục vẫn hỏi riêng từng server.
 - Dữ liệu (key, cấu hình, phiên) nằm ở `~/.opentrading/`; đổi chỗ bằng biến `OPENTRADING_HOME`.
