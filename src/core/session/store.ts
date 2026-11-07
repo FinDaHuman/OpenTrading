@@ -53,6 +53,7 @@ export type SessionEntry =
       retiredTodos?: number
       /** Tools whose data the turn did not get (loop/failures.ts). */
       dataGaps?: string[]
+      ungrounded?: string[]
     }
   /**
    * The history was compacted: `messages` replaces everything before it for the model. The
@@ -213,6 +214,7 @@ export interface TurnInfo {
   /** Items left open when the model answered (the list was retired, items unconfirmed). */
   retiredTodos?: number
   dataGaps?: string[]
+  ungrounded?: string[]
 }
 
 /**
@@ -456,6 +458,7 @@ export class Session {
       ...(info.unanswered ? { unanswered: true } : {}),
       ...(info.retiredTodos ? { retiredTodos: info.retiredTodos } : {}),
       ...(info.dataGaps ? { dataGaps: info.dataGaps } : {}),
+      ...(info.ungrounded?.length ? { ungrounded: info.ungrounded } : {}),
     })
     const firstText = messages.map(userText).find((t) => t.trim()) ?? ""
     // A stopped session never writes again: keep the turn's number for the receipt, not its content.

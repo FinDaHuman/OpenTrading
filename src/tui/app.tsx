@@ -725,7 +725,7 @@ async function sendTurn(
             // Before the turn is queued: the card is written with it, named after its number.
             if (cardDraft) madeCard = takeCard(cardDraft)
             cardDraft = undefined
-            recordTurn(event.messages, event.usage?.contextTokens, { recoveries: event.recoveries, unanswered: event.unanswered, retiredTodos: event.retiredTodos, dataGaps: event.dataGaps })
+            recordTurn(event.messages, event.usage?.contextTokens, { recoveries: event.recoveries, unanswered: event.unanswered, retiredTodos: event.retiredTodos, dataGaps: event.dataGaps, ungrounded: event.ungrounded })
           }
           if (event.dataGaps) {
             closeText()

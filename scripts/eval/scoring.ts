@@ -1,6 +1,6 @@
 import { z } from "zod"
 import { REPLAY_MISS } from "./cassette"
-import { answerFigures, plainValues, sourceNumbers, thousandDongPrices, tracesTo, wrongDong, type Figure } from "./figures"
+import { answerFigures, plainValues, sourceNumbers, thousandDongPrices, tracesTo, wrongDong, type Figure } from "../../src/core/loop/figures"
 import type { Attempt, Trace } from "./read-trace"
 
 const EXPECTED = z.discriminatedUnion("kind", [

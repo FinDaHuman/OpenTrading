@@ -49,7 +49,7 @@ import { NOTE as NOTICE_NOTE } from "./subagents/notification"
 import { currentTodos, retiredNote, retireLeftTodos, todoMark, TODO_WRITE } from "./tools/todos"
 import { FAILURE_STREAK_FINAL, FAILURE_STREAK_STOP, failureNudge, turnFailures } from "./loop/failures"
 import { answerAfterTools } from "./loop/history-shape"
-import { answeredAndClosedTodos, figureSources, isEmptyAnswer, isUnfetched, judgeStop, MAX_RECOVERIES, ranDataTool, stripEchoes, unfetchedFigures, type RecoveryKind, type Verdict } from "./loop/stop-gate"
+import { answeredAndClosedTodos, figureSources, isEmptyAnswer, isUnfetched, judgeStop, MAX_RECOVERIES, ranDataTool, stripEchoes, ungroundedInTurn, unfetchedFigures, type RecoveryKind, type Verdict } from "./loop/stop-gate"
 import { MAX_TOOLS_PER_REQUEST, modelOutput, stripImages, type BuiltToolSet, type ToolRegistry, type ToolSetOptions } from "./tools/registry"
 import { describeTool, LOADED_PREFIX, resolveToolName } from "./tools/search"
 import { cleanToolErrors, toolErrorText } from "./tools/errors"
@@ -282,6 +282,11 @@ export function withNudge(messages: ModelMessage[], text: string): ModelMessage[
 }
 
 /** The `done` field for a turn's messages, left out when nothing is missing. */
+function ungrounded(history: readonly ModelMessage[], user: ModelMessage, messages: readonly ModelMessage[], context?: string) {
+  const figures = ungroundedInTurn([...history, user], messages, context)
+  return figures?.length ? { ungrounded: figures } : {}
+}
+
 function dataGaps(messages: readonly ModelMessage[]) {
   const { gaps } = turnFailures(messages)
   return gaps.length > 0 ? { dataGaps: gaps } : {}
@@ -1350,6 +1355,7 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
       ...(unanswered ? { unanswered } : {}),
       ...(retiredTodos > 0 ? { retiredTodos } : {}),
       ...dataGaps([user, ...messages]),
+      ...ungrounded(opts.history, user, messages, assembled.context),
     }
     if (opts.hooks) void opts.hooks.emit({ type: "turn-end", sessionId, messages: [user, ...messages] })
     return

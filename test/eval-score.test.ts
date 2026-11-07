@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
 import path from "node:path"
-import { answerFigures, plainValues, sourceNumbers, tracesTo, wrongDong } from "../scripts/eval/figures"
+import { answerFigures, plainValues, sourceNumbers, tracesTo, wrongDong } from "../src/core/loop/figures"
 import { readTrace } from "../scripts/eval/read-trace"
 import { bootstrap, compare, mcnemar, parseLabels, scoreTrace, type Score } from "../scripts/eval/scoring"
 import { TRACE_VERSION } from "../scripts/eval/trace"
@@ -66,10 +66,19 @@ test("sources: a capped table and a result after a notice keep their numbers apa
   expect([...noticed].sort()).toEqual([64.27, 64.5])
 })
 
+test("sources: cut JSON is read as JSON, so no number comes from a separator", () => {
+  const numbers = sourceNumbers('{"c":[1.234,5.6,64.27,64.5, [... đã lược')
+  expect([...numbers].sort((a, b) => a - b)).toEqual([1.234, 5.6, 64.27, 64.5])
+})
+
 test("sources: a Vietnamese page keeps its grouped numbers", () => {
   const numbers = sourceNumbers("Doanh thu đạt 1.234,5 tỷ, biên 24,1%.")
   expect(numbers.has(1234.5)).toBe(true)
   expect(numbers.has(24.1)).toBe(true)
+})
+
+test("sources: a number inside a text field counts", () => {
+  expect(sourceNumbers(JSON.stringify([{ content: "P/E 19,5 lần, giá 1.234,5" }])).has(19.5)).toBe(true)
 })
 
 test("a fall traces to a negative number, the sign is in the words", () => {

@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test"
-import { claimsFetch, figureSources, isEmptyAnswer, isFragment, judgeStop, MAX_RECOVERIES, ranDataTool, stripEchoes, unfetchedFigures, type LastStep } from "../src/core/loop/stop-gate"
+import type { ModelMessage } from "ai"
+import { claimsFetch, figureSources, isEmptyAnswer, isFragment, judgeStop, MAX_RECOVERIES, ranDataTool, stripEchoes, ungroundedInTurn, unfetchedFigures, type LastStep } from "../src/core/loop/stop-gate"
 
 const step = (over: Partial<LastStep>): LastStep => ({ text: "", toolNames: [], finish: "stop", ...over })
 
@@ -210,6 +211,36 @@ test("only a tool other than the todo list counts as fetching", () => {
   })
   expect(ranDataTool([result("todo_write")])).toBe(false)
   expect(ranDataTool([result("todo_write"), result("mcp__opentrading__financial_ratios")])).toBe(true)
+})
+
+test("a figure in a compact JSON array is known, and 'tính từ đầu năm' is no arithmetic", () => {
+  const known = JSON.stringify({ c: [64.27, 64.5, 65.1] })
+  expect(unfetchedFigures("Đã lấy dữ liệu: giá 64,27 và 65,1.", known)).toEqual([])
+  expect(unfetchedFigures("Đã lấy dữ liệu: tăng 99,9% tính từ đầu năm, 88,8% trong quý.", "")).toEqual(["99,9", "88,8"])
+})
+
+const toolTurn = (answer: string, output: string): ModelMessage[] => [
+  { role: "assistant", content: [{ type: "tool-call", toolCallId: "c", toolName: "q", input: {} }] },
+  { role: "tool", content: [{ type: "tool-result", toolCallId: "c", toolName: "q", output: { type: "text", value: output } }] },
+  { role: "assistant", content: answer },
+]
+
+test("a tool turn reports the figure next to the real ones, however few", () => {
+  const user: ModelMessage = { role: "user", content: "Giá FPT?" }
+  const turn = toolTurn("Giá 64,27 đ, 64,5 đ, 65,1 đ, P/E 12,3 lần.", '[ref r1] {"c":[64.27,64.5,65.1]}')
+  expect(ungroundedInTurn([user], turn)).toEqual(["12,3 lần"])
+})
+
+test("a figure from an earlier turn or from the profile is grounded", () => {
+  const earlier: ModelMessage[] = [{ role: "user", content: "x" }, { role: "assistant", content: "P/E 12,3 lần" }]
+  expect(ungroundedInTurn(earlier, toolTurn("P/E 12,3 lần, mục tiêu 15,5%.", "{}"), "mục tiêu lợi nhuận 15,5%")).toEqual([])
+})
+
+test("no tool in the turn, or an image: nothing to judge", () => {
+  const user: ModelMessage = { role: "user", content: "x" }
+  expect(ungroundedInTurn([user], [{ role: "assistant", content: "P/E 12,3 lần" }])).toBeUndefined()
+  const image: ModelMessage = { role: "user", content: [{ type: "image", image: "data:x" }] }
+  expect(ungroundedInTurn([image], toolTurn("12,3 lần", "{}"))).toBeUndefined()
 })
 
 test("an ablated rule never sends the model back, and the rules after it still run", () => {

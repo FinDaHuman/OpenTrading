@@ -187,7 +187,7 @@ export async function settleForExit(ms = SETTLE_MS, session = current): Promise<
 export function recordTurn(
   messages: ModelMessage[],
   contextTokens?: number,
-  gate?: Pick<TurnInfo, "recoveries" | "unanswered" | "retiredTodos" | "dataGaps">,
+  gate?: Pick<TurnInfo, "recoveries" | "unanswered" | "retiredTodos" | "dataGaps" | "ungrounded">,
 ) {
   if (messages.length === 0) return
   const session = current
