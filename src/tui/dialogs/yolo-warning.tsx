@@ -29,6 +29,9 @@ export const YOLO_EXPLAIN = [
 export function answerYolo(gate: PermissionGate, choice: Choice) {
   setState("yoloWarning", false)
   if (choice === "exit") return requestExit()
+  // A ▸▸ opt-in waiting behind (defaultMode "auto", never accepted) would ask next and its
+  // "no" would drop the session out of ▸▸▸: the user just chose a mode beyond it.
+  setState("autoOptIn", undefined)
   gate.setMode("bypass")
 }
 

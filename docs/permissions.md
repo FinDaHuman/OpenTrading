@@ -2,7 +2,7 @@
 
 Agent đọc được file bạn đưa (PDF báo cáo, Excel, CSV, ghi chú, ảnh), tạo file giúp bạn (kế hoạch `.md`, bảng `.csv`, trang `.html` có biểu đồ) và chạy lệnh (ví dụ script Python tính toán). Mọi thao tác ghi đều qua **cổng quyền**, và **chế độ quyền** quyết định ai duyệt. Thiết kế theo Claude Code (permission modes, auto mode), có tham khảo opencode và Codex. PR #91, #92, #94, #95, #96.
 
-## Ba chế độ (Shift+Tab, hoặc Alt+M)
+## Bốn chế độ (Shift+Tab, hoặc Alt+M)
 
 | Chế độ | Đọc file | Ghi / sửa file | Lệnh `shell` | Tool ghi khác (watchlist, tool MCP ghi, trang web domain mới) |
 | --- | --- | --- | --- | --- |

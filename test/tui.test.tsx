@@ -1776,6 +1776,8 @@ test("--yolo: the red warning asks first and keeps the mode; yes turns on ▸▸
   const modeRow = (f: string) => f.split("\n").find((r) => /^ {3}(‖|▸)/.test(r)) ?? ""
   gate.bypassAvailable = true
   setState("yoloWarning", true)
+  // A ▸▸ opt-in waiting behind (defaultMode "auto" never accepted) must not undo the yes below.
+  setState("autoOptIn", { from: "read-only" })
   try {
     let frame = await setup.waitForFrame((f) => f.includes("CẢNH BÁO: OpenTrading đang chạy ở chế độ ▸▸▸ bỏ qua quyền"))
     show(frame)
@@ -1789,6 +1791,7 @@ test("--yolo: the red warning asks first and keeps the mode; yes turns on ▸▸
     expect(gate.mode).toBe("read-only")
     setup.mockInput.pressKey("2")
     await setup.waitFor(() => gate.mode === "bypass")
+    expect(state.autoOptIn).toBeUndefined()
     frame = await setup.waitForFrame((f) => modeRow(f).includes("▸▸▸ bỏ qua quyền (shift+tab đổi)"))
     expect(frame).not.toContain("CẢNH BÁO")
     // Nothing remembered: the next --yolo launch asks again.
