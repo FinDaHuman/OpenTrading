@@ -332,7 +332,7 @@ Gắn bằng CLI: `ot mcp add <tên> <url>` hoặc `ot mcp add <tên> -- <lệnh
 
 - Hội thoại được lưu ở `~/.opentrading/sessions/`, gắn với thư mục đã mở; `/sessions` mở lại (mặc định phiên của thư mục này, `tab` xem mọi thư mục), tiêu đề được đặt tự động sau lượt đầu.
 - Gần đầy ngữ cảnh thì tự nén (ngưỡng trong `/config`); `/compact` nén tay.
-- Memory: nói `Ghi nhớ: …` hoặc để model đề xuất, duyệt trong `/memory`. File memory hỏng bị bỏ qua và được báo trong `/memory`, không làm mất các memory khác.
+- Memory (Sổ ghi nhớ, bật trong `/config`): tự ghi ràng buộc, cách trình bày, luận điểm, bài học bằng `/nho`, `/luandiem`, `/baihoc`; xem, sửa, xoá trong `/memory`. Model có thể gợi ý lưu bằng một thẻ dưới câu trả lời; chỉ lưu khi bạn xác nhận trong form (`/goiy` chọn lại thẻ đang chờ).
 - Hồ sơ nhà đầu tư `INVESTOR.md` (`/profile`) luôn có trong ngữ cảnh.
 
 ## Cấu hình
@@ -410,7 +410,7 @@ Script trong `scripts/dev/`:
 src/core/     provider, auth, config, agent loop, hồ sơ nhà đầu tư (không import UI)
   prompt/     ghép prompt theo tầng, ngân sách token, đồng hồ phiên
   skills/     schema SKILL.md, loader 3 nguồn, catalog, preroute
-  memory/     contract MemoryProvider, bản mẫu FileMemory
+  memory/     contract MemoryProvider, Sổ ghi nhớ (memory.db), thẻ gợi ý
   session/    lưu phiên JSONL, mở lại, dựng lại transcript
   tools/      tool registry, giới hạn/timeout, tool có sẵn (file, shell, chart, watchlist, web…)
   subagents/  subagent: manager, giới hạn slot, transcript riêng, thông báo nền

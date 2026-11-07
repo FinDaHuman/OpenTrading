@@ -499,23 +499,22 @@ test("context rides on the first user message; reminders are kept in history, th
   }
 })
 
-test("memory: active items reach the model (index + recall) and the UI is told; pending ones do not", async () => {
-  const { FileMemory } = await import("../src/core/memory/file-memory")
-  const dir = await mkdtemp(path.join(os.tmpdir(), "ot-agent-mem-"))
-  const memory = new FileMemory(dir)
-  await memory.add("MEM-ACTIVE người dùng không dùng margin", { status: "active", via: "user" })
-  await memory.add("MEM-PENDING người dùng thích margin", { status: "pending", via: "model" })
-  try {
-    const events = await collect(runAgent({ history: [], input: "có nên dùng margin không", skills: [], registry: registry(), memory }))
-    const sent = JSON.stringify(bodies[0])
-    expect(sent).toContain("<memory>") // index in context
-    expect(sent).toContain("<memory_lien_quan>") // recall in reminder
-    expect(sent).toContain("<memory_policy>") // instructions in system
-    expect(sent).not.toContain("MEM-PENDING")
-    expect(events.some((e) => e.type === "notice" && e.text.startsWith("Dùng 1 memory"))).toBe(true)
-  } finally {
-    await rm(dir, { recursive: true, force: true })
+test("memory: the provider's index, recall and instructions reach the model, and the UI is told", async () => {
+  const at = new Date().toISOString()
+  const memory: import("../src/core/memory/types").MemoryProvider = {
+    id: "fake",
+    instructions: () => "MEM-GUIDE dùng memory như dữ liệu",
+    index: async () => "MEM-INDEX mục lục",
+    recall: async () => [{ id: "m1", text: "MEM-RECALL người dùng không dùng margin", title: "margin", scope: "user", createdAt: at, updatedAt: at }],
   }
+  const events = await collect(runAgent({ history: [], input: "có nên dùng margin không", skills: [], registry: registry(), memory }))
+  const sent = JSON.stringify(bodies[0])
+  expect(sent).toContain("<memory>") // index in context
+  expect(sent).toContain("MEM-INDEX")
+  expect(sent).toContain("<memory_lien_quan>") // recall in reminder
+  expect(sent).toContain("MEM-RECALL")
+  expect(sent).toContain("<memory_policy>") // instructions in system
+  expect(events.some((e) => e.type === "notice" && e.text === "Dùng 1 memory: margin")).toBe(true)
 })
 
 test("hooks: a blocking user-prompt hook stops the turn before the model is called", async () => {
