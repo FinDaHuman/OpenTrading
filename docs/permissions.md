@@ -9,6 +9,18 @@ Agent đọc được file bạn đưa (PDF báo cáo, Excel, CSV, ghi chú, ả
 | `‖ chỉ đọc` (mặc định) | tự do | hỏi từng lần: **Có, lần này / Có, và chuyển sang ▸ / Không** | hỏi từng lần (như ghi file) | hỏi như trước: lần này / cả phiên / luôn / không |
 | `▸ sửa có hỏi` | tự do | hỏi; "cả phiên này" cho cả thư mục (và thư mục con) | hỏi; "cả phiên"/"luôn" cho một **tiền tố lệnh chỉ đọc** như `git status …` | hỏi như trước |
 | `▸▸ tự động` | tự do | file **mới** hoặc file do phiên tạo: chạy luôn; file có sẵn: model duyệt | model duyệt | model duyệt |
+| `▸▸▸ bỏ qua quyền` (chỉ khi mở bằng `--yolo`) | tự do | chạy luôn | chạy luôn | chạy luôn |
+
+- **`▸▸▸ bỏ qua quyền` (`ot --yolo`, alias `--dangerously-skip-permissions`)** giống chế độ bypass của Claude Code và `--yolo` của Codex.
+  - Mỗi lần mở bằng cờ này, TUI hiện một hộp cảnh báo đỏ. Lựa chọn mặc định là **Không, thoát**. Lựa chọn không được lưu, nên lần mở sau lại hỏi. Trong lúc hộp đang mở, chế độ chưa đổi, và dòng chế độ ghi `▸▸▸ bỏ qua quyền (chờ xác nhận)`.
+  - Sau khi bạn đồng ý, Shift+Tab đi qua `‖ → ▸ → ▸▸ → ▸▸▸`.
+  - Không có cờ thì không vào được chế độ này: `defaultMode` trong config không nhận nó, và `-c`/`-r` không giữ lại nó.
+  - Ở chế độ này không có model duyệt nào được gọi (0 request). Subagent dùng chung chế độ của phiên.
+  - **Vẫn chặn:** `blockFor` và quy tắc `deny`.
+  - **Vẫn hỏi bạn** (chạy không giao diện thì bị từ chối):
+    - quy tắc `ask`;
+    - các mục ở phần "Luôn hỏi bạn" bên dưới: file khoá/mật khẩu, `.git`, `.opentrading`, `.ssh`…, đường mạng, ngoài workspace, vòng lặp;
+    - thẻ duyệt chạy ultradesk, vì đó là thẻ chi phí, không phải thẻ quyền.
 
 - Chế độ hiện ở dòng chế độ ngay dưới ô nhập (xem [ui.md](ui.md)). `/config → Chế độ quyền khi mở` để đổi chế độ lúc khởi động (lưu `permissions.defaultMode`).
 - Lần đầu chuyển sang `▸▸`, một hộp xác nhận giải thích auto mode (Bật / Bật và đặt làm mặc định / Không, quay lại). Trong lúc hộp mở, chế độ chưa đổi. Đồng ý một lần thì lưu `permissions.autoAcknowledged`. Phiên đặt mở ở `▸▸` mà chưa từng đồng ý sẽ mở ở `▸` rồi hỏi. Đoạn giải thích cũng có trong `/permissions` khi đang ở `▸▸`.

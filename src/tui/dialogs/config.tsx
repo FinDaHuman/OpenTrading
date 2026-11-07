@@ -24,7 +24,9 @@ import { describeScroll, nextScrollSetting, scrollSetting } from "../scroll"
 type CompactLevel = number | "cap" | "uncap"
 const COMPACT_PERCENTS = [95, 90, 80, 70]
 
-const DEFAULT_MODE_NEXT: Record<PermissionMode, PermissionMode> = { "read-only": "ask", ask: "auto", auto: "read-only" }
+/** ▸▸▸ bypass is never a default: only `--yolo` starts it, so it is not in this cycle. */
+type DefaultMode = Exclude<PermissionMode, "bypass">
+const DEFAULT_MODE_NEXT: Record<DefaultMode, DefaultMode> = { "read-only": "ask", ask: "auto", auto: "read-only" }
 
 type Setting = "memory" | "toolSearch" | "autoCompact" | "idleCompact" | "compactLevel" | "maxSteps" | "effort" | "subagentMax" | "subagentModel" | "webModel" | "autoModel" | "defaultMode" | "askEffort" | "tips" | "terminalNotify" | "scroll" | "updateCheck" | "scratchpad"
 type SubagentModel = { provider: string; model: string } | "inherit" | "auto"
@@ -231,7 +233,7 @@ export function ConfigDialog(props: { runtime: Runtime }) {
     )
       return setEditing(setting)
     if (setting === "defaultMode") {
-      const next = DEFAULT_MODE_NEXT[defaultMode()]
+      const next = DEFAULT_MODE_NEXT[defaultMode()] ?? "ask"
       await saveConfig((current) => ({ permissions: { ...current.permissions, defaultMode: next } }))
       await refetch()
       return

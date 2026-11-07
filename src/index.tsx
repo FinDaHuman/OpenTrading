@@ -70,4 +70,4 @@ if (cli.dir !== undefined) {
 const { compiled } = await import("./core/build-info")
 if (!compiled) await import("@opentui/solid/preload")
 const { startTui } = await import("./tui/main")
-await startTui(cli.resume)
+await startTui(cli.resume, { yolo: cli.yolo === true })

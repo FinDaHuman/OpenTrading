@@ -1771,6 +1771,39 @@ test("shift+tab cycles ‖ chỉ đọc ↔ ▸ sửa có hỏi; a write in read
   runtime.permissions.setMode("read-only")
 })
 
+test("--yolo: the red warning asks first and keeps the mode; yes turns on ▸▸▸ bypass, red on the mode line, in the Shift+Tab cycle", async () => {
+  const gate = runtime.permissions
+  const modeRow = (f: string) => f.split("\n").find((r) => /^ {3}(‖|▸)/.test(r)) ?? ""
+  gate.bypassAvailable = true
+  setState("yoloWarning", true)
+  try {
+    let frame = await setup.waitForFrame((f) => f.includes("CẢNH BÁO: OpenTrading đang chạy ở chế độ ▸▸▸ bỏ qua quyền"))
+    show(frame)
+    expect(frame).toContain("❯ 1. Không, thoát")
+    expect(modeRow(frame)).toContain("▸▸▸ bỏ qua quyền (chờ xác nhận)")
+    expect(frame).toContain("Vẫn chặn hoặc vẫn hỏi")
+    expect(gate.mode).toBe("read-only")
+    // Shift+Tab does not get past the warning.
+    setup.mockInput.pressTab({ shift: true })
+    await Bun.sleep(50)
+    expect(gate.mode).toBe("read-only")
+    setup.mockInput.pressKey("2")
+    await setup.waitFor(() => gate.mode === "bypass")
+    frame = await setup.waitForFrame((f) => modeRow(f).includes("▸▸▸ bỏ qua quyền (shift+tab đổi)"))
+    expect(frame).not.toContain("CẢNH BÁO")
+    // Nothing remembered: the next --yolo launch asks again.
+    expect(JSON.stringify((await loadConfig()).permissions ?? {})).not.toContain("bypass")
+    setup.mockInput.pressTab({ shift: true })
+    await setup.waitFor(() => gate.mode === "read-only")
+    setup.mockInput.pressTab({ shift: true })
+    await setup.waitFor(() => gate.mode === "ask")
+  } finally {
+    setState("yoloWarning", false)
+    gate.bypassAvailable = false
+    gate.setMode("read-only")
+  }
+})
+
 test("/undo lists and puts back the agent's file changes; /permissions lists rules and deletes one with d", async () => {
   const run = command
   const write = runtime.registry.get("write_file")!
