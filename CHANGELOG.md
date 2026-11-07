@@ -5,6 +5,14 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ## [Unreleased]
 
+### Added (permissions)
+
+- `ot --yolo` (alias `--dangerously-skip-permissions`): the `▸▸▸ bỏ qua quyền` mode.
+  - Nothing asks and no classifier request is sent.
+  - Deny rules, ask rules, blocked calls and the user-only scopes (key files, `.git`/`.opentrading`/`.ssh`, network paths, outside the workspace, the loop guard) still stop or ask. With no UI attached, those calls are refused.
+  - Every launch shows a red warning first; its default answer is "Không, thoát". The answer is never saved.
+  - Only the flag turns the mode on: config and resume cannot. With the flag, Shift+Tab includes `▸▸▸`.
+
 ### Changed (memory, spec 007)
 
 - Compaction never sees memory content: every memory block in the part summarized is cut down to its label,

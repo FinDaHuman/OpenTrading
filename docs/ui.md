@@ -55,7 +55,7 @@ Câu trả lời được vẽ bằng markdown (đậm, danh sách, bảng, code
 ## Dòng chế độ và status bar
 
 - **Dòng chế độ** (ngay dưới ô nhập), từ trái sang phải:
-  - chế độ quyền `‖ chỉ đọc` / `▸ sửa có hỏi` / `▸▸ tự động`, kèm `(shift+tab đổi)` khi dòng còn chỗ;
+  - chế độ quyền `‖ chỉ đọc` / `▸ sửa có hỏi` / `▸▸ tự động` / `▸▸▸ bỏ qua quyền` (đỏ, chỉ khi mở bằng `--yolo`), kèm `(shift+tab đổi)` khi dòng còn chỗ;
   - số subagent đang chạy;
   - gợi ý phím: `esc dừng` khi agent đang chạy, `? phím tắt · / lệnh` khi rảnh.
 - **Status bar** (dòng cuối cùng): provider · model, effort (khi model nhận effort), MCP, skill đang bật, và context đang dùng.

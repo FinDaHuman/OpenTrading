@@ -198,6 +198,8 @@ export const [state, setState] = createStore({
   permissionMode: "read-only" as PermissionMode,
   /** The ▸▸ auto opt-in dialog is open; `from` is the mode kept if the user says no. */
   autoOptIn: undefined as { from: PermissionMode } | undefined,
+  /** Started with --yolo and not yet accepted: the red warning owns the keys (dialogs/yolo-warning). */
+  yoloWarning: false,
   /** The folder has its own skills/agents and is not trusted yet: the trust dialog is open. */
   folderTrust: undefined as ProjectExtras | undefined,
   /** The folder's own skills/agents (.opentrading/) load; false until its folder is trusted. */
@@ -276,4 +278,4 @@ export function requestExit() {
  * nothing typed or chosen is lost — but must not react to keys meanwhile.
  */
 export const blocked = () =>
-  Boolean(state.approval || state.question || state.folderTrust || state.autoOptIn || state.deskApproval || state.turnHold)
+  Boolean(state.yoloWarning || state.approval || state.question || state.folderTrust || state.autoOptIn || state.deskApproval || state.turnHold)

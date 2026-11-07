@@ -101,6 +101,7 @@ import { ShortcutsPane } from "./shortcuts"
 import { loadModelPrefs } from "../core/model-prefs"
 import { AgentPanel, isDeskRow, panelAgents } from "./agent-panel"
 import { AutoOptInDialog } from "./dialogs/auto-optin"
+import { YoloWarningDialog } from "./dialogs/yolo-warning"
 import { FolderTrustDialog } from "./dialogs/folder-trust"
 import { announceMcp } from "./mcp/notices"
 import { Toasts } from "./toast"
@@ -816,7 +817,7 @@ export function App(props: {
    * Who owns the keyboard instead of the prompt: an approval or a question from the model.
    * Every rule that hides the prompt, closes dialogs or reroutes Esc goes through this.
    */
-  const owner = () => state.approval ?? state.question ?? state.folderTrust ?? state.autoOptIn ?? state.deskApproval ?? state.turnHold
+  const owner = () => (state.yoloWarning ? "yolo" : undefined) ?? state.approval ?? state.question ?? state.folderTrust ?? state.autoOptIn ?? state.deskApproval ?? state.turnHold
   /** The subagent panel's rows (ticks once a second so finished agents leave). */
   const panelTick = useNow(1000)
   const panelList = createMemo(() => panelAgents(panelTick()))
@@ -1909,7 +1910,7 @@ export function App(props: {
     // (as in Claude Code). Not while a prompt or dialog owns the keys (checked above).
     if ((evt.name === "tab" && evt.shift) || (evt.meta && evt.name === "m")) {
       evt.preventDefault()
-      const next = cycleMode(props.runtime.permissions.mode)
+      const next = cycleMode(props.runtime.permissions.mode, { bypass: props.runtime.permissions.bypassAvailable })
       // The first time, auto waits for a yes in the opt-in dialog; the gate keeps its mode.
       if (next === "auto" && !state.autoAcknowledged) return void setState("autoOptIn", { from: props.runtime.permissions.mode })
       return props.runtime.permissions.setMode(next)
@@ -2027,10 +2028,14 @@ export function App(props: {
         </Show>
         {/* The ▸▸ auto opt-in gives way to an approval or a question (it is asked again later). */}
         {/* Asked once at start, before the ▸▸ auto opt-in; waits behind approvals and questions. */}
-        <Show when={state.folderTrust && !state.approval && !state.question}>
+        {/* --yolo asks before anything else at start; until then the gate keeps its mode. */}
+        <Show when={state.yoloWarning}>
+          <YoloWarningDialog gate={props.runtime.permissions} />
+        </Show>
+        <Show when={state.folderTrust && !state.yoloWarning && !state.approval && !state.question}>
           <FolderTrustDialog runtime={props.runtime} />
         </Show>
-        <Show when={state.autoOptIn && !state.approval && !state.question && !state.folderTrust}>
+        <Show when={state.autoOptIn && !state.yoloWarning && !state.approval && !state.question && !state.folderTrust}>
           <AutoOptInDialog gate={props.runtime.permissions} />
         </Show>
         {/* A desk run's approval card waits behind tool approvals and questions. */}

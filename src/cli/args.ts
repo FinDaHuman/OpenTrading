@@ -1,5 +1,6 @@
 import { statSync } from "node:fs"
 import path from "node:path"
+import { YOLO_FLAGS } from "../core/permission/mode"
 
 /**
  * Top-level command line, parsed without touching the TUI so the help, version and error
@@ -12,7 +13,7 @@ export type Cli =
   | { kind: "self-check" }
   | { kind: "mcp"; args: string[] }
   | { kind: "update"; args: string[] }
-  | { kind: "tui"; dir?: string; resume?: string }
+  | { kind: "tui"; dir?: string; resume?: string; yolo?: boolean }
   | { kind: "error"; message: string }
 
 export const HELP = `OpenTrading — harness AI phân tích chứng khoán Việt Nam
@@ -20,6 +21,8 @@ export const HELP = `OpenTrading — harness AI phân tích chứng khoán Việ
   opentrading [thư mục]            mở TUI; workspace = thư mục (mặc định: thư mục hiện tại)
   opentrading -c, --continue       mở lại phiên mới nhất
   opentrading -r, --resume [id]    mở lại phiên theo id (bỏ trống = mới nhất)
+  opentrading --yolo               ▸▸▸ bỏ qua quyền: không hỏi trước khi ghi file/chạy lệnh
+                                   (alias --dangerously-skip-permissions; hỏi xác nhận khi mở)
   opentrading mcp …                quản lý MCP server (opentrading mcp --help)
   opentrading update [--check]     cập nhật lên bản mới (opentrading update --help)
   opentrading -v, --version        phiên bản và nơi cài
@@ -37,10 +40,15 @@ export function parseCli(argv: string[]): Cli {
   if (argv[0] === "--self-check") return { kind: "self-check" }
   let dir: string | undefined
   let resume: string | undefined
+  let yolo = false
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]!
     if (arg === "-h" || arg === "--help") return { kind: "help" }
     if (arg === "-v" || arg === "--version") return { kind: "version" }
+    if (YOLO_FLAGS.includes(arg)) {
+      yolo = true
+      continue
+    }
     if (arg === "-c" || arg === "--continue") {
       resume ??= "latest"
       continue
@@ -61,7 +69,7 @@ export function parseCli(argv: string[]): Cli {
     if (dir !== undefined) return { kind: "error", message: `Chỉ mở được một thư mục (nhận "${dir}" và "${arg}").` }
     dir = arg
   }
-  return { kind: "tui", dir, resume }
+  return { kind: "tui", dir, resume, ...(yolo ? { yolo } : {}) }
 }
 
 /** The folder to open, resolved against `cwd` (PowerShell sets no PWD, so never read it). */
