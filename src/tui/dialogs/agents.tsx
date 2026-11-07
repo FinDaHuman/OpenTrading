@@ -3,7 +3,7 @@ import { agentRoots, loadAgents } from "../../core/agents/loader"
 import { toolFilter, toolSummary } from "../../core/agents/resolve"
 import type { AgentDefinition } from "../../core/agents/schema"
 import { setAgents, type Runtime } from "../../core/runtime"
-import { EXCLUDED_TOOLS } from "../../core/subagents/manager"
+import { childMayUse } from "../../core/subagents/manager"
 import { closeDialog, providerName, setState, state } from "../state"
 import { color } from "../theme"
 import { useKeys } from "../ui/keys"
@@ -22,12 +22,12 @@ export async function reloadAgents(runtime: Runtime) {
   return agents.length
 }
 
-/** Tools this type would get right now (current registry, minus what subagents never get). */
-function resolvedTools(runtime: Runtime, def: AgentDefinition) {
+/** Tools this type would get right now: the same check childRegistry makes, then the type's own list. */
+export function resolvedTools(runtime: Runtime, def: AgentDefinition) {
   const keep = toolFilter(def)
   return runtime.registry
     .list()
-    .filter((t) => !EXCLUDED_TOOLS.has(t.name) && !t.source?.startsWith("memory:") && keep(t))
+    .filter((t) => childMayUse(t) && keep(t))
     .map((t) => t.name)
 }
 

@@ -13,13 +13,15 @@ import { loadSkills, skillRoots } from "../../src/core/skills/loader"
 import { catalogRegistry, loadCases } from "../../test/helpers/routing-eval"
 
 // Opt-in live smoke test, one bounded request per question/tier; no finance calls.
-// --dry-run records every prompt without resolving credentials or calling a provider.
+// Calls a provider only with --yes; otherwise, or with --dry-run, it records every prompt
+// without resolving credentials.
 const arg = (name: string) => {
   const i = process.argv.indexOf(name)
   return i < 0 ? undefined : process.argv[i + 1]
 }
 const root = path.resolve(import.meta.dir, "../..")
-const dryRun = process.argv.includes("--dry-run")
+const dryRun = process.argv.includes("--dry-run") || !process.argv.includes("--yes")
+if (dryRun && !process.argv.includes("--dry-run")) console.log("Dry run: add --yes to call the model (uses your quota).")
 const catalogOnly = process.argv.includes("--catalog-only")
 const only = (arg("--only") ?? "278,279,280,282,283,284,288,289,290,291").split(",").map(Number)
 const tiers = (arg("--tiers") ?? "A,B").split(",")

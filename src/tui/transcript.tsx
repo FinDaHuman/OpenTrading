@@ -7,6 +7,7 @@ import { color, markdownStyle } from "./theme"
 import { ChartBox } from "./ui/chart-box"
 import { truncate } from "./ui/text"
 import { STREAM_CURSOR, streamView } from "./ui/stream-view"
+import { CardRow } from "./card-row"
 import { useSpinner } from "./ui/clock"
 import { fmtElapsed } from "./activity"
 import { LEGACY_TODO_PREFIX, TODO_PREFIX } from "../core/tools/todos"
@@ -248,6 +249,9 @@ function Row(props: { line: Line; prev?: Line; index: number; width: number }) {
             </Show>
           </>
         )}
+      </Match>
+      <Match when={props.line.kind === "card" && props.line}>
+        {(line) => <CardRow line={line() as Extract<Line, { kind: "card" }>} />}
       </Match>
       <Match when={props.line.kind === "chart" && props.line}>
         {(line) => <ChartBox data={(line() as Extract<Line, { kind: "chart" }>).data} width={props.width} />}

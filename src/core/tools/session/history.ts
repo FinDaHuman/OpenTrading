@@ -2,6 +2,7 @@ import { z } from "zod"
 import { listSessions, loadSession } from "../../session/store"
 import { visibleUserText } from "../../agent"
 import type { ModelMessage } from "ai"
+import type { RedactionCheck } from "../../memory/redaction/check"
 import { LOCAL_SOURCE, type ToolDef } from "../types"
 
 const clip = (text: string, max: number) => {
@@ -36,7 +37,7 @@ export function turnsOf(messages: ModelMessage[]) {
  * This user's saved sessions (~/.opentrading/sessions), the local counterpart of the MCP
  * server's shared run log: past conversations never mix between users.
  */
-export function sessionHistoryTools(): ToolDef[] {
+export function sessionHistoryTools(deps: { redaction?: RedactionCheck } = {}): ToolDef[] {
   const list: ToolDef<{ limit?: number }> = {
     name: "session_list",
     description:
@@ -73,7 +74,8 @@ export function sessionHistoryTools(): ToolDef[] {
       if (matches.length > 1 && !matches.some((s) => s.id === input.id)) {
         throw new Error(`Tiền tố "${input.id}" khớp ${matches.length} phiên: ${matches.slice(0, 5).map((s) => s.id).join(", ")}. Dùng id dài hơn.`)
       }
-      const loaded = await loadSession(input.id)
+      // Read with the masks (never written here): what the user deleted does not come back through an old session.
+      const loaded = await loadSession(input.id, { check: deps.redaction })
       // The whole conversation (display), not just what is left after the last compaction.
       const turns = turnsOf(loaded.display).slice(-12)
       return [
@@ -82,7 +84,9 @@ export function sessionHistoryTools(): ToolDef[] {
       ].join("\n")
     },
   }
-  return [list, get]
+  // Marked here, for every tool of the group, so a history tool added later is kept from
+  // subagents without anyone having to list its name.
+  return [list, get].map((def): ToolDef => ({ ...def, mainAgentOnly: true }))
 }
 
 /** Health check of this machine's harness, as opposed to the MCP server's own `doctor`. */

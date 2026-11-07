@@ -5,6 +5,8 @@ import { runAgent } from "../agent"
 import { gapsLine } from "../loop/failures"
 import { describeError, resolveTarget, type Target } from "../chat"
 import { loadConfig, type Config } from "../config"
+import type { Waiver } from "../memory/binding/bind"
+import type { ConstraintReader } from "../memory/binding/constraints"
 import { isEffort, type Effort } from "../effort"
 import { classifyFailure, retryText } from "../retry"
 import { closeDanglingToolCalls } from "../session/store"
@@ -43,17 +45,22 @@ const MAX_FINISHED = 20
 export const EXCLUDED_TOOLS = new Set(["spawn_subagent", "send_message", "stop_agent", "ask_user", "todo_write", "tool_search", "load_skill", "desk_run"])
 
 /**
- * The child's registry: the parent's tools minus EXCLUDED_TOOLS and memory tools (a child
- * must not propose memories about the user), narrowed by `filter`. It shares the parent's
- * lock (writes exclude each other across agents) and gate (approvals reach the main UI).
+ * The child's registry: the parent's tools minus EXCLUDED_TOOLS, memory tools (a child
+ * must not propose memories about the user) and main-agent-only tools (session history: the
+ * main agent quotes what a task needs), narrowed by `filter`. No filter brings any of them
+ * back. Every way a subagent starts (start, continue, the ultradesk) goes through here.
+ * It shares the parent's lock (writes exclude each other across agents) and gate (approvals reach the main UI).
  */
+/** Whether a subagent may ever get this tool, before its type's own list; /agents shows the same. */
+export const childMayUse = (t: ToolDef) => !EXCLUDED_TOOLS.has(t.name) && !t.source?.startsWith("memory:") && !t.mainAgentOnly
+
 export function childRegistry(parent: ToolRegistry, origin: AgentOrigin, filter?: (def: ToolDef) => boolean, skills?: () => Skill[]) {
   const child = new ToolRegistry({ lock: parent.lock, origin })
   child.gate = parent.gate
   child.workspace = parent.workspace
   const candidates = parent
     .list()
-    .filter((t) => !EXCLUDED_TOOLS.has(t.name) && !t.source?.startsWith("memory:") && (!filter || filter(t)))
+    .filter((t) => childMayUse(t) && (!filter || filter(t)))
   if (candidates.length === 0) throw new Error("Subagent không có tool nào để dùng (danh sách tool rỗng hoặc không khớp).")
   for (const def of candidates) child.register(def)
   if (candidates.some((t) => t.deferrable)) child.register(toolSearchTool(child))
@@ -104,12 +111,21 @@ export interface StartSpec extends TypeSpec {
   schema?: z.ZodObject
   /** The ultradesk run this agent belongs to. */
   deskRunId?: string
+  /**
+   * The waiver of the turn that started this agent's desk run (DeskEngine reads it once at start), so
+   * agents a run starts after that turn ended keep the user's choice. Takes precedence over deps.waiver.
+   */
+  waiver?: Waiver
 }
 
 export interface ManagerDeps {
   parent: ToolRegistry
   skills?: () => Skill[]
   serverInstructions?: () => { server: string; text: string }[]
+  /** The user's constraints: every turn of every sub-agent reads them (runtime.constraints). */
+  constraints?: ConstraintReader
+  /** The waiver of the main turn now running (runtime.turnWaiver); undefined outside such a turn. */
+  waiver?: () => Waiver | undefined
 }
 
 type Listener = (view: SubagentView) => void
@@ -124,6 +140,11 @@ interface RunContext {
   inbox: string[]
   /** The parent turn's signal, for foreground runs. */
   parentSignal?: AbortSignal
+  /**
+   * The waiver of the main turn that started or continued this run, kept for its first turn even if
+   * it waits for a slot. Later turns (messages sent meanwhile) read the waiver in force then.
+   */
+  waiver?: Waiver
 }
 
 const newId = () => `ag-${Math.random().toString(36).slice(2, 8).padEnd(6, "0")}`
@@ -275,7 +296,7 @@ export class SubagentManager {
       sessionId: this.session?.id,
       deskRunId: spec.deskRunId,
     }
-    const context: RunContext = { child, spec, inbox: [], parentSignal: spec.parentSignal }
+    const context: RunContext = { child, spec, inbox: [], parentSignal: spec.parentSignal, waiver: spec.waiver ?? this.deps.waiver?.() }
     if (spec.schema) child.register(resultTool(spec.schema, (data) => (context.data = data)))
     this.runs.set(id, run)
     this.owners.set(id, this.session?.id)
@@ -302,6 +323,8 @@ export class SubagentManager {
       return "queued"
     }
     context.parentSignal = undefined
+    // Continued outside a waived turn (a background agent later on), a failed read holds it again.
+    context.waiver = this.deps.waiver?.()
     // A continuation must produce its own structured result, never return the previous one.
     context.data = undefined
     Object.assign(run, { status: "queued", background: true, controller: new AbortController(), text: "", error: undefined, endedAt: undefined })
@@ -485,6 +508,11 @@ export class SubagentManager {
           disabled: this.disabled,
           agentPrompt: spec.agentPrompt,
           serverInstructions: this.deps.serverInstructions,
+          // The host reads the constraints itself for every turn, whatever the main agent's brief says.
+          constraints: this.deps.constraints,
+          // The first turn and the result reminders are the same task: the waiver kept at start/continue.
+          // A message sent meanwhile is new work: the waiver in force now (a desk run's own, if any).
+          waive: attempts === 1 || reminding ? context.waiver : (spec.waiver ?? this.deps.waiver?.()),
           effort,
           ...(spec.schema ? { finalTool: RESULT_TOOL, finalPrompt: RESULT_LAST_STEP } : {}),
         })) {

@@ -355,7 +355,7 @@ From the command line: `ot mcp add <name> <url>` or `ot mcp add <name> -- <comma
 
 - Conversations are saved in `~/.opentrading/sessions/`, tied to the folder they were opened in. `/sessions` reopens one: this folder's by default, `tab` for every folder. A title is set automatically after the first turn.
 - Near the context limit the conversation is compacted automatically (threshold in `/config`); `/compact` does it by hand.
-- Memory: say `Ghi nhớ: …` ("remember: …") or let the model propose one, then review it in `/memory`. A broken memory file is skipped and reported in `/memory`; the other memories are kept.
+- Memory (the notebook, on in `/config`): you write constraints, presentation style, theses and lessons with `/nho`, `/luandiem`, `/baihoc`, and view, edit or delete them in `/memory`. The model may suggest saving one with a card under its answer; nothing is saved until you confirm the form (`/goiy` picks a pending card again).
 - Your investor profile `INVESTOR.md` (`/profile`) is always in the context.
 
 ## Configuration
@@ -433,7 +433,7 @@ Scripts in `scripts/dev/`:
 src/core/     providers, auth, config, agent loop, investor profile (no UI imports)
   prompt/     layered prompt assembly, token budgets, market clock
   skills/     SKILL.md schema, 3-source loader, catalog, preroute
-  memory/     MemoryProvider contract, FileMemory reference implementation
+  memory/     MemoryProvider contract, the notebook (memory.db), suggestion cards
   session/    JSONL sessions, resume, transcript rebuild
   tools/      tool registry, limits/timeouts, built-in tools (files, shell, chart, watchlist, web…)
   subagents/  subagents: manager, slot limiter, own transcripts, background notices
