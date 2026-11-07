@@ -162,6 +162,23 @@ test("Streamable HTTP falls back to SSE for legacy servers; type sse connects di
   expect(await registry.get("mcp__old__echo")!.execute({ text: "sse" }, ctx)).toBe("sse")
 }, 20_000)
 
+test("nothing listening at the address: only Streamable HTTP is tried, never the SSE fallback", async () => {
+  const gone = Bun.serve({ port: 0, fetch: () => new Response("") })
+  const url = `http://127.0.0.1:${gone.port}/mcp`
+  gone.stop(true)
+  const { manager } = await managerWith({ down: { type: "http", url } })
+  const kinds: string[] = []
+  ;(manager as unknown as { opts: { transport: (name: string, real: () => object) => object } }).opts.transport = (_name, real) => {
+    const transport = real()
+    kinds.push(transport.constructor.name)
+    return transport
+  }
+  await manager.start()
+  expect(state(manager, "down").state).toBe("failed")
+  // The first try and its two retries (retryDelaysMs [10, 10]), all over HTTP.
+  expect(kinds).toEqual(["StreamableHTTPClientTransport", "StreamableHTTPClientTransport", "StreamableHTTPClientTransport"])
+}, 20_000)
+
 test("enabledTools / disabledTools filter what the model sees", async () => {
   const remote = startHttpServer()
   cleanups.push(remote.stop)

@@ -302,6 +302,11 @@ function isTransient(error: unknown) {
   return error instanceof TypeError || /ECONNRESET|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|fetch failed|socket/i.test(text)
 }
 
+/** No server at that address: the connection was refused or the host name does not resolve. */
+function isUnreachable(error: unknown) {
+  return /ECONNREFUSED|ENOTFOUND|Unable to connect|ConnectionRefused/i.test(errorText(error))
+}
+
 /** The connection itself is gone (server down, network cut) — not a protocol-level error. */
 function isConnectionLost(error: unknown) {
   if (error instanceof SseError) return true
@@ -854,6 +859,9 @@ export class McpManager {
       // Servers that predate Streamable HTTP answer the POST with 404/405/400.
       const status = httpStatus(error)
       if (isAuthError(error) || error instanceof TimeoutError || (status !== undefined && ![400, 404, 405].includes(status))) throw error
+      // Nothing listening there (refused, unknown host): SSE would go to the same host and port
+      // and fail the same way, only after its own retries (1–2 s per reconnect attempt).
+      if (status === undefined && isUnreachable(error)) throw error
       try {
         return await attempt("sse")
       } catch {
