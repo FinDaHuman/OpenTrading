@@ -1,19 +1,21 @@
 import { expect, test } from "bun:test"
 import path from "node:path"
+import { Script } from "node:vm"
 import { TARGETS, targetName } from "../scripts/targets"
 
 // CI's `npm` job packs and installs the packages for real; this checks the parts it cannot.
 const launcher = path.resolve(import.meta.dir, "../scripts/npm/launcher.cjs")
 
 test("the npm launcher is plain Node that parses", async () => {
-  const node = Bun.which("node")
-  if (!node) return
-  // Async, with no stdin and its own limit: under --parallel on the Windows runner a spawnSync
-  // of node once never returned within 20 s, while the check itself takes well under a second.
-  const run = Bun.spawn([node, "--check", launcher], { stdin: "ignore", stdout: "pipe", stderr: "pipe", timeout: 15_000 })
-  const [stderr, code] = await Promise.all([new Response(run.stderr).text(), run.exited])
-  expect(stderr).toBe("")
-  expect(code).toBe(0)
+  // Parsed in this process, as Node wraps a CommonJS module: under --parallel on the Windows
+  // runner a spawned `node --check` hung past 20 s (main d85b9a1, #243), and again past its own
+  // 15 s limit after the async spawn (#251, exit 143). Running it under real Node is the
+  // Package workflow's npm job (3 OSes, `ot --version` from the installed package).
+  const source = (await Bun.file(launcher).text()).replace(/^#!.*\n/, "\n")
+  expect(() => new Script(`(function (exports, require, module, __filename, __dirname) {${source}\n})`, { filename: launcher })).not.toThrow()
+  // The check would catch what Node rejects: TypeScript or an import in a .cjs file.
+  expect(() => new Script("(function () { const x: number = 1 })")).toThrow()
+  expect(() => new Script('(function () { import x from "y" })')).toThrow()
 })
 
 test("the launcher asks for the package names scripts/npm.ts publishes", async () => {
