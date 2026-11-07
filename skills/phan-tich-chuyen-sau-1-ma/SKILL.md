@@ -6,7 +6,8 @@ requires_tools: [symbol_lookup, financial_detail]
 uses_tools: [symbol_lookup, symbol_resolve, vn_company, vs_company_info, vs_industry_tree, financial_detail, news_symbol, company_events, event_calendar_vn, evidence_bundle]
 triggers:
   keywords: [kỹ thuật định giá, phân tích cổ phiếu, phân tích mã, phân tích toàn diện, chi tiết mã, mã này sao]
-version: 1.5.0
+  exclude_keywords: [phân tích cơ bản]
+version: 1.5.1
 ---
 
 # Phân tích toàn diện một mã

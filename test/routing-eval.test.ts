@@ -14,7 +14,7 @@ const FLOOR = {
   /** Existing and review regression cases; tool recall is unchanged. */
   skillHits: 86, // minimum retained from the parallel PR review fix
   /** Keep the stricter remote ratchet; macro trade exclusions remove Q267/Q268 overlap. */
-  maxWrongSuggestions: 19,
+  maxWrongSuggestions: 18, // 2026-11-08: "phân tích cơ bản" no longer adds phan-tich-chuyen-sau-1-ma (Q301)
   /** "No skill" cases that still get a suggestion. */
   maxNegativesSuggested: 5,
 
