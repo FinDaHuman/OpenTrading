@@ -208,6 +208,20 @@ test("the gate goes back to refusing when the run ends", async () => {
   expect(runtime.permissions.interactive).toBe(false)
 })
 
+test("--yolo: a tool that would ask runs unanswered, and the header records the bypass mode", async () => {
+  for (const yolo of [false, true]) {
+    const runtime = initRuntime({ home, cwd: home, skills: () => [] })
+    let ran = 0
+    // Not read-only: without --yolo the unattended list refuses it.
+    runtime.registry.register({ name: "fake_quote", description: "Giá giả", input: z.object({}), readOnly: false, permissionScope: "fake@1", execute: async () => (ran++, "64,27") })
+    const events: TraceEvent[] = []
+    const target = await resolveTarget({ provider: "groq", model: "tooly" })
+    await runEval({ runtime, skills: [], target, questions: parseQuestions(JSON.stringify([question("q1")])), write: (e) => events.push(e), version: "0.0.0", yolo })
+    expect(of(events, "run")[0]!.permission_mode).toBe(yolo ? "bypass" : "read-only")
+    expect(ran).toBe(yolo ? 1 : 0)
+  }
+})
+
 test("a rule switched off stays off, notice included, and the rest still run", async () => {
   invent = true
   const { events } = await run([question("q1")], 1, undefined, parseAblations(["gate-unfetched"]))

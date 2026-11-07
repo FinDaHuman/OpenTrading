@@ -131,6 +131,8 @@ export interface EvalRun {
   /** Stops the run at its cap. Reaching it mid-question aborts that question. */
   ledger?: RequestLedger
   ablated?: Ablated
+  /** --yolo: ▸▸▸ bypass instead of the narrow unattended list (approvals.ts). */
+  yolo?: boolean
 }
 
 const DEFAULT_TIMEOUT_MS = 15 * 60_000
@@ -140,7 +142,12 @@ export async function runEval(run: EvalRun) {
   const { runtime, write, ledger } = run
   const { registry } = runtime
   const web = WEB_TOOLS.flatMap((name) => registry.get(name) ?? [])
-  const stopAnswering = answerUnattended(runtime.permissions, "eval")
+  // Bypass needs nobody to answer: what it still keeps for the user is refused (not interactive).
+  if (run.yolo) {
+    runtime.permissions.bypassAvailable = true
+    runtime.permissions.setMode("bypass")
+  }
+  const stopAnswering = run.yolo ? () => {} : answerUnattended(runtime.permissions, "eval")
   runtime.subagents.disabled = run.ablated?.loop
   if (run.ablated?.setup.has("todo")) registry.unregister(TODO_WRITE)
   if (run.ablated?.setup.has("skills")) registry.unregister("load_skill")
@@ -155,6 +162,8 @@ export async function runEval(run: EvalRun) {
     model: run.target.model,
     started_at: new Date().toISOString(),
     tools: registry.list().length,
+    // Bypass declares the write tools in full (~850 tokens a turn): the prompt differs, not only approvals.
+    permission_mode: runtime.permissions.mode,
     ...(run.settings ? { settings: run.settings } : {}),
   })
   const seen = new WeakSet<ToolDef>()

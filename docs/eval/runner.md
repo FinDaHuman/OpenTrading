@@ -19,6 +19,7 @@ Each question has an `id`, a `group` (A–F), the `question`, and `now`, the mom
 - Refs are cleared before each question, and each question starts with no history.
 - `web_fetch` and `web_search` are removed for groups A–E, because recorded MCP data does not cover the web. Group F keeps them.
 - Without a connected MCP tool the run stops before any model request.
+- Approvals: nobody watches, so by default only `web_fetch` is answered "once" (approvals.ts) and every other call that asks is refused. `--yolo` runs in ▸▸▸ bypass instead: no prompt, no classifier request, and what bypass still keeps for the user is refused. The header records `permission_mode`. Bypass also declares the write tools in full, so the prompt is not the same as a run without it: do not compare traces across the two.
 
 ## Trace
 

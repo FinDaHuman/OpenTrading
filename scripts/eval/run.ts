@@ -20,11 +20,12 @@ import { traceFile } from "./trace"
  * Cách chạy: bun scripts/eval/run.ts --questions file.json --model provider/model
  *            [--only id1,id2] [--repeat 1] [--timeout-min 15] [--max-requests 500]
  *            [--out trace.jsonl] [--yes]
- *            [--mcp-record tape.jsonl | --mcp-replay tape.jsonl] [--ablate a,b]
+ *            [--mcp-record tape.jsonl | --mcp-replay tape.jsonl] [--ablate a,b] [--yolo]
  *   --max-requests  trần request của model này trong ngày, cộng dồn qua các lần chạy
  *   --mcp-record    ghi câu trả lời MCP; câu đã có trong file thì không gọi server nữa
  *   --mcp-replay    chỉ dùng file đã ghi, không gọi server MCP
  *   --ablate        tắt từng phần của harness để đo (xem docs/eval/runner.md)
+ *   --yolo          chế độ ▸▸▸ bỏ qua quyền thay cho danh sách duyệt hẹp (chỉ web_fetch)
  */
 
 const REQUESTS_PER_QUESTION = 5
@@ -55,6 +56,7 @@ if (record && replay) stop("Chỉ dùng một trong --mcp-record và --mcp-repla
 const tape = record ?? replay
 const ablate = arg("--ablate")?.split(",") ?? []
 const ablated = parseAblations(ablate)
+const yolo = process.argv.includes("--yolo")
 const questions = parseQuestions(await readFile(file, "utf8")).filter((q) => !only || only.includes(q.id))
 if (questions.length === 0) stop("Không còn câu hỏi nào sau --only.")
 
@@ -94,8 +96,8 @@ try {
   if (!runtime.registry.list().some((t) => t.source?.startsWith("mcp:"))) throw new Error("Không có tool MCP nào: kiểm tra kết nối MCP.")
   const target = await resolveTarget(model)
   const { effort, toolSearch, maxSteps } = await loadConfig()
-  const settings = { effort, toolSearch, maxSteps, ablate, mcp: cassette?.mode ?? "live", ...(tape ? { mcp_tape: path.basename(tape), mcp_answers: cassette!.size } : {}) }
-  await runEval({ runtime, skills, target, questions, repeat, timeoutMs: minutes * 60_000, write: traceFile(out), version: pkg.version, commit, settings, ledger: requests, ablated })
+  const settings = { effort, toolSearch, maxSteps, ablate, permissions: yolo ? "bypass" : "unattended", mcp: cassette?.mode ?? "live", ...(tape ? { mcp_tape: path.basename(tape), mcp_answers: cassette!.size } : {}) }
+  await runEval({ runtime, skills, target, questions, repeat, timeoutMs: minutes * 60_000, write: traceFile(out), version: pkg.version, commit, settings, ledger: requests, ablated, yolo })
   console.log(`Trace: ${out}`)
   if (cassette?.misses) console.log(`${cassette.misses} yêu cầu MCP không có trong bản ghi: lần chạy này không hoàn toàn trên dữ liệu cố định.`)
 } finally {

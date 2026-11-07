@@ -87,6 +87,9 @@ ot                       # mở TUI, workspace = thư mục hiện tại
 ot D:\Dau-tu             # mở ở thư mục khác
 ot -c                    # mở lại phiên mới nhất của thư mục này
 ot -r <id>               # mở lại một phiên cụ thể
+ot --yolo                # ▸▸▸ bỏ qua quyền (hộp cảnh báo đỏ mỗi lần mở)
+ot -p "Giá FPT hôm nay?" # một lượt không giao diện, in câu trả lời rồi thoát
+ot -p "…" --yolo --model openrouter/deepseek/deepseek-v4.1-flash-1017 --output-format json
 ot mcp list              # quản lý MCP server không cần mở TUI (ot mcp --help)
 ot update                # cập nhật
 ot --version             # phiên bản và nơi cài
@@ -97,6 +100,11 @@ ot --help                # mọi tuỳ chọn
 - Skill và agent riêng của một thư mục (`.opentrading/skills`, `.opentrading/agents`) trở thành chỉ dẫn cho model. Vì vậy lần đầu mở thư mục có chúng, OpenTrading hỏi **"Thư mục này có skill/agent riêng"**:
   - *Tin cậy và nạp*: lưu ở `~/.opentrading/folder-trust.json`. Với thư mục home hay gốc ổ đĩa thì chỉ áp dụng cho lần chạy này.
   - *Bỏ qua*: không lưu, lần sau hỏi lại.
+- `ot -p` (giống `claude -p`, `codex exec`, `opencode run`) chạy đúng vòng agent của TUI, có memory, ghi phiên (`ot -r <id>` mở lại được), và không bao giờ hỏi:
+  - Tool cần duyệt bị từ chối, trừ khi có `--yolo`. Ngay cả với `--yolo`, những gì chế độ bypass vẫn giữ cho bạn vẫn bị từ chối.
+  - Skill/agent riêng của thư mục chỉ được nạp nếu thư mục đã được tin trong TUI.
+  - stdout chỉ chứa câu trả lời, hoặc một dòng JSON với `--output-format json`: `answer`, `outcome`, `session_file`, `requests`, token, `permission_mode`, `errors`. Tiến trình in ra stderr.
+  - Mã thoát: 0 khi có câu trả lời, 1 trong mọi trường hợp khác.
 
   `.mcp.json` của thư mục vẫn hỏi riêng từng server.
 - Dữ liệu (key, cấu hình, phiên) nằm ở `~/.opentrading/`; đổi chỗ bằng biến `OPENTRADING_HOME`.

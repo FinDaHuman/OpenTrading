@@ -26,6 +26,8 @@ export type TraceEvent =
       model: string
       started_at: string
       tools: number
+      /** The permission mode the run used ("read-only" with the unattended list, or "bypass" with --yolo). */
+      permission_mode?: string
       settings?: Record<string, unknown>
     }
   | (Asked & { type: "question"; group: string; question: string; now: string })
