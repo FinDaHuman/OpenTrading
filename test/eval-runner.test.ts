@@ -249,6 +249,8 @@ test("--memory notebook: each question gets an empty notebook (guide in the prom
     }
     expect(opened).toEqual([memory, memory])
   }
+  // The home is shared by this file's tests: no notebook left behind for the constraints reader.
+  for (const suffix of ["", "-wal", "-shm"]) await rm(path.join(home, `memory.db${suffix}`), { force: true })
 })
 
 test("a rule switched off stays off, notice included, and the rest still run", async () => {

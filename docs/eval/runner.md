@@ -4,9 +4,9 @@
 
 ```sh
 # Prints the question count and a request estimate, then exits. Needs no key.
-bun scripts/eval/run.ts --questions scripts/eval/example-questions.json --model google/gemini-3.1-flash-lite
+bun scripts/eval/run.ts --questions scripts/eval/example-questions.json --model google/gemini-3.1-flash-lite --memory none
 # Real run.
-bun scripts/eval/run.ts --questions set.json --model provider/model --repeat 3 --out trace.jsonl --yes
+bun scripts/eval/run.ts --questions set.json --model provider/model --memory notebook --repeat 3 --out trace.jsonl --yes
 ```
 
 Each question has an `id`, a `group` (A–F), the `question`, and `now`, the moment it is asked at, with a UTC offset.
