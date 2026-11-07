@@ -180,11 +180,17 @@ export class ToolRegistry {
     // One guard per tool set: a turn (or a subagent run) counts its own repeats.
     const loop = new LoopGuard()
     for (const def of [...declared].sort((a, b) => a.name.localeCompare(b.name))) {
-      const execute = (input: unknown, options: { abortSignal?: AbortSignal; toolCallId: string }) =>
+      const execute = (input: unknown, options: { abortSignal?: AbortSignal; toolCallId: string; messages?: ModelMessage[] }) =>
         runTool(
           def,
           input,
-          { signal: options.abortSignal ?? new AbortController().signal, callId: options.toolCallId, agent: this.origin, loop },
+          {
+            signal: options.abortSignal ?? new AbortController().signal,
+            callId: options.toolCallId,
+            agent: this.origin,
+            loop,
+            messages: options.messages,
+          },
           this.lock,
           this.gate,
         )

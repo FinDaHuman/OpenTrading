@@ -3,6 +3,7 @@ import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid"
 import { createEffect, createMemo, createSignal, For, Match, on, onCleanup, onMount, Show, Switch } from "solid-js"
 import { produce, reconcile } from "solid-js/store"
 import { REMINDER_TAG, runAgent, summarizeConversation } from "../core/agent"
+import { redactHistory } from "../core/memory/redaction/redact"
 import {
   COMPACT_LEAN_TOKENS,
   IMAGE_TOKENS,
@@ -75,6 +76,8 @@ import {
   currentSession,
   exitTimeoutText,
   recordCompact,
+  recordRedaction,
+  heldLine,
   recordTurn,
   resumeFromArgs,
   settleForExit,
@@ -155,7 +158,18 @@ export async function compact(runtime: Runtime, trigger: "auto" | "manual" | "id
   const limits = contextLimits()
   setState({ streaming: true, compacting: true, activity: startActivity({ compacting: true }) })
   try {
-    const result = await compactHistory(state.history, {
+    // The summary request must not carry what the user deleted: mask first (recorded once), and hand the
+    // compaction what would be sent. Blocks held then stay held in the part kept after compaction.
+    const masked = await redactHistory(state.history, runtime.redaction)
+    // /new or a stop while the store was read: the history and the session are no longer this one's.
+    if (epoch !== mine || controller.signal.aborted) return false
+    if (masked.record.length > 0) {
+      setState("history", masked.kept)
+      recordRedaction(masked.record)
+    }
+    const held = heldLine(masked.temporary)
+    if (held) pushLine(held)
+    const result = await compactHistory(masked.sent, {
       // Auto: what the next request would hold, including the message being sent.
       contextTokens: projected ?? state.contextTokens,
       onSummarize: () =>
@@ -620,6 +634,7 @@ async function sendTurn(
       memory: runtime.memory,
       constraints: runtime.constraints,
       waive: mode.waive,
+      redaction: runtime.redaction,
       serverInstructions: () => runtime.mcp.instructions(),
       compactAt: state.autoCompactOff ? undefined : contextLimits()?.threshold,
     })
@@ -656,6 +671,16 @@ async function sendTurn(
         case "notice":
           pushLine({ kind: "info", text: event.text })
           break
+        case "memory-redaction": {
+          // Masks the store confirmed replace the history for good; held ones were only in what was sent.
+          if (event.record.length > 0) {
+            setState("history", event.kept)
+            recordRedaction(event.record)
+          }
+          const held = heldLine(event.temporary)
+          if (held) pushLine(held)
+          break
+        }
         case "step-usage":
           // Live during a long tool loop: each step's prompt plus its answer (opencode).
           if (event.inputTokens > 0) setState({ contextTokens: event.inputTokens + event.outputTokens, contextEstimated: false })
@@ -2037,7 +2062,7 @@ export function App(props: {
               <EffortDialog />
             </Match>
             <Match when={state.dialog === "memory"}>
-              <MemoryDialog memory={props.runtime.memory} />
+              <MemoryDialog memory={props.runtime.memory} redaction={props.runtime.redaction} />
             </Match>
             <Match when={state.dialog === "notebook-form"}>
               <NotebookFormDialog memory={props.runtime.memory} />

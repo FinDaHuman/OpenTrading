@@ -1,3 +1,4 @@
+import type { ModelMessage } from "ai"
 import { z } from "zod"
 import type { ToolDef } from "../../tools/types"
 
@@ -13,10 +14,13 @@ export interface MemoryReadInput {
   query?: string
 }
 
-/** What the provider answers each way of asking with; every answer is text, never an exception. */
+/**
+ * What the provider answers each way of asking with; every answer is text, never an exception. `messages`
+ * is what the model sees at this step (old tool results pruned): a version already in view is not sent again.
+ */
 export interface NotebookReads {
-  readSubject(name: string): string
-  readLesson(id: number): string
+  readSubject(name: string, messages?: readonly ModelMessage[]): string
+  readLesson(id: number, messages?: readonly ModelMessage[]): string
   search(query: string): string
 }
 
@@ -42,13 +46,13 @@ export function memoryReadTool(reads: NotebookReads): ToolDef<MemoryReadInput> {
       if (i.lesson !== undefined) return `memory_read(#${i.lesson})`
       return `memory_read("${i.query ?? ""}")`
     },
-    async execute(input) {
+    async execute(input, ctx) {
       const asked = [input.subject?.trim(), input.lesson, input.query?.trim()].filter(
         (v) => v !== undefined && v !== "",
       )
       if (asked.length !== 1) return READ_DIRECTIONS
-      if (input.lesson !== undefined) return reads.readLesson(input.lesson)
-      if (input.subject?.trim()) return reads.readSubject(input.subject.trim())
+      if (input.lesson !== undefined) return reads.readLesson(input.lesson, ctx?.messages)
+      if (input.subject?.trim()) return reads.readSubject(input.subject.trim(), ctx?.messages)
       return reads.search(input.query!.trim())
     },
   }

@@ -3,6 +3,7 @@ import type { z } from "zod"
 import type { ChartData } from "./chart/data"
 import type { LoopGuard } from "./loop-guard"
 import type { DiffLine } from "../fs/diff"
+import type { ModelMessage } from "ai"
 
 export interface ToolContext {
   signal: AbortSignal
@@ -13,6 +14,8 @@ export interface ToolContext {
   agent?: AgentOrigin
   /** Repeats of the same call in this turn (asks the user past the threshold). */
   loop?: LoopGuard
+  /** The messages the model was sent at this step (after old tool results were pruned), from the AI SDK. */
+  messages?: readonly ModelMessage[]
 }
 
 /** The subagent behind a tool call (see core/subagents). */

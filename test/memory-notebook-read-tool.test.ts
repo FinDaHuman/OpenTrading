@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test"
 import type { z } from "zod"
+import type { ModelMessage } from "ai"
+import { userMessage } from "../src/core/agent"
 import { HookBus } from "../src/core/hooks"
+import { PRUNED_TEXT } from "../src/core/compact"
+import { alreadyShown } from "../src/core/memory/notebook/render"
 import type { ToolDef } from "../src/core/tools/types"
 import { DECISION_MARKER, HPG_BLOCK_V3, LESSON_7, seedExample, useNotebookDir } from "./helpers/memory-notebook"
 
@@ -16,7 +20,8 @@ function setup() {
   const tools = notebook.tools()
   const tool = tools[0] as ToolDef
   const read = async (input: unknown) => (await tool.execute(input, CTX)) as string
-  return { other, ids, notebook, hooks, tools, tool, read }
+  const history: ModelMessage[] = []
+  return { other, ids, notebook, hooks, tools, tool, read, history }
 }
 
 const LESSON_7_BLOCK = [
@@ -110,19 +115,16 @@ describe("memory_read (Story 5)", () => {
 })
 
 describe("what memory_read sent is tracked like an injected block", () => {
-  /** A turn in which the model calls memory_read: the tool result is in the turn's messages. */
+  /** A turn in which the model calls memory_read: the turn's messages join the history the next recall gets. */
   async function turnWithRead(s: ReturnType<typeof setup>, query: string, input?: unknown) {
-    const items = (await s.notebook.recall(query, { sessionId: "s1" })).map((i) => i.text)
+    const items = (await s.notebook.recall(query, { sessionId: "s1", history: s.history })).map((i) => i.text)
     const output = input === undefined ? "" : await s.read(input)
-    await s.hooks.emit({
-      type: "turn-end",
-      sessionId: "s1",
-      messages: [
-        { role: "user", content: [{ type: "text", text: items.map((t) => `- ${t}`).join("\n") }, { type: "text", text: query }] },
-        { role: "assistant", content: [{ type: "tool-call", toolCallId: "c1", toolName: "memory_read", input }] },
-        { role: "tool", content: [{ type: "tool-result", toolCallId: "c1", toolName: "memory_read", output: { type: "text", value: output } }] },
-      ],
-    })
+    const section = items.length > 0 ? [`<memory_lien_quan>\n${items.map((t) => `- ${t}`).join("\n")}\n</memory_lien_quan>`] : []
+    s.history.push(
+      userMessage(query, section),
+      { role: "assistant", content: [{ type: "tool-call", toolCallId: "c1", toolName: "memory_read", input }] },
+      { role: "tool", content: [{ type: "tool-result", toolCallId: "c1", toolName: "memory_read", output: { type: "text", value: output } }] },
+    )
     return items
   }
 
@@ -158,5 +160,62 @@ describe("what memory_read sent is tracked like an injected block", () => {
     await s.read({ lesson: 7 })
     s.other.writer.deleteLesson(7, 1)
     expect(await turnWithRead(s, "y")).toEqual([])
+  })
+})
+
+describe("memory_read answers in one sentence when that version is in view (Story 6)", () => {
+  const readOf = (output: string): ModelMessage[] => [
+    { role: "assistant", content: [{ type: "tool-call", toolCallId: "c0", toolName: "memory_read", input: { lesson: 7 } }] },
+    { role: "tool", content: [{ type: "tool-result", toolCallId: "c0", toolName: "memory_read", output: { type: "text", value: output } }] },
+  ]
+  const withMessages = (messages: ModelMessage[]) => ({ ...CTX, messages })
+
+  test("the same version in view: one sentence pointing at the label; not in view: the full block", async () => {
+    const s = setup()
+    expect(await s.tool.execute({ lesson: 7 }, withMessages(readOf(LESSON_7_BLOCK)))).toBe(alreadyShown.lesson(7, 1))
+    expect(await s.tool.execute({ lesson: 7 }, withMessages([]))).toBe(LESSON_7_BLOCK)
+    expect(await s.tool.execute({ lesson: 7 }, CTX)).toBe(LESSON_7_BLOCK)
+  })
+
+  test("an old result pruned from this step's request does not count", async () => {
+    const s = setup()
+    expect(await s.tool.execute({ lesson: 7 }, withMessages(readOf(PRUNED_TEXT)))).toBe(LESSON_7_BLOCK)
+  })
+
+  test("a new version since: the full block of the new version", async () => {
+    const s = setup()
+    s.other.writer.reviseLesson(7, 1, LESSON_7(s.ids.banks))
+    const answer = (await s.tool.execute({ lesson: 7 }, withMessages(readOf(LESSON_7_BLOCK)))) as string
+    expect(answer.startsWith("[Memory · bài học · #7 · bản 2 ·")).toBe(true)
+  })
+
+  test("a thesis: in view with its detail gives the sentence; a reminder block without the detail does not", async () => {
+    const s = setup()
+    const full = (await s.read({ subject: "HPG" })) as string
+    const inTool: ModelMessage[] = [
+      { role: "assistant", content: [{ type: "tool-call", toolCallId: "c0", toolName: "memory_read", input: { subject: "HPG" } }] },
+      { role: "tool", content: [{ type: "tool-result", toolCallId: "c0", toolName: "memory_read", output: { type: "text", value: full } }] },
+    ]
+    expect(await s.tool.execute({ subject: "hòa phát" }, withMessages(inTool))).toBe(alreadyShown.thesis("HPG", 3))
+    const inReminder = [userMessage("Hòa Phát?", [`<memory_lien_quan>\n- ${HPG_BLOCK_V3}\n</memory_lien_quan>`])]
+    expect(await s.tool.execute({ subject: "HPG" }, withMessages(inReminder))).toBe(full)
+  })
+
+  test("a thesis whose state changed since the block in view: the full block, not the sentence", async () => {
+    const s = setup()
+    const full = (await s.read({ subject: "HPG" })) as string
+    const inTool: ModelMessage[] = [
+      { role: "assistant", content: [{ type: "tool-call", toolCallId: "c0", toolName: "memory_read", input: { subject: "HPG" } }] },
+      { role: "tool", content: [{ type: "tool-result", toolCallId: "c0", toolName: "memory_read", output: { type: "text", value: full } }] },
+    ]
+    s.other.writer.setThesisState(s.ids.hpg, 3, "refuted")
+    const answer = (await s.tool.execute({ subject: "HPG" }, withMessages(inTool))) as string
+    expect(answer).toContain("Trạng thái: đã bị bác bỏ")
+  })
+
+  test("a block cut short in view does not count", async () => {
+    const s = setup()
+    const cut = `${LESSON_7_BLOCK.slice(0, 120)}\n\n[... đã lược 999 ký tự ...]\n\nhết`
+    expect(await s.tool.execute({ lesson: 7 }, withMessages(readOf(cut)))).toBe(LESSON_7_BLOCK)
   })
 })

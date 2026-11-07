@@ -5,7 +5,12 @@ import { BUDGETS } from "../src/core/prompt/budget"
 import { MEMORY_INDEX_MAX_CHARS, MEMORY_RECALL_MAX_CHARS, MEMORY_RECALL_MAX_ITEMS } from "../src/core/memory/types"
 import { promptFile } from "../src/core/prompt/assemble"
 import { DECISION_MARKER, HPG_BLOCK_V3, HPG_V3, seedExample, useNotebookDir } from "./helpers/memory-notebook"
-import { HookBus } from "../src/core/hooks"
+import type { ModelMessage } from "ai"
+import { userMessage } from "../src/core/agent"
+import { memoryLines } from "../src/core/memory/notebook/history-blocks"
+import { createRedactionCheck } from "../src/core/memory/redaction/check"
+import { redactHistory } from "../src/core/memory/redaction/redact"
+import { maskedLesson } from "../src/core/memory/notebook/render"
 import { noticesMessage, notificationText } from "../src/core/subagents/notification"
 import type { SubagentView } from "../src/core/subagents/types"
 
@@ -81,91 +86,27 @@ describe("packing the reminder part under the smallest tier's budget", () => {
 const HPG = 2
 const VCB = 6
 
-/** A turn's messages as the core hands them to turn-end: the user message with its reminder, a tool result. */
-const turnMessages = (reminder: string, toolOutput = "") => [
-  { role: "user", content: [{ type: "text", text: `<system-reminder>\n- ${reminder}\n</system-reminder>` }, { type: "text", text: "hỏi" }] },
-  {
-    role: "tool",
-    content: [{ type: "tool-result", toolCallId: "c1", toolName: "memory_read", output: { type: "text", value: toolOutput } }],
-  },
-]
-
-describe("session ledger", () => {
+describe("session ledger: the focus window only (what was sent is read from the history)", () => {
   const typed = (text: string) => ({ text, noticeOnly: false })
-
-  test("a block counts as sent only once its label is in the turn's messages", () => {
-    const l = new SessionLedger("s1")
-    l.beginTurn(typed("Hòa Phát?"), [HPG])
-    l.add({ label: "[Memory · luận điểm · HPG · bản 3", sent: ["thesis:2", { version: 3, state: "watching", name: "HPG" }] })
-    l.add({ label: "[Memory · bài học · #7 · bản 1", sent: ["lesson:7", { version: 1 }] })
-    l.confirm(turnMessages("[Memory · luận điểm · HPG · bản 3 · ghi …]\nTrạng thái: …"))
-    expect([...l.sent.keys()]).toEqual(["thesis:2"])
-    expect(l.sent.get("thesis:2")).toEqual({ version: 3, state: "watching", name: "HPG" })
-  })
-
-  test("a tool result confirms too; notes and pointers are remembered once sent", () => {
-    const l = new SessionLedger("s1")
-    l.beginTurn(typed("x"), [])
-    l.add({ label: "[Memory · bài học · #7 · bản 1", sent: ["lesson:7", { version: 1 }] })
-    l.add({ label: "[Memory · nhắc] Luận điểm VNM (bản 2) chưa chèn", pointer: "thesis:5@2:a" })
-    l.add({ label: "[Memory · nhắc] Bài học #3 đã bị", notified: "lesson:3!deleted" })
-    l.confirm(
-      turnMessages(
-        "[Memory · nhắc] Luận điểm VNM (bản 2) chưa chèn ở lượt này\n[Memory · nhắc] Bài học #3 đã bị người dùng xoá",
-        "[Memory · bài học · #7 · bản 1 · ghi 01/11/2026]",
-      ),
-    )
-    expect(l.sent.has("lesson:7")).toBe(true)
-    expect([...l.pointers]).toEqual(["thesis:5@2:a"])
-    expect([...l.notified]).toEqual(["lesson:3!deleted"])
-  })
-
-  test("the next turn drops what an unconfirmed turn left (cut for context, stopped, failed)", () => {
-    const l = new SessionLedger("s1")
-    l.beginTurn(typed("Hòa Phát?"), [HPG])
-    l.add({ label: "LABEL-HPG", sent: ["thesis:2", { version: 3 }] })
-    l.beginTurn(typed("Hòa Phát?"), [HPG])
-    l.confirm(turnMessages("LABEL-HPG"))
-    expect(l.sent.size).toBe(0)
-  })
-
-  test("a turn of notifications only confirms at once, tool reads included (the core sends it no hooks)", () => {
-    const l = new SessionLedger("s1")
-    l.beginTurn({ text: "", noticeOnly: true }, [])
-    l.add({ label: "NOTE-1", notified: "lesson:3!deleted" })
-    l.confirmAll()
-    l.add({ label: "LABEL-7", sent: ["lesson:7", { version: 1 }] })
-    expect([...l.notified]).toEqual(["lesson:3!deleted"])
-    expect(l.sent.has("lesson:7")).toBe(true)
-    l.beginTurn(typed("tiếp"), [])
-    l.add({ label: "LABEL-8", sent: ["lesson:8", { version: 1 }] })
-    l.beginTurn(typed("tiếp nữa"), [])
-    expect(l.sent.has("lesson:8")).toBe(false)
-  })
 
   test("focus: subjects spotted this turn and in the two typed turns before, never carried further", () => {
     const l = new SessionLedger("s1")
     const focus = () => l.focus().map((f) => [f.subjectId, f.detected])
-    l.beginTurn(typed("Hòa Phát?"), [HPG])
+    l.beginTurn(typed("Hòa Phát?"), [HPG], 0)
     expect(focus()).toEqual([[HPG, true]])
-    l.confirm([])
-    l.beginTurn(typed("Điều kiện 2?"), [])
+    l.beginTurn(typed("Điều kiện 2?"), [], 2)
     expect(focus()).toEqual([[HPG, false]])
-    l.confirm([])
-    l.beginTurn(typed("Kiểm lại"), [])
+    l.beginTurn(typed("Kiểm lại"), [], 4)
     expect(focus()).toEqual([[HPG, false]])
-    l.confirm([])
-    l.beginTurn(typed("VCB?"), [VCB])
+    l.beginTurn(typed("VCB?"), [VCB], 6)
     expect(focus()).toEqual([[VCB, true]])
   })
 
   test("spotted this turn comes first, then the previous turn's, then the one before", () => {
     const l = new SessionLedger("s1")
-    l.beginTurn(typed("a"), [7])
-    l.confirm([])
-    l.beginTurn(typed("b"), [8, 7])
-    l.confirm([])
-    l.beginTurn(typed("c"), [9])
+    l.beginTurn(typed("a"), [7], 0)
+    l.beginTurn(typed("b"), [8, 7], 2)
+    l.beginTurn(typed("c"), [9], 4)
     expect(l.focus()).toEqual([
       { subjectId: 9, detected: true },
       { subjectId: 8, detected: false },
@@ -173,43 +114,30 @@ describe("session ledger", () => {
     ])
   })
 
-  test("the same words sent again after an unconfirmed turn replace that turn in the window", () => {
+  test("the same words again with no turn added to the history (dropped, then resent) replace that turn", () => {
     const l = new SessionLedger("s1")
-    l.beginTurn(typed("Hòa Phát?"), [HPG])
-    l.confirm([])
-    l.beginTurn(typed("Còn gì?"), [])
-    l.beginTurn(typed("Còn gì?"), [])
-    l.confirm([])
-    l.beginTurn(typed("Kiểm lại"), [])
+    l.beginTurn(typed("Hòa Phát?"), [HPG], 0)
+    l.beginTurn(typed("Còn gì?"), [], 2)
+    l.beginTurn(typed("Còn gì?"), [], 2)
+    l.beginTurn(typed("Kiểm lại"), [], 4)
     expect(l.focus().map((f) => f.subjectId)).toEqual([HPG])
   })
 
   test("a turn of notifications only does not move the window", () => {
     const l = new SessionLedger("s1")
-    l.beginTurn(typed("Hòa Phát?"), [HPG])
-    l.confirm([])
-    l.beginTurn({ text: "", noticeOnly: true }, [])
+    l.beginTurn(typed("Hòa Phát?"), [HPG], 0)
+    l.beginTurn({ text: "", noticeOnly: true }, [], 2)
     expect(l.focus()).toEqual([])
-    l.confirmAll()
-    l.beginTurn(typed("a"), [])
-    l.confirm([])
-    l.beginTurn(typed("b"), [])
+    l.beginTurn(typed("a"), [], 4)
+    l.beginTurn(typed("b"), [], 6)
     expect(l.focus().map((f) => f.subjectId)).toEqual([HPG])
   })
 
-  test("ledgers are per session; the latest one used is current; a confirmation reaches only its session", () => {
+  test("one window per session", () => {
     const all = new Ledgers()
-    const a = all.session("A")
-    a.beginTurn(typed("x"), [])
-    a.add({ label: "LABEL", sent: ["lesson:7", { version: 1 }] })
-    const b = all.session("B")
-    expect(all.current).toBe(b)
-    all.confirm("B", turnMessages("LABEL"))
-    expect(a.sent.size).toBe(0)
-    all.confirm("A", turnMessages("LABEL"))
-    expect(a.sent.size).toBe(1)
-    expect(all.session("A")).toBe(a)
-    expect(all.current).toBe(a)
+    all.session("A").beginTurn(typed("Hòa Phát?"), [HPG], 0)
+    expect(all.session("B").focus()).toEqual([])
+    expect(all.session("A").focus().map((f) => f.subjectId)).toEqual([HPG])
   })
 })
 
@@ -325,36 +253,29 @@ describe("index (Story 2)", () => {
 
 // ── The provider: blocks and notes over a chain of turns (Story 3, Story 4) ─────────────────────
 
-/** A notebook with its hooks, and a turn as the core runs it: recall, the reminder stored, turn-end. */
+/**
+ * A notebook and turns as the core runs them: the history masked, then recall gets it, and a turn that ended
+ * adds its user message (with the reminder as the agent loop builds it) and an answer to that history.
+ */
 function chain() {
   const other = nb.store()
   const ids = seedExample(other)
   const notebook = nb.notebook()
-  const hooks = new HookBus()
-  notebook.register(hooks)
+  const histories = new Map<string, ModelMessage[]>()
   const turn = async (query: string, o: { sessionId?: string; ended?: boolean } = {}) => {
     const sessionId = o.sessionId ?? "s1"
-    const items = (await notebook.recall(query, { sessionId })).map((i) => i.text)
-    const reminder = items.map((t) => `- ${t}`).join("\n")
+    // As the agent loop does first: blocks of items the store confirms deleted are masked in the history.
+    const masked = await redactHistory(histories.get(sessionId) ?? [], createRedactionCheck(nb.file()))
+    const history = masked.kept
+    const items = (await notebook.recall(query, { sessionId, history: masked.sent })).map((i) => i.text)
     if (o.ended !== false) {
-      await hooks.emit({
-        type: "turn-end",
-        sessionId,
-        messages: [
-          {
-            role: "user",
-            content: [
-              { type: "text", text: `<system-reminder>\n<memory_lien_quan>\n${reminder}\n</memory_lien_quan>\n</system-reminder>` },
-              { type: "text", text: query },
-            ],
-          },
-          { role: "assistant", content: "Trả lời." },
-        ],
-      })
+      const section = items.length > 0 ? [`<memory_lien_quan>\n${items.map((t) => `- ${t}`).join("\n")}\n</memory_lien_quan>`] : []
+      histories.set(sessionId, [...history, userMessage(query, section), { role: "assistant", content: "Trả lời." }])
     }
     return items
   }
-  return { other, ids, notebook, hooks, turn }
+  const set = (messages: ModelMessage[], sessionId = "s1") => histories.set(sessionId, messages)
+  return { other, ids, notebook, turn, history: (sessionId = "s1") => histories.get(sessionId) ?? [], set }
 }
 
 const HPG_V4 = { ...HPG_V3, text: "Hưởng lợi từ đầu tư công và giá thép" }
@@ -547,6 +468,160 @@ describe("notes about what changed (Story 4)", () => {
     expect(await turn("c", { ended: false })).toEqual([HPG_V4_NOTE])
     expect(await turn("d")).toEqual([HPG_V4_NOTE])
     expect(await turn("e")).toEqual([])
+  })
+})
+
+describe("what was sent is read from the history (a new provider knows it too)", () => {
+  const recallWith = async (history: ModelMessage[], query: string) =>
+    (await nb.notebook().recall(query, { sessionId: "s1", history })).map((i) => i.text)
+
+  test("blocks, notes and pointers already in the history are not sent again by a restarted app", async () => {
+    const { other, ids, turn, history } = chain()
+    const vnm = other.writer.createSubject({ kind: "ticker", alias: "VNM" }).id
+    other.writer.saveThesis(vnm, null, { text: "x".repeat(350), conditions: Array.from({ length: 8 }, (_, i) => `${i}`.repeat(160)) })
+    expect(await turn("Hòa Phát và VNM?")).toEqual([
+      "[Memory · nhắc] Luận điểm VNM (bản 1) dài hơn giới hạn tự chèn; đọc bằng memory_read.",
+      HPG_BLOCK_V3,
+    ])
+    await turn("a")
+    await turn("b")
+    other.writer.saveThesis(ids.hpg, 3, HPG_V4)
+    expect(await turn("c")).toEqual([HPG_V4_NOTE])
+    expect(await recallWith(history(), "Hòa Phát và VNM thì sao?")).toEqual([
+      expect.stringContaining("bản 4 · ghi 20/10/2026 · người dùng tự ghi · thay cho bản 3"),
+    ])
+    expect(await recallWith(history(), "Còn gì?")).toEqual([])
+  })
+
+  test("a block masked in the history brings one deletion note; the note in the history stops it", async () => {
+    const { other, turn, history, set } = chain()
+    await turn("x")
+    const read: ModelMessage[] = [
+      { role: "assistant", content: [{ type: "tool-call", toolCallId: "c1", toolName: "memory_read", input: { lesson: 7 } }] },
+      {
+        role: "tool",
+        content: [{ type: "tool-result", toolCallId: "c1", toolName: "memory_read", output: { type: "text", value: maskedLesson(7) } }],
+      },
+    ]
+    set([...history(), ...read])
+    other.writer.deleteLesson(7, 1)
+    const note = "[Memory · nhắc] Bài học #7 đã bị người dùng xoá; không dùng nội dung #7 phía trên nữa."
+    expect(await turn("Còn ACB?")).toEqual([note])
+    expect(await turn("Còn FPT?")).toEqual([])
+    expect(await recallWith(history(), "Còn VCB?")).toEqual([])
+  })
+
+  test("a lesson read by memory_read counts as sent: its new version is noted", async () => {
+    const { other, turn, history, set } = chain()
+    await turn("x")
+    const block = (await nb.notebook().tools()[0]!.execute({ lesson: 7 }, { signal: new AbortController().signal, callId: "c" })) as string
+    set([
+      ...history(),
+      { role: "assistant", content: [{ type: "tool-call", toolCallId: "c1", toolName: "memory_read", input: { lesson: 7 } }] },
+      { role: "tool", content: [{ type: "tool-result", toolCallId: "c1", toolName: "memory_read", output: { type: "text", value: block } }] },
+    ])
+    other.writer.reviseLesson(7, 1, { title: "Định giá ngân hàng", summary: "Dùng P/B, ROE và NIM" })
+    expect(await turn("Tiếp")).toEqual([
+      "[Memory · nhắc] Bài học #7 đã có bản 2; bản 1 phía trên đã cũ. Đọc bằng memory_read nếu cần.",
+    ])
+    expect(await turn("Tiếp nữa")).toEqual([])
+  })
+
+  test("the store error line is sent once per reason, read from the history", async () => {
+    const store = nb.store()
+    seedExample(store)
+    nb.raw().run("PRAGMA user_version = 99")
+    const first = await nb.notebook().recall("Hòa Phát?", { sessionId: "s1", history: [] })
+    const err = "[Memory · lỗi] Kho memory không mở được: kho do phiên bản OpenTrading mới hơn tạo."
+    expect(first.map((i) => i.text)).toEqual([err])
+    const history = [userMessage("Hòa Phát?", [`<memory_lien_quan>
+- ${err}
+</memory_lien_quan>`]), { role: "assistant", content: "Trả lời." }] as ModelMessage[]
+    expect(memoryLines(history).lines).toEqual([{ kind: "error", reason: "kho do phiên bản OpenTrading mới hơn tạo" }])
+    expect(await nb.notebook().recall("Tiếp", { sessionId: "s1", history })).toEqual([])
+  })
+})
+
+describe("code review fixes, round 3", () => {
+  test("two notes in one turn: the next turn repeats neither", async () => {
+    const { other, ids, turn } = chain()
+    await turn("So sánh HSG với HPG")
+    other.writer.setThesisState(ids.hpg, 3, "closed")
+    other.writer.setThesisState(ids.hsg, 1, "watching")
+    // Both notes go in one item, the way pack.ts puts every note line together.
+    const t = await turn("a")
+    expect(t.length).toBe(1)
+    expect(t[0]).toContain("Luận điểm HPG (bản 3) đã chuyển sang trạng thái")
+    expect(t[0]).toContain("Luận điểm HSG (bản 1) đã chuyển sang trạng thái")
+    expect(await turn("b")).toEqual([])
+  })
+
+  test("a thesis deleted and written again, then named: the new block, no deletion note", async () => {
+    const { other, turn } = chain()
+    const fpt = other.writer.createSubject({ kind: "ticker", alias: "FPT" }).id
+    other.writer.saveThesis(fpt, null, { text: "FPT-BAN-1", conditions: [] })
+    expect((await turn("FPT?")).join("")).toContain("FPT-BAN-1")
+    other.writer.deleteThesis(fpt, 1)
+    other.writer.saveThesis(fpt, null, { text: "FPT-BAN-2", conditions: [] })
+    const items = (await turn("FPT thế nào?")).join("\n")
+    expect(items).toContain("FPT-BAN-2")
+    expect(items).not.toContain("đã bị người dùng xoá")
+  })
+
+  test("the state the model saw last is the later of the block and the state note", async () => {
+    const { other, ids, turn, history, set } = chain()
+    await turn("Hòa Phát?")
+    other.writer.setThesisState(ids.hpg, 3, "refuted")
+    expect(await turn("a")).toEqual(["[Memory · nhắc] Luận điểm HPG (bản 3) đã chuyển sang trạng thái: đã bị bác bỏ."])
+    other.writer.setThesisState(ids.hpg, 3, "watching")
+    // A later memory_read shows the block with the state as it is now: watching.
+    const block = (await nb.notebook().tools()[0]!.execute({ subject: "HPG" }, { signal: new AbortController().signal, callId: "c" })) as string
+    set([
+      ...history(),
+      { role: "assistant", content: [{ type: "tool-call", toolCallId: "c9", toolName: "memory_read", input: { subject: "HPG" } }] },
+      { role: "tool", content: [{ type: "tool-result", toolCallId: "c9", toolName: "memory_read", output: { type: "text", value: block } }] },
+    ])
+    expect(await turn("b")).toEqual([])
+  })
+})
+
+describe("code review fixes", () => {
+  test("a state that changes back and forth is noted each time it differs from what the model saw last", async () => {
+    const { other, ids, turn } = chain()
+    await turn("Hòa Phát?")
+    other.writer.setThesisState(ids.hpg, 3, "refuted")
+    expect(await turn("a")).toEqual(["[Memory · nhắc] Luận điểm HPG (bản 3) đã chuyển sang trạng thái: đã bị bác bỏ."])
+    other.writer.setThesisState(ids.hpg, 3, "watching")
+    expect(await turn("b")).toEqual(["[Memory · nhắc] Luận điểm HPG (bản 3) đã chuyển sang trạng thái: đang theo dõi."])
+    other.writer.setThesisState(ids.hpg, 3, "refuted")
+    expect(await turn("c")).toEqual(["[Memory · nhắc] Luận điểm HPG (bản 3) đã chuyển sang trạng thái: đã bị bác bỏ."])
+    expect(await turn("d")).toEqual([])
+  })
+
+  test("a store error told before a turn that read fine is told again", async () => {
+    const store = nb.store()
+    seedExample(store)
+    const err = "[Memory · lỗi] Kho memory không mở được: kho do phiên bản OpenTrading mới hơn tạo."
+    const reminder = (items: string[]) => [`<memory_lien_quan>\n${items.map((t) => `- ${t}`).join("\n")}\n</memory_lien_quan>`]
+    const history = [
+      userMessage("Hòa Phát?", reminder([err])),
+      { role: "assistant", content: "Trả lời." },
+      userMessage("Hòa Phát nữa?", reminder([HPG_BLOCK_V3])),
+      { role: "assistant", content: "Trả lời." },
+    ] as ModelMessage[]
+    nb.raw().run("PRAGMA user_version = 99")
+    expect((await nb.notebook().recall("Tiếp", { sessionId: "s1", history })).map((i) => i.text)).toEqual([err])
+  })
+
+  test("a thesis sent under a code since retired: not announced as deleted, not injected again under the new code", async () => {
+    const { other, ids, turn } = chain()
+    expect(await turn("Hòa Phát?")).toEqual([HPG_BLOCK_V3])
+    other.writer.addAlias(ids.hpg, "HPX")
+    other.writer.retireAlias(ids.hpg, "HPG")
+    expect(await turn("Còn ACB?")).toEqual([])
+    // Typed words still match the codes in use only: HPX is found, HPG no longer is.
+    expect(await turn("HPX thế nào?")).toEqual([])
+    expect(await turn("HPG thì sao?", { sessionId: "s2" })).toEqual([])
   })
 })
 

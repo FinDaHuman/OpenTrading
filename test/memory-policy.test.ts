@@ -63,7 +63,7 @@ const EXPECTED: Record<string, readonly string[]> = {
     "createdAt",
   ],
   // Spotting subjects in what the user typed: aliases are compared, never put in a prompt.
-  "main_agent/match/thesis": ["subjectId", "aliases", "uppercaseOnly"],
+  "main_agent/match/thesis": ["subjectId", "aliases", "uppercaseOnly", "pastAliases"],
   "main_agent/propose/constraint": [],
   "main_agent/propose/style": [],
   "main_agent/propose/lesson": [],
@@ -223,7 +223,7 @@ test("deleted entries never come out of the gate", () => {
   expect(everything).not.toContain("Định giá ngân hàng")
 })
 
-test("matching sees the aliases in use of subjects with a thesis, and the uppercase-only flag", () => {
+test("matching sees the aliases in use of subjects with a thesis, the uppercase-only flag, and retired aliases apart", () => {
   const { store, hpg } = oneOfEach()
   const w = store.writer
   w.addAlias(hpg, "Hòa Phát")
@@ -234,8 +234,8 @@ test("matching sees the aliases in use of subjects with a thesis, and the upperc
   // A subject without a thesis is never looked for: nothing would be injected.
   w.createSubject({ kind: "ticker", alias: "VCB" })
   expect(store.gate.read("main_agent", "match").map((i) => i.fields)).toEqual([
-    { subjectId: hpg, aliases: ["HPG", "Hòa Phát"], uppercaseOnly: false },
-    { subjectId: tin, aliases: ["TIN"], uppercaseOnly: true },
+    { subjectId: hpg, aliases: ["HPG", "Hòa Phát"], uppercaseOnly: false, pastAliases: ["HPG cũ"] },
+    { subjectId: tin, aliases: ["TIN"], uppercaseOnly: true, pastAliases: [] },
   ])
 })
 

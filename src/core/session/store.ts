@@ -7,6 +7,9 @@ import type { ModelMessage } from "ai"
 import { samePathKey } from "../fs/path-safety"
 import { dataDir } from "../paths"
 import type { ChartData } from "../tools/chart/data"
+import { memoryLines } from "../memory/notebook/history-blocks"
+import type { RedactionCheck } from "../memory/redaction/check"
+import { applyCheck, applyRedactLines, mergeItems, type Redaction, type RedactItem } from "../memory/redaction/redact"
 
 /**
  * Session transcripts as append-only JSONL, one file per session (the Claude Code / Codex
@@ -36,6 +39,8 @@ export type SessionEntry =
   | {
       type: "turn_end"
       ts: string
+      /** The turn's number, given when it was queued (a turn written late keeps it). Absent before format 006. */
+      turn?: number
       provider?: string
       model?: string
       contextTokens?: number
@@ -60,6 +65,12 @@ export type SessionEntry =
   | { type: "chart"; ts: string; callId: string; data: ChartData }
   /** A user turn's text that the harness wrote (an MCP prompt's template): not the user's words for auto mode. */
   | { type: "harness"; ts: string; text: string }
+  /**
+   * Memory items the user deleted: every block of these items and versions written before this line is
+   * masked when the file is read. Appended, never a change to an earlier line; holds no memory content.
+   * A build that does not know the type skips it (and does not mask).
+   */
+  | { type: "redact"; ts: string; items: RedactItem[] }
 
 export interface SessionSummary {
   id: string
@@ -170,6 +181,8 @@ export interface SaveReceipt {
   pending: number[]
   /** Compactions still waiting. */
   pendingCompactions: number
+  /** Redact lines still waiting. */
+  pendingRedactions: number
   /** The index line could not be written; retried on the next write. */
   indexPending: boolean
   /**
@@ -202,6 +215,7 @@ export interface TurnInfo {
 type Part =
   | { kind: "turn"; turn: number; ts: string; firstText: string; info: SessionInfo & TurnInfo; lines: SessionEntry[] }
   | { kind: "compact"; lines: SessionEntry[] }
+  | { kind: "redact"; lines: SessionEntry[] }
 
 /** A failed append could not be cut back: the file may end in a partial write we cannot remove. */
 class StoppedError extends Error {
@@ -300,8 +314,10 @@ export class Session {
     public file: string | undefined,
     summary?: SessionSummary,
     createdAt = new Date(),
+    lastTurn?: number,
   ) {
-    this.turns = summary?.turns ?? 0
+    // The file's count wins over a lagging index; the index wins when the file's turn_end lines are unreadable.
+    this.turns = Math.max(lastTurn ?? 0, summary?.turns ?? 0)
     this.queuedTurns = this.turns
     this.title = summary?.title ?? ""
     // The folder (YYYY/MM) must agree with the id's timestamp, so both come from one clock.
@@ -312,9 +328,12 @@ export class Session {
     return new Session(newSessionId(now), undefined, undefined, now)
   }
 
-  /** Keep appending to an existing session file after resume. */
-  static continue(summary: SessionSummary) {
-    return new Session(summary.id, summary.file, summary)
+  /**
+   * Keep appending to an existing session file after resume. `lastTurn` is the file's own count
+   * (LoadedSession.lastTurn): the index line can lag behind it when its write failed.
+   */
+  static continue(summary: SessionSummary, lastTurn?: number) {
+    return new Session(summary.id, summary.file, summary, undefined, lastTurn)
   }
 
   /** Replace the fallback title with a generated one, written to the index right away. */
@@ -367,6 +386,18 @@ export class Session {
     return this.drain()
   }
 
+  /**
+   * Record that these memory items were deleted. Queued after whatever waits, so the line always
+   * follows the turns whose blocks it masks, a turn still waiting to be written included.
+   */
+  appendRedaction(items: RedactItem[]): Promise<SaveReceipt> {
+    if (items.length === 0 || (!this.file && this.queuedTurns === 0)) return Promise.resolve(this.receipt([]))
+    const line: SessionEntry = { type: "redact", ts: new Date().toISOString(), items }
+    // A stopped session never writes again: count the line, keep nothing of it.
+    this.queue.push({ kind: "redact", lines: this.stopped ? [] : [line] })
+    return this.drain()
+  }
+
   /** Writes whatever is waiting; resolves when the attempt is over. */
   flush(): Promise<SaveReceipt> {
     return this.drain()
@@ -380,9 +411,11 @@ export class Session {
     for (const message of stripImages(messages)) lines.push({ type: "message", ts, message })
     for (const chart of this.pendingCharts.splice(0)) lines.push({ type: "chart", ts, ...chart })
     for (const text of this.pendingHarness.splice(0)) lines.push({ type: "harness", ts, text })
+    const turn = ++this.queuedTurns
     lines.push({
       type: "turn_end",
       ts,
+      turn,
       provider: info.provider,
       model: info.model,
       contextTokens: info.contextTokens,
@@ -393,7 +426,7 @@ export class Session {
     })
     const firstText = messages.map(userText).find((t) => t.trim()) ?? ""
     // A stopped session never writes again: keep the turn's number for the receipt, not its content.
-    this.queue.push({ kind: "turn", turn: ++this.queuedTurns, ts, firstText, info, lines: this.stopped ? [] : lines })
+    this.queue.push({ kind: "turn", turn, ts, firstText, info, lines: this.stopped ? [] : lines })
     return this.drain()
   }
 
@@ -410,12 +443,14 @@ export class Session {
 
   private receipt(saved: number[], error?: Error): SaveReceipt {
     const pending = this.queue.flatMap((p) => (p.kind === "turn" ? [p.turn] : []))
-    const pendingCompactions = this.queue.length - pending.length
+    // Counted by kind: a redact line waiting is not a compaction waiting.
+    const count = (kind: Part["kind"]) => this.queue.filter((p) => p.kind === kind).length
     const failing = this.stopped || this.indexWaiting || this.queue.length > 0
     return {
       saved,
       pending,
-      pendingCompactions,
+      pendingCompactions: count("compact"),
+      pendingRedactions: count("redact"),
       indexPending: this.indexWaiting,
       stopped: this.stopped,
       error: failing ? (error ?? this.lastError) : undefined,
@@ -555,19 +590,45 @@ export interface LoadedSession {
   contextTokens?: number
   /** Tool calls that had no result and were closed with an "interrupted" result. */
   patched: number
+  /** The last turn's number from the file's own turn_end lines (the index line may lag behind). */
+  lastTurn: number
+  redaction: {
+    /** Redact lines in the file that were applied. */
+    fromFile: number
+    /** Items the store confirmed deleted that no line masked yet: the caller may record them (resume does). */
+    confirmed: RedactItem[]
+    /** Blocks held in `display` (no store, unreadable, content differs); `messages` keeps them. */
+    temporary?: Redaction["temporary"]
+  }
 }
 
-/** Read a session back. Unreadable lines (e.g. a write cut by a crash) are skipped. */
-export async function loadSession(id: string): Promise<LoadedSession> {
+const isRedactItem = (value: unknown): value is RedactItem => {
+  const i = value as Record<string, unknown> | null
+  if (!i || typeof i !== "object") return false
+  const versions = Array.isArray(i.versions) && i.versions.length > 0 && i.versions.every(Number.isInteger)
+  if (i.kind === "lesson") return versions && Number.isInteger(i.id)
+  return i.kind === "thesis" && versions && typeof i.name === "string"
+}
+
+/**
+ * Read a session back. Unreadable lines (e.g. a write cut by a crash) are skipped. Each redact line
+ * masks the blocks before it, where it stands (a compaction's history counts from the compact line).
+ * With `check`, the store is asked once about the blocks left: blocks of items it confirms deleted are
+ * masked in both lists; blocks it cannot vouch for are held in `display` only, since `messages` goes back
+ * into a live session whose every request is checked again. Reading never writes.
+ */
+export async function loadSession(id: string, opts: { check?: RedactionCheck } = {}): Promise<LoadedSession> {
   const summary = (await listSessions()).find((s) => s.id === id || s.id.startsWith(id))
   if (!summary) throw new Error(`Không tìm thấy phiên "${id}". Gõ /sessions để xem danh sách.`)
   const text = await readFile(path.join(sessionsDir(), summary.file), "utf8")
   let meta: LoadedSession["meta"]
   let raw: ModelMessage[] = []
-  const shown: ModelMessage[] = []
+  let shown: ModelMessage[] = []
   let contextTokens: number | undefined
   const charts = new Map<string, ChartData>()
   const harness: string[] = []
+  let lastTurn = 0
+  let fromFile = 0
   for (const line of text.split("\n")) {
     if (!line.trim()) continue
     try {
@@ -584,15 +645,38 @@ export async function loadSession(id: string): Promise<LoadedSession> {
         // The marker and summary (absent when only tool results were pruned).
         if (entry.messages[0] && isCompactMarker(entry.messages[0])) shown.push(...entry.messages.slice(0, 2))
         contextTokens = entry.after
-      } else if (entry.type === "turn_end" && entry.contextTokens !== undefined) contextTokens = entry.contextTokens
-      else if (entry.type === "chart" && entry.callId && entry.data) charts.set(entry.callId, entry.data)
+      } else if (entry.type === "turn_end") {
+        // A line with its number says it; an older one is the previous number plus one.
+        lastTurn = Number.isInteger(entry.turn) && entry.turn! > 0 ? entry.turn! : lastTurn + 1
+        if (entry.contextTokens !== undefined) contextTokens = entry.contextTokens
+      } else if (entry.type === "chart" && entry.callId && entry.data) charts.set(entry.callId, entry.data)
       else if (entry.type === "harness" && typeof entry.text === "string") harness.push(entry.text)
+      else if (entry.type === "redact" && Array.isArray(entry.items) && entry.items.length > 0 && entry.items.every(isRedactItem)) {
+        raw = applyRedactLines(raw, entry.items)
+        shown = applyRedactLines(shown, entry.items)
+        fromFile++
+      }
     } catch {
       // skip
     }
   }
+  const redaction: LoadedSession["redaction"] = { fromFile, confirmed: [] }
+  const rawBlocks = opts.check ? memoryLines(raw).blocks : []
+  const shownBlocks = opts.check ? memoryLines(shown).blocks : []
+  if (opts.check && rawBlocks.length + shownBlocks.length > 0) {
+    // One look at the store for both lists; each list is masked with its own block objects.
+    const result = await opts.check.check([...rawBlocks, ...shownBlocks])
+    const model = applyCheck(raw, rawBlocks, result)
+    const view = applyCheck(shown, shownBlocks, result)
+    raw = model.kept
+    shown = view.sent
+    redaction.confirmed = mergeItems(model.record, view.record)
+    const temporary = model.temporary ?? view.temporary
+    if (temporary) redaction.temporary = temporary
+  }
   const { messages, patched } = closeDanglingToolCalls(raw)
-  return { summary, meta, messages, display: closeDanglingToolCalls(shown).messages, contextTokens, patched, charts, harness }
+  const display = closeDanglingToolCalls(shown).messages
+  return { summary, meta, messages, display, contextTokens, patched, charts, harness, lastTurn, redaction }
 }
 
 /**

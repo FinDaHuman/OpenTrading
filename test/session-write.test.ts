@@ -239,7 +239,7 @@ test("R23: another writer's line that landed between our size check and our fail
 const tui = await import("../src/tui/session")
 const { ToolRegistry } = await import("../src/core/tools/registry")
 type Receipt = import("../src/core/session/store").SaveReceipt
-const receipt = (r: Partial<Receipt>): Receipt => ({ saved: [], pending: [], pendingCompactions: 0, indexPending: false, stopped: false, ...r })
+const receipt = (r: Partial<Receipt>): Receipt => ({ saved: [], pending: [], pendingCompactions: 0, pendingRedactions: 0, indexPending: false, stopped: false, ...r })
 const texts = (lines: { text?: string }[]) => lines.map((l) => l.text)
 
 test("the TUI words each receipt: pending, caught up (once), stopped (once), index; another session by name", () => {

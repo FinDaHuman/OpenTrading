@@ -53,6 +53,7 @@ export function memoryGate(ctx: StoreContext) {
     const needDisplay = want("display")
     const needSector = want("sectorDisplay")
     const needAliases = want("aliases")
+    const needPast = want("pastAliases")
     const needApplies = want("appliesToDisplay")
     switch (kind) {
       case "constraint":
@@ -71,6 +72,7 @@ export function memoryGate(ctx: StoreContext) {
               sectorId: sector_id ?? undefined,
               sectorDisplay: sector_id === null || !needSector ? undefined : displayOf(db, sector_id),
               aliases: needAliases ? aliasesInUse(db, id) : undefined,
+              pastAliases: needPast ? retiredAliases(db, id) : undefined,
               uppercaseOnly: uppercase_only === 1,
               version: v?.version,
               text: v?.text,
@@ -134,6 +136,14 @@ function thesisSubjects(db: Database, filter: GateFilter) {
     .all() as { id: number; sector_id: number | null; thesis_state: string; uppercase_only: number }[]
   return filter.subjectIds ? rows.filter((r) => filter.subjectIds!.includes(r.id)) : rows
 }
+
+/** Retired aliases, oldest first: a subject's old codes, for blocks sent under them. */
+const retiredAliases = (db: Database, subjectId: number) =>
+  (
+    db.query("SELECT alias FROM subject_aliases WHERE subject_id = ? AND retired_at IS NOT NULL ORDER BY id").all(
+      subjectId,
+    ) as { alias: string }[]
+  ).map((a) => a.alias)
 
 /** Aliases in use, oldest first; a retired code never matches. */
 const aliasesInUse = (db: Database, subjectId: number) =>

@@ -76,9 +76,9 @@ const STORE_REASON: Record<string, string> = {
 }
 
 /** A disk error worth a retry, or the store busy with another window's write. */
-const isPassing = (error: unknown) => (error instanceof MemoryStoreError ? error.kind === "busy" : isPassingCode(error))
+export const isPassing = (error: unknown) => (error instanceof MemoryStoreError ? error.kind === "busy" : isPassingCode(error))
 
-function failureOf(file: string, error: unknown, deadlineMs: number): SourceFailure {
+export function failureOf(file: string, error: unknown, deadlineMs: number): SourceFailure {
   if (error instanceof MemoryStoreError) {
     return {
       file,

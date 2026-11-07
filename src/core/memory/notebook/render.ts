@@ -13,7 +13,8 @@ export const THESIS_STATE_LABEL: Readonly<Record<string, string>> = {
   refuted: "đã bị bác bỏ",
   closed: "đã đóng",
 }
-const stateLabel = (state: string) => THESIS_STATE_LABEL[state] ?? escapeMemoryLine(state)
+/** A thesis state as blocks and notes print it. */
+export const stateLabel = (state: string) => THESIS_STATE_LABEL[state] ?? escapeMemoryLine(state)
 
 // Vietnam has no daylight saving time, so a fixed offset gives the same day on every machine, with no
 // dependence on the time zone data a runtime ships.
@@ -184,4 +185,34 @@ export const reminders = {
   tooLong: (name: string, version: number) =>
     `${NOTE} Luận điểm ${escapeMemoryLine(name)} (bản ${version}) dài hơn giới hạn tự chèn; đọc bằng memory_read.`,
   storeError: (reason: string) => `[Memory · lỗi] Kho memory không mở được: ${reason}.`,
+}
+
+/*
+ * What stands in for a block in the history. `name` is the thesis name exactly as the block's label
+ * printed it (already escaped), since the mask is built from the history, never from the store.
+ */
+
+/** A block of an item the store confirmed deleted or absent: replaces it in the history for good. */
+export const maskedLesson = (id: number) => `[Memory · bài học #${id} đã bị người dùng xoá]`
+export const maskedThesis = (name: string) => `[Memory · luận điểm ${name} đã bị người dùng xoá]`
+
+/**
+ * A block that could not be checked against the store (no store, unreadable, or its content differs from
+ * the stored version): masked only in what is sent, never in the history. It does not say "deleted",
+ * which nothing proved.
+ */
+export const heldLesson = (id: number, version: number) =>
+  `[Memory · bài học #${id} · bản ${version} tạm che: chưa đối chiếu được với kho]`
+export const heldThesis = (name: string, version: number) =>
+  `[Memory · luận điểm ${name} · bản ${version} tạm che: chưa đối chiếu được với kho]`
+
+/**
+ * memory_read's answer when the very version asked for is already in what the model sees at this step.
+ * It points at the block by its label, not by turn: the model is never shown turn numbers.
+ */
+export const alreadyShown = {
+  lesson: (id: number, version: number) =>
+    `Bài học #${id} bản ${version} đã có phía trên trong hội thoại, ở khối có nhãn [Memory · bài học · #${id} · bản ${version} · …]; nội dung không đổi.`,
+  thesis: (name: string, version: number) =>
+    `Luận điểm ${name} bản ${version} đã có phía trên trong hội thoại, ở khối có nhãn [Memory · luận điểm · ${name} · bản ${version} · …]; nội dung không đổi.`,
 }

@@ -8,6 +8,7 @@ import { askUserTool } from "./tools/builtin/ask-user"
 import { PermissionGate } from "./permission"
 import type { Waiver } from "./memory/binding/bind"
 import { createConstraintReader, type ConstraintReader } from "./memory/binding/constraints"
+import { createRedactionCheck, type RedactionCheck } from "./memory/redaction/check"
 import { FileMemory } from "./memory/file-memory"
 import { openNotebook } from "./memory/notebook/lifecycle"
 import { NoopMemory, type MemoryProvider } from "./memory/types"
@@ -72,6 +73,11 @@ export interface Runtime {
    * whatever `memory` is. It holds no connection between reads, so nothing to close on exit or switch.
    */
   constraints: ConstraintReader
+  /**
+   * Checks memory blocks in a session's history against <home>/memory.db (read-only, no connection kept),
+   * whatever `memory` is: the main agent's turns, resume, /export and the session history tools mask with it.
+   */
+  redaction: RedactionCheck
   /** The waiver of the main turn now running (set by the UI per turn, like deskOptIn). */
   turnWaiver?: Waiver
   /** Agent types loaded by setAgents (desk agents resolve their type here). */
@@ -162,7 +168,8 @@ export function initRuntime(opts: {
   registry.register(chartRenderTool())
   registry.register(chartCompareTool())
   registry.register(chartDepthTool())
-  for (const tool of sessionHistoryTools()) registry.register(tool)
+  const redaction = createRedactionCheck(path.join(home, "memory.db"))
+  for (const tool of sessionHistoryTools({ redaction })) registry.register(tool)
   for (const tool of localWatchlistTools(home)) registry.register(tool)
   registry.register(webFetchTool())
   registry.register(webSearchTool())
@@ -237,7 +244,7 @@ export function initRuntime(opts: {
     waiver: () => runtime.turnWaiver,
   })
   const deskApprovals = new DeskApprovals()
-  const runtime: Runtime = { registry, permissions, questions, mcp, hooks: new HookBus(), memory: new NoopMemory(), constraints, subagents, desk, deskApprovals, agents: [], home, workspace, files, history, auto }
+  const runtime: Runtime = { registry, permissions, questions, mcp, hooks: new HookBus(), memory: new NoopMemory(), constraints, redaction, subagents, desk, deskApprovals, agents: [], home, workspace, files, history, auto }
   registry.register(deskRunTool({ engine: desk, approvals: deskApprovals, playbooks: () => PLAYBOOKS, optIn: () => runtime.deskOptIn, mode: () => permissions.mode }))
   switchMemory(runtime, opts.memory ?? new NoopMemory())
   return runtime

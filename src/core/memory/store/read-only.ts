@@ -3,6 +3,7 @@ import { existsSync } from "node:fs"
 import { MemoryStoreError, openError } from "./errors"
 import { memoryGate } from "./gate"
 import { createStoreContext, type MemoryGate } from "./open"
+import { readPresence, type PresenceRef, type PresenceVersion } from "./presence"
 import { APPLICATION_ID, SCHEMA_VERSION } from "./schema"
 
 /**
@@ -18,7 +19,13 @@ export type ReadOnlyStore =
   | { state: "missing" }
   /** A file with no schema yet (a first open that stopped before building it). */
   | { state: "empty" }
-  | { state: "open"; gate: MemoryGate; close(): void }
+  | {
+      state: "open"
+      gate: MemoryGate
+      /** For the redaction check only (presence.ts); not the policy-checked path. */
+      presence(refs: readonly PresenceRef[]): PresenceVersion[]
+      close(): void
+    }
 
 /** Test seam (spyOn): the look for the file before SQLite opens it. */
 export const readOnlyDisk = {
@@ -79,6 +86,7 @@ export function openStoreReadOnly(file: string, opts: { busyTimeoutMs?: number }
   return Object.freeze({
     state: "open" as const,
     gate: Object.freeze(memoryGate(ctx)),
+    presence: (refs: readonly PresenceRef[]) => ctx.read(() => readPresence(conn, refs)),
     close() {
       if (closed) return
       closed = true

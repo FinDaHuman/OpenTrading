@@ -76,8 +76,9 @@ export const MEMORY_POLICY: readonly PolicyRule[] = Object.freeze([
   // can point to the sector's own thesis; its detail only on request.
   rule("main_agent", "block", "thesis", THESIS_BLOCK),
   // Which subjects the user named: the aliases in use of subjects that have a thesis (nothing else would be
-  // injected). Compared only, never rendered into a prompt.
-  rule("main_agent", "match", "thesis", ["subjectId", "aliases", "uppercaseOnly"]),
+  // injected). Retired aliases come apart: they only tell which subject a block already in the history (sent
+  // under an old code) belongs to, and never match what the user types. Compared only, never rendered.
+  rule("main_agent", "match", "thesis", ["subjectId", "aliases", "uppercaseOnly", "pastAliases"]),
   rule("main_agent", "memory_read", "constraint", CONSTRAINT),
   rule("main_agent", "memory_read", "style", STYLE),
   rule("main_agent", "memory_read", "thesis", [...THESIS_BLOCK, "detail"]),

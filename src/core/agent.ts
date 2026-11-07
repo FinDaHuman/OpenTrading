@@ -20,6 +20,9 @@ import type { AgentEvent } from "./events"
 import type { Ablations } from "./ablation"
 import { bindLenient, bindTurn, checkFits, type Bound, type Waiver } from "./memory/binding/bind"
 import type { ConstraintReader } from "./memory/binding/constraints"
+import type { RedactionCheck } from "./memory/redaction/check"
+import { REMINDER_CAP_MARK, REMINDER_TAG } from "./reminder-tag"
+import { redactHistory } from "./memory/redaction/redact"
 import { assemble, type Assembled } from "./prompt/assemble"
 import { estimateTokens, tierOf, type Tier } from "./prompt/budget"
 import type { ClockSnapshot } from "./prompt/market-clock"
@@ -140,8 +143,7 @@ export function nudgeAfterTools(target: TargetLike | undefined): boolean {
   return NUDGE_NPM.has(npm) && !(npm === "@ai-sdk/openai" && api)
 }
 
-/** Reminders ride on the user message inside this tag; UIs hide it, history keeps it. */
-export const REMINDER_TAG = "nhac_nho"
+export { REMINDER_TAG }
 
 export interface RunOptions {
   history: ModelMessage[]
@@ -201,6 +203,12 @@ export interface RunOptions {
   constraints?: ConstraintReader
   /** The user's choice for this turn: run without the sources that failed to read. Only the UI sets it. */
   waive?: Waiver
+  /**
+   * Checks the history's memory blocks against memory.db at the start of a main-agent turn: blocks of
+   * deleted items are masked (reported in a memory-redaction event), blocks it cannot vouch for are held
+   * in what is sent. Undefined (sub-agents, evals): the history goes as it is.
+   */
+  redaction?: RedactionCheck
   /** What an eval switched off (ablation.ts). */
   disabled?: Ablations
 }
@@ -775,7 +783,7 @@ interface TurnExtras {
 }
 
 const cap = (text: string | undefined, max: number) =>
-  text && text.length > max ? text.slice(0, max) + "\n[… đã cắt bớt]" : text
+  text && text.length > max ? text.slice(0, max) + "\n" + REMINDER_CAP_MARK : text
 
 /** Any of these sent: the `<quyen_tep>` reminder (workspace, temp folder, mode) rides along. */
 const FILE_TOOLS = ["read_file", "write_file", "shell"]
@@ -1019,6 +1027,15 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
   opts = { ...opts, target: target0 }
   // Never cut the constraints to fit: a model too small for them whole gets no request.
   checkFits(bound, role, target0)
+  // After the binding, so a held turn masks and says nothing. The turn already running when an item is
+  // deleted is left as it is: every request of this turn (stop gate reruns included) uses this one view.
+  if (opts.redaction) {
+    const masked = await redactHistory(opts.history ?? [], opts.redaction)
+    if (masked.record.length > 0 || masked.temporary) {
+      yield { type: "memory-redaction", kept: masked.kept, record: masked.record, temporary: masked.temporary }
+    }
+    opts = { ...opts, history: masked.sent }
+  }
   // The auto-mode classifier reads the user's words (or, for a subagent, its task as the main
   // agent's words), never the answers.
   opts.registry.gate?.auto?.log.turn(opts.input, { agent: opts.role === "subagent" ? opts.registry.origin : undefined, note: NOTICE_NOTE })
@@ -1036,7 +1053,7 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
     extras.hookContext = hooked.context
   }
   // Memory relevant to this message (active items only; the provider filters pending ones).
-  const recalled = (await opts.memory?.recall?.(opts.input, { sessionId }).catch(() => []))?.slice(0, MEMORY_RECALL_MAX_ITEMS) ?? []
+  const recalled = (await opts.memory?.recall?.(opts.input, { sessionId, history: opts.history ?? [] }).catch(() => []))?.slice(0, MEMORY_RECALL_MAX_ITEMS) ?? []
   if (recalled.length > 0) {
     extras.recalled = cap(recalled.map((m) => `- ${m.text}`).join("\n"), MEMORY_RECALL_MAX_CHARS)
     // Never invisible (the lesson from Cursor's memories): say what was used.

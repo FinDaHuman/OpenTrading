@@ -7,6 +7,17 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ### Added
 
+- Memory blocks are tracked and masked through the session history (`src/core/memory/notebook/history-blocks.ts`,
+  `src/core/memory/redaction/`). The notebook decides what to inject from the history each turn is sent with
+  (`MemoryContext.history`), not from RAM, so a restart, a resumed session or a dropped turn never repeats or
+  misses a block. Deleting a thesis or lesson masks its blocks in the open conversation, on resume, in
+  `/export` and in `session_get`, and appends a `redact` line to the session file; no saved line is changed.
+  A line is written only when `memory.db` is readable and confirms the item deleted; a missing or unreadable
+  store, or a block whose content differs from the store, is masked in what is sent only, with a notice.
+  `turn_end` lines carry the turn number, and resume counts on from the file. `memory_read` answers with one
+  sentence pointing at the block's label when that version is in view (`ToolContext.messages`). Delete
+  notices say "deleted from the app" and that the copy sent to the provider cannot be recalled.
+
 - Memory v5.1 store (`src/core/memory/store/`), not wired into the app yet: one SQLite file opened
   from an explicit path; schema version 1 with step-by-step migrations; a store from a newer build,
   another program's file or a damaged file is refused and left untouched. Versioned constraints and

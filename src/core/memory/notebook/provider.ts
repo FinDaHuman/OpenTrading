@@ -1,3 +1,4 @@
+import type { ModelMessage } from "ai"
 import type { HookBus } from "../../hooks"
 import { promptFile } from "../../prompt/assemble"
 import type { ToolDef } from "../../tools/types"
@@ -5,22 +6,24 @@ import type { MemoryStoreError } from "../store/errors"
 import type { MemoryGate } from "../store/open"
 import type { MemoryContext, MemoryItem, MemoryProvider } from "../types"
 import { escapeMemoryLine } from "./escape"
+import { memoryLines, type HistoryBlock } from "./history-blocks"
 import { rankLessons } from "./lesson-search"
 import { indexCharLimit, packRecall, type PackBlock, type PackLine } from "./pack"
 import {
-  labelOf,
+  alreadyShown,
   reminders,
   renderIndex,
   renderInstructions,
   renderLessonBlock,
   renderThesisBlock,
+  stateLabel,
   type ConstraintLine,
   type LessonBlockData,
   type IndexLesson,
   type IndexThesis,
   type ThesisBlockData,
 } from "./render"
-import { Ledgers, type Pending, type SessionLedger } from "./session-ledger"
+import { Ledgers } from "./session-ledger"
 import { memoryReadTool, type NotebookReads } from "./read-tool"
 import { detectSubjects, foldName, typedText, type MatchEntry } from "./topics"
 
@@ -55,6 +58,8 @@ interface Snapshot {
   styles: ConstraintLine[]
   index?: string
   match: MatchEntry[]
+  /** Retired aliases by subject, only to tell which subject a block sent under an old code belongs to. */
+  past: { subjectId: number; aliases: string[] }[]
 }
 
 type Fields = Readonly<Record<string, unknown>>
@@ -65,6 +70,8 @@ function snapshot(gate: MemoryGate): Snapshot {
   const system = gate.read("main_agent", "system")
   const line = (f: Fields): ConstraintLine => ({ id: num(f, "id"), version: num(f, "version"), text: str(f, "text") })
   const index = gate.read("main_agent", "index")
+  // One read for both: the aliases typed words match, and the retired ones that only map old labels.
+  const match = gate.read("main_agent", "match")
   const theses: IndexThesis[] = index
     .filter((i) => i.kind === "thesis")
     .map(({ fields: f }) => ({
@@ -79,10 +86,14 @@ function snapshot(gate: MemoryGate): Snapshot {
   return {
     styles: system.filter((i) => i.kind === "style").map((i) => line(i.fields)),
     index: renderIndex(theses, lessons, indexCharLimit()),
-    match: gate.read("main_agent", "match").map(({ fields: f }) => ({
+    match: match.map(({ fields: f }) => ({
       subjectId: num(f, "subjectId"),
       aliases: f.aliases as string[],
       uppercaseOnly: f.uppercaseOnly === true,
+    })),
+    past: match.map(({ fields: f }) => ({
+      subjectId: num(f, "subjectId"),
+      aliases: (f.pastAliases as string[] | undefined) ?? [],
     })),
   }
 }
@@ -136,6 +147,108 @@ const asItem = (text: string, i: number, at: string): MemoryItem => ({
   updatedAt: at,
 })
 
+/** A thesis as the history shows it sent: the name in its label, its highest version, the state shown. */
+interface SentThesis {
+  name: string
+  version: number
+  state?: string
+}
+
+/**
+ * What the model already has in view, read from the history this turn is sent with: complete blocks,
+ * notes, pointers, the store error line, and blocks masked as deleted. Nothing of it is kept between turns.
+ */
+interface HistoryView {
+  /** By the name in the label (escaped). */
+  theses: Map<string, SentThesis>
+  /** Lesson number → highest version shown. */
+  lessons: Map<number, number>
+  notes: Set<string>
+  pointers: Set<string>
+  maskedTheses: Set<string>
+  maskedLessons: Set<number>
+  /** Reason of the last line said in the memory channel, when that line was a store error. */
+  errorSent?: string
+  noted(prefix: string): boolean
+  /** The state the model last saw for that version: a state note after the block, or the block's own. */
+  stateOf(mark: SentThesis): string | undefined
+}
+
+const STATE_LINE = "Trạng thái: "
+
+function viewOf(history: readonly ModelMessage[]): HistoryView {
+  const theses = new Map<string, SentThesis>()
+  const lessons = new Map<number, number>()
+  const notes = new Set<string>()
+  const pointers = new Set<string>()
+  const maskedTheses = new Set<string>()
+  const maskedLessons = new Set<number>()
+  const noteKeys: string[] = []
+  // State as last seen per "name@version": a block shows it, a later state note changes it.
+  const seen = new Map<string, string>()
+  // Message by message, in order, so "later" means later in what the model read. In one reminder the
+  // notes item comes before the blocks.
+  for (const message of history) {
+    const { blocks, lines } = memoryLines([message])
+    for (const line of lines) {
+      if (line.kind === "note") {
+        notes.add(line.key)
+        noteKeys.push(line.key)
+        const state = /^thesisState:(.+):(\d+):(.+)$/.exec(line.key)
+        if (state) seen.set(`${state[1]}@${state[2]}`, state[3]!)
+      } else if (line.kind === "pointer") pointers.add(line.key)
+      else if (line.kind === "masked") {
+        if (line.item.kind === "lesson") maskedLessons.add(line.item.ref as number)
+        else maskedTheses.add(line.item.ref as string)
+      }
+    }
+    // A block cut short was not seen whole: it does not count as sent.
+    for (const b of blocks.filter((x) => x.complete && x.labelSure)) {
+      if (b.kind === "lesson") lessons.set(b.ref as number, Math.max(lessons.get(b.ref as number) ?? 0, b.version))
+      else {
+        const name = b.ref as string
+        const state = b.lines.find((l) => l.startsWith(STATE_LINE))?.slice(STATE_LINE.length)
+        if (state !== undefined) seen.set(`${name}@${b.version}`, state)
+        const prior = theses.get(name)
+        if (!prior || prior.version <= b.version) theses.set(name, { name, version: b.version, state })
+      }
+    }
+  }
+  return {
+    theses,
+    lessons,
+    notes,
+    pointers,
+    maskedTheses,
+    maskedLessons,
+    errorSent: lastErrorSaid(history),
+    noted: (prefix) => noteKeys.some((k) => k.startsWith(prefix)),
+    stateOf: (mark) => seen.get(`${mark.name}@${mark.version}`) ?? mark.state,
+  }
+}
+
+/**
+ * The store error reason when the last thing the memory channels said was that error line. Anything said
+ * after it (a block, a note) means the store was read again, so a later failure is told again.
+ */
+function lastErrorSaid(history: readonly ModelMessage[]): string | undefined {
+  for (let i = history.length - 1; i >= 0; i--) {
+    const { blocks, lines } = memoryLines([history[i]!])
+    if (blocks.length === 0 && lines.length === 0) continue
+    const last = lines.at(-1)
+    return blocks.length === 0 && last?.kind === "error" ? last.reason : undefined
+  }
+  return undefined
+}
+
+
+/** Blocks the model sees whole at this step; a block it may not have read in full never counts. */
+const inViewBlocks = (messages: readonly ModelMessage[] | undefined): HistoryBlock[] =>
+  memoryLines(messages ?? []).blocks.filter((b) => b.complete && b.labelSure)
+
+/** A name as a label prints it, back to the text render.ts escapes again. */
+const unescapeLine = (name: string) => name.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&")
+
 export class NotebookMemory implements MemoryProvider {
   readonly id = "notebook"
   private cache?: { gate: MemoryGate; data: Snapshot }
@@ -174,57 +287,61 @@ export class NotebookMemory implements MemoryProvider {
 
   /**
    * The turn's labelled blocks and notes. Subjects come from the user's typed words only; a block goes
-   * in when its version was not sent in this session yet, and counts as sent only once turn-end shows it.
+   * in when its version is not already in the history this turn is sent with (ctx.history, masks applied).
    */
   async recall(query: string, ctx: MemoryContext): Promise<MemoryItem[]> {
+    const history = ctx.history ?? []
     const ledger = this.ledgers.session(ctx.sessionId)
     const typed = typedText(query)
     if (this.source.closed()) {
-      ledger.beginTurn(typed, [])
+      ledger.beginTurn(typed, [], history.length)
       return []
     }
     this.source.retryIfBusy()
     const data = this.refresh()
     const detected = data && !typed.noticeOnly ? detectSubjects(typed.text, data.match) : []
-    ledger.beginTurn(typed, detected)
+    ledger.beginTurn(typed, detected, history.length)
+    const view = viewOf(history)
     let texts: string[]
     try {
-      texts = data ? this.compose(ledger) : this.errorLine(ledger)
+      texts = data ? this.compose(ledger.focus(), view, data) : this.errorLine(view)
     } catch (error) {
       this.cache = undefined
       this.source.fail(error)
-      texts = this.errorLine(ledger)
+      texts = this.errorLine(view)
     }
-    // The core runs a turn of notifications without hooks: no turn-end will confirm it.
-    if (typed.noticeOnly) ledger.confirmAll()
     const at = new Date().toISOString()
     return texts.map((t, i) => asItem(t, i, at))
   }
 
-  /** The store cannot be read: say so once per session. */
-  private errorLine(ledger: SessionLedger): string[] {
+  /** The store cannot be read: say so once per reason, unless the history already says it. */
+  private errorLine(view: HistoryView): string[] {
     const error = this.source.problem()
     if (!error) return []
     const reason = reasonOf(error)
-    if (ledger.errorSent === reason) return []
-    const text = reminders.storeError(reason)
-    ledger.add({ label: text, error: reason })
-    return [text]
+    if (view.errorSent === reason) return []
+    return [reminders.storeError(reason)]
   }
 
   /** Blocks for the subjects in focus, notes for what changed since it was sent, packed under the cap. */
-  private compose(ledger: SessionLedger): string[] {
+  private compose(focus: { subjectId: number }[], view: HistoryView, data: Snapshot): string[] {
     const gate = this.source.gate()!
-    // Readable again: a later failure is worth telling again.
-    ledger.errorSent = undefined
-    const focus = ledger.focus()
     const inFocus = new Set(focus.map((f) => f.subjectId))
-    const sentTheses: number[] = []
-    const sentLessons: number[] = []
-    for (const key of ledger.sent.keys()) {
-      const [kind, id] = key.split(":")
-      if (kind === "thesis") sentTheses.push(Number(id))
-      else sentLessons.push(Number(id))
+    // A thesis label carries the display name it had when sent: the subject is found through the aliases in
+    // use, then through retired ones (a code since changed). A name in use by one subject wins over the same
+    // name retired by another.
+    const subjectOf = new Map<string, number>()
+    for (const m of data.match) for (const a of m.aliases) subjectOf.set(escapeMemoryLine(a), m.subjectId)
+    for (const p of data.past) {
+      for (const a of p.aliases) if (!subjectOf.has(escapeMemoryLine(a))) subjectOf.set(escapeMemoryLine(a), p.subjectId)
+    }
+    const sent = new Map<number, SentThesis>()
+    for (const [name, mark] of view.theses) {
+      const id = subjectOf.get(name)
+      // No subject with a thesis has had this name: its thesis is gone, and the block the redaction check
+      // masked (the store confirmed it deleted) is what announces it.
+      if (id === undefined) continue
+      if (!sent.has(id) || sent.get(id)!.version < mark.version) sent.set(id, mark)
     }
 
     const theses = new Map<number, ThesisFields>()
@@ -234,104 +351,93 @@ export class NotebookMemory implements MemoryProvider {
         theses.set(num(fields, "subjectId"), thesisData(fields))
       }
     }
-    readTheses([...new Set([...inFocus, ...sentTheses])])
+    readTheses([...new Set([...inFocus, ...sent.keys()])])
     // A ticker's block points to its sector's thesis by name and version.
     const sectors = focus.map((f) => theses.get(f.subjectId)?.sectorId)
     readTheses([...new Set(sectors)].filter((id): id is number => id !== undefined && !theses.has(id)))
     const lessons = new Map<number, number>()
+    const sentLessons = [...view.lessons.keys()]
     if (sentLessons.length > 0) {
       const read = gate.read("main_agent", "memory_read", { shared: false }, { subjectIds: [], lessonIds: sentLessons })
       for (const { kind, fields } of read) if (kind === "lesson") lessons.set(num(fields, "id"), num(fields, "version"))
     }
 
-    const pending = new Map<string, Pending>()
-    const line = (key: string, text: string, p: Omit<Pending, "label">): PackLine => {
-      pending.set(key, { label: text, ...p })
-      return { key, text }
-    }
-
     const lines: PackLine[] = []
-    for (const [key, mark] of ledger.sent) {
-      const id = Number(key.split(":")[1])
-      if (key.startsWith("thesis:")) {
-        const now = theses.get(id)
-        const name = now?.display ?? mark.name ?? `#${id}`
-        if (!now) {
-          const note = `${key}!deleted@${mark.version}`
-          if (!ledger.notified.has(note)) lines.push(line(note, reminders.thesisDeleted(name), { notified: note }))
-        } else if (now.version > mark.version) {
-          // In focus, the new block itself says what it replaces.
-          const note = `${key}@${now.version}`
-          if (!inFocus.has(id) && !ledger.notified.has(note)) {
-            lines.push(line(note, reminders.thesisNewVersion(name, now.version, mark.version), { notified: note }))
-          }
-        } else if (now.state !== mark.state) {
-          const note = `${key}@${now.version}#${now.state}`
-          if (!ledger.notified.has(note)) {
-            const sent: Pending["sent"] = [key, { ...mark, state: now.state }]
-            lines.push(line(note, reminders.thesisState(name, now.version, now.state), { notified: note, sent }))
-          }
+    const say = (key: string, text: string) => {
+      if (!view.notes.has(key) && !lines.some((l) => l.key === key)) lines.push({ key, text })
+    }
+    const deleted = new Set(view.maskedTheses)
+    for (const [id, mark] of sent) {
+      const now = theses.get(id)
+      if (!now) {
+        deleted.add(mark.name)
+        continue
+      }
+      const name = escapeMemoryLine(now.display)
+      if (now.version > mark.version) {
+        // In focus, the new block itself says what it replaces.
+        if (!inFocus.has(id) && !view.noted(`thesisNewVersion:${name}:${now.version}:`)) {
+          say(`thesisNewVersion:${name}:${now.version}:${mark.version}`, reminders.thesisNewVersion(now.display, now.version, mark.version))
         }
       } else {
-        const version = lessons.get(id)
-        if (version !== undefined && version <= mark.version) continue
-        const note = version === undefined ? `${key}!deleted` : `${key}@${version}`
-        if (ledger.notified.has(note)) continue
-        const text =
-          version === undefined ? reminders.lessonDeleted(id) : reminders.lessonNewVersion(id, version, mark.version)
-        lines.push(line(note, text, { notified: note }))
+        const state = stateLabel(now.state)
+        // Not deduplicated against older notes: a state that comes back (refuted, watching, refuted) is news again.
+        if (view.stateOf(mark) !== state) {
+          lines.push({ key: `thesisState:${name}:${now.version}:${state}`, text: reminders.thesisState(now.display, now.version, now.state) })
+        }
       }
     }
+    for (const name of deleted) {
+      // The name now belongs to a subject with a live thesis (written again, or the code reused): saying it
+      // was deleted would contradict the block the model gets for it.
+      if (subjectOf.has(name)) continue
+      say(`thesisDeleted:${name}`, reminders.thesisDeleted(unescapeLine(name)))
+    }
+    for (const [id, version] of view.lessons) {
+      const now = lessons.get(id)
+      if (now === undefined) say(`lessonDeleted:${id}`, reminders.lessonDeleted(id))
+      else if (now > version && !view.noted(`lessonNewVersion:${id}:${now}:`)) {
+        say(`lessonNewVersion:${id}:${now}:${version}`, reminders.lessonNewVersion(id, now, version))
+      }
+    }
+    for (const id of view.maskedLessons) if (!view.lessons.has(id)) say(`lessonDeleted:${id}`, reminders.lessonDeleted(id))
 
     const blocks: PackBlock[] = []
     for (const { subjectId } of focus) {
       const t = theses.get(subjectId)
       if (!t) continue
-      const key = `thesis:${subjectId}`
-      const mark = ledger.sent.get(key)
+      const mark = sent.get(subjectId)
       if (mark && mark.version >= t.version) continue
       const sector = t.sectorId === undefined ? undefined : theses.get(t.sectorId)
       const text = renderThesisBlock(t, {
         sector: sector && { display: sector.display, version: sector.version },
         replaces: mark?.version,
       })
-      const note = mark ? `${key}@${t.version}` : undefined
-      pending.set(key, {
-        label: labelOf(text),
-        sent: [key, { version: t.version, state: t.state, name: t.display }],
-        notified: note,
-      })
+      const name = escapeMemoryLine(t.display)
       // Not injected: the pointer (once per version), and the stale-version note the block would have made.
-      const unplaced = (kind: "a" | "b") => {
+      const unplaced = (kind: "roomless" | "tooLong") => {
         const out: PackLine[] = []
-        const pointer = `${key}@${t.version}:${kind}`
-        if (!ledger.pointers.has(pointer)) {
-          const say = kind === "a" ? reminders.roomless : reminders.tooLong
-          out.push(line(pointer, say(t.display, t.version), { pointer }))
-        }
-        if (mark && note && !ledger.notified.has(note)) {
-          out.push(line(note, reminders.thesisNewVersion(t.display, t.version, mark.version), { notified: note }))
+        const pointer = `${kind}:${name}:${t.version}`
+        if (!view.pointers.has(pointer)) out.push({ key: pointer, text: reminders[kind](t.display, t.version) })
+        if (mark && !view.noted(`thesisNewVersion:${name}:${t.version}:`)) {
+          const key = `thesisNewVersion:${name}:${t.version}:${mark.version}`
+          out.push({ key, text: reminders.thesisNewVersion(t.display, t.version, mark.version) })
         }
         return out
       }
-      blocks.push({ key, text, ifRoomless: unplaced("a"), ifTooLong: unplaced("b") })
+      blocks.push({ key: `thesis:${subjectId}`, text, ifRoomless: unplaced("roomless"), ifTooLong: unplaced("tooLong") })
     }
 
-    const packed = packRecall({ lines, blocks })
-    for (const key of [...packed.lines, ...packed.placed]) ledger.add(pending.get(key)!)
-    return packed.items
+    return packRecall({ lines, blocks }).items
   }
 
   tools(): ToolDef[] {
     return [memoryReadTool(this.reads)]
   }
 
-  /**
-   * memory_read's answers. The tool has no session id; within a turn recall always runs before any tool,
-   * so what it returns is tracked in the session of the latest recall.
-   */
+  /** memory_read's answers. `messages` is what the model sees at this step: a version in view is not sent again. */
   private readonly reads: NotebookReads = {
-    readSubject: (name) =>
+    readSubject: (name, messages) =>
       this.answer((gate, data) => {
         const key = foldName(name)
         const hit = data.match.find((m) => m.aliases.some((a) => foldName(a) === key))
@@ -342,27 +448,37 @@ export class NotebookMemory implements MemoryProvider {
             .find((i) => i.kind === "thesis")
         if (!found) return `Sổ không có luận điểm cho «${escapeMemoryLine(name)}» (chưa từng ghi hoặc đã bị xoá).`
         const t = thesisData(found.fields)
+        const past = data.past.find((p) => p.subjectId === hit.subjectId)?.aliases ?? []
+        const names = new Set([...hit.aliases, ...past].map(escapeMemoryLine))
+        // A reminder block has no detail: it answers a read only when the thesis has none.
+        const inView = inViewBlocks(messages).find(
+          (b) =>
+            b.kind === "thesis" &&
+            names.has(b.ref as string) &&
+            b.version === t.version &&
+            // The state changes without a new version: a block showing another state is not "unchanged".
+            b.lines.includes(`${STATE_LINE}${stateLabel(t.state)}`) &&
+            (!t.detail || b.lines.some((l) => l.startsWith("Chi tiết: "))),
+        )
+        if (inView) return alreadyShown.thesis(inView.ref as string, t.version)
         const sector =
           t.sectorId === undefined
             ? undefined
             : gate.read("main_agent", "block", { shared: false }, { subjectIds: [t.sectorId] })[0]
-        const text = renderThesisBlock(t, {
+        return renderThesisBlock(t, {
           sector: sector && { display: str(sector.fields, "display"), version: num(sector.fields, "version") },
           detail: true,
         })
-        this.track(text, `thesis:${t.subjectId}`, { version: t.version, state: t.state, name: t.display })
-        return text
       }),
-    readLesson: (id) =>
+    readLesson: (id, messages) =>
       this.answer((gate) => {
         const found = gate
           .read("main_agent", "memory_read", { shared: false }, { subjectIds: [], lessonIds: [id] })
           .find((i) => i.kind === "lesson")
         if (!found) return `Sổ không có bài học #${id} (chưa từng ghi hoặc đã bị xoá).`
         const lesson = lessonData(found.fields)
-        const text = renderLessonBlock(lesson)
-        this.track(text, `lesson:${lesson.id}`, { version: lesson.version })
-        return text
+        const inView = inViewBlocks(messages).some((b) => b.kind === "lesson" && b.ref === id && b.version === lesson.version)
+        return inView ? alreadyShown.lesson(id, lesson.version) : renderLessonBlock(lesson)
       }),
     search: (query) =>
       this.answer((gate) => {
@@ -373,11 +489,7 @@ export class NotebookMemory implements MemoryProvider {
         const hits = rankLessons(query, all)
         const quoted = escapeMemoryLine(query)
         if (hits.length === 0) return `Chưa tìm được bài học khớp «${quoted}».`
-        const blocks = hits.map((lesson) => {
-          const text = renderLessonBlock(lesson)
-          this.track(text, `lesson:${lesson.id}`, { version: lesson.version })
-          return text
-        })
+        const blocks = hits.map((lesson) => renderLessonBlock(lesson))
         return `Bài học khớp «${quoted}» (${hits.length} bài, xếp theo độ khớp):\n${blocks.join("\n\n")}`
       }),
   }
@@ -397,10 +509,6 @@ export class NotebookMemory implements MemoryProvider {
     }
   }
 
-  private track(block: string, key: string, mark: { version: number; state?: string; name?: string }) {
-    this.ledgers.current?.add({ label: labelOf(block), sent: [key, mark] })
-  }
-
   problems(): string[] {
     const error = this.source.problem()
     if (!error || this.source.closed()) return []
@@ -412,16 +520,9 @@ export class NotebookMemory implements MemoryProvider {
     return [`Sổ ghi nhớ chưa dùng được${where}: ${error.message} Chat vẫn chạy. ${next}`]
   }
 
-  register(hooks: HookBus): () => void {
-    const off = [
-      hooks.on("turn-end", (e) => this.ledgers.confirm(e.sessionId, e.messages)),
-      // memory_read has no session id: the session last started or recalled is the current one.
-      hooks.on("session-start", (e) => void this.ledgers.session(e.sessionId)),
-    ]
-    return () => {
-      for (const f of off) f()
-      this.close()
-    }
+  /** No hook needed: what was sent is read from the history. The cleanup closes the store. */
+  register(_hooks: HookBus): () => void {
+    return () => this.close()
   }
 
   /** Closes the store; later calls answer as "switched off". */

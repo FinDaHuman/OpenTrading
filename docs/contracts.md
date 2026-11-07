@@ -149,7 +149,10 @@ interface MemoryProvider {
   list?(); approve?(id); reject?(id); remove?(id)        // cho /memory
 }
 interface MemoryItem { id; text; scope: "user" | "workspace"; status: "pending" | "active"; source?; createdAt; updatedAt }
+interface MemoryContext { sessionId: string; history?: readonly ModelMessage[] }
 ```
+
+`ctx.history` là lịch sử lượt này sẽ gửi, trước tin nhắn của người dùng, đã áp phần che. Provider đọc từ đó những gì model đã có trong tầm nhìn, thay vì tự nhớ trong RAM. Tool nhận `ToolContext.messages`: danh sách tin nhắn model được gửi ở đúng bước đó (kết quả tool cũ có thể đã bị dọn).
 
 **Quy định bắt buộc:**
 - Memory **`pending`** (model đề xuất) không bao giờ được trả về từ `index()` hay `recall()` cho tới khi người dùng duyệt trong `/memory`. Đây là bài học từ Cursor: memory mà người dùng không thấy thì thành chỉ dẫn vô hình.
@@ -192,7 +195,8 @@ Frontmatter gồm `name` (trùng tên file), `description`, `tools`, `disallowed
 - Các loại dòng:
   - `meta`: format, id, cwd, `promptVersion` (hash của `prompts/*.md`), danh sách skill và version.
   - `message`: một `ModelMessage` của AI SDK.
-  - `turn_end`: provider và model của lượt, `contextTokens` (kích thước context sau lượt, theo usage của provider).
+  - `turn_end`: số lượt `turn` (gán lúc lượt vào hàng ghi; lượt lưu bù giữ số của nó; dòng ghi trước khi có trường này thì lấy số trước cộng một), provider và model của lượt, `contextTokens` (kích thước context sau lượt, theo usage của provider).
+  - `redact`: mục memory người dùng đã xoá (`items`: loại, số bài học hoặc tên luận điểm như trong nhãn, các bản). Khi đọc, mọi khối của mục và bản đó nằm **trước** dòng này bị thay bằng chữ "đã bị người dùng xoá"; khối nằm trong lịch sử của một dòng `compact` tính theo vị trí dòng `compact`. Dòng này không chứa nội dung memory và chỉ được ghi khi kho xác nhận mục đã xoá. Bản app chưa biết loại dòng này thì bỏ qua (vẫn mở được phiên, không che).
   - `compact`: hội thoại vừa được nén (`trigger` auto/manual, `before`/`after` token, `messages` là history mới). Khi mở lại, model chỉ nhận history từ entry `compact` cuối cùng trở đi; transcript vẫn hiện các lượt cũ cùng một dòng "Đã nén hội thoại".
 - `index.jsonl` có một dòng cho mỗi lần cập nhật phiên; dòng sau cùng của cùng một id thắng.
 - Subagent ghi transcript riêng ở `YYYY/MM/<id>/subagents/agent-<agentId>.jsonl` (các dòng `agent_meta`, `message`, `notice`, `agent_end`) và `.meta.json`. File phiên chính chỉ chứa lời gọi `spawn_subagent` và kết quả (có trailer `<subagent_meta>`). Kết quả của subagent nền vào history dưới dạng tin user `<thong_bao_subagent>`.

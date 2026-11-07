@@ -1,3 +1,5 @@
+import type { ModelMessage } from "ai"
+import { userMessage } from "../src/core/agent"
 import { existsSync, readdirSync, readFileSync, rmSync } from "node:fs"
 import { mkdtemp, rm } from "node:fs/promises"
 import os from "node:os"
@@ -30,10 +32,17 @@ async function holdLock(mode: "hold" | "lock", file: string, ms: number) {
   return child
 }
 
-/** recall, then turn-end carrying what recall returned, as the core does. */
-async function turn(notebook: ReturnType<typeof nb.notebook>, hooks: HookBus, query: string, sessionId = "s1") {
-  const items = (await notebook.recall(query, { sessionId })).map((i) => i.text)
-  await hooks.emit({ type: "turn-end", sessionId, messages: [{ role: "user", content: items.map((t) => `- ${t}`).join("\n") }] })
+/** Each provider's histories by session: what the core hands recall, a turn's reminder appended once it ends. */
+const histories = new WeakMap<object, Map<string, ModelMessage[]>>()
+
+/** recall with the session's history, then the turn's reminder joins that history, as the core does. */
+async function turn(notebook: ReturnType<typeof nb.notebook>, _hooks: HookBus, query: string, sessionId = "s1") {
+  const sessions = histories.get(notebook) ?? new Map<string, ModelMessage[]>()
+  histories.set(notebook, sessions)
+  const history = sessions.get(sessionId) ?? []
+  const items = (await notebook.recall(query, { sessionId, history })).map((i) => i.text)
+  const section = items.length > 0 ? [`<memory_lien_quan>\n${items.map((t) => `- ${t}`).join("\n")}\n</memory_lien_quan>`] : []
+  sessions.set(sessionId, [...history, userMessage(query, section), { role: "assistant", content: "Trả lời." }])
   return items
 }
 
@@ -176,10 +185,17 @@ describe("the /memory handle (admin)", () => {
     expect(admin.remove("lesson", { id: 7, version: 1 })).toEqual({
       ok: true,
       message:
-        "Đã ngừng dùng bài học #7: model không còn nhận mục này. Nội dung đã gửi trước đây vẫn còn trong lịch sử các phiên đã dùng nó; trong hội thoại đang mở, model được dặn không dùng nữa. Bản đã gửi provider không thu hồi được.",
+        "Đã xoá bài học #7 khỏi ứng dụng. Từ lượt sau, model không còn nhận nội dung này, kể cả trong lịch sử hội thoại và khi mở lại phiên cũ. Câu trả lời trước đó của model có thể đã nhắc lại nội dung này. Bản đã gửi provider không thu hồi được.",
     })
-    expect(admin.remove("thesis", { id: 2, version: 3 })).toMatchObject({ ok: true, message: expect.stringMatching(/^Đã ngừng dùng luận điểm HPG: /) })
+    expect(admin.remove("thesis", { id: 2, version: 3 })).toMatchObject({ ok: true, message: "Đã xoá luận điểm HPG khỏi ứng dụng. Từ lượt sau, model không còn nhận nội dung này, kể cả trong lịch sử hội thoại và khi mở lại phiên cũ. Câu trả lời trước đó của model có thể đã nhắc lại nội dung này. Bản đã gửi provider không thu hồi được." })
     expect(admin.remove("decision", { id: 1 })).toMatchObject({ ok: true })
+    expect(admin.remove("constraint", { id: 1, version: 2 })).toEqual({
+      ok: true,
+      message: "Đã xoá ràng buộc #1 khỏi ứng dụng. Từ lượt sau, model không còn nhận ràng buộc này. Bản đã gửi provider không thu hồi được.",
+    })
+    for (const r of [admin.remove("style", { id: 2, version: 1 })]) {
+      expect(r).toEqual({ ok: true, message: "Đã xoá cách trình bày #2 khỏi ứng dụng. Từ lượt sau, model không còn nhận cách trình bày này. Bản đã gửi provider không thu hồi được." })
+    }
     expect(admin.entries().some((e) => e.group === "lesson" && e.id === 7)).toBe(false)
   })
 

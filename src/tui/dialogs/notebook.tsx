@@ -4,6 +4,8 @@ import type { NotebookAdmin, NotebookEntry, NotebookGroup, ThesisStateChoice } f
 import { formatDate, THESIS_STATE_LABEL } from "../../core/memory/notebook/render"
 import { closeDialog } from "../state"
 import { say } from "../notify"
+import { redactOpen } from "../session"
+import type { RedactionCheck } from "../../core/memory/redaction/check"
 import { color } from "../theme"
 import { DialogFrame } from "./frame"
 import { Picker } from "./picker"
@@ -53,7 +55,8 @@ function editRequest(e: NotebookEntry): NotebookFormRequest | undefined {
       return undefined
   }
 }
-export function NotebookDialog(props: { admin: NotebookAdmin }) {
+/** `redaction`: the runtime's check, so a delete masks the open conversation at once. */
+export function NotebookDialog(props: { admin: NotebookAdmin; redaction?: RedactionCheck }) {
   const [entries, setEntries] = createSignal(props.admin.entries())
   // Read right after each listing: an unreadable store must show as such, never as an empty notebook.
   const [problem, setProblem] = createSignal(props.admin.problem())
@@ -71,6 +74,8 @@ export function NotebookDialog(props: { admin: NotebookAdmin }) {
   function remove(entry: NotebookEntry) {
     const result = props.admin.remove(entry.group, { id: entry.id, version: entry.version })
     say(result.message, result.ok ? "success" : "error", result.ok ? 12000 : 8000)
+    // Mask the open conversation now; redactOpen leaves it to the next turn while a turn or compaction runs.
+    if (result.ok && (entry.group === "lesson" || entry.group === "thesis")) void redactOpen(props.redaction)
     setConfirming(false)
     if (result.ok || result.reason === "deleted") setOpen(undefined)
     reload()

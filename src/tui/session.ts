@@ -9,6 +9,8 @@ import { transcriptFromMessages } from "../core/session/transcript"
 import { useResultSession } from "../core/tools/refs"
 import { reconcile } from "solid-js/store"
 import { NO_COMPACTION, providerName, pushLine, setState, state, type Line } from "./state"
+import type { RedactionCheck } from "../core/memory/redaction/check"
+import { redactHistory, temporaryNotice, type Redaction, type RedactItem } from "../core/memory/redaction/redact"
 
 /**
  * Every Session object this process opened, by id: one per session, so one writer per file.
@@ -96,6 +98,9 @@ export function receiptLines(session: Session, receipt: SaveReceipt, opts: { nam
     out.push({ kind: "error", text: named(`Chưa lưu được ${turnRange(receipt.pending)}: ${reason(receipt)}. ${later}`) })
   } else if (receipt.pendingCompactions > 0) {
     out.push({ kind: "error", text: named(`Chưa lưu được bản nén hội thoại: ${reason(receipt)}. ${later}`) })
+  } else if (receipt.pendingRedactions > 0) {
+    // Apart from the delete's own words: the open history is masked and every read masks by the store.
+    out.push({ kind: "error", text: named(`Chưa lưu được dòng che mục memory đã xoá: ${reason(receipt)}. ${later}`) })
   }
   if (receipt.indexPending) {
     const retry = isCurrent ? "Sẽ thử lại." : later
@@ -109,6 +114,7 @@ export function leavingLine(session: Session, receipt: SaveReceipt): Notice | un
   const waiting = [
     ...(receipt.pending.length > 0 ? [`${receipt.pending.length} lượt`] : []),
     ...(receipt.pendingCompactions > 0 ? [`${receipt.pendingCompactions} bản nén hội thoại`] : []),
+    ...(receipt.pendingRedactions > 0 ? [`${receipt.pendingRedactions} dòng che mục memory đã xoá`] : []),
   ]
   const parts = [
     ...(waiting.length > 0 ? [`còn ${waiting.join(" và ")} chưa lưu được`] : []),
@@ -215,6 +221,41 @@ async function retitleOnce(session: Session, messages: ModelMessage[]) {
   }
 }
 
+/** Queue one redact line (items the store confirmed deleted) after whatever the session has waiting. */
+export function recordRedaction(items: RedactItem[]) {
+  if (items.length === 0) return
+  const session = current
+  void session.appendRedaction(items).then((receipt) => report(session, receipt))
+}
+
+/** Held-block notices already said, per session and state: each is said once. */
+const heldTold = new WeakMap<Session, Set<string>>()
+
+/** The notice for blocks held in what is sent, once per state of the current session. */
+export function heldLine(temporary: Redaction["temporary"]): Line | undefined {
+  if (!temporary) return undefined
+  const told = heldTold.get(current) ?? new Set<string>()
+  heldTold.set(current, told)
+  const key = `${temporary.state}:${temporary.reason ?? ""}`
+  if (told.has(key)) return undefined
+  told.add(key)
+  return { kind: "info", text: temporaryNotice(temporary) }
+}
+
+/**
+ * Right after a delete in /memory: mask the open history now and record it. Not while a turn or a
+ * compaction runs: that one holds the history it started with, and the next turn masks (once).
+ */
+export async function redactOpen(check: RedactionCheck | undefined): Promise<void> {
+  if (!check || state.streaming || state.compacting) return
+  const before = state.history
+  const masked = await redactHistory(before, check)
+  // Something started or changed the history meanwhile: the next turn masks instead.
+  if (state.streaming || state.compacting || state.history !== before || masked.record.length === 0) return
+  setState("history", masked.kept)
+  recordRedaction(masked.record)
+}
+
 /** Persist a compaction, so --resume starts from the compacted history. */
 export function recordCompact(entry: { trigger: "auto" | "manual"; before: number; after: number; messages: ModelMessage[] }) {
   const session = current
@@ -258,7 +299,7 @@ async function refuseUnsaved(session: Session, ms: number) {
  * writer per file, its turn numbers carry on. An error after `old` was left carries `left`, the
  * lines leaving it produced, for the caller to show.
  */
-export async function openForResume(old: Session, id: string, ms = SETTLE_MS) {
+export async function openForResume(old: Session, id: string, ms = SETTLE_MS, check?: RedactionCheck) {
   track(old)
   const matches = (s: { id: string }) => s.id === id || s.id.startsWith(id)
   const summary = (await listSessions()).find(matches)
@@ -268,8 +309,8 @@ export async function openForResume(old: Session, id: string, ms = SETTLE_MS) {
   const left = await leave(old, ms)
   try {
     if (live === old) await refuseUnsaved(old, ms)
-    const loaded = await loadSession(summary?.id ?? live!.id)
-    return { session: live ?? track(Session.continue(loaded.summary)), loaded, left }
+    const loaded = await loadSession(summary?.id ?? live!.id, { check })
+    return { session: live ?? track(Session.continue(loaded.summary, loaded.lastTurn)), loaded, left }
   } catch (error) {
     throw Object.assign(error instanceof Error ? error : new Error(String(error)), { left })
   }
@@ -290,10 +331,14 @@ export async function transcriptOfCurrent(runtime: Runtime, session = current) {
     if (unsaved) throw new Error(unsaved)
     return undefined
   }
-  const loaded = await loadSession(session.id).catch((error) => {
+  // Masked, never written: /export shows what the user deleted no more than the model sees it.
+  const loaded = await loadSession(session.id, { check: runtime.redaction }).catch((error) => {
     // Not in the index yet (its line could not be written): say why, not "not found".
     throw unsaved ? new Error(unsaved) : error
   })
+  // Blocks held in the transcript are said, once per state of the session, as on resume.
+  const held = session === current ? heldLine(loaded.redaction.temporary) : undefined
+  if (held) pushLine(held)
   return {
     id: session.id,
     turns: loaded.summary.turns,
@@ -331,7 +376,7 @@ export async function startSession(runtime: Runtime, source: "startup" | "clear"
 
 /** Reopen a stored session: rebuild history and transcript, then keep appending to its file. */
 export async function resumeSession(runtime: Runtime, id: string) {
-  const target = await openForResume(current, id).catch((error) => {
+  const target = await openForResume(current, id, SETTLE_MS, runtime.redaction).catch((error) => {
     // Refused after the current session was left: what leaving it said is still shown.
     for (const line of (error as { left?: Notice[] }).left ?? []) pushLine(line)
     throw error
@@ -370,6 +415,13 @@ export async function resumeSession(runtime: Runtime, id: string) {
   if (from && samePathKey(from) !== samePathKey(process.cwd())) {
     notes.push({ kind: "info", text: `Phiên này tạo ở ${from}; workspace bây giờ là thư mục đang mở (${runtime.workspace.primary}).` })
   }
+  // Items the store confirmed deleted that no line of the file masked yet: masked now, recorded once.
+  if (loaded.redaction.confirmed.length > 0) {
+    recordRedaction(loaded.redaction.confirmed)
+    notes.push({ kind: "info", text: `Đã che ${loaded.redaction.confirmed.length} mục memory đã xoá trong phiên này.` })
+  }
+  const held = heldLine(loaded.redaction.temporary)
+  if (held) notes.push(held)
   if (loaded.patched > 0) notes.push({ kind: "info", text: `${loaded.patched} lần gọi tool bị ngắt ở phiên trước đã được đánh dấu là lỗi.` })
   const saved = loaded.summary.provider && loaded.summary.model ? `${loaded.summary.provider}/${loaded.summary.model}` : undefined
   if (saved && saved !== `${state.provider}/${state.model}`) {

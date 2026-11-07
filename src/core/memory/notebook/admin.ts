@@ -252,9 +252,15 @@ function readEntries(r: MemoryReader): NotebookEntry[] {
   return out
 }
 
-/** The wording the user chose for "stopped using" (a deleted copy already sent cannot be recalled). */
-const stopped = (what: string) =>
-  `Đã ngừng dùng ${what}: model không còn nhận mục này. Nội dung đã gửi trước đây vẫn còn trong lịch sử các phiên đã dùng nó; trong hội thoại đang mở, model được dặn không dùng nữa. Bản đã gửi provider không thu hồi được.`
+/**
+ * What a delete of an item that can sit in a session's history says. Its blocks are masked in the open
+ * conversation and on every read of a session; nothing is promised about the disk or the provider's copy.
+ */
+const deletedFromHistory = (what: string) =>
+  `Đã xoá ${what} khỏi ứng dụng. Từ lượt sau, model không còn nhận nội dung này, kể cả trong lịch sử hội thoại và khi mở lại phiên cũ. Câu trả lời trước đó của model có thể đã nhắc lại nội dung này. Bản đã gửi provider không thu hồi được.`
+/** Constraints and style only go in the system part, never in the history. */
+const deletedFromSystem = (what: string, kind: string) =>
+  `Đã xoá ${what} khỏi ứng dụng. Từ lượt sau, model không còn nhận ${kind} này. Bản đã gửi provider không thu hồi được.`
 
 export function createNotebookAdmin(side: AdminSide): NotebookAdmin {
   let readProblem: string | undefined
@@ -317,21 +323,21 @@ export function createNotebookAdmin(side: AdminSide): NotebookAdmin {
         switch (group) {
           case "constraint":
             writer.deleteConstraint(key.id, version)
-            message = `Đã ngừng dùng ràng buộc #${key.id}: model không còn nhận mục này từ lượt sau. Bản đã gửi provider không thu hồi được.`
+            message = deletedFromSystem(`ràng buộc #${key.id}`, "ràng buộc")
             break
           case "style":
             writer.deleteConstraint(key.id, version)
-            message = `Đã ngừng dùng cách trình bày #${key.id}: model không còn nhận mục này từ lượt sau. Bản đã gửi provider không thu hồi được.`
+            message = deletedFromSystem(`cách trình bày #${key.id}`, "cách trình bày")
             break
           case "thesis": {
             const display = reader.subject(key.id)?.display ?? `#${key.id}`
             writer.deleteThesis(key.id, version)
-            message = stopped(`luận điểm ${display}`)
+            message = deletedFromHistory(`luận điểm ${display}`)
             break
           }
           case "lesson":
             writer.deleteLesson(key.id, version)
-            message = stopped(`bài học #${key.id}`)
+            message = deletedFromHistory(`bài học #${key.id}`)
             break
           case "decision":
             writer.deleteDecision(key.id)

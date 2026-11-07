@@ -1,5 +1,6 @@
 import type { HookBus } from "../hooks"
 import type { ToolDef } from "../tools/types"
+import type { ModelMessage } from "ai"
 
 /**
  * Memory contract for teammates. The harness decides WHERE memory goes in the prompt and
@@ -27,6 +28,11 @@ export interface MemoryItem {
 
 export interface MemoryContext {
   sessionId: string
+  /**
+   * The history this turn sends, before the user's message, with masks applied. A provider decides from it
+   * what the model already has in view, instead of keeping its own record. Absent: none.
+   */
+  history?: readonly ModelMessage[]
 }
 
 export interface MemoryProvider {
