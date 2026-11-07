@@ -12,6 +12,11 @@ adopt Semantic Versioning when it exposes a stable public API.
   - Deny rules, ask rules, blocked calls and the user-only scopes (key files, `.git`/`.opentrading`/`.ssh`, network paths, outside the workspace, the loop guard) still stop or ask. With no UI attached, those calls are refused.
   - Every launch shows a red warning first; its default answer is "Không, thoát". The answer is never saved.
   - Only the flag turns the mode on: config and resume cannot. With the flag, Shift+Tab includes `▸▸▸`.
+- `ot -p "câu hỏi"` (or the question on stdin): one turn through the TUI's agent loop with no UI, saved as a session.
+  - `--model provider/model` picks the model; `--output-format json` prints one result object; `--yolo` runs in bypass.
+  - Calls that would ask are refused. A folder's own skills/agents load only if the folder is already trusted.
+  - Exit code is 0 with an answer, 1 otherwise.
+- `scripts/eval/run.ts --yolo` runs the eval in bypass instead of the narrow unattended list; the trace header records `permission_mode`.
 
 ### Changed (memory, spec 007)
 
