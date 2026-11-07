@@ -4,7 +4,9 @@ import { readJson, writeJson } from "./store"
 
 /**
  * Provider/model catalog from models.dev — the same source opencode uses.
- * Fetched once an hour, cached on disk, and usable offline from the cache.
+ * Cached on disk and refreshed once an hour: a cache past that is still used at once while a
+ * fresh copy downloads in the background (about 6 MB), so a start never waits on the network
+ * unless there is no cache at all. Usable offline from the cache.
  */
 
 export interface CatalogModel {
@@ -92,6 +94,19 @@ async function load(file: string): Promise<Catalog> {
     .catch(() => Infinity)
   const cached = await readJson<Catalog | undefined>(file, undefined)
   if (cached && age < TTL_MS) return cached
+  if (cached) {
+    // Stale: answer with it now; later calls in this process get the fresh copy once it lands.
+    const stale = pending.get(file)
+    void download(file).then((fresh) => {
+      if (fresh && pending.get(file) === stale) pending.set(file, Promise.resolve(fresh))
+    })
+    return cached
+  }
+  return (await download(file)) ?? FALLBACK
+}
+
+/** The catalog from the network, written to the cache; undefined when it could not be fetched. */
+async function download(file: string): Promise<Catalog | undefined> {
   try {
     const res = await fetch(CATALOG_URL, { signal: AbortSignal.timeout(15_000) })
     if (!res.ok) throw new Error(`catalog ${res.status}`)
@@ -99,6 +114,6 @@ async function load(file: string): Promise<Catalog> {
     await writeJson(file, fresh).catch(() => {})
     return fresh
   } catch {
-    return cached ?? FALLBACK
+    return undefined
   }
 }
