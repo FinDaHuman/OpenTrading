@@ -11,7 +11,7 @@
 |---|---|---|
 | Dư nợ cho vay ký quỹ | `financial_detail` | Xu hướng 4–8 quý. Tăng đều cho thấy nhu cầu ký quỹ tăng, chưa chứng minh chất lượng tín dụng; giảm đột ngột = thị trường vừa xả hoặc CTCK siết gọi |
 | Vốn chủ sở hữu | `financial_detail` | Dùng làm mẫu số cho mức đòn bẩy. Cổ tức bằng cổ phiếu thường tái phân loại trong vốn chủ, không tự làm giảm tổng vốn chủ; kiểm tra biến động vốn thực tế |
-| Mức đòn bẩy | Tự tính: dư nợ / vốn chủ (ghi rõ tự tính) | So trần quy định hiện hành. Đây là chỉ báo **chỗ tăng trưởng còn lại**, không phải chỉ báo chất lượng |
+| Mức đòn bẩy | Tính bằng `calculate`: dư nợ / vốn chủ (ghi rõ là số tính ra) | So trần quy định hiện hành. Đây là chỉ báo **chỗ tăng trưởng còn lại**, không phải chỉ báo chất lượng |
 | Các khoản phải thu | `financial_detail` | Phải thu từ giao dịch margin tăng nhanh hơn dư nợ = công nợ đang ùn lại |
 
 ## 2. Nhóm doanh thu

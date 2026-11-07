@@ -3,7 +3,7 @@ import { extractFromRef } from "../chart/extract"
 import { readEnvelope } from "../envelope"
 import { keepEvidence, recallResult, REF_PREFIX, rememberResult } from "../refs"
 import { LOCAL_SOURCE, type ToolContext, type ToolDef } from "../types"
-import { CalcError, evaluate, FUNCTION_NAMES, type Quantity } from "./expression"
+import { CalcError, dataLiterals, evaluate, FUNCTION_NAMES, type Quantity } from "./expression"
 import { describeDims, parseUnit, sameDims } from "./units"
 
 /**
@@ -56,6 +56,9 @@ function resolve(name: string, spec: ValueSpec): Resolved {
     const unit = parseUnit(spec.unit)
     return { value: spec.value * unit.factor, dims: unit.dims, shown: { name, value: spec.value, ...(spec.unit ? { unit: spec.unit } : {}), ...(spec.ref ? { ref: spec.ref } : {}) } }
   }
+  // A figure this tool or compute already made: its `result` and `unit`, not an input inside it.
+  const stored = recallResult(spec.from_call)
+  if (stored && (stored.tool === "calculate" || stored.tool === "compute")) return computed(name, spec, stored.tool, stored.text)
   const found = extractFromRef(spec.from_call, { symbol: spec.from_symbol, field: spec.field, path: spec.path })
   if (!found.series?.length) throw new CalcError(`Kết quả ${spec.from_call} không có số để lấy cho "${name}".`)
   const { item, index } = pick(found.series, spec.at, `"${name}" (${spec.from_call})`)
@@ -80,6 +83,19 @@ function resolve(name: string, spec: ValueSpec): Resolved {
   }
 }
 
+function computed(name: string, spec: Extract<ValueSpec, { from_call: string }>, tool: string, text: string): Resolved {
+  let parsed: { result?: unknown; unit?: unknown }
+  try {
+    parsed = JSON.parse(text)
+  } catch {
+    throw new CalcError(`Không đọc được kết quả ${spec.from_call}.`)
+  }
+  if (typeof parsed.result !== "number") throw new CalcError(`${spec.from_call} (${tool}) không ra một số; lấy từng giá trị bằng value kèm unit.`)
+  const unitText = typeof parsed.unit === "string" && parsed.unit ? parsed.unit : spec.unit
+  const unit = parseUnit(unitText)
+  return { value: parsed.result * unit.factor, dims: unit.dims, shown: { name, value: parsed.result, ...(unitText ? { unit: unitText } : {}), ref: spec.from_call, tool } }
+}
+
 export interface CalcResult {
   expression: string
   result: number
@@ -94,9 +110,9 @@ export function calculate(input: Input): CalcResult {
   for (const [name, spec] of Object.entries(input.values ?? {})) resolved[name] = resolve(name, spec)
   // Digits typed into the expression are fine for constants (100, 1/3, 4 quarters); a figure
   // from data typed there loses its unit and its source.
-  const literal = input.expression.match(/\d+\.\d{2,}|\d{4,}/g)
+  const literal = dataLiterals(input.expression)
   const warnings: string[] = []
-  if (literal) warnings.push(`Biểu thức có số viết thẳng (${literal.slice(0, 3).join(", ")}): số lấy từ dữ liệu nên đặt trong values kèm đơn vị và ref.`)
+  if (literal.length > 0) warnings.push(`Biểu thức có số viết thẳng (${literal.slice(0, 3).join(", ")}): số lấy từ dữ liệu nên đặt trong values kèm đơn vị và ref.`)
   for (const r of Object.values(resolved)) if (!r.shown.unit && "ref" in r.shown && r.shown.tool) warnings.push(`"${r.shown.name}" không rõ đơn vị: kiểm tra lại trước khi dùng.`)
   const q = evaluate(input.expression, resolved)
   const decimals = input.decimals ?? 6

@@ -75,9 +75,21 @@ test("a value taken straight from a ref keeps the unit the data server published
   expect(await failure({ expression: "p", values: { p: { from_call: ref, field: "c", unit: "cổ phiếu" } } })).toContain("ghi đơn vị")
 })
 
-test("digits from data typed into the expression get a warning; constants do not", async () => {
+test("digits from data typed into the expression get a warning; constants and digits in names do not", async () => {
   expect((await run({ expression: "64.27 * 1000" })).warnings?.[0]).toContain("số viết thẳng")
   expect((await run({ expression: "x / 4", values: { x: { value: 8 } } })).warnings).toBeUndefined()
+  // The schema's own example.
+  const cagr = await run({ expression: "(rev_2025 / rev_2022) ^ (1/3) - 1", values: { rev_2025: { value: 62_000, unit: "tỷ đồng" }, rev_2022: { value: 44_000, unit: "tỷ đồng" } }, unit: "%" })
+  expect(cagr.warnings).toBeUndefined()
+})
+
+test("a figure calculate or compute already made is read by its result and unit, not an input inside it", async () => {
+  const first = await run({ expression: "a + b", values: { a: { value: 1.2, unit: "nghìn tỷ đồng" }, b: { value: 350, unit: "tỷ đồng" } }, unit: "tỷ đồng" })
+  const chained = await run({ expression: "total / shares", values: { total: { from_call: first.ref! }, shares: { value: 1, unit: "tỷ cổ phiếu" } }, unit: "đồng/cổ phiếu" })
+  expect(chained.result).toBe(1550)
+  expect(chained.inputs[0]).toMatchObject({ value: 1550, unit: "tỷ đồng", ref: first.ref, tool: "calculate" })
+  const ranked = rememberResult("compute", JSON.stringify({ op: "rank", result: [{ label: "FPT", value: 1 }] }))
+  expect(await failure({ expression: "x", values: { x: { from_call: ranked } } })).toContain("không ra một số")
 })
 
 test("the expression is parsed, never run: names, odd characters and bad input fail cleanly", () => {

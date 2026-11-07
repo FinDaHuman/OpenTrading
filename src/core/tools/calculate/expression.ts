@@ -99,6 +99,15 @@ const FUNCTIONS: Record<string, Fn> = {
 
 export const FUNCTION_NAMES = Object.keys(FUNCTIONS)
 
+/** Numbers typed into `text` that look like data (4+ digits, or 2+ decimals), not constants like 100 or 1/3. */
+export function dataLiterals(text: string): string[] {
+  try {
+    return tokenize(text).flatMap((t) => (t.kind === "num" && (Math.abs(t.value) >= 1000 || /\.\d{2,}/.test(String(t.value))) ? [String(t.value)] : []))
+  } catch {
+    return []
+  }
+}
+
 /** Evaluate `text` with `values` (each already in base units). */
 export function evaluate(text: string, values: Record<string, Quantity>): Quantity {
   const tokens = tokenize(text)
