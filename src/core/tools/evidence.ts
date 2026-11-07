@@ -1,4 +1,4 @@
-import { appendFileSync, mkdirSync, readFileSync, statSync } from "node:fs"
+import { appendFileSync, closeSync, mkdirSync, openSync, readSync, statSync } from "node:fs"
 import path from "node:path"
 
 /**
@@ -35,22 +35,15 @@ export function appendEvidence(file: string, record: Evidence) {
   } catch {}
 }
 
-/** Parsed once per size: a skill reads the same refs many times, and this runs on the UI thread. */
-let cached: { file: string; size: number; records: Evidence[] } | undefined
+/**
+ * What has been parsed of the file so far: `end` is the byte just past its last complete line.
+ * The file only grows by appends, so a later read parses only the bytes after `end` instead of
+ * the whole file (up to 64 MB) on the UI thread after every new result.
+ */
+let cached: { file: string; end: number; records: Evidence[] } | undefined
 
-/** A line cut by a crash is skipped; the ones before it stay good. */
-export function readEvidence(file: string): Evidence[] {
-  let size: number
-  let text: string
-  try {
-    // ENOTDIR on Linux when a parent is a file: this must not stop a session from opening.
-    size = statSync(file).size
-    if (cached?.file === file && cached.size === size) return cached.records
-    text = readFileSync(file, "utf8")
-  } catch {
-    return []
-  }
-  const records = text.split("\n").flatMap((line) => {
+const parseLines = (text: string): Evidence[] =>
+  text.split("\n").flatMap((line) => {
     if (!line) return []
     try {
       return [JSON.parse(line) as Evidence]
@@ -58,6 +51,32 @@ export function readEvidence(file: string): Evidence[] {
       return []
     }
   })
-  cached = { file, size, records }
-  return records
+
+/** A line cut by a crash is skipped; the ones before it stay good. */
+export function readEvidence(file: string): Evidence[] {
+  let size: number
+  let fd: number | undefined
+  try {
+    // ENOTDIR on Linux when a parent is a file: this must not stop a session from opening.
+    size = statSync(file).size
+    // Another file, or one that got shorter (not an append): parse it from the start.
+    if (cached?.file !== file || size < cached.end) cached = { file, end: 0, records: [] }
+    if (size === cached.end) return cached.records
+    const bytes = Buffer.alloc(size - cached.end)
+    fd = openSync(file, "r")
+    const read = readSync(fd, bytes, 0, bytes.length, cached.end)
+    const chunk = bytes.subarray(0, read)
+    // 0x0A never occurs inside a multi-byte UTF-8 character, so cutting there is safe.
+    const complete = chunk.lastIndexOf(0x0a) + 1
+    cached.records = [...cached.records, ...parseLines(chunk.subarray(0, complete).toString("utf8"))]
+    cached.end += complete
+    // A last line without its newline yet (being written, or cut by a crash) is read every time
+    // and kept only once it is complete.
+    const tail = parseLines(chunk.subarray(complete).toString("utf8"))
+    return tail.length > 0 ? [...cached.records, ...tail] : cached.records
+  } catch {
+    return []
+  } finally {
+    if (fd !== undefined) closeSync(fd)
+  }
 }
