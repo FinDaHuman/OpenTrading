@@ -39,8 +39,10 @@ jobs:
       - if: runner.os == 'Linux'
         run: bun run typecheck
       # Files run in parallel worker processes, each file in a fresh global (implies --isolate),
-      # so one file's leftover state cannot reach the next.
-      - run: bun test --parallel
+      # so one file's leftover state cannot reach the next. With every CPU busy, a test that
+      # spawns processes passed the default 5 s on the Windows runner: 20 s each here; a real
+      # hang still ends at the job's timeout.
+      - run: bun test --parallel --timeout=20000
 
   build:
     # The standalone binary (scripts/build.ts) on Linux for every pull request; the script itself
