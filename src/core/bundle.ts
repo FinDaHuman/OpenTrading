@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs"
 import path from "node:path"
-import { compiled } from "./build-info"
+import { compiled, prebundled } from "./build-info"
 import { dataDir } from "./home"
 
 /**
@@ -76,4 +76,6 @@ function prune(base: string, keep: string) {
 /** Folder holding skills/, agents/, prompts/ and market/. */
 export const BUNDLED_ROOT = compiled
   ? materialize(OPENTRADING_ASSETS!, OPENTRADING_ASSETS_ID!, path.join(dataDir(), "bundled"))
-  : path.resolve(import.meta.dir, "../..")
+  : // From source this file is src/core/; in the shims' bundle every module is in
+    // node_modules/.opentrading-dev/<key>/ (src/cli/dev-launch.ts).
+    path.resolve(import.meta.dir, prebundled ? "../../.." : "../..")

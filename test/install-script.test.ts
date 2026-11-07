@@ -25,20 +25,24 @@ test("Windows gets .cmd shims for cmd/PowerShell and bare sh shims for Git Bash"
   expect(cmd).toContain('if not exist "%OT_BUN%" set "OT_BUN=bun"')
   expect(cmd).toContain('"%OT_BUN%" --config="D:\\Code\\OpenTrading\\src\\cli\\launcher.bunfig.toml"')
   expect(cmd).toContain("--no-env-file --no-install")
-  expect(cmd).toContain('"D:\\Code\\OpenTrading\\src\\index.tsx" %*')
+  // The launcher (src/cli/dev-launch.ts), or the source on an older commit that has none.
+  expect(cmd).toContain('set "OT_ENTRY=D:\\Code\\OpenTrading\\src\\cli\\dev-launch.ts"')
+  expect(cmd).toContain('if not exist "%OT_ENTRY%" set "OT_ENTRY=D:\\Code\\OpenTrading\\src\\index.tsx"')
+  expect(cmd).toContain('--no-env-file --no-install "%OT_ENTRY%" %*')
   expect(cmd).toContain("\r\n")
   const sh = files.find((f) => f.file.endsWith(`${path.sep}ot`))!.content
   expect(sh.startsWith("#!/bin/sh\n")).toBe(true)
   expect(sh).toContain(`b='C:/npm/node_modules/bun/bin/bun.exe'; [ -x "$b" ] || b=bun`)
-  expect(sh).toContain("exec \"$b\" --config='D:/Code/OpenTrading/src/cli/launcher.bunfig.toml' --no-env-file --no-install 'D:/Code/OpenTrading/src/index.tsx' \"$@\"")
+  expect(sh).toContain(`e='D:/Code/OpenTrading/src/cli/dev-launch.ts'; [ -f "$e" ] || e='D:/Code/OpenTrading/src/index.tsx'`)
+  expect(sh).toContain("exec \"$b\" --config='D:/Code/OpenTrading/src/cli/launcher.bunfig.toml' --no-env-file --no-install \"$e\" \"$@\"")
 })
 
 test("macOS/Linux get sh shims only; quotes and % in paths are escaped", () => {
   const files = shimFiles({ root: "/home/an/it's", dir: "/home/an/.local/bin", platform: "linux" })
   expect(files.map((f) => path.basename(f.file)).sort()).toEqual(["opentrading", "ot"])
-  expect(files[0]!.content).toContain(`'/home/an/it'\\''s/src/index.tsx'`)
+  expect(files[0]!.content).toContain(`'/home/an/it'\\''s/src/cli/dev-launch.ts'`)
   const cmd = shimFiles({ root: "D:\\100%", dir: "C:\\bin", platform: "win32" })[0]!.content
-  expect(cmd).toContain("D:\\100%%\\src\\index.tsx")
+  expect(cmd).toContain("D:\\100%%\\src\\cli\\dev-launch.ts")
 })
 
 test("install is repeatable, never overwrites someone else's file, uninstall removes only ours", async () => {

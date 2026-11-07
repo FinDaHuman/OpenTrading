@@ -30,7 +30,9 @@ if (cli.kind === "version") {
     if (latest && compareVersions(latest, build.version) > 0) process.stdout.write(`có bản mới ${latest}: opentrading update\n`)
     process.exit(0)
   }
-  const root = path.resolve(import.meta.dir, "..")
+  const { prebundled } = await import("./core/build-info")
+  // The shims' bundle lives in node_modules/.opentrading-dev/<key>/ (src/cli/dev-launch.ts).
+  const root = path.resolve(import.meta.dir, prebundled ? "../../.." : "..")
   const { version } = await import("../package.json")
   let commit = ""
   try {
@@ -72,8 +74,8 @@ if (cli.kind === "print") {
 
 // Bun reads bunfig.toml (and its Solid preload) from the current folder only, so started from
 // any other folder the JSX would not compile. Register the transform here instead.
-// A binary is already compiled by scripts/build.ts.
-const { compiled } = await import("./core/build-info")
-if (!compiled) await import("@opentui/solid/preload")
+// A binary is already compiled by scripts/build.ts, and the shims' bundle by src/cli/dev-launch.ts.
+const { compiled, prebundled } = await import("./core/build-info")
+if (!compiled && !prebundled) await import("@opentui/solid/preload")
 const { startTui } = await import("./tui/main")
 await startTui(cli.resume, { yolo: cli.yolo === true })

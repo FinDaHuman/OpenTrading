@@ -46,7 +46,10 @@ export function shimFiles(opts: InstallOptions): ShimFile[] {
           "setlocal",
           `set "OT_BUN=${bun.replaceAll("%", "%%")}"`,
           `if not exist "%OT_BUN%" set "OT_BUN=bun"`,
-          `"%OT_BUN%" --config="${root}\\src\\cli\\launcher.bunfig.toml" --no-env-file --no-install "${root}\\src\\index.tsx" %*`,
+          // An older commit checked out there has no launcher yet: its source runs.
+          `set "OT_ENTRY=${root}\\src\\cli\\dev-launch.ts"`,
+          `if not exist "%OT_ENTRY%" set "OT_ENTRY=${root}\\src\\index.tsx"`,
+          `"%OT_BUN%" --config="${root}\\src\\cli\\launcher.bunfig.toml" --no-env-file --no-install "%OT_ENTRY%" %*`,
           "",
         ].join("\r\n"),
       })
@@ -59,7 +62,9 @@ export function shimFiles(opts: InstallOptions): ShimFile[] {
         "#!/bin/sh",
         `# ${SHIM_MARK}: written by "bun run install:global" in ${root}; run it again to update.`,
         `b=${shQuote(bun.replaceAll("\\", "/"))}; [ -x "$b" ] || b=bun`,
-        `exec "$b" --config=${shQuote(`${root}/src/cli/launcher.bunfig.toml`)} --no-env-file --no-install ${shQuote(`${root}/src/index.tsx`)} "$@"`,
+        // An older commit checked out there has no launcher yet: its source runs.
+        `e=${shQuote(`${root}/src/cli/dev-launch.ts`)}; [ -f "$e" ] || e=${shQuote(`${root}/src/index.tsx`)}`,
+        `exec "$b" --config=${shQuote(`${root}/src/cli/launcher.bunfig.toml`)} --no-env-file --no-install "$e" "$@"`,
         "",
       ].join("\n"),
     })

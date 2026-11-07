@@ -389,6 +389,7 @@ bun run install:global
   - Dời repo sang chỗ khác thì chạy lại `bun run install:global`.
   - Gỡ bằng `bun run uninstall:global`.
   - Đừng cài cùng lúc với bản dựng sẵn: lệnh `ot` nào đứng trước trong PATH thì được chạy (script cài báo khi gặp trường hợp này).
+  - Để mở nhanh (~0,4s thay vì ~3s), lần chạy đầu sau mỗi lần đổi code đã commit sẽ dựng một bản gộp trong `node_modules/.opentrading-dev/` (khoảng 2s). Khi `src/`, `package.json` hay `bun.lock` còn thay đổi chưa commit, lệnh chạy thẳng mã nguồn như cũ. Đặt `OPENTRADING_FROM_SOURCE=1` để luôn chạy mã nguồn.
 - Lệnh bỏ qua `bunfig.toml` và `.env` của thư mục đang đứng, vì chúng có thể chạy code hoặc đổi `OPENTRADING_HOME`. Key để trong file `.env` vì vậy không được nạp: dùng `/connect` hoặc biến môi trường thật.
 - Lệnh chạy đúng bản code đang checkout ở thư mục đã cài. Nếu bạn còn sửa code hay đổi nhánh trong repo đó, cài từ một bản riêng để `ot` không chạy theo nhánh đang làm dở: `git worktree add ../OpenTrading-ot main`, rồi chạy `bun install` và `bun run install:global` trong đó.
 - Thử provider mà không mở TUI (chỉ dùng tool có sẵn): `bun src/core/chat.ts "mấy giờ rồi?"`.

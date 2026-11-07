@@ -402,6 +402,7 @@ bun run install:global
   - After moving the repo, run `bun run install:global` again.
   - Remove them with `bun run uninstall:global`.
   - Don't install them next to the prebuilt binary: whichever `ot` comes first on PATH wins (the installer warns about it).
+  - To start fast (about 0.4 s instead of about 3 s), the first run after each committed code change builds a bundle in `node_modules/.opentrading-dev/` (about 2 s). While `src/`, `package.json` or `bun.lock` has uncommitted changes, the source runs as before. Set `OPENTRADING_FROM_SOURCE=1` to always run the source.
 - They ignore the current folder's `bunfig.toml` and `.env`, which could run code or change `OPENTRADING_HOME`. Keys in a `.env` file are therefore not loaded: use `/connect` or real environment variables.
 - They run whatever is checked out in that folder. If you also edit code or switch branches there, install from a separate worktree so `ot` does not follow your work in progress: `git worktree add ../OpenTrading-ot main`, then `bun install` and `bun run install:global` inside it.
 - Try a provider without the TUI (built-in tools only): `bun src/core/chat.ts "mấy giờ rồi?"` ("what time is it?").
