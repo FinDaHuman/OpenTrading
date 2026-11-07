@@ -26,7 +26,7 @@ import { describeError } from "../core/chat"
 import { TurnHeldError, type BoundSource, type Waiver } from "../core/memory/binding/bind"
 import { waiveLabel } from "../core/memory/binding/render"
 import type { AgentEvent } from "../core/events"
-import { loadConfig, saveConfig } from "../core/config"
+import { cardsSwitchOn, loadConfig, saveConfig } from "../core/config"
 import { idleCompactSettings, IdleTimer } from "../core/idle-compact"
 import { loadCatalog } from "../core/catalog"
 import { closeMemory, type Runtime } from "../core/runtime"
@@ -45,6 +45,11 @@ import { ConnectDialog } from "./dialogs/connect"
 import { ContextDialog } from "./dialogs/context"
 import { HelpDialog } from "./dialogs/help"
 import { MemoryDialog } from "./dialogs/memory"
+import { migrateLegacyMemory } from "../core/memory/legacy"
+import { cardStreamFilter } from "../core/memory/cards/stream"
+import type { Card, CardDraft } from "../core/memory/cards/types"
+import { CardKeys } from "./card-row"
+import { cardOutcomes, focusLatestCard, takeCard } from "./cards"
 import { NotebookFormDialog } from "./dialogs/notebook-form/forms"
 import { offWithConstraints, openNotebookForm } from "./dialogs/notebook-form/open"
 import { notebookCommandOf } from "../core/memory/notebook/commands"
@@ -567,6 +572,11 @@ async function sendTurn(
   let unanswered = false
   // Index of the assistant line currently receiving text; -1 after a tool call.
   let current = -1
+  // Card blocks never show, not even while they stream (spec 007): one filter per assistant line.
+  let cards = cardStreamFilter()
+  /** The card this turn's answer ended with (the core checked it); named and noted when the turn is recorded. */
+  let cardDraft: CardDraft | undefined
+  let madeCard: Card | undefined
   const edit = (index: number, fn: (line: any) => void) => {
     if (live() && index >= 0) setState(produce((s) => fn(s.lines[index])))
   }
@@ -589,6 +599,8 @@ async function sendTurn(
     edit(current, (l) => (l.text += text))
   }
   const closeText = () => {
+    pending += cards.end()
+    cards = cardStreamFilter()
     flush()
     // Echoed todo status lines leave the screen as they leave history (loop/stop-gate.ts).
     edit(current, (l) => {
@@ -617,9 +629,13 @@ async function sendTurn(
     runtime.deskOptIn = optIn
     // Sub-agents started in this turn take the same choice (SubagentManager reads it at start).
     runtime.turnWaiver = mode.waive
+    // Cards follow the notebook's switch in /config, read for each turn (spec 007).
+    const cardsOn = runtime.memory.id === "notebook" && cardsSwitchOn(await loadConfig())
     const turn = runAgent({
       history: state.history,
       input: msg.text,
+      cards: cardsOn,
+      cardOutcomes: cardOutcomes(),
       ...(optIn ? { preload: [DESK_RUN], desk: deskReminder(optIn, PLAYBOOKS) } : {}),
       images: [...(msg.images ?? []), ...(attached?.images ?? [])],
       attachments: attached?.parts,
@@ -641,7 +657,7 @@ async function sendTurn(
     for await (const event of turn) {
       if (!live()) continue
       if (event.type === "text-delta") {
-        pending += event.text
+        pending += cards.push(event.text)
         flushTimer ??= setTimeout(flush, FLUSH_MS)
         continue
       }
@@ -667,6 +683,9 @@ async function sendTurn(
             const parsed = TodoWriteInput.safeParse(todoCalls.get(event.callId))
             if (parsed.success) setState("liveTodos", parsed.data.todos)
           }
+          break
+        case "card":
+          cardDraft = event.card
           break
         case "notice":
           pushLine({ kind: "info", text: event.text })
@@ -702,6 +721,9 @@ async function sendTurn(
           if (event.usage) setState({ contextTokens: event.usage.contextTokens, contextEstimated: event.usage.estimated })
           if (event.messages.length > 0) {
             setState("history", (history) => [...history, ...event.messages])
+            // Before the turn is queued: the card is written with it, named after its number.
+            if (cardDraft) madeCard = takeCard(cardDraft)
+            cardDraft = undefined
             recordTurn(event.messages, event.usage?.contextTokens, { recoveries: event.recoveries, unanswered: event.unanswered, retiredTodos: event.retiredTodos, dataGaps: event.dataGaps })
           }
           if (event.dataGaps) {
@@ -714,6 +736,13 @@ async function sendTurn(
       }
     }
     flush()
+    if (live() && madeCard) {
+      closeText()
+      // Never takes the keys by itself: the user's next keystroke belongs to the prompt (an "x" there must not
+      // dismiss the card). /goiy gives it the keys.
+      pushLine({ kind: "card", card: madeCard, state: "pending" })
+    }
+    madeCard = undefined
     if (live() && controller.signal.aborted) pushLine({ kind: "info", text: "Đã dừng." })
   } catch (error) {
     // Setup problems (no provider, model or key) are thrown before the turn starts.
@@ -1042,8 +1071,10 @@ export function App(props: {
     if (skillSet.problems.length > 0) {
       pushLine({ kind: "error", text: `${skillSet.problems.length} skill bị lỗi và không được nạp. Xem /skills.` })
     }
+    // A config still naming the removed legacy memory: written back as the notebook and said once (spec 007).
+    const moved = await migrateLegacyMemory(props.runtime.home).catch(() => undefined)
+    if (moved) pushLine({ kind: "info", text: moved })
     // A notebook that did not open says why at once (chat still works); it is also in /config and /memory.
-    // Only the notebook: the legacy file memory keeps reporting its broken files in /memory alone.
     if (props.runtime.memory.id === "notebook") {
       for (const problem of props.runtime.memory.problems?.() ?? []) pushLine({ kind: "error", text: problem })
     }
@@ -1693,6 +1724,9 @@ export function App(props: {
       case "clear":
       case "new":
         return void clearTranscript(props.runtime)
+      case "goiy":
+        if (!focusLatestCard()) say("Không có thẻ gợi ý nào đang chờ.", "info")
+        return
       case "compact":
         if (state.streaming) return say("Đang trả lời; chờ xong rồi nén.", "warning")
         // Messages typed while it runs are queued: send them (or give them back) afterwards.
@@ -1832,6 +1866,8 @@ export function App(props: {
       return renderer.clearSelection()
     }
     if (owner() || state.dialog) return
+    // A focused suggestion card has the keys (card-row.tsx CardKeys); the prompt stays in view.
+    if (state.cardFocus !== undefined) return
     if (state.panelFocus !== undefined) return panelKey(evt)
     // The chat scrolls from the keyboard too (opencode): PageUp/PageDown half a screen,
     // Ctrl+Home/Ctrl+End to the start/end (plain Home/End stay with the prompt).
@@ -2005,6 +2041,10 @@ export function App(props: {
         <Show when={!state.approval && !state.question ? state.turnHold : undefined} keyed>
           {(card) => <HoldCard card={card} />}
         </Show>
+        {/* A suggestion card's keys, behind every other card and prompt (spec 007). */}
+        <Show when={!state.approval && !state.question && !state.turnHold && !state.deskApproval && !state.dialog ? state.cardFocus : undefined} keyed>
+          {(id) => <CardKeys id={id} memory={props.runtime.memory} />}
+        </Show>
         {/* A question stays mounted (answers kept) while an approval covers it. */}
         <Show when={state.question} keyed>
           {(request) => (
@@ -2078,7 +2118,7 @@ export function App(props: {
         <PromptInput
           ref={(r) => (input = r)}
           visible={!owner() && !state.dialog}
-          focused={!state.dialog && !owner() && state.panelFocus === undefined}
+          focused={!state.dialog && !owner() && state.panelFocus === undefined && state.cardFocus === undefined}
           busy={state.streaming}
           placeholder={
             state.streaming ? "đang trả lời… esc để dừng · enter để xếp hàng tin tiếp" : "Hỏi về thị trường, hoặc gõ / để xem lệnh · ↑ lịch sử · ctrl+j xuống dòng"

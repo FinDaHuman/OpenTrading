@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| **Trạng thái** | Đã duyệt lộ trình (28/10/2026). Spec 004, 001, 002, 003, 005, 006 đã implement (PR #229, CI xanh); spec 007 chưa làm |
+| **Trạng thái** | Đã duyệt lộ trình (28/10/2026). Spec 004, 001, 002, 003, 005, 006, 007 đã implement (PR #229) |
 | **Kiến trúc** | [ra-soat-v5.md](../ra-soat-v5.md) phần C, các quyết định Q1–Q7 trong bảng "Đã chốt" (§B10) |
 | **Quyết định** | ADR [0002](../../decisions/0002-memory-ban-ghi-co-nhan.md) · [0003](../../decisions/0003-memory-kho-sqlite-va-dinh-danh.md) · [0004](../../decisions/0004-memory-muc-luc-va-model-tu-doc.md) · [0005](../../decisions/0005-memory-rang-buoc-co-cau-truc.md) · [0006](../../decisions/0006-memory-ranh-gioi-theo-loai.md) |
 | **Nhánh** | `feat/memory`, một PR vào `main` |
@@ -23,7 +23,7 @@
   - typecheck và `bun test` qua ở máy;
   - CI trên PR xanh;
   - trạng thái được cập nhật ở `docs/STATUS.md`, `CHANGELOG.md` và bảng dưới đây.
-- Bản tham khảo `FileMemory` giữ nguyên. Provider v5.1 là một lựa chọn mới trong `/config`.
+- Provider v5.1 (Sổ ghi nhớ) là lựa chọn duy nhất ngoài "Tắt" trong `/config`; bản tham khảo `FileMemory` đã gỡ ở spec 007.
 
 ## Các spec
 
@@ -40,7 +40,7 @@ Ký hiệu:
 | 5 | [003](003-duong-ghi-lenh-form/spec.md) | Đường ghi: lệnh và form | `/nho`, `/luandiem`, `/baihoc`, `/quyetdinh`; `/memory` xem, sửa, xoá, xuất Markdown; cảnh báo lệch ngăn; xung đột phiên bản hiện diff; lịch sử ô nhập chỉ lưu tên lệnh | [M] + [LÕI] vừa | 001, 002 | C4, T6, K7 | `implemented` (test chạy trên máy; chưa duyệt code, chưa CI; chưa thử tay trên TUI) |
 | 6 | [005](005-rang-buoc-agent-con/spec.md) | Ràng buộc tới agent con và hồ sơ | Host gửi ràng buộc có cấu trúc cho agent con; ràng buộc độc lập với công tắc memory; đọc lỗi thì hoãn lượt (T7); file mẫu `INVESTOR.md` đưa ví dụ vào chú thích (T8) | **[LÕI]** | 001 | Q4, T7, T8 | `implemented` (test chạy trên máy; phần lõi `blocked-by-core` tới khi chủ repo duyệt; chưa duyệt code, chưa CI; chưa thử tay trên TUI, chưa thử với model thật) |
 | 7 | [006](006-nhan-che-ma-luot/spec.md) | Phương án Y đầy đủ trong lõi | Lõi đưa danh sách nhãn đang có trong lịch sử cho memory; xoá thì che khối trong phiên đang mở và khi đọc lại mọi phiên; dòng che trong file phiên; mã lượt; `memory_read` trả câu ngắn khi khối đã có. Không đụng phần nén hội thoại (thuộc 007) | **[LÕI]** | 002, 004 | K3, K5 | `implemented` (test chạy trên máy, chưa chạy CI, chưa qua duyệt code); phần sửa lõi `blocked-by-core` tới khi chủ repo duyệt |
-| 8 | 007 | Nén hội thoại, gỡ memory cũ, thẻ gợi ý | Ba việc: (1) toàn bộ phần nén hội thoại: mẫu tóm tắt chỉ giữ nhãn memory, không chép nội dung khối, nên xoá thì che được; mục "Ràng buộc và sở thích" của bản tóm tắt; báo memory lúc vừa nén; (2) gỡ memory cũ (lựa chọn "Memory cũ", tool `propose_memory`, hook "Ghi nhớ:"), có đường chuyển cho cấu hình cũ, không xoá dữ liệu người dùng; (3) thẻ gợi ý: tách thẻ khỏi câu trả lời, dòng thẻ trong file phiên, thẻ mở form của 003 | **[LÕI]** | 003, 006 | K3, K5; thẻ gợi ý | `specified` |
+| 8 | 007 | Nén hội thoại, gỡ memory cũ, thẻ gợi ý | Ba việc: (1) toàn bộ phần nén hội thoại: mẫu tóm tắt chỉ giữ nhãn memory, không chép nội dung khối, nên xoá thì che được; mục "Ràng buộc và sở thích" của bản tóm tắt; báo memory lúc vừa nén; (2) gỡ memory cũ (lựa chọn "Memory cũ", tool `propose_memory`, hook "Ghi nhớ:"), có đường chuyển cho cấu hình cũ, không xoá dữ liệu người dùng; (3) thẻ gợi ý: tách thẻ khỏi câu trả lời, dòng thẻ trong file phiên, thẻ mở form của 003 | **[LÕI]** | 003, 006 | K3, K5; thẻ gợi ý | `implemented` (test chạy trên máy Windows và Linux; chưa duyệt code, chưa CI; chưa thử tay trên TUI, chưa thử với model thật) |
 
 **Mốc dùng được:** sau 001, 002 và 003, memory v5.1 chạy trọn vòng ghi và đọc. Sau 005, ràng buộc tới agent chính và mọi agent con ở cả ba lựa chọn memory. Sau 006, sổ ghi nhớ quyết định theo lịch sử thật và xoá thì che. Các giới hạn:
 
@@ -48,7 +48,7 @@ Ký hiệu:
 | --- | --- |
 | Sau nén hoặc mở lại phiên, khối memory có thể bị chèn lại hoặc thiếu | Đã gỡ ở 006 |
 | Xoá chỉ báo "đã ngừng dùng", chưa che nội dung cũ trong lịch sử đang mở | Đã gỡ ở 006 |
-| Bản tóm tắt khi nén có thể chép nội dung khối memory mà không kèm nhãn, nên che không tới | 007 |
+| Bản tóm tắt khi nén có thể chép nội dung khối memory mà không kèm nhãn, nên che không tới | Đã gỡ ở 007 |
 
 ## Ngoài lộ trình này
 

@@ -48,6 +48,8 @@ export interface AssembleInput {
   unread?: string
   /** MemoryProvider.instructions(): static, goes to system. */
   memoryInstructions?: string
+  /** Suggestion cards are on this turn (spec 007): the guide to the card block (prompts/memory-cards.md). */
+  memoryCards?: boolean
   /** MemoryProvider.index(): always-on summary, goes to context. */
   memoryIndex?: string
   /** MemoryProvider.recall() for this message, already capped: reminder. */
@@ -196,6 +198,7 @@ export function assemble(input: AssembleInput, promptsDir = PROMPTS_DIR): Assemb
   if (subagent) add(system, "chi_dan_agent", 6, "system", input.agentPrompt?.trim() || undefined, "identity")
   else {
     add(system, "memory_policy", 4, "system", input.memoryInstructions?.trim() || undefined)
+    if (input.memoryCards) add(system, "memory_cards", 4, "system", promptFile("memory-cards", promptsDir))
     add(system, "style", 8, "system", promptFile("style", promptsDir))
   }
 

@@ -256,9 +256,9 @@ const { readJson } = await import("../src/core/store")
 const { setKey } = await import("../src/core/auth")
 const { loadConfig, saveConfig } = await import("../src/core/config")
 const { initRuntime } = await import("../src/core/runtime")
-const { FileMemory } = await import("../src/core/memory/file-memory")
+const { NoopMemory } = await import("../src/core/memory/types")
 
-const memory = new FileMemory(path.join(home, "memory"))
+const memory = new NoopMemory()
 /** Times the app asked to exit (the real exit is replaced in tests). */
 let exits = 0
 /** What copy-on-select sent over OSC52 (the renderer's method is replaced in beforeAll). */
@@ -788,8 +788,8 @@ test("/tools lists built-in and MCP tools", async () => {
     setup.mockInput.pressEnter()
     // 6 core built-ins (current_time, load_skill, ask_user, todo_write, tool_search, read_file)
     // + 24 local tools (glob_files, grep_files, write_file, edit_file, shell, chart, session, watchlist, web, spawn_subagent, send_message, stop_agent, doctor_local, desk_run)
-    // + propose_memory + 4 from the demo MCP server
-    frame = await setup.waitForFrame((f) => f.includes("Tool · 35") && f.includes("25 tool hoãn"))
+    // + 4 from the demo MCP server (memory is off here: no memory_read)
+    frame = await setup.waitForFrame((f) => f.includes("Tool · 34") && f.includes("25 tool hoãn"))
     show(frame)
     // Regression for the 01/10 screenshot: every tool is exactly one line, long descriptions
     // end in "…" instead of wrapping mid-word, and the mark column is straight.
@@ -809,15 +809,14 @@ test("/tools lists built-in and MCP tools", async () => {
     expect(rows.find((r) => r.includes(" read_file "))).not.toContain("hoãn · ")
     expect(rows.find((r) => r.includes(" glob_files "))).toContain("hoãn · ")
     expect(rows.find((r) => r.includes(" chart_render "))).toContain("hoãn · ")
-    // ↑ from the first row wraps to the last: the Memory and MCP groups sit below the fold.
+    // ↑ from the first row wraps to the last: the MCP group sits below the fold (memory is off: no Memory group).
     setup.mockInput.pressArrow("up")
-    frame = await setup.waitForFrame((f) => f.includes("MCP · demo") && f.includes("35/35"))
+    frame = await setup.waitForFrame((f) => f.includes("MCP · demo") && f.includes("34/34"))
     show(frame)
-    expect(frame).toContain("Memory")
     const tail = frame.split("\n").filter((l) => /^ {2}(❯ |  )[◇◆] \S/.test(l))
     expect(tail.find((r) => r.includes(" echo "))).toContain("hoãn · ")
     setup.mockInput.pressArrow("down")
-    await setup.waitForFrame((f) => f.includes("1/35"))
+    await setup.waitForFrame((f) => f.includes("1/34"))
   } finally {
     await saveConfig({ toolSearch: undefined })
   }
@@ -828,7 +827,7 @@ test("/tools lists built-in and MCP tools", async () => {
   expect(frame).toContain("ask_user")
   expect(frame).toMatch(/• questions \(bắt buộc\): array/)
   setup.mockInput.pressEscape()
-  await setup.waitForFrame((f) => f.includes("Tool · 35"))
+  await setup.waitForFrame((f) => f.includes("Tool · 34"))
   setup.mockInput.pressEscape()
   await setup.waitFor(() => state.dialog === undefined)
 })
@@ -1869,58 +1868,6 @@ test("the session's temp folder: a size warning sits under the answer, /scratch 
   }
 })
 
-test("/memory: a model proposal is pending until approved with 'a'", async () => {
-  await memory.add("Người dùng không giao dịch margin", { status: "pending", via: "model" })
-  await setup.mockInput.typeText("/memory")
-  setup.mockInput.pressEnter()
-  await setup.waitForFrame((f) => f.includes("chờ duyệt"))
-  setup.mockInput.pressEnter()
-  await setup.waitForFrame((f) => f.includes("a duyệt"))
-  setup.mockInput.pressKey("a")
-  await setup.waitFor(async () => (await memory.list())[0]?.status === "active")
-  await setup.waitForFrame((f) => f.includes("đang dùng"))
-  setup.mockInput.pressEscape()
-  await setup.waitFor(() => state.dialog === undefined)
-})
-
-test("/memory: a, r and d act only in a memory's view; in the list they are letters of the filter", async () => {
-  const pending = await memory.add("Không mua cổ phiếu penny", { status: "pending", via: "model" })
-  const active = await memory.add("Ưu tiên cổ tức tiền mặt", { status: "active", via: "user" })
-  const status = async (id: string) => (await memory.list()).find((i) => i.id === id)?.status
-  await setup.mockInput.typeText("/memory")
-  setup.mockInput.pressEnter()
-  await setup.waitForFrame((f) => f.includes("Không mua cổ phiếu penny") && f.includes("gõ để lọc"))
-  // In the list a, r and d only filter: nothing is approved, rejected or removed.
-  await setup.mockInput.typeText("ard")
-  let frame = await setup.waitForFrame((f) => f.includes("› ard"))
-  show(frame)
-  expect(await status(pending.id)).toBe("pending")
-  expect(await status(active.id)).toBe("active")
-  for (let i = 0; i < 3; i++) setup.mockInput.pressBackspace()
-  // The memory's view has no filter: r rejects, and the list comes back with an empty filter.
-  await setup.mockInput.typeText("penny")
-  await setup.waitForFrame((f) => f.includes("› penny"))
-  setup.mockInput.pressEnter()
-  await setup.waitForFrame((f) => f.includes("a duyệt · r bỏ"))
-  setup.mockInput.pressKey("r")
-  await setup.waitFor(async () => (await status(pending.id)) !== "pending")
-  frame = await setup.waitForFrame((f) => f.includes("Memory · ") && f.includes("Ưu tiên cổ tức"))
-  expect(frame).toContain("gõ để lọc")
-  expect(frame).not.toContain("› r")
-  await setup.mockInput.typeText("cổ tức")
-  await setup.waitForFrame((f) => f.includes("› cổ tức"))
-  setup.mockInput.pressEnter()
-  await setup.waitForFrame((f) => f.includes("d xoá · esc"))
-  setup.mockInput.pressKey("d")
-  await setup.waitFor(async () => (await status(active.id)) === undefined)
-  frame = await setup.waitForFrame((f) => f.includes("Memory · ") && !f.includes("cổ tức tiền mặt  đang dùng"))
-  show(frame)
-  expect(frame).toContain("gõ để lọc")
-  expect(frame).not.toContain("› d")
-  setup.mockInput.pressEscape()
-  await setup.waitFor(() => state.dialog === undefined)
-})
-
 test("/permissions: ctrl+r on an auto-mode block grants the retry and never lands in the list's filter; in the list r is a letter", async () => {
   const granted: string[] = []
   const realGrant = runtime.auto.grantRetry.bind(runtime.auto)
@@ -1958,26 +1905,29 @@ test("/permissions: ctrl+r on an auto-mode block grants the retry and never land
   }
 })
 
-test("/config turns memory off and on without a restart", async () => {
-  expect(runtime.memory.id).toBe("file")
+test("/config turns memory on and off without a restart", async () => {
+  expect(runtime.memory.id).toBe("none")
   await setup.mockInput.typeText("/config")
   setup.mockInput.pressEnter()
   await setup.waitForFrame((f) => f.includes("Cài đặt") && f.includes("Memory"))
-  // Memory has three choices (off, the legacy file memory, the notebook): enter opens them, type to pick.
+  // Memory has two choices (off, the notebook): enter opens them, type to pick.
   setup.mockInput.pressEnter()
   await setup.waitForFrame((f) => f.includes("Sổ ghi nhớ"))
-  await setup.mockInput.typeText("tat")
+  await setup.mockInput.typeText("so ghi")
+  await setup.waitForFrame((f) => !f.includes("không dùng memory"))
   setup.mockInput.pressEnter()
-  await setup.waitFor(() => runtime.memory.id === "none")
+  await setup.waitFor(() => runtime.memory.id === "notebook")
+  expect(runtime.registry.get("memory_read")).toBeDefined()
   expect(runtime.registry.get("propose_memory")).toBeUndefined()
-  expect((await Bun.file(path.join(home, "config.json")).json()).memory).toEqual({ provider: "none" })
+  expect((await Bun.file(path.join(home, "config.json")).json()).memory).toEqual({ provider: "notebook" })
   await setup.waitForFrame((f) => f.includes("Cài đặt"))
   setup.mockInput.pressEnter()
-  await setup.waitForFrame((f) => f.includes("Sổ ghi nhớ"))
-  await setup.mockInput.typeText("memory cu")
+  await setup.waitForFrame((f) => f.includes("Cho phép thẻ gợi ý"))
+  await setup.mockInput.typeText("tat")
+  await setup.waitForFrame((f) => !f.includes("ràng buộc, luận điểm, bài học"))
   setup.mockInput.pressEnter()
-  await setup.waitFor(() => runtime.memory.id === "file")
-  expect(runtime.registry.get("propose_memory")).toBeDefined()
+  await setup.waitFor(() => runtime.memory.id === "none")
+  expect(runtime.registry.get("memory_read")).toBeUndefined()
   setup.mockInput.pressEscape()
   await setup.waitFor(() => state.dialog === undefined)
 })

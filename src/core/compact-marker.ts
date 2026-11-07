@@ -1,4 +1,5 @@
 import type { ModelMessage } from "ai"
+import { REMINDER_TAG } from "./reminder-tag"
 import { LOADED_PREFIX } from "./tools/search"
 
 /**
@@ -58,11 +59,11 @@ export function compactCarry(m: ModelMessage): { tools: string[]; skills: string
 }
 
 export function compactPair(summary: string, carry: { tools: string[]; skills: string[]; todos: CarriedTodo[] }): ModelMessage[] {
-  const lines = ["<nhac_nho>", `<${COMPACT_TAG}>`, COMPACT_HEADER]
+  const lines = [`<${REMINDER_TAG}>`, `<${COMPACT_TAG}>`, COMPACT_HEADER]
   if (carry.tools.length > 0) lines.push(`${LOADED_PREFIX}${carry.tools.join(", ")}`)
   if (carry.skills.length > 0) lines.push(`${SKILLS_PREFIX}${carry.skills.join(", ")} — gọi lại load_skill nếu cần hướng dẫn chi tiết.`)
   if (carry.todos.length > 0) lines.push(`<${TODOS_TAG}>${JSON.stringify(carry.todos)}</${TODOS_TAG}>`)
-  lines.push(`</${COMPACT_TAG}>`, "</nhac_nho>")
+  lines.push(`</${COMPACT_TAG}>`, `</${REMINDER_TAG}>`)
   return [
     { role: "user", content: lines.join("\n") },
     { role: "assistant", content: summary.trim() },

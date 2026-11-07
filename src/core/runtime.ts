@@ -9,7 +9,6 @@ import { PermissionGate } from "./permission"
 import type { Waiver } from "./memory/binding/bind"
 import { createConstraintReader, type ConstraintReader } from "./memory/binding/constraints"
 import { createRedactionCheck, type RedactionCheck } from "./memory/redaction/check"
-import { FileMemory } from "./memory/file-memory"
 import { openNotebook } from "./memory/notebook/lifecycle"
 import { NoopMemory, type MemoryProvider } from "./memory/types"
 import { dataDir } from "./paths"
@@ -94,14 +93,13 @@ export interface Runtime {
   auto: AutoReviewer
 }
 
-export type MemoryChoice = "none" | "file" | "notebook"
+export type MemoryChoice = "none" | "notebook"
 
 /**
  * Pick the memory implementation named in config (`memory.provider`). Default: off. The notebook opens
  * <home>/memory.db now; a store that fails to open still yields a provider that says why.
  */
 export function createMemory(choice: MemoryChoice | undefined, home = dataDir()): MemoryProvider {
-  if (choice === "file") return new FileMemory(path.join(home, "memory"))
   if (choice === "notebook") return openNotebook(path.join(home, "memory.db"))
   return new NoopMemory()
 }

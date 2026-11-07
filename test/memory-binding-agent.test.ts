@@ -86,7 +86,6 @@ const { currentTimeTool } = await import("../src/core/tools/builtin/current-time
 const { saveConfig } = await import("../src/core/config")
 const { setKey } = await import("../src/core/auth")
 const { HookBus } = await import("../src/core/hooks")
-const { FileMemory } = await import("../src/core/memory/file-memory")
 const { createConstraintReader } = await import("../src/core/memory/binding/constraints")
 const { TurnHeldError } = await import("../src/core/memory/binding/bind")
 const { SubagentManager } = await import("../src/core/subagents/manager")
@@ -130,7 +129,7 @@ const systemOf = (body: Body) => {
 }
 const count = (haystack: string, needle: string) => haystack.split(needle).length - 1
 
-type Choice = "none" | "file" | "notebook"
+type Choice = "none" | "notebook"
 
 /** A runAgent turn the way the UI wires one, with the memory choice of /config. */
 function setup(choice: Choice) {
@@ -143,8 +142,6 @@ function setup(choice: Choice) {
     for (const tool of notebook.tools()) registry.register({ ...tool, source: `memory:${notebook.id}` })
     notebook.register(hooks)
     memory = notebook
-  } else if (choice === "file") {
-    memory = new FileMemory(path.join(nb.dir(), "file-memory"))
   }
   const constraints = createConstraintReader(nb.file())
   let prompts = 0
@@ -195,7 +192,7 @@ function seedNewer() {
 }
 
 describe("main agent: constraints whatever /config chose", () => {
-  for (const choice of ["none", "file", "notebook"] as const) {
+  for (const choice of ["none", "notebook"] as const) {
     test(`${choice}: both constraints exactly once; style, index, memory_read only with the notebook`, async () => {
       seed()
       const { turn } = setup(choice)
@@ -304,7 +301,7 @@ describe("main agent: a source that cannot be read holds the turn", () => {
     expect(system).not.toContain("ho_so_nha_dau_tu")
   })
 
-  for (const choice of ["none", "file", "notebook"] as const) {
+  for (const choice of ["none", "notebook"] as const) {
     test(`${choice}: a newer-schema store holds every turn, the file stays byte for byte; moved away, the turn runs`, async () => {
       seedNewer()
       const before = readFileSync(nb.file())
@@ -353,14 +350,20 @@ describe("compaction reads leniently", () => {
     expect(systemOf(bodies.at(-1)!)).not.toContain(HEADING)
   })
 
-  test("a readable store: the summary request has the turn's exact system part", async () => {
+  test("a readable store: the summary request has the profile but no constraint block (spec 007)", async () => {
     seed()
     writeFileSync(profilePath, `## Khung đầu tư\n${PROFILE_LINE}\n`)
-    const { registry, constraints, turn } = setup("none")
+    const { registry, constraints, turn } = setup("notebook")
     const turnSystem = systemOf((await turn("Câu hỏi")).requests[0]!)
-    await summarizeConversation({ head, prompt: "TÓM-TẮT", skills: [], registry, constraints })
-    expect(systemOf(bodies.at(-1)!)).toBe(turnSystem)
     expect(turnSystem).toContain(C1)
+    await summarizeConversation({ head, prompt: "TÓM-TẮT", skills: [], registry, constraints, memory: nb.notebook() })
+    const summarySystem = systemOf(bodies.at(-1)!)
+    // Saved constraints are sent with every turn: the summary never holds a copy an edit cannot reach.
+    expect(summarySystem).not.toContain(C1)
+    expect(summarySystem).not.toContain(HEADING)
+    expect(summarySystem).not.toContain("<memory_policy>")
+    expect(JSON.stringify(bodies.at(-1))).not.toContain("[Sổ ghi nhớ · mục lục")
+    expect(summarySystem).toContain(PROFILE_LINE)
   })
 })
 

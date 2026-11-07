@@ -32,7 +32,8 @@ const masked = (b: HistoryBlock) => (b.kind === "lesson" ? maskedLesson(b.ref as
 const held = (b: HistoryBlock) =>
   b.kind === "lesson" ? heldLesson(b.ref as number, b.version) : heldThesis(b.ref as string, b.version)
 
-type Edit = { block: HistoryBlock; text: string }
+export type BlockEdit = { block: HistoryBlock; text: string }
+type Edit = BlockEdit
 
 /** The text a block sits in: a reminder text part, or a memory_read result's text output. */
 function textOf(part: unknown): string {
@@ -45,7 +46,7 @@ function withText(part: unknown, text: string): unknown {
 }
 
 /** Applies the edits; messages and parts nothing touched are the same objects as before. */
-function replace(messages: readonly ModelMessage[], edits: readonly Edit[]): ModelMessage[] {
+export function replaceBlocks(messages: readonly ModelMessage[], edits: readonly Edit[]): ModelMessage[] {
   if (edits.length === 0) return [...messages]
   const byPart = new Map<string, Edit[]>()
   for (const e of edits) {
@@ -113,7 +114,7 @@ export function applyCheck(messages: readonly ModelMessage[], blocks: readonly H
   if (result.state !== "checked") {
     return {
       kept: [...messages],
-      sent: replace(
+      sent: replaceBlocks(
         messages,
         blocks.map((block) => ({ block, text: held(block) })),
       ),
@@ -125,8 +126,8 @@ export function applyCheck(messages: readonly ModelMessage[], blocks: readonly H
   const differ = blocks.filter((b) => result.verdict(b) === "mismatch")
   const forGood = deleted.map((block) => ({ block, text: masked(block) }))
   return {
-    kept: replace(messages, forGood),
-    sent: replace(messages, [...forGood, ...differ.map((block) => ({ block, text: held(block) }))]),
+    kept: replaceBlocks(messages, forGood),
+    sent: replaceBlocks(messages, [...forGood, ...differ.map((block) => ({ block, text: held(block) }))]),
     record: group(deleted),
     ...(differ.length > 0 ? { temporary: { state: "mismatch" as const, blocks: differ.length } } : {}),
   }
@@ -147,7 +148,7 @@ export function applyRedactLines(messages: readonly ModelMessage[], items: reado
         i.kind === b.kind && (i.kind === "lesson" ? i.id === b.ref : i.name === b.ref) && i.versions.includes(b.version),
     )
   const blocks = memoryLines(messages).blocks.filter(hit)
-  return replace(
+  return replaceBlocks(
     messages,
     blocks.map((block) => ({ block, text: masked(block) })),
   )

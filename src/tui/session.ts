@@ -384,7 +384,7 @@ export async function startSession(runtime: Runtime, source: "startup" | "clear"
   setState("deskRuns", reconcile({}))
   setState({ notices: [], noticeHold: false })
   // A fresh conversation has not seen the market clock yet.
-  setState({ lines: left, history: [], clock: undefined, ...NO_COMPACTION })
+  setState({ lines: left, history: [], clock: undefined, cardFocus: undefined, ...NO_COMPACTION })
   runtime.auto.reset()
   runtime.history.newConversation()
   await runtime.hooks.emit({ type: "session-start", sessionId: current.id, source })
@@ -405,7 +405,7 @@ export async function resumeSession(runtime: Runtime, id: string) {
   setState("deskRuns", reconcile({}))
   setState({ notices: [], noticeHold: false })
 
-  const lines: Line[] = transcriptFromMessages(loaded.display).flatMap((item): Line[] => {
+  const toLines = (item: ReturnType<typeof transcriptFromMessages>[number]): Line[] => {
     if (item.kind === "compact") return [{ kind: "compact", summary: item.text }]
     if (item.kind === "note") return [{ kind: "info", text: item.text }]
     if (item.kind === "agent-notice") {
@@ -425,7 +425,17 @@ export async function resumeSession(runtime: Runtime, id: string) {
       return chart ? [row, { kind: "chart", data: chart }] : [row]
     }
     return [item.kind === "user" ? { kind: "user", text: item.text, files: item.files } : { kind: "assistant", text: item.text, done: true }]
-  })
+  }
+  // Suggestion cards (spec 007) come back under the answer they followed, in their last state. The
+  // transcript is built turn by turn around them: a card sits between two turns, never inside one.
+  const lines: Line[] = []
+  let fromMessage = 0
+  for (const c of [...loaded.cards].sort((a, b) => a.at - b.at)) {
+    lines.push(...transcriptFromMessages(loaded.display.slice(fromMessage, c.at)).flatMap(toLines))
+    lines.push({ kind: "card", card: c.card, state: c.state, ...(c.saved ? { saved: c.saved } : {}) })
+    fromMessage = c.at
+  }
+  lines.push(...transcriptFromMessages(loaded.display.slice(fromMessage)).flatMap(toLines))
   const notes: Line[] = [...left, { kind: "info", text: `Mở lại phiên "${loaded.summary.title}" · ${session.turns} lượt` }]
   const from = loaded.meta?.cwd
   if (from && samePathKey(from) !== samePathKey(process.cwd())) {
@@ -451,7 +461,7 @@ export async function resumeSession(runtime: Runtime, id: string) {
   runtime.auto.reset(loaded.display, (name) => runtime.registry.get(name), visibleUserText, loaded.harness)
   runtime.history.newConversation()
   // The clock snapshot is unknown after resume, so the next turn re-sends it.
-  setState({ lines: [...notes, ...lines], history: loaded.messages, clock: undefined, ...NO_COMPACTION, contextTokens: loaded.contextTokens })
+  setState({ lines: [...notes, ...lines], history: loaded.messages, clock: undefined, cardFocus: undefined, ...NO_COMPACTION, contextTokens: loaded.contextTokens })
   await runtime.hooks.emit({ type: "session-start", sessionId: current.id, source: "resume" })
 }
 

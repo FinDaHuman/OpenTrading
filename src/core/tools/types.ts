@@ -95,8 +95,8 @@ export interface ToolDef<I = any> {
   annotations?: { title?: string; destructive?: boolean; openWorld?: boolean }
   /**
    * Who may run this without asking. Read-only tools never ask. `"never"` exempts a
-   * non-read-only tool whose effect is already reviewed elsewhere (propose_memory only
-   * queues a proposal the user approves in /memory).
+   * non-read-only tool whose effect is already reviewed elsewhere (todo_write only edits
+   * the turn's own list).
    */
   approval?: "never"
   /**

@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from "bun:test"
 import { Database } from "bun:sqlite"
-import { existsSync, readdirSync, readFileSync, rmSync } from "node:fs"
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { mkdtemp, readdir, rm } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
@@ -251,19 +251,27 @@ describe("a notebook command while the notebook cannot be used", () => {
     expect((await history()).map((h) => h.text)).toEqual(["/nho"])
   })
 
-  test("legacy memory: also says the command does not write there; the legacy folder is unchanged", async () => {
-    await start("file")
-    await type("/luandiem HPG Hưởng lợi")
-    enter()
-    await frameWith("không ghi vào memory cũ")
-    expect(state.notification?.text).toBe(
-      "Sổ ghi nhớ đang tắt; /luandiem chưa lưu gì. Bật trong /config (mục Memory → Sổ ghi nhớ) rồi gõ lại. " +
-        "Lệnh này ghi vào sổ ghi nhớ, không ghi vào memory cũ.",
-    )
-    expect(state.dialog).toBeUndefined()
-    expect(existsSync(STORE)).toBe(false)
-    expect(existsSync(LEGACY) ? readdirSync(LEGACY) : []).toEqual([])
-    expect(runtime!.memory.id).toBe("file")
+  test("a config still naming the removed legacy memory: the notebook opens, said once; the legacy folder is unchanged", async () => {
+    const { loadConfig, memoryChoiceOf, saveConfig } = await import("../src/core/config")
+    const config = path.join(home, "config.json")
+    const before = existsSync(config) ? readFileSync(config, "utf8") : undefined
+    try {
+      await saveConfig({ memory: { provider: "file" } })
+      mkdirSync(LEGACY, { recursive: true })
+      writeFileSync(path.join(LEGACY, "old.md"), '---\nid: "1"\nstatus: "active"\n---\nKhông dùng margin\n')
+      const legacyBefore = readFileSync(path.join(LEGACY, "old.md"), "utf8")
+      await start(memoryChoiceOf(await loadConfig()))
+      await frameWith("Memory cũ đã được gỡ")
+      expect(runtime!.memory.id).toBe("notebook")
+      expect((await loadConfig()).memory?.provider).toBe("notebook")
+      const said = state.lines.filter((l) => l.kind === "info" && l.text.includes("Memory cũ đã được gỡ"))
+      expect(said).toHaveLength(1)
+      expect((said[0] as { text: string }).text).toContain(LEGACY)
+      expect(readFileSync(path.join(LEGACY, "old.md"), "utf8")).toBe(legacyBefore)
+    } finally {
+      if (before === undefined) rmSync(config, { force: true })
+      else writeFileSync(config, before)
+    }
   })
 
   test("a store that failed to open: the reason and path, no form, the file untouched", async () => {
@@ -1304,5 +1312,196 @@ describe("a long form in a short window scrolls", () => {
     await start("notebook", 24)
     await command("/luandiem HPG", "Luận điểm HPG")
     await walk("Đang sửa từ bản 4", ["Văn bản", ...Array.from({ length: 8 }, (_, i) => "Điều kiện " + (i + 1)), "Hạn xem lại", "Chi tiết"])
+  })
+})
+
+// ── Spec 007: suggestion cards ───────────────────────────────────────────────────────────────────
+
+describe("suggestion cards (spec 007)", () => {
+  const TYPED = "Từ giờ đừng bao giờ gợi ý cổ phiếu penny cho tôi"
+  const ANSWER = "Ghi nhận: mình sẽ không gợi ý cổ phiếu penny cho bạn nữa."
+  const BLOCK = `<the_goi_y loai="rang_buoc">\nnoi_dung: Không gợi ý cổ phiếu penny\ncau_goc: ${TYPED}\n</the_goi_y>`
+  /** The turns' own requests (streamed), not the side ones such as the session title. */
+  const mainBodies = () => bodies.filter((b) => (b as { stream?: boolean }).stream)
+  const cardLine = () => state.lines.find((l) => l.kind === "card") as Extract<(typeof state.lines)[number], { kind: "card" }> | undefined
+  const { resumeSession, currentSession } = { resumeSession: async (id: string) => (await import("../src/tui/session")).resumeSession(runtime!, id), currentSession: async () => (await import("../src/tui/session")).currentSession() }
+
+  async function ask() {
+    await setKey("groq", "gsk_test_1234567890abcdefgh")
+    reply = `${ANSWER}\n\n${BLOCK}`
+    await type(TYPED)
+    enter()
+    return frameWith("Gợi ý lưu · ràng buộc")
+  }
+
+  test("shown under the answer, never its block; Enter opens /nho filled in; confirming saves it from the card", async () => {
+    const other = otherWindow()
+    seedExample(other)
+    await start()
+    const f = await ask()
+    expect(f).toContain("Không gợi ý cổ phiếu penny")
+    expect(f).toContain(`Bạn đã nói: "${TYPED}"`)
+    expect(f).not.toMatch(/the_goi_y|noi_dung|cau_goc/)
+    expect(JSON.stringify(state.history)).not.toContain("the_goi_y")
+    expect(cardLine()?.state).toBe("pending")
+    // It never takes the keys by itself; /goiy gives them to it.
+    expect(state.cardFocus).toBeUndefined()
+    // The guide went with the request.
+    expect(JSON.stringify(mainBodies().at(-1))).toContain("<memory_cards>")
+    // Nothing is stored yet.
+    expect(other.reader.constraints("constraint")).toHaveLength(2)
+
+    await type("/goiy")
+    enter()
+    await until(() => state.cardFocus === cardLine()!.card.id)
+    await new Promise((r) => setTimeout(r, 450))
+    enter()
+    await until(() => state.dialog === "notebook-form")
+    const form = flat(await frameWith("Câu bạn đã gõ"))
+    expect(form).toContain("Không gợi ý cổ phiếu penny")
+    expect(form).toContain(CONSTRAINT_HINT)
+    tab()
+    key("1")
+    await frameWith("Tổng ràng buộc sau khi lưu")
+    await confirm(1)
+    await until(() => state.dialog === undefined)
+    expect(other.reader.constraint(5)).toMatchObject({ kind: "constraint", text: "Không gợi ý cổ phiếu penny", source: "card" })
+    await until(() => cardLine()?.state === "saved")
+    expect(cardLine()?.saved).toEqual({ group: "constraint", id: 5 })
+    expect(await frameWith("Đã lưu thành ràng buộc #5")).toContain("Đã lưu thành ràng buộc #5")
+
+    // The next turn tells the model, once.
+    reply = "Đã rõ."
+    await type("Còn gì nữa không?")
+    enter()
+    await until(() => !state.streaming && mainBodies().length >= 2)
+    expect(JSON.stringify(mainBodies().at(-1))).toContain(`Người dùng đã lưu gợi ý ${cardLine()!.card.id} thành ràng buộc #5.`)
+    await until(async () => (await sessionFiles()).includes('"state":"saved"'))
+    expect(await sessionFiles()).toContain('"type":"card"')
+  })
+
+  test("typing right after a card goes to the prompt whole, even a message that starts with x; the card waits", async () => {
+    seedExample(otherWindow())
+    await start()
+    await ask()
+    reply = "Đã rõ."
+    await setup!.mockInput.typeText("xem giá HPG")
+    await frameWith("xem giá HPG")
+    enter()
+    await until(() => !state.streaming && mainBodies().length >= 2)
+    expect(cardLine()?.state).toBe("pending")
+    const users = state.lines.filter((l) => l.kind === "user").map((l) => (l as { text: string }).text)
+    expect(users.at(-1)).toBe("xem giá HPG")
+    expect(await sessionFiles()).not.toContain('"state":"dismissed"')
+  })
+
+  test("x dismisses; Esc gives the keys back and the card waits; /goiy takes them again; a new message is no yes", async () => {
+    seedExample(otherWindow())
+    await start()
+    await ask()
+    const id = cardLine()!.card.id
+    await type("/goiy")
+    enter()
+    await until(() => state.cardFocus === id)
+    setup!.mockInput.pressEscape()
+    await until(() => state.cardFocus === undefined)
+    expect(cardLine()?.state).toBe("pending")
+    // Sending another message leaves the card pending; the model is told it waits.
+    reply = "Đã rõ."
+    await type("Còn gì nữa không?")
+    enter()
+    await until(() => !state.streaming && mainBodies().length >= 2)
+    expect(cardLine()?.state).toBe("pending")
+    expect(JSON.stringify(mainBodies().at(-1))).toContain(`Gợi ý lưu ${id} (ràng buộc) đang chờ người dùng xem`)
+    await type("/goiy")
+    enter()
+    await until(() => state.cardFocus === id)
+    key("x")
+    await until(() => cardLine()?.state === "dismissed")
+    expect(await frameWith("Đã bỏ qua")).toContain("Đã bỏ qua")
+    // The same suggestion again is not a new card.
+    reply = `${ANSWER}\n\n${BLOCK}`
+    await type(TYPED)
+    enter()
+    await until(() => !state.streaming && mainBodies().length >= 3)
+    expect(state.lines.filter((l) => l.kind === "card")).toHaveLength(1)
+  })
+
+  test("a lesson card: marked as the model's, /baihoc filled in, saved from the card", async () => {
+    const other = otherWindow()
+    seedExample(other)
+    await start()
+    await setKey("groq", "gsk_test_1234567890abcdefgh")
+    reply = `Đúng vậy.\n\n<the_goi_y loai="bai_hoc">\ntieu_de: Không mua đuổi\ntom_tat: Giá tăng quá 7% trong phiên thì chờ, không mua đuổi.\n</the_goi_y>`
+    await type("Bài học là đừng mua đuổi khi giá đã tăng quá 7% trong phiên")
+    enter()
+    expect(await frameWith("Gợi ý lưu · bài học (model đề xuất)")).toContain("Không mua đuổi")
+    await type("/goiy")
+    enter()
+    await until(() => state.cardFocus === cardLine()!.card.id)
+    await new Promise((r) => setTimeout(r, 450))
+    enter()
+    await until(() => state.dialog === "notebook-form")
+    const form = flat(await frameWith("Không mua đuổi"))
+    expect(form).toContain("Giá tăng quá 7% trong phiên thì chờ, không mua đuổi.")
+    // Title, summary, applies to, exceptions, detail, tags; then "Xác nhận".
+    await confirm(6)
+    await until(() => cardLine()?.state === "saved")
+    expect(cardLine()?.saved?.group).toBe("lesson")
+    const saved = other.reader.lesson(cardLine()!.saved!.id)
+    expect(saved).toMatchObject({ source: "card" })
+  })
+
+  test("closing the form without saving leaves the card pending and the store unchanged", async () => {
+    const other = otherWindow()
+    seedExample(other)
+    await start()
+    await ask()
+    await type("/goiy")
+    enter()
+    await until(() => state.cardFocus === cardLine()!.card.id)
+    await new Promise((r) => setTimeout(r, 450))
+    enter()
+    await until(() => state.dialog === "notebook-form")
+    await frameWith("Câu bạn đã gõ")
+    await escTwice()
+    await until(() => state.dialog === undefined)
+    expect(cardLine()?.state).toBe("pending")
+    expect(other.reader.constraints("constraint")).toHaveLength(2)
+  })
+
+  test("cards switched off in /config: no guide and no card, and the block still never shows", async () => {
+    seedExample(otherWindow())
+    await saveConfig({ memory: { provider: "notebook", cards: false } })
+    await start()
+    await setKey("groq", "gsk_test_1234567890abcdefgh")
+    reply = `${ANSWER}\n\n${BLOCK}`
+    await type(TYPED)
+    enter()
+    await until(() => !state.streaming && mainBodies().length >= 1)
+    const f = await frameWith(ANSWER.slice(0, 20))
+    expect(f).not.toMatch(/the_goi_y|noi_dung|Gợi ý lưu/)
+    expect(cardLine()).toBeUndefined()
+    expect(JSON.stringify(mainBodies().at(-1))).not.toContain("<memory_cards>")
+    await saveConfig({ memory: { provider: "notebook", cards: true } })
+  })
+
+  test("a resumed session shows the card again under its answer, still pending and still usable", async () => {
+    seedExample(otherWindow())
+    await start()
+    await ask()
+    const id = cardLine()!.card.id
+    const sid = (await currentSession()).id
+    await until(async () => (await sessionFiles()).includes('"type":"card"'))
+    await startSession(runtime!, "clear")
+    expect(cardLine()).toBeUndefined()
+    await resumeSession(sid)
+    await until(() => cardLine()?.card.id === id)
+    const at = state.lines.findIndex((l) => l.kind === "card")
+    expect(state.lines[at - 1]).toMatchObject({ kind: "assistant" })
+    expect(cardLine()?.state).toBe("pending")
+    await type("/goiy")
+    enter()
+    await until(() => state.cardFocus === id)
   })
 })

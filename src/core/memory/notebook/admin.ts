@@ -124,10 +124,11 @@ export interface NotebookAdmin {
   /** Characters of a kind's active entries, leaving out the one being edited. */
   activeConstraintChars(kind: ConstraintKind, except?: number): Read<number>
 
-  saveConstraint(draft: ConstraintDraft, edit?: { id: number; expected: number }): SaveResult
+  /** `from.card`: saved from a suggestion card (spec 007), stored with source "card". */
+  saveConstraint(draft: ConstraintDraft, edit?: { id: number; expected: number }, from?: { card?: boolean }): SaveResult
   /** `expected`: the thesis version the form opened on, null when it opened on "no thesis". */
   saveThesis(subject: SubjectTarget | NewSubjectDraft, expected: number | null, draft: ThesisDraft): SaveResult
-  saveLesson(draft: LessonDraft, edit?: { id: number; expected: number }): SaveResult
+  saveLesson(draft: LessonDraft, edit?: { id: number; expected: number }, from?: { card?: boolean }): SaveResult
   saveDecision(subject: SubjectTarget | NewSubjectDraft, draft: DecisionDraft): SaveResult
   setThesisState(subjectId: number, expected: number, state: ThesisStateChoice): SaveResult
   /** A Markdown copy of the notebook in the exports folder; decisions only when asked for this once. */
@@ -151,7 +152,7 @@ export function grantNotebookAdmin(provider: MemoryProvider, admin: NotebookAdmi
   admins.set(provider, admin)
 }
 
-/** The handle for a notebook provider; undefined for any other memory (off, the legacy file memory). */
+/** The handle for a notebook provider; undefined for any other memory (off). */
 export function notebookAdmin(memory: MemoryProvider): NotebookAdmin | undefined {
   return admins.get(memory)
 }
@@ -426,7 +427,7 @@ export function createNotebookAdmin(side: AdminSide): NotebookAdmin {
       )
     },
 
-    saveConstraint(draft: ConstraintDraft, edit?: { id: number; expected: number }): SaveResult {
+    saveConstraint(draft: ConstraintDraft, edit?: { id: number; expected: number }, from?: { card?: boolean }): SaveResult {
       const kind = draft.kind
       if (!kind) {
         return { ok: false, reason: "invalid", field: "ngăn", message: "Chọn ngăn: Ràng buộc hoặc Cách trình bày." }
@@ -435,7 +436,7 @@ export function createNotebookAdmin(side: AdminSide): NotebookAdmin {
         try {
           const saved = edit
             ? w.reviseConstraint(edit.id, edit.expected, { text: draft.text })
-            : w.addConstraint({ kind, text: draft.text })
+            : w.addConstraint({ kind, text: draft.text, ...(from?.card ? { source: "card" as const } : {}) })
           const what = kind === "constraint" ? "ràng buộc" : "cách trình bày"
           return {
             ok: true,
@@ -472,7 +473,7 @@ export function createNotebookAdmin(side: AdminSide): NotebookAdmin {
       })
     },
 
-    saveLesson(draft: LessonDraft, edit?: { id: number; expected: number }): SaveResult {
+    saveLesson(draft: LessonDraft, edit?: { id: number; expected: number }, from?: { card?: boolean }): SaveResult {
       return writing((w, r) => {
         const created: CreatedSubject[] = []
         try {
@@ -492,7 +493,7 @@ export function createNotebookAdmin(side: AdminSide): NotebookAdmin {
           })
           const saved = edit
             ? w.reviseLesson(edit.id, edit.expected, { ...input, appliesTo })
-            : w.addLesson({ ...input, appliesTo })
+            : w.addLesson({ ...input, appliesTo, ...(from?.card ? { source: "card" as const } : {}) })
           return { ok: true, message: `Đã lưu bài học #${saved.id} (bản ${saved.version}).`, saved }
         } catch (error) {
           return failure(error, {

@@ -107,7 +107,7 @@ export class ToolRegistry {
     if (changed) this.emit()
   }
 
-  /** Remove every tool registered with this `source` (e.g. "memory:file" when memory is switched). */
+  /** Remove every tool registered with this `source` (e.g. "memory:notebook" when memory is switched). */
   unregisterSource(source: string) {
     let changed = false
     for (const [name, def] of [...this.tools]) {

@@ -1,3 +1,4 @@
+import type { Card, CardOutcome, CardState } from "../core/memory/cards/types"
 import type { ModelMessage } from "ai"
 import { contextLimits as limitsOf, DEFAULT_COMPACT_PERCENT, type ContextLimits } from "../core/compact"
 import { IDLE_COMPACT_MIN_TOKENS, IDLE_COMPACT_MINUTES } from "../core/idle-compact"
@@ -57,6 +58,8 @@ export type Line =
   | { kind: "agent-notice"; agentId: string; text: string; status: string }
   /** "✻ Xong sau 1m 23s": a long turn finished (`background` subagents still running). */
   | { kind: "done"; ms: number; background?: number; unanswered?: boolean }
+  /** A suggestion card under the answer it came with (spec 007); nothing is stored until a form saves it. */
+  | { kind: "card"; card: Card; state: CardState; saved?: CardOutcome["saved"] }
 
 /** The turn (or compaction) being worked on, for the row above the prompt (activity.tsx). */
 export interface Activity {
@@ -95,11 +98,17 @@ export interface TurnHoldCard {
 
 export type DialogName = "connect" | "model" | "skills" | "help" | "mcp" | "tools" | "context" | "sessions" | "memory" | "config" | "agents" | "tasks" | "watchlist" | "permissions" | "shortcuts" | "desk" | "effort" | "notebook-form"
 
+/** A form opened from a suggestion card (spec 007): saving marks the card, and the user's words are shown. */
+export interface FormCard {
+  id: string
+  quote?: string
+}
+
 /** Which notebook form is open, and for what: a notebook command's arguments, or an entry picked in /memory. */
 export type NotebookFormRequest =
-  | { group: "constraint"; text?: string; edit?: { id: number }; kind?: "constraint" | "style"; fromLesson?: boolean }
+  | { group: "constraint"; text?: string; edit?: { id: number }; kind?: "constraint" | "style"; fromLesson?: boolean; card?: FormCard }
   | { group: "thesis"; alias?: string }
-  | { group: "lesson"; title?: string; edit?: { id: number } }
+  | { group: "lesson"; title?: string; summary?: string; edit?: { id: number }; card?: FormCard }
   | { group: "decision"; alias?: string }
   | { group: "export" }
 
@@ -218,6 +227,8 @@ export const [state, setState] = createStore({
   deskApproval: undefined as DeskApprovalRequest | undefined,
   /** A turn held before sending, waiting for the user's choice. */
   turnHold: undefined as TurnHoldCard | undefined,
+  /** The suggestion card that has the keys (spec 007); the prompt has them back when undefined. */
+  cardFocus: undefined as string | undefined,
   /** Run /desk opens on (enter on a panel row). */
   deskFocus: undefined as string | undefined,
 })

@@ -6,7 +6,6 @@ import os from "node:os"
 import path from "node:path"
 import { describe, expect, test } from "bun:test"
 import { HookBus } from "../src/core/hooks"
-import { FileMemory } from "../src/core/memory/file-memory"
 import { notebookAdmin } from "../src/core/memory/notebook/admin"
 import { promptFile } from "../src/core/prompt/assemble"
 import { NoopMemory } from "../src/core/memory/types"
@@ -140,22 +139,10 @@ describe("switching and closing", () => {
     expect(existsSync(nb.file())).toBe(false)
   })
 
-  test("the legacy file memory is unchanged by switching back and forth", async () => {
-    const dir = await mkdtemp(path.join(os.tmpdir(), "ot-filemem-"))
-    try {
-      const file = new FileMemory(dir)
-      await file.add("Không dùng margin", { status: "active", via: "user" })
-      const before = await file.list()
-      const rt = runtimeStub()
-      switchMemory(rt, file)
-      switchMemory(rt, nb.notebook())
-      switchMemory(rt, file)
-      expect(await file.list()).toEqual(before)
-      expect(notebookAdmin(file)).toBeUndefined()
-      expect(notebookAdmin(new NoopMemory())).toBeUndefined()
-    } finally {
-      await rm(dir, { recursive: true, force: true })
-    }
+  test("only the notebook has an admin handle", () => {
+    expect(notebookAdmin(new NoopMemory())).toBeUndefined()
+    const notebook = nb.notebook()
+    expect(notebookAdmin(notebook)).toBeDefined()
   })
 })
 

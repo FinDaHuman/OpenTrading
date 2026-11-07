@@ -29,6 +29,8 @@ export interface PinnedIndex {
 
 export class SessionLedger {
   pinnedIndex?: PinnedIndex
+  /** The code of the newest compaction this session's history held at the last turn (provider.ts compactCode). */
+  lastCompact?: string
   private window: number[][] = []
   private lastText?: string
   private lastLength = -1

@@ -1,7 +1,7 @@
 import { useKeys } from "../ui/keys"
 import { MODE_LABEL, type PermissionMode } from "../../core/permission/mode"
 import { createResource, createSignal, Match, Switch } from "solid-js"
-import { loadConfig, saveConfig } from "../../core/config"
+import { cardsSwitchOn, loadConfig, memoryChoiceOf, saveConfig } from "../../core/config"
 import { configFile } from "../../core/paths"
 import { stillApplyLine } from "../../core/memory/binding/render"
 import { closeMemory, createMemory, switchMemory, type MemoryChoice, type Runtime } from "../../core/runtime"
@@ -34,12 +34,6 @@ const TOOL_SEARCH_NEXT = { auto: "on", on: "off", off: "auto" } as const
 /** The memory choices, in the order listed; the label is what the user picks by. */
 const MEMORY_CHOICES: { value: MemoryChoice; label: string; hint: string; said: string }[] = [
   { value: "none", label: "Tắt", hint: "không dùng memory", said: "Đã tắt memory. Dữ liệu đã lưu vẫn còn trên đĩa và sẽ dùng lại khi bật." },
-  {
-    value: "file",
-    label: "Memory cũ",
-    hint: "lưu file ở ~/.opentrading/memory; nói \"Ghi nhớ: …\" để lưu",
-    said: "Đã bật memory cũ (lưu file ở ~/.opentrading/memory). Nói \"Ghi nhớ: …\" để lưu; xem và duyệt bằng /memory.",
-  },
   {
     value: "notebook",
     label: "Sổ ghi nhớ",
@@ -195,7 +189,20 @@ export function ConfigDialog(props: { runtime: Runtime }) {
     setEditing(undefined)
     await refetch()
   }
-  const memoryChoice = () => (config()?.memory?.provider ?? props.runtime.memory.id) as MemoryChoice
+  /** Suggestion cards (spec 007): a switch of the notebook's own, like Codex's "Generate memories". */
+  async function toggleCards() {
+    const on = !cardsSwitchOn(config() ?? {})
+    await saveConfig((current) => ({ memory: { ...current.memory, cards: on } }))
+    say(
+      on
+        ? "Đã bật thẻ gợi ý: model có thể đề xuất lưu một ràng buộc, cách trình bày hay bài học; chỉ lưu khi bạn xác nhận trong form."
+        : "Đã tắt thẻ gợi ý. Sổ ghi nhớ vẫn dùng như cũ.",
+      "success",
+      8000,
+    )
+    await refetch()
+  }
+  const memoryChoice = (): MemoryChoice => (config() ? memoryChoiceOf(config()!) : (props.runtime.memory.id as MemoryChoice))
   const memoryProblem = () =>
     props.runtime.memory.id === "notebook" ? props.runtime.memory.problems?.()[0] : undefined
   /**
@@ -311,13 +318,28 @@ export function ConfigDialog(props: { runtime: Runtime }) {
             </text>
           )}
           <Picker
-            items={MEMORY_CHOICES.map((c) => ({
-              label: c.label,
-              hint: c.hint,
-              mark: props.runtime.memory.id === c.value ? "●" : " ",
-              value: c.value,
-            }))}
-            onPick={(c) => void saveMemory(c)}
+            items={[
+              ...MEMORY_CHOICES.map((c) => ({
+                label: c.label,
+                hint: c.hint,
+                mark: props.runtime.memory.id === c.value ? "●" : " ",
+                value: c.value as MemoryChoice | "cards",
+              })),
+              // The switch belongs to the notebook that is running, not to what the config file says.
+              ...(props.runtime.memory.id === "notebook"
+                ? [
+                    {
+                      label: "Cho phép thẻ gợi ý",
+                      hint: cardsSwitchOn(config() ?? {})
+                        ? "bật · model đề xuất lưu, bạn xác nhận trong form · enter để tắt"
+                        : "tắt · enter để bật",
+                      mark: cardsSwitchOn(config() ?? {}) ? "●" : "○",
+                      value: "cards" as const,
+                    },
+                  ]
+                : []),
+            ]}
+            onPick={(c) => void (c === "cards" ? toggleCards() : saveMemory(c))}
           />
         </DialogFrame>
       </Match>
@@ -460,9 +482,7 @@ export function ConfigDialog(props: { runtime: Runtime }) {
                     ? memoryProblem()
                       ? "Sổ ghi nhớ · chưa mở được, enter để xem"
                       : "Sổ ghi nhớ · memory.db"
-                    : memoryChoice() === "file"
-                      ? "Memory cũ · lưu file ở ~/.opentrading/memory"
-                      : "Tắt · enter để chọn",
+                    : "Tắt · enter để chọn",
                 mark: props.runtime.memory.id === "none" ? "○" : "●",
                 value: "memory" as Setting,
               },

@@ -32,8 +32,7 @@ export function openNotebookRequest(memory: MemoryProvider, request: NotebookFor
   const admin = notebookAdmin(memory)
   if (!admin) {
     const what = command ? `; /${command} chưa lưu gì` : ""
-    const off = `Sổ ghi nhớ đang tắt${what}. Bật trong /config (mục Memory → Sổ ghi nhớ) rồi gõ lại.`
-    return memory.id === "file" ? `${off} Lệnh này ghi vào sổ ghi nhớ, không ghi vào memory cũ.` : off
+    return `Sổ ghi nhớ đang tắt${what}. Bật trong /config (mục Memory → Sổ ghi nhớ) rồi gõ lại.`
   }
   // A read that failed earlier may have passed (another window finished writing): read again before refusing.
   if (admin.problem()) admin.entries()

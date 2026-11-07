@@ -1,5 +1,6 @@
 import { useKeys } from "../ui/keys"
-import { createMemo, createSignal, Match, Show, Switch } from "solid-js"
+import { createMemo, createResource, createSignal, Match, Show, Switch } from "solid-js"
+import { cardsSwitchOn, loadConfig } from "../../core/config"
 import type { NotebookAdmin, NotebookEntry, NotebookGroup, ThesisStateChoice } from "../../core/memory/notebook/admin"
 import { formatDate, THESIS_STATE_LABEL } from "../../core/memory/notebook/render"
 import { closeDialog } from "../state"
@@ -58,6 +59,8 @@ function editRequest(e: NotebookEntry): NotebookFormRequest | undefined {
 /** `redaction`: the runtime's check, so a delete masks the open conversation at once. */
 export function NotebookDialog(props: { admin: NotebookAdmin; redaction?: RedactionCheck }) {
   const [entries, setEntries] = createSignal(props.admin.entries())
+  // The suggestion-card switch (spec 007) lives in /config; shown here like Claude Code's auto-memory toggle.
+  const [config] = createResource(loadConfig)
   // Read right after each listing: an unreadable store must show as such, never as an empty notebook.
   const [problem, setProblem] = createSignal(props.admin.problem())
   const reload = () => {
@@ -190,6 +193,13 @@ export function NotebookDialog(props: { admin: NotebookAdmin; redaction?: Redact
       </Match>
       <Match when={true}>
         <DialogFrame title={`Sổ ghi nhớ · ${entries().length}`} hint="enter xem · ctrl+x xuất Markdown · esc đóng">
+          <Show when={config()}>
+            {(c) => (
+              <text fg={color.tx3} marginBottom={1}>
+                {`Thẻ gợi ý: ${cardsSwitchOn(c()) ? "bật" : "tắt"} · đổi trong /config › Memory`}
+              </text>
+            )}
+          </Show>
           <Show when={problem()}>
             <text fg={color.tham} wrapMode="word" marginBottom={1}>
               {`△ ${problem()}`}

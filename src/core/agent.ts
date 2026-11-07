@@ -23,6 +23,12 @@ import type { ConstraintReader } from "./memory/binding/constraints"
 import type { RedactionCheck } from "./memory/redaction/check"
 import { REMINDER_CAP_MARK, REMINDER_TAG } from "./reminder-tag"
 import { redactHistory } from "./memory/redaction/redact"
+import { labelsOnly } from "./memory/notebook/labels-only"
+import { acceptCard } from "./memory/cards/check"
+import { stripCardMessages } from "./memory/cards/messages"
+import { stripCardBlocks } from "./memory/cards/block"
+import type { CardOutcome } from "./memory/cards/types"
+import { typedText } from "./memory/notebook/topics"
 import { assemble, type Assembled } from "./prompt/assemble"
 import { estimateTokens, tierOf, type Tier } from "./prompt/budget"
 import type { ClockSnapshot } from "./prompt/market-clock"
@@ -148,6 +154,14 @@ export { REMINDER_TAG }
 export interface RunOptions {
   history: ModelMessage[]
   input: string
+  /**
+   * Suggestion cards are on (spec 007: the notebook is chosen and its switch is on). The main agent then gets
+   * the card guide and a valid card block becomes a `card` event; never on tier C or for a sub-agent. Card
+   * blocks are taken out of the answer on every turn either way.
+   */
+  cards?: boolean
+  /** The session's cards and where each stands, passed to memory for its notes (MemoryContext.cards). */
+  cardOutcomes?: readonly CardOutcome[]
   /** Images pasted into the prompt, sent after the text (only to models that take image input). */
   images?: { data: string; mediaType: string }[]
   /** Files the user @-mentioned, read for the model (mentions.ts), sent after the text. */
@@ -320,6 +334,10 @@ export function continueAnswer(kept: ModelMessage[], more: ModelMessage[]): Mode
   }
   return [...kept.slice(0, -1), { ...prev, content: joined }, ...more.slice(1)]
 }
+
+/** Cards this turn: switched on, the main agent, the notebook present, a model above tier C (design-v5 §6). */
+const cardsOn = (opts: { cards?: boolean; role?: string; memory?: unknown }, tier: Tier) =>
+  !!opts.cards && opts.role !== "subagent" && !!opts.memory && tier !== "C"
 
 /** Echoed todo status lines out of every assistant text (stop-gate.ts stripEchoes). */
 export function stripEchoMessages(messages: ModelMessage[]): ModelMessage[] {
@@ -812,6 +830,7 @@ async function assembleFor(opts: TurnInput, target: Target | undefined, bound: B
     constraints: bound.constraints,
     unread: bound.unread,
     memoryInstructions: opts.memory?.instructions?.(),
+    memoryCards: cardsOn(opts, tier),
     memoryIndex: cap(await opts.memory?.index?.({ sessionId: opts.sessionId ?? "", tier }).catch(() => undefined), MEMORY_INDEX_MAX_CHARS),
     recalled: extras.recalled,
     hookContext: extras.hookContext,
@@ -926,18 +945,24 @@ const estimateRequest = (system: string | SystemModelMessage, messages: ModelMes
 
 /**
  * Compaction step 2: the model condenses `head` (older turns) into a structured summary.
- * Same system prompt, context and tool set as a turn, tools disabled; the instruction comes
- * last. A prompt-too-long error drops the oldest turn and retries (at most twice).
+ * Same system prompt and tool set as a turn, tools disabled; the instruction comes last. A
+ * prompt-too-long error drops the oldest turn and retries (at most twice).
+ *
+ * Memory never reaches the summary (spec 007): every memory block in `head` is cut down to its label,
+ * and the request carries no memory guide, no notebook index and no constraint block. A summary is plain
+ * text, so a delete could not mask what it copied, and the index and constraints are sent again with
+ * every request anyway.
  */
 export async function summarizeConversation(
   opts: Omit<TurnInput, "input"> & { head: ModelMessage[]; prompt: string; signal?: AbortSignal },
 ): Promise<string> {
-  let head = opts.head
+  opts = { ...opts, memory: undefined, constraints: undefined }
+  let head = labelsOnly(opts.head)
   // The same effort as the conversation's turns (config `effort` unless the caller passes one).
   const configured = (await loadConfig()).effort
   const effort = opts.effort ?? (isEffort(configured) ? configured : undefined)
   // Not an answer turn, and idle compaction runs while the user is away: a failed source is left out,
-  // never held. A readable one is sent, so the summary request shares the turn's system prefix.
+  // never held (the profile; constraints are left out above).
   const bound = await bindLenient({ role: opts.role ?? "main", constraints: opts.constraints })
   for (let attempt = 0; ; attempt++) {
     const prepared = await prepare({ ...opts, effort, history: head, input: "" }, bound, {})
@@ -1053,7 +1078,7 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
     extras.hookContext = hooked.context
   }
   // Memory relevant to this message (active items only; the provider filters pending ones).
-  const recalled = (await opts.memory?.recall?.(opts.input, { sessionId, history: opts.history ?? [], tier: tierOf(target0.provider.models[target0.model]?.limit?.context) }).catch(() => []))?.slice(0, MEMORY_RECALL_MAX_ITEMS) ?? []
+  const recalled = (await opts.memory?.recall?.(opts.input, { sessionId, history: opts.history ?? [], tier: tierOf(target0.provider.models[target0.model]?.limit?.context), cards: opts.cardOutcomes }).catch(() => []))?.slice(0, MEMORY_RECALL_MAX_ITEMS) ?? []
   if (recalled.length > 0) {
     extras.recalled = cap(recalled.map((m) => `- ${m.text}`).join("\n"), MEMORY_RECALL_MAX_CHARS)
     // Never invisible (the lesson from Cursor's memories): say what was used.
@@ -1291,6 +1316,13 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
   if (messages && !outcome.aborted && !outcome.failure) {
     // Echoed todo lines never reach history, so a later turn has nothing to imitate (29/10).
     if (!opts.disabled?.has("strip-echoes")) messages = stripEchoMessages(messages)
+    // Card blocks never reach history (spec 007); a valid one at the end of the final answer is a card.
+    const carded = stripCardMessages(messages)
+    messages = carded.messages
+    if (carded.last && !unanswered && cardsOn(opts, tierOf(target0.provider.models[target0.model]?.limit?.context))) {
+      const card = acceptCard(carded.last, { typed: typedText(opts.input).text })
+      if (card) yield { type: "card", card }
+    }
     // Answered with items of this turn's list still open: retire the list (never mark them done
     // for the model) and say which ones stay unconfirmed. No request is spent on it.
     let retiredTodos = 0
@@ -1332,8 +1364,9 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
   // closes any call left without a result, so providers still accept the history), then the
   // partial text. The user message keeps its reminders, so the clock it carried still counts
   // as sent.
-  const text = outcome.text
-  const progress = closeDanglingToolCalls(outcome.progress, "Tool bị ngắt vì lượt bị dừng giữa chừng.").messages
+  const text = outcome.text && stripCardBlocks(outcome.text).text
+  // A stopped or failed turn has no card, and its card blocks never reach history either (spec 007).
+  const progress = stripCardMessages(closeDanglingToolCalls(outcome.progress, "Tool bị ngắt vì lượt bị dừng giữa chừng.").messages).messages
   // No square brackets: the markdown renderer read "[Đã dừng]" as a link. The closed steps
   // already carry their text, so the trailing note appears only when nothing else closes the
   // turn — a resumed session must not show a step's text twice.

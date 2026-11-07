@@ -144,13 +144,15 @@ interface MemoryProvider {
   instructions?(): string | undefined                    // system (tĩnh): cách model dùng memory
   index?(ctx): Promise<string | undefined>               // context, mọi request, harness cắt ≤ 4 KB
   recall?(query, ctx): Promise<MemoryItem[]>             // reminder của lượt, harness giữ ≤ 5 mục / 4 KB
-  tools?(): ToolDef[]                                    // ví dụ propose_memory, đăng ký lúc khởi động
+  tools?(): ToolDef[]                                    // chỉ đọc (memory_read), đăng ký lúc khởi động
   register?(hooks: HookBus): void                        // nghe session-start, user-prompt, turn-end, session-end
-  list?(); approve?(id); reject?(id); remove?(id)        // cho /memory
+  problems?(): string[]                                  // điều làm provider không chạy được (kho không mở được)
 }
-interface MemoryItem { id; text; title?; scope: "user" | "workspace"; status: "pending" | "active"; source?; createdAt; updatedAt }
-interface MemoryContext { sessionId: string; history?: readonly ModelMessage[]; tier?: "A" | "B" | "C" }
+interface MemoryItem { id; text; title?; scope: "user" | "workspace"; createdAt; updatedAt }
+interface MemoryContext { sessionId: string; history?: readonly ModelMessage[]; tier?: "A" | "B" | "C"; cards?: readonly CardOutcome[] }
 ```
+
+`ctx.cards` là thẻ gợi ý của phiên và trạng thái từng thẻ (spec 007); provider dùng nó để báo model một lần thẻ đang chờ hay người dùng đã làm gì với thẻ. Spec 007 bỏ các phần chỉ memory cũ dùng (`pending`, `approve`, `reject`, `list`, `remove`).
 
 `ctx.tier` là hạng của model nhận lượt; provider dùng nó để giữ phần trả về trong ngân sách memory của hạng đó (vắng: hạng nhỏ nhất). `MemoryItem.title` là vài chữ gọi tên mục trong câu báo "Dùng N memory: …" cho người dùng (vắng: đầu văn bản của mục).
 
@@ -159,19 +161,18 @@ interface MemoryContext { sessionId: string; history?: readonly ModelMessage[]; 
 `ctx.history` là lịch sử lượt này sẽ gửi, trước tin nhắn của người dùng, đã áp phần che. Provider đọc từ đó những gì model đã có trong tầm nhìn, thay vì tự nhớ trong RAM. Tool nhận `ToolContext.messages`: danh sách tin nhắn model được gửi ở đúng bước đó (kết quả tool cũ có thể đã bị dọn).
 
 **Quy định bắt buộc:**
-- Memory **`pending`** (model đề xuất) không bao giờ được trả về từ `index()` hay `recall()` cho tới khi người dùng duyệt trong `/memory`. Đây là bài học từ Cursor: memory mà người dùng không thấy thì thành chỉ dẫn vô hình.
+- **Chỉ người dùng làm memory có hiệu lực.** Provider không cho model tool nào ghi memory. Model chỉ đề xuất được qua thẻ gợi ý (spec 007), và thẻ chỉ thành memory khi người dùng xác nhận trong form. Đây là bài học từ Cursor: memory mà người dùng không thấy thì thành chỉ dẫn vô hình.
 - Không lưu dữ liệu thị trường (giá, chỉ số, tín hiệu, nhận định), vì chúng nhanh cũ. Tool lấy chúng mỗi lần.
 - Memory có **ưu tiên thấp nhất**: không ghi đè `INVESTOR.md` hay bất biến an toàn.
 - Mỗi lượt có dùng memory, TUI hiện dòng "Dùng N memory: …" để người dùng biết.
 
-**Bản mẫu `FileMemory`** (`src/core/memory/file-memory.ts`) để tham khảo và thay thế:
-- Mỗi memory là một file markdown trong `~/.opentrading/memory/`.
-- Tool `propose_memory` tạo memory `pending`. Người dùng gõ "Ghi nhớ: …" thì lưu thẳng `active`, qua hook `user-prompt`.
-- `recall` khớp theo từ khoá.
+**Provider có sẵn:** Sổ ghi nhớ (`src/core/memory/notebook/`, kho `memory.db`, spec 001–007). Memory cũ (`FileMemory`, tool `propose_memory`, hook "Ghi nhớ: …") đã gỡ ở spec 007; cấu hình `"file"` cũ được hiểu là `"notebook"`, giao diện ghi lại một lần và báo; thư mục `~/.opentrading/memory/` cũ giữ nguyên.
 
-**Bật memory:** dùng `/config` trong TUI (có hiệu lực ngay, không cần mở lại), hoặc sửa `~/.opentrading/config.json`. Mặc định là `"none"` (tắt):
+**Thẻ gợi ý (spec 007):** model có thể kết thúc câu trả lời bằng một khối `<the_goi_y loai="…">` (`prompts/memory-cards.md`). Lõi tách mọi khối khỏi câu trả lời trước khi vào lịch sử, ở mọi lượt; khối hợp lệ ở cuối câu trả lời cuối của agent chính thành sự kiện `card` (`src/core/memory/cards/`). Giao diện ẩn khối cả lúc stream, hiện thẻ, mở form spec 003. Không bao giờ có thẻ cho agent con, model hạng C hay dòng lệnh không giao diện.
+
+**Bật memory:** dùng `/config` trong TUI (có hiệu lực ngay, không cần mở lại), hoặc sửa `~/.opentrading/config.json`. Mặc định là `"none"` (tắt); `cards` là công tắc thẻ gợi ý của Sổ, mặc định bật:
 ```json
-{ "memory": { "provider": "file" } }
+{ "memory": { "provider": "notebook", "cards": true } }
 ```
 Khi đổi provider, harness gỡ tool và hook của provider cũ; `register()` nên trả về hàm huỷ đăng ký.
 Đăng ký provider mới: thêm lựa chọn trong `createMemory()` (`src/core/runtime.ts`).
@@ -201,6 +202,9 @@ Frontmatter gồm `name` (trùng tên file), `description`, `tools`, `disallowed
   - `message`: một `ModelMessage` của AI SDK.
   - `turn_end`: số lượt `turn` (gán lúc lượt vào hàng ghi; lượt lưu bù giữ số của nó; dòng ghi trước khi có trường này thì lấy số trước cộng một), provider và model của lượt, `contextTokens` (kích thước context sau lượt, theo usage của provider).
   - `redact`: mục memory người dùng đã xoá (`items`: loại, số bài học hoặc tên luận điểm như trong nhãn, các bản). Khi đọc, mọi khối của mục và bản đó nằm **trước** dòng này bị thay bằng chữ "đã bị người dùng xoá"; khối nằm trong lịch sử của một dòng `compact` tính theo vị trí dòng `compact`. Dòng này không chứa nội dung memory và chỉ được ghi khi kho xác nhận mục đã xoá. Bản app chưa biết loại dòng này thì bỏ qua (vẫn mở được phiên, không che).
+  - `chart`: biểu đồ đã vẽ cho một lời gọi tool (model chỉ nhận tóm tắt), để transcript hiện lại khi mở phiên.
+  - `harness`: chữ của một lượt do harness viết (mẫu của prompt MCP), không phải lời người dùng.
+  - `card`: thẻ gợi ý lưu memory (spec 007), model không thấy. Dòng tạo có `id` (`the-<lượt>-<4 hex>`), `turn`, `kind` (`constraint`, `style`, `lesson`), nội dung, câu gốc và `state: "pending"`, ghi cùng lượt trước `turn_end`; mỗi lần đổi trạng thái (`saved` kèm `saved: { group, id }`, `dismissed`) là một dòng nữa cùng `id`. Dòng sau cùng của một `id` thắng. Bản app chưa biết loại dòng này thì bỏ qua.
   - `compact`: hội thoại vừa được nén (`trigger` auto/manual, `before`/`after` token, `messages` là history mới). Khi mở lại, model chỉ nhận history từ entry `compact` cuối cùng trở đi; transcript vẫn hiện các lượt cũ cùng một dòng "Đã nén hội thoại".
 - `index.jsonl` có một dòng cho mỗi lần cập nhật phiên; dòng sau cùng của cùng một id thắng.
 - Subagent ghi transcript riêng ở `YYYY/MM/<id>/subagents/agent-<agentId>.jsonl` (các dòng `agent_meta`, `message`, `notice`, `agent_end`) và `.meta.json`. File phiên chính chỉ chứa lời gọi `spawn_subagent` và kết quả (có trailer `<subagent_meta>`). Kết quả của subagent nền vào history dưới dạng tin user `<thong_bao_subagent>`.

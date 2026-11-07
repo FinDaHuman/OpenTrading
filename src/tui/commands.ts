@@ -33,6 +33,7 @@ export const COMMANDS: CommandInfo[] = [
   { name: "nho", args: "[văn bản]", description: "Ghi nhớ một ràng buộc hoặc cách trình bày vào sổ ghi nhớ" },
   { name: "luandiem", args: "[mã]", description: "Viết hoặc sửa luận điểm của một mã, một ngành" },
   { name: "baihoc", description: "Ghi một bài học vào sổ ghi nhớ" },
+  { name: "goiy", description: "Chọn lại thẻ gợi ý lưu memory đang chờ (Enter mở form, x bỏ qua)" },
   { name: "quyetdinh", args: "[mã]", description: "Ghi nhật ký quyết định (chỉ trên máy này, không phải lệnh giao dịch)" },
   { name: "config", description: "Cài đặt: bật / tắt memory…" },
   { name: "clear", description: "Xoá màn hình và bắt đầu phiên mới" },

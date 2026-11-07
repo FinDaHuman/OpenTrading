@@ -1,3 +1,4 @@
+import type { CardDraft } from "./memory/cards/types"
 import type { ModelMessage } from "ai"
 import type { ClockSnapshot } from "./prompt/market-clock"
 import type { FailureKind } from "./retry"
@@ -15,6 +16,8 @@ export type AgentEvent =
   | { type: "tool-end"; callId: string; ok: boolean; output: string; chart?: ChartData; durationMs: number }
   /** Informational: step limit reached, model without tool support… */
   | { type: "notice"; text: string }
+  /** A suggestion card the final answer ended with, checked, before "done" (spec 007); the TUI gives it an id. */
+  | { type: "card"; card: CardDraft }
   /**
    * Start of a main-agent turn: memory blocks were masked. `kept` replaces the history (masks the store
    * confirmed); `record` is what to write as one redact line; `temporary` says blocks were held in what is

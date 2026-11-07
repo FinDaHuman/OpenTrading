@@ -103,6 +103,11 @@ function compile() {
     one("note", "thesisState", reminders.thesisState(NAME, VERSION, STATE), ["name", "version", "state"]),
     one("note", "indexThesisAdded", reminders.indexThesisAdded(NAME), ["name"]),
     one("note", "indexLessonAdded", reminders.indexLessonAdded(ID), ["id"]),
+    one("note", "compacted", reminders.compacted(NAME), ["name"]),
+    // Keyed by the card id alone: one note per card and state, whatever it was saved as.
+    one("note", "cardPending", reminders.cardPending(NAME, STATE), ["name"]),
+    one("note", "cardSaved", reminders.cardSaved(NAME, STATE, ID), ["name"]),
+    one("note", "cardDismissed", reminders.cardDismissed(NAME), ["name"]),
     one("pointer", "roomless", reminders.roomless(NAME, VERSION), ["name", "version"]),
     one("pointer", "tooLong", reminders.tooLong(NAME, VERSION), ["name", "version"]),
   ]

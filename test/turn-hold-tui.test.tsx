@@ -343,7 +343,7 @@ describe("the constraints still apply with the notebook off", () => {
     await openMemoryScreen()
     await frameWith("2 ràng buộc vẫn áp dụng khi tắt Sổ ghi nhớ")
     await setup!.mockInput.typeText("so ghi")
-    await frameWith((f) => !f.includes("Memory cũ"))
+    await frameWith((f) => !f.includes("không dùng memory"))
     setup!.mockInput.pressEnter()
     await until(() => runtime!.memory.id === "notebook")
     await frameWith("Cài đặt")

@@ -8,8 +8,12 @@ import type { AutoModeConfig } from "./permission/auto/rules"
 export interface Config {
   provider?: ProviderId
   model?: string
-  /** Memory implementation: "none" (default), "file" (reference FileMemory) or "notebook" (memory v5.1, memory.db). */
-  memory?: { provider?: "none" | "file" | "notebook" }
+  /**
+   * Memory: "none" (default) or "notebook" (memory v5.1, memory.db). "file" is the removed legacy memory, read
+   * as "notebook" (memoryChoiceOf) and written back by the TUI at startup. `cards`: suggestion cards (spec 007),
+   * on unless false; only with the notebook.
+   */
+  memory?: { provider?: "none" | "file" | "notebook"; cards?: boolean }
   /**
    * Permissions (core/permission): `allow` = "always allow" answers; `deny` / `ask` = rules the
    * user writes by hand (tool name with `*`, optional `pattern` on the path or command);
@@ -153,3 +157,15 @@ export function saveConfig(patch: Partial<Config> | ((current: Config) => Partia
   // A config.json that exists but cannot be read is refused, not replaced by the patch alone.
   return updateJson<Config>(configFile(), {}, (current) => ({ ...current, ...(typeof patch === "function" ? patch(current) : patch) }))
 }
+
+/** The memory the config names. The removed legacy memory ("file") is read as the notebook; anything else is off. */
+export function memoryChoiceOf(config: Config): "none" | "notebook" {
+  const provider = config.memory?.provider
+  return provider === "notebook" || provider === "file" ? "notebook" : "none"
+}
+
+/** The suggestion-card switch of the notebook (spec 007): on unless set off. */
+export const cardsSwitchOn = (config: Config) => config.memory?.cards !== false
+
+/** Suggestion cards are on: the notebook is chosen and its switch is not off. */
+export const cardsEnabled = (config: Config) => memoryChoiceOf(config) === "notebook" && cardsSwitchOn(config)

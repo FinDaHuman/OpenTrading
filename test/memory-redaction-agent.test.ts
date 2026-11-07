@@ -23,7 +23,7 @@ const CATALOG = {
   },
 }
 
-type Body = { messages: { role: string; content?: unknown }[] }
+type Body = { messages: { role: string; content?: unknown }[]; stream?: boolean }
 const bodies: Body[] = []
 /** Tool calls the fake model makes, one per request, before it answers in text. */
 let calls: { tool: string; args: object }[] = []
@@ -47,6 +47,16 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   if (!url.endsWith("/chat/completions")) throw new Error(`unexpected fetch ${url}`)
   const body = JSON.parse(String(init?.body)) as Body
   bodies.push(body)
+  if (!body.stream) {
+    return Response.json({
+      id: "c",
+      object: "chat.completion",
+      created: 1,
+      model: "m",
+      choices: [{ index: 0, message: { role: "assistant", content: "<summary>## Yêu cầu của người dùng\nTÓM-TẮT-GIẢ</summary>" }, finish_reason: "stop" }],
+      usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+    })
+  }
   const next = calls.shift()
   if (next) {
     const id = `call_${bodies.length}`
@@ -59,7 +69,10 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   return sse([chunk({ role: "assistant", content: "Đã xem." }), chunk({}, "stop")])
 }) as typeof fetch
 
-const { runAgent } = await import("../src/core/agent")
+const { runAgent, summarizeConversation } = await import("../src/core/agent")
+const { compactPair } = await import("../src/core/compact-marker")
+const { compactCode } = await import("../src/core/memory/notebook/provider")
+const { LABELS_ONLY_NOTE, labelsOnly } = await import("../src/core/memory/notebook/labels-only")
 const { ToolRegistry } = await import("../src/core/tools/registry")
 const { saveConfig } = await import("../src/core/config")
 const { setKey } = await import("../src/core/auth")
@@ -448,16 +461,102 @@ describe("Story 6, the other scenarios, through the agent loop", () => {
     await s.turn("Bài 7?")
     // What a compaction leaves: a summary in place of the older turns, the recent turns kept as they were.
     const kept = s.history()
-    s.setHistory([
-      {
-        role: "user",
-        content: [{ type: "text", text: "<nhac_nho>\n<tom_tat_hoi_thoai>\nTóm tắt phần đầu.\n</tom_tat_hoi_thoai>\n</nhac_nho>" }],
-      },
-      { role: "assistant", content: "Đã hiểu." },
-      ...kept,
-    ])
+    s.setHistory([...compactPair("Tóm tắt phần đầu.", { tools: [], skills: [], todos: [] }), ...kept])
     calls = [{ tool: "memory_read", args: { lesson: 7 } }]
     const t = await s.turn("Đọc lại bài 7")
     expect(toolOutputs(t.requests).at(-1)).toContain(alreadyShown.lesson(7, 1))
+  })
+})
+
+// ── Spec 007: memory and compaction ──────────────────────────────────────────────────────────────
+
+describe("compaction (spec 007)", () => {
+  const LESSON_7_TEXT = "Dùng P/B và ROE, không dùng P/E"
+  const carry = { tools: [], skills: [], todos: [] }
+
+  test("labelsOnly: blocks in both channels keep their label line only; a label the user typed is left as it is", async () => {
+    seedExample(nb.store())
+    const s = session()
+    await s.turn("Hòa Phát?")
+    calls = [{ tool: "memory_read", args: { lesson: 7 } }]
+    await s.turn("Bài 7?")
+    const typed: ModelMessage = { role: "user", content: `${HPG_LABEL}\nTôi tự gõ dòng này` }
+    const history = [...s.history(), typed]
+    const cut = JSON.stringify(labelsOnly(history))
+    expect(JSON.stringify(history)).toContain(LESSON_7_TEXT)
+    expect(cut).not.toContain(LESSON_7_TEXT)
+    expect(cut).not.toContain(JSON.stringify(HPG_V3.text).slice(1, -1))
+    expect(cut.split(JSON.stringify(LABELS_ONLY_NOTE).slice(1, -1)).length - 1).toBe(2)
+    expect(cut).toContain("Tôi tự gõ dòng này")
+    // A message with no block is the very same object.
+    expect(labelsOnly(history).at(-1)).toBe(typed)
+  })
+
+  test("the summary request carries no memory content, no index and no constraint block", async () => {
+    seedExample(nb.store())
+    const s = session()
+    await s.turn("Hòa Phát?")
+    calls = [{ tool: "memory_read", args: { lesson: 7 } }]
+    await s.turn("Bài 7?")
+    const from = bodies.length
+    const registry = new ToolRegistry()
+    const summary = await summarizeConversation({
+      head: s.history(),
+      prompt: "TÓM-TẮT",
+      skills: [],
+      registry,
+      memory: nb.notebook(),
+      constraints: createConstraintReader(nb.file()),
+    })
+    expect(summary).toContain("TÓM-TẮT-GIẢ")
+    const sent = all(bodies.slice(from))
+    expect(sent).not.toContain(LESSON_7_TEXT)
+    expect(sent).not.toContain("[Sổ ghi nhớ · mục lục")
+    expect(sent).not.toContain("<rang_buoc>")
+    expect(sent).toContain(JSON.stringify(LABELS_ONLY_NOTE).slice(1, -1))
+  })
+
+  test("the first turn after a compaction gets the note once; a second compaction gets its own", async () => {
+    seedExample(nb.store())
+    const s = session()
+    await s.turn("Hòa Phát?")
+    const first = compactPair("Tóm tắt lần một.", carry)
+    s.setHistory([...first, ...s.history().slice(-2)])
+    const code1 = compactCode(s.history())!
+    const t1 = await s.turn("Còn gì nữa?")
+    expect(memoryPart(t1.requests)).toContain(reminders.compacted(code1))
+    const t2 = await s.turn("Thêm một câu.")
+    expect(memoryPart(t2.requests)).not.toContain("đã được nén")
+    // A second compaction whose kept tail still holds the first note: its own note all the same.
+    const second = compactPair("Tóm tắt lần hai.", carry)
+    s.setHistory([...second, ...s.history().slice(-4)])
+    const code2 = compactCode(s.history())!
+    expect(code2).not.toBe(code1)
+    const t3 = await s.turn("Tiếp nhé.")
+    expect(memoryPart(t3.requests)).toContain(reminders.compacted(code2))
+  })
+
+  test("no compaction marker, no note; the note survives a restart without being said again", async () => {
+    seedExample(nb.store())
+    const s = session()
+    const t0 = await s.turn("Hòa Phát?")
+    expect(memoryPart(t0.requests)).not.toContain("đã được nén")
+    s.setHistory([...compactPair("Tóm tắt.", carry), ...s.history()])
+    await s.turn("Còn gì nữa?")
+    s.restart()
+    const t = await s.turn("Thêm một câu.")
+    expect(memoryPart(t.requests)).not.toContain("đã được nén")
+  })
+
+  test("after a compaction the index is rendered afresh", async () => {
+    seedExample(nb.store())
+    const s = session()
+    await s.turn("Hòa Phát?")
+    const added = nb.store().writer.addLesson({ title: "Không bình quân giá xuống", summary: "x" }).id
+    const before = await s.turn("Còn gì?")
+    expect(all(before.requests)).not.toContain(`#${added} Không bình quân giá xuống`)
+    s.setHistory([...compactPair("Tóm tắt.", carry), ...s.history().slice(-2)])
+    const after = await s.turn("Tiếp nhé.")
+    expect(all(after.requests)).toContain(`#${added} Không bình quân giá xuống`)
   })
 })

@@ -5,6 +5,27 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ## [Unreleased]
 
+### Changed (memory, spec 007)
+
+- Compaction never sees memory content: every memory block in the part summarized is cut down to its label,
+  and the summary request carries no memory guide, notebook index or constraint block (they are sent again
+  with every request). Both summary templates keep "Ràng buộc và sở thích" and say to cite memory by label.
+  The first turn after each compaction tells the model, and the index is rendered afresh.
+- The legacy memory ("Memory cũ": `FileMemory`, the `propose_memory` tool, the "Ghi nhớ: …" hook) is
+  removed. A config naming it is read as the notebook; the TUI writes it back and says so once; the old
+  `memory/` folder is left untouched. `MemoryProvider` drops `pending`, `approve`, `reject`, `list`, `remove`.
+
+### Added (memory, spec 007)
+
+- Suggestion cards: the model may end an answer with a `<the_goi_y>` block proposing a constraint, a
+  presentation style or a lesson. The block never reaches history or the screen (hidden while it streams);
+  a valid one becomes a card under the answer. A constraint or style card must quote the user's own words
+  of that turn. Enter opens the spec-003 form filled in, `x` dismisses, `/goiy` picks a pending card again.
+  Nothing is stored until the user confirms the form (source "card"). Cards are `card` lines in the
+  session file and come back on resume; the next turn tells the model what became of each. Switch:
+  "Cho phép thẻ gợi ý" in `/config`; never for tier C models, sub-agents or the headless CLI.
+- The notebook guide tells the model to answer without saved memory when the user asks to ignore it.
+
 ### Fixed (memory, PR #229 review)
 
 - A memory block is masked for good (a `redact` line) only when `memory.db` still holds the item's or version's

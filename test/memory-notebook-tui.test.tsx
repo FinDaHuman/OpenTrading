@@ -40,7 +40,6 @@ const { resetNotifications } = await import("../src/tui/notify")
 const { closeMemory, createMemory, initRuntime, switchMemory } = await import("../src/core/runtime")
 const { loadConfig, saveConfig } = await import("../src/core/config")
 const { openMemoryStore } = await import("../src/core/memory/store/open")
-const { FileMemory } = await import("../src/core/memory/file-memory")
 const { NoopMemory } = await import("../src/core/memory/types")
 const { promptFile } = await import("../src/core/prompt/assemble")
 
@@ -105,16 +104,17 @@ async function openConfig(runtimeHome = home) {
   setup = await testRender(() => <ConfigDialog runtime={runtime!} />, { width: 110, height: 40 })
   await frameWith("Cài đặt")
 }
-/** Memory is the first row of /config: enter opens its three choices; type to filter, enter to pick. */
+/** Memory is the first row of /config: enter opens its choices; type to filter, enter to pick. */
 async function chooseMemory(filter: string) {
   setup!.mockInput.pressEnter()
   await frameWith("Sổ ghi nhớ")
   await setup!.mockInput.typeText(filter)
-  await frameWith((f) => !f.includes("Memory cũ") || filter.startsWith("memory"))
+  // Wait for the filter: the other choice's hint is gone.
+  await frameWith((f) => !f.includes(filter.startsWith("tat") ? "ràng buộc, luận điểm, bài học" : "không dùng memory"))
   setup!.mockInput.pressEnter()
 }
 
-describe("/config: three memory choices", () => {
+describe("/config: memory choices", () => {
   test("Sổ ghi nhớ opens memory.db at once and is saved; Tắt closes it and the file can be deleted", async () => {
     await openConfig()
     await chooseMemory("so ghi")
@@ -170,13 +170,14 @@ describe("/config: three memory choices", () => {
     }
   })
 
-  test("the three choices are listed with the current one marked", async () => {
+  test("two choices, the current one marked; no legacy memory; the card switch only with the notebook", async () => {
     await openConfig()
     setup!.mockInput.pressEnter()
     const f = await frameWith("Sổ ghi nhớ")
     expect(f).toContain("Tắt")
-    expect(f).toContain("Memory cũ")
+    expect(f).not.toContain("Memory cũ")
     expect(f).toMatch(/● Tắt/)
+    expect(f).not.toContain("Cho phép thẻ gợi ý")
   })
 
   test("a store from a newer app: the reason and what to do; the notebook's system part is the guide alone", async () => {
@@ -320,16 +321,11 @@ describe("/memory with the notebook", () => {
     expect(f).not.toContain("Sổ ghi nhớ còn trống")
   })
 
-  test("the legacy file memory keeps its own /memory screen", async () => {
-    const dir = path.join(home, "memory")
-    const file = new FileMemory(dir)
-    await file.add("Không dùng margin", { status: "active", via: "user" })
+  test("memory off: /memory says so and how to turn it on", async () => {
     setState({ dialog: "memory" })
-    setup = await testRender(() => <MemoryDialog memory={file} />, { width: 110, height: 40 })
-    const f = await frameWith("Memory · 1")
-    expect(f).toContain("Không dùng margin")
-    expect(f).not.toContain("Ràng buộc (")
-    rmSync(dir, { recursive: true, force: true })
+    setup = await testRender(() => <MemoryDialog memory={new NoopMemory()} />, { width: 110, height: 40 })
+    const f = await frameWith("Memory đang tắt")
+    expect(f).toContain("/config")
   })
 })
 

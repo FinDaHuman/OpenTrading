@@ -1,3 +1,4 @@
+import type { Card, CardOutcome, CardState } from "../memory/cards/types"
 import { stripImages } from "../tools/registry"
 import { isCompactMarker } from "../compact-marker"
 import { splitNotices } from "../subagents/notification"
@@ -71,6 +72,12 @@ export type SessionEntry =
    * A build that does not know the type skips it (and does not mask).
    */
   | { type: "redact"; ts: string; items: RedactItem[] }
+  /**
+   * A suggestion card (spec 007): the model never sees it. The line that creates it carries the card and
+   * `state: "pending"`, written with its turn; each change of state is another line with the id. The last
+   * line of an id wins. A build that does not know the type skips it.
+   */
+  | ({ type: "card"; ts: string; id: string; state: CardState; saved?: CardOutcome["saved"] } & Partial<Omit<Card, "id">>)
 
 export interface SessionSummary {
   id: string
@@ -216,6 +223,7 @@ type Part =
   | { kind: "turn"; turn: number; ts: string; firstText: string; info: SessionInfo & TurnInfo; lines: SessionEntry[] }
   | { kind: "compact"; lines: SessionEntry[] }
   | { kind: "redact"; lines: SessionEntry[] }
+  | { kind: "card"; lines: SessionEntry[] }
 
 /** A failed append could not be cut back: the file may end in a partial write we cannot remove. */
 class StoppedError extends Error {
@@ -370,6 +378,25 @@ export class Session {
 
   private pendingCharts: { callId: string; data: ChartData }[] = []
   private pendingHarness: string[] = []
+  private pendingCards: Card[] = []
+
+  /** The number the next queued turn gets (a card made this turn is named after it). */
+  get nextTurn() {
+    return this.queuedTurns + 1
+  }
+
+  /** A suggestion card the current turn ended with; written with the turn, before turn_end (spec 007). */
+  noteCard(card: Card) {
+    this.pendingCards.push(card)
+  }
+
+  /** A card was saved or dismissed: one more line with its id, after whatever waits. */
+  appendCardState(id: string, state: CardState, saved?: CardOutcome["saved"]): Promise<SaveReceipt> {
+    if (!this.file && this.queuedTurns === 0) return Promise.resolve(this.receipt([]))
+    const line: SessionEntry = { type: "card", ts: new Date().toISOString(), id, state, ...(saved ? { saved } : {}) }
+    this.queue.push({ kind: "card", lines: this.stopped ? [] : [line] })
+    return this.drain()
+  }
 
   /** The next turn's user text came from the harness; written with that turn. */
   noteHarness(text: string) {
@@ -416,6 +443,7 @@ export class Session {
     for (const message of stripImages(messages)) lines.push({ type: "message", ts, message })
     for (const chart of this.pendingCharts.splice(0)) lines.push({ type: "chart", ts, ...chart })
     for (const text of this.pendingHarness.splice(0)) lines.push({ type: "harness", ts, text })
+    for (const card of this.pendingCards.splice(0)) lines.push({ type: "card", ts, ...card, state: "pending" })
     const turn = ++this.queuedTurns
     lines.push({
       type: "turn_end",
@@ -597,6 +625,11 @@ export interface LoadedSession {
   patched: number
   /** The last turn's number from the file's own turn_end lines (the index line may lag behind). */
   lastTurn: number
+  /**
+   * The session's suggestion cards, last state each, in file order. `at`: how many `display` messages come
+   * before the card (the card follows its turn's answer).
+   */
+  cards: LoadedCard[]
   redaction: {
     /** Redact lines in the file that were applied. */
     fromFile: number
@@ -606,6 +639,16 @@ export interface LoadedSession {
     temporary?: Redaction["temporary"]
   }
 }
+
+export interface LoadedCard {
+  card: Card
+  state: CardState
+  saved?: CardOutcome["saved"]
+  at: number
+}
+
+const CARD_KINDS = new Set(["constraint", "style", "lesson"])
+const CARD_STATES = new Set(["pending", "saved", "dismissed"])
 
 const isRedactItem = (value: unknown): value is RedactItem => {
   const i = value as Record<string, unknown> | null
@@ -634,6 +677,7 @@ export async function loadSession(id: string, opts: { check?: RedactionCheck } =
   const harness: string[] = []
   let lastTurn = 0
   let fromFile = 0
+  const cards = new Map<string, LoadedCard & { after?: ModelMessage }>()
   for (const line of text.split("\n")) {
     if (!line.trim()) continue
     try {
@@ -656,6 +700,16 @@ export async function loadSession(id: string, opts: { check?: RedactionCheck } =
         if (entry.contextTokens !== undefined) contextTokens = entry.contextTokens
       } else if (entry.type === "chart" && entry.callId && entry.data) charts.set(entry.callId, entry.data)
       else if (entry.type === "harness" && typeof entry.text === "string") harness.push(entry.text)
+      else if (entry.type === "card" && typeof entry.id === "string" && CARD_STATES.has(entry.state)) {
+        const known = cards.get(entry.id)
+        if (known) {
+          known.state = entry.state
+          if (entry.saved) known.saved = entry.saved
+        } else if (CARD_KINDS.has(entry.kind ?? "") && Number.isInteger(entry.turn)) {
+          const { type: _t, ts: _ts, state, saved, ...card } = entry
+          cards.set(entry.id, { card: card as Card, state, saved, at: shown.length, after: shown.at(-1) })
+        }
+      }
       else if (entry.type === "redact" && Array.isArray(entry.items) && entry.items.length > 0 && entry.items.every(isRedactItem)) {
         raw = applyRedactLines(raw, entry.items)
         shown = applyRedactLines(shown, entry.items)
@@ -681,7 +735,12 @@ export async function loadSession(id: string, opts: { check?: RedactionCheck } =
   }
   const { messages, patched } = closeDanglingToolCalls(raw)
   const display = closeDanglingToolCalls(shown).messages
-  return { summary, meta, messages, display, contextTokens, patched, charts, harness, lastTurn, redaction }
+  // Closing dangling calls may insert results: a card stays after the message it followed.
+  const placed = [...cards.values()].map(({ after, ...c }) => {
+    const i = after ? display.indexOf(after) : -1
+    return { ...c, at: i >= 0 ? i + 1 : Math.min(c.at, display.length) }
+  })
+  return { summary, meta, messages, display, contextTokens, patched, charts, harness, lastTurn, cards: placed, redaction }
 }
 
 /**

@@ -1,5 +1,5 @@
 import { render } from "@opentui/solid"
-import { loadConfig } from "../core/config"
+import { loadConfig, memoryChoiceOf } from "../core/config"
 import { createMemory, initRuntime } from "../core/runtime"
 import { App } from "./app"
 import { requestExit, state } from "./state"
@@ -9,7 +9,7 @@ import { color } from "./theme"
 /** Boot the TUI. Kept out of src/index.tsx so `opentrading mcp …` never needs a JSX runtime. */
 export async function startTui(resume: string | undefined) {
   const config = await loadConfig()
-  const runtime = initRuntime({ skills: () => state.skills, memory: createMemory(config.memory?.provider), workspaceDirs: config.workspace?.dirs, scratchpad: {} })
+  const runtime = initRuntime({ skills: () => state.skills, memory: createMemory(memoryChoiceOf(config)), workspaceDirs: config.workspace?.dirs, scratchpad: {} })
   if (runtime.workspace.scratch) runtime.workspace.scratch.enabled = config.scratchpad?.enabled !== false
   // ▸▸ auto never accepted (set by hand or in /config) opens as ▸; the app asks first.
   runtime.permissions.setMode(startMode(config.permissions))

@@ -169,6 +169,13 @@ export const labelOf = (block: string) => block.split("\n", 1)[0]!
 const NOTE = "[Memory · nhắc]"
 
 /** One-line notes about items already sent this session, and pointers to blocks not injected. */
+/** How a card's kind is said to the model and the user. */
+export const CARD_KIND_LABEL: Record<"constraint" | "style" | "lesson", string> = {
+  constraint: "ràng buộc",
+  style: "cách trình bày",
+  lesson: "bài học",
+}
+
 export const reminders = {
   lessonDeleted: (id: number) => `${NOTE} Bài học #${id} đã bị người dùng xoá; không dùng nội dung #${id} phía trên nữa.`,
   lessonNewVersion: (id: number, version: number, old: number) =>
@@ -188,6 +195,12 @@ export const reminders = {
   indexThesisAdded: (name: string) =>
     `${NOTE} Sổ có thêm luận điểm ${escapeMemoryLine(name)}, chưa có trong mục lục; đọc bằng memory_read nếu cần.`,
   indexLessonAdded: (id: number) => `${NOTE} Sổ có thêm bài học #${id}, chưa có trong mục lục; đọc bằng memory_read nếu cần.`,
+  cardPending: (id: string, kind: string) =>
+    `${NOTE} Gợi ý lưu ${id} (${kind}) đang chờ người dùng xem; không đề xuất lại.`,
+  cardSaved: (id: string, group: string, n: number) => `${NOTE} Người dùng đã lưu gợi ý ${id} thành ${group} #${n}.`,
+  cardDismissed: (id: string) => `${NOTE} Người dùng đã bỏ qua gợi ý ${id}; không đề xuất lại trong phiên này.`,
+  compacted: (code: string) =>
+    `${NOTE} Hội thoại phía trên đã được nén (mã nén ${code}); bản tóm tắt chỉ giữ nhãn memory, cần nội dung thì đọc bằng memory_read.`,
   storeError: (reason: string) => `[Memory · lỗi] Kho memory không mở được: ${reason}.`,
 }
 

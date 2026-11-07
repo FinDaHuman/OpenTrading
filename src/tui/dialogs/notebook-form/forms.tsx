@@ -1,3 +1,4 @@
+import { cardSaved } from "../../cards"
 import { createMemo, createSignal, Match, Show, Switch } from "solid-js"
 import { createStore } from "solid-js/store"
 import { notebookAdmin, type NotebookAdmin, type SaveResult, type SubjectTarget } from "../../../core/memory/notebook/admin"
@@ -98,10 +99,13 @@ function settle(
   on: {
     conflict?: (current: Extract<SaveResult, { reason: "conflict" }>["current"]) => void
     deleted?: () => void
+    /** After a save that went through, before the form closes (a suggestion card is marked saved). */
+    saved?: (saved: { id: number }) => void
     partial?: (created: NonNullable<Extract<SaveResult, { partial?: unknown }>["partial"]>["created"]) => void
   } = {},
 ) {
   if (result.ok) {
+    on.saved?.(result.saved)
     say(result.message, "success")
     return closeDialog()
   }
@@ -204,6 +208,7 @@ function ConstraintForm(props: { admin: NotebookAdmin; req: Request<"constraint"
     if (draft.kind && sum) out.push(`Tổng ${KIND_NAME[draft.kind]} sau khi lưu: ${countText(sum)} ký tự`)
     if (!draft.kind) out.push("Chọn ngăn trước khi xác nhận.")
     if (props.req.fromLesson) out.push("Mở từ form bài học: chỉ giữ câu này; các ô khác của bài học không được lưu.")
+    if (props.req.card?.quote) out.push(`Mở từ thẻ gợi ý của model. Câu bạn đã gõ: "${props.req.card.quote}"`)
     out.push(FIGURE_GUIDE)
     return out
   })
@@ -211,7 +216,11 @@ function ConstraintForm(props: { admin: NotebookAdmin; req: Request<"constraint"
   function save() {
     const b = base()
     const edit = b.id !== undefined && b.version !== undefined ? { id: b.id, expected: b.version } : undefined
-    settle(ui, admin.saveConstraint({ ...draft }, edit), {
+    const card = props.req.card
+    settle(ui, admin.saveConstraint({ ...draft }, edit, { card: !!card }), {
+      saved: (s) => {
+        if (card && draft.kind) cardSaved(card.id, { group: draft.kind, id: s.id })
+      },
       conflict: (current) => {
         const theirs = current as ConstraintDraft & { version: number }
         const mine = { ...draft }
@@ -848,7 +857,7 @@ function LessonForm(props: { admin: NotebookAdmin; req: Request<"lesson"> }) {
   const ui = createFormUi()
   const fieldsOf = (l: LessonDraft | undefined, title = ""): LessonFields => ({
     title: l?.title ?? title,
-    summary: l?.summary ?? "",
+    summary: l?.summary ?? (l ? "" : (props.req.summary ?? "")),
     appliesTo: (l?.appliesTo ?? []).map(refName).join(", "),
     exceptions: l?.exceptions ?? "",
     detail: l?.detail ?? "",
@@ -888,7 +897,11 @@ function LessonForm(props: { admin: NotebookAdmin; req: Request<"lesson"> }) {
     const mine = toLesson(draft, refs)
     const b = base()
     const edit = loaded && b.version !== undefined ? { id: loaded.id, expected: b.version } : undefined
-    settle(ui, admin.saveLesson(mine, edit), {
+    const card = props.req.card
+    settle(ui, admin.saveLesson(mine, edit, { card: !!card }), {
+      saved: (s) => {
+        if (card) cardSaved(card.id, { group: "lesson", id: s.id })
+      },
       conflict: (cur) => {
         const theirs = cur as LessonDraft & { version: number }
         ui.setStep(

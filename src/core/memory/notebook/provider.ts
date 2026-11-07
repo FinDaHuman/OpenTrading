@@ -1,4 +1,7 @@
 import type { ModelMessage } from "ai"
+import { createHash } from "node:crypto"
+import { isCompactMarker } from "../../compact-marker"
+import type { CardOutcome } from "../cards/types"
 import type { HookBus } from "../../hooks"
 import { promptFile } from "../../prompt/assemble"
 import type { ToolDef } from "../../tools/types"
@@ -11,6 +14,7 @@ import { rankLessons } from "./lesson-search"
 import { indexCharLimit, packRecall, recallCharLimit, type PackBlock, type PackLine } from "./pack"
 import {
   alreadyShown,
+  CARD_KIND_LABEL,
   reminders,
   renderIndex,
   renderInstructions,
@@ -141,12 +145,33 @@ const REASON: Record<string, string> = {
 }
 const reasonOf = (error: MemoryStoreError) => REASON[error.kind] ?? "kho báo lỗi khi đọc"
 
+interface ComposeOptions {
+  chars: number
+  pinned?: PinnedIndex
+  /** The newest compaction's code, when the history holds one (compactCode). */
+  compacted?: string
+  cards: readonly CardOutcome[]
+}
+
+/**
+ * A short code for the newest compaction in `history`: the first 6 hex digits of its summary's SHA-1. Stable
+ * across restarts and resumes, and different for each compaction, so the note of one never stands for the next.
+ */
+export function compactCode(history: readonly ModelMessage[]): string | undefined {
+  for (let i = history.length - 1; i >= 0; i--) {
+    if (!isCompactMarker(history[i]!)) continue
+    const summary = history[i + 1]
+    const text = typeof summary?.content === "string" ? summary.content : JSON.stringify(summary?.content ?? "")
+    return createHash("sha1").update(text).digest("hex").slice(0, 6)
+  }
+  return undefined
+}
+
 const asItem = (text: string, i: number, at: string): MemoryItem => ({
   id: `notebook:${i}`,
   text,
   title: labelTitle(text) ?? "ghi chú của sổ",
   scope: "user",
-  status: "active",
   createdAt: at,
   updatedAt: at,
 })
@@ -323,9 +348,18 @@ export class NotebookMemory implements MemoryProvider {
     }
     ledger.beginTurn(typed, detected, history.length)
     const view = viewOf(history)
+    // The newest compaction in view (spec 007): its summary only keeps memory labels, which the model is told
+    // once; and the index is rendered afresh, the first user message having changed anyway.
+    const compacted = compactCode(history)
+    if (compacted !== ledger.lastCompact) {
+      ledger.lastCompact = compacted
+      if (compacted) ledger.pinnedIndex = undefined
+    }
     let texts: string[]
     try {
-      texts = data ? this.compose(ledger.focus(), view, data, recallCharLimit(ctx.tier), ledger.pinnedIndex) : this.errorLine(view)
+      texts = data
+        ? this.compose(ledger.focus(), view, data, { chars: recallCharLimit(ctx.tier), pinned: ledger.pinnedIndex, compacted, cards: ctx.cards ?? [] })
+        : this.errorLine(view)
     } catch (error) {
       this.cache = undefined
       this.source.fail(error)
@@ -345,7 +379,8 @@ export class NotebookMemory implements MemoryProvider {
   }
 
   /** Blocks for the subjects in focus, notes for what changed since it was sent, packed under the cap. */
-  private compose(focus: { subjectId: number }[], view: HistoryView, data: Snapshot, chars: number, pinned?: PinnedIndex): string[] {
+  private compose(focus: { subjectId: number }[], view: HistoryView, data: Snapshot, opts: ComposeOptions): string[] {
+    const { chars, pinned } = opts
     const gate = this.source.gate()!
     const inFocus = new Set(focus.map((f) => f.subjectId))
     // A thesis label carries the display name it had when sent: the subject is found through the aliases in
@@ -386,6 +421,15 @@ export class NotebookMemory implements MemoryProvider {
     const lines: PackLine[] = []
     const say = (key: string, text: string) => {
       if (!view.notes.has(key) && !lines.some((l) => l.key === key)) lines.push({ key, text })
+    }
+    if (opts.compacted) say(`compacted:${opts.compacted}`, reminders.compacted(opts.compacted))
+    // Suggestion cards (spec 007): the model never sees a card (stripped from its answer), so it is told once
+    // that one waits, and once what the user did with it; otherwise it would suggest the same thing again.
+    for (const card of opts.cards) {
+      if (card.state === "pending") say(`cardPending:${card.id}`, reminders.cardPending(card.id, CARD_KIND_LABEL[card.kind]))
+      else if (card.state === "saved" && card.saved) {
+        say(`cardSaved:${card.id}`, reminders.cardSaved(card.id, CARD_KIND_LABEL[card.saved.group], card.saved.id))
+      } else if (card.state === "dismissed") say(`cardDismissed:${card.id}`, reminders.cardDismissed(card.id))
     }
     const deleted = new Set(view.maskedTheses)
     for (const [id, mark] of sent) {

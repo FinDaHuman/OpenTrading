@@ -1,3 +1,4 @@
+import { cardsSwitchOn, loadConfig } from "../../core/config"
 import { pad } from "../ui/text"
 import { tokensOf } from "../../core/compact"
 import { useKeys } from "../ui/keys"
@@ -37,6 +38,7 @@ const LAYER_NAME: Record<string, string> = {
   phien_giao_dich: "Đồng hồ phiên",
   goi_y_skill: "Gợi ý skill",
   memory_policy: "Cách dùng memory",
+  memory_cards: "Thẻ gợi ý lưu memory",
   memory_lien_quan: "Memory liên quan",
   hook_context: "Ngữ cảnh từ hook",
   viec_can_lam: "Việc cần làm",
@@ -45,9 +47,11 @@ const LAYER_NAME: Record<string, string> = {
 
 /** What the next request would carry, layer by layer (HarnessPlan §10.2 observability). */
 export function ContextDialog(props: { runtime: Runtime }) {
-  const [preview] = createResource(() =>
+  const [preview] = createResource(async () =>
     previewContext({
       input: "",
+      // The card guide as the next turn would send it (spec 007).
+      cards: props.runtime.memory.id === "notebook" && cardsSwitchOn(await loadConfig()),
       skills: state.skills,
       sticky: state.activeSkills,
       prevClock: state.clock,
