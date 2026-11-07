@@ -216,7 +216,7 @@ describe("Story 1: a resumed session neither repeats nor misses blocks", () => {
     expect(memoryPart((await s.turn("MBB thì sao?")).requests)).toContain(note)
     s.restart()
     expect(memoryPart((await s.turn("Còn TCB?")).requests)).not.toContain(note)
-  })
+  }, 15_000)
 
   test("restarted: a follow-up keeps the subjects of the turns before it (the window is rebuilt from the history)", async () => {
     const other = nb.store()

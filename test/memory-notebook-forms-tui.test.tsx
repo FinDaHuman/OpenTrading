@@ -30,6 +30,8 @@ const CATALOG = {
 /** Every request but the model catalog: the notebook commands must make none. */
 const requests: string[] = []
 const bodies: { messages: { role: string; content?: unknown }[] }[] = []
+/** The turns' own requests (streamed), not the side ones such as the session title: that one may come in before the turn ends. */
+const mainBodies = () => bodies.filter((b) => (b as { stream?: boolean }).stream)
 let reply = "Đã rõ."
 const realFetch = globalThis.fetch
 globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -228,7 +230,7 @@ describe("prompt history keeps only the command name (four ways out of the box)"
     await frameWith("Hỏi về thị trường")
     await type("Phân tích HPG")
     enter()
-    await until(() => !state.streaming && bodies.length === 1)
+    await until(() => !state.streaming && mainBodies().length === 1)
     expect((await history()).map((h) => h.text)).toEqual(["/nho", "Phân tích HPG"])
   })
 })
@@ -380,8 +382,8 @@ describe("/nho: the remember form", () => {
     expect(requests).toEqual([])
     await type("Phân tích HPG")
     enter()
-    await until(() => !state.streaming && bodies.length === 1)
-    expect(JSON.stringify(bodies[0]!.messages.filter((m) => m.role === "system"))).toContain("[#5 · bản 1] Không bán khống")
+    await until(() => !state.streaming && mainBodies().length === 1)
+    expect(JSON.stringify(mainBodies()[0]!.messages.filter((m) => m.role === "system"))).toContain("[#5 · bản 1] Không bán khống")
   })
 
   test("Cách trình bày: saved, the constraint set stays", async () => {
@@ -534,7 +536,7 @@ describe("a notebook command is not a chat turn", () => {
     reply = "/nho Được dùng margin"
     await type("Phân tích HPG")
     enter()
-    await until(() => !state.streaming && bodies.length === 1)
+    await until(() => !state.streaming && mainBodies().length === 1)
     await frameWith("Được dùng margin")
     expect(state.dialog).toBeUndefined()
     expect(other.reader.constraints("constraint")).toHaveLength(2)
@@ -899,7 +901,7 @@ describe("/quyetdinh: the decision log rests on what the form showed", () => {
     expect(requests).toEqual([])
     await type("Phân tích HPG")
     enter()
-    await until(() => !state.streaming && bodies.length === 1)
+    await until(() => !state.streaming && mainBodies().length === 1)
     expect(JSON.stringify(bodies)).not.toContain(MARK)
   })
 
@@ -1321,8 +1323,6 @@ describe("suggestion cards (spec 007)", () => {
   const TYPED = "Từ giờ đừng bao giờ gợi ý cổ phiếu penny cho tôi"
   const ANSWER = "Ghi nhận: mình sẽ không gợi ý cổ phiếu penny cho bạn nữa."
   const BLOCK = `<the_goi_y loai="rang_buoc">\nnoi_dung: Không gợi ý cổ phiếu penny\ncau_goc: ${TYPED}\n</the_goi_y>`
-  /** The turns' own requests (streamed), not the side ones such as the session title. */
-  const mainBodies = () => bodies.filter((b) => (b as { stream?: boolean }).stream)
   const cardLine = () => state.lines.find((l) => l.kind === "card") as Extract<(typeof state.lines)[number], { kind: "card" }> | undefined
   const { resumeSession, currentSession } = { resumeSession: async (id: string) => (await import("../src/tui/session")).resumeSession(runtime!, id), currentSession: async () => (await import("../src/tui/session")).currentSession() }
 
