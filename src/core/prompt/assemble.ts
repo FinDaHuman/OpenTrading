@@ -42,8 +42,14 @@ export interface AssembleInput {
   /** Skills switched on by the user (/skill <name>). */
   sticky: string[]
   investorProfile?: string
+  /** The user's constraints block (memory/binding renderConstraints), for both roles; never cut. */
+  constraints?: string
+  /** The note naming the sources the user chose to run without this turn. */
+  unread?: string
   /** MemoryProvider.instructions(): static, goes to system. */
   memoryInstructions?: string
+  /** Suggestion cards are on this turn (spec 007): the guide to the card block (prompts/memory-cards.md). */
+  memoryCards?: boolean
   /** MemoryProvider.index(): always-on summary, goes to context. */
   memoryIndex?: string
   /** MemoryProvider.recall() for this message, already capped: reminder. */
@@ -99,6 +105,21 @@ export function promptFile(id: string, dir = PROMPTS_DIR): string | undefined {
 }
 
 const tag = (id: string, text: string) => `<${id}>\n${text}\n</${id}>`
+
+/** The user's own file may hold anything pasted in: no tag inside it may close its block or open another. */
+const entities = (text: string) => text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+
+/**
+ * The first system layer of a role, as assemble sends it: identity.md for the main agent; for a
+ * sub-agent subagent.md plus identity's invariants and priority order. Also what the turn binding
+ * measures to check the constraints fit the model.
+ */
+export function identityLayer(role: "main" | "subagent" | undefined, promptsDir = PROMPTS_DIR): string | undefined {
+  if (role !== "subagent") return promptFile("identity", promptsDir)
+  const identity = promptFile("identity", promptsDir)
+  const rules = [section(identity, "bat_bien"), section(identity, "thu_tu_uu_tien")].filter(Boolean).join("\n\n")
+  return [promptFile("subagent", promptsDir), rules].filter(Boolean).join("\n\n") || undefined
+}
 
 /** One `<id>…</id>` block of a prompt file, tags included (the subagent reuses identity's invariants). */
 export function section(text: string | undefined, id: string): string | undefined {
@@ -161,20 +182,23 @@ export function assemble(input: AssembleInput, promptsDir = PROMPTS_DIR): Assemb
 
   // ── system: static first ─────────────────────────────────────────────
   const subagent = input.role === "subagent"
-  if (subagent) {
-    const identity = promptFile("identity", promptsDir)
-    const rules = [section(identity, "bat_bien"), section(identity, "thu_tu_uu_tien")].filter(Boolean).join("\n\n")
-    add(system, "subagent", 1, "system", [promptFile("subagent", promptsDir), rules].filter(Boolean).join("\n\n") || undefined, "identity")
-  } else add(system, "identity", 1, "system", promptFile("identity", promptsDir))
+  if (subagent) add(system, "subagent", 1, "system", identityLayer("subagent", promptsDir), "identity")
+  else add(system, "identity", 1, "system", identityLayer("main", promptsDir))
   if (input.tools.length > 0) add(system, "tools", 7, "system", promptFile("tools", promptsDir))
   if (!input.disabled?.has("citations-prompt")) add(system, "citations", 1, "system", promptFile("citations", promptsDir))
   // Investor profile rides the static system prefix (cache-marked on Anthropic) like
   // CLAUDE.md at boot. Re-read per request but byte-identical while the file is unchanged,
   // so it caches the same — while an edit still applies the very next request.
-  add(system, "ho_so_nha_dau_tu", 3, "system", input.investorProfile?.trim() || undefined, "investor_profile")
+  // A subagent works for the main agent: never the investor profile, whatever the caller passed.
+  const profile = subagent ? undefined : input.investorProfile?.trim()
+  add(system, "ho_so_nha_dau_tu", 3, "system", profile ? entities(profile) : undefined, "investor_profile")
+  // The user's constraints, whole, for both roles, whatever memory is switched to (memory/binding).
+  add(system, "rang_buoc", 3, "system", input.constraints?.trim() || undefined, "constraints")
+  add(system, "nguon_chua_nap", 3, "system", input.unread?.trim() || undefined, "constraints")
   if (subagent) add(system, "chi_dan_agent", 6, "system", input.agentPrompt?.trim() || undefined, "identity")
   else {
     add(system, "memory_policy", 4, "system", input.memoryInstructions?.trim() || undefined)
+    if (input.memoryCards) add(system, "memory_cards", 4, "system", promptFile("memory-cards", promptsDir))
     add(system, "style", 8, "system", promptFile("style", promptsDir))
   }
 

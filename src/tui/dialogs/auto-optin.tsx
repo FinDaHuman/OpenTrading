@@ -2,7 +2,7 @@ import { useKeyboard } from "@opentui/solid"
 import { createSignal, For } from "solid-js"
 import { saveConfig } from "../../core/config"
 import type { PermissionGate } from "../../core/permission"
-import { MODE_LABEL } from "../../core/permission/mode"
+import { cycleMode, MODE_LABEL } from "../../core/permission/mode"
 import { say, saySaveFailure } from "../notify"
 import { setState, state } from "../state"
 import { color } from "../theme"
@@ -52,7 +52,7 @@ export function AutoOptInDialog(props: { gate: PermissionGate }) {
     if ((evt.name === "tab" && evt.shift) || (evt.meta && evt.name === "m")) {
       evt.preventDefault()
       setState("autoOptIn", undefined)
-      return props.gate.setMode("read-only")
+      return props.gate.setMode(cycleMode("auto", { bypass: props.gate.bypassAvailable }))
     }
     evt.preventDefault()
     const n = CHOICES.length

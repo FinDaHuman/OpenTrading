@@ -25,6 +25,12 @@ test("a folder, with or without resume flags, in any order", () => {
   expect(parseCli(["--continue", ".."])).toEqual({ kind: "tui", dir: "..", resume: "latest" })
 })
 
+test("--yolo (or --dangerously-skip-permissions) goes with a folder and resume flags", () => {
+  expect(parseCli(["--yolo"])).toEqual({ kind: "tui", dir: undefined, resume: undefined, yolo: true })
+  expect(parseCli([".", "-c", "--dangerously-skip-permissions"])).toEqual({ kind: "tui", dir: ".", resume: "latest", yolo: true })
+  expect(parseCli(["-c"])).not.toHaveProperty("yolo")
+})
+
 test("-r takes a session id but never a folder", () => {
   expect(parseCli(["-r", "20261022-140500-ab12"])).toEqual({ kind: "tui", dir: undefined, resume: "20261022-140500-ab12" })
   expect(parseCli(["-r"])).toEqual({ kind: "tui", dir: undefined, resume: "latest" })
@@ -45,9 +51,9 @@ test("help, version, unknown flags and two folders", () => {
   expect(parseCli([".", "--help"]).kind).toBe("help")
   expect(parseCli(["--version"]).kind).toBe("version")
   expect(parseCli(["-v"]).kind).toBe("version")
-  const unknown = parseCli(["--yolo"])
+  const unknown = parseCli(["--nope"])
   expect(unknown.kind).toBe("error")
-  expect(unknown.kind === "error" && unknown.message).toContain("--yolo")
+  expect(unknown.kind === "error" && unknown.message).toContain("--nope")
   expect(parseCli(["a", "b"]).kind).toBe("error")
   // Hidden smoke test of a built binary: only as the first argument.
   expect(parseCli(["--self-check"]).kind).toBe("self-check")

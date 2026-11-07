@@ -92,10 +92,11 @@ const queues = new Map<string, Promise<unknown>>()
 export function updateWatchlists<T>(home: string, change: (store: WatchlistStore) => T): Promise<T> {
   const file = watchlistFile(home)
   const run = (queues.get(file) ?? Promise.resolve()).catch(() => {}).then(() =>
-    withFileLock(file, async () => {
+    withFileLock(file, async (lock) => {
       const store = await readWatchlists(home)
       const result = change(store)
-      await writeJson(file, store)
+      // A lock taken over meanwhile means another process wrote: fail rather than overwrite it.
+      await writeJson(file, store, false, { beforeCommit: lock.assertHeld })
       return result
     }),
   )

@@ -256,9 +256,9 @@ const { readJson } = await import("../src/core/store")
 const { setKey } = await import("../src/core/auth")
 const { loadConfig, saveConfig } = await import("../src/core/config")
 const { initRuntime } = await import("../src/core/runtime")
-const { FileMemory } = await import("../src/core/memory/file-memory")
+const { NoopMemory } = await import("../src/core/memory/types")
 
-const memory = new FileMemory(path.join(home, "memory"))
+const memory = new NoopMemory()
 /** Times the app asked to exit (the real exit is replaced in tests). */
 let exits = 0
 /** What copy-on-select sent over OSC52 (the renderer's method is replaced in beforeAll). */
@@ -266,6 +266,7 @@ const osc52: string[] = []
 /** What it handed to the OS clipboard command (stubbed; CI never runs powershell). */
 const copied: string[] = []
 const { setClipboardSpawn } = await import("../src/tui/clipboard")
+const { currentSession } = await import("../src/tui/session")
 setClipboardSpawn(async (_command, text) => {
   copied.push(text)
   return true
@@ -787,8 +788,8 @@ test("/tools lists built-in and MCP tools", async () => {
     setup.mockInput.pressEnter()
     // 6 core built-ins (current_time, load_skill, ask_user, todo_write, tool_search, read_file)
     // + 24 local tools (glob_files, grep_files, write_file, edit_file, shell, chart, session, watchlist, web, spawn_subagent, send_message, stop_agent, doctor_local, desk_run)
-    // + propose_memory + 4 from the demo MCP server
-    frame = await setup.waitForFrame((f) => f.includes("Tool · 36") && f.includes("25 tool hoãn"))
+    // + read_result + 4 from the demo MCP server (memory is off here: no memory_read)
+    frame = await setup.waitForFrame((f) => f.includes("Tool · 35") && f.includes("25 tool hoãn"))
     show(frame)
     // Regression for the 01/10 screenshot: every tool is exactly one line, long descriptions
     // end in "…" instead of wrapping mid-word, and the mark column is straight.
@@ -808,15 +809,14 @@ test("/tools lists built-in and MCP tools", async () => {
     expect(rows.find((r) => r.includes(" read_file "))).not.toContain("hoãn · ")
     expect(rows.find((r) => r.includes(" glob_files "))).toContain("hoãn · ")
     expect(rows.find((r) => r.includes(" chart_render "))).toContain("hoãn · ")
-    // ↑ from the first row wraps to the last: the Memory and MCP groups sit below the fold.
+    // ↑ from the first row wraps to the last: the MCP group sits below the fold (memory is off: no Memory group).
     setup.mockInput.pressArrow("up")
-    frame = await setup.waitForFrame((f) => f.includes("MCP · demo") && f.includes("36/36"))
+    frame = await setup.waitForFrame((f) => f.includes("MCP · demo") && f.includes("35/35"))
     show(frame)
-    expect(frame).toContain("Memory")
     const tail = frame.split("\n").filter((l) => /^ {2}(❯ |  )[◇◆] \S/.test(l))
     expect(tail.find((r) => r.includes(" echo "))).toContain("hoãn · ")
     setup.mockInput.pressArrow("down")
-    await setup.waitForFrame((f) => f.includes("1/36"))
+    await setup.waitForFrame((f) => f.includes("1/35"))
   } finally {
     await saveConfig({ toolSearch: undefined })
   }
@@ -827,7 +827,7 @@ test("/tools lists built-in and MCP tools", async () => {
   expect(frame).toContain("ask_user")
   expect(frame).toMatch(/• questions \(bắt buộc\): array/)
   setup.mockInput.pressEscape()
-  await setup.waitForFrame((f) => f.includes("Tool · 36"))
+  await setup.waitForFrame((f) => f.includes("Tool · 35"))
   setup.mockInput.pressEscape()
   await setup.waitFor(() => state.dialog === undefined)
 })
@@ -878,12 +878,29 @@ test("/profile creates INVESTOR.md from a template", async () => {
 test("/context shows each prompt layer with its token estimate", async () => {
   await setup.mockInput.typeText("/context")
   setup.mockInput.pressEnter()
-  const frame = await setup.waitForFrame((f) => f.includes("Danh tính & bất biến") && f.includes("Hồ sơ nhà đầu tư"))
-  expect(frame).toContain("Danh sách skill")
+  const frame = await setup.waitForFrame((f) => f.includes("Danh tính & bất biến") && f.includes("Danh sách skill"))
+  // INVESTOR.md is still the untouched template /profile wrote: its examples are comments, nothing is sent.
+  expect(frame).not.toContain("Hồ sơ nhà đầu tư")
   expect(frame).toContain("hạng B")
   show(frame)
   setup.mockInput.pressEscape()
   await setup.waitFor(() => state.dialog === undefined)
+})
+
+test("/context shows the investor profile layer once INVESTOR.md has real content", async () => {
+  const file = path.join(home, "INVESTOR.md")
+  const template = await Bun.file(file).text()
+  try {
+    await Bun.write(file, "# Hồ sơ nhà đầu tư\n\nKhẩu vị rủi ro: thấp. Chỉ mua cổ phiếu ngân hàng, giữ trên 1 năm.\n")
+    await setup.mockInput.typeText("/context")
+    setup.mockInput.pressEnter()
+    const frame = await setup.waitForFrame((f) => f.includes("Danh tính & bất biến") && f.includes("Hồ sơ nhà đầu tư"))
+    expect(frame).toContain("Hồ sơ nhà đầu tư")
+    setup.mockInput.pressEscape()
+    await setup.waitFor(() => state.dialog === undefined)
+  } finally {
+    await Bun.write(file, template)
+  }
 })
 
 test("a retried request waits on the working row (with its deadline) and leaves nothing in the transcript", async () => {
@@ -1622,6 +1639,9 @@ test("/new starts a fresh session; /sessions reopens the previous one with its t
   // The "reopened" note is the first line (may be scrolled out of view): check state.
   expect(state.lines[0]).toMatchObject({ kind: "info" })
   expect((state.lines[0] as { text: string }).text).toContain("Mở lại phiên")
+  // The count is the session's own (its file's turn lines), the same /save and /export show.
+  const told = Number(/· (\d+) lượt$/.exec((state.lines[0] as { text: string }).text)?.[1])
+  expect(told).toBe(currentSession().turns)
   // Tool rows come back (the older ones may be scrolled out of view: check state too).
   expect(state.lines.some((l) => l.kind === "tool" && l.label.includes("current_time"))).toBe(true)
   const frame = await setup.waitForFrame((f) => f.includes("● "))
@@ -1751,6 +1771,42 @@ test("shift+tab cycles ‖ chỉ đọc ↔ ▸ sửa có hỏi; a write in read
   runtime.permissions.setMode("read-only")
 })
 
+test("--yolo: the red warning asks first and keeps the mode; yes turns on ▸▸▸ bypass, red on the mode line, in the Shift+Tab cycle", async () => {
+  const gate = runtime.permissions
+  const modeRow = (f: string) => f.split("\n").find((r) => /^ {3}(‖|▸)/.test(r)) ?? ""
+  gate.bypassAvailable = true
+  setState("yoloWarning", true)
+  // A ▸▸ opt-in waiting behind (defaultMode "auto" never accepted) must not undo the yes below.
+  setState("autoOptIn", { from: "read-only" })
+  try {
+    let frame = await setup.waitForFrame((f) => f.includes("CẢNH BÁO: OpenTrading đang chạy ở chế độ ▸▸▸ bỏ qua quyền"))
+    show(frame)
+    expect(frame).toContain("❯ 1. Không, thoát")
+    expect(modeRow(frame)).toContain("▸▸▸ bỏ qua quyền (chờ xác nhận)")
+    expect(frame).toContain("Vẫn chặn hoặc vẫn hỏi")
+    expect(gate.mode).toBe("read-only")
+    // Shift+Tab does not get past the warning.
+    setup.mockInput.pressTab({ shift: true })
+    await Bun.sleep(50)
+    expect(gate.mode).toBe("read-only")
+    setup.mockInput.pressKey("2")
+    await setup.waitFor(() => gate.mode === "bypass")
+    expect(state.autoOptIn).toBeUndefined()
+    frame = await setup.waitForFrame((f) => modeRow(f).includes("▸▸▸ bỏ qua quyền (shift+tab đổi)"))
+    expect(frame).not.toContain("CẢNH BÁO")
+    // Nothing remembered: the next --yolo launch asks again.
+    expect(JSON.stringify((await loadConfig()).permissions ?? {})).not.toContain("bypass")
+    setup.mockInput.pressTab({ shift: true })
+    await setup.waitFor(() => gate.mode === "read-only")
+    setup.mockInput.pressTab({ shift: true })
+    await setup.waitFor(() => gate.mode === "ask")
+  } finally {
+    setState("yoloWarning", false)
+    gate.bypassAvailable = false
+    gate.setMode("read-only")
+  }
+})
+
 test("/undo lists and puts back the agent's file changes; /permissions lists rules and deletes one with d", async () => {
   const run = command
   const write = runtime.registry.get("write_file")!
@@ -1848,58 +1904,6 @@ test("the session's temp folder: a size warning sits under the answer, /scratch 
   }
 })
 
-test("/memory: a model proposal is pending until approved with 'a'", async () => {
-  await memory.add("Người dùng không giao dịch margin", { status: "pending", via: "model" })
-  await setup.mockInput.typeText("/memory")
-  setup.mockInput.pressEnter()
-  await setup.waitForFrame((f) => f.includes("chờ duyệt"))
-  setup.mockInput.pressEnter()
-  await setup.waitForFrame((f) => f.includes("a duyệt"))
-  setup.mockInput.pressKey("a")
-  await setup.waitFor(async () => (await memory.list())[0]?.status === "active")
-  await setup.waitForFrame((f) => f.includes("đang dùng"))
-  setup.mockInput.pressEscape()
-  await setup.waitFor(() => state.dialog === undefined)
-})
-
-test("/memory: a, r and d act only in a memory's view; in the list they are letters of the filter", async () => {
-  const pending = await memory.add("Không mua cổ phiếu penny", { status: "pending", via: "model" })
-  const active = await memory.add("Ưu tiên cổ tức tiền mặt", { status: "active", via: "user" })
-  const status = async (id: string) => (await memory.list()).find((i) => i.id === id)?.status
-  await setup.mockInput.typeText("/memory")
-  setup.mockInput.pressEnter()
-  await setup.waitForFrame((f) => f.includes("Không mua cổ phiếu penny") && f.includes("gõ để lọc"))
-  // In the list a, r and d only filter: nothing is approved, rejected or removed.
-  await setup.mockInput.typeText("ard")
-  let frame = await setup.waitForFrame((f) => f.includes("› ard"))
-  show(frame)
-  expect(await status(pending.id)).toBe("pending")
-  expect(await status(active.id)).toBe("active")
-  for (let i = 0; i < 3; i++) setup.mockInput.pressBackspace()
-  // The memory's view has no filter: r rejects, and the list comes back with an empty filter.
-  await setup.mockInput.typeText("penny")
-  await setup.waitForFrame((f) => f.includes("› penny"))
-  setup.mockInput.pressEnter()
-  await setup.waitForFrame((f) => f.includes("a duyệt · r bỏ"))
-  setup.mockInput.pressKey("r")
-  await setup.waitFor(async () => (await status(pending.id)) !== "pending")
-  frame = await setup.waitForFrame((f) => f.includes("Memory · ") && f.includes("Ưu tiên cổ tức"))
-  expect(frame).toContain("gõ để lọc")
-  expect(frame).not.toContain("› r")
-  await setup.mockInput.typeText("cổ tức")
-  await setup.waitForFrame((f) => f.includes("› cổ tức"))
-  setup.mockInput.pressEnter()
-  await setup.waitForFrame((f) => f.includes("d xoá · esc"))
-  setup.mockInput.pressKey("d")
-  await setup.waitFor(async () => (await status(active.id)) === undefined)
-  frame = await setup.waitForFrame((f) => f.includes("Memory · ") && !f.includes("cổ tức tiền mặt  đang dùng"))
-  show(frame)
-  expect(frame).toContain("gõ để lọc")
-  expect(frame).not.toContain("› d")
-  setup.mockInput.pressEscape()
-  await setup.waitFor(() => state.dialog === undefined)
-})
-
 test("/permissions: ctrl+r on an auto-mode block grants the retry and never lands in the list's filter; in the list r is a letter", async () => {
   const granted: string[] = []
   const realGrant = runtime.auto.grantRetry.bind(runtime.auto)
@@ -1937,18 +1941,29 @@ test("/permissions: ctrl+r on an auto-mode block grants the retry and never land
   }
 })
 
-test("/config turns memory off and on without a restart", async () => {
-  expect(runtime.memory.id).toBe("file")
+test("/config turns memory on and off without a restart", async () => {
+  expect(runtime.memory.id).toBe("none")
   await setup.mockInput.typeText("/config")
   setup.mockInput.pressEnter()
   await setup.waitForFrame((f) => f.includes("Cài đặt") && f.includes("Memory"))
+  // Memory has two choices (off, the notebook): enter opens them, type to pick.
+  setup.mockInput.pressEnter()
+  await setup.waitForFrame((f) => f.includes("Sổ ghi nhớ"))
+  await setup.mockInput.typeText("so ghi")
+  await setup.waitForFrame((f) => !f.includes("không dùng memory"))
+  setup.mockInput.pressEnter()
+  await setup.waitFor(() => runtime.memory.id === "notebook")
+  expect(runtime.registry.get("memory_read")).toBeDefined()
+  expect(runtime.registry.get("propose_memory")).toBeUndefined()
+  expect((await Bun.file(path.join(home, "config.json")).json()).memory).toEqual({ provider: "notebook" })
+  await setup.waitForFrame((f) => f.includes("Cài đặt"))
+  setup.mockInput.pressEnter()
+  await setup.waitForFrame((f) => f.includes("Cho phép thẻ gợi ý"))
+  await setup.mockInput.typeText("tat")
+  await setup.waitForFrame((f) => !f.includes("ràng buộc, luận điểm, bài học"))
   setup.mockInput.pressEnter()
   await setup.waitFor(() => runtime.memory.id === "none")
-  expect(runtime.registry.get("propose_memory")).toBeUndefined()
-  expect((await Bun.file(path.join(home, "config.json")).json()).memory).toEqual({ provider: "none" })
-  setup.mockInput.pressEnter()
-  await setup.waitFor(() => runtime.memory.id === "file")
-  expect(runtime.registry.get("propose_memory")).toBeDefined()
+  expect(runtime.registry.get("memory_read")).toBeUndefined()
   setup.mockInput.pressEscape()
   await setup.waitFor(() => state.dialog === undefined)
 })
@@ -3702,4 +3717,18 @@ test("the third identical call asks before it runs; esc stops the loop and the t
   expect(rows).toHaveLength(3)
   expect(rows.map((l) => l.kind === "tool" && l.status)).toEqual(["ok", "ok", "error"])
   expect(turn.some((l) => l.kind === "assistant" && l.text.includes("HẾT-CÂU-TRẢ-LỜI"))).toBe(true)
+})
+
+test("/agents lists exactly the tools a subagent gets: never the main agent's own (session history)", async () => {
+  const { resolvedTools } = await import("../src/tui/dialogs/agents")
+  const { childRegistry } = await import("../src/core/subagents/manager")
+  const def = { name: "tat-ca", description: "x", tools: undefined, disallowedTools: undefined }
+  const listed = resolvedTools(runtime, def as never)
+  expect(listed).not.toContain("session_list")
+  expect(listed).not.toContain("session_get")
+  const child = childRegistry(runtime.registry, { id: "ag-x", type: "tat-ca", description: "x" })
+    .list()
+    .map((t) => t.name)
+    .filter((n) => n !== "tool_search")
+  expect([...listed].sort()).toEqual([...child].sort())
 })

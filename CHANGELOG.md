@@ -5,6 +5,127 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ## [Unreleased]
 
+### Added (permissions)
+
+- `ot --yolo` (alias `--dangerously-skip-permissions`): the `▸▸▸ bỏ qua quyền` mode.
+  - Nothing asks and no classifier request is sent.
+  - Deny rules, ask rules, blocked calls and the user-only scopes (key files, `.git`/`.opentrading`/`.ssh`, network paths, outside the workspace, the loop guard) still stop or ask. With no UI attached, those calls are refused.
+  - Every launch shows a red warning first; its default answer is "Không, thoát". The answer is never saved.
+  - Only the flag turns the mode on: config and resume cannot. With the flag, Shift+Tab includes `▸▸▸`.
+- `ot -p "câu hỏi"` (or the question on stdin): one turn through the TUI's agent loop with no UI, saved as a session.
+  - `--model provider/model` picks the model; `--output-format json` prints one result object; `--yolo` runs in bypass.
+  - Calls that would ask are refused. A folder's own skills/agents load only if the folder is already trusted.
+  - Exit code is 0 with an answer, 1 otherwise.
+- `scripts/eval/run.ts --memory notebook|none` (required): `notebook` gives each question an empty notebook (guide in the prompt, `memory_read`), and the trace header records `memory`.
+- `scripts/eval/run.ts --yolo` runs the eval in bypass instead of the narrow unattended list; the trace header records `permission_mode`.
+
+### Changed (memory, spec 007)
+
+- Compaction never sees memory content: every memory block in the part summarized is cut down to its label,
+  and the summary request carries no memory guide, notebook index or constraint block (they are sent again
+  with every request). Both summary templates keep "Ràng buộc và sở thích" and say to cite memory by label.
+  The first turn after each compaction tells the model, and the index is rendered afresh.
+- The legacy memory ("Memory cũ": `FileMemory`, the `propose_memory` tool, the "Ghi nhớ: …" hook) is
+  removed. A config naming it is read as the notebook; the TUI writes it back and says so once; the old
+  `memory/` folder is left untouched. `MemoryProvider` drops `pending`, `approve`, `reject`, `list`, `remove`.
+
+### Added (memory, spec 007)
+
+- Suggestion cards: the model may end an answer with a `<the_goi_y>` block proposing a constraint, a
+  presentation style or a lesson. The block never reaches history or the screen (hidden while it streams);
+  a valid one becomes a card under the answer. A constraint or style card must quote the user's own words
+  of that turn. Enter opens the spec-003 form filled in, `x` dismisses, `/goiy` picks a pending card again.
+  Nothing is stored until the user confirms the form (source "card"). Cards are `card` lines in the
+  session file and come back on resume; the next turn tells the model what became of each. Switch:
+  "Cho phép thẻ gợi ý" in `/config`; never for tier C models, sub-agents or the headless CLI.
+- The notebook guide tells the model to answer without saved memory when the user asks to ignore it.
+
+### Fixed (memory, PR #229 review)
+
+- A memory block is masked for good (a `redact` line) only when `memory.db` still holds the item's or version's
+  row marked deleted. A store that does not know the item (re-created empty, a session folder copied to another
+  machine, an old backup restored) only masks it in what is sent, so restoring the store brings it back.
+- The notebook sizes its injected blocks and its index to the tier of the model the turn goes to
+  (`MemoryContext.tier`), not to the smallest tier for every model. The thesis form warns when a thesis is too
+  long to be injected. An index over its budget drops the oldest entries first, so the newest stay in view.
+- The index is pinned per session: saving, editing or changing the state of an entry no longer changes the
+  context part of every request (no cache miss); a new entry is announced once in that turn's reminder. It is
+  rendered again only when one of its entries is deleted or the model tier changes.
+- After a restart or a resumed session, the subjects in focus are rebuilt from the user's typed turns in the
+  history, so a follow-up question keeps the subjects of the turns before it.
+- The "Dùng N memory" notice names items shortly ("HPG bản 3, bài học #7 bản 2", `MemoryItem.title`).
+- "Mở lại phiên … · N lượt" counts the session file's turns, as `/save` and `/export` do.
+
+### Added (MCP results, measurement stage B)
+
+- Memory blocks are tracked and masked through the session history (`src/core/memory/notebook/history-blocks.ts`,
+  `src/core/memory/redaction/`). The notebook decides what to inject from the history each turn is sent with
+  (`MemoryContext.history`), not from RAM, so a restart, a resumed session or a dropped turn never repeats or
+  misses a block. Deleting a thesis or lesson masks its blocks in the open conversation, on resume, in
+  `/export` and in `session_get`, and appends a `redact` line to the session file; no saved line is changed.
+  A line is written only when `memory.db` is readable and confirms the item deleted; a missing or unreadable
+  store, or a block whose content differs from the store, is masked in what is sent only, with a notice.
+  `turn_end` lines carry the turn number, and resume counts on from the file. `memory_read` answers with one
+  sentence pointing at the block's label when that version is in view (`ToolContext.messages`). Delete
+  notices say "deleted from the app" and that the copy sent to the provider cannot be recalled.
+
+- Memory v5.1 store (`src/core/memory/store/`), not wired into the app yet: one SQLite file opened
+  from an explicit path; schema version 1 with step-by-step migrations; a store from a newer build,
+  another program's file or a damaged file is refused and left untouched. Versioned constraints and
+  presentation style, subjects with internal ids and alias history, thesis versions that are never
+  renumbered, lessons, and an append-only decision log tied to the thesis version the user saw.
+  Every change checks the version it was read from; ids are never reused; deleting removes the
+  content and keeps ids and version numbers. Texts are length-checked (never cut), and text shaped
+  like an API key is refused.
+- Memory policy table (`src/core/memory/policy.ts`) and the one policy-checked read path over the
+  store: sub-agents get constraints only, and no model-facing read ever returns a decision.
+- Memory v5.1 read path, the "Sổ ghi nhớ" (notebook) choice in `/config` next to "Tắt" and the legacy
+  file memory (`src/core/memory/notebook/`). Constraints and presentation style go into the system
+  part of every main-agent request, word for word with id and version, never cut. The notebook's
+  index (subjects with a thesis, lesson titles) goes into the context part. When the user names a
+  subject that has a thesis (aliases, any case or diacritics, whole words, the user's typed words
+  only), its labelled block is injected once per session; a newer version replaces it with a "thay
+  cho bản N" label, and a change, state change or deletion of something already sent is noted once.
+  Everything stays under the smallest tier's memory budget, so the core never cuts a block; a block
+  that does not fit gets a one-line pointer instead. `memory_read` is the model's only memory tool and
+  only reads (a subject's thesis, a lesson by number, lessons by keyword); decisions never reach the
+  model. Stored text is escaped and never starts a line. A store that fails to open says why at
+  startup, in `/config` and `/memory`, and in the system part; chat keeps working. `/memory` shows the
+  five groups and deletes the version on screen after asking. The store is closed when switching
+  away and on exit. Known limits of this minimal version: what was sent is tracked in RAM per session
+  (compaction, a resumed session after a restart, or switching memory off and on can repeat or miss a
+  block), deleting does not mask old blocks in the history yet, and sub-agents do not get constraints
+  yet.
+- Memory v5.1 write path: `/nho` (a constraint or a presentation style, no section chosen by
+  default), `/luandiem <code>` (a new thesis version; a code not in the notebook creates the subject),
+  `/baihoc` and `/quyetdinh <code>` open forms that run on this machine only, with no model call and
+  no chat turn. Nothing is written until the user confirms. The prompt history keeps only the command
+  name (on send, Esc Esc and Ctrl+C), so a pasted key or a private thesis never lands there. Forms show
+  each field's length against its limit and refuse to save over it (nothing is cut); warn, without
+  blocking, on a hard rule saved as a lesson (with a way to save it as a constraint instead), on a
+  price or forecast, and on a duplicate; show the field-by-field changes before an edit is saved; and,
+  when another window saved first, show what differs and let the user keep theirs as the next
+  version, take the other one, or keep editing. A decision rests on the thesis version the form
+  showed; a newer one saved meanwhile is asked about, never attached silently. Ctrl+C on a changed
+  form asks like Esc. `/memory` adds edit, a thesis state change, and a Markdown export to the app's
+  exports folder, decisions left out unless asked for on that export.
+- The user's constraints reach every agent, whatever memory is set to in `/config`: the host reads
+  them from `memory.db` at the start of every turn of the main agent and of every sub-agent (new
+  task, continued task, ultradesk) and sends them word for word with id and version, exactly once,
+  never cut. With the notebook off the store is opened read-only (never created, never migrated, no
+  connection kept); `/config` and the notebook-off message say how many constraints still apply. A
+  model too small for them is not sent the turn.
+- A turn is held, before anything is sent and before any hook runs, when `INVESTOR.md` or the
+  constraint store exists but cannot be read (reads have a deadline and retry passing locks for
+  under a second). The TUI shows a card: retry, run this turn without the failed source (the model
+  is told what is missing; a source that read is still sent; sub-agents started in that turn, and
+  every agent of an ultradesk run started in it, follow the same choice), or cancel (the question goes
+  back to the box, before anything typed meanwhile; stopping the turn while it reads does the same).
+  `/context` says which source could not be read and that the next turn will be held.
+  A store from a newer build, another file or damaged data gets a way out in the message; the app
+  never deletes or repairs it. The provider check from the command line prints the reason and exits
+  with code 1. Compaction and `/context` leave a failed source out instead of holding.
+
 ### Added
 
 - Every MCP result, from any server, is kept in full in `<session>/evidence/results.jsonl`, up to
@@ -15,13 +136,39 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ### Fixed
 
+- Saving a session recovers from a failed write instead of repeating the first error forever. The
+  failed turn stays queued and is written, in order and once, with the next one; the session's
+  first line is written by the first write that succeeds, so a session whose first turn failed
+  still shows in `/sessions`. A write cut halfway is cut back, and a torn last line no longer
+  swallows the first line of the next turn. The TUI says which turns are not saved yet and when
+  they are caught up.
+- Switching sessions (`/new`, `/clear`, resume), `/save`, `/export` and exit wait up to 2 s for the
+  session's writes; a session left while still writing finishes in the background, and resuming it
+  reuses the same writer.
+- Local watchlist file lock: the holder refreshes the lock, so a slow but live holder is never taken
+  over; taking over and releasing check the owner's token; the holder checks it still owns the lock
+  right before each rename attempt; creating the lock waits through Windows' delete-pending errors.
+- `writeJson` removes its temp file on every failure (for `auth.json` it holds the key).
 - `desk-eval.ts` can read pages again: its approval responder never ran, so every `web_fetch` to
   a new domain was refused. Expect more requests than its estimate, because `web_fetch` calls a
   side model.
+- The `co-ban` agent prompt no longer carries a real HPG divestment figure, which could leak
+  into answers. `skill-routing-live-eval.ts` calls a model only with `--yes`.
 - Stop gate: an answer that claims fetched data (a tool name, `Nguồn:`, "đã lấy dữ liệu") with
   figures the conversation does not hold, in a turn where no data tool ran, is sent back once
   with tools on. If the retry does the same, the answer stays and the user is told its figures
   are unverified.
+
+### Changed
+
+- Subagents no longer get the session history tools (`session_list`, `session_get`); the main agent
+  keeps them and quotes what a task needs.
+- `/profile` writes a template whose examples are comments. What goes to the model from
+  `INVESTOR.md` leaves out comments, lines equal to an example of the old template (an edited one is
+  kept) and empty sections, and is escaped so no text can close its block. A profile that is only
+  headings and comments sends nothing.
+- The notebook no longer lists the constraints in its own system part (they have their own block);
+  the `/nho` form no longer says sub-agents do not get them.
 
 ## [0.3.1] — 2026-11-03
 

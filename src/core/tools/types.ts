@@ -3,6 +3,7 @@ import type { z } from "zod"
 import type { ChartData } from "./chart/data"
 import type { LoopGuard } from "./loop-guard"
 import type { DiffLine } from "../fs/diff"
+import type { ModelMessage } from "ai"
 
 export interface ToolContext {
   signal: AbortSignal
@@ -13,6 +14,8 @@ export interface ToolContext {
   agent?: AgentOrigin
   /** Repeats of the same call in this turn (asks the user past the threshold). */
   loop?: LoopGuard
+  /** The messages the model was sent at this step (after old tool results were pruned), from the AI SDK. */
+  messages?: readonly ModelMessage[]
 }
 
 /** The subagent behind a tool call (see core/subagents). */
@@ -92,8 +95,8 @@ export interface ToolDef<I = any> {
   annotations?: { title?: string; destructive?: boolean; openWorld?: boolean }
   /**
    * Who may run this without asking. Read-only tools never ask. `"never"` exempts a
-   * non-read-only tool whose effect is already reviewed elsewhere (propose_memory only
-   * queues a proposal the user approves in /memory).
+   * non-read-only tool whose effect is already reviewed elsewhere (todo_write only edits
+   * the turn's own list).
    */
   approval?: "never"
   /**
@@ -129,6 +132,8 @@ export interface ToolDef<I = any> {
   autoSafe?(input: I): Promise<boolean>
   /** Session approvals are shared by tools of one group ("this folder, this session" covers write_file and edit_file). */
   approvalGroup?: string
+  /** Never given to a subagent, whatever its type's tool list says (session history: it reads every saved session). */
+  mainAgentOnly?: boolean
   /**
    * Runs before approval, the timeout and the lock — for waiting on the user (ask_user),
    * which must neither count as runtime nor hold a lock. Its result reaches `execute` as
