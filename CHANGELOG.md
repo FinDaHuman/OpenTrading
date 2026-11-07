@@ -5,7 +5,13 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ## [Unreleased]
 
-### Added (calculate)
+## [0.4.0] — 2026-11-08
+
+The `--yolo` bypass mode and the headless `ot -p` for benchmarks, the unit-checked `calculate` tool, the notebook
+memory (v5.1), every MCP result kept per session, and dependency updates. Update with `ot update` (npm:
+`npm i -g @findahuman/opentrading@latest`).
+
+### Added
 
 - `calculate`, a core built-in tool (never deferred): a calculator with units.
   - It evaluates an expression (`+ - * / ^`, brackets, `sqrt abs min max sum avg ln log10 exp`) over named values.
@@ -14,8 +20,6 @@ adopt Semantic Versioning when it exposes a stable public API.
   - The expression is parsed by hand, never run as code. The result gets a ref like a data result.
   - Data figures typed into the expression get a warning.
 - `prompts/tools.md`: no mental arithmetic. Every computed figure comes from `calculate` (or `compute` for whole series by ref), with a unit for each value.
-
-### Added (permissions)
 
 - `ot --yolo` (alias `--dangerously-skip-permissions`): the `▸▸▸ bỏ qua quyền` mode.
   - Nothing asks and no classifier request is sent.
@@ -29,18 +33,6 @@ adopt Semantic Versioning when it exposes a stable public API.
 - `scripts/eval/run.ts --memory notebook|none` (required): `notebook` gives each question an empty notebook (guide in the prompt, `memory_read`), and the trace header records `memory`.
 - `scripts/eval/run.ts --yolo` runs the eval in bypass instead of the narrow unattended list; the trace header records `permission_mode`.
 
-### Changed (memory, spec 007)
-
-- Compaction never sees memory content: every memory block in the part summarized is cut down to its label,
-  and the summary request carries no memory guide, notebook index or constraint block (they are sent again
-  with every request). Both summary templates keep "Ràng buộc và sở thích" and say to cite memory by label.
-  The first turn after each compaction tells the model, and the index is rendered afresh.
-- The legacy memory ("Memory cũ": `FileMemory`, the `propose_memory` tool, the "Ghi nhớ: …" hook) is
-  removed. A config naming it is read as the notebook; the TUI writes it back and says so once; the old
-  `memory/` folder is left untouched. `MemoryProvider` drops `pending`, `approve`, `reject`, `list`, `remove`.
-
-### Added (memory, spec 007)
-
 - Suggestion cards: the model may end an answer with a `<the_goi_y>` block proposing a constraint, a
   presentation style or a lesson. The block never reaches history or the screen (hidden while it streams);
   a valid one becomes a card under the answer. A constraint or style card must quote the user's own words
@@ -49,24 +41,6 @@ adopt Semantic Versioning when it exposes a stable public API.
   session file and come back on resume; the next turn tells the model what became of each. Switch:
   "Cho phép thẻ gợi ý" in `/config`; never for tier C models, sub-agents or the headless CLI.
 - The notebook guide tells the model to answer without saved memory when the user asks to ignore it.
-
-### Fixed (memory, PR #229 review)
-
-- A memory block is masked for good (a `redact` line) only when `memory.db` still holds the item's or version's
-  row marked deleted. A store that does not know the item (re-created empty, a session folder copied to another
-  machine, an old backup restored) only masks it in what is sent, so restoring the store brings it back.
-- The notebook sizes its injected blocks and its index to the tier of the model the turn goes to
-  (`MemoryContext.tier`), not to the smallest tier for every model. The thesis form warns when a thesis is too
-  long to be injected. An index over its budget drops the oldest entries first, so the newest stay in view.
-- The index is pinned per session: saving, editing or changing the state of an entry no longer changes the
-  context part of every request (no cache miss); a new entry is announced once in that turn's reminder. It is
-  rendered again only when one of its entries is deleted or the model tier changes.
-- After a restart or a resumed session, the subjects in focus are rebuilt from the user's typed turns in the
-  history, so a follow-up question keeps the subjects of the turns before it.
-- The "Dùng N memory" notice names items shortly ("HPG bản 3, bài học #7 bản 2", `MemoryItem.title`).
-- "Mở lại phiên … · N lượt" counts the session file's turns, as `/save` and `/export` do.
-
-### Added (MCP results, measurement stage B)
 
 - Memory blocks are tracked and masked through the session history (`src/core/memory/notebook/history-blocks.ts`,
   `src/core/memory/redaction/`). The notebook decides what to inject from the history each turn is sent with
@@ -136,8 +110,6 @@ adopt Semantic Versioning when it exposes a stable public API.
   never deletes or repairs it. The provider check from the command line prints the reason and exits
   with code 1. Compaction and `/context` leave a failed source out instead of holding.
 
-### Added
-
 - Every MCP result, from any server, is kept in full in `<session>/evidence/results.jsonl`, up to
   64 MiB per session and for as long as the session is. A `[ref rN]` now outlives a restart and
   the 40 most recent results.
@@ -145,7 +117,16 @@ adopt Semantic Versioning when it exposes a stable public API.
   it instead of telling the model to fetch them again, which could return other numbers.
 - `compute` does fixed arithmetic on fetched results by ref (returns, means, TTM, relative
   strength, ranks), so the model stops doing it by hand. Its result has a ref of its own.
+
 ### Changed
+
+- Compaction never sees memory content: every memory block in the part summarized is cut down to its label,
+  and the summary request carries no memory guide, notebook index or constraint block (they are sent again
+  with every request). Both summary templates keep "Ràng buộc và sở thích" and say to cite memory by label.
+  The first turn after each compaction tells the model, and the index is rendered afresh.
+- The legacy memory ("Memory cũ": `FileMemory`, the `propose_memory` tool, the "Ghi nhớ: …" hook) is
+  removed. A config naming it is read as the notebook; the TUI writes it back and says so once; the old
+  `memory/` folder is left untouched. `MemoryProvider` drops `pending`, `approve`, `reject`, `list`, `remove`.
 
 - Each turn with tools records figures that no result held, in the session and the eval trace.
   Nothing is sent back to the model yet: the check first has to prove its precision.
@@ -154,7 +135,30 @@ adopt Semantic Versioning when it exposes a stable public API.
 - The source line after a data server's result names the provider and, when the server gives it,
   how far the data goes, so an answer can cite them.
 
+- Subagents no longer get the session history tools (`session_list`, `session_get`); the main agent
+  keeps them and quotes what a task needs.
+- `/profile` writes a template whose examples are comments. What goes to the model from
+  `INVESTOR.md` leaves out comments, lines equal to an example of the old template (an edited one is
+  kept) and empty sections, and is escaped so no text can close its block. A profile that is only
+  headings and comments sends nothing.
+- The notebook no longer lists the constraints in its own system part (they have their own block);
+  the `/nho` form no longer says sub-agents do not get them.
+
 ### Fixed
+
+- A memory block is masked for good (a `redact` line) only when `memory.db` still holds the item's or version's
+  row marked deleted. A store that does not know the item (re-created empty, a session folder copied to another
+  machine, an old backup restored) only masks it in what is sent, so restoring the store brings it back.
+- The notebook sizes its injected blocks and its index to the tier of the model the turn goes to
+  (`MemoryContext.tier`), not to the smallest tier for every model. The thesis form warns when a thesis is too
+  long to be injected. An index over its budget drops the oldest entries first, so the newest stay in view.
+- The index is pinned per session: saving, editing or changing the state of an entry no longer changes the
+  context part of every request (no cache miss); a new entry is announced once in that turn's reminder. It is
+  rendered again only when one of its entries is deleted or the model tier changes.
+- After a restart or a resumed session, the subjects in focus are rebuilt from the user's typed turns in the
+  history, so a follow-up question keeps the subjects of the turns before it.
+- The "Dùng N memory" notice names items shortly ("HPG bản 3, bài học #7 bản 2", `MemoryItem.title`).
+- "Mở lại phiên … · N lượt" counts the session file's turns, as `/save` and `/export` do.
 
 - Saving a session recovers from a failed write instead of repeating the first error forever. The
   failed turn stays queued and is written, in order and once, with the next one; the session's
@@ -181,17 +185,6 @@ adopt Semantic Versioning when it exposes a stable public API.
   figures the conversation does not hold, in a turn where no data tool ran, is sent back once
   with tools on. If the retry does the same, the answer stays and the user is told its figures
   are unverified.
-
-### Changed
-
-- Subagents no longer get the session history tools (`session_list`, `session_get`); the main agent
-  keeps them and quotes what a task needs.
-- `/profile` writes a template whose examples are comments. What goes to the model from
-  `INVESTOR.md` leaves out comments, lines equal to an example of the old template (an edited one is
-  kept) and empty sections, and is escaped so no text can close its block. A profile that is only
-  headings and comments sends nothing.
-- The notebook no longer lists the constraints in its own system part (they have their own block);
-  the `/nho` form no longer says sub-agents do not get them.
 
 ## [0.3.1] — 2026-11-03
 
@@ -248,7 +241,6 @@ list's filter (`/desk`, `/permissions`). Update with `ot update` (npm:
 - `/watchlist <a name that is no list>`: `r` is typed into the lists' filter again (it was
   swallowed as "refresh"), and one esc closes the dialog.
 - `docs/mcp.md`: logging out of a server is the **Đăng xuất** row of its menu; there is no `x` key.
-
 
 ## [0.3.0] — 2026-10-31
 
