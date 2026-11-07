@@ -208,6 +208,51 @@ test("the gate goes back to refusing when the run ends", async () => {
   expect(runtime.permissions.interactive).toBe(false)
 })
 
+test("--yolo: a tool that would ask runs unanswered, and the header records the bypass mode", async () => {
+  for (const yolo of [false, true]) {
+    const runtime = initRuntime({ home, cwd: home, skills: () => [] })
+    let ran = 0
+    // Not read-only: without --yolo the unattended list refuses it.
+    runtime.registry.register({ name: "fake_quote", description: "Giá giả", input: z.object({}), readOnly: false, permissionScope: "fake@1", execute: async () => (ran++, "64,27") })
+    const events: TraceEvent[] = []
+    const target = await resolveTarget({ provider: "groq", model: "tooly" })
+    await runEval({ runtime, skills: [], target, questions: parseQuestions(JSON.stringify([question("q1")])), write: (e) => events.push(e), version: "0.0.0", yolo })
+    expect(of(events, "run")[0]!.permission_mode).toBe(yolo ? "bypass" : "read-only")
+    expect(ran).toBe(yolo ? 1 : 0)
+    // The gate goes back to refusing when the run ends, --yolo or not.
+    expect(runtime.permissions.mode).toBe("read-only")
+    runtime.permissions.setMode("bypass")
+    expect(runtime.permissions.mode).toBe("read-only")
+  }
+})
+
+test("--memory notebook: each question gets an empty notebook (guide in the prompt, memory_read offered); none has neither", async () => {
+  for (const memory of ["none", "notebook"] as const) {
+    bodies.length = 0
+    const runtime = initRuntime({ home, cwd: home, skills: () => [] })
+    runtime.registry.register({ name: "fake_quote", description: "Giá giả", input: z.object({}), readOnly: true, execute: async () => "64,27" })
+    const events: TraceEvent[] = []
+    const target = await resolveTarget({ provider: "groq", model: "tooly" })
+    const opened: string[] = []
+    const questions = parseQuestions(JSON.stringify([question("q1"), question("q2")]))
+    await runEval({ runtime, skills: [], target, questions, write: (e) => (e.type === "question" && opened.push(runtime.memory.id), events.push(e)), version: "0.0.0", memory })
+    expect(of(events, "run")[0]!.memory).toBe(memory)
+    const streamed = bodies.filter((b) => b.stream)
+    const system = streamed.map((b) => JSON.stringify(b.messages.find((m) => m.role === "system")?.content ?? ""))
+    const offered = streamed.map((b) => (b.tools ?? []).some((t) => t.function.name === "memory_read"))
+    if (memory === "notebook") {
+      expect(system.every((s) => s.includes("Sổ ghi nhớ là ghi chép"))).toBe(true)
+      expect(offered.some(Boolean)).toBe(true)
+    } else {
+      expect(system.some((s) => s.includes("Sổ ghi nhớ là ghi chép"))).toBe(false)
+      expect(offered.some(Boolean)).toBe(false)
+    }
+    expect(opened).toEqual([memory, memory])
+  }
+  // The home is shared by this file's tests: no notebook left behind for the constraints reader.
+  for (const suffix of ["", "-wal", "-shm"]) await rm(path.join(home, `memory.db${suffix}`), { force: true })
+})
+
 test("a rule switched off stays off, notice included, and the rest still run", async () => {
   invent = true
   const { events } = await run([question("q1")], 1, undefined, parseAblations(["gate-unfetched"]))

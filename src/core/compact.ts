@@ -132,6 +132,15 @@ export type CompactVariant = "full" | "lean"
 const OWN_FIGURES =
   'Số chỉ có trong câu trả lời trước (không có trong kết quả tool nào) thì ghi nguồn là "câu trả lời trước", không ghi tên tool. Kết quả đã dọn có id read_result thì ghi id đó vào cột nguồn.'
 
+/**
+ * Spec 007: memory, the user's saved constraints and the investor profile are sent again with every
+ * request, so a summary that copies them only keeps an old copy a later edit or delete cannot reach.
+ */
+const MEMORY_LABELS =
+  'Không chép nội dung khối memory ("[Memory · …]"), ràng buộc đã lưu hay hồ sơ nhà đầu tư: chúng được gửi lại ở mọi lượt. Cần nhắc tới thì ghi nhãn, ví dụ "bài học #7", "luận điểm HPG".'
+
+const PREFERENCES = "Điều người dùng đã nói trong hội thoại này về khẩu vị rủi ro, khung thời gian, mã đang quan tâm, cách trình bày mong muốn."
+
 const MISSING_DATA = "Tool hoặc nguồn nào đã lỗi, đã xử lý thế nào, và số liệu nào vẫn chưa lấy được. Không điền số thay cho phần thiếu."
 
 /**
@@ -146,6 +155,8 @@ export function compactPrompt(instructions?: string, variant: CompactVariant = "
       ? [
           "## Yêu cầu của người dùng",
           "Mục tiêu và từng yêu cầu, giữ sát lời gốc.",
+          "## Ràng buộc và sở thích",
+          PREFERENCES,
           "## Số liệu đã xác minh",
           `Bảng: chỉ tiêu | giá trị | đơn vị | nguồn | thời điểm. Chép nguyên văn, không làm tròn. Số nào không có nguồn và thời điểm thì bỏ. ${OWN_FIGURES}`,
           "## Lỗi và dữ liệu còn thiếu",
@@ -157,7 +168,7 @@ export function compactPrompt(instructions?: string, variant: CompactVariant = "
           "## Yêu cầu của người dùng",
           "Mục tiêu và từng yêu cầu của người dùng, giữ sát lời gốc.",
           "## Ràng buộc và sở thích",
-          "Điều người dùng đã nói về khẩu vị rủi ro, khung thời gian, mã đang quan tâm, cách trình bày mong muốn.",
+          PREFERENCES,
           "## Số liệu đã xác minh",
           `Bảng: chỉ tiêu | giá trị | đơn vị | nguồn | thời điểm. Chép nguyên văn từ kết quả tool, không làm tròn, không đổi đơn vị. Số nào không có nguồn và thời điểm thì bỏ. ${OWN_FIGURES}`,
           "## Phân tích và kết luận đã đưa ra",
@@ -172,6 +183,7 @@ export function compactPrompt(instructions?: string, variant: CompactVariant = "
     "",
     "Trước hết viết một khối <analysis> ngắn để kiểm kê, không nhận định: mỗi tool đã gọi và số lần; tool nào lỗi và vì sao; chuỗi số liệu đã lấy (mã, kỳ, nguồn); từng câu hỏi của người dùng; skill đã nạp. Khối này chỉ là nháp và sẽ bị bỏ.",
     "Sau đó viết bản tóm tắt trong khối <summary>, giữ đúng các mục sau, mục nào không có thì ghi \"(không có)\":",
+    MEMORY_LABELS,
     "",
     ...sections,
     ...(instructions?.trim() ? ["", `Yêu cầu thêm của người dùng cho bản tóm tắt: ${instructions.trim()}`] : []),
