@@ -2,6 +2,7 @@
   "name": "opentrading",
   "version": "0.4.0",
   "private": true,
+  "packageManager": "bun@1.4.4",
   "type": "module",
   "description": "OpenTrading — AI harness TUI for Vietnamese equity research (demo v0)",
   "license": "Apache-2.0",
@@ -17,7 +18,8 @@
     "build": "bun ./scripts/build.ts",
     "install:global": "bun ./src/cli/install.ts",
     "uninstall:global": "bun ./src/cli/install.ts --uninstall",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "bun test --parallel=6 --timeout=20000"
   },
   "dependencies": {
     "@ai-sdk/alibaba": "2.0.82",

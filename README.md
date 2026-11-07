@@ -397,7 +397,8 @@ bun run install:global
 
 ```shell
 bun run typecheck
-bun test                     # có smoke test TUI chạy headless; SHOW_FRAME=1 để in khung hình
+bun run test                 # bun test --parallel=6, như CI; có smoke test TUI headless
+bun test                     # tuần tự, chậm hơn ~3 lần; SHOW_FRAME=1 để in khung hình
 bun test test/tui.test.tsx   # chỉ phần giao diện
 bun run build --single       # binary cho máy này: dist/opentrading-<hđh>-<cpu>/bin/
 ```
