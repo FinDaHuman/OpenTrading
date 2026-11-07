@@ -56,7 +56,7 @@ adopt Semantic Versioning when it exposes a stable public API.
 - The "Dùng N memory" notice names items shortly ("HPG bản 3, bài học #7 bản 2", `MemoryItem.title`).
 - "Mở lại phiên … · N lượt" counts the session file's turns, as `/save` and `/export` do.
 
-### Added
+### Added (MCP results, measurement stage B)
 
 - Memory blocks are tracked and masked through the session history (`src/core/memory/notebook/history-blocks.ts`,
   `src/core/memory/redaction/`). The notebook decides what to inject from the history each turn is sent with
@@ -125,6 +125,12 @@ adopt Semantic Versioning when it exposes a stable public API.
   A store from a newer build, another file or damaged data gets a way out in the message; the app
   never deletes or repairs it. The provider check from the command line prints the reason and exits
   with code 1. Compaction and `/context` leave a failed source out instead of holding.
+
+### Added
+
+- Every MCP result, from any server, is kept in full in `<session>/evidence/results.jsonl`, up to
+  64 MiB per session and for as long as the session is. A `[ref rN]` now outlives a restart and
+  the 40 most recent results.
 
 ### Fixed
 

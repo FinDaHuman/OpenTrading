@@ -5,12 +5,16 @@
  * the harness stamps `[ref rN]` at the head of each MCP result that carries a data array and
  * keeps the untruncated text here. `chart_render({from_call: "r3"})` then reads the numbers
  * itself: the model never re-types them, and the chart may hold more points than the
- * (truncated) text the model saw. Process-wide, so subagent results are reachable too.
+ * (truncated) text the model saw. Process-wide, so subagent results are reachable too. RAM holds
+ * the recent ones; the session's evidence file (evidence.ts) answers for the rest, also after a
+ * restart.
  *
  * Each result belongs to the session that was open when it came in: a resumed session's
  * history may name `r1` for data this process never saw, and another session's `r1` must not
  * answer for it.
  */
+
+import { appendEvidence, evidenceFile, readEvidence, type Evidence } from "./evidence"
 
 const MAX_ENTRIES = 40
 const MAX_BYTES = 8 * 1024 * 1024
@@ -28,14 +32,24 @@ const store = new Map<string, StoredResult>()
 let counter = 0
 let bytes = 0
 let session = ""
+/** The open session's evidence file; undefined with no session folder (headless runs). */
+let evidence: string | undefined
 
 /**
  * The session new results belong to and refs resolve in (start, /new, resume). `history`:
- * the resumed conversation, so new refs never reuse a number it already names.
+ * the resumed conversation, so new refs never reuse a number it already names. `dir`: the
+ * session's folder, whose evidence also holds the refs subagents took.
  */
-export function useResultSession(id: string, history?: string) {
+export function useResultSession(id: string, history?: string, dir?: string) {
   session = id
+  evidence = dir ? evidenceFile(dir) : undefined
   for (const m of history?.matchAll(/\[ref r(\d+)\]/g) ?? []) counter = Math.max(counter, Number(m[1]))
+  for (const saved of evidence ? readEvidence(evidence) : []) counter = Math.max(counter, Number(saved.ref?.slice(1) ?? 0))
+}
+
+/** Keep a full result for the session: what `recallResult` falls back on. */
+export function keepEvidence(record: Omit<Evidence, "at">) {
+  if (evidence) appendEvidence(evidence, { ...record, at: new Date().toISOString() })
 }
 
 export function rememberResult(tool: string, text: string): string {
@@ -53,8 +67,11 @@ export function rememberResult(tool: string, text: string): string {
 
 /** A ref of the current session; another session's result is as gone as an evicted one. */
 export function recallResult(ref: string): StoredResult | undefined {
-  const stored = store.get(ref.trim().replace(/^\[?ref\s+/i, "").replace(/\]$/, ""))
-  return stored?.session === session ? stored : undefined
+  const id = ref.trim().replace(/^\[?ref\s+/i, "").replace(/\]$/, "")
+  const stored = store.get(id)
+  if (stored?.session === session) return stored
+  const saved = evidence ? readEvidence(evidence).find((e) => e.ref === id) : undefined
+  return saved && { ref: id, tool: saved.tool, text: saved.text, at: Date.parse(saved.at), session }
 }
 
 /** Refs of the current session still stored, oldest first. */
@@ -68,6 +85,7 @@ export function clearResults() {
   counter = 0
   bytes = 0
   session = ""
+  evidence = undefined
 }
 
 /** Parse a JSON tool result; non-JSON text (or a JSON prefix line) yields undefined. */

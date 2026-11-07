@@ -235,7 +235,7 @@ test("refs belong to the session they were fetched in; a resumed session never r
     expect(vcb).toBe("r1")
     // Resume A, whose history names r1 (FPT) and r4.
     useResultSession("A", JSON.stringify([{ content: "FPT [ref r1] … [ref r4]" }]))
-    await expect(render({ kind: "line", from_call: "r1" })).rejects.toThrow("hết hạn")
+    await expect(render({ kind: "line", from_call: "r1" })).rejects.toThrow("Không còn kết quả")
     expect(recallResult("r1")).toBeUndefined()
     const next = refOf(await callTool(candleTool("FPT", [100, 101, 102])))!
     expect(next).toBe("r5")

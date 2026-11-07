@@ -371,7 +371,7 @@ export function attachSubagents(runtime: Runtime, history?: string) {
   runtime.subagents.attachSession({ id: current.id, dir: current.dir })
   runtime.workspace.scratch?.attach(current.id)
   runtime.desk.attachSession({ id: current.id, dir: current.dir })
-  useResultSession(current.id, history)
+  useResultSession(current.id, history, current.dir)
 }
 
 /** Start a fresh session (startup, /new, /clear). */
