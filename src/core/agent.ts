@@ -17,6 +17,7 @@ import {
 import { ChatSetupError, describeError, resolveTarget, type Target } from "./chat"
 import { effortOptions, isEffort, mergeProviderOptions, type Effort } from "./effort"
 import type { AgentEvent } from "./events"
+import type { Ablations } from "./ablation"
 import { loadProfile } from "./profile"
 import { assemble, validatePromptDir, type Assembled } from "./prompt/assemble"
 import { estimateTokens, tierOf, type Tier } from "./prompt/budget"
@@ -101,6 +102,12 @@ export function toolNudge(messages: readonly ModelMessage[]): string {
     "\n</nhac_nho>",
     `\nViệc cần làm còn mở:\n${items}${behind}\nCập nhật trạng thái bằng todo_write CÙNG lượt với các tool tiếp theo. Khi viết câu trả lời cuối, gọi todo_write đóng danh sách trong cùng bước đó.\n</nhac_nho>`,
   )
+}
+
+/** What follows a round of tool results, less what an eval switched off. */
+function stepNudge(messages: readonly ModelMessage[], off?: Ablations) {
+  if (off?.has("tool-nudge")) return undefined
+  return off?.has("todo-nudge") ? TOOL_NUDGE : toolNudge(messages)
 }
 
 /** Model steps after the last todo_write call in this turn (all of them when there is none). */
@@ -190,6 +197,8 @@ export interface RunOptions {
   preload?: string[]
   /** The <ultradesk> reminder (desk/keyword.ts deskReminder). */
   desk?: string
+  /** What an eval switched off (ablation.ts). */
+  disabled?: Ablations
 }
 
 export function label(registry: ToolRegistry, name: string, input: unknown) {
@@ -803,6 +812,7 @@ async function assembleFor(opts: TurnInput, target: Target | undefined, extras: 
     todos: currentTodos(opts.history ?? []),
     fileAccess: FILE_TOOLS.some((t) => toolNames.includes(t)) && opts.registry.workspace ? `${opts.registry.workspace.describe()}\n${modeNote(mode)}` : undefined,
     prevFileAccess: lastReminder(opts.history ?? [], "quyen_tep"),
+    disabled: opts.disabled,
   }, opts.promptDir === undefined ? undefined : validatePromptDir(opts.promptDir))
   if (built && built.names.length > 0) {
     const share = info?.limit?.context ? built.tokens / info.limit.context : 0
@@ -1119,9 +1129,9 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
           const afterTool = messages.at(-1)?.role === "tool"
           // A route that rejects user words after tool results (nudgeAfterTools) gets the
           // rescue without its text: tools off still makes the model answer.
-          const base = rescueNow ? (afterTool && !nudge ? undefined : rescueNow.nudge) : nudge && afterTool ? toolNudge(messages) : undefined
+          const base = rescueNow ? (afterTool && !nudge ? undefined : rescueNow.nudge) : nudge && afterTool ? stepNudge(messages, opts.disabled) : undefined
           // One tail: the rescue or tool nudge, then what the failures add (same routes only).
-          const added = nudge && afterTool ? (stopped ? FAILURE_STREAK_FINAL : failureNudge(failures)) : undefined
+          const added = nudge && afterTool ? (stopped ? FAILURE_STREAK_FINAL : opts.disabled?.has("failure-nudge") ? undefined : failureNudge(failures)) : undefined
           const tail = [base, added].filter(Boolean).join("\n") || undefined
           const choice = stopped || rescueNow?.toolChoice === "none" || (rescueNow && !tail) ? { toolChoice: "none" as const } : {}
           return { ...(active ? { activeTools: active } : {}), ...choice, messages: tail ? withNudge(messages, tail) : messages }
@@ -1184,7 +1194,7 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
     measured = result
 
     // Only a turn where no data tool ran is checked: the sources are the conversation itself.
-    const sources = ranDataTool([...kept, ...response]) ? undefined : figureSources([...opts.history, user])
+    const sources = ranDataTool([...kept, ...response]) || opts.disabled?.has("gate-unfetched") ? undefined : figureSources([...opts.history, user])
     const unfetched = sources === undefined ? 0 : unfetchedFigures(last.stepText ?? "", `${assembled.context ?? ""}\n${sources}`).length
     // A run with a final tool is judged by its caller (the subagent manager forces the tool).
     const verdict: Verdict = opts.finalTool
@@ -1201,6 +1211,7 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
             unfetched,
           },
           recoveries,
+          opts.disabled,
         )
     // No step left for another run: the cap's summary step had the last word.
     const capped = stepsUsed >= maxSteps
@@ -1244,7 +1255,7 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
 
   if (messages && !outcome.aborted && !outcome.failure) {
     // Echoed todo lines never reach history, so a later turn has nothing to imitate (29/10).
-    messages = stripEchoMessages(messages)
+    if (!opts.disabled?.has("strip-echoes")) messages = stripEchoMessages(messages)
     // Answered with items of this turn's list still open: retire the list (never mark them done
     // for the model) and say which ones stay unconfirmed. No request is spent on it.
     let retiredTodos = 0

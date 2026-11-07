@@ -1,3 +1,4 @@
+import type { Ablations } from "../ablation"
 import { readFile } from "node:fs/promises"
 import type { z } from "zod"
 import { runAgent } from "../agent"
@@ -169,6 +170,11 @@ export class SubagentManager {
   constructor(private deps: ManagerDeps) {
     this.limiter = new Limiter(() => this.max)
   }
+
+  /** The moment runs believe it is; undefined = the real clock. An eval replays a past date. */
+  clock?: () => Date
+  /** What an eval switched off (ablation.ts). */
+  disabled?: Ablations
 
   /** Session each run belongs to: only runs of the attached session notify (/clear, /new, resume). */
   private owners = new Map<string, string | undefined>()
@@ -475,6 +481,8 @@ export class SubagentManager {
           stallMs: this.idleConfigured === undefined ? undefined : this.idleConfigured + 2 * watchdogTick(this.idleConfigured),
           role: "subagent",
           target,
+          now: this.clock?.(),
+          disabled: this.disabled,
           agentPrompt: spec.agentPrompt,
           serverInstructions: this.deps.serverInstructions,
           effort,

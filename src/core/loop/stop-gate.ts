@@ -1,3 +1,4 @@
+import type { Ablations } from "../ablation"
 import type { ModelMessage, StepResult, ToolSet } from "ai"
 import { hasOpenTodos, LEGACY_TODO_PREFIX, TODO_PREFIX, TODO_WRITE, type Todo } from "../tools/todos"
 
@@ -63,26 +64,27 @@ export const RESCUE_UNFETCHED =
 /** Tools off (it brought 2.5-flash-lite's empty answers back). */
 export const RESCUE_EMPTY_FINAL = "Hãy trả lời câu hỏi của người dùng dựa trên kết quả tool ở trên. Không gọi thêm tool."
 
-export function judgeStop(last: LastStep, done: readonly RecoveryKind[]): Verdict {
+export function judgeStop(last: LastStep, done: readonly RecoveryKind[], disabled?: Ablations): Verdict {
   // Still calling tools: the step cap ended the run, and its summary step has its own rules.
   if (last.toolNames.some((name) => name !== TODO_WRITE)) return { action: "accept" }
   const raw = last.rawFinish ?? ""
   const empty = isEmptyAnswer(last.text)
   const left = MAX_RECOVERIES - done.length
   const used = (kind: RecoveryKind) => done.filter((k) => k === kind).length
+  const once = (kind: Extract<RecoveryKind, "malformed" | "promise" | "unfetched" | "fragment">) => left > 0 && used(kind) === 0 && !disabled?.has(`gate-${kind}`)
 
   if (empty && (BLOCKED.test(raw) || last.finish === "content-filter")) return { action: "give-up", kind: "blocked" }
   if (MALFORMED.test(raw) && empty) {
-    if (left > 0 && used("malformed") === 0) return { action: "continue", kind: "malformed", nudge: RESCUE_MALFORMED, toolChoice: "auto" }
+    if (once("malformed")) return { action: "continue", kind: "malformed", nudge: RESCUE_MALFORMED, toolChoice: "auto" }
     return { action: "give-up", kind: "malformed" }
   }
   if (!empty && last.finish === "length") {
     // A cut answer is still an answer: out of budget, keep it as it is.
-    if (left > 0) return { action: "continue", kind: "length", nudge: RESCUE_LENGTH, toolChoice: "auto" }
+    if (left > 0 && !disabled?.has("gate-length")) return { action: "continue", kind: "length", nudge: RESCUE_LENGTH, toolChoice: "auto" }
     return { action: "accept" }
   }
   if (empty) {
-    if (left <= 0) return { action: "give-up", kind: "empty" }
+    if (left <= 0 || disabled?.has("gate-empty")) return { action: "give-up", kind: "empty" }
     // Right after tool results the data is there: tools off first, the fix that brought
     // 2.5-flash-lite's empty answers back. Otherwise the model may still lack data, so it may
     // call a tool first (Gemini CLI). The second try is the other one.
@@ -93,17 +95,17 @@ export function judgeStop(last: LastStep, done: readonly RecoveryKind[]): Verdic
   }
   // Said it would fetch something and stopped without calling a tool: send it back once, tools on.
   if (last.toolNames.length === 0 && (last.finish ?? "stop") === "stop" && isPromise(last.text)) {
-    if (left > 0 && used("promise") === 0) return { action: "continue", kind: "promise", nudge: RESCUE_PROMISE, toolChoice: "auto" }
+    if (once("promise")) return { action: "continue", kind: "promise", nudge: RESCUE_PROMISE, toolChoice: "auto" }
   }
   // After a cut answer the step holds only the rest of it, so neither check below can judge it.
   const continuing = done.includes("length")
   // Presented figures as fetched data with no tool behind them: send it back once, tools on.
   if (last.toolNames.every((name) => name === TODO_WRITE) && (last.finish ?? "stop") === "stop" && !continuing && isUnfetched(last)) {
-    if (left > 0 && used("unfetched") === 0) return { action: "continue", kind: "unfetched", nudge: RESCUE_UNFETCHED, toolChoice: "auto" }
+    if (once("unfetched")) return { action: "continue", kind: "unfetched", nudge: RESCUE_UNFETCHED, toolChoice: "auto" }
   }
   // Continued an earlier sentence instead of answering the new message: send it back once.
   if (last.toolNames.length === 0 && (last.finish ?? "stop") === "stop" && !last.toolsInTurn && !continuing && isFragment(last.text)) {
-    if (left > 0 && used("fragment") === 0) return { action: "continue", kind: "fragment", nudge: RESCUE_FRAGMENT, toolChoice: "auto" }
+    if (once("fragment")) return { action: "continue", kind: "fragment", nudge: RESCUE_FRAGMENT, toolChoice: "auto" }
   }
   return { action: "accept" }
 }

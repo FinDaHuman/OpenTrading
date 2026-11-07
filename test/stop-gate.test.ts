@@ -211,3 +211,12 @@ test("only a tool other than the todo list counts as fetching", () => {
   expect(ranDataTool([result("todo_write")])).toBe(false)
   expect(ranDataTool([result("todo_write"), result("mcp__opentrading__financial_ratios")])).toBe(true)
 })
+
+test("an ablated rule never sends the model back, and the rules after it still run", () => {
+  const promise = { text: "Để tôi tra cứu giá FPT:", toolNames: [], finish: "stop" as const }
+  expect(judgeStop(promise, [])).toMatchObject({ action: "continue", kind: "promise" })
+  expect(judgeStop(promise, [], new Set(["gate-promise"]))).toEqual({ action: "accept" })
+  const invented = { text: "Giá 10.", toolNames: [], finish: "stop" as const, unfetched: 2 }
+  expect(judgeStop(invented, [], new Set(["gate-promise"]))).toMatchObject({ action: "continue", kind: "unfetched" })
+  expect(judgeStop({ text: "", toolNames: [], finish: "stop" }, [], new Set(["gate-empty"]))).toEqual({ action: "give-up", kind: "empty" })
+})
