@@ -190,8 +190,9 @@ test("tool guidance lives in one place and the format example carries no real-lo
   // rules joined style.md on 18/10/2026, ≈1.9k after the 18/10/2026 wording pass — same rules,
   // deduped: scenarios live in <bat_bien> only, the citations monster bullet split, the
   // deferred-tools header shortened, and style's budget raised (400/250/0 → 1000/900/800) so
-  // the rules survive every tier).
-  expect(Math.ceil(a.system.length / 4)).toBeLessThan(2_000)
+  // the rules survive every tier), ≈2.05k after the 08/11/2026 no-mental-math line (calculate:
+  // the user asked that every computed figure come from a tool).
+  expect(Math.ceil(a.system.length / 4)).toBeLessThan(2_100)
 })
 
 test("the constraints budget key is explicit and never cuts on any tier", () => {
