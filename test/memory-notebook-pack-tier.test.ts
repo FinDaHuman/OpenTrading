@@ -23,5 +23,10 @@ test("labelTitle names a block shortly, for the notice; anything else has none",
   const lesson = renderLessonBlock({ id: 7, version: 2, title: "x", summary: "x", appliesToDisplay: [], tags: [], createdAt: "2026-10-20T00:00:00.000Z" })
   expect(labelTitle(thesis)).toBe("HPG bản 3")
   expect(labelTitle(lesson)).toBe("bài học #7 bản 2")
+  const escaped = renderThesisBlock(
+    { subjectId: 2, display: "Dầu & khí", version: 1, text: "x", conditions: [], state: "watching", validFrom: "2026-10-20T00:00:00.000Z" },
+    {},
+  )
+  expect(labelTitle(escaped)).toBe("Dầu & khí bản 1")
   expect(labelTitle("[Memory · nhắc] Luận điểm HPG đã có bản 4")).toBeUndefined()
 })

@@ -126,7 +126,10 @@ const patterns = () => (compiled ??= compile())
 export function labelTitle(text: string): string | undefined {
   const label = parseLabel(text.split("\n", 1)[0] ?? "")
   if (!label) return undefined
-  return label.kind === "lesson" ? `bài học #${label.ref} bản ${label.version}` : `${label.ref} bản ${label.version}`
+  if (label.kind === "lesson") return `bài học #${label.ref} bản ${label.version}`
+  // The label prints the name escaped (escape.ts); the user reads it plain.
+  const name = (label.ref as string).replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&")
+  return `${name} bản ${label.version}`
 }
 
 function parseLabel(line: string): { kind: BlockKind; ref: number | string; version: number } | undefined {

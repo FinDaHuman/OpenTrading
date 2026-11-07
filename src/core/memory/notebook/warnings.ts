@@ -110,10 +110,6 @@ function duplicate(
 }
 
 /**
- * Warnings for a draft against the notebook's active entries. `self` is the entry being edited, which is
- * not its own duplicate.
- */
-/**
  * A thesis whose block is longer than a turn can carry is never injected on that tier: the model only gets
  * a pointer and must call memory_read. Measured as the reminder sends it (no detail; a short code, a sector).
  */
@@ -134,6 +130,10 @@ function tooLong(d: ThesisDraft): DraftWarning | undefined {
   }
 }
 
+/**
+ * Warnings for a draft against the notebook's active entries. `self` is the entry being edited, which is
+ * not its own duplicate.
+ */
 export function draftWarnings(
   group: FormGroup,
   draft: AnyDraft,
