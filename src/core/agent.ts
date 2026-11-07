@@ -303,6 +303,7 @@ const RESCUE_NOTICE: Record<RecoveryKind, string> = {
   promise: "Model nói sẽ lấy thêm dữ liệu nhưng dừng mà chưa làm.",
   fragment: "Câu trả lời bị cụt đầu (model viết tiếp câu cũ thay vì trả lời tin nhắn mới).",
   unfetched: "Câu trả lời trên ghi số liệu kèm nguồn nhưng chưa gọi tool nào: đừng dùng các số đó.",
+  draft: "Model viết bản nháp (dàn ý, việc sẽ làm) thay vì câu trả lời.",
 }
 
 type AssistantMessage = Extract<ModelMessage, { role: "assistant" }>
@@ -313,16 +314,17 @@ const assistantParts = (message: AssistantMessage): AssistantPart[] =>
 
 /**
  * A recovered run's broken final step leaves history: its text (empty, or only echoed todo
- * lines) is dropped, and the message with it unless it carries tool calls. The answer that
- * follows takes its place, so two model turns never sit side by side.
+ * lines, a draft, invented figures) is dropped, and the message with it unless it carries tool
+ * calls. The step may end on its own tool results (a closing todo_write): they stay. The answer
+ * that follows takes its place, so two model turns never sit side by side.
  */
 export function dropFinalText(messages: ModelMessage[]): ModelMessage[] {
   const index = messages.findLastIndex((m) => m.role === "assistant")
-  if (index < 0 || index !== messages.length - 1) return messages
+  if (index < 0 || messages.slice(index + 1).some((m) => m.role !== "tool")) return messages
   const message = messages[index] as AssistantMessage
   const parts = assistantParts(message).filter((part) => part.type !== "text")
-  if (!parts.some((part) => part.type === "tool-call")) return messages.slice(0, index)
-  return [...messages.slice(0, index), { ...message, content: parts }]
+  if (!parts.some((part) => part.type === "tool-call")) return [...messages.slice(0, index), ...messages.slice(index + 1)]
+  return [...messages.slice(0, index), { ...message, content: parts }, ...messages.slice(index + 1)]
 }
 
 /** A cut answer and its continuation become one assistant message (the nudge between is not kept). */
@@ -1259,7 +1261,8 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
     measured = result
 
     // Only a turn where no data tool ran is checked: the sources are the conversation itself.
-    const sources = ranDataTool([...kept, ...response]) || opts.disabled?.has("gate-unfetched") ? undefined : figureSources([...opts.history, user])
+    const dataInTurn = ranDataTool([...kept, ...response])
+    const sources = dataInTurn || opts.disabled?.has("gate-unfetched") ? undefined : figureSources([...opts.history, user])
     const unfetched = sources === undefined ? 0 : unfetchedFigures(last.stepText ?? "", `${assembled.context ?? ""}\n${sources}`).length
     // A run with a final tool is judged by its caller (the subagent manager forces the tool).
     const verdict: Verdict = opts.finalTool
@@ -1273,6 +1276,7 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
             reasoned: last.reasoned,
             afterTools: [...base, ...response].findLast((m) => m.role !== "assistant")?.role === "tool",
             toolsInTurn: [...kept, ...response].some((m) => m.role === "tool"),
+            dataInTurn,
             unfetched,
           },
           recoveries,

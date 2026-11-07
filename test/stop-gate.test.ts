@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test"
 import type { ModelMessage } from "ai"
-import { claimsFetch, figureSources, isEmptyAnswer, isFragment, judgeStop, MAX_RECOVERIES, ranDataTool, stripEchoes, ungroundedInTurn, unfetchedFigures, type LastStep } from "../src/core/loop/stop-gate"
+import { claimsFetch, figureSources, isDraft, isEmptyAnswer, isFragment, judgeStop, MAX_RECOVERIES, RESCUE_DRAFT, RESCUE_DRAFT_FETCH, ranDataTool, stripEchoes, ungroundedInTurn, unfetchedFigures, type LastStep } from "../src/core/loop/stop-gate"
+import { DRAFT } from "./fixtures/draft-answer"
 
 const step = (over: Partial<LastStep>): LastStep => ({ text: "", toolNames: [], finish: "stop", ...over })
 
@@ -145,6 +146,9 @@ test("figures no tool fetched are sent back once with tools on, then the answer 
   expect(judgeStop(invented, [])).toMatchObject({ action: "continue", kind: "unfetched", toolChoice: "auto" })
   // Closing a todo list beside the answer fetched nothing.
   expect(judgeStop({ ...invented, toolNames: ["todo_write"] }, [])).toMatchObject({ kind: "unfetched" })
+  // As it really comes: a step with a function call finishes as "tool-calls".
+  expect(judgeStop({ ...invented, toolNames: ["todo_write"], finish: "tool-calls" }, [])).toMatchObject({ kind: "unfetched" })
+  expect(judgeStop({ ...invented, toolNames: ["todo_write"], finish: "other" }, [])).toEqual({ action: "accept" })
   expect(judgeStop(invented, ["unfetched"])).toEqual({ action: "accept" })
   expect(judgeStop(invented, ["promise", "fragment"])).toEqual({ action: "accept" })
   // The step holds only the rest of a cut answer.
@@ -250,4 +254,37 @@ test("an ablated rule never sends the model back, and the rules after it still r
   const invented = { text: "Giá 10.", toolNames: [], finish: "stop" as const, unfetched: 2 }
   expect(judgeStop(invented, [], new Set(["gate-promise"]))).toMatchObject({ action: "continue", kind: "unfetched" })
   expect(judgeStop({ text: "", toolNames: [], finish: "stop" }, [], new Set(["gate-empty"]))).toEqual({ action: "give-up", kind: "empty" })
+})
+
+
+test("the draft of 08/11 is no answer: sent back once with tools off, the data is already there", () => {
+  expect(isDraft(DRAFT)).toBe(true)
+  const draft = step({ text: DRAFT, toolNames: ["todo_write"], finish: "tool-calls", afterTools: true, toolsInTurn: true, dataInTurn: true })
+  expect(judgeStop(draft, [])).toMatchObject({ action: "continue", kind: "draft", toolChoice: "none", nudge: RESCUE_DRAFT })
+  // The nudge stands on its own: the dropped draft is never mentioned to the model.
+  expect(RESCUE_DRAFT).not.toContain("nháp")
+  // A plan written before any data came may fetch first (the todo_write's own result is no data).
+  expect(judgeStop({ ...draft, dataInTurn: false }, [])).toMatchObject({ kind: "draft", toolChoice: "auto", nudge: RESCUE_DRAFT_FETCH })
+  expect(judgeStop({ ...draft, toolNames: [] }, [])).toMatchObject({ kind: "draft" })
+  // Once: a second draft stands rather than spend the whole budget.
+  expect(judgeStop(draft, ["draft"])).toEqual({ action: "accept" })
+  expect(judgeStop(draft, ["empty", "empty"])).toEqual({ action: "accept" })
+  expect(judgeStop(draft, [], new Set(["gate-draft"]))).toEqual({ action: "accept" })
+  // Still calling a data tool, or the rest of a cut answer: not judged.
+  expect(judgeStop({ ...draft, toolNames: ["todo_write", "vn_company"] }, [])).toEqual({ action: "accept" })
+  expect(judgeStop(draft, ["length"])).toEqual({ action: "accept" })
+})
+
+test("one draft signal alone is a real answer (stored answers it would have hit)", () => {
+  for (const text of [
+    // Answering "which tools do you have" names them.
+    "Mình có các công cụ sau:\n1. **`current_time`**: Lấy giờ Việt Nam.\n2. **`load_skill`**: Nạp hướng dẫn phân tích.",
+    // A promise names a tool (the promise check judges it, not this one).
+    "Sau khi xác định mã, mình sẽ:\n1. Tạo **todo list** 3 việc.\n2. Gọi **spawn_subagent** cho 3 mã song song.",
+    // A company's plan is not the model's.
+    "*   **Kế hoạch:** Công ty đặt mục tiêu DT 58.580 tỷ đồng và LNTT 11.629 tỷ.",
+    "Kỹ thuật: chưa có dữ liệu trong lượt này, sẽ cập nhật khi bạn yêu cầu.",
+    "Kết quả đã lấy: P/E 8,44x, P/B 1,98x. FPT đang rẻ hơn trung bình ngành.",
+  ])
+    expect([text, isDraft(text)]).toEqual([text, false])
 })
