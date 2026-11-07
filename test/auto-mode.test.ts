@@ -506,4 +506,5 @@ test("runtime wiring: ask_user answers reach the classifier's log as the user's 
   await asked
   expect(runtime.auto.log.render()).toContain('{"user_answer":"Khung thời gian? → 1 năm"}')
   expect(runtime.permissions.auto).toBe(runtime.auto)
-})
+  // The first import of the whole runtime takes over 5 s on the Windows CI runner.
+}, 20_000)
