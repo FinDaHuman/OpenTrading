@@ -11,7 +11,7 @@
 ```shell
 bun install --frozen-lockfile
 bun run typecheck
-bun run test    # bun test --parallel=6: files in parallel worker processes
+bun run test    # bun test --parallel=6 --timeout=20000: files in parallel worker processes
 ```
 
 CI runs the same checks (`bun test --parallel`) and is the source of truth. It also builds the standalone binary
