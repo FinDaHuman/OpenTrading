@@ -1,0 +1,144 @@
+name: Package
+
+# The installers (install.sh / install.ps1, `ot update`) and the npm packages on 3 OSes: 6 jobs,
+# each building the binary for its own platform first (scripts/build.ts runs --version and
+# --self-check). They run on every push to main and on a pull request that touches what they
+# check, not on every pull request (ci.yml builds the Linux binary for those).
+# Not required by branch protection, so a pull request this skips can still merge.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - .github/workflows/package.yml
+      - install.ps1
+      - install.sh
+      - scripts/**
+      - src/index.tsx
+      - src/cli/**
+      - src/core/build-info.ts
+      - src/core/bundle.ts
+      - src/core/update.ts
+      - package.json
+      - bun.lock
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: package-${{ github.ref == 'refs/heads/main' && github.run_id || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  install:
+    # install.sh / install.ps1 against a local copy of a release: download, checksum, PATH, `ot`, uninstall.
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      OPENTRADING_RELEASE_BASE: http://127.0.0.1:8765
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun run build --single && bun scripts/package.ts && bun scripts/checksums.ts dist/release
+      - name: Seed an unexpanded user PATH entry (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey("Environment", $true)
+          $raw = [string]$key.GetValue("Path", "", "DoNotExpandEnvironmentNames")
+          $key.SetValue("Path", "%TEMP%\ot-probe;$raw", [Microsoft.Win32.RegistryValueKind]::ExpandString)
+          $key.Close()
+      - name: Install from the local release
+        run: |
+          bun scripts/dev/serve-release.ts dist/release 8765 &
+          sleep 2
+          if [ "$RUNNER_OS" = Windows ]; then
+            powershell -NoProfile -ExecutionPolicy Bypass -Command "Get-Content -Raw install.ps1 | Invoke-Expression"
+          else
+            bash install.sh
+          fi
+      - name: ot is on PATH in the next step
+        run: |
+          ot --version
+          opentrading --self-check
+      - name: ot update to a newer build, run through ot itself
+        run: |
+          OPENTRADING_BUILD_VERSION=9.9.9 bun run build --single
+          bun scripts/package.ts && bun scripts/checksums.ts dist/release
+          bun scripts/dev/serve-release.ts dist/release 8766 &
+          sleep 2
+          OPENTRADING_RELEASE_BASE=http://127.0.0.1:8766 ot update 9.9.9
+          ot --version | grep -F 9.9.9
+          opentrading --version | grep -F 9.9.9
+      - name: PATH written where a new shell reads it (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          # -s: not every startup file exists; the line must be in the one the installer chose.
+          lines=$(grep -sh -A1 "OpenTrading installer" "$HOME/.bashrc" "$HOME/.bash_profile" "$HOME/.zshrc" "$HOME/.profile" || true)
+          echo "$lines"
+          echo "$lines" | grep -F ".opentrading/bin"
+      - name: PATH written where a new shell reads it (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey("Environment")
+          $raw = [string]$key.GetValue("Path", "", "DoNotExpandEnvironmentNames")
+          if ($key.GetValueKind("Path") -ne "ExpandString") { throw "user PATH is no longer REG_EXPAND_SZ" }
+          if ($raw -notlike "*\.opentrading\bin*") { throw "install folder missing from the user PATH: $raw" }
+          if ($raw -notlike "*%TEMP%\ot-probe*") { throw "the unexpanded entry was rewritten: $raw" }
+      - name: Uninstall (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          bash install.sh --uninstall
+          test ! -e "$HOME/.opentrading/bin/opentrading"
+          ! grep -rqs "OpenTrading installer" "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.bash_profile" "$HOME/.profile"
+      - name: Uninstall (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          & .\install.ps1 -Uninstall
+          if (Test-Path "$HOME\.opentrading\bin\opentrading.exe") { throw "opentrading.exe still there" }
+          $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey("Environment")
+          $raw = [string]$key.GetValue("Path", "", "DoNotExpandEnvironmentNames")
+          if ($raw -like "*\.opentrading\bin*") { throw "user PATH still has the install folder: $raw" }
+          if ($raw -notlike "*%TEMP%\ot-probe*") { throw "uninstall rewrote the other entries: $raw" }
+
+  npm:
+    # The npm packages for each runner's platform, installed globally into a temp prefix.
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - run: bun install --frozen-lockfile
+      - run: bun run build --single && bun scripts/npm.ts
+      - name: npm i -g from the packed files
+        run: |
+          prefix="$RUNNER_TEMP/npm-global"
+          main=$(ls dist/npm/findahuman-opentrading-*.tgz)
+          platform=$(ls dist/npm/opentrading-*.tgz | grep -vxF "$main")
+          npm i -g --prefix "$prefix" $platform "$main"
+          if [ "$RUNNER_OS" = Windows ]; then bin="$prefix"; else bin="$prefix/bin"; fi
+          "$bin/ot" --version
+          "$bin/opentrading" --self-check
+          "$bin/ot" --version | grep -F node_modules
