@@ -410,7 +410,8 @@ bun run install:global
 
 ```shell
 bun run typecheck
-bun test                     # includes a headless TUI smoke test; SHOW_FRAME=1 prints frames
+bun run test                 # bun test --parallel=6, as CI does; includes a headless TUI smoke test
+bun test                     # one file at a time, about 3x slower; SHOW_FRAME=1 prints frames
 bun test test/tui.test.tsx   # UI only
 bun run build --single       # binary for this machine: dist/opentrading-<os>-<cpu>/bin/
 ```

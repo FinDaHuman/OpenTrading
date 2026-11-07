@@ -25,11 +25,22 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2
+        with:
+          # The version in package.json "packageManager", the same on CI and every machine.
+          bun-version-file: package.json
+      # Bun's download cache, keyed on the lockfile; bun install then only links.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
       - run: bun install --frozen-lockfile
       # Types do not depend on the OS: checked once.
       - if: runner.os == 'Linux'
         run: bun run typecheck
-      - run: bun test
+      # Files run in parallel worker processes, each file in a fresh global (implies --isolate),
+      # so one file's leftover state cannot reach the next.
+      - run: bun test --parallel
 
   build:
     # The standalone binary (scripts/build.ts) on Linux for every pull request; the script itself
@@ -41,6 +52,15 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2
+        with:
+          # The version in package.json "packageManager", the same on CI and every machine.
+          bun-version-file: package.json
+      # Bun's download cache, keyed on the lockfile; bun install then only links.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
       - run: bun install --frozen-lockfile
       - run: bun run build --single
 
