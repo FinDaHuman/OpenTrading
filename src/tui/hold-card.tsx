@@ -3,6 +3,7 @@ import { createSignal } from "solid-js"
 import { DialogFrame } from "./dialogs/frame"
 import type { HoldChoice, TurnHoldCard } from "./state"
 import { color } from "./theme"
+import { enterGrace } from "./ui/clock"
 
 /**
  * The card of a turn held before anything was sent: the investor profile or the user's constraints
@@ -14,12 +15,11 @@ import { color } from "./theme"
  */
 
 const ROWS: HoldChoice[] = ["retry", "waive", "cancel"]
-/** Enter this soon after the card appears is ignored: it was meant for the prompt. */
-const GRACE_MS = 400
 
 export function HoldCard(props: { card: TurnHoldCard }) {
   const [row, setRow] = createSignal<HoldChoice>("retry")
-  const shownAt = Date.now()
+  // Enter right after the card appears was meant for the prompt.
+  const inGrace = enterGrace()
   const label = (choice: HoldChoice) => (choice === "retry" ? "Thử lại" : choice === "waive" ? props.card.waive : "Huỷ")
 
   useKeyboard((evt) => {
@@ -29,7 +29,7 @@ export function HoldCard(props: { card: TurnHoldCard }) {
     if (evt.name === "up") return setRow(ROWS[(at + ROWS.length - 1) % ROWS.length]!)
     if (evt.name === "down" || evt.name === "tab") return setRow(ROWS[(at + 1) % ROWS.length]!)
     if (evt.name === "escape" || (evt.ctrl && evt.name === "c")) return props.card.choose("cancel")
-    if (evt.name !== "return" || Date.now() - shownAt < GRACE_MS) return
+    if (evt.name !== "return" || inGrace()) return
     props.card.choose(row())
   })
 

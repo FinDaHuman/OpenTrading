@@ -8,6 +8,7 @@ import { color } from "./theme"
 import { truncate } from "./ui/text"
 import { useTerminalDimensions } from "@opentui/solid"
 import { BADGE } from "./ui/badges"
+import { enterGrace } from "./ui/clock"
 
 /**
  * "Cần xác nhận" — shown in place of the prompt input while a tool with side effects
@@ -53,13 +54,6 @@ const RECORD: Record<Choice, string> = {
   mode: "lần này, chuyển sang ▸ sửa có hỏi",
   deny: "",
 }
-
-/**
- * A subagent's prompt can pop up while the user is typing (background agents): it takes no
- * digit shortcuts at all, and Enter pressed this soon after it appears is ignored, so keys
- * meant for the input never approve it.
- */
-export const ANSWER_GUARD_MS = 400
 
 /** What the scope says the call is about, for the title. */
 function kindOf(req: ApprovalRequest): string {
@@ -107,7 +101,10 @@ function hintOf(choice: Choice, req: ApprovalRequest): string {
 export function ApprovalPrompt(props: { gate: PermissionGate; request: ApprovalRequest; subagents?: SubagentManager }) {
   const [selected, setSelected] = createSignal(0)
   // The prompt is keyed on the request in app.tsx, so each request mounts afresh.
-  const shownAt = Date.now()
+  // A subagent's prompt can pop up while the user is typing (background agents): it takes no
+  // digit shortcuts at all, and Enter right after it appears is ignored, so keys meant for the
+  // input never approve it.
+  const inGrace = enterGrace()
   const [noting, setNoting] = createSignal(false)
   let note = ""
   const req = () => props.request
@@ -155,7 +152,7 @@ export function ApprovalPrompt(props: { gate: PermissionGate; request: ApprovalR
       return // the note input handles everything else; enter submits through onSubmit
     }
     evt.preventDefault()
-    const early = !!req().agent && Date.now() - shownAt < ANSWER_GUARD_MS
+    const early = !!req().agent && inGrace()
     if (early && evt.name === "return") return
     const count = options().length
     if (evt.name === "up") setSelected((i) => (i + count - 1) % count)
