@@ -9,6 +9,8 @@ export interface Figure {
   /** Every value it can mean: "16.800" is 16800 in Vietnamese and 16.8 in JSON. */
   values: number[]
   decimals: number
+  /** What the written number was multiplied by to get `values` ("nghìn tỷ" is read in tỷ: 1000). */
+  scale?: number
   unit?: "%" | "đ" | "tỷ" | "triệu" | "nghìn" | "lần"
   /** Marked as the model's own arithmetic (prompts/citations.md). */
   derived: boolean
@@ -22,7 +24,11 @@ const E = String.raw`(?![\p{L}\p{N}])`
 export const DERIVED = new RegExp(String.raw`${B}(tự tính|tính từ(?!\s+(đầu|đáy|đỉnh|cuối|ngày|năm|tháng|quý|phiên|lúc|khi|thời|\d{1,2}\/)))${E}`, "iu")
 const DATES = /(?<![\d.,/-])\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}(?![\d/-])|(?<![\d.,/])\d{1,2}\/\d{4}(?!\d)|(?<![\d.,:])\d{1,2}:\d{2}(?![\d:])/g
 const PERIODS = /\b[QH]\d(?:\/\d{2,4})?\b|\b(?:quý|năm|tháng|phiên|ngày)\s+\d+/giu
-const FIGURE = /(?<![\p{L}\d.,])(\d{1,3}(?:[.,]\d{3})+(?:[.,]\d+)?|\d+[.,]\d+|\d+)(?:\s*(%|đồng|đ(?!\p{L})|nghìn tỷ|tỷ|triệu|nghìn|lần))?/gu
+/**
+ * A number and its unit. "2,49T" is a trillion dong ("nghìn tỷ") as finance writers shorten it:
+ * only right after a decimal number and before no letter, digit or "+" ("T+2", "T3" are not).
+ */
+const FIGURE = /(?<![\p{L}\d.,])(\d{1,3}(?:[.,]\d{3})+(?:[.,]\d+)?|\d+[.,]\d+|\d+)(?:\s*(%|đồng|đ(?!\p{L})|nghìn tỷ|tỷ|triệu|nghìn|lần)|(?<=[.,]\d+)(T)(?![\p{L}\p{N}+]))?/gu
 /** A whole number with no unit is usually a count or a heading, not market data. */
 const isFigure = (token: string, unit: string | undefined) => unit !== undefined || /[.,]/.test(token)
 
@@ -47,11 +53,13 @@ export function answerFigures(text: string): Figure[] {
     const derived = DERIVED.test(line)
     const plain = line.replace(DATES, " ").replace(PERIODS, " ")
     for (const match of plain.matchAll(FIGURE)) {
-      const [whole, token, unit] = match
+      const [whole, token, written, trillion] = match
+      const unit = trillion ? "nghìn tỷ" : written
       if (!token || !isFigure(token, unit)) continue
       const { values, decimals } = readings(token)
-      const scaled = unit === "nghìn tỷ" ? values.map((v) => v * 1000) : values
-      figures.push({ text: whole.trim(), values: scaled, decimals, unit: unitOf(unit), derived, line })
+      // Read in tỷ, so the rounding the answer wrote ("95,8") is 1000 times wider too.
+      const scale = unit === "nghìn tỷ" ? 1000 : 1
+      figures.push({ text: whole.trim(), values: values.map((v) => v * scale), decimals, scale, unit: unitOf(unit), derived, line })
     }
   }
   return figures
@@ -104,7 +112,7 @@ const SCALES = [1, 100, 0.01, 1e3, 1e-3, 1e6, 1e-6, 1e9, 1e-9]
 
 /** Whether `figure` is one of `numbers` at a common scale, rounded as the answer writes it. */
 export function tracesTo(figure: Figure, numbers: Set<number>) {
-  const near = 0.5 * 10 ** -figure.decimals + 1e-9
+  const near = 0.5 * 10 ** -figure.decimals * (figure.scale ?? 1) + 1e-9
   for (const value of figure.values) {
     for (const number of numbers) {
       // "giảm 3,2%" writes the sign in words.
