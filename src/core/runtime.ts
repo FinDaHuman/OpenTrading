@@ -6,11 +6,17 @@ import { loadConfig } from "./config"
 import { McpManager, type McpManagerOptions } from "./mcp/manager"
 import { askUserTool } from "./tools/builtin/ask-user"
 import { PermissionGate } from "./permission"
-import { FileMemory } from "./memory/file-memory"
+import type { Waiver } from "./memory/binding/bind"
+import { createConstraintReader, type ConstraintReader } from "./memory/binding/constraints"
+import { createRedactionCheck, type RedactionCheck } from "./memory/redaction/check"
+import { openNotebook } from "./memory/notebook/lifecycle"
 import { NoopMemory, type MemoryProvider } from "./memory/types"
 import { dataDir } from "./paths"
 import type { Skill } from "./skills/schema"
 import { currentTimeTool } from "./tools/builtin/current-time"
+import { readResultTool } from "./tools/builtin/read-result"
+import { computeTool } from "./tools/compute"
+import { calculateTool } from "./tools/calculate"
 import { loadSkillTool } from "./tools/builtin/load-skill"
 import { chartDepthTool, chartRenderTool } from "./tools/chart/render"
 import { chartCompareTool } from "./tools/chart/compare"
@@ -64,6 +70,18 @@ export interface Runtime {
   deskApprovals: DeskApprovals
   /** How the request being answered opted into desk runs (set by the UI per turn). */
   deskOptIn?: DeskOptIn
+  /**
+   * The user's constraints in <home>/memory.db, read at the start of every turn of every agent,
+   * whatever `memory` is. It holds no connection between reads, so nothing to close on exit or switch.
+   */
+  constraints: ConstraintReader
+  /**
+   * Checks memory blocks in a session's history against <home>/memory.db (read-only, no connection kept),
+   * whatever `memory` is: the main agent's turns, resume, /export and the session history tools mask with it.
+   */
+  redaction: RedactionCheck
+  /** The waiver of the main turn now running (set by the UI per turn, like deskOptIn). */
+  turnWaiver?: Waiver
   /** Agent types loaded by setAgents (desk agents resolve their type here). */
   agents: AgentDefinition[]
   /** Data directory this runtime reads and writes (OPENTRADING_HOME or the test's temp dir). */
@@ -78,11 +96,24 @@ export interface Runtime {
   auto: AutoReviewer
 }
 
-export type MemoryChoice = "none" | "file"
+export type MemoryChoice = "none" | "notebook"
 
-/** Pick the memory implementation named in config (`memory.provider`). Default: off. */
+/**
+ * Pick the memory implementation named in config (`memory.provider`). Default: off. The notebook opens
+ * <home>/memory.db now; a store that fails to open still yields a provider that says why.
+ */
 export function createMemory(choice: MemoryChoice | undefined, home = dataDir()): MemoryProvider {
-  return choice === "file" ? new FileMemory(path.join(home, "memory")) : new NoopMemory()
+  if (choice === "notebook") return openNotebook(path.join(home, "memory.db"))
+  return new NoopMemory()
+}
+
+/**
+ * Run the current provider's cleanup (unhooks it; the notebook also closes its store, which Windows
+ * keeps locked while open). For the exit path: session-end also fires on /clear, so it cannot close it.
+ */
+export function closeMemory(runtime: Runtime) {
+  runtime.detachMemory?.()
+  runtime.detachMemory = undefined
 }
 
 /**
@@ -116,6 +147,7 @@ export function initRuntime(opts: {
   void pruneHistory(path.join(home, "tool-output"), 7)
   const questions = new AskBroker()
   registry.register(currentTimeTool())
+  registry.register(readResultTool())
   registry.register(askUserTool(questions))
   registry.register(todoWriteTool())
   registry.register(readFileTool(workspace, files))
@@ -135,10 +167,13 @@ export function initRuntime(opts: {
       () => new Set(registry.list().map((d) => d.name)),
     ),
   )
+  registry.register(computeTool())
+  registry.register(calculateTool())
   registry.register(chartRenderTool())
   registry.register(chartCompareTool())
   registry.register(chartDepthTool())
-  for (const tool of sessionHistoryTools()) registry.register(tool)
+  const redaction = createRedactionCheck(path.join(home, "memory.db"))
+  for (const tool of sessionHistoryTools({ redaction })) registry.register(tool)
   for (const tool of localWatchlistTools(home)) registry.register(tool)
   registry.register(webFetchTool())
   registry.register(webSearchTool())
@@ -193,14 +228,27 @@ export function initRuntime(opts: {
   })
   permissions.auto = auto
   questions.onAnswered = (qs, answers) => auto.log.answer(qs.map((q) => `${q.question} → ${answers[q.question] ?? "(bỏ qua)"}`).join("\n"))
-  const subagents = new SubagentManager({ parent: registry, skills: opts.skills, serverInstructions: () => mcp.instructions() })
+  const constraints = createConstraintReader(path.join(home, "memory.db"))
+  const subagents = new SubagentManager({
+    parent: registry,
+    skills: opts.skills,
+    serverInstructions: () => mcp.instructions(),
+    constraints,
+    // Read lazily: the UI sets it around each turn, after the runtime exists.
+    waiver: () => runtime.turnWaiver,
+  })
   registry.register(spawnSubagentTool(subagents))
   registry.register(sendMessageTool(subagents))
   registry.register(stopAgentTool(subagents))
   // Read lazily: setAgents replaces the list once agent types load.
-  const desk = new DeskEngine({ starter: subagents, agents: () => runtime.agents, playbooks: () => PLAYBOOKS })
+  const desk = new DeskEngine({
+    starter: subagents,
+    agents: () => runtime.agents,
+    playbooks: () => PLAYBOOKS,
+    waiver: () => runtime.turnWaiver,
+  })
   const deskApprovals = new DeskApprovals()
-  const runtime: Runtime = { registry, permissions, questions, mcp, hooks: new HookBus(), memory: new NoopMemory(), subagents, desk, deskApprovals, agents: [], home, workspace, files, history, auto }
+  const runtime: Runtime = { registry, permissions, questions, mcp, hooks: new HookBus(), memory: new NoopMemory(), constraints, redaction, subagents, desk, deskApprovals, agents: [], home, workspace, files, history, auto }
   registry.register(deskRunTool({ engine: desk, approvals: deskApprovals, playbooks: () => PLAYBOOKS, optIn: () => runtime.deskOptIn, mode: () => permissions.mode }))
   switchMemory(runtime, opts.memory ?? new NoopMemory())
   return runtime

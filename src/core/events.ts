@@ -1,7 +1,9 @@
+import type { CardDraft } from "./memory/cards/types"
 import type { ModelMessage } from "ai"
 import type { ClockSnapshot } from "./prompt/market-clock"
 import type { FailureKind } from "./retry"
 import type { ChartData } from "./tools/chart/data"
+import type { Redaction, RedactItem } from "./memory/redaction/redact"
 
 /**
  * Everything the agent loop tells a UI. Tool events are correlated by `callId`.
@@ -14,6 +16,14 @@ export type AgentEvent =
   | { type: "tool-end"; callId: string; ok: boolean; output: string; chart?: ChartData; durationMs: number }
   /** Informational: step limit reached, model without tool support… */
   | { type: "notice"; text: string }
+  /** A suggestion card the final answer ended with, checked, before "done" (spec 007); the TUI gives it an id. */
+  | { type: "card"; card: CardDraft }
+  /**
+   * Start of a main-agent turn: memory blocks were masked. `kept` replaces the history (masks the store
+   * confirmed); `record` is what to write as one redact line; `temporary` says blocks were held in what is
+   * sent only. Sent only when `record` or `temporary` has something.
+   */
+  | { type: "memory-redaction"; kept: ModelMessage[]; record: RedactItem[]; temporary?: Redaction["temporary"] }
   /**
    * A model request failed and is retried after `delayMs` (retry `attempt` of `max`); the
    * next attempt starts at `until` (epoch ms). Any later event means the wait is over.
@@ -50,4 +60,6 @@ export type AgentEvent =
       retiredTodos?: number
       /** Tools whose data the turn did not get (loop/failures.ts). */
       dataGaps?: string[]
+      /** Figures of the answer that no tool result held (stop-gate.ts ungroundedInTurn): measured only. */
+      ungrounded?: string[]
     }

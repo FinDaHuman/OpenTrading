@@ -3,6 +3,7 @@ import type { Config } from "../config"
 import { loadConfig } from "../config"
 import { describeError } from "../chat"
 import type { AgentDefinition } from "../agents/schema"
+import type { Waiver } from "../memory/binding/bind"
 import { Limiter } from "../subagents/limiter"
 import type { StartSpec } from "../subagents/manager"
 import type { SubagentResult, SubagentView } from "../subagents/types"
@@ -30,6 +31,8 @@ export interface DeskDeps {
   agents: () => AgentDefinition[]
   playbooks: () => Playbook[]
   config?: () => Promise<Config>
+  /** The waiver of the main turn now running (runtime.turnWaiver): a run keeps the one it started under. */
+  waiver?: () => Waiver | undefined
 }
 
 /** An agent() call that failed (shown in the run's agent list already, so not logged again). */
@@ -68,6 +71,8 @@ interface RunState {
   effortOverride: boolean
   /** Per prompt prefix: released once the first agent of that prefix has a response. */
   stagger: Map<string, { promise: Promise<void>; release: () => void }>
+  /** The user's "run without …" choice of the turn that launched the run, for every agent it starts. */
+  waiver?: Waiver
   done: Promise<DeskRunView>
 }
 
@@ -133,9 +138,11 @@ export class DeskEngine {
 
   /** Starts a run in the background; `done` resolves with its final view. Bad args throw here. */
   async start(name: string, args: unknown, opts: DeskStart = {}): Promise<{ id: string; done: Promise<DeskRunView> }> {
+    // Read once, now, inside the turn's desk_run call: later phases start after that turn has ended.
+    const waiver = this.deps.waiver?.()
     const playbook = this.require(name)
     const parsed = parseArgs(playbook, args)
-    return this.launch(newId(), playbook, parsed, opts, new Map())
+    return this.launch(newId(), playbook, parsed, opts, new Map(), undefined, waiver)
   }
 
   /**
@@ -152,6 +159,8 @@ export class DeskEngine {
   }
 
   private async resumeOnce(id: string): Promise<{ id: string; done: Promise<DeskRunView> }> {
+    // A resumed run takes the choice of the turn resuming it (none when the user resumes from /desk).
+    const waiver = this.deps.waiver?.()
     const live = this.runs.get(id)
     if (live && (live.view.status === "running" || live.view.status === "paused")) throw new Error(`Run ${id} vẫn đang chạy.`)
     if (!this.session) throw new Error("Chưa có phiên nào để tìm run.")
@@ -163,7 +172,7 @@ export class DeskEngine {
     // An effort inherited from desk.effort follows the config as it is now (the user may have
     // raised it after the quota ran out); only one chosen for this run is kept.
     const effort = meta.effortOverride ? meta.effort : undefined
-    const handle = await this.launch(id, playbook, parseArgs(playbook, meta.args), { size: meta.size, effort }, cache, meta)
+    const handle = await this.launch(id, playbook, parseArgs(playbook, meta.args), { size: meta.size, effort }, cache, meta, waiver)
     if (meta.version !== playbook.meta.version) this.log(this.runs.get(id)!, `Playbook đã đổi phiên bản (${meta.version} → ${playbook.meta.version}): mọi agent chạy lại.`)
     return handle
   }
@@ -224,7 +233,15 @@ export class DeskEngine {
     return this.deps.config ? this.deps.config() : loadConfig()
   }
 
-  private async launch(id: string, playbook: Playbook, args: unknown, opts: DeskStart, cache: Map<string, JournalEntry>, previous?: DeskMeta) {
+  private async launch(
+    id: string,
+    playbook: Playbook,
+    args: unknown,
+    opts: DeskStart,
+    cache: Map<string, JournalEntry>,
+    previous?: DeskMeta,
+    waiver?: Waiver,
+  ) {
     const settings = deskSettings(await this.config())
     const size = opts.size ?? settings.size
     const effort = opts.effort ?? settings.effort
@@ -257,6 +274,7 @@ export class DeskEngine {
       occurrences: new Map(),
       phase: playbook.meta.phases[0] ?? "Chạy",
       stagger: new Map(),
+      waiver,
       done: Promise.resolve(undefined as never),
     }
     this.runs.set(id, state)
@@ -410,6 +428,7 @@ export class DeskEngine {
         ...(model ? { model } : {}),
         ...(opts.maxSteps ? { maxSteps: opts.maxSteps } : {}),
         deskRunId: view.id,
+        ...(state.waiver ? { waiver: state.waiver } : {}),
         background: false,
         parentSignal: state.controller.signal,
       }

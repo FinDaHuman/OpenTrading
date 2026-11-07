@@ -1,4 +1,5 @@
 import type { ModelMessage } from "ai"
+import { REMINDER_TAG } from "./reminder-tag"
 import { LOADED_PREFIX } from "./tools/search"
 
 /**
@@ -13,7 +14,7 @@ const TODOS_TAG = "viec_can_lam_luu"
 const SKILLS_PREFIX = "Skill đã nạp: "
 
 const COMPACT_HEADER =
-  "Phần đầu cuộc hội thoại đã được nén thành bản tóm tắt ở tin nhắn ngay sau. Số liệu trong tóm tắt giữ nguyên nguồn và thời điểm; cần số mới hơn hoặc chi tiết đã lược thì gọi lại tool."
+  "Phần đầu cuộc hội thoại đã được nén thành bản tóm tắt ở tin nhắn ngay sau. Số liệu trong tóm tắt giữ nguyên nguồn và thời điểm. Chi tiết đã lược: đọc bằng read_result nếu tóm tắt có id; cần số mới hơn thì gọi lại tool."
 
 interface CarriedTodo {
   content: string
@@ -58,11 +59,11 @@ export function compactCarry(m: ModelMessage): { tools: string[]; skills: string
 }
 
 export function compactPair(summary: string, carry: { tools: string[]; skills: string[]; todos: CarriedTodo[] }): ModelMessage[] {
-  const lines = ["<nhac_nho>", `<${COMPACT_TAG}>`, COMPACT_HEADER]
+  const lines = [`<${REMINDER_TAG}>`, `<${COMPACT_TAG}>`, COMPACT_HEADER]
   if (carry.tools.length > 0) lines.push(`${LOADED_PREFIX}${carry.tools.join(", ")}`)
   if (carry.skills.length > 0) lines.push(`${SKILLS_PREFIX}${carry.skills.join(", ")} — gọi lại load_skill nếu cần hướng dẫn chi tiết.`)
   if (carry.todos.length > 0) lines.push(`<${TODOS_TAG}>${JSON.stringify(carry.todos)}</${TODOS_TAG}>`)
-  lines.push(`</${COMPACT_TAG}>`, "</nhac_nho>")
+  lines.push(`</${COMPACT_TAG}>`, `</${REMINDER_TAG}>`)
   return [
     { role: "user", content: lines.join("\n") },
     { role: "assistant", content: summary.trim() },

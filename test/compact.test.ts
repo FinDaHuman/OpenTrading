@@ -8,6 +8,7 @@ import {
   MAX_AUTO_FAILURES,
   PRUNED_ERROR_TEXT,
   PRUNED_TEXT,
+  prunedEvidence,
   formatCompactSummary,
   compactHistory,
   compactPrompt,
@@ -57,7 +58,7 @@ test("pruning empties large old tool results, keeps the last two turns and the l
   expect(outputOf(messages, "c1")).toBe(`Đã nạp tool: mcp__ot__quote, mcp__ot__bctc\n${PRUNED_TEXT}`)
   expect(outputOf(messages, "c2")).toBe(BIG) // todo_write is protected
   expect(outputOf(messages, "c3")).toBe("98.500") // small results stay
-  expect(outputOf(messages, "c4")).toBe(PRUNED_TEXT)
+  expect(outputOf(messages, "c4")).toBe(prunedEvidence("c4")) // a data result: its evidence is the way back
   expect(outputOf(messages, "c5")).toBe(`${BIG}5`) // last two turns verbatim
   expect(outputOf(messages, "c6")).toBe(`${BIG}6`)
   expect(pruned).toBe(2)
@@ -202,7 +203,7 @@ test("the summary prompt asks for verbatim sourced figures and carries the user'
   expect(compactPrompt()).not.toContain("Yêu cầu thêm")
 })
 
-test("one request: an <analysis> scratchpad then the <summary>; lean drops the analysis section", () => {
+test("one request: an <analysis> scratchpad then the <summary>; lean drops the analysis section, keeps preferences", () => {
   const full = compactPrompt()
   expect(full).toContain("<analysis>")
   expect(full).toContain("<summary>")
@@ -213,7 +214,14 @@ test("one request: an <analysis> scratchpad then the <summary>; lean drops the a
   expect(lean).toContain("## Lỗi và dữ liệu còn thiếu")
   expect(full).toContain("## Lỗi và dữ liệu còn thiếu")
   expect(lean).not.toContain("## Phân tích và kết luận đã đưa ra")
-  expect(lean).not.toContain("## Ràng buộc và sở thích")
+  // Spec 007 (design.md L7): the lean variant keeps what the user said about risk, horizon and style too.
+  for (const prompt of [full, lean]) {
+    expect(prompt).toContain("## Ràng buộc và sở thích")
+    expect(prompt).toContain("Điều người dùng đã nói trong hội thoại này")
+    // Memory, saved constraints and the profile are sent again with every request: labels only.
+    expect(prompt).toContain('Không chép nội dung khối memory ("[Memory · …]"), ràng buộc đã lưu hay hồ sơ nhà đầu tư')
+    expect(prompt).toContain('"bài học #7"')
+  }
   // A figure only an earlier answer gave is not sourced to a tool (30/10, AAA "LNTT +29,3%").
   for (const prompt of [full, lean]) expect(prompt).toContain('ghi nguồn là "câu trả lời trước", không ghi tên tool')
 })

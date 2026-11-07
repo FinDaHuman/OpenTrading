@@ -1,4 +1,5 @@
 import type { Ablations } from "../ablation"
+import { DERIVED, sourceNumbers, ungroundedFigures } from "./figures"
 import type { ModelMessage, StepResult, ToolSet } from "ai"
 import { hasOpenTodos, LEGACY_TODO_PREFIX, TODO_PREFIX, TODO_WRITE, type Todo } from "../tools/todos"
 
@@ -235,14 +236,10 @@ export function claimsFetch(text: string): boolean {
   return [...body.matchAll(SOURCE_LINE)].some((source) => !NOT_FETCHED.test(source[1] ?? ""))
 }
 
-/** The model's own arithmetic, marked as prompts/citations.md asks: nothing to fetch. */
-const DERIVED = new RegExp(String.raw`${B}(tính từ|tự tính)${E}`, "iu")
-
 /** Dates, month/year and clock times: they say when, not how much. */
 const DATES = /(?<![\d.,/-])\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}(?![\d/-])|(?<![\d.,/])\d{1,2}\/\d{4}(?!\d)|(?<![\d.,:])\d{1,2}:\d{2}(?![\d:])/g
 /** A market figure: thousands groups, a decimal, or a whole number with a unit. */
 const FIGURE = /\d{1,3}(?:[.,]\d{3})+(?:[.,]\d+)?|\d+[.,]\d+|\d+(?=\s*(?:%|đ(?!\p{L})|đồng|tỷ|triệu|nghìn|lần))/gu
-const NUMBER = /\d+(?:[.,]\d+)*/g
 /** A tool may give a ratio or thousands where the answer writes a percent or dong. */
 const SCALES = [1, 100, 0.01, 1e3, 1e-3, 1e6, 1e-6, 1e9, 1e-9]
 
@@ -273,7 +270,7 @@ export function unfetchedFigures(text: string, known: string): string[] {
     .join("\n")
   const figures = [...new Set(stated.replace(DATES, " ").match(FIGURE) ?? [])]
   if (figures.length === 0) return []
-  const values = [...new Set((known.match(NUMBER) ?? []).flatMap((token) => readings(token).map((r) => r.value)))]
+  const values = [...sourceNumbers(known)]
   const missing = figures.filter(
     (figure) =>
       !readings(figure).some(({ value, decimals }) => {
@@ -282,6 +279,29 @@ export function unfetchedFigures(text: string, known: string): string[] {
       }),
   )
   return missing.length * 2 >= figures.length ? missing : []
+}
+
+/**
+ * Figures of a turn's answer that nothing it read holds, in a turn where tools ran. Only measured:
+ * the guard tried on 13/10 had no precision, so this sends nothing back until a replay shows it
+ * can. Undefined when it cannot judge: no tool ran, or an image or file is in the turn.
+ */
+export function ungroundedInTurn(earlier: readonly ModelMessage[], turn: readonly ModelMessage[], context = ""): string[] | undefined {
+  const asked = figureSources(earlier)
+  const results = turn.filter((m) => m.role === "tool")
+  const answer = turn.findLast((m) => m.role === "assistant")
+  if (asked === undefined || results.length === 0 || !answer) return undefined
+  const text = typeof answer.content === "string" ? answer.content : answer.content.flatMap((p) => (p.type === "text" ? [p.text] : [])).join("")
+  const numbers = sourceNumbers(`${context}\n${asked}`)
+  // Each result on its own: a JSON result reads as JSON.
+  for (const message of results) {
+    for (const part of message.content) {
+      if (part.type !== "tool-result") continue
+      const { value } = part.output as { value?: unknown }
+      for (const n of sourceNumbers(typeof value === "string" ? value : JSON.stringify(value ?? ""))) numbers.add(n)
+    }
+  }
+  return ungroundedFigures(text, numbers)
 }
 
 /**

@@ -11,6 +11,7 @@ import {
   PROMISE_MAX_CHARS,
   ranDataTool,
   stripEchoes,
+  ungroundedInTurn,
   UNFETCHED_MIN_FIGURES,
   unfetchedFigures,
 } from "../../src/core/loop/stop-gate"
@@ -65,6 +66,9 @@ let caught = 0
 const misfired: string[] = []
 /** Final answers of turns without any tool call: the group the fragment check judges. */
 let toolless = 0
+/** Answers of turns with a tool result, and those holding figures no result or earlier turn has. */
+let judged = 0
+const ungrounded: string[] = []
 for (const file of sessionFiles(dir)) {
   let last: ModelMessage | undefined
   let toolsInTurn = false
@@ -125,6 +129,11 @@ for (const file of sessionFiles(dir)) {
         }
       }
     }
+    const figures = ungroundedInTurn([...history, ...turn.filter((m) => m.role === "user")], turn)
+    if (figures) {
+      judged++
+      if (figures.length > 0) ungrounded.push(`${where} [${figures.join(" ")}]`)
+    }
     history.push(...turn)
     turn = []
     last = undefined
@@ -152,6 +161,9 @@ console.log(`  Thử tải, trên ${cited} câu trả lời có nguồn và số
 console.log(`  - bỏ kết quả tool đi (giống số bịa): bắt được ${caught}/${cited}`)
 console.log(`  - giữ kết quả tool (giống lượt sau nhắc lại số đã lấy): báo nhầm ${misfired.length}/${cited}`)
 for (const line of misfired.slice(0, show)) console.log(`    ${line}`)
+console.log(`
+Số không có trong kết quả tool (lượt có tool, chỉ đo, chưa gửi lại model): ${ungrounded.length}/${judged}`)
+for (const line of ungrounded.slice(0, show)) console.log(`  ${line}`)
 console.log(`
 Câu dạo đầu thật (kèm gọi tool) nhận ra là lời hứa: ${preambles - missed.length}/${preambles}`)
 for (const line of missed.slice(0, show)) console.log(`  sót: ${line}`)

@@ -87,6 +87,9 @@ ot                       # mở TUI, workspace = thư mục hiện tại
 ot D:\Dau-tu             # mở ở thư mục khác
 ot -c                    # mở lại phiên mới nhất của thư mục này
 ot -r <id>               # mở lại một phiên cụ thể
+ot --yolo                # ▸▸▸ bỏ qua quyền (hộp cảnh báo đỏ mỗi lần mở)
+ot -p "Giá FPT hôm nay?" # một lượt không giao diện, in câu trả lời rồi thoát
+ot -p "…" --yolo --model openrouter/deepseek/deepseek-v4.1-flash-1017 --output-format json
 ot mcp list              # quản lý MCP server không cần mở TUI (ot mcp --help)
 ot update                # cập nhật
 ot --version             # phiên bản và nơi cài
@@ -97,6 +100,12 @@ ot --help                # mọi tuỳ chọn
 - Skill và agent riêng của một thư mục (`.opentrading/skills`, `.opentrading/agents`) trở thành chỉ dẫn cho model. Vì vậy lần đầu mở thư mục có chúng, OpenTrading hỏi **"Thư mục này có skill/agent riêng"**:
   - *Tin cậy và nạp*: lưu ở `~/.opentrading/folder-trust.json`. Với thư mục home hay gốc ổ đĩa thì chỉ áp dụng cho lần chạy này.
   - *Bỏ qua*: không lưu, lần sau hỏi lại.
+- `ot -p` (giống `claude -p`, `codex exec`, `opencode run`) chạy đúng vòng agent của TUI, có memory, ghi phiên (`ot -r <id>` mở lại được), và không bao giờ hỏi:
+  - Tool cần duyệt bị từ chối, trừ khi có `--yolo`. Ngay cả với `--yolo`, những gì chế độ bypass vẫn giữ cho bạn vẫn bị từ chối.
+  - Skill/agent riêng của thư mục chỉ được nạp nếu thư mục đã được tin trong TUI.
+  - stdout chỉ chứa câu trả lời, hoặc một dòng JSON với `--output-format json`: `answer`, `outcome`, `session_file`, `requests`, token, `permission_mode`, `errors`. Tiến trình in ra stderr.
+  - Mã thoát: 0 khi có câu trả lời, 1 trong mọi trường hợp khác.
+  - `ot -p` dùng home thật `~/.opentrading`: memory, ràng buộc, luật deny/ask, `defaultMode`, và ghi một file phiên mỗi lần chạy. Khi chạy benchmark, đặt `OPENTRADING_HOME` trỏ tới một home sạch (chỉ chép `auth.json` và cấu hình MCP sang), để kết quả không phụ thuộc máy và không ghi vào memory của bạn. Không có `--yolo` mà config lại mở ở `▸▸ tự động` (đã đồng ý) thì model duyệt vẫn tốn request; trường `permission_mode` trong JSON cho biết chế độ đã dùng.
 
   `.mcp.json` của thư mục vẫn hỏi riêng từng server.
 - Dữ liệu (key, cấu hình, phiên) nằm ở `~/.opentrading/`; đổi chỗ bằng biến `OPENTRADING_HOME`.
@@ -295,13 +304,14 @@ Kéo chuột để bôi đen và copy (chỉ copy chữ, bỏ ký hiệu `●`/`
 
 Agent đọc được file bạn đưa đường dẫn hoặc gắn bằng `@` (text, CSV, PDF, ảnh, Excel `.xlsx`, Word `.docx`), tạo hay sửa file (kế hoạch `.md`, bảng `.csv`, trang `.html`) và chạy lệnh shell. Ghi đè cả file chỉ được khi agent đã đọc toàn bộ file đó (đọc nhiều trang liên tiếp tới cuối file cũng tính); output shell dài được lưu đầy đủ ra file để đọc tiếp.
 
-Ba chế độ quyền, đổi bằng `shift+tab`:
+Bốn chế độ quyền, đổi bằng `shift+tab`:
 
 | Chế độ | Hành vi |
 | --- | --- |
 | `‖ chỉ đọc` (mặc định) | Mọi lần ghi file hay chạy lệnh đều hỏi |
 | `▸ sửa có hỏi` | Hỏi, và cho phép được cả thư mục trong phiên |
 | `▸▸ tự động` | Một model phụ duyệt từng hành động thay bạn (cần bật một lần) |
+| `▸▸▸ bỏ qua quyền` | Chỉ khi mở bằng `ot --yolo`: không hỏi gì, có hộp cảnh báo đỏ mỗi lần mở |
 
 File chứa khoá/mật khẩu, cấu hình OpenTrading và việc ghi ra ngoài workspace luôn hỏi bạn. `/undo` hoàn tác thay đổi file của agent. Xem [docs/permissions.md](docs/permissions.md).
 
@@ -332,7 +342,7 @@ Gắn bằng CLI: `ot mcp add <tên> <url>` hoặc `ot mcp add <tên> -- <lệnh
 
 - Hội thoại được lưu ở `~/.opentrading/sessions/`, gắn với thư mục đã mở; `/sessions` mở lại (mặc định phiên của thư mục này, `tab` xem mọi thư mục), tiêu đề được đặt tự động sau lượt đầu.
 - Gần đầy ngữ cảnh thì tự nén (ngưỡng trong `/config`); `/compact` nén tay.
-- Memory: nói `Ghi nhớ: …` hoặc để model đề xuất, duyệt trong `/memory`. File memory hỏng bị bỏ qua và được báo trong `/memory`, không làm mất các memory khác.
+- Memory (Sổ ghi nhớ, bật trong `/config`): tự ghi ràng buộc, cách trình bày, luận điểm, bài học bằng `/nho`, `/luandiem`, `/baihoc`; xem, sửa, xoá trong `/memory`. Model có thể gợi ý lưu bằng một thẻ dưới câu trả lời; chỉ lưu khi bạn xác nhận trong form (`/goiy` chọn lại thẻ đang chờ).
 - Hồ sơ nhà đầu tư `INVESTOR.md` (`/profile`) luôn có trong ngữ cảnh.
 
 ## Cấu hình
@@ -410,7 +420,7 @@ Script trong `scripts/dev/`:
 src/core/     provider, auth, config, agent loop, hồ sơ nhà đầu tư (không import UI)
   prompt/     ghép prompt theo tầng, ngân sách token, đồng hồ phiên
   skills/     schema SKILL.md, loader 3 nguồn, catalog, preroute
-  memory/     contract MemoryProvider, bản mẫu FileMemory
+  memory/     contract MemoryProvider, Sổ ghi nhớ (memory.db), thẻ gợi ý
   session/    lưu phiên JSONL, mở lại, dựng lại transcript
   tools/      tool registry, giới hạn/timeout, tool có sẵn (file, shell, chart, watchlist, web…)
   subagents/  subagent: manager, giới hạn slot, transcript riêng, thông báo nền

@@ -100,7 +100,9 @@ if (import.meta.main) {
     }
   }
   try {
-    for await (const event of runAgent({ history: [], input, skills, registry, serverInstructions: () => runtime.mcp.instructions() })) {
+    // No UI to choose "run without": a source that fails to read stops here through fail(), exit code 1.
+    const constraints = runtime.constraints
+    for await (const event of runAgent({ history: [], input, skills, registry, constraints, serverInstructions: () => runtime.mcp.instructions() })) {
       if (event.type === "text-delta") process.stdout.write(event.text)
       else if (event.type === "tool-start") process.stdout.write(`\n⚙ ${event.label}\n`)
       else if (event.type === "tool-end") process.stdout.write(`${!event.ok ? "✕" : event.output.startsWith(SOURCE_FAILED_PREFIX) ? "!" : "✓"} ${event.output.slice(0, 200)}\n`)

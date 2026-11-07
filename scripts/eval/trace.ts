@@ -26,6 +26,10 @@ export type TraceEvent =
       model: string
       started_at: string
       tools: number
+      /** The permission mode the run used ("read-only" with the unattended list, or "bypass" with --yolo). */
+      permission_mode?: string
+      /** "notebook" (an empty one per question) or "none". */
+      memory?: string
       settings?: Record<string, unknown>
     }
   | (Asked & { type: "question"; group: string; question: string; now: string })
@@ -51,6 +55,8 @@ export type TraceEvent =
       unanswered: boolean
       recoveries: { kind: string; attempt: number }[]
       data_gaps: string[]
+      /** What the harness itself measured, to compare with the scorer's untraced figures. */
+      ungrounded?: string[]
       /** Finished model steps, subagents included. */
       model_steps: number
       /** HTTP requests to a model: retries, subagents and side calls included. */

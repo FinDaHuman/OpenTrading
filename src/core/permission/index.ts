@@ -29,8 +29,8 @@ export { AUTO_BLOCK_PREFIX, blockedMessage, deniedMessage, RULE_DENY_PREFIX, USE
  *    "always" covers it.
  * 3. A user ask rule forces the prompt; a write in the session's temp folder (`scratch:`) runs
  *    outside ‖ read-only; an allow rule ("always") lets it run.
- * 4. The permission mode: ‖ read-only asks local file/shell effects with "switch to ▸";
- *    ▸ ask prompts as before.
+ * 4. The permission mode: ▸▸▸ bypass runs it (no classifier, no prompt, also headless);
+ *    ‖ read-only asks local file/shell effects with "switch to ▸"; ▸ ask prompts as before.
  */
 
 export interface AllowRule {
@@ -188,6 +188,8 @@ export class PermissionGate {
   private sessionDirs = new Map<string, string[]>()
   /** Set by the TUI. Without it every request is denied. */
   interactive = false
+  /** Started with --yolo: only then may the mode become ▸▸▸ bypass (config and resume never set it). */
+  bypassAvailable = false
   /** ▸▸ auto mode's reviewer (runtime.ts); it also keeps the log the classifier reads, in every mode. */
   auto?: AutoReviewer
 
@@ -205,6 +207,7 @@ export class PermissionGate {
   /** Switch the permission mode (Shift+Tab, the "switch to ▸" choice, config default). */
   setMode(mode: PermissionMode) {
     if (mode === this.current) return
+    if (mode === "bypass" && !this.bypassAvailable) return
     this.current = mode
     for (const listener of this.modeListeners) listener(mode)
   }
@@ -312,6 +315,8 @@ export class PermissionGate {
     if (userOnly(scope)) {
       if (sessionOk(scope) && this.session.has(key)) return { allow: true }
     } else if (!lists.ask.some((r) => listMatches(r, def, subject))) {
+      // ▸▸▸ bypass: no prompt and no classifier request (a benchmark counts every request).
+      if (this.current === "bypass") return this.ran()
       if (scope?.startsWith("scratch:") && this.approvalsApply(def)) return this.ran()
       if (this.approvalsApply(def) && (this.sessionCovers(def, input, key) || (await this.allowedAlways(def, input)))) return this.ran()
     }
