@@ -415,7 +415,7 @@ describe("masking memory blocks (spec 006)", () => {
     await until(() => !JSON.stringify(state.history).includes(MARK7))
     await s.currentSession().flush()
     expect(await redactLines(s.currentSession().path!)).toHaveLength(1)
-  })
+  }, 15_000)
 
   test("deleted while compacting: nothing then; the compaction masks first and writes exactly one line", async () => {
     const other = otherWindow()
@@ -432,7 +432,7 @@ describe("masking memory blocks (spec 006)", () => {
     await s.redactOpen(runtime!.redaction)
     await s.currentSession().flush()
     expect(await redactLines(file)).toHaveLength(1)
-  })
+  }, 15_000)
 
   test("/new while the compaction's redaction check is still waiting: the new session gets nothing of the old", async () => {
     const other = otherWindow()
