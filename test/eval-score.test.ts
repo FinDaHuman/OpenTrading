@@ -63,6 +63,24 @@ test("figures: 'nghìn tỷ' and '…T' trace to dong rounded as written (08/11,
   expect(answerFigures("giá 1,5T+").map((f) => f.text)).toEqual(["1,5"])
 })
 
+test("figures: a grouped number read as a decimal keeps its three places", () => {
+  // "90,300đ" may be 90300 or 90.300, never 90 ± 0.5: a tool's 90.1 does not back it.
+  const [target] = answerFigures("target 90,300đ")
+  expect(target!.decimals).toEqual([0, 3])
+  expect(tracesTo(target!, new Set([90.1]))).toBe(false)
+  expect(tracesTo(target!, new Set([90.3]))).toBe(true)
+  expect(tracesTo(target!, new Set([90300]))).toBe(true)
+  expect(tracesTo(answerFigures("giá 55.900đ")[0]!, new Set([55.91]))).toBe(false)
+})
+
+test("figures: a subagent's report grouped with commas backs the answer", () => {
+  // Seen 10/10–11/10: the subagent wrote "90,300đ" and "53,442 tỷ", the answer "53.442 tỷ".
+  const numbers = sourceNumbers("Target CTCK 90,300đ; vốn điều lệ 53,442 tỷ đồng; tổng 1,234,567.5")
+  expect([...numbers]).toEqual(expect.arrayContaining([90300, 90.3, 53442, 1234567.5]))
+  expect(tracesTo(answerFigures("vốn điều lệ 53.442 tỷ")[0]!, numbers)).toBe(true)
+  expect(tracesTo(answerFigures("target 90,300đ")[0]!, numbers)).toBe(true)
+})
+
 test("figures: 'tính từ' marks arithmetic, but not a period", () => {
   expect(answerFigures("Tăng 12,5% (tính từ 100 và 112,5)")[0]!.derived).toBe(true)
   expect(answerFigures("Tăng 99,9% tính từ đầu năm")[0]!.derived).toBe(false)

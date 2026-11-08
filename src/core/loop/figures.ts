@@ -8,7 +8,8 @@ export interface Figure {
   text: string
   /** Every value it can mean: "16.800" is 16800 in Vietnamese and 16.8 in JSON. */
   values: number[]
-  decimals: number
+  /** Decimals of each reading, in `values` order: "57.000" read as 57 was written to 3 places. */
+  decimals: number[]
   /** What the written number was multiplied by to get `values` ("nghìn tỷ" is read in tỷ: 1000). */
   scale?: number
   unit?: "%" | "đ" | "tỷ" | "triệu" | "nghìn" | "lần"
@@ -35,10 +36,10 @@ const isFigure = (token: string, unit: string | undefined) => unit !== undefined
 function readings(token: string) {
   const groups = token.split(/[.,]/)
   const tail = groups.at(-1) ?? ""
-  if (groups.length === 1) return { values: [Number(token)], decimals: 0 }
+  if (groups.length === 1) return { values: [Number(token)], decimals: [0] }
   const decimal = Number(`${groups.slice(0, -1).join("")}.${tail}`)
   const grouped = groups.slice(1).every((g) => g.length === 3)
-  return grouped ? { values: [Number(groups.join("")), decimal], decimals: 0 } : { values: [decimal], decimals: tail.length }
+  return grouped ? { values: [Number(groups.join("")), decimal], decimals: [0, tail.length] } : { values: [decimal], decimals: [tail.length] }
 }
 
 const unitOf = (raw: string | undefined): Figure["unit"] => {
@@ -70,8 +71,11 @@ const REF = /^\[ref r\d+\]\s*/
 const NOTICES = /^(?:\[[^\]\n]*\p{L}[^\n]*\n)+(?=\[ref |[[{])/u
 /** The numbers of JSON too long to parse whole, or of plain text. */
 const JSON_NUMBER = /-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/g
-/** Numbers as a Vietnamese web page writes them: 1.234,5 and 24,1. */
-const VIETNAMESE_NUMBER = /\d{1,3}(?:\.\d{3})+(?:,\d+)?|\d+,\d{1,2}(?!\d)/g
+/**
+ * Numbers as a Vietnamese web page writes them: 1.234,5 and 24,1. A subagent's report also
+ * groups with commas ("90,300đ", "53,442 tỷ"): both readings are kept, as for an answer.
+ */
+const VIETNAMESE_NUMBER = /\d{1,3}(?:\.\d{3})+(?:,\d+)?|\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+,\d{1,2}(?!\d)/g
 
 function scan(text: string, out: Set<number>) {
   for (const match of text.matchAll(JSON_NUMBER)) out.add(Number(match[0]))
@@ -112,8 +116,8 @@ const SCALES = [1, 100, 0.01, 1e3, 1e-3, 1e6, 1e-6, 1e9, 1e-9]
 
 /** Whether `figure` is one of `numbers` at a common scale, rounded as the answer writes it. */
 export function tracesTo(figure: Figure, numbers: Set<number>) {
-  const near = 0.5 * 10 ** -figure.decimals * (figure.scale ?? 1) + 1e-9
-  for (const value of figure.values) {
+  for (const [i, value] of figure.values.entries()) {
+    const near = 0.5 * 10 ** -(figure.decimals[i] ?? 0) * (figure.scale ?? 1) + 1e-9
     for (const number of numbers) {
       // "giảm 3,2%" writes the sign in words.
       if (SCALES.some((scale) => Math.abs(Math.abs(number) * scale - value) <= near)) return true
