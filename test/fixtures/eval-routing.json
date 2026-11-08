@@ -1276,6 +1276,15 @@
     "van-tai-vn"
    ],
    "note": "PR116 reconciled remote exact regression"
+  },
+  {
+   "id": 301,
+   "split": "dev",
+   "q": "phân tích cơ bản fpt hôm nay.",
+   "skills": [
+    "co-ban-chuyen-sau"
+   ],
+   "note": "08/11 session: the soft match added phan-tich-chuyen-sau-1-ma, the model loaded it and copied its 8-part outline"
   }
  ]
 }

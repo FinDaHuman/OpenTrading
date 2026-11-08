@@ -46,6 +46,23 @@ test("figures: dates and periods are not figures, units and groups are read", ()
   expect(plainValues(answerFigures("1.200 nghìn tỷ")[0]!)).toContain(1.2e12)
 })
 
+test("figures: 'nghìn tỷ' and '…T' trace to dong rounded as written (08/11, FPT)", () => {
+  // The tool's values of that turn: market cap, Q3 revenue, three quarters of net profit.
+  const numbers = new Set([95794964518400, 13754159003395, 2487371587099, 2567654036428, 2723122579228])
+  const text = "vốn hóa 95,8 nghìn tỷ, doanh thu 13,8 nghìn tỷ, LNST 2,49T -> 2,57T -> 2,72T"
+  const figures = answerFigures(text)
+  expect(figures.map((f) => f.text)).toEqual(["95,8 nghìn tỷ", "13,8 nghìn tỷ", "2,49T", "2,57T", "2,72T"])
+  expect(figures.every((f) => tracesTo(f, numbers))).toBe(true)
+  expect(plainValues(figures[2]!)).toContain(2.49e12)
+  // Coarser rounding of a real value holds ("2,6T" is 2.568e12); a wrong value does not.
+  expect(tracesTo(answerFigures("2,6T")[0]!, numbers)).toBe(true)
+  expect(tracesTo(answerFigures("96,8 nghìn tỷ")[0]!, numbers)).toBe(false)
+  expect(tracesTo(answerFigures("2,9T")[0]!, numbers)).toBe(false)
+  // Settlement days and months are not trillions.
+  expect(answerFigures("Tiền về T+2, tháng T3, 2T+").map((f) => f.text)).toEqual([])
+  expect(answerFigures("giá 1,5T+").map((f) => f.text)).toEqual(["1,5"])
+})
+
 test("figures: 'tính từ' marks arithmetic, but not a period", () => {
   expect(answerFigures("Tăng 12,5% (tính từ 100 và 112,5)")[0]!.derived).toBe(true)
   expect(answerFigures("Tăng 99,9% tính từ đầu năm")[0]!.derived).toBe(false)

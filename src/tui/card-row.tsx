@@ -4,6 +4,7 @@ import type { MemoryProvider } from "../core/memory/types"
 import { dismissCard, openCard } from "./cards"
 import { setState, state, type Line } from "./state"
 import { color } from "./theme"
+import { enterGrace } from "./ui/clock"
 
 /**
  * A suggestion card under the answer it came with (spec 007). It never takes the keys by itself: /goiy gives
@@ -55,17 +56,15 @@ export function CardRow(props: { line: CardLine }) {
   )
 }
 
-/** Enter this soon after the card takes the keys is ignored: it was meant for the prompt. */
-const GRACE_MS = 400
-
 /** The keys of the focused card, mounted while it has them. */
 export function CardKeys(props: { id: string; memory: MemoryProvider }) {
-  const shownAt = Date.now()
+  // Enter right after the card takes the keys was meant for the prompt.
+  const inGrace = enterGrace()
   useKeyboard((evt) => {
     if (evt.eventType === "release") return
     evt.preventDefault()
     if (evt.name === "return") {
-      if (Date.now() - shownAt >= GRACE_MS) openCard(props.memory, props.id)
+      if (!inGrace()) openCard(props.memory, props.id)
       return
     }
     if (evt.name === "x" && !evt.ctrl && !evt.meta) return dismissCard(props.id)

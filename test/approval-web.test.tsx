@@ -4,6 +4,7 @@ import { PermissionGate, type AllowRule } from "../src/core/permission"
 import { webFetchTool } from "../src/core/tools/web/fetch"
 import { ApprovalPrompt } from "../src/tui/approval"
 import { setState } from "../src/tui/state"
+import { pastEnterGrace, realClock } from "./helpers/clock"
 
 let setup: Awaited<ReturnType<typeof testRender>> | undefined
 // The prompt records its decision as a transcript line in the shared store: leave it empty for
@@ -11,6 +12,7 @@ let setup: Awaited<ReturnType<typeof testRender>> | undefined
 afterAll(() => {
   setup?.renderer.destroy()
   setState("lines", [])
+  realClock()
 })
 
 async function frameWith(text: string) {
@@ -38,7 +40,7 @@ test("web_fetch on a new domain: the prompt says it reads that domain (not a wri
   expect(frame).toContain("đọc trang từ domain mới: evil.example")
   expect(frame).not.toContain("tool ghi")
   expect(frame).toContain("lưu vào cấu hình, cho domain này")
-  await new Promise((r) => setTimeout(r, 450)) // the answer guard
+  pastEnterGrace() // the answer guard
   setup.mockInput.pressKey("3")
   expect(await decision).toEqual({ allow: true })
   expect(saved).toEqual([{ tool: "web_fetch", scope: "native#domain:evil.example" }])

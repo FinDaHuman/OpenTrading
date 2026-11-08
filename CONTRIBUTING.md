@@ -11,10 +11,10 @@
 ```shell
 bun install --frozen-lockfile
 bun run typecheck
-bun test
+bun run test    # bun test --parallel=6 --timeout=20000: files in parallel worker processes
 ```
 
-CI runs the same commands and is the source of truth. It also builds the standalone binary
+CI runs the same checks (`bun test --parallel`) and is the source of truth. It also builds the standalone binary
 (`bun run build --single`). Releases: [docs/release.md](docs/release.md).
 
 ## Review rules

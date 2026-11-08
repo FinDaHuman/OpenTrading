@@ -7,6 +7,7 @@ import { groupDigits } from "../../core/subagents/result"
 import { color } from "../theme"
 import { truncate } from "../ui/text"
 import { DialogFrame } from "./frame"
+import { enterGrace } from "../ui/clock"
 
 /**
  * The card before a desk run (the user picked "gọn, chỉnh được", 21/10): what it will do,
@@ -23,8 +24,6 @@ const EFFORTS: (Effort | undefined)[] = [undefined, ...EFFORT_LEVELS]
 
 type Row = "size" | "effort" | "run" | "remember" | "args" | "no"
 const ROWS: Row[] = ["size", "effort", "run", "remember", "args", "no"]
-/** Enter this soon after the card appears is ignored: it was meant for the prompt. */
-const GRACE_MS = 400
 
 export function DeskApprovalCard(props: { request: DeskApprovalRequest; approvals: DeskApprovals }) {
   const r = () => props.request
@@ -32,7 +31,8 @@ export function DeskApprovalCard(props: { request: DeskApprovalRequest; approval
   const [size, setSize] = createSignal<DeskSize>(r().size)
   const [effort, setEffort] = createSignal<Effort | undefined>(r().effort)
   const [showArgs, setShowArgs] = createSignal(false)
-  const shownAt = Date.now()
+  // Enter right after the card appears was meant for the prompt.
+  const inGrace = enterGrace()
 
   const estimate = () => r().estimates[size()]
   const over = () => estimate().requests > r().warnRequests || (r().maxRequests !== undefined && estimate().requests > r().maxRequests!)
@@ -52,7 +52,7 @@ export function DeskApprovalCard(props: { request: DeskApprovalRequest; approval
       return
     }
     if (evt.name === "escape" || (evt.ctrl && evt.name === "c")) return answer(false)
-    if (evt.name !== "return" || Date.now() - shownAt < GRACE_MS) return
+    if (evt.name !== "return" || inGrace()) return
     if (row() === "no") return answer(false)
     if (row() === "args") return setShowArgs((v) => !v)
     if (row() === "remember") return answer(true, true)

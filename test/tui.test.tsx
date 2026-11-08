@@ -5,6 +5,7 @@ import path from "node:path"
 import { testRender } from "@opentui/solid"
 import { z } from "zod"
 import { createEffect, createRoot } from "solid-js"
+import { pastEnterGrace, realClock } from "./helpers/clock"
 
 // Isolate state from the real ~/.opentrading before any core module loads.
 const home = await mkdtemp(path.join(os.tmpdir(), "opentrading-test-"))
@@ -292,6 +293,7 @@ beforeAll(async () => {
 // Tests share one app. If a test fails with a dialog open, close it so the failure does not
 // cascade into every later test typing into that dialog.
 afterEach(() => {
+  realClock()
   if (state.dialog) setState("dialog", undefined)
   // An opt-in or trust dialog left open would keep every later prompt blocked.
   if (state.autoOptIn) setState("autoOptIn", undefined)
@@ -3407,7 +3409,7 @@ test("ultradesk card: ←→ change the size and its cost, a large run warns, en
   setup.mockInput.pressArrow("right")
   frame = await setup.waitForFrame((f) => f.includes("◂ large ▸") && f.includes("Run này có thể tốn tới ~276 request"))
   show(frame)
-  await new Promise((r) => setTimeout(r, 450))
+  pastEnterGrace()
   setup.mockInput.pressArrow("down")
   setup.mockInput.pressArrow("down")
   setup.mockInput.pressEnter()

@@ -1253,6 +1253,37 @@ test("answering and closing the todo list in one step ends the turn: no extra re
   expect(done(events).recoveries).toBeUndefined()
 })
 
+test("a draft beside a closing todo_write (08/11) is sent back once with tools off and never stored", async () => {
+  const { DRAFT } = await import("./fixtures/draft-answer")
+  const closed = { todos: [{ content: "Lấy dữ liệu", status: "completed" }, { content: "Tổng hợp", status: "completed" }] }
+  // A data tool first, as in the session: then the draft beside the closing call.
+  respond = (_body, n) =>
+    n === 0 ? toolCall("current_time", {}, "call_d") : n === 1 ? toolCall("todo_write", closed, "call_t", DRAFT) : n === 2 ? answer("FPT: nhận định đầy đủ.") : undefined
+  const events = await collect(runAgent({ history: [], input: "phân tích cơ bản fpt hôm nay.", skills: [], registry: await todoRegistry() }))
+  expect(bodies).toHaveLength(3)
+  expect(bodies[2]!.tool_choice).toBe("none")
+  expect(lastSent(2)).toContain("chưa viết câu trả lời")
+  expect(lastSent(2)).not.toContain("nháp")
+  expect(events.some((e) => e.type === "notice" && e.text.includes("bản nháp") && e.text.includes("(1/2)"))).toBe(true)
+  expect(done(events).recoveries).toEqual([{ kind: "draft", attempt: 1 }])
+  const stored = JSON.stringify(done(events).messages)
+  expect(stored).not.toContain("Cấu trúc trả lời")
+  expect(stored).toContain("FPT: nhận định đầy đủ.")
+  // The closing call stays: the list is done either way.
+  expect(done(events).messages.map((m) => m.role)).toEqual(["user", "assistant", "tool", "assistant", "tool", "assistant"])
+})
+
+test("invented figures beside a closing todo_write are dropped from history too, the call stays", async () => {
+  const closed = { todos: [{ content: "Phân tích FPT", status: "completed" }] }
+  const invented = "Tôi đã lấy dữ liệu tài chính của FPT.\n\nNguồn: `financial_ratios` · 05/11/2026.\n\nP/E 19,5 lần, ROE 27,2%."
+  respond = (_body, n) => (n === 0 ? toolCall("todo_write", closed, "call_t", invented) : n === 1 ? answer("Chưa có dữ liệu FPT trong lượt này.") : undefined)
+  const events = await collect(runAgent({ history: [], input: "Phân tích FPT", skills: [], registry: await todoRegistry() }))
+  expect(done(events).recoveries).toEqual([{ kind: "unfetched", attempt: 1 }])
+  const stored = JSON.stringify(done(events).messages)
+  expect(stored).not.toContain("19,5")
+  expect(stored).toContain("call_t")
+})
+
 test("a preamble that opens a todo list goes on (the early stop is only for a closing call)", async () => {
   const open = { todos: [{ content: "Lấy dữ liệu", status: "in_progress" }, { content: "Kết luận", status: "pending" }] }
   respond = (_body, n) => (n === 0 ? toolCall("todo_write", open, "call_t", "Để mình lấy dữ liệu.") : undefined)

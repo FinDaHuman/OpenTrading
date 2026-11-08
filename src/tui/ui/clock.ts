@@ -11,6 +11,18 @@ let read: () => number = Date.now
 /** The time the TUI shows; tests replace it with {@link setClockForTests}. */
 export const now = () => read()
 
+/** Enter this soon after a card or prompt takes the keys was meant for the prompt under it. */
+export const ENTER_GRACE_MS = 400
+
+/**
+ * Call when the card mounts; the result says whether Enter is still in its grace period. Read
+ * on the TUI clock, so tests move past it with {@link setClockForTests} instead of sleeping.
+ */
+export function enterGrace(ms = ENTER_GRACE_MS): () => boolean {
+  const shownAt = now()
+  return () => now() - shownAt < ms
+}
+
 interface Ticker {
   value: Accessor<number>
   set: (n: number) => void
