@@ -52,7 +52,8 @@ let runtime: Runtime | undefined
 const opened: { close(): void }[] = []
 
 beforeEach(async () => {
-  await saveConfig({ provider: "groq", model: "m", update: { check: false } })
+  // memory is reset too: a test that switched cards or memory must not carry over to the next one.
+  await saveConfig({ provider: "groq", model: "m", update: { check: false }, memory: undefined })
 })
 afterEach(async () => {
   setup?.renderer.destroy()
@@ -121,6 +122,22 @@ async function chooseMemory(filter: string) {
 }
 
 describe("/config: memory choices", () => {
+  test("the card switch flips in place: the Memory view stays open", async () => {
+    await openConfig()
+    await chooseMemory("so ghi")
+    await until(() => runtime!.memory.id === "notebook")
+    await frameWith("Cài đặt")
+    setup!.mockInput.pressEnter()
+    await frameWith("Cho phép thẻ gợi ý")
+    await setup!.mockInput.typeText("cho phep")
+    await frameWith((f) => !f.includes("không dùng memory"))
+    setup!.mockInput.pressEnter()
+    await until(async () => (await loadConfig()).memory?.cards === false)
+    const f = await frameWith("tắt · enter để bật")
+    expect(f).toContain("Có hiệu lực ngay")
+    await saveConfig({ memory: { provider: "notebook", cards: true } })
+  })
+
   test("Sổ ghi nhớ opens memory.db at once and is saved; Tắt closes it and the file can be deleted", async () => {
     await openConfig()
     await chooseMemory("so ghi")

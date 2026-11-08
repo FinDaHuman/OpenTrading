@@ -1176,6 +1176,29 @@ describe("/memory: edit, change a thesis state, export", () => {
     expect(flat(await frameWith("Sửa bài học #7"))).toContain("Đang sửa từ bản 1")
   })
 
+  test("saving an edit opened from /memory goes back to the list; the key that saved does nothing there", async () => {
+    const other = otherWindow()
+    seedExample(other)
+    await start()
+    await openMemory()
+    await openEntry("margin", "Không dùng margin, kể cả T+0")
+    key("s")
+    await frameWith("Sửa ràng buộc #1")
+    await setup!.mockInput.typeText(" nữa")
+    // The section cannot change in an edit: text, then "Xác nhận".
+    await confirm(1)
+    await frameWith("[1] Xác nhận lưu")
+    key("1")
+    await until(() => state.dialog === "memory")
+    expect(state.memoryTab).toBe("notebook")
+    const f = await frameWith("ctrl+x xuất Markdown")
+    // The list with an empty filter: the key that saved is not typed into it, and opens nothing.
+    expect(f).toContain("gõ để lọc")
+    expect(f).toContain("Quyết định (1)")
+    expect(f).not.toContain("esc quay lại")
+    expect(other.reader.constraint(1)).toMatchObject({ text: "Không dùng margin, kể cả T+0 nữa", version: 3 })
+  })
+
   test("a decision has no edit", async () => {
     seedExample(otherWindow())
     await start()

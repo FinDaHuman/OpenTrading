@@ -252,8 +252,9 @@ export function ConfigDialog(props: { runtime: Runtime }) {
         <MemorySettings
           runtime={props.runtime}
           hint="enter chọn · esc quay lại"
-          onChanged={() => {
-            setEditing(undefined)
+          onChanged={(what) => {
+            // The card switch stays on this view, as before; a memory choice goes back to the list.
+            if (what !== "cards") setEditing(undefined)
             void refetch()
           }}
         />
