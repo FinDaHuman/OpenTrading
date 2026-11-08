@@ -4,6 +4,7 @@ import { configFile } from "./paths"
 import type { ProviderId } from "./providers"
 import { readJson, updateJson } from "./store"
 import type { AutoModeConfig } from "./permission/auto/rules"
+import type { OpenRouterRoutingConfig } from "./openrouter-routing"
 
 export interface Config {
   provider?: ProviderId
@@ -133,6 +134,13 @@ export interface Config {
     /** Playbooks approved with "không hỏi lại": an opted-in request runs them without the card. */
     approved?: string[]
   }
+  /**
+   * OpenRouter provider routing (openrouter-routing.ts): `routing` maps a model id to OpenRouter's
+   * `provider` block (`order`, `allow_fallbacks`, `quantizations`, …); `"*"` applies to every
+   * OpenRouter model and a model's own block wins key by key. Sent on every request to that
+   * model: main agent, subagents, compaction, title, web side calls and the auto-mode reviewer.
+   */
+  openrouter?: { routing?: OpenRouterRoutingConfig }
   /** Extra workspace folders kept across sessions (`/add-dir <thư mục> --luu`). */
   workspace?: { dirs?: string[] }
   /**

@@ -148,7 +148,7 @@ export const HANDOFF = (agent: string) =>
 
 export async function classify(input: ClassifyInput, target: Target, signal: AbortSignal, deps: ClassifierDeps = {}): Promise<Verdict> {
   const call = deps.call ?? defaultCall
-  const model = languageModel(target.provider, target.model, target.apiKey)
+  const model = languageModel(target.provider, target.model, target.apiKey, { routing: target.routing })
   const system = systemPrompt(input)
   const prompt = userContent(input) + (input.handoff ? HANDOFF(input.handoff) : "")
   const providerOptions = lowThinking(target)

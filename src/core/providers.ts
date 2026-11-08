@@ -16,10 +16,11 @@ import { createOpenRouter } from "@openrouter/ai-sdk-provider"
 import type { LanguageModel } from "ai"
 import type { Catalog, CatalogModel, CatalogProvider } from "./catalog"
 import { countedFetch } from "./requests"
+import type { OpenRouterRouting } from "./openrouter-routing"
 
 export type ProviderId = string
 
-type Options = { apiKey: string; baseURL?: string; name: string; fetch: typeof globalThis.fetch }
+type Options = { apiKey: string; baseURL?: string; name: string; fetch: typeof globalThis.fetch; routing?: OpenRouterRouting }
 
 type GeminiContent = { role?: string; parts?: unknown[] }
 
@@ -72,8 +73,12 @@ const SDK: Record<string, Factory> = {
   "@ai-sdk/vercel": (o) => createVercel(o),
   "@ai-sdk/alibaba": (o) => createAlibaba(o),
   "@openrouter/ai-sdk-provider": (o) => {
-    const sdk = createOpenRouter({ ...o, ...(isOpenRouter(o.baseURL) ? OPENROUTER_APP : {}) })
-    return (id) => sdk.chat(id)
+    const { routing, ...rest } = o
+    const own = isOpenRouter(o.baseURL)
+    const sdk = createOpenRouter({ ...rest, ...(own ? OPENROUTER_APP : {}) })
+    // Provider routing is OpenRouter's own; gateways that reuse the SDK do not get it.
+    const settings = own && routing ? { provider: routing as never } : undefined
+    return (id) => (settings ? sdk.chat(id, settings) : sdk.chat(id))
   },
 }
 
@@ -159,8 +164,14 @@ export function isChatModel(m: CatalogModel): boolean {
   return !NOT_CHAT.test(m.id)
 }
 
-export function languageModel(provider: CatalogProvider, modelId: string, apiKey: string): Exclude<LanguageModel, string> {
+/** Per-request extras: `routing` = OpenRouter provider pinning (ignored by other providers). */
+export interface ModelOptions {
+  routing?: OpenRouterRouting
+}
+
+export function languageModel(provider: CatalogProvider, modelId: string, apiKey: string, opts: ModelOptions = {}): Exclude<LanguageModel, string> {
   const target = route(provider, provider.models[modelId])
   if (!target) throw new Error(`Provider ${provider.name} chưa được hỗ trợ trong bản này.`)
-  return target.factory({ apiKey, baseURL: target.baseURL, name: provider.id, fetch: countedFetch(provider.id, modelId) })(modelId)
+  const options: Options = { apiKey, baseURL: target.baseURL, name: provider.id, fetch: countedFetch(provider.id, modelId) }
+  return target.factory(opts.routing ? { ...options, routing: opts.routing } : options)(modelId)
 }

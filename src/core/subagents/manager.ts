@@ -152,7 +152,7 @@ const newId = () => `ag-${Math.random().toString(36).slice(2, 8).padEnd(6, "0")}
 /** A copy without the live parts (controller, messages, promise): what UIs store. */
 export function viewOf(run: SubagentRun): SubagentView {
   const { controller: _c, messages: _m, done: _d, ...view } = run
-  return { ...view, tools: run.tools.map((t) => ({ ...t })), usage: { ...run.usage }, retry: run.retry ? { ...run.retry } : undefined }
+  return { ...view, tools: run.tools.map((t) => ({ ...t })), usage: { ...run.usage }, retry: run.retry ? { ...run.retry } : undefined, ...(run.servedBy ? { servedBy: { ...run.servedBy } } : {}) }
 }
 
 const isActive = (run: { status: string }) => run.status === "queued" || run.status === "running"
@@ -541,6 +541,7 @@ export class SubagentManager {
             }
             case "step":
               run.requests = (run.requests ?? 0) + 1
+              if (event.servedBy) run.servedBy = { ...run.servedBy, [event.servedBy]: (run.servedBy?.[event.servedBy] ?? 0) + 1 }
               this.emit(run)
               break
             case "step-usage":

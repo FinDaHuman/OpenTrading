@@ -1,13 +1,15 @@
 import { connectedProviders, getKey } from "./auth"
 import { loadConfig } from "./config"
 import { loadCatalog, type CatalogProvider } from "./catalog"
+import { routingFor, type OpenRouterRouting } from "./openrouter-routing"
 import { gapsLine } from "./loop/failures"
 import { describeFailure } from "./retry"
 import { SOURCE_FAILED_PREFIX } from "./tools/outcome"
 
 export class ChatSetupError extends Error {}
 
-export type Target = { provider: CatalogProvider; model: string; apiKey: string }
+/** `routing`: OpenRouter provider pinning for this model (config `openrouter.routing`), when set. */
+export type Target = { provider: CatalogProvider; model: string; apiKey: string; routing?: OpenRouterRouting }
 
 /**
  * The provider, model and key a request goes to: the configured ones, or `override` (a
@@ -23,7 +25,9 @@ export async function resolveTarget(override?: { provider?: string; model?: stri
   if (!apiKey) throw new ChatSetupError(`Chưa có API key cho ${provider.name}. Gõ /connect.`)
   const model = override?.provider ? override.model : (override?.model ?? config.model)
   if (!model) throw new ChatSetupError("Chưa chọn model. Gõ /model.")
-  return { provider, model, apiKey }
+  // Computed for the model finally chosen, after a subagent's override.
+  const routing = provider.id === "openrouter" ? routingFor(config, model) : undefined
+  return { provider, model, apiKey, ...(routing ? { routing } : {}) }
 }
 
 /** Turn SDK/network errors into one readable line. */
@@ -39,6 +43,10 @@ export function describeError(error: unknown): string {
   // OpenRouter: a model offered only to apps it recognises, not a key problem.
   if (status === 403 && /agentic harness/i.test(e?.message ?? ""))
     return `Model này chỉ dùng được qua các app OpenRouter công nhận, OpenTrading chưa nằm trong danh sách đó (403): ${providerText(e?.message)}. Gõ /model để chọn model khác.`
+  // OpenRouter found no provider for the request: often a pin (openrouter.routing) nobody serves.
+  // Matched on the text, not the status: a pinned provider that is down can come back as 502/503.
+  if (/no (allowed )?(endpoints|providers) (found|are available)/i.test(e?.message ?? ""))
+    return `OpenRouter không có provider nào phục vụ được request này${status ? ` (${status})` : ""}: ${providerText(e?.message)}. Nếu đang ghim provider (openrouter.routing trong config.json), kiểm tra lại ghim hoặc cho phép fallback.`
   if (status === 401 || status === 403)
     return `API key không hợp lệ hoặc không có quyền (${status}). Gõ /connect để nhập lại.`
   if (status === 404) {
