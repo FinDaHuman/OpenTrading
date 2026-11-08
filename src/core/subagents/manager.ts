@@ -1,4 +1,4 @@
-import { childConversation } from "../conversation"
+import { childConversation, conversationId } from "../conversation"
 import type { Ablations } from "../ablation"
 import { readFile } from "node:fs/promises"
 import type { z } from "zod"
@@ -506,7 +506,8 @@ export class SubagentManager {
           role: "subagent",
           target,
           // Its own conversation for gateways that cache by it, stable over the agent's resumes.
-          conversationId: childConversation(run.sessionId, run.id),
+          // Without an attached session (ot -p, eval) it groups under the process's conversation.
+          conversationId: childConversation(run.sessionId ?? conversationId(), run.id),
           now: this.clock?.(),
           disabled: this.disabled,
           agentPrompt: spec.agentPrompt,

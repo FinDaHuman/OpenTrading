@@ -17,6 +17,8 @@ const { resolveTarget } = await import("../src/core/chat")
 const { runAgent } = await import("../src/core/agent")
 const { initRuntime } = await import("../src/core/runtime")
 const { parseQuestions, runEval } = await import("../scripts/eval/runner")
+const { nativeSearch } = await import("../src/core/tools/web/side-model")
+const { onModelRequest } = await import("../src/core/requests")
 type CatalogProvider = import("../src/core/catalog").CatalogProvider
 
 const MODEL = { id: "deepseek-v4.1-flash", name: "DeepSeek V4.1 Flash", tool_call: true, modalities: { input: ["text"], output: ["text"] } }
@@ -123,5 +125,28 @@ test("subagents and every conversation entry point set the id", async () => {
   const src = (file: string) => readFile(path.join(import.meta.dir, "..", file), "utf8")
   expect(await src("src/tui/session.ts")).toContain("setConversation(current.id)")
   expect(await src("src/cli/print.ts")).toContain("setConversation(session.id)")
-  expect(await src("src/core/subagents/manager.ts")).toContain("conversationId: childConversation(run.sessionId, run.id)")
+  expect(await src("src/core/subagents/manager.ts")).toContain("conversationId: childConversation(run.sessionId ?? conversationId(), run.id)")
+})
+
+test("native search on an OpenCode Anthropic model sends the headers and is counted", async () => {
+  // Go serves claude-haiku-5-5 through its Anthropic endpoint; web_search builds that client itself.
+  const models = { "claude-haiku-5-5": { ...MODEL, id: "claude-haiku-5-5", provider: { npm: "@ai-sdk/anthropic", api: "https://opencode.ai/inference/go/anthropic/v1" } } }
+  const go = { id: "opencode-go", name: "OpenCode Go", env: [], npm: "@ai-sdk/openai-compatible", api: GO, models } as unknown as CatalogProvider
+  const counted: string[] = []
+  const stop = onModelRequest((r) => counted.push(`${r.provider}/${r.model}`))
+  const seen: { session: string | null; ua: string | null }[] = []
+  globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+    const headers = new Headers(init?.headers)
+    seen.push({ session: headers.get("x-opencode-session"), ua: headers.get("user-agent") })
+    return Response.json({ id: "m", type: "message", role: "assistant", model: "claude-haiku-5-5", content: [{ type: "text", text: "kết quả" }], stop_reason: "end_turn", usage: { input_tokens: 1, output_tokens: 1 } })
+  }) as typeof fetch
+  setConversation("s-web")
+  try {
+    const found = await nativeSearch("giá FPT", { provider: go, model: "claude-haiku-5-5", apiKey: "k" }, {}, AbortSignal.timeout(5000))
+    expect(found?.backend).toBe("anthropic-web-search")
+  } finally {
+    stop()
+  }
+  expect(seen).toEqual([{ session: "s-web", ua: USER_AGENT }])
+  expect(counted).toEqual(["opencode-go/claude-haiku-5-5"])
 })

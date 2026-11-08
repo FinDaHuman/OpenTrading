@@ -5,7 +5,7 @@ import { generateText, type LanguageModel, type ToolSet } from "ai"
 import { describeError, resolveTarget, type Target } from "../../chat"
 import { loadConfig } from "../../config"
 import { sideRequest } from "../../effort"
-import { languageModel, sdkOf } from "../../providers"
+import { languageModel, requestFetch, sdkOf } from "../../providers"
 import { classifyFailure } from "../../retry"
 import { vnDay } from "../net-dates"
 
@@ -52,14 +52,16 @@ export interface NativeOptions {
  */
 export function nativeSearchSetup(target: Target, opts: NativeOptions): { backend: string; model: LanguageModel; tools: ToolSet } | undefined {
   const { npm, baseURL } = sdkOf(target.provider, target.model)
+  // Counted like every model request, and gateways (OpenCode) get their headers here too.
+  const fetch = requestFetch(target.provider.id, target.model, baseURL)
   // Gemini grounding has no domain filter: the caller puts `site:` operators in the query
   // and filters the sources afterwards.
   if (npm === "@ai-sdk/google") {
-    const google = createGoogleGenerativeAI({ apiKey: target.apiKey, ...(baseURL ? { baseURL } : {}) })
+    const google = createGoogleGenerativeAI({ apiKey: target.apiKey, fetch, ...(baseURL ? { baseURL } : {}) })
     return { backend: "gemini-grounding", model: google(target.model), tools: asTools({ google_search: google.tools.googleSearch({}) }) }
   }
   if (npm === "@ai-sdk/anthropic") {
-    const anthropic = createAnthropic({ apiKey: target.apiKey, ...(baseURL ? { baseURL } : {}) })
+    const anthropic = createAnthropic({ apiKey: target.apiKey, fetch, ...(baseURL ? { baseURL } : {}) })
     const domains = opts.allowed?.length ? { allowedDomains: opts.allowed } : opts.blocked?.length ? { blockedDomains: opts.blocked } : {}
     return {
       backend: "anthropic-web-search",
@@ -70,7 +72,7 @@ export function nativeSearchSetup(target: Target, opts: NativeOptions): { backen
   // OpenAI's search needs the Responses API, which third parties behind a baseURL lack;
   // it filters allowed domains only.
   if (npm === "@ai-sdk/openai" && !baseURL && !opts.blocked?.length) {
-    const openai = createOpenAI({ apiKey: target.apiKey })
+    const openai = createOpenAI({ apiKey: target.apiKey, fetch })
     return {
       backend: "openai-web-search",
       model: openai.responses(target.model),

@@ -8,7 +8,7 @@ adopt Semantic Versioning when it exposes a stable public API.
 ### Added
 
 - OpenRouter provider pinning: `openrouter.routing` in `config.json` maps a model id (or `"*"`) to OpenRouter's `provider` block (`order`, `allow_fallbacks`, `quantizations`…), sent on every request to that model: main agent, subagents, compaction, title, web side calls and the auto-mode reviewer. Eval runs pin with `--or-provider`, `--or-no-fallback` and `--or-quant`, and the trace records `served_by`, the upstream provider that answered each step. OpenRouter's "no provider" error now reads as one Vietnamese line. See `docs/openrouter.md`.
-- OpenCode Go/Zen: every request to `opencode.ai` sends OT's own `User-Agent` (`opentrading/<version> (<os> <arch>)`) and `x-opencode-session`, as Go's docs ask: the session id for the main agent and side calls, `<session>/<agent id>` for a subagent, one id per question in eval runs. See `docs/opencode-go.md`.
+- OpenCode Go/Zen: every request to `opencode.ai` sends OT's own `User-Agent` (`opentrading/<version> (<os> <arch>)`) and `x-opencode-session`, as Go's docs ask: the session id for the main agent and side calls, `<session>/<agent id>` for a subagent, one id per question in eval runs. Native web search clients now use the same fetch, so their requests also count toward the request tally and the eval ledger. See `docs/opencode-go.md`.
 
 ## [0.4.0] — 2026-11-08
 

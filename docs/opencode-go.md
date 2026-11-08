@@ -10,7 +10,7 @@ Tài liệu Go ([opencode.ai/docs/go](https://opencode.ai/docs/go/), mục "Wher
 
 Client nào chỉ gửi header này ở một số đường gọi sẽ bị liệt vào nhóm "problematic".
 
-Mọi request tới host `opencode.ai` đều được gắn header, bất kể SDK hay nơi gọi:
+Mọi request tới host `opencode.ai` đều được gắn header, bất kể SDK hay nơi gọi, kể cả search native của model Anthropic/Google trên Go/Zen (`web_search`):
 
 | Request | `User-Agent` | `x-opencode-session` |
 |---|---|---|

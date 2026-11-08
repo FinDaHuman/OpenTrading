@@ -138,6 +138,16 @@ const openCodeFetch = (base: typeof globalThis.fetch, conversation: string | und
     return base(input, { ...init, headers })
   }) as typeof globalThis.fetch
 
+/**
+ * The fetch every request to a model goes through: counted (quota, eval ledger) and, for
+ * opencode.ai, with OpenCode's headers. Clients built outside languageModel (native search)
+ * take it too, so no path to a gateway goes out without them.
+ */
+export function requestFetch(providerId: string, modelId: string, baseURL: string | undefined, conversation?: string): typeof globalThis.fetch {
+  const counted = countedFetch(providerId, modelId)
+  return isOpenCode(baseURL) ? openCodeFetch(counted, conversation) : counted
+}
+
 const COMPATIBLE = "@ai-sdk/openai-compatible"
 
 /** Providers shown first in /connect; everything else is alphabetical. */
@@ -209,8 +219,7 @@ export interface ModelOptions {
 export function languageModel(provider: CatalogProvider, modelId: string, apiKey: string, opts: ModelOptions = {}): Exclude<LanguageModel, string> {
   const target = route(provider, provider.models[modelId])
   if (!target) throw new Error(`Provider ${provider.name} chưa được hỗ trợ trong bản này.`)
-  const counted = countedFetch(provider.id, modelId)
-  const fetch = isOpenCode(target.baseURL) ? openCodeFetch(counted, opts.conversation) : counted
+  const fetch = requestFetch(provider.id, modelId, target.baseURL, opts.conversation)
   const options: Options = { apiKey, baseURL: target.baseURL, name: provider.id, fetch }
   return target.factory(opts.routing ? { ...options, routing: opts.routing } : options)(modelId)
 }
