@@ -69,6 +69,8 @@ export function answerFigures(text: string): Figure[] {
 const REF = /^\[ref r\d+\]\s*/
 /** Notice lines the harness puts before a result: `[Dữ liệu một phần] …`. */
 const NOTICES = /^(?:\[[^\]\n]*\p{L}[^\n]*\n)+(?=\[ref |[[{])/u
+/** The source line after a web or MCP result (`provenanceOf`): with it, the JSON does not parse. */
+const SOURCE_LINE = /\n\[Nguồn: [^\n]*\]\s*$/u
 /** The numbers of JSON too long to parse whole, or of plain text. */
 const JSON_NUMBER = /-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/g
 /**
@@ -76,6 +78,9 @@ const JSON_NUMBER = /-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/g
  * groups with commas ("90,300đ", "53,442 tỷ"): both readings are kept, as for an answer.
  */
 const VIETNAMESE_NUMBER = /\d{1,3}(?:\.\d{3})+(?:,\d+)?|\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+,\d{1,2}(?!\d)/g
+
+/** A JSON string literal's content, the last one possibly cut before its closing quote. */
+const JSON_STRING = /"((?:[^"\\]|\\.)*)(?:"|$)/g
 
 function scan(text: string, out: Set<number>) {
   for (const match of text.matchAll(JSON_NUMBER)) out.add(Number(match[0]))
@@ -93,15 +98,21 @@ function walk(value: unknown, out: Set<number>) {
 /** The numbers of a tool result. JSON is read as JSON, so `[64.27,64.5]` stays two numbers. */
 export function sourceNumbers(text: string): Set<number> {
   const out = new Set<number>()
-  const body = text.replace(NOTICES, "").replace(REF, "")
+  // The source line goes first: before it, a one-line "[ref r2] {…}" reads as a notice line too.
+  const body = text.replace(SOURCE_LINE, "").replace(NOTICES, "").replace(REF, "")
   try {
     walk(JSON.parse(body), out)
     return out
   } catch {}
   // A capped result does not parse. It is still JSON text, where "64.27,64.5" is two numbers
   // and must not also read as the Vietnamese 6.427,64.
-  if (/^\s*[[{]/.test(body)) for (const match of body.matchAll(JSON_NUMBER)) out.add(Number(match[0]))
-  else scan(body, out)
+  if (/^\s*[[{]/.test(body)) {
+    for (const match of body.matchAll(JSON_NUMBER)) out.add(Number(match[0]))
+    // Its string values are still text, though: a capped web_search result holds "23,1%" in a
+    // string, and reading only JSON numbers made it 23 and 1 (08/11, real run). The last string
+    // may be cut before its closing quote.
+    for (const match of body.matchAll(JSON_STRING)) scan(match[1]!, out)
+  } else scan(body, out)
   return out
 }
 
