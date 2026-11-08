@@ -1,3 +1,4 @@
+import { childConversation } from "../conversation"
 import type { Ablations } from "../ablation"
 import { readFile } from "node:fs/promises"
 import type { z } from "zod"
@@ -504,6 +505,8 @@ export class SubagentManager {
           stallMs: this.idleConfigured === undefined ? undefined : this.idleConfigured + 2 * watchdogTick(this.idleConfigured),
           role: "subagent",
           target,
+          // Its own conversation for gateways that cache by it, stable over the agent's resumes.
+          conversationId: childConversation(run.sessionId, run.id),
           now: this.clock?.(),
           disabled: this.disabled,
           agentPrompt: spec.agentPrompt,
