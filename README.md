@@ -272,7 +272,7 @@ Gõ `/` để xem danh sách (gõ tiếp để lọc, `tab` điền, enter chạ
 | `/add-dir [thư mục] [--luu]` | Thêm thư mục vào workspace (nơi agent ghi file); không tham số: xem workspace |
 | `/undo [số] [--force]` | Hoàn tác thay đổi file do agent ghi |
 | `/permissions` | Chế độ quyền, workspace, quy tắc cho phép/chặn, các lần auto mode chặn |
-| `/memory` | Xem, duyệt, xoá memory |
+| `/memory` | Ba tab: Gợi ý (thẻ gợi ý đang chờ), Sổ ghi nhớ (xem, sửa, xoá, xuất), Cài đặt (bật/tắt memory, thẻ gợi ý); ←/→ đổi tab |
 | `/config` | Cài đặt, có hiệu lực ngay: memory, tìm tool, tự nén, số bước, subagent, model phụ, chế độ quyền khi mở, hỏi effort khi chọn model, thông báo, cuộn, báo bản mới |
 | `/clear`, `/help`, `/exit` | Xoá màn hình và bắt đầu phiên mới, trợ giúp, thoát |
 
@@ -342,7 +342,7 @@ Gắn bằng CLI: `ot mcp add <tên> <url>` hoặc `ot mcp add <tên> -- <lệnh
 
 - Hội thoại được lưu ở `~/.opentrading/sessions/`, gắn với thư mục đã mở; `/sessions` mở lại (mặc định phiên của thư mục này, `tab` xem mọi thư mục), tiêu đề được đặt tự động sau lượt đầu.
 - Gần đầy ngữ cảnh thì tự nén (ngưỡng trong `/config`); `/compact` nén tay.
-- Memory (Sổ ghi nhớ, bật trong `/config`): tự ghi ràng buộc, cách trình bày, luận điểm, bài học bằng `/nho`, `/luandiem`, `/baihoc`; xem, sửa, xoá trong `/memory`. Model có thể gợi ý lưu bằng một thẻ dưới câu trả lời; chỉ lưu khi bạn xác nhận trong form (`/goiy` chọn lại thẻ đang chờ).
+- Memory (Sổ ghi nhớ, bật trong `/config`): tự ghi ràng buộc, cách trình bày, luận điểm, bài học bằng `/nho`, `/luandiem`, `/baihoc`; xem, sửa, xoá trong `/memory`. Model có thể gợi ý lưu bằng một thẻ dưới câu trả lời; chỉ lưu khi bạn xác nhận trong form (lưu hoặc bỏ qua ở tab Gợi ý của `/memory`).
 - Hồ sơ nhà đầu tư `INVESTOR.md` (`/profile`) luôn có trong ngữ cảnh.
 
 ## Cấu hình

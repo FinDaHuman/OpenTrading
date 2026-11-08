@@ -123,15 +123,21 @@ async function start(choice: MemoryChoice = "notebook", height = 44) {
   await frameWith("Hỏi về thị trường")
 }
 
+/**
+ * The first rendered frame that has `text`. Always renders first (a check such as "no longer shows X" must not
+ * pass on the empty frame before any render) and fails on timeout instead of returning the last frame.
+ */
 async function frameWith(text: string | ((f: string) => boolean)) {
   const ok = typeof text === "string" ? (f: string) => f.includes(text) : text
   let frame = ""
-  for (let i = 0; i < 150 && !ok(frame); i++) {
+  for (let i = 0; i < 150; i++) {
     await new Promise((r) => setTimeout(r, 10))
     await setup!.renderOnce()
     frame = setup!.captureCharFrame()
+    if (ok(frame)) return frame
   }
-  return frame
+  throw new Error(`frame never showed ${typeof text === "string" ? JSON.stringify(text) : "the expected state"}:
+${frame}`)
 }
 async function until(check: () => boolean | Promise<boolean>) {
   for (let i = 0; i < 200 && !(await check()); i++) await new Promise((r) => setTimeout(r, 10))
@@ -690,6 +696,7 @@ describe("/luandiem: a thesis, version by version", () => {
     const f = flat(await command("/luandiem", "Luận điểm mới"))
     expect(f).toContain("Gõ mã hoặc tên chủ đề rồi Enter.")
     await setup!.mockInput.typeText("VCB")
+    await frameWith("VCB")
     enter()
     await frameWith("Luận điểm VCB")
     expect(state.notebookForm).toMatchObject({ group: "thesis", alias: "VCB" })
@@ -1130,7 +1137,7 @@ async function openMemory() {
   await type("/memory")
   enter()
   await until(() => state.dialog === "memory")
-  return frameWith("Sổ ghi nhớ ·")
+  return frameWith("ctrl+x xuất Markdown")
 }
 async function openEntry(filter: string, title: string) {
   await setup!.mockInput.typeText(filter)
@@ -1336,6 +1343,15 @@ describe("suggestion cards (spec 007)", () => {
     return frameWith("Gợi ý lưu · ràng buộc")
   }
 
+  /** /memory opens on the Gợi ý tab while a card waits. */
+  async function openCards() {
+    await type("/memory")
+    enter()
+    await until(() => state.dialog === "memory")
+    expect(state.memoryTab).toBe("cards")
+    return frameWith("x bỏ qua")
+  }
+
   test("shown under the answer, never its block; Enter opens /nho filled in; confirming saves it from the card", async () => {
     const other = otherWindow()
     seedExample(other)
@@ -1346,16 +1362,17 @@ describe("suggestion cards (spec 007)", () => {
     expect(f).not.toMatch(/the_goi_y|noi_dung|cau_goc/)
     expect(JSON.stringify(state.history)).not.toContain("the_goi_y")
     expect(cardLine()?.state).toBe("pending")
-    // It never takes the keys by itself; /goiy gives them to it.
-    expect(state.cardFocus).toBeUndefined()
+    // It never takes the keys; /memory is where it is saved or dismissed.
+    expect(f).toContain("Chưa lưu · /memory để lưu hoặc bỏ qua")
     // The guide went with the request.
     expect(JSON.stringify(mainBodies().at(-1))).toContain("<memory_cards>")
     // Nothing is stored yet.
     expect(other.reader.constraints("constraint")).toHaveLength(2)
 
-    await type("/goiy")
-    enter()
-    await until(() => state.cardFocus === cardLine()!.card.id)
+    const tabbed = flat(await openCards())
+    expect(tabbed).toMatch(/Memory\s+Gợi ý \(1\)\s+Sổ ghi nhớ\s+Cài đặt/)
+    expect(tabbed).toContain("Ràng buộc · Không gợi ý cổ phiếu penny")
+    expect(tabbed).toContain(`Bạn đã nói: "${TYPED}"`)
     pastEnterGrace()
     enter()
     await until(() => state.dialog === "notebook-form")
@@ -1366,6 +1383,11 @@ describe("suggestion cards (spec 007)", () => {
     key("1")
     await frameWith("Tổng ràng buộc sau khi lưu")
     await confirm(1)
+    // Back to /memory, on the same tab: nothing waits any more.
+    await until(() => state.dialog === "memory")
+    expect(state.memoryTab).toBe("cards")
+    await frameWith("Không có thẻ gợi ý nào đang chờ")
+    setup!.mockInput.pressEscape()
     await until(() => state.dialog === undefined)
     expect(other.reader.constraint(5)).toMatchObject({ kind: "constraint", text: "Không gợi ý cổ phiếu penny", source: "card" })
     await until(() => cardLine()?.state === "saved")
@@ -1397,16 +1419,14 @@ describe("suggestion cards (spec 007)", () => {
     expect(await sessionFiles()).not.toContain('"state":"dismissed"')
   })
 
-  test("x dismisses; Esc gives the keys back and the card waits; /goiy takes them again; a new message is no yes", async () => {
+  test("x dismisses in /memory; Esc closes it and the card waits; a new message is no yes", async () => {
     seedExample(otherWindow())
     await start()
     await ask()
     const id = cardLine()!.card.id
-    await type("/goiy")
-    enter()
-    await until(() => state.cardFocus === id)
+    await openCards()
     setup!.mockInput.pressEscape()
-    await until(() => state.cardFocus === undefined)
+    await until(() => state.dialog === undefined)
     expect(cardLine()?.state).toBe("pending")
     // Sending another message leaves the card pending; the model is told it waits.
     reply = "Đã rõ."
@@ -1415,11 +1435,12 @@ describe("suggestion cards (spec 007)", () => {
     await until(() => !state.streaming && mainBodies().length >= 2)
     expect(cardLine()?.state).toBe("pending")
     expect(JSON.stringify(mainBodies().at(-1))).toContain(`Gợi ý lưu ${id} (ràng buộc) đang chờ người dùng xem`)
-    await type("/goiy")
-    enter()
-    await until(() => state.cardFocus === id)
+    await openCards()
     key("x")
     await until(() => cardLine()?.state === "dismissed")
+    await frameWith("Không có thẻ gợi ý nào đang chờ")
+    setup!.mockInput.pressEscape()
+    await until(() => state.dialog === undefined)
     expect(await frameWith("Đã bỏ qua")).toContain("Đã bỏ qua")
     // The same suggestion again is not a new card.
     reply = `${ANSWER}\n\n${BLOCK}`
@@ -1438,9 +1459,7 @@ describe("suggestion cards (spec 007)", () => {
     await type("Bài học là đừng mua đuổi khi giá đã tăng quá 7% trong phiên")
     enter()
     expect(await frameWith("Gợi ý lưu · bài học (model đề xuất)")).toContain("Không mua đuổi")
-    await type("/goiy")
-    enter()
-    await until(() => state.cardFocus === cardLine()!.card.id)
+    expect(await openCards()).toContain("Bài học (model đề xuất) · Không mua đuổi")
     pastEnterGrace()
     enter()
     await until(() => state.dialog === "notebook-form")
@@ -1459,15 +1478,16 @@ describe("suggestion cards (spec 007)", () => {
     seedExample(other)
     await start()
     await ask()
-    await type("/goiy")
-    enter()
-    await until(() => state.cardFocus === cardLine()!.card.id)
+    await openCards()
     pastEnterGrace()
     enter()
     await until(() => state.dialog === "notebook-form")
     await frameWith("Câu bạn đã gõ")
-    await escTwice()
-    await until(() => state.dialog === undefined)
+    // Nothing changed in the form: one Esc closes it.
+    setup!.mockInput.pressEscape()
+    // Back to /memory with the card still there.
+    await until(() => state.dialog === "memory")
+    await frameWith("x bỏ qua")
     expect(cardLine()?.state).toBe("pending")
     expect(other.reader.constraints("constraint")).toHaveLength(2)
   })
@@ -1502,8 +1522,9 @@ describe("suggestion cards (spec 007)", () => {
     const at = state.lines.findIndex((l) => l.kind === "card")
     expect(state.lines[at - 1]).toMatchObject({ kind: "assistant" })
     expect(cardLine()?.state).toBe("pending")
-    await type("/goiy")
+    await openCards()
+    pastEnterGrace()
     enter()
-    await until(() => state.cardFocus === id)
+    await until(() => state.dialog === "notebook-form")
   })
 })

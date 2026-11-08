@@ -206,3 +206,5 @@ Phần thuộc memory (không phải lõi): `memory/cards/*`, `labels-only.ts`, 
 | `MemoryContext.cards` | Model phải biết kết quả và thẻ đang chờ (research R-7) | Không báo: model đề xuất lại (bài học Claude Code) |
 | Hai nơi tách thẻ (lõi, giao diện) | Lõi quyết định lịch sử; chỉ giao diện thấy chữ đang stream | Một nơi: hoặc lộ lúc stream, hoặc lịch sử phụ thuộc giao diện |
 | Lệnh `/goiy` | Thẻ không chặn ô nhập nên cần cách chọn lại | Thẻ chặn phím như thẻ hoãn lượt: không cho gõ tiếp khi có thẻ |
+
+> Ghi chú (08/11/2026): `/goiy` và việc thẻ nhận phím trong transcript đã bỏ. Thẻ đang chờ được lưu hoặc bỏ qua ở tab Gợi ý của `/memory` (CHANGELOG, mục Unreleased).

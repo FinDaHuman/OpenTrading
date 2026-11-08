@@ -1,5 +1,5 @@
 import { useKeys } from "../ui/keys"
-import { createMemo, createResource, createSignal, Match, Show, Switch } from "solid-js"
+import { createEffect, createMemo, createResource, createSignal, Match, Show, Switch, type JSX } from "solid-js"
 import { cardsSwitchOn, loadConfig } from "../../core/config"
 import type { NotebookAdmin, NotebookEntry, NotebookGroup, ThesisStateChoice } from "../../core/memory/notebook/admin"
 import { formatDate, THESIS_STATE_LABEL } from "../../core/memory/notebook/render"
@@ -56,8 +56,16 @@ function editRequest(e: NotebookEntry): NotebookFormRequest | undefined {
       return undefined
   }
 }
-/** `redaction`: the runtime's check, so a delete masks the open conversation at once. */
-export function NotebookDialog(props: { admin: NotebookAdmin; redaction?: RedactionCheck }) {
+/**
+ * The Sổ ghi nhớ tab of /memory. `redaction`: the runtime's check, so a delete masks the open conversation
+ * at once. `header`: the tab row; `onLock`: true while an entry is open, so ←/→ cannot switch tabs then.
+ */
+export function NotebookDialog(props: {
+  admin: NotebookAdmin
+  redaction?: RedactionCheck
+  header?: JSX.Element
+  onLock?: (locked: boolean) => void
+}) {
   const [entries, setEntries] = createSignal(props.admin.entries())
   // The suggestion-card switch (spec 007) lives in /config; shown here like Claude Code's auto-memory toggle.
   const [config] = createResource(loadConfig)
@@ -73,6 +81,7 @@ export function NotebookDialog(props: { admin: NotebookAdmin; redaction?: Redact
   const [stating, setStating] = createSignal(false)
   const [nextState, setNextState] = createSignal<ThesisStateChoice>()
   const selected = createMemo(() => entries().find((e) => keyOf(e) === open()))
+  createEffect(() => props.onLock?.(selected() !== undefined))
 
   function remove(entry: NotebookEntry) {
     const result = props.admin.remove(entry.group, { id: entry.id, version: entry.version })
@@ -105,7 +114,7 @@ export function NotebookDialog(props: { admin: NotebookAdmin; redaction?: Redact
       // The list's filter takes typed letters, so export is on Ctrl+X.
       if (evt.ctrl && evt.name === "x") {
         evt.preventDefault()
-        showNotebookForm({ group: "export" })
+        showNotebookForm({ group: "export" }, true)
       }
       return
     }
@@ -134,7 +143,7 @@ export function NotebookDialog(props: { admin: NotebookAdmin; redaction?: Redact
       if (!request) return
       // The form's first field takes focus under this key press: it must not also get the "s".
       evt.preventDefault()
-      showNotebookForm(request)
+      showNotebookForm(request, true)
     } else if (evt.name === "t" && entry.group === "thesis") setStating(true)
   })
 
@@ -192,11 +201,15 @@ export function NotebookDialog(props: { admin: NotebookAdmin; redaction?: Redact
         )}
       </Match>
       <Match when={true}>
-        <DialogFrame title={`Sổ ghi nhớ · ${entries().length}`} hint="enter xem · ctrl+x xuất Markdown · esc đóng">
+        <DialogFrame
+          title={`Sổ ghi nhớ · ${entries().length}`}
+          header={props.header}
+          hint={`enter xem · ctrl+x xuất Markdown${props.header ? " · ←/→ đổi tab" : ""} · esc đóng`}
+        >
           <Show when={config()}>
             {(c) => (
               <text fg={color.tx3} marginBottom={1}>
-                {`Thẻ gợi ý: ${cardsSwitchOn(c()) ? "bật" : "tắt"} · đổi trong /config › Memory`}
+                {`${entries().length} mục · thẻ gợi ý: ${cardsSwitchOn(c()) ? "bật" : "tắt"} · đổi ở tab Cài đặt`}
               </text>
             )}
           </Show>

@@ -137,6 +137,10 @@ export const [state, setState] = createStore({
   expandTools: false,
   dialog: undefined as DialogName | undefined,
   notebookForm: undefined as NotebookFormRequest | undefined,
+  /** The notebook form was opened from /memory: closing or saving it goes back there, on the same tab. */
+  notebookFormBack: false,
+  /** The /memory tab shown; set when /memory opens (Gợi ý when a card waits), kept while a form opened from it is up. */
+  memoryTab: "notebook" as MemoryTab,
   /** The open notebook form differs from what it opened with: Ctrl+C asks before dropping it. */
   notebookFormDirty: false,
   /** Set by Ctrl+C on a changed notebook form (instead of closing it); the form asks, then clears it. */
@@ -229,8 +233,6 @@ export const [state, setState] = createStore({
   deskApproval: undefined as DeskApprovalRequest | undefined,
   /** A turn held before sending, waiting for the user's choice. */
   turnHold: undefined as TurnHoldCard | undefined,
-  /** The suggestion card that has the keys (spec 007); the prompt has them back when undefined. */
-  cardFocus: undefined as string | undefined,
   /** Run /desk opens on (enter on a panel row). */
   deskFocus: undefined as string | undefined,
 })
@@ -250,6 +252,11 @@ export function pushLine(line: Line) {
 }
 
 export const closeDialog = () => setState("dialog", undefined)
+
+export type MemoryTab = "cards" | "notebook" | "settings"
+
+/** Closing a notebook form: back to /memory when it was opened from there, else to the prompt. */
+export const leaveNotebookForm = () => setState("dialog", state.notebookFormBack ? "memory" : undefined)
 
 export const providerName = (id?: ProviderId) => (id ? (state.catalog[id]?.name ?? id) : "")
 

@@ -1,7 +1,7 @@
 import { createSignal } from "solid-js"
 import type { NotebookAdmin } from "../../../core/memory/notebook/admin"
 import { say } from "../../notify"
-import { closeDialog } from "../../state"
+import { leaveNotebookForm } from "../../state"
 import { createFormUi, FormFrame } from "./frame"
 
 /**
@@ -22,7 +22,7 @@ export function ExportForm(props: { admin: NotebookAdmin }) {
       return say(result.message, "error")
     }
     say(`Đã xuất sổ ghi nhớ: ${result.file}`, "success", 12_000)
-    closeDialog()
+    leaveNotebookForm()
   }
 
   return (

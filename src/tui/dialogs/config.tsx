@@ -1,10 +1,9 @@
 import { useKeys } from "../ui/keys"
 import { MODE_LABEL, type PermissionMode } from "../../core/permission/mode"
 import { createResource, createSignal, Match, Switch } from "solid-js"
-import { cardsSwitchOn, loadConfig, memoryChoiceOf, saveConfig } from "../../core/config"
+import { loadConfig, memoryChoiceOf, saveConfig } from "../../core/config"
 import { configFile } from "../../core/paths"
-import { stillApplyLine } from "../../core/memory/binding/render"
-import { closeMemory, createMemory, switchMemory, type MemoryChoice, type Runtime } from "../../core/runtime"
+import type { MemoryChoice, Runtime } from "../../core/runtime"
 import { DEFAULT_MAX_CONCURRENT } from "../../core/subagents/manager"
 import { AUTO_MODEL } from "../../core/subagents/model-pick"
 import { DEFAULT_MAX_STEPS } from "../../core/agent"
@@ -17,6 +16,7 @@ import { say, saySaveFailure } from "../notify"
 import { color } from "../theme"
 import { DialogFrame } from "./frame"
 import { Picker, type PickerItem } from "./picker"
+import { MemorySettings } from "./memory-settings"
 import { modelChoices, type ModelChoice } from "./model-choices"
 import { describeScroll, nextScrollSetting, scrollSetting } from "../scroll"
 
@@ -33,16 +33,6 @@ type SubagentModel = { provider: string; model: string } | "inherit" | "auto"
 
 const TOOL_SEARCH_NEXT = { auto: "on", on: "off", off: "auto" } as const
 
-/** The memory choices, in the order listed; the label is what the user picks by. */
-const MEMORY_CHOICES: { value: MemoryChoice; label: string; hint: string; said: string }[] = [
-  { value: "none", label: "Tắt", hint: "không dùng memory", said: "Đã tắt memory. Dữ liệu đã lưu vẫn còn trên đĩa và sẽ dùng lại khi bật." },
-  {
-    value: "notebook",
-    label: "Sổ ghi nhớ",
-    hint: "ràng buộc, luận điểm, bài học trong memory.db; xem, xoá bằng /memory",
-    said: "Đã bật sổ ghi nhớ (memory.db trong thư mục dữ liệu). Xem, xoá bằng /memory; model đọc bằng memory_read.",
-  },
-]
 
 const TOOL_SEARCH_HINT = {
   auto: "Tự động · hoãn tool khi > 40 tool hoặc > 10% context; model nạp bằng tool_search",
@@ -171,55 +161,9 @@ export function ConfigDialog(props: { runtime: Runtime }) {
     await refetch()
   }
 
-  /**
-   * Choosing the notebook again reopens it only when it failed to open (the retry path): a healthy one is
-   * kept, since a new provider would forget what this session already sent the model.
-   */
-  async function saveMemory(choice: MemoryChoice) {
-    await saveConfig((current) => ({ memory: { ...current.memory, provider: choice } }))
-    if (choice === props.runtime.memory.id && !(props.runtime.memory.problems?.() ?? []).length) {
-      say(`Đang chọn «${MEMORY_CHOICES.find((c) => c.value === choice)!.label}»; không đổi gì.`, "info")
-      setEditing(undefined)
-      return
-    }
-    // The old store is closed before the new one opens: never two connections of this window on memory.db.
-    closeMemory(props.runtime)
-    switchMemory(props.runtime, createMemory(choice, props.runtime.home))
-    const problem = props.runtime.memory.problems?.()[0]
-    if (choice === "notebook" && problem) say(problem, "error", 15000)
-    else say(MEMORY_CHOICES.find((c) => c.value === choice)!.said, "success", 8000)
-    setEditing(undefined)
-    await refetch()
-  }
-  /** Suggestion cards (spec 007): a switch of the notebook's own, like Codex's "Generate memories". */
-  async function toggleCards() {
-    const on = !cardsSwitchOn(config() ?? {})
-    await saveConfig((current) => ({ memory: { ...current.memory, cards: on } }))
-    say(
-      on
-        ? "Đã bật thẻ gợi ý: model có thể đề xuất lưu một ràng buộc, cách trình bày hay bài học; chỉ lưu khi bạn xác nhận trong form."
-        : "Đã tắt thẻ gợi ý. Sổ ghi nhớ vẫn dùng như cũ.",
-      "success",
-      8000,
-    )
-    await refetch()
-  }
   const memoryChoice = (): MemoryChoice => (config() ? memoryChoiceOf(config()!) : (props.runtime.memory.id as MemoryChoice))
   const memoryProblem = () =>
     props.runtime.memory.id === "notebook" ? props.runtime.memory.problems?.()[0] : undefined
-  /**
-   * With the notebook off, constraints in the store still reach every agent: say so, and how to manage
-   * them. Read again each time the screen opens (a new source object), and shown only while the current
-   * choice, a reactive value, is not the notebook: a resource keeps its last value when its source empties.
-   */
-  const [stillApplies] = createResource(
-    () => (editing() === "memory" && memoryChoice() !== "notebook" ? { choice: memoryChoice() } : undefined),
-    async () => {
-      const read = await props.runtime.constraints.read("main_agent")
-      if (read.state === "failed") return `Không đọc được ràng buộc trong kho memory (${read.failure.file}): ${read.failure.reason}.`
-      return read.state === "loaded" && read.lines.length > 0 ? stillApplyLine(read.lines.length) : undefined
-    },
-  )
 
   async function toggle(setting: Setting) {
     if (
@@ -305,45 +249,14 @@ export function ConfigDialog(props: { runtime: Runtime }) {
   return (
     <Switch>
       <Match when={editing() === "memory"}>
-        <DialogFrame title="Memory" hint="enter chọn · esc quay lại">
-          <text fg={color.tx3} wrapMode="word">
-            Có hiệu lực ngay, không cần mở lại OpenTrading. Dữ liệu của lựa chọn khác vẫn giữ nguyên trên đĩa.
-          </text>
-          {memoryProblem() && (
-            <text fg={color.tham} wrapMode="word">
-              {memoryProblem()}
-            </text>
-          )}
-          {memoryChoice() !== "notebook" && stillApplies() && (
-            <text fg={color.tham} wrapMode="word">
-              {stillApplies()}
-            </text>
-          )}
-          <Picker
-            items={[
-              ...MEMORY_CHOICES.map((c) => ({
-                label: c.label,
-                hint: c.hint,
-                mark: props.runtime.memory.id === c.value ? "●" : " ",
-                value: c.value as MemoryChoice | "cards",
-              })),
-              // The switch belongs to the notebook that is running, not to what the config file says.
-              ...(props.runtime.memory.id === "notebook"
-                ? [
-                    {
-                      label: "Cho phép thẻ gợi ý",
-                      hint: cardsSwitchOn(config() ?? {})
-                        ? "bật · model đề xuất lưu, bạn xác nhận trong form · enter để tắt"
-                        : "tắt · enter để bật",
-                      mark: cardsSwitchOn(config() ?? {}) ? "●" : "○",
-                      value: "cards" as const,
-                    },
-                  ]
-                : []),
-            ]}
-            onPick={(c) => void (c === "cards" ? toggleCards() : saveMemory(c))}
-          />
-        </DialogFrame>
+        <MemorySettings
+          runtime={props.runtime}
+          hint="enter chọn · esc quay lại"
+          onChanged={() => {
+            setEditing(undefined)
+            void refetch()
+          }}
+        />
       </Match>
       <Match when={editing() === "subagentMax"}>
         <DialogFrame title="Subagent chạy song song" hint="enter lưu · esc quay lại">

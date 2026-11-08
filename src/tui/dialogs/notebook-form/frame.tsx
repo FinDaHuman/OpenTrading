@@ -3,7 +3,7 @@ import { useTerminalDimensions } from "@opentui/solid"
 import { createEffect, createMemo, createSignal, For, Match, onCleanup, Show, Switch, type JSX } from "solid-js"
 import type { FieldCount } from "../../../core/memory/notebook/form-model"
 import { useKeys } from "../../ui/keys"
-import { blocked, closeDialog, setState, state } from "../../state"
+import { blocked, leaveNotebookForm, setState, state } from "../../state"
 import { color } from "../../theme"
 import { DialogFrame } from "../frame"
 import { ButtonRow, ChoiceRow, FieldLabel, Lines, TextBox, type ChoiceOption } from "./fields"
@@ -144,14 +144,14 @@ export function FormFrame(props: {
   })
   onCleanup(() => setState({ notebookFormDirty: false, notebookFormAskLeave: false }))
 
-  const leave = () => (props.dirty ? setAsking(true) : closeDialog())
+  const leave = () => (props.dirty ? setAsking(true) : leaveNotebookForm())
 
   useKeys((evt) => {
     if (evt.eventType === "release") return
     if (asking()) {
       evt.preventDefault()
       // Enter keeps the draft: dropping it takes the explicit "1".
-      if (digit(evt) === 1) return closeDialog()
+      if (digit(evt) === 1) return leaveNotebookForm()
       if (digit(evt) === 2 || isEnter(evt) || evt.name === "escape") return setAsking(false)
       return
     }

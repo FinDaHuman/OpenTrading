@@ -28,7 +28,7 @@ function requestFor(name: NotebookCommand, args: string): NotebookFormRequest {
 }
 
 /** Opens a form for `request`; undefined when it opened, otherwise why not (nothing opened, nothing written). */
-export function openNotebookRequest(memory: MemoryProvider, request: NotebookFormRequest, command?: string): string | undefined {
+export function openNotebookRequest(memory: MemoryProvider, request: NotebookFormRequest, command?: string, back = false): string | undefined {
   const admin = notebookAdmin(memory)
   if (!admin) {
     const what = command ? `; /${command} chưa lưu gì` : ""
@@ -38,7 +38,7 @@ export function openNotebookRequest(memory: MemoryProvider, request: NotebookFor
   if (admin.problem()) admin.entries()
   const problem = admin.problem()
   if (problem) return problem
-  showNotebookForm(request)
+  showNotebookForm(request, back)
   return undefined
 }
 
@@ -59,8 +59,9 @@ export async function offWithConstraints(
 }
 
 /** Opens a form from /memory, which already holds a working notebook. */
-export function showNotebookForm(request: NotebookFormRequest) {
-  setState({ notebookForm: request, notebookFormDirty: false, notebookFormAskLeave: false, dialog: "notebook-form" })
+/** `back`: opened from /memory, so closing or saving the form goes back there. */
+export function showNotebookForm(request: NotebookFormRequest, back = false) {
+  setState({ notebookForm: request, notebookFormBack: back, notebookFormDirty: false, notebookFormAskLeave: false, dialog: "notebook-form" })
 }
 
 /** undefined: the form is open. A string: why it cannot open (nothing written, nothing opened). */

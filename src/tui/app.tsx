@@ -48,8 +48,7 @@ import { MemoryDialog } from "./dialogs/memory"
 import { migrateLegacyMemory } from "../core/memory/legacy"
 import { cardStreamFilter } from "../core/memory/cards/stream"
 import type { Card, CardDraft } from "../core/memory/cards/types"
-import { CardKeys } from "./card-row"
-import { cardOutcomes, focusLatestCard, takeCard } from "./cards"
+import { cardOutcomes, pendingCards, takeCard } from "./cards"
 import { NotebookFormDialog } from "./dialogs/notebook-form/forms"
 import { offWithConstraints, openNotebookForm } from "./dialogs/notebook-form/open"
 import { notebookCommandOf } from "../core/memory/notebook/commands"
@@ -739,8 +738,8 @@ async function sendTurn(
     flush()
     if (live() && madeCard) {
       closeText()
-      // Never takes the keys by itself: the user's next keystroke belongs to the prompt (an "x" there must not
-      // dismiss the card). /goiy gives it the keys.
+      // Never takes the keys: the user's next keystroke belongs to the prompt (an "x" there must not dismiss
+      // the card). It is saved or dismissed in /memory, on the Gợi ý tab.
       pushLine({ kind: "card", card: madeCard, state: "pending" })
     }
     madeCard = undefined
@@ -1694,6 +1693,9 @@ export function App(props: {
         void props.runtime.permissions.refreshRules()
         return setState("dialog", cmd.name)
       case "memory":
+        // A card waiting to be saved comes first; otherwise the notebook itself.
+        setState("memoryTab", pendingCards().length > 0 ? "cards" : "notebook")
+        return setState("dialog", "memory")
       case "config":
       case "agents":
       case "tasks":
@@ -1725,9 +1727,6 @@ export function App(props: {
       case "clear":
       case "new":
         return void clearTranscript(props.runtime)
-      case "goiy":
-        if (!focusLatestCard()) say("Không có thẻ gợi ý nào đang chờ.", "info")
-        return
       case "compact":
         if (state.streaming) return say("Đang trả lời; chờ xong rồi nén.", "warning")
         // Messages typed while it runs are queued: send them (or give them back) afterwards.
@@ -1867,8 +1866,6 @@ export function App(props: {
       return renderer.clearSelection()
     }
     if (owner() || state.dialog) return
-    // A focused suggestion card has the keys (card-row.tsx CardKeys); the prompt stays in view.
-    if (state.cardFocus !== undefined) return
     if (state.panelFocus !== undefined) return panelKey(evt)
     // The chat scrolls from the keyboard too (opencode): PageUp/PageDown half a screen,
     // Ctrl+Home/Ctrl+End to the start/end (plain Home/End stay with the prompt).
@@ -2046,10 +2043,6 @@ export function App(props: {
         <Show when={!state.approval && !state.question ? state.turnHold : undefined} keyed>
           {(card) => <HoldCard card={card} />}
         </Show>
-        {/* A suggestion card's keys, behind every other card and prompt (spec 007). */}
-        <Show when={!state.approval && !state.question && !state.turnHold && !state.deskApproval && !state.dialog ? state.cardFocus : undefined} keyed>
-          {(id) => <CardKeys id={id} memory={props.runtime.memory} />}
-        </Show>
         {/* A question stays mounted (answers kept) while an approval covers it. */}
         <Show when={state.question} keyed>
           {(request) => (
@@ -2112,7 +2105,7 @@ export function App(props: {
               <EffortDialog />
             </Match>
             <Match when={state.dialog === "memory"}>
-              <MemoryDialog memory={props.runtime.memory} redaction={props.runtime.redaction} />
+              <MemoryDialog runtime={props.runtime} />
             </Match>
             <Match when={state.dialog === "notebook-form"}>
               <NotebookFormDialog memory={props.runtime.memory} />
@@ -2123,7 +2116,7 @@ export function App(props: {
         <PromptInput
           ref={(r) => (input = r)}
           visible={!owner() && !state.dialog}
-          focused={!state.dialog && !owner() && state.panelFocus === undefined && state.cardFocus === undefined}
+          focused={!state.dialog && !owner() && state.panelFocus === undefined}
           busy={state.streaming}
           placeholder={
             state.streaming ? "đang trả lời… esc để dừng · enter để xếp hàng tin tiếp" : "Hỏi về thị trường, hoặc gõ / để xem lệnh · ↑ lịch sử · ctrl+j xuống dòng"

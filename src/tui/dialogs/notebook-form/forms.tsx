@@ -24,7 +24,7 @@ import type { Confidence, ConstraintKind, SubjectKind, ThesisVersion } from "../
 import type { MemoryProvider } from "../../../core/memory/types"
 import { say } from "../../notify"
 import { useKeys } from "../../ui/keys"
-import { closeDialog, setState, state, type NotebookFormRequest } from "../../state"
+import { leaveNotebookForm, setState, state, type NotebookFormRequest } from "../../state"
 import { color } from "../../theme"
 import { DialogFrame } from "../frame"
 import { conflictStep, deletedStep, reviewStep } from "./conflict"
@@ -74,7 +74,7 @@ export function NotebookFormDialog(props: { memory: MemoryProvider }) {
 
 function Unavailable() {
   useKeys((evt) => {
-    if (evt.eventType !== "release" && evt.name === "escape") closeDialog()
+    if (evt.eventType !== "release" && evt.name === "escape") leaveNotebookForm()
   })
   return (
     <DialogFrame title="Sổ ghi nhớ" hint="esc đóng">
@@ -87,7 +87,7 @@ function Unavailable() {
 function failOpen(message: string) {
   queueMicrotask(() => {
     say(message, "error")
-    closeDialog()
+    leaveNotebookForm()
   })
   return null
 }
@@ -107,7 +107,7 @@ function settle(
   if (result.ok) {
     on.saved?.(result.saved)
     say(result.message, "success")
-    return closeDialog()
+    return leaveNotebookForm()
   }
   if (result.reason === "conflict") {
     if (on.conflict) return on.conflict(result.current)
@@ -321,7 +321,9 @@ function CodeFirst(props: { group: "thesis" | "decision"; title: string }) {
   const ui = createFormUi()
   const [value, setValue] = createSignal("")
   const open = () => {
-    if (value().trim()) setState("notebookForm", { group: props.group, alias: value().trim() })
+    // A new object at the top level: setState("notebookForm", {...}) would merge into the open request, keep
+    // its identity, and the keyed form would never open the subject typed.
+    if (value().trim()) setState({ notebookForm: { group: props.group, alias: value().trim() } })
   }
   return (
     <FormFrame
