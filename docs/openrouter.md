@@ -38,6 +38,10 @@ Gateway khác có dùng lại SDK OpenRouter thì không nhận ghim.
 
 Nếu provider đã ghim không phục vụ model, hoặc đang sập mà fallback đã tắt, OpenRouter trả lỗi kiểu "No allowed providers…" hay "No endpoints found…", thường kèm mã 404 (đôi khi 502/503). OT hiện một dòng: "OpenRouter không có provider nào phục vụ được request này…" và nhắc kiểm tra `openrouter.routing`.
 
+Khi OpenRouter gửi kèm lý do loại từng provider, dòng lỗi giữ lại các lý do đó và rút danh sách dài thành số đếm, ví dụ `Guardrails loại deepseek (Paid model training violation (account settings)); Fallback loại 47 provider`.
+
+**Cài đặt tài khoản cũng loại provider.** Trang [openrouter.ai/settings/privacy](https://openrouter.ai/settings/privacy) đặt chính sách dữ liệu của tài khoản. Nếu tài khoản không cho phép provider dùng prompt để huấn luyện, OpenRouter loại các provider làm việc đó, trong đó có `deepseek` chính hãng (đã gặp thật 08/11). Ghim `order: ["deepseek"]` và tắt fallback thì request sẽ lỗi. Khi đó, đổi cài đặt trên trang trên hoặc ghim một provider khác. Dòng lỗi có lý do "account settings" thì OT nhắc tới trang này.
+
 ## Trong eval
 
 `scripts/eval/run.ts` không đọc ghim từ config của bạn. Mỗi lần chạy phải nêu bằng cờ, mỗi cờ ứng với một khoá:

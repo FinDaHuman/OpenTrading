@@ -151,3 +151,20 @@ test("OpenRouter's 'no provider' error reads in Vietnamese and points at the pin
     expect(text).toContain("openrouter.routing")
   }
 })
+
+test("OpenRouter's routing funnel keeps why the pinned provider was dropped, with long lists counted", () => {
+  // Shape of a real 404 (08/11, pin order deepseek, no fallback); the fallback list is trimmed here.
+  const fallback = Array.from({ length: 45 }, (_, i) => `p${i}/fp8`).join(", ")
+  const message = `No endpoints found for deepseek/deepseek-v4.1-flash-1017. Every candidate endpoint was removed during routing: Filter by Tier Endpoint Rows removed particle-ai/us/flex, deepinfra/fp8/flex, fireworks/ultrafast (Excluded tier endpoint rows the request did not opt into); Filter by Guardrails removed deepseek (Paid model training violation (account settings)); Filter by Fallback removed ${fallback}.`
+  const error = new APICallError({ message, url: "https://openrouter.ai/api/v1/chat/completions", requestBodyValues: {}, statusCode: 404, responseBody: "{}" })
+  const text = describeError(error)
+  expect(text).toContain("No endpoints found for deepseek/deepseek-v4.1-flash-1017. ")
+  expect(text).toContain("Guardrails loại deepseek (Paid model training violation (account settings))")
+  expect(text).toContain("Fallback loại 45 provider")
+  expect(text).not.toContain("p44/fp8")
+  expect(text).toContain("openrouter.ai/settings/privacy")
+  expect(text).toContain("openrouter.routing")
+  // Without a funnel the provider's words stay as they were, and no account hint is added.
+  const plain = describeError(new APICallError({ message: "No allowed providers are available for the selected model.", url: "https://openrouter.ai/api/v1/chat/completions", requestBodyValues: {}, statusCode: 404, responseBody: "{}" }))
+  expect(plain).not.toContain("settings/privacy")
+})
