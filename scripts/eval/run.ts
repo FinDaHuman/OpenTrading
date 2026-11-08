@@ -111,14 +111,16 @@ try {
   const target = await resolveTarget(model)
   const { effort, toolSearch, maxSteps } = await loadConfig()
   const settings = { effort, toolSearch, maxSteps, ablate, memory, permissions: yolo ? "bypass" : "unattended", mcp: cassette?.mode ?? "live", ...(routing ? { openrouter_routing: routing } : {}), ...(tape ? { mcp_tape: path.basename(tape), mcp_answers: cassette!.size } : {}) }
-  await runEval({ runtime, skills, target, questions, repeat, timeoutMs: minutes * 60_000, write: traceFile(out), version: pkg.version, commit, settings, ledger: requests, ablated, yolo, memory })
+  // Tallied from this run's own answers: --out may name a file that already holds earlier runs.
+  const answers: TraceEvent[] = []
+  const toFile = traceFile(out)
+  const write = (event: TraceEvent) => {
+    if (event.type === "answer") answers.push(event)
+    toFile(event)
+  }
+  await runEval({ runtime, skills, target, questions, repeat, timeoutMs: minutes * 60_000, write, version: pkg.version, commit, settings, ledger: requests, ablated, yolo, memory })
   console.log(`Trace: ${out}`)
-  const served = servedSummary(
-    (await readFile(out, "utf8"))
-      .split("\n")
-      .filter(Boolean)
-      .map((line) => JSON.parse(line) as TraceEvent),
-  )
+  const served = servedSummary(answers)
   if (Object.keys(served).length > 0) console.log(`Provider đã trả lời (số bước): ${Object.entries(served).map(([by, n]) => `${by} ${n}`).join(", ")}`)
   if (cassette?.misses) console.log(`${cassette.misses} yêu cầu MCP không có trong bản ghi: lần chạy này không hoàn toàn trên dữ liệu cố định.`)
 } finally {
