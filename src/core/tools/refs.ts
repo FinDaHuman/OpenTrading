@@ -23,6 +23,11 @@ export interface StoredResult {
   ref: string
   tool: string
   text: string
+  callId?: string
+  sourceInput?: unknown
+  rawText?: string
+  rawSha256?: string
+  visibleSha256?: string
   at: number
   /** The session it was fetched in ("" outside a session: headless runs, tests). */
   session: string
@@ -52,9 +57,9 @@ export function keepEvidence(record: Omit<Evidence, "at">) {
   if (evidence) appendEvidence(evidence, { ...record, at: new Date().toISOString() })
 }
 
-export function rememberResult(tool: string, text: string): string {
+export function rememberResult(tool: string, text: string, source: Partial<Pick<StoredResult, "callId" | "sourceInput" | "rawText" | "rawSha256" | "visibleSha256">> = {}): string {
   const ref = `r${++counter}`
-  store.set(ref, { ref, tool, text, at: Date.now(), session })
+  store.set(ref, { ref, tool, text, at: Date.now(), session, ...source })
   bytes += text.length
   while (store.size > MAX_ENTRIES || bytes > MAX_BYTES) {
     const oldest = store.keys().next().value
@@ -71,7 +76,7 @@ export function recallResult(ref: string): StoredResult | undefined {
   const stored = store.get(id)
   if (stored?.session === session) return stored
   const saved = evidence ? readEvidence(evidence).find((e) => e.ref === id) : undefined
-  return saved && { ref: id, tool: saved.tool, text: saved.text, at: Date.parse(saved.at), session }
+  return saved && { ref: id, tool: saved.tool, text: saved.text, at: Date.parse(saved.at), session, callId: saved.callId, sourceInput: saved.sourceInput ?? saved.input, rawText: saved.rawText, rawSha256: saved.rawSha256, visibleSha256: saved.visibleSha256 }
 }
 
 /** A result of the open session by ref or call id: the evidence file, or RAM in a headless run. */

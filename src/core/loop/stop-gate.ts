@@ -70,7 +70,11 @@ export const RESCUE_DRAFT =
 export const RESCUE_DRAFT_FETCH =
   "<nhac_nho>\nBạn chưa viết câu trả lời cho người dùng và lượt này chưa lấy dữ liệu nào. Gọi tool lấy dữ liệu ngay trong bước này rồi trả lời; không viết dàn ý, kế hoạch hay tên tool.\n</nhac_nho>"
 /** Tools off (it brought 2.5-flash-lite's empty answers back). */
-export const RESCUE_EMPTY_FINAL = "Hãy trả lời câu hỏi của người dùng dựa trên kết quả tool ở trên. Không gọi thêm tool."
+export const RESCUE_EMPTY_FINAL = "Hãy trả lời câu hỏi của người dùng dựa trên kết quả tool ở trên. Không gọi thêm tool. Nếu công cụ tính đã từ chối, tự tính từ đúng các số tool đã trả về và ghi rõ công thức cùng từng số đầu vào."
+
+/** Last empty-answer rescue: data is in the turn, write the final answer now. */
+export const RESCUE_ANSWER_NOW =
+  "Viết NGAY câu trả lời cuối cùng cho người dùng, đúng định dạng được yêu cầu, chỉ dùng các số tool đã trả về ở trên (nếu công cụ tính từ chối thì tự tính và ghi công thức cùng từng số đầu vào). Không suy luận dài, không gọi tool, không trả lời rỗng."
 
 export function judgeStop(last: LastStep, done: readonly RecoveryKind[], disabled?: Ablations): Verdict {
   // Still calling tools: the step cap ended the run, and its summary step has its own rules.
@@ -92,6 +96,10 @@ export function judgeStop(last: LastStep, done: readonly RecoveryKind[], disable
     return { action: "accept" }
   }
   if (empty) {
+    // Pilot or15 fin-l5-profile-01: after a tool loop both rescues came back reasoning-only, the turn ended with
+    // fetched data and no answer. One last, answer-only rescue with tools off when the turn has data.
+    if (left <= 0 && last.dataInTurn && used("empty") < MAX_RECOVERIES + 1 && !disabled?.has("gate-empty"))
+      return { action: "continue", kind: "empty", nudge: RESCUE_ANSWER_NOW, toolChoice: "none" }
     if (left <= 0 || disabled?.has("gate-empty")) return { action: "give-up", kind: "empty" }
     // Right after tool results the data is there: tools off first, the fix that brought
     // 2.5-flash-lite's empty answers back. Otherwise the model may still lack data, so it may
