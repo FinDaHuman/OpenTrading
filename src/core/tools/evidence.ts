@@ -16,6 +16,10 @@ export interface Evidence {
   /** When it was fetched. The envelope in `text` says how old the data is. */
   at: string
   text: string
+  sourceInput?: unknown
+  rawText?: string
+  rawSha256?: string
+  visibleSha256?: string
 }
 
 /** A session past this keeps working on what it has; refs newer than the cap live in RAM only. */

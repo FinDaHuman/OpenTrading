@@ -1,3 +1,5 @@
+import {parseUnit,sameDims} from "./calculate/units"
+import {financialLeaves,financialValue,validateAlignment,sourceProof,DerivationError,type FinancialLeaf} from "./financial-source"
 import { z } from "zod"
 import { extractFromRef, type Extracted } from "./chart/extract"
 import { readEnvelope } from "./envelope"
@@ -135,6 +137,51 @@ function calculate(input: Input) {
   }
 }
 
+export function groundedCompute(input: Input) {
+ const sameSourceUnit=(values:FinancialLeaf[])=>{
+  const first=parseUnit(values[0]?.unit)
+  if(values.some(x=>!x.unit||!sameDims(parseUnit(x.unit).dims,first.dims)||parseUnit(x.unit).factor!==first.factor))throw new DerivationError("Published source units differ inside the window; convert explicitly with calculate before computing growth/relative strength.")
+ }
+ const read=(spec:Spec)=>{
+  let values=financialLeaves(spec.from_call)
+  if(spec.path){const p=spec.path.startsWith("/")?spec.path:"/"+spec.path.replace(/\[(\d+)\]/g,"/$1").replace(/\./g,"/");values=values.filter(x=>x.path===p||x.path.startsWith(p+"/"))}
+  if(spec.field)values=values.filter(x=>x.metric===spec.field||x.path.split("/").at(-1)===spec.field)
+  if(spec.from_symbol)values=values.filter(x=>x.entity?.toUpperCase()===spec.from_symbol!.toUpperCase())
+  if(!values.length)throw new DerivationError("No numeric leaves match the source selector.")
+  if(values.some(x=>!x.unit))throw new DerivationError("Missing published financial unit; caller assumptions are not source proof.")
+  if(new Set(values.map(x=>x.metric)).size>1)throw new DerivationError("Ambiguous metrics: specify field or exact path.")
+  const key=(x:FinancialLeaf)=>Number(/\d{4}/.exec(x.period??"")?.[0]??0)*10+Number(/Q([1-4])/i.exec(x.period??"")?.[1]??0)
+  return values.sort((a,b)=>key(a)-key(b)||String(a.period).localeCompare(String(b.period)))
+ }
+ let inputs=read(input);let result:unknown;let unit=inputs[0]!.unit
+ if(input.op==="mean"||input.op==="sum"||input.op==="annualize"){
+  const n=input.op==="annualize"?input.periods_done:input.periods;if(n!==undefined){if(n>inputs.length)throw new DerivationError("Insufficient periods.");inputs=inputs.slice(-n)}
+  validateAlignment(inputs,"time_series")
+  if(inputs.some(x=>x.unit!==unit))throw new DerivationError("Series units differ; convert with calculate.")
+  let total=inputs.reduce((a,x)=>a+x.value,0);if(input.op==="mean")total/=inputs.length;result=total
+  if(input.op==="annualize"){if(!input.periods_done||!input.periods_per_year)throw new DerivationError("annualize requires periods_done and periods_per_year.");result=(result as number)*input.periods_per_year/input.periods_done}
+ }else if(input.op==="pct_change"){
+  const n=input.periods??inputs.length-1;if(n<1||n>=inputs.length)throw new DerivationError("Insufficient periods for growth.");inputs=[inputs.at(-1-n)!,inputs.at(-1)!];validateAlignment(inputs,"time_series");sameSourceUnit(inputs);if(inputs[0]!.value===0)throw new DerivationError("Zero base.");result=(inputs[1]!.value/inputs[0]!.value-1)*100;unit="%"
+ }else if(input.op==="ratio"){
+  if(!input.other)throw new DerivationError("ratio requires other.");inputs=[inputs.at(-1)!,read(input.other).at(-1)!];validateAlignment(inputs);if(inputs[0]!.unit!==inputs[1]!.unit)throw new DerivationError("Ratio units differ; use calculate for scaling.");if(inputs[1]!.value===0)throw new DerivationError("Zero denominator.");result=inputs[0]!.value/inputs[1]!.value;unit="lần"
+ }else if(input.op==="relative_strength"){
+  if(!input.other)throw new DerivationError("relative_strength requires other.");const other=read(input.other);const steps=input.periods??inputs.length-1;const bsteps=input.periods??other.length-1
+  if(steps<1||bsteps<1||steps>=inputs.length||bsteps>=other.length)throw new DerivationError("Insufficient periods.")
+  const a=[inputs.at(-1-steps)!,inputs.at(-1)!],b=[other.at(-1-bsteps)!,other.at(-1)!];validateAlignment(a,"time_series");validateAlignment(b,"time_series");sameSourceUnit(a);sameSourceUnit(b)
+  if(a.some((x,i)=>x.period!==b[i]!.period))throw new DerivationError("Relative-strength windows differ.")
+  if(a[0]!.value===0||b[0]!.value===0)throw new DerivationError("Zero base.")
+  result=((a[1]!.value/a[0]!.value-1)-(b[1]!.value/b[0]!.value-1))*100;unit="điểm %";inputs=[...a,...b]
+ }else if(input.op==="rank"||input.op==="share"){
+  validateAlignment(inputs,"cross_entity_same_period");if(inputs.some(x=>!x.entity))throw new DerivationError("Ranking/share requires source entity labels.")
+  if(inputs.some(x=>x.unit!==unit))throw new DerivationError("Ranking/share source units differ.")
+  const rows=inputs.map(x=>({label:x.entity!,value:x.value}))
+  if(input.op==="rank")result=rows.sort((a,b)=>b.value-a.value)
+  else{const total=rows.reduce((a,x)=>a+x.value,0);if(total===0)throw new DerivationError("Zero total.");result=rows.map(x=>({label:x.label,value:round(x.value/total*100)}));unit="%"}
+ }else throw new DerivationError("Unsupported operation.")
+ if(typeof result==="number"){if(!Number.isFinite(result))throw new DerivationError("Non-finite result.");result=round(result)}
+ return {result,unit,inputs:inputs.map(x=>({ref:x.ref,path:x.path,value:x.value,unit:x.unit})),...sourceProof(inputs,input.op,result,unit)}
+}
+
 export function computeTool(): ToolDef<Input> {
   return {
     name: "compute",
@@ -148,9 +195,9 @@ export function computeTool(): ToolDef<Input> {
     source: LOCAL_SOURCE,
     summarize: ({ op, from_call }) => `compute(${op}, ${from_call})`,
     async execute(input, ctx: ToolContext) {
-      const text = JSON.stringify({ op: input.op, ...(input.periods ? { periods: input.periods } : {}), ...calculate(input) })
-      const ref = rememberResult("compute", text)
-      keepEvidence({ ref, callId: ctx.callId, tool: "compute", input, text })
+      const text = JSON.stringify({ op: input.op, ...(input.periods ? { periods: input.periods } : {}), ...(ctx.groundedFinancial ? groundedCompute(input) : calculate(input)) })
+      const ref = rememberResult("compute", text, {callId:ctx.callId,rawText:text,rawSha256:new Bun.CryptoHasher("sha256").update(text).digest("hex"),visibleSha256:new Bun.CryptoHasher("sha256").update(text).digest("hex")})
+      keepEvidence({ ref, callId: ctx.callId, tool: "compute", input, text, rawText:text,rawSha256:new Bun.CryptoHasher("sha256").update(text).digest("hex"),visibleSha256:new Bun.CryptoHasher("sha256").update(text).digest("hex") })
       return `${REF_PREFIX}${ref}] ${text}`
     },
   }

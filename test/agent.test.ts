@@ -1448,3 +1448,48 @@ test("a fragment answer is sent back once with tools on and never stored", async
   expect(stored).toContain("VCB: phân tích sâu.")
   expect(done(events).messages.map((m) => m.role)).toEqual(["user", "assistant"])
 })
+
+
+test("v45 native gateway-owned retries do not redeliver503 or terminal424", async () => {
+  for(const status of [503,424]) {
+    bodies.length=0
+    respond=()=>Response.json({error:{message:"synthetic terminal failure"}},{status})
+    const events:AgentEvent[]=[]
+    for await(const event of runAgent({history:[],input:"Xin chào",skills:[],registry:registry(),providerRetry:{maxRetries:0}}))events.push(event)
+    expect(bodies.length).toBe(1)
+    expect(events.some(e=>e.type==="error")).toBe(true)
+  }
+})
+test("v45 caller JSON contract buffers rejected raw final and repairs format only once", async () => {
+  const answer=JSON.stringify({value:null,reason:"No source available in this synthetic fixture",evidence:[]})
+  respond=(_body,n)=>sse([chunk({role:"assistant",content:n===0?"invalid raw prose":answer}),chunk({},"stop")])
+  const events:AgentEvent[]=[]
+  const contract={version:"synthetic-test-v1",refusalSchema:{type:"object",required:["value","reason","evidence"],properties:{value:{type:"null"},reason:{type:"string",minLength:1},evidence:{type:"array"}}}}
+  for await(const event of runAgent({history:[],input:"Return caller JSON.\nPUBLIC_RESPONSE_CONTRACT_V1="+JSON.stringify(contract),skills:[],registry:registry(),providerRetry:{maxRetries:0},financePolicy:{enabled:true,machineResponse:true},maxSteps:5}))events.push(event)
+  expect(bodies.length).toBe(2)
+  expect(events.filter(e=>e.type==="text-delta")).toHaveLength(0)
+  expect(events.some(e=>e.type==="notice"&&e.text.includes("invalid raw prose"))).toBe(true)
+  const done=events.findLast(e=>e.type==="done")
+  expect(done?.type==="done"&&JSON.stringify(done.messages).includes("No source available")).toBe(true)
+})
+
+test("v45 grounded mode preserves finite MCP JSON Schema constraints on the actual SDK wire",async()=>{
+ const r=registry()
+ const inputSchema={type:"object" as const,properties:{symbol:{type:"string" as const},from:{type:"string" as const},to:{type:"string" as const}},additionalProperties:false,anyOf:[{properties:{symbol:{const:"SYN"}},required:["symbol"]}],oneOf:[{required:["from"]},{required:["to"]}],not:{required:["from","to"]}}
+ r.register({name:"source_contract",description:"synthetic finite contract",source:"mcp:fixture",readOnly:true,input:inputSchema,execute:async()=>"{}"})
+ for await(const _ of runAgent({history:[],input:"Xin chào",skills:[],registry:r,groundedFinancial:true,providerRetry:{maxRetries:0}})){}
+ const sent=(bodies[0]!.tools as {function:{name:string;parameters:unknown}}[]).find(t=>t.function.name==="source_contract")
+ expect(sent!.function.parameters).toEqual(inputSchema)
+})
+
+test("v45 SDK schema rejection is local proof; one lossless argument correction keeps original identity",async()=>{
+ const r=registry();let executions=0
+ r.register({name:"strict_source",description:"synthetic source",source:"mcp:fixture",readOnly:true,input:{type:"object",properties:{symbol:{type:"string"},count:{type:"integer"}},required:["symbol","count"],additionalProperties:false},execute:async()=>{executions++;return JSON.stringify({data:{symbol:"SYN",last:12},availability:"available"})}})
+ script=[{tool:"strict_source",args:{symbol:"SYN",count:"5"}},{tool:"strict_source",args:{symbol:"SYN",count:5}}]
+ const events:AgentEvent[]=[]
+ for await(const event of runAgent({history:[],input:"Read synthetic source for SYN count5",skills:[],registry:r,groundedFinancial:true,providerRetry:{maxRetries:0},financePolicy:{enabled:true,machineResponse:false},maxSteps:6}))events.push(event)
+ expect(executions).toBe(1)
+ const notices=events.flatMap(e=>{if(e.type!=="notice")return[];try{return [JSON.parse(e.text)]}catch{return[]}})
+ expect(notices.some(x=>x.event==="financial_local_rejection"&&x.code==="invalid_tool_input"&&x.sdk_call_id==="call_1")).toBe(true)
+ expect(notices.some(x=>x.event==="financial_call_audit"&&x.sdk_call_id==="call_2"&&x.original_sdk_call_id==="call_1"&&x.correction_used===1)).toBe(true)
+})

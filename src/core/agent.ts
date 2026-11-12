@@ -1,6 +1,8 @@
+import { FinancePolicyState, type FinancePolicyOptions } from "./finance-policy"
 import {
   generateText,
   NoSuchToolError,
+  InvalidToolInputError,
   ToolChoiceViolationError,
   hasToolCall,
   isStepCount,
@@ -152,6 +154,10 @@ export function nudgeAfterTools(target: TargetLike | undefined): boolean {
 export { REMINDER_TAG }
 
 export interface RunOptions {
+  providerRetry?: Pick<RetryOptions, "maxRetries">
+  groundedFinancial?: boolean
+  financePolicy?: FinancePolicyOptions
+  financeState?: FinancePolicyState
   history: ModelMessage[]
   input: string
   /**
@@ -500,6 +506,7 @@ interface Outcome {
   /** The SDK's unified finish reason of the last step (stop, length…). */
   finish?: string
   /** Completed steps of this turn (assistant calls + their tool results), for aborted turns. */
+  bufferText?: boolean
   progress: ModelMessage[]
 }
 
@@ -630,7 +637,7 @@ async function* relay(
           outcome.text += part.text
           outcome.stepText = (outcome.stepText ?? "") + part.text
           stepText += part.text
-          yield { type: "text-delta", text: part.text }
+          if(!outcome.bufferText) yield { type: "text-delta", text: part.text }
           break
         case "tool-call":
           outcome.stepTools = [...(outcome.stepTools ?? []), part.toolName]
@@ -827,7 +834,7 @@ async function assembleFor(opts: TurnInput, target: Target | undefined, bound: B
   const mode = opts.registry.gate?.mode ?? "read-only"
   const modeTools = mode === "read-only" ? [] : opts.registry.list().filter((d) => d.effect).map((d) => d.name)
   const loaded = new Set([...loadedTools(opts.history ?? []), ...modeTools, ...(opts.preload ?? [])])
-  const built = supportsTools ? opts.registry.toToolSet({ ...setOptions, defer, loaded }) : undefined
+  const built = supportsTools ? opts.registry.toToolSet({ ...setOptions, defer, loaded, financeState: opts.financeState, groundedFinancial: opts.groundedFinancial }) : undefined
   const toolNames = built?.names ?? []
   const assembled = assemble({
     tier,
@@ -1100,6 +1107,8 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
   const config = await loadConfig()
   // The main agent's effort comes from config; a subagent's is resolved by its manager.
   if (opts.role !== "subagent" && opts.effort === undefined && isEffort(config.effort)) opts = { ...opts, effort: config.effort }
+  const finance = opts.financePolicy?.enabled ? new FinancePolicyState(opts.financePolicy, opts.input) : undefined
+  opts = {...opts, financeState: finance}
   const prepared = await prepare(opts, bound, extras)
   const { target, tools, built, assembled, supportsTools } = prepared
   const configured = config.maxSteps
@@ -1147,7 +1156,7 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
     stall.abort()
   }
   // Past turns are sent with answers after their tool results (loop/history-shape.ts).
-  const { system, request, model, providerOptions } = requestFor(prepared, [...answerAfterTools(opts.history), user], notices.options)
+  const { system, request, model, providerOptions } = requestFor(prepared, [...answerAfterTools(opts.history), user], {...notices.options, ...opts.providerRetry})
   let summarized = false
   /** Tool results pruned mid-turn (undefined: not near the threshold). */
   let midTurnPruned: number | undefined
@@ -1215,7 +1224,14 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
         summarized = true
         return { toolChoice: "none", activeTools: active, messages: withNudge(messages, SUMMARY_PROMPT) }
       },
-      experimental_repairToolCall: async ({ toolCall, error }) => repairCall(opts.registry, built, active, loaded, toolCall, error),
+      experimental_repairToolCall: async ({ toolCall, error }) => {
+        if(finance && InvalidToolInputError.isInstance(error)) {
+          finance.localRejections.set(toolCall.toolCallId,{code:"invalid_tool_input",tool:error.toolName,rawInput:error.toolInput})
+          const def=opts.registry.get(error.toolName)
+          if(def){let args:unknown=error.toolInput;try{args=JSON.parse(error.toolInput)}catch{};finance.failed(def,args,Object.assign(new Error(error.message),{code:"invalid_argument",retryable_with_corrected_arguments:true}),toolCall.toolCallId)}
+        }
+        return repairCall(opts.registry,built,active,loaded,toolCall,error)
+      },
       abortSignal,
       providerOptions,
       // The model is wrapped with retry.ts (by kind of failure, shown to the user, Esc
@@ -1235,12 +1251,17 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
   let messages: ModelMessage[] | undefined
   /** The stop gate gave up: the turn ends without an answer. */
   let unanswered = false
+  let financialCorrectionUsed = false
 
   for (;;) {
     const base = [...request, ...kept]
     const result = run(base, rescue)
-    const last: Outcome = { text: "", aborted: false, steps: 0, progress: [] }
+    const last: Outcome = { text: "", aborted: false, steps: 0, progress: [], bufferText: !!finance?.options.machineResponse }
     yield* relay(result, opts.registry, opts.signal, last, notices, { ms: stallMs, onStall }, prepared.images)
+    if(finance) {
+      for(const [sdk_call_id,audit] of finance.callAudit)yield {type:"notice",text:JSON.stringify({event:"financial_call_audit",...audit})}
+      for(const [sdk_call_id,rejection] of finance.localRejections)yield {type:"notice",text:JSON.stringify({event:"financial_local_rejection",sdk_call_id,...rejection})}
+    }
     stepsUsed += last.steps
     outcome.text += last.text
     outcome.steps += last.steps
@@ -1264,6 +1285,22 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
       break
     }
     measured = result
+
+    if (finance) {
+      const candidate=last.stepText ?? ""
+      const issues=finance.issues(candidate, opts.registry.list())
+      const corrections=finance.correctionTools()
+      if ((issues.length || corrections.length) && !financialCorrectionUsed && stepsUsed < maxSteps - 1) {
+        financialCorrectionUsed=true
+        kept=[...kept,...dropFinalText(response)]
+        // No acquisition keyed on benchmark tokens. Only actual failed intent or caller contract.
+        if(corrections.length) finance.beginCorrection(); else finance.beginOutputCorrection()
+        rescue={nudge:["Correct the actual failed arguments without changing source/entity/period/metric, or correct the caller's output contract. Do not replay successful tools.",...issues].join("\n"),toolChoice:corrections.length ? "auto" : "none"}
+        yield {type:"notice",text:JSON.stringify({event:"financial_rejected_final",raw_final:candidate,issues,correction_tools:corrections})}
+        continue
+      }
+      if(issues.length) yield {type:"notice",text:JSON.stringify({event:"financial_contract_invalid",raw_final:candidate,issues})}
+    }
 
     // Only a turn where no data tool ran is checked: the sources are the conversation itself.
     const dataInTurn = ranDataTool([...kept, ...response])

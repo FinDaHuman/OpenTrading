@@ -1,9 +1,10 @@
+import { financialValue, sourceProof, validateAlignment, DerivationError, type FinancialLeaf } from "../financial-source"
 import { z } from "zod"
 import { extractFromRef } from "../chart/extract"
 import { readEnvelope } from "../envelope"
 import { keepEvidence, recallResult, REF_PREFIX, rememberResult } from "../refs"
 import { LOCAL_SOURCE, type ToolContext, type ToolDef } from "../types"
-import { CalcError, dataLiterals, evaluate, FUNCTION_NAMES, type Quantity } from "./expression"
+import { CalcError, dataLiterals, nonFormulaLiterals, checkSourceBindings, evaluate, FUNCTION_NAMES, type Quantity } from "./expression"
 import { describeDims, parseUnit, sameDims } from "./units"
 
 /**
@@ -31,9 +32,10 @@ const Value = z.union([
 ])
 
 const Input = z.object({
+  alignment: z.enum(["same_period", "time_series", "cross_entity_same_period"]).optional().describe("Financial alignment: default same entity/period/scope; time_series permits different periods of one metric; cross_entity_same_period permits aggregation/comparison of entities at one date."),
   expression: z.string().min(1).describe("Biểu thức với tên trong values: price / eps, (rev_2025 / rev_2022) ^ (1/3) - 1, a + b. Hàm: " + FUNCTION_NAMES.join(", ") + "."),
-  values: z.record(z.string(), Value).optional().describe("Tên → giá trị có đơn vị. Mọi số lấy từ dữ liệu đặt ở đây, không viết thẳng vào biểu thức."),
-  unit: z.string().optional().describe('Đơn vị muốn nhận kết quả: "lần", "%", "tỷ đồng", "đồng/cổ phiếu". Lệch loại đơn vị thì báo lỗi.'),
+  values: z.record(z.string(), Value).optional().describe("Tên → giá trị có đơn vị. Supply exactly the variables used in expression; no unused bindings. Mọi số lấy từ dữ liệu đặt ở đây, không viết thẳng vào biểu thức."),
+  unit: z.string().optional().describe('Đơn vị muốn nhận kết quả (unit-aware: expression a/b-1 with unit % already scales by 100; do not also multiply expression by 100): "lần", "%", "tỷ đồng", "đồng/cổ phiếu". Lệch loại đơn vị thì báo lỗi.'),
   decimals: z.number().int().min(0).max(12).optional().describe("Số chữ số thập phân khi làm tròn; mặc định 6."),
 })
 
@@ -51,7 +53,13 @@ function pick<T>(list: T[], at: "last" | "first" | number | undefined, what: str
   return { item: list[index]!, index }
 }
 
-function resolve(name: string, spec: ValueSpec): Resolved {
+function resolve(name: string, spec: ValueSpec, grounded = false, lineage: FinancialLeaf[] = []): Resolved {
+  if (grounded) {
+    if ("value" in spec) throw new DerivationError("Financial operands must use from_call and an actual numeric leaf; typed value/ref is not source proof. Put formula constants in expression.");
+    const leaf = {...financialValue(spec), name}; lineage.push(leaf);
+    if(!leaf.unit) throw new DerivationError(`Source ${spec.from_call} has no published unit; provide unit only when metadata omits it.`);
+    const unit=parseUnit(leaf.unit);return {value:leaf.value*unit.factor,dims:unit.dims,shown:{name,value:leaf.value,unit:leaf.unit,ref:leaf.ref,tool:recallResult(leaf.ref)?.tool,field:leaf.metric,symbol:leaf.entity,time:leaf.period}}
+  }
   if ("value" in spec) {
     const unit = parseUnit(spec.unit)
     return { value: spec.value * unit.factor, dims: unit.dims, shown: { name, value: spec.value, ...(spec.unit ? { unit: spec.unit } : {}), ...(spec.ref ? { ref: spec.ref } : {}) } }
@@ -105,13 +113,18 @@ export interface CalcResult {
   warnings?: string[]
 }
 
-export function calculate(input: Input): CalcResult {
-  const resolved: Record<string, Resolved> = {}
-  for (const [name, spec] of Object.entries(input.values ?? {})) resolved[name] = resolve(name, spec)
+export function calculate(input: Input, grounded = false): CalcResult & Partial<ReturnType<typeof sourceProof>> {
+  if(grounded)checkSourceBindings(input.expression,Object.keys(input.values??{}))
+  const lineage: FinancialLeaf[] = []
+  const resolved: Record<string, Resolved> = Object.create(null)
+  for (const [name, spec] of Object.entries(input.values ?? {})) resolved[name] = resolve(name, spec, grounded, lineage)
+  if(grounded) validateAlignment(lineage, input.alignment)
   // Digits typed into the expression are fine for constants (100, 1/3, 4 quarters); a figure
   // from data typed there loses its unit and its source.
   const literal = dataLiterals(input.expression)
   const warnings: string[] = []
+  if(grounded && nonFormulaLiterals(input.expression).length) throw new DerivationError("Financial figures must be retrieved via source refs, not embedded in expressions.")
+  if(grounded && !lineage.length) throw new DerivationError("Financial calculation requires at least one verified source operand.")
   if (literal.length > 0) warnings.push(`Biểu thức có số viết thẳng (${literal.slice(0, 3).join(", ")}): số lấy từ dữ liệu nên đặt trong values kèm đơn vị và ref.`)
   for (const r of Object.values(resolved)) if (!r.shown.unit && "ref" in r.shown && r.shown.tool) warnings.push(`"${r.shown.name}" không rõ đơn vị: kiểm tra lại trước khi dùng.`)
   const q = evaluate(input.expression, resolved)
@@ -131,6 +144,7 @@ export function calculate(input: Input): CalcResult {
     unit: unitText,
     inputs: Object.values(resolved).map((r) => r.shown),
     ...(warnings.length ? { warnings } : {}),
+    ...(grounded ? sourceProof(lineage,input.expression,Number(value.toFixed(decimals)),unitText) : {}),
   }
 }
 
@@ -141,7 +155,7 @@ export function calculateTool(): ToolDef<Input> {
       "Máy tính có đơn vị: tính biểu thức (+ - * / ^, ngoặc, hàm) trên các giá trị đặt tên, mỗi giá trị kèm đơn vị, rồi đổi kết quả sang đơn vị cần. Lệch đơn vị (cộng giá với khối lượng, đổi % sang tỷ đồng) thì báo lỗi thay vì ra số sai. " +
       "Dùng khi: mọi con số phải tính ra (tỷ lệ, % thay đổi, CAGR, P/E, EV, giá trị vị thế, đổi tỷ ↔ nghìn tỷ, nghìn đồng ↔ đồng); không tự tính nhẩm. Lấy số thẳng từ ref bằng from_call khi có. Câu trả lời ghi số này kèm ref của phép tính. " +
       "Không dùng khi: số đã có sẵn trong kết quả tool; phép trên cả chuỗi theo ref (trung bình 8 quý, % thay đổi qua 63 phiên) thì dùng compute. " +
-      'Ví dụ: {"expression":"price / eps","values":{"price":{"from_call":"r2","field":"close"},"eps":{"value":4520,"unit":"đồng/cổ phiếu","ref":"r5"}},"unit":"lần"}.',
+      'Ví dụ: {"expression":"price / eps","values":{"price":{"from_call":"r2","field":"close"},"eps":{"from_call":"r5","field":"eps"}},"unit":"lần"}. Financial mode requires actual source refs; field/path selects numeric leaves, never type source numbers.',
     input: Input,
     readOnly: true,
     source: LOCAL_SOURCE,
@@ -149,15 +163,18 @@ export function calculateTool(): ToolDef<Input> {
     async execute(input, ctx: ToolContext) {
       let out: CalcResult
       try {
-        out = calculate(input)
+        out = calculate(input, ctx.groundedFinancial)
       } catch (error) {
         // A wrong expression or a unit mismatch is the model's to fix: say exactly what.
-        if (error instanceof CalcError) throw new Error(`Không tính được: ${error.message}`)
+        if (error instanceof CalcError) {
+          if(ctx.groundedFinancial)throw new DerivationError(`invalid_derivation: ${error.message}`)
+          throw new Error(`Không tính được: ${error.message}`)
+        }
         throw error
       }
       const text = JSON.stringify(out)
-      const ref = rememberResult("calculate", text)
-      keepEvidence({ ref, callId: ctx.callId, tool: "calculate", input, text })
+      const ref = rememberResult("calculate", text, {callId: ctx.callId, rawText: text, rawSha256: new Bun.CryptoHasher("sha256").update(text).digest("hex"), visibleSha256: new Bun.CryptoHasher("sha256").update(text).digest("hex")})
+      keepEvidence({ ref, callId: ctx.callId, tool: "calculate", input, text, rawText:text,rawSha256:new Bun.CryptoHasher("sha256").update(text).digest("hex"),visibleSha256:new Bun.CryptoHasher("sha256").update(text).digest("hex") })
       return `${REF_PREFIX}${ref}] ${text}`
     },
   }

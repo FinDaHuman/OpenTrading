@@ -46,6 +46,8 @@ export interface RetryNotice {
 }
 
 export interface RetryOptions {
+  /** Explicit caller-owned transport retries; zero disables this retry layer. */
+  maxRetries?: number
   onRetry?: (notice: RetryNotice) => void
   /** Estimated size of the request, to tell a request too large for a per-minute quota. */
   requestTokens?: () => number
@@ -193,7 +195,7 @@ export async function withRetries<T>(call: () => PromiseLike<T>, signal: AbortSi
         const tokens = limit === undefined ? 0 : opts.requestTokens()
         if (limit !== undefined && tokens > limit) throw new RequestOverQuota(tokens, limit)
       }
-      const max = retriesFor(failure.kind)
+      const max = Math.min(retriesFor(failure.kind), opts.maxRetries ?? Infinity)
       if (attempt > max) throw error
       const delayMs = failure.kind === "rate-limit" && failure.delayMs !== undefined ? failure.delayMs : backoff(attempt, opts.random)
       if (delayMs > MAX_WAIT_MS) throw error

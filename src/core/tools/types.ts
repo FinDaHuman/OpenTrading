@@ -6,6 +6,8 @@ import type { DiffLine } from "../fs/diff"
 import type { ModelMessage } from "ai"
 
 export interface ToolContext {
+  /** Source-grounded financial calculations; generic calculator default unchanged. */
+  groundedFinancial?: boolean
   signal: AbortSignal
   callId: string
   /** What `prepare` returned, if the tool has one. */
@@ -52,6 +54,8 @@ export interface ToolResult {
 export interface ToolDef<I = any> {
   /** Name the model sees: [A-Za-z0-9_-], at most 64 characters. */
   name: string
+  /** Exact original MCP public name, before SDK sanitization. */
+  canonicalName?: string
   description: string
   /** zod for native tools, plain JSON Schema for MCP tools. */
   input: z.ZodType<I> | JSONSchema7

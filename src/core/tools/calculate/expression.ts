@@ -108,6 +108,22 @@ export function dataLiterals(text: string): string[] {
   }
 }
 
+/** Public formula constants only; financial operands must be source-bound variables. */
+export const FORMULA_CONSTANTS = [0,1,2,3,4,12,100,252,365] as const
+export function nonFormulaLiterals(text:string):string[] {
+  return tokenize(text).flatMap(t=>t.kind === "num" && !(FORMULA_CONSTANTS as readonly number[]).includes(t.value) ? [String(t.value)] : [])
+}
+
+/** Variable names only: a name followed by '(' is a function call, not a source binding. */
+export function expressionVariables(text:string):string[] {
+ const tokens=tokenize(text)
+ return [...new Set(tokens.flatMap((t,i)=>t.kind === "name" && !(tokens[i+1]?.kind === "op" && (tokens[i+1] as {op:string}).op === "(") ? [t.name] : []))]
+}
+export function checkSourceBindings(text:string,names:string[]) {
+ const used=expressionVariables(text);const missing=used.filter(x=>!names.includes(x));const unused=names.filter(x=>!used.includes(x))
+ if(missing.length||unused.length)throw new CalcError(`Expression/source bindings differ: missing=[${missing.join(",")}], unused=[${unused.join(",")}]. Supply exactly the variables used in expression.`)
+}
+
 /** Evaluate `text` with `values` (each already in base units). */
 export function evaluate(text: string, values: Record<string, Quantity>): Quantity {
   const tokens = tokenize(text)

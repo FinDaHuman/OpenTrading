@@ -57,7 +57,8 @@ function baseOf(word: string): string | undefined {
 
 /** One factor of a unit: "tỷ đồng", "cổ phiếu", "%". */
 function term(raw: string): Unit {
-  const text = norm(raw)
+  const aliases: Record<string,string> = {vndbn:"tỷ đồng", vndmn:"triệu đồng", vndk:"nghìn đồng", "vnd/share":"đồng/cổ phiếu", "vnd/cổ phiếu":"đồng/cổ phiếu", "billion vnd":"tỷ đồng", "million vnd":"triệu đồng"}
+  const text = aliases[norm(raw)] ?? norm(raw)
   if (text in DIMENSIONLESS) return { factor: DIMENSIONLESS[text]!, dims: {} }
   for (const [word, scale] of MAGNITUDES) {
     if (text === word) return { factor: scale, dims: {} }
