@@ -32,6 +32,7 @@ import { stripCardBlocks } from "./memory/cards/block"
 import type { CardOutcome } from "./memory/cards/types"
 import { typedText } from "./memory/notebook/topics"
 import { assemble, validatePromptDir, type Assembled } from "./prompt/assemble"
+import { renderMcpGuidance } from "./prompt/mcp-guidance"
 import { estimateTokens, tierOf, type Tier } from "./prompt/budget"
 import type { ClockSnapshot } from "./prompt/market-clock"
 import { languageModel } from "./providers"
@@ -884,6 +885,15 @@ const cap = (text: string | undefined, max: number) =>
 const FILE_TOOLS = ["read_file", "write_file", "shell"]
 const fileTool = (registry: TurnInput["registry"], name: string) => FILE_TOOLS.includes(name) && (name !== "shell" || registry.get(name)?.effect === "shell")
 
+function serverGuidance(opts: Pick<RunOptions, "registry" | "serverInstructions">, names: readonly string[], tier: Tier) {
+  if (!opts.serverInstructions) return undefined
+  const sources = new Set(names.flatMap((name) => {
+    const source = opts.registry.get(name)?.source
+    return source?.startsWith("mcp:") ? [source] : []
+  }))
+  return sources.size ? renderMcpGuidance(opts.serverInstructions(), sources, tier) : undefined
+}
+
 async function assembleFor(opts: TurnInput, target: Target | undefined, bound: Bound, extras: TurnExtras = {}) {
   const info = target?.provider.models[target.model]
   const supportsTools = info?.tool_call !== false
@@ -920,7 +930,6 @@ async function assembleFor(opts: TurnInput, target: Target | undefined, bound: B
     prevClock: opts.prevClock,
     deferredTools: built && built.deferred.length > 0 ? deferredByServer(opts.registry, built.deferred) : undefined,
     declaredTools: built ? Object.keys(built.tools) : undefined,
-    mcpInstructions: opts.serverInstructions?.(),
     todos: currentTodos(opts.history ?? []),
     fileAccess: toolNames.some((t) => fileTool(opts.registry, t)) && opts.registry.workspace ? `${opts.registry.workspace.describe()}\n${modeNote(mode)}` : undefined,
     prevFileAccess: lastReminder(opts.history ?? [], "quyen_tep"),
@@ -1100,6 +1109,8 @@ export async function previewContext(opts: TurnInput) {
   }
   const bound = await bindLenient({ role: opts.role ?? "main", constraints: opts.constraints })
   const { assembled, tier, built } = await assembleFor(opts, target, bound)
+  const guidance = serverGuidance(opts, built?.names ?? [], tier)
+  if (guidance) assembled.report.push({ id: "huong_dan_mcp", layer: 7, channel: "context", tokens: estimateTokens(guidance.text), truncated: guidance.truncated, dropped: false })
   const loaded = new Set(loadedTools(opts.history ?? []))
   return {
     report: assembled.report,
@@ -1245,6 +1256,7 @@ async function* runTurn(opts: RunOptions, budget?: RequestBudget): AsyncGenerato
   // Visible tools at the current step; deferred tools join once loaded (tool search).
   let active = activeFor(built, request)
   let loaded = loadedTools(request)
+  let guidanceTokens = 0
   // Steps used by earlier runs of this turn: a recovery run counts from 0 again, but the step
   // cap (and its forced summary) is for the whole turn.
   let stepsUsed = 0
@@ -1281,6 +1293,13 @@ async function* runTurn(opts: RunOptions, budget?: RequestBudget): AsyncGenerato
         }
         active = activeFor(built, messages)
         loaded = loadedTools(messages)
+        const guide = serverGuidance(opts, active ?? built?.names ?? [], prepared.tier)
+        // Rebuilt from the host each step: discovery, skill preload and repaired calls all
+        // use the active tool set. The reminder marker keeps this out of the user's intent
+        // seen by auto approval, and the temporary part never reaches saved history.
+        const guidance = guide ? `<${REMINDER_TAG}>\n${guide.text}\n</${REMINDER_TAG}>` : undefined
+        guidanceTokens = guidance ? estimateTokens(guidance) : 0
+        messages = withContext(messages, guidance)
         const failures = turnFailures(messages)
         const stopped = failures.streak >= FAILURE_STREAK_STOP
         // A run that must end in its final tool ends there: with tools off it could not.
@@ -1523,7 +1542,7 @@ async function* runTurn(opts: RunOptions, budget?: RequestBudget): AsyncGenerato
     const usage =
       tokens !== undefined
         ? { contextTokens: tokens + midTurnSaved, estimated: false, total: outcome.usage }
-        : { contextTokens: estimateRequest(system, [...request, ...messages], built?.tokens), estimated: true, total: outcome.usage }
+        : { contextTokens: estimateRequest(system, [...request, ...messages], (built?.tokens ?? 0) + guidanceTokens), estimated: true, total: outcome.usage }
     yield {
       type: "done",
       messages: [user, ...messages],
@@ -1566,7 +1585,7 @@ async function* runTurn(opts: RunOptions, budget?: RequestBudget): AsyncGenerato
     messages: [user, ...progress, ...closing],
     clock: assembled.clock,
     usage: {
-      contextTokens: estimateRequest(system, [...request, ...progress, ...closing], built?.tokens),
+      contextTokens: estimateRequest(system, [...request, ...progress, ...closing], (built?.tokens ?? 0) + guidanceTokens),
       estimated: true,
       total: outcome.usage,
     },
