@@ -26,9 +26,10 @@ test('equal-unit source growth still works and source scope verification stays e
  expect(out.result).toBe(100);expect(out.derived_result.alignment_verification.scope).toBe('unverified_missing')
  expect(out.derived_result.alignment_verification.entity).toBe('verified')
 })
-test('a financial comparison cannot silently accept all-missing entity metadata',async()=>{
+test('a financial comparison with all-missing entity metadata is computed but never verified',async()=>{
  const ref=source(series('VNDmn','VNDmn'),null)
- await expect(computeTool().execute({op:'pct_change',from_call:ref,field:'sales'},ctx)).rejects.toThrow(/entity/i)
+ const out=parse(await computeTool().execute({op:'pct_change',from_call:ref,field:'sales'},ctx))
+ expect(out.lineage).toBe('unverified');expect(out.lineage_note).toMatch(/entity/i);expect(out.derived_result).toBeUndefined()
 })
 
 test('historical candle t/time rows keep their actual dates instead of latest capture time',async()=>{

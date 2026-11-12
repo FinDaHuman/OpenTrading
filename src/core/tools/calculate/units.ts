@@ -46,7 +46,7 @@ const BASES: [string, string[]][] = [
 ]
 
 /** Plain numbers: "lần" is a multiple (P/E 12 lần), "%" is a hundredth. */
-const DIMENSIONLESS: Record<string, number> = { "": 1, lần: 1, x: 1, "%": 0.01, "điểm %": 0.01, "điểm phần trăm": 0.01, "phần trăm": 0.01, bps: 0.0001 }
+const DIMENSIONLESS: Record<string, number> = { "": 1, lần: 1, "tỷ lệ": 1, "tỉ lệ": 1, dimensionless: 1, unitless: 1, ratio: 1, fraction: 1, x: 1, "%": 0.01, "điểm %": 0.01, "điểm phần trăm": 0.01, "phần trăm": 0.01, bps: 0.0001 }
 
 const norm = (s: string) => s.normalize("NFC").toLowerCase().replace(/\s+/g, " ").trim()
 
@@ -116,4 +116,12 @@ export function describeDims(dims: Dims): string {
   const bottom = Object.entries(dims).filter(([, v]) => v < 0).map(([k, v]) => fmt(k, v))
   if (top.length === 0 && bottom.length === 0) return ""
   return `${top.join("·") || "1"}${bottom.length ? `/${bottom.join("/")}` : ""}`
+}
+
+/** Same dimensions once the per-share denominator is ignored ("nghìn đồng" vs "nghìn đồng/cổ phiếu" for a price). */
+export const samePerShare = (a: Dims, b: Dims) => {
+  const x = { ...a }, y = { ...b }
+  delete x["cổ phiếu"]
+  delete y["cổ phiếu"]
+  return sameDims(x, y)
 }

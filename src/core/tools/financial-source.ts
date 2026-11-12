@@ -50,7 +50,7 @@ export function financialLeaves(ref:string):FinancialLeaf[] {
  walk(object(raw.data)||Array.isArray(raw.data)?raw.data:raw,raw.data!==undefined?"/data":"",[],"")
  return out
 }
-export function financialValue(spec:SourceSpec):FinancialLeaf {
+export function financialValue(spec:SourceSpec,lenient=false):FinancialLeaf {
  const stored=recallResult(spec.from_call)
  if(stored && ["calculate","compute"].includes(stored.tool)) {
   const parsed=parseResult(stored.text); if(!object(parsed)||!object(parsed.derived_result)||typeof parsed.result!=="number"||!Array.isArray(parsed.derived_result.inputs)||!stored.rawText||hash(stored.rawText)!==stored.rawSha256)throw new DerivationError("Derived ref lacks verified source lineage.")
@@ -68,8 +68,11 @@ export function financialValue(spec:SourceSpec):FinancialLeaf {
  if(leaves.every(x=>x.period))leaves.sort((a,b)=>timeKey(a)-timeKey(b)||String(a.period).localeCompare(String(b.period)))
  const at=spec.at===undefined||spec.at==="last"?leaves.length-1:spec.at==="first"?0:spec.at<0?leaves.length+spec.at:spec.at
  const result=leaves[at];if(!result)throw new DerivationError(`Index outside source ${spec.from_call}.`)
- if(spec.unit && result.unit && (parseUnit(spec.unit).factor!==parseUnit(result.unit).factor||!sameDims(parseUnit(spec.unit).dims,parseUnit(result.unit).dims)))throw new DerivationError(`Published unit ${result.unit} cannot be overridden as ${spec.unit}.`)
- if(!result.unit)throw new DerivationError(`Source ${spec.from_call} has no published financial unit; a caller-supplied unit is not proof.`)
+ // Same scale, differing only by the per-share denominator ("nghìn đồng" vs "nghìn đồng/cổ phiếu" for a price):
+ // the label is equivalent, the source unit is kept on the leaf. Any other scale/dimension change still fails.
+ const perShareOnly=(a:Record<string,number>,b:Record<string,number>)=>{const x={...a},y={...b};delete x["cổ phiếu"];delete y["cổ phiếu"];return sameDims(x,y)}
+ if(spec.unit && result.unit && (parseUnit(spec.unit).factor!==parseUnit(result.unit).factor||!(sameDims(parseUnit(spec.unit).dims,parseUnit(result.unit).dims)||perShareOnly(parseUnit(spec.unit).dims,parseUnit(result.unit).dims))))throw new DerivationError(`Published unit ${result.unit} cannot be overridden as ${spec.unit}. Copy the source unit exactly; request conversion in output unit. A user label is not source metadata.`)
+ if(!result.unit){if(lenient)return {...result,unit:spec.unit??""};throw new DerivationError(`Source ${spec.from_call} has no published financial unit; a caller-supplied unit is not proof.`)}
  return result
 }
 export function validateAlignment(inputs:FinancialLeaf[],alignment:"same_period"|"time_series"|"cross_entity_same_period"="same_period") {
@@ -82,4 +85,30 @@ export function validateAlignment(inputs:FinancialLeaf[],alignment:"same_period"
 export function sourceProof(inputs:FinancialLeaf[],expression:string,value:unknown,unit?:string){
  const roots=(xs:FinancialLeaf[]):FinancialLeaf[]=>xs.flatMap(x=>x.derived_inputs?roots(x.derived_inputs):[x]);const source=roots(inputs)
  return {source_evidence:[...new Map(source.filter(x=>x.receipt).map(x=>[x.call_id,x.receipt])).values()],derived_result:{expression,value,unit:unit??"",alignment_verification:Object.fromEntries(["entity","period","scope","unit"].map(k=>[k,source.every(x=>!!x[k as keyof FinancialLeaf])?"verified":"unverified_missing"])),inputs:source,expression_inputs:inputs,source_scopes:source.map(x=>({entity:x.entity,period:x.period,scope:x.scope,metric:x.metric}))}}
+}
+
+/** Grounded failures that only say "this lineage cannot be proven" (missing unit/period/entity metadata,
+ *  a typed operand, an undeclared alignment). The arithmetic itself is sound, so the tools may still
+ *  compute and label the result unverified. Inconsistencies (scale changes, unit/metric/scope mismatch,
+ *  unit overrides with another scale, unused variables, ambiguous selectors) are never relaxed: computing
+ *  past them would produce a wrong number. */
+export function relaxableDerivation(message: string): boolean {
+  return [
+    /has no published (financial )?unit/i,
+    /Missing published financial unit/i,
+    /Missing financial period/i,
+    /Missing entity metadata/i,
+    /Missing (scope|period|entity) on one source/i,
+    /typed value\/ref is not source proof/i,
+    /Financial figures must be retrieved via source refs/i,
+    /requires at least one verified source operand/i,
+    /Incompatible entity/i,
+    /explicit unambiguous (field )?unit metadata/i,
+    /lacks an intact SDK\/raw record/i,
+  ].some((re) => re.test(message))
+}
+
+/** validateAlignment that, in lenient (unverified) mode, tolerates only missing-metadata failures. */
+export function alignOrRelax(inputs:FinancialLeaf[],alignment:"same_period"|"time_series"|"cross_entity_same_period"|undefined,lenient:boolean){
+ try{validateAlignment(inputs,alignment)}catch(error){if(!(lenient&&error instanceof DerivationError&&relaxableDerivation(error.message)))throw error}
 }

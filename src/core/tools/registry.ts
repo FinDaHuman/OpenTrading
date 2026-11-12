@@ -1,4 +1,4 @@
-import type { FinancePolicyState } from "../finance-policy"
+import { validateAuthoritativeInput, type FinancePolicyState, type FinanceAuditOrigin } from "../finance-policy"
 import { dynamicTool, jsonSchema, tool, type ModelMessage, type ToolSet } from "ai"
 import type { JSONSchema7 } from "@ai-sdk/provider"
 import { z } from "zod"
@@ -184,15 +184,16 @@ export class ToolRegistry {
     const loop = new LoopGuard()
     for (const def of [...declared].sort((a, b) => a.name.localeCompare(b.name))) {
       const execute = async (input: unknown, options: { abortSignal?: AbortSignal; toolCallId: string; messages?: ModelMessage[] }) => {
-        try { opts.financeState?.before(def,input,options.toolCallId) } catch(error) {
-          opts.financeState?.localRejections.set(options.toolCallId,{code:"policy_guard_rejected",tool:def.name,rawInput:JSON.stringify(input),reason:error instanceof Error?error.message:String(error)})
+        let reservedOrigin:FinanceAuditOrigin|undefined
+        try { reservedOrigin=opts.financeState?.before(def,input,options.toolCallId) } catch(error) {
+          opts.financeState?.noteLocalRejection(options.toolCallId,{code:"policy_guard_rejected",tool:def.name,rawInput:JSON.stringify(input),reason:error instanceof Error?error.message:String(error)})
           throw error
         }
         try {
           const result=await runTool(def,input,{signal:options.abortSignal??new AbortController().signal,callId:options.toolCallId,agent:this.origin,loop,messages:options.messages,groundedFinancial:opts.groundedFinancial},this.lock,this.gate)
-          opts.financeState?.succeeded(def,result,input,options.toolCallId)
+          opts.financeState?.succeeded(def,result,input,options.toolCallId,reservedOrigin)
           return result
-        }catch(error){opts.financeState?.failed(def,input,error,options.toolCallId);throw error}
+        }catch(error){opts.financeState?.failed(def,input,error,options.toolCallId,reservedOrigin);throw error}
       }
       // Financial source contracts are authoritative JSON Schema, including finite
       // variants, required-only combinator clauses, not and closed objects. Generic
@@ -204,7 +205,7 @@ export class ToolRegistry {
       set[def.name] =
         def.input instanceof z.ZodType
           ? tool({ description: def.description, inputSchema: def.input, execute, toModelOutput })
-          : dynamicTool({ description: def.description, inputSchema: opts.financeState ? jsonSchema(inputContract, {validate:value=>opts.financeState!.validate({...def,input:inputContract},value)}) : jsonSchema(inputContract), execute, toModelOutput })
+          : dynamicTool({ description: def.description, inputSchema: opts.groundedFinancial && def.source?.startsWith("mcp:") ? jsonSchema(inputContract, {validate:value=>validateAuthoritativeInput(inputContract,value)}) : opts.financeState ? jsonSchema(inputContract, {validate:value=>opts.financeState!.validate({...def,input:inputContract},value)}) : jsonSchema(inputContract), execute, toModelOutput })
     }
     return {
       tools: set,

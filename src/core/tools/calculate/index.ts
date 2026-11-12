@@ -1,11 +1,11 @@
-import { financialValue, sourceProof, validateAlignment, DerivationError, type FinancialLeaf } from "../financial-source"
+import { financialValue, sourceProof, alignOrRelax, DerivationError, relaxableDerivation, type FinancialLeaf } from "../financial-source"
 import { z } from "zod"
 import { extractFromRef } from "../chart/extract"
 import { readEnvelope } from "../envelope"
 import { keepEvidence, recallResult, REF_PREFIX, rememberResult } from "../refs"
 import { LOCAL_SOURCE, type ToolContext, type ToolDef } from "../types"
-import { CalcError, dataLiterals, nonFormulaLiterals, checkSourceBindings, evaluate, FUNCTION_NAMES, type Quantity } from "./expression"
-import { describeDims, parseUnit, sameDims } from "./units"
+import { CalcError, dataLiterals, expressionVariables, nonFormulaLiterals, nonFormulaLiteralsRelaxed, checkSourceBindings, evaluate, FUNCTION_NAMES, type Quantity } from "./expression"
+import { describeDims, parseUnit, sameDims, samePerShare } from "./units"
 
 /**
  * `calculate`: the model's arithmetic, done by the harness. Models get sums, percentages and
@@ -53,11 +53,15 @@ function pick<T>(list: T[], at: "last" | "first" | number | undefined, what: str
   return { item: list[index]!, index }
 }
 
-function resolve(name: string, spec: ValueSpec, grounded = false, lineage: FinancialLeaf[] = []): Resolved {
+function resolve(name: string, spec: ValueSpec, grounded = false, lineage: FinancialLeaf[] = [], lenient = false): Resolved {
+  if (grounded && lenient && "value" in spec) {
+    const unit = parseUnit(spec.unit)
+    return { value: spec.value * unit.factor, dims: unit.dims, shown: { name, value: spec.value, ...(spec.unit ? { unit: spec.unit } : {}), ...(spec.ref ? { ref: spec.ref } : {}) } }
+  }
   if (grounded) {
     if ("value" in spec) throw new DerivationError("Financial operands must use from_call and an actual numeric leaf; typed value/ref is not source proof. Put formula constants in expression.");
-    const leaf = {...financialValue(spec), name}; lineage.push(leaf);
-    if(!leaf.unit) throw new DerivationError(`Source ${spec.from_call} has no published unit; provide unit only when metadata omits it.`);
+    const leaf = {...financialValue(spec, lenient), name}; lineage.push(leaf);
+    if(!leaf.unit && !lenient) throw new DerivationError(`Source ${spec.from_call} has no published unit; provide unit only when metadata omits it.`);
     const unit=parseUnit(leaf.unit);return {value:leaf.value*unit.factor,dims:unit.dims,shown:{name,value:leaf.value,unit:leaf.unit,ref:leaf.ref,tool:recallResult(leaf.ref)?.tool,field:leaf.metric,symbol:leaf.entity,time:leaf.period}}
   }
   if ("value" in spec) {
@@ -72,7 +76,7 @@ function resolve(name: string, spec: ValueSpec, grounded = false, lineage: Finan
   const { item, index } = pick(found.series, spec.at, `"${name}" (${spec.from_call})`)
   const published = found.field ? readEnvelope(recallResult(spec.from_call)?.text ?? "")?.units.get(found.field) : undefined
   const unitText = published ?? spec.unit
-  if (published && spec.unit && !sameDims(parseUnit(published).dims, parseUnit(spec.unit).dims))
+  if (published && spec.unit && !sameDims(parseUnit(published).dims, parseUnit(spec.unit).dims) && !samePerShare(parseUnit(published).dims, parseUnit(spec.unit).dims))
     throw new CalcError(`"${name}": kết quả ${spec.from_call} ghi đơn vị "${published}", không phải "${spec.unit}".`)
   const unit = parseUnit(unitText)
   return {
@@ -104,6 +108,16 @@ function computed(name: string, spec: Extract<ValueSpec, { from_call: string }>,
   return { value: parsed.result * unit.factor, dims: unit.dims, shown: { name, value: parsed.result, ...(unitText ? { unit: unitText } : {}), ref: spec.from_call, tool } }
 }
 
+/** Alignment the inputs imply when the caller did not declare one: several entities → a cross-entity
+ *  aggregate/comparison of one period; one entity over several periods → a time series. */
+function inferAlignment(inputs: FinancialLeaf[]): "same_period" | "time_series" | "cross_entity_same_period" | undefined {
+  const entities = new Set(inputs.map((x) => x.entity).filter(Boolean))
+  const periods = new Set(inputs.map((x) => x.period).filter(Boolean))
+  if (entities.size > 1) return "cross_entity_same_period"
+  if (periods.size > 1) return "time_series"
+  return undefined
+}
+
 export interface CalcResult {
   expression: string
   result: number
@@ -111,32 +125,49 @@ export interface CalcResult {
   inputs: Resolved["shown"][]
   /** A value whose unit no one gave: the result may be off by its scale. */
   warnings?: string[]
+  /** The expression and the output unit both scaled by the same power of ten; applied once. */
+  scale_fixed?: boolean
 }
 
-export function calculate(input: Input, grounded = false): CalcResult & Partial<ReturnType<typeof sourceProof>> {
+export function calculate(input: Input, grounded = false, lenient = false, relaxedUnits = false): CalcResult & Partial<ReturnType<typeof sourceProof>> {
+  input = bindRefVariables(input)
   if(grounded)checkSourceBindings(input.expression,Object.keys(input.values??{}))
   const lineage: FinancialLeaf[] = []
   const resolved: Record<string, Resolved> = Object.create(null)
-  for (const [name, spec] of Object.entries(input.values ?? {})) resolved[name] = resolve(name, spec, grounded, lineage)
-  if(grounded) validateAlignment(lineage, input.alignment)
+  for (const [name, spec] of Object.entries(input.values ?? {})) resolved[name] = resolve(name, spec, grounded, lineage, lenient)
+  if(grounded) alignOrRelax(lineage, input.alignment ?? inferAlignment(lineage), lenient)
   // Digits typed into the expression are fine for constants (100, 1/3, 4 quarters); a figure
   // from data typed there loses its unit and its source.
   const literal = dataLiterals(input.expression)
   const warnings: string[] = []
-  if(grounded && nonFormulaLiterals(input.expression).length) throw new DerivationError("Financial figures must be retrieved via source refs, not embedded in expressions.")
-  if(grounded && !lineage.length) throw new DerivationError("Financial calculation requires at least one verified source operand.")
+  if(grounded && !lenient && (relaxedUnits ? nonFormulaLiteralsRelaxed : nonFormulaLiterals)(input.expression).length) throw new DerivationError("Financial figures must be retrieved via source refs, not embedded in expressions.")
+  if(grounded && !lenient && !lineage.length) throw new DerivationError("Financial calculation requires at least one verified source operand.")
   if (literal.length > 0) warnings.push(`Biểu thức có số viết thẳng (${literal.slice(0, 3).join(", ")}): số lấy từ dữ liệu nên đặt trong values kèm đơn vị và ref.`)
   for (const r of Object.values(resolved)) if (!r.shown.unit && "ref" in r.shown && r.shown.tool) warnings.push(`"${r.shown.name}" không rõ đơn vị: kiểm tra lại trước khi dùng.`)
   const q = evaluate(input.expression, resolved)
   const decimals = input.decimals ?? 6
   let value = q.value
+  let scaleFixed = false
   let unitText = describeDims(q.dims)
   if (input.unit !== undefined) {
     const want = parseUnit(input.unit)
-    if (!sameDims(want.dims, q.dims))
+    if (!sameDims(want.dims, q.dims) && !(relaxedUnits && samePerShare(want.dims, q.dims)))
       throw new CalcError(`Kết quả có đơn vị ${describeDims(q.dims) || "số thuần"}, không đổi được sang "${input.unit}" (${describeDims(want.dims) || "số thuần"}): lệch đơn vị.`)
-    value = q.value / want.factor
+    // Double scaling (pilot or15 fin-l5-profile-01): "cap / 1000000000" with unit "tỷ đồng", or "(a/b-1)*100"
+    // with unit "%", states the same conversion twice. Both parts mean one intent, so the expression's own
+    // scaling is kept and the unit conversion is skipped (never a silent 10^9 error); the result is labelled.
+    const dup = want.factor !== 1 ? scaleLiterals(input.expression).find((s) => near(s, want.factor) || near(s, 1 / want.factor)) : undefined
+    if (dup !== undefined) {
+      scaleFixed = true
+      value = q.value
+      warnings.push(`Biểu thức đã tự nhân/chia ${dup} và đơn vị "${input.unit}" cũng quy đổi cùng hệ số: chỉ áp một lần (kết quả theo ${input.unit}).`)
+    } else value = q.value / want.factor
     unitText = input.unit
+    // Per-share-only label difference: keep the true dimension in the reported unit.
+    if (!sameDims(want.dims, q.dims)) {
+      const perShare = (q.dims["cổ phiếu"] ?? 0) === -1
+      unitText = perShare ? `${input.unit.replace(/\s+$/, "")}/cổ phiếu` : input.unit.replace(/\s*\/\s*(cổ phiếu|cp|shares?)\s*$/i, "")
+    }
   }
   return {
     expression: input.expression,
@@ -144,9 +175,37 @@ export function calculate(input: Input, grounded = false): CalcResult & Partial<
     unit: unitText,
     inputs: Object.values(resolved).map((r) => r.shown),
     ...(warnings.length ? { warnings } : {}),
-    ...(grounded ? sourceProof(lineage,input.expression,Number(value.toFixed(decimals)),unitText) : {}),
+    ...(scaleFixed ? { scale_fixed: true } : {}),
+    ...(grounded && !lenient && !scaleFixed ? sourceProof(lineage,input.expression,Number(value.toFixed(decimals)),unitText) : {}),
   }
 }
+
+/**
+ * Pilot or15r: DeepSeek repeatedly dropped `values` on long calculate calls and looped until the request budget ran
+ * out. A variable named like a ref (r38) that is not in `values` now binds to that earlier compute/calculate result
+ * (its result and unit), so "(r38 + r39 + r40) / 3" needs no values object. Data refs still need field/path.
+ */
+export function bindRefVariables(input: Input): Input {
+  const given = input.values ?? {}
+  const refs = expressionVariables(input.expression).filter((v) => /^r\d+$/.test(v) && !(v in given))
+  const bound = refs.filter((v) => { const stored = recallResult(v); return stored && (stored.tool === "compute" || stored.tool === "calculate") })
+  if (!bound.length) return input
+  return { ...input, values: { ...given, ...Object.fromEntries(bound.map((v) => [v, { from_call: v }])) } }
+}
+
+/** Powers of ten (>= 100) that multiply or divide the whole expression or a term: 1000000000, 1e9, 10^9, 100. */
+export function scaleLiterals(expression: string): number[] {
+  const out: number[] = []
+  const num = String.raw`(10\s*\^\s*\d+|\d+(?:\.\d+)?(?:e\d+)?)`
+  for (const m of expression.matchAll(new RegExp(String.raw`[*/]\s*` + num + "|" + num + String.raw`\s*\*`, "gi"))) {
+    const raw = (m[1] ?? m[2] ?? "").replace(/\s+/g, "")
+    const v = raw.includes("^") ? 10 ** Number(raw.split("^")[1]) : Number(raw)
+    if (Number.isFinite(v) && v >= 100 && Math.abs(Math.log10(v) - Math.round(Math.log10(v))) < 1e-9) out.push(v)
+  }
+  return out
+}
+
+const near = (a: number, b: number) => Math.abs(a - b) <= Math.abs(b) * 1e-9
 
 export function calculateTool(): ToolDef<Input> {
   return {
@@ -155,23 +214,33 @@ export function calculateTool(): ToolDef<Input> {
       "Máy tính có đơn vị: tính biểu thức (+ - * / ^, ngoặc, hàm) trên các giá trị đặt tên, mỗi giá trị kèm đơn vị, rồi đổi kết quả sang đơn vị cần. Lệch đơn vị (cộng giá với khối lượng, đổi % sang tỷ đồng) thì báo lỗi thay vì ra số sai. " +
       "Dùng khi: mọi con số phải tính ra (tỷ lệ, % thay đổi, CAGR, P/E, EV, giá trị vị thế, đổi tỷ ↔ nghìn tỷ, nghìn đồng ↔ đồng); không tự tính nhẩm. Lấy số thẳng từ ref bằng from_call khi có. Câu trả lời ghi số này kèm ref của phép tính. " +
       "Không dùng khi: số đã có sẵn trong kết quả tool; phép trên cả chuỗi theo ref (trung bình 8 quý, % thay đổi qua 63 phiên) thì dùng compute. " +
-      'Ví dụ: {"expression":"price / eps","values":{"price":{"from_call":"r2","field":"close"},"eps":{"from_call":"r5","field":"eps"}},"unit":"lần"}. Financial mode requires actual source refs; field/path selects numeric leaves, never type source numbers.',
+      'Kết quả compute/calculate trước dùng thẳng tên ref làm biến, không cần values: {"expression":"(r38 + r39 + r40) / 3","unit":"%"}. ' +
+      'Ví dụ: {"expression":"price / eps","values":{"price":{"from_call":"r2","field":"close"},"eps":{"from_call":"r5","field":"eps"}},"unit":"lần"}. Prefer from_call refs (field/path selects numeric leaves) so the result carries source proof; when the source lacks unit/period metadata or an operand is typed as value+unit, the result is still computed and labelled lineage: unverified.',
     input: Input,
     readOnly: true,
     source: LOCAL_SOURCE,
     summarize: ({ expression }) => `calculate(${expression.length > 60 ? `${expression.slice(0, 57)}…` : expression})`,
     async execute(input, ctx: ToolContext) {
-      let out: CalcResult
+      let out: CalcResult & { lineage?: string; lineage_note?: string }
       try {
-        out = calculate(input, ctx.groundedFinancial)
+        out = calculate(input, ctx.groundedFinancial, false, true)
       } catch (error) {
-        // A wrong expression or a unit mismatch is the model's to fix: say exactly what.
-        if (error instanceof CalcError) {
-          if(ctx.groundedFinancial)throw new DerivationError(`invalid_derivation: ${error.message}`)
+        // Grounded lineage could not be proven (unit/period metadata missing, typed operand, entity
+        // mix): still compute from the stated values instead of dead-ending the turn. The result is
+        // labelled unverified and carries no derived_result, so it is never recorded as source proof.
+        if (ctx.groundedFinancial && error instanceof DerivationError && relaxableDerivation(error.message)) {
+          try {
+            out = { ...calculate(input, true, true, true), lineage: "unverified", lineage_note: `Không gắn được nguồn kiểm chứng (${error.message.slice(0, 200)}). Kết quả tính từ giá trị/đơn vị đã khai: dùng để trả lời, ghi rõ công thức và số đầu vào.` }
+          } catch (fallback) {
+            if (fallback instanceof CalcError) throw new Error(`Không tính được: ${fallback.message}`)
+            throw fallback
+          }
+        } else if (error instanceof CalcError) {
+          if (ctx.groundedFinancial) throw new DerivationError(`invalid_derivation: ${error.message}`)
           throw new Error(`Không tính được: ${error.message}`)
-        }
-        throw error
+        } else throw error
       }
+      if (out.scale_fixed && !out.lineage) out = { ...out, lineage: "unverified", lineage_note: "Quy đổi đơn vị trùng đã được gộp còn một lần; kết quả không mang source proof." }
       const text = JSON.stringify(out)
       const ref = rememberResult("calculate", text, {callId: ctx.callId, rawText: text, rawSha256: new Bun.CryptoHasher("sha256").update(text).digest("hex"), visibleSha256: new Bun.CryptoHasher("sha256").update(text).digest("hex")})
       keepEvidence({ ref, callId: ctx.callId, tool: "calculate", input, text, rawText:text,rawSha256:new Bun.CryptoHasher("sha256").update(text).digest("hex"),visibleSha256:new Bun.CryptoHasher("sha256").update(text).digest("hex") })

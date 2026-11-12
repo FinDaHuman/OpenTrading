@@ -35,15 +35,18 @@ test('source unit override is rejected instead of multiplying a financial value 
  const r=await source({symbol:'AAA',last:12},'VNDbn')
  await expect(calc({expression:'x',values:{x:{from_call:r,field:'last',unit:'VND'}}})).rejects.toThrow('cannot be overridden')
 })
-test('literal ref and embedded data constants are not lineage',async()=>{
- await expect(calc({expression:'x',values:{x:{value:20,unit:'VND',ref:'r99'}}})).rejects.toThrow('typed value/ref')
+test('literal ref and embedded data constants are computed but never lineage (2026-11-11 relaxed calculator)',async()=>{
+ const typed=await calc({expression:'x',values:{x:{value:20,unit:'VND',ref:'r99'}}})
+ expect(typed.result).toBe(20);expect(typed.lineage).toBe('unverified');expect(typed.lineage_note).toContain('typed value/ref')
+ expect(typed.derived_result).toBeUndefined();expect(typed.source_evidence).toBeUndefined()
  const r=await source({symbol:'AAA',last:12})
- await expect(calc({expression:'x+12345',values:{x:{from_call:r,field:'last'}}})).rejects.toThrow('embedded')
+ const embedded=await calc({expression:'x*12345',values:{x:{from_call:r,field:'last'}}})
+ expect(embedded.result).toBe(148140);expect(embedded.lineage).toBe('unverified');expect(embedded.derived_result).toBeUndefined()
 })
-test('period-aligned growth needs explicit time_series and unit-aware percent expression',async()=>{
+test('period-aligned growth infers time_series for one entity over two periods and keeps lineage',async()=>{
  const r=await source({symbol:'AAA',statements:[{name:'revenue',unit:'VNDbn',values:{'Q1/2030':100,'Q2/2030':125}}]})
  const input={expression:'b/a-1',values:{a:{from_call:r,field:'revenue',at:'first'},b:{from_call:r,field:'revenue',at:'last'}},unit:'%'}
- await expect(calc(input)).rejects.toThrow('period')
+ const inferred=await calc(input);expect(inferred.result).toBe(25);expect(inferred.lineage).toBeUndefined();expect(inferred.derived_result.inputs).toHaveLength(2)
  const out=await calc({...input,alignment:'time_series'});expect(out.result).toBe(25);expect(out.derived_result.inputs).toHaveLength(2)
 })
 test('different metrics cannot hide inside time-series alignment',async()=>{
@@ -55,10 +58,12 @@ test('margin on aligned same-entity source figures is computed and periods remai
  const out=await calc({expression:'profit/revenue',values:{profit:{from_call:r,field:'profit'},revenue:{from_call:r,field:'revenue'}},unit:'%'})
  expect(out.result).toBe(12.5);expect(out.derived_result.expression_inputs.map((x:any)=>x.name)).toEqual(['profit','revenue'])
 })
-test('cross-entity aggregation requires explicit alignment; no source metadata is discarded',async()=>{
+test('cross-entity aggregation infers its alignment; no source metadata is discarded',async()=>{
  const a=await source({symbol:'AAA',last:12},'VND','a'),b=await source({symbol:'BBB',last:18},'VND','b')
  const input={expression:'avg(a,b)',values:{a:{from_call:a,field:'last'},b:{from_call:b,field:'last'}},unit:'VND'}
- await expect(calc(input)).rejects.toThrow('entity');expect((await calc({...input,alignment:'cross_entity_same_period'})).result).toBe(15)
+ const inferred=await calc(input);expect(inferred.result).toBe(15);expect(inferred.lineage).toBeUndefined()
+ expect(inferred.source_evidence).toEqual([receipt('a'),receipt('b')]);expect(inferred.derived_result.inputs.map((x:any)=>x.entity)).toEqual(['AAA','BBB'])
+ expect((await calc({...input,alignment:'cross_entity_same_period'})).result).toBe(15)
 })
 test('scope mismatch is not repaired by changing the numeric selector',async()=>{
  const a=await source({symbol:'AAA',scope:'consolidated',last:12},'VND','a'),b=await source({symbol:'AAA',scope:'separate',last:18},'VND','b')
@@ -103,9 +108,11 @@ test('caller supplied units cannot fill missing published financial metadata',as
  expect(()=>financialValue({from_call:r,path:'/data/custom_numeric',unit:'VND'})).toThrow('caller-supplied unit is not proof')
 })
 
-test('statement capture data_time cannot substitute for an absent financial period',async()=>{
+test('statement capture data_time cannot substitute for an absent financial period: computed, unverified',async()=>{
  const r=await source({symbol:'AAA',rows:[{name:'revenue',unit:'VND',value:120}]})
- await expect(calc({expression:'x*2',values:{x:{from_call:r,field:'revenue'}}})).rejects.toThrow('Missing financial period')
+ const out=await calc({expression:'x*2',values:{x:{from_call:r,field:'revenue'}}})
+ expect(out.result).toBe(240);expect(out.lineage).toBe('unverified');expect(out.lineage_note).toContain('Missing financial period')
+ expect(out.derived_result).toBeUndefined();expect(out.source_evidence).toBeUndefined()
 })
 test('actual SDK year/quarter/scope metadata is explicit fallback, not rewritten source evidence',async()=>{
  const r=await source({symbol:'AAA',rows:[{name:'revenue',unit:'VND',value:120}]},'VND','query',{symbol:'AAA',year:2030,quarter:2,consolidated:true})
@@ -116,4 +123,10 @@ test('actual SDK year/quarter/scope metadata is explicit fallback, not rewritten
 test('explicit source period wins over requested SDK period and remains visible for independent audit',async()=>{
  const r=await source({symbol:'AAA',period:'Q1/2030',rows:[{name:'revenue',unit:'VND',value:120}]},'VND','query',{year:2030,quarter:2})
  expect(financialValue({from_call:r,field:'revenue'})).toMatchObject({period:'Q1/2030',period_provenance:'source',query_context:{year:2030,quarter:2}})
+})
+test('per-share label is equivalent at the same scale, other overrides still fail (2026-11-10 OT fix)',async()=>{
+ const r=await source({symbol:'AAA',last:56.3},'nghìn đồng/cổ phiếu')
+ expect(financialValue({from_call:r,field:'last',unit:'nghìn đồng'})).toMatchObject({value:56.3,unit:'nghìn đồng/cổ phiếu'})
+ expect(()=>financialValue({from_call:r,field:'last',unit:'đồng'})).toThrow('cannot be overridden')
+ expect(()=>financialValue({from_call:r,field:'last',unit:'tỷ đồng'})).toThrow('cannot be overridden')
 })

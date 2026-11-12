@@ -1,13 +1,27 @@
-import { parseResult } from "./tools/refs"
+import { createHash } from "node:crypto"
+import { parseResult, recallResult } from "./tools/refs"
 import { financialValue } from "./tools/financial-source"
 /** Opt-in native read-only finance safeguards. No task IDs, oracle or financial gold. */
 import Ajv from "ajv"
 import type { JSONSchema7 } from "@ai-sdk/provider"
 import type { ToolDef } from "./tools/types"
 
-export interface FinancePolicyOptions { enabled: true; machineResponse?: boolean }
+export interface FinanceAuditOrigin {
+  origin_provider_request_index?: number; origin_sdk_call_id: string
+  origin_memory_session?: string; origin_memory_turn?: number; origin_native_session_id?: string
+}
+export interface FinancePolicyOptions { enabled: true; machineResponse?: boolean; auditContext?: () => {provider_request_index?:number;memory_session?:string;memory_turn?:number;native_session_id?:string} }
 const ajv = new Ajv({ strict: false, strictSchema: true, allErrors: true, coerceTypes: false, useDefaults: false, removeAdditional: false, validateFormats: false })
 for (const keyword of ["x-opentrading-schema-profile", "x-repair-fields", "x-finite-request-variants", "x-scope-aliases"]) ajv.addKeyword({ keyword, valid: true })
+const schemaValidators = new WeakMap<object, ReturnType<typeof ajv.compile>>()
+/** The same authoritative request validation applies to both financial benchmark arms. */
+export function validateAuthoritativeInput(schema: unknown, value: unknown) {
+  if (!obj(schema)) return {success:false as const,error:new Error("invalid_tool_schema: MCP input contract must be an object; arguments were not executed.")}
+  let validate = schemaValidators.get(schema)
+  try { if (!validate) { validate=ajv.compile(schema as JSONSchema7); schemaValidators.set(schema,validate) } }
+  catch(error) { return {success:false as const,error:new Error(`invalid_tool_schema: ${error instanceof Error ? error.message : String(error)}; arguments were not executed.`)} }
+  return validate(value) ? {success:true as const,value} : {success:false as const,error:new Error(`invalid_argument: ${ajv.errorsText(validate.errors)}. Correct arguments to the declared schema; rejected input is not evidence of missing data.`)}
+}
 const key = (v: unknown): string => JSON.stringify(v, (_k, x) => x && typeof x === "object" && !Array.isArray(x) ? Object.fromEntries(Object.entries(x).sort(([a],[b])=>a.localeCompare(b))) : x)
 const comparisonValue = (v:unknown):unknown => Array.isArray(v) ? v.map(comparisonValue).sort((a,b)=>key(a).localeCompare(key(b))) : typeof v === "string" ? v.trim().toUpperCase() : obj(v) ? Object.fromEntries(Object.entries(v).map(([k,x])=>[k,comparisonValue(x)])) : v
 const obj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v)
@@ -17,7 +31,7 @@ const immutableClone = (value: unknown): unknown => {
   const freeze = (v: unknown): unknown => { if (v && typeof v === "object") { for (const child of Object.values(v)) freeze(child); Object.freeze(v) }; return v }
   return freeze(copy)
 }
-export interface FinanceIntentAudit {
+export interface FinanceIntentAudit extends FinanceAuditOrigin {
   intent_id: string; original_sdk_call_id: string; sdk_call_id: string
   phase: "initial" | "correction" | "bounded_finance_correction" | "bounded_finance_acquisition"
   correction_budget: number; correction_used: number; reason: string
@@ -45,7 +59,7 @@ function correctionEligible(def: ToolDef, error: unknown): boolean {
   return /^(?:invalid[_. ]argument|invalid[_. ]request|invalid_tool_input|unsupported_snapshot_query|not[_. ]recorded|invalid_derivation|schema(?:[_. ]validation)?|parse)(?:\b|:)/i.test(message.trim())
 }
 export class FinancePolicyState {
-  readonly localRejections = new Map<string, {code:"invalid_tool_input"|"policy_guard_rejected";tool:string;rawInput:string;reason?:string;phase?:"bounded_finance_correction"|"bounded_finance_acquisition";allowedTools?:readonly string[]}>()
+  readonly localRejections = new Map<string, {code:"invalid_tool_input"|"policy_guard_rejected";tool:string;rawInput:string;reason?:string;phase?:"bounded_finance_correction"|"bounded_finance_acquisition";allowedTools?:readonly string[]} & FinanceAuditOrigin>()
   readonly callAudit = new Map<string, FinanceIntentAudit>()
   repairAllowedTools?: ReadonlySet<string>
   private repairIntentIds?: ReadonlySet<string>
@@ -57,7 +71,6 @@ export class FinancePolicyState {
   /** Retained for the complete turn, including successful corrections: no identity reset. */
   readonly failures = new Map<string, Intent>()
   private activeCalls = new Map<string, Intent>()
-  private validators = new WeakMap<object, ReturnType<typeof ajv.compile>>()
   private serial = 0
   constructor(readonly options: FinancePolicyOptions, readonly input: string) {}
   private scope(def: ToolDef, input: unknown): string {
@@ -118,8 +131,22 @@ export class FinancePolicyState {
     const f:Intent={id:`finance-intent-${++this.serial}`,tool:def.name,canonical:def.canonicalName ?? def.name,scope:this.scope(def,input),original:immutableClone(input),originalCallId:callId,args:new Set(),eligible:false,attempts:0,correctionUsed:0,status:"pending",message:""}
     this.failures.set(f.id,f);return f
   }
-  private record(f:Intent,callId:string,phase:FinanceIntentAudit["phase"],reason:string) {
-    this.callAudit.set(callId,{intent_id:f.id,original_sdk_call_id:f.originalCallId,sdk_call_id:callId,phase,correction_budget:1,correction_used:f.correctionUsed,reason})
+  private origin(callId:string):FinanceAuditOrigin {
+    const context=this.options.auditContext?.() ?? {}
+    return {origin_sdk_call_id:callId,origin_provider_request_index:context.provider_request_index,origin_memory_session:context.memory_session,origin_memory_turn:context.memory_turn,origin_native_session_id:context.native_session_id}
+  }
+  private occurrence(origin:FinanceAuditOrigin):string {
+    // Older non-instrumented callers have no generation metadata. Benchmark
+    // callbacks always supply it; SDK identifiers alone never scope those calls.
+    return origin.origin_provider_request_index === undefined && origin.origin_memory_session === undefined && origin.origin_native_session_id === undefined ? origin.origin_sdk_call_id : key({origin_sdk_call_id:origin.origin_sdk_call_id,origin_provider_request_index:origin.origin_provider_request_index,origin_memory_session:origin.origin_memory_session,origin_memory_turn:origin.origin_memory_turn,origin_native_session_id:origin.origin_native_session_id})
+  }
+  noteLocalRejection(callId:string,row:Omit<FinancePolicyState["localRejections"] extends Map<string,infer V> ? V : never,keyof FinanceAuditOrigin>) {
+    const origin=this.origin(callId), occurrence=this.occurrence(origin)
+    this.localRejections.set(occurrence,{...row,...origin})
+  }
+  private record(f:Intent,callId:string,phase:FinanceIntentAudit["phase"],reason:string,origin=this.origin(callId)) {
+    const occurrence=this.occurrence(origin)
+    this.callAudit.set(occurrence,{...origin,intent_id:f.id,original_sdk_call_id:f.originalCallId,sdk_call_id:callId,phase,correction_budget:1,correction_used:f.correctionUsed,reason})
   }
   beginCorrection() {
     this.endAcquisition()
@@ -139,13 +166,8 @@ export class FinancePolicyState {
     this.repairIntentIds=undefined;this.repairAllowedTools=undefined
   }
   endAcquisition() { this.acquisitionActive=false;this.acquisitionAllowedTools=undefined }
-  validate(def: ToolDef, value: unknown) {
-    if (!obj(def.input)) return { success: false as const, error: new Error("unsupported_schema: MCP input contract must be an object schema; arguments were not executed.") }
-    let validate = this.validators.get(def.input)
-    if (!validate) { validate = ajv.compile(def.input as JSONSchema7); this.validators.set(def.input, validate) }
-    if (validate(value)) return { success: true as const, value }
-    return { success: false as const, error: new Error(`invalid_argument: ${ajv.errorsText(validate.errors)}. Correct arguments to the declared schema; rejected input is not evidence of missing data.`) }
-  }
+  validate(def: ToolDef, value: unknown) { return validateAuthoritativeInput(def.input,value) }
+
   before(def: ToolDef, input: unknown, callId = `direct-${++this.serial}`) {
     let f = this.find(def,input)
     const reject = (message:string): never => {
@@ -160,32 +182,39 @@ export class FinancePolicyState {
       if (!f.eligible || f.correctionUsed >= 1) reject("Tool correction exhausted or ineligible; do not replay this request.")
       f.correctionUsed++
     } else f=this.create(def,input,callId)
-    f.args.add(this.requestKey(def,input));f.status="pending";this.activeCalls.set(callId,f)
+    f.args.add(this.requestKey(def,input));f.status="pending";this.activeCalls.set(this.occurrence(this.origin(callId)),f)
     this.record(f,callId,this.repairIntentIds ? "bounded_finance_correction" : this.acquisitionActive ? "bounded_finance_acquisition" : f.correctionUsed ? "correction" : "initial","execution_reserved")
-    return this.callAudit.get(callId)!
+    return this.callAudit.get(this.occurrence(this.origin(callId)))!
   }
-  failed(def: ToolDef, input: unknown, error: unknown, callId?: string) {
-    let f = callId ? this.activeCalls.get(callId) : undefined
+  failed(def: ToolDef, input: unknown, error: unknown, callId?: string, reservedOrigin?:FinanceAuditOrigin) {
+    const origin=reservedOrigin ?? this.origin(callId ?? "")
+    let f = callId ? this.activeCalls.get(this.occurrence(origin)) : undefined
     f ??= this.find(def,input)
     if (!f) f=this.create(def,input,callId ?? `validation-${++this.serial}`)
     // Validation happens before execute. Reserve its correction once, with actual SDK ID.
     const id=callId ?? f.originalCallId
-    if(f.status === "succeeded") {this.record(f,id,this.repairIntentIds ? "bounded_finance_correction" : this.acquisitionActive ? "bounded_finance_acquisition" : "initial","invalid_duplicate_after_success; successful intent retained");return}
-    if (!this.activeCalls.has(id) && f.status === "failed" && !f.args.has(this.requestKey(def,input))) {
+    if(f.status === "succeeded") {this.record(f,id,this.repairIntentIds ? "bounded_finance_correction" : this.acquisitionActive ? "bounded_finance_acquisition" : "initial","invalid_duplicate_after_success; successful intent retained",origin);return}
+    if (!this.activeCalls.has(this.occurrence(origin)) && f.status === "failed" && !f.args.has(this.requestKey(def,input))) {
       if (f.correctionUsed >= 1) return
       f.correctionUsed++
     }
     f.args.add(this.requestKey(def,input));f.attempts++;f.status="failed";f.eligible=correctionEligible(def,error)
     f.message=error instanceof Error ? error.message : String(error)
-    this.activeCalls.delete(id)
-    this.record(f,id,this.repairIntentIds ? "bounded_finance_correction" : this.acquisitionActive ? "bounded_finance_acquisition" : f.correctionUsed ? "correction" : "initial",f.message)
+    this.activeCalls.delete(this.occurrence(origin))
+    this.record(f,id,this.repairIntentIds ? "bounded_finance_correction" : this.acquisitionActive ? "bounded_finance_acquisition" : f.correctionUsed ? "correction" : "initial",f.message,origin)
   }
-  succeeded(def: ToolDef, value: unknown, input?: unknown, callId?:string) {
-    const f=callId ? this.activeCalls.get(callId) : input === undefined ? undefined : this.find(def,input)
-    if(f){f.status="succeeded";f.eligible=false;this.activeCalls.delete(callId!);this.record(f,callId!,this.repairIntentIds ? "bounded_finance_correction" : this.acquisitionActive ? "bounded_finance_acquisition" : f.correctionUsed ? "correction" : "initial","execution_succeeded")}
+  succeeded(def: ToolDef, value: unknown, input?: unknown, callId?:string, reservedOrigin?:FinanceAuditOrigin) {
+    const origin=reservedOrigin ?? this.origin(callId ?? "")
+    const f=callId ? this.activeCalls.get(this.occurrence(origin)) : input === undefined ? undefined : this.find(def,input)
+    if(f){f.status="succeeded";f.eligible=false;this.activeCalls.delete(this.occurrence(origin));this.record(f,callId!,this.repairIntentIds ? "bounded_finance_correction" : this.acquisitionActive ? "bounded_finance_acquisition" : f.correctionUsed ? "correction" : "initial","execution_succeeded",origin)}
     const text = typeof value === "string" ? value : obj(value) && typeof value.output === "string" ? value.output : undefined
     let parsed: unknown = value
-    try { if (text !== undefined) parsed = parseResult(text.includes("<structuredContent>\n") ? text.split("<structuredContent>\n").at(-1)! : text) ?? value } catch {}
+    // runTool adds a local [ref rN] prefix and may cap the visible body. Read the
+    // intact original only when this exact SDK call and registered tool own it.
+    const ref = text && /^\[ref (r\d+)\]\s*/.exec(text)?.[1]
+    const stored = ref ? recallResult(ref) : undefined
+    const raw = stored && callId && stored.callId === callId && stored.tool === def.name && stored.rawText && createHash("sha256").update(stored.rawText).digest("hex") === stored.rawSha256 ? stored.rawText : undefined
+    try { if (text !== undefined && (!ref || raw !== undefined)) parsed = parseResult(raw ?? text) ?? value } catch {}
     this.successes.push({tool:def.name, canonical:def.canonicalName ?? def.name, value:immutableClone(parsed)})
   }
   correctionTools() { return [...new Set([...this.failures.values()].filter(f=>f.status === "failed" && f.eligible && f.correctionUsed < 1 && (!this.repairIntentIds || this.repairIntentIds.has(f.id))).map(f=>f.tool))] }
@@ -193,7 +222,15 @@ export class FinancePolicyState {
   issues(text: string, defs: ToolDef[]): string[] {
     if (!this.options.machineResponse) return []
     let value: unknown
-    try { value = JSON.parse(text) } catch { return ["Final response must be exactly one JSON object, without markdown or surrounding prose."] }
+    try { value = JSON.parse(text) } catch {
+      // v4.6-update: a SOLE fenced JSON with whitespace outside is equivalent
+      // to the bare object — matches the grounded metric's fence acceptance
+      // (the endpoint previously enforced the strict bare-object form, killing
+      // grounded-acceptable fenced answers from fence-style models).
+      const fence = /^\s*```(?:json)?\s*([\s\S]+?)\s*```\s*$/.exec(text)
+      const inner = fence ? fence[1]! : text
+      try { value = JSON.parse(inner) } catch { return ["Final response must be exactly one JSON object, without markdown or surrounding prose."] }
+    }
     if (!obj(value)) return ["Final response must be a JSON object."]
     const issues: string[] = []
     let refusal = false

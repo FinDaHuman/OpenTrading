@@ -157,6 +157,7 @@ export interface RunOptions {
   providerRetry?: Pick<RetryOptions, "maxRetries">
   groundedFinancial?: boolean
   financePolicy?: FinancePolicyOptions
+  toolAuditContext?: FinancePolicyOptions["auditContext"]
   financeState?: FinancePolicyState
   history: ModelMessage[]
   input: string
@@ -1107,7 +1108,8 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
   const config = await loadConfig()
   // The main agent's effort comes from config; a subagent's is resolved by its manager.
   if (opts.role !== "subagent" && opts.effort === undefined && isEffort(config.effort)) opts = { ...opts, effort: config.effort }
-  const finance = opts.financePolicy?.enabled ? new FinancePolicyState(opts.financePolicy, opts.input) : undefined
+  const finance = opts.financePolicy?.enabled ? new FinancePolicyState({...opts.financePolicy,auditContext:opts.financePolicy.auditContext ?? opts.toolAuditContext}, opts.input) : undefined
+  const commonLocalRejections: Record<string,unknown>[] = []
   opts = {...opts, financeState: finance}
   const prepared = await prepare(opts, bound, extras)
   const { target, tools, built, assembled, supportsTools } = prepared
@@ -1225,8 +1227,12 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
         return { toolChoice: "none", activeTools: active, messages: withNudge(messages, SUMMARY_PROMPT) }
       },
       experimental_repairToolCall: async ({ toolCall, error }) => {
+        if(!finance && opts.groundedFinancial && InvalidToolInputError.isInstance(error)) {
+          const context=opts.toolAuditContext?.() ?? {}
+          commonLocalRejections.push({event:"financial_local_rejection",sdk_call_id:toolCall.toolCallId,code:"invalid_tool_input",tool:error.toolName,rawInput:error.toolInput,reason:error.message,origin_sdk_call_id:toolCall.toolCallId,origin_provider_request_index:context.provider_request_index,origin_memory_session:context.memory_session,origin_memory_turn:context.memory_turn,origin_native_session_id:context.native_session_id})
+        }
         if(finance && InvalidToolInputError.isInstance(error)) {
-          finance.localRejections.set(toolCall.toolCallId,{code:"invalid_tool_input",tool:error.toolName,rawInput:error.toolInput})
+          finance.noteLocalRejection(toolCall.toolCallId,{code:"invalid_tool_input",tool:error.toolName,rawInput:error.toolInput})
           const def=opts.registry.get(error.toolName)
           if(def){let args:unknown=error.toolInput;try{args=JSON.parse(error.toolInput)}catch{};finance.failed(def,args,Object.assign(new Error(error.message),{code:"invalid_argument",retryable_with_corrected_arguments:true}),toolCall.toolCallId)}
         }
@@ -1253,14 +1259,24 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
   let unanswered = false
   let financialCorrectionUsed = false
 
+  const emittedFinanceOrigins = new Set<string>()
   for (;;) {
     const base = [...request, ...kept]
     const result = run(base, rescue)
     const last: Outcome = { text: "", aborted: false, steps: 0, progress: [], bufferText: !!finance?.options.machineResponse }
     yield* relay(result, opts.registry, opts.signal, last, notices, { ms: stallMs, onStall }, prepared.images)
+    for(const rejection of commonLocalRejections.splice(0)) yield {type:"notice",text:JSON.stringify(rejection)}
     if(finance) {
-      for(const [sdk_call_id,audit] of finance.callAudit)yield {type:"notice",text:JSON.stringify({event:"financial_call_audit",...audit})}
-      for(const [sdk_call_id,rejection] of finance.localRejections)yield {type:"notice",text:JSON.stringify({event:"financial_local_rejection",sdk_call_id,...rejection})}
+      for(const [event,rows] of [["financial_call_audit",finance.callAudit],["financial_local_rejection",finance.localRejections]] as const) {
+        for(const row of rows.values()) {
+          const sdk_call_id=row.origin_sdk_call_id
+          const origin={origin_provider_request_index:row.origin_provider_request_index,origin_sdk_call_id:row.origin_sdk_call_id,origin_memory_session:row.origin_memory_session,origin_memory_turn:row.origin_memory_turn,origin_native_session_id:row.origin_native_session_id}
+          const identity=JSON.stringify([event,origin])
+          const replay=emittedFinanceOrigins.has(identity)
+          yield {type:"notice",text:JSON.stringify({event,sdk_call_id,...row,...(replay?{replay_of:origin}:{})})}
+          emittedFinanceOrigins.add(identity)
+        }
+      }
     }
     stepsUsed += last.steps
     outcome.text += last.text
@@ -1299,7 +1315,14 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
         yield {type:"notice",text:JSON.stringify({event:"financial_rejected_final",raw_final:candidate,issues,correction_tools:corrections})}
         continue
       }
-      if(issues.length) yield {type:"notice",text:JSON.stringify({event:"financial_contract_invalid",raw_final:candidate,issues})}
+      if(issues.length) {
+        yield {type:"notice",text:JSON.stringify({event:"financial_contract_invalid",raw_final:candidate,issues})}
+        // The bounded correction is exhausted. Retain the rejected candidate only
+        // in diagnostic telemetry, never in accepted text/history or as a claim.
+        unanswered=true
+        messages=[...kept,...dropFinalText(response),{role:"assistant",content:"(không có câu trả lời đáp ứng hợp đồng đã yêu cầu)"}]
+        break
+      }
     }
 
     // Only a turn where no data tool ran is checked: the sources are the conversation itself.
@@ -1339,7 +1362,7 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
       // A cut answer stays and the rest is joined onto it; any other broken step is dropped.
       kept = verdict.kind === "length" ? (continuing ? continueAnswer(kept, response) : [...kept, ...response]) : [...kept, ...dropFinalText(response)]
       rescue = { nudge: verdict.nudge, toolChoice: verdict.toolChoice }
-      yield { type: "notice", text: `${RESCUE_NOTICE[verdict.kind]} Đã nhắc model trả lời tiếp (${recoveries.length}/${MAX_RECOVERIES}).` }
+      yield { type: "notice", text: `${RESCUE_NOTICE[verdict.kind]} Đã nhắc model trả lời tiếp (${recoveries.length}/${Math.max(MAX_RECOVERIES, recoveries.length)}).` }
       continue
     }
     // Gave up: say why, and keep a placeholder so the session file shows what happened.

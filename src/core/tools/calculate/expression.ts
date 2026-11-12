@@ -110,8 +110,20 @@ export function dataLiterals(text: string): string[] {
 
 /** Public formula constants only; financial operands must be source-bound variables. */
 export const FORMULA_CONSTANTS = [0,1,2,3,4,12,100,252,365] as const
+/** A formula constant, not a data figure: the listed constants, small counts (n of a mean, periods,
+ *  quarters, days of a month) and powers of ten used to rescale units. */
+export function isFormulaConstant(v:number):boolean {
+  if((FORMULA_CONSTANTS as readonly number[]).includes(v))return true
+  if(Number.isInteger(v)&&Math.abs(v)<=31)return true
+  const k=Math.log10(Math.abs(v));return v!==0&&Number.isInteger(Math.round(k*1e9)/1e9)&&Math.abs(k)<=15
+}
+/** Strict list (shared benchmark calculator shim depends on it): only FORMULA_CONSTANTS. */
 export function nonFormulaLiterals(text:string):string[] {
   return tokenize(text).flatMap(t=>t.kind === "num" && !(FORMULA_CONSTANTS as readonly number[]).includes(t.value) ? [String(t.value)] : [])
+}
+/** OpenTrading native calculator (2026-11-11): small counts and powers of ten are formula constants too. */
+export function nonFormulaLiteralsRelaxed(text:string):string[] {
+  return tokenize(text).flatMap(t=>t.kind === "num" && !isFormulaConstant(t.value) ? [String(t.value)] : [])
 }
 
 /** Variable names only: a name followed by '(' is a function call, not a source binding. */
@@ -121,7 +133,7 @@ export function expressionVariables(text:string):string[] {
 }
 export function checkSourceBindings(text:string,names:string[]) {
  const used=expressionVariables(text);const missing=used.filter(x=>!names.includes(x));const unused=names.filter(x=>!used.includes(x))
- if(missing.length||unused.length)throw new CalcError(`Expression/source bindings differ: missing=[${missing.join(",")}], unused=[${unused.join(",")}]. Supply exactly the variables used in expression.`)
+ if(missing.length||unused.length)throw new CalcError(`Expression/source bindings differ: missing=[${missing.join(",")}], unused=[${unused.join(",")}]. Supply exactly the variables used in expression.${missing.length?` Mỗi biến phải có trong "values", ví dụ {"expression":"${text.replace(/"/g,"'")}","values":{${missing.map(x=>`"${x}":{"from_call":"r2","field":"tên_trường"}`).join(",")}},"unit":"..."} hoặc {"${missing[0]}":{"value":123,"unit":"đồng"}}. Kết quả compute/calculate trước có thể dùng thẳng tên ref làm biến (vd "(r12 + r13) / 2"). Nếu không cần tính thêm: trả lời ngay từ số tool đã trả về.`:""}`)
 }
 
 /** Evaluate `text` with `values` (each already in base units). */
