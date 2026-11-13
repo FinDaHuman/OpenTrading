@@ -1,5 +1,5 @@
 /**
- * Units for `calculate`: a value is a number in base units plus the dimensions it carries
+ * Units for financial sources (financial-source.ts): a value is a number in base units plus the dimensions it carries
  * ({đồng: 1, "cổ phiếu": -1} for a price). Adding two values of different dimensions, or
  * converting into a unit of another dimension, is an error: that is the "lệch đơn vị" mistake
  * a model makes by hand (a price in nghìn đồng next to an EPS in đồng, tỷ next to nghìn tỷ).

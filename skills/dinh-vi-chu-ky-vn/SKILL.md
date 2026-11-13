@@ -5,7 +5,7 @@ activation: auto
 triggers:
   keywords: [giai đoạn nào, pha tiếp theo, dẫn sóng, pha nào, chu kỳ ngành, sóng tiếp theo, đầu sóng, chu kỳ thị trường, giai đoạn thị trường, pha thị trường, luân chuyển ngành, rotation, sóng ngành, đỉnh chu kỳ, giai đoạn phân phối, đầu phục hồi, bank dẫn, chứng dẫn, dòng tiền ngành, cuối sóng, giữa sóng, mùa vụ ngành, mảng vin, họ vin]
 requires_tools: [cycle_stats_check, vn_index_ohlcv]
-uses_tools: [compute, cycle_stats_check, cycle_seasonality, cycle_chains, cycle_turning, cycle_tet, cycle_yearly, cycle_trough_events, vn_index_ohlcv, seasonality, sbv_rates, breadth_scan, market_movers, market_candles_batch, event_study, sector_performance]
+uses_tools: [cycle_stats_check, cycle_seasonality, cycle_chains, cycle_turning, cycle_tet, cycle_yearly, cycle_trough_events, vn_index_ohlcv, seasonality, sbv_rates, breadth_scan, market_movers, market_candles_batch, event_study, sector_performance]
 version: 1.8.0
 ---
 
@@ -60,7 +60,7 @@ Gọi `cycle_stats_check`.
 
 **Bước 1: RS mảng live (song song).**
 
-Chạy `vn_index_ohlcv` cho VNINDEX + VN30 + VNFIN + VNREAL + VNUTI + VNMAT + VNIT (count=126, interval=1D; cần đủ nến để có giá 63 phiên trước, không dùng summary), mỗi lượt tối đa 3 chỉ số để không dồn tải lên server. Tính RS 3 tháng (≈63 nến) từng chỉ số ngành vs VNINDEX = % thay đổi chỉ số ngành − % thay đổi VNINDEX; ghi rõ ngày đầu/cuối dùng để tính. Mảng Vin không có chỉ số riêng: chạy `market_candles_batch` cho VIC, VHM, VRE, VPL (days=126) rồi tính RS 3 tháng bằng trung bình % thay đổi 4 mã trừ VNINDEX (ghi rõ cách tính và mã nào thiếu nến). Đối chiếu quy tắc đọc RS trong `references/rotation-chains.md` + tra `cycle_trough_events` so mẫu hồi sau đáy. Song song chạy `market_movers` + `breadth_scan` (sóng thật cần breadth > 50%). Muốn đọc nhanh mảng nào đang khỏe thì `sector_performance` (heatmap GICS) để đối chiếu — nhưng RS chính tính bằng `compute` (op relative_strength, periods 63, other là VNINDEX; ref có nhiều chỉ số thì nêu from_symbol) như trên, RS của skill này không lấy từ heatmap.
+Chạy `vn_index_ohlcv` cho VNINDEX + VN30 + VNFIN + VNREAL + VNUTI + VNMAT + VNIT (count=64, interval=1D: nến đầu là giá 63 phiên trước, nến cuối là phiên gần nhất; bảng dài bị lược ở giữa nhưng luôn giữ nến đầu và cuối; không dùng summary), mỗi lượt tối đa 3 chỉ số để không dồn tải lên server. Tính RS 3 tháng (≈63 nến) từng chỉ số ngành vs VNINDEX = % thay đổi chỉ số ngành − % thay đổi VNINDEX; ghi rõ ngày đầu/cuối dùng để tính. Mảng Vin không có chỉ số riêng: chạy `market_candles_batch` cho VIC, VHM, VRE, VPL (days=64) rồi tính RS 3 tháng bằng trung bình % thay đổi 4 mã trừ VNINDEX (ghi rõ cách tính và mã nào thiếu nến). Đối chiếu quy tắc đọc RS trong `references/rotation-chains.md` + tra `cycle_trough_events` so mẫu hồi sau đáy. Song song chạy `market_movers` + `breadth_scan` (sóng thật cần breadth > 50%). Muốn đọc nhanh mảng nào đang khỏe thì `sector_performance` (heatmap GICS) để đối chiếu — nhưng RS chính tính như trên từ giá đóng cửa đầu/cuối cửa sổ 63 phiên (mỗi chỉ số ngành và VNINDEX: 4 số, ghi rõ ngày), mọi chỉ số gộp vào một lệnh `shell`; RS của skill này không lấy từ heatmap.
 
 Tham số `basket` của các tool `cycle_*` nhận cả tên tiếng Việt không dấu ("bất động sản", "dầu khí", "CNTT"...) — danh sách ngành đầy đủ nằm trong mô tả tool `cycle_seasonality`; không cần chép vào câu trả lời.
 

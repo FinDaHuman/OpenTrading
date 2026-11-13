@@ -1,7 +1,7 @@
 /** Source operands are read from this session's raw tool record, never a typed financial literal. */
 import { createHash } from "node:crypto"
 import { parseResult, recallResult } from "./refs"
-import { parseUnit, sameDims } from "./calculate/units"
+import { parseUnit, sameDims } from "./units"
 const hash = (s: string) => createHash("sha256").update(s).digest("hex")
 const object = (v: unknown): v is Record<string,unknown> => !!v && typeof v === "object" && !Array.isArray(v)
 export interface SourceSpec {from_call:string;field?:string;path?:string;from_symbol?:string;at?:"last"|"first"|number;unit?:string}

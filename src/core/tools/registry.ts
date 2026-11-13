@@ -190,7 +190,7 @@ export class ToolRegistry {
           throw error
         }
         try {
-          const result=await runTool(def,input,{signal:options.abortSignal??new AbortController().signal,callId:options.toolCallId,agent:this.origin,loop,messages:options.messages,groundedFinancial:opts.groundedFinancial},this.lock,this.gate)
+          const result=await runTool(def,input,{signal:options.abortSignal??new AbortController().signal,callId:options.toolCallId,agent:this.origin,loop,messages:options.messages},this.lock,this.gate)
           opts.financeState?.succeeded(def,result,input,options.toolCallId,reservedOrigin)
           return result
         }catch(error){opts.financeState?.failed(def,input,error,options.toolCallId,reservedOrigin);throw error}

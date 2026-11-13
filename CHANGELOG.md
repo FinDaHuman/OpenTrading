@@ -14,6 +14,24 @@ adopt Semantic Versioning when it exposes a stable public API.
 - Read-only subagents (`@chi-doc`) and ultradesk agents get `shell` for arithmetic only; any other command is refused
   at once, never put to the user. `/agents` lists it as "shell (chỉ tính toán)".
 
+### Changed
+
+- `prompts/tools.md`: computed figures (ratios, %, CAGR, P/E, unit changes) come from one arithmetic-only `shell`
+  command per step, large amounts scaled to tỷ đồng inside the expression; the answer states the formula and inputs.
+  A command that still fails after one fix may be computed by hand, labelled "tự tính" with formula and inputs.
+- `shell` is always declared (no longer deferred): arithmetic needs no `tool_search` request first.
+- Skills that used `compute` (valuation history, sector RS, ranking after troughs, sector KPIs) work from start/end
+  values (RS fetches 64 bars: the table cap always keeps the first and last row) and the periods `financial_ratios`
+  returns, computed in one `shell` command.
+
+### Removed
+
+- The `calculate` and `compute` tools. In the v4.6u benchmark the loop guard stopped `calculate` 31 times in 16 trials
+  (13 requests per trial against 3.8, 6 of 15 failed trials); here their description and schema took 3.6k
+  characters each.
+  Native tool descriptions and schemas shrink from 39.9k to 32.7k characters; always-declared ones by 1.9k.
+  `financial-source.ts` and `finance-policy.ts` (benchmark path) stay; `calculate/units.ts` moved to `tools/units.ts`.
+
 ## [0.4.0] — 2026-11-08
 
 The `--yolo` bypass mode and the headless `ot -p` for benchmarks, the unit-checked `calculate` tool, the notebook

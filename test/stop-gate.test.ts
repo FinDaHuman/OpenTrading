@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test"
 import type { ModelMessage } from "ai"
-import { claimsFetch, figureSources, isDraft, isEmptyAnswer, isFragment, judgeStop, MAX_RECOVERIES, RESCUE_DRAFT, RESCUE_DRAFT_FETCH, ranDataTool, stripEchoes, ungroundedInTurn, unfetchedFigures, type LastStep } from "../src/core/loop/stop-gate"
+import { claimsFetch, figureSources, isDraft, isEmptyAnswer, isFragment, judgeStop, MAX_RECOVERIES, RESCUE_ANSWER_NOW, RESCUE_DRAFT, RESCUE_DRAFT_FETCH, ranDataTool, stripEchoes, ungroundedInTurn, unfetchedFigures, type LastStep } from "../src/core/loop/stop-gate"
 import { DRAFT } from "./fixtures/draft-answer"
 
 const step = (over: Partial<LastStep>): LastStep => ({ text: "", toolNames: [], finish: "stop", ...over })
@@ -287,4 +287,13 @@ test("one draft signal alone is a real answer (stored answers it would have hit)
     "Kết quả đã lấy: P/E 8,44x, P/B 1,98x. FPT đang rẻ hơn trung bình ngành.",
   ])
     expect([text, isDraft(text)]).toEqual([text, false])
+})
+
+// Pilot or15 (2026-11-11): both empty rescues came back reasoning-only after a tool loop.
+test("after both empty rescues, one answer-only rescue when the turn has data, then give up", () => {
+  const empty: LastStep = { text: "", toolNames: [], finish: "stop", afterTools: true, dataInTurn: true, reasoned: true }
+  const done = Array(MAX_RECOVERIES).fill("empty")
+  expect(judgeStop(empty, done)).toEqual({ action: "continue", kind: "empty", nudge: RESCUE_ANSWER_NOW, toolChoice: "none" })
+  expect(judgeStop(empty, [...done, "empty"])).toEqual({ action: "give-up", kind: "empty" })
+  expect(judgeStop({ ...empty, dataInTurn: false }, done)).toEqual({ action: "give-up", kind: "empty" })
 })
