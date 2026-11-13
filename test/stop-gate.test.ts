@@ -122,6 +122,11 @@ test("13/11 m3: an offer that waits on the user or on the source is no promise; 
     "Bạn vui lòng chờ, mình sẽ lấy giá HPG.",
     // Only the last sentence counts: an earlier offer does not cover a promise after it.
     "Khi nguồn hoạt động lại bạn thử lại nhé. Để mình thử nguồn khác.",
+    // What the user already gave is no condition.
+    "Dựa trên thông tin bạn cung cấp, mình sẽ phân tích.",
+    "Với 3 mã bạn gửi, mình sẽ lấy giá.",
+    "Theo mã bạn chọn, mình sẽ lấy BCTC.",
+    "Mình sẽ phân tích dữ liệu bạn cung cấp.",
   ])
     expect([text, isPromise(text)]).toEqual([text, true])
   // The gate accepts m3 as it is: no request spent sending it back.

@@ -237,11 +237,13 @@ const OFFER = /\?\s*$|^(nếu bạn|nếu cần|bạn có muốn|bạn muốn|if
  * … cung cấp giá …, mình sẽ tính"), or a source comes back ("khi nguồn hoạt động lại, mình sẽ…"),
  * before or after "mình sẽ". 13/11 eval m3: sent back for this, the model wrote the same answer
  * twice. The subject is required: "sau khi nạp tool", "khi có dữ liệu" or "sau khi lấy được giá"
- * leave the model as the actor, and "bạn chờ chút" asks the user to wait for it.
+ * leave the model as the actor, and "bạn chờ chút" asks the user to wait for it. "bạn" counts
+ * only where a clause starts: "thông tin bạn cung cấp, mình sẽ phân tích" is about what the user
+ * already gave, a real promise.
  */
 const WAITS = new RegExp(
   [
-    String.raw`${B}bạn\s+((vui lòng|có thể|hãy|cứ|chỉ cần|thử)\s+)*(thử lại|cung cấp|gửi|nhập|chọn|chia sẻ|xác nhận|cho (mình|tôi|em) biết)${E}`,
+    String.raw`(^|[,;:]\s*|${B}(khi|nếu|sau khi|một khi|ngay khi|hoặc)\s+)bạn\s+((vui lòng|có thể|hãy|cứ|chỉ cần|thử)\s+)*(thử lại|cung cấp|gửi|nhập|chọn|chia sẻ|xác nhận|cho (mình|tôi|em) biết)${E}`,
     String.raw`${B}(khi|nếu|sau khi|một khi|ngay khi)\s+(nguồn|hệ thống|kết nối|dữ liệu|máy chủ)${E}[^,.;!?]{0,40}${B}(hoạt động|trở lại|ổn định|khôi phục|phục hồi|có lại)${E}`,
   ].join("|"),
   "iu",
