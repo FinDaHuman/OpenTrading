@@ -1481,6 +1481,8 @@ async function* runTurn(opts: RunOptions, budget?: RequestBudget): AsyncGenerato
       // A cut answer stays and the rest is joined onto it; any other broken step is dropped.
       kept = verdict.kind === "length" ? (continuing ? continueAnswer(kept, response) : [...kept, ...response]) : [...kept, ...dropFinalText(response)]
       rescue = { nudge: verdict.nudge, toolChoice: verdict.toolChoice }
+      // 13/11 eval m3: the screen showed the dropped answer and then the new one.
+      if (verdict.kind !== "length") yield { type: "retract" }
       yield { type: "notice", text: `${RESCUE_NOTICE[verdict.kind]} Đã nhắc model trả lời tiếp (${recoveries.length}/${Math.max(MAX_RECOVERIES, recoveries.length)}).` }
       continue
     }

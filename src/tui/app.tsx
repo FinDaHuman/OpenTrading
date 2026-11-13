@@ -598,6 +598,36 @@ async function sendTurn(
     }
     edit(current, (l) => (l.text += text))
   }
+  /**
+   * Where the screen stood when the last two model requests began: lines so far, and the
+   * assistant line then open with its length. A retract (the stop gate dropped the last
+   * request's text) cuts the screen back to the older one.
+   */
+  type StepMark = { lines: number; current: number; length: number }
+  const mark = (): StepMark => {
+    const open = state.lines[current]
+    return { lines: state.lines.length, current, length: open?.kind === "assistant" ? open.text.length : 0 }
+  }
+  let stepMarks: [StepMark, StepMark] = [mark(), mark()]
+  const retract = () => {
+    pending = ""
+    if (flushTimer) clearTimeout(flushTimer)
+    flushTimer = undefined
+    cards = cardStreamFilter()
+    const [from] = stepMarks
+    if (live()) {
+      setState(
+        produce((s) => {
+          const open = s.lines[from.current]
+          if (from.current >= 0 && open?.kind === "assistant") open.text = open.text.slice(0, from.length)
+          // Only the dropped request's text goes: its tool lines (a todo_write beside a draft) stay.
+          s.lines = s.lines.filter((l, i) => i < from.lines || l.kind !== "assistant")
+        }),
+      )
+    }
+    current = from.current >= 0 && from.current < from.lines ? from.current : -1
+    stepMarks = [mark(), mark()]
+  }
   const closeText = () => {
     pending += cards.end()
     cards = cardStreamFilter()
@@ -689,6 +719,13 @@ async function sendTurn(
           break
         case "notice":
           pushLine({ kind: "info", text: event.text })
+          break
+        case "step":
+          // Pending text was flushed above: the screen as the next request begins.
+          stepMarks = [stepMarks[1], mark()]
+          break
+        case "retract":
+          retract()
           break
         case "memory-redaction": {
           // Masks the store confirmed replace the history for good; held ones were only in what was sent.

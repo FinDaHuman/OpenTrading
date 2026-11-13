@@ -1423,6 +1423,35 @@ test("a cut answer (finish length) is continued and joined into one message", as
   expect(messages.map((m) => m.role)).toEqual(["user", "assistant"])
   expect(JSON.stringify(messages[1])).toContain("Phần đầu, phần sau.")
   expect(done(events).recoveries).toEqual([{ kind: "length", attempt: 1 }])
+  // The first half stays in history, so a UI keeps it on screen too.
+  expect(events.some((e) => e.type === "retract")).toBe(false)
+})
+
+test("a dropped step is retracted right before the gate's notice; the text deltas still carry both (eval streamed)", async () => {
+  respond = (_body, n) => (n === 0 ? answer("Mình sẽ lấy giờ hiện tại:") : n === 1 ? toolCall("current_time", {}, "call_r") : n === 2 ? answer("Bây giờ là 10:00.") : undefined)
+  const events = await collect(runAgent({ history: [], input: "mấy giờ rồi", skills: [], registry: registry() }))
+  const kinds = events.map((e) => e.type)
+  const at = kinds.indexOf("retract")
+  expect(at).toBeGreaterThan(0)
+  expect(kinds.filter((k) => k === "retract")).toHaveLength(1)
+  // After the step that wrote the promise ended, before the notice that says why.
+  expect(kinds.slice(0, at)).toContain("step")
+  expect(events[at + 1]).toMatchObject({ type: "notice" })
+  const streamed = events.flatMap((e) => (e.type === "text-delta" ? [e.text] : [])).join("")
+  expect(streamed).toContain("Mình sẽ lấy giờ hiện tại:")
+  expect(streamed).toContain("Bây giờ là 10:00.")
+})
+
+test("with a step cap, the summary step that stands is not retracted", async () => {
+  await saveConfig({ provider: "groq", model: "tooly", maxSteps: 2 })
+  try {
+    respond = (_body, n) => (n === 0 ? toolCall("current_time", {}, "call_c") : n === 1 ? answer("Mình sẽ lấy BCTC quý 3:") : undefined)
+    const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: registry() }))
+    expect(JSON.stringify(done(events).messages.at(-1))).toContain("Mình sẽ lấy BCTC quý 3:")
+    expect(events.some((e) => e.type === "retract")).toBe(false)
+  } finally {
+    await saveConfig({ provider: "groq", model: "tooly", maxSteps: undefined })
+  }
 })
 
 test("answering and closing the todo list in one step ends the turn: no extra request", async () => {
