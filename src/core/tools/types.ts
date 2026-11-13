@@ -6,8 +6,6 @@ import type { DiffLine } from "../fs/diff"
 import type { ModelMessage } from "ai"
 
 export interface ToolContext {
-  /** Source-grounded financial calculations; generic calculator default unchanged. */
-  groundedFinancial?: boolean
   signal: AbortSignal
   callId: string
   /** What `prepare` returned, if the tool has one. */

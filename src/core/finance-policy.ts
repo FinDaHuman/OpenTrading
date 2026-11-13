@@ -79,7 +79,7 @@ export class FinancePolicyState {
     const repairFields = new Set(Array.isArray(schema["x-repair-fields"]) ? (schema["x-repair-fields"] as string[]).filter(name=>!/symbol|ticker|currency|entity|peers|metric|statement|year|quarter|month|date|period|periods|count|limit|window|lookback|scope|consolidated|^(start|end|from|to)$/i.test(name)) : [])
     const properties = obj(schema.properties) ? schema.properties : {}
     const withDefaults = {...Object.fromEntries(Object.entries(properties).filter(([,v])=>obj(v) && "default" in v).map(([name,v])=>[name,(v as Record<string,unknown>).default])),...input}
-    if (["calculate","compute"].includes(def.name) || def.canonicalName?.endsWith("analytics_compute")) {
+    if (def.canonicalName?.endsWith("analytics_compute")) {
       const stable = (v: unknown): unknown => {
         if(Array.isArray(v))return v.map(stable)
         if(!obj(v))return v

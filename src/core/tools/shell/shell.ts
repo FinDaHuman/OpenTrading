@@ -61,7 +61,7 @@ export function shellTool(workspace: Workspace, opts: { shell?: ShellInfo } = {}
     readOnly: false,
     effect: "shell",
     approvalGroup: "shell",
-    deferrable: true,
+    // Always declared: the model's arithmetic goes through it (no tool_search request first).
     source: LOCAL_SOURCE,
     // The tool keeps its own time: the timeout kills the whole process tree, not just the wait.
     timeoutMs: MAX_TIMEOUT_MS + 15_000,

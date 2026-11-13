@@ -2,7 +2,7 @@ import {afterEach,expect,test} from 'bun:test'
 import {FinancePolicyState,validateAuthoritativeInput} from '../src/core/finance-policy'
 import {clearResults,useResultSession} from '../src/core/tools/refs'
 import {RwLock,runTool} from '../src/core/tools/wrap'
-import {parseUnit,sameDims} from '../src/core/tools/calculate/units'
+import {parseUnit,sameDims} from '../src/core/tools/units'
 import type {ToolDef} from '../src/core/tools/types'
 const evidence={tool:'quote',source:'fixture',as_of:'2031-03-04',call_id:'public-one',payload_sha256:'a'.repeat(64),matched_entry_id:'entity-one',response_sha256:'b'.repeat(64)}
 const envelope={data:{symbol:'ABC',last:27.4,last_t:'2031-03-04'},units:{last:'nghìn đồng'},provenance:{source:'fixture',as_of:'2031-03-04'},benchmark_evidence:evidence}
@@ -12,7 +12,7 @@ const def:ToolDef={name:'mcp__fixture__quote',canonicalName:'quote',source:'mcp:
 afterEach(()=>clearResults())
 test('actual runTool ref-prefixed source validates exact mapped seven-field receipt',async()=>{
  clearResults();useResultSession('v46-fixture')
- const result=await runTool(def,{}, {signal:new AbortController().signal,callId:'sdk-one',groundedFinancial:true},new RwLock())
+ const result=await runTool(def,{}, {signal:new AbortController().signal,callId:'sdk-one'},new RwLock())
  expect(result.output).toMatch(/^\[ref r\d+\]/)
  const p=new FinancePolicyState({enabled:true,machineResponse:true},input)
  p.succeeded(def,result,{},'sdk-one')

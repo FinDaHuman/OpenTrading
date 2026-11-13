@@ -790,8 +790,8 @@ test("/tools lists built-in and MCP tools", async () => {
     setup.mockInput.pressEnter()
     // 6 core built-ins (current_time, load_skill, ask_user, todo_write, tool_search, read_file)
     // + 24 local tools (glob_files, grep_files, write_file, edit_file, shell, chart, session, watchlist, web, spawn_subagent, send_message, stop_agent, doctor_local, desk_run)
-    // + read_result + compute + calculate + 4 from the demo MCP server (memory is off here: no memory_read)
-    frame = await setup.waitForFrame((f) => f.includes("Tool · 37") && f.includes("26 tool hoãn"))
+    // + read_result + 4 from the demo MCP server (memory is off here: no memory_read)
+    frame = await setup.waitForFrame((f) => f.includes("Tool · 35") && f.includes("24 tool hoãn"))
     show(frame)
     // Regression for the 01/10 screenshot: every tool is exactly one line, long descriptions
     // end in "…" instead of wrapping mid-word, and the mark column is straight.
@@ -804,21 +804,20 @@ test("/tools lists built-in and MCP tools", async () => {
     expect(timeRow).toMatch(/…\s+\[chỉ đọc\]\s*$/)
     expect(frame).not.toMatch(/^\s+Asia\/H/m)
     expect(frame).toContain("Có sẵn")
-    // 3 demo tools (add is alwaysLoad) + 22 optional local tools (incl. glob_files/grep_files/write_file/edit_file/shell) (incl. web_search/web_fetch) (chart, session, watchlist, doctor, send_message, stop_agent); desk_run is on demand, not deferred
-    expect(frame).toContain("26 tool hoãn: model chỉ thấy tên")
+    // 3 demo tools (add is alwaysLoad) + 21 optional local tools (incl. glob_files/grep_files/write_file/edit_file) (incl. web_search/web_fetch) (chart, session, watchlist, doctor, send_message, stop_agent); desk_run is on demand, shell always declared (arithmetic)
+    expect(frame).toContain("24 tool hoãn: model chỉ thấy tên")
     expect(timeRow).not.toContain("hoãn · ")
-    // calculate is core (the model must never do arithmetic by hand); read_file and spawn_subagent sit below the fold now.
-    expect(rows.find((r) => r.includes(" calculate "))).not.toContain("hoãn · ")
+    // read_file and spawn_subagent sit below the fold now.
     expect(rows.find((r) => r.includes(" glob_files "))).toContain("hoãn · ")
     expect(rows.find((r) => r.includes(" chart_render "))).toContain("hoãn · ")
     // ↑ from the first row wraps to the last: the MCP group sits below the fold (memory is off: no Memory group).
     setup.mockInput.pressArrow("up")
-    frame = await setup.waitForFrame((f) => f.includes("MCP · demo") && f.includes("37/37"))
+    frame = await setup.waitForFrame((f) => f.includes("MCP · demo") && f.includes("35/35"))
     show(frame)
     const tail = frame.split("\n").filter((l) => /^ {2}(❯ |  )[◇◆] \S/.test(l))
     expect(tail.find((r) => r.includes(" echo "))).toContain("hoãn · ")
     setup.mockInput.pressArrow("down")
-    await setup.waitForFrame((f) => f.includes("1/37"))
+    await setup.waitForFrame((f) => f.includes("1/35"))
   } finally {
     await saveConfig({ toolSearch: undefined })
   }
@@ -829,7 +828,7 @@ test("/tools lists built-in and MCP tools", async () => {
   expect(frame).toContain("ask_user")
   expect(frame).toMatch(/• questions \(bắt buộc\): array/)
   setup.mockInput.pressEscape()
-  await setup.waitForFrame((f) => f.includes("Tool · 37"))
+  await setup.waitForFrame((f) => f.includes("Tool · 35"))
   setup.mockInput.pressEscape()
   await setup.waitFor(() => state.dialog === undefined)
 })
