@@ -5,6 +5,13 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ## [Unreleased]
 
+### Added
+
+- `shell`: a command that only does arithmetic runs without a prompt in every permission mode, `ot -p` and evals
+  (no ▸▸ classifier request); deny and ask rules still apply. Windows: bare PowerShell expressions with
+  `[math]::` functions, printed in the invariant culture; macOS/Linux: `awk 'BEGIN{printf …}'` in the C locale.
+  Anything else (a variable, a file, a pipe, `1..3`, a comma outside a call) asks as before. `docs/permissions.md`.
+
 ## [0.4.0] — 2026-11-08
 
 The `--yolo` bypass mode and the headless `ot -p` for benchmarks, the unit-checked `calculate` tool, the notebook

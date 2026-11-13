@@ -27,8 +27,9 @@ export { AUTO_BLOCK_PREFIX, blockedMessage, deniedMessage, RULE_DENY_PREFIX, USE
  * 2. A user-only scope (key file, network path, protected folder, outside the workspace,
  *    loop guard): asked every time (a key file may be allowed for the session); no rule or
  *    "always" covers it.
- * 3. A user ask rule forces the prompt; a write in the session's temp folder (`scratch:`) runs
- *    outside ‖ read-only; an allow rule ("always") lets it run.
+ * 3. A user ask rule forces the prompt; a shell command that only computes numbers (`math:`)
+ *    runs in every mode; a write in the session's temp folder (`scratch:`) runs outside ‖
+ *    read-only; an allow rule ("always") lets it run.
  * 4. The permission mode: ▸▸▸ bypass runs it (no classifier, no prompt, also headless);
  *    ‖ read-only asks local file/shell effects with "switch to ▸"; ▸ ask prompts as before.
  */
@@ -315,6 +316,9 @@ export class PermissionGate {
     if (userOnly(scope)) {
       if (sessionOk(scope) && this.session.has(key)) return { allow: true }
     } else if (!lists.ask.some((r) => listMatches(r, def, subject))) {
+      // A shell command that only computes numbers (tools/shell/math.ts): every mode, also
+      // ‖ read-only, headless and evals; no classifier request. Deny and ask rules still apply.
+      if (scope?.startsWith("math:")) return this.ran()
       // ▸▸▸ bypass: no prompt and no classifier request (a benchmark counts every request).
       if (this.current === "bypass") return this.ran()
       if (scope?.startsWith("scratch:") && this.approvalsApply(def)) return this.ran()
