@@ -5,6 +5,7 @@ import { Background } from "../src/tui/background"
 import { DEFAULT_SCROLL_SPEED, nextScrollSetting, scrollSetting, scrollTranscript } from "../src/tui/scroll"
 import { setState, type Line } from "../src/tui/state"
 import { Transcript } from "../src/tui/transcript"
+import { captureIdle, until } from "./helpers/tui"
 
 let setup: Awaited<ReturnType<typeof testRender>> | undefined
 
@@ -125,9 +126,10 @@ test("a running tool's spinner keeps turning on an idle renderer", async () => {
   await setup.renderOnce()
   expect(setup.renderer.liveRequestCount).toBe(0)
   const first = setup.captureCharFrame()
-  // No renderOnce here: the frame must come from the spinner's own render request.
-  await new Promise((r) => setTimeout(r, 400))
-  expect(setup.captureCharFrame()).not.toBe(first)
+  // No renderOnce here: the frame must come from the spinner's own render request. Read it only
+  // between renders (captureIdle), and in real time: a busy machine can delay the spinner's tick.
+  const view = setup
+  await until(async () => (await captureIdle(view)) !== first, 5_000, "the spinner to turn")
 })
 
 test("the background animates on Home only: in a chat nothing keeps the renderer drawing", async () => {

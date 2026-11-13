@@ -6,6 +6,7 @@ import { testRender } from "@opentui/solid"
 import { z } from "zod"
 import { createEffect, createRoot } from "solid-js"
 import { pastEnterGrace, realClock } from "./helpers/clock"
+import { until } from "./helpers/tui"
 
 // Isolate state from the real ~/.opentrading before any core module loads.
 const home = await mkdtemp(path.join(os.tmpdir(), "opentrading-test-"))
@@ -291,6 +292,9 @@ beforeAll(async () => {
   // waitFor/waitForFrame count frames and give up once the renderer idles. The app draws on
   // demand in a chat (the background holds still there), so keep the frame clock ticking.
   setup.renderer.requestLive()
+  // The app sets the provider catalog at the end of its startup reads (skills first): about 0.1 s
+  // alone, seconds with every CPU busy. /connect and /model list nothing before it.
+  await until(() => Object.keys(state.catalog).length > 0, 15_000, "the app's startup reads")
   // OSC52 always carries the copy (the OS command may not exist, e.g. on CI without xclip).
   setup.renderer.copyToClipboardOSC52 = (text: string) => {
     osc52.push(text)
@@ -512,8 +516,12 @@ test("/model lists models from every connected provider", async () => {
 })
 
 test("a reply streams into the transcript with wrapping", async () => {
+  const before = state.history.length
   await setup.mockInput.typeText("Giải thích T+2.5")
   setup.mockInput.pressEnter()
+  // The whole answer can take longer than waitForFrame's 20 frames on a busy machine.
+  const answered = () => state.history.length > before && JSON.stringify(state.history.at(-1)?.content ?? "").includes("HẾT-CÂU-TRẢ-LỜI")
+  await until(() => !state.streaming && answered(), 15_000, "the answer")
   const frame = await setup.waitForFrame((f) => f.includes("HẾT-CÂU-TRẢ-LỜI"))
   expect(chatCalls.at(-1)).toContain("api.groq.com")
   expect(frame).toContain("T+2.5 là chu kỳ thanh toán.")
@@ -1185,7 +1193,8 @@ test("a write tool asks first: esc denies just that call (the turn goes on), 2 a
   // Esc answers the prompt with "no" — it must not also stop the turn.
   setup.mockInput.pressEscape()
   // The denial shows under its own tool row.
-  frame = await setup.waitForFrame((f) => /● demo · ghi_chu.*\n\s+⎿  ✘ Đã từ chối/.test(f))
+  // The still background can leave a dot in the left gutter of any row: match past it.
+  frame = await setup.waitForFrame((f) => /● demo · ghi_chu.*\n[^\n]*⎿  ✘ Đã từ chối/.test(f))
   await waitMcp(() => !state.streaming)
   expect(toolResult()).toContain("Người dùng từ chối chạy tool này")
   expect(state.approval).toBeUndefined()
