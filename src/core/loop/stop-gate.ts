@@ -1,5 +1,5 @@
 import type { Ablations } from "../ablation"
-import { DERIVED, sourceNumbers, ungroundedFigures } from "./figures"
+import { answerFigures, sourceNumbers, tracesTo, ungroundedFigures } from "./figures"
 import type { ModelMessage, StepResult, ToolSet } from "ai"
 import { hasOpenTodos, LEGACY_TODO_PREFIX, TODO_PREFIX, TODO_WRITE, type Todo } from "../tools/todos"
 
@@ -177,9 +177,6 @@ const ACTS =
 /** What a fetch is about: a promise names data or tools, advice to the user does not. */
 const OBJECTS = "dữ liệu|số liệu|thông tin|tool|công cụ|skill|chúng|nguồn|báo cáo|BCTC|giá|kết quả"
 
-/** Prices, percentages and amounts: a text carrying them already answers something. */
-const FIGURES = /\d{1,3}([.,]\d{3})+|\d+([.,]\d+)?\s*(%|đ(?!\p{L})|đồng|tỷ|triệu|nghìn|lần)/u
-
 /** A promise to act: "mình sẽ lấy…", "để mình kiểm tra", "vui lòng chờ", "let me…", "I'll…". */
 // JS's \b only knows ASCII letters ("Để", "thử" break it): word edges are spelled out.
 const B = String.raw`(?<![\p{L}\p{N}_])`
@@ -214,7 +211,8 @@ export const PROMISE_MAX_CHARS = 400
  */
 export function isPromise(text: string): boolean {
   const body = stripEchoes(invisible(text)).trim()
-  if (!body || body.length > PROMISE_MAX_CHARS || /^\s*\|.*\|\s*$/m.test(body) || FIGURES.test(body)) return false
+  // Prices, percentages and amounts: a text carrying them already answers something.
+  if (!body || body.length > PROMISE_MAX_CHARS || /^\s*\|.*\|\s*$/m.test(body) || answerFigures(body).length > 0) return false
   const lastLine = bare(body.split("\n").filter((l) => l.trim()).at(-1) ?? "")
   if (OFFER.test(lastLine)) return false
   if (/:\s*$/.test(lastLine)) return true
@@ -285,22 +283,6 @@ export function claimsFetch(text: string): boolean {
   return [...body.matchAll(SOURCE_LINE)].some((source) => !NOT_FETCHED.test(source[1] ?? ""))
 }
 
-/** Dates, month/year and clock times: they say when, not how much. */
-const DATES = /(?<![\d.,/-])\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}(?![\d/-])|(?<![\d.,/])\d{1,2}\/\d{4}(?!\d)|(?<![\d.,:])\d{1,2}:\d{2}(?![\d:])/g
-/** A market figure: thousands groups, a decimal, or a whole number with a unit. */
-const FIGURE = /\d{1,3}(?:[.,]\d{3})+(?:[.,]\d+)?|\d+[.,]\d+|\d+(?=\s*(?:%|đ(?!\p{L})|đồng|tỷ|triệu|nghìn|lần))/gu
-/** A tool may give a ratio or thousands where the answer writes a percent or dong. */
-const SCALES = [1, 100, 0.01, 1e3, 1e-3, 1e6, 1e-6, 1e9, 1e-9]
-
-/** Both readings of a number: "16.800" is 16800 in Vietnamese and 16.8 in JSON. */
-function readings(token: string): { value: number; decimals: number }[] {
-  const groups = token.split(/[.,]/)
-  const tail = groups.at(-1) ?? ""
-  if (groups.length === 1) return [{ value: Number(token), decimals: 0 }]
-  const decimal = { value: Number(`${groups.slice(0, -1).join("")}.${tail}`), decimals: tail.length }
-  return groups.slice(1).every((g) => g.length === 3) ? [{ value: Number(groups.join("")), decimals: 0 }, decimal] : [decimal]
-}
-
 /**
  * Figures of an answer that claims fetched data but that `known` (see figureSources) does not
  * hold, at any common scale and rounded as the answer writes them. Seen 05/11 with
@@ -312,21 +294,13 @@ function readings(token: string): { value: number; decimals: number }[] {
  */
 export function unfetchedFigures(text: string, known: string): string[] {
   if (!claimsFetch(text)) return []
-  const stated = text
-    .normalize("NFC")
-    .split("\n")
-    .filter((line) => !DERIVED.test(line))
-    .join("\n")
-  const figures = [...new Set(stated.replace(DATES, " ").match(FIGURE) ?? [])]
+  // Read as the eval scorer and the per-turn measure read them (figures.ts): one figure written
+  // twice counts once, "nghìn tỷ" and "…T" keep the rounding they were written with.
+  const seen = new Set<string>()
+  const figures = answerFigures(text).filter((f) => !f.derived && !seen.has(f.text) && seen.add(f.text))
   if (figures.length === 0) return []
-  const values = [...sourceNumbers(known)]
-  const missing = figures.filter(
-    (figure) =>
-      !readings(figure).some(({ value, decimals }) => {
-        const near = 0.5 * 10 ** -decimals + 1e-9
-        return values.some((v) => SCALES.some((scale) => Math.abs(v * scale - value) <= near))
-      }),
-  )
+  const numbers = sourceNumbers(known)
+  const missing = figures.filter((f) => !tracesTo(f, numbers)).map((f) => f.text)
   return missing.length * 2 >= figures.length ? missing : []
 }
 

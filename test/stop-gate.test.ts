@@ -138,7 +138,7 @@ const INVENTED = [
 ].join("\n")
 
 test("the invented answer of 05/11 has three figures nothing backs", () => {
-  expect(unfetchedFigures(INVENTED, "Phân tích FPT")).toEqual(["19,5", "27,2", "16.800"])
+  expect(unfetchedFigures(INVENTED, "Phân tích FPT")).toEqual(["19,5", "27,2%", "16.800"])
 })
 
 test("figures no tool fetched are sent back once with tools on, then the answer stands", () => {
@@ -220,7 +220,24 @@ test("only a tool other than the todo list counts as fetching", () => {
 test("a figure in a compact JSON array is known, and 'tính từ đầu năm' is no arithmetic", () => {
   const known = JSON.stringify({ c: [64.27, 64.5, 65.1] })
   expect(unfetchedFigures("Đã lấy dữ liệu: giá 64,27 và 65,1.", known)).toEqual([])
-  expect(unfetchedFigures("Đã lấy dữ liệu: tăng 99,9% tính từ đầu năm, 88,8% trong quý.", "")).toEqual(["99,9", "88,8"])
+  expect(unfetchedFigures("Đã lấy dữ liệu: tăng 99,9% tính từ đầu năm, 88,8% trong quý.", "")).toEqual(["99,9%", "88,8%"])
+})
+
+test("'nghìn tỷ' and '…T' figures trace at the rounding they were written with", () => {
+  // The scorer learned this in #251; the gate read them with a ±0.05 tỷ tolerance and sent back
+  // correct answers whose source holds the exact dong.
+  const answer = "Nguồn: Vietstock.\n\nDoanh thu 95,8 nghìn tỷ, LNST 2,49T."
+  const known = JSON.stringify({ revenue: 95812345678901, profit: 2493000000000 })
+  expect(unfetchedFigures(answer, known)).toEqual([])
+  expect(unfetchedFigures(answer, "")).toEqual(["95,8 nghìn tỷ", "2,49T"])
+})
+
+test("a fall written in words matches a negative source", () => {
+  expect(unfetchedFigures("Đã lấy dữ liệu: giá giảm 3,2%, khối lượng giảm 12,5%.", JSON.stringify({ change: -0.032, volume: -0.125 }))).toEqual([])
+})
+
+test("a figure written twice counts once", () => {
+  expect(unfetchedFigures("Đã lấy dữ liệu: P/E 19,5; nhắc lại P/E 19,5 và ROE 27,2%.", "")).toEqual(["19,5", "27,2%"])
 })
 
 const toolTurn = (answer: string, output: string): ModelMessage[] => [
