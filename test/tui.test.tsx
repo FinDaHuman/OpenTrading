@@ -1068,7 +1068,11 @@ async function turnEnded(prompt: string) {
     const from = state.lines.findLastIndex((l) => l.kind === "user" && l.text === prompt)
     return from >= 0 && !state.streaming && state.lines.slice(from).some((l) => l.kind === "assistant" && l.text.includes("HẾT-CÂU-TRẢ-LỜI"))
   })
-  return setup.waitForFrame((f) => f.includes(`❯ ${prompt}`) && f.includes("HẾT-CÂU-TRẢ-LỜI"))
+  // The answer under this turn's prompt (an earlier answer above it does not count), streaming done.
+  return setup.waitForFrame((f) => {
+    const at = f.lastIndexOf(`❯ ${prompt}`)
+    return at >= 0 && f.slice(at).includes("HẾT-CÂU-TRẢ-LỜI") && !f.includes("đang trả lời")
+  })
 }
 
 test("a promise the stop gate sends back leaves the screen: the notice stays, the answer shows once (13/11 m3)", async () => {
