@@ -3,6 +3,7 @@ import { testRender } from "@opentui/solid"
 import { notify, resetNotifications } from "../src/tui/notify"
 import { Toasts } from "../src/tui/toast"
 import { color } from "../src/tui/theme"
+import { renderedFrame } from "./helpers/tui"
 
 let setup: Awaited<ReturnType<typeof testRender>> | undefined
 // The toasts live in the shared store: leave it empty for the next test file.
@@ -11,15 +12,7 @@ afterAll(() => {
   resetNotifications()
 })
 
-async function frameWith(text: string) {
-  let frame = ""
-  for (let i = 0; i < 50 && !frame.includes(text); i++) {
-    await new Promise((r) => setTimeout(r, 20))
-    await setup!.renderOnce()
-    frame = setup!.captureCharFrame()
-  }
-  return frame
-}
+const frameWith = (text: string) => renderedFrame(setup!, text)
 
 test("a toast is a card in the top-right corner with bars in its level's colour", async () => {
   setup = await testRender(() => <Toasts />, { width: 100, height: 20 })

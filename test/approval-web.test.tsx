@@ -6,6 +6,7 @@ import { ApprovalPrompt } from "../src/tui/approval"
 import { setState } from "../src/tui/state"
 import { pastEnterGrace, realClock } from "./helpers/clock"
 import { tempDirs } from "./helpers/temp"
+import { renderedFrame } from "./helpers/tui"
 
 const temp = tempDirs()
 
@@ -18,15 +19,7 @@ afterAll(() => {
   realClock()
 })
 
-async function frameWith(text: string) {
-  let frame = ""
-  for (let i = 0; i < 50 && !frame.includes(text); i++) {
-    await new Promise((r) => setTimeout(r, 50))
-    await setup!.renderOnce()
-    frame = setup!.captureCharFrame()
-  }
-  return frame
-}
+const frameWith = (text: string) => renderedFrame(setup!, text)
 
 test("web_fetch on a new domain: the prompt says it reads that domain (not a write), and 'always' is stored for that domain only", async () => {
   const saved: AllowRule[] = []

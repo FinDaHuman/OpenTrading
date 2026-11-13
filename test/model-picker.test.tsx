@@ -3,6 +3,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { testRender } from "@opentui/solid"
+import { renderedFrame, until } from "./helpers/tui"
 
 // Preferences and config go to a scratch home, never ~/.opentrading.
 const home = await mkdtemp(path.join(os.tmpdir(), "ot-model-picker-"))
@@ -55,15 +56,7 @@ async function open(prefs = { favorite: [] as { provider: string; model: string 
   setup = await testRender(() => <ModelDialog />, { width: 100, height: 40 })
   return frameWith("Chọn model")
 }
-async function frameWith(text: string) {
-  let frame = ""
-  for (let i = 0; i < 50 && !frame.includes(text); i++) {
-    await new Promise((r) => setTimeout(r, 10))
-    await setup!.renderOnce()
-    frame = setup!.captureCharFrame()
-  }
-  return frame
-}
+const frameWith = (text: string) => renderedFrame(setup!, text)
 const rows = (f: string) => f.split("\n").map((r) => r.trimEnd())
 const selected = (f: string) => rows(f).find((r) => r.includes("❯ ")) ?? ""
 
@@ -105,7 +98,8 @@ test("ctrl+f stars the highlighted model and keeps the highlight on it; it is sa
   expect(state.notification?.text).toContain("Đã thêm gemini-3.1-pro vào yêu thích")
   // The filter did not move: ctrl+f is not the input's forward-char here.
   setup!.mockInput.pressKey("f", { ctrl: true })
-  await frameWith("Đã bỏ")
+  // The confirmation is a notification: this test renders the dialog alone, without the toasts.
+  await until(() => state.notification?.text.includes("Đã bỏ gemini-3.1-pro khỏi yêu thích") === true, 5_000, "the unstar notice")
   expect(state.modelPrefs.favorite).toEqual([])
 })
 
@@ -141,7 +135,8 @@ test("a favourite that cannot be used now is greyed with the reason; enter says 
   const f = await frameWith("[provider chưa kết nối]")
   expect(f).toMatch(/Claude Sonnet 5\.5.*\[provider chưa kết nối\]/)
   setup!.mockInput.pressEnter()
-  await frameWith("Không dùng được")
+  // A notification, not drawn here (the dialog is rendered without the toasts).
+  await until(() => state.notification?.text.includes("Không dùng được claude-sonnet-5-5") === true, 5_000, "the reason")
   expect(state.notification).toMatchObject({ level: "error" })
   expect(state.notification?.text).toContain("provider chưa kết nối")
   expect(state.model).toBe("gemini-3.5-flash-lite")

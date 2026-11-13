@@ -9,6 +9,7 @@ import type { ToolResult } from "../src/core/tools/types"
 import type { ChartData } from "../src/core/tools/chart/data"
 import { AXIS_COL, buildChart } from "../src/tui/ui/chart-box"
 import { Transcript } from "../src/tui/transcript"
+import { renderedFrame } from "./helpers/tui"
 
 const ctx = () => ({ signal: new AbortController().signal, callId: "c1" })
 const closes = [57.3, 58.1, 58.0, 57.4, 57.7, 58.4, 59.0, 58.6, 59.4, 60.1]
@@ -24,12 +25,7 @@ afterAll(() => {
 })
 
 async function frameWith(text: string) {
-  let frame = ""
-  for (let i = 0; i < 50 && !frame.includes(text); i++) {
-    await new Promise((r) => setTimeout(r, 100))
-    await setup!.renderOnce()
-    frame = setup!.captureCharFrame()
-  }
+  const frame = await renderedFrame(setup!, text)
   if (process.env.SHOW_FRAME) console.log(frame)
   return frame
 }

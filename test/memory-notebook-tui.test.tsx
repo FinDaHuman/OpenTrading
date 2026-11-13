@@ -8,6 +8,7 @@ import { testRender } from "@opentui/solid"
 import type { ModelMessage } from "ai"
 import { HPG_BLOCK_V3, seedExample, LESSON_7 } from "./helpers/memory-notebook"
 import { testClock } from "./helpers/memory-store"
+import { renderedFrame } from "./helpers/tui"
 
 // Config, the store and sessions go to a scratch home, never ~/.opentrading; no network.
 const home = await mkdtemp(path.join(os.tmpdir(), "ot-notebook-tui-"))
@@ -88,18 +89,7 @@ function otherWindow() {
  * The first rendered frame that has `text`. Always renders first (a check such as "no longer shows X" must not
  * pass on the empty frame before any render) and fails on timeout instead of returning the last frame.
  */
-async function frameWith(text: string | ((f: string) => boolean)) {
-  const ok = typeof text === "string" ? (f: string) => f.includes(text) : text
-  let frame = ""
-  for (let i = 0; i < 100; i++) {
-    await new Promise((r) => setTimeout(r, 10))
-    await setup!.renderOnce()
-    frame = setup!.captureCharFrame()
-    if (ok(frame)) return frame
-  }
-  throw new Error(`frame never showed ${typeof text === "string" ? JSON.stringify(text) : "the expected state"}:
-${frame}`)
-}
+const frameWith = (text: string | ((f: string) => boolean)) => renderedFrame(setup!, text)
 async function until(check: () => boolean | Promise<boolean>) {
   for (let i = 0; i < 200 && !(await check()); i++) await new Promise((r) => setTimeout(r, 10))
   expect(await check()).toBe(true)

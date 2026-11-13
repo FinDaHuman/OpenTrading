@@ -8,6 +8,7 @@ import { testRender } from "@opentui/solid"
 import { seedExample } from "./helpers/memory-notebook"
 import { testClock } from "./helpers/memory-store"
 import { pastEnterGrace, realClock } from "./helpers/clock"
+import { renderedFrame, until } from "./helpers/tui"
 
 // Config, the store, sessions and the prompt history go to a scratch home, never ~/.opentrading.
 const home = await mkdtemp(path.join(os.tmpdir(), "ot-turn-hold-"))
@@ -127,20 +128,7 @@ async function start(choice: MemoryChoice = "none") {
   setup = await testRender(() => <App runtime={runtime!} onExit={() => {}} />, { width: 110, height: 44, exitOnCtrlC: false })
   await frameWith("Hỏi về thị trường")
 }
-async function frameWith(text: string | ((f: string) => boolean)) {
-  const ok = typeof text === "string" ? (f: string) => f.includes(text) : text
-  let frame = ""
-  for (let i = 0; i < 150 && !ok(frame); i++) {
-    await new Promise((r) => setTimeout(r, 10))
-    await setup!.renderOnce()
-    frame = setup!.captureCharFrame()
-  }
-  return frame
-}
-async function until(check: () => boolean | Promise<boolean>) {
-  for (let i = 0; i < 200 && !(await check()); i++) await new Promise((r) => setTimeout(r, 10))
-  expect(await check()).toBe(true)
-}
+const frameWith = (text: string | ((f: string) => boolean)) => renderedFrame(setup!, text)
 async function ask(text: string) {
   await setup!.mockInput.typeText(text)
   setup!.mockInput.pressEnter()
@@ -323,8 +311,20 @@ describe("a turn held because a source cannot be read", () => {
 })
 
 describe("the constraints still apply with the notebook off", () => {
+  // saveConfig merges: without this, a test after the one that switches to the notebook ran with it on,
+  // and its "no such line" held whatever the code did.
+  beforeEach(() => saveConfig({ memory: { provider: "none" } }))
+  /** Reads of the constraint store the open screen started: "no such line" is only meaningful after them. */
+  let constraintReads: Promise<unknown>[] = []
   async function openMemoryScreen() {
     runtime = initRuntime({ home, skills: () => [] })
+    constraintReads = []
+    const read = runtime.constraints.read.bind(runtime.constraints)
+    spyOn(runtime.constraints, "read").mockImplementation((role) => {
+      const done = read(role)
+      constraintReads.push(done)
+      return done
+    })
     setState({ dialog: "config" })
     setup = await testRender(() => <ConfigDialog runtime={runtime!} />, { width: 110, height: 40 })
     await frameWith("Cài đặt")
@@ -356,9 +356,13 @@ describe("the constraints still apply with the notebook off", () => {
 
   test("/config → Memory, off, an empty store: no such line", async () => {
     openMemoryStore(STORE).close()
-    const frame = await openMemoryScreen()
-    await new Promise((r) => setTimeout(r, 100))
-    expect(frame + setup!.captureCharFrame()).not.toContain("vẫn áp dụng khi tắt")
+    await openMemoryScreen()
+    // The line comes from an asynchronous read of the store: check only once that read is over (a fixed
+    // 100 ms passed before it, so the check held even when the line was shown for 0 constraints).
+    await until(() => constraintReads.length > 0, 5_000, "the screen to read the constraints")
+    await Promise.all(constraintReads)
+    const frame = await frameWith("Có hiệu lực ngay")
+    expect(frame).not.toContain("vẫn áp dụng khi tắt")
   })
 
   test("/nho with the notebook off: the usual message, then the still-applies line", async () => {
