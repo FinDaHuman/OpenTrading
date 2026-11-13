@@ -1252,6 +1252,39 @@ test("an answer that only echoes the todo status (29/10) is recovered, tools all
   expect(done(events).unanswered).toBeUndefined()
 })
 
+test("an answer made only of a self-made <nhac_nho> block (13/11) is recovered and never shown or stored", async () => {
+  respond = (_body, n) => (n === 0 ? answer("<nhac_nho>\nDanh sách việc của bạn:\n- [in_progress] Lấy giá HPG\n</nhac_nho>") : undefined)
+  const events = await collect(runAgent({ history: [], input: "Giá HPG?", skills: [], registry: registry() }))
+  expect(bodies).toHaveLength(2)
+  expect(lastSent(1)).toContain("chưa viết câu trả lời")
+  const shown = events.flatMap((e) => (e.type === "text-delta" ? [e.text] : [])).join("")
+  expect(shown).not.toContain("nhac_nho")
+  expect(shown).not.toContain("Lấy giá HPG")
+  const stored = JSON.stringify(done(events).messages.slice(1))
+  expect(stored).not.toContain("nhac_nho")
+  expect(done(events).recoveries).toEqual([{ kind: "empty", attempt: 1 }])
+  // Counted even though the step was dropped: the eval trace measures how often it happens.
+  expect(done(events).markup).toEqual(["nhac_nho"])
+})
+
+test("markup around a real answer leaves the screen, the history and the trace field says which", async () => {
+  respond = (_body, n) =>
+    n === 0 ? answer('<todo_write>{"todos":[]}</todo_write>\nHPG đóng cửa 27.500 đồng.\n<thought>xong</thought>') : undefined
+  const events = await collect(runAgent({ history: [], input: "Giá HPG?", skills: [], registry: registry() }))
+  expect(bodies).toHaveLength(1)
+  const shown = events.flatMap((e) => (e.type === "text-delta" ? [e.text] : [])).join("")
+  expect(shown.trim()).toBe("HPG đóng cửa 27.500 đồng.")
+  expect(JSON.stringify(done(events).messages.at(-1))).not.toMatch(/todo_write|thought/)
+  expect(done(events).markup?.sort()).toEqual(["thought", "todo_write"])
+})
+
+test("ablation strip-markup leaves the markup where it was", async () => {
+  respond = (_body, n) => (n === 0 ? answer("HPG đóng cửa 27.500 đồng.\n<thought>xong</thought>") : undefined)
+  const events = await collect(runAgent({ history: [], input: "Giá HPG?", skills: [], registry: registry(), disabled: new Set(["strip-markup"]) }))
+  expect(events.flatMap((e) => (e.type === "text-delta" ? [e.text] : [])).join("")).toContain("<thought>")
+  expect(JSON.stringify(done(events).messages.at(-1))).toContain("<thought>")
+})
+
 test("a cut answer (finish length) is continued and joined into one message", async () => {
   respond = (_body, n) => (n === 0 ? answer("Phần đầu, ", "length") : n === 1 ? answer("phần sau.") : undefined)
   const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: registry() }))

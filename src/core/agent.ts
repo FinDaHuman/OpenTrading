@@ -51,6 +51,7 @@ import { NOTE as NOTICE_NOTE } from "./subagents/notification"
 import { currentTodos, retiredNote, retireLeftTodos, todoMark, TODO_WRITE } from "./tools/todos"
 import { FAILURE_STREAK_FINAL, FAILURE_STREAK_STOP, failureNudge, turnFailures } from "./loop/failures"
 import { answerAfterTools } from "./loop/history-shape"
+import { markupStreamFilter, stripMarkup, type MarkupFilter } from "./loop/markup"
 import { answeredAndClosedTodos, figureSources, isEmptyAnswer, isUnfetched, judgeStop, MAX_RECOVERIES, ranDataTool, stripEchoes, ungroundedInTurn, unfetchedFigures, type RecoveryKind, type Verdict } from "./loop/stop-gate"
 import { MAX_TOOLS_PER_REQUEST, modelOutput, stripImages, type BuiltToolSet, type ToolRegistry, type ToolSetOptions } from "./tools/registry"
 import { describeTool, LOADED_PREFIX, resolveToolName } from "./tools/search"
@@ -362,17 +363,32 @@ export function continueAnswer(kept: ModelMessage[], more: ModelMessage[]): Mode
 const cardsOn = (opts: { cards?: boolean; role?: string; memory?: unknown }, tier: Tier) =>
   !!opts.cards && opts.role !== "subagent" && !!opts.memory && tier !== "C"
 
-/** Echoed todo status lines out of every assistant text (stop-gate.ts stripEchoes). */
-export function stripEchoMessages(messages: ModelMessage[]): ModelMessage[] {
+/**
+ * Echoed todo status lines and harness markup out of every assistant text (stop-gate.ts
+ * stripEchoes). `echoes`/`markup` false keep that kind; `tags` collects the markup removed.
+ */
+export function stripEchoMessages(
+  messages: ModelMessage[],
+  { echoes = true, markup = true, tags }: { echoes?: boolean; markup?: boolean; tags?: Set<string> } = {},
+): ModelMessage[] {
+  const clean = (text: string) => {
+    let out = text
+    if (markup) {
+      const stripped = stripMarkup(out)
+      for (const tag of stripped.tags) tags?.add(tag)
+      out = stripped.text
+    }
+    return echoes ? stripEchoes(out, { markup: false }) : out
+  }
   return messages.flatMap((message): ModelMessage[] => {
     if (message.role !== "assistant") return [message]
     if (typeof message.content === "string") {
-      const text = stripEchoes(message.content)
+      const text = clean(message.content)
       return text === message.content ? [message] : text ? [{ ...message, content: text }] : []
     }
     const parts: AssistantPart[] = message.content.flatMap((part): AssistantPart[] => {
       if (part.type !== "text") return [part]
-      const text = stripEchoes(part.text)
+      const text = clean(part.text)
       return text === part.text ? [part] : text ? [{ ...part, text }] : []
     })
     if (parts.length === message.content.length && parts.every((p, i) => p === message.content[i])) return [message]
@@ -514,6 +530,8 @@ interface Outcome {
   /** Completed steps of this turn (assistant calls + their tool results), for aborted turns. */
   bufferText?: boolean
   progress: ModelMessage[]
+  /** Harness markup taken out of the streamed text (loop/markup.ts); undefined = shown as written. */
+  markup?: Set<string>
 }
 
 /**
@@ -567,6 +585,8 @@ async function* relay(
   // conversion as the tool set (text, images only for a model that sees them, never the
   // chart payload), errors cleaned, provider metadata (Gemini thought signatures) kept.
   let stepText = ""
+  // Markup never reaches the screen: one filter per step, emptied when the step ends.
+  let shown: MarkupFilter | undefined
   const stepCalls: Omit<ToolCallPart, "type">[] = []
   const stepResults: Omit<ToolResultPart, "type">[] = []
   const flushProgress = () => {
@@ -616,6 +636,7 @@ async function* relay(
       rearm()
       switch (part.type) {
         case "start-step":
+          shown = outcome.markup ? markupStreamFilter() : undefined
           outcome.steps++
           outcome.stepText = ""
           outcome.stepTools = []
@@ -625,6 +646,11 @@ async function* relay(
           yield { type: "progress" }
           break
         case "finish-step": {
+          {
+            const rest = shown?.end()
+            if (rest && !outcome.bufferText) yield { type: "text-delta", text: rest }
+            for (const tag of shown?.tags ?? []) outcome.markup?.add(tag)
+          }
           flushProgress()
           outcome.rawFinish = part.rawFinishReason
           outcome.finish = part.finishReason
@@ -644,7 +670,10 @@ async function* relay(
           outcome.text += part.text
           outcome.stepText = (outcome.stepText ?? "") + part.text
           stepText += part.text
-          if(!outcome.bufferText) yield { type: "text-delta", text: part.text }
+          if (!outcome.bufferText) {
+            const text = shown ? shown.push(part.text) : part.text
+            if (text) yield { type: "text-delta", text }
+          }
           break
         case "tool-call":
           outcome.stepTools = [...(outcome.stepTools ?? []), part.toolName]
@@ -1271,12 +1300,14 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
   /** The stop gate gave up: the turn ends without an answer. */
   let unanswered = false
   let financialCorrectionUsed = false
+  /** Markup taken out this turn, streamed or stored (loop/markup.ts). */
+  const markupTags = opts.disabled?.has("strip-markup") ? undefined : new Set<string>()
 
   const emittedFinanceOrigins = new Set<string>()
   for (;;) {
     const base = [...request, ...kept]
     const result = run(base, rescue)
-    const last: Outcome = { text: "", aborted: false, steps: 0, progress: [], bufferText: !!finance?.options.machineResponse }
+    const last: Outcome = { text: "", aborted: false, steps: 0, progress: [], bufferText: !!finance?.options.machineResponse, ...(markupTags ? { markup: markupTags } : {}) }
     yield* relay(result, opts.registry, opts.signal, last, notices, { ms: stallMs, onStall }, prepared.images)
     for(const rejection of commonLocalRejections.splice(0)) yield {type:"notice",text:JSON.stringify(rejection)}
     if(finance) {
@@ -1401,8 +1432,9 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
   }
 
   if (messages && !outcome.aborted && !outcome.failure) {
-    // Echoed todo lines never reach history, so a later turn has nothing to imitate (29/10).
-    if (!opts.disabled?.has("strip-echoes")) messages = stripEchoMessages(messages)
+    // Echoed todo lines and harness markup never reach history, so a later turn has nothing to
+    // imitate (29/10, 13/11).
+    messages = stripEchoMessages(messages, { echoes: !opts.disabled?.has("strip-echoes"), markup: !!markupTags, tags: markupTags })
     // Card blocks never reach history (spec 007); a valid one at the end of the final answer is a card.
     const carded = stripCardMessages(messages)
     messages = carded.messages
@@ -1438,6 +1470,7 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
       ...(retiredTodos > 0 ? { retiredTodos } : {}),
       ...dataGaps([user, ...messages]),
       ...ungrounded(opts.history, user, messages, assembled.context),
+      ...(markupTags?.size ? { markup: [...markupTags] } : {}),
     }
     if (opts.hooks) void opts.hooks.emit({ type: "turn-end", sessionId, messages: [user, ...messages] })
     return
@@ -1452,9 +1485,10 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
   // closes any call left without a result, so providers still accept the history), then the
   // partial text. The user message keeps its reminders, so the clock it carried still counts
   // as sent.
-  const text = outcome.text && stripCardBlocks(outcome.text).text
+  const text = outcome.text && stripCardBlocks(markupTags ? stripMarkup(outcome.text).text : outcome.text).text
   // A stopped or failed turn has no card, and its card blocks never reach history either (spec 007).
-  const progress = stripCardMessages(closeDanglingToolCalls(outcome.progress, "Tool bị ngắt vì lượt bị dừng giữa chừng.").messages).messages
+  const cut = closeDanglingToolCalls(outcome.progress, "Tool bị ngắt vì lượt bị dừng giữa chừng.").messages
+  const progress = stripCardMessages(markupTags ? stripEchoMessages(cut, { echoes: false }) : cut).messages
   // No square brackets: the markdown renderer read "[Đã dừng]" as a link. The closed steps
   // already carry their text, so the trailing note appears only when nothing else closes the
   // turn — a resumed session must not show a step's text twice.

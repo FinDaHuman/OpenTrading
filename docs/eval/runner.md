@@ -30,7 +30,7 @@ Each question has an `id`, a `group` (A–F), the `question`, and `now`, the mom
 
 `tool_result.visible` is what the model saw, after notices and the output cap. `tool_raw.raw` is what the tool returned. Use `visible` to ask whether the model invented a figure, and `raw` to check a figure against the data. Subagent calls have only `tool_raw`, with `agent` set. `raw` is taken before date normalization, so it can hold `/Date(ms)/` where `visible` shows an ISO date.
 
-`answer.text` is the answer the harness kept. `answer.streamed` is everything the user saw, including a draft the stop gate sent back.
+`answer.text` is the answer the harness kept. `answer.markup_stripped` names the harness tags the loop took out of the turn's text (a step it dropped included), when there were any. `answer.streamed` is everything the user saw, including a draft the stop gate sent back.
 
 ## Fixed data
 
@@ -48,6 +48,7 @@ Each question has an `id`, a `group` (A–F), the `question`, and `now`, the mom
 |---|---|
 | `gate-empty`, `gate-length`, `gate-malformed`, `gate-promise`, `gate-unfetched`, `gate-fragment` | That stop-gate rule never sends the model back. An empty or malformed answer ends the turn unanswered. |
 | `strip-echoes` | Echoed todo lines stay in the saved messages. The gate's own reading of an answer still strips them. |
+| `strip-markup` | Harness markup (`<nhac_nho>`, tool calls written as text, `<thought>` notes; see `src/core/loop/markup.ts`) stays in the stream and the saved messages. The gate's own reading of an answer still strips it. |
 | `tool-nudge`, `todo-nudge` | The reminder after tool results, or only its open-todo part. |
 | `failure-nudge` | The reminder about failed tools. The stop after a long failure streak stays. |
 | `skill-hints` | The per-question skill suggestion. The catalog stays. |

@@ -191,8 +191,9 @@ test("tool guidance lives in one place and the format example carries no real-lo
   // deduped: scenarios live in <bat_bien> only, the citations monster bullet split, the
   // deferred-tools header shortened, and style's budget raised (400/250/0 → 1000/900/800) so
   // the rules survive every tier), ≈2.05k after the 08/11/2026 no-mental-math line (every
-  // computed figure comes from a tool; since 13/11/2026 an arithmetic-only shell command).
-  expect(Math.ceil(a.system.length / 4)).toBeLessThan(2_100)
+  // computed figure comes from a tool; since 13/11/2026 an arithmetic-only shell command), ≈2.11k
+  // after the 13/11/2026 no-harness-markup line (the model copied <nhac_nho> into its answer).
+  expect(Math.ceil(a.system.length / 4)).toBeLessThan(2_120)
 })
 
 test("the constraints budget key is explicit and never cuts on any tier", () => {

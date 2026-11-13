@@ -57,6 +57,8 @@ export type TraceEvent =
       data_gaps: string[]
       /** What the harness itself measured, to compare with the scorer's untraced figures. */
       ungrounded?: string[]
+      /** Harness markup the loop took out of the answer (loop/markup.ts). */
+      markup_stripped?: string[]
       /** Finished model steps, subagents included. */
       model_steps: number
       /** Those steps per upstream provider that answered them, when the gateway says (OpenRouter display names). */

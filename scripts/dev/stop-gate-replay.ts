@@ -15,6 +15,7 @@ import {
   UNFETCHED_MIN_FIGURES,
   unfetchedFigures,
 } from "../../src/core/loop/stop-gate"
+import { stripMarkup } from "../../src/core/loop/markup"
 import { sessionsDir } from "../../src/core/session/store"
 import { sessionFiles } from "./session-files"
 
@@ -167,3 +168,31 @@ for (const line of ungrounded.slice(0, show)) console.log(`  ${line}`)
 console.log(`
 Câu dạo đầu thật (kèm gọi tool) nhận ra là lời hứa: ${preambles - missed.length}/${preambles}`)
 for (const line of missed.slice(0, show)) console.log(`  sót: ${line}`)
+
+// Harness markup (loop/markup.ts) over every assistant text of every step, subagents included:
+// what it takes out, so a real answer that loses text shows up here before the filter ships.
+const markupHits: string[] = []
+let assistantTexts = 0
+for (const file of sessionFiles(dir)) {
+  for (const line of readFileSync(file, "utf8").split("\n")) {
+    if (!line.trim()) continue
+    let entry: { type?: string; message?: ModelMessage }
+    try {
+      entry = JSON.parse(line)
+    } catch {
+      continue
+    }
+    if (entry.type !== "message" || entry.message?.role !== "assistant") continue
+    const text = textOf(entry.message)
+    if (!text.trim()) continue
+    assistantTexts++
+    const { text: kept, tags } = stripMarkup(text)
+    if (tags.length === 0) continue
+    const lost = text.length - kept.length
+    markupHits.push(
+      `${path.relative(dir, file)} [${tags.join(",")}] −${lost} ký tự, còn ${kept.length}: ${kept.replace(/\s+/g, " ").slice(0, 80) || "(rỗng)"}`,
+    )
+  }
+}
+console.log(`\nMarkup harness bị bỏ (mọi bước, cả subagent): ${markupHits.length}/${assistantTexts} đoạn`)
+for (const line of markupHits.slice(0, show)) console.log(`  ${line}`)
