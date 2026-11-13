@@ -78,7 +78,12 @@ export interface TurnFailures {
   gaps: string[]
   /** Steps in a row, up to the last one, where every call failed. */
   streak: number
+  /** A tool other than the harness's own (todo list, tool search, skills) returned something to answer from. */
+  usable: boolean
 }
+
+/** Tools that run the harness, not fetch data: their success is nothing to answer from. */
+const HARNESS_TOOLS = new Set(["todo_write", "tool_search", "load_skill"])
 
 /** Over the last turn in `messages` (from its user message). */
 export function turnFailures(messages: readonly ModelMessage[]): TurnFailures {
@@ -87,6 +92,7 @@ export function turnFailures(messages: readonly ModelMessage[]): TurnFailures {
   const missing = new Map<string, { name: string; alternatives: string[] }>()
   const worked = new Set<string>()
   let streak = 0
+  let usable = false
   for (const message of messages.slice(start + 1)) {
     if (message.role === "assistant" && Array.isArray(message.content)) {
       for (const part of message.content) if (part.type === "tool-call") inputs.set(part.toolCallId, part.input)
@@ -101,6 +107,7 @@ export function turnFailures(messages: readonly ModelMessage[]): TurnFailures {
       const key = `${part.toolName}\u0000${stableJson(inputs.get(part.toolCallId))}`
       if (outcome === "ok") {
         succeeded = true
+        if (!HARNESS_TOOLS.has(part.toolName)) usable = true
         missing.delete(key)
         worked.add(shortName(part.toolName))
       } else if (!NEUTRAL.has(outcome)) {
@@ -114,13 +121,25 @@ export function turnFailures(messages: readonly ModelMessage[]): TurnFailures {
     else if (failed) streak++
   }
   const gaps = [...missing.values()].filter((gap) => !gap.alternatives.some((name) => worked.has(name))).map((gap) => gap.name)
-  return { gaps: [...new Set(gaps)], streak }
+  return { gaps: [...new Set(gaps)], streak, usable }
+}
+
+/**
+ * The answer the harness writes when the model gave none after every recovery and sources
+ * failed: it names what is missing and states no figure. Seen 13/11 (eval m6): both price
+ * sources down, the model answered empty three times.
+ */
+export function gapsAnswer(gaps: readonly string[]): string {
+  return [
+    `Mình chưa trả lời được câu này vì chưa lấy được dữ liệu cần thiết: ${gaps.join(", ")} (nguồn lỗi hoặc quá thời gian trong lượt này).`,
+    "Mình không đưa ra con số nào cho phần thiếu để tránh sai. Bạn thử hỏi lại sau ít phút, hoặc hỏi phần dữ liệu khác.",
+  ].join("\n\n")
 }
 
 const remind = (text: string) => `<nhac_nho>\n${text}\n</nhac_nho>`
 
 /** Reminder for the next step, if the turn has one to give. */
-export function failureNudge({ gaps, streak }: TurnFailures): string | undefined {
+export function failureNudge({ gaps, streak }: Pick<TurnFailures, "gaps" | "streak">): string | undefined {
   const lines = [
     ...(gaps.length > 0 ? [`Lượt này chưa lấy được dữ liệu từ: ${gaps.join(", ")}. Khi trả lời, nêu rõ phần còn thiếu và không tự điền số cho phần đó.`] : []),
     ...(streak === FAILURE_STREAK_NUDGE ? [`${streak} bước liên tiếp chỉ toàn lỗi. Đổi cách khác, hoặc trả lời bằng dữ liệu đã có.`] : []),

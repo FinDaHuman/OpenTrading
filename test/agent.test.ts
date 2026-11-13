@@ -1282,6 +1282,36 @@ test("13/11 m6 as it happened: a tool, two empty answers, then only <nhac_nho>: 
   expect(done(events).markup).toEqual(["nhac_nho"])
 })
 
+test("every source failed and the model answers empty: the rescue asks about what is missing, tools off then on", async () => {
+  respond = (_body, n) => (n === 0 ? toolCall("mcp__ot__source", {}, "call_1") : n === 1 ? answer("") : n === 2 ? answer("") : answer("Chưa lấy được giá HPG: nguồn lỗi."))
+  const events = await collect(runAgent({ history: [], input: "Giá HPG?", skills: [], registry: failingSource() }))
+  expect(bodies).toHaveLength(4)
+  expect(lastSent(2)).toContain("chưa trả dữ liệu trong lượt này: source")
+  expect(bodies[2]!.tool_choice).toBe("none")
+  expect(lastSent(3)).toContain("chưa trả dữ liệu trong lượt này: source")
+  expect(bodies[3]!.tool_choice).not.toBe("none")
+  expect(JSON.stringify(done(events).messages.at(-1))).toContain("Chưa lấy được giá HPG")
+  expect(done(events).unanswered).toBeUndefined()
+  expect(done(events).fallback).toBeUndefined()
+})
+
+test("13/11 m6 with sources down: empty, empty, <nhac_nho> — the harness answers with the gaps, no figure", async () => {
+  const block = "<nhac_nho>\nDanh sách việc của bạn:\n- [in_progress] Lấy giá HPG\n</nhac_nho>"
+  respond = (_body, n) => (n === 0 ? toolCall("mcp__ot__source", {}, "call_1") : n <= 2 ? answer("") : answer(block))
+  const events = await collect(runAgent({ history: [], input: "Giá HPG?", skills: [], registry: failingSource() }))
+  // Two gap rescues; no answer-only rescue (nothing to answer from); then the harness answers.
+  expect(bodies).toHaveLength(4)
+  const shown = events.flatMap((e) => (e.type === "text-delta" ? [e.text] : [])).join("")
+  expect(shown).toContain("chưa lấy được dữ liệu cần thiết: source")
+  expect(shown).not.toContain("nhac_nho")
+  expect(shown).not.toMatch(/\d/)
+  const last = JSON.stringify(done(events).messages.at(-1))
+  expect(last).toContain("chưa lấy được dữ liệu cần thiết: source")
+  expect(done(events).unanswered).toBe(true)
+  expect(done(events).fallback).toBe(true)
+  expect(done(events).dataGaps).toEqual(["source"])
+})
+
 test("markup around a real answer leaves the screen, the history and the trace field says which", async () => {
   respond = (_body, n) =>
     n === 0 ? answer('<todo_write>{"todos":[]}</todo_write>\nHPG đóng cửa 27.500 đồng.\n<thought>xong</thought>') : undefined

@@ -150,3 +150,18 @@ test("the reminder names the gaps, and the streak only once", () => {
 test("the line under the answer counts the sources", () => {
   expect(gapsLine(["a", "b"])).toBe("! 2 nguồn lỗi chưa khắc phục trong lượt này: a, b")
 })
+
+test("usable: only a tool other than the harness's own that returned data counts", () => {
+  const search = { tool: "tool_search", text: `${LOADED_PREFIX}mcp__ot__a` }
+  expect(turnFailures(turn(step(search), step({ tool: "mcp__ot__a", text: FAILED_SOURCE }))).usable).toBe(false)
+  expect(turnFailures(turn(step({ tool: "todo_write" }, { tool: "load_skill" }), step({ tool: "mcp__ot__a", error: DOWN }))).usable).toBe(false)
+  expect(turnFailures(turn(step({ tool: "mcp__ot__a", text: FAILED_SOURCE }), step({ tool: "mcp__ot__b" }))).usable).toBe(true)
+  expect(turnFailures(turn(step({ tool: "current_time" }))).usable).toBe(true)
+})
+
+test("gapsAnswer names every gap and states no figure", async () => {
+  const { gapsAnswer } = await import("../src/core/loop/failures")
+  const text = gapsAnswer(["vn_quote_history", "market_candles_batch"])
+  expect(text).toContain("vn_quote_history, market_candles_batch")
+  expect(text).not.toMatch(/\d/)
+})
