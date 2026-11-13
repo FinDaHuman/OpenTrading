@@ -1154,6 +1154,23 @@ test("<quyen_tep> names the session's temp folder to an agent with only shell, a
   expect(userOf(0)).toContain(JSON.stringify(path.join("phien-2", "scratchpad")).slice(1, -1))
 })
 
+test("no <quyen_tep> for an agent whose shell only computes numbers (read-only subagents, ultradesk)", async () => {
+  const { Workspace } = await import("../src/core/fs/workspace")
+  const { shellTool } = await import("../src/core/tools/shell/shell")
+  const { mkdir } = await import("node:fs/promises")
+  const project = path.join(home, "du-an-tinh")
+  await mkdir(project, { recursive: true })
+  const r = registry()
+  const workspace = new Workspace(project, { data: path.join(home, "data") })
+  r.workspace = workspace
+  r.register(shellTool(workspace).readOnlyVariant!)
+  bodies.length = 0
+  await collect(runAgent({ history: [], input: "tính thử", skills: [], registry: r }))
+  const user = JSON.stringify(bodies[0]!.messages.filter((m) => m.role === "user").at(-1))
+  expect(user).not.toContain("quyen_tep")
+  expect(JSON.stringify(bodies[0]!.tools ?? bodies[0])).toContain("Máy tính")
+})
+
 test("read-only sends write_file/edit_file by name only; ask mode declares them; <quyen_tep> says the mode", async () => {
   const { Workspace } = await import("../src/core/fs/workspace")
   const { FileState } = await import("../src/core/fs/file-state")

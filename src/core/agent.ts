@@ -822,8 +822,12 @@ interface TurnExtras {
 const cap = (text: string | undefined, max: number) =>
   text && text.length > max ? text.slice(0, max) + "\n" + REMINDER_CAP_MARK : text
 
-/** Any of these sent: the `<quyen_tep>` reminder (workspace, temp folder, mode) rides along. */
+/**
+ * Any of these sent: the `<quyen_tep>` reminder (workspace, temp folder, mode) rides along.
+ * Only the full shell (effect "shell"): a read-only agent's arithmetic-only shell reaches no file.
+ */
 const FILE_TOOLS = ["read_file", "write_file", "shell"]
+const fileTool = (registry: TurnInput["registry"], name: string) => FILE_TOOLS.includes(name) && (name !== "shell" || registry.get(name)?.effect === "shell")
 
 async function assembleFor(opts: TurnInput, target: Target | undefined, bound: Bound, extras: TurnExtras = {}) {
   const info = target?.provider.models[target.model]
@@ -862,7 +866,7 @@ async function assembleFor(opts: TurnInput, target: Target | undefined, bound: B
     declaredTools: built ? Object.keys(built.tools) : undefined,
     mcpInstructions: opts.serverInstructions?.(),
     todos: currentTodos(opts.history ?? []),
-    fileAccess: FILE_TOOLS.some((t) => toolNames.includes(t)) && opts.registry.workspace ? `${opts.registry.workspace.describe()}\n${modeNote(mode)}` : undefined,
+    fileAccess: toolNames.some((t) => fileTool(opts.registry, t)) && opts.registry.workspace ? `${opts.registry.workspace.describe()}\n${modeNote(mode)}` : undefined,
     prevFileAccess: lastReminder(opts.history ?? [], "quyen_tep"),
     disabled: opts.disabled,
   }, opts.promptDir === undefined ? undefined : validatePromptDir(opts.promptDir))

@@ -91,7 +91,7 @@ Có 17 loại sẵn trong thư mục `agents/` (mô tả đầy đủ ở từng
 | `bull` / `bear` | chỉ tool đọc | 6 | hai phe trong tranh luận (dùng trong playbook `tranh-bien`) |
 | `tong-hop` | chỉ tool đọc | 6 | trọng tài: gộp báo cáo và tranh luận thành kịch bản |
 
-Loại chỉ đọc được bộ lọc tool của harness chặn ở mức tool (`@chi-doc` chỉ đưa tool đọc vào subagent); subagent không có tool shell hay file. Báo cáo cuối của subagent là text trả về cho agent chính (`prompts/subagent.md`).
+Loại chỉ đọc được bộ lọc tool của harness chặn ở mức tool (`@chi-doc` chỉ đưa tool đọc vào subagent); subagent không có tool file, và chỉ có `shell` ở dạng **chỉ tính toán** (biểu thức số, xem `docs/permissions.md` mục "Lệnh chỉ tính toán"; lệnh khác bị từ chối ngay, không hỏi bạn). Agent ultradesk cũng vậy. Báo cáo cuối của subagent là text trả về cho agent chính (`prompts/subagent.md`).
 
 **Tự định nghĩa loại mới** (theo `.claude/agents/*.md` của Claude Code):
 - Dự án: `.opentrading/agents/<tên>.md` (chỉ nạp khi thư mục đã được tin cậy; xem [contracts.md](contracts.md#3-viết-skill-skillstênskillmd)).
@@ -114,7 +114,7 @@ Chỉ dẫn riêng cho loại này (vào system prompt của subagent, trong <ch
 
 Cách viết `tools`:
 - Bỏ trống hoặc `*`: mọi tool subagent được dùng.
-- `@chi-doc`: chỉ tool đọc.
+- `@chi-doc`: chỉ tool đọc, cộng `shell` chỉ tính toán.
 - Pattern dạng `current_time`, `opentrading/vn_*`, `*news*`.
 - `disallowedTools` bị trừ sau cùng. Không pattern nào thêm lại được các tool bị loại.
 

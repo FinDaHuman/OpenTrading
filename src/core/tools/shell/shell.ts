@@ -49,7 +49,7 @@ export function shellTool(workspace: Workspace, opts: { shell?: ShellInfo } = {}
   const shell = opts.shell ?? detectShell()
   const cwdOf = (input: ShellInput) => (input.workdir ? workspace.resolve(input.workdir) : workspace.primary)
   const critical = (input: ShellInput) => criticalDelete(input.command, { roots: [os.homedir(), ...workspace.roots()] })
-  return {
+  const def: ToolDef<ShellInput> = {
     name: "shell",
     description: describe(shell),
     input: z.object({
@@ -125,6 +125,44 @@ export function shellTool(workspace: Workspace, opts: { shell?: ShellInfo } = {}
           ? `file ${saved.file} chỉ giữ ${saved.chars} ký tự đầu (giới hạn ${SPILL_CAP / 1024 / 1024} MB), phần sau không được lưu; đọc bằng read_file với offset hoặc tìm bằng grep_files`
           : `bản đầy đủ (${saved.chars} ký tự) ở ${saved.file}, đọc tiếp bằng read_file với offset hoặc tìm bằng grep_files`
       return `${meta}\n(Output dài${result.dropped ? "" : ` ${output.length} ký tự`}; ${where}.)\n${output}`
+    },
+  }
+  return { ...def, readOnlyVariant: mathShellTool(def, shell) }
+}
+
+/**
+ * shell for agents limited to read-only tools (`@chi-doc` subagents, ultradesk): arithmetic
+ * only (math.ts), in the workspace. Anything else is refused at once, never put to the user.
+ */
+function mathShellTool(full: ToolDef<ShellInput>, shell: ShellInfo): ToolDef<ShellInput> {
+  // A tool error, not a permission denial: the model should retry as arithmetic, not stop.
+  const refusal = `Lệnh này không phải phép tính thuần nên không chạy (agent này chỉ dùng shell để tính số). Viết lại thành biểu thức số. ${mathHint(shell)}`
+  return {
+    name: "shell",
+    description:
+      "Máy tính: chạy một lệnh chỉ gồm phép tính số và trả kết quả. " +
+      "Dùng khi: cần số tính ra từ số đã có (tỷ lệ, % thay đổi, CAGR, P/E, đổi đơn vị); gộp nhiều phép vào một lệnh. " +
+      `Không dùng khi: chạy chương trình, đọc hay ghi file (bị từ chối). ${mathHint(shell)}`,
+    input: z.object({
+      command: z.string().min(1).describe("Biểu thức cần tính"),
+      description: z.string().max(200).optional().describe("Phép tính này để làm gì, 5–10 từ"),
+    }),
+    readOnly: true,
+    source: LOCAL_SOURCE,
+    timeoutMs: 30_000,
+    maxOutputChars: 4_000,
+    // Arithmetic goes through the gate as `math:` (deny/ask rules apply); anything else never
+    // reaches the user: execute refuses it.
+    askFor: (input) => {
+      const { command } = input as ShellInput
+      return typeof command === "string" && mathOnlyCommand(command, shell) ? `math:${command.trim()}` : undefined
+    },
+    subject: (input) => input.command,
+    summarize: full.summarize,
+    async execute(input, ctx) {
+      // Also without a gate (tests, scripts): never run anything but arithmetic.
+      if (!mathOnlyCommand(input.command, shell)) throw new Error(refusal)
+      return full.execute({ command: input.command, ...(input.description ? { description: input.description } : {}), timeout_ms: 20_000 }, ctx)
     },
   }
 }
