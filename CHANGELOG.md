@@ -18,15 +18,17 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 - `prompts/tools.md`: computed figures (ratios, %, CAGR, P/E, unit changes) come from one arithmetic-only `shell`
   command per step, large amounts scaled to tỷ đồng inside the expression; the answer states the formula and inputs.
-  This replaces the 12/11 line that let the model fall back to its own arithmetic when the calculator refused.
+  A command that still fails after one fix may be computed by hand, labelled "tự tính" with formula and inputs.
 - `shell` is always declared (no longer deferred): arithmetic needs no `tool_search` request first.
 - Skills that used `compute` (valuation history, sector RS, ranking after troughs, sector KPIs) work from start/end
-  values and quarterly ratios, computed in one `shell` command.
+  values (RS fetches 64 bars: the table cap always keeps the first and last row) and the periods `financial_ratios`
+  returns, computed in one `shell` command.
 
 ### Removed
 
 - The `calculate` and `compute` tools. In the v4.6u benchmark the loop guard stopped `calculate` 31 times in 16 trials
-  (13 requests per trial against 3.8, 6 of 15 failed trials), and their schemas were about 11 KB per request.
+  (13 requests per trial against 3.8, 6 of 15 failed trials); here their description and schema took 3.6k
+  characters each.
   Native tool descriptions and schemas shrink from 39.9k to 32.7k characters; always-declared ones by 1.9k.
   `financial-source.ts` and `finance-policy.ts` (benchmark path) stay; `calculate/units.ts` moved to `tools/units.ts`.
 

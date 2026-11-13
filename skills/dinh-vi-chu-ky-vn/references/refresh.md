@@ -17,7 +17,7 @@ Khi kích hoạt nhưng user CHƯA đồng ý: chỉ cảnh báo + ghi verdict �
 
 | Lớp | Nội dung | Cách refresh |
 |---|---|---|
-| **Live** (không lưu) | RS 3M mảng, đỉnh gần nhất, bias tháng hiện tại | Tính trực tiếp từ MCP tools mỗi lần gọi (`vn_index_ohlcv` 126 nến, `seasonality`, `event_study`) |
+| **Live** (không lưu) | RS 3M mảng, đỉnh gần nhất, bias tháng hiện tại | Tính trực tiếp từ MCP tools mỗi lần gọi (`vn_index_ohlcv` 64 nến, `seasonality`, `event_study`) |
 | **Prior dài hạn** (PG `cycle_*`) | month_stats, chains, turning, tet, yearly, trough_events | Tools `cycle_stats_*` dưới đây; version trong `cycle_meta` |
 
 ## 3. Quy trình refresh bằng MCP tools (mặc định, incremental)

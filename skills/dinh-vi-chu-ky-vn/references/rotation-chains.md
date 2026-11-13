@@ -16,7 +16,7 @@
 - Không có tool nào trả lead-lag tuần: không dùng nhận định "CK tuần này → BĐS/VNI tuần sau" làm bằng chứng.
 - Lead-lag tháng hầu hết âm nhẹ (mean-reversion): không bắt lead tuyến tính ở horizon tháng, chỉ dùng chuỗi relative mục 1.
 
-## 3. Đọc RS 3M (giá đầu/cuối 63 phiên từ `vn_index_ohlcv` 126 nến, `market_candles_batch` cho Vin; tính bằng `shell`)
+## 3. Đọc RS 3M (giá đầu/cuối 63 phiên từ `vn_index_ohlcv` 64 nến (nến đầu = 63 phiên trước), `market_candles_batch` cho Vin; tính bằng `shell`)
 
 - RS 3M > +15% sau giai đoạn bank dẫn = quá nóng, thường trước đỉnh 1–3 tháng.
 - RS bank+CK dương, BĐS âm = đầu/giữa sóng (tiền chưa lan tới BĐS).

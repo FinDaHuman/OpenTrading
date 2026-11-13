@@ -30,7 +30,7 @@ Chạy `valuation_run` (symbol, method mặc định auto — chỉ đổi metho
 
 **Bước 2: Neo lịch sử (song song, gọi trực tiếp).**
 
-Chạy `financial_ratios` (symbol) + `vn_quote_history` (symbol, days=365), tính PER/PB trung bình 2–3 năm từ PER/PB theo quý của `financial_ratios` (8–12 quý): cộng các quý rồi chia số quý trong một lệnh `shell`, ghi rõ số quý và quý đầu/cuối. Thiếu lịch sử giá thì bỏ so lịch sử, verdict partial + ghi thiếu.
+Chạy `financial_ratios` (symbol) + `vn_quote_history` (symbol, days=365), tính PER/PB trung bình 2–3 năm từ các kỳ PER/PB mà `financial_ratios` trả (period mặc định là năm: 2–3 số; có số theo quý thì dùng quý): cộng các kỳ rồi chia số kỳ trong một lệnh `shell`, ghi rõ số kỳ và kỳ đầu/cuối. `vn_quote_history` cho giá hiện tại để đối chiếu. Thiếu lịch sử giá thì bỏ so lịch sử, verdict partial + ghi thiếu.
 
 **Bước 3: Bối cảnh lãi suất (chỉ khi cần).**
 
@@ -45,7 +45,7 @@ Không tự dựng lại DCF (đã tính sẵn trong `valuation_run`). Không g�
 Trình bày kết luận đúng cấu trúc sau, mỗi mục ghi số + trend + provenance:
 
 1. Giá hiện tại so với vùng giá hợp lý: phương pháp nào dẫn dắt, chênh bao nhiêu % (`provenance: valuation_run` + `vs_overview_trading`).
-2. PER/PB hiện tại so với trung bình 2–3 năm (tính từ PER/PB theo quý của `financial_ratios`; `provenance: financial_ratios` + `vn_quote_history`).
+2. PER/PB hiện tại so với trung bình 2–3 năm (tính từ các kỳ PER/PB của `financial_ratios`; `provenance: financial_ratios` + `vn_quote_history`).
 3. Rẻ/đắt vì sao: tăng trưởng + chất lượng (cross-ref `co-ban-chuyen-sau`) + lãi suất.
 4. Dư địa tăng/giảm % + độ tin (cao nếu 2 phương pháp đồng thuận).
 5. Dòng neo kỳ vọng: mức giá mục tiêu của CTCK (`provenance: tim-co-hoi-bao-cao-ctck` cross-ref, chỉ tham chiếu).
