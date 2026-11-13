@@ -52,7 +52,8 @@ let runtime: Runtime | undefined
 const opened: { close(): void }[] = []
 
 beforeEach(async () => {
-  await saveConfig({ provider: "groq", model: "m", update: { check: false } })
+  // memory is reset too: a test that switched cards or memory must not carry over to the next one.
+  await saveConfig({ provider: "groq", model: "m", update: { check: false }, memory: undefined })
 })
 afterEach(async () => {
   setup?.renderer.destroy()
@@ -83,15 +84,21 @@ function otherWindow() {
   return store
 }
 
+/**
+ * The first rendered frame that has `text`. Always renders first (a check such as "no longer shows X" must not
+ * pass on the empty frame before any render) and fails on timeout instead of returning the last frame.
+ */
 async function frameWith(text: string | ((f: string) => boolean)) {
   const ok = typeof text === "string" ? (f: string) => f.includes(text) : text
   let frame = ""
-  for (let i = 0; i < 100 && !ok(frame); i++) {
+  for (let i = 0; i < 100; i++) {
     await new Promise((r) => setTimeout(r, 10))
     await setup!.renderOnce()
     frame = setup!.captureCharFrame()
+    if (ok(frame)) return frame
   }
-  return frame
+  throw new Error(`frame never showed ${typeof text === "string" ? JSON.stringify(text) : "the expected state"}:
+${frame}`)
 }
 async function until(check: () => boolean | Promise<boolean>) {
   for (let i = 0; i < 200 && !(await check()); i++) await new Promise((r) => setTimeout(r, 10))
@@ -115,6 +122,22 @@ async function chooseMemory(filter: string) {
 }
 
 describe("/config: memory choices", () => {
+  test("the card switch flips in place: the Memory view stays open", async () => {
+    await openConfig()
+    await chooseMemory("so ghi")
+    await until(() => runtime!.memory.id === "notebook")
+    await frameWith("Cài đặt")
+    setup!.mockInput.pressEnter()
+    await frameWith("Cho phép thẻ gợi ý")
+    await setup!.mockInput.typeText("cho phep")
+    await frameWith((f) => !f.includes("không dùng memory"))
+    setup!.mockInput.pressEnter()
+    await until(async () => (await loadConfig()).memory?.cards === false)
+    const f = await frameWith("tắt · enter để bật")
+    expect(f).toContain("Có hiệu lực ngay")
+    await saveConfig({ memory: { provider: "notebook", cards: true } })
+  })
+
   test("Sổ ghi nhớ opens memory.db at once and is saved; Tắt closes it and the file can be deleted", async () => {
     await openConfig()
     await chooseMemory("so ghi")
@@ -213,8 +236,8 @@ describe("startup", () => {
 describe("/memory with the notebook", () => {
   async function openMemory() {
     runtime = initRuntime({ home, skills: () => [], memory: createMemory("notebook", home) })
-    setState({ dialog: "memory" })
-    setup = await testRender(() => <MemoryDialog memory={runtime!.memory} />, { width: 110, height: 40 })
+    setState({ dialog: "memory", memoryTab: "notebook" })
+    setup = await testRender(() => <MemoryDialog runtime={runtime!} />, { width: 110, height: 40 })
   }
   async function openEntry(filter: string, title: string) {
     await setup!.mockInput.typeText(filter)
@@ -252,12 +275,12 @@ describe("/memory with the notebook", () => {
     await frameWith("Quyết định")
     await openEntry("dinh gia", "Dùng P/B và ROE")
     setup!.mockInput.pressKey("d")
-    await frameWith("enter xoá · esc huỷ")
+    await frameWith("enter xác nhận · esc huỷ")
     setup!.mockInput.pressEscape()
-    await frameWith((f) => !f.includes("enter xoá · esc huỷ"))
+    await frameWith((f) => f.includes("esc quay lại") && !f.includes("enter xác nhận · esc huỷ"))
     expect(runtime!.memory.instructions?.()).toBeDefined()
     setup!.mockInput.pressKey("d")
-    await frameWith("enter xoá · esc huỷ")
+    await frameWith("enter xác nhận · esc huỷ")
     setup!.mockInput.pressEnter()
     await until(() => state.notification?.text?.startsWith("Đã xoá") === true)
     expect(state.notification?.text).toBe(
@@ -274,7 +297,7 @@ describe("/memory with the notebook", () => {
     await openEntry("dinh gia", "Dùng P/B và ROE")
     other.writer.reviseLesson(7, 1, LESSON_7(banks))
     setup!.mockInput.pressKey("d")
-    await frameWith("enter xoá · esc huỷ")
+    await frameWith("enter xác nhận · esc huỷ")
     setup!.mockInput.pressEnter()
     await until(() => state.notification?.text?.startsWith("Mục này vừa được sửa") === true)
     expect(state.notification?.text).toBe("Mục này vừa được sửa ở nơi khác (đang là bản 2). Mở lại để xem bản mới.")
@@ -291,7 +314,7 @@ describe("/memory with the notebook", () => {
       let out = ""
       while (!out.includes("held")) out += new TextDecoder().decode((await reader.read()).value)
       setup!.mockInput.pressKey("d")
-      await frameWith("enter xoá · esc huỷ")
+      await frameWith("enter xác nhận · esc huỷ")
       const start = performance.now()
       setup!.mockInput.pressEnter()
       await until(() => state.notification?.text?.startsWith("Kho memory đang bận") === true)
@@ -313,7 +336,7 @@ describe("/memory with the notebook", () => {
     raw.run("DROP TABLE constraint_versions")
     raw.close(true)
     setup!.mockInput.pressKey("d")
-    await frameWith("enter xoá · esc huỷ")
+    await frameWith("enter xác nhận · esc huỷ")
     setup!.mockInput.pressEnter()
     await until(() => state.notification?.text?.startsWith("Đã xoá quyết định D1") === true)
     const f = await frameWith("△")
@@ -321,11 +344,81 @@ describe("/memory with the notebook", () => {
     expect(f).not.toContain("Sổ ghi nhớ còn trống")
   })
 
+  test("tabs: the row shows them, ←/→ and tab/shift+tab switch, wrapping", async () => {
+    seedExample(otherWindow())
+    await openMemory()
+    const f = await frameWith("Quyết định")
+    expect(f).toMatch(/Memory\s+Gợi ý\s+Sổ ghi nhớ\s+Cài đặt/)
+    expect(f).toContain("←/→ đổi tab")
+    setup!.mockInput.pressArrow("right")
+    await until(() => state.memoryTab === "settings")
+    expect(await frameWith("Cho phép thẻ gợi ý")).toContain("Có hiệu lực ngay")
+    setup!.mockInput.pressTab()
+    await until(() => state.memoryTab === "cards")
+    await frameWith("Không có thẻ gợi ý nào đang chờ")
+    setup!.mockInput.pressTab({ shift: true })
+    await until(() => state.memoryTab === "settings")
+    setup!.mockInput.pressArrow("left")
+    await until(() => state.memoryTab === "notebook")
+    await frameWith("Quyết định")
+    // Esc on a tab other than the notebook closes /memory too.
+    setup!.mockInput.pressArrow("left")
+    await until(() => state.memoryTab === "cards")
+    setup!.mockInput.pressEscape()
+    await until(() => state.dialog === undefined)
+  })
+
+  test("an open entry and a delete being confirmed keep ←/→/tab: the confirmation is never lost", async () => {
+    seedExample(otherWindow())
+    await openMemory()
+    await frameWith("Quyết định")
+    await openEntry("hpg", "HPG")
+    setup!.mockInput.pressArrow("right")
+    setup!.mockInput.pressKey("d")
+    await frameWith("Xoá luận điểm này")
+    setup!.mockInput.pressArrow("left")
+    setup!.mockInput.pressTab()
+    const f = await frameWith("Xoá luận điểm này")
+    expect(state.memoryTab).toBe("notebook")
+    expect(f).toContain("Xoá luận điểm này")
+    setup!.mockInput.pressEscape()
+    // Wait for each view: two Esc sent together arrive as one Alt+Esc.
+    await frameWith((f) => f.includes("Hưởng lợi từ đầu tư công") && !f.includes("Xoá luận điểm này"))
+    setup!.mockInput.pressEscape()
+    await frameWith("ctrl+x xuất Markdown")
+    setup!.mockInput.pressArrow("right")
+    await until(() => state.memoryTab === "settings")
+  })
+
+  test("Cài đặt tab: the card switch and memory off take effect at once and stay on the tab", async () => {
+    seedExample(otherWindow())
+    await openMemory()
+    await frameWith("Quyết định")
+    setup!.mockInput.pressArrow("right")
+    await frameWith("Cho phép thẻ gợi ý")
+    await setup!.mockInput.typeText("cho phep")
+    await frameWith("cho phep")
+    setup!.mockInput.pressEnter()
+    await until(async () => (await loadConfig()).memory?.cards === false)
+    await frameWith("tắt · enter để bật")
+    expect(state.memoryTab).toBe("settings")
+    for (let i = 0; i < "cho phep".length; i++) setup!.mockInput.pressBackspace()
+    await setup!.mockInput.typeText("tat")
+    await frameWith("không dùng memory")
+    setup!.mockInput.pressEnter()
+    await until(() => runtime!.memory.id === "none")
+    // The notebook tab reads the runtime's memory again.
+    setup!.mockInput.pressArrow("left")
+    await frameWith("Memory đang tắt")
+    await saveConfig({ memory: { provider: "notebook", cards: true } })
+  })
+
   test("memory off: /memory says so and how to turn it on", async () => {
-    setState({ dialog: "memory" })
-    setup = await testRender(() => <MemoryDialog memory={new NoopMemory()} />, { width: 110, height: 40 })
+    runtime = initRuntime({ home, skills: () => [], memory: new NoopMemory() })
+    setState({ dialog: "memory", memoryTab: "notebook" })
+    setup = await testRender(() => <MemoryDialog runtime={runtime!} />, { width: 110, height: 40 })
     const f = await frameWith("Memory đang tắt")
-    expect(f).toContain("/config")
+    expect(f).toContain("tab Cài đặt")
   })
 })
 
@@ -402,15 +495,15 @@ describe("masking memory blocks (spec 006)", () => {
     s.recordTurn(readTurn())
     setState("history", readTurn())
     await s.currentSession().flush()
-    setState({ dialog: "memory" })
-    setup = await testRender(() => <MemoryDialog memory={runtime!.memory} redaction={runtime!.redaction} />, { width: 110, height: 40 })
+    setState({ dialog: "memory", memoryTab: "notebook" })
+    setup = await testRender(() => <MemoryDialog runtime={runtime!} />, { width: 110, height: 40 })
     await frameWith("Quyết định")
     await setup.mockInput.typeText("dinh gia")
     await frameWith("dinh gia")
     setup.mockInput.pressEnter()
     await frameWith("Dùng P/B và ROE")
     setup.mockInput.pressKey("d")
-    await frameWith("enter xoá · esc huỷ")
+    await frameWith("enter xác nhận · esc huỷ")
     setup.mockInput.pressEnter()
     await until(() => !JSON.stringify(state.history).includes(MARK7))
     await s.currentSession().flush()

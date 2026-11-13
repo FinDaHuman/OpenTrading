@@ -273,7 +273,7 @@ Type `/` for the list (keep typing to filter, `tab` completes, enter runs).
 | `/add-dir [folder] [--luu]` | Add a folder to the workspace (where the agent may write); no argument: show the workspace |
 | `/undo [n] [--force]` | Undo file changes the agent made |
 | `/permissions` | Permission mode, workspace, allow/deny rules, what auto mode blocked |
-| `/memory` | View, review and delete memories |
+| `/memory` | Three tabs: suggestions (pending cards), notebook (view, edit, delete, export), settings (memory and cards on/off); ←/→ switch |
 | `/config` | Settings, applied at once: memory, tool search, auto-compact, steps, subagents, side models, start-up permission mode, effort prompt, notifications, scrolling, new version notice |
 | `/clear`, `/help`, `/exit` | Clear the screen and start a new session, help, quit |
 
@@ -357,7 +357,7 @@ From the command line: `ot mcp add <name> <url>` or `ot mcp add <name> -- <comma
 
 - Conversations are saved in `~/.opentrading/sessions/`, tied to the folder they were opened in. `/sessions` reopens one: this folder's by default, `tab` for every folder. A title is set automatically after the first turn.
 - Near the context limit the conversation is compacted automatically (threshold in `/config`); `/compact` does it by hand.
-- Memory (the notebook, on in `/config`): you write constraints, presentation style, theses and lessons with `/nho`, `/luandiem`, `/baihoc`, and view, edit or delete them in `/memory`. The model may suggest saving one with a card under its answer; nothing is saved until you confirm the form (`/goiy` picks a pending card again).
+- Memory (the notebook, on in `/config`): you write constraints, presentation style, theses and lessons with `/nho`, `/luandiem`, `/baihoc`, and view, edit or delete them in `/memory`. The model may suggest saving one with a card under its answer; nothing is saved until you confirm the form (save or dismiss it on the suggestions tab of `/memory`).
 - Your investor profile `INVESTOR.md` (`/profile`) is always in the context.
 
 ## Configuration

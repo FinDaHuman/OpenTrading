@@ -1,5 +1,5 @@
 import { useTerminalDimensions } from "@opentui/solid"
-import { Show, type JSX } from "solid-js"
+import { children, Show, type JSX } from "solid-js"
 import { color } from "../theme"
 
 /**
@@ -9,6 +9,8 @@ import { color } from "../theme"
  */
 export function DialogFrame(props: {
   title: string
+  /** Shown in place of the title line (a tab row: TabRow). */
+  header?: JSX.Element
   subtitle?: string
   hint?: string
   /** Rule and title colour: green for panels, yellow/red for approvals, cyan for questions. */
@@ -16,6 +18,8 @@ export function DialogFrame(props: {
   children: JSX.Element
 }) {
   const dims = useTerminalDimensions()
+  // Resolved once: the header is read twice below (whether to show it, and the element itself).
+  const header = children(() => props.header)
   return (
     <box
       flexShrink={0}
@@ -27,9 +31,18 @@ export function DialogFrame(props: {
       paddingLeft={2}
       paddingRight={2}
     >
-      <text fg={props.accent ?? color.tang} marginTop={1} wrapMode="none">
-        <span style={{ bold: true }}>{props.title}</span>
-      </text>
+      <Show
+        when={props.header !== undefined}
+        fallback={
+          <text fg={props.accent ?? color.tang} marginTop={1} wrapMode="none">
+            <span style={{ bold: true }}>{props.title}</span>
+          </text>
+        }
+      >
+        <box marginTop={1} flexShrink={0}>
+          {header()}
+        </box>
+      </Show>
       <Show when={props.subtitle}>
         <text fg={color.tx3} wrapMode="none">
           {props.subtitle}

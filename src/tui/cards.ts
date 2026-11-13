@@ -49,7 +49,6 @@ function setCardState(id: string, next: CardState, saved?: CardOutcome["saved"])
       const line = s.lines[index] as CardLine
       line.state = next
       if (saved) line.saved = saved
-      if (s.cardFocus === id) s.cardFocus = undefined
     }),
   )
   void currentSession().appendCardState(id, next, saved)
@@ -64,7 +63,17 @@ export function dismissCard(id: string) {
   setCardState(id, "dismissed")
 }
 
-/** Enter on a card: its form, filled in. A notebook that is off says so; the card stays pending. */
+/** The cards still waiting for the user, oldest first: the Gợi ý tab of /memory. */
+export function pendingCards(): Card[] {
+  return cardLines()
+    .filter((l) => l.state === "pending")
+    .map((l) => l.card)
+}
+
+/**
+ * Enter on a card in /memory: its form, filled in; closing or saving it goes back to /memory. A notebook that
+ * is off says so; the card stays pending.
+ */
 export function openCard(memory: MemoryProvider, id: string) {
   const line = cardLines().find((l) => l.card.id === id)
   if (!line || line.state !== "pending") return
@@ -74,16 +83,6 @@ export function openCard(memory: MemoryProvider, id: string) {
       ? { group: "lesson", title: c.title, summary: c.summary, card: { id: c.id } }
       : // The user picks the box (constraint or style), as with /nho: never chosen for them (spec 003).
         { group: "constraint", text: c.text, card: { id: c.id, quote: c.quote } }
-  const why = openNotebookRequest(memory, request)
+  const why = openNotebookRequest(memory, request, undefined, true)
   if (why) say(why, "error", 10000)
-  else setState("cardFocus", undefined)
-}
-
-/** /goiy: the newest pending card takes the keys again. */
-export function focusLatestCard(): boolean {
-  const pending = cardLines().filter((l) => l.state === "pending")
-  const last = pending.at(-1)
-  if (!last) return false
-  setState("cardFocus", last.card.id)
-  return true
 }

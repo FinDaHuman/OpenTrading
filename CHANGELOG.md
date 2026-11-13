@@ -25,6 +25,12 @@ adopt Semantic Versioning when it exposes a stable public API.
 - Skills that used `compute` (valuation history, sector RS, ranking after troughs, sector KPIs) work from start/end
   values (RS fetches 64 bars: the table cap always keeps the first and last row) and the periods `financial_ratios`
   returns, computed in one `shell` command.
+- `/memory` has three tabs, like Claude Code's settings: **Gợi ý** (the suggestion cards still waiting: Enter
+  opens the form filled in, `x` dismisses), **Sổ ghi nhớ** (the notebook as before) and **Cài đặt** (memory
+  on or off and the card switch, also still in `/config › Memory`). It opens on Gợi ý while a card waits, else
+  on Sổ ghi nhớ; ←/→ and tab/shift+tab switch tabs, never while an entry is open or a delete is being
+  confirmed. A form opened from `/memory` goes back there when it is saved or closed.
+- `/goiy` is removed: cards no longer take the keys in the transcript; they say "/memory để lưu hoặc bỏ qua".
 
 ### Removed
 
@@ -33,6 +39,11 @@ adopt Semantic Versioning when it exposes a stable public API.
   characters each.
   Native tool descriptions and schemas shrink from 39.9k to 32.7k characters; always-declared ones by 1.9k.
   `financial-source.ts` and `finance-policy.ts` (benchmark path) stay; `calculate/units.ts` moved to `tools/units.ts`.
+
+### Fixed
+
+- `/luandiem` or `/quyetdinh` without a code: typing the code and Enter now opens that subject's form (the
+  request was merged into the open one and the form never changed).
 
 ## [0.4.0] — 2026-11-08
 
