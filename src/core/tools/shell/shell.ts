@@ -5,7 +5,7 @@ import { z } from "zod"
 import type { Workspace } from "../../fs/workspace"
 import { LOCAL_SOURCE, type ToolDef } from "../types"
 import { commandPrefix, criticalDelete, mentionsSensitive, readOnlyCommand, startsInterpreter } from "./command"
-import { mathHint, mathOnlyCommand } from "./math"
+import { mathHint, mathNearMiss, mathOnlyCommand } from "./math"
 import { detectShell, runShell, SPILL_CAP, type ShellInfo } from "./run"
 
 /**
@@ -86,6 +86,9 @@ export function shellTool(workspace: Workspace, opts: { shell?: ShellInfo } = {}
     // ▸▸: a command that only lists or prints state needs no classifier request.
     autoSafe: async (input) => typeof input.command === "string" && readOnlyCommand(input.command),
     async validate(input) {
+      // Arithmetic in a form the grammar does not take: say the right form (a tool error the
+      // model fixes), before the gate turns it into a denial that tells it to stop.
+      if (mathNearMiss(input.command, shell)) return `Lệnh này là phép tính nhưng chưa đúng dạng chỉ-toán nên chưa chạy; viết lại đúng dạng thì chạy ngay, không cần duyệt. ${mathHint(shell)}`
       const cwd = cwdOf(input)
       try {
         if (!(await stat(cwd)).isDirectory()) return `${cwd} không phải thư mục.`

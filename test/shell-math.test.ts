@@ -4,7 +4,7 @@ import os from "node:os"
 import path from "node:path"
 import { Workspace } from "../src/core/fs/workspace"
 import { PermissionGate } from "../src/core/permission"
-import { mathOnlyCommand } from "../src/core/tools/shell/math"
+import { mathNearMiss, mathOnlyCommand } from "../src/core/tools/shell/math"
 import { shellArgs } from "../src/core/tools/shell/run"
 import { shellTool } from "../src/core/tools/shell/shell"
 import { RwLock, runTool } from "../src/core/tools/wrap"
@@ -218,4 +218,30 @@ test("through runTool with a read-only, non-interactive gate: arithmetic runs, o
   const command = win ? "[math]::Round(31250/4520, 2)" : String.raw`awk 'BEGIN{printf "%.2f\n", 31250/4520}'`
   expect(text(await runTool(tool, { command }, ctx(), new RwLock(), gate))).toContain("6.91")
   await expect(runTool(tool, { command: win ? "Get-Date" : "date" }, ctx(), new RwLock(), gate)).rejects.toThrow()
+}, 30_000)
+
+test("arithmetic in a form the grammar does not take is a near miss; programs and real commands are not", () => {
+  for (const c of ['python -c "print(1.2*3)"', "python3 -c 'print(round(2.5e12/4e8, 2))'", 'node -e "console.log(2**10)"', "1,2*3", "2^3", "echo $((1+2))", "echo 1.5*3 | bc -l", "expr 3 + 4"])
+    expect(mathNearMiss(c, PS), c).toBe(true)
+  for (const c of ["3/2", "(1+2)*4"]) expect(mathNearMiss(c, BASH), c).toBe(true)
+  expect(mathNearMiss("awk 'BEGIN{print (128.4/112-1)*100}'", BASH)).toBe(true)
+  for (const c of ["git status", "python phan_tich.py", 'python -c "import os; print(1)"', 'python -c "print(__import__(1))"', "ls -la", "Get-Date", "date +%s", "1", "3/2", "Get-ChildItem | Measure-Object"])
+    expect(mathNearMiss(c, PS), c).toBe(false)
+  expect(mathNearMiss("1/2", PS)).toBe(false) // accepted as is on PowerShell
+})
+
+test("a near miss is a tool error with the accepted form, before any approval: never a denial that says stop", async () => {
+  const gate = new PermissionGate({ load: async () => [], save: async () => {} })
+  gate.setMode("read-only")
+  const tool = shellTool(ws())
+  for (const command of ['python -c "print(1.2*3)"', win ? "1,2*3" : "awk 'BEGIN{print 1/3}'"]) {
+    const error = await runTool(tool, { command }, ctx(), new RwLock(), gate).then(
+      () => "",
+      (e: Error) => e.message,
+    )
+    expect(error, command).toContain("chưa đúng dạng chỉ-toán")
+    expect(error, command).toContain(win ? "[math]::Round" : "awk 'BEGIN{printf")
+    expect(error, command).not.toContain("Không chạy.")
+    expect(error, command).not.toContain("DỪNG")
+  }
 }, 30_000)
