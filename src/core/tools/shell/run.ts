@@ -57,7 +57,8 @@ export function shellArgs(shell: ShellInfo, command: string): string[] {
     const encoded = Buffer.from(psScript(command), "utf16le").toString("base64")
     return [shell.path, "-NoLogo", "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded]
   }
-  return [shell.path, "-c", command]
+  // awk's printf may follow LC_NUMERIC (a comma locale prints 1,50): arithmetic runs in the C locale.
+  return [shell.path, "-c", mathOnlyCommand(command, shell) ? `LC_ALL=C ${command.trim()}` : command]
 }
 
 export interface RunResult {

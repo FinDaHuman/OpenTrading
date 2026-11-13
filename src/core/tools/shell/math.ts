@@ -67,6 +67,8 @@ function tokenize(text: string, form: Form): Token[] | undefined {
         continue
       }
     }
+    // `++` and `--` are increment/decrement in both shells (a parse error on a number): `1 - -2` is fine.
+    if ((c === "+" || c === "-") && text[i + 1] === c) return undefined
     if (OPERATORS[form].includes(c)) out.push({ kind: "op", op: c })
     else if (c === "(") out.push({ kind: "open" })
     else if (c === ")") out.push({ kind: "close" })
