@@ -52,11 +52,19 @@ export interface ToolResult {
 export interface ToolDef<I = any> {
   /** Name the model sees: [A-Za-z0-9_-], at most 64 characters. */
   name: string
+  /** Exact original MCP public name, before SDK sanitization. */
+  canonicalName?: string
   description: string
   /** zod for native tools, plain JSON Schema for MCP tools. */
   input: z.ZodType<I> | JSONSchema7
   /** Read-only tools may run in parallel; anything else runs alone. */
   readOnly: boolean
+  /**
+   * A read-only version of this tool, same name, for agents limited to read-only tools
+   * (`@chi-doc` subagents, ultradesk): shell that only runs arithmetic. Never registered for
+   * the main agent.
+   */
+  readOnlyVariant?: ToolDef
   /** Default 60s. 0 = no time limit (the tool watches its own progress, e.g. spawn_subagent). */
   timeoutMs?: number
   /**

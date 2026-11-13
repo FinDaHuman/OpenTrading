@@ -45,8 +45,12 @@ export function describeError(error: unknown): string {
     return `Model này chỉ dùng được qua các app OpenRouter công nhận, OpenTrading chưa nằm trong danh sách đó (403): ${providerText(e?.message)}. Gõ /model để chọn model khác.`
   // OpenRouter found no provider for the request: often a pin (openrouter.routing) nobody serves.
   // Matched on the text, not the status: a pinned provider that is down can come back as 502/503.
-  if (/no (allowed )?(endpoints|providers) (found|are available)/i.test(e?.message ?? ""))
-    return `OpenRouter không có provider nào phục vụ được request này${status ? ` (${status})` : ""}: ${providerText(e?.message)}. Nếu đang ghim provider (openrouter.routing trong config.json), kiểm tra lại ghim hoặc cho phép fallback.`
+  if (/no (allowed )?(endpoints|providers) (found|are available)/i.test(e?.message ?? "")) {
+    const funnel = routingFunnel(e?.message ?? "")
+    const said = funnel ? funnel.text : providerText(e?.message)
+    const account = funnel?.account ? " Provider bị loại theo cài đặt tài khoản OpenRouter: xem openrouter.ai/settings/privacy." : ""
+    return `OpenRouter không có provider nào phục vụ được request này${status ? ` (${status})` : ""}: ${said}.${account} Nếu đang ghim provider (openrouter.routing trong config.json), kiểm tra lại ghim hoặc cho phép fallback.`
+  }
   if (status === 401 || status === 403)
     return `API key không hợp lệ hoặc không có quyền (${status}). Gõ /connect để nhập lại.`
   if (status === 404) {
@@ -63,6 +67,36 @@ export function describeError(error: unknown): string {
 
 /** Most of a provider's error text an error line keeps (opencode keeps it too, minus HTML pages). */
 const PROVIDER_TEXT_MAX = 300
+
+/** A removal list longer than this is counted, not named (the fallback filter can name ~50). */
+const FUNNEL_NAMES_MAX = 3
+
+/**
+ * OpenRouter's "Every candidate endpoint was removed during routing: Filter by X removed a, b
+ * (why); …" in short: each filter with what it removed, so the reason a pinned provider was
+ * dropped (e.g. the account's data policy) survives the length cap. Undefined for other texts.
+ * `account`: a filter cites the account's own settings.
+ */
+function routingFunnel(message: string): { text: string; account: boolean } | undefined {
+  const flat = message.replace(/\s+/g, " ").trim()
+  const at = flat.indexOf("removed during routing:")
+  if (at < 0) return undefined
+  // Not up to the first ".": model ids hold dots (deepseek-v4.1-flash).
+  const head = flat.slice(0, at).replace(/\s*Every candidate endpoint was\s*$/i, "").replace(/\.$/, "")
+  const steps: string[] = []
+  let account = false
+  for (const segment of flat.slice(at + "removed during routing:".length).replace(/\.$/, "").split(";")) {
+    const m = /^\s*Filter by (.+?) removed (.+?)(?: \((.+)\))?\s*$/.exec(segment)
+    if (!m) continue
+    const names = m[2]!.split(",").map((s) => s.trim()).filter(Boolean)
+    const list = names.length > FUNNEL_NAMES_MAX ? `${names.length} provider` : names.join(", ")
+    if (m[3] && /account settings/i.test(m[3])) account = true
+    steps.push(`${m[1]} loại ${list}${m[3] ? ` (${m[3]})` : ""}`)
+  }
+  if (steps.length === 0) return undefined
+  // Not capped like providerText: lists are already short, and the reasons are the point.
+  return { text: `${head}. ${steps.join("; ")}`, account }
+}
 
 /** The provider's own words, one line and capped; nothing for an HTML error page. */
 function providerText(message: string | undefined): string {

@@ -10,6 +10,7 @@ import { MODE_LABEL, startMode } from "../core/permission/mode"
 import { promptVersion } from "../core/prompt/assemble"
 import { onModelRequest } from "../core/requests"
 import { closeMemory, createMemory, initRuntime, setAgents, type Runtime } from "../core/runtime"
+import { useResultSession } from "../core/tools/refs"
 import { Session, sessionsDir } from "../core/session/store"
 import { loadSkills, skillRoots } from "../core/skills/loader"
 import type { PrintFormat } from "./args"
@@ -108,6 +109,7 @@ export async function runPrint(opts: PrintOptions, deps: { runtime?: Runtime; ta
     requests++
   })
   const session = Session.create()
+  useResultSession(session.id, undefined, session.dir)
   const started = Date.now()
   const result = { text: "", outcome: "failed", unanswered: false, steps: 0, input: 0, output: 0, gaps: [] as string[], messages: [] as ModelMessage[] }
   let target: Target | undefined

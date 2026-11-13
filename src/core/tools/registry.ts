@@ -1,3 +1,4 @@
+import { validateAuthoritativeInput, type FinancePolicyState, type FinanceAuditOrigin } from "../finance-policy"
 import { dynamicTool, jsonSchema, tool, type ModelMessage, type ToolSet } from "ai"
 import type { JSONSchema7 } from "@ai-sdk/provider"
 import { z } from "zod"
@@ -22,6 +23,8 @@ const MAX_IMAGE_BASE64 = 5 * 1024 * 1024 * (4 / 3)
 const MAX_IMAGES_PER_RESULT = 4
 
 export interface ToolSetOptions {
+  financeState?: FinancePolicyState
+  groundedFinancial?: boolean
   /** Schema dialect of the target provider. */
   flavor?: SchemaFlavor
   /** Whether the target model can see images in tool results. */
@@ -180,25 +183,29 @@ export class ToolRegistry {
     // One guard per tool set: a turn (or a subagent run) counts its own repeats.
     const loop = new LoopGuard()
     for (const def of [...declared].sort((a, b) => a.name.localeCompare(b.name))) {
-      const execute = (input: unknown, options: { abortSignal?: AbortSignal; toolCallId: string; messages?: ModelMessage[] }) =>
-        runTool(
-          def,
-          input,
-          {
-            signal: options.abortSignal ?? new AbortController().signal,
-            callId: options.toolCallId,
-            agent: this.origin,
-            loop,
-            messages: options.messages,
-          },
-          this.lock,
-          this.gate,
-        )
+      const execute = async (input: unknown, options: { abortSignal?: AbortSignal; toolCallId: string; messages?: ModelMessage[] }) => {
+        let reservedOrigin:FinanceAuditOrigin|undefined
+        try { reservedOrigin=opts.financeState?.before(def,input,options.toolCallId) } catch(error) {
+          opts.financeState?.noteLocalRejection(options.toolCallId,{code:"policy_guard_rejected",tool:def.name,rawInput:JSON.stringify(input),reason:error instanceof Error?error.message:String(error)})
+          throw error
+        }
+        try {
+          const result=await runTool(def,input,{signal:options.abortSignal??new AbortController().signal,callId:options.toolCallId,agent:this.origin,loop,messages:options.messages},this.lock,this.gate)
+          opts.financeState?.succeeded(def,result,input,options.toolCallId,reservedOrigin)
+          return result
+        }catch(error){opts.financeState?.failed(def,input,error,options.toolCallId,reservedOrigin);throw error}
+      }
+      // Financial source contracts are authoritative JSON Schema, including finite
+      // variants, required-only combinator clauses, not and closed objects. Generic
+      // provider sanitization broadens these constraints and is unsafe in this mode.
+      const inputContract = def.input instanceof z.ZodType ? {} : opts.groundedFinancial && def.source?.startsWith("mcp:")
+        ? structuredClone(def.input as JSONSchema7)
+        : this.schemaFor(def, flavor)
       const toModelOutput = ({ output }: { output: unknown }) => modelOutput(output as ToolResult, opts.images ?? false)
       set[def.name] =
         def.input instanceof z.ZodType
           ? tool({ description: def.description, inputSchema: def.input, execute, toModelOutput })
-          : dynamicTool({ description: def.description, inputSchema: jsonSchema(this.schemaFor(def, flavor)), execute, toModelOutput })
+          : dynamicTool({ description: def.description, inputSchema: opts.groundedFinancial && def.source?.startsWith("mcp:") ? jsonSchema(inputContract, {validate:value=>validateAuthoritativeInput(inputContract,value)}) : opts.financeState ? jsonSchema(inputContract, {validate:value=>opts.financeState!.validate({...def,input:inputContract},value)}) : jsonSchema(inputContract), execute, toModelOutput })
     }
     return {
       tools: set,

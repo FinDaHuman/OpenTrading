@@ -55,13 +55,22 @@ export const EXCLUDED_TOOLS = new Set(["spawn_subagent", "send_message", "stop_a
 /** Whether a subagent may ever get this tool, before its type's own list; /agents shows the same. */
 export const childMayUse = (t: ToolDef) => !EXCLUDED_TOOLS.has(t.name) && !t.source?.startsWith("memory:") && !t.mainAgentOnly
 
+/**
+ * The tools an agent gets from `tools`: each one its filter keeps, else that tool's read-only
+ * version when the filter keeps that (a read-only agent gets shell for arithmetic only).
+ */
+export function childTools(tools: ToolDef[], filter?: (def: ToolDef) => boolean): ToolDef[] {
+  return tools.filter(childMayUse).flatMap((t) => {
+    if (!filter || filter(t)) return [t]
+    return t.readOnlyVariant && filter(t.readOnlyVariant) ? [t.readOnlyVariant] : []
+  })
+}
+
 export function childRegistry(parent: ToolRegistry, origin: AgentOrigin, filter?: (def: ToolDef) => boolean, skills?: () => Skill[]) {
   const child = new ToolRegistry({ lock: parent.lock, origin })
   child.gate = parent.gate
   child.workspace = parent.workspace
-  const candidates = parent
-    .list()
-    .filter((t) => childMayUse(t) && (!filter || filter(t)))
+  const candidates = childTools(parent.list(), filter)
   if (candidates.length === 0) throw new Error("Subagent không có tool nào để dùng (danh sách tool rỗng hoặc không khớp).")
   for (const def of candidates) child.register(def)
   if (candidates.some((t) => t.deferrable)) child.register(toolSearchTool(child))

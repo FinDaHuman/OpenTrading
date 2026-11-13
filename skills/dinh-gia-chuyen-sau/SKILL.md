@@ -3,7 +3,7 @@ name: dinh-gia-chuyen-sau
 description: "Tính vùng giá hợp lý và % upside/downside của một mã (P/E, P/B so với lịch sử 2–3 năm). Dùng khi hỏi mã đắt hay rẻ, fair value, còn upside không."
 activation: auto
 requires_tools: [mcp__opentrading__valuation_run]
-uses_tools: [mcp__opentrading__valuation_run, compute]
+uses_tools: [mcp__opentrading__valuation_run]
 triggers:
   keywords: [định giá, fair value, dcf, per, đắt hay rẻ, upside, giá mục tiêu tự tính, valuation]
 version: 1.3.0
@@ -30,7 +30,7 @@ Chạy `valuation_run` (symbol, method mặc định auto — chỉ đổi metho
 
 **Bước 2: Neo lịch sử (song song, gọi trực tiếp).**
 
-Chạy `financial_ratios` (symbol) + `vn_quote_history` (symbol, days=365), tính PER/PB trung bình 2–3 năm bằng `compute` (op mean). Thiếu lịch sử giá thì bỏ so lịch sử, verdict partial + ghi thiếu.
+Chạy `financial_ratios` (symbol) + `vn_quote_history` (symbol, days=365), tính PER/PB trung bình 2–3 năm từ các kỳ PER/PB mà `financial_ratios` trả (period mặc định là năm: 2–3 số; có số theo quý thì dùng quý): cộng các kỳ rồi chia số kỳ trong một lệnh `shell`, ghi rõ số kỳ và kỳ đầu/cuối. `vn_quote_history` cho giá hiện tại để đối chiếu. Thiếu lịch sử giá thì bỏ so lịch sử, verdict partial + ghi thiếu.
 
 **Bước 3: Bối cảnh lãi suất (chỉ khi cần).**
 
@@ -45,7 +45,7 @@ Không tự dựng lại DCF (đã tính sẵn trong `valuation_run`). Không g�
 Trình bày kết luận đúng cấu trúc sau, mỗi mục ghi số + trend + provenance:
 
 1. Giá hiện tại so với vùng giá hợp lý: phương pháp nào dẫn dắt, chênh bao nhiêu % (`provenance: valuation_run` + `vs_overview_trading`).
-2. PER/PB hiện tại so với trung bình 2–3 năm từ `compute` (`provenance: financial_ratios` + `vn_quote_history`).
+2. PER/PB hiện tại so với trung bình 2–3 năm (tính từ các kỳ PER/PB của `financial_ratios`; `provenance: financial_ratios` + `vn_quote_history`).
 3. Rẻ/đắt vì sao: tăng trưởng + chất lượng (cross-ref `co-ban-chuyen-sau`) + lãi suất.
 4. Dư địa tăng/giảm % + độ tin (cao nếu 2 phương pháp đồng thuận).
 5. Dòng neo kỳ vọng: mức giá mục tiêu của CTCK (`provenance: tim-co-hoi-bao-cao-ctck` cross-ref, chỉ tham chiếu).

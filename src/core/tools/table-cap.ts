@@ -49,7 +49,7 @@ export function capTable(output: string, max: number): string | undefined {
     return undefined
   }
   const prefix = ref ? `${REF_PREFIX}${ref[1]}] ` : ""
-  const where = ref ? `đủ ở ref ${ref[1]}: compute và chart đọc thẳng, read_result đọc nguyên văn` : "gọi tool với phạm vi hẹp hơn nếu cần"
+  const where = ref ? `đủ ở ref ${ref[1]}: chart đọc thẳng, read_result đọc nguyên văn` : "gọi tool với phạm vi hẹp hơn nếu cần"
   const room = max - prefix.length
   const list = slots(parsed)
   if (list.length === 0) return undefined
