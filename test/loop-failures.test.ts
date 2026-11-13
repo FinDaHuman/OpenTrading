@@ -157,6 +157,9 @@ test("usable: only a tool other than the harness's own that returned data counts
   expect(turnFailures(turn(step({ tool: "todo_write" }, { tool: "load_skill" }), step({ tool: "mcp__ot__a", error: DOWN }))).usable).toBe(false)
   expect(turnFailures(turn(step({ tool: "mcp__ot__a", text: FAILED_SOURCE }), step({ tool: "mcp__ot__b" }))).usable).toBe(true)
   expect(turnFailures(turn(step({ tool: "current_time" }))).usable).toBe(true)
+  // fetched: only a data tool (MCP, web) that returned data.
+  expect(turnFailures(turn(step({ tool: "current_time" }, { tool: "mcp__ot__a", error: DOWN }))).fetched).toBe(false)
+  expect(turnFailures(turn(step({ tool: "mcp__ot__a", text: FAILED_SOURCE }), step({ tool: "mcp__ot__b" }))).fetched).toBe(true)
 })
 
 test("gapsAnswer names every gap and states no figure", async () => {

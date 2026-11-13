@@ -80,6 +80,8 @@ export interface TurnFailures {
   streak: number
   /** A tool other than the harness's own (todo list, tool search, skills) returned something to answer from. */
   usable: boolean
+  /** A data tool (MCP, web) returned data: with gaps and none of this, every source failed. */
+  fetched: boolean
 }
 
 /** Tools that run the harness, not fetch data: their success is nothing to answer from. */
@@ -93,6 +95,7 @@ export function turnFailures(messages: readonly ModelMessage[]): TurnFailures {
   const worked = new Set<string>()
   let streak = 0
   let usable = false
+  let fetched = false
   for (const message of messages.slice(start + 1)) {
     if (message.role === "assistant" && Array.isArray(message.content)) {
       for (const part of message.content) if (part.type === "tool-call") inputs.set(part.toolCallId, part.input)
@@ -108,6 +111,7 @@ export function turnFailures(messages: readonly ModelMessage[]): TurnFailures {
       if (outcome === "ok") {
         succeeded = true
         if (!HARNESS_TOOLS.has(part.toolName)) usable = true
+        if (bringsData(part.toolName)) fetched = true
         missing.delete(key)
         worked.add(shortName(part.toolName))
       } else if (!NEUTRAL.has(outcome)) {
@@ -121,7 +125,7 @@ export function turnFailures(messages: readonly ModelMessage[]): TurnFailures {
     else if (failed) streak++
   }
   const gaps = [...missing.values()].filter((gap) => !gap.alternatives.some((name) => worked.has(name))).map((gap) => gap.name)
-  return { gaps: [...new Set(gaps)], streak, usable }
+  return { gaps: [...new Set(gaps)], streak, usable, fetched }
 }
 
 /**

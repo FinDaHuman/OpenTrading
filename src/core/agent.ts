@@ -52,7 +52,7 @@ import { currentTodos, retiredNote, retireLeftTodos, todoMark, TODO_WRITE } from
 import { FAILURE_STREAK_FINAL, FAILURE_STREAK_STOP, failureNudge, gapsAnswer, turnFailures } from "./loop/failures"
 import { answerAfterTools } from "./loop/history-shape"
 import { markupStreamFilter, stripMarkup, type MarkupFilter } from "./loop/markup"
-import { answeredAndClosedTodos, figureSources, isEmptyAnswer, isUnfetched, judgeStop, MAX_RECOVERIES, ranDataTool, stripEchoes, ungroundedInTurn, unfetchedFigures, type RecoveryKind, type Verdict } from "./loop/stop-gate"
+import { answeredAndClosedTodos, figureSources, isEmptyAnswer, isUnfetched, GAPS_RESCUE_START, judgeStop, MAX_RECOVERIES, sourcesFailed, ranDataTool, stripEchoes, ungroundedInTurn, unfetchedFigures, type RecoveryKind, type Verdict } from "./loop/stop-gate"
 import { MAX_TOOLS_PER_REQUEST, modelOutput, stripImages, type BuiltToolSet, type ToolRegistry, type ToolSetOptions } from "./tools/registry"
 import { describeTool, LOADED_PREFIX, resolveToolName } from "./tools/search"
 import { cleanToolErrors, toolErrorText } from "./tools/errors"
@@ -1256,7 +1256,16 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
           // rescue without its text: tools off still makes the model answer.
           const base = rescueNow ? (afterTool && !nudge ? undefined : rescueNow.nudge) : nudge && afterTool ? stepNudge(messages, opts.disabled) : undefined
           // One tail: the rescue or tool nudge, then what the failures add (same routes only).
-          const added = nudge && afterTool ? (stopped ? FAILURE_STREAK_FINAL : opts.disabled?.has("failure-nudge") ? undefined : failureNudge(failures)) : undefined
+          // The gap rescue already names the failed sources: their reminder would say it twice.
+          const gapRescue = !!rescueNow?.nudge.startsWith(GAPS_RESCUE_START)
+          const added =
+            nudge && afterTool
+              ? stopped
+                ? FAILURE_STREAK_FINAL
+                : opts.disabled?.has("failure-nudge")
+                  ? undefined
+                  : failureNudge(gapRescue ? { gaps: [], streak: failures.streak } : failures)
+              : undefined
           const tail = [base, added].filter(Boolean).join("\n") || undefined
           const choice = stopped || rescueNow?.toolChoice === "none" || (rescueNow && !tail) ? { toolChoice: "none" as const } : {}
           return { ...(active ? { activeTools: active } : {}), ...choice, messages: tail ? withNudge(messages, tail) : messages }
@@ -1391,6 +1400,7 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
             dataInTurn,
             gaps: failures.gaps,
             usableData: failures.usable,
+            fetchedData: failures.fetched,
             unfetched,
           },
           recoveries,
@@ -1416,8 +1426,9 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
     }
     // Gave up: say why, and keep a placeholder so the session file shows what happened.
     unanswered = true
-    if (verdict.kind === "empty" && failures.gaps.length > 0) {
-      // Sources failed and the model wrote nothing: the harness says what is missing, no figure.
+    // Every source failed and the model wrote nothing: the harness says what is missing, no figure.
+    // Not on a machine-response run (finance): its answer has a contract of its own.
+    if (verdict.kind === "empty" && !finance && sourcesFailed({ gaps: failures.gaps, fetchedData: failures.fetched })) {
       const text = gapsAnswer(failures.gaps)
       yield { type: "text-delta", text }
       yield { type: "notice", text: "Model không viết được câu trả lời khi nguồn dữ liệu lỗi; câu trên do OpenTrading tự ghi phần còn thiếu." }

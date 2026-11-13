@@ -1286,6 +1286,8 @@ test("every source failed and the model answers empty: the rescue asks about wha
   respond = (_body, n) => (n === 0 ? toolCall("mcp__ot__source", {}, "call_1") : n === 1 ? answer("") : n === 2 ? answer("") : answer("Chưa lấy được giá HPG: nguồn lỗi."))
   const events = await collect(runAgent({ history: [], input: "Giá HPG?", skills: [], registry: failingSource() }))
   expect(bodies).toHaveLength(4)
+  // One reminder, not the gap rescue and the failure reminder both naming the source.
+  expect(lastSent(2).match(/<nhac_nho>/g)).toHaveLength(1)
   expect(lastSent(2)).toContain("chưa trả dữ liệu trong lượt này: source")
   expect(bodies[2]!.tool_choice).toBe("none")
   expect(lastSent(3)).toContain("chưa trả dữ liệu trong lượt này: source")
@@ -1293,6 +1295,30 @@ test("every source failed and the model answers empty: the rescue asks about wha
   expect(JSON.stringify(done(events).messages.at(-1))).toContain("Chưa lấy được giá HPG")
   expect(done(events).unanswered).toBeUndefined()
   expect(done(events).fallback).toBeUndefined()
+})
+
+test("a clock tool worked but the data source did not: still the gap rescue and the harness's answer", async () => {
+  respond = (_body, n) =>
+    n === 0 ? toolCall("current_time", {}, "call_t") : n === 1 ? toolCall("mcp__ot__source", {}, "call_1") : answer("")
+  const events = await collect(runAgent({ history: [], input: "Giá HPG?", skills: [], registry: failingSource() }))
+  expect(bodies).toHaveLength(5)
+  expect(lastSent(3)).toContain("chưa trả dữ liệu trong lượt này: source")
+  expect(done(events).fallback).toBe(true)
+})
+
+test("some data came back and the model still wrote nothing: the usual placeholder, never the gaps answer", async () => {
+  respond = (_body, n) =>
+    n === 0 ? toolCall("mcp__ot__source", {}, "call_1") : n === 1 ? toolCall("mcp__ot__other", {}, "call_2") : answer("")
+  const r = failingSource()
+  r.register({ name: "mcp__ot__other", description: "another data tool", input: z.object({}), readOnly: true, execute: async () => "27.5" })
+  const events = await collect(runAgent({ history: [], input: "Giá HPG?", skills: [], registry: r }))
+  // Two rescues, the answer-only one (data came back), then give-up.
+  expect(bodies).toHaveLength(6)
+  expect(bodies[5]!.tool_choice).toBe("none")
+  expect(done(events).fallback).toBeUndefined()
+  expect(done(events).unanswered).toBe(true)
+  expect(JSON.stringify(done(events).messages.at(-1))).toContain("(không có câu trả lời")
+  expect(done(events).dataGaps).toEqual(["source"])
 })
 
 test("13/11 m6 with sources down: empty, empty, <nhac_nho> — the harness answers with the gaps, no figure", async () => {

@@ -43,6 +43,8 @@ export interface LastStep {
    */
   gaps?: readonly string[]
   usableData?: boolean
+  /** A data tool (MCP, web) returned data in this turn. */
+  fetchedData?: boolean
   /** Figures presented as fetched data with nothing behind them (see unfetchedFigures). */
   unfetched?: number
 }
@@ -79,9 +81,15 @@ export const RESCUE_DRAFT_FETCH =
 /** Tools off (it brought 2.5-flash-lite's empty answers back). */
 export const RESCUE_EMPTY_FINAL = "Hãy trả lời câu hỏi của người dùng dựa trên kết quả tool ở trên. Không gọi thêm tool. Số cần tính mà chưa tính được thì tự tính từ đúng các số tool đã trả về và ghi rõ công thức cùng từng số đầu vào."
 
+/** Data sources failed this turn and none brought data (a clock or file tool may still have run). */
+export const sourcesFailed = (last: Pick<LastStep, "gaps" | "fetchedData">) => !!last.gaps?.length && last.fetchedData === false
+
+/** How the gap rescue starts: the loop leaves out the failure reminder beside it (same gaps). */
+export const GAPS_RESCUE_START = "<nhac_nho>\nCác nguồn sau chưa trả dữ liệu trong lượt này:"
+
 /** An empty answer when every data source of the turn failed: answer about what is missing. */
 export function rescueGaps(gaps: readonly string[]): string {
-  return `<nhac_nho>\nCác nguồn sau chưa trả dữ liệu trong lượt này: ${gaps.join(", ")}. Viết ngay câu trả lời cho người dùng: nói rõ phần nào chưa lấy được và vì sao (nguồn lỗi, quá thời gian), dùng phần dữ liệu khác nếu đã có, không tự điền số cho phần thiếu, gợi ý thử lại sau. Không viết dòng nhắc việc hay thẻ hệ thống.\n</nhac_nho>`
+  return `${GAPS_RESCUE_START} ${gaps.join(", ")}. Viết ngay câu trả lời cho người dùng: nói rõ phần nào chưa lấy được và vì sao (nguồn lỗi, quá thời gian), dùng phần dữ liệu khác nếu đã có, không tự điền số cho phần thiếu, gợi ý thử lại sau. Không viết dòng nhắc việc hay thẻ hệ thống.\n</nhac_nho>`
 }
 
 /** Last empty-answer rescue: data is in the turn, write the final answer now. */
@@ -111,12 +119,12 @@ export function judgeStop(last: LastStep, done: readonly RecoveryKind[], disable
     // Every source failed (13/11 eval m6, m3): "answer from the tool results" left the model nothing
     // to write, so it answered empty again. Ask for the answer about what is missing instead, tools
     // off first (the calls were already retried), then on (it may try another source).
-    const failedOnly = !!last.gaps?.length && last.usableData === false
+    const failedOnly = sourcesFailed(last)
     if (failedOnly && left > 0 && !disabled?.has("gate-empty"))
       return { action: "continue", kind: "empty", nudge: rescueGaps(last.gaps!), toolChoice: used("empty") === 0 ? "none" : "auto" }
     // Pilot or15 fin-l5-profile-01: after a tool loop both rescues came back reasoning-only, the turn ended with
     // fetched data and no answer. One last, answer-only rescue with tools off when the turn has data.
-    const hasData = last.usableData ?? last.dataInTurn
+    const hasData = !failedOnly && (last.usableData ?? last.dataInTurn)
     if (left <= 0 && hasData && used("empty") < MAX_RECOVERIES + 1 && !disabled?.has("gate-empty"))
       return { action: "continue", kind: "empty", nudge: RESCUE_ANSWER_NOW, toolChoice: "none" }
     if (left <= 0 || disabled?.has("gate-empty")) return { action: "give-up", kind: "empty" }
