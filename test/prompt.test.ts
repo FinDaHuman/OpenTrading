@@ -5,7 +5,9 @@ import { assemble, identityLayer, type AssembleInput } from "../src/core/prompt/
 import { BUDGETS, fit, tierOf } from "../src/core/prompt/budget"
 import { clockState, loadCalendar, renderClock, sameSnapshot } from "../src/core/prompt/market-clock"
 import type { Skill } from "../src/core/skills/schema"
-import { tempDir } from "./helpers/temp"
+import { tempDirs } from "./helpers/temp"
+
+const temp = tempDirs()
 
 const calendar = loadCalendar()
 // 2026-09-28 is a Monday. Times are UTC; Vietnam is UTC+7.
@@ -121,7 +123,7 @@ test("no tools: no tool guidance, no skill catalog", () => {
 })
 
 test("prompt text is read from prompts/*.md, so edits apply without code changes", async () => {
-  const dir = await tempDir("ot-prompts-")
+  const dir = await temp.make("ot-prompts-")
   await writeFile(path.join(dir, "identity.md"), "Bạn là trợ lý thử nghiệm.")
   const custom = assemble(base(), dir)
   expect(custom.system).toContain("<identity>\nBạn là trợ lý thử nghiệm.\n</identity>")

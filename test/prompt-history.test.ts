@@ -12,14 +12,16 @@ import {
   resetHistory,
   searchHistory,
 } from "../src/tui/prompt/history"
-import { removeTempDir, tempDir } from "./helpers/temp"
+import { removeTempDir, tempDirs } from "./helpers/temp"
+
+const temp = tempDirs()
 
 const saved = process.env.OPENTRADING_HOME
 let home = ""
 
 beforeEach(async () => {
   await historyFlushed()
-  home = await tempDir("opentrading-history-")
+  home = await temp.make("opentrading-history-")
   process.env.OPENTRADING_HOME = home
   resetHistory()
 })
