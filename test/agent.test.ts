@@ -437,10 +437,12 @@ test("a model that stays silent gets a visible notice, not a blank turn", async 
   plan = { tool: "current_time", args: {} }
   emptyAfterTool = "always"
   const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: registry() }))
-  // Two recoveries at most: tools off right after the results, then tools on.
-  expect(bodies).toHaveLength(4)
+  // Tools off right after the results, then tools on; with data in the turn, one last answer-only rescue
+  // with tools off (or15 pilot fix), then the notice.
+  expect(bodies).toHaveLength(5)
   expect(bodies[2]!.tool_choice).toBe("none")
   expect(bodies[3]!.tool_choice).not.toBe("none")
+  expect(bodies[4]!.tool_choice).toBe("none")
   expect(done(events).unanswered).toBe(true)
   expect(events.some((e) => e.type === "notice" && e.text.includes("không trả lời sau khi gọi tool"))).toBe(true)
   expect(done(events).messages.map((m) => m.role)).toEqual(["user", "assistant", "tool", "assistant"])
@@ -1152,6 +1154,23 @@ test("<quyen_tep> names the session's temp folder to an agent with only shell, a
   expect(userOf(0)).toContain(JSON.stringify(path.join("phien-2", "scratchpad")).slice(1, -1))
 })
 
+test("no <quyen_tep> for an agent whose shell only computes numbers (read-only subagents, ultradesk)", async () => {
+  const { Workspace } = await import("../src/core/fs/workspace")
+  const { shellTool } = await import("../src/core/tools/shell/shell")
+  const { mkdir } = await import("node:fs/promises")
+  const project = path.join(home, "du-an-tinh")
+  await mkdir(project, { recursive: true })
+  const r = registry()
+  const workspace = new Workspace(project, { data: path.join(home, "data") })
+  r.workspace = workspace
+  r.register(shellTool(workspace).readOnlyVariant!)
+  bodies.length = 0
+  await collect(runAgent({ history: [], input: "tính thử", skills: [], registry: r }))
+  const user = JSON.stringify(bodies[0]!.messages.filter((m) => m.role === "user").at(-1))
+  expect(user).not.toContain("quyen_tep")
+  expect(JSON.stringify(bodies[0]!.tools ?? bodies[0])).toContain("Máy tính")
+})
+
 test("read-only sends write_file/edit_file by name only; ask mode declares them; <quyen_tep> says the mode", async () => {
   const { Workspace } = await import("../src/core/fs/workspace")
   const { FileState } = await import("../src/core/fs/file-state")
@@ -1447,4 +1466,101 @@ test("a fragment answer is sent back once with tools on and never stored", async
   expect(stored).not.toContain("hoặc FPT không")
   expect(stored).toContain("VCB: phân tích sâu.")
   expect(done(events).messages.map((m) => m.role)).toEqual(["user", "assistant"])
+})
+
+
+test("v45 native gateway-owned retries do not redeliver503 or terminal424", async () => {
+  for(const status of [503,424]) {
+    bodies.length=0
+    respond=()=>Response.json({error:{message:"synthetic terminal failure"}},{status})
+    const events:AgentEvent[]=[]
+    for await(const event of runAgent({history:[],input:"Xin chào",skills:[],registry:registry(),providerRetry:{maxRetries:0}}))events.push(event)
+    expect(bodies.length).toBe(1)
+    expect(events.some(e=>e.type==="error")).toBe(true)
+  }
+})
+test("v45 caller JSON contract buffers rejected raw final and repairs format only once", async () => {
+  const answer=JSON.stringify({value:null,reason:"No source available in this synthetic fixture",evidence:[]})
+  respond=(_body,n)=>sse([chunk({role:"assistant",content:n===0?"invalid raw prose":answer}),chunk({},"stop")])
+  const events:AgentEvent[]=[]
+  const contract={version:"synthetic-test-v1",refusalSchema:{type:"object",required:["value","reason","evidence"],properties:{value:{type:"null"},reason:{type:"string",minLength:1},evidence:{type:"array"}}}}
+  for await(const event of runAgent({history:[],input:"Return caller JSON.\nPUBLIC_RESPONSE_CONTRACT_V1="+JSON.stringify(contract),skills:[],registry:registry(),providerRetry:{maxRetries:0},financePolicy:{enabled:true,machineResponse:true},maxSteps:5}))events.push(event)
+  expect(bodies.length).toBe(2)
+  expect(events.filter(e=>e.type==="text-delta")).toHaveLength(0)
+  expect(events.some(e=>e.type==="notice"&&e.text.includes("invalid raw prose"))).toBe(true)
+  const done=events.findLast(e=>e.type==="done")
+  expect(done?.type==="done"&&JSON.stringify(done.messages).includes("No source available")).toBe(true)
+})
+
+test("v45 grounded mode preserves finite MCP JSON Schema constraints on the actual SDK wire",async()=>{
+ const r=registry()
+ const inputSchema={type:"object" as const,properties:{symbol:{type:"string" as const},from:{type:"string" as const},to:{type:"string" as const}},additionalProperties:false,anyOf:[{properties:{symbol:{const:"SYN"}},required:["symbol"]}],oneOf:[{required:["from"]},{required:["to"]}],not:{required:["from","to"]}}
+ r.register({name:"source_contract",description:"synthetic finite contract",source:"mcp:fixture",readOnly:true,input:inputSchema,execute:async()=>"{}"})
+ for await(const _ of runAgent({history:[],input:"Xin chào",skills:[],registry:r,groundedFinancial:true,providerRetry:{maxRetries:0}})){}
+ const sent=(bodies[0]!.tools as {function:{name:string;parameters:unknown}}[]).find(t=>t.function.name==="source_contract")
+ expect(sent!.function.parameters).toEqual(inputSchema)
+})
+
+test("v45 SDK schema rejection is local proof; one lossless argument correction keeps original identity",async()=>{
+ const r=registry();let executions=0
+ r.register({name:"strict_source",description:"synthetic source",source:"mcp:fixture",readOnly:true,input:{type:"object",properties:{symbol:{type:"string"},count:{type:"integer"}},required:["symbol","count"],additionalProperties:false},execute:async()=>{executions++;return JSON.stringify({data:{symbol:"SYN",last:12},availability:"available"})}})
+ script=[{tool:"strict_source",args:{symbol:"SYN",count:"5"}},{tool:"strict_source",args:{symbol:"SYN",count:5}}]
+ const events:AgentEvent[]=[]
+ for await(const event of runAgent({history:[],input:"Read synthetic source for SYN count5",skills:[],registry:r,groundedFinancial:true,providerRetry:{maxRetries:0},financePolicy:{enabled:true,machineResponse:false},maxSteps:6}))events.push(event)
+ expect(executions).toBe(1)
+ const notices=events.flatMap(e=>{if(e.type!=="notice")return[];try{return [JSON.parse(e.text)]}catch{return[]}})
+ expect(notices.some(x=>x.event==="financial_local_rejection"&&x.code==="invalid_tool_input"&&x.sdk_call_id==="call_1")).toBe(true)
+ expect(notices.some(x=>x.event==="financial_call_audit"&&x.sdk_call_id==="call_2"&&x.original_sdk_call_id==="call_1"&&x.correction_used===1)).toBe(true)
+})
+
+test("v46-update B0 and B1 apply identical actual SDK finite-schema validation",async()=>{
+ for(const enabled of [false,true]) {
+  bodies.length=0
+  const r=registry();let executions=0
+  r.register({name:"v46_strict_source",description:"synthetic authoritative MCP contract",source:"mcp:fixture",readOnly:true,input:{type:"object",properties:{symbol:{type:"string"},count:{type:"integer"}},required:["symbol","count"],additionalProperties:false,oneOf:[{properties:{symbol:{const:"SYN"}}}]},execute:async()=>{executions++;return JSON.stringify({data:{symbol:"SYN",last:12},availability:"available"})}})
+  script=[{tool:"v46_strict_source",args:{symbol:"SYN",count:"5"}},{tool:"v46_strict_source",args:{symbol:"SYN",count:5}}]
+  const events:AgentEvent[]=[]
+  for await(const event of runAgent({history:[],input:"Read synthetic source for SYN count5",skills:[],registry:r,groundedFinancial:true,providerRetry:{maxRetries:0},financePolicy:enabled?{enabled:true,machineResponse:false}:undefined,toolAuditContext:()=>({provider_request_index:bodies.length,memory_session:"A",memory_turn:3,native_session_id:"native-A"}),maxSteps:6}))events.push(event)
+  expect(executions).toBe(1)
+  const notices=events.flatMap(e=>{if(e.type!=="notice")return[];try{return[JSON.parse(e.text)]}catch{return[]}})
+  expect(notices.some(x=>x.event==="financial_local_rejection"&&x.sdk_call_id==="call_1"&&x.origin_sdk_call_id==="call_1"&&x.origin_provider_request_index===1&&x.origin_memory_session==="A"&&x.origin_memory_turn===3)).toBe(true)
+  expect(notices.some(x=>x.code==="policy_guard_rejected")).toBe(false)
+ }
+})
+
+
+test("v46-update exhausted invalid financial contract preserves raw diagnostics but accepts no answer",async()=>{
+ const raw="not a requested JSON object"
+ respond=()=>sse([chunk({role:"assistant",content:raw}),chunk({},"stop")])
+ const events:AgentEvent[]=[]
+ const contract={version:"synthetic-test-v1",refusalSchema:{type:"object",required:["value","reason","evidence"],properties:{value:{type:"null"},reason:{type:"string",minLength:1},evidence:{type:"array"}}}}
+ for await(const event of runAgent({history:[],input:"Return caller JSON.\nPUBLIC_RESPONSE_CONTRACT_V1="+JSON.stringify(contract),skills:[],registry:registry(),providerRetry:{maxRetries:0},financePolicy:{enabled:true,machineResponse:true},maxSteps:5}))events.push(event)
+ expect(bodies.length).toBe(2)
+ const notices=events.flatMap(e=>{if(e.type!=="notice")return[];try{return[JSON.parse(e.text)]}catch{return[]}})
+ expect(notices.filter(x=>x.event==="financial_rejected_final")).toHaveLength(1)
+ expect(notices.find(x=>x.event==="financial_contract_invalid")?.raw_final).toBe(raw)
+ const final=done(events)
+ expect(final.unanswered).toBe(true)
+ expect(JSON.stringify(final.messages)).not.toContain(raw)
+ expect(events.filter(e=>e.type==="text-delta")).toHaveLength(0)
+ expect(JSON.stringify(final.messages)).toContain("không có câu trả lời đáp ứng hợp đồng")
+})
+
+test("v46-update reused SDK id in two actual provider generations has two origins and truthful replays",async()=>{
+ const r=registry();let executions=0
+ r.register({name:"v46_repeated_id",description:"synthetic strict source",source:"mcp:fixture",readOnly:true,input:{type:"object",properties:{symbol:{type:"string"},count:{type:"integer"}},required:["symbol","count"],additionalProperties:false},execute:async()=>{executions++;return "{}"}})
+ const valid=JSON.stringify({value:null,reason:"No source data was retrieved by these invalid synthetic requests",evidence:[]})
+ respond=(_body,n)=>n===0?toolCall("v46_repeated_id",{symbol:"AAA",count:"bad"},"same-sdk"):n===1?toolCall("v46_repeated_id",{symbol:"BBB",count:"also-bad"},"same-sdk"):n===2?answer("invalid caller JSON"):answer(valid)
+ const contract={version:"synthetic-test-v1",refusalSchema:{type:"object",required:["value","reason","evidence"],properties:{value:{type:"null"},reason:{type:"string",minLength:1},evidence:{type:"array"}}}}
+ const events:AgentEvent[]=[]
+ for await(const event of runAgent({history:[],input:"Return caller JSON.\nPUBLIC_RESPONSE_CONTRACT_V1="+JSON.stringify(contract),skills:[],registry:r,groundedFinancial:true,providerRetry:{maxRetries:0},financePolicy:{enabled:true,machineResponse:true},toolAuditContext:()=>({provider_request_index:bodies.length,memory_session:"A",memory_turn:1,native_session_id:"native-A"}),maxSteps:8}))events.push(event)
+ expect(executions).toBe(0)
+ expect(bodies.length).toBe(4)
+ const notices=events.flatMap(e=>{if(e.type!=="notice")return[];try{return[JSON.parse(e.text)]}catch{return[]}})
+ const originals=notices.filter(x=>x.event==="financial_local_rejection"&&!x.replay_of)
+ expect(originals.map(x=>[x.sdk_call_id,x.origin_provider_request_index,JSON.parse(x.rawInput).symbol])).toEqual([["same-sdk",1,"AAA"],["same-sdk",2,"BBB"]])
+ const replays=notices.filter(x=>x.event==="financial_local_rejection"&&x.replay_of)
+ expect(replays.map(x=>x.replay_of.origin_provider_request_index)).toEqual([1,2])
+ expect(replays.every(x=>x.sdk_call_id==="same-sdk"&&x.replay_of.origin_sdk_call_id==="same-sdk")).toBe(true)
+ expect(done(events).unanswered).toBeUndefined()
 })

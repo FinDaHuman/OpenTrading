@@ -6,9 +6,9 @@ Agent đọc được file bạn đưa (PDF báo cáo, Excel, CSV, ghi chú, ả
 
 | Chế độ | Đọc file | Ghi / sửa file | Lệnh `shell` | Tool ghi khác (watchlist, tool MCP ghi, trang web domain mới) |
 | --- | --- | --- | --- | --- |
-| `‖ chỉ đọc` (mặc định) | tự do | hỏi từng lần: **Có, lần này / Có, và chuyển sang ▸ / Không** | hỏi từng lần (như ghi file) | hỏi như trước: lần này / cả phiên / luôn / không |
-| `▸ sửa có hỏi` | tự do | hỏi; "cả phiên này" cho cả thư mục (và thư mục con) | hỏi; "cả phiên"/"luôn" cho một **tiền tố lệnh chỉ đọc** như `git status …` | hỏi như trước |
-| `▸▸ tự động` | tự do | file **mới** hoặc file do phiên tạo: chạy luôn; file có sẵn: model duyệt | model duyệt | model duyệt |
+| `‖ chỉ đọc` (mặc định) | tự do | hỏi từng lần: **Có, lần này / Có, và chuyển sang ▸ / Không** | hỏi từng lần (như ghi file); lệnh chỉ tính toán chạy luôn | hỏi như trước: lần này / cả phiên / luôn / không |
+| `▸ sửa có hỏi` | tự do | hỏi; "cả phiên này" cho cả thư mục (và thư mục con) | hỏi; "cả phiên"/"luôn" cho một **tiền tố lệnh chỉ đọc** như `git status …`; lệnh chỉ tính toán chạy luôn | hỏi như trước |
+| `▸▸ tự động` | tự do | file **mới** hoặc file do phiên tạo: chạy luôn; file có sẵn: model duyệt | model duyệt (lệnh chỉ tính toán chạy luôn) | model duyệt |
 | `▸▸▸ bỏ qua quyền` (chỉ khi mở bằng `--yolo`) | tự do | chạy luôn | chạy luôn | chạy luôn |
 
 - **`▸▸▸ bỏ qua quyền` (`ot --yolo`, alias `--dangerously-skip-permissions`)** giống chế độ bypass của Claude Code và `--yolo` của Codex.
@@ -76,6 +76,15 @@ Dung lượng và dọn dẹp (Claude Code không dọn thư mục tạm của n
   - `/scratch clear` xoá thư mục của các phiên khác trong dự án, trừ phiên vừa có thay đổi trong 1 giờ qua (có thể là một cửa sổ OpenTrading khác đang mở cùng thư mục).
   - `/scratch clear all` xoá cả phiên này (thư mục được tạo lại rỗng).
 - Khi đo và khi xoá, symlink/junction chỉ bị gỡ như một liên kết: không đếm, không đi vào và không xoá thư mục nó trỏ tới.
+
+## Lệnh chỉ tính toán
+
+Model tính số (tỷ lệ, %, CAGR, P/E, đổi đơn vị) bằng `shell`. Lệnh **chỉ gồm phép tính** chạy ngay ở mọi chế độ, kể cả ‖ chỉ đọc, `ot -p` và eval, không hỏi bạn và không tốn request duyệt của ▸▸:
+
+- Windows (PowerShell): biểu thức số, nhiều phép ngăn bằng `;`, hàm chỉ `[math]::Round/Abs/Sqrt/Pow/Log/Log10/Exp/Max/Min/Floor/Ceiling/Truncate`. Ví dụ `(128.4/112-1)*100; [math]::Round(31250/4520, 2)`. Kết quả in theo dấu chấm thập phân (`1.5`), không theo cài đặt vùng của máy.
+- macOS, Linux: `awk 'BEGIN{printf "%.2f %.2f\n", (128.4/112-1)*100, 1.08^3}'`, hàm chỉ `sqrt/log/exp/int`.
+
+OpenTrading kiểm từng lệnh bằng văn phạm biểu thức. Lệnh có biến, file, pipe, dấu phẩy ngoài ngoặc hàm, khoảng `1..3`, thư mục chạy khác (`workdir`) hay bất kỳ tên nào khác thì đi đường duyệt bình thường. Quy tắc `deny`/`ask` của bạn vẫn áp dụng cho các lệnh này.
 
 ## Luôn hỏi bạn, không quy tắc hay model nào duyệt thay
 

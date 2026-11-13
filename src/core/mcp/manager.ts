@@ -1012,6 +1012,7 @@ export class McpManager {
       registered.push(modelName)
       this.registry.register({
         name: modelName,
+        canonicalName: tool.name,
         source: `mcp:${name}`,
         priority,
         ...fields,

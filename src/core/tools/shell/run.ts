@@ -6,6 +6,7 @@
  * it unchanged, and console output is switched to UTF-8 first.
  */
 
+import { mathOnlyCommand } from "./math"
 import { mkdirSync } from "node:fs"
 import path from "node:path"
 import type { FileSink } from "bun"
@@ -40,6 +41,8 @@ export function detectShell(platform: NodeJS.Platform = process.platform): Shell
 function psScript(command: string) {
   return [
     "$ProgressPreference='SilentlyContinue';$ErrorActionPreference='Continue'",
+    // Arithmetic prints 1.5, not the user's culture (vi-VN: 1,5 reads as a thousands separator).
+    ...(mathOnlyCommand(command, { kind: "powershell" }) ? ["[System.Threading.Thread]::CurrentThread.CurrentCulture=[cultureinfo]::InvariantCulture"] : []),
     "[Console]::OutputEncoding=[System.Text.Encoding]::UTF8;$OutputEncoding=[System.Text.Encoding]::UTF8",
     "$__otErr = $false",
     "& {",
@@ -54,7 +57,8 @@ export function shellArgs(shell: ShellInfo, command: string): string[] {
     const encoded = Buffer.from(psScript(command), "utf16le").toString("base64")
     return [shell.path, "-NoLogo", "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded]
   }
-  return [shell.path, "-c", command]
+  // awk's printf may follow LC_NUMERIC (a comma locale prints 1,50): arithmetic runs in the C locale.
+  return [shell.path, "-c", mathOnlyCommand(command, shell) ? `LC_ALL=C ${command.trim()}` : command]
 }
 
 export interface RunResult {

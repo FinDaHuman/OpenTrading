@@ -43,6 +43,7 @@
     "@opentui/core": "0.8.2",
     "@opentui/solid": "0.8.2",
     "ai": "7.0.162",
+    "ajv": "8.18.0",
     "linkedom": "0.18.15",
     "lru-cache": "11.5.3",
     "solid-js": "1.9.18",
@@ -55,5 +56,13 @@
     "@types/bun": "latest",
     "@types/turndown": "5.0.6",
     "typescript": "^7.0.2"
+  },
+  "overrides": {
+    "@hono/node-server": "2.1.6",
+    "glob": "14.0.2",
+    "minimatch": "11.0.8"
+  },
+  "patchedDependencies": {
+    "babel-plugin-module-resolver@5.0.2": "patches/babel-plugin-module-resolver@5.0.2.patch"
   }
 }
