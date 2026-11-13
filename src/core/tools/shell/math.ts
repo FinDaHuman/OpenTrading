@@ -195,6 +195,37 @@ export function mathOnlyCommand(command: string, shell: Pick<ShellInfo, "kind">)
   return shell.kind === "pwsh" || shell.kind === "powershell" ? powershellMath(text) : awkMath(text)
 }
 
+/** Only numbers, operators, brackets, commas and a few function names: an expression, whatever its form. */
+const LOOKS_NUMERIC = /^[\d\s.,+\-*/%^()]+$/
+const NUMERIC_CALL = /^(?:python3?|py)\s+-c\s+["']print\((.*)\)["']$|^node\s+-e\s+["']console\.log\((.*)\)["']$/i
+const ECHO_ARITH = /^(?:echo\s+\$\(\((.*)\)\)|expr\s+(.*)|echo\s+["']?(.*?)["']?\s*\|\s*bc(?:\s+-l)?)$/i
+const AWK_PRINT = /^awk\s+'BEGIN\s*\{\s*print\s+([^'{}]*)\}'$/
+
+const numeric = (text: string | undefined) => {
+  const bare = (text ?? "")
+    .replace(/\[math\]::[a-z0-9]+|\bmath\.[a-z0-9]+|\b(?:round|abs|min|max|pow|sqrt|log|exp|int)\b/gi, "")
+    .replace(/(\d)e([+-]?\d)/gi, "$1$2")
+  return LOOKS_NUMERIC.test(bare) && /\d/.test(bare)
+}
+
+/**
+ * A command that is clearly an attempt at arithmetic in a form the grammar does not take
+ * (`python -c "print(1.2*3)"`, `1,2*3`, `awk 'BEGIN{print 1/3}'`, `echo $((1+2))`). It gets
+ * a tool error with the accepted form instead of the approval path: a headless denial tells
+ * the model to stop and never rewrite the command, the loop calculate used to fall into.
+ */
+export function mathNearMiss(command: string, shell: Pick<ShellInfo, "kind">): boolean {
+  const text = command.trim()
+  if (text === "" || /[\r\n]/.test(text) || mathOnlyCommand(text, shell)) return false
+  const call = NUMERIC_CALL.exec(text)
+  if (call) return numeric(call[1] ?? call[2]) && !/import|__/.test(text)
+  const echo = ECHO_ARITH.exec(text)
+  if (echo) return numeric(echo[1] ?? echo[2] ?? echo[3])
+  const awk = AWK_PRINT.exec(text)
+  if (awk) return numeric(awk[1])
+  return /[+\-*/%^]/.test(text) && numeric(text)
+}
+
 /** The arithmetic form for this machine's shell, for the tool description. */
 export function mathHint(shell: Pick<ShellInfo, "kind">): string {
   return shell.kind === "pwsh" || shell.kind === "powershell"
