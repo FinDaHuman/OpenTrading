@@ -199,6 +199,11 @@ export interface RunOptions {
    */
   compactAt?: number
   sessionId?: string
+  /**
+   * The conversation id gateways get (OpenCode `x-opencode-session`): a subagent's own
+   * (conversation.ts childConversation). Unset: the process's current conversation.
+   */
+  conversationId?: string
   hooks?: HookBus
   memory?: MemoryProvider
   /** `instructions` of connected MCP servers (McpManager.instructions). */
@@ -710,6 +715,8 @@ interface Prepared {
   /** Images in user messages reach the model. */
   userImages: boolean
   assembled: Assembled
+  /** RunOptions.conversationId. */
+  conversation?: string
   supportsTools: boolean
   effort?: Effort
 }
@@ -903,6 +910,7 @@ async function prepare(opts: TurnInput, bound: Bound, extras: TurnExtras): Promi
     tools: toolNames.length > 0 ? built!.tools : undefined,
     assembled,
     effort: opts.effort,
+    conversation: opts.conversationId,
   }
 }
 
@@ -921,7 +929,7 @@ function requestFor(p: Prepared, messages: ModelMessage[], retry: RetryOptions =
       ? { role: "system", content: p.assembled.system, providerOptions: { anthropic: { cacheControl: { type: "ephemeral" } } } }
       : p.assembled.system
   // Requests are retried by kind of failure (retry.ts); the SDK's own retry stays off.
-  const model = wrapLanguageModel({ model: languageModel(p.target.provider, p.target.model, p.target.apiKey, { routing: p.target.routing }), middleware: retryMiddleware(retry) })
+  const model = wrapLanguageModel({ model: languageModel(p.target.provider, p.target.model, p.target.apiKey, { routing: p.target.routing, conversation: p.conversation }), middleware: retryMiddleware(retry) })
   const providerOptions = mergeProviderOptions(thoughtOptions(p.target), effortOptions(p.target, p.effort))
   return { system, request, model, active: activeFor(p.built, request), providerOptions }
 }

@@ -1,3 +1,4 @@
+import { setConversation } from "../../src/core/conversation"
 import { copyFile, mkdir, rm, writeFile } from "node:fs/promises"
 import path from "node:path"
 import type { ModelMessage } from "ai"
@@ -149,6 +150,8 @@ export function observeTools(registry: ToolRegistry, seen: WeakSet<ToolDef>, ask
 
 export interface EvalRun {
   runtime: Runtime
+  /** Prefix of each question's conversation id (`eval-<stamp>-<q>#<rep>`); set by runEval when missing. */
+  conversationStamp?: string
   skills: Skill[]
   target: Target
   questions: EvalQuestion[]
@@ -184,6 +187,7 @@ const DEFAULT_TIMEOUT_MS = 15 * 60_000
 /** Every question, one fresh conversation each. Nothing a question does reaches the next. */
 export async function runEval(run: EvalRun) {
   const { runtime, write, ledger } = run
+  run.conversationStamp ??= Date.now().toString(36)
   const { registry } = runtime
   const web = WEB_TOOLS.flatMap((name) => registry.get(name) ?? [])
   // Bypass needs nobody to answer: what it still keeps for the user is refused (not interactive).
@@ -268,6 +272,8 @@ async function ask(run: EvalRun, question: EvalQuestion, asked: Asked, now: Date
   const { runtime, write } = run
   clearResults()
   useResultSession(`${asked.q}#${asked.rep}`)
+  // Each question is its own conversation for gateways that cache by it (OpenCode).
+  setConversation(`eval-${run.conversationStamp ?? "run"}-${asked.q}#${asked.rep}`)
   runtime.subagents.clock = () => now
   write({ type: "question", ...asked, group: question.group, question: question.question, now: question.now })
   const before = new Set(runtime.subagents.list().map((v) => v.id))

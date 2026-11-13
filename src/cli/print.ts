@@ -1,3 +1,4 @@
+import { setConversation } from "../core/conversation"
 import path from "node:path"
 import type { ModelMessage } from "ai"
 import { runAgent } from "../core/agent"
@@ -119,6 +120,7 @@ export async function runPrint(opts: PrintOptions, deps: { runtime?: Runtime; ta
     const slash = opts.model?.indexOf("/") ?? -1
     target = deps.target ?? (await resolveTarget(opts.model ? { provider: opts.model.slice(0, slash), model: opts.model.slice(slash + 1) } : undefined))
     await runtime.mcp.start()
+    setConversation(session.id)
     const before = new Set(runtime.subagents.list().map((v) => v.id))
     for await (const event of runAgent({
       history: [],
