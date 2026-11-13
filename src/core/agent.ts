@@ -49,10 +49,10 @@ import { loadedTools } from "./tools/loaded"
 import { modeNote } from "./permission/mode"
 import { NOTE as NOTICE_NOTE } from "./subagents/notification"
 import { currentTodos, retiredNote, retireLeftTodos, todoMark, TODO_WRITE } from "./tools/todos"
-import { FAILURE_STREAK_FINAL, FAILURE_STREAK_STOP, failureNudge, turnFailures } from "./loop/failures"
+import { FAILURE_STREAK_FINAL, FAILURE_STREAK_STOP, failureNudge, gapsAnswer, turnFailures } from "./loop/failures"
 import { answerAfterTools } from "./loop/history-shape"
 import { markupStreamFilter, stripMarkup, type MarkupFilter } from "./loop/markup"
-import { answeredAndClosedTodos, figureSources, isEmptyAnswer, isUnfetched, judgeStop, MAX_RECOVERIES, ranDataTool, stripEchoes, ungroundedInTurn, unfetchedFigures, type RecoveryKind, type Verdict } from "./loop/stop-gate"
+import { answeredAndClosedTodos, figureSources, isEmptyAnswer, isUnfetched, GAPS_RESCUE_START, judgeStop, MAX_RECOVERIES, sourcesFailed, ranDataTool, stripEchoes, ungroundedInTurn, unfetchedFigures, type RecoveryKind, type Verdict } from "./loop/stop-gate"
 import { MAX_TOOLS_PER_REQUEST, modelOutput, stripImages, type BuiltToolSet, type ToolRegistry, type ToolSetOptions } from "./tools/registry"
 import { describeTool, LOADED_PREFIX, resolveToolName } from "./tools/search"
 import { cleanToolErrors, toolErrorText } from "./tools/errors"
@@ -1256,7 +1256,16 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
           // rescue without its text: tools off still makes the model answer.
           const base = rescueNow ? (afterTool && !nudge ? undefined : rescueNow.nudge) : nudge && afterTool ? stepNudge(messages, opts.disabled) : undefined
           // One tail: the rescue or tool nudge, then what the failures add (same routes only).
-          const added = nudge && afterTool ? (stopped ? FAILURE_STREAK_FINAL : opts.disabled?.has("failure-nudge") ? undefined : failureNudge(failures)) : undefined
+          // The gap rescue already names the failed sources: their reminder would say it twice.
+          const gapRescue = !!rescueNow?.nudge.startsWith(GAPS_RESCUE_START)
+          const added =
+            nudge && afterTool
+              ? stopped
+                ? FAILURE_STREAK_FINAL
+                : opts.disabled?.has("failure-nudge")
+                  ? undefined
+                  : failureNudge(gapRescue ? { gaps: [], streak: failures.streak } : failures)
+              : undefined
           const tail = [base, added].filter(Boolean).join("\n") || undefined
           const choice = stopped || rescueNow?.toolChoice === "none" || (rescueNow && !tail) ? { toolChoice: "none" as const } : {}
           return { ...(active ? { activeTools: active } : {}), ...choice, messages: tail ? withNudge(messages, tail) : messages }
@@ -1300,6 +1309,8 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
   /** The stop gate gave up: the turn ends without an answer. */
   let unanswered = false
   let financialCorrectionUsed = false
+  /** The answer is the harness's own, naming the missing data (loop/failures.ts gapsAnswer). */
+  let fallback = false
   /** Markup taken out this turn, streamed or stored (loop/markup.ts). */
   const markupTags = opts.disabled?.has("strip-markup") ? undefined : new Set<string>()
 
@@ -1371,6 +1382,7 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
 
     // Only a turn where no data tool ran is checked: the sources are the conversation itself.
     const dataInTurn = ranDataTool([...kept, ...response])
+    const failures = turnFailures([user, ...kept, ...response])
     const sources = dataInTurn || opts.disabled?.has("gate-unfetched") ? undefined : figureSources([...opts.history, user])
     const unfetched = sources === undefined ? 0 : unfetchedFigures(last.stepText ?? "", `${assembled.context ?? ""}\n${sources}`).length
     // A run with a final tool is judged by its caller (the subagent manager forces the tool).
@@ -1386,6 +1398,9 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
             afterTools: [...base, ...response].findLast((m) => m.role !== "assistant")?.role === "tool",
             toolsInTurn: [...kept, ...response].some((m) => m.role === "tool"),
             dataInTurn,
+            gaps: failures.gaps,
+            usableData: failures.usable,
+            fetchedData: failures.fetched,
             unfetched,
           },
           recoveries,
@@ -1411,6 +1426,16 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
     }
     // Gave up: say why, and keep a placeholder so the session file shows what happened.
     unanswered = true
+    // Every source failed and the model wrote nothing: the harness says what is missing, no figure.
+    // Not on a machine-response run (finance): its answer has a contract of its own.
+    if (verdict.kind === "empty" && !finance && sourcesFailed({ gaps: failures.gaps, fetchedData: failures.fetched })) {
+      const text = gapsAnswer(failures.gaps)
+      yield { type: "text-delta", text }
+      yield { type: "notice", text: "Model không viết được câu trả lời khi nguồn dữ liệu lỗi; câu trên do OpenTrading tự ghi phần còn thiếu." }
+      fallback = true
+      messages = [...kept, ...dropFinalText(response), { role: "assistant", content: text }]
+      break
+    }
     const why = emptyReason(outcome)
     const reason = why ? ` Lý do từ provider: ${why}.` : ""
     const usedTools = [...kept, ...response].some((m) => m.role === "tool")
@@ -1467,6 +1492,7 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
       outcome: "completed",
       ...(recoveries.length > 0 ? { recoveries: recoveries.map((kind, i) => ({ kind, attempt: i + 1 })) } : {}),
       ...(unanswered ? { unanswered } : {}),
+      ...(fallback ? { fallback } : {}),
       ...(retiredTodos > 0 ? { retiredTodos } : {}),
       ...dataGaps([user, ...messages]),
       ...ungrounded(opts.history, user, messages, assembled.context),

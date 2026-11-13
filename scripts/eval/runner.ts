@@ -278,7 +278,7 @@ async function ask(run: EvalRun, question: EvalQuestion, asked: Asked, now: Date
   write({ type: "question", ...asked, group: question.group, question: question.question, now: question.now })
   const before = new Set(runtime.subagents.list().map((v) => v.id))
   const started = Date.now()
-  const result = { text: "", streamed: "", steps: 0, input: 0, output: 0, outcome: "failed", unanswered: false, recoveries: [] as { kind: string; attempt: number }[], gaps: [] as string[], ungrounded: [] as string[], markup: [] as string[] }
+  const result = { text: "", streamed: "", steps: 0, input: 0, output: 0, outcome: "failed", unanswered: false, recoveries: [] as { kind: string; attempt: number }[], gaps: [] as string[], ungrounded: [] as string[], markup: [] as string[], fallback: false }
   const served: Record<string, number> = {}
   const serve = (by: string, n = 1) => (served[by] = (served[by] ?? 0) + n)
   const say = (event: TraceEvent) => write(event)
@@ -319,6 +319,7 @@ async function ask(run: EvalRun, question: EvalQuestion, asked: Asked, now: Date
         result.gaps = event.dataGaps ?? []
         result.ungrounded = event.ungrounded ?? []
         result.markup = event.markup ?? []
+        result.fallback = event.fallback ?? false
       }
     }
   } catch (error) {
@@ -346,6 +347,7 @@ async function ask(run: EvalRun, question: EvalQuestion, asked: Asked, now: Date
     data_gaps: result.gaps,
     ungrounded: result.ungrounded,
     ...(result.markup.length > 0 ? { markup_stripped: result.markup } : {}),
+    ...(result.fallback ? { fallback: true } : {}),
     model_steps: result.steps,
     ...(Object.keys(served).length > 0 ? { served_by: served } : {}),
     requests: meter.requests,

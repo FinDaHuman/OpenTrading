@@ -57,6 +57,8 @@ export type AgentEvent =
       recoveries?: { kind: string; attempt: number }[]
       /** Completed without an answer: the stop gate gave up (a notice says why). */
       unanswered?: boolean
+      /** That turn's answer was written by the harness: the data it lacked, no figure (loop/failures.ts gapsAnswer). */
+      fallback?: boolean
       /** Items the model left open in this turn's list when it answered (the list was retired). */
       retiredTodos?: number
       /** Tools whose data the turn did not get (loop/failures.ts). */

@@ -42,6 +42,11 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ### Fixed
 
+- Every source failed and the model answered empty (13/11, eval m3/m6): the stop gate no longer asks it to
+  "answer from the tool results" when none brought data. It names the failed sources and asks for an answer
+  about what is missing, tools off then on; the answer-only rescue runs only when some tool returned data. Out
+  of recoveries, the harness writes the answer itself: the sources it lacked and no figure (`unanswered` stays
+  true; `done.fallback`, eval `fallback: true`), instead of "(không có câu trả lời)".
 - Harness markup in the answer: a model that copies `<nhac_nho>` (or another harness tag), writes a tool call as
   text (`<todo_write>{…}</todo_write>`, `<tool_call>`, `<function=…>`) or wraps notes in `<thought>` no longer
   shows it. It leaves the stream, `ot -p`, evals and the history (`src/core/loop/markup.ts`); a step made only

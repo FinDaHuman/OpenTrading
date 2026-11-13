@@ -314,3 +314,20 @@ test("after both empty rescues, one answer-only rescue when the turn has data, t
   expect(judgeStop(empty, [...done, "empty"])).toEqual({ action: "give-up", kind: "empty" })
   expect(judgeStop({ ...empty, dataInTurn: false }, done)).toEqual({ action: "give-up", kind: "empty" })
 })
+
+test("empty after every source failed: the gap rescue, tools off then on; then give-up, never the answer-only rescue", async () => {
+  const { rescueGaps } = await import("../src/core/loop/stop-gate")
+  const failed = step({ afterTools: true, dataInTurn: true, gaps: ["vn_quote_history"], usableData: false, fetchedData: false })
+  expect(judgeStop(failed, [])).toEqual({ action: "continue", kind: "empty", nudge: rescueGaps(["vn_quote_history"]), toolChoice: "none" })
+  expect(judgeStop(failed, ["empty"])).toEqual({ action: "continue", kind: "empty", nudge: rescueGaps(["vn_quote_history"]), toolChoice: "auto" })
+  expect(judgeStop(failed, ["empty", "empty"])).toEqual({ action: "give-up", kind: "empty" })
+  // Some data came back: the usual rescues, and the answer-only one at the end.
+  const some = step({ afterTools: true, dataInTurn: true, gaps: ["vn_quote_history"], usableData: true, fetchedData: true })
+  expect(judgeStop(some, []).action === "continue" && (judgeStop(some, []) as { nudge: string }).nudge).not.toContain("chưa trả dữ liệu")
+  expect(judgeStop(some, ["empty", "empty"])).toMatchObject({ action: "continue", nudge: RESCUE_ANSWER_NOW, toolChoice: "none" })
+  expect(rescueGaps(["a", "b"])).toContain("a, b")
+  // A clock or file tool worked but no data source did: still the gap rescue, and no answer-only rescue.
+  const clock = step({ afterTools: true, dataInTurn: true, gaps: ["vn_quote_history"], usableData: true, fetchedData: false })
+  expect(judgeStop(clock, [])).toMatchObject({ nudge: rescueGaps(["vn_quote_history"]) })
+  expect(judgeStop(clock, ["empty", "empty"])).toEqual({ action: "give-up", kind: "empty" })
+})
