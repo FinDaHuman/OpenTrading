@@ -61,6 +61,12 @@ export interface ToolDef<I = any> {
   input: z.ZodType<I> | JSONSchema7
   /** Read-only tools may run in parallel; anything else runs alone. */
   readOnly: boolean
+  /**
+   * A read-only version of this tool, same name, for agents limited to read-only tools
+   * (`@chi-doc` subagents, ultradesk): shell that only runs arithmetic. Never registered for
+   * the main agent.
+   */
+  readOnlyVariant?: ToolDef
   /** Default 60s. 0 = no time limit (the tool watches its own progress, e.g. spawn_subagent). */
   timeoutMs?: number
   /**

@@ -49,7 +49,7 @@ export function shellTool(workspace: Workspace, opts: { shell?: ShellInfo } = {}
   const shell = opts.shell ?? detectShell()
   const cwdOf = (input: ShellInput) => (input.workdir ? workspace.resolve(input.workdir) : workspace.primary)
   const critical = (input: ShellInput) => criticalDelete(input.command, { roots: [os.homedir(), ...workspace.roots()] })
-  return {
+  const def: ToolDef<ShellInput> = {
     name: "shell",
     description: describe(shell),
     input: z.object({
@@ -122,6 +122,39 @@ export function shellTool(workspace: Workspace, opts: { shell?: ShellInfo } = {}
           ? `file ${saved.file} chỉ giữ ${saved.chars} ký tự đầu (giới hạn ${SPILL_CAP / 1024 / 1024} MB), phần sau không được lưu; đọc bằng read_file với offset hoặc tìm bằng grep_files`
           : `bản đầy đủ (${saved.chars} ký tự) ở ${saved.file}, đọc tiếp bằng read_file với offset hoặc tìm bằng grep_files`
       return `${meta}\n(Output dài${result.dropped ? "" : ` ${output.length} ký tự`}; ${where}.)\n${output}`
+    },
+  }
+  return { ...def, readOnlyVariant: mathShellTool(def, shell) }
+}
+
+/**
+ * shell for agents limited to read-only tools (`@chi-doc` subagents, ultradesk): arithmetic
+ * only (math.ts), in the workspace. Anything else is refused at once, never put to the user.
+ */
+function mathShellTool(full: ToolDef<ShellInput>, shell: ShellInfo): ToolDef<ShellInput> {
+  const refusal = "Agent này chỉ được chạy phép tính thuần bằng shell (không chạy chương trình, không đọc file)."
+  return {
+    name: "shell",
+    description: `Chỉ tính số, không chạy chương trình hay đọc file. ${mathHint(shell)} Lệnh khác bị từ chối.`,
+    input: z.object({
+      command: z.string().min(1).describe("Biểu thức cần tính"),
+      description: z.string().max(200).optional().describe("Phép tính này để làm gì, 5–10 từ"),
+    }),
+    readOnly: true,
+    source: LOCAL_SOURCE,
+    timeoutMs: 30_000,
+    maxOutputChars: 4_000,
+    blockFor: (input) => (typeof input.command === "string" && mathOnlyCommand(input.command, shell) ? undefined : refusal),
+    askFor: (input) => {
+      const { command } = input as ShellInput
+      return typeof command === "string" ? `math:${command.trim()}` : undefined
+    },
+    subject: (input) => input.command,
+    summarize: full.summarize,
+    async execute(input, ctx) {
+      // Also without a gate (tests, scripts): never run anything but arithmetic.
+      if (!mathOnlyCommand(input.command, shell)) throw new Error(refusal)
+      return full.execute({ command: input.command, ...(input.description ? { description: input.description } : {}), timeout_ms: 20_000 }, ctx)
     },
   }
 }

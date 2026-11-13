@@ -11,6 +11,8 @@ adopt Semantic Versioning when it exposes a stable public API.
   (no ▸▸ classifier request); deny and ask rules still apply. Windows: bare PowerShell expressions with
   `[math]::` functions, printed in the invariant culture; macOS/Linux: `awk 'BEGIN{printf …}'` in the C locale.
   Anything else (a variable, a file, a pipe, `1..3`, a comma outside a call) asks as before. `docs/permissions.md`.
+- Read-only subagents (`@chi-doc`) and ultradesk agents get `shell` for arithmetic only; any other command is refused
+  at once, never put to the user. `/agents` lists it as "shell (chỉ tính toán)".
 
 ## [0.4.0] — 2026-11-08
 
