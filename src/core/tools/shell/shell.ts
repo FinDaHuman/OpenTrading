@@ -5,6 +5,7 @@ import { z } from "zod"
 import type { Workspace } from "../../fs/workspace"
 import { LOCAL_SOURCE, type ToolDef } from "../types"
 import { commandPrefix, criticalDelete, mentionsSensitive, readOnlyCommand, startsInterpreter } from "./command"
+import { mathHint, mathOnlyCommand } from "./math"
 import { detectShell, runShell, SPILL_CAP, type ShellInfo } from "./run"
 
 /**
@@ -16,6 +17,8 @@ import { detectShell, runShell, SPILL_CAP, type ShellInfo } from "./run"
  * - `outside:` (working folder outside the workspace) and `protected:` (names a key file,
  *   OpenTrading's config, login autostart): asked every time, nothing pre-approves them.
  * A recursive delete of a drive root, home, a system folder or the workspace root never runs.
+ * A command that only computes numbers (math.ts) gets `math:` and runs without a prompt in
+ * every mode, headless included: the model's arithmetic goes through the shell.
  */
 
 export type ShellInput = { command: string; description?: string; timeout_ms?: number; workdir?: string }
@@ -37,7 +40,8 @@ function describe(shell: ShellInfo): string {
     `${notes} ` +
     "Dùng khi cần chạy chương trình: script Python phân tích số liệu hay vẽ biểu đồ ra file, chuyển đổi định dạng, cài thư viện người dùng đồng ý. " +
     "Không dùng khi đọc, tìm hay sửa file (dùng read_file, glob_files, grep_files, write_file, edit_file), cũng không dùng cho lệnh chờ nhập từ bàn phím hay chạy mãi (server). " +
-    `Mỗi lệnh người dùng duyệt; ghi description ngắn để người dùng biết lệnh làm gì. Timeout mặc định ${DEFAULT_TIMEOUT_MS / 1000}s, tối đa ${MAX_TIMEOUT_MS / 1000}s; output dài được lưu ra file để đọc tiếp bằng read_file.`
+    `${mathHint(shell)} ` +
+    `Lệnh khác người dùng duyệt; ghi description ngắn để người dùng biết lệnh làm gì. Timeout mặc định ${DEFAULT_TIMEOUT_MS / 1000}s, tối đa ${MAX_TIMEOUT_MS / 1000}s; output dài được lưu ra file để đọc tiếp bằng read_file.`
   )
 }
 
@@ -69,6 +73,8 @@ export function shellTool(workspace: Workspace, opts: { shell?: ShellInfo } = {}
     askFor: (input) => {
       const { command } = input as ShellInput
       if (typeof command !== "string") return undefined
+      // Arithmetic only, in the workspace: runs in every mode (permission/index.ts `math:`).
+      if (!(input as ShellInput).workdir && mathOnlyCommand(command, shell)) return `math:${command.trim()}`
       const cwd = cwdOf(input as ShellInput)
       // The session's temp folder is a fine place to run a script; the command still asks.
       if (!workspace.contains(cwd) && !workspace.inScratch(cwd)) return `outside:${cwd}`

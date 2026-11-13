@@ -77,6 +77,16 @@ Dung lượng và dọn dẹp (Claude Code không dọn thư mục tạm của n
   - `/scratch clear all` xoá cả phiên này (thư mục được tạo lại rỗng).
 - Khi đo và khi xoá, symlink/junction chỉ bị gỡ như một liên kết: không đếm, không đi vào và không xoá thư mục nó trỏ tới.
 
+## Lệnh chỉ tính toán
+
+Model tính số (tỷ lệ, %, CAGR, P/E, đổi đơn vị) bằng `shell`. Lệnh **chỉ gồm phép tính** chạy ngay ở mọi chế độ, kể cả ‖ chỉ đọc, `ot -p` và eval, không hỏi bạn và không tốn request duyệt của ▸▸:
+
+- Windows (PowerShell): biểu thức số, nhiều phép ngăn bằng `;`, hàm chỉ `[math]::Round/Abs/Sqrt/Pow/Log/Log10/Exp/Max/Min/Floor/Ceiling/Truncate`. Ví dụ `(128.4/112-1)*100; [math]::Round(31250/4520, 2)`. Kết quả in theo dấu chấm thập phân (`1.5`), không theo cài đặt vùng của máy.
+- macOS, Linux: `awk 'BEGIN{printf "%.2f %.2f
+", (128.4/112-1)*100, 1.08^3}'`, hàm chỉ `sqrt/log/exp/int`.
+
+OpenTrading kiểm từng lệnh bằng văn phạm biểu thức. Lệnh có biến, file, pipe, dấu phẩy ngoài ngoặc hàm, khoảng `1..3`, thư mục chạy khác (`workdir`) hay bất kỳ tên nào khác thì đi đường duyệt bình thường. Quy tắc `deny`/`ask` của bạn vẫn áp dụng cho các lệnh này.
+
 ## Luôn hỏi bạn, không quy tắc hay model nào duyệt thay
 
 - **Đọc file chứa khoá/mật khẩu:**
