@@ -1,5 +1,6 @@
 import { Database } from "bun:sqlite"
-import { mkdtemp, rm } from "node:fs/promises"
+import { mkdtemp } from "node:fs/promises"
+import { removeTempDir } from "./temp"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { afterEach, beforeEach } from "bun:test"
@@ -23,7 +24,7 @@ export function useNotebookDir() {
   })
   afterEach(async () => {
     for (const close of closers.splice(0).reverse()) close()
-    await rm(dir, { recursive: true, force: true })
+    await removeTempDir(dir)
   })
   const file = () => path.join(dir, "memory.db")
   return {

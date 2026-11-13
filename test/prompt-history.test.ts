@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, expect, test } from "bun:test"
-import { readFile, rm, stat, writeFile } from "node:fs/promises"
+import { readFile, stat, writeFile } from "node:fs/promises"
 import path from "node:path"
 import {
   addHistory,
@@ -12,7 +12,7 @@ import {
   resetHistory,
   searchHistory,
 } from "../src/tui/prompt/history"
-import { tempDir } from "./helpers/temp"
+import { removeTempDir, tempDir } from "./helpers/temp"
 
 const saved = process.env.OPENTRADING_HOME
 let home = ""
@@ -29,7 +29,7 @@ afterAll(async () => {
   resetHistory()
   if (saved === undefined) delete process.env.OPENTRADING_HOME
   else process.env.OPENTRADING_HOME = saved
-  await rm(home, { recursive: true, force: true })
+  await removeTempDir(home)
 })
 
 test("history: appended to a jsonl file, blanks and repeats of the newest skipped", async () => {

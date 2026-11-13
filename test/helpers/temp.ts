@@ -22,6 +22,17 @@ export async function tempDir(prefix: string) {
   return dir
 }
 
+/**
+ * Removes a temp folder a test made, and nothing else: "" or a path outside the system temp dir is
+ * left alone. Bun's `rm("", { recursive: true })` empties the current directory, the checkout under
+ * test: what an after hook did when `mkdtemp` in its before hook had failed (TEMP pointing nowhere).
+ */
+export async function removeTempDir(dir: string, opts: { maxRetries?: number; retryDelay?: number } = {}) {
+  const root = path.resolve(os.tmpdir()) + path.sep
+  if (!dir || !path.resolve(dir).startsWith(root)) return
+  await rm(dir, { recursive: true, force: true, ...opts })
+}
+
 export function tempDirSync(prefix: string) {
   const dir = mkdtempSync(path.join(os.tmpdir(), prefix))
   made.push(dir)

@@ -1,5 +1,6 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
-import { mkdtemp, rm } from "node:fs/promises"
+import { mkdtemp } from "node:fs/promises"
+import { removeTempDir } from "./helpers/temp"
 import os from "node:os"
 import path from "node:path"
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test"
@@ -15,7 +16,7 @@ beforeEach(async () => {
 afterEach(async () => {
   if (saved === undefined) delete process.env.OPENTRADING_HOME
   else process.env.OPENTRADING_HOME = saved
-  await rm(dir, { recursive: true, force: true })
+  await removeTempDir(dir)
 })
 
 const file = () => path.join(dir, "INVESTOR.md")

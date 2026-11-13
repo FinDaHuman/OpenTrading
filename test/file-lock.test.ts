@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process"
 import { afterEach, beforeEach, expect, spyOn, test } from "bun:test"
-import { chmod, mkdir, mkdtemp, readdir, readFile, rm, utimes, writeFile } from "node:fs/promises"
+import { chmod, mkdir, mkdtemp, readdir, readFile, utimes, writeFile } from "node:fs/promises"
+import { removeTempDir } from "./helpers/temp"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { withFileLock } from "../src/core/file-lock"
@@ -24,7 +25,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   // Windows may still hold a handle a child process or a scanner opened a moment ago.
-  await rm(home, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
+  await removeTempDir(home, { maxRetries: 10, retryDelay: 100 })
 })
 
 test("a holder that keeps refreshing is never taken over, however long it holds (Story 4, scenario 1)", async () => {

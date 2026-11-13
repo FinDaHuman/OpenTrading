@@ -1,4 +1,5 @@
-import { mkdtemp, rm } from "node:fs/promises"
+import { mkdtemp } from "node:fs/promises"
+import { removeTempDir } from "./helpers/temp"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { afterEach, beforeEach, expect, test } from "bun:test"
@@ -13,7 +14,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
-  await rm(home, { recursive: true, force: true })
+  await removeTempDir(home)
 })
 
 function tool(name: string) {
