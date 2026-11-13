@@ -3,6 +3,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { z } from "zod"
+import { tempDir } from "./helpers/temp"
 
 // Isolated state dir before core modules read it.
 const home = await mkdtemp(path.join(os.tmpdir(), "ot-eval-"))
@@ -170,7 +171,7 @@ test("requests count retries, which model steps do not", async () => {
 })
 
 test("the ledger adds up across runs and the cap stops the run before the next question", async () => {
-  const file = ledgerFile(await mkdtemp(path.join(os.tmpdir(), "ot-eval-usage-")))
+  const file = ledgerFile(await tempDir("ot-eval-usage-"))
   await run([question("q1")], 1, await RequestLedger.open(file, "groq/tooly", 100))
   expect(await spentToday(file, "groq/tooly")).toBe(2)
   const { events } = await run([question("q2"), question("q3")], 1, await RequestLedger.open(file, "groq/tooly", 4))
@@ -180,7 +181,7 @@ test("the ledger adds up across runs and the cap stops the run before the next q
 })
 
 test("reaching the cap mid-question aborts it, and the requests still reach the ledger", async () => {
-  const file = ledgerFile(await mkdtemp(path.join(os.tmpdir(), "ot-eval-usage-")))
+  const file = ledgerFile(await tempDir("ot-eval-usage-"))
   const { events } = await run([question("q1")], 1, await RequestLedger.open(file, "groq/tooly", 1))
   const [answer] = of(events, "answer")
   expect(answer).toMatchObject({ outcome: "aborted", abort: "cap" })
@@ -188,7 +189,7 @@ test("reaching the cap mid-question aborts it, and the requests still reach the 
 })
 
 test("a side model on another provider does not spend the cap, and is booked apart", async () => {
-  const file = ledgerFile(await mkdtemp(path.join(os.tmpdir(), "ot-eval-usage-")))
+  const file = ledgerFile(await tempDir("ot-eval-usage-"))
   const ledger = await RequestLedger.open(file, "groq/tooly", 1)
   ledger.note("google/side")
   expect(ledger.exhausted).toBe(false)

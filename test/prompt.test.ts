@@ -1,11 +1,11 @@
 import { expect, test } from "bun:test"
-import { mkdtemp, writeFile } from "node:fs/promises"
-import os from "node:os"
+import { writeFile } from "node:fs/promises"
 import path from "node:path"
 import { assemble, identityLayer, type AssembleInput } from "../src/core/prompt/assemble"
 import { BUDGETS, fit, tierOf } from "../src/core/prompt/budget"
 import { clockState, loadCalendar, renderClock, sameSnapshot } from "../src/core/prompt/market-clock"
 import type { Skill } from "../src/core/skills/schema"
+import { tempDir } from "./helpers/temp"
 
 const calendar = loadCalendar()
 // 2026-09-28 is a Monday. Times are UTC; Vietnam is UTC+7.
@@ -121,7 +121,7 @@ test("no tools: no tool guidance, no skill catalog", () => {
 })
 
 test("prompt text is read from prompts/*.md, so edits apply without code changes", async () => {
-  const dir = await mkdtemp(path.join(os.tmpdir(), "ot-prompts-"))
+  const dir = await tempDir("ot-prompts-")
   await writeFile(path.join(dir, "identity.md"), "Bạn là trợ lý thử nghiệm.")
   const custom = assemble(base(), dir)
   expect(custom.system).toContain("<identity>\nBạn là trợ lý thử nghiệm.\n</identity>")

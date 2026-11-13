@@ -1,19 +1,19 @@
 import { expect, test } from "bun:test"
-import { mkdtemp, mkdir, writeFile } from "node:fs/promises"
-import os from "node:os"
+import { mkdir, writeFile } from "node:fs/promises"
 import path from "node:path"
 import { loadSkills, skillRoots } from "../src/core/skills/loader"
 import { suggestSkills } from "../src/core/skills/catalog"
 import { loadSkillTool } from "../src/core/tools/builtin/load-skill"
 import type { Skill } from "../src/core/skills/schema"
 import { lintSkills } from "./helpers/skill-lint"
+import { tempDir } from "./helpers/temp"
 import { copiedResultHit, decisionTreeIssues, issuerFigure } from "./helpers/skill-lint"
 
 const root = path.join(import.meta.dir, "..")
 const ctx = { signal: new AbortController().signal, callId: "c1" }
 
 // The report lists every problem by skill; `bun scripts/dev/skill-scan.ts` prints it.
-const report = await lintSkills(root)
+const report = await lintSkills(root, await tempDir("ot-lint-"))
 
 test("bundled skills only name tools that exist (MCP fixture + local tools)", () => {
   expect(report.unknownTools).toEqual([])
@@ -72,7 +72,7 @@ test("an everyday question does not pull in the chart skill", async () => {
 })
 
 async function skillDir(name: string) {
-  const dir = path.join(await mkdtemp(path.join(os.tmpdir(), "ot-skill-")), name)
+  const dir = path.join(await tempDir("ot-skill-"), name)
   await mkdir(dir, { recursive: true })
   await writeFile(path.join(dir, "SKILL.md"), `---\nname: ${name}\ndescription: thử\n---\nTHÂN`)
   return dir

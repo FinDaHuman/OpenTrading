@@ -66,11 +66,12 @@ export async function loadCases(root: string): Promise<RoutingCase[]> {
 }
 
 /** Local tools as initRuntime registers them, plus the captured MCP catalog registered the way McpManager does. */
-export async function catalogRegistry(root: string): Promise<ToolRegistry> {
+/** `home`: the state folder for the runtime; a fresh temp folder (left behind) when not given. */
+export async function catalogRegistry(root: string, home?: string): Promise<ToolRegistry> {
   const catalog = JSON.parse(await readFile(path.join(root, "test/fixtures/mcp-catalog/opentrading.json"), "utf8")) as {
     tools: { name: string; description?: string; inputSchema?: JSONSchema7; _meta?: Record<string, unknown> }[]
   }
-  const home = await mkdtemp(path.join(os.tmpdir(), "ot-routing-"))
+  home ??= await mkdtemp(path.join(os.tmpdir(), "ot-routing-"))
   const { registry } = initRuntime({ home, cwd: home, skills: () => [] })
   const taken = new Set(registry.list().map((t) => t.name))
   for (const tool of catalog.tools) {
@@ -112,9 +113,9 @@ export function suggestedSkills(input: string, skills: Awaited<ReturnType<typeof
   return match ? match[1]!.split(", ").map((s) => s.trim()) : []
 }
 
-export async function evalRouting(root: string) {
+export async function evalRouting(root: string, home?: string) {
   const cases = await loadCases(root)
-  const registry = await catalogRegistry(root)
+  const registry = await catalogRegistry(root, home)
   const { skills } = await loadSkills(skillRoots(root).filter((r) => r.source === "bundled"))
   const declared = registry.list().map((t) => t.name)
   const results: CaseResult[] = []

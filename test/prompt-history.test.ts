@@ -1,6 +1,5 @@
 import { afterAll, beforeEach, expect, test } from "bun:test"
-import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises"
-import os from "node:os"
+import { readFile, rm, stat, writeFile } from "node:fs/promises"
 import path from "node:path"
 import {
   addHistory,
@@ -13,13 +12,14 @@ import {
   resetHistory,
   searchHistory,
 } from "../src/tui/prompt/history"
+import { tempDir } from "./helpers/temp"
 
 const saved = process.env.OPENTRADING_HOME
 let home = ""
 
 beforeEach(async () => {
   await historyFlushed()
-  home = await mkdtemp(path.join(os.tmpdir(), "opentrading-history-"))
+  home = await tempDir("opentrading-history-")
   process.env.OPENTRADING_HOME = home
   resetHistory()
 })
