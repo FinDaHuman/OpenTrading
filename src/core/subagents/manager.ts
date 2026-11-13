@@ -1,3 +1,4 @@
+import { childConversation, conversationId } from "../conversation"
 import type { Ablations } from "../ablation"
 import { readFile } from "node:fs/promises"
 import type { z } from "zod"
@@ -54,13 +55,22 @@ export const EXCLUDED_TOOLS = new Set(["spawn_subagent", "send_message", "stop_a
 /** Whether a subagent may ever get this tool, before its type's own list; /agents shows the same. */
 export const childMayUse = (t: ToolDef) => !EXCLUDED_TOOLS.has(t.name) && !t.source?.startsWith("memory:") && !t.mainAgentOnly
 
+/**
+ * The tools an agent gets from `tools`: each one its filter keeps, else that tool's read-only
+ * version when the filter keeps that (a read-only agent gets shell for arithmetic only).
+ */
+export function childTools(tools: ToolDef[], filter?: (def: ToolDef) => boolean): ToolDef[] {
+  return tools.filter(childMayUse).flatMap((t) => {
+    if (!filter || filter(t)) return [t]
+    return t.readOnlyVariant && filter(t.readOnlyVariant) ? [t.readOnlyVariant] : []
+  })
+}
+
 export function childRegistry(parent: ToolRegistry, origin: AgentOrigin, filter?: (def: ToolDef) => boolean, skills?: () => Skill[]) {
   const child = new ToolRegistry({ lock: parent.lock, origin })
   child.gate = parent.gate
   child.workspace = parent.workspace
-  const candidates = parent
-    .list()
-    .filter((t) => childMayUse(t) && (!filter || filter(t)))
+  const candidates = childTools(parent.list(), filter)
   if (candidates.length === 0) throw new Error("Subagent không có tool nào để dùng (danh sách tool rỗng hoặc không khớp).")
   for (const def of candidates) child.register(def)
   if (candidates.some((t) => t.deferrable)) child.register(toolSearchTool(child))
@@ -152,7 +162,7 @@ const newId = () => `ag-${Math.random().toString(36).slice(2, 8).padEnd(6, "0")}
 /** A copy without the live parts (controller, messages, promise): what UIs store. */
 export function viewOf(run: SubagentRun): SubagentView {
   const { controller: _c, messages: _m, done: _d, ...view } = run
-  return { ...view, tools: run.tools.map((t) => ({ ...t })), usage: { ...run.usage }, retry: run.retry ? { ...run.retry } : undefined }
+  return { ...view, tools: run.tools.map((t) => ({ ...t })), usage: { ...run.usage }, retry: run.retry ? { ...run.retry } : undefined, ...(run.servedBy ? { servedBy: { ...run.servedBy } } : {}) }
 }
 
 const isActive = (run: { status: string }) => run.status === "queued" || run.status === "running"
@@ -504,6 +514,9 @@ export class SubagentManager {
           stallMs: this.idleConfigured === undefined ? undefined : this.idleConfigured + 2 * watchdogTick(this.idleConfigured),
           role: "subagent",
           target,
+          // Its own conversation for gateways that cache by it, stable over the agent's resumes.
+          // Without an attached session (ot -p, eval) it groups under the process's conversation.
+          conversationId: childConversation(run.sessionId ?? conversationId(), run.id),
           now: this.clock?.(),
           disabled: this.disabled,
           agentPrompt: spec.agentPrompt,
@@ -541,6 +554,7 @@ export class SubagentManager {
             }
             case "step":
               run.requests = (run.requests ?? 0) + 1
+              if (event.servedBy) run.servedBy = { ...run.servedBy, [event.servedBy]: (run.servedBy?.[event.servedBy] ?? 0) + 1 }
               this.emit(run)
               break
             case "step-usage":

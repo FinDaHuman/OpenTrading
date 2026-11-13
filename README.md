@@ -304,11 +304,13 @@ Kéo chuột để bôi đen và copy (chỉ copy chữ, bỏ ký hiệu `●`/`
 
 Agent đọc được file bạn đưa đường dẫn hoặc gắn bằng `@` (text, CSV, PDF, ảnh, Excel `.xlsx`, Word `.docx`), tạo hay sửa file (kế hoạch `.md`, bảng `.csv`, trang `.html`) và chạy lệnh shell. Ghi đè cả file chỉ được khi agent đã đọc toàn bộ file đó (đọc nhiều trang liên tiếp tới cuối file cũng tính); output shell dài được lưu đầy đủ ra file để đọc tiếp.
 
+Agent không tự tính nhẩm: mọi số tính ra (tỷ lệ, %, CAGR, P/E, đổi đơn vị) chạy bằng một lệnh shell **chỉ gồm phép tính** (biểu thức PowerShell trên Windows, `awk` trên macOS/Linux). Lệnh như vậy chạy ngay ở mọi chế độ, không hỏi bạn; lệnh có biến, file hay pipe thì vẫn hỏi như thường. Chi tiết ở [`docs/permissions.md`](docs/permissions.md).
+
 Bốn chế độ quyền, đổi bằng `shift+tab`:
 
 | Chế độ | Hành vi |
 | --- | --- |
-| `‖ chỉ đọc` (mặc định) | Mọi lần ghi file hay chạy lệnh đều hỏi |
+| `‖ chỉ đọc` (mặc định) | Mọi lần ghi file hay chạy lệnh đều hỏi (trừ lệnh chỉ tính toán) |
 | `▸ sửa có hỏi` | Hỏi, và cho phép được cả thư mục trong phiên |
 | `▸▸ tự động` | Một model phụ duyệt từng hành động thay bạn (cần bật một lần) |
 | `▸▸▸ bỏ qua quyền` | Chỉ khi mở bằng `ot --yolo`: không hỏi gì, có hộp cảnh báo đỏ mỗi lần mở |

@@ -5,7 +5,26 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ## [Unreleased]
 
+### Added
+
+- OpenRouter provider pinning: `openrouter.routing` in `config.json` maps a model id (or `"*"`) to OpenRouter's `provider` block (`order`, `allow_fallbacks`, `quantizations`…), sent on every request to that model: main agent, subagents, compaction, title, web side calls and the auto-mode reviewer. Eval runs pin with `--or-provider`, `--or-no-fallback` and `--or-quant`, and the trace records `served_by`, the upstream provider that answered each step. OpenRouter's "no provider" error now reads as one Vietnamese line. See `docs/openrouter.md`.
+- OpenCode Go/Zen: every request to `opencode.ai` sends OT's own `User-Agent` (`opentrading/<version> (<os> <arch>)`) and `x-opencode-session`, as Go's docs ask: the session id for the main agent and side calls, `<session>/<agent id>` for a subagent, one id per question in eval runs. Native web search clients now use the same fetch, so their requests also count toward the request tally and the eval ledger. See `docs/opencode-go.md`.
+- `shell`: a command that only does arithmetic runs without a prompt in every permission mode, `ot -p` and evals
+  (no ▸▸ classifier request); deny and ask rules still apply. Windows: bare PowerShell expressions with
+  `[math]::` functions, printed in the invariant culture; macOS/Linux: `awk 'BEGIN{printf …}'` in the C locale.
+  Anything else (a variable, a file, a pipe, `1..3`, a comma outside a call) asks as before. `docs/permissions.md`.
+- Read-only subagents (`@chi-doc`) and ultradesk agents get `shell` for arithmetic only; any other command is refused
+  at once, never put to the user. `/agents` lists it as "shell (chỉ tính toán)".
+
 ### Changed
+
+- `prompts/tools.md`: computed figures (ratios, %, CAGR, P/E, unit changes) come from one arithmetic-only `shell`
+  command per step, large amounts scaled to tỷ đồng inside the expression; the answer states the formula and inputs.
+  A command that still fails after one fix may be computed by hand, labelled "tự tính" with formula and inputs.
+- `shell` is always declared (no longer deferred): arithmetic needs no `tool_search` request first.
+- Skills that used `compute` (valuation history, sector RS, ranking after troughs, sector KPIs) work from start/end
+  values (RS fetches 64 bars: the table cap always keeps the first and last row) and the periods `financial_ratios`
+  returns, computed in one `shell` command.
 - `/memory` has three tabs, like Claude Code's settings: **Gợi ý** (the suggestion cards still waiting: Enter
   opens the form filled in, `x` dismisses), **Sổ ghi nhớ** (the notebook as before) and **Cài đặt** (memory
   on or off and the card switch, also still in `/config › Memory`). It opens on Gợi ý while a card waits, else
@@ -13,7 +32,16 @@ adopt Semantic Versioning when it exposes a stable public API.
   confirmed. A form opened from `/memory` goes back there when it is saved or closed.
 - `/goiy` is removed: cards no longer take the keys in the transcript; they say "/memory để lưu hoặc bỏ qua".
 
+### Removed
+
+- The `calculate` and `compute` tools. In the v4.6u benchmark the loop guard stopped `calculate` 31 times in 16 trials
+  (13 requests per trial against 3.8, 6 of 15 failed trials); here their description and schema took 3.6k
+  characters each.
+  Native tool descriptions and schemas shrink from 39.9k to 32.7k characters; always-declared ones by 1.9k.
+  `financial-source.ts` and `finance-policy.ts` (benchmark path) stay; `calculate/units.ts` moved to `tools/units.ts`.
+
 ### Fixed
+
 - `/luandiem` or `/quyetdinh` without a code: typing the code and Enter now opens that subject's form (the
   request was merged into the open one and the form never changed).
 

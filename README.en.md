@@ -311,11 +311,13 @@ The agent can:
 
 It may overwrite a whole file only after reading all of it (reading consecutive pages through to the end counts). Long shell output is saved in full to a file it can read on.
 
+The agent does no mental arithmetic: every computed figure (ratios, %, CAGR, P/E, unit changes) comes from a shell command that **only does arithmetic** (a PowerShell expression on Windows, `awk` on macOS/Linux). Such a command runs at once in every mode without asking you; one with a variable, a file or a pipe asks as usual. See [`docs/permissions.md`](docs/permissions.md).
+
 Three permission modes, switched with `shift+tab`:
 
 | Mode | Behavior |
 | --- | --- |
-| `‖ chỉ đọc` (read-only, default) | Every file write or command asks you |
+| `‖ chỉ đọc` (read-only, default) | Every file write or command asks you (except arithmetic-only commands) |
 | `▸ sửa có hỏi` (edit with approval) | Asks, and can allow a whole folder for the session |
 | `▸▸ tự động` (auto) | A side model approves each action for you (turned on once, explicitly) |
 

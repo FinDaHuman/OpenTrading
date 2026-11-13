@@ -3,7 +3,7 @@ import { agentRoots, loadAgents } from "../../core/agents/loader"
 import { toolFilter, toolSummary } from "../../core/agents/resolve"
 import type { AgentDefinition } from "../../core/agents/schema"
 import { setAgents, type Runtime } from "../../core/runtime"
-import { childMayUse } from "../../core/subagents/manager"
+import { childTools } from "../../core/subagents/manager"
 import { closeDialog, providerName, setState, state } from "../state"
 import { color } from "../theme"
 import { useKeys } from "../ui/keys"
@@ -24,11 +24,9 @@ export async function reloadAgents(runtime: Runtime) {
 
 /** Tools this type would get right now: the same check childRegistry makes, then the type's own list. */
 export function resolvedTools(runtime: Runtime, def: AgentDefinition) {
-  const keep = toolFilter(def)
-  return runtime.registry
-    .list()
-    .filter((t) => childMayUse(t) && keep(t))
-    .map((t) => t.name)
+  const all = runtime.registry.list()
+  // A read-only version (shell for arithmetic) is not in the registry itself.
+  return childTools(all, toolFilter(def)).map((t) => (all.includes(t) ? t.name : `${t.name} (chỉ tính toán)`))
 }
 
 /** Why the type's own model would not be used (the run falls back to the session's), if so. */

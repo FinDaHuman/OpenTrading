@@ -1,6 +1,6 @@
 import type { Ablations } from "../ablation"
 import { createHash } from "node:crypto"
-import { existsSync, readdirSync, readFileSync } from "node:fs"
+import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs"
 import path from "node:path"
 import { BUNDLED_ROOT } from "../bundle"
 import { availableSkills, renderCatalog, suggestSkills } from "../skills/catalog"
@@ -63,6 +63,8 @@ export interface AssembleInput {
   /** The user's message, for trigger matching. */
   input: string
   now: Date
+  /** Historical data runs omit the live market-session reminder; the caller supplies now. */
+  clockPolicy?: "live" | "snapshot"
   /** Clock snapshot last sent to the model in this conversation; undefined = never. */
   prevClock?: ClockSnapshot
   calendar?: Calendar
@@ -97,6 +99,32 @@ export interface Assembled {
 }
 
 export const PROMPTS_DIR = path.join(BUNDLED_ROOT, "prompts")
+
+/** Trusted host configuration only, never inferred from user text or tool output. */
+export function validatePromptDir(dir: string): string {
+  if (!path.isAbsolute(dir)) throw new Error("promptDir must be an absolute directory")
+  const resolved = realpathSync(dir)
+  if (!statSync(resolved).isDirectory()) throw new Error("promptDir must be a directory")
+  const files = readdirSync(resolved).filter((name) => name.endsWith(".md"))
+  if (files.length > 32) throw new Error("promptDir contains too many prompt files")
+  for (const required of ["identity.md", "tools.md", "citations.md", "style.md"]) {
+    if (!files.includes(required)) throw new Error(`promptDir missing ${required}`)
+  }
+  let total = 0
+  for (const name of files) {
+    const file = path.join(resolved, name)
+    const stat = statSync(file)
+    if (!stat.isFile() || path.dirname(realpathSync(file)) !== resolved || stat.size > 65_536) {
+      throw new Error(`promptDir contains an unsafe or oversized file: ${name}`)
+    }
+    total += stat.size
+    if (["identity.md", "tools.md", "citations.md", "style.md"].includes(name) && !readFileSync(file, "utf8").trim()) {
+      throw new Error(`promptDir empty ${name}`)
+    }
+  }
+  if (total > 262_144) throw new Error("promptDir exceeds total prompt size limit")
+  return resolved
+}
 
 /** Prompt text lives in prompts/<id>.md so prompt writers never touch code. Read per call: edits apply next turn. */
 export function promptFile(id: string, dir = PROMPTS_DIR): string | undefined {
@@ -164,6 +192,7 @@ export function renderDeferred(groups: { server: string; tools: string[] }[], bu
 }
 
 export function assemble(input: AssembleInput, promptsDir = PROMPTS_DIR): Assembled {
+  if (!Number.isFinite(input.now.getTime())) throw new Error("now must be a valid Date")
   const report: LayerReport[] = []
   const system: string[] = []
   const context: string[] = []
@@ -241,7 +270,10 @@ ${m.text}
   // ── reminders: re-sent only when they change ───────────────────────────
   const calendar = input.calendar ?? loadCalendar()
   const clock = clockState(input.now, calendar)
-  if (!sameSnapshot(input.prevClock, clock.snapshot)) {
+  if (input.clockPolicy !== undefined && input.clockPolicy !== "live" && input.clockPolicy !== "snapshot") {
+    throw new Error("Unsupported clockPolicy")
+  }
+  if (input.clockPolicy !== "snapshot" && !sameSnapshot(input.prevClock, clock.snapshot)) {
     add(reminders, "phien_giao_dich", 2, "reminder", renderClock(clock, calendar), "market_clock")
   }
   if (input.fileAccess && input.fileAccess !== input.prevFileAccess) add(reminders, "quyen_tep", 7, "reminder", input.fileAccess)

@@ -15,11 +15,15 @@ import { createXai } from "@ai-sdk/xai"
 import { createOpenRouter } from "@openrouter/ai-sdk-provider"
 import type { LanguageModel } from "ai"
 import type { Catalog, CatalogModel, CatalogProvider } from "./catalog"
+import pkg from "../../package.json"
+import { build } from "./build-info"
+import { conversationId } from "./conversation"
 import { countedFetch } from "./requests"
+import type { OpenRouterRouting } from "./openrouter-routing"
 
 export type ProviderId = string
 
-type Options = { apiKey: string; baseURL?: string; name: string; fetch: typeof globalThis.fetch }
+type Options = { apiKey: string; baseURL?: string; name: string; fetch: typeof globalThis.fetch; routing?: OpenRouterRouting }
 
 type GeminiContent = { role?: string; parts?: unknown[] }
 
@@ -72,8 +76,12 @@ const SDK: Record<string, Factory> = {
   "@ai-sdk/vercel": (o) => createVercel(o),
   "@ai-sdk/alibaba": (o) => createAlibaba(o),
   "@openrouter/ai-sdk-provider": (o) => {
-    const sdk = createOpenRouter({ ...o, ...(isOpenRouter(o.baseURL) ? OPENROUTER_APP : {}) })
-    return (id) => sdk.chat(id)
+    const { routing, ...rest } = o
+    const own = isOpenRouter(o.baseURL)
+    const sdk = createOpenRouter({ ...rest, ...(own ? OPENROUTER_APP : {}) })
+    // Provider routing is OpenRouter's own; gateways that reuse the SDK do not get it.
+    const settings = own && routing ? { provider: routing as never } : undefined
+    return (id) => (settings ? sdk.chat(id, settings) : sdk.chat(id))
   },
 }
 
@@ -98,6 +106,46 @@ function isOpenRouter(baseURL: string | undefined) {
   } catch {
     return false
   }
+}
+
+/**
+ * OpenCode Go/Zen (opencode.ai/docs/go, "Where can I use it?"): a client "should" identify
+ * itself with its own user agent rather than an SDK name, and send "a stable session ID in
+ * `x-opencode-session` for each conversation" for routing and prompt caching. Clients that
+ * send it on some paths only are listed there as problematic, so it is added here, on the
+ * fetch every request to that host goes through, whatever the SDK or call site.
+ */
+function isOpenCode(baseURL: string | undefined) {
+  if (!baseURL) return false
+  try {
+    const host = new URL(baseURL).hostname
+    return host === "opencode.ai" || host.endsWith(".opencode.ai")
+  } catch {
+    return false
+  }
+}
+
+export const USER_AGENT = `opentrading/${build?.version ?? pkg.version} (${process.platform} ${process.arch})`
+
+/** `conversation`: this request's conversation id (a subagent's own); unset = the process's current one. */
+const openCodeFetch = (base: typeof globalThis.fetch, conversation: string | undefined) =>
+  ((input: RequestInfo | URL, init?: RequestInit) => {
+    const headers = new Headers(init?.headers)
+    // Set last, so it replaces the SDK's "ai/<version> …" user agent.
+    headers.set("user-agent", USER_AGENT)
+    const session = conversation ?? conversationId()
+    if (session) headers.set("x-opencode-session", session)
+    return base(input, { ...init, headers })
+  }) as typeof globalThis.fetch
+
+/**
+ * The fetch every request to a model goes through: counted (quota, eval ledger) and, for
+ * opencode.ai, with OpenCode's headers. Clients built outside languageModel (native search)
+ * take it too, so no path to a gateway goes out without them.
+ */
+export function requestFetch(providerId: string, modelId: string, baseURL: string | undefined, conversation?: string): typeof globalThis.fetch {
+  const counted = countedFetch(providerId, modelId)
+  return isOpenCode(baseURL) ? openCodeFetch(counted, conversation) : counted
 }
 
 const COMPATIBLE = "@ai-sdk/openai-compatible"
@@ -159,8 +207,19 @@ export function isChatModel(m: CatalogModel): boolean {
   return !NOT_CHAT.test(m.id)
 }
 
-export function languageModel(provider: CatalogProvider, modelId: string, apiKey: string): Exclude<LanguageModel, string> {
+/**
+ * Per-request extras: `routing` = OpenRouter provider pinning (ignored by other providers);
+ * `conversation` = the conversation id OpenCode gets (a subagent's own; unset = conversation.ts).
+ */
+export interface ModelOptions {
+  routing?: OpenRouterRouting
+  conversation?: string
+}
+
+export function languageModel(provider: CatalogProvider, modelId: string, apiKey: string, opts: ModelOptions = {}): Exclude<LanguageModel, string> {
   const target = route(provider, provider.models[modelId])
   if (!target) throw new Error(`Provider ${provider.name} chưa được hỗ trợ trong bản này.`)
-  return target.factory({ apiKey, baseURL: target.baseURL, name: provider.id, fetch: countedFetch(provider.id, modelId) })(modelId)
+  const fetch = requestFetch(provider.id, modelId, target.baseURL, opts.conversation)
+  const options: Options = { apiKey, baseURL: target.baseURL, name: provider.id, fetch }
+  return target.factory(opts.routing ? { ...options, routing: opts.routing } : options)(modelId)
 }

@@ -57,12 +57,12 @@ test("every MCP result is saved in full, with what asked for it", async () => {
   expect(Number.isNaN(Date.parse(saved!.at))).toBe(false)
 })
 
-test("a single-row result has no ref but is saved too", async () => {
+test("a scalar result has a source ref and is saved too", async () => {
   const dir = sessionDir()
   useResultSession("s", undefined, dir)
   await call(mcpTool(JSON.stringify({ data: { price: 64.27 } })))
   const [saved] = readEvidence(evidenceFile(dir))
-  expect(saved!.ref).toBeUndefined()
+  expect(saved!.ref).toMatch(/^r\d+$/)
   expect(saved!.text).toContain("64.27")
 })
 

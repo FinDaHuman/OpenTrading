@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto"
 import { deniedMessage, type PermissionGate } from "../permission"
 import { readEnvelope } from "./envelope"
 import { loopDef, loopDenied } from "./loop-guard"
@@ -19,8 +20,12 @@ function stampRef(def: ToolDef, raw: string, input: unknown, callId: string) {
   const output = normalizeNetDates(raw)
   if (output.length > 5_000_000) return output
   const parsed = parseResult(output)
-  const ref = parsed !== undefined && hasDataArray(parsed) ? rememberResult(def.name, output) : undefined
-  keepEvidence({ ...(ref ? { ref } : {}), callId, tool: def.name, input, text: output })
+  const hash = (text: string) => createHash("sha256").update(text).digest("hex")
+  const source = {callId, sourceInput: structuredClone(input), rawText: raw, rawSha256: hash(raw), visibleSha256: hash(output)}
+  // Scalar quote/one-row financial statements need the same source refs as series.
+  const hasNumber = (v: unknown, depth = 0): boolean => depth < 12 && (typeof v === "number" && Number.isFinite(v) || !!v && typeof v === "object" && Object.values(v).some(x => hasNumber(x, depth + 1)))
+  const ref = parsed !== undefined && (hasDataArray(parsed) || hasNumber(parsed)) ? rememberResult(def.name, output, source) : undefined
+  keepEvidence({ ...(ref ? { ref } : {}), ...source, tool: def.name, input, text: output })
   return ref ? `${REF_PREFIX}${ref}] ${output}` : output
 }
 

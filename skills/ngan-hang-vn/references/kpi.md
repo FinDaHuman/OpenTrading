@@ -3,7 +3,7 @@
 Tra `vs_financial_norms(btype=3)` trước khi chọn dòng ngân hàng. Mỗi lời gọi
 `financial_detail` nhận một `statement`: `KQKD`, `CDKT` hoặc `TM`. Tên dòng thực tế
 phải khớp kết quả tra; tỷ lệ không có sẵn cần tính từ thuyết minh hoặc công bố ngân hàng.
-Không truyền `btype` vào `financial_detail`. Ghi rõ đơn vị, kỳ và công thức; số tính ra thì tính bằng `calculate`.
+Không truyền `btype` vào `financial_detail`. Ghi rõ đơn vị, kỳ và công thức; số tính ra thì tính bằng `shell` (một lệnh chỉ gồm phép tính).
 
 ## Thu nhập và hiệu quả
 

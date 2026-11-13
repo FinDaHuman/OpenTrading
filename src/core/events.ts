@@ -35,7 +35,8 @@ export type AgentEvent =
    */
   | { type: "error"; message: string; kind?: FailureKind | "stall" | "tool-choice" }
   /** One model request finished (every step, whether or not the provider reported usage). */
-  | { type: "step" }
+  /** One finished model request; `servedBy` = the upstream provider that answered, when the gateway says (OpenRouter). */
+  | { type: "step"; servedBy?: string }
   /** Billed tokens of one model request (sent after each step that reported usage). */
   | { type: "step-usage"; inputTokens: number; outputTokens: number }
   /** The model is streaming reasoning: never shown, but it is progress (stall timer, subagent watchdog). */

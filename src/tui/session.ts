@@ -1,3 +1,4 @@
+import { setConversation } from "../core/conversation"
 import type { ModelMessage } from "ai"
 import { label, visibleUserText } from "../core/agent"
 import { promptVersion } from "../core/prompt/assemble"
@@ -368,6 +369,8 @@ export async function transcriptOfCurrent(runtime: Runtime, session = current) {
  * `history`: a resumed conversation, whose refs new results must not reuse.
  */
 export function attachSubagents(runtime: Runtime, history?: string) {
+  // Gateways that cache by conversation (OpenCode) get the session id on every request.
+  setConversation(current.id)
   runtime.subagents.attachSession({ id: current.id, dir: current.dir })
   runtime.workspace.scratch?.attach(current.id)
   runtime.desk.attachSession({ id: current.id, dir: current.dir })

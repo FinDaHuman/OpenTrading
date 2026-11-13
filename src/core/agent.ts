@@ -1,6 +1,8 @@
+import { FinancePolicyState, type FinancePolicyOptions } from "./finance-policy"
 import {
   generateText,
   NoSuchToolError,
+  InvalidToolInputError,
   ToolChoiceViolationError,
   hasToolCall,
   isStepCount,
@@ -29,7 +31,7 @@ import { stripCardMessages } from "./memory/cards/messages"
 import { stripCardBlocks } from "./memory/cards/block"
 import type { CardOutcome } from "./memory/cards/types"
 import { typedText } from "./memory/notebook/topics"
-import { assemble, type Assembled } from "./prompt/assemble"
+import { assemble, validatePromptDir, type Assembled } from "./prompt/assemble"
 import { estimateTokens, tierOf, type Tier } from "./prompt/budget"
 import type { ClockSnapshot } from "./prompt/market-clock"
 import { languageModel } from "./providers"
@@ -152,6 +154,11 @@ export function nudgeAfterTools(target: TargetLike | undefined): boolean {
 export { REMINDER_TAG }
 
 export interface RunOptions {
+  providerRetry?: Pick<RetryOptions, "maxRetries">
+  groundedFinancial?: boolean
+  financePolicy?: FinancePolicyOptions
+  toolAuditContext?: FinancePolicyOptions["auditContext"]
+  financeState?: FinancePolicyState
   history: ModelMessage[]
   input: string
   /**
@@ -174,6 +181,10 @@ export interface RunOptions {
   /** Market-clock snapshot last sent in this conversation; undefined = send it. */
   prevClock?: ClockSnapshot
   now?: Date
+  /** Trusted caller configuration; absolute directory with a complete bounded prompt set. */
+  promptDir?: string
+  /** Default live; snapshot suppresses the live-session reminder without fabricating prevClock. */
+  clockPolicy?: "live" | "snapshot"
   signal?: AbortSignal
   /**
    * How long a request may stream nothing before it is cut (default LLM_STALL_MS). A subagent
@@ -188,6 +199,11 @@ export interface RunOptions {
    */
   compactAt?: number
   sessionId?: string
+  /**
+   * The conversation id gateways get (OpenCode `x-opencode-session`): a subagent's own
+   * (conversation.ts childConversation). Unset: the process's current conversation.
+   */
+  conversationId?: string
   hooks?: HookBus
   memory?: MemoryProvider
   /** `instructions` of connected MCP servers (McpManager.instructions). */
@@ -496,6 +512,7 @@ interface Outcome {
   /** The SDK's unified finish reason of the last step (stop, length…). */
   finish?: string
   /** Completed steps of this turn (assistant calls + their tool results), for aborted turns. */
+  bufferText?: boolean
   progress: ModelMessage[]
 }
 
@@ -614,7 +631,8 @@ async function* relay(
           const note = (part.providerMetadata?.google as { finishMessage?: unknown } | undefined)?.finishMessage
           outcome.finishMessage = typeof note === "string" && note.trim() ? note.trim().slice(0, 300) : undefined
           // Every finished step is one model request, usage reported or not (quota counts requests).
-          yield { type: "step" }
+          const served = (part.providerMetadata?.openrouter as { provider?: unknown } | undefined)?.provider
+          yield typeof served === "string" && served ? { type: "step", servedBy: served } : { type: "step" }
           const input = part.usage?.inputTokens
           const output = part.usage?.outputTokens
           if (input === undefined && output === undefined) break
@@ -626,7 +644,7 @@ async function* relay(
           outcome.text += part.text
           outcome.stepText = (outcome.stepText ?? "") + part.text
           stepText += part.text
-          yield { type: "text-delta", text: part.text }
+          if(!outcome.bufferText) yield { type: "text-delta", text: part.text }
           break
         case "tool-call":
           outcome.stepTools = [...(outcome.stepTools ?? []), part.toolName]
@@ -697,6 +715,8 @@ interface Prepared {
   /** Images in user messages reach the model. */
   userImages: boolean
   assembled: Assembled
+  /** RunOptions.conversationId. */
+  conversation?: string
   supportsTools: boolean
   effort?: Effort
 }
@@ -810,8 +830,12 @@ interface TurnExtras {
 const cap = (text: string | undefined, max: number) =>
   text && text.length > max ? text.slice(0, max) + "\n" + REMINDER_CAP_MARK : text
 
-/** Any of these sent: the `<quyen_tep>` reminder (workspace, temp folder, mode) rides along. */
+/**
+ * Any of these sent: the `<quyen_tep>` reminder (workspace, temp folder, mode) rides along.
+ * Only the full shell (effect "shell"): a read-only agent's arithmetic-only shell reaches no file.
+ */
 const FILE_TOOLS = ["read_file", "write_file", "shell"]
+const fileTool = (registry: TurnInput["registry"], name: string) => FILE_TOOLS.includes(name) && (name !== "shell" || registry.get(name)?.effect === "shell")
 
 async function assembleFor(opts: TurnInput, target: Target | undefined, bound: Bound, extras: TurnExtras = {}) {
   const info = target?.provider.models[target.model]
@@ -823,7 +847,7 @@ async function assembleFor(opts: TurnInput, target: Target | undefined, bound: B
   const mode = opts.registry.gate?.mode ?? "read-only"
   const modeTools = mode === "read-only" ? [] : opts.registry.list().filter((d) => d.effect).map((d) => d.name)
   const loaded = new Set([...loadedTools(opts.history ?? []), ...modeTools, ...(opts.preload ?? [])])
-  const built = supportsTools ? opts.registry.toToolSet({ ...setOptions, defer, loaded }) : undefined
+  const built = supportsTools ? opts.registry.toToolSet({ ...setOptions, defer, loaded, financeState: opts.financeState, groundedFinancial: opts.groundedFinancial }) : undefined
   const toolNames = built?.names ?? []
   const assembled = assemble({
     tier,
@@ -844,15 +868,16 @@ async function assembleFor(opts: TurnInput, target: Target | undefined, bound: B
     desk: opts.desk,
     input: opts.input,
     now: opts.now ?? new Date(),
+    clockPolicy: opts.clockPolicy,
     prevClock: opts.prevClock,
     deferredTools: built && built.deferred.length > 0 ? deferredByServer(opts.registry, built.deferred) : undefined,
     declaredTools: built ? Object.keys(built.tools) : undefined,
     mcpInstructions: opts.serverInstructions?.(),
     todos: currentTodos(opts.history ?? []),
-    fileAccess: FILE_TOOLS.some((t) => toolNames.includes(t)) && opts.registry.workspace ? `${opts.registry.workspace.describe()}\n${modeNote(mode)}` : undefined,
+    fileAccess: toolNames.some((t) => fileTool(opts.registry, t)) && opts.registry.workspace ? `${opts.registry.workspace.describe()}\n${modeNote(mode)}` : undefined,
     prevFileAccess: lastReminder(opts.history ?? [], "quyen_tep"),
     disabled: opts.disabled,
-  })
+  }, opts.promptDir === undefined ? undefined : validatePromptDir(opts.promptDir))
   if (built && built.names.length > 0) {
     const share = info?.limit?.context ? built.tokens / info.limit.context : 0
     assembled.report.push({
@@ -885,6 +910,7 @@ async function prepare(opts: TurnInput, bound: Bound, extras: TurnExtras): Promi
     tools: toolNames.length > 0 ? built!.tools : undefined,
     assembled,
     effort: opts.effort,
+    conversation: opts.conversationId,
   }
 }
 
@@ -903,7 +929,7 @@ function requestFor(p: Prepared, messages: ModelMessage[], retry: RetryOptions =
       ? { role: "system", content: p.assembled.system, providerOptions: { anthropic: { cacheControl: { type: "ephemeral" } } } }
       : p.assembled.system
   // Requests are retried by kind of failure (retry.ts); the SDK's own retry stays off.
-  const model = wrapLanguageModel({ model: languageModel(p.target.provider, p.target.model, p.target.apiKey), middleware: retryMiddleware(retry) })
+  const model = wrapLanguageModel({ model: languageModel(p.target.provider, p.target.model, p.target.apiKey, { routing: p.target.routing, conversation: p.conversation }), middleware: retryMiddleware(retry) })
   const providerOptions = mergeProviderOptions(thoughtOptions(p.target), effortOptions(p.target, p.effort))
   return { system, request, model, active: activeFor(p.built, request), providerOptions }
 }
@@ -1095,6 +1121,9 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
   const config = await loadConfig()
   // The main agent's effort comes from config; a subagent's is resolved by its manager.
   if (opts.role !== "subagent" && opts.effort === undefined && isEffort(config.effort)) opts = { ...opts, effort: config.effort }
+  const finance = opts.financePolicy?.enabled ? new FinancePolicyState({...opts.financePolicy,auditContext:opts.financePolicy.auditContext ?? opts.toolAuditContext}, opts.input) : undefined
+  const commonLocalRejections: Record<string,unknown>[] = []
+  opts = {...opts, financeState: finance}
   const prepared = await prepare(opts, bound, extras)
   const { target, tools, built, assembled, supportsTools } = prepared
   const configured = config.maxSteps
@@ -1142,7 +1171,7 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
     stall.abort()
   }
   // Past turns are sent with answers after their tool results (loop/history-shape.ts).
-  const { system, request, model, providerOptions } = requestFor(prepared, [...answerAfterTools(opts.history), user], notices.options)
+  const { system, request, model, providerOptions } = requestFor(prepared, [...answerAfterTools(opts.history), user], {...notices.options, ...opts.providerRetry})
   let summarized = false
   /** Tool results pruned mid-turn (undefined: not near the threshold). */
   let midTurnPruned: number | undefined
@@ -1210,7 +1239,18 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
         summarized = true
         return { toolChoice: "none", activeTools: active, messages: withNudge(messages, SUMMARY_PROMPT) }
       },
-      experimental_repairToolCall: async ({ toolCall, error }) => repairCall(opts.registry, built, active, loaded, toolCall, error),
+      experimental_repairToolCall: async ({ toolCall, error }) => {
+        if(!finance && opts.groundedFinancial && InvalidToolInputError.isInstance(error)) {
+          const context=opts.toolAuditContext?.() ?? {}
+          commonLocalRejections.push({event:"financial_local_rejection",sdk_call_id:toolCall.toolCallId,code:"invalid_tool_input",tool:error.toolName,rawInput:error.toolInput,reason:error.message,origin_sdk_call_id:toolCall.toolCallId,origin_provider_request_index:context.provider_request_index,origin_memory_session:context.memory_session,origin_memory_turn:context.memory_turn,origin_native_session_id:context.native_session_id})
+        }
+        if(finance && InvalidToolInputError.isInstance(error)) {
+          finance.noteLocalRejection(toolCall.toolCallId,{code:"invalid_tool_input",tool:error.toolName,rawInput:error.toolInput})
+          const def=opts.registry.get(error.toolName)
+          if(def){let args:unknown=error.toolInput;try{args=JSON.parse(error.toolInput)}catch{};finance.failed(def,args,Object.assign(new Error(error.message),{code:"invalid_argument",retryable_with_corrected_arguments:true}),toolCall.toolCallId)}
+        }
+        return repairCall(opts.registry,built,active,loaded,toolCall,error)
+      },
       abortSignal,
       providerOptions,
       // The model is wrapped with retry.ts (by kind of failure, shown to the user, Esc
@@ -1230,12 +1270,27 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
   let messages: ModelMessage[] | undefined
   /** The stop gate gave up: the turn ends without an answer. */
   let unanswered = false
+  let financialCorrectionUsed = false
 
+  const emittedFinanceOrigins = new Set<string>()
   for (;;) {
     const base = [...request, ...kept]
     const result = run(base, rescue)
-    const last: Outcome = { text: "", aborted: false, steps: 0, progress: [] }
+    const last: Outcome = { text: "", aborted: false, steps: 0, progress: [], bufferText: !!finance?.options.machineResponse }
     yield* relay(result, opts.registry, opts.signal, last, notices, { ms: stallMs, onStall }, prepared.images)
+    for(const rejection of commonLocalRejections.splice(0)) yield {type:"notice",text:JSON.stringify(rejection)}
+    if(finance) {
+      for(const [event,rows] of [["financial_call_audit",finance.callAudit],["financial_local_rejection",finance.localRejections]] as const) {
+        for(const row of rows.values()) {
+          const sdk_call_id=row.origin_sdk_call_id
+          const origin={origin_provider_request_index:row.origin_provider_request_index,origin_sdk_call_id:row.origin_sdk_call_id,origin_memory_session:row.origin_memory_session,origin_memory_turn:row.origin_memory_turn,origin_native_session_id:row.origin_native_session_id}
+          const identity=JSON.stringify([event,origin])
+          const replay=emittedFinanceOrigins.has(identity)
+          yield {type:"notice",text:JSON.stringify({event,sdk_call_id,...row,...(replay?{replay_of:origin}:{})})}
+          emittedFinanceOrigins.add(identity)
+        }
+      }
+    }
     stepsUsed += last.steps
     outcome.text += last.text
     outcome.steps += last.steps
@@ -1259,6 +1314,29 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
       break
     }
     measured = result
+
+    if (finance) {
+      const candidate=last.stepText ?? ""
+      const issues=finance.issues(candidate, opts.registry.list())
+      const corrections=finance.correctionTools()
+      if ((issues.length || corrections.length) && !financialCorrectionUsed && stepsUsed < maxSteps - 1) {
+        financialCorrectionUsed=true
+        kept=[...kept,...dropFinalText(response)]
+        // No acquisition keyed on benchmark tokens. Only actual failed intent or caller contract.
+        if(corrections.length) finance.beginCorrection(); else finance.beginOutputCorrection()
+        rescue={nudge:["Correct the actual failed arguments without changing source/entity/period/metric, or correct the caller's output contract. Do not replay successful tools.",...issues].join("\n"),toolChoice:corrections.length ? "auto" : "none"}
+        yield {type:"notice",text:JSON.stringify({event:"financial_rejected_final",raw_final:candidate,issues,correction_tools:corrections})}
+        continue
+      }
+      if(issues.length) {
+        yield {type:"notice",text:JSON.stringify({event:"financial_contract_invalid",raw_final:candidate,issues})}
+        // The bounded correction is exhausted. Retain the rejected candidate only
+        // in diagnostic telemetry, never in accepted text/history or as a claim.
+        unanswered=true
+        messages=[...kept,...dropFinalText(response),{role:"assistant",content:"(không có câu trả lời đáp ứng hợp đồng đã yêu cầu)"}]
+        break
+      }
+    }
 
     // Only a turn where no data tool ran is checked: the sources are the conversation itself.
     const dataInTurn = ranDataTool([...kept, ...response])
@@ -1297,7 +1375,7 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
       // A cut answer stays and the rest is joined onto it; any other broken step is dropped.
       kept = verdict.kind === "length" ? (continuing ? continueAnswer(kept, response) : [...kept, ...response]) : [...kept, ...dropFinalText(response)]
       rescue = { nudge: verdict.nudge, toolChoice: verdict.toolChoice }
-      yield { type: "notice", text: `${RESCUE_NOTICE[verdict.kind]} Đã nhắc model trả lời tiếp (${recoveries.length}/${MAX_RECOVERIES}).` }
+      yield { type: "notice", text: `${RESCUE_NOTICE[verdict.kind]} Đã nhắc model trả lời tiếp (${recoveries.length}/${Math.max(MAX_RECOVERIES, recoveries.length)}).` }
       continue
     }
     // Gave up: say why, and keep a placeholder so the session file shows what happened.

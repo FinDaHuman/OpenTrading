@@ -42,6 +42,8 @@ export interface SubagentView {
   usage: { input: number; output: number }
   /** Model requests made (finished steps; free tiers count requests per day). */
   requests?: number
+  /** Finished steps per upstream provider that answered them (OpenRouter), when reported. */
+  servedBy?: Record<string, number>
   /** Final answer (or the partial text after a failure or stop). */
   text: string
   error?: string

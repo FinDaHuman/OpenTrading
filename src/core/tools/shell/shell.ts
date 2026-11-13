@@ -5,6 +5,7 @@ import { z } from "zod"
 import type { Workspace } from "../../fs/workspace"
 import { LOCAL_SOURCE, type ToolDef } from "../types"
 import { commandPrefix, criticalDelete, mentionsSensitive, readOnlyCommand, startsInterpreter } from "./command"
+import { mathHint, mathNearMiss, mathOnlyCommand } from "./math"
 import { detectShell, runShell, SPILL_CAP, type ShellInfo } from "./run"
 
 /**
@@ -16,6 +17,8 @@ import { detectShell, runShell, SPILL_CAP, type ShellInfo } from "./run"
  * - `outside:` (working folder outside the workspace) and `protected:` (names a key file,
  *   OpenTrading's config, login autostart): asked every time, nothing pre-approves them.
  * A recursive delete of a drive root, home, a system folder or the workspace root never runs.
+ * A command that only computes numbers (math.ts) gets `math:` and runs without a prompt in
+ * every mode, headless included: the model's arithmetic goes through the shell.
  */
 
 export type ShellInput = { command: string; description?: string; timeout_ms?: number; workdir?: string }
@@ -37,7 +40,8 @@ function describe(shell: ShellInfo): string {
     `${notes} ` +
     "Dùng khi cần chạy chương trình: script Python phân tích số liệu hay vẽ biểu đồ ra file, chuyển đổi định dạng, cài thư viện người dùng đồng ý. " +
     "Không dùng khi đọc, tìm hay sửa file (dùng read_file, glob_files, grep_files, write_file, edit_file), cũng không dùng cho lệnh chờ nhập từ bàn phím hay chạy mãi (server). " +
-    `Mỗi lệnh người dùng duyệt; ghi description ngắn để người dùng biết lệnh làm gì. Timeout mặc định ${DEFAULT_TIMEOUT_MS / 1000}s, tối đa ${MAX_TIMEOUT_MS / 1000}s; output dài được lưu ra file để đọc tiếp bằng read_file.`
+    `${mathHint(shell)} ` +
+    `Lệnh khác người dùng duyệt; ghi description ngắn để người dùng biết lệnh làm gì. Timeout mặc định ${DEFAULT_TIMEOUT_MS / 1000}s, tối đa ${MAX_TIMEOUT_MS / 1000}s; output dài được lưu ra file để đọc tiếp bằng read_file.`
   )
 }
 
@@ -45,7 +49,7 @@ export function shellTool(workspace: Workspace, opts: { shell?: ShellInfo } = {}
   const shell = opts.shell ?? detectShell()
   const cwdOf = (input: ShellInput) => (input.workdir ? workspace.resolve(input.workdir) : workspace.primary)
   const critical = (input: ShellInput) => criticalDelete(input.command, { roots: [os.homedir(), ...workspace.roots()] })
-  return {
+  const def: ToolDef<ShellInput> = {
     name: "shell",
     description: describe(shell),
     input: z.object({
@@ -57,7 +61,7 @@ export function shellTool(workspace: Workspace, opts: { shell?: ShellInfo } = {}
     readOnly: false,
     effect: "shell",
     approvalGroup: "shell",
-    deferrable: true,
+    // Always declared: the model's arithmetic goes through it (no tool_search request first).
     source: LOCAL_SOURCE,
     // The tool keeps its own time: the timeout kills the whole process tree, not just the wait.
     timeoutMs: MAX_TIMEOUT_MS + 15_000,
@@ -69,6 +73,8 @@ export function shellTool(workspace: Workspace, opts: { shell?: ShellInfo } = {}
     askFor: (input) => {
       const { command } = input as ShellInput
       if (typeof command !== "string") return undefined
+      // Arithmetic only, in the workspace: runs in every mode (permission/index.ts `math:`).
+      if (!(input as ShellInput).workdir && mathOnlyCommand(command, shell)) return `math:${command.trim()}`
       const cwd = cwdOf(input as ShellInput)
       // The session's temp folder is a fine place to run a script; the command still asks.
       if (!workspace.contains(cwd) && !workspace.inScratch(cwd)) return `outside:${cwd}`
@@ -80,6 +86,9 @@ export function shellTool(workspace: Workspace, opts: { shell?: ShellInfo } = {}
     // ▸▸: a command that only lists or prints state needs no classifier request.
     autoSafe: async (input) => typeof input.command === "string" && readOnlyCommand(input.command),
     async validate(input) {
+      // Arithmetic in a form the grammar does not take: say the right form (a tool error the
+      // model fixes), before the gate turns it into a denial that tells it to stop.
+      if (mathNearMiss(input.command, shell)) return `Lệnh này là phép tính nhưng chưa đúng dạng chỉ-toán nên chưa chạy; viết lại đúng dạng thì chạy ngay, không cần duyệt. ${mathHint(shell)}`
       const cwd = cwdOf(input)
       try {
         if (!(await stat(cwd)).isDirectory()) return `${cwd} không phải thư mục.`
@@ -116,6 +125,44 @@ export function shellTool(workspace: Workspace, opts: { shell?: ShellInfo } = {}
           ? `file ${saved.file} chỉ giữ ${saved.chars} ký tự đầu (giới hạn ${SPILL_CAP / 1024 / 1024} MB), phần sau không được lưu; đọc bằng read_file với offset hoặc tìm bằng grep_files`
           : `bản đầy đủ (${saved.chars} ký tự) ở ${saved.file}, đọc tiếp bằng read_file với offset hoặc tìm bằng grep_files`
       return `${meta}\n(Output dài${result.dropped ? "" : ` ${output.length} ký tự`}; ${where}.)\n${output}`
+    },
+  }
+  return { ...def, readOnlyVariant: mathShellTool(def, shell) }
+}
+
+/**
+ * shell for agents limited to read-only tools (`@chi-doc` subagents, ultradesk): arithmetic
+ * only (math.ts), in the workspace. Anything else is refused at once, never put to the user.
+ */
+function mathShellTool(full: ToolDef<ShellInput>, shell: ShellInfo): ToolDef<ShellInput> {
+  // A tool error, not a permission denial: the model should retry as arithmetic, not stop.
+  const refusal = `Lệnh này không phải phép tính thuần nên không chạy (agent này chỉ dùng shell để tính số). Viết lại thành biểu thức số. ${mathHint(shell)}`
+  return {
+    name: "shell",
+    description:
+      "Máy tính: chạy một lệnh chỉ gồm phép tính số và trả kết quả. " +
+      "Dùng khi: cần số tính ra từ số đã có (tỷ lệ, % thay đổi, CAGR, P/E, đổi đơn vị); gộp nhiều phép vào một lệnh. " +
+      `Không dùng khi: chạy chương trình, đọc hay ghi file (bị từ chối). ${mathHint(shell)}`,
+    input: z.object({
+      command: z.string().min(1).describe("Biểu thức cần tính"),
+      description: z.string().max(200).optional().describe("Phép tính này để làm gì, 5–10 từ"),
+    }),
+    readOnly: true,
+    source: LOCAL_SOURCE,
+    timeoutMs: 30_000,
+    maxOutputChars: 4_000,
+    // Arithmetic goes through the gate as `math:` (deny/ask rules apply); anything else never
+    // reaches the user: execute refuses it.
+    askFor: (input) => {
+      const { command } = input as ShellInput
+      return typeof command === "string" && mathOnlyCommand(command, shell) ? `math:${command.trim()}` : undefined
+    },
+    subject: (input) => input.command,
+    summarize: full.summarize,
+    async execute(input, ctx) {
+      // Also without a gate (tests, scripts): never run anything but arithmetic.
+      if (!mathOnlyCommand(input.command, shell)) throw new Error(refusal)
+      return full.execute({ command: input.command, ...(input.description ? { description: input.description } : {}), timeout_ms: 20_000 }, ctx)
     },
   }
 }
