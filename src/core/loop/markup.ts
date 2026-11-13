@@ -34,6 +34,8 @@ export const HARNESS_TAGS = [
   "bat_bien",
   "thu_tu_uu_tien",
   "vi_du",
+  "subagent",
+  "bang_chung",
 ] as const
 
 /** Tool-call wrappers other harnesses and model families use (Hermes, Qwen, Claude XML, GLM). */
@@ -57,6 +59,9 @@ export const CALL_TAGS = [
 export const NOTE_TAGS = ["thought", "thinking", "think", "analysis", "reasoning", "scratchpad", "phan_tich_tool", "chi_dan_agent"] as const
 
 const KNOWN = new Set<string>([...HARNESS_TAGS, ...CALL_TAGS, ...NOTE_TAGS])
+
+/** The memory card is an answer part (memory/cards): its own filter takes it out, never this one. */
+const CARD_TAG = "the_goi_y"
 
 /** A tag name a tool could have: snake case or an MCP name. Known only when a JSON body follows. */
 const TOOL_LIKE = /^[a-z][a-z0-9]*(?:__?[a-z0-9]+)+$/
@@ -238,6 +243,11 @@ export function markupStreamFilter(): MarkupFilter {
           buf = buf.slice(after)
           continue
         }
+        emit(token)
+        buf = buf.slice(tag.length)
+        continue
+      }
+      if (tag.name === CARD_TAG) {
         emit(token)
         buf = buf.slice(tag.length)
         continue

@@ -97,6 +97,16 @@ test("the stream never shows a piece of a block, at any chunk boundary", () => {
   }
 })
 
+test("a memory card block is left for the card filter, whatever its body looks like", () => {
+  for (const text of [
+    'Kết luận.\n<the_goi_y loai="bai_hoc">\ntieu_de: Chờ BCTC\ntom_tat: x\n</the_goi_y>',
+    'Kết luận.\n<the_goi_y>{"a":1}</the_goi_y>',
+  ]) {
+    expect(stripMarkup(text)).toEqual({ text, tags: [] })
+    expectStreamAgrees(text)
+  }
+})
+
 // --- The tag lists stay in step with what the harness sends ---
 
 test("HARNESS_TAGS holds every tag the harness emits and every tag in prompts/", () => {

@@ -1267,6 +1267,21 @@ test("an answer made only of a self-made <nhac_nho> block (13/11) is recovered a
   expect(done(events).markup).toEqual(["nhac_nho"])
 })
 
+test("13/11 m6 as it happened: a tool, two empty answers, then only <nhac_nho>: nothing shown or stored, the turn says it has no answer", async () => {
+  const block = "<nhac_nho>\nDanh sách việc của bạn:\n- [in_progress] Lấy giá HPG\n</nhac_nho>"
+  respond = (_body, n) => (n === 0 ? toolCall("current_time", {}, "call_1") : n <= 2 ? answer("") : answer(block))
+  const events = await collect(runAgent({ history: [], input: "Giá HPG?", skills: [], registry: registry() }))
+  // Two recoveries, then the answer-only rescue (tools off: the turn has a tool result), then give-up.
+  expect(bodies).toHaveLength(5)
+  expect(bodies[4]!.tool_choice).toBe("none")
+  const shown = events.flatMap((e) => (e.type === "text-delta" ? [e.text] : [])).join("")
+  expect(shown).not.toContain("nhac_nho")
+  expect(shown).not.toContain("Lấy giá HPG")
+  expect(JSON.stringify(done(events).messages.slice(1))).not.toContain("Lấy giá HPG")
+  expect(done(events).unanswered).toBe(true)
+  expect(done(events).markup).toEqual(["nhac_nho"])
+})
+
 test("markup around a real answer leaves the screen, the history and the trace field says which", async () => {
   respond = (_body, n) =>
     n === 0 ? answer('<todo_write>{"todos":[]}</todo_write>\nHPG đóng cửa 27.500 đồng.\n<thought>xong</thought>') : undefined
