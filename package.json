@@ -58,6 +58,11 @@
     "typescript": "^7.0.2"
   },
   "overrides": {
-    "@hono/node-server": "2.1.6"
+    "@hono/node-server": "2.1.6",
+    "glob": "14.0.2",
+    "minimatch": "11.0.8"
+  },
+  "patchedDependencies": {
+    "babel-plugin-module-resolver@5.0.2": "patches/babel-plugin-module-resolver@5.0.2.patch"
   }
 }
