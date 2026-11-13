@@ -5,6 +5,7 @@ import { z } from "zod"
 import { ABLATIONS, type Ablation, type Ablations } from "../../src/core/ablation"
 import { runAgent } from "../../src/core/agent"
 import type { Target } from "../../src/core/chat"
+import { cleanRouting, type OpenRouterRouting } from "../../src/core/openrouter-routing"
 import { promptVersion } from "../../src/core/prompt/assemble"
 import { onModelRequest } from "../../src/core/requests"
 import { closeMemory, createMemory, switchMemory, type MemoryChoice, type Runtime } from "../../src/core/runtime"
@@ -70,10 +71,41 @@ export function parseAblations(list: string[]): Ablated {
 export const skillsFor = (skills: Skill[], ablated?: Ablated) => (ablated?.setup.has("skills") ? [] : skills)
 
 /** A run's own home: same model and connections as `from`, none of the user's other state. */
-export async function prepareHome(from: string, to: string, target: { provider: string; model: string }, ablated?: Ablated) {
+export async function prepareHome(from: string, to: string, target: { provider: string; model: string }, ablated?: Ablated, routing?: OpenRouterRouting) {
   await mkdir(path.join(to, "cache"), { recursive: true })
   for (const file of HOME_FILES) await copyFile(path.join(from, file), path.join(to, file)).catch(() => {})
-  await writeFile(path.join(to, "config.json"), JSON.stringify({ ...target, ...(ablated?.setup.has("tool-deferral") ? { toolSearch: "off" } : {}) }))
+  // The pin comes from this run's flags only, never from the user's config: a run states it.
+  const pin = routing ? { openrouter: { routing: { [target.model]: routing } } } : {}
+  await writeFile(path.join(to, "config.json"), JSON.stringify({ ...target, ...(ablated?.setup.has("tool-deferral") ? { toolSearch: "off" } : {}), ...pin }))
+}
+
+/** Finished model steps per upstream provider over a trace's answers (OpenRouter's `served_by`). */
+export function servedSummary(events: TraceEvent[]): Record<string, number> {
+  const total: Record<string, number> = {}
+  for (const event of events) {
+    if (event.type !== "answer" || !event.served_by) continue
+    for (const [by, n] of Object.entries(event.served_by)) total[by] = (total[by] ?? 0) + n
+  }
+  return total
+}
+
+/**
+ * The OpenRouter pin of an eval run, from its flags (one key each): `--or-provider a,b` → order,
+ * `--or-no-fallback` → allow_fallbacks false, `--or-quant fp8` → quantizations. Undefined with
+ * none of them; an error when they are given for another provider. `warnings`: why the run can
+ * still mix providers.
+ */
+export function routingFromFlags(provider: string, flags: { orProvider?: string; noFallback?: boolean; quant?: string }): { routing?: OpenRouterRouting; error?: string; warnings: string[] } {
+  const list = (value?: string) => value?.split(",").map((s) => s.trim()).filter(Boolean)
+  const order = list(flags.orProvider)
+  const quantizations = list(flags.quant)
+  const any = flags.orProvider !== undefined || flags.noFallback || flags.quant !== undefined
+  if (provider !== "openrouter") return any ? { error: `--or-provider/--or-no-fallback/--or-quant chỉ dùng với model openrouter/… (đang là ${provider}).`, warnings: [] } : { warnings: [] }
+  const routing = cleanRouting({ order, quantizations, ...(flags.noFallback ? { allow_fallbacks: false } : {}) })
+  const warnings: string[] = []
+  if (!routing.order) warnings.push("Provider OpenRouter không cố định (thiếu --or-provider): kết quả có thể lẫn provider.")
+  else if (routing.allow_fallbacks !== false) warnings.push("Vẫn cho fallback (thiếu --or-no-fallback): kết quả vẫn có thể lẫn provider.")
+  return { ...(Object.keys(routing).length > 0 ? { routing } : {}), warnings }
 }
 
 interface Asked {
@@ -241,6 +273,8 @@ async function ask(run: EvalRun, question: EvalQuestion, asked: Asked, now: Date
   const before = new Set(runtime.subagents.list().map((v) => v.id))
   const started = Date.now()
   const result = { text: "", streamed: "", steps: 0, input: 0, output: 0, outcome: "failed", unanswered: false, recoveries: [] as { kind: string; attempt: number }[], gaps: [] as string[], ungrounded: [] as string[] }
+  const served: Record<string, number> = {}
+  const serve = (by: string, n = 1) => (served[by] = (served[by] ?? 0) + n)
   const say = (event: TraceEvent) => write(event)
   const timeout = AbortSignal.timeout(run.timeoutMs ?? DEFAULT_TIMEOUT_MS)
   try {
@@ -264,7 +298,10 @@ async function ask(run: EvalRun, question: EvalQuestion, asked: Asked, now: Date
       else if (event.type === "retry") say({ type: "retry", ...asked, attempt: event.attempt, delay_ms: event.delayMs, label: event.label })
       else if (event.type === "notice") say({ type: "notice", ...asked, text: event.text })
       else if (event.type === "error") say({ type: "error", ...asked, message: event.message, ...(event.kind ? { kind: event.kind } : {}) })
-      else if (event.type === "step") result.steps++
+      else if (event.type === "step") {
+        result.steps++
+        if (event.servedBy) serve(event.servedBy)
+      }
       else if (event.type === "step-usage") {
         result.input += event.inputTokens
         result.output += event.outputTokens
@@ -288,6 +325,7 @@ async function ask(run: EvalRun, question: EvalQuestion, asked: Asked, now: Date
     result.steps += view.requests ?? 0
     result.input += view.usage.input
     result.output += view.usage.output
+    for (const [by, n] of Object.entries(view.servedBy ?? {})) serve(by, n)
   }
   write({
     type: "answer",
@@ -301,6 +339,7 @@ async function ask(run: EvalRun, question: EvalQuestion, asked: Asked, now: Date
     data_gaps: result.gaps,
     ungrounded: result.ungrounded,
     model_steps: result.steps,
+    ...(Object.keys(served).length > 0 ? { served_by: served } : {}),
     requests: meter.requests,
     input_tokens: result.input,
     output_tokens: result.output,

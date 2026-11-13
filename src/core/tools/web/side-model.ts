@@ -117,7 +117,7 @@ export type Extracted = { text: string; finishReason?: string }
 
 export async function extractWithModel(content: string, prompt: string, url: string, target: Target, signal: AbortSignal): Promise<Extracted> {
   const result = await generateText({
-    model: languageModel(target.provider, target.model, target.apiKey),
+    model: languageModel(target.provider, target.model, target.apiKey, { routing: target.routing }),
     abortSignal: signal,
     maxRetries: 0,
     // Least reasoning, with room for it (effort.ts sideRequest): the answer keeps its 2000 tokens.

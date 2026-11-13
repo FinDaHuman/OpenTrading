@@ -32,7 +32,7 @@ export async function generateTitleText(target: Target, firstText: string): Prom
   if (!input) return undefined
   try {
     const result = await generateText({
-      model: languageModel(target.provider, target.model, target.apiKey),
+      model: languageModel(target.provider, target.model, target.apiKey, { routing: target.routing }),
       system: titlePrompt(),
       messages: [{ role: "user", content: input }],
       // 256 for the title's few words (Gemini 2.5/3 count thoughts as output; 30 came back

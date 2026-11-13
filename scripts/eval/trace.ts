@@ -59,6 +59,8 @@ export type TraceEvent =
       ungrounded?: string[]
       /** Finished model steps, subagents included. */
       model_steps: number
+      /** Those steps per upstream provider that answered them, when the gateway says (OpenRouter display names). */
+      served_by?: Record<string, number>
       /** HTTP requests to a model: retries, subagents and side calls included. */
       requests?: number
       input_tokens: number

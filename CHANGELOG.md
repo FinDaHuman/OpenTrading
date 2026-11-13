@@ -7,6 +7,7 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ### Added
 
+- OpenRouter provider pinning: `openrouter.routing` in `config.json` maps a model id (or `"*"`) to OpenRouter's `provider` block (`order`, `allow_fallbacks`, `quantizations`…), sent on every request to that model: main agent, subagents, compaction, title, web side calls and the auto-mode reviewer. Eval runs pin with `--or-provider`, `--or-no-fallback` and `--or-quant`, and the trace records `served_by`, the upstream provider that answered each step. OpenRouter's "no provider" error now reads as one Vietnamese line. See `docs/openrouter.md`.
 - `shell`: a command that only does arithmetic runs without a prompt in every permission mode, `ot -p` and evals
   (no ▸▸ classifier request); deny and ask rules still apply. Windows: bare PowerShell expressions with
   `[math]::` functions, printed in the invariant culture; macOS/Linux: `awk 'BEGIN{printf …}'` in the C locale.

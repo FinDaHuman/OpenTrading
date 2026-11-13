@@ -10,8 +10,9 @@ import { loadSkills, skillRoots } from "../../src/core/skills/loader"
 import pkg from "../../package.json"
 import { Cassette } from "./cassette"
 import { ledgerFile, RequestLedger, spentToday } from "./ledger"
-import { parseAblations, parseQuestions, prepareHome, runEval, skillsFor } from "./runner"
-import { traceFile } from "./trace"
+import { describeRouting } from "../../src/core/openrouter-routing"
+import { parseAblations, parseQuestions, prepareHome, routingFromFlags, runEval, servedSummary, skillsFor } from "./runner"
+import { traceFile, type TraceEvent } from "./trace"
 
 /**
  * Runs a question set through the real agent loop and writes a JSONL trace. Spends the user's
@@ -29,6 +30,10 @@ import { traceFile } from "./trace"
  *   --memory        notebook: mỗi câu một sổ ghi nhớ rỗng (prompt có hướng dẫn memory, tool memory_read);
  *                   none: không memory (mặc định của sản phẩm). Bắt buộc nêu rõ, như --model.
  *   --yolo          chế độ ▸▸▸ bỏ qua quyền thay cho danh sách duyệt hẹp (chỉ web_fetch)
+ *   --or-provider   (chỉ model openrouter/…) ghim provider theo thứ tự, vd deepseek hoặc deepinfra/fp8 → provider.order
+ *   --or-no-fallback  không cho OpenRouter chuyển sang provider khác → allow_fallbacks: false
+ *   --or-quant      chỉ dùng các mức quantization này, vd fp8 → provider.quantizations
+ *                   Ghim chỉ lấy từ cờ, không từ config của bạn. Trace ghi served_by (provider thật) mỗi câu.
  */
 
 const REQUESTS_PER_QUESTION = 5
@@ -57,6 +62,9 @@ const record = arg("--mcp-record")
 const replay = arg("--mcp-replay")
 if (record && replay) stop("Chỉ dùng một trong --mcp-record và --mcp-replay.")
 const tape = record ?? replay
+const pin = routingFromFlags(model.provider, { orProvider: arg("--or-provider"), noFallback: process.argv.includes("--or-no-fallback"), quant: arg("--or-quant") })
+if (pin.error) stop(pin.error)
+const routing = pin.routing
 const ablate = arg("--ablate")?.split(",") ?? []
 const ablated = parseAblations(ablate)
 const yolo = process.argv.includes("--yolo")
@@ -65,7 +73,8 @@ const memory = memoryArg === "notebook" || memoryArg === "none" ? memoryArg : st
 const questions = parseQuestions(await readFile(file, "utf8")).filter((q) => !only || only.includes(q.id))
 if (questions.length === 0) stop("Không còn câu hỏi nào sau --only.")
 
-console.log(`${questions.length} câu × ${repeat} lần · ${pick}`)
+console.log(`${questions.length} câu × ${repeat} lần · ${pick}${model.provider === "openrouter" ? ` · ${describeRouting(routing)}` : ""}`)
+for (const warning of pin.warnings) console.log(`Cảnh báo: ${warning}`)
 const realHome = dataDir()
 const ledger = ledgerFile(realHome)
 console.log(`Dự kiến khoảng ${questions.length * repeat * REQUESTS_PER_QUESTION} request. Hôm nay đã dùng ${await spentToday(ledger, pick)}/${cap}.`)
@@ -81,7 +90,7 @@ const home = await mkdtemp(path.join(os.tmpdir(), "ot-eval-"))
 const work = path.join(home, "work")
 const commit = (await Bun.$`git rev-parse --short HEAD`.cwd(import.meta.dir).quiet().nothrow().text()).trim()
 await mkdir(work)
-await prepareHome(realHome, home, model, ablated)
+await prepareHome(realHome, home, model, ablated, routing)
 process.env.OPENTRADING_HOME = home
 const requests = await RequestLedger.open(ledger, pick, cap)
 // The home holds a copy of the keys, and requests already sent are spent quota.
@@ -101,9 +110,18 @@ try {
   if (!runtime.registry.list().some((t) => t.source?.startsWith("mcp:"))) throw new Error("Không có tool MCP nào: kiểm tra kết nối MCP.")
   const target = await resolveTarget(model)
   const { effort, toolSearch, maxSteps } = await loadConfig()
-  const settings = { effort, toolSearch, maxSteps, ablate, memory, permissions: yolo ? "bypass" : "unattended", mcp: cassette?.mode ?? "live", ...(tape ? { mcp_tape: path.basename(tape), mcp_answers: cassette!.size } : {}) }
-  await runEval({ runtime, skills, target, questions, repeat, timeoutMs: minutes * 60_000, write: traceFile(out), version: pkg.version, commit, settings, ledger: requests, ablated, yolo, memory })
+  const settings = { effort, toolSearch, maxSteps, ablate, memory, permissions: yolo ? "bypass" : "unattended", mcp: cassette?.mode ?? "live", ...(routing ? { openrouter_routing: routing } : {}), ...(tape ? { mcp_tape: path.basename(tape), mcp_answers: cassette!.size } : {}) }
+  // Tallied from this run's own answers: --out may name a file that already holds earlier runs.
+  const answers: TraceEvent[] = []
+  const toFile = traceFile(out)
+  const write = (event: TraceEvent) => {
+    if (event.type === "answer") answers.push(event)
+    toFile(event)
+  }
+  await runEval({ runtime, skills, target, questions, repeat, timeoutMs: minutes * 60_000, write, version: pkg.version, commit, settings, ledger: requests, ablated, yolo, memory })
   console.log(`Trace: ${out}`)
+  const served = servedSummary(answers)
+  if (Object.keys(served).length > 0) console.log(`Provider đã trả lời (số bước): ${Object.entries(served).map(([by, n]) => `${by} ${n}`).join(", ")}`)
   if (cassette?.misses) console.log(`${cassette.misses} yêu cầu MCP không có trong bản ghi: lần chạy này không hoàn toàn trên dữ liệu cố định.`)
 } finally {
   await runtime.mcp.stop()

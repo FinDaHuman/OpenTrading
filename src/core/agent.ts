@@ -626,7 +626,8 @@ async function* relay(
           const note = (part.providerMetadata?.google as { finishMessage?: unknown } | undefined)?.finishMessage
           outcome.finishMessage = typeof note === "string" && note.trim() ? note.trim().slice(0, 300) : undefined
           // Every finished step is one model request, usage reported or not (quota counts requests).
-          yield { type: "step" }
+          const served = (part.providerMetadata?.openrouter as { provider?: unknown } | undefined)?.provider
+          yield typeof served === "string" && served ? { type: "step", servedBy: served } : { type: "step" }
           const input = part.usage?.inputTokens
           const output = part.usage?.outputTokens
           if (input === undefined && output === undefined) break
@@ -920,7 +921,7 @@ function requestFor(p: Prepared, messages: ModelMessage[], retry: RetryOptions =
       ? { role: "system", content: p.assembled.system, providerOptions: { anthropic: { cacheControl: { type: "ephemeral" } } } }
       : p.assembled.system
   // Requests are retried by kind of failure (retry.ts); the SDK's own retry stays off.
-  const model = wrapLanguageModel({ model: languageModel(p.target.provider, p.target.model, p.target.apiKey), middleware: retryMiddleware(retry) })
+  const model = wrapLanguageModel({ model: languageModel(p.target.provider, p.target.model, p.target.apiKey, { routing: p.target.routing }), middleware: retryMiddleware(retry) })
   const providerOptions = mergeProviderOptions(thoughtOptions(p.target), effortOptions(p.target, p.effort))
   return { system, request, model, active: activeFor(p.built, request), providerOptions }
 }
