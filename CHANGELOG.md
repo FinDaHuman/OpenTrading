@@ -42,6 +42,12 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ### Fixed
 
+- The stop gate no longer takes an offer that waits on the user or on a source for a broken promise (13/11,
+  eval m3: "Bạn vui lòng … cung cấp giá đóng cửa …, mình sẽ tính toán ngay giúp bạn" was sent back, cost one
+  more request and showed two answers). The last sentence is an offer when the user gives something first
+  ("bạn … cung cấp / gửi / nhập / cho mình biết") or a named source comes back ("khi nguồn hoạt động lại"),
+  before or after "mình sẽ", or when it starts with "nếu bạn…". Waiting on the model ("Bạn chờ chút, mình sẽ
+  lấy giá", "Sau khi nạp tool, mình sẽ…") is still sent back.
 - Every source failed and the model answered empty (13/11, eval m3/m6): the stop gate no longer asks it to
   "answer from the tool results" when none brought data. It names the failed sources and asks for an answer
   about what is missing, tools off then on; the answer-only rescue runs only when some tool returned data. Out
