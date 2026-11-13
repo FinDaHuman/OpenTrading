@@ -45,7 +45,7 @@ test("read-only agents (@chi-doc, ultradesk) get shell for arithmetic only; type
   const shell = chiDoc.find((t) => t.name === "shell")!
   expect(shell).toBe(full.readOnlyVariant!)
   expect(shell.effect).toBeUndefined()
-  expect(shell.description).toContain("Chỉ tính số")
+  expect(shell.description).toContain("Máy tính")
 
   // The ultradesk filter: read-only tools only.
   expect(childTools(reg.list(), (d) => d.readOnly).map((t) => t.name).sort()).toEqual(["mcp__data__quote", "shell"])
@@ -61,10 +61,17 @@ test("a @chi-doc subagent's shell runs arithmetic and refuses anything else with
   const child = childRegistry(reg, { id: "ag-1", type: "phan-tich", description: "x" }, toolFilter({ tools: [READ_ONLY] }))
   const shell = child.get("shell")!
   expect(text(await runTool(shell, { command: ARITH }, ctx(), new RwLock(), child.gate))).toContain("6.91")
-  // Not interactive: a call that asked would say "headless"; this one is blocked outright.
-  const decision = await child.gate!.check(shell, { command: win ? "Get-Date" : "date" }, new AbortController().signal)
-  expect(decision).toMatchObject({ allow: false, reason: "blocked" })
-  expect(decision.message).toContain("chỉ được chạy phép tính thuần")
+  // Anything else: never put to the user (not interactive, an ask would say "headless"); the
+  // model reads a tool error with the accepted form, not a denial telling it to stop.
+  const other = win ? "Get-Date" : "date"
+  expect(await child.gate!.check(shell, { command: other }, new AbortController().signal)).toEqual({ allow: true })
+  const error = await runTool(shell, { command: other }, ctx(), new RwLock(), child.gate).then(
+    () => "",
+    (e: Error) => e.message,
+  )
+  expect(error).toContain("không phải phép tính thuần")
+  expect(error).toContain(win ? "[math]::Round" : "awk 'BEGIN{printf")
+  expect(error).not.toContain("Đừng thử lại")
   // Without a gate the tool itself still refuses.
-  await expect(shell.execute({ command: win ? "Get-Date" : "date" }, ctx())).rejects.toThrow("phép tính thuần")
+  await expect(shell.execute({ command: other }, ctx())).rejects.toThrow("phép tính thuần")
 }, 30_000)

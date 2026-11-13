@@ -132,10 +132,14 @@ export function shellTool(workspace: Workspace, opts: { shell?: ShellInfo } = {}
  * only (math.ts), in the workspace. Anything else is refused at once, never put to the user.
  */
 function mathShellTool(full: ToolDef<ShellInput>, shell: ShellInfo): ToolDef<ShellInput> {
-  const refusal = "Agent này chỉ được chạy phép tính thuần bằng shell (không chạy chương trình, không đọc file)."
+  // A tool error, not a permission denial: the model should retry as arithmetic, not stop.
+  const refusal = `Lệnh này không phải phép tính thuần nên không chạy (agent này chỉ dùng shell để tính số). Viết lại thành biểu thức số. ${mathHint(shell)}`
   return {
     name: "shell",
-    description: `Chỉ tính số, không chạy chương trình hay đọc file. ${mathHint(shell)} Lệnh khác bị từ chối.`,
+    description:
+      "Máy tính: chạy một lệnh chỉ gồm phép tính số và trả kết quả. " +
+      "Dùng khi: cần số tính ra từ số đã có (tỷ lệ, % thay đổi, CAGR, P/E, đổi đơn vị); gộp nhiều phép vào một lệnh. " +
+      `Không dùng khi: chạy chương trình, đọc hay ghi file (bị từ chối). ${mathHint(shell)}`,
     input: z.object({
       command: z.string().min(1).describe("Biểu thức cần tính"),
       description: z.string().max(200).optional().describe("Phép tính này để làm gì, 5–10 từ"),
@@ -144,10 +148,11 @@ function mathShellTool(full: ToolDef<ShellInput>, shell: ShellInfo): ToolDef<She
     source: LOCAL_SOURCE,
     timeoutMs: 30_000,
     maxOutputChars: 4_000,
-    blockFor: (input) => (typeof input.command === "string" && mathOnlyCommand(input.command, shell) ? undefined : refusal),
+    // Arithmetic goes through the gate as `math:` (deny/ask rules apply); anything else never
+    // reaches the user: execute refuses it.
     askFor: (input) => {
       const { command } = input as ShellInput
-      return typeof command === "string" ? `math:${command.trim()}` : undefined
+      return typeof command === "string" && mathOnlyCommand(command, shell) ? `math:${command.trim()}` : undefined
     },
     subject: (input) => input.command,
     summarize: full.summarize,
