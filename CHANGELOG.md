@@ -42,6 +42,11 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ### Fixed
 
+- Harness markup in the answer: a model that copies `<nhac_nho>` (or another harness tag), writes a tool call as
+  text (`<todo_write>{…}</todo_write>`, `<tool_call>`, `<function=…>`) or wraps notes in `<thought>` no longer
+  shows it. It leaves the stream, `ot -p`, evals and the history (`src/core/loop/markup.ts`); a step made only
+  of it counts as empty, so the stop gate sends the model back. Code and a tag named in prose stay. Seen 05/11,
+  08/11 and 13/11 with gemini-3.1-flash-lite (13/11: the whole answer was a self-made todo list in `<nhac_nho>`).
 - `/luandiem` or `/quyetdinh` without a code: typing the code and Enter now opens that subject's form (the
   request was merged into the open one and the form never changed).
 

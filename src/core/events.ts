@@ -63,4 +63,6 @@ export type AgentEvent =
       dataGaps?: string[]
       /** Figures of the answer that no tool result held (stop-gate.ts ungroundedInTurn): measured only. */
       ungrounded?: string[]
+      /** Harness markup taken out of the answer (loop/markup.ts): tag names, measured only. */
+      markup?: string[]
     }

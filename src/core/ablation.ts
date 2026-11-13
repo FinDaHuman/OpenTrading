@@ -11,6 +11,7 @@ export const ABLATIONS = [
   "gate-unfetched",
   "gate-draft",
   "strip-echoes",
+  "strip-markup",
   "tool-nudge",
   "todo-nudge",
   "failure-nudge",

@@ -1,4 +1,5 @@
 import type { Ablations } from "../ablation"
+import { stripMarkup } from "./markup"
 import { answerFigures, sourceNumbers, tracesTo, ungroundedFigures } from "./figures"
 import type { ModelMessage, StepResult, ToolSet } from "ai"
 import { hasOpenTodos, LEGACY_TODO_PREFIX, TODO_PREFIX, TODO_WRITE, type Todo } from "../tools/todos"
@@ -159,8 +160,12 @@ function invisible(text: string) {
 /** A line stripped of markdown emphasis and wrapping parentheses. */
 const bare = (line: string) => line.normalize("NFC").trim().replace(/^[\s*_()]+|[\s*_()]+$/g, "")
 
-/** The text without echoed todo status lines (and the item list printed under one). */
-export function stripEchoes(text: string): string {
+/**
+ * The text without echoed todo status lines (and the item list printed under one), and without
+ * harness markup (loop/markup.ts) unless `markup` is false.
+ */
+export function stripEchoes(text: string, { markup = true }: { markup?: boolean } = {}): string {
+  if (markup) text = stripMarkup(text).text
   const lines = text.split("\n")
   if (!lines.some((line) => ECHO_LINE.test(bare(line)))) return text
   const kept = lines.filter((line) => {

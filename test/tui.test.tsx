@@ -92,6 +92,10 @@ let overflowing = 0
 let childGate: Promise<void> | undefined
 /** A "CON-DOC" subagent waits for this after its first tool (between two model steps). */
 let childAfterTool: Promise<void> | undefined
+/** A model that copies harness tags (13/11, loop/markup.ts): none of it may reach the screen. */
+const MARKUP_REPLY =
+  'Mở đầu.\n<nhac_nho>\nBÍ-MẬT-NHẮC-VIỆC\n</nhac_nho>\n<todo_write>{"todos":[]}</todo_write>\nHPG-ĐÃ-XONG, xem `<bat_bien>` trong code.'
+
 globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   const url = String(input instanceof Request ? input.url : input)
   const auth = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined)).get("authorization")
@@ -230,8 +234,12 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
         headers: { "content-type": "text/event-stream" },
       })
     }
-    // "NHIỀU-MẨU": an answer in 60 tiny deltas.
-    const parts = last.includes("NHIỀU-MẨU") ? Array.from({ length: 60 }, (_, i) => `m${i} `).concat("HẾT-CÂU-TRẢ-LỜI") : REPLY
+    // "NHIỀU-MẨU": an answer in 60 tiny deltas. "MARKUP-GIẢ": harness markup around the answer, 3 characters per delta.
+    const parts = last.includes("NHIỀU-MẨU")
+      ? Array.from({ length: 60 }, (_, i) => `m${i} `).concat("HẾT-CÂU-TRẢ-LỜI")
+      : last.includes("MARKUP-GIẢ")
+        ? (MARKUP_REPLY.match(/[\s\S]{1,3}/g) ?? [])
+        : REPLY
     const body =
       chunk({ role: "assistant", content: "" }) +
       parts.map((content) => chunk({ content })).join("") +
@@ -1100,6 +1108,38 @@ test("the context size follows each step's usage while a turn is still running",
     usageGate = undefined
   }
   await setup.waitFor(() => !state.streaming)
+})
+
+test("harness markup a model writes never shows, not even half a tag while it streams (13/11)", async () => {
+  await setKey("nvidia", "nvapi-good-key")
+  // Every text the answer line held while it streamed.
+  const seen = new Set<string>()
+  const stop = createRoot((dispose) => {
+    createEffect(() => {
+      const last = state.lines.at(-1)
+      if (last?.kind === "assistant") seen.add(last.text)
+    })
+    return dispose
+  })
+  const before = state.lines.length
+  try {
+    await setup.mockInput.typeText("MARKUP-GIẢ nhé")
+    setup.mockInput.pressEnter()
+    await waitMcp(() => !state.streaming && state.lines.slice(before).some((l) => l.kind === "assistant" && l.text.includes("HPG-ĐÃ-XONG")))
+  } finally {
+    stop()
+  }
+  const frame = await setup.waitForFrame((f) => f.includes("HPG-ĐÃ-XONG"))
+  show(frame)
+  for (const text of [...seen, frame]) {
+    expect(text).not.toContain("BÍ-MẬT-NHẮC-VIỆC")
+    expect(text).not.toContain("todo_write")
+    expect(text).not.toMatch(/<\/?nhac_n/)
+  }
+  expect(frame).toContain("Mở đầu.")
+  const answer = state.lines.findLast((l) => l.kind === "assistant")
+  expect(answer?.kind === "assistant" && answer.text).toBe("Mở đầu.\nHPG-ĐÃ-XONG, xem `<bat_bien>` trong code.")
+  expect(JSON.stringify(state.history.at(-1))).not.toContain("BÍ-MẬT")
 })
 
 // Regression: every token was its own store write, so the answer was re-laid-out per token.
