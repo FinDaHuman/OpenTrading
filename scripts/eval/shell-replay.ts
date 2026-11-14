@@ -15,6 +15,8 @@ export interface RecordedCommand {
   command: string
   /** A label to group by (awk-vars, python…). */
   form?: string
+  /** The question the command was written for, when it comes from an eval run. */
+  task?: string
   source?: string
 }
 

@@ -123,6 +123,13 @@ export interface ToolDef<I = any> {
    * `shell`. In ‖ read-only mode such a call asks with "switch to ▸" as an option.
    */
   effect?: "file" | "shell"
+  /**
+   * The call would have to ask, but written another way the tool runs it unasked (shell: arithmetic
+   * in a form the math grammar does not take). Returns what to tell the model: a tool error, read
+   * before the user or the ▸▸ classifier is asked. Not consulted when a rule, an approval or ▸▸▸
+   * already lets the call run.
+   */
+  rewrite?(input: I): string | undefined
   /** Never run this call, whatever the mode or rules (odd Windows path, deleting a drive root). Returns why. */
   blockFor?(input: I): string | undefined
   /** Checks that need no approval (old_string not found, file not read yet): an error goes to the model before anyone is asked. */

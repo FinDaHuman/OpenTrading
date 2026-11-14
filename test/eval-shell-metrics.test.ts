@@ -4,6 +4,7 @@ import { readTrace } from "../scripts/eval/read-trace"
 import { parseQuestions } from "../scripts/eval/runner"
 import { parseLabels, scoreAttempt } from "../scripts/eval/scoring"
 import { parseCommands, replayAll } from "../scripts/eval/shell-replay"
+import { computeIntent } from "../src/core/tools/shell/math"
 import { operandsOf, shellMetrics } from "../scripts/eval/shell-metrics"
 import { shellExecMs, shellRoute } from "../scripts/eval/shell-route"
 import { TRACE_VERSION, type TraceEvent } from "../scripts/eval/trace"
@@ -120,25 +121,27 @@ test("the command forms of issue #268 against the grammar: where each one ends u
   const synthetic = replayAll(commands.filter((c) => c.source !== "r0-gemini-flash-lite"))
   expect(synthetic.commands).toBe(14)
   // Grammar v2: every awk form of the issue runs (was run 3, near 1, ask 10). The python forms
-  // are left: two multi-line ones still reach the gate.
-  expect(synthetic.total).toEqual({ run: 11, near: 1, ask: 2 })
+  // get the form to use: nothing reaches the approval gate any more.
+  expect(synthetic.total).toEqual({ run: 11, near: 3, ask: 0 })
   for (const form of ["awk-one-line", "awk-vars", "awk-printf-parens", "awk-multiline", "awk-long", "awk-newline-in-format"]) expect([form, synthetic.forms[form]!.near + synthetic.forms[form]!.ask]).toEqual([form, 0])
-  expect(synthetic.forms.python).toEqual({ run: 0, near: 1, ask: 2 })
+  expect(synthetic.forms.python).toEqual({ run: 0, near: 3, ask: 0 })
 })
 
 test("the commands gemini-3.1-flash-lite really sent on 14/11 (run R0, both shells): what runs, and what a series still needs", async () => {
   const commands = parseCommands(await Bun.file(path.join(import.meta.dir, "fixtures", "shell-commands.jsonl")).text()).filter((c) => c.source === "r0-gemini-flash-lite")
   const report = replayAll(commands)
   expect(report.commands).toBe(24)
-  // On the grammar before v2: run 17, ask 7. v2 takes the PowerShell command with variables.
-  expect(report.total).toEqual({ run: 18, near: 0, ask: 6 })
+  // On the grammar before v2: run 17, ask 7. v2 takes the PowerShell command with variables;
+  // the six that walk a series are told how to write it, instead of being denied.
+  expect(report.total).toEqual({ run: 18, near: 6, ask: 0 })
   expect(report.forms["ps-expression"]).toEqual({ run: 9, near: 0, ask: 0 })
   expect(report.forms["awk-expression"]).toEqual({ run: 8, near: 0, ask: 0 })
   expect(report.forms["ps-vars"]).toEqual({ run: 1, near: 0, ask: 0 })
   // A series (MA20, 30 volumes, volatility, drawdown) was written as an array with a loop
   // (`split(…)` + `for` in awk, `@(…)` + `foreach` in PowerShell): not arithmetic-only yet.
-  expect(report.forms["ps-series-loop"]).toEqual({ run: 0, near: 0, ask: 2 })
-  expect(report.forms["awk-series-loop"]).toEqual({ run: 0, near: 0, ask: 4 })
+  expect(report.forms["ps-series-loop"]).toEqual({ run: 0, near: 2, ask: 0 })
+  expect(report.forms["awk-series-loop"]).toEqual({ run: 0, near: 4, ask: 0 })
+  for (const c of commands.filter((c) => c.form?.endsWith("series-loop"))) expect([c.task, computeIntent(c.command, { kind: c.shell })]).toEqual([c.task, "series"])
 })
 
 /** A right answer to each compute question, written the way the prompt asks (Vietnamese number format). */

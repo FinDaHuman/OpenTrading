@@ -25,6 +25,21 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ### Changed
 
+- `shell`: arithmetic written in a form the math grammar does not take now comes back as a tool error that says
+  why and shows the form to use, instead of an approval prompt (TUI) or a denial that forbids rewriting the
+  command (`ot -p`, evals): a series walked with an array or a loop (`split` + `for`, `@(…)` + `foreach`,
+  `Measure-Object`), python or node (`python3 -c`, a heredoc script that only imports `math` and prints),
+  other spellings (`1,2*3`, `echo $((1+2))`), and the right form with a `workdir` it does not need. The check
+  moved from before the gate into it (`ToolDef.rewrite`): a command the user already allowed (an "always"
+  rule, a session approval, ▸▸▸) runs as written, an `ask` rule still asks, and ▸▸ spends no classifier request
+  on it. A command that does more than print numbers (a file, another module, a pipe) is not taken for
+  arithmetic. Baseline run of 14/11: after a denied arithmetic command the model computed in its head and 5 of
+  7 answers were wrong; after a command that ran, 17 of 17 were right.
+- `prompts/tools.md`: figures already in the data are used as they are and a one-step unit change (×/÷ 10^n) may
+  be done in the head; every other computation goes through one arithmetic-only `shell` command. A command that
+  fails is rewritten in the form its error names before the "tự tính" fallback (issue #278 P4/N4).
+- `shell` description: the multi-step example, no "Python script for figures" among its uses, and a line saying
+  that arithmetic in Python, arrays or loops comes back with the form to use.
 - `shell` arithmetic-only commands take the forms models really write (issue #268: 56% of the commands of a
   benchmark run were sent to the approval gate and denied). Both shells now accept several statements, on one
   line or many, with variables: `awk 'BEGIN{ k = 250/119; a = log(66.3/73.5)*k; printf "%.4f\n", a }'` and

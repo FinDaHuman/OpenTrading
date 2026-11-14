@@ -82,7 +82,8 @@ export interface ApprovalRequest {
 /**
  * `reason` says why a call did not run: the user said no, the turn was cancelled, nobody could
  * be asked, a deny rule matched, auto mode blocked it, it can never run (`blocked`), or an
- * "always" rule could not be saved (`unsaved`).
+ * "always" rule could not be saved (`unsaved`), or the tool wants the call written another way
+ * (`rewrite`: a tool error with the form to use, never put to the user).
  */
 export interface Decision extends DenyInfo {
   allow: boolean
@@ -323,6 +324,13 @@ export class PermissionGate {
       if (this.current === "bypass") return this.ran()
       if (scope?.startsWith("scratch:") && this.approvalsApply(def)) return this.ran()
       if (this.approvalsApply(def) && (this.sessionCovers(def, input, key) || (await this.allowedAlways(def, input)))) return this.ran()
+    }
+    // Nothing above lets it run. Before anyone is asked (the user, or the ▸▸ classifier with a
+    // request): a call the tool runs unasked once it is written its way goes back to the model
+    // with that form. An ask rule means the user wants to see such calls, so it is not used then.
+    if (!userOnly(scope) && !lists.ask.some((r) => listMatches(r, def, subject))) {
+      const rewrite = def.rewrite?.(input)
+      if (rewrite) return { allow: false, reason: "rewrite", message: rewrite }
     }
     let notice: string | undefined
     let handedOver: AutoBlock | undefined

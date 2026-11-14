@@ -381,7 +381,6 @@ export function awkWithPrecision(command: string): string {
 
 /** Only numbers, operators, brackets, commas and a few function names: an expression, whatever its form. */
 const LOOKS_NUMERIC = /^[\d\s.,+\-*/%^()]+$/
-const NUMERIC_CALL = /^(?:python3?|py)\s+-c\s+["']print\((.*)\)["']$|^node\s+-e\s+["']console\.log\((.*)\)["']$/i
 const ECHO_ARITH = /^(?:echo\s+\$\(\((.*)\)\)|expr\s+(.*)|echo\s+["']?(.*?)["']?\s*\|\s*bc(?:\s+-l)?)$/i
 
 const numeric = (text: string | undefined) => {
@@ -392,24 +391,118 @@ const numeric = (text: string | undefined) => {
 }
 
 /**
- * A command that is clearly an attempt at arithmetic in a form the grammar does not take
- * (`python -c "print(1.2*3)"`, `1,2*3`, `echo $((1+2))`). It gets a tool error with the accepted
- * form instead of the approval path: a headless denial tells the model to stop and never
- * rewrite the command, the loop calculate used to fall into.
+ * Why a command that computes numbers is not in the grammar:
+ * - "series": it walks a list of numbers with an array or a loop (`split` + `for`, `@(…)` +
+ *   `foreach`, `Measure-Object`). Seen 14/11 with gemini-3.1-flash-lite: 6 of 24 commands.
+ * - "interpreter": python or node (issue #268: 17 of 51 denied commands).
+ * - "form": arithmetic the shell would run, written another way (`1,2*3`, `echo $((1+2))`).
  */
-export function mathNearMiss(command: string, shell: Pick<ShellInfo, "kind">): boolean {
+export type ComputeMiss = "series" | "interpreter" | "form"
+
+/** A python or node one-liner or heredoc script; the code is group 1 of whichever matched. */
+const PYTHON_FORMS = [
+  /^(?:python3?|py)\s+-c\s+"([^"]*)"$/i,
+  /^(?:python3?|py)\s+-c\s+'([^']*)'$/i,
+  /^(?:python3?|py)\s+(?:-\s+)?<<-?\s*['"]?(\w+)['"]?\r?\n([\s\S]*?)\r?\n\1$/i,
+  /^cat\s*>\s*(\S+\.py)\s*<<-?\s*['"]?(\w+)['"]?\r?\n([\s\S]*?)\r?\n\2\s*(?:\r?\n|;|&&)\s*(?:python3?|py)\s+\1$/i,
+]
+const NODE_FORMS = [/^node\s+-e\s+"([^"]*)"$/i, /^node\s+-e\s+'([^']*)'$/i]
+/** Anything but printing numbers: another module, files, the system, code built at run time. */
+const PYTHON_OTHER = /\b(?:import|from)\s+(?!math\b|statistics\b)|\bopen\s*\(|__|\b(?:os|sys|subprocess|socket|shutil|pathlib|requests|urllib|exec|eval|compile|input|globals|locals|getattr|setattr|with)\b/
+const NODE_OTHER = /\b(?:require|import|process|child_process|fetch|eval|Function|globalThis|Bun|Deno)\b|\bfs\b/
+/** awk beyond printing numbers: a program, a file, a pipe. */
+const AWK_OTHER = /\b(?:system|getline|close|fflush|ENVIRON|ARGV|PROCINFO)\b|(?:^|[^|])\|(?:[^|]|$)|>>/
+const AWK_PROGRAM = /^awk[ \t]+(?:-v[ \t]+\w+=[\w.+-]+[ \t]+)*'\s*BEGIN\s*\{([^']*)\}\s*'$/
+const SERIES = /\bfor(?:each)?\s*\(|\bwhile\s*\(|\bsplit\s*\(|@\(|\[\s*[\w$-]|Measure-Object|ForEach-Object/i
+
+/** `>` outside brackets on a print line is a redirect to a file, not a comparison. */
+function awkRedirects(body: string): boolean {
+  return body.split(/[;\n{}]/).some((statement) => {
+    if (!/^\s*printf?\b/.test(statement)) return false
+    let flat = statement.replace(/"[^"]*"/g, '""')
+    for (let last = ""; last !== flat; ) {
+      last = flat
+      flat = flat.replace(/\([^()]*\)/g, "")
+    }
+    return flat.includes(">")
+  })
+}
+
+/**
+ * What a PowerShell script may hold and still be nothing but arithmetic on numbers: when every
+ * piece below is taken out, nothing is left. Only ever used to answer with the accepted form.
+ */
+const POWERSHELL_PIECES = [
+  /#[^\n]*/g,
+  /"[\w\s{}:.,%#=()\-+/]*"|'[\w\s{}:.,%#=()\-+/]*'/g,
+  /\[math\]::[a-z0-9]+/gi,
+  /\[(?:double|single|float|decimal|int|int32|int64|long)(?:\[\])?\]/gi,
+  /\$(?:_|[a-z_]\w*)(?![\w:])/gi,
+  /\.(?:Count|Length|Sum|Average|Maximum|Minimum|ToString)\b/gi,
+  /\b(?:Measure-Object|ForEach-Object|Write-Output|Write-Host)\b/gi,
+  /-(?:Sum|Average|Maximum|Minimum|lt|le|gt|ge|eq|ne|and|or|not|f)\b/gi,
+  /\b(?:foreach|for|in|if|else|elseif|while)\b/gi,
+  /\d+(?:\.\d+)?(?:e[+-]?\d+)?/gi,
+  /[\s+\-*/%=<>!()[\]{}@,;|.]/g,
+]
+
+function powershellComputes(text: string): boolean {
+  let left = text
+  for (const piece of POWERSHELL_PIECES) left = left.replace(piece, " ")
+  return left.trim() === "" && /\d/.test(text) && /[+\-*/%]|\[math\]/i.test(text)
+}
+
+/**
+ * A command that is clearly an attempt at arithmetic in a form the grammar does not take
+ * (`python -c "print(1.2*3)"`, `1,2*3`, awk with `split` and a loop, a PowerShell array). It
+ * gets a tool error with the accepted form instead of the approval path: a headless denial
+ * tells the model to stop and never rewrite the command, and it then computes in its head
+ * (issue #268; 14/11 run R0: 5 of 7 such answers were wrong).
+ *
+ * This never lets a command run. A wrong "yes" only costs the user one approval prompt they
+ * might have wanted, so the checks err towards saying no when a command does more than print
+ * numbers (another module, a file, a pipe, the environment).
+ */
+export function computeIntent(command: string, shell: Pick<ShellInfo, "kind">): ComputeMiss | undefined {
   const text = command.trim()
-  if (text === "" || /[\r\n]/.test(text) || mathOnlyCommand(text, shell)) return false
-  const call = NUMERIC_CALL.exec(text)
-  if (call) return numeric(call[1] ?? call[2]) && !/import|__/.test(text)
-  const echo = ECHO_ARITH.exec(text)
-  if (echo) return numeric(echo[1] ?? echo[2] ?? echo[3])
-  return /[+\-*/%^]/.test(text) && numeric(text)
+  if (text === "" || text.length > 4 * MATH_MAX_CHARS || mathOnlyCommand(text, shell)) return undefined
+  for (const form of PYTHON_FORMS) {
+    const code = form.exec(text)?.at(-1)
+    if (code !== undefined) return /\bprint\s*\(/.test(code) && /\d/.test(code) && !PYTHON_OTHER.test(code) ? "interpreter" : undefined
+  }
+  for (const form of NODE_FORMS) {
+    const code = form.exec(text)?.[1]
+    if (code !== undefined) return /console\.log\s*\(/.test(code) && /\d/.test(code) && !NODE_OTHER.test(code) ? "interpreter" : undefined
+  }
+  const awk = AWK_PROGRAM.exec(text)
+  if (awk) {
+    const body = awk[1]!
+    if (AWK_OTHER.test(body.replace(/"[^"]*"/g, '""')) || awkRedirects(body) || !/\bprintf?\b/.test(body)) return undefined
+    return SERIES.test(body) ? "series" : "form"
+  }
+  if (!/[\r\n]/.test(text)) {
+    const echo = ECHO_ARITH.exec(text)
+    if (echo) return numeric(echo[1] ?? echo[2] ?? echo[3]) ? "form" : undefined
+    if (/[+\-*/%^]/.test(text) && numeric(text)) return "form"
+  }
+  if ((shell.kind === "pwsh" || shell.kind === "powershell") && powershellComputes(text)) return SERIES.test(text) ? "series" : "form"
+  return undefined
+}
+
+/** The command is arithmetic in a form the grammar does not take (see computeIntent). */
+export const mathNearMiss = (command: string, shell: Pick<ShellInfo, "kind">): boolean => computeIntent(command, shell) !== undefined
+
+/** What to tell the model about its command, before the accepted form (mathHint). */
+export function rewriteAdvice(miss: ComputeMiss, shell: Pick<ShellInfo, "kind">): string {
+  const ps = shell.kind === "pwsh" || shell.kind === "powershell"
+  if (miss === "series") return "Lệnh dùng mảng hoặc vòng lặp. Viết thẳng từng số của chuỗi vào biểu thức (trung bình là (a+b+c)/3) và gán mỗi bước trung gian vào một biến."
+  if (miss === "interpreter") return `Lệnh dùng Python hoặc Node. Viết lại phép tính đó bằng ${ps ? "biểu thức PowerShell" : "awk"} theo dạng dưới đây.`
+  return ""
 }
 
 /** The arithmetic form for this machine's shell, for the tool description. */
 export function mathHint(shell: Pick<ShellInfo, "kind">): string {
   return shell.kind === "pwsh" || shell.kind === "powershell"
     ? "Tính số: lệnh chỉ gồm phép tính, ví dụ `$g = 128.4/112 - 1; $g*100; [math]::Pow(1 + $g, 3)` (mỗi câu lệnh cách nhau bằng ; hoặc xuống dòng; biến $ten phải gán trước khi dùng; biểu thức trần in ra giá trị; hàm chỉ [math]::Round/Abs/Sqrt/Pow/Log/Log10/Exp/Max/Min/Floor/Ceiling/Truncate; không mảng, không vòng lặp: chuỗi số thì viết thẳng (a+b+c)/3) chạy ngay, không cần người dùng duyệt. Giữ đủ chữ số ở bước trung gian, chỉ làm tròn ở kết quả cuối."
-    : "Tính số: lệnh dạng `awk 'BEGIN{ g = 128.4/112 - 1; printf \"%.10g %.10g\\n\", g*100, (1+g)^3 }'` (mỗi câu lệnh cách nhau bằng ; hoặc xuống dòng; biến phải gán trước khi dùng; in bằng print hoặc printf; hàm chỉ sqrt/log/exp/int; so sánh và ?: đặt trong ngoặc; không mảng, split hay vòng lặp: chuỗi số thì viết thẳng (a+b+c)/3) chạy ngay, không cần người dùng duyệt. Giữ đủ chữ số ở bước trung gian, chỉ làm tròn ở kết quả cuối."
+    : "Tính số: lệnh dạng `awk 'BEGIN{ g = 128.4/112 - 1; printf \"%.15g %.15g\\n\", g*100, (1+g)^3 }'` (mỗi câu lệnh cách nhau bằng ; hoặc xuống dòng; biến phải gán trước khi dùng; in bằng print hoặc printf; hàm chỉ sqrt/log/exp/int; so sánh và ?: đặt trong ngoặc; không mảng, split hay vòng lặp: chuỗi số thì viết thẳng (a+b+c)/3) chạy ngay, không cần người dùng duyệt. Giữ đủ chữ số ở bước trung gian, chỉ làm tròn ở kết quả cuối."
 }
