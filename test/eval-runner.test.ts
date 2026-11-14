@@ -4,6 +4,7 @@ import os from "node:os"
 import path from "node:path"
 import { z } from "zod"
 import { tempDirs } from "./helpers/temp"
+import { chunkFor, sse } from "./helpers/chat"
 
 const temp = tempDirs()
 
@@ -42,9 +43,7 @@ let hang = false
 /** Streamed requests fail with 429 this many times, then work. */
 let failFirst = 0
 
-const sse = (chunks: object[]) =>
-  new Response(chunks.map((c) => `data: ${JSON.stringify(c)}\n\n`).join("") + "data: [DONE]\n\n", { headers: { "content-type": "text/event-stream" } })
-const chunk = (delta: object, finish: string | null = null) => ({ id: "c", object: "chat.completion.chunk", created: 1, model: "tooly", choices: [{ index: 0, delta, finish_reason: finish }] })
+const chunk = chunkFor("tooly")
 
 const realFetch = globalThis.fetch
 globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {

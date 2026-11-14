@@ -5,6 +5,7 @@ import path from "node:path"
 import type { ModelMessage } from "ai"
 import { z } from "zod"
 import { loadedTools } from "../src/core/tools/loaded"
+import { chunkFor, sse } from "./helpers/chat"
 
 // Isolated state dir before core modules read it.
 const home = await mkdtemp(path.join(os.tmpdir(), "ot-agent-"))
@@ -57,17 +58,7 @@ let respond: ((body: Body, n: number) => Response | undefined) | undefined
 const NUDGE = "Hãy trả lời câu hỏi của người dùng dựa trên kết quả tool"
 const TOOL_NUDGE_START = "Nếu còn cần dữ liệu, gọi cùng lúc"
 
-const sse = (chunks: object[]) =>
-  new Response(chunks.map((c) => `data: ${JSON.stringify(c)}\n\n`).join("") + "data: [DONE]\n\n", {
-    headers: { "content-type": "text/event-stream" },
-  })
-const chunk = (delta: object, finish: string | null = null) => ({
-  id: "c",
-  object: "chat.completion.chunk",
-  created: 1,
-  model: "tooly",
-  choices: [{ index: 0, delta, finish_reason: finish }],
-})
+const chunk = chunkFor("tooly")
 
 const realFetch = globalThis.fetch
 globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {

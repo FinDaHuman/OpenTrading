@@ -5,6 +5,7 @@ import path from "node:path"
 import { z } from "zod"
 import { until } from "./helpers/tui"
 import { tempDirs } from "./helpers/temp"
+import { chunkFor, sse } from "./helpers/chat"
 
 const temp = tempDirs()
 
@@ -52,18 +53,7 @@ let childSlowReasoning = false
 /** The child sends one reasoning chunk, then the stream never closes (stall tests). */
 let childDanglingStream = false
 
-const sse = (chunks: object[]) =>
-  new Response(chunks.map((c) => `data: ${JSON.stringify(c)}\n\n`).join("") + "data: [DONE]\n\n", {
-    headers: { "content-type": "text/event-stream" },
-  })
-const chunk = (delta: object, finish: string | null = null, extra: object = {}) => ({
-  id: "c",
-  object: "chat.completion.chunk",
-  created: 1,
-  model: "tooly",
-  choices: [{ index: 0, delta, finish_reason: finish }],
-  ...extra,
-})
+const chunk = chunkFor("tooly")
 let ids = 0
 const toolCalls = (calls: Call[]) =>
   sse([
