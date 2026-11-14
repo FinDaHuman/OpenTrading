@@ -555,6 +555,13 @@ test("an invalid key surfaces as a Vietnamese error line", async () => {
   await setup.waitFor(() => !state.streaming)
 })
 
+/**
+ * Ends the "press Ctrl+C/Ctrl+D again to exit" window at once, so the next key starts afresh. Only the
+ * test of the window itself waits it out (800 ms, EXIT_WINDOW_MS); four more 900 ms sleeps sat on the
+ * slowest file of the suite.
+ */
+const disarmExit = () => setState("exitArmed", undefined)
+
 const waitMcp = async (pred: () => boolean, what = pred.toString()) => {
   // Spawning or stopping the server takes real time, so poll the clock instead of render passes.
   for (let i = 0; i < 200 && !pred(); i++) await new Promise((r) => setTimeout(r, 100))
@@ -1523,10 +1530,10 @@ test("Ctrl+C like Claude Code: the first press clears the draft and says press a
   await waitMcp(() => exits === before + 1)
 
   // Ctrl+D counts only on an empty prompt.
-  await new Promise((r) => setTimeout(r, 900))
+  disarmExit()
   setup.mockInput.pressKey("d", { ctrl: true })
   await setup.waitForFrame((f) => f.includes("Nhấn Ctrl+D lần nữa để thoát"))
-  await new Promise((r) => setTimeout(r, 900))
+  disarmExit()
 })
 
 test("Ctrl+C while answering stops the answer (and arms exit); on an approval it denies", async () => {
@@ -1558,7 +1565,7 @@ test("Ctrl+C while answering stops the answer (and arms exit); on an approval it
     callSlowTool = false
     runtime.registry.unregister("cho_lau")
   }
-  await new Promise((r) => setTimeout(r, 900))
+  disarmExit()
 
   runtime.registry.register({ name: "xoa_thu", description: "Xoá (tool thử)", input: z.object({}), readOnly: false, execute: async () => "đã xoá" })
   const decision = runtime.permissions.check(runtime.registry.get("xoa_thu")!, {}, new AbortController().signal, "test · xoa_thu")
@@ -1567,6 +1574,8 @@ test("Ctrl+C while answering stops the answer (and arms exit); on an approval it
   expect((await decision).allow).toBe(false)
   expect(exits).toBe(before)
   runtime.registry.unregister("xoa_thu")
+  // Not only the exit window: with disarmExit() here the tests after this one failed under
+  // --parallel=8 (4/4 runs) though they passed with the file alone. Cause not found; keep the wait.
   await new Promise((r) => setTimeout(r, 900))
 })
 
@@ -3316,7 +3325,7 @@ test("ultradesk: the keyword is hinted while typed; /desk on|off shows on the mo
   show(frame)
   setup.mockInput.pressKey("c", { ctrl: true })
   await setup.waitForFrame((f) => !f.includes("ultradesk so sánh FPT"))
-  await new Promise((r) => setTimeout(r, 900))
+  disarmExit()
   await setup.mockInput.typeText("/desk on")
   setup.mockInput.pressEnter()
   frame = await setup.waitForFrame((f) => f.includes("desk ●"))

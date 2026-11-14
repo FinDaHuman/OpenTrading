@@ -19,7 +19,7 @@
     "install:global": "bun ./src/cli/install.ts",
     "uninstall:global": "bun ./src/cli/install.ts --uninstall",
     "typecheck": "tsc --noEmit",
-    "test": "bun test --parallel=6 --timeout=20000"
+    "test": "bun test --parallel=8 --timeout=20000"
   },
   "dependencies": {
     "@ai-sdk/alibaba": "2.0.82",
