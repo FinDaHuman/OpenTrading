@@ -405,9 +405,12 @@ export function ranDataTool(messages: readonly ModelMessage[]): boolean {
 }
 
 /** No answer in it: nothing visible once echoed todo lines are gone. */
-/** The text holds a tool call written as markup (it never ran). */
+/**
+ * The text holds a tool call written as markup (it never ran). A fake todo_write is not counted:
+ * like a real one, it is no reason to hand the tools back (the empty-answer rescue decides).
+ */
 export function isTextCall(text: string): boolean {
-  return stripMarkup(text).tags.some(isCallTag)
+  return stripMarkup(text).tags.some((tag) => tag !== TODO_WRITE && isCallTag(tag))
 }
 
 export function isEmptyAnswer(text: string): boolean {

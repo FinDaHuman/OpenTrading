@@ -35,7 +35,11 @@ test("a step that is only a tool call written as text is asked for the real call
   expect(judgeStop(dsml, [])).toEqual({ action: "continue", kind: "text-call", nudge: RESCUE_TEXT_CALL, toolChoice: "auto" })
   // Again: an empty answer like any other (after "text-call", the second try of the empty rescue).
   expect(judgeStop(dsml, ["text-call"])).toMatchObject({ action: "continue", kind: "empty" })
+  // After a tools-off rescue, the step most likely to write a call as text: still asked, tools on.
+  expect(judgeStop(dsml, ["empty"])).toMatchObject({ action: "continue", kind: "text-call", toolChoice: "auto" })
   expect(judgeStop(dsml, ["empty", "empty"])).toEqual({ action: "give-up", kind: "empty" })
+  // A fake todo_write is judged as before (tools off first right after tool results).
+  expect(judgeStop(step({ text: '<todo_write>{"todos":[]}</todo_write>', afterTools: true }), [])).toMatchObject({ kind: "empty", toolChoice: "none" })
   expect(judgeStop(dsml, [], new Set(["gate-text-call"]))).toMatchObject({ kind: "empty" })
   expect(judgeStop(step({ text: '<tool_call>vn_quote_history<param_key>limit</param_key></tool_call>' }), [])).toMatchObject({ kind: "text-call" })
   // A copied harness tag or a working note is no call; a call beside a real answer is just removed.
