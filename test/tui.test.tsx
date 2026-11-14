@@ -562,7 +562,7 @@ test("an invalid key surfaces as a Vietnamese error line", async () => {
 
 /**
  * Ends the "press Ctrl+C/Ctrl+D again to exit" window at once, so the next key starts afresh. Only the
- * test of the window itself waits it out (800 ms, EXIT_WINDOW_MS); four more 900 ms sleeps sat on the
+ * test of the window itself waits it out (800 ms, EXIT_WINDOW_MS); five more 900 ms sleeps sat on the
  * slowest file of the suite.
  */
 const disarmExit = () => setState("exitArmed", undefined)
@@ -1579,9 +1579,11 @@ test("Ctrl+C while answering stops the answer (and arms exit); on an approval it
   expect((await decision).allow).toBe(false)
   expect(exits).toBe(before)
   runtime.registry.unregister("xoa_thu")
-  // Not only the exit window: with disarmExit() here the tests after this one failed under
-  // --parallel=8 (4/4 runs) though they passed with the file alone. Cause not found; keep the wait.
-  await new Promise((r) => setTimeout(r, 900))
+  disarmExit()
+  // The denied prompt leaves on the next render; until then it still takes keys. Ending here without
+  // waiting made the next tests' keys go to it (8 failures per --parallel=8 run, 4/4 runs); a 900 ms
+  // sleep used to cover this.
+  await setup.waitForFrame((f) => !f.includes("Cần xác nhận"))
 })
 
 test("highlighting with the mouse copies the words only (no ● / ⎿, no trailing spaces) and says so", async () => {
