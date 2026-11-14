@@ -84,8 +84,6 @@ beforeEach(async () => {
 })
 afterEach(async () => {
   realClock()
-  if (setup) await mounted()
-  mounted = async () => {}
   setup?.renderer.destroy()
   setup = undefined
   if (runtime) {
@@ -125,26 +123,8 @@ function otherWindow() {
   return store
 }
 
-/**
- * Resolves once the App's startup (onMount) has run to its end. The renderer going away does not stop
- * it, so a test ending first left it writing into the next test's state (seen with --randomize).
- * With the notebook, the last thing onMount does is ask the notebook for its problems; another
- * memory choice has no such call, so only the provider catalog (the slow part) is waited for.
- */
-let mounted: () => Promise<void> = async () => {}
-
 async function start(choice: MemoryChoice = "notebook", height = 44) {
-  const memory = createMemory(choice, home)
-  let ended = false
-  const problems = memory.problems?.bind(memory)
-  if (problems) {
-    memory.problems = () => {
-      if (new Error().stack?.includes("app.tsx")) ended = true
-      return problems()
-    }
-  }
-  mounted = () => (problems ? until(() => ended, 10_000, "the app's startup") : until(() => Object.keys(state.catalog).length > 0, 10_000, "the catalog"))
-  runtime = initRuntime({ home, skills: () => [], memory })
+  runtime = initRuntime({ home, skills: () => [], memory: createMemory(choice, home) })
   setup = await testRender(() => <App runtime={runtime!} onExit={() => {}} />, { width: 110, height, exitOnCtrlC: false })
   await frameWith("Hỏi về thị trường")
 }
