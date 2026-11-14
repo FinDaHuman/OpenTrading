@@ -3274,9 +3274,13 @@ test("background subagent: /clear stops it and its result never reaches the new 
     setup.mockInput.pressEnter()
     await waitMcp(() => !state.streaming && Object.values(state.agents).some((a) => a.background && a.status !== "completed" && a.status !== "stopped"))
     const id = Object.values(state.agents).find((a) => a.background && (a.status === "running" || a.status === "queued"))!.id
+    const old = currentSession().id
     await setup.mockInput.typeText("/clear")
     setup.mockInput.pressEnter()
     await waitMcp(() => runtime.subagents.get(id)?.status === "stopped")
+    // /clear has switched to the new conversation (its run was stopped on the way out): only then
+    // do the checks below say anything. Under full CPU load, 50 ms after the stop was not enough.
+    await until(() => currentSession().id !== old, 10_000, "/clear to start the new conversation")
     await new Promise((r) => setTimeout(r, 50))
     expect(state.notices).toEqual([])
     expect(state.lines.some((l) => l.kind === "agent-notice")).toBe(false)
