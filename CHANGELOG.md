@@ -48,6 +48,8 @@ adopt Semantic Versioning when it exposes a stable public API.
   ("bạn … cung cấp / gửi / nhập / cho mình biết") or a named source comes back ("khi nguồn hoạt động lại"),
   before or after "mình sẽ", or when it starts with "nếu bạn…". Waiting on the model ("Bạn chờ chút, mình sẽ
   lấy giá", "Sau khi nạp tool, mình sẽ…") is still sent back.
+- The gap rescue (every source failed, empty answer) now also tells the model not to say it is fixing or
+  reconnecting the source (13/11, eval m6: "Mình đang thực hiện các bước khắc phục…", work nothing does).
 - Every source failed and the model answered empty (13/11, eval m3/m6): the stop gate no longer asks it to
   "answer from the tool results" when none brought data. It names the failed sources and asks for an answer
   about what is missing, tools off then on; the answer-only rescue runs only when some tool returned data. Out

@@ -87,9 +87,13 @@ export const sourcesFailed = (last: Pick<LastStep, "gaps" | "fetchedData">) => !
 /** How the gap rescue starts: the loop leaves out the failure reminder beside it (same gaps). */
 export const GAPS_RESCUE_START = "<nhac_nho>\nCác nguồn sau chưa trả dữ liệu trong lượt này:"
 
-/** An empty answer when every data source of the turn failed: answer about what is missing. */
+/**
+ * An empty answer when every data source of the turn failed: answer about what is missing. 13/11
+ * eval m6: after this rescue the model wrote "Mình đang thực hiện các bước khắc phục để kết nối
+ * lại với nguồn dữ liệu mới", work nothing in the harness does, hence the clause against it.
+ */
 export function rescueGaps(gaps: readonly string[]): string {
-  return `${GAPS_RESCUE_START} ${gaps.join(", ")}. Viết ngay câu trả lời cho người dùng: nói rõ phần nào chưa lấy được và vì sao (nguồn lỗi, quá thời gian), dùng phần dữ liệu khác nếu đã có, không tự điền số cho phần thiếu, gợi ý thử lại sau. Không viết dòng nhắc việc hay thẻ hệ thống.\n</nhac_nho>`
+  return `${GAPS_RESCUE_START} ${gaps.join(", ")}. Viết ngay câu trả lời cho người dùng: nói rõ phần nào chưa lấy được và vì sao (nguồn lỗi, quá thời gian), dùng phần dữ liệu khác nếu đã có, không tự điền số cho phần thiếu, gợi ý thử lại sau. Không viết là bạn đang khắc phục hay kết nối lại nguồn. Không viết dòng nhắc việc hay thẻ hệ thống.\n</nhac_nho>`
 }
 
 /** Last empty-answer rescue: data is in the turn, write the final answer now. */
