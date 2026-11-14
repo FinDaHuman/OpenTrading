@@ -38,6 +38,15 @@ jobs:
       # Types do not depend on the OS: checked once.
       - if: runner.os == 'Linux'
         run: bun run typecheck
+      # Experiment: on Windows the memory tests (SQLite, a fresh store per test) have stalled for
+      # 20-47 s, all four workers at once. Defender scans every new file; keep it out of the temp
+      # folders and the checkout, and print its state first so the logs say whether it was on.
+      - if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Get-MpComputerStatus | Format-List AMRunningMode, RealTimeProtectionEnabled, OnAccessProtectionEnabled
+          Add-MpPreference -ExclusionPath $env:RUNNER_TEMP, $env:TEMP, $env:GITHUB_WORKSPACE
+          (Get-MpPreference).ExclusionPath
       # Files run in parallel worker processes, each file in a fresh global (implies --isolate),
       # so one file's leftover state cannot reach the next. With every CPU busy, a test that
       # spawns processes passed the default 5 s on the Windows runner: 20 s each here; a real
