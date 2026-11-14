@@ -295,6 +295,22 @@ beforeAll(async () => {
   // waitFor/waitForFrame count frames and give up once the renderer idles. The app draws on
   // demand in a chat (the background holds still there), so keep the frame clock ticking.
   setup.renderer.requestLive()
+  // OpenTUI's waitFor/waitForFrame give up after 20 frames (~0.33 s), whatever the test timeout says.
+  // With every CPU busy the app is correct but late: a streamed answer reached the screen after more
+  // than 20 frames. In this file both keep their own behaviour but try again until 5 s have passed.
+  const patient = <A extends unknown[], R>(wait: (...args: A) => Promise<R>) =>
+    async (...args: A): Promise<R> => {
+      const end = Date.now() + 5_000
+      for (;;) {
+        try {
+          return await wait(...args)
+        } catch (error) {
+          if (Date.now() > end || !String(error).includes("Timed out waiting")) throw error
+        }
+      }
+    }
+  setup.waitForFrame = patient(setup.waitForFrame)
+  setup.waitFor = patient(setup.waitFor)
   // The app sets the provider catalog at the end of its startup reads (skills first): about 0.1 s
   // alone, seconds with every CPU busy. /connect and /model list nothing before it.
   await until(() => Object.keys(state.catalog).length > 0, 15_000, "the app's startup reads")
