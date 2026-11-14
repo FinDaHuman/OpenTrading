@@ -1,0 +1,134 @@
+[
+  {
+    "id": "compute-01-pct",
+    "group": "B",
+    "question": "Bài kiểm tra tính toán: chỉ dùng đúng các số cho trong câu hỏi này, không cần lấy thêm dữ liệu. Giá đóng cửa HPG ngày 30/09/2026 là 25.350 đồng, ngày 31/10/2026 là 27.100 đồng. HPG thay đổi bao nhiêu % giữa hai ngày? Ghi 4 chữ số thập phân.",
+    "now": "2026-11-13T15:30:00+07:00",
+    "expected": {
+      "kind": "number",
+      "value": 6.903353057199202,
+      "tolerance_pct": 0.05
+    }
+  },
+  {
+    "id": "compute-02-cagr",
+    "group": "B",
+    "question": "Bài kiểm tra tính toán: chỉ dùng đúng các số cho trong câu hỏi này, không cần lấy thêm dữ liệu. Doanh thu của một doanh nghiệp năm 2021 là 35.657 tỷ đồng, năm 2025 là 62.849 tỷ đồng. Tính tốc độ tăng trưởng kép hằng năm (CAGR) của 4 năm đó, theo %, ghi 4 chữ số thập phân.",
+    "now": "2026-11-13T15:30:00+07:00",
+    "expected": {
+      "kind": "number",
+      "value": 15.222791518428336,
+      "tolerance_pct": 0.05
+    }
+  },
+  {
+    "id": "compute-03-logreturn",
+    "group": "B",
+    "question": "Bài kiểm tra tính toán: chỉ dùng đúng các số cho trong câu hỏi này, không cần lấy thêm dữ liệu. Một cổ phiếu có giá đóng cửa 66,3 nghìn đồng, sau 119 phiên là 73,5 nghìn đồng. Tính lợi suất log của giai đoạn rồi quy về năm theo 250 phiên (lợi suất log × 250 ÷ 119), theo %, ghi 4 chữ số thập phân.",
+    "now": "2026-11-13T15:30:00+07:00",
+    "expected": {
+      "kind": "number",
+      "value": 21.65872038381811,
+      "tolerance_pct": 0.05
+    }
+  },
+  {
+    "id": "compute-04-ma20",
+    "group": "B",
+    "question": "Bài kiểm tra tính toán: chỉ dùng đúng các số cho trong câu hỏi này, không cần lấy thêm dữ liệu. Giá đóng cửa 20 phiên gần nhất của một cổ phiếu (nghìn đồng, cũ đến mới): 25,1; 25,3; 25; 24,8; 24,9; 25,2; 25,6; 25,9; 26,1; 26; 25,8; 25,7; 25,9; 26,2; 26,4; 26,3; 26,5; 26,8; 27; 27,1. Tính trung bình động 20 phiên (MA20), ghi 4 chữ số thập phân.",
+    "now": "2026-11-13T15:30:00+07:00",
+    "expected": {
+      "kind": "number",
+      "value": 25.879999999999995,
+      "tolerance_pct": 0.05
+    }
+  },
+  {
+    "id": "compute-05-volume",
+    "group": "B",
+    "question": "Bài kiểm tra tính toán: chỉ dùng đúng các số cho trong câu hỏi này, không cần lấy thêm dữ liệu. Khối lượng khớp lệnh 30 phiên gần nhất của một cổ phiếu (cổ phiếu, cũ đến mới): 12000000; 13419003; 14838006; 16257009; 17676012; 12595015; 14014018; 15433021; 16852024; 18271027; 13190030; 14609033; 16028036; 17447039; 12366042; 13785045; 15204048; 16623051; 18042054; 12961057; 14380060; 15799063; 17218066; 12137069; 13556072; 14975075; 16394078; 17813081; 12732084; 14151087. Khối lượng phiên cuối bằng bao nhiêu % khối lượng trung bình 30 phiên? Ghi 2 chữ số thập phân.",
+    "now": "2026-11-13T15:30:00+07:00",
+    "expected": {
+      "kind": "number",
+      "value": 94.18020053650639,
+      "tolerance_pct": 0.05
+    }
+  },
+  {
+    "id": "compute-06-rs",
+    "group": "B",
+    "question": "Bài kiểm tra tính toán: chỉ dùng đúng các số cho trong câu hỏi này, không cần lấy thêm dữ liệu. Trong 63 phiên, chỉ số ngành thép đi từ 1.842,6 lên 2.015,3 điểm, còn VNINDEX đi từ 1.268,4 lên 1.301,9 điểm. Sức mạnh tương đối (RS) của ngành = % thay đổi của ngành − % thay đổi của VNINDEX. Tính RS theo điểm %, ghi 4 chữ số thập phân.",
+    "now": "2026-11-13T15:30:00+07:00",
+    "expected": {
+      "kind": "number",
+      "value": 6.731502963450619,
+      "tolerance_pct": 0.05
+    }
+  },
+  {
+    "id": "compute-07-volatility",
+    "group": "B",
+    "question": "Bài kiểm tra tính toán: chỉ dùng đúng các số cho trong câu hỏi này, không cần lấy thêm dữ liệu. Giá đóng cửa 11 phiên liên tiếp của một cổ phiếu (nghìn đồng): 61,2; 61,9; 61,4; 62,3; 63,1; 62,6; 62,9; 64; 63,5; 64,4; 65,1. Tính độ biến động quy năm: độ lệch chuẩn mẫu (chia cho n − 1) của 10 lợi suất log hằng ngày, nhân căn bậc hai của 250, theo %, ghi 4 chữ số thập phân.",
+    "now": "2026-11-13T15:30:00+07:00",
+    "expected": {
+      "kind": "number",
+      "value": 16.254953532554676,
+      "tolerance_pct": 0.05
+    }
+  },
+  {
+    "id": "compute-08-eps",
+    "group": "B",
+    "question": "Bài kiểm tra tính toán: chỉ dùng đúng các số cho trong câu hỏi này, không cần lấy thêm dữ liệu. Lợi nhuận sau thuế của một doanh nghiệp là 1.315.800.000.000 đồng, số cổ phiếu đang lưu hành là 215.000.000. Tính EPS theo đồng, ghi 2 chữ số thập phân.",
+    "now": "2026-11-13T15:30:00+07:00",
+    "expected": {
+      "kind": "number",
+      "value": 6120,
+      "tolerance_pct": 0.05
+    }
+  },
+  {
+    "id": "compute-09-pe",
+    "group": "B",
+    "question": "Bài kiểm tra tính toán: chỉ dùng đúng các số cho trong câu hỏi này, không cần lấy thêm dữ liệu. Một cổ phiếu có giá 96.500 đồng, EPS 6.120 đồng. Tính P/E, ghi 4 chữ số thập phân.",
+    "now": "2026-11-13T15:30:00+07:00",
+    "expected": {
+      "kind": "number",
+      "value": 15.767973856209151,
+      "tolerance_pct": 0.05
+    }
+  },
+  {
+    "id": "compute-10-portfolio",
+    "group": "B",
+    "question": "Bài kiểm tra tính toán: chỉ dùng đúng các số cho trong câu hỏi này, không cần lấy thêm dữ liệu. Một danh mục gồm 3 mã với tỷ trọng 40; 35; 25 (%) và lợi suất trong kỳ lần lượt 12,4; -3,8; 7,15 (%). Tính lợi suất của cả danh mục theo %, ghi 4 chữ số thập phân.",
+    "now": "2026-11-13T15:30:00+07:00",
+    "expected": {
+      "kind": "number",
+      "value": 5.4175,
+      "tolerance_pct": 0.05
+    }
+  },
+  {
+    "id": "compute-11-compound",
+    "group": "B",
+    "question": "Bài kiểm tra tính toán: chỉ dùng đúng các số cho trong câu hỏi này, không cần lấy thêm dữ liệu. Gửi 100.000.000 đồng với lãi suất 7,2%/năm, ghép lãi hằng tháng, trong 5 năm. Số tiền cuối kỳ là bao nhiêu đồng? Ghi đến hàng đơn vị.",
+    "now": "2026-11-13T15:30:00+07:00",
+    "expected": {
+      "kind": "number",
+      "value": 143178841.20211518,
+      "tolerance_pct": 0.05
+    }
+  },
+  {
+    "id": "compute-12-drawdown",
+    "group": "B",
+    "question": "Bài kiểm tra tính toán: chỉ dùng đúng các số cho trong câu hỏi này, không cần lấy thêm dữ liệu. Giá đóng cửa 12 phiên liên tiếp của một cổ phiếu (nghìn đồng): 48,5; 50,2; 51,8; 49,9; 47,3; 46,1; 47,8; 49; 45,2; 44,7; 46,9; 48,1. Tính mức sụt giảm sâu nhất từ đỉnh (max drawdown) trong 12 phiên này theo %, ghi 4 chữ số thập phân (viết giá trị tuyệt đối).",
+    "now": "2026-11-13T15:30:00+07:00",
+    "expected": {
+      "kind": "number",
+      "value": 13.706563706563701,
+      "tolerance_pct": 0.05
+    }
+  }
+]

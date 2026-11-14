@@ -7,6 +7,7 @@ import { loadConfig } from "../../src/core/config"
 import { dataDir } from "../../src/core/paths"
 import { initRuntime, setAgents } from "../../src/core/runtime"
 import { loadSkills, skillRoots } from "../../src/core/skills/loader"
+import { detectShell } from "../../src/core/tools/shell/run"
 import pkg from "../../package.json"
 import { Cassette } from "./cassette"
 import { ledgerFile, RequestLedger, spentToday } from "./ledger"
@@ -110,7 +111,8 @@ try {
   if (!runtime.registry.list().some((t) => t.source?.startsWith("mcp:"))) throw new Error("Không có tool MCP nào: kiểm tra kết nối MCP.")
   const target = await resolveTarget(model)
   const { effort, toolSearch, maxSteps } = await loadConfig()
-  const settings = { effort, toolSearch, maxSteps, ablate, memory, permissions: yolo ? "bypass" : "unattended", mcp: cassette?.mode ?? "live", ...(routing ? { openrouter_routing: routing } : {}), ...(tape ? { mcp_tape: path.basename(tape), mcp_answers: cassette!.size } : {}) }
+  // The shell decides which arithmetic form runs unasked (awk on bash/sh, expressions on PowerShell).
+  const settings = { effort, toolSearch, maxSteps, ablate, memory, shell: detectShell().kind, permissions: yolo ? "bypass" : "unattended", mcp: cassette?.mode ?? "live", ...(routing ? { openrouter_routing: routing } : {}), ...(tape ? { mcp_tape: path.basename(tape), mcp_answers: cassette!.size } : {}) }
   // Tallied from this run's own answers: --out may name a file that already holds earlier runs.
   const answers: TraceEvent[] = []
   const toFile = traceFile(out)

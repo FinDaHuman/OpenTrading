@@ -1,0 +1,14 @@
+{"shell":"bash","form":"awk-one-line","source":"issue-268","command":"awk 'BEGIN{printf \"%.2f\\n\", (128.4/112-1)*100}'"}
+{"shell":"bash","form":"awk-one-line","source":"issue-268","command":"awk 'BEGIN{printf \"%.4f %.4f\\n\", log(66.3/73.5)*250/119, log(74.0/81.33)*250/119}'"}
+{"shell":"bash","form":"awk-one-line","source":"issue-268","command":"awk 'BEGIN{printf \"%.6f\\n\", (1.08^3-1)*100}'"}
+{"shell":"bash","form":"awk-vars","source":"issue-268","command":"awk 'BEGIN{x=5; printf \"%.2f\\n\", x*2}'"}
+{"shell":"bash","form":"awk-vars","source":"issue-268","command":"awk 'BEGIN{k=250/119; a=log(66.3/73.5)*k; printf \"%.4f\\n\", a}'"}
+{"shell":"bash","form":"awk-vars","source":"issue-268","command":"awk 'BEGIN{p0=58.2; p1=52.7; chg=(p1-p0)/p0*100; printf \"%.4f\\n\", chg}'"}
+{"shell":"bash","form":"awk-printf-parens","source":"issue-268","command":"awk 'BEGIN { printf(\"%.2f\\n\", 1/3) }'"}
+{"shell":"bash","form":"awk-multiline","source":"issue-268","command":"awk 'BEGIN{\nk=250/119;\nstb=log(66.3/73.5)*k; mwg=log(74.0/81.33)*k;\nprintf \"%.4f %.4f\\n\", stb, mwg\n}'"}
+{"shell":"bash","form":"awk-multiline","source":"issue-268","command":"awk 'BEGIN {\n  ma20 = (25.1+25.3+25.0+24.8+24.9+25.2+25.6+25.9+26.1+26.0+25.8+25.7+25.9+26.2+26.4+26.3+26.5+26.8+27.0+27.1)/20\n  printf \"%.4f\\n\", ma20\n}'"}
+{"shell":"bash","form":"awk-long","source":"issue-268","command":"awk 'BEGIN{printf \"%.0f\\n\", (12000000+13419003+14838006+16257009+17676012+12595015+14014018+15433021+16852024+18271027+13190030+14609033+16028036+17447039+12366042+13785045+15204048+16623051+18042054+12961057+14380060+15799063+17218066+12137069+13556072+14975075+16394078+17813081+12732084+14151087+15570090+16989093+18408096+13327099+14746102+16165105+17584108+12503111+13922114+15341117+16760120+18179123+13098126+14517129+15936132+17355135+12274138+13693141+15112144+16531147+17950150+12869153+14288156+15707159+17126162+12045165+13464168+14883171+16302174+17721177+12640180+14059183+15478186+16897189+18316192+13235195+14654198+16073201+17492204+12411207+13830210+15249213+16668216+18087219+13006222+14425225+15844228+17263231+12182234+13601237+15020240+16439243+17858246+12777249+14196252+15615255+17034258+18453261+13372264+14791267+16210270+17629273+12548276+13967279+15386282+16805285+18224288+13143291+14562294+15981297)/100}'"}
+{"shell":"bash","form":"awk-newline-in-format","source":"issue-268","command":"awk 'BEGIN{printf \"%.0f\\n%.0f\\n%.0f\\n\", 1e9/3, 2e9/3, 4e9/3}'"}
+{"shell":"bash","form":"python","source":"issue-268","command":"python3 -c \"\nimport math\nk = 250/119\nprint(round(math.log(66.3/73.5)*k, 4))\n\""}
+{"shell":"bash","form":"python","source":"issue-268","command":"cat > /tmp/calc.py << 'EOF'\nimport math\nrets = [0.012, -0.004, 0.021]\nprint(math.sqrt(sum(r*r for r in rets)/len(rets))*math.sqrt(250))\nEOF\npython3 /tmp/calc.py"}
+{"shell":"bash","form":"python","source":"issue-268","command":"python3 -c \"print((128.4/112-1)*100)\""}
