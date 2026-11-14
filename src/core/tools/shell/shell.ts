@@ -5,7 +5,7 @@ import { z } from "zod"
 import type { Workspace } from "../../fs/workspace"
 import { LOCAL_SOURCE, type ToolDef } from "../types"
 import { commandPrefix, criticalDelete, mentionsSensitive, readOnlyCommand, startsInterpreter } from "./command"
-import { mathHint, mathNearMiss, mathOnlyCommand } from "./math"
+import { computeIntent, mathHint, mathOnlyCommand, rewriteAdvice } from "./math"
 import { detectShell, runShell, SPILL_CAP, type ShellInfo } from "./run"
 
 /**
@@ -31,6 +31,16 @@ export const MAX_TIMEOUT_MS = 600_000
 /** Output beyond this goes to a file the model can page with read_file. */
 export const SHELL_OUTPUT_CHARS = 30_000
 
+/** The tool error for arithmetic the grammar does not take: why, and the form that runs unasked. */
+function nearMiss(command: string, shell: ShellInfo, workdir: boolean): string | undefined {
+  if (typeof command !== "string") return undefined
+  // The right form in another folder: arithmetic needs none.
+  if (workdir && mathOnlyCommand(command, shell)) return `${MATH_NEAR_MISS_PREFIX} vì có workdir nên chưa chạy; phép tính không cần thư mục: gọi lại không kèm workdir thì chạy ngay, không cần duyệt.`
+  const miss = computeIntent(command, shell)
+  if (!miss) return undefined
+  return [`${MATH_NEAR_MISS_PREFIX} nên chưa chạy; viết lại đúng dạng thì chạy ngay, không cần duyệt.`, rewriteAdvice(miss, shell), mathHint(shell)].filter(Boolean).join(" ")
+}
+
 function describe(shell: ShellInfo): string {
   const ps = shell.kind === "pwsh" || shell.kind === "powershell"
   const notes = ps
@@ -41,10 +51,10 @@ function describe(shell: ShellInfo): string {
   return (
     "Chạy một lệnh shell trên máy người dùng, thư mục chạy mặc định là workspace; trả output (stdout và stderr) cùng mã thoát. " +
     `${notes} ` +
-    "Dùng khi cần chạy chương trình: script Python phân tích số liệu hay vẽ biểu đồ ra file, chuyển đổi định dạng, cài thư viện người dùng đồng ý. " +
+    "Dùng khi cần chạy chương trình: script đọc file dữ liệu hay vẽ biểu đồ ra file, chuyển đổi định dạng, cài thư viện người dùng đồng ý. " +
     "Không dùng khi đọc, tìm hay sửa file (dùng read_file, glob_files, grep_files, write_file, edit_file), cũng không dùng cho lệnh chờ nhập từ bàn phím hay chạy mãi (server). " +
     `${mathHint(shell)} ` +
-    `Lệnh khác người dùng duyệt; ghi description ngắn để người dùng biết lệnh làm gì. Timeout mặc định ${DEFAULT_TIMEOUT_MS / 1000}s, tối đa ${MAX_TIMEOUT_MS / 1000}s; output dài được lưu ra file để đọc tiếp bằng read_file.`
+    `Phép tính viết bằng Python, mảng hay vòng lặp không chạy mà trả lại dạng đúng để viết lại. Lệnh khác người dùng duyệt; ghi description ngắn để người dùng biết lệnh làm gì. Timeout mặc định ${DEFAULT_TIMEOUT_MS / 1000}s, tối đa ${MAX_TIMEOUT_MS / 1000}s; output dài được lưu ra file để đọc tiếp bằng read_file.`
   )
 }
 
@@ -57,7 +67,7 @@ export function shellTool(workspace: Workspace, opts: { shell?: ShellInfo } = {}
     description: describe(shell),
     input: z.object({
       command: z.string().min(1).describe("Lệnh cần chạy"),
-      description: z.string().max(200).optional().describe("Lệnh này làm gì, 5–10 từ, ví dụ: Chạy script tính lợi suất FPT"),
+      description: z.string().max(200).optional().describe("Lệnh này làm gì, 5–10 từ, ví dụ: Vẽ biểu đồ giá FPT ra file PNG"),
       timeout_ms: z.number().int().min(1000).max(MAX_TIMEOUT_MS).optional().describe(`Thời gian tối đa (ms, mặc định ${DEFAULT_TIMEOUT_MS})`),
       workdir: z.string().optional().describe("Thư mục chạy lệnh (mặc định workspace)"),
     }),
@@ -88,10 +98,11 @@ export function shellTool(workspace: Workspace, opts: { shell?: ShellInfo } = {}
     subject: (input) => input.command,
     // ▸▸: a command that only lists or prints state needs no classifier request.
     autoSafe: async (input) => typeof input.command === "string" && readOnlyCommand(input.command),
+    // Arithmetic in a form the grammar does not take: say the right form (a tool error the model
+    // fixes) instead of a prompt, or of a denial that tells it to stop. Only where the call would
+    // have asked: a command the user already allowed (a rule, ▸▸▸) runs as written.
+    rewrite: (input) => nearMiss(input.command, shell, !!input.workdir),
     async validate(input) {
-      // Arithmetic in a form the grammar does not take: say the right form (a tool error the
-      // model fixes), before the gate turns it into a denial that tells it to stop.
-      if (mathNearMiss(input.command, shell)) return `${MATH_NEAR_MISS_PREFIX} nên chưa chạy; viết lại đúng dạng thì chạy ngay, không cần duyệt. ${mathHint(shell)}`
       const cwd = cwdOf(input)
       try {
         if (!(await stat(cwd)).isDirectory()) return `${cwd} không phải thư mục.`
@@ -164,7 +175,7 @@ function mathShellTool(full: ToolDef<ShellInput>, shell: ShellInfo): ToolDef<She
     summarize: full.summarize,
     async execute(input, ctx) {
       // Also without a gate (tests, scripts): never run anything but arithmetic.
-      if (!mathOnlyCommand(input.command, shell)) throw new Error(refusal)
+      if (!mathOnlyCommand(input.command, shell)) throw new Error(nearMiss(input.command, shell, false) ?? refusal)
       return full.execute({ command: input.command, ...(input.description ? { description: input.description } : {}), timeout_ms: 20_000 }, ctx)
     },
   }

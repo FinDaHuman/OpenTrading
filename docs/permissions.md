@@ -94,6 +94,16 @@ OpenTrading kiểm từng lệnh bằng một văn phạm, không phải bằng 
 
 Quy tắc `deny`/`ask` của bạn vẫn áp dụng cho các lệnh này.
 
+### Phép tính viết sai dạng
+
+Khi model gửi một lệnh rõ ràng chỉ để tính số nhưng không đúng dạng trên, OpenTrading không hỏi bạn và cũng không từ chối. Nó trả cho model một lỗi tool nêu lý do và dạng đúng, để model viết lại rồi chạy ngay:
+
+- phép tính trên một chuỗi số bằng mảng hoặc vòng lặp (`split` + `for` trong awk; `@(…)` + `foreach`, `Measure-Object` trong PowerShell);
+- phép tính bằng Python hoặc Node (`python3 -c "print(…)"`, script heredoc chỉ `import math` rồi `print`);
+- dạng khác của cùng phép tính (`1,2*3`, `echo $((1+2))`, `expr 3 + 4`, phép tính đúng dạng nhưng kèm `workdir`).
+
+Điều này chỉ áp dụng ở chỗ lệnh lẽ ra phải hỏi. Lệnh bạn đã cho phép (quy tắc "luôn cho phép", duyệt cả phiên, ▸▸▸) vẫn chạy nguyên văn, và lệnh khớp quy tắc `ask` của bạn vẫn hiện hộp duyệt. Lệnh làm nhiều hơn in ra con số (đọc file, `import` thư viện khác, pipe, biến môi trường) không được coi là phép tính và đi đường duyệt bình thường. Ở ▸▸, lệnh loại này không tốn request của model duyệt.
+
 ## Luôn hỏi bạn, không quy tắc hay model nào duyệt thay
 
 - **Đọc file chứa khoá/mật khẩu:**

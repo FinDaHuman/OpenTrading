@@ -22,7 +22,7 @@ export interface AutoBlock {
 }
 
 export interface DenyInfo {
-  reason?: "user" | "cancelled" | "headless" | "rule" | "blocked" | "classifier" | "unsaved"
+  reason?: "user" | "cancelled" | "headless" | "rule" | "blocked" | "classifier" | "unsaved" | "rewrite"
   /** The user's note when denying, or why it is blocked. */
   message?: string
   /** Auto mode blocked this call (directly, or before handing it to the user). */
@@ -70,6 +70,9 @@ export function deniedMessage(decision: DenyInfo, opts: { tool?: string; agent?:
   switch (decision.reason) {
     case "cancelled":
       return "Lời gọi tool đã bị huỷ."
+    case "rewrite":
+      // Not a denial: the tool says how to write the call so that it runs (ToolDef.rewrite).
+      return decision.message ?? "Viết lại lời gọi này đúng dạng tool nhận."
     case "unsaved":
       return `Không chạy được: ${decision.message ?? "chưa lưu được quyền"}.`
     case "classifier":
