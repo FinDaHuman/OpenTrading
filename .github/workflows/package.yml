@@ -52,7 +52,7 @@ jobs:
           # The version in package.json "packageManager", the same on CI and every machine.
           bun-version-file: package.json
       # Bun's download cache, keyed on the lockfile; bun install then only links.
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: ~/.bun/install/cache
           key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
@@ -140,7 +140,7 @@ jobs:
           # The version in package.json "packageManager", the same on CI and every machine.
           bun-version-file: package.json
       # Bun's download cache, keyed on the lockfile; bun install then only links.
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: ~/.bun/install/cache
           key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
