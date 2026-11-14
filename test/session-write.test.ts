@@ -339,14 +339,9 @@ test("R20: /save and /export say which turns the transcript lacks", async () => 
 
 test("R22: resuming the session being written waits for its writes and keeps one writer", async () => {
   const s = await sessionWith(2)
-  const realAppend = store.sessionFiles.append
-  let release!: () => void
-  const gate = new Promise<void>((r) => (release = r))
-  spy("append").mockImplementationOnce(async (file: string, text: string) => {
-    await gate
-    return realAppend(file, text)
-  })
+  const { release, held } = holdNextAppend()
   void s.appendTurn(turn(3), info)
+  await held
   setTimeout(release, 50)
   const same = await tui.openForResume(s, s.id)
   expect(same.session).toBe(s)
@@ -360,14 +355,11 @@ test("R22: resuming the session being written waits for its writes and keeps one
 test("R14: a hung write does not hold up switching; the old session finishes into its own file and says so by name", async () => {
   const old = await sessionWith(4)
   old.title = "Định giá HPG"
-  const realAppend = store.sessionFiles.append
-  let release!: () => void
-  const gate = new Promise<void>((r) => (release = r))
-  spy("append").mockImplementationOnce(async (file: string, text: string) => {
-    await gate
-    return realAppend(file, text)
-  })
+  const { release, held } = holdNextAppend()
   void old.appendTurn(turn(5), info)
+  // The held append must be the old session's: without this wait, on a busy machine the fresh session
+  // below reached append first, took the hold and waited for a release that comes after it (20 s).
+  await held
   let late!: (r: Receipt) => void
   const lateReceipt = new Promise<Receipt>((r) => (late = r))
   const started = Date.now()
@@ -389,7 +381,6 @@ test("exit: the line printed when turns stay unsaved, or when writing did not fi
   // Not the TUI module's current session, which other test files share.
   const s = Session.create()
   s.title = "Thoát"
-  const realAppend = store.sessionFiles.append
   // Fails on every attempt: settleForExit retries what is pending.
   const full = spy("append").mockImplementation(async () => {
     throw fail("ổ đầy", "ENOSPC")
@@ -397,13 +388,9 @@ test("exit: the line printed when turns stay unsaved, or when writing did not fi
   await s.appendTurn(turn(1), info)
   expect(about(await tui.settleForExit(2000, s), s)).toBe('Phiên "Thoát" còn 1 lượt chưa lưu được: ổ đầy.')
   full.mockRestore()
-  let release!: () => void
-  const gate = new Promise<void>((r) => (release = r))
-  spy("append").mockImplementationOnce(async (file: string, text: string) => {
-    await gate
-    return realAppend(file, text)
-  })
+  const { release, held } = holdNextAppend()
   void s.appendTurn(turn(2), info)
+  await held
   // R21: whole seconds, the same line app.tsx prints when its own deadline wins.
   expect(about(await tui.settleForExit(100, s), s)).toBe(tui.exitTimeoutText(s))
   expect(tui.exitTimeoutText(s)).toBe('Phiên "Thoát": chưa ghi xong trong 2 giây khi thoát; lượt cuối có thể chưa được lưu.')
@@ -413,23 +400,31 @@ test("exit: the line printed when turns stay unsaved, or when writing did not fi
 
 // Review round 2.
 
-/** Holds the next append until `release()`; then it writes for real. */
+/**
+ * Holds the next append until `release()`; then it writes for real. `held` resolves once that append
+ * has started. Wait for it before another session writes: the hold goes to whichever append comes
+ * first, and on a busy machine that could be the other session's (R14 then hung for 20 s).
+ */
 function holdNextAppend() {
   const realAppend = store.sessionFiles.append
   let release!: () => void
   const gate = new Promise<void>((r) => (release = r))
+  let entered!: () => void
+  const held = new Promise<void>((r) => (entered = r))
   spy("append").mockImplementationOnce(async (file: string, text: string) => {
+    entered()
     await gate
     return realAppend(file, text)
   })
-  return release
+  return { release, held }
 }
 
 test("review 2 #1: resuming a session left with a write still running reuses its object, after the write lands", async () => {
   const s = await sessionWith(3)
   const other = await sessionWith(1)
-  const release = holdNextAppend()
+  const { release, held } = holdNextAppend()
   void s.appendTurn(turn(4), info)
+  await held
   // Left by /new or resume while turn 4 hangs: it goes on writing in the background.
   await tui.openForResume(s, other.id, 50)
   setTimeout(release, 50)
@@ -443,8 +438,9 @@ test("review 2 #4: exit also waits for, and reports, sessions left with writes s
   s.title = "Bỏ lại"
   const fresh = Session.create()
   const elsewhere = await sessionWith(1)
-  const release = holdNextAppend()
+  const { release, held } = holdNextAppend()
   void s.appendTurn(turn(2), info)
+  await held
   await tui.openForResume(s, elsewhere.id, 50)
   expect(about(await tui.settleForExit(100, fresh), s)).toBe(tui.exitTimeoutText(s))
   release()
