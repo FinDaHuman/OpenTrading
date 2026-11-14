@@ -28,10 +28,10 @@
 - Mỗi phiên 1 dòng: `Phiên 1 ▲ thắng +4.5` / `▼ thua -2.4` (số luôn kèm dấu).
 - Text thuần cũng hiện số (để đọc verdict), không chỉ ▲▼.
 
-## Compare % (chart_compare, tool riêng)
+## Compare % (chart_render kind=compare)
 
-- Input 2–5 chuỗi `{label, values}` (dài ngắn khác nhau được, căn điểm cuối).
+- Input: `from_calls` (lọc bằng `symbols`), hoặc số tay `labels` + `matrix` (2–5 hàng; dài ngắn khác nhau được, căn điểm cuối).
 - Mỗi mã cao 9 dòng braille + TRỤC Y RIÊNG (nhãn thang từng chart) + header
   `● tên +cuối%` + dòng trống giữa các mã.
-- `ymin`/`ymax` tùy biến để cố định thang khi so nhiều kỳ; `times` trục X;
+- `times` trục X;
   thang % in ở tiêu đề, `unit` hiện `[%]`.

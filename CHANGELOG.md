@@ -79,6 +79,7 @@ adopt Semantic Versioning when it exposes a stable public API.
   computes with 0 or `$null` without an error). `print` in awk keeps 15 significant digits (awk's default is 6).
   The tool description shows the multi-step form and says to round only the final result (issue #278 N1: the
   old `%.2f` example was copied into intermediate values).
+- Charts (issue #278): `chart_compare` and `chart_depth` are folded into `chart_render` as `kind="compare"` (`from_calls`, `symbols`, or `labels` + `matrix`) and `kind="depth"` (`bids`, `asks`, `levels`). Every chart kind and typed field stays; parameter descriptions are shorter and `ymin`/`ymax` of compare are gone. Three schemas (8.3 KB) become one.
 - `prompts/tools.md`: computed figures (ratios, %, CAGR, P/E, unit changes) come from one arithmetic-only `shell`
   command per step, large amounts scaled to tỷ đồng inside the expression; the answer states the formula and inputs.
   A command that still fails after one fix may be computed by hand, labelled "tự tính" with formula and inputs.
