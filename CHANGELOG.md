@@ -7,6 +7,13 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ### Added
 
+- Eval: how `shell` served the model's arithmetic is now measured (issue #268). Each `shell` result in a trace
+  carries `shell: { route, exec_ms }` (`math`, `read-only`, `approved`, `near-miss`, `denied`, `error`) and the
+  header records the machine's shell. `scripts/dev/shell-metrics.ts` counts commands per route, attempts where
+  no command ran, answers that say "tự tính", requests per attempt, time per command and typed operands found
+  in what the model had read. `scripts/dev/shell-replay.ts` replays recorded commands against the grammar
+  alone. `scripts/eval/questions/compute.json` is a 12-question arithmetic set that carries its own data. See
+  `docs/eval/runner.md`.
 - OpenRouter provider pinning: `openrouter.routing` in `config.json` maps a model id (or `"*"`) to OpenRouter's `provider` block (`order`, `allow_fallbacks`, `quantizations`…), sent on every request to that model: main agent, subagents, compaction, title, web side calls and the auto-mode reviewer. Eval runs pin with `--or-provider`, `--or-no-fallback` and `--or-quant`, and the trace records `served_by`, the upstream provider that answered each step. OpenRouter's "no provider" error now reads as one Vietnamese line. See `docs/openrouter.md`.
 - OpenCode Go/Zen: every request to `opencode.ai` sends OT's own `User-Agent` (`opentrading/<version> (<os> <arch>)`) and `x-opencode-session`, as Go's docs ask: the session id for the main agent and side calls, `<session>/<agent id>` for a subagent, one id per question in eval runs. Native web search clients now use the same fetch, so their requests also count toward the request tally and the eval ledger. See `docs/opencode-go.md`.
 - `shell`: a command that only does arithmetic runs without a prompt in every permission mode, `ot -p` and evals

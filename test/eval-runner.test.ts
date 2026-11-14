@@ -19,6 +19,8 @@ const { initRuntime } = await import("../src/core/runtime")
 const { rememberResult, recallResult } = await import("../src/core/tools/refs")
 const { parseAblations, parseQuestions, prepareHome, runEval, skillsFor } = await import("../scripts/eval/runner")
 const { TRACE_VERSION } = await import("../scripts/eval/trace")
+const { readTrace } = await import("../scripts/eval/read-trace")
+const { shellMetrics } = await import("../scripts/eval/shell-metrics")
 const { ledgerFile, RequestLedger, spentToday } = await import("../scripts/eval/ledger")
 type TraceEvent = import("../scripts/eval/trace").TraceEvent
 
@@ -42,6 +44,8 @@ let invent = false
 let hang = false
 /** Streamed requests fail with 429 this many times, then work. */
 let failFirst = 0
+/** Shell commands the model sends, one per request, before it answers. */
+let commands: string[] | undefined
 
 const chunk = chunkFor("tooly")
 
@@ -58,6 +62,15 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   if (failFirst > 0) {
     failFirst--
     return Response.json({ error: { message: "rate limited" } }, { status: 429 })
+  }
+  if (commands) {
+    const calls = body.messages.filter((m) => m.role === "tool").length
+    const command = commands[calls]
+    if (calls >= commands.length) return sse([chunk({ role: "assistant", content: "Tăng 14,64% (tự tính)." }), chunk({}, "stop")])
+    return sse([
+      chunk({ role: "assistant", tool_calls: [{ index: 0, id: `sh_${calls}`, type: "function", function: { name: "shell", arguments: JSON.stringify(command === undefined ? {} : { command }) } }] }),
+      chunk({}, "tool_calls"),
+    ])
   }
   if (invent) {
     const first = bodies.length === 1
@@ -82,6 +95,7 @@ beforeEach(() => {
   invent = false
   failFirst = 0
   hang = false
+  commands = undefined
 })
 
 const LONG = "x".repeat(40_000)
@@ -208,6 +222,33 @@ test("a timed-out question says so, apart from a cap", async () => {
 test("the gate goes back to refusing when the run ends", async () => {
   const { runtime } = await run([question("q1")])
   expect(runtime.permissions.interactive).toBe(false)
+})
+
+test("a shell call's result line says what became of the command, and the metrics add it up (issue #268)", async () => {
+  const math = process.platform === "win32" ? "(128.4/112-1)*100" : `awk 'BEGIN{printf "%.2f\\n", (128.4/112-1)*100}'`
+  // Arithmetic that runs unasked, arithmetic in a form the grammar refuses, a program nobody can approve.
+  commands = [math, 'python -c "print(128.4/112)"', "python tinh.py"]
+  const asked = { id: "q1", group: "A" as const, question: "FPT từ 112 lên 128,4 là tăng bao nhiêu %?", now: "2026-03-10T10:00:00+07:00" }
+  const { events } = await run(parseQuestions(JSON.stringify([asked])))
+  const results = of(events, "tool_result")
+  expect(results.map((r) => r.shell?.route)).toEqual(["math", "near-miss", "denied"])
+  expect(results[0]!.shell!.exec_ms).toBeGreaterThanOrEqual(0)
+  expect(results[1]!.shell!.exec_ms).toBeUndefined()
+  expect(results[0]!.visible).toContain("14.64")
+  const m = shellMetrics(readTrace(events.map((e) => JSON.stringify(e)).join("\n")))
+  expect(m).toMatchObject({ attempts: 1, commands: 3, attempts_with_shell: 1, attempts_with_run: 1, attempts_all_refused: 0, self_computed: 1 })
+  expect(m.routes).toEqual({ math: 1, "read-only": 0, approved: 0, "near-miss": 1, denied: 1, error: 0 })
+  // The command that ran and the one refused as arithmetic each typed 128.4 and 112, both in the question (100 and 1 are constants).
+  expect(m.operands).toEqual({ total: 4, traced: 4, untraced: [] })
+})
+
+test("a shell call with broken arguments is traced as an error and the question still ends with its answer", async () => {
+  // Issue #268 had shell calls whose arguments were not valid: measuring them must not end the question.
+  commands = [undefined as unknown as string]
+  const { events } = await run(parseQuestions(JSON.stringify([question("q1")])))
+  expect(of(events, "tool_result").map((r) => r.shell?.route)).toEqual(["error"])
+  expect(of(events, "error")).toHaveLength(0)
+  expect(of(events, "answer")[0]!.outcome).toBe("completed")
 })
 
 test("--yolo: a tool that would ask runs unanswered, and the header records the bypass mode", async () => {

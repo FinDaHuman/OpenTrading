@@ -23,6 +23,9 @@ import { detectShell, runShell, SPILL_CAP, type ShellInfo } from "./run"
 
 export type ShellInput = { command: string; description?: string; timeout_ms?: number; workdir?: string }
 
+/** How the tool error for arithmetic in a form the grammar does not take starts (eval traces count it). */
+export const MATH_NEAR_MISS_PREFIX = "Lệnh này là phép tính nhưng chưa đúng dạng chỉ-toán"
+
 export const DEFAULT_TIMEOUT_MS = 120_000
 export const MAX_TIMEOUT_MS = 600_000
 /** Output beyond this goes to a file the model can page with read_file. */
@@ -88,7 +91,7 @@ export function shellTool(workspace: Workspace, opts: { shell?: ShellInfo } = {}
     async validate(input) {
       // Arithmetic in a form the grammar does not take: say the right form (a tool error the
       // model fixes), before the gate turns it into a denial that tells it to stop.
-      if (mathNearMiss(input.command, shell)) return `Lệnh này là phép tính nhưng chưa đúng dạng chỉ-toán nên chưa chạy; viết lại đúng dạng thì chạy ngay, không cần duyệt. ${mathHint(shell)}`
+      if (mathNearMiss(input.command, shell)) return `${MATH_NEAR_MISS_PREFIX} nên chưa chạy; viết lại đúng dạng thì chạy ngay, không cần duyệt. ${mathHint(shell)}`
       const cwd = cwdOf(input)
       try {
         if (!(await stat(cwd)).isDirectory()) return `${cwd} không phải thư mục.`

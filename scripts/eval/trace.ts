@@ -35,7 +35,15 @@ export type TraceEvent =
   | (Asked & { type: "question"; group: string; question: string; now: string })
   | (Asked & { type: "tool_call"; call_id: string; tool: string; input: unknown; step: number })
   /** What the model was shown, after notices and the output cap. Subagent calls have none. */
-  | (Asked & { type: "tool_result"; call_id: string; ok: boolean; visible: string; duration_ms: number })
+  | (Asked & {
+      type: "tool_result"
+      call_id: string
+      ok: boolean
+      visible: string
+      duration_ms: number
+      /** Only for the `shell` tool: what became of the command (shell-route.ts) and how long it ran. */
+      shell?: { route: "math" | "read-only" | "approved" | "near-miss" | "denied" | "error"; exec_ms?: number }
+    })
   /** What the tool returned, before any cap: `agent` is set when a subagent made the call. */
   | (Asked & { type: "tool_raw"; call_id: string; tool: string; input: unknown; ok: boolean; raw: string; agent?: string })
   | (Asked & { type: "retry"; attempt: number; delay_ms: number; label: string })

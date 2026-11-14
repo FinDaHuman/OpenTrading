@@ -32,6 +32,34 @@ Each question has an `id`, a `group` (A–F), the `question`, and `now`, the mom
 
 `answer.text` is the answer the harness kept. `answer.markup_stripped` names the harness tags the loop took out of the turn's text (a step it dropped included), when there were any. `answer.fallback: true` means the model gave no answer after every recovery while sources failed, and the harness wrote the answer: the missing sources, no figure. `answer.streamed` is everything the user saw, including a draft the stop gate sent back.
 
+## Shell commands
+
+A `tool_result` of the `shell` tool also carries `shell: { route, exec_ms }`: what became of the command.
+
+| `route` | Meaning |
+|---|---|
+| `math` | Ran as an arithmetic-only command, with no approval. |
+| `read-only` | Ran, and the command only lists or prints state. |
+| `approved` | Ran any other command (bypass, a rule). |
+| `near-miss` | Refused as arithmetic in a form the grammar does not take, with the form to use. |
+| `denied` | Needed an approval nobody could give, or was blocked. |
+| `error` | Never started for another reason. |
+
+`exec_ms` is the run time the tool itself reports, without the approval wait. The header's `settings.shell` names the shell of the machine (`bash`, `sh`, `pwsh`, `powershell`): it decides which arithmetic form runs unasked, so compare runs per shell.
+
+```sh
+# Counts for one trace: commands per route, attempts where nothing ran, answers that say "tự tính",
+# requests per attempt, time per command, typed operands found in what the model had read.
+bun scripts/dev/shell-metrics.ts trace.jsonl [--untraced] [--out metrics.json]
+# Recorded commands against the grammar alone: run unasked, refused with a hint, or sent to the gate.
+bun scripts/dev/shell-replay.ts test/fixtures/shell-commands.jsonl [--ask]
+```
+
+- Both read files only: no model, no key.
+- The operand count covers `math` and `near-miss` commands. Small counts and unit factors (1, 2, 12, 100, 250, powers of ten…) are skipped. An operand is traced when the question or an earlier result of the attempt holds it, at a common scale (×100, ×1000…): a decimal may be the source rounded as typed, an integer must be the number itself. Denials, errors and the shell's own status line are not sources. Untraced does not mean invented: list them with `--untraced` and read them. A command the gate denied is not counted, so the rate of a run where many arithmetic commands were denied covers fewer commands than a run where they were refused as near misses.
+- `scripts/eval/questions/compute.json` is a set of 12 arithmetic questions that carry their own data, with labels, for measuring the shell path without depending on a data source.
+- `test/fixtures/shell-commands.jsonl` is a provisional replay set written from the command forms of issue #268, one JSON object per line (`shell`, `command`, `form`).
+
 ## Fixed data
 
 `--mcp-record tape.jsonl` keeps each MCP answer. A request already in the file is answered from it, so the first answer stays and a second run only adds what is new. `--mcp-replay tape.jsonl` uses the file alone and never reaches the server.
