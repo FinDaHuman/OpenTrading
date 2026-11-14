@@ -1914,7 +1914,10 @@ test("/undo lists and puts back the agent's file changes; /permissions lists rul
     let frame = await setup.waitForFrame((f) => f.includes("Quyền · 2 quy tắc") && f.includes("mẫu *bi-mat*"))
     show(frame)
     expect(frame).toContain("Chế độ: ‖ chỉ đọc")
-    expect(frame).toContain(`Workspace: ${cwd}`)
+    // The header line is cut at the dialog's width: with a long TEMP the folder does not fit whole.
+    const shown = frame.split("\n").find((l) => l.includes("Workspace: "))!.trim()
+    expect(shown.length).toBeGreaterThan("Workspace: ".length)
+    expect(`Workspace: ${cwd}`.startsWith(shown)).toBe(true)
     setup.mockInput.pressEnter() // the deny rule comes first
     frame = await setup.waitForFrame((f) => f.includes("d xoá"))
     setup.mockInput.pressKey("d")
@@ -3753,7 +3756,8 @@ test("a folder with its own skills/agents asks for trust first; skip leaves them
     expect(extras).toMatchObject({ skills: 1, agents: 1 })
     // What startup does for an untrusted folder (the app is mounted once for the whole file).
     setState({ projectAllowed: false, folderTrust: extras })
-    let frame = await setup.waitForFrame((f) => f.includes("Thư mục này có skill/agent riêng") && f.includes("1 skill, 1 agent"))
+    // Spaces folded: the folder's path comes first on that line, and a long one wraps "1 skill, 1 agent".
+    let frame = await setup.waitForFrame((f) => f.includes("Thư mục này có skill/agent riêng") && f.replace(/\s+/g, " ").includes("1 skill, 1 agent"))
     show(frame)
     expect(frame).toContain("Tin cậy và nạp")
     expect(frame).not.toContain("Hỏi về thị trường") // the prompt waits
