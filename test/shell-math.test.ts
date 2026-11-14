@@ -254,6 +254,9 @@ test("arithmetic gets the math: scope (in the workspace only); anything else kee
   // The description shows the multi-step form: models copy the example they are given.
   expect(ps.description).toContain("$g = 128.4/112 - 1")
   expect(ps.description + sh.description).not.toContain("không biến")
+  // The example's format keeps an amount in dong out of exponent form (%.10g prints 2.5e12/3 as 8.333333333e+11).
+  expect(sh.description).toContain("%.15g")
+  expect(sh.description).not.toContain("%.10g")
 })
 
 test("arithmetic runs in every mode without a prompt, also headless; deny and ask rules still apply", async () => {

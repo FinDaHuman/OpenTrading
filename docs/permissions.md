@@ -82,7 +82,7 @@ Dung lượng và dọn dẹp (Claude Code không dọn thư mục tạm của n
 Model tính số (tỷ lệ, %, CAGR, P/E, đổi đơn vị) bằng `shell`. Lệnh **chỉ gồm phép tính** chạy ngay ở mọi chế độ, kể cả ‖ chỉ đọc, `ot -p` và eval, không hỏi bạn và không tốn request duyệt của ▸▸:
 
 - Windows (PowerShell): các câu lệnh cách nhau bằng `;` hoặc xuống dòng. Mỗi câu là phép gán `$ten = biểu thức` hoặc một biểu thức (in ra giá trị). Hàm chỉ `[math]::Round/Abs/Sqrt/Pow/Log/Log10/Exp/Max/Min/Floor/Ceiling/Truncate`. Ví dụ `$g = 128.4/112 - 1; $g*100; [math]::Pow(1 + $g, 3)`. Kết quả in theo dấu chấm thập phân (`1.5`), không theo cài đặt vùng của máy.
-- macOS, Linux: `awk 'BEGIN{ … }'` với phép gán, `print` và `printf`, viết một dòng hoặc nhiều dòng. Ví dụ `awk 'BEGIN{ g = 128.4/112 - 1; printf "%.10g %.10g\n", g*100, (1+g)^3 }'`. Hàm chỉ `sqrt/log/exp/int`; so sánh và `?:` phải nằm trong ngoặc. `print` giữ 15 chữ số có nghĩa (mặc định của awk chỉ giữ 6).
+- macOS, Linux: `awk 'BEGIN{ … }'` với phép gán, `print` và `printf`, viết một dòng hoặc nhiều dòng. Ví dụ `awk 'BEGIN{ g = 128.4/112 - 1; printf "%.15g %.15g\n", g*100, (1+g)^3 }'`. Hàm chỉ `sqrt/log/exp/int`; so sánh và `?:` phải nằm trong ngoặc. `print` giữ 15 chữ số có nghĩa (mặc định của awk chỉ giữ 6).
 - Cả hai: lệnh dài tối đa 8.000 ký tự và 60 câu lệnh; được viết chú thích `#`.
 
 OpenTrading kiểm từng lệnh bằng một văn phạm, không phải bằng danh sách ký tự. Những thứ sau khiến lệnh đi đường duyệt bình thường:
