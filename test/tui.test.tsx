@@ -295,6 +295,22 @@ beforeAll(async () => {
   // waitFor/waitForFrame count frames and give up once the renderer idles. The app draws on
   // demand in a chat (the background holds still there), so keep the frame clock ticking.
   setup.renderer.requestLive()
+  // OpenTUI's waitFor/waitForFrame give up after 20 frames (~0.33 s), whatever the test timeout says.
+  // With every CPU busy the app is correct but late: a streamed answer reached the screen after more
+  // than 20 frames. In this file both keep their own behaviour but try again until 5 s have passed.
+  const patient = <A extends unknown[], R>(wait: (...args: A) => Promise<R>) =>
+    async (...args: A): Promise<R> => {
+      const end = Date.now() + 5_000
+      for (;;) {
+        try {
+          return await wait(...args)
+        } catch (error) {
+          if (Date.now() > end || !String(error).includes("Timed out waiting")) throw error
+        }
+      }
+    }
+  setup.waitForFrame = patient(setup.waitForFrame)
+  setup.waitFor = patient(setup.waitFor)
   // The app sets the provider catalog at the end of its startup reads (skills first): about 0.1 s
   // alone, seconds with every CPU busy. /connect and /model list nothing before it.
   await until(() => Object.keys(state.catalog).length > 0, 15_000, "the app's startup reads")
@@ -562,7 +578,7 @@ test("an invalid key surfaces as a Vietnamese error line", async () => {
 
 /**
  * Ends the "press Ctrl+C/Ctrl+D again to exit" window at once, so the next key starts afresh. Only the
- * test of the window itself waits it out (800 ms, EXIT_WINDOW_MS); four more 900 ms sleeps sat on the
+ * test of the window itself waits it out (800 ms, EXIT_WINDOW_MS); five more 900 ms sleeps sat on the
  * slowest file of the suite.
  */
 const disarmExit = () => setState("exitArmed", undefined)
@@ -1579,9 +1595,11 @@ test("Ctrl+C while answering stops the answer (and arms exit); on an approval it
   expect((await decision).allow).toBe(false)
   expect(exits).toBe(before)
   runtime.registry.unregister("xoa_thu")
-  // Not only the exit window: with disarmExit() here the tests after this one failed under
-  // --parallel=8 (4/4 runs) though they passed with the file alone. Cause not found; keep the wait.
-  await new Promise((r) => setTimeout(r, 900))
+  disarmExit()
+  // The denied prompt leaves on the next render; until then it still takes keys. Ending here without
+  // waiting made the next tests' keys go to it (8 failures per --parallel=8 run, 4/4 runs); a 900 ms
+  // sleep used to cover this.
+  await setup.waitForFrame((f) => !f.includes("Cần xác nhận"))
 })
 
 test("highlighting with the mouse copies the words only (no ● / ⎿, no trailing spaces) and says so", async () => {
@@ -3256,9 +3274,13 @@ test("background subagent: /clear stops it and its result never reaches the new 
     setup.mockInput.pressEnter()
     await waitMcp(() => !state.streaming && Object.values(state.agents).some((a) => a.background && a.status !== "completed" && a.status !== "stopped"))
     const id = Object.values(state.agents).find((a) => a.background && (a.status === "running" || a.status === "queued"))!.id
+    const old = currentSession().id
     await setup.mockInput.typeText("/clear")
     setup.mockInput.pressEnter()
     await waitMcp(() => runtime.subagents.get(id)?.status === "stopped")
+    // /clear has switched to the new conversation (its run was stopped on the way out): only then
+    // do the checks below say anything. Under full CPU load, 50 ms after the stop was not enough.
+    await until(() => currentSession().id !== old, 10_000, "/clear to start the new conversation")
     await new Promise((r) => setTimeout(r, 50))
     expect(state.notices).toEqual([])
     expect(state.lines.some((l) => l.kind === "agent-notice")).toBe(false)

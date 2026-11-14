@@ -143,6 +143,11 @@ async function choose(row: 0 | 1 | 2) {
 const systemOf = (body: Body) => JSON.stringify(body.messages.filter((m) => m.role === "system"))
 const userLines = () => state.lines.filter((l) => l.kind === "user")
 /** Requests of answer turns (streamed); the session title request after a first turn is not one. */
+/**
+ * The turn requests (streamed). "Nothing was sent" counts these: a request that does not stream, such
+ * as the title of the previous test's session or its background result, can land after that test ended
+ * when the machine is slow (60 ms per request was enough), in this test's `bodies`.
+ */
 const turns = () => bodies.filter((b) => b.stream)
 /** Waits for `n` turn requests, then for the turn to end. */
 async function answered(n: number) {
@@ -162,12 +167,12 @@ describe("a turn held because a source cannot be read", () => {
     expect(card).toContain("Thử lại")
     expect(card).toContain("Huỷ")
     expect(card).not.toContain("Hỏi về thị trường")
-    expect(bodies).toHaveLength(0)
+    expect(turns()).toHaveLength(0)
     setup!.mockInput.pressEscape()
     await until(() => state.turnHold === undefined)
     // The box holds the question again (its placeholder only shows when it is empty).
     const after = await frameWith((f) => f.includes("HPG thế nào?") && !f.includes("Chạy lượt này"))
-    expect(bodies).toHaveLength(0)
+    expect(turns()).toHaveLength(0)
     expect(userLines()).toHaveLength(0)
     expect(after).toContain("HPG thế nào?")
   })
@@ -185,7 +190,7 @@ describe("a turn held because a source cannot be read", () => {
     await frameWith((f) => f.includes("HPG thế nào?") && !f.includes("Chạy lượt này"))
     setup!.mockInput.pressEnter()
     await frameWith("Chạy lượt này không có hồ sơ và ràng buộc")
-    expect(bodies).toHaveLength(0)
+    expect(turns()).toHaveLength(0)
   })
 
   test("Thử lại after the cause is fixed: one request with the profile", async () => {
@@ -210,7 +215,7 @@ describe("a turn held because a source cannot be read", () => {
     await frameWith("Chạy lượt này không có hồ sơ")
     await choose(0)
     await until(() => state.turnHold !== undefined)
-    expect(bodies).toHaveLength(0)
+    expect(turns()).toHaveLength(0)
     expect(userLines()).toHaveLength(1)
   })
 
@@ -253,7 +258,7 @@ describe("a turn held because a source cannot be read", () => {
     expect(frame).toMatch(/HPG thế nào\?[\s\S]*so với HSG/)
     expect(state.queue).toHaveLength(0)
     expect(userLines()).toHaveLength(0)
-    expect(bodies).toHaveLength(0)
+    expect(turns()).toHaveLength(0)
   })
 
   test("stopped (Esc) while the read is still going: no card; handled like Huỷ, and 'Đã dừng.'", async () => {
@@ -275,7 +280,7 @@ describe("a turn held because a source cannot be read", () => {
     expect(frame).not.toContain("Chạy lượt này không có hồ sơ")
     expect(userLines()).toHaveLength(0)
     expect(frame).toContain("HPG thế nào?")
-    expect(bodies).toHaveLength(0)
+    expect(turns()).toHaveLength(0)
   })
 
   test("a background-result turn held then cancelled: the result waits and goes with what the user types next", async () => {
@@ -306,7 +311,7 @@ describe("a turn held because a source cannot be read", () => {
     expect(frame).toContain("HPG thế nào?")
     expect(state.turnHold).toBeUndefined()
     expect(userLines()).toHaveLength(0)
-    expect(bodies).toHaveLength(0)
+    expect(turns()).toHaveLength(0)
   })
 })
 
