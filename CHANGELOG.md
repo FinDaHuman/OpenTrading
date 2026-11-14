@@ -25,6 +25,16 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ### Changed
 
+- `shell` arithmetic-only commands take the forms models really write (issue #268: 56% of the commands of a
+  benchmark run were sent to the approval gate and denied). Both shells now accept several statements, on one
+  line or many, with variables: `awk 'BEGIN{ k = 250/119; a = log(66.3/73.5)*k; printf "%.4f\n", a }'` and
+  `$k = 250/119; [math]::Log(66.3/73.5)*$k`. awk also takes `print`, `printf(…)`, `\n` and `\t` anywhere in a
+  format, widths, comments, and comparisons or `?:` inside brackets. Limits: 8,000 characters (was 500) and 60
+  statements. Still not arithmetic: files, pipes, redirects (`print a > b` writes a file), loops, arrays,
+  strings, awk's and PowerShell's own names, and a variable the command never assigned (a mistyped name
+  computes with 0 or `$null` without an error). `print` in awk keeps 15 significant digits (awk's default is 6).
+  The tool description shows the multi-step form and says to round only the final result (issue #278 N1: the
+  old `%.2f` example was copied into intermediate values).
 - `prompts/tools.md`: computed figures (ratios, %, CAGR, P/E, unit changes) come from one arithmetic-only `shell`
   command per step, large amounts scaled to tỷ đồng inside the expression; the answer states the formula and inputs.
   A command that still fails after one fix may be computed by hand, labelled "tự tính" with formula and inputs.
