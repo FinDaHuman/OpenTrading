@@ -81,10 +81,18 @@ Dung lượng và dọn dẹp (Claude Code không dọn thư mục tạm của n
 
 Model tính số (tỷ lệ, %, CAGR, P/E, đổi đơn vị) bằng `shell`. Lệnh **chỉ gồm phép tính** chạy ngay ở mọi chế độ, kể cả ‖ chỉ đọc, `ot -p` và eval, không hỏi bạn và không tốn request duyệt của ▸▸:
 
-- Windows (PowerShell): biểu thức số, nhiều phép ngăn bằng `;`, hàm chỉ `[math]::Round/Abs/Sqrt/Pow/Log/Log10/Exp/Max/Min/Floor/Ceiling/Truncate`. Ví dụ `(128.4/112-1)*100; [math]::Round(31250/4520, 2)`. Kết quả in theo dấu chấm thập phân (`1.5`), không theo cài đặt vùng của máy.
-- macOS, Linux: `awk 'BEGIN{printf "%.2f %.2f\n", (128.4/112-1)*100, 1.08^3}'`, hàm chỉ `sqrt/log/exp/int`.
+- Windows (PowerShell): các câu lệnh cách nhau bằng `;` hoặc xuống dòng. Mỗi câu là phép gán `$ten = biểu thức` hoặc một biểu thức (in ra giá trị). Hàm chỉ `[math]::Round/Abs/Sqrt/Pow/Log/Log10/Exp/Max/Min/Floor/Ceiling/Truncate`. Ví dụ `$g = 128.4/112 - 1; $g*100; [math]::Pow(1 + $g, 3)`. Kết quả in theo dấu chấm thập phân (`1.5`), không theo cài đặt vùng của máy.
+- macOS, Linux: `awk 'BEGIN{ … }'` với phép gán, `print` và `printf`, viết một dòng hoặc nhiều dòng. Ví dụ `awk 'BEGIN{ g = 128.4/112 - 1; printf "%.10g %.10g\n", g*100, (1+g)^3 }'`. Hàm chỉ `sqrt/log/exp/int`; so sánh và `?:` phải nằm trong ngoặc. `print` giữ 15 chữ số có nghĩa (mặc định của awk chỉ giữ 6).
+- Cả hai: lệnh dài tối đa 8.000 ký tự và 60 câu lệnh; được viết chú thích `#`.
 
-OpenTrading kiểm từng lệnh bằng văn phạm biểu thức. Lệnh có biến, file, pipe, dấu phẩy ngoài ngoặc hàm, khoảng `1..3`, thư mục chạy khác (`workdir`) hay bất kỳ tên nào khác thì đi đường duyệt bình thường. Quy tắc `deny`/`ask` của bạn vẫn áp dụng cho các lệnh này.
+OpenTrading kiểm từng lệnh bằng một văn phạm, không phải bằng danh sách ký tự. Những thứ sau khiến lệnh đi đường duyệt bình thường:
+
+- file, pipe, chuyển hướng (`>` sau `print` trong awk là ghi ra file), vòng lặp, `if`, định nghĩa hàm, chuỗi (trừ format của `printf` và nhãn trong `print`), mảng;
+- tên riêng của awk (`system`, `getline`, `ENVIRON`…) hoặc biến có sẵn của PowerShell (`$env:…`, `$ErrorActionPreference`…), thành viên hay chỉ số của biến (`$x.Y`, `$x[0]`);
+- biến chưa được gán trong chính lệnh đó. Tên gõ sai sẽ thành 0 trong awk và `$null` trong PowerShell mà không báo lỗi, nên lệnh như vậy không được coi là phép tính;
+- dấu phẩy ngoài ngoặc hàm và khoảng `1..3` trong PowerShell, tuỳ chọn như `-v` hay file đầu vào của awk, thư mục chạy khác (`workdir`).
+
+Quy tắc `deny`/`ask` của bạn vẫn áp dụng cho các lệnh này.
 
 ## Luôn hỏi bạn, không quy tắc hay model nào duyệt thay
 
