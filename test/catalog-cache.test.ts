@@ -2,6 +2,7 @@ import { afterEach, expect, test } from "bun:test"
 import { mkdir, mkdtemp, rm, utimes, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
+import { until } from "./helpers/tui"
 
 const { loadCatalog } = await import("../src/core/catalog")
 
@@ -28,14 +29,6 @@ async function homeWithCache(ageMs: number) {
   const at = new Date(Date.now() - ageMs)
   await utimes(file, at, at)
   return file
-}
-
-async function until(ok: () => Promise<boolean>, ms = 2000) {
-  const end = Date.now() + ms
-  while (!(await ok())) {
-    if (Date.now() > end) throw new Error("condition not met in time")
-    await new Promise((r) => setTimeout(r, 5))
-  }
 }
 
 test("a stale cache is used at once, without waiting for the download; later calls get the fresh catalog", async () => {

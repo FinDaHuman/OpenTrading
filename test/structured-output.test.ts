@@ -4,6 +4,7 @@ import os from "node:os"
 import path from "node:path"
 import { z } from "zod"
 import { until } from "./helpers/tui"
+import { chunkFor, sse } from "./helpers/chat"
 
 // Isolated state dir before core modules read it.
 const home = await mkdtemp(path.join(os.tmpdir(), "ot-structured-"))
@@ -25,9 +26,7 @@ type Msg = { role: string; content?: unknown }
 type Body = { messages: Msg[]; tools?: { function: { name: string } }[]; tool_choice?: unknown }
 type Reply = { call: { name: string; args: object } } | { text: string } | { status: number; message: string }
 
-const sse = (chunks: object[]) =>
-  new Response(chunks.map((c) => `data: ${JSON.stringify(c)}\n\n`).join("") + "data: [DONE]\n\n", { headers: { "content-type": "text/event-stream" } })
-const chunk = (delta: object, finish: string | null = null) => ({ id: "c", object: "chat.completion.chunk", created: 1, model: "tooly", choices: [{ index: 0, delta, finish_reason: finish }] })
+const chunk = chunkFor("tooly")
 let ids = 0
 
 /** What the child answers, request by request; the last reply repeats. */

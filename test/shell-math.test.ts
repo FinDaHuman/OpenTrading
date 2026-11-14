@@ -204,11 +204,16 @@ test("awk arithmetic runs under a POSIX shell", async () => {
 test("every accepted form really runs in this machine's shell and prints only numbers", async () => {
   const tool = shellTool(ws())
   const cases = win ? PS_OK : Bun.which("awk") ? AWK_OK : []
-  for (const command of cases) {
-    const out = text(await tool.execute({ command }, ctx()))
-    expect(out, command).toContain("mã thoát 0")
-    expect(out.split(/\r?\n/).slice(1).join(" "), command).toMatch(/^[\s\d.=;:a-z+-]+$/i)
+  // Each form in its own shell, as the tool runs it, four at a time: one after another took 10.5 s
+  // (about 1 s per PowerShell start), the slowest test of the suite.
+  const outs: string[] = []
+  for (let i = 0; i < cases.length; i += 4) {
+    outs.push(...(await Promise.all(cases.slice(i, i + 4).map(async (command) => text(await tool.execute({ command }, ctx()))))))
   }
+  cases.forEach((command, i) => {
+    expect(outs[i], command).toContain("mã thoát 0")
+    expect(outs[i]!.split(/\r?\n/).slice(1).join(" "), command).toMatch(/^[\s\d.=;:a-z+-]+$/i)
+  })
 }, 60_000)
 
 test("through runTool with a read-only, non-interactive gate: arithmetic runs, other commands are refused", async () => {

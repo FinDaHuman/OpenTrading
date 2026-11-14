@@ -4,6 +4,7 @@ import os from "node:os"
 import path from "node:path"
 import { APICallError, generateText } from "ai"
 import { z } from "zod"
+import { chunkFor, sse } from "./helpers/chat"
 
 const home = await mkdtemp(path.join(os.tmpdir(), "ot-orpin-"))
 process.env.OPENTRADING_HOME = home
@@ -27,10 +28,8 @@ const CATALOG = {
 
 type Body = { provider?: unknown; messages: { role: string }[] }
 const bodies: Body[] = []
-const sse = (chunks: object[]) =>
-  new Response(chunks.map((c) => `data: ${JSON.stringify(c)}\n\n`).join("") + "data: [DONE]\n\n", { headers: { "content-type": "text/event-stream" } })
 // OpenRouter puts the upstream provider on every chunk.
-const chunk = (delta: object, finish: string | null = null) => ({ id: "c", provider: "DeepSeek", object: "chat.completion.chunk", created: 1, model: MODEL.id, choices: [{ index: 0, delta, finish_reason: finish }] })
+const chunk = chunkFor(MODEL.id, { provider: "DeepSeek" })
 
 const realFetch = globalThis.fetch
 globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {

@@ -4,6 +4,7 @@ import os from "node:os"
 import path from "node:path"
 import { generateText } from "ai"
 import { z } from "zod"
+import { chunkFor, sse } from "./helpers/chat"
 
 const home = await mkdtemp(path.join(os.tmpdir(), "ot-ocgo-"))
 process.env.OPENTRADING_HOME = home
@@ -30,9 +31,7 @@ const CATALOG = {
 
 type Sent = { url: string; ua: string | null; session: string | null; stream: boolean; tool: boolean }
 const sent: Sent[] = []
-const sse = (chunks: object[]) =>
-  new Response(chunks.map((c) => `data: ${JSON.stringify(c)}\n\n`).join("") + "data: [DONE]\n\n", { headers: { "content-type": "text/event-stream" } })
-const chunk = (delta: object, finish: string | null = null) => ({ id: "c", object: "chat.completion.chunk", created: 1, model: MODEL.id, choices: [{ index: 0, delta, finish_reason: finish }] })
+const chunk = chunkFor(MODEL.id)
 
 const realFetch = globalThis.fetch
 globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {

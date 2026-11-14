@@ -5,6 +5,7 @@ import path from "node:path"
 import { z } from "zod"
 import type { ModelMessage } from "ai"
 import { HPG_BLOCK_V3, HPG_V3, seedExample, useNotebookDir } from "./helpers/memory-notebook"
+import { chunkFor, sse } from "./helpers/chat"
 
 // Isolated state dir before core modules read it; no retry waits.
 const home = await mkdtemp(path.join(os.tmpdir(), "ot-redaction-agent-"))
@@ -28,17 +29,7 @@ const bodies: Body[] = []
 /** Tool calls the fake model makes, one per request, before it answers in text. */
 let calls: { tool: string; args: object }[] = []
 
-const sse = (chunks: object[]) =>
-  new Response(chunks.map((c) => `data: ${JSON.stringify(c)}\n\n`).join("") + "data: [DONE]\n\n", {
-    headers: { "content-type": "text/event-stream" },
-  })
-const chunk = (delta: object, finish: string | null = null) => ({
-  id: "c",
-  object: "chat.completion.chunk",
-  created: 1,
-  model: "m",
-  choices: [{ index: 0, delta, finish_reason: finish }],
-})
+const chunk = chunkFor("m")
 
 const realFetch = globalThis.fetch
 globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
