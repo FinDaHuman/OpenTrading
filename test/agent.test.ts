@@ -1468,6 +1468,20 @@ test("a promise without a tool call is sent back once with tools on, and the too
   expect(JSON.stringify(done(events).messages)).not.toContain("Mình sẽ lấy giờ hiện tại")
 })
 
+test("13/11 m3: sources down, an honest answer that offers to compute from the user's price is kept as is", async () => {
+  const offer =
+    "Mình chưa thể lấy được giá đóng cửa gần nhất của HPG vì nguồn dữ liệu đang lỗi.\n\nBạn vui lòng thử lại sau vài phút hoặc cung cấp giá đóng cửa gần nhất mà bạn đang theo dõi, mình sẽ tính toán ngay giúp bạn."
+  respond = (_body, n) => (n === 0 ? toolCall("mcp__ot__source", {}, "call_1") : n === 1 ? answer(offer) : undefined)
+  const events = await collect(runAgent({ history: [], input: "Mua 1.500 cổ phiếu HPG ở giá đóng cửa gần nhất thì hết bao nhiêu?", skills: [], registry: failingSource() }))
+  expect(bodies).toHaveLength(2)
+  expect(done(events).recoveries).toBeUndefined()
+  expect(done(events).dataGaps).toEqual(["source"])
+  // Shown once: no second answer streamed after a rescue.
+  const shown = events.flatMap((e) => (e.type === "text-delta" ? [e.text] : [])).join("")
+  expect(shown.split("mình sẽ tính toán ngay")).toHaveLength(2)
+  expect(JSON.stringify(done(events).messages.at(-1))).toContain("mình sẽ tính toán ngay")
+})
+
 test("an answer that ends with an offer or a question costs exactly one request", async () => {
   respond = (_body, n) => (n === 0 ? answer("VCB đóng cửa 57.200đ.\n\nBạn có muốn mình lấy thêm dữ liệu khối ngoại không?") : undefined)
   const events = await collect(runAgent({ history: [], input: "giá VCB", skills: [], registry: registry() }))

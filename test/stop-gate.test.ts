@@ -91,6 +91,49 @@ test("a bare promise to act is sent back once, tools on; offers, questions and r
   expect(judgeStop({ ...promise, finish: "length" }, ["length", "length"])).toEqual({ action: "accept" })
 })
 
+test("13/11 m3: an offer that waits on the user or on the source is no promise; waiting on the model still is", async () => {
+  const { isPromise } = await import("../src/core/loop/stop-gate")
+  // The two answers of eval m3 (sources down), verbatim.
+  const m3 =
+    "Hiện tại hệ thống dữ liệu về giá cổ phiếu (HPG) đang tạm thời gián đoạn (do quá tải hệ thống nguồn). Mình chưa thể lấy được giá đóng cửa gần nhất để tính toán chính xác tổng tiền và % lãi/lỗ cho bạn tại thời điểm này.\n\nBạn vui lòng thử lại sau vài phút hoặc cung cấp giá đóng cửa gần nhất mà bạn đang theo dõi, mình sẽ tính toán ngay giúp bạn."
+  const m3Again =
+    "Hiện tại mình chưa thể lấy được dữ liệu giá cổ phiếu HPG mới nhất do sự cố kết nối tạm thời từ phía nguồn dữ liệu. \n\nVì lý do này, mình không có giá đóng cửa gần nhất để tính toán chính xác tổng số tiền đầu tư và phần trăm lãi/lỗ theo yêu cầu của bạn. \n\nKhi nguồn dữ liệu hoạt động trở lại, bạn có thể cho mình biết lại hoặc mình sẽ hỗ trợ bạn ngay khi kiểm tra lại được dữ liệu."
+  for (const text of [
+    m3,
+    m3Again,
+    "Bạn vui lòng thử lại sau vài phút hoặc cung cấp giá đóng cửa gần nhất mà bạn đang theo dõi, mình sẽ tính toán ngay giúp bạn.",
+    "Bạn cứ nhập giá, mình sẽ tính.",
+    "Nếu bạn gửi giá, mình sẽ tính tổng tiền.",
+    "Khi nguồn hoạt động lại, mình sẽ lấy giá.",
+    "Mình sẽ tính ngay khi bạn gửi giá.",
+    "Nguồn giá đang lỗi, mình sẽ kiểm tra ngay khi hệ thống ổn định lại.",
+    // The offer starts the last sentence, not the line.
+    "Mình chưa lấy được giá. Nếu bạn gửi giá, mình sẽ tính.",
+    "Bạn có thể cho mình biết giá mua, mình sẽ tính lãi/lỗ.",
+  ])
+    expect([text, isPromise(text)]).toEqual([text, false])
+  for (const text of [
+    "Bạn chờ chút, mình sẽ lấy giá HPG.",
+    "Đợi mình kiểm tra lại nhé, mình sẽ gọi tool.",
+    "Mình chưa lấy được giá. Để mình thử nguồn khác.",
+    "Sau khi nạp tool, mình sẽ lấy giá.",
+    "Khi có dữ liệu, mình sẽ phân tích.",
+    "Mình sẽ tính sau khi lấy được giá.",
+    "Bạn vui lòng chờ, mình sẽ lấy giá HPG.",
+    // Only the last sentence counts: an earlier offer does not cover a promise after it.
+    "Khi nguồn hoạt động lại bạn thử lại nhé. Để mình thử nguồn khác.",
+    // What the user already gave is no condition.
+    "Dựa trên thông tin bạn cung cấp, mình sẽ phân tích.",
+    "Với 3 mã bạn gửi, mình sẽ lấy giá.",
+    "Theo mã bạn chọn, mình sẽ lấy BCTC.",
+    "Mình sẽ phân tích dữ liệu bạn cung cấp.",
+  ])
+    expect([text, isPromise(text)]).toEqual([text, true])
+  // The gate accepts m3 as it is: no request spent sending it back.
+  const failed = step({ text: m3, afterTools: true, toolsInTurn: true, dataInTurn: true, gaps: ["vn_equity_quote_batch"], usableData: true, fetchedData: false })
+  expect(judgeStop(failed, [])).toEqual({ action: "accept" })
+})
+
 test("a fragment continuing an old sentence (30/10) is sent back once, only in a turn without tools", () => {
   for (const text of [
     " hay FPT sẽ mang lại góc nhìn rõ hơn về định giá hoặc kỹ thuật nếu bạn quan tâm.",
