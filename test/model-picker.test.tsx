@@ -41,6 +41,9 @@ afterEach(async () => {
   // A write still in flight would fail once the scratch home is gone, and its warning
   // would land in the next test file's notifications.
   await modelPrefsSaved()
+  // Each test starts from the prefs it gives open(): a test after one that saved a recent model read
+  // that model back from model.json (seen with --randomize, seed 101).
+  await rm(modelPrefsFile(), { force: true })
   resetNotifications()
   setState({ dialog: undefined, modelPrefs: { favorite: [], recent: [] }, provider: undefined, model: undefined, effort: undefined, askEffort: true })
 })
@@ -93,7 +96,7 @@ test("ctrl+f stars the highlighted model and keeps the highlight on it; it is sa
   // The row moved nowhere: still the Google one, now starred; the favourite also sits on top.
   expect(selected(f)).toMatch(/❯ ★ Gemini 3\.1 Pro/)
   expect(state.modelPrefs.favorite).toEqual([{ provider: "google", model: "gemini-3.1-pro" }])
-  await until(async () => (await readFile(modelPrefsFile(), "utf8").catch(() => "")).includes("gemini-3.1-pro"), 5_000, "the prefs file")
+  await until(async () => (await loadModelPrefs()).favorite.some((f) => f.model === "gemini-3.1-pro"), 5_000, "the favourite in model.json")
   expect(await loadModelPrefs()).toEqual({ favorite: [{ provider: "google", model: "gemini-3.1-pro" }], recent: [] })
   expect(state.notification?.text).toContain("Đã thêm gemini-3.1-pro vào yêu thích")
   // The filter did not move: ctrl+f is not the input's forward-char here.
