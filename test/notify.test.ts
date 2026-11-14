@@ -2,18 +2,11 @@ import { afterEach, expect, test } from "bun:test"
 import { dismiss, flash, MAX_TOASTS, noticeText, notify, resetNotifications, say } from "../src/tui/notify"
 import { announceMcp } from "../src/tui/mcp/notices"
 import { state } from "../src/tui/state"
+import { until } from "./helpers/tui"
 
 const shown = () => state.notification?.text
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 /** Wait for a condition, not a fixed time: under CI load a 20 ms timer can fire much later. */
-async function until(ok: () => boolean, ms = 2000) {
-  const end = Date.now() + ms
-  while (!ok()) {
-    if (Date.now() > end) throw new Error("condition not met in time")
-    await sleep(5)
-  }
-}
-
 afterEach(() => resetNotifications())
 
 test("one notice shows at a time; the next waits and shows when the first times out", async () => {
