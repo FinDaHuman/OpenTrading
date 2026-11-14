@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test"
 import { readFileSync, readdirSync } from "node:fs"
 import path from "node:path"
-import { CALL_TAGS, HARNESS_TAGS, markupStreamFilter, NOTE_TAGS, stripMarkup } from "../src/core/loop/markup"
+import { CALL_TAGS, HARNESS_TAGS, isCallTag, markupStreamFilter, NOTE_TAGS, stripMarkup } from "../src/core/loop/markup"
 import { isEmptyAnswer, stripEchoes } from "../src/core/loop/stop-gate"
 import { REMINDER_TAG } from "../src/core/reminder-tag"
 import { COMPACT_TAG } from "../src/core/compact-marker"
@@ -55,6 +55,42 @@ test("fake tool calls in Hermes/Qwen/GLM form go, stray closing tags too", () =>
   )
   expect(stripMarkup("<function=mcp__opentrading__vn_quote_history>\n<parameter=symbol>\nHPG\n</parameter>\n</function>\nGiá HPG?").text).toBe("Giá HPG?")
   expect(stripMarkup("T the the réforme\n</parameter>\n>\n</function>\n").text).toBe("T the the réforme\n>")
+})
+
+// --- DeepSeek DSML (issue #268 bug 2, issue #278 R2): the bar is U+FF5C, a space may follow it ---
+
+const DSML_268 =
+  'Kết quả:\n<｜DSML｜function_calls>\n<｜DSML｜invoke name="calculate">\n<｜DSML｜parameter name="expression" string="true">1+2</｜DSML｜parameter>\n</｜DSML｜invoke>\n</｜DSML｜function_calls>'
+/** The final text of trial c1-chg-402, cut where the benchmark cut it. */
+const DSML_278 =
+  '<｜DSML｜ calls>\n<｜DSML｜ invoke name="calculate">\n<｜DSML｜ parameter name="expression" string="true">(52.7 - 58.2) * 1000</｜DSML｜ parameter>\n'
+
+test("a DeepSeek DSML tool call goes, closed or cut, with or without the space", () => {
+  expect(stripMarkup(DSML_268)).toEqual({ text: "Kết quả:", tags: ["dsml"] })
+  expect(stripMarkup(DSML_278)).toEqual({ text: "", tags: ["dsml"] })
+  expect(isEmptyAnswer(DSML_278)).toBe(true)
+  // Opened mid-sentence and never closed: still a call, no prose names such a tag.
+  expect(stripMarkup('Để tính: <｜DSML｜ invoke name="shell"> python3 -c "print(1)"').text).toBe("Để tính:")
+  // What is left of a call: closing tags alone, and the ASCII bar.
+  expect(stripMarkup("Xong.\n</｜DSML｜ parameter>\n</｜DSML｜ invoke>").text).toBe("Xong.")
+  expect(stripMarkup('<|DSML|invoke name="shell">x</|DSML|invoke>FPT tăng.').text).toBe("FPT tăng.")
+  expect(stripMarkup("Thẻ `<｜DSML｜ invoke>` là cú pháp của DeepSeek.").tags).toEqual([])
+  for (const text of [DSML_268, DSML_278, "a <｜ b < ｜DSML｜ c <｜DSMX｜ d", 'Số <｜DSML｜ invoke name="x">1</｜DSML｜ invoke> hết.']) expectStreamAgrees(text)
+  expect(stripMarkup("a <｜ b < ｜DSML｜ c <｜DSMX｜ d").tags).toEqual([])
+})
+
+test("the stream never shows a piece of a DSML call, at any chunk boundary", () => {
+  for (let i = 0; i <= DSML_268.length; i++) {
+    const f = markupStreamFilter()
+    const shown = f.push(DSML_268.slice(0, i))
+    expect(shown).not.toContain("DSML")
+    expect(shown).not.toContain("<")
+  }
+})
+
+test("isCallTag: a call written as text, not a harness tag or a working note", () => {
+  expect(["dsml", "tool_call", "invoke", "todo_write"].map(isCallTag)).toEqual([true, true, true, true])
+  expect(["nhac_nho", "thought", "bat_bien"].map(isCallTag)).toEqual([false, false, false])
 })
 
 test("working notes go; a note that never closes takes the rest of the step with it", () => {

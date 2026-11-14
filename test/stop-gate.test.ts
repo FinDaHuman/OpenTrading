@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test"
 import type { ModelMessage } from "ai"
-import { claimsFetch, figureSources, isDraft, isEmptyAnswer, isFragment, judgeStop, MAX_RECOVERIES, RESCUE_ANSWER_NOW, RESCUE_DRAFT, RESCUE_DRAFT_FETCH, ranDataTool, stripEchoes, ungroundedInTurn, unfetchedFigures, type LastStep } from "../src/core/loop/stop-gate"
+import { claimsFetch, figureSources, isDraft, isEmptyAnswer, isFragment, judgeStop, MAX_RECOVERIES, RESCUE_ANSWER_NOW, RESCUE_DRAFT, RESCUE_DRAFT_FETCH, RESCUE_TEXT_CALL, ranDataTool, stripEchoes, ungroundedInTurn, unfetchedFigures, type LastStep } from "../src/core/loop/stop-gate"
 import { DRAFT } from "./fixtures/draft-answer"
 
 const step = (over: Partial<LastStep>): LastStep => ({ text: "", toolNames: [], finish: "stop", ...over })
@@ -28,6 +28,20 @@ test("Gemini's malformed call is retried once with tools on; filters give up at 
   expect(judgeStop(step({ rawFinish: "UNEXPECTED_TOOL_CALL" }), [])).toMatchObject({ kind: "malformed" })
   expect(judgeStop(step({ rawFinish: "SAFETY" }), [])).toEqual({ action: "give-up", kind: "blocked" })
   expect(judgeStop(step({ rawFinish: "RECITATION", finish: "content-filter" }), [])).toEqual({ action: "give-up", kind: "blocked" })
+})
+
+test("a step that is only a tool call written as text is asked for the real call once, tools on", () => {
+  const dsml = step({ text: '<｜DSML｜ calls>\n<｜DSML｜ invoke name="shell">\n<｜DSML｜ parameter name="command">awk</｜DSML｜ parameter>\n', afterTools: true })
+  expect(judgeStop(dsml, [])).toEqual({ action: "continue", kind: "text-call", nudge: RESCUE_TEXT_CALL, toolChoice: "auto" })
+  // Again: an empty answer like any other (after "text-call", the second try of the empty rescue).
+  expect(judgeStop(dsml, ["text-call"])).toMatchObject({ action: "continue", kind: "empty" })
+  expect(judgeStop(dsml, ["empty", "empty"])).toEqual({ action: "give-up", kind: "empty" })
+  expect(judgeStop(dsml, [], new Set(["gate-text-call"]))).toMatchObject({ kind: "empty" })
+  expect(judgeStop(step({ text: '<tool_call>vn_quote_history<param_key>limit</param_key></tool_call>' }), [])).toMatchObject({ kind: "text-call" })
+  // A copied harness tag or a working note is no call; a call beside a real answer is just removed.
+  expect(judgeStop(step({ text: "<nhac_nho>\nx\n</nhac_nho>" }), [])).toMatchObject({ kind: "empty" })
+  expect(judgeStop(step({ text: "<thought>x</thought>" }), [])).toMatchObject({ kind: "empty" })
+  expect(judgeStop(step({ text: 'VCB: LNST quý 2 tăng 54%.\n<｜DSML｜ invoke name="x">1</｜DSML｜ invoke>' }), [])).toEqual({ action: "accept" })
 })
 
 test("a cut answer is continued while the budget lasts, then kept as it is", () => {

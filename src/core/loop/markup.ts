@@ -3,7 +3,8 @@
  * - The harness's own tags, which the model copies. Seen 13/11 with gemini-3.1-flash-lite: after
  *   two empty answers, the whole answer was a self-made `<nhac_nho>` todo list. Also 05/11 (34i).
  * - A tool call written as text: `<todo_write>{…}</todo_write>` (08/11, 40a),
- *   `<tool_call>name<param_key>…`, `<function=…><parameter=…>`. These are never run.
+ *   `<tool_call>name<param_key>…`, `<function=…><parameter=…>`, DeepSeek's
+ *   `<｜DSML｜ invoke name="…">` (issues #268, #278). These are never run.
  * - Its own working notes: `<thought>`, `<phan_tich_tool>`.
  *
  * Removing it is deterministic, so the user, `ot -p`, evals and the history never see it. A step
@@ -58,7 +59,21 @@ export const CALL_TAGS = [
 /** Working notes, never an answer. */
 export const NOTE_TAGS = ["thought", "thinking", "think", "analysis", "reasoning", "scratchpad", "phan_tich_tool", "chi_dan_agent"] as const
 
-const KNOWN = new Set<string>([...HARNESS_TAGS, ...CALL_TAGS, ...NOTE_TAGS])
+/**
+ * DeepSeek's own tool-call syntax, leaked as text when its template is not parsed upstream:
+ * `<｜DSML｜function_calls>`, `<｜DSML｜ invoke name="shell">`, `</｜DSML｜ parameter>`. The bar is
+ * U+FF5C (an ASCII bar is read too) and a space may follow the prefix. Whatever the name after
+ * it, the tag is a call, reported under this one name.
+ */
+export const DSML_TAG = "dsml"
+const DSML = /^[｜|]DSML[｜|][ \t]*/
+const DSML_PREFIXES = ["｜DSML｜", "|DSML|"]
+
+const KNOWN = new Set<string>([...HARNESS_TAGS, ...CALL_TAGS, ...NOTE_TAGS, DSML_TAG])
+const NOT_CALLS = new Set<string>([...HARNESS_TAGS, ...NOTE_TAGS])
+
+/** Whether a removed tag (MarkupFilter.tags) was a tool call written as text. */
+export const isCallTag = (name: string) => !NOT_CALLS.has(name)
 
 /** The memory card is an answer part (memory/cards): its own filter takes it out, never this one. */
 const CARD_TAG = "the_goi_y"
@@ -76,22 +91,33 @@ interface Opening {
   /** Length of the whole `<name …>` token. */
   length: number
   closing: boolean
+  /** How this tag's block ends when it is not the plain `</name>`. */
+  close?: RegExp
 }
 
 /** The tag at the start of `text`: a token, "need more text", or not a tag at all. */
 function readTag(text: string): Opening | "more" | undefined {
-  const m = /^<(\/?)([a-z][a-z0-9_]*)/.exec(text)
+  const closing = text[1] === "/"
+  let at = closing ? 2 : 1
+  const dsml = DSML.exec(text.slice(at))
+  if (dsml) at += dsml[0].length
+  // "<｜DS" at the end of what has arrived: wait.
+  else if (text.length > at && DSML_PREFIXES.some((p) => p.startsWith(text.slice(at)))) return text.length <= MAX_TOKEN ? "more" : undefined
+  const m = /^[a-z][a-z0-9_]*/.exec(text.slice(at))
   if (!m) {
     // "<", "</", "<f…" at the end of what has arrived: wait.
-    return /^<\/?[a-z0-9_]*$/.test(text) && text.length <= MAX_TOKEN ? "more" : undefined
+    return /^[a-z0-9_]*$/.test(text.slice(at)) && text.length <= MAX_TOKEN ? "more" : undefined
   }
-  const rest = text.slice(m[0].length)
+  at += m[0].length
+  const rest = text.slice(at)
   if (rest === "") return text.length <= MAX_TOKEN ? "more" : undefined
   // `<function=name>`, `<parameter name="x">`, `<invoke name="x">`.
   const attrs = /^(?:[\s=][^<>\n]*)?(>|$)/.exec(rest.slice(0, MAX_TOKEN))
   if (!attrs) return undefined
   if (attrs[1] === "") return text.length <= MAX_TOKEN ? "more" : undefined
-  return { name: m[2]!, length: m[0].length + attrs[0].length, closing: m[1] === "/" }
+  const length = at + attrs[0].length
+  if (dsml) return { name: DSML_TAG, length, closing, close: new RegExp(`</[｜|]DSML[｜|][ \\t]*${m[0]}>`) }
+  return { name: m[0], length, closing }
 }
 
 export interface MarkupFilter {
@@ -112,7 +138,7 @@ export function markupStreamFilter(): MarkupFilter {
   let fence = false
   let inline = false
   // Inside a block: its tag, where it opened, and whether it opened its line.
-  let block: { name: string; token: string; ownLine: boolean } | undefined
+  let block: { name: string; token: string; ownLine: boolean; close?: RegExp } | undefined
 
   function run(final: boolean): string {
     let out = ""
@@ -127,9 +153,10 @@ export function markupStreamFilter(): MarkupFilter {
     }
     for (;;) {
       if (block) {
-        const close = buf.indexOf(`</${block.name}>`)
+        const found = block.close?.exec(buf)
+        const close = block.close ? (found?.index ?? -1) : buf.indexOf(`</${block.name}>`)
         if (close >= 0) {
-          let after = close + block.name.length + 3
+          let after = close + (found ? found[0].length : block.name.length + 3)
           // A block on its own line takes its line break with it: wait to see whether one follows.
           if (block.ownLine && after === buf.length && !final) return out
           tags.add(block.name)
@@ -138,8 +165,8 @@ export function markupStreamFilter(): MarkupFilter {
           block = undefined
           continue
         }
-        if (!block.ownLine && (buf.length > MAX_INLINE_BLOCK || final)) {
-          // Never closed, opened mid-sentence: it was text after all.
+        if (!block.ownLine && !block.close && (buf.length > MAX_INLINE_BLOCK || final)) {
+          // Never closed, opened mid-sentence: it was text after all. (No prose names a DSML tag.)
           const token = block.token
           block = undefined
           buf = buf.slice(token.length)
@@ -262,7 +289,7 @@ export function markupStreamFilter(): MarkupFilter {
         }
         if (body === "") return out
       }
-      block = { name: tag.name, token, ownLine: lineStart }
+      block = { name: tag.name, token, ownLine: lineStart, ...(tag.close ? { close: tag.close } : {}) }
     }
   }
 

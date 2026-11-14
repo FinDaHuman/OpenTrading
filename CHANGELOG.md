@@ -42,6 +42,11 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ### Fixed
 
+- DeepSeek's tool-call syntax written as text (`<｜DSML｜ invoke name="shell">…`, with the full-width bar and an
+  optional space) is now removed from the answer like other fake calls; it was shown as the final answer in
+  benchmark trials (issues #268, #278). A step that held only a tool call written as text, in any form, is
+  sent back once with tools on (`text-call` recovery: "call it again as a tool call"), instead of the
+  empty-answer rescue that switched tools off right after tool results. Eval ablation: `gate-text-call`.
 - The stop gate no longer takes an offer that waits on the user or on a source for a broken promise (13/11,
   eval m3: "Bạn vui lòng … cung cấp giá đóng cửa …, mình sẽ tính toán ngay giúp bạn" was sent back, cost one
   more request and showed two answers). The last sentence is an offer when the user gives something first
