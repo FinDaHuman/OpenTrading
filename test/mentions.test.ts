@@ -33,6 +33,8 @@ beforeAll(async () => {
   await writeFile(path.join(root, "docs", "a.md"), "A\n")
   await writeFile(path.join(root, ".env"), "KEY=secret\n")
   await writeFile(path.join(root, "lon.txt"), Array.from({ length: 3000 }, (_, i) => `dòng số ${i + 1} ${"x".repeat(20)}`).join("\n"))
+  // 40k characters each (the cap test and the prune test both use them, in either order).
+  for (let i = 0; i < 4; i++) await writeFile(path.join(root, `lon-${i}.txt`), Array.from({ length: 1000 }, () => "z".repeat(39)).join("\n"))
   await writeFile(path.join(outside, "bi-mat.md"), "không được đọc\n")
   ws = new Workspace(root, { home: path.join(base, "home"), data: path.join(base, "data") })
 })
@@ -107,7 +109,6 @@ describe("attachMentions", () => {
 
   test("past the per-message cap, files are named for read_file instead", async () => {
     // 40k characters each: two fill 40k at the per-file cap, the third gets the 10k left, the fourth none.
-    for (let i = 0; i < 4; i++) await writeFile(path.join(root, `lon-${i}.txt`), Array.from({ length: 1000 }, () => "z".repeat(39)).join("\n"))
     const a = await attach("@lon-0.txt @lon-1.txt @lon-2.txt @lon-3.txt")
     const sent = a.parts.filter((p) => !attachmentAttrs(p)?.tham_chieu)
     expect(sent.reduce((n, p) => n + p.length, 0)).toBeLessThan(MENTION_TOTAL_CHARS + 3_000)
@@ -116,19 +117,21 @@ describe("attachMentions", () => {
   })
 
   test("the same unchanged file again sends one line, not the content", async () => {
-    const first = await attach("@ghi-chu.md")
-    const history = [asMessage("@ghi-chu.md", first)]
-    const again = await attach("lại @ghi-chu.md", history)
-    expect(again.files[0]!.note).toBe("ghi-chu.md (không đổi, đã gửi trước)")
+    // Its own file: the end of this test changes it on disk, and other tests read ghi-chu.md.
+    await writeFile(path.join(root, "doi.md"), "dòng 1\ndòng 2\ndòng 3\ndòng 4\n")
+    const first = await attach("@doi.md")
+    const history = [asMessage("@doi.md", first)]
+    const again = await attach("lại @doi.md", history)
+    expect(again.files[0]!.note).toBe("doi.md (không đổi, đã gửi trước)")
     expect(again.parts[0]).not.toContain("dòng 1")
     // Another range is another attachment.
-    expect((await attach("@ghi-chu.md#L1-2", history)).parts[0]).toContain("1\tdòng 1")
+    expect((await attach("@doi.md#L1-2", history)).parts[0]).toContain("1\tdòng 1")
     // Changed on disk: sent again.
-    await writeFile(path.join(root, "ghi-chu.md"), "mới\n")
+    await writeFile(path.join(root, "doi.md"), "mới\n")
     const later = new Date(Date.now() + 5_000)
     const { utimes } = await import("node:fs/promises")
-    await utimes(path.join(root, "ghi-chu.md"), later, later)
-    expect((await attach("@ghi-chu.md", history)).parts[0]).toContain("1\tmới")
+    await utimes(path.join(root, "doi.md"), later, later)
+    expect((await attach("@doi.md", history)).parts[0]).toContain("1\tmới")
   })
 
   test("the transcript and the classifier never see the file content", async () => {
