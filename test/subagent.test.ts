@@ -4,6 +4,9 @@ import os from "node:os"
 import path from "node:path"
 import { z } from "zod"
 import { until } from "./helpers/tui"
+import { tempDirs } from "./helpers/temp"
+
+const temp = tempDirs()
 
 // Isolated state dir before core modules read it.
 const home = await mkdtemp(path.join(os.tmpdir(), "ot-subagent-"))
@@ -627,7 +630,7 @@ test("stop_agent stops a running background agent; its partial result still noti
 })
 
 test("a subagent's sidechain holds tool errors cleaned, like the main history", async () => {
-  const dir = await mkdtemp(path.join(os.tmpdir(), "ot-sub-errors-"))
+  const dir = await temp.make("ot-sub-errors-")
   const { manager } = setup((r) =>
     r.register({
       name: "boom",

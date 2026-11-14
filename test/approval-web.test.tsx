@@ -5,6 +5,9 @@ import { webFetchTool } from "../src/core/tools/web/fetch"
 import { ApprovalPrompt } from "../src/tui/approval"
 import { setState } from "../src/tui/state"
 import { pastEnterGrace, realClock } from "./helpers/clock"
+import { tempDirs } from "./helpers/temp"
+
+const temp = tempDirs()
 
 let setup: Awaited<ReturnType<typeof testRender>> | undefined
 // The prompt records its decision as a transcript line in the shared store: leave it empty for
@@ -52,12 +55,11 @@ test("web_fetch on a new domain: the prompt says it reads that domain (not a wri
 })
 
 test("read_file on a key file: the prompt names it, offers no 'always', and digit 3 means no", async () => {
-  const { mkdtempSync, mkdirSync } = await import("node:fs")
-  const os = await import("node:os")
+  const { mkdirSync } = await import("node:fs")
   const path = await import("node:path")
   const { Workspace } = await import("../src/core/fs/workspace")
   const { readFileTool } = await import("../src/core/tools/fs/read")
-  const root = mkdtempSync(path.join(os.tmpdir(), "ot-approval-"))
+  const root = temp.makeSync("ot-approval-")
   const project = path.join(root, "p")
   mkdirSync(project)
   const data = path.join(root, "data")

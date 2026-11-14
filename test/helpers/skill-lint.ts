@@ -50,9 +50,10 @@ const NOT_TOOLS = new Set(["cycle_meta", "cycle_month_stats", "cycle_ohlcv", "vn
 /** `mcp__<server>__name` → `name` (skills may name a tool with its server prefix). */
 const bare = (t: string) => t.replace(/^mcp__.+?__/, "")
 
-export async function toolNames(root: string) {
+/** `home`: the state folder for the runtime; a fresh temp folder (left behind) when not given. */
+export async function toolNames(root: string, home?: string) {
   const fixture = JSON.parse(await readFile(path.join(root, "test/fixtures/mcp-tool-names.json"), "utf8")) as { tools: string[] }
-  const home = await mkdtemp(path.join(os.tmpdir(), "ot-lint-"))
+  home ??= await mkdtemp(path.join(os.tmpdir(), "ot-lint-"))
   const runtime = initRuntime({ home, cwd: home, skills: () => [] })
   const local = runtime.registry.list().map((t) => t.name)
   const writes = new Set(runtime.registry.list().filter((t) => !t.readOnly).map((t) => t.name))
@@ -129,9 +130,9 @@ export function decisionTreeIssues(body: string): string[] {
   return [...new Set(issues)]
 }
 
-export async function lintSkills(root: string) {
+export async function lintSkills(root: string, home?: string) {
   const { skills } = await loadSkills(skillRoots(root).filter((r) => r.source === "bundled"))
-  const { all, writes } = await toolNames(root)
+  const { all, writes } = await toolNames(root, home)
   const skillNames = new Set(skills.map((s) => s.name))
   const report: Record<string, string[]> = { unknownTools: [], triggers: [], catalogLength: [], englishHeadings: [], preloadedWrites: [], copiedResults: [], decisionTrees: [] }
   const known = (t: string) => all.has(bare(t)) || matchToolPattern(bare(t), all).length > 0

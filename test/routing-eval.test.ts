@@ -2,6 +2,9 @@ import { expect, test } from "bun:test"
 import path from "node:path"
 import { loadSkills, skillRoots } from "../src/core/skills/loader"
 import { catalogRegistry, evalRouting, loadCases, suggestedSkills } from "./helpers/routing-eval"
+import { tempDirs } from "./helpers/temp"
+
+const temp = tempDirs()
 
 /**
  * Ratchet over the offline routing eval (test/helpers/routing-eval.ts). The floors are the
@@ -24,7 +27,7 @@ const root = path.resolve(import.meta.dir, "..")
 
 test("labels name real catalog tools and bundled auto skills", async () => {
   const cases = await loadCases(root)
-  const registry = await catalogRegistry(root)
+  const registry = await catalogRegistry(root, await temp.make("ot-routing-"))
   const tools = new Set(registry.list().map((t) => t.name.replace(/^mcp__opentrading__/, "")))
   const { skills } = await loadSkills(skillRoots(root).filter((r) => r.source === "bundled"))
   const auto = new Set(skills.filter((s) => s.activation === "auto").map((s) => s.name))
@@ -36,7 +39,7 @@ test("labels name real catalog tools and bundled auto skills", async () => {
 })
 
 test("routing does not regress below the recorded floors", async () => {
-  const { summary } = await evalRouting(root)
+  const { summary } = await evalRouting(root, await temp.make("ot-routing-"))
   const all = summary.all
   console.log(JSON.stringify(summary))
   expect(all.toolHits).toBeGreaterThanOrEqual(FLOOR.toolHits)
@@ -48,7 +51,7 @@ test("routing does not regress below the recorded floors", async () => {
 
 test("PR116 regressions produce the exact expected suggestions", async () => {
   const cases = (await loadCases(root)).filter((c) => c.note === "PR116 exact suggestions regression" || c.note === "PR116 reconciled remote exact regression")
-  const registry = await catalogRegistry(root)
+  const registry = await catalogRegistry(root, await temp.make("ot-routing-"))
   const { skills } = await loadSkills(skillRoots(root).filter((r) => r.source === "bundled"))
   const declared = registry.list().map((tool) => tool.name)
   expect(cases.length).toBeGreaterThanOrEqual(14)

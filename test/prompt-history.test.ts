@@ -1,6 +1,5 @@
 import { afterAll, beforeEach, expect, test } from "bun:test"
-import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises"
-import os from "node:os"
+import { readFile, stat, writeFile } from "node:fs/promises"
 import path from "node:path"
 import {
   addHistory,
@@ -13,13 +12,16 @@ import {
   resetHistory,
   searchHistory,
 } from "../src/tui/prompt/history"
+import { removeTempDir, tempDirs } from "./helpers/temp"
+
+const temp = tempDirs()
 
 const saved = process.env.OPENTRADING_HOME
 let home = ""
 
 beforeEach(async () => {
   await historyFlushed()
-  home = await mkdtemp(path.join(os.tmpdir(), "opentrading-history-"))
+  home = await temp.make("opentrading-history-")
   process.env.OPENTRADING_HOME = home
   resetHistory()
 })
@@ -29,7 +31,7 @@ afterAll(async () => {
   resetHistory()
   if (saved === undefined) delete process.env.OPENTRADING_HOME
   else process.env.OPENTRADING_HOME = saved
-  await rm(home, { recursive: true, force: true })
+  await removeTempDir(home)
 })
 
 test("history: appended to a jsonl file, blanks and repeats of the newest skipped", async () => {

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, test } from "bun:test"
 import { mkdirSync, readFileSync } from "node:fs"
-import { mkdtemp, rm } from "node:fs/promises"
+import { mkdtemp } from "node:fs/promises"
+import { removeTempDir } from "./helpers/temp"
 import os from "node:os"
 import path from "node:path"
 import { openMemoryStore } from "../src/core/memory/store/open"
@@ -14,7 +15,7 @@ beforeEach(async () => {
   home = await mkdtemp(path.join(os.tmpdir(), "ot-chat-cli-"))
 })
 afterEach(async () => {
-  await rm(home, { recursive: true, force: true })
+  await removeTempDir(home)
 })
 
 async function chat(question: string) {
