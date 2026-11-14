@@ -315,6 +315,7 @@ type Rescue = { nudge: string; toolChoice: "auto" | "none" }
 /** What the user is told when the stop gate sends the model back. */
 const RESCUE_NOTICE: Record<RecoveryKind, string> = {
   malformed: "Model gọi tool sai định dạng nên lượt dừng khi chưa trả lời.",
+  "text-call": "Model viết lời gọi tool thành chữ nên tool chưa chạy.",
   length: "Câu trả lời bị cắt vì chạm giới hạn độ dài output.",
   empty: "Model dừng khi chưa viết câu trả lời.",
   promise: "Model nói sẽ lấy thêm dữ liệu nhưng dừng mà chưa làm.",

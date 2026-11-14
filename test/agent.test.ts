@@ -1258,6 +1258,24 @@ test("an answer made only of a self-made <nhac_nho> block (13/11) is recovered a
   expect(done(events).markup).toEqual(["nhac_nho"])
 })
 
+test("a DSML tool call written as text after a tool result (issues #268, #278) is asked again with tools on, never shown or stored", async () => {
+  const dsml =
+    '<｜DSML｜ calls>\n<｜DSML｜ invoke name="shell">\n<｜DSML｜ parameter name="command" string="true">awk \'BEGIN{printf "%.2f\\n", (52.7-58.2)*1000}\'</｜DSML｜ parameter>\n</｜DSML｜ invoke>\n</｜DSML｜ calls>'
+  respond = (_body, n) => (n === 0 ? toolCall("current_time", {}, "call_1") : n === 1 ? answer(dsml) : answer("HPG giảm 5.500 đồng."))
+  const events = await collect(runAgent({ history: [], input: "Giá HPG?", skills: [], registry: registry() }))
+  expect(bodies).toHaveLength(3)
+  expect(lastSent(2)).toContain("viết thành chữ")
+  // Right after a tool result the empty-answer rescue would have switched tools off.
+  expect(bodies[2]!.tool_choice).not.toBe("none")
+  const shown = events.flatMap((e) => (e.type === "text-delta" ? [e.text] : [])).join("")
+  expect(shown).not.toContain("DSML")
+  expect(shown).not.toContain("awk")
+  expect(JSON.stringify(done(events).messages.slice(1))).not.toContain("DSML")
+  expect(done(events).recoveries).toEqual([{ kind: "text-call", attempt: 1 }])
+  expect(done(events).markup).toEqual(["dsml"])
+  expect(shown).toContain("HPG giảm 5.500 đồng.")
+})
+
 test("13/11 m6 as it happened: a tool, two empty answers, then only <nhac_nho>: nothing shown or stored, the turn says it has no answer", async () => {
   const block = "<nhac_nho>\nDanh sách việc của bạn:\n- [in_progress] Lấy giá HPG\n</nhac_nho>"
   respond = (_body, n) => (n === 0 ? toolCall("current_time", {}, "call_1") : n <= 2 ? answer("") : answer(block))
