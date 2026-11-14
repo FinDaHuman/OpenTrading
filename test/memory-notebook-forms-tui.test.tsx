@@ -266,9 +266,12 @@ describe("a notebook command while the notebook cannot be used", () => {
     const config = path.join(home, "config.json")
     const before = existsSync(config) ? readFileSync(config, "utf8") : undefined
     try {
-      await saveConfig({ memory: { provider: "file" } })
+      // The old note first, then the config naming the legacy memory: an app left by an earlier test
+      // can still be finishing its startup (onMount is not cancelled when its renderer goes) and may
+      // run the migration itself as soon as the config says "file". It must see the note too.
       mkdirSync(LEGACY, { recursive: true })
       writeFileSync(path.join(LEGACY, "old.md"), '---\nid: "1"\nstatus: "active"\n---\nKhông dùng margin\n')
+      await saveConfig({ memory: { provider: "file" } })
       const legacyBefore = readFileSync(path.join(LEGACY, "old.md"), "utf8")
       await start(memoryChoiceOf(await loadConfig()))
       await frameWith("Memory cũ đã được gỡ")

@@ -3,6 +3,7 @@ import { mkdtemp, readdir, readFile, rm } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { z } from "zod"
+import { until } from "./helpers/tui"
 
 // Isolated state dir before core modules read it.
 const home = await mkdtemp(path.join(os.tmpdir(), "ot-subagent-"))
@@ -263,6 +264,7 @@ test("parallel spawns beyond subagents.maxConcurrent wait for a slot instead of 
   await saveConfig({ provider: "groq", model: "tooly", subagents: { maxConcurrent: 2 } })
   let active = 0
   let peak = 0
+  let done = 0
   const { registry, manager } = setup((r) =>
     r.register({
       name: "cham",
@@ -272,8 +274,12 @@ test("parallel spawns beyond subagents.maxConcurrent wait for a slot instead of 
       async execute() {
         active++
         peak = Math.max(peak, active)
-        await new Promise((res) => setTimeout(res, 60))
+        // The first two hold their slots until the third is queued behind them (a fixed 60 ms was
+        // not enough when a busy machine prepares the third child more than 60 ms later).
+        if (done === 0) await until(() => manager.limiter.stats().waiting > 0, 10_000, "the third subagent to queue")
+        await new Promise((res) => setTimeout(res, 20))
         active--
+        done++
         return "ok"
       },
     }),

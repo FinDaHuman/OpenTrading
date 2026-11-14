@@ -445,12 +445,14 @@ test("review 2 #2: a left session with turns it could not save is not reopened w
     throw fail("ổ đầy", "ENOSPC")
   })
   await s.appendTurn(turn(3), info)
-  await tui.openForResume(s, other.id, 100)
-  await expect(tui.openForResume(other, s.id, 100)).rejects.toThrow('Phiên "Còn lượt" còn 1 lượt chưa lưu được')
+  // Generous deadlines: every write here ends (fails or lands), and the outcome under test is not a
+  // timeout. 100 ms was passed by the retries alone on a busy machine ("chưa ghi xong").
+  await tui.openForResume(s, other.id, 5_000)
+  await expect(tui.openForResume(other, s.id, 5_000)).rejects.toThrow('Phiên "Còn lượt" còn 1 lượt chưa lưu được')
   full.mockRestore()
   // Once saved, it reopens.
   expect((await s.flush()).pending).toEqual([])
-  expect((await tui.openForResume(other, s.id, 100)).session).toBe(s)
+  expect((await tui.openForResume(other, s.id, 5_000)).session).toBe(s)
 })
 
 test("review 2 #3: a size check that fails for a moment after a failed write is retried, not taken as a stop", async () => {
