@@ -50,7 +50,8 @@ test("a session is created lazily, written turn by turn, and read back identical
   await s.appendTurn(turn2, { ...info, model: "m2" })
   expect(s.file!.split(path.sep).join("/")).toMatch(/^2026\/09\/20260930-031500-\w+\.jsonl$/)
 
-  const [summary] = await listSessions()
+  // By id: sessions other tests write are dated now, so newer than this one.
+  const summary = (await listSessions()).find((x) => x.id === s.id)
   expect(summary).toMatchObject({ id: s.id, title: "Mấy giờ rồi?", turns: 2, model: "m2" })
   const loaded = await loadSession(s.id)
   expect(loaded.messages).toEqual([...turn1, ...turn2])
@@ -62,7 +63,11 @@ test("a session is created lazily, written turn by turn, and read back identical
 })
 
 test("continuing a session appends to the same file; newest session is listed first", async () => {
-  const older = (await listSessions())[0]!
+  // Its own older session (it used to take the first test's, so it passed only in file order).
+  const first = Session.create()
+  await first.appendTurn(turn1, info)
+  await first.appendTurn(turn2, info)
+  const older = (await listSessions()).find((x) => x.id === first.id)!
   const newer = Session.create()
   await newer.appendTurn(turn2, info)
   expect((await listSessions())[0]!.id).toBe(newer.id)
@@ -257,7 +262,10 @@ test("sessions are listed per folder; index lines from before `cwd` read it from
     .split("\n")
     .filter(Boolean)
     .map((l) => {
-      const { cwd: _drop, ...rest } = JSON.parse(l)
+      // Lines that are not session objects stay as they are (the BUG-006 test adds `null` and `42`).
+      const entry = JSON.parse(l) as unknown
+      if (entry === null || typeof entry !== "object") return l
+      const { cwd: _drop, ...rest } = entry as Record<string, unknown>
       return JSON.stringify(rest)
     })
     .join("\n")
