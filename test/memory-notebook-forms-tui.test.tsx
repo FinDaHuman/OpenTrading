@@ -1048,6 +1048,23 @@ describe("/baihoc: lessons, and hard rules saved in the wrong place", () => {
     expect(other.reader.lessons()).toHaveLength(2)
   })
 
+  test("from an edited lesson, 'Lưu thành ràng buộc' opens a new constraint, not an edit of the one with the lesson's number", async () => {
+    const other = otherWindow()
+    seedExample(other)
+    await start()
+    setState({ notebookForm: { group: "lesson", edit: { id: 7 } }, dialog: "notebook-form" })
+    await frameWith("Sửa bài học #7")
+    tab()
+    await setup!.mockInput.typeText(". Tuyệt đối không bắt đáy")
+    await confirm(5)
+    await frameWith("Lưu thành ràng buộc")
+    key("1")
+    await frameWith("Mở từ form bài học")
+    // Nothing of the lesson's request is left: setState("notebookForm", {...}) merged its edit: { id: 7 }.
+    expect(state.notebookForm).toEqual({ group: "constraint", text: expect.stringContaining("Tuyệt đối không bắt đáy"), kind: "constraint", fromLesson: true })
+    expect(flat(await frameWith("Ghi nhớ"))).not.toContain("Sửa ràng buộc")
+  })
+
   test("'tuyệt đối không' in the summary warns too; 'Dùng P/B và ROE, không dùng P/E' does not", async () => {
     seedExample(otherWindow())
     await start()
