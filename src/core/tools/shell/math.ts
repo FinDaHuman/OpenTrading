@@ -345,6 +345,14 @@ function program(text: string, form: Form): boolean {
   return !!tokens && parses(tokens, form)
 }
 
+/**
+ * A line may end in LF or CRLF only. PowerShell also ends a statement, and a comment, at a lone
+ * CR (tried on 5.1: `1<CR>2` prints 1 and 2), where this grammar would read on to the next LF:
+ * `1 # note<CR>Remove-Item x` would hide a command in what we take for a comment. The same goes
+ * for any other character a shell might read as a line end, and for control characters.
+ */
+const ODD_LINE_END = /\r(?!\n)|[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\u0085\u2028\u2029]/
+
 /** One program in single quotes and nothing else: no option, no input file, no second block. */
 const AWK = /^awk[ \t]+'BEGIN\s*\{([^'{}]*)\}'$/
 
@@ -354,7 +362,7 @@ const AWK = /^awk[ \t]+'BEGIN\s*\{([^'{}]*)\}'$/
  */
 export function mathOnlyCommand(command: string, shell: Pick<ShellInfo, "kind">): boolean {
   const text = command.trim()
-  if (text === "" || text.length > MATH_MAX_CHARS) return false
+  if (text === "" || text.length > MATH_MAX_CHARS || ODD_LINE_END.test(text)) return false
   if (shell.kind === "pwsh" || shell.kind === "powershell") return program(text, "powershell")
   const awk = AWK.exec(text)
   return !!awk && program(awk[1]!, "awk")
