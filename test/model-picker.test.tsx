@@ -93,7 +93,7 @@ test("ctrl+f stars the highlighted model and keeps the highlight on it; it is sa
   // The row moved nowhere: still the Google one, now starred; the favourite also sits on top.
   expect(selected(f)).toMatch(/❯ ★ Gemini 3\.1 Pro/)
   expect(state.modelPrefs.favorite).toEqual([{ provider: "google", model: "gemini-3.1-pro" }])
-  for (let i = 0; i < 50 && !(await readFile(modelPrefsFile(), "utf8").catch(() => "")).includes("gemini-3.1-pro"); i++) await new Promise((r) => setTimeout(r, 10))
+  await until(async () => (await readFile(modelPrefsFile(), "utf8").catch(() => "")).includes("gemini-3.1-pro"), 5_000, "the prefs file")
   expect(await loadModelPrefs()).toEqual({ favorite: [{ provider: "google", model: "gemini-3.1-pro" }], recent: [] })
   expect(state.notification?.text).toContain("Đã thêm gemini-3.1-pro vào yêu thích")
   // The filter did not move: ctrl+f is not the input's forward-char here.
@@ -149,7 +149,7 @@ test("enter switches the model and puts it first in recent", async () => {
   setup!.mockInput.pressArrow("right") // to Google
   setup!.mockInput.pressArrow("right") // to Groq
   setup!.mockInput.pressEnter()
-  for (let i = 0; i < 50 && state.model !== "llama-4"; i++) await new Promise((r) => setTimeout(r, 10))
+  await until(() => state.model === "llama-4", 5_000, "the model switch")
   expect({ provider: state.provider, model: state.model }).toEqual({ provider: "groq", model: "llama-4" })
   expect(state.modelPrefs.recent[0]).toEqual({ provider: "groq", model: "llama-4" })
   expect(state.dialog).toBeUndefined()
@@ -182,7 +182,7 @@ test("enter on a model with effort levels goes on to the effort step; nothing is
 
   setup!.mockInput.pressArrow("down")
   setup!.mockInput.pressEnter()
-  for (let i = 0; i < 50 && state.dialog !== undefined; i++) await new Promise((r) => setTimeout(r, 10))
+  await until(() => state.dialog === undefined, 5_000, "the dialog to close")
   expect({ provider: state.provider, model: state.model, effort: state.effort }).toEqual({ provider: "google", model: "gemini-3.1-pro", effort: "low" })
   expect(await configJson()).toEqual({ provider: "google", model: "gemini-3.1-pro", effort: "low" })
   expect(state.modelPrefs.recent[0]).toEqual({ provider: "google", model: "gemini-3.1-pro" })
@@ -222,7 +222,7 @@ test("a saved level the model lacks: the row it runs as is highlighted, and ente
   const f = await frameWith("Effort cho gemini-3.5-flash-lite")
   expect(selected(f)).toMatch(/● high\s+đang dùng · max chạy như high với model này/)
   setup!.mockInput.pressEnter()
-  for (let i = 0; i < 50 && state.dialog !== undefined; i++) await new Promise((r) => setTimeout(r, 10))
+  await until(() => state.dialog === undefined, 5_000, "the dialog to close")
   expect(await configJson()).toEqual({ effort: "max", provider: "google", model: "gemini-3.5-flash-lite" })
   expect(state.effort).toBe("max")
   expect(state.notification?.text).toContain("effort high")
@@ -238,7 +238,7 @@ test("moving off the highlighted row and back, then enter, saves that row's leve
   setup!.mockInput.pressArrow("down") // high → auto (wraps)
   setup!.mockInput.pressArrow("up") // back to high
   setup!.mockInput.pressEnter()
-  for (let i = 0; i < 50 && state.dialog !== undefined; i++) await new Promise((r) => setTimeout(r, 10))
+  await until(() => state.dialog === undefined, 5_000, "the dialog to close")
   expect(await configJson()).toEqual({ effort: "high", provider: "google", model: "gemini-3.5-flash-lite" })
   expect(state.effort).toBe("high")
 })
@@ -251,7 +251,7 @@ test("auto clears a saved level", async () => {
   await frameWith("Effort cho gemini-3.1-pro")
   setup!.mockInput.pressArrow("down") // high → auto (wraps)
   setup!.mockInput.pressEnter()
-  for (let i = 0; i < 50 && state.dialog !== undefined; i++) await new Promise((r) => setTimeout(r, 10))
+  await until(() => state.dialog === undefined, 5_000, "the dialog to close")
   expect(await configJson()).toEqual({ provider: "google", model: "gemini-3.1-pro" })
   expect(state.effort).toBeUndefined()
 })
@@ -261,7 +261,7 @@ test("with ui.askEffort off, a model with levels switches at once and the effort
   setState({ askEffort: false, effort: "high" })
   await open()
   setup!.mockInput.pressEnter() // Gemini 3.1 Pro
-  for (let i = 0; i < 50 && state.dialog !== undefined; i++) await new Promise((r) => setTimeout(r, 10))
+  await until(() => state.dialog === undefined, 5_000, "the dialog to close")
   expect(state.model).toBe("gemini-3.1-pro")
   expect(await configJson()).toEqual({ effort: "high", provider: "google", model: "gemini-3.1-pro" })
 })
@@ -305,7 +305,7 @@ test("manual entry with no model id ('groq/', '/', blank) keeps the dialog open 
   expect(await readFile(path.join(home, "config.json"), "utf8")).toBe("{}\n")
   await setup!.mockInput.typeText("groq/llama-moi")
   setup!.mockInput.pressEnter()
-  for (let i = 0; i < 50 && state.model !== "llama-moi"; i++) await new Promise((r) => setTimeout(r, 10))
+  await until(() => state.model === "llama-moi", 5_000, "the model switch")
   expect({ provider: state.provider, model: state.model }).toEqual({ provider: "groq", model: "llama-moi" })
 })
 
