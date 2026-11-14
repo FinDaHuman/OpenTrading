@@ -7,6 +7,7 @@ export const ABLATIONS = [
   "gate-fragment",
   "gate-length",
   "gate-malformed",
+  "gate-text-call",
   "gate-promise",
   "gate-unfetched",
   "gate-draft",

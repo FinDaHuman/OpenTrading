@@ -46,7 +46,7 @@ Each question has an `id`, a `group` (A–F), the `question`, and `now`, the mom
 
 | Name | Without it |
 |---|---|
-| `gate-empty`, `gate-length`, `gate-malformed`, `gate-promise`, `gate-unfetched`, `gate-fragment` | That stop-gate rule never sends the model back. An empty or malformed answer ends the turn unanswered. |
+| `gate-empty`, `gate-length`, `gate-malformed`, `gate-text-call`, `gate-promise`, `gate-unfetched`, `gate-fragment` | That stop-gate rule never sends the model back. An empty or malformed answer ends the turn unanswered. |
 | `strip-echoes` | Echoed todo lines stay in the saved messages. The gate's own reading of an answer still strips them. |
 | `strip-markup` | Harness markup (`<nhac_nho>`, tool calls written as text, `<thought>` notes; see `src/core/loop/markup.ts`) stays in the stream and the saved messages. The gate's own reading of an answer still strips it. |
 | `tool-nudge`, `todo-nudge` | The reminder after tool results, or only its open-todo part. |

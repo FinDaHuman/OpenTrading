@@ -1,5 +1,5 @@
 import type { Ablations } from "../ablation"
-import { stripMarkup } from "./markup"
+import { isCallTag, stripMarkup } from "./markup"
 import { answerFigures, sourceNumbers, tracesTo, ungroundedFigures } from "./figures"
 import type { ModelMessage, StepResult, ToolSet } from "ai"
 import { hasOpenTodos, LEGACY_TODO_PREFIX, TODO_PREFIX, TODO_WRITE, type Todo } from "../tools/todos"
@@ -17,7 +17,7 @@ import { hasOpenTodos, LEGACY_TODO_PREFIX, TODO_PREFIX, TODO_WRITE, type Todo } 
 /** Recovery requests a turn may spend at most: the gate never loops. */
 export const MAX_RECOVERIES = 2
 
-export type RecoveryKind = "malformed" | "length" | "empty" | "promise" | "fragment" | "unfetched" | "draft"
+export type RecoveryKind = "malformed" | "text-call" | "length" | "empty" | "promise" | "fragment" | "unfetched" | "draft"
 
 /** What the last request's final step produced. */
 export interface LastStep {
@@ -62,6 +62,14 @@ const BLOCKED = /^(SAFETY|RECITATION|BLOCKLIST|PROHIBITED_CONTENT|SPII|IMAGE_SAF
 
 export const RESCUE_MALFORMED =
   "<nhac_nho>\nLời gọi tool vừa rồi sai định dạng nên không chạy. Gọi lại tool đúng tham số, hoặc trả lời người dùng nếu đã đủ dữ liệu.\n</nhac_nho>"
+/**
+ * The step was only a tool call written as text (DeepSeek's DSML in issues #268 and #278, a
+ * `<tool_call>` block): markup.ts took it out and nothing ran. Tools stay on. The empty-answer
+ * rescue would turn them off right after tool results, and the model then does the arithmetic it
+ * meant to run in its head.
+ */
+export const RESCUE_TEXT_CALL =
+  "<nhac_nho>\nLời gọi tool vừa rồi được viết thành chữ trong câu trả lời nên chưa chạy. Gọi lại tool đó bằng tool call ngay trong bước này, hoặc trả lời người dùng nếu đã đủ dữ liệu. Không viết thẻ lời gọi tool thành chữ.\n</nhac_nho>"
 export const RESCUE_LENGTH =
   "<nhac_nho>\nCâu trả lời bị cắt vì chạm giới hạn độ dài output. Viết tiếp ngay từ chỗ dừng: không xin lỗi, không tóm tắt lại phần đã viết.\n</nhac_nho>"
 /** Gemini CLI's nudge after an empty answer: the answer, or a tool when data is missing. */
@@ -107,13 +115,15 @@ export function judgeStop(last: LastStep, done: readonly RecoveryKind[], disable
   const empty = isEmptyAnswer(last.text)
   const left = MAX_RECOVERIES - done.length
   const used = (kind: RecoveryKind) => done.filter((k) => k === kind).length
-  const once = (kind: Extract<RecoveryKind, "malformed" | "promise" | "unfetched" | "fragment" | "draft">) => left > 0 && used(kind) === 0 && !disabled?.has(`gate-${kind}`)
+  const once = (kind: Extract<RecoveryKind, "malformed" | "text-call" | "promise" | "unfetched" | "fragment" | "draft">) => left > 0 && used(kind) === 0 && !disabled?.has(`gate-${kind}`)
 
   if (empty && (BLOCKED.test(raw) || last.finish === "content-filter")) return { action: "give-up", kind: "blocked" }
   if (MALFORMED.test(raw) && empty) {
     if (once("malformed")) return { action: "continue", kind: "malformed", nudge: RESCUE_MALFORMED, toolChoice: "auto" }
     return { action: "give-up", kind: "malformed" }
   }
+  // Nothing but a call written as text: ask for the real call once. A second one is an empty answer.
+  if (empty && isTextCall(last.text) && once("text-call")) return { action: "continue", kind: "text-call", nudge: RESCUE_TEXT_CALL, toolChoice: "auto" }
   if (!empty && last.finish === "length") {
     // A cut answer is still an answer: out of budget, keep it as it is.
     if (left > 0 && !disabled?.has("gate-length")) return { action: "continue", kind: "length", nudge: RESCUE_LENGTH, toolChoice: "auto" }
@@ -395,6 +405,14 @@ export function ranDataTool(messages: readonly ModelMessage[]): boolean {
 }
 
 /** No answer in it: nothing visible once echoed todo lines are gone. */
+/**
+ * The text holds a tool call written as markup (it never ran). A fake todo_write is not counted:
+ * like a real one, it is no reason to hand the tools back (the empty-answer rescue decides).
+ */
+export function isTextCall(text: string): boolean {
+  return stripMarkup(text).tags.some((tag) => tag !== TODO_WRITE && isCallTag(tag))
+}
+
 export function isEmptyAnswer(text: string): boolean {
   return stripEchoes(invisible(text)).trim() === ""
 }
