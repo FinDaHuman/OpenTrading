@@ -93,6 +93,13 @@ test("PowerShell: arrays, ranges, variables, other types, invocation and chainin
     // PowerShell's own variables: reading leaks state, writing changes the session.
     "$ErrorActionPreference = 1",
     "$PSDefaultParameterValues = 1",
+    // Windows PowerShell 5.1 session limits (review of #287): writing one changes the session.
+    "$MaximumVariableCount = 1",
+    "$MaximumAliasCount = 1",
+    "$MaximumDriveCount = 1",
+    "$MaximumErrorCount = 1",
+    "$MaximumFunctionCount = 1",
+    "$maximumhistorycount = 1",
     "$_",
     "$pid",
     "$true + 1",
