@@ -361,6 +361,18 @@ export function dropFinalText(messages: ModelMessage[]): ModelMessage[] {
   return [...messages.slice(0, index), { ...message, content: parts }, ...messages.slice(index + 1)]
 }
 
+/**
+ * How many of a run's last model requests lose their text in dropFinalText, so a UI takes as many off
+ * the screen: 2 when the last request wrote no message at all (`requests` counts it, the messages do
+ * not), so the text dropped is the one written beside the tool calls of the request before it.
+ */
+export function droppedRequests(response: ModelMessage[], requests: number): 1 | 2 {
+  const index = response.findLastIndex((m) => m.role === "assistant")
+  const assistants = response.filter((m) => m.role === "assistant").length
+  const tail = response.slice(index + 1)
+  return index >= 0 && requests > assistants && tail.length > 0 && tail.every((m) => m.role === "tool") ? 2 : 1
+}
+
 /** A cut answer and its continuation become one assistant message (the nudge between is not kept). */
 export function continueAnswer(kept: ModelMessage[], more: ModelMessage[]): ModelMessage[] {
   const prev = kept.at(-1)
@@ -1482,7 +1494,7 @@ async function* runTurn(opts: RunOptions, budget?: RequestBudget): AsyncGenerato
       kept = verdict.kind === "length" ? (continuing ? continueAnswer(kept, response) : [...kept, ...response]) : [...kept, ...dropFinalText(response)]
       rescue = { nudge: verdict.nudge, toolChoice: verdict.toolChoice }
       // 13/11 eval m3: the screen showed the dropped answer and then the new one.
-      if (verdict.kind !== "length") yield { type: "retract" }
+      if (verdict.kind !== "length") yield { type: "retract", steps: droppedRequests(response, last.steps) }
       yield { type: "notice", text: `${RESCUE_NOTICE[verdict.kind]} Đã nhắc model trả lời tiếp (${recoveries.length}/${Math.max(MAX_RECOVERIES, recoveries.length)}).` }
       continue
     }

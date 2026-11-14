@@ -20,8 +20,10 @@ export type AgentEvent =
    * The stop gate sent the model back and dropped the text of the last model request from
    * history (dropFinalText): a UI takes what it showed of that request off the screen, so the
    * user does not read two answers in a row. Text output (`ot -p`) and eval traces keep it.
+   * `steps`: how many of the last model requests that is: 2 when the last one wrote nothing and the
+   * text dropped is the preamble written beside the previous request's tool calls.
    */
-  | { type: "retract" }
+  | { type: "retract"; steps: 1 | 2 }
   /** A suggestion card the final answer ended with, checked, before "done" (spec 007); the TUI gives it an id. */
   | { type: "card"; card: CardDraft }
   /**

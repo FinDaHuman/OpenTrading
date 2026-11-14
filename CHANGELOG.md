@@ -102,8 +102,8 @@ adopt Semantic Versioning when it exposes a stable public API.
 - TUI: when the stop gate sends the model back (a promise, a draft, a fragment, figures with no tool), the text
   of that step leaves the screen too, as it leaves history; its notice line and any tool rows stay, so the user no
   longer reads two answers in a row (13/11, eval m3). A cut answer (`length`) and a step-cap summary stay as before.
-  Known gap: after an empty step, history also drops the preamble written beside the previous step's tool call; the
-  screen keeps it. New agent event `retract`; `ot -p` text output and eval
+  After an empty step history also drops the preamble written beside the previous step's tool call, and the screen
+  takes that off too. New agent event `retract` (`steps`: 1, or 2 for that case); `ot -p` text output and eval
   `streamed` still carry both.
 - `prompts/tools.md`: computed figures (ratios, %, CAGR, P/E, unit changes) come from one arithmetic-only `shell`
   command per step, large amounts scaled to tỷ đồng inside the expression; the answer states the formula and inputs.

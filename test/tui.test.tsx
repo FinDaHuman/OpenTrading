@@ -89,6 +89,8 @@ let callSlowTool = false
 let overloaded = 0
 /** "TRÀN-NGỮ-CẢNH" requests fail as too long for the model this many times. */
 let overflowing = 0
+/** Requests of the "DẠO-ĐẦU" turn after its tool result (the first one writes nothing). */
+let preambleAfterTool = 0
 /** Subagent requests wait for this before answering (their rows stay "running"). */
 let childGate: Promise<void> | undefined
 /** A "CON-DOC" subagent waits for this after its first tool (between two model steps). */
@@ -234,6 +236,19 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
       if (!last.includes("không gọi tool nào")) return sseOf(chunk({ role: "assistant", content: "Mình sẽ lấy giờ hiện tại:" }) + chunk({}, "stop") + "data: [DONE]\n\n")
       const call = { index: 0, id: "call_promised", type: "function", function: { name: "current_time", arguments: "{}" } }
       return sseOf(chunk({ role: "assistant", tool_calls: [call] }) + chunk({}, "tool_calls") + "data: [DONE]\n\n")
+    }
+    // "DẠO-ĐẦU": a preamble beside the clock call, then a step that writes nothing; reminded, the answer.
+    const preambleAt = request.messages.findLastIndex((m) => m.role === "user" && JSON.stringify(m.content ?? "").includes("DẠO-ĐẦU"))
+    const preambleTurn = preambleAt >= 0 && request.messages.slice(preambleAt + 1).every((m) => m.role !== "user" || JSON.stringify(m.content ?? "").includes("<nhac_nho>"))
+    // Counted by request, not by the reminder's wording: the first after the tool writes nothing.
+    if (preambleTurn) {
+      if (!request.messages.slice(preambleAt).some((m) => m.role === "tool")) {
+        preambleAfterTool = 0
+        const call = { index: 0, id: "call_preamble", type: "function", function: { name: "current_time", arguments: "{}" } }
+        return sseOf(chunk({ role: "assistant", content: "Mình sẽ xem giờ trước, LỜI-DẠO-ĐẦU." }) + chunk({ tool_calls: [call] }) + chunk({}, "tool_calls") + "data: [DONE]\n\n")
+      }
+      if (preambleAfterTool++ === 0) return sseOf(chunk({ role: "assistant", content: "" }) + chunk({}, "stop") + "data: [DONE]\n\n")
+      return sseOf(chunk({ role: "assistant", content: "Bây giờ là 10:00. HẾT-CÂU-TRẢ-LỜI" }) + chunk({}, "stop") + "data: [DONE]\n\n")
     }
     // "NHÁP-TODO": the clock, then a draft beside a closing todo_write (08/11), then, reminded, the answer.
     const draftAt = request.messages.findLastIndex((m) => m.role === "user" && JSON.stringify(m.content ?? "").includes("NHÁP-TODO"))
@@ -1088,6 +1103,20 @@ test("a promise the stop gate sends back leaves the screen: the notice stays, th
   const { shown, stored } = lastTurnAnswers(prompt)
   expect(shown).toEqual(stored)
   expect(shown).toHaveLength(1)
+})
+
+test("a preamble beside a tool call, then an empty step: the preamble leaves the screen as it leaves history", async () => {
+  const prompt = "DẠO-ĐẦU mấy giờ?"
+  await setup.mockInput.typeText(prompt)
+  setup.mockInput.pressEnter()
+  const frame = await turnEnded(prompt)
+  show(frame)
+  // History dropped the preamble with the empty step (dropFinalText); the screen used to keep it.
+  expect(frame).not.toContain("LỜI-DẠO-ĐẦU")
+  expect(frame).toContain("● current_time()")
+  const { shown, stored } = lastTurnAnswers(prompt)
+  expect(stored.join(" ")).not.toContain("LỜI-DẠO-ĐẦU")
+  expect(shown).toEqual(stored)
 })
 
 test("a draft beside a closing todo_write is taken off the screen; its todo row stays", async () => {

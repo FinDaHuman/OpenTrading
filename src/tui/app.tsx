@@ -599,22 +599,24 @@ async function sendTurn(
     edit(current, (l) => (l.text += text))
   }
   /**
-   * Where the screen stood when the last two model requests began: lines so far, and the
-   * assistant line then open with its length. A retract (the stop gate dropped the last
-   * request's text) cuts the screen back to the older one.
+   * Where the screen stood when each of the last model requests began: lines so far, and the
+   * assistant line then open with its length; [before the one before last, before the last, now].
+   * A retract (the stop gate dropped the text of the last `steps` requests) cuts the screen back:
+   * to before the last request, or, when that one wrote nothing and history lost the preamble
+   * beside the previous request's tool calls, to before that one.
    */
   type StepMark = { lines: number; current: number; length: number }
   const mark = (): StepMark => {
     const open = state.lines[current]
     return { lines: state.lines.length, current, length: open?.kind === "assistant" ? open.text.length : 0 }
   }
-  let stepMarks: [StepMark, StepMark] = [mark(), mark()]
-  const retract = () => {
+  let stepMarks: [StepMark, StepMark, StepMark] = [mark(), mark(), mark()]
+  const retract = (steps: 1 | 2) => {
     pending = ""
     if (flushTimer) clearTimeout(flushTimer)
     flushTimer = undefined
     cards = cardStreamFilter()
-    const [from] = stepMarks
+    const from = steps === 2 ? stepMarks[0] : stepMarks[1]
     if (live()) {
       setState(
         produce((s) => {
@@ -626,7 +628,7 @@ async function sendTurn(
       )
     }
     current = from.current >= 0 && from.current < from.lines ? from.current : -1
-    stepMarks = [mark(), mark()]
+    stepMarks = [mark(), mark(), mark()]
   }
   const closeText = () => {
     pending += cards.end()
@@ -722,10 +724,10 @@ async function sendTurn(
           break
         case "step":
           // Pending text was flushed above: the screen as the next request begins.
-          stepMarks = [stepMarks[1], mark()]
+          stepMarks = [stepMarks[1], stepMarks[2], mark()]
           break
         case "retract":
-          retract()
+          retract(event.steps)
           break
         case "memory-redaction": {
           // Masks the store confirmed replace the history for good; held ones were only in what was sent.

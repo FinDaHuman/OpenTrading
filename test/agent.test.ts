@@ -1274,6 +1274,27 @@ test("a preamble, a tool, then an empty last step: the empty step is recovered (
   expect(messages.map((m) => m.role)).toEqual(["user", "assistant", "tool", "assistant"])
   expect(done(events).recoveries).toEqual([{ kind: "empty", attempt: 1 }])
   expect(events.some((e) => e.type === "notice" && e.text.includes("dừng khi chưa viết câu trả lời"))).toBe(true)
+  // What history lost, the screen loses too: the retract reaches back past the empty request exactly
+  // when the preamble beside the tool call went from history.
+  const retract = events.find((e) => e.type === "retract") as { steps: number } | undefined
+  const preambleKept = JSON.stringify(messages).includes("Mình sẽ xem giờ trước.")
+  expect(retract?.steps).toBe(preambleKept ? 1 : 2)
+})
+
+test("droppedRequests: the last request's own text is 1; an empty last request after tool calls is 2", async () => {
+  const { droppedRequests } = await import("../src/core/agent")
+  const call = { type: "tool-call" as const, toolCallId: "c", toolName: "current_time", input: {} }
+  const result = { type: "tool-result" as const, toolCallId: "c", toolName: "current_time", output: { type: "text" as const, value: "10:00" } }
+  const withTool: ModelMessage[] = [
+    { role: "assistant", content: [{ type: "text", text: "Mình xem giờ:" }, call] },
+    { role: "tool", content: [result] },
+  ]
+  // Two requests, the second wrote nothing: the preamble of the first is what dropFinalText takes.
+  expect(droppedRequests(withTool, 2)).toBe(2)
+  // A draft beside a closing todo_write ends the run without another request: the text is the last request's.
+  expect(droppedRequests(withTool, 1)).toBe(1)
+  expect(droppedRequests([...withTool, { role: "assistant", content: "Bây giờ là 10:00." }], 2)).toBe(1)
+  expect(droppedRequests([], 1)).toBe(1)
 })
 
 test("an answer that only echoes the todo status (29/10) is recovered, tools allowed, and never stored", async () => {
