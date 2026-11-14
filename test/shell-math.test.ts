@@ -41,6 +41,7 @@ const PS_OK = [
   "$k = 250/119\n$stb = [math]::Log(66.3/73.5)*$k\n[math]::Round($stb, 4)",
   "$Tong = 1+2; $tong += 3; $TONG / 2 # tên biến không phân biệt hoa thường",
   "# lợi suất\n$g = 128.4/112 - 1\n\n$g*100;;",
+  "$g = 128.4/112 - 1 # ghi chú\r\n$g*100\r\n", // CRLF line ends
 ]
 const AWK_OK = [
   String.raw`awk 'BEGIN{printf "%.2f\n", (128.4/112-1)*100}'`,
@@ -108,6 +109,14 @@ test("PowerShell: arrays, ranges, variables, other types, invocation and chainin
     "$x = 1; while (1) { $x }",
     "$f = { 1 }",
     "1#Remove-Item x", // glued to a token, PowerShell reads one word and runs it as a command
+    // PowerShell ends a statement and a comment at a lone CR: nothing may hide behind one.
+    "1 # note\rRemove-Item x",
+    "1\r% 1",
+    "$x = 5\r$x*2",
+    "1 # note\u2028Remove-Item x",
+    "1 # note\u0085Remove-Item x",
+    "1 # note\u000bRemove-Item x",
+    "1 # \u001b[2J",
     "$x = 1 +\n2", // a line ending in an operator continues in PowerShell: not parsed the same way
     ". (1)",
     "&(1)",
@@ -200,6 +209,7 @@ test("POSIX: awk BEGIN with assignments, print and printf; files, system, getlin
     String.raw`awk 'BEGIN{print 2**3}'`,
     String.raw`awk 'BEGIN{x = 1; x++; print x}'`,
     String.raw`awk 'BEGIN{}'`,
+    "awk 'BEGIN{print 1 # note\rprint 2}'", // a lone CR: refused in both forms
     // Options, files, other programs.
     String.raw`awk -v x=1 'BEGIN{print x}'`,
     String.raw`awk -f calc.awk`,
