@@ -18,6 +18,7 @@ import type { ToolDef, ToolResult } from "../../src/core/tools/types"
 import type { ToolRegistry } from "../../src/core/tools/registry"
 import { answerUnattended } from "./approvals"
 import type { RequestLedger } from "./ledger"
+import { SHELL_TOOL, shellExecMs, shellRoute } from "./shell-route"
 import { TRACE_VERSION, type TraceEvent, type TraceWriter } from "./trace"
 
 const QUESTIONS = z
@@ -216,6 +217,8 @@ export async function runEval(run: EvalRun) {
     ...(run.settings ? { settings: run.settings } : {}),
   })
   const seen = new WeakSet<ToolDef>()
+  /** Calls of the current question whose tool really ran (observeTools reports before tool-end). */
+  const executed = new Set<string>()
   let asked: Asked = { q: "", rep: 0 }
   const meter = { requests: 0, capped: new AbortController() }
   const stopMeter = onModelRequest((request) => {
@@ -242,11 +245,15 @@ export async function runEval(run: EvalRun) {
           registry,
           seen,
           () => asked,
-          (tag, { callId, ...call }) => write({ type: "tool_raw", ...tag, call_id: callId, ...call }),
+          (tag, { callId, ...call }) => {
+            executed.add(callId)
+            write({ type: "tool_raw", ...tag, call_id: callId, ...call })
+          },
         )
         meter.requests = 0
         await freshMemory(runtime, run.memory ?? "none")
-        await ask(run, question, asked, now, meter)
+        executed.clear()
+        await ask(run, question, asked, now, meter, executed)
         await ledger?.flush()
       }
     }
@@ -268,8 +275,24 @@ function finalText(messages: ModelMessage[]) {
   return (content ?? []).flatMap((part) => (part.type === "text" ? [part.text] : [])).join("")
 }
 
-async function ask(run: EvalRun, question: EvalQuestion, asked: Asked, now: Date, meter: { requests: number; capped: AbortController }) {
+/** The `shell` field of a shell call's result line: what the gate made of the command. */
+async function shellOutcome(registry: ToolRegistry, input: unknown, executed: boolean, ok: boolean, visible: string) {
+  // The input is the model's own, not yet checked against the schema (issue #268 had calls with
+  // broken arguments): reading it must never end the question it only measures.
+  try {
+    const def = registry.get(SHELL_TOOL)
+    const readOnly = (await def?.autoSafe?.(input as never)) ?? false
+    const route = shellRoute({ scope: def?.askFor?.(input), readOnly, executed, ok, visible })
+    const exec_ms = executed ? shellExecMs(visible) : undefined
+    return { route, ...(exec_ms !== undefined ? { exec_ms } : {}) }
+  } catch {
+    return { route: "error" as const }
+  }
+}
+
+async function ask(run: EvalRun, question: EvalQuestion, asked: Asked, now: Date, meter: { requests: number; capped: AbortController }, executed: ReadonlySet<string> = new Set()) {
   const { runtime, write } = run
+  const shellInputs = new Map<string, unknown>()
   clearResults()
   useResultSession(`${asked.q}#${asked.rep}`)
   // Each question is its own conversation for gateways that cache by it (OpenCode).
@@ -299,8 +322,13 @@ async function ask(run: EvalRun, question: EvalQuestion, asked: Asked, now: Date
       signal: AbortSignal.any([timeout, meter.capped.signal]),
     })) {
       if (event.type === "text-delta") result.streamed += event.text
-      else if (event.type === "tool-start") say({ type: "tool_call", ...asked, call_id: event.callId, tool: event.name, input: event.input, step: event.step })
-      else if (event.type === "tool-end") say({ type: "tool_result", ...asked, call_id: event.callId, ok: event.ok, visible: event.output, duration_ms: event.durationMs })
+      else if (event.type === "tool-start") {
+        if (event.name === SHELL_TOOL) shellInputs.set(event.callId, event.input)
+        say({ type: "tool_call", ...asked, call_id: event.callId, tool: event.name, input: event.input, step: event.step })
+      } else if (event.type === "tool-end") {
+        const shell = shellInputs.has(event.callId) ? await shellOutcome(runtime.registry, shellInputs.get(event.callId), executed.has(event.callId), event.ok, event.output) : undefined
+        say({ type: "tool_result", ...asked, call_id: event.callId, ok: event.ok, visible: event.output, duration_ms: event.durationMs, ...(shell ? { shell } : {}) })
+      }
       else if (event.type === "retry") say({ type: "retry", ...asked, attempt: event.attempt, delay_ms: event.delayMs, label: event.label })
       else if (event.type === "notice") say({ type: "notice", ...asked, text: event.text })
       else if (event.type === "error") say({ type: "error", ...asked, message: event.message, ...(event.kind ? { kind: event.kind } : {}) })

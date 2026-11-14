@@ -125,16 +125,18 @@ export const ungroundedFigures = (text: string, numbers: Set<number>) =>
 /** A tool may give a ratio or thousands where the answer writes a percent or dong. */
 const SCALES = [1, 100, 0.01, 1e3, 1e-3, 1e6, 1e-6, 1e9, 1e-9]
 
-/** Whether `figure` is one of `numbers` at a common scale, rounded as the answer writes it. */
-export function tracesTo(figure: Figure, numbers: Set<number>) {
-  for (const [i, value] of figure.values.entries()) {
-    const near = 0.5 * 10 ** -(figure.decimals[i] ?? 0) * (figure.scale ?? 1) + 1e-9
-    for (const number of numbers) {
-      // "giảm 3,2%" writes the sign in words.
-      if (SCALES.some((scale) => Math.abs(Math.abs(number) * scale - value) <= near)) return true
-    }
+/** Whether `value` is one of `numbers` at a common scale, within `near`. */
+export function valueTracesTo(value: number, near: number, numbers: Set<number>) {
+  for (const number of numbers) {
+    // "giảm 3,2%" writes the sign in words.
+    if (SCALES.some((scale) => Math.abs(Math.abs(number) * scale - value) <= near)) return true
   }
   return false
+}
+
+/** Whether `figure` is one of `numbers` at a common scale, rounded as the answer writes it. */
+export function tracesTo(figure: Figure, numbers: Set<number>) {
+  return figure.values.some((value, i) => valueTracesTo(value, 0.5 * 10 ** -(figure.decimals[i] ?? 0) * (figure.scale ?? 1) + 1e-9, numbers))
 }
 
 const UNIT_VALUE: Partial<Record<NonNullable<Figure["unit"]>, number>> = { tỷ: 1e9, triệu: 1e6, nghìn: 1e3 }

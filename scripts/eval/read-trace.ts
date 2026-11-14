@@ -42,6 +42,8 @@ export interface Attempt {
   q: string
   rep: number
   question: Of<"question">
+  /** Tool calls and their results in the order they happened. */
+  timeline: (Of<"tool_call"> | Of<"tool_result">)[]
   results: Of<"tool_result">[]
   raws: Of<"tool_raw">[]
   answer?: Of<"answer">
@@ -73,12 +75,16 @@ export function readTrace(text: string): Trace {
     if (event.type === "run") return
     const key = `${event.q}#${event.rep}`
     if (event.type === "question") {
-      attempts.set(key, { q: event.q, rep: event.rep, question: event, results: [], raws: [] })
+      attempts.set(key, { q: event.q, rep: event.rep, question: event, timeline: [], results: [], raws: [] })
       return
     }
     const attempt = attempts.get(key)
     if (!attempt) throw new Error(`Dòng ${i + 2} của trace: chưa có câu ${key}.`)
-    if (event.type === "tool_result") attempt.results.push(event)
+    if (event.type === "tool_call") attempt.timeline.push(event)
+    else if (event.type === "tool_result") {
+      attempt.results.push(event)
+      attempt.timeline.push(event)
+    }
     else if (event.type === "tool_raw") attempt.raws.push(event)
     else if (event.type === "answer") attempt.answer = event
   })
