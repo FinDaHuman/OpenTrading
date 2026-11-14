@@ -78,6 +78,8 @@ test("the title uses the side model (webModel) with room for a thinking model", 
 })
 
 test("a reasoning model gets room for its reasoning on top of the title's 256 tokens (30/10)", async () => {
+  // Its own key: it used to rely on the test above having saved one.
+  await setKey("groq", "gsk-test")
   await saveConfig({ provider: "groq", model: "thinker", webModel: undefined })
   await generateTitle("Giá FPT")
   expect(sent.at(-1)!.model).toBe("thinker")
