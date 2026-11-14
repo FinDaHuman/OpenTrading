@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { z } from "zod"
+import { until } from "./helpers/tui"
 
 // Isolated state dir before core modules read it.
 const home = await mkdtemp(path.join(os.tmpdir(), "ot-structured-"))
@@ -222,6 +223,8 @@ test("an agent restored from its sidechain keeps its desk run id (review #118)",
   replies = [{ text: "Thêm." }]
   await second.continue(run.id, "Thêm", () => ({}))
   expect(second.get(run.id)?.deskRunId).toBe("dk-keep01")
+  // The continued run answers in the background: let it end here, or its request lands in the next test.
+  await until(() => !["queued", "running"].includes(second.get(run.id)?.status ?? ""), 10_000, "the continued run to end")
   await second.flush()
 })
 

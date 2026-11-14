@@ -1,5 +1,6 @@
 import { afterAll, afterEach, expect, spyOn, test } from "bun:test"
 import { appendFile, mkdir, mkdtemp, readFile, rm, stat, truncate, writeFile } from "node:fs/promises"
+import { existsSync } from "node:fs"
 import os from "node:os"
 import path from "node:path"
 import type { ModelMessage } from "ai"
@@ -37,6 +38,15 @@ const turn = (n: number): ModelMessage[] => [
 const fail = (message: string, code: string) => Object.assign(new Error(message), { code })
 const fileOf = (s: import("../src/core/session/store").Session) => path.join(sessionsDir(), s.file!)
 const lines = async (file: string) => (await readFile(file, "utf8")).split("\n").filter((l) => l.trim())
+/**
+ * The lines of an exit report about these sessions only. settleForExit reports every session this
+ * process left, and the tests before this one (in any order) leave theirs.
+ */
+const about = (report: string | undefined, ...sessions: import("../src/core/session/store").Session[]) =>
+  report
+    ?.split("\n")
+    .filter((line) => sessions.some((s) => line.startsWith(`Phiên "${s.title || s.id}"`)))
+    .join("\n") || undefined
 
 /** A session with `n` turns already on disk. */
 async function sessionWith(n: number) {
@@ -46,7 +56,11 @@ async function sessionWith(n: number) {
 }
 
 test("TC-001: a first turn that cannot be written is retried with the next one; the meta line comes first", async () => {
-  const s = Session.create(new Date("2026-10-29T08:00:00Z"))
+  // A year that has no folder yet (other tests write sessions dated now), long past so its session never
+  // shows as the newest in another test's list.
+  let year0 = 2001
+  while (existsSync(path.join(sessionsDir(), String(year0)))) year0++
+  const s = Session.create(new Date(`${year0}-10-29T08:00:00Z`))
   // The year folder the session goes into, from the session's own date, blocked by a file.
   const year = path.relative(sessionsDir(), s.dir).split(path.sep)[0]!
   const blocker = path.join(sessionsDir(), year)
@@ -381,7 +395,7 @@ test("exit: the line printed when turns stay unsaved, or when writing did not fi
     throw fail("ổ đầy", "ENOSPC")
   })
   await s.appendTurn(turn(1), info)
-  expect(await tui.settleForExit(2000, s)).toBe('Phiên "Thoát" còn 1 lượt chưa lưu được: ổ đầy.')
+  expect(about(await tui.settleForExit(2000, s), s)).toBe('Phiên "Thoát" còn 1 lượt chưa lưu được: ổ đầy.')
   full.mockRestore()
   let release!: () => void
   const gate = new Promise<void>((r) => (release = r))
@@ -391,10 +405,10 @@ test("exit: the line printed when turns stay unsaved, or when writing did not fi
   })
   void s.appendTurn(turn(2), info)
   // R21: whole seconds, the same line app.tsx prints when its own deadline wins.
-  expect(await tui.settleForExit(100, s)).toBe(tui.exitTimeoutText(s))
+  expect(about(await tui.settleForExit(100, s), s)).toBe(tui.exitTimeoutText(s))
   expect(tui.exitTimeoutText(s)).toBe('Phiên "Thoát": chưa ghi xong trong 2 giây khi thoát; lượt cuối có thể chưa được lưu.')
   release()
-  expect(await tui.settleForExit(2000, s)).toBeUndefined()
+  expect(about(await tui.settleForExit(2000, s), s)).toBeUndefined()
 })
 
 // Review round 2.
@@ -432,9 +446,9 @@ test("review 2 #4: exit also waits for, and reports, sessions left with writes s
   const release = holdNextAppend()
   void s.appendTurn(turn(2), info)
   await tui.openForResume(s, elsewhere.id, 50)
-  expect(await tui.settleForExit(100, fresh)).toBe(tui.exitTimeoutText(s))
+  expect(about(await tui.settleForExit(100, fresh), s)).toBe(tui.exitTimeoutText(s))
   release()
-  expect(await tui.settleForExit(2000, fresh)).toBeUndefined()
+  expect(about(await tui.settleForExit(2000, fresh), s)).toBeUndefined()
 })
 
 test("review 2 #2: a left session with turns it could not save is not reopened without them", async () => {
@@ -565,7 +579,12 @@ test("R46: a stopped session keeps no compaction content in memory", async () =>
 })
 
 test("a /resume prefix that matches two sessions, one of them open: told to use a longer id, nothing switched or written", async () => {
-  const at = new Date("2026-09-20T03:04:05Z")
+  // Ids start with the second of creation. A run of this test before this one in the same process
+  // (bun test --rerun-each) left two open sessions at that second in src/tui/session.ts, which made the
+  // prefix match 4: each run takes the next second.
+  const runs = ((globalThis as { __resumePrefixRuns?: number }).__resumePrefixRuns ?? 0) + 1
+  ;(globalThis as { __resumePrefixRuns?: number }).__resumePrefixRuns = runs
+  const at = new Date(Date.parse("2026-09-20T03:04:05Z") + runs * 1000)
   const a = Session.create(at)
   const b = Session.create(at)
   expect(a.id.slice(0, 15)).toBe(b.id.slice(0, 15))

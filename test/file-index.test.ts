@@ -23,6 +23,8 @@ const git = (cwd: string, ...args: string[]) => Bun.spawnSync(["git", ...args], 
 
 beforeAll(async () => {
   base = await mkdtemp(path.join(os.tmpdir(), "ot-file-index-"))
+  // The plain (non-git) tree several tests read: made here, not by whichever test ran first.
+  await tree(path.join(base, "plain"))
 })
 afterAll(async () => {
   await rm(base, { recursive: true, force: true })

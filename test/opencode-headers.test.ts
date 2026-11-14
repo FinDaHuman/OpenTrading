@@ -135,6 +135,8 @@ test("native search on an OpenCode Anthropic model sends the headers and is coun
   const counted: string[] = []
   const stop = onModelRequest((r) => counted.push(`${r.provider}/${r.model}`))
   const seen: { session: string | null; ua: string | null }[] = []
+  // This file's fetch comes back after the test: tests after it (any order) expect the chat answers.
+  const fileFetch = globalThis.fetch
   globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
     const headers = new Headers(init?.headers)
     seen.push({ session: headers.get("x-opencode-session"), ua: headers.get("user-agent") })
@@ -146,6 +148,7 @@ test("native search on an OpenCode Anthropic model sends the headers and is coun
     expect(found?.backend).toBe("anthropic-web-search")
   } finally {
     stop()
+    globalThis.fetch = fileFetch
   }
   expect(seen).toEqual([{ session: "s-web", ua: USER_AGENT }])
   expect(counted).toEqual(["opencode-go/claude-haiku-5-5"])

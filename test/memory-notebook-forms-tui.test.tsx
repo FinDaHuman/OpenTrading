@@ -8,7 +8,7 @@ import { testRender } from "@opentui/solid"
 import { DECISION_MARKER, HPG_V3, seedExample, seedRenamed } from "./helpers/memory-notebook"
 import { testClock } from "./helpers/memory-store"
 import { pastEnterGrace, realClock } from "./helpers/clock"
-import { renderedFrame } from "./helpers/tui"
+import { renderedFrame, until } from "./helpers/tui"
 
 // Config, the store, sessions and the prompt history go to a scratch home, never ~/.opentrading.
 const home = await mkdtemp(path.join(os.tmpdir(), "ot-notebook-forms-"))
@@ -75,6 +75,8 @@ let runtime: Runtime | undefined
 const opened: { close(): void }[] = []
 
 beforeEach(async () => {
+  // A fresh config: saveConfig merges, so what one test set (cards off, memory choice…) reached the next.
+  rmSync(path.join(home, "config.json"), { force: true })
   await saveConfig({ provider: "groq", model: "m", update: { check: false } })
   requests.length = 0
   bodies.length = 0
@@ -94,7 +96,10 @@ afterEach(async () => {
   runtime = undefined
   for (const s of opened.splice(0)) s.close()
   resetNotifications()
-  setState({ dialog: undefined, lines: [], notebookForm: undefined, notebookFormDirty: false, notebookFormAskLeave: false })
+  // exitArmed and notebookFormBack too: a Ctrl+C at the end of one test armed exit for 800 ms, and the next
+  // test's first Ctrl+C exited instead of asking; a form opened from /memory made the next test's form
+  // (set directly) go back to /memory on save. Both seen with --randomize.
+  setState({ dialog: undefined, lines: [], notebookForm: undefined, notebookFormBack: false, notebookFormDirty: false, notebookFormAskLeave: false, exitArmed: undefined })
   await historyFlushed()
   resetHistory()
   rmSync(historyFile(), { force: true })
@@ -125,10 +130,6 @@ async function start(choice: MemoryChoice = "notebook", height = 44) {
 }
 
 const frameWith = (text: string | ((f: string) => boolean)) => renderedFrame(setup!, text)
-async function until(check: () => boolean | Promise<boolean>) {
-  for (let i = 0; i < 200 && !(await check()); i++) await new Promise((r) => setTimeout(r, 10))
-  expect(await check()).toBe(true)
-}
 
 async function history(): Promise<{ text: string; ts?: number; pastes?: Record<string, string> }[]> {
   await historyFlushed()

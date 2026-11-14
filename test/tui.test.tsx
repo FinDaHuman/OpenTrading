@@ -276,7 +276,7 @@ const osc52: string[] = []
 /** What it handed to the OS clipboard command (stubbed; CI never runs powershell). */
 const copied: string[] = []
 const { setClipboardSpawn } = await import("../src/tui/clipboard")
-const { currentSession } = await import("../src/tui/session")
+const { currentSession, startSession } = await import("../src/tui/session")
 setClipboardSpawn(async (_command, text) => {
   copied.push(text)
   return true
@@ -287,6 +287,9 @@ let setup: Awaited<ReturnType<typeof testRender>>
 beforeAll(async () => {
   // Test files share one process and one store: start from an empty transcript whatever ran before.
   setState({ lines: [], approval: undefined, approvals: [], dialog: undefined })
+  // And on a fresh session: the current one is module state, and may belong to a file (or an earlier
+  // run of this one) whose home is gone ("Không tìm thấy phiên" on /save).
+  await startSession(runtime, "startup")
   // exitOnCtrlC off, as in main.tsx: the app handles Ctrl+C (double press) itself.
   setup = await testRender(() => <App runtime={runtime} onExit={() => exits++} />, { width: 100, height: 32, exitOnCtrlC: false })
   // waitFor/waitForFrame count frames and give up once the renderer idles. The app draws on
@@ -329,6 +332,8 @@ async function command(cmd: string): Promise<{ kind: string; text: string; level
 }
 
 afterAll(async () => {
+  // The next test file (bun test without --parallel) must not start on this file's session.
+  await startSession(runtime, "clear")
   await runtime.mcp.stop()
   setup.renderer.destroy()
   await rm(cwd, { recursive: true, force: true })
