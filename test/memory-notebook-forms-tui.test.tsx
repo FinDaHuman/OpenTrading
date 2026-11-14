@@ -1048,6 +1048,30 @@ describe("/baihoc: lessons, and hard rules saved in the wrong place", () => {
     expect(other.reader.lessons()).toHaveLength(2)
   })
 
+  test("from an edited lesson, 'Lưu thành ràng buộc' opens a new constraint, not an edit of the one with the lesson's number", async () => {
+    const other = otherWindow()
+    seedExample(other)
+    // Constraints and lessons are numbered apart: a constraint #7 next to lesson #7 is what the bug opened
+    // for editing, with its text in place of the rule (and saving changed it).
+    while (!other.reader.constraint(7)) other.writer.addConstraint({ kind: "constraint", text: `Ràng buộc khác ${Date.now()}` })
+    const seventh = other.reader.constraint(7)
+    await start()
+    setState({ notebookForm: { group: "lesson", edit: { id: 7 } }, dialog: "notebook-form" })
+    await frameWith("Sửa bài học #7")
+    tab()
+    await setup!.mockInput.typeText(". Tuyệt đối không bắt đáy")
+    await confirm(5)
+    await frameWith("Lưu thành ràng buộc")
+    key("1")
+    await frameWith("Mở từ form bài học")
+    // Nothing of the lesson's request is left: setState("notebookForm", {...}) merged its edit: { id: 7 }.
+    expect(state.notebookForm).toEqual({ group: "constraint", text: expect.stringContaining("Tuyệt đối không bắt đáy"), kind: "constraint", fromLesson: true })
+    const form = flat(await frameWith("Ghi nhớ"))
+    expect(form).not.toContain("Sửa ràng buộc")
+    expect(form).toContain("Tuyệt đối không bắt đáy")
+    expect(other.reader.constraint(7)).toEqual(seventh)
+  })
+
   test("'tuyệt đối không' in the summary warns too; 'Dùng P/B và ROE, không dùng P/E' does not", async () => {
     seedExample(otherWindow())
     await start()

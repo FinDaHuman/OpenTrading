@@ -974,12 +974,16 @@ function LessonForm(props: { admin: NotebookAdmin; req: Request<"lesson"> }) {
       ? [
           {
             label: "Lưu thành ràng buộc (chỉ giữ câu này)",
+            // A new object at the top level: setState("notebookForm", {...}) merged into the lesson's
+            // request and kept its edit: { id }, so the constraint form opened constraint #id.
             run: () =>
-              setState("notebookForm", {
-                group: "constraint",
-                text: rule.field === "summary" ? draft.summary.trim() : draft.title.trim(),
-                kind: "constraint",
-                fromLesson: true,
+              setState({
+                notebookForm: {
+                  group: "constraint",
+                  text: rule.field === "summary" ? draft.summary.trim() : draft.title.trim(),
+                  kind: "constraint",
+                  fromLesson: true,
+                },
               }),
           },
         ]
