@@ -88,8 +88,10 @@ function tokenize(text: string, form: Form): Token[] | undefined {
       i++
       continue
     }
-    // A comment runs to the end of its line in both languages.
+    // A comment runs to the end of its line in both languages. Only where a token may start:
+    // glued to one (`1#x`), PowerShell reads a single word, which it would run as a command.
     if (c === "#") {
+      if (i > 0 && !/[\s;]/.test(text[i - 1]!)) return undefined
       const end = text.indexOf("\n", i)
       i = end < 0 ? text.length : end
       continue
@@ -177,10 +179,10 @@ function tokenize(text: string, form: Form): Token[] | undefined {
 
 /** A number conversion of printf: flags, a width and a precision of at most two digits, no `*`, no `%s`. */
 const CONVERSION = /%[-+ 0]*\d{0,2}(?:\.\d{1,2})?[fgdeEG]/g
-/** A printf format: conversions, `%%`, `\n`, `\t` and plain text. */
-const FORMAT = /^(?:%[-+ 0]*\d{0,2}(?:\.\d{1,2})?[fgdeEG]|%%|\\[nt]|[^%\\"'\r\n])*$/
+/** A printf format: conversions, `%%`, `\n`, `\t` and plain text (no control character: the output reaches a terminal). */
+const FORMAT = /^(?:%[-+ 0]*\d{0,2}(?:\.\d{1,2})?[fgdeEG]|%%|\\[nt]|[^%\\"'\x00-\x1f\x7f])*$/
 /** A label in `print`: plain text. */
-const LABEL = /^(?:\\[nt]|[^\\"'\r\n])*$/
+const LABEL = /^(?:\\[nt]|[^\\"'\x00-\x1f\x7f])*$/
 
 /**
  * program := stmt ((; | newline)+ stmt)*

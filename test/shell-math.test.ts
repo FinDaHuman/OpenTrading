@@ -100,6 +100,8 @@ test("PowerShell: arrays, ranges, variables, other types, invocation and chainin
     "$x = 1; if ($x) { 2 }",
     "$x = 1; while (1) { $x }",
     "$f = { 1 }",
+    "1#Remove-Item x", // glued to a token, PowerShell reads one word and runs it as a command
+    "$x = 1 +\n2", // a line ending in an operator continues in PowerShell: not parsed the same way
     ". (1)",
     "&(1)",
     "`1+1",
@@ -177,6 +179,9 @@ test("POSIX: awk BEGIN with assignments, print and printf; files, system, getlin
     String.raw`awk 'BEGIN{print rand()}'`,
     String.raw`awk 'BEGIN{print abs(1)}'`,
     String.raw`awk 'BEGIN{print "\x41"}'`,
+    String.raw`awk 'BEGIN{print "a\" ; system(\"id\") ; \""}'`, // one string to awk: an escaped quote must not end it for us
+    "awk 'BEGIN{print \"\u001b[2J\"}'", // a control character would reach the terminal
+    "awk 'BEGIN{printf \"\u001b]0;x\u0007%d\\n\", 1}'",
     // A variable is read only after it was assigned (a mistyped name is 0 in awk).
     String.raw`awk 'BEGIN{gia = 5; printf "%.2f\n", gai*2}'`,
     String.raw`awk 'BEGIN{x += 1; print x}'`,
