@@ -188,15 +188,12 @@ export function webFetchTool(deps: FetchDeps = {}): ToolDef<WebFetchInput> {
   return {
     name: "web_fetch",
     description:
-      "Đọc một URL công khai (bài báo, công bố, báo cáo PDF): HTML được chuyển sang markdown (giữ link, bảng), PDF lấy chữ; http tự nâng lên https; cache 15 phút. " +
-      "Truyền prompt để một model phụ đọc trang và chỉ trả phần cần (khuyên dùng với trang dài). Trang dài không có prompt thì đọc tiếp bằng start_char. " +
-      "Chuyển hướng sang host khác sẽ được báo lại kèm URL mới để gọi lại. Không đọc được trang cần đăng nhập, trang chỉ render bằng JavaScript hay PDF scan. Không dùng để tìm kiếm (dùng web_search).",
+      "Đọc một URL công khai (HTML thành markdown, PDF lấy chữ). Dùng khi cần nội dung một trang hay báo cáo cụ thể. Không dùng để tìm kiếm (dùng web_search); không đọc được trang cần đăng nhập hay chỉ chạy JavaScript. " +
+      "Trang dài: truyền prompt để chỉ nhận phần cần, hoặc đọc tiếp bằng start_char.",
     input: z.object({
-      url: z.string().min(8).describe("URL đầy đủ"),
-      prompt: z.string().min(3).max(1000).optional().describe("Câu hỏi cần trả lời từ trang, ví dụ: lợi nhuận quý 3 và kế hoạch năm"),
-      format: z.enum(["markdown", "text", "html"]).optional().describe("Dạng nội dung (mặc định markdown)"),
-      start_char: z.number().int().min(0).optional().describe("Đọc tiếp từ ký tự này (trang dài)"),
-      timeoutSeconds: z.number().int().min(5).max(120).optional().describe("Thời gian chờ (giây, mặc định 60)"),
+      url: z.string().min(8),
+      prompt: z.string().min(3).max(1000).optional().describe("Câu hỏi cần trả lời từ trang"),
+      start_char: z.number().int().min(0).optional(),
     }),
     readOnly: true,
     deferrable: true,

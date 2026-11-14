@@ -58,13 +58,11 @@ export function globFilesTool(workspace: Workspace): ToolDef<GlobInput> {
   return {
     name: "glob_files",
     description:
-      "Tìm file theo mẫu tên (glob) trong một thư mục (mặc định workspace), trả đường dẫn đầy đủ, file mới sửa nhất trước, tối đa 100 kết quả. " +
-      'Mẫu không có "/" khớp tên file ở mọi cấp: "*.pdf", "*bctc*"; có "/" thì khớp theo đường dẫn tương đối: "bao-cao/**/*.md". ' +
-      "Dùng khi cần biết có những file nào (báo cáo, CSV, ghi chú) trước khi đọc. Không dùng khi đã biết đường dẫn (dùng read_file) hay cần tìm chữ bên trong file (dùng grep_files). " +
-      "Bỏ qua .git, node_modules, .venv và file chứa khoá.",
+      'Tìm file theo mẫu tên (glob, ví dụ "*.pdf", "bao-cao/**/*.md"), mới sửa nhất trước, tối đa 100. ' +
+      "Dùng khi cần biết có file nào trước khi đọc. Không dùng khi tìm chữ trong file (dùng grep_files).",
     input: z.object({
-      pattern: z.string().min(1).describe('Mẫu glob, ví dụ "*.pdf" hoặc "data/**/*.csv"'),
-      path: z.string().optional().describe("Thư mục để tìm (mặc định workspace)"),
+      pattern: z.string().min(1),
+      path: z.string().optional().describe("Mặc định workspace"),
     }),
     readOnly: true,
     deferrable: true,
@@ -103,19 +101,16 @@ export function grepFilesTool(workspace: Workspace): ToolDef<GrepInput> {
   return {
     name: "grep_files",
     description:
-      "Tìm chữ (biểu thức chính quy kiểu JavaScript) bên trong các file text của một thư mục (mặc định workspace) hoặc một file. " +
-      'output_mode: "files_with_matches" (mặc định, chỉ tên file, mới sửa nhất trước), "content" (dòng khớp kèm số dòng, thêm context dòng xung quanh), "count" (số dòng khớp mỗi file). ' +
-      'Lọc file bằng glob, ví dụ "*.csv". head_limit giới hạn số dòng kết quả (mặc định 250). ' +
-      "Dùng khi cần tìm một mã, một con số, một từ khoá trong nhiều file hoặc trong file dài trước khi đọc đúng đoạn bằng read_file. " +
-      "Không dùng khi tìm file theo tên (dùng glob_files). Không đọc PDF/ảnh/file nhị phân và file chứa khoá.",
+      "Tìm chữ (regex JavaScript) trong file text của một thư mục hoặc file. output_mode: files_with_matches (mặc định), content (dòng khớp, thêm context), count. " +
+      "Dùng khi tìm một mã, con số, từ khoá trong nhiều file hay file dài. Không dùng khi tìm file theo tên (dùng glob_files); không đọc PDF, ảnh.",
     input: z.object({
-      pattern: z.string().min(1).describe('Biểu thức tìm, ví dụ "FPT|CMG" hoặc "lợi nhuận sau thuế"'),
-      path: z.string().optional().describe("Thư mục hoặc file để tìm (mặc định workspace)"),
-      glob: z.string().optional().describe('Chỉ tìm trong file khớp mẫu, ví dụ "*.md"'),
-      ignore_case: z.boolean().optional().describe("Không phân biệt hoa thường"),
+      pattern: z.string().min(1),
+      path: z.string().optional().describe("Mặc định workspace"),
+      glob: z.string().optional().describe('Lọc file, ví dụ "*.md"'),
+      ignore_case: z.boolean().optional(),
       output_mode: z.enum(["files_with_matches", "content", "count"]).optional(),
-      context: z.number().int().min(0).max(10).optional().describe("Số dòng hiện thêm trước/sau mỗi dòng khớp (output_mode content)"),
-      head_limit: z.number().int().min(1).max(2000).optional().describe("Tối đa bao nhiêu dòng kết quả (mặc định 250)"),
+      context: z.number().int().min(0).max(10).optional(),
+      head_limit: z.number().int().min(1).max(2000).optional().describe("Mặc định 250"),
     }),
     readOnly: true,
     deferrable: true,

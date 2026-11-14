@@ -16,12 +16,11 @@ export function toolSearchTool(registry: ToolRegistry, pending: () => string[] =
   return {
     name: TOOL_SEARCH,
     description: [
-      "Tìm và nạp các tool đang hoãn (liệt kê theo tên trong <tool_hoan>). Dùng khi: cần một tool chưa có schema trong lượt này. Tool hoãn chưa có schema nên phải nạp trước khi gọi; nạp xong thì gọi được ngay như tool bình thường.",
-      'Cách viết query: "select:ten_a,ten_b" để nạp đúng các tool đã biết tên — gộp mọi tool sẽ cần vào một lần gọi thay vì gọi tool_search nhiều lần; hoặc từ khoá như "gia lich su co phieu"; "+tu" bắt buộc khớp từ đó; "mcp__server" lấy tool của một server. Mô tả tool thường viết tiếng Việt và tên tool tiếng Anh, ví dụ "price history", "foreign flow" đều khớp.',
-      "Kết quả gồm mô tả và tham số của từng tool đã nạp.",
+      "Nạp tool đang hoãn (tên trong <tool_hoan>) để gọi được ngay. Dùng khi cần một tool chưa có schema.",
+      'query: "select:ten_a,ten_b" nạp đúng tên (gộp mọi tool sẽ cần vào một lần gọi); hoặc từ khoá Việt/Anh như "gia lich su", "foreign flow"; "+tu" bắt buộc khớp; "mcp__server" lấy cả server.',
     ].join(" "),
     input: z.object({
-      query: z.string().describe('Ví dụ "select:vn_quote_history,market_snapshot" hoặc "dong tien khoi ngoai"'),
+      query: z.string(),
       max_results: z.number().int().min(1).max(MAX_RESULTS).optional().describe(`Số tool tối đa (mặc định ${DEFAULT_RESULTS})`),
     }),
     readOnly: true,
