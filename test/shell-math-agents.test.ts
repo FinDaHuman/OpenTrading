@@ -70,7 +70,7 @@ test("a @chi-doc subagent's shell runs arithmetic and refuses anything else with
     (e: Error) => e.message,
   )
   expect(error).toContain("không phải phép tính thuần")
-  expect(error).toContain(win ? "[math]::Round" : "awk 'BEGIN{printf")
+  expect(error).toContain(win ? "[math]::Round" : "awk 'BEGIN{")
   expect(error).not.toContain("Đừng thử lại")
   // Without a gate the tool itself still refuses.
   await expect(shell.execute({ command: other }, ctx())).rejects.toThrow("phép tính thuần")

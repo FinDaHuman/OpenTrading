@@ -6,7 +6,7 @@
  * it unchanged, and console output is switched to UTF-8 first.
  */
 
-import { mathOnlyCommand } from "./math"
+import { awkWithPrecision, mathOnlyCommand } from "./math"
 import { mkdirSync } from "node:fs"
 import path from "node:path"
 import type { FileSink } from "bun"
@@ -57,8 +57,9 @@ export function shellArgs(shell: ShellInfo, command: string): string[] {
     const encoded = Buffer.from(psScript(command), "utf16le").toString("base64")
     return [shell.path, "-NoLogo", "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded]
   }
-  // awk's printf may follow LC_NUMERIC (a comma locale prints 1,50): arithmetic runs in the C locale.
-  return [shell.path, "-c", mathOnlyCommand(command, shell) ? `LC_ALL=C ${command.trim()}` : command]
+  // awk's printf may follow LC_NUMERIC (a comma locale prints 1,50): arithmetic runs in the C locale,
+  // and `print` keeps a value's digits.
+  return [shell.path, "-c", mathOnlyCommand(command, shell) ? `LC_ALL=C ${awkWithPrecision(command)}` : command]
 }
 
 export interface RunResult {

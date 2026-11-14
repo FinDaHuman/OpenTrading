@@ -117,10 +117,28 @@ test("the command forms of issue #268 against the grammar: where each one ends u
   // run are in. A PR that widens the grammar or the near-miss moves these numbers, on purpose.
   const commands = parseCommands(await Bun.file(path.join(import.meta.dir, "fixtures", "shell-commands.jsonl")).text())
   const report = replayAll(commands)
-  expect(report.commands).toBe(14)
-  expect(report.total).toEqual({ run: 3, near: 1, ask: 10 })
-  expect(report.forms["awk-one-line"]).toEqual({ run: 3, near: 0, ask: 0 })
-  for (const form of ["awk-vars", "awk-printf-parens", "awk-multiline", "awk-long", "awk-newline-in-format"]) expect(report.forms[form]!.run).toBe(0)
+  const synthetic = replayAll(commands.filter((c) => c.source !== "r0-gemini-flash-lite"))
+  expect(synthetic.commands).toBe(14)
+  // Grammar v2: every awk form of the issue runs (was run 3, near 1, ask 10). The python forms
+  // are left: two multi-line ones still reach the gate.
+  expect(synthetic.total).toEqual({ run: 11, near: 1, ask: 2 })
+  for (const form of ["awk-one-line", "awk-vars", "awk-printf-parens", "awk-multiline", "awk-long", "awk-newline-in-format"]) expect([form, synthetic.forms[form]!.near + synthetic.forms[form]!.ask]).toEqual([form, 0])
+  expect(synthetic.forms.python).toEqual({ run: 0, near: 1, ask: 2 })
+})
+
+test("the commands gemini-3.1-flash-lite really sent on 14/11 (run R0, both shells): what runs, and what a series still needs", async () => {
+  const commands = parseCommands(await Bun.file(path.join(import.meta.dir, "fixtures", "shell-commands.jsonl")).text()).filter((c) => c.source === "r0-gemini-flash-lite")
+  const report = replayAll(commands)
+  expect(report.commands).toBe(24)
+  // On the grammar before v2: run 17, ask 7. v2 takes the PowerShell command with variables.
+  expect(report.total).toEqual({ run: 18, near: 0, ask: 6 })
+  expect(report.forms["ps-expression"]).toEqual({ run: 9, near: 0, ask: 0 })
+  expect(report.forms["awk-expression"]).toEqual({ run: 8, near: 0, ask: 0 })
+  expect(report.forms["ps-vars"]).toEqual({ run: 1, near: 0, ask: 0 })
+  // A series (MA20, 30 volumes, volatility, drawdown) was written as an array with a loop
+  // (`split(…)` + `for` in awk, `@(…)` + `foreach` in PowerShell): not arithmetic-only yet.
+  expect(report.forms["ps-series-loop"]).toEqual({ run: 0, near: 0, ask: 2 })
+  expect(report.forms["awk-series-loop"]).toEqual({ run: 0, near: 0, ask: 4 })
 })
 
 /** A right answer to each compute question, written the way the prompt asks (Vietnamese number format). */
