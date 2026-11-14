@@ -75,11 +75,18 @@ function attemptOperands(attempt: Attempt) {
       for (const operand of operandsOf(command)) {
         if (isConstant(operand.value)) continue
         total++
-        if (valueTracesTo(operand.value, 0.5 * 10 ** -operand.decimals + 1e-9, known)) traced++
+        // A decimal may be the source rounded as typed (66.3 for 66.27); an integer must be the
+        // number itself, or among thirty volumes nearly any small integer would trace by chance.
+        const near = operand.decimals > 0 ? 0.5 * 10 ** -operand.decimals + 1e-9 : 1e-9
+        if (valueTracesTo(operand.value, near, known)) traced++
         else untraced.push({ q: attempt.q, rep: attempt.rep, value: operand.text, command })
       }
     }
-    for (const n of sourceNumbers(event.visible)) known.add(n)
+    // Only data the model read: not a denial or an error text, and not the shell's own status
+    // line (exit code, seconds, digits of the folder path).
+    if (!event.ok || (event.shell && !RAN.has(event.shell.route))) continue
+    const data = event.shell ? event.visible.replace(/^\[[^\n]*\]\n?/, "") : event.visible
+    for (const n of sourceNumbers(data)) known.add(n)
   }
   return { total, traced, untraced }
 }

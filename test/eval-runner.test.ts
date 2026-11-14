@@ -66,9 +66,9 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   if (commands) {
     const calls = body.messages.filter((m) => m.role === "tool").length
     const command = commands[calls]
-    if (command === undefined) return sse([chunk({ role: "assistant", content: "Tăng 14,64% (tự tính)." }), chunk({}, "stop")])
+    if (calls >= commands.length) return sse([chunk({ role: "assistant", content: "Tăng 14,64% (tự tính)." }), chunk({}, "stop")])
     return sse([
-      chunk({ role: "assistant", tool_calls: [{ index: 0, id: `sh_${calls}`, type: "function", function: { name: "shell", arguments: JSON.stringify({ command }) } }] }),
+      chunk({ role: "assistant", tool_calls: [{ index: 0, id: `sh_${calls}`, type: "function", function: { name: "shell", arguments: JSON.stringify(command === undefined ? {} : { command }) } }] }),
       chunk({}, "tool_calls"),
     ])
   }
@@ -240,6 +240,15 @@ test("a shell call's result line says what became of the command, and the metric
   expect(m.routes).toEqual({ math: 1, "read-only": 0, approved: 0, "near-miss": 1, denied: 1, error: 0 })
   // The command that ran and the one refused as arithmetic each typed 128.4 and 112, both in the question (100 and 1 are constants).
   expect(m.operands).toEqual({ total: 4, traced: 4, untraced: [] })
+})
+
+test("a shell call with broken arguments is traced as an error and the question still ends with its answer", async () => {
+  // Issue #268 had shell calls whose arguments were not valid: measuring them must not end the question.
+  commands = [undefined as unknown as string]
+  const { events } = await run(parseQuestions(JSON.stringify([question("q1")])))
+  expect(of(events, "tool_result").map((r) => r.shell?.route)).toEqual(["error"])
+  expect(of(events, "error")).toHaveLength(0)
+  expect(of(events, "answer")[0]!.outcome).toBe("completed")
 })
 
 test("--yolo: a tool that would ask runs unanswered, and the header records the bypass mode", async () => {

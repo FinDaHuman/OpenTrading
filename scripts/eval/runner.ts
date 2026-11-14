@@ -277,11 +277,17 @@ function finalText(messages: ModelMessage[]) {
 
 /** The `shell` field of a shell call's result line: what the gate made of the command. */
 async function shellOutcome(registry: ToolRegistry, input: unknown, executed: boolean, ok: boolean, visible: string) {
-  const def = registry.get(SHELL_TOOL)
-  const readOnly = (await def?.autoSafe?.(input as never).catch(() => false)) ?? false
-  const route = shellRoute({ scope: def?.askFor?.(input), readOnly, executed, ok, visible })
-  const exec_ms = executed ? shellExecMs(visible) : undefined
-  return { route, ...(exec_ms !== undefined ? { exec_ms } : {}) }
+  // The input is the model's own, not yet checked against the schema (issue #268 had calls with
+  // broken arguments): reading it must never end the question it only measures.
+  try {
+    const def = registry.get(SHELL_TOOL)
+    const readOnly = (await def?.autoSafe?.(input as never)) ?? false
+    const route = shellRoute({ scope: def?.askFor?.(input), readOnly, executed, ok, visible })
+    const exec_ms = executed ? shellExecMs(visible) : undefined
+    return { route, ...(exec_ms !== undefined ? { exec_ms } : {}) }
+  } catch {
+    return { route: "error" as const }
+  }
 }
 
 async function ask(run: EvalRun, question: EvalQuestion, asked: Asked, now: Date, meter: { requests: number; capped: AbortController }, executed: ReadonlySet<string> = new Set()) {

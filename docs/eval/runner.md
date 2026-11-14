@@ -56,7 +56,7 @@ bun scripts/dev/shell-replay.ts test/fixtures/shell-commands.jsonl [--ask]
 ```
 
 - Both read files only: no model, no key.
-- The operand count covers `math` and `near-miss` commands. Small counts and unit factors (1, 2, 12, 100, 250, powers of ten…) are skipped. An operand is traced when the question or an earlier result of the attempt holds it, at a common scale (×100, ×1000…). Untraced does not mean invented: list them with `--untraced` and read them.
+- The operand count covers `math` and `near-miss` commands. Small counts and unit factors (1, 2, 12, 100, 250, powers of ten…) are skipped. An operand is traced when the question or an earlier result of the attempt holds it, at a common scale (×100, ×1000…): a decimal may be the source rounded as typed, an integer must be the number itself. Denials, errors and the shell's own status line are not sources. Untraced does not mean invented: list them with `--untraced` and read them. A command the gate denied is not counted, so the rate of a run where many arithmetic commands were denied covers fewer commands than a run where they were refused as near misses.
 - `scripts/eval/questions/compute.json` is a set of 12 arithmetic questions that carry their own data, with labels, for measuring the shell path without depending on a data source.
 - `test/fixtures/shell-commands.jsonl` is a provisional replay set written from the command forms of issue #268, one JSON object per line (`shell`, `command`, `form`).
 

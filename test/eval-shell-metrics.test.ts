@@ -2,7 +2,7 @@ import { expect, test } from "bun:test"
 import path from "node:path"
 import { readTrace } from "../scripts/eval/read-trace"
 import { parseQuestions } from "../scripts/eval/runner"
-import { parseLabels } from "../scripts/eval/scoring"
+import { parseLabels, scoreAttempt } from "../scripts/eval/scoring"
 import { parseCommands, replayAll } from "../scripts/eval/shell-replay"
 import { operandsOf, shellMetrics } from "../scripts/eval/shell-metrics"
 import { shellExecMs, shellRoute } from "../scripts/eval/shell-route"
@@ -78,6 +78,27 @@ test("shellMetrics: routes, attempts where nothing ran, self-computed answers, o
   expect(m.operands.untraced.map((u) => u.value)).toEqual(["26.9"])
 })
 
+test("an operand traces only to data the model read: not a status line, not a denial, and an integer only to itself", () => {
+  const events: TraceEvent[] = [
+    head,
+    { type: "question", q: "a", rep: 1, group: "A", question: "Khối lượng các phiên: 12543200; 13876500; 11987300. Trung bình?", now: "2026-03-10T10:00:00+07:00" },
+    // A denial that names a number, and a refused command: neither is data.
+    call("a", "c0", "shell", "python3 vol.py 77"),
+    { type: "tool_result", q: "a", rep: 1, call_id: "c0", ok: false, visible: `${DENIED} (mã 77)`, duration_ms: 1, shell: { route: "denied" } },
+    // 13876500 mistyped as 13876400; 3 is a constant. 0.2s and exit code 0 are the tool's own line.
+    call("a", "c1", "shell", "(12543200+13876400+11987300)/3"),
+    { type: "tool_result", q: "a", rep: 1, call_id: "c1", ok: true, visible: "[mã thoát 0 · 0.2s · /w/20]\n12802300", duration_ms: 250, shell: { route: "math", exec_ms: 200 } },
+    // 20 is only in the status line (as 0.2s × 100, and in the folder name); 77 only in the denial.
+    call("a", "c2", "shell", "12802300/20 + 77"),
+    { type: "tool_result", q: "a", rep: 1, call_id: "c2", ok: true, visible: "[mã thoát 0 · 0.1s · /w/20]\n640192", duration_ms: 150, shell: { route: "math", exec_ms: 100 } },
+    answer("a", "Trung bình 12.802.300 cổ phiếu.", 3),
+  ]
+  const m = shellMetrics(readTrace(events.map((e) => JSON.stringify(e)).join("\n")))
+  expect(m.operands.total).toBe(6)
+  expect(m.operands.traced).toBe(3)
+  expect(m.operands.untraced.map((u) => u.value)).toEqual(["13876400", "20", "77"])
+})
+
 test("a trace written before the shell field has no shell commands to count", () => {
   const events: TraceEvent[] = [
     head,
@@ -100,6 +121,43 @@ test("the command forms of issue #268 against the grammar: where each one ends u
   expect(report.total).toEqual({ run: 3, near: 1, ask: 10 })
   expect(report.forms["awk-one-line"]).toEqual({ run: 3, near: 0, ask: 0 })
   for (const form of ["awk-vars", "awk-printf-parens", "awk-multiline", "awk-long", "awk-newline-in-format"]) expect(report.forms[form]!.run).toBe(0)
+})
+
+/** A right answer to each compute question, written the way the prompt asks (Vietnamese number format). */
+const RIGHT: Record<string, string> = {
+  "compute-01-pct": "HPG tăng 6,903% giữa hai ngày.",
+  "compute-02-cagr": "CAGR 4 năm là 15,223%.",
+  "compute-03-logreturn": "Lợi suất log quy năm: 21,659%.",
+  "compute-04-ma20": "MA20 = 25,880 nghìn đồng.",
+  "compute-05-volume": "Phiên cuối bằng 94,18% khối lượng trung bình 30 phiên.",
+  "compute-06-rs": "RS = 6,732 điểm %.",
+  "compute-07-volatility": "Độ biến động quy năm là 16,255%.",
+  "compute-08-eps": "EPS = 6.120,00 đồng.",
+  "compute-09-pe": "P/E = 15,768 lần.",
+  "compute-10-portfolio": "Lợi suất danh mục là 5,418%.",
+  "compute-11-compound": "Số tiền cuối kỳ: 143.178.841 đồng.",
+  "compute-12-drawdown": "Max drawdown là 13,707%.",
+}
+/** The same questions answered 1% off, and one answered with the inputs only. */
+const WRONG: Record<string, string> = {
+  "compute-01-pct": "HPG tăng 6,972% giữa hai ngày.",
+  "compute-02-cagr": "CAGR 4 năm là 15,375%.",
+  "compute-09-pe": "P/E = 15,926 lần.",
+  "compute-11-compound": "Số tiền cuối kỳ: 144.610.630 đồng.",
+  "compute-08-eps": "Lợi nhuận 1.315.800.000.000 đồng, 215.000.000 cổ phiếu.",
+}
+
+test("the compute labels mark a right answer right and a wrong one wrong, as the scorer reads them", async () => {
+  const text = await Bun.file(path.join(import.meta.dir, "..", "scripts", "eval", "questions", "compute.json")).text()
+  const labels = parseLabels(text)
+  const scored = (id: string, said: string) => {
+    const q = parseQuestions(text).find((x) => x.id === id)!
+    const events: TraceEvent[] = [head, { type: "question", q: id, rep: 1, group: q.group, question: q.question, now: q.now }, answer(id, said, 2)]
+    return scoreAttempt(readTrace(events.map((e) => JSON.stringify(e)).join("\n")).attempts[0]!, labels)!.correct
+  }
+  for (const [id, said] of Object.entries(RIGHT)) expect([id, scored(id, said)]).toEqual([id, true])
+  for (const [id, said] of Object.entries(WRONG)) expect([id, scored(id, said)]).toEqual([id, false])
+  expect(Object.keys(RIGHT)).toHaveLength(labels.size)
 })
 
 test("the compute question set parses as questions and every question has a label", async () => {
