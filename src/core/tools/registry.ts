@@ -34,8 +34,12 @@ export interface ToolSetOptions {
    * Tool search: leave `deferrable` tools out of the model-visible set (unless in `loaded`)
    * but still declare them, so they run when called and can be activated per step.
    */
-  defer?: boolean
-  /** Deferred tools the model already loaded (tool_search, load_skill, or a direct call). */
+  defer?: boolean | "default"
+  /**
+   * Deferred tools the model already loaded (tool_search, load_skill, or a direct call), in the
+   * order they were loaded: they follow the visible tools in that order, so loading one appends
+   * to the request's tool list instead of shifting it (prompt cache).
+   */
   loaded?: ReadonlySet<string>
 }
 
@@ -46,8 +50,13 @@ export interface BuiltToolSet {
   names: string[]
   /** Deferred tools not loaded yet: declared, not shown to the model. */
   deferred: string[]
-  /** Whether tool search is on for this request (`defer`). */
-  deferring: boolean
+  /**
+   * Every tool this request's policy defers, loaded or not: what <tool_hoan> lists, so the
+   * system prompt does not change when the model loads one.
+   */
+  deferrable: string[]
+  /** Whether tool search is on for this request (`defer`); "default": only `deferByDefault` tools. */
+  deferring: boolean | "default"
   /** Tools left out because of `maxTools`, per source. */
   hidden: { source: string; count: number }[]
   /** Rough token cost of the visible definitions (name + description + schema, chars / 4). */
@@ -170,19 +179,28 @@ export class ToolRegistry {
     const ordered = this.list()
       .filter((d) => !d.onDemand || opts.loaded?.has(d.name))
       .sort((a, b) => (a.priority ?? -1) - (b.priority ?? -1) || a.name.localeCompare(b.name))
-    const isDeferred = (def: ToolDef) => !!opts.defer && !!def.deferrable && !opts.loaded?.has(def.name)
-    const visible = ordered.filter((d) => !isDeferred(d))
+    const byPolicy = (def: ToolDef) => !!opts.defer && !!def.deferrable && (opts.defer !== "default" || !!def.deferByDefault)
+    const isDeferred = (def: ToolDef) => byPolicy(def) && !opts.loaded?.has(def.name)
+    // Always-visible tools by name, then loaded deferred ones in load order (appended, never inserted).
+    const loadOrder = [...(opts.loaded ?? [])]
+    const rank = (def: ToolDef) => (byPolicy(def) ? loadOrder.indexOf(def.name) : -1)
+    const visible = [
+      ...ordered.filter((d) => !byPolicy(d)),
+      ...ordered.filter((d) => byPolicy(d) && !isDeferred(d)).sort((a, b) => rank(a) - rank(b)),
+    ]
     const kept = visible.slice(0, max)
     const hiddenBySource = new Map<string, number>()
     for (const def of visible.slice(max)) hiddenBySource.set(def.source ?? "?", (hiddenBySource.get(def.source ?? "?") ?? 0) + 1)
     const deferred = ordered.filter(isDeferred)
 
     const set: ToolSet = {}
-    // Keep the request's tool order stable (by name) for prompt caching.
-    const declared = opts.defer ? ordered : kept
+    // Keep the request's tool order stable for prompt caching: the SDK sends declared tools in
+    // this object's order, filtered by the step's active names. Visible tools come first, then
+    // the deferred ones, so a tool loaded mid-turn lands after everything already sent.
+    const declared = opts.defer ? [...visible, ...deferred] : [...kept].sort((a, b) => a.name.localeCompare(b.name))
     // One guard per tool set: a turn (or a subagent run) counts its own repeats.
     const loop = new LoopGuard()
-    for (const def of [...declared].sort((a, b) => a.name.localeCompare(b.name))) {
+    for (const def of declared) {
       const execute = async (input: unknown, options: { abortSignal?: AbortSignal; toolCallId: string; messages?: ModelMessage[] }) => {
         let reservedOrigin:FinanceAuditOrigin|undefined
         try { reservedOrigin=opts.financeState?.before(def,input,options.toolCallId) } catch(error) {
@@ -211,7 +229,8 @@ export class ToolRegistry {
       tools: set,
       names: kept.map((d) => d.name),
       deferred: deferred.map((d) => d.name),
-      deferring: !!opts.defer,
+      deferrable: ordered.filter(byPolicy).map((d) => d.name),
+      deferring: opts.defer === "default" ? "default" : !!opts.defer,
       hidden: [...hiddenBySource].map(([source, count]) => ({ source, count })),
       tokens: this.estimateTokens(kept, flavor),
     }

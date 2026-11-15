@@ -832,7 +832,10 @@ export const DEFAULT_DEFER_MIN_TOOLS = 40
 
 /**
  * Whether deferrable tools (MCP and the optional built-in ones) go out by name only this
- * request (tool search). "auto" defers once the deferrable tools are many (tool choice degrades past ~30–50) or heavy for the context.
+ * request (tool search). "auto" defers all of them once they are many (tool choice degrades
+ * past ~30–50) or heavy for the context; below that it defers only the `deferByDefault` local
+ * tools that turns rarely use (grep/glob, sessions, doctor, send/stop, charts). A subagent's
+ * tools are already narrowed by its type, so it keeps them visible.
  */
 export function shouldDefer(
   config: Pick<Config, "toolSearch" | "toolSearchMinTools">,
@@ -846,7 +849,9 @@ export function shouldDefer(
   if (deferrable.length === 0) return false
   if (mode === "on") return true
   if (deferrable.length > (config.toolSearchMinTools ?? DEFAULT_DEFER_MIN_TOOLS)) return true
-  return !!context && registry.estimateTokens(deferrable, flavor) > context * DEFER_CONTEXT_SHARE
+  if (context && registry.estimateTokens(deferrable, flavor) > context * DEFER_CONTEXT_SHARE) return true
+  if (registry.origin) return false
+  return deferrable.some((d) => d.deferByDefault) ? "default" : false
 }
 
 /** Deferred tool names grouped by MCP server, short names where they are unambiguous. */
@@ -932,7 +937,8 @@ async function assembleFor(opts: TurnInput, target: Target | undefined, bound: B
     now: opts.now ?? new Date(),
     clockPolicy: opts.clockPolicy,
     prevClock: opts.prevClock,
-    deferredTools: built && built.deferred.length > 0 ? deferredByServer(opts.registry, built.deferred) : undefined,
+    // Every tool the policy defers, loaded or not: loading one must not change the system prompt.
+    deferredTools: built && built.deferrable.length > 0 ? deferredByServer(opts.registry, built.deferrable) : undefined,
     declaredTools: built ? Object.keys(built.tools) : undefined,
     mcpInstructions: opts.serverInstructions?.(),
     todos: currentTodos(opts.history ?? []),
@@ -1209,7 +1215,8 @@ async function* runTurn(opts: RunOptions, budget?: RequestBudget): AsyncGenerato
   }
   // Tell the user once whenever deferral or the hidden tools change. Keyed on every
   // deferrable tool, not on those still unloaded: loading tools must not repeat the notice.
-  const deferrable = built?.deferring ? opts.registry.list().filter((d) => d.deferrable).map((d) => d.name) : []
+  // Deferring only the default local tools is the normal state and stays silent (/tools shows it).
+  const deferrable = built?.deferring === true ? opts.registry.list().filter((d) => d.deferrable).map((d) => d.name) : []
   const hiddenKey = JSON.stringify([built?.hidden ?? [], deferrable.length])
   if (hiddenKey !== opts.registry.lastHiddenNotice) {
     opts.registry.lastHiddenNotice = hiddenKey

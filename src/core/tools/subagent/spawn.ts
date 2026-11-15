@@ -123,8 +123,9 @@ export function sendMessageTool(manager: SubagentManager, agents: AgentDefinitio
       message: z.string().min(1).describe("Nội dung giao thêm"),
     }),
     readOnly: true,
-    // Only useful once a subagent exists: loaded with tool_search when needed.
+    // Only useful once a subagent exists: spawn_subagent loads it (tools/loaded.ts).
     deferrable: true,
+    deferByDefault: true,
     source: LOCAL_SOURCE,
     summarize: (input) => `send_message(${input.to})`,
     async execute(input) {
@@ -144,6 +145,7 @@ export function stopAgentTool(manager: SubagentManager): ToolDef<{ id: string }>
     input: z.object({ id: z.string().min(1).describe("agent_id") }),
     readOnly: true,
     deferrable: true,
+    deferByDefault: true,
     source: LOCAL_SOURCE,
     summarize: (input) => `stop_agent(${input.id})`,
     async execute(input) {

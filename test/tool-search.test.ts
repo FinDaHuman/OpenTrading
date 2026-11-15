@@ -4,6 +4,7 @@ import { z } from "zod"
 import { renderDeferred } from "../src/core/prompt/assemble"
 import { toolSearchTool } from "../src/core/tools/builtin/tool-search"
 import { loadedTools } from "../src/core/tools/loaded"
+import { shouldDefer } from "../src/core/agent"
 import { ToolRegistry } from "../src/core/tools/registry"
 import { LOADED_PREFIX, expandQuery, resolveToolName } from "../src/core/tools/search"
 import type { ToolDef } from "../src/core/tools/types"
@@ -156,4 +157,53 @@ test("only domain-neutral phrases expand; tool vocabulary lives in the tools' ow
 test("keyword search loads only hits close to the best one (loading is permanent)", async () => {
   const r = registry()
   expect(firstLine(await search(r, "dividend"))).toBe(`${LOADED_PREFIX}mcp__ot__dividends_splits`)
+})
+
+function local(name: string, extra: Partial<ToolDef> = {}): ToolDef {
+  return { name, source: "local", deferrable: true, description: name, input: z.object({}), readOnly: true, execute: async () => "", ...extra }
+}
+
+function defaultsRegistry(opts: { origin?: boolean } = {}) {
+  const r = new ToolRegistry(opts.origin ? { origin: { id: "ag-1", type: "nghien-cuu" } as never } : {})
+  r.register({ name: "current_time", description: "Giờ", input: z.object({}), readOnly: true, execute: async () => "" })
+  r.register(local("web_search"))
+  r.register(local("chart_render", { deferByDefault: true }))
+  r.register(local("grep_files", { deferByDefault: true }))
+  r.register(local("session_list", { deferByDefault: true }))
+  r.register(mcp("ot", "vn_quote_history", "Daily candles."))
+  r.register(toolSearchTool(r))
+  return r
+}
+
+test('"auto" below the threshold defers only deferByDefault tools; a subagent defers none', () => {
+  const r = defaultsRegistry()
+  expect(shouldDefer({ toolSearch: "auto" }, r, 1_000_000)).toBe("default")
+  const built = r.toToolSet({ defer: "default" })
+  expect(built.deferred).toEqual(["chart_render", "grep_files", "session_list"])
+  expect(built.names).toContain("web_search")
+  expect(built.names).toContain("mcp__ot__vn_quote_history")
+  expect(built.deferring).toBe("default")
+  expect(shouldDefer({ toolSearch: "auto" }, defaultsRegistry({ origin: true }), 1_000_000)).toBe(false)
+  expect(shouldDefer({ toolSearch: "off" }, r, 1_000_000)).toBe(false)
+})
+
+test("loaded deferred tools follow the visible ones in load order; <tool_hoan> keeps listing them", () => {
+  const r = defaultsRegistry()
+  const before = r.toToolSet({ defer: "default" })
+  const after = r.toToolSet({ defer: "default", loaded: new Set(["session_list", "chart_render"]) })
+  // The visible prefix is unchanged; loaded tools are appended, not sorted into it.
+  expect(after.names.slice(0, before.names.length)).toEqual(before.names)
+  expect(after.names.slice(before.names.length)).toEqual(["session_list", "chart_render"])
+  // The SDK sends declared tools in object order: visible first, deferred after.
+  expect(Object.keys(after.tools)).toEqual([...after.names, "grep_files"])
+  // The prompt's deferred list does not depend on what was loaded.
+  expect(after.deferrable).toEqual(before.deferrable)
+  expect(after.deferred).toEqual(["grep_files"])
+})
+
+test("spawning a subagent loads send_message and stop_agent", () => {
+  const history: ModelMessage[] = [
+    { role: "assistant", content: [{ type: "tool-call", toolCallId: "c1", toolName: "spawn_subagent", input: {} }] },
+  ]
+  expect(loadedTools(history)).toEqual(["spawn_subagent", "send_message", "stop_agent"])
 })

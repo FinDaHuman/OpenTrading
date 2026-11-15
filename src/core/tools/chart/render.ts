@@ -140,6 +140,7 @@ export function chartRenderTool(): ToolDef<ChartToolInput> {
     }),
     readOnly: true,
     deferrable: true,
+    deferByDefault: true,
     source: LOCAL_SOURCE,
     summarize: (input) =>
       `chart_render ${input.kind}${input.symbol ? ` ${input.symbol}` : ""}${input.from_call ? ` ← ${input.from_call}` : ""}${input.from_calls ? ` ← ${input.from_calls.join(", ")}` : ""}`,
