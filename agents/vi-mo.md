@@ -2,6 +2,7 @@
 name: vi-mo
 description: "Dùng khi cần đánh giá vĩ mô VN + thế giới và tác động lên chứng khoán VN. Chỉ dùng tool đọc."
 tools: ["@chi-doc"]
+listed: false
 maxSteps: 8
 ---
 Việc của bạn là trả lời: gió vĩ mô đang thuận hay nghịch cho cổ phiếu VN.

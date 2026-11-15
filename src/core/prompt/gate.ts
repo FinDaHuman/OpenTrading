@@ -11,7 +11,13 @@
  *
  * Tools count when the turn declares them, deferred ones included, so loading a deferred tool
  * never changes the system prompt (the cached prefix stays byte-identical).
+ *
+ * A term outside GATE_TERMS throws: a typo (`termnial`, `chart_redner`) would otherwise drop its line
+ * without a word, the failure the old prefix-matched `MACHINE_DROPPED_TOOL_LINES` had.
  */
+
+/** The terms a condition may use: the profiles, the notebook, and the built-in tools a prompt line depends on. */
+export const GATE_TERMS: ReadonlySet<string> = new Set(["terminal", "machine", "memory", "shell", "chart_render", "memory_read"])
 
 export interface GateContext {
   tools: ReadonlySet<string>
@@ -23,6 +29,18 @@ const LINE = /\s*<!--\s*khi:\s*([^>]*?)\s*-->\s*$/
 const OPEN = /^\s*<!--\s*khi:\s*([^>]*?)\s*-->\s*$/
 const CLOSE = /^\s*<!--\s*\/khi\s*-->\s*$/
 
+function terms(condition: string): string[][] {
+  const alts = condition.split("|").map((alt) => alt.split(",").map((t) => t.trim()).filter(Boolean))
+  for (const alt of alts) {
+    if (!alt.length) throw new Error(`prompt gate: empty alternative in "khi: ${condition}"`)
+    for (const t of alt) {
+      const name = t.startsWith("!") ? t.slice(1).trim() : t
+      if (!GATE_TERMS.has(name)) throw new Error(`prompt gate: unknown term "${name}" in "khi: ${condition}" (known: ${[...GATE_TERMS].join(", ")})`)
+    }
+  }
+  return alts
+}
+
 function term(raw: string, ctx: GateContext): boolean {
   const negate = raw.startsWith("!")
   const name = negate ? raw.slice(1).trim() : raw
@@ -31,10 +49,14 @@ function term(raw: string, ctx: GateContext): boolean {
   return negate ? !value : value
 }
 
-/** Whether a `khi:` condition holds; with no context every condition holds (the widest prompt). */
+/**
+ * Whether a `khi:` condition holds; with no context every condition holds (the widest prompt).
+ * Throws on a term outside GATE_TERMS, with or without a context.
+ */
 export function holds(condition: string, ctx: GateContext | undefined): boolean {
+  const alts = terms(condition)
   if (!ctx) return true
-  return condition.split("|").some((alt) => alt.split(",").map((t) => t.trim()).filter(Boolean).every((t) => term(t, ctx)))
+  return alts.some((alt) => alt.every((t) => term(t, ctx)))
 }
 
 /**

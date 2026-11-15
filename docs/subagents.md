@@ -19,6 +19,7 @@ Subagent là một agent riêng, bắt đầu với ngữ cảnh trống. Agent 
   ```
 
   Mục để trống thì bỏ dòng. Các trường theo hướng dẫn giao việc cho Agent tool của Claude Code (mục đích, đã biết/đã loại trừ, câu hỏi cụ thể, độ dài muốn nhận, mức kỹ). Claude Code, opencode và Codex để prompt tự do; OT ép khung để model nhỏ (Flash-Lite) không giao việc cụt. `send_message` vẫn là văn bản tự do. Ultradesk không dùng tool này: prompt của nó dựng bằng template trong từng playbook.
+- **Danh mục loại trong mô tả tool**: chỉ các loại không có `listed: false` được liệt kê kèm "khi nào dùng"; các loại còn lại (bull, bear, tong-hop… dùng trong skill và playbook) chỉ ghi tên, vẫn gọi đích danh được.
 - **Giao diện**:
   - Các subagent spawn trong cùng một bước hiện thành một khối `● Chạy N subagent…` với cây `├─ └─`. Mỗi dòng có tool đang chạy, số tool, token, hoặc "đang chờ slot (r/max)".
   - Xong thì hiện `Xong (N tool · Xk token · Ns)`.
@@ -107,6 +108,7 @@ disallowedTools: ["web_*"]      # tuỳ chọn
 provider: groq                  # tuỳ chọn; có provider thì phải có model
 model: llama-3.3-70b-versatile
 maxSteps: 5                     # 1–30, mặc định 8
+listed: false                   # tuỳ chọn; false = chỉ ghi tên trong mô tả spawn_subagent
 effort: low                     # tuỳ chọn; low | medium | high | xhigh | max
 ---
 Chỉ dẫn riêng cho loại này (vào system prompt của subagent, trong <chi_dan_agent>).

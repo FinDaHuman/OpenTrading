@@ -34,7 +34,7 @@ Q3. Mỗi điểm có đủ O/H/L/C không?
     ├─ ≥2 chuỗi CÙNG đơn vị (RSI/PE/PB/%, lợi suất, yields)? → ★ [multiline]
     │    Mỗi series 1 màu + legend. Mỗi series ≥2 điểm, cần ≥2 series.
     │    (Giá nhiều mã tuy cùng đơn vị tiền nhưng magnitude lệch → KHÔNG vào đây.)
-    └─ ≥2 chuỗi KHÁC magnitude (giá nhiều mã, mã vs index)? → ★ [chart_compare]
+    └─ ≥2 chuỗi KHÁC magnitude (giá nhiều mã, mã vs index)? → ★ [chart_render kind=compare]
          Chuẩn hóa % từ điểm đầu, mỗi mã 9 dòng + trục Y riêng.
          2–5 chuỗi, mỗi chuỗi ≥2 điểm.
 
@@ -75,7 +75,7 @@ Q7. Cấu trúc đặc biệt nào?
 ├─ Ma trận 2D thật (hàng×cột đều có labels)? → ★ [heatmap]
 │    Vd: ma trận tương quan, param grid fast×slow, tháng×metric.
 │    (Hàng đơn + cột đơn thuần túy → về Q5 bar.)
-├─ Bid/ask ladder (price+volume mua/bán)? → ★ [chart_depth]
+├─ Bid/ask ladder (price+volume mua/bán)? → ★ [chart_render kind=depth]
 │    ASK đỏ / BID xanh. Sổ rỗng cả 2 bên (ngoài giờ) → báo trung thực.
 ├─ 1 số + max (index, score /100, % hoàn thành)? → ★ [gauge, donut]
 │    gauge: index/ngưỡng (sợ hãi, RSI snapshot...);

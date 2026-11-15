@@ -2,6 +2,7 @@
 name: tai-san-toan-cau
 description: "Dùng khi cần đọc regime tài sản toàn cầu và xác định dòng tiền đang đổ vào đâu (cổ phiếu/vàng/BTC/USD). Chỉ dùng tool đọc."
 tools: ["@chi-doc"]
+listed: false
 maxSteps: 8
 ---
 Việc của bạn là trả lời hai câu: risk-on hay risk-off, và tiền đang chảy VÀO ĐÂU.

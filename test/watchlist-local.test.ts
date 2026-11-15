@@ -17,10 +17,21 @@ afterEach(async () => {
   await removeTempDir(home)
 })
 
+const ACTION: Record<string, string> = {
+  watchlist_local_create: "create",
+  watchlist_local_list: "list",
+  watchlist_local_get: "get",
+  watchlist_local_add: "add",
+  watchlist_local_remove: "remove",
+  watchlist_local_rename: "rename",
+  watchlist_local_delete: "delete",
+}
+
+/** The old per-action tool names, now `action` values of the one `watchlist_local` tool. */
 function tool(name: string) {
-  const t = localWatchlistTools(home).find((t) => t.name === name)!
-  expect(t).toBeDefined()
-  return t
+  const [t] = localWatchlistTools(home)
+  expect(t!.name).toBe("watchlist_local")
+  return { execute: (input: Record<string, unknown>, c: ReturnType<typeof ctx>) => t!.execute({ action: ACTION[name], ...input }, c) }
 }
 
 test("local watchlist CRUD roundtrip, stored under the runtime's home", async () => {
@@ -39,10 +50,22 @@ test("local watchlist CRUD roundtrip, stored under the runtime's home", async ()
   expect((await tool("watchlist_local_list").execute({}, ctx())) as string).toContain("Chưa có")
 })
 
-test("watchlist tools are deferred until loaded and only the list is read-only", () => {
+test("one deferrable watchlist tool: list/get never ask, writes ask, delete on its own scope", async () => {
   const tools = localWatchlistTools(home)
-  expect(tools.every((t) => t.deferrable && t.source === "local")).toBe(true)
-  expect(tools.filter((t) => t.readOnly).map((t) => t.name)).toEqual(["watchlist_local_list", "watchlist_local_get"])
+  expect(tools.map((t) => t.name)).toEqual(["watchlist_local"])
+  const [t] = tools
+  expect(t!.deferrable && t!.source === "local").toBe(true)
+  expect(t!.readOnly).toBe(false)
+  expect(t!.askFor!({ action: "list" })).toBeUndefined()
+  expect(t!.askFor!({ action: "get", name: "core" })).toBeUndefined()
+  expect(t!.askFor!({ action: "add", name: "core", symbols: ["FPT"] })).toBe("ghi")
+  expect(t!.askFor!({ action: "delete", name: "core" })).toBe("xoa")
+  // Read-only agents get the same name with only list/get.
+  const ro = t!.readOnlyVariant!
+  expect(ro.name).toBe("watchlist_local")
+  expect(ro.readOnly).toBe(true)
+  expect(JSON.stringify(ro.input)).not.toContain("delete")
+  await expect(t!.execute({ action: "add", name: "core" }, ctx())).rejects.toThrow("cần trường symbols")
 })
 
 test("a corrupted watchlists.json is refused, never overwritten with an empty store", async () => {

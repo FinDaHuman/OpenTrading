@@ -45,6 +45,7 @@ export function sessionHistoryTools(deps: { redaction?: RedactionCheck } = {}): 
     input: z.object({ limit: z.number().int().min(1).max(30).optional().describe("Số phiên (mặc định 10)") }),
     readOnly: true,
     deferrable: true,
+    deferByDefault: true,
     source: LOCAL_SOURCE,
     summarize: () => "session_list()",
     async execute(input) {
@@ -67,6 +68,7 @@ export function sessionHistoryTools(deps: { redaction?: RedactionCheck } = {}): 
     input: z.object({ id: z.string().min(4).describe("Id phiên lấy từ session_list (cho phép tiền tố, ít nhất 4 ký tự)") }),
     readOnly: true,
     deferrable: true,
+    deferByDefault: true,
     source: LOCAL_SOURCE,
     summarize: (input) => `session_get(${input.id})`,
     async execute(input) {
@@ -107,6 +109,7 @@ export function doctorLocalTool(deps: {
     input: z.object({}),
     readOnly: true,
     deferrable: true,
+    deferByDefault: true,
     source: LOCAL_SOURCE,
     summarize: () => "doctor_local()",
     async execute() {
