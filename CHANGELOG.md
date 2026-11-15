@@ -25,6 +25,11 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ### Changed
 
+- `prompts/identity.md` priority order (issue #278 P1): the user's direct request, including the format, schema
+  and units of the answer, now ranks above the remaining system instructions (working rules and default
+  presentation); invariants stay first. `style.md` ("no JSON or raw tool output") and `citations.md` (thousands
+  separators, one-decimal percent) say these are defaults. Static prompt about 2.15k tokens (guard 2,120 → 2,160).
+
 - `shell`: arithmetic written in a form the math grammar does not take now comes back as a tool error that says
   why and shows the form to use, instead of an approval prompt (TUI) or a denial that forbids rewriting the
   command (`ot -p`, evals): a series walked with an array or a loop (`split` + `for`, `@(…)` + `foreach`,
