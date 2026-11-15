@@ -53,7 +53,9 @@ adopt Semantic Versioning when it exposes a stable public API.
 - MCP server instructions leave the system prompt. They ride in the request as reference text
   (`<huong_dan_mcp>` inside `<nhac_nho>`, `src/core/prompt/mcp-guidance.ts`), only for servers that have a tool the
   model can call at that step (eager, loaded by `tool_search`, a skill, a preload or a repaired call), each once,
-  under the tier's `mcp_instructions` budget. The block says the text is the server's, serves to choose a tool and
+  under the tier's `mcp_instructions` budget: a short guide goes whole and the long ones share the rest equally, so
+  one server's long text does not leave the others without theirs. A number in a guide is not a number the model
+  read (the operand note still fires). The block says the text is the server's, serves to choose a tool and
   read its result, and grants nothing. It is rebuilt from the host at every step and never saved in history, so a
   resumed or compacted session gets the server's current text. A server with no callable tool sends nothing. The
   permission gate, the auto reviewer's log and memory blocks do not read it (tests pin each). Proposal and the

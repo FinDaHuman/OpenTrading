@@ -1352,6 +1352,27 @@ test("after an arithmetic command with a number nothing read holds, the next req
   }
 })
 
+test("a number written in a server's guide is not one the model read: the operand note still goes out", async () => {
+  const win = process.platform === "win32"
+  const command = win ? "$e = 1315800000000; $s = 21500000; $e / $s" : "awk 'BEGIN{ e = 1315800000000; s = 21500000; print e / s }'"
+  const r = registry()
+  r.register({ name: "mcp__so__tra", source: "mcp:so", description: "x", input: z.object({}), readOnly: true, execute: async () => "ok" })
+  r.register({ name: "shell", description: "shell", input: z.object({ command: z.string() }), readOnly: true, execute: async () => "[mã thoát 0 · 0.2s · /w]\n61200" })
+  respond = (_body, n) => (n === 0 ? toolCall("shell", { command }, "call_1") : answer("EPS 61.200 đồng."))
+  await collect(runAgent({
+    history: [],
+    input: "Lợi nhuận sau thuế 1.315.800.000.000 đồng, 215.000.000 cổ phiếu. EPS?",
+    skills: [],
+    registry: r,
+    serverInstructions: () => [{ server: "so", text: "Số cổ phiếu lưu hành mặc định là 21500000." }],
+  }))
+  const sent = bodies.filter((b) => (b as { stream?: boolean }).stream)[1]!
+  // The guide rides in the request, and the typed 21500000 is still reported as read from nowhere.
+  expect(JSON.stringify(sent.messages)).toContain("Số cổ phiếu lưu hành mặc định")
+  expect(lastSent(1)).toContain("trong lệnh tính vừa rồi")
+  expect(lastSent(1)).toContain("21500000")
+})
+
 // --- Stop gate (loop/stop-gate.ts): a turn never ends without an answer ---
 
 const toolCall = (name: string, args: object, id = "call_x", text?: string) =>

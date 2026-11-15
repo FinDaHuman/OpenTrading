@@ -23,7 +23,7 @@ import type { Ablations } from "./ablation"
 import { bindLenient, bindTurn, checkFits, type Bound, type Waiver } from "./memory/binding/bind"
 import type { ConstraintReader } from "./memory/binding/constraints"
 import type { RedactionCheck } from "./memory/redaction/check"
-import { REMINDER_CAP_MARK, REMINDER_TAG } from "./reminder-tag"
+import { REMINDER_CAP_MARK, REMINDER_TAG, reminderBlock } from "./reminder-tag"
 import { redactHistory } from "./memory/redaction/redact"
 import { labelsOnly } from "./memory/notebook/labels-only"
 import { acceptCard } from "./memory/cards/check"
@@ -438,7 +438,7 @@ export function userMessage(input: string, reminders: string[], images: RunOptio
   return {
     role: "user",
     content: [
-      ...(reminders.length > 0 ? [{ type: "text" as const, text: `<${REMINDER_TAG}>\n${reminders.join("\n\n")}\n</${REMINDER_TAG}>` }] : []),
+      ...(reminders.length > 0 ? [{ type: "text" as const, text: reminderBlock(reminders.join("\n\n")) }] : []),
       { type: "text" as const, text: input },
       ...attachments.map((text) => ({ type: "text" as const, text })),
       ...images.map((i) => ({ type: "file" as const, data: i.data, mediaType: i.mediaType })),
@@ -891,7 +891,11 @@ function serverGuidance(opts: Pick<RunOptions, "registry" | "serverInstructions"
     const source = opts.registry.get(name)?.source
     return source?.startsWith("mcp:") ? [source] : []
   }))
-  return sources.size ? renderMcpGuidance(opts.serverInstructions(), sources, tier) : undefined
+  const guide = sources.size ? renderMcpGuidance(opts.serverInstructions(), sources, tier) : undefined
+  if (!guide) return undefined
+  // As it is sent: a reminder part, so the readers of a user's words skip it (visibleUserText).
+  const text = reminderBlock(guide.text)
+  return { text, tokens: estimateTokens(text), truncated: guide.truncated }
 }
 
 async function assembleFor(opts: TurnInput, target: Target | undefined, bound: Bound, extras: TurnExtras = {}) {
@@ -1111,7 +1115,7 @@ export async function previewContext(opts: TurnInput) {
   const { assembled, tier, built } = await assembleFor(opts, target, bound)
   // The tools the next request can call, deferred ones the history loaded included: what runAgent uses.
   const guidance = serverGuidance(opts, activeFor(built, opts.history ?? []) ?? built?.names ?? [], tier)
-  if (guidance) assembled.report.push({ id: "huong_dan_mcp", layer: 7, channel: "context", tokens: estimateTokens(guidance.text), truncated: guidance.truncated, dropped: false })
+  if (guidance) assembled.report.push({ id: "huong_dan_mcp", layer: 7, channel: "context", tokens: guidance.tokens, truncated: guidance.truncated, dropped: false })
   const loaded = new Set(loadedTools(opts.history ?? []))
   return {
     report: assembled.report,
@@ -1294,13 +1298,18 @@ async function* runTurn(opts: RunOptions, budget?: RequestBudget): AsyncGenerato
         }
         active = activeFor(built, messages)
         loaded = loadedTools(messages)
-        const guide = serverGuidance(opts, active ?? built?.names ?? [], prepared.tier)
         // Rebuilt from the host each step: discovery, skill preload and repaired calls all
         // use the active tool set. The reminder marker keeps this out of the user's intent
         // seen by auto approval, and the temporary part never reaches saved history.
-        const guidance = guide ? `<${REMINDER_TAG}>\n${guide.text}\n</${REMINDER_TAG}>` : undefined
-        guidanceTokens = guidance ? estimateTokens(guidance) : 0
-        messages = withContext(messages, guidance)
+        // It changes only when a tool of another server becomes callable, the step the request's
+        // tool list changes too.
+        const guidance = serverGuidance(opts, active ?? built?.names ?? [], prepared.tier)
+        // What the model and the tools wrote, without the guide: the checks below read the
+        // conversation, and a server's text is not something the model read from a tool.
+        const said = messages
+        messages = withContext(messages, guidance?.text)
+        // No user message to carry it (nothing was added): nothing to count.
+        guidanceTokens = guidance && messages !== said ? guidance.tokens : 0
         const failures = turnFailures(messages)
         const stopped = failures.streak >= FAILURE_STREAK_STOP
         // A run that must end in its final tool ends there: with tools off it could not.
@@ -1323,7 +1332,7 @@ async function* runTurn(opts: RunOptions, budget?: RequestBudget): AsyncGenerato
               : undefined
           // Numbers typed into an arithmetic command that nothing read holds (loop/operands.ts): a
           // one-step note, on the same routes as the other nudges. The command already ran.
-          const operands = nudge && afterTool && !opts.disabled?.has("operand-note") ? untracedOperands(messages, isArithmetic, [bound.profile, bound.constraints, assembled.context].filter(Boolean).join("\n")) : []
+          const operands = nudge && afterTool && !opts.disabled?.has("operand-note") ? untracedOperands(said, isArithmetic, [bound.profile, bound.constraints, assembled.context].filter(Boolean).join("\n")) : []
           const tail = [base, added, operands.length > 0 ? operandNote(operands) : undefined].filter(Boolean).join("\n") || undefined
           const choice = stopped || rescueNow?.toolChoice === "none" || (rescueNow && !tail) ? { toolChoice: "none" as const } : {}
           return { ...(active ? { activeTools: active } : {}), ...choice, messages: tail ? withNudge(messages, tail) : messages }
