@@ -1194,6 +1194,29 @@ test("read-only sends write_file/edit_file by name only; ask mode declares them;
   expect(userOf(0)).toContain("sửa có hỏi")
 })
 
+// --- Operand note (loop/operands.ts, issue #278 N2) ---
+
+test("after an arithmetic command with a number nothing read holds, the next request carries a one-step note", async () => {
+  const win = process.platform === "win32"
+  const typo = win ? "$e = 1315800000000; $s = 21500000; $e / $s" : "awk 'BEGIN{ e = 1315800000000; s = 21500000; print e / s }'"
+  const right = typo.replace("21500000", "215000000")
+  for (const [command, disabled, expected] of [
+    [typo, undefined, true],
+    [right, undefined, false],
+    [typo, new Set(["operand-note"] as const), false],
+  ] as const) {
+    bodies.length = 0
+    const r = registry()
+    // The result a shell would give; only the command's grammar and the result's first line are read.
+    r.register({ name: "shell", description: "shell", input: z.object({ command: z.string() }), readOnly: true, execute: async () => "[mã thoát 0 · 0.2s · /w]\n61200" })
+    respond = (_body, n) => (n === 0 ? toolCall("shell", { command }, "call_1") : answer("EPS 61.200 đồng."))
+    await collect(runAgent({ history: [], input: "Lợi nhuận sau thuế 1.315.800.000.000 đồng, 215.000.000 cổ phiếu. EPS?", skills: [], registry: r, ...(disabled ? { disabled } : {}) }))
+    const second = lastSent(1)
+    expect([command, disabled?.size ?? 0, second.includes("trong lệnh tính vừa rồi")]).toEqual([command, disabled?.size ?? 0, expected])
+    if (expected) expect(second).toContain("21500000")
+  }
+})
+
 // --- Stop gate (loop/stop-gate.ts): a turn never ends without an answer ---
 
 const toolCall = (name: string, args: object, id = "call_x", text?: string) =>
@@ -1690,27 +1713,4 @@ test("v46-update reused SDK id in two actual provider generations has two origin
  expect(replays.map(x=>x.replay_of.origin_provider_request_index)).toEqual([1,2])
  expect(replays.every(x=>x.sdk_call_id==="same-sdk"&&x.replay_of.origin_sdk_call_id==="same-sdk")).toBe(true)
  expect(done(events).unanswered).toBeUndefined()
-})
-
-// --- Operand note (loop/operands.ts, issue #278 N2) ---
-
-test("after an arithmetic command with a number nothing read holds, the next request carries a one-step note", async () => {
-  const win = process.platform === "win32"
-  const typo = win ? "$e = 1315800000000; $s = 21500000; $e / $s" : "awk 'BEGIN{ e = 1315800000000; s = 21500000; print e / s }'"
-  const right = typo.replace("21500000", "215000000")
-  for (const [command, disabled, expected] of [
-    [typo, undefined, true],
-    [right, undefined, false],
-    [typo, new Set(["operand-note"] as const), false],
-  ] as const) {
-    bodies.length = 0
-    const r = registry()
-    // The result a shell would give; only the command's grammar and the result's first line are read.
-    r.register({ name: "shell", description: "shell", input: z.object({ command: z.string() }), readOnly: true, execute: async () => "[mã thoát 0 · 0.2s · /w]\n61200" })
-    respond = (_body, n) => (n === 0 ? toolCall("shell", { command }, "call_1") : answer("EPS 61.200 đồng."))
-    await collect(runAgent({ history: [], input: "Lợi nhuận sau thuế 1.315.800.000.000 đồng, 215.000.000 cổ phiếu. EPS?", skills: [], registry: r, ...(disabled ? { disabled } : {}) }))
-    const second = lastSent(1)
-    expect([command, disabled?.size ?? 0, second.includes("trong lệnh tính vừa rồi")]).toEqual([command, disabled?.size ?? 0, expected])
-    if (expected) expect(second).toContain("21500000")
-  }
 })

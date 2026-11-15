@@ -54,3 +54,18 @@ test("the note names the numbers, says the command ran, and leaves the decision 
   expect(note).toContain("bỏ qua nhắc này")
   for (const word of ["Không chạy", "bị chặn", "DỪNG"]) expect(note).not.toContain(word)
 })
+
+test("what the user told the harness counts: constraints and profile (system), the memory index (context), an earlier answer", () => {
+  // The user's own threshold, not in any message of the turn.
+  const command = "$pe = 96500 / 6120; $pe - 12.5"
+  const turn: ModelMessage[] = [
+    { role: "user", content: "P/E của FPT là bao nhiêu? Giá 96.500 đồng, EPS 6.120 đồng." },
+    { role: "assistant", content: [{ type: "tool-call", toolCallId: "c1", toolName: "shell", input: { command } }] },
+    { role: "tool", content: [{ type: "tool-result", toolCallId: "c1", toolName: "shell", output: { type: "text", value: "[mã thoát 0 · 0.2s · /w]\n3.268" } }] },
+  ]
+  expect(untracedOperands(turn, arithmetic)).toEqual(["12.5"])
+  expect(untracedOperands(turn, arithmetic, "<rang_buoc>\nRàng buộc của người dùng: - [#1 · bản 1] Chỉ mua khi P/E dưới 12,5 lần.\n</rang_buoc>")).toEqual([])
+  expect(untracedOperands(turn, arithmetic, "Sổ ghi nhớ: ngưỡng P/E 12.5 cho cổ phiếu công nghệ")).toEqual([])
+  const followUp: ModelMessage[] = [{ role: "user", content: "Ngưỡng?" }, { role: "assistant", content: "Ngưỡng P/E bạn đặt là 12,5 lần." }, ...turn]
+  expect(untracedOperands(followUp, arithmetic)).toEqual([])
+})

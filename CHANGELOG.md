@@ -7,14 +7,6 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ### Added
 
-- After an arithmetic shell command whose typed numbers nothing the model read holds (the question, earlier tool
-  results, earlier command output), the next request carries a one-step note naming them (issue #278 N2,
-  `src/core/loop/operands.ts`). The command has already run and nothing is blocked: the model checks the
-  number against its source or ignores the note for a constant it chose. Array indices and small constants are
-  not operands. Over the 9 saved Gemini runs it would have fired once, on the dropped zero behind a wrong EPS
-  answer. Same routes as the other per-step nudges; eval ablation `operand-note`. The eval's `shell-metrics`
-  uses the same check.
-
 - Eval: how `shell` served the model's arithmetic is now measured (issue #268). Each `shell` result in a trace
   carries `shell: { route, exec_ms }` (`math`, `read-only`, `approved`, `near-miss`, `denied`, `error`) and the
   header records the machine's shell. `scripts/dev/shell-metrics.ts` counts commands per route, attempts where
@@ -24,6 +16,13 @@ adopt Semantic Versioning when it exposes a stable public API.
   `docs/eval/runner.md`.
 - OpenRouter provider pinning: `openrouter.routing` in `config.json` maps a model id (or `"*"`) to OpenRouter's `provider` block (`order`, `allow_fallbacks`, `quantizations`…), sent on every request to that model: main agent, subagents, compaction, title, web side calls and the auto-mode reviewer. Eval runs pin with `--or-provider`, `--or-no-fallback` and `--or-quant`, and the trace records `served_by`, the upstream provider that answered each step. OpenRouter's "no provider" error now reads as one Vietnamese line. See `docs/openrouter.md`.
 - OpenCode Go/Zen: every request to `opencode.ai` sends OT's own `User-Agent` (`opentrading/<version> (<os> <arch>)`) and `x-opencode-session`, as Go's docs ask: the session id for the main agent and side calls, `<session>/<agent id>` for a subagent, one id per question in eval runs. Native web search clients now use the same fetch, so their requests also count toward the request tally and the eval ledger. See `docs/opencode-go.md`.
+- After an arithmetic shell command whose typed numbers nothing the model read holds (the question, earlier tool
+  results, earlier command output), the next request carries a one-step note naming them (issue #278 N2,
+  `src/core/loop/operands.ts`). The command has already run and nothing is blocked: the model checks the
+  number against its source or ignores the note for a constant it chose. Array indices and small constants are
+  not operands. Over the 9 saved Gemini runs it would have fired once, on the dropped zero behind a wrong EPS
+  answer. Same routes as the other per-step nudges; eval ablation `operand-note`. The eval's `shell-metrics`
+  uses the same check.
 - `shell`: a command that only does arithmetic runs without a prompt in every permission mode, `ot -p` and evals
   (no ▸▸ classifier request); deny and ask rules still apply. Windows: bare PowerShell expressions with
   `[math]::` functions, printed in the invariant culture; macOS/Linux: `awk 'BEGIN{printf …}'` in the C locale.

@@ -65,19 +65,23 @@ const textOf = (message: ModelMessage) =>
 
 /**
  * Operands of the arithmetic commands in the last assistant step that ran and that nothing the
- * model read before holds. `isArithmetic` says which shell commands count (the grammar of the
- * shell that ran them). At most `max`, each once.
+ * model read before holds: the messages before that step, and `sources` (the system prompt and
+ * the context, which are not messages). `isArithmetic` says which shell commands count (the
+ * grammar of the shell that ran them). At most `max`, each once.
  */
-export function untracedOperands(messages: readonly ModelMessage[], isArithmetic: (command: string) => boolean, max = 5): string[] {
+export function untracedOperands(messages: readonly ModelMessage[], isArithmetic: (command: string) => boolean, sources = "", max = 5): string[] {
   const at = messages.findLastIndex((m) => m.role === "assistant")
   if (at < 0) return []
   const step = messages[at]!
   if (typeof step.content === "string") return []
   const calls = step.content.flatMap((p) => (p.type === "tool-call" && p.toolName === "shell" ? [p] : []))
   if (calls.length === 0) return []
-  const known = new Set<number>()
+  // What the user told the harness rides outside the messages: the system prompt (investor
+  // profile, constraints) and the context (memory index). The caller passes them.
+  const known = sourceNumbers(sources)
   for (const message of messages.slice(0, at)) {
-    if (message.role === "user" || message.role === "system") for (const n of sourceNumbers(textOf(message))) known.add(n)
+    // An earlier answer's figures count too: a follow-up computes on them.
+    if (message.role === "user" || message.role === "system" || message.role === "assistant") for (const n of sourceNumbers(textOf(message))) known.add(n)
     if (message.role !== "tool") continue
     for (const part of message.content) {
       if (part.type !== "tool-result") continue

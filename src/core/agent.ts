@@ -46,18 +46,17 @@ import { isContextOverflow, pruneAttachments, pruneToolResults, tokensOf } from 
 import { isAttachmentText } from "./mentions"
 import { classifyFailure, retryMiddleware, type RetryNotice, type RetryOptions } from "./retry"
 import { loadedTools } from "./tools/loaded"
+import { operandNote, untracedOperands } from "./loop/operands"
+import { mathOnlyCommand } from "./tools/shell/math"
+import { detectShell } from "./tools/shell/run"
+/** A shell command the math grammar takes, for the shell this machine runs. */
+const isArithmetic = (command: string) => mathOnlyCommand(command, detectShell())
 import { modeNote } from "./permission/mode"
 import { NOTE as NOTICE_NOTE } from "./subagents/notification"
 import { currentTodos, retiredNote, retireLeftTodos, todoMark, TODO_WRITE } from "./tools/todos"
 import { FAILURE_STREAK_FINAL, FAILURE_STREAK_STOP, failureNudge, gapsAnswer, turnFailures } from "./loop/failures"
 import { answerAfterTools } from "./loop/history-shape"
 import { markupStreamFilter, stripMarkup, type MarkupFilter } from "./loop/markup"
-import { operandNote, untracedOperands } from "./loop/operands"
-import { mathOnlyCommand } from "./tools/shell/math"
-import { detectShell } from "./tools/shell/run"
-
-/** A shell command the math grammar takes, for the shell this machine runs. */
-const isArithmetic = (command: string) => mathOnlyCommand(command, detectShell())
 import { answeredAndClosedTodos, figureSources, isEmptyAnswer, isUnfetched, GAPS_RESCUE_START, judgeStop, MAX_RECOVERIES, sourcesFailed, ranDataTool, stripEchoes, ungroundedInTurn, unfetchedFigures, type RecoveryKind, type Verdict } from "./loop/stop-gate"
 import { MAX_TOOLS_PER_REQUEST, modelOutput, stripImages, type BuiltToolSet, type ToolRegistry, type ToolSetOptions } from "./tools/registry"
 import { describeTool, LOADED_PREFIX, resolveToolName } from "./tools/search"
@@ -1275,7 +1274,7 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
               : undefined
           // Numbers typed into an arithmetic command that nothing read holds (loop/operands.ts): a
           // one-step note, on the same routes as the other nudges. The command already ran.
-          const operands = nudge && afterTool && !opts.disabled?.has("operand-note") ? untracedOperands(messages, isArithmetic) : []
+          const operands = nudge && afterTool && !opts.disabled?.has("operand-note") ? untracedOperands(messages, isArithmetic, `${typeof system === "string" ? system : JSON.stringify(system)}\n${assembled.context ?? ""}`) : []
           const tail = [base, added, operands.length > 0 ? operandNote(operands) : undefined].filter(Boolean).join("\n") || undefined
           const choice = stopped || rescueNow?.toolChoice === "none" || (rescueNow && !tail) ? { toolChoice: "none" as const } : {}
           return { ...(active ? { activeTools: active } : {}), ...choice, messages: tail ? withNudge(messages, tail) : messages }
