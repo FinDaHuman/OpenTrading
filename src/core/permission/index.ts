@@ -320,6 +320,9 @@ export class PermissionGate {
       // A shell command that only computes numbers (tools/shell/math.ts): every mode, also
       // ‖ read-only, headless and evals; no classifier request. Deny and ask rules still apply.
       if (scope?.startsWith("math:")) return this.ran()
+      // A shell command that only lists a folder of the workspace (tools/shell/read-only.ts): the
+      // same in every mode. read_file needs no approval for the same paths.
+      if (scope?.startsWith("read:")) return this.ran()
       // ▸▸▸ bypass: no prompt and no classifier request (a benchmark counts every request).
       if (this.current === "bypass") return this.ran()
       if (scope?.startsWith("scratch:") && this.approvalsApply(def)) return this.ran()

@@ -25,6 +25,18 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ### Changed
 
+- `shell`: a command that only lists a folder of the workspace or the session's temp folder now runs without a
+  prompt in every permission mode, also ‖, `ot -p` and evals, as `read_file` does for the same path: `pwd`,
+  POSIX `ls` with display flags, PowerShell `ls`/`dir`/`gci`/`Get-ChildItem` with filtering switches and one
+  path (`src/core/tools/shell/read-only.ts`, scope `read:`). Anything the shell expands (`$`, `~`, `%VAR%`, globs,
+  braces, backticks, single quotes), a path outside the workspace, a key file, a link leading out, a network
+  path, a PowerShell provider drive, recursion, an unlisted flag or a second command still asks. pwsh on Linux
+  and macOS takes a backslash as a separator, so the path check does too (defensive: OpenTrading starts
+  PowerShell on Windows only); bash takes it as an escape, so it is refused. A path part that ends in a dot or a
+  space is refused (Windows drops them), and a network or device path is refused before anything resolves it.
+  The ‖ mode line of the `<quyen_tep>` reminder says these two kinds of commands need no approval. git, pip, npm and `--version` stay ▸▸-only: files in the folder can make them run other programs.
+  Such a listing runs with a 20 s limit.
+
 - `shell`: arithmetic written in a form the math grammar does not take now comes back as a tool error that says
   why and shows the form to use, instead of an approval prompt (TUI) or a denial that forbids rewriting the
   command (`ot -p`, evals): a series walked with an array or a loop (`split` + `for`, `@(…)` + `foreach`,

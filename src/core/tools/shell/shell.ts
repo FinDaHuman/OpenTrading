@@ -6,6 +6,9 @@ import type { Workspace } from "../../fs/workspace"
 import { LOCAL_SOURCE, type ToolDef } from "../types"
 import { commandPrefix, criticalDelete, mentionsSensitive, readOnlyCommand, startsInterpreter } from "./command"
 import { computeIntent, mathHint, mathOnlyCommand, rewriteAdvice } from "./math"
+import { listingCommand } from "./read-only"
+import { readScope } from "../../fs/path-safety"
+import { realish } from "../../fs/workspace"
 import { detectShell, runShell, SPILL_CAP, type ShellInfo } from "./run"
 
 /**
@@ -27,6 +30,8 @@ export type ShellInput = { command: string; description?: string; timeout_ms?: n
 export const MATH_NEAR_MISS_PREFIX = "Lệnh này là phép tính nhưng chưa đúng dạng chỉ-toán"
 
 export const DEFAULT_TIMEOUT_MS = 120_000
+/** A listing of the workspace runs unasked (read-only.ts), so it gets a short limit. */
+export const LISTING_TIMEOUT_MS = 20_000
 export const MAX_TIMEOUT_MS = 600_000
 /** Output beyond this goes to a file the model can page with read_file. */
 export const SHELL_OUTPUT_CHARS = 30_000
@@ -54,13 +59,18 @@ function describe(shell: ShellInfo): string {
     "Dùng khi cần chạy chương trình: script đọc file dữ liệu hay vẽ biểu đồ ra file, chuyển đổi định dạng, cài thư viện người dùng đồng ý. " +
     "Không dùng khi đọc, tìm hay sửa file (dùng read_file, glob_files, grep_files, write_file, edit_file), cũng không dùng cho lệnh chờ nhập từ bàn phím hay chạy mãi (server). " +
     `${mathHint(shell)} ` +
-    `Phép tính viết bằng Python, mảng hay vòng lặp không chạy mà trả lại dạng đúng để viết lại. Lệnh khác người dùng duyệt; ghi description ngắn để người dùng biết lệnh làm gì. Timeout mặc định ${DEFAULT_TIMEOUT_MS / 1000}s, tối đa ${MAX_TIMEOUT_MS / 1000}s; output dài được lưu ra file để đọc tiếp bằng read_file.`
+    `Phép tính viết bằng Python, mảng hay vòng lặp không chạy mà trả lại dạng đúng để viết lại. Liệt kê thư mục trong workspace (ls, dir, pwd) cũng chạy ngay. Lệnh khác người dùng duyệt; ghi description ngắn để người dùng biết lệnh làm gì. Timeout mặc định ${DEFAULT_TIMEOUT_MS / 1000}s, tối đa ${MAX_TIMEOUT_MS / 1000}s; output dài được lưu ra file để đọc tiếp bằng read_file.`
   )
 }
 
 export function shellTool(workspace: Workspace, opts: { shell?: ShellInfo } = {}): ToolDef<ShellInput> {
   const shell = opts.shell ?? detectShell()
   const cwdOf = (input: ShellInput) => (input.workdir ? workspace.resolve(input.workdir) : workspace.primary)
+  // The same answer read_file gives for a path: inside the workspace or the temp folder, and not
+  // a key file, a network path or an odd Windows spelling, symlinks and junctions followed.
+  // readScope first: its string checks refuse a network path before anything resolves it.
+  const readable = (abs: string) => readScope(abs, workspace.env(), realish) === undefined && (workspace.contains(abs) || workspace.inScratch(abs))
+  const lists = (command: string, cwd: string) => listingCommand(command, { shell, readable, resolve: (raw) => path.resolve(cwd, raw) })
   const critical = (input: ShellInput) => criticalDelete(input.command, { roots: [os.homedir(), ...workspace.roots()] })
   const def: ToolDef<ShellInput> = {
     name: "shell",
@@ -92,6 +102,8 @@ export function shellTool(workspace: Workspace, opts: { shell?: ShellInfo } = {}
       // The session's temp folder is a fine place to run a script; the command still asks.
       if (!workspace.contains(cwd) && !workspace.inScratch(cwd)) return `outside:${cwd}`
       if (mentionsSensitive(command)) return `protected:${command.trim()}`
+      // Lists a folder of the workspace and nothing else (read-only.ts): every mode, like `math:`.
+      if (lists(command, cwd)) return `read:${command.trim()}`
       const prefix = commandPrefix(command)
       return prefix && !startsInterpreter(command) ? `cmd:${prefix}` : `cmd!${command.trim()}`
     },
@@ -119,7 +131,8 @@ export function shellTool(workspace: Workspace, opts: { shell?: ShellInfo } = {}
     summarize: (input) => `shell ${input.description ? `${input.description} · ` : ""}${input.command.replace(/\s+/g, " ").slice(0, 80)}`,
     async execute(input, ctx) {
       const cwd = cwdOf(input)
-      const timeoutMs = Math.min(MAX_TIMEOUT_MS, input.timeout_ms ?? DEFAULT_TIMEOUT_MS)
+      // A listing that ran unasked gets a short limit: it never needs long, and nobody approved it.
+      const timeoutMs = lists(input.command, cwd) ? LISTING_TIMEOUT_MS : Math.min(MAX_TIMEOUT_MS, input.timeout_ms ?? DEFAULT_TIMEOUT_MS)
       // Long output goes to this file as it streams, before the memory cap drops its middle.
       const file = path.join(workspace.env().data!, "tool-output", `${ctx.callId.replace(/[^\w-]/g, "_")}.txt`)
       const result = await runShell(input.command, { cwd, timeoutMs, signal: ctx.signal, shell, spill: { file, after: SHELL_OUTPUT_CHARS } })
