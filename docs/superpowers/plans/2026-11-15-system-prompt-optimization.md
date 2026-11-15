@@ -2,7 +2,7 @@
 
 Trạng thái: **chờ duyệt**. Chưa sửa code.
 
-Cơ sở: OpenTrading `main` ab2b303 (sau #291–#295), cộng #288 (gộp tool) và #296 (hoãn nạp tool local) đang mở. Token đếm bằng `o200k_base` (tiktoken), lấy từ request đầu thật mà harness gửi (bản chụp ở repo benchmark: [`plans/v47-fullharness-capture/`](https://github.com/DoanDuyLong212/opentrading-benchmark/tree/main/plans/v47-fullharness-capture), PR [benchmark#4](https://github.com/DoanDuyLong212/opentrading-benchmark/pull/4)). Mọi số "sau khi sửa" là ước tính, phải đo lại.
+Cơ sở: OpenTrading `main` ab2b303 (sau #291–#295), cộng #288 (gộp tool) và #296 (hoãn nạp tool local) đang mở. Token đếm bằng `o200k_base` (tiktoken), lấy từ request đầu thật mà harness gửi (bản chụp ở repo benchmark: [`plans/v47-fullharness-capture/`](https://github.com/DoanDuyLong212/opentrading-benchmark/tree/plan/ot-system-prompt/plans/v47-fullharness-capture), PR [benchmark#4](https://github.com/DoanDuyLong212/opentrading-benchmark/pull/4)). Mọi số "sau khi sửa" là ước tính, phải đo lại.
 
 ## 1. Hiện trạng
 
