@@ -8,6 +8,7 @@ import type { Skill } from "../skills/schema"
 import { TODO_WRITE, hasOpenTodos, renderTodos, type Todo } from "../tools/todos"
 import { LOCAL_SOURCE } from "../tools/types"
 import { BUDGETS, estimateTokens, fit, type Tier } from "./budget"
+import { gate, type GateContext } from "./gate"
 import { clockState, loadCalendar, renderClock, sameSnapshot, type Calendar, type ClockSnapshot } from "./market-clock"
 
 /**
@@ -90,24 +91,13 @@ export interface AssembleInput {
   agentPrompt?: string
   /**
    * "machine": the caller is a program that sets its own output format (`ot -p --profile machine`,
-   * a benchmark runner). No style.md, citations-machine.md for citations.md, and tools.md without
-   * the lines written for a person watching a terminal (MACHINE_DROPPED_TOOL_LINES).
+   * a benchmark runner). No style.md, citations-machine.md for citations.md, and the prompt lines
+   * marked `<!-- khi: terminal -->` left out (prompt/gate.ts).
    */
   profile?: PromptProfile
 }
 
 export type PromptProfile = "terminal" | "machine"
-
-/** How the tools.md lines that only serve a person watching a terminal begin. */
-export const MACHINE_DROPPED_TOOL_LINES = ["- Nói theo việc đã làm", "- Trước lượt tool đầu hoặc khi đổi hướng"]
-
-/** tools.md for a program caller: the lines above left out. */
-export function machineTools(text: string | undefined): string | undefined {
-  return text
-    ?.split("\n")
-    .filter((line) => !MACHINE_DROPPED_TOOL_LINES.some((start) => line.startsWith(start)))
-    .join("\n")
-}
 
 export interface Assembled {
   system: string
@@ -159,13 +149,14 @@ const entities = (text: string) => text.replace(/&/g, "&amp;").replace(/</g, "&l
 /**
  * The first system layer of a role, as assemble sends it: identity.md for the main agent; for a
  * sub-agent subagent.md plus identity's invariants and priority order. Also what the turn binding
- * measures to check the constraints fit the model.
+ * measures to check the constraints fit the model. Without a gate context every conditional line
+ * is kept: the widest the layer can be.
  */
-export function identityLayer(role: "main" | "subagent" | undefined, promptsDir = PROMPTS_DIR): string | undefined {
-  if (role !== "subagent") return promptFile("identity", promptsDir)
-  const identity = promptFile("identity", promptsDir)
+export function identityLayer(role: "main" | "subagent" | undefined, promptsDir = PROMPTS_DIR, ctx?: GateContext): string | undefined {
+  const identity = gate(promptFile("identity", promptsDir), ctx)
+  if (role !== "subagent") return identity
   const rules = [section(identity, "bat_bien"), section(identity, "thu_tu_uu_tien")].filter(Boolean).join("\n\n")
-  return [promptFile("subagent", promptsDir), rules].filter(Boolean).join("\n\n") || undefined
+  return [gate(promptFile("subagent", promptsDir), ctx), rules].filter(Boolean).join("\n\n") || undefined
 }
 
 /** One `<id>…</id>` block of a prompt file, tags included (the subagent reuses identity's invariants). */
@@ -210,6 +201,18 @@ export function renderDeferred(groups: { server: string; tools: string[] }[], bu
   return { text: [DEFERRED_HEADER, ...short].join("\n"), truncated: true }
 }
 
+/**
+ * What the prompt's conditional lines are read against (prompt/gate.ts): every declared tool,
+ * deferred ones included, so loading one never changes the system prompt.
+ */
+export function gateContext(input: Pick<AssembleInput, "tools" | "declaredTools" | "deferredTools" | "profile" | "role" | "memoryInstructions">): GateContext {
+  return {
+    tools: new Set([...input.tools, ...(input.declaredTools ?? []), ...(input.deferredTools ?? []).flatMap((g) => g.tools)]),
+    profile: input.profile === "machine" ? "machine" : "terminal",
+    memory: input.role !== "subagent" && !!input.memoryInstructions?.trim(),
+  }
+}
+
 export function assemble(input: AssembleInput, promptsDir = PROMPTS_DIR): Assembled {
   if (!Number.isFinite(input.now.getTime())) throw new Error("now must be a valid Date")
   const report: LayerReport[] = []
@@ -230,11 +233,13 @@ export function assemble(input: AssembleInput, promptsDir = PROMPTS_DIR): Assemb
 
   // ── system: static first ─────────────────────────────────────────────
   const subagent = input.role === "subagent"
-  if (subagent) add(system, "subagent", 1, "system", identityLayer("subagent", promptsDir), "identity")
-  else add(system, "identity", 1, "system", identityLayer("main", promptsDir))
   const machine = input.profile === "machine"
-  if (input.tools.length > 0) add(system, "tools", 7, "system", machine ? machineTools(promptFile("tools", promptsDir)) : promptFile("tools", promptsDir))
-  if (!input.disabled?.has("citations-prompt")) add(system, "citations", 1, "system", (machine ? (promptFile("citations-machine", promptsDir) ?? promptFile("citations-machine")) : promptFile("citations", promptsDir)), "citations")
+  const ctx = gateContext(input)
+  const file = (id: string) => gate(promptFile(id, promptsDir), ctx)
+  if (subagent) add(system, "subagent", 1, "system", identityLayer("subagent", promptsDir, ctx), "identity")
+  else add(system, "identity", 1, "system", identityLayer("main", promptsDir, ctx))
+  if (input.tools.length > 0) add(system, "tools", 7, "system", file("tools"))
+  if (!input.disabled?.has("citations-prompt")) add(system, "citations", 1, "system", machine ? (file("citations-machine") ?? gate(promptFile("citations-machine"), ctx)) : file("citations"), "citations")
   // Investor profile rides the static system prefix (cache-marked on Anthropic) like
   // CLAUDE.md at boot. Re-read per request but byte-identical while the file is unchanged,
   // so it caches the same — while an edit still applies the very next request.
@@ -246,10 +251,10 @@ export function assemble(input: AssembleInput, promptsDir = PROMPTS_DIR): Assemb
   add(system, "nguon_chua_nap", 3, "system", input.unread?.trim() || undefined, "constraints")
   if (subagent) add(system, "chi_dan_agent", 6, "system", input.agentPrompt?.trim() || undefined, "identity")
   else {
-    add(system, "memory_policy", 4, "system", input.memoryInstructions?.trim() || undefined)
-    if (input.memoryCards) add(system, "memory_cards", 4, "system", promptFile("memory-cards", promptsDir))
+    add(system, "memory_policy", 4, "system", gate(input.memoryInstructions, ctx)?.trim() || undefined)
+    if (input.memoryCards) add(system, "memory_cards", 4, "system", file("memory-cards"))
     // A program sets its own format: the terminal style guide would only argue with it.
-    if (!machine) add(system, "style", 8, "system", promptFile("style", promptsDir))
+    if (!machine) add(system, "style", 8, "system", file("style"))
   }
 
   // ── system: per-session (changes only when skills or tools change) ────

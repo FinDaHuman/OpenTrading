@@ -34,7 +34,7 @@ Each question has an `id`, a `group` (A–F), the `question`, and `now`, the mom
 
 ## Profile
 
-`--profile machine` measures OT the way a program calls it (`RunOptions.profile`): no `style.md`, `prompts/citations-machine.md` for citations, two `tools.md` lines for a person watching the terminal left out, and, without `--yolo`, the calculator shell. The header's `settings.profile` records it. Compare runs per profile only. Two limits of the profile: the calculator shell runs arithmetic only, so a workspace listing (`ls`, `dir`), which the full shell runs unasked, is refused there; and subagents keep the terminal prompt (the profile is not passed to them). A benchmark runner that registers MCP tools only has neither shell listings nor subagents. Each `answer` carries `cached_input_tokens` when the provider reported the part of the input it read from its prompt cache.
+`--profile machine` measures OT the way a program calls it (`RunOptions.profile`): no `style.md`, `prompts/citations-machine.md` for citations, the prompt lines marked `<!-- khi: terminal -->` left out (`src/core/prompt/gate.ts`), and, without `--yolo`, the calculator shell. The header's `settings.profile` records it. Compare runs per profile only. Two limits of the profile: the calculator shell runs arithmetic only, so a workspace listing (`ls`, `dir`), which the full shell runs unasked, is refused there; and subagents keep the terminal prompt (the profile is not passed to them). A benchmark runner that registers MCP tools only has neither shell listings nor subagents. Each `answer` carries `cached_input_tokens` when the provider reported the part of the input it read from its prompt cache.
 
 ## Shell commands
 
