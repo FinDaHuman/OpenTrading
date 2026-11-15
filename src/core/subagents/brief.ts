@@ -13,20 +13,13 @@ export type Depth = (typeof DEPTHS)[number]
 const DEPTH_LABEL: Record<Depth, string> = { quick: "nhanh", medium: "vừa", thorough: "rất kỹ" }
 
 export const briefFields = {
-  task: z.string().min(1).max(200).describe("Một dòng: loại việc + đối tượng, ví dụ \"Tra cứu BCTC VCB 3 quý gần nhất (chỉ đọc)\""),
-  depth: z.enum(DEPTHS).optional().describe("Mức kỹ: quick (1–3 lần gọi tool), medium (mặc định), thorough (đào sâu, đối chiếu nhiều nguồn)"),
-  purpose: z.string().min(1).describe("Vì sao cần và kết quả dùng để làm gì (để subagent tự quyết những chỗ không nói rõ)"),
-  context: z
-    .string()
-    .optional()
-    .describe("Số liệu, kết luận đã có (kèm nguồn, thời điểm) và những gì đã loại trừ; subagent không thấy hội thoại"),
-  questions: z
-    .array(z.string().min(1))
-    .min(1)
-    .max(10)
-    .describe("Các câu hỏi/việc cụ thể cần trả lời, mỗi mục một ý. Tự hiểu vấn đề rồi giao phần việc cụ thể, đừng giao việc hiểu vấn đề"),
-  scope: z.string().optional().describe("Phạm vi: mã, kỳ, nguồn ưu tiên; những gì KHÔNG cần làm"),
-  output: z.string().min(1).describe("Dạng và độ dài kết quả muốn nhận, ví dụ \"≤ 10 dòng, mỗi số kèm nguồn và kỳ\""),
+  task: z.string().min(1).max(200).describe("Một dòng: loại việc + đối tượng"),
+  depth: z.enum(DEPTHS).optional().describe("quick: 1–3 lần gọi tool; medium (mặc định); thorough: đối chiếu nhiều nguồn"),
+  purpose: z.string().min(1).describe("Vì sao cần, kết quả dùng làm gì"),
+  context: z.string().optional().describe("Số liệu, kết luận đã có (kèm nguồn, thời điểm), điều đã loại trừ"),
+  questions: z.array(z.string().min(1)).min(1).max(10).describe("Câu hỏi/việc cụ thể, mỗi mục một ý"),
+  scope: z.string().optional().describe("Mã, kỳ, nguồn ưu tiên; việc KHÔNG cần làm"),
+  output: z.string().min(1).describe("Dạng và độ dài kết quả, ví dụ \"≤ 10 dòng, mỗi số kèm nguồn và kỳ\""),
   done_when: z.string().optional().describe("Khi nào là xong"),
 }
 

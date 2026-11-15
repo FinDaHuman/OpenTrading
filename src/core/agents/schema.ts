@@ -25,6 +25,8 @@ export const AgentFrontmatter = z.object({
   maxSteps: z.number().int().min(1).max(30).optional(),
   /** Reasoning effort (low…max); unset = config subagents.effort, then effort. */
   effort: z.enum(EFFORT_LEVELS).optional(),
+  /** false: left out of spawn_subagent's type list (named only); still callable by name. */
+  listed: z.boolean().optional(),
 }).refine((a) => !a.provider || a.model, { path: ["model"], message: "có provider thì phải ghi cả model" })
 
 export type AgentFrontmatter = z.infer<typeof AgentFrontmatter>

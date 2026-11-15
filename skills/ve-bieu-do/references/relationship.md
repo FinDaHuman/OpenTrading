@@ -12,7 +12,7 @@
 
 - Input: `matrix` (mỗi dòng 1 series) + `labels` + `times`.
 - Chỉ dùng cho chỉ số CÙNG đơn vị (RSI, Stochastic, PE, PB...).
-- CẤM vẽ giá nhiều mã (lệch magnitude → xẹp hình) — giá nhiều mã dùng `chart_compare`.
+- CẤM vẽ giá nhiều mã (lệch magnitude → xẹp hình) — giá nhiều mã dùng `chart_render kind=compare`.
 - Mỗi series 1 màu + legend giá trị cuối. Padding top 20% / bottom 10%.
 
 ## Heatmap gradient

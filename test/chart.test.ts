@@ -230,3 +230,15 @@ test("chart tools passthrough dữ liệu mới: volume nến, groups scatter, d
   )) as ToolResult
   expect(compare.chart).toMatchObject({ kind: "compare", domain: [-15, 15], times: ["T1", "T2"] })
 })
+
+test("chart_render folds compare and depth in: same chart data as the old tools", async () => {
+  const tool = chartRenderTool()
+  const c = { signal: new AbortController().signal, callId: "c" }
+  const cmp = (await tool.execute({ kind: "compare", symbol: "VCB vs HPG", labels: ["VCB", "HPG"], matrix: [[10, 11, 12], [20, 19, 22]] }, c)) as { chart: { kind: string; series: { label: string }[] } }
+  expect(cmp.chart.kind).toBe("compare")
+  expect(cmp.chart.series.map((s) => s.label)).toEqual(["VCB", "HPG"])
+  await expect(tool.execute({ kind: "compare", matrix: [[1, 2]] }, c)).rejects.toThrow("2–5 hàng")
+  const depth = (await tool.execute({ kind: "depth", symbol: "FPT", bids: [{ price: 99, volume: 10 }], asks: [{ price: 101, volume: 5 }], levels: 3 }, c)) as { chart: { kind: string; depth: number } }
+  expect(depth.chart).toMatchObject({ kind: "depth", depth: 3 })
+  await expect(tool.execute({ kind: "depth", bids: [] }, c)).rejects.toThrow("cần bids và asks")
+})

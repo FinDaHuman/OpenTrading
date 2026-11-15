@@ -101,6 +101,8 @@ export interface ToolDef<I = any> {
   displayName?: string
   /** MCP tool annotations, shown in /mcp and in the approval prompt. */
   annotations?: { title?: string; destructive?: boolean; openWorld?: boolean }
+  /** Per-call annotations for a tool whose calls differ (watchlist_local: only `delete` is destructive). */
+  annotationsFor?(input: I): ToolDef["annotations"]
   /**
    * Who may run this without asking. Read-only tools never ask. `"never"` exempts a
    * non-read-only tool whose effect is already reviewed elsewhere (todo_write only edits

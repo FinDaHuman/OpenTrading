@@ -169,92 +169,101 @@ export const watchlistOps = {
   },
 }
 
-export function localWatchlistTools(home: string): ToolDef[] {
-  const base = { deferrable: true, source: LOCAL_SOURCE } as const
-  const nameField = z.string().min(1).describe("Tên watchlist")
-  const symbolsField = z.array(z.string()).min(1).describe('Các mã, ví dụ ["VCB", "HPG"]; chuỗi "VCB, HPG" cũng được tách')
+const ACTIONS = ["list", "get", "create", "add", "remove", "rename", "delete"] as const
+type Action = (typeof ACTIONS)[number]
+const READ_ACTIONS: readonly Action[] = ["list", "get"]
 
-  const create: ToolDef<{ name: string }> = {
+interface WatchlistInput {
+  action: Action
+  name?: string
+  symbols?: string[]
+  to?: string
+}
+
+function required<T>(value: T | undefined, action: Action, field: string): T {
+  if (value === undefined || (typeof value === "string" && !value.trim()) || (Array.isArray(value) && value.length === 0)) {
+    throw new Error(`action "${action}" cần trường ${field}.`)
+  }
+  return value
+}
+
+async function listAll(home: string) {
+  const store = await readWatchlists(home)
+  const names = Object.keys(store)
+  if (names.length === 0) return "Chưa có watchlist cá nhân nào."
+  return names.map((n) => `- ${n}: ${store[n]!.symbols.join(", ") || "(trống)"}`).join("\n")
+}
+
+async function getOne(home: string, name: string) {
+  const w = need(await readWatchlists(home), normName(name))
+  return `"${w.name}" (${w.symbols.length} mã, cập nhật ${w.updatedAt}): ${w.symbols.join(", ") || "(trống)"}`
+}
+
+async function runAction(home: string, input: WatchlistInput): Promise<string> {
+  const { action } = input
+  const name = () => required(input.name, action, "name")
+  const symbols = () => required(input.symbols, action, "symbols")
+  switch (action) {
+    case "list":
+      return listAll(home)
+    case "get":
+      return getOne(home, name())
+    case "create":
+      return watchlistOps.create(home, name())
+    case "add":
+      return watchlistOps.add(home, name(), symbols())
+    case "remove":
+      return watchlistOps.remove(home, name(), symbols())
+    case "rename":
+      return watchlistOps.rename(home, name(), required(input.to, action, "to"))
+    case "delete":
+      return watchlistOps.delete(home, name())
+  }
+}
+
+function summarize(input: WatchlistInput) {
+  const parts = [input.name, input.symbols?.join(","), input.to && `→ ${input.to}`].filter(Boolean)
+  return `watchlist_local ${input.action}${parts.length ? ` ${parts.join(" ")}` : ""}`
+}
+
+/**
+ * One tool for the personal watchlists, the operation in `action` (as chart_render takes `kind`).
+ * Seven tools cost about 3 KB of schema per request for a feature most turns never touch.
+ * list/get run without approval; the others ask, `delete` on its own scope.
+ */
+export function localWatchlistTools(home: string): ToolDef[] {
+  const fields = {
+    name: z.string().min(1).optional().describe("Tên watchlist (mọi action trừ list)"),
+    symbols: z.array(z.string()).min(1).optional().describe('add/remove: các mã, ví dụ ["VCB", "HPG"]'),
+    to: z.string().min(1).optional().describe("rename: tên mới"),
+  }
+  const base = {
+    name: "watchlist_local",
+    deferrable: true,
+    source: LOCAL_SOURCE,
+    summarize: (input: unknown) => summarize(input as WatchlistInput),
+    execute: (input: WatchlistInput) => runAction(home, input),
+  } as const
+  const readOnlyVariant: ToolDef<WatchlistInput> = {
     ...base,
-    name: "watchlist_local_create",
+    description: "Xem watchlist CÁ NHÂN trên máy này: list (mọi danh sách) hoặc get (các mã của một danh sách).",
+    input: z.object({ action: z.enum(["list", "get"]), name: fields.name }),
+    readOnly: true,
+  }
+  const tool: ToolDef<WatchlistInput> = {
+    ...base,
     description:
-      "Tạo watchlist CÁ NHÂN trên máy này. Dùng khi user muốn theo dõi nhóm mã riêng (không share team — share team thì dùng watchlist_create của MCP server).",
-    input: z.object({ name: nameField }),
+      "Watchlist CÁ NHÂN trên máy này (không share team; share team dùng watchlist_* của MCP server). " +
+      "action: list, get, create, add, remove (mã tự viết hoa, bỏ trùng), rename, delete.",
+    input: z.object({ action: z.enum(ACTIONS), ...fields }),
     readOnly: false,
-    summarize: (input) => `watchlist_local_create(${(input as { name: string }).name})`,
-    execute: (input) => watchlistOps.create(home, input.name),
-  }
-  const list: ToolDef<Record<string, never>> = {
-    ...base,
-    name: "watchlist_local_list",
-    description: "Liệt kê watchlist cá nhân trên máy này kèm các mã đang theo dõi.",
-    input: z.object({}),
-    readOnly: true,
-    summarize: () => "watchlist_local_list()",
-    async execute() {
-      const store = await readWatchlists(home)
-      const names = Object.keys(store)
-      if (names.length === 0) return "Chưa có watchlist cá nhân nào."
-      return names.map((n) => `- ${n}: ${store[n]!.symbols.join(", ") || "(trống)"}`).join("\n")
+    readOnlyVariant,
+    annotationsFor: (input) => (input?.action === "delete" ? { destructive: true } : undefined),
+    askFor: (input) => {
+      const action = (input as Partial<WatchlistInput> | undefined)?.action
+      if (action && READ_ACTIONS.includes(action)) return undefined
+      return action === "delete" ? "xoa" : "ghi"
     },
   }
-  const get: ToolDef<{ name: string }> = {
-    ...base,
-    name: "watchlist_local_get",
-    description: "Lấy các mã của một watchlist cá nhân (để gọi tiếp tool giá, ví dụ vn_equity_quote_batch).",
-    input: z.object({ name: nameField }),
-    readOnly: true,
-    summarize: (input) => `watchlist_local_get(${(input as { name: string }).name})`,
-    async execute(input) {
-      const w = need(await readWatchlists(home), normName(input.name))
-      return `"${w.name}" (${w.symbols.length} mã, cập nhật ${w.updatedAt}): ${w.symbols.join(", ") || "(trống)"}`
-    },
-  }
-  const add: ToolDef<{ name: string; symbols: string[] }> = {
-    ...base,
-    name: "watchlist_local_add",
-    description: "Thêm mã vào watchlist cá nhân (tự viết hoa, tách chuỗi có dấu phẩy, bỏ trùng).",
-    input: z.object({ name: nameField, symbols: symbolsField }),
-    readOnly: false,
-    summarize: (input) => {
-      const i = input as { name: string; symbols: string[] }
-      return `watchlist_local_add ${i.name} +${i.symbols.join(",")}`
-    },
-    execute: (input) => watchlistOps.add(home, input.name, input.symbols),
-  }
-  const remove: ToolDef<{ name: string; symbols: string[] }> = {
-    ...base,
-    name: "watchlist_local_remove",
-    description: "Bớt mã khỏi watchlist cá nhân.",
-    input: z.object({ name: nameField, symbols: symbolsField }),
-    readOnly: false,
-    summarize: (input) => {
-      const i = input as { name: string; symbols: string[] }
-      return `watchlist_local_remove ${i.name} -${i.symbols.join(",")}`
-    },
-    execute: (input) => watchlistOps.remove(home, input.name, input.symbols),
-  }
-  const rename: ToolDef<{ name: string; to: string }> = {
-    ...base,
-    name: "watchlist_local_rename",
-    description: "Đổi tên watchlist cá nhân.",
-    input: z.object({ name: nameField, to: z.string().min(1).describe("Tên mới") }),
-    readOnly: false,
-    summarize: (input) => {
-      const i = input as { name: string; to: string }
-      return `watchlist_local_rename ${i.name} → ${i.to}`
-    },
-    execute: (input) => watchlistOps.rename(home, input.name, input.to),
-  }
-  const del: ToolDef<{ name: string }> = {
-    ...base,
-    name: "watchlist_local_delete",
-    description: "Xóa watchlist cá nhân.",
-    input: z.object({ name: nameField }),
-    readOnly: false,
-    annotations: { destructive: true },
-    summarize: (input) => `watchlist_local_delete(${(input as { name: string }).name})`,
-    execute: (input) => watchlistOps.delete(home, input.name),
-  }
-  return [create, list, get, add, remove, rename, del]
+  return [tool]
 }
