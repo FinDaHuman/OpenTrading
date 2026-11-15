@@ -34,7 +34,7 @@ export interface PrintOptions {
   /** `provider/model`. */
   model?: string
   format: PrintFormat
-  /** `--max-requests`: the turn's cap on model requests (core/request-budget.ts). */
+  /** `--turn-requests`: the turn's cap on model requests (core/request-budget.ts). */
   maxRequests?: number
 }
 

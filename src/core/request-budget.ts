@@ -1,7 +1,7 @@
 import { guardModelRequests, onModelRequest } from "./requests"
 
 /**
- * A caller's cap on the model requests of one turn (`ot -p --max-requests N`, an eval's
+ * A caller's cap on the model requests of one turn (`ot -p --turn-requests N`, an eval's
  * `--turn-requests N`, a benchmark runner's `maxRequests`). Issue #278 R3: a benchmark cut the run
  * at its 25th request, so the summary step that the step cap forces never ran.
  *

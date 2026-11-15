@@ -91,7 +91,7 @@ bun scripts/dev/shell-replay.ts test/fixtures/shell-commands.jsonl [--ask]
 
 Every model request is counted at the provider's fetch and added to `<home>/usage/YYYY-MM-DD.json`, by the `provider/model` it went to, in the real home. `--max-requests` (default 500) is a cap for the `--model` model for the day, across runs; a side model on another provider is booked under its own name and does not spend it. The run stops before the next question at the cap, and a question that reaches it mid-way is aborted; a `stopped` line records it. The ledger counts only eval runs, not requests made in the TUI, and the day is the local day, while a provider's quota may reset at another hour.
 
-`--turn-requests N` is a different cap: each question's own, as a benchmark sets one (`maxRequests` in `runAgent`, `ot -p --max-requests N`). Every request the process sends during the question counts, retries, recoveries and subagents included, and none is sent past N. With two requests left the loop forces the summary step, so the question still ends with an answer unless a retry spent that reserve. The header's `settings.turn_requests` records it.
+`--turn-requests N` is a different cap: each question's own, as a benchmark sets one (`maxRequests` in `runAgent`, `ot -p --turn-requests N`). Every request the process sends during the question counts, retries, recoveries and subagents included, and none is sent past N. With two requests left the loop forces the summary step, so the question still ends with an answer unless a retry spent that reserve. The header's `settings.turn_requests` records it.
 
 ## Scoring
 

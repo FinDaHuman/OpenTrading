@@ -7,7 +7,7 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ### Added
 
-- A caller's cap on model requests per turn (issue #278 R3): `ot -p --max-requests N`, eval `--turn-requests N`, and
+- A caller's cap on model requests per turn (issue #278 R3): `ot -p --turn-requests N`, eval `--turn-requests N`, and
   `RunOptions.maxRequests` for runners that call `runAgent` directly (a benchmark's 24-request cap cut OT at its
   25th request, before the summary step ran). Every request the process sends during the turn counts, retries,
   stop-gate recoveries and subagents included, and none is sent past the cap (`src/core/request-budget.ts`; a
