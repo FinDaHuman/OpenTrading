@@ -7,6 +7,14 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ### Added
 
+- After an arithmetic shell command whose typed numbers nothing the model read holds (the question, earlier tool
+  results, earlier command output), the next request carries a one-step note naming them (issue #278 N2,
+  `src/core/loop/operands.ts`). The command has already run and nothing is blocked: the model checks the
+  number against its source or ignores the note for a constant it chose. Array indices and small constants are
+  not operands. Over the 9 saved Gemini runs it would have fired once, on the dropped zero behind a wrong EPS
+  answer. Same routes as the other per-step nudges; eval ablation `operand-note`. The eval's `shell-metrics`
+  uses the same check.
+
 - Eval: how `shell` served the model's arithmetic is now measured (issue #268). Each `shell` result in a trace
   carries `shell: { route, exec_ms }` (`math`, `read-only`, `approved`, `near-miss`, `denied`, `error`) and the
   header records the machine's shell. `scripts/dev/shell-metrics.ts` counts commands per route, attempts where
