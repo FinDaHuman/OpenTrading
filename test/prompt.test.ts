@@ -196,10 +196,10 @@ test("tool guidance lives in one place and the format example carries no real-lo
   // computed figure comes from a tool; since 13/11/2026 an arithmetic-only shell command), ≈2.11k
   // after the 13/11/2026 no-harness-markup line (the model copied <nhac_nho> into its answer),
   // ≈2.15k after the 15/11/2026 priority order (issue #278 P1: the user's format, schema and units
-  // rank above the default presentation rules; plan allowed the guard +40), ≈1.91k after the
-  // 15/11/2026 dedupe (bat_bien 2/3, style's repeated rules and examples, the shell retry line;
-  // docs/superpowers/plans/2026-11-15-system-prompt-optimization.md items 4–6).
-  expect(Math.ceil(a.system.length / 4)).toBeLessThan(1_950)
+  // rank above the default presentation rules; plan allowed the guard +40), ≈1.94k after the
+  // 15/11/2026 dedupe (style's repeated rules and examples, the shell retry line;
+  // docs/superpowers/plans/2026-11-15-system-prompt-optimization.md items 4–5).
+  expect(Math.ceil(a.system.length / 4)).toBeLessThan(1_980)
 })
 
 test("the constraints budget key is explicit and never cuts on any tier", () => {
