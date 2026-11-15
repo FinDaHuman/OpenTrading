@@ -305,7 +305,7 @@ test("the provider's reason is copied only when it is a code word", async () => 
   }
 })
 
-test("an explicit provider filter never falls back to the page, even with partial text", async () => {
+test("a safety filter never falls back to the page, even with partial text", async () => {
   for (const text of ["  ", "Trả lời dở của provider"]) {
     const { deps } = article()
     let extractions = 0
@@ -313,20 +313,44 @@ test("an explicit provider filter never falls back to the page, even with partia
       ...deps,
       extract: async () => {
         extractions++
-        return { text, finishReason: "content-filter", rawFinishReason: "RECITATION" }
+        return { text, finishReason: "content-filter", rawFinishReason: "SAFETY" }
       },
     })
     expect(extractions).toBe(1)
     expect(out).toContain("finishReason=content-filter")
-    // The provider's own reason tells a block over quoted text from a safety block.
     expect(out).toContain("BỊ CHẶN:")
-    expect(out).toContain("lý do của provider: RECITATION")
+    expect(out).toContain("lý do của provider: SAFETY")
     // A statement of what happened, with no instruction to the model.
     expect(out).not.toContain("Không tự động")
     expect(out).toContain("bị provider chặn")
     expect(out).not.toContain("10.000 tỷ đồng")
     expect(out).not.toContain("Trả lời dở")
     expect(out).not.toContain("start_char")
+  }
+})
+
+test("a RECITATION block still says so, then gives the page (what web_fetch without a prompt returns)", async () => {
+  const { deps } = article()
+  const out = await runFetch({ url: "https://cafef.vn/vcb", prompt: "lợi nhuận quý 3?" }, signal(), {
+    ...deps,
+    extract: async () => ({ text: "Trả lời dở của provider", finishReason: "content-filter", rawFinishReason: "RECITATION" }),
+  })
+  expect(out).toContain("BỊ CHẶN:")
+  expect(out).toContain("lý do của provider: RECITATION")
+  expect(out.indexOf("BỊ CHẶN:")).toBeLessThan(out.indexOf("10.000 tỷ đồng"))
+  // The cut partial answer is still dropped: only the page itself comes back.
+  expect(out).not.toContain("Trả lời dở")
+})
+
+test("only the exact RECITATION code gives the page: other spellings and no reason stay a bare block", async () => {
+  for (const raw of ["recitation", "RECITATION_ACTION", undefined]) {
+    const { deps } = article()
+    const out = await runFetch({ url: "https://cafef.vn/vcb", prompt: "lợi nhuận quý 3?" }, signal(), {
+      ...deps,
+      extract: async () => ({ text: "", finishReason: "content-filter", ...(raw ? { rawFinishReason: raw } : {}) }),
+    })
+    expect([raw, out.includes("BỊ CHẶN:")]).toEqual([raw, true])
+    expect([raw, out.includes("10.000 tỷ đồng")]).toEqual([raw, false])
   }
 })
 
