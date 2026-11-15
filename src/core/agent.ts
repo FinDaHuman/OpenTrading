@@ -1109,7 +1109,8 @@ export async function previewContext(opts: TurnInput) {
   }
   const bound = await bindLenient({ role: opts.role ?? "main", constraints: opts.constraints })
   const { assembled, tier, built } = await assembleFor(opts, target, bound)
-  const guidance = serverGuidance(opts, built?.names ?? [], tier)
+  // The tools the next request can call, deferred ones the history loaded included: what runAgent uses.
+  const guidance = serverGuidance(opts, activeFor(built, opts.history ?? []) ?? built?.names ?? [], tier)
   if (guidance) assembled.report.push({ id: "huong_dan_mcp", layer: 7, channel: "context", tokens: estimateTokens(guidance.text), truncated: guidance.truncated, dropped: false })
   const loaded = new Set(loadedTools(opts.history ?? []))
   return {
