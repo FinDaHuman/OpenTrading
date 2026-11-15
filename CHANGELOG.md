@@ -123,6 +123,7 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ### Fixed
 
+- `web_fetch` with a prompt: a `RECITATION` block (the side model's provider refused to quote the page) still opens with `BỊ CHẶN:` and the provider's reason, then gives the page as `web_fetch` without a prompt would; it left the model with nothing to read, and financial news trips it often. Safety blocks (`SAFETY`, `PROHIBITED_CONTENT`…) stay a bare `BỊ CHẶN:` line. `web_search`'s description again says facts that may have changed (people, rules, company events) are searched, not answered from memory (dropped in #288). The unused `format`/`timeoutSeconds` handling of `web_fetch` is gone.
 - `web_fetch` with a prompt: when the side model's provider filters its output (`finishReason=content-filter`), the
   result now says so, opening with `BỊ CHẶN:` and naming the provider's own reason when it gives one (Gemini's
   `RECITATION`, `SAFETY`…). It was treated as an unfinished read and replaced by the whole page. An empty answer,

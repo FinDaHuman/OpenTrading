@@ -15,7 +15,7 @@ import { extractWithModel, webTarget, type Extracted } from "./side-model"
  * Hosts outside the Vietnamese presets ask the user first (per domain).
  */
 
-export type WebFetchInput = { url: string; prompt?: string; format?: "markdown" | "text" | "html"; start_char?: number; timeoutSeconds?: number }
+export type WebFetchInput = { url: string; prompt?: string; start_char?: number }
 
 const PAGE = 50_000
 /** Page part kept beside a cut side answer, however long the answer. */
@@ -26,6 +26,8 @@ const PROMPT_INPUT = 100_000
 export const FETCH_TOOL_TIMEOUT_MS = 125_000
 /** How a result opens when the side model's provider blocked its output (stable, like `REDIRECT:`, for tests and traces). */
 export const FILTERED_PREFIX = "BỊ CHẶN:"
+/** The page download's own limit. */
+const DOWNLOAD_TIMEOUT_MS = 60_000
 /** The side model's own limit, inside what the download left of the call's. */
 const EXTRACT_MAX_MS = 90_000
 /** Kept back so the page and a note still come back before the call's limit fires. */
@@ -48,13 +50,6 @@ interface Page {
 }
 
 const cache = new LRUCache<string, Page>({ maxSize: 50 * 1024 * 1024, sizeCalculation: (p) => p.markdown.length + (p.html?.length ?? 0) + 1, ttl: 15 * 60_000 })
-
-const plain = (md: string) =>
-  md
-    .replace(/!\[[^\]]*\]\([^)]*\)/g, "")
-    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
-    .replace(/^#{1,6}\s+/gm, "")
-    .replace(/[*_`]{1,3}/g, "")
 
 export interface FetchDeps {
   fetch?: typeof fetch
@@ -101,7 +96,7 @@ async function load(url: URL, signal: AbortSignal, deps: FetchDeps): Promise<Pag
 }
 
 /**
- * `signal` is the caller's (the user's Esc). The download gets `timeoutSeconds` (default 60); the
+ * `signal` is the caller's (the user's Esc). The download gets 60s (DOWNLOAD_TIMEOUT_MS); the
  * side model gets its own limit from what is left of the call's 125s. On 30/10 one 60s limit
  * covered both, and gemini-3.8-flash reading a 22k-token page ended in a bare "The operation
  * timed out." (opencode and Claude Code time only the HTTP request; their summarizer has none).
@@ -111,7 +106,7 @@ export async function runFetch(input: WebFetchInput, signal: AbortSignal, deps: 
   const started = now()
   const url = checkUrl(input.url)
   const cachedBefore = cache.has(url.href)
-  const page = await load(url, AbortSignal.any([signal, AbortSignal.timeout((input.timeoutSeconds ?? 60) * 1000)]), deps)
+  const page = await load(url, AbortSignal.any([signal, AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS)]), deps)
   if ("redirect" in page) {
     return [
       "REDIRECT: URL chuyển hướng sang host khác.",
@@ -125,8 +120,7 @@ export async function runFetch(input: WebFetchInput, signal: AbortSignal, deps: 
     ].join("\n")
   }
   const header = `URL: ${page.url} | HTTP ${page.status} | ${page.contentType || "?"} | ${Math.max(1, Math.round(page.bytes / 1024))}KB | lấy lúc ${page.fetchedAt}${cachedBefore ? " | (cache)" : ""}${page.title ? `\nTiêu đề: ${page.title}` : ""}${page.note ? `\nGhi chú: ${page.note}` : ""}`
-  const format = input.format ?? "markdown"
-  const body = format === "html" ? (page.html ?? page.markdown) : format === "text" ? plain(page.markdown) : page.markdown
+  const body = page.markdown
 
   if (input.prompt) {
     const content = body.length > PROMPT_INPUT ? `${body.slice(0, PROMPT_INPUT)}\n[nội dung bị cắt vì quá dài]` : body
@@ -154,9 +148,12 @@ export async function runFetch(input: WebFetchInput, signal: AbortSignal, deps: 
       // A code word of the provider (RECITATION, SAFETY, content_filter…): anything else is not copied into the result.
       const reason = got.rawFinishReason && /^[A-Za-z0-9_-]{1,40}$/.test(got.rawFinishReason) ? got.rawFinishReason : undefined
       const raw = reason ? `, lý do của provider: ${reason}` : ""
-      return `${header}
-
-${FILTERED_PREFIX} model phụ đọc trang bị provider chặn đầu ra (finishReason=content-filter${raw}). Chưa có kết quả đọc cho yêu cầu này.`
+      const line = `${FILTERED_PREFIX} model phụ đọc trang bị provider chặn đầu ra (finishReason=content-filter${raw}).`
+      // RECITATION is a block over quoting the page, not over what the page says: the page is what
+      // web_fetch without a prompt returns anyway, so it comes back (as data, after the stated
+      // block). Financial news trips it often; a bare block left the model with nothing to read.
+      if (reason === "RECITATION") return `${header}\n\n${line} Dưới đây là nội dung trang.${pageChunk(body, 0)}`
+      return `${header}\n\n${line} Chưa có kết quả đọc cho yêu cầu này.`
     }
     const text = got.text.trim()
     if (!text) return withPage(header, body, `không trả lời${got.finishReason ? `, finishReason=${got.finishReason}` : ""}`)
