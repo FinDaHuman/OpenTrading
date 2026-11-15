@@ -200,7 +200,10 @@ export class ToolRegistry {
     const declared = opts.defer ? [...visible, ...deferred] : [...kept].sort((a, b) => a.name.localeCompare(b.name))
     // One guard per tool set: a turn (or a subagent run) counts its own repeats.
     const loop = new LoopGuard()
+    // Every registered tool, deferred ones included: a description names only tools the turn can reach.
+    const present = new Set(this.list().map((d) => d.name))
     for (const def of declared) {
+      const description = def.descriptionFor?.(present) ?? def.description
       const execute = async (input: unknown, options: { abortSignal?: AbortSignal; toolCallId: string; messages?: ModelMessage[] }) => {
         let reservedOrigin:FinanceAuditOrigin|undefined
         try { reservedOrigin=opts.financeState?.before(def,input,options.toolCallId) } catch(error) {
@@ -222,8 +225,8 @@ export class ToolRegistry {
       const toModelOutput = ({ output }: { output: unknown }) => modelOutput(output as ToolResult, opts.images ?? false)
       set[def.name] =
         def.input instanceof z.ZodType
-          ? tool({ description: def.description, inputSchema: def.input, execute, toModelOutput })
-          : dynamicTool({ description: def.description, inputSchema: opts.groundedFinancial && def.source?.startsWith("mcp:") ? jsonSchema(inputContract, {validate:value=>validateAuthoritativeInput(inputContract,value)}) : opts.financeState ? jsonSchema(inputContract, {validate:value=>opts.financeState!.validate({...def,input:inputContract},value)}) : jsonSchema(inputContract), execute, toModelOutput })
+          ? tool({ description, inputSchema: def.input, execute, toModelOutput })
+          : dynamicTool({ description, inputSchema: opts.groundedFinancial && def.source?.startsWith("mcp:") ? jsonSchema(inputContract, {validate:value=>validateAuthoritativeInput(inputContract,value)}) : opts.financeState ? jsonSchema(inputContract, {validate:value=>opts.financeState!.validate({...def,input:inputContract},value)}) : jsonSchema(inputContract), execute, toModelOutput })
     }
     return {
       tools: set,

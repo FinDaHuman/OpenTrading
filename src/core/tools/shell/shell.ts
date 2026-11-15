@@ -46,7 +46,17 @@ function nearMiss(command: string, shell: ShellInfo, workdir: boolean): string |
   return [`${MATH_NEAR_MISS_PREFIX} nên chưa chạy; viết lại đúng dạng thì chạy ngay, không cần duyệt.`, rewriteAdvice(miss, shell), mathHint(shell)].filter(Boolean).join(" ")
 }
 
-function describe(shell: ShellInfo): string {
+/** The file tools the shell description sends the model to instead of a command. */
+const FILE_TOOLS = ["read_file", "glob_files", "grep_files", "write_file", "edit_file"]
+
+/**
+ * `present`: the tools the registry holds; the description names only those (a host that keeps the
+ * shell but drops the file tools, like a benchmark runner, must not send the model to read_file).
+ * Without it every file tool is named.
+ */
+function describe(shell: ShellInfo, present?: ReadonlySet<string>): string {
+  const has = (name: string) => !present || present.has(name)
+  const fileTools = FILE_TOOLS.filter(has)
   const ps = shell.kind === "pwsh" || shell.kind === "powershell"
   const notes = ps
     ? shell.kind === "powershell"
@@ -57,9 +67,11 @@ function describe(shell: ShellInfo): string {
     "Chạy một lệnh shell trên máy người dùng, thư mục chạy mặc định là workspace; trả output (stdout và stderr) cùng mã thoát. " +
     `${notes} ` +
     "Dùng khi cần chạy chương trình: script đọc file dữ liệu hay vẽ biểu đồ ra file, chuyển đổi định dạng, cài thư viện người dùng đồng ý. " +
-    "Không dùng khi đọc, tìm hay sửa file (dùng read_file, glob_files, grep_files, write_file, edit_file), cũng không dùng cho lệnh chờ nhập từ bàn phím hay chạy mãi (server). " +
+    (fileTools.length > 0
+      ? `Không dùng khi đọc, tìm hay sửa file (dùng ${fileTools.join(", ")}), cũng không dùng cho lệnh chờ nhập từ bàn phím hay chạy mãi (server). `
+      : "Không dùng cho lệnh chờ nhập từ bàn phím hay chạy mãi (server). ") +
     `${mathHint(shell)} ` +
-    `Phép tính viết bằng Python, mảng hay vòng lặp không chạy mà trả lại dạng đúng để viết lại. Liệt kê thư mục trong workspace (ls, dir, pwd) cũng chạy ngay. Lệnh khác người dùng duyệt; ghi description ngắn để người dùng biết lệnh làm gì. Timeout mặc định ${DEFAULT_TIMEOUT_MS / 1000}s, tối đa ${MAX_TIMEOUT_MS / 1000}s; output dài được lưu ra file để đọc tiếp bằng read_file.`
+    `Phép tính viết bằng Python, mảng hay vòng lặp không chạy mà trả lại dạng đúng để viết lại. Liệt kê thư mục trong workspace (ls, dir, pwd) cũng chạy ngay. Lệnh khác người dùng duyệt; ghi description ngắn để người dùng biết lệnh làm gì. Timeout mặc định ${DEFAULT_TIMEOUT_MS / 1000}s, tối đa ${MAX_TIMEOUT_MS / 1000}s; output dài được lưu ra file${has("read_file") ? " để đọc tiếp bằng read_file" : ""}.`
   )
 }
 
@@ -75,6 +87,7 @@ export function shellTool(workspace: Workspace, opts: { shell?: ShellInfo } = {}
   const def: ToolDef<ShellInput> = {
     name: "shell",
     description: describe(shell),
+    descriptionFor: (present) => describe(shell, present),
     input: z.object({
       command: z.string().min(1).describe("Lệnh cần chạy"),
       description: z.string().max(200).optional().describe("Lệnh này làm gì, 5–10 từ, ví dụ: Vẽ biểu đồ giá FPT ra file PNG"),

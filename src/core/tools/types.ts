@@ -55,6 +55,12 @@ export interface ToolDef<I = any> {
   /** Exact original MCP public name, before SDK sanitization. */
   canonicalName?: string
   description: string
+  /**
+   * The description for a registry that holds exactly these tools (deferred ones included), when it
+   * names other tools: a hint to use a tool the turn does not have sends the model after it.
+   * `description` stays the widest text (every tool present).
+   */
+  descriptionFor?: (present: ReadonlySet<string>) => string
   /** zod for native tools, plain JSON Schema for MCP tools. */
   input: z.ZodType<I> | JSONSchema7
   /** Read-only tools may run in parallel; anything else runs alone. */
