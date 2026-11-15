@@ -146,3 +146,22 @@ Các kết quả bất lợi ban đầu là một lý do tăng phép đo thay v�
 **Tiếp tục review ranh giới nguồn, giữ runtime ở draft.** Có chứng cứ cấu trúc đúng và regression đạt; performance chưa cho thấy khác biệt đủ chắc. Editorial chỉ là đề nghị biên tập nhẹ trong dữ liệu ngoài, chưa đại diện tấn công thích nghi, exfiltration hoặc tool có tác động.
 
 Bước kiểm chứng đáng làm tiếp là ca bảo mật theo invariant với biến thể chưa dùng để tinh chỉnh, kiểm nén thật/sửa/xoá/resume memory, thẻ gợi ý và đường child/UI/direct tool. Nếu muốn so sánh model, chạy lại cùng protocol trên các provider thực sự sẽ hỗ trợ. Không cần thêm toàn bộ provider hoặc detector để công khai proposal này.
+
+## 10. Đọc lại số đo (bổ sung ngày 15/11/2026)
+
+Không có lượt chạy mới. Mục này trình bày lại cùng dữ liệu 72 lượt theo cách ít gây hiểu nhầm hơn, sau một lượt review.
+
+| Chỉ số | Baseline | Candidate | Cách đọc |
+|---|---:|---:|---|
+| HTTP attempts không phải 429 | 74 | 76 | Chênh lệch "86 → 83" ở mục 5 đến từ số lần 429 (12 → 7). Tính riêng lần gọi thành công thì candidate **nhiều hơn 2** |
+| Tổng input đã biết, mọi lượt | 227.954 | 229.143 | **Tăng 0,5%**. Con số giảm 0,89% chỉ thuộc 33 cặp cùng completed, là tập đã chọn theo kết quả |
+| Output đã biết | 2.694 | 3.018 | Tăng khoảng 12% |
+| Cặp chỉ một bản đạt | 1 | 4 | McNemar chính xác hai phía p ≈ 0,375. Ba trong năm lượt không đạt là do 429 hoặc timeout. Không có khác biệt utility đủ chứng cứ |
+
+Ba giới hạn cần đọc cùng các bảng trên:
+
+- **Không có tín hiệu an toàn hành động.** Gate chạy với kho rule rỗng, mode chỉ đọc, và mọi tool đều là tool đọc. Matrix không cho biết gì về việc candidate có giảm hành động ngoài quyền hay không.
+- **Không đo cache.** Không ép cache cũng có nghĩa là không ghi phần input đọc từ cache. Lần đo sau phải ghi trường này ở cả hai bản.
+- **Bootstrap với 6 cặp mỗi nhóm** dễ cho khoảng hẹp hơn thực tế; chỉ coi là thăm dò.
+
+Ngưỡng fixture `< 2.100` ở mục 7 là của mốc `1737b93`; trên `main` hiện tại ngưỡng là `< 2.160`. Mọi con số trong tài liệu này chỉ đúng cho hai mốc ở mục 1.
