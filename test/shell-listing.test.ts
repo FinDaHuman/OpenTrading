@@ -240,6 +240,14 @@ test("pwsh on Linux and macOS: a backslash is a separator there too, and there i
   for (const c of [String.raw`dir ..\outside`, String.raw`dir ..\..\etc`, String.raw`dir C:\x`, "dir C:/x"]) expect([c, listingCommand(c, linux)]).toEqual([c, false])
 })
 
+test("a tilde runs only inside an 8.3 short name; at a word start or after = or : it is home", () => {
+  const w = env(PS)
+  const short = { ...w, readable: () => true }
+  for (const c of ["dir RUNNER~1", "dir src/PROGRA~2/x", 'dir "C:/Users/RUNNER~1/AppData"']) expect([c, listingCommand(c, short)]).toEqual([c, true])
+  for (const c of ["dir ~", "dir ~/x", "dir ~1", "dir a~", "dir a~b", "dir a=~/x", "dir a:~/x", "dir src/~x", 'dir "~"', 'dir "a/~/b"']) expect([c, listingCommand(c, short)]).toEqual([c, false])
+  for (const c of ["ls ~", "ls a=~/x", "ls x:~/y"]) expect([c, listingCommand(c, { ...env(BASH), readable: () => true })]).toEqual([c, false])
+})
+
 test("bash: a backslash is an escape, never part of a plain path", () => {
   for (const c of [String.raw`ls src\core`, String.raw`ls "src\core"`, String.raw`ls \..`]) expect([c, listingCommand(c, env(BASH))]).toEqual([c, false])
 })

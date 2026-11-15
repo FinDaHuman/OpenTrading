@@ -42,9 +42,15 @@ export const LISTING_MAX_CHARS = 1000
 const MAX_PATHS = 8
 
 /** Letters and digits of any script, and the few marks a plain path or a flag is made of. */
-const WORD = /^[\p{L}\p{N}._\-\\/:=]+$/u
+const WORD = /^[\p{L}\p{N}._\-\\/:=~]+$/u
+/**
+ * A tilde only inside a Windows 8.3 short name (`RUNNER~1`, the temp folder of many machines):
+ * after a letter or digit and before a digit. Both shells expand it at the start of a word, and
+ * bash also after `=` or `:`; neither does there.
+ */
+const HOME_TILDE = /(?<![\p{L}\p{N}])~|~(?!\d)/u
 /** Inside double quotes a path may also hold spaces, commas and brackets (`Program Files (x86)`). */
-const QUOTED = /^[\p{L}\p{N}._\-\\/: ,()+@]+$/u
+const QUOTED = /^[\p{L}\p{N}._\-\\/: ,()+@~]+$/u
 
 /** The words of the command, or undefined when anything is outside the two forms above. */
 function words(text: string): { text: string; quoted: boolean }[] | undefined {
@@ -61,14 +67,14 @@ function words(text: string): { text: string; quoted: boolean }[] | undefined {
       if (end < 0) return undefined
       const inner = text.slice(i + 1, end)
       // A quoted word ends at a space or the end: `"a"b` and `a"b"` are joined by the shell.
-      if (inner === "" || !QUOTED.test(inner) || (end + 1 < text.length && !/[ \t]/.test(text[end + 1]!))) return undefined
+      if (inner === "" || !QUOTED.test(inner) || HOME_TILDE.test(inner) || (end + 1 < text.length && !/[ \t]/.test(text[end + 1]!))) return undefined
       out.push({ text: inner, quoted: true })
       i = end + 1
       continue
     }
     const end = text.slice(i).search(/[ \t]/)
     const word = end < 0 ? text.slice(i) : text.slice(i, i + end)
-    if (!WORD.test(word)) return undefined
+    if (!WORD.test(word) || HOME_TILDE.test(word)) return undefined
     out.push({ text: word, quoted: false })
     i += word.length
   }
