@@ -21,7 +21,7 @@ Backend nào lỗi thì thử backend tiếp theo. Kết quả ghi rõ backend �
 
 | Tham số | Ý nghĩa |
 |---|---|
-| `allowed_domains` / `blocked_domains` | Chỉ lấy, hoặc loại, kết quả từ các domain này. Không dùng cùng lúc cả hai. |
+| `allowed_domains` | Chỉ lấy kết quả từ các domain này. |
 | `preset` | `vn_finance`, `vn_news`, `vn_official`: nhóm nguồn Việt Nam, xem `src/core/tools/web/domains.ts`. |
 | `recency_days` | Chỉ lấy kết quả trong N ngày gần đây. |
 

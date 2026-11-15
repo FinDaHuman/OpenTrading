@@ -3,6 +3,9 @@ import { compactCarry, isCompactMarker } from "../compact-marker"
 import { toolErrorText } from "./errors"
 import { LOADED_PREFIX } from "./search"
 
+/** A call that makes other deferred tools callable: a spawned subagent can be messaged or stopped. */
+const IMPLIES: Record<string, string[]> = { spawn_subagent: ["send_message", "stop_agent"] }
+
 /** Tools whose results may announce loaded tools on their first line. */
 const LOADERS = new Set(["tool_search", "load_skill"])
 
@@ -35,7 +38,10 @@ export function loadedTools(messages: readonly ModelMessage[]): string[] {
     if (isCompactMarker(message)) for (const name of compactCarry(message).tools) seen.add(name)
     if (typeof message.content === "string") continue
     for (const part of message.content as { type: string; toolName?: string; output?: unknown }[]) {
-      if (part.type === "tool-call" && part.toolName) seen.add(part.toolName)
+      if (part.type === "tool-call" && part.toolName) {
+        seen.add(part.toolName)
+        for (const name of IMPLIES[part.toolName] ?? []) seen.add(name)
+      }
       // A loader's result, or the error for a deferred tool called before it was loaded
       // (agent.ts repairCall), which loads it — read through the SDK's prefixes, which
       // sessions saved before errors were cleaned still carry.

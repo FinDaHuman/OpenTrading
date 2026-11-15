@@ -2,6 +2,7 @@
 name: chu-ky-nganh
 description: "Dùng khi cần biết dòng tiền ngành VN hiện ở đâu và 1 tháng tới sẽ đổ vào đâu theo chu kỳ. Chỉ dùng tool đọc."
 tools: ["sector_performance", "breadth_scan", "money_flow", "dnse_foreign_flow", "distribution_count", "vn_asset_seasonality", "cycle_yearly"]
+listed: false
 maxSteps: 10
 ---
 Việc của bạn là trả lời đúng hai câu: (a) HIỆN TẠI tiền đang ở ngành nào, (b) 1 THÁNG TỚI tiền dự kiến đổ vào đâu theo chu kỳ.

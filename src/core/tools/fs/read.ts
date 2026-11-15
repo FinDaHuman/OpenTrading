@@ -233,17 +233,14 @@ export function readFileTool(workspace: Workspace, state?: FileState): ToolDef<R
   return {
     name: "read_file",
     description:
-      "Đọc một file hoặc thư mục trên máy người dùng theo đường dẫn (tuyệt đối, hoặc tương đối tính từ workspace; ~ là thư mục home). " +
-      "Text/CSV/JSON/Markdown/HTML trả về từng dòng có số dòng (tối đa 2000 dòng mỗi lần, đọc tiếp bằng offset/limit); thư mục trả về danh sách file; Excel .xlsx trả từng sheet dạng CSV (chọn bằng sheet); Word .docx trả markdown; PDF trả chữ theo trang (mặc định 10 trang đầu, chọn bằng pages, tối đa 20 trang/lần); ảnh png/jpg/gif/webp trả về ảnh. " +
-      "Dùng khi người dùng đưa đường dẫn file/thư mục, nhắc tới một file trên máy, hoặc cần xem nội dung file trước khi trả lời. Gọi song song nhiều file cùng lúc được. " +
-      "Không dùng khi cần tìm file theo tên (dùng glob_files) hay tìm chữ trong nhiều file (dùng grep_files); không dùng cho URL (dùng web_fetch). " +
-      "File chứa khoá/mật khẩu (.env, auth.json, .ssh…) cần người dùng cho phép.",
+      "Đọc file hoặc thư mục trên máy (đường dẫn tuyệt đối hay tính từ workspace). Text trả từng dòng có số dòng (tối đa 2000, đọc tiếp bằng offset/limit); .xlsx trả CSV theo sheet; .docx trả markdown; PDF trả chữ theo trang (pages, tối đa 20/lần); ảnh trả ảnh. " +
+      "Dùng khi người dùng nhắc tới một file hay thư mục. Không dùng khi đọc URL (dùng web_fetch). File chứa khoá cần người dùng cho phép.",
     input: z.object({
-      path: z.string().min(1).describe("Đường dẫn file hoặc thư mục, ví dụ D:\\Dau-tu\\bctc-fpt.pdf hoặc ghi-chu.md"),
-      offset: z.number().int().min(1).optional().describe("Dòng bắt đầu (từ 1), cho file text dài"),
-      limit: z.number().int().min(1).max(MAX_LINES).optional().describe(`Số dòng đọc (mặc định và tối đa ${MAX_LINES})`),
-      pages: z.string().optional().describe('Trang PDF cần đọc, ví dụ "3", "1-5", "2,4-6"'),
-      sheet: z.string().optional().describe("Sheet Excel cần đọc: tên (ưu tiên khi trùng, ví dụ sheet tên \"2026\") hoặc số thứ tự (mặc định sheet đầu)"),
+      path: z.string().min(1),
+      offset: z.number().int().min(1).optional(),
+      limit: z.number().int().min(1).max(MAX_LINES).optional(),
+      pages: z.string().optional().describe('Ví dụ "1-5"'),
+      sheet: z.string().optional().describe("Tên hoặc số thứ tự sheet"),
     }),
     readOnly: true,
     timeoutMs: 60_000,

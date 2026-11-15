@@ -1,7 +1,7 @@
 # Anti-patterns — những gì KHÔNG được vẽ
 
 - Không vẽ khi thiếu điểm tối thiểu (nến <5, line <2, boxplot nhóm <4, pie toàn ≤0...).
-- Không multiline giá nhiều mã (lệch magnitude → xẹp) — dùng `chart_compare`.
+- Không multiline giá nhiều mã (lệch magnitude → xẹp) — dùng `chart_render kind=compare`.
 - Không pie >7 lát (đọc legend bar thay thế).
 - Không pie 2 lát / donut cho phân phối — donut chỉ cho 1 value/max.
 - Không boxplot các nhóm khác magnitude.
