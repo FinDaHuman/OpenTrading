@@ -14,6 +14,8 @@ adopt Semantic Versioning when it exposes a stable public API.
   no-mental-math rule (`shell`; without a shell, one line on writing "tự tính"), the chart advice in `style.md`
   (`chart_render`), `memory_read` in `memory.md`, "chạy trong terminal" in `identity.md`, and the two `tools.md`
   lines for a person watching (`terminal`). `MACHINE_DROPPED_TOOL_LINES` and `machineTools` are gone.
+  A term outside the known list (`GATE_TERMS`) or a malformed block throws, and a host `promptDir` is checked
+  at start-up (`validatePromptDir`), so a typo never drops a line silently.
 
 - A caller's cap on model requests per turn (issue #278 R3): `ot -p --turn-requests N`, eval `--turn-requests N`, and
   `RunOptions.maxRequests` for runners that call `runAgent` directly (a benchmark's 24-request cap cut OT at its

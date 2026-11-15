@@ -127,8 +127,15 @@ export function validatePromptDir(dir: string): string {
       throw new Error(`promptDir contains an unsafe or oversized file: ${name}`)
     }
     total += stat.size
-    if (["identity.md", "tools.md", "citations.md", "style.md"].includes(name) && !readFileSync(file, "utf8").trim()) {
+    const text = readFileSync(file, "utf8")
+    if (["identity.md", "tools.md", "citations.md", "style.md"].includes(name) && !text.trim()) {
       throw new Error(`promptDir empty ${name}`)
+    }
+    // Conditional lines (prompt/gate.ts) fail here, at start-up, not on every turn.
+    try {
+      gate(text, undefined)
+    } catch (error) {
+      throw new Error(`promptDir ${name}: ${error instanceof Error ? error.message : String(error)}`)
     }
   }
   if (total > 262_144) throw new Error("promptDir exceeds total prompt size limit")
