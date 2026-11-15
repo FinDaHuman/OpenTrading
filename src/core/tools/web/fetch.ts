@@ -146,6 +146,10 @@ export async function runFetch(input: WebFetchInput, signal: AbortSignal, deps: 
       if (signal.aborted || (error as { name?: string })?.name !== "TimeoutError") throw error
       return withPage(header, body, `quá ${Math.round(budget / 1000)}s`)
     }
+    // A provider block is a terminal result, not an incomplete extraction to replace with the page.
+    if (got.finishReason === "content-filter") {
+      return `${header}\n\nModel phụ đọc trang bị provider chặn đầu ra (finishReason=content-filter). Chưa có kết quả đọc cho yêu cầu này. Không tự động chuyển sang đọc thẳng trang để thay thế kết quả bị chặn.`
+    }
     const text = got.text.trim()
     if (!text) return withPage(header, body, `không trả lời${got.finishReason ? `, finishReason=${got.finishReason}` : ""}`)
     if (got.finishReason === "length") return withPage(header, body, "câu trả lời bị cắt (finishReason=length)", text)

@@ -295,6 +295,42 @@ test("an empty or cut side answer says why; a cut one is kept above the page", a
   expect(ok).toEndWith("\n\n10.000 tỷ đồng.")
 })
 
+test("an explicit provider filter never falls back to the page, even with partial text", async () => {
+  for (const text of ["  ", "Trả lời dở của provider"]) {
+    const { deps } = article()
+    let extractions = 0
+    const out = await runFetch({ url: "https://cafef.vn/vcb", prompt: "lợi nhuận quý 3?" }, signal(), {
+      ...deps,
+      extract: async () => {
+        extractions++
+        return { text, finishReason: "content-filter" }
+      },
+    })
+    expect(extractions).toBe(1)
+    expect(out).toContain("finishReason=content-filter")
+    expect(out).toContain("bị provider chặn")
+    expect(out).not.toContain("10.000 tỷ đồng")
+    expect(out).not.toContain("Trả lời dở")
+    expect(out).not.toContain("start_char")
+  }
+})
+
+test("ordinary empty output still recovers the page and a textual refusal is preserved as text", async () => {
+  const { deps } = article()
+  const empty = await runFetch({ url: "https://cafef.vn/vcb", prompt: "lợi nhuận quý 3?" }, signal(), {
+    ...deps, extract: async () => ({ text: "", finishReason: "stop" }),
+  })
+  expect(empty).toContain("10.000 tỷ đồng")
+  expect(empty).not.toContain("bị provider chặn")
+  const refusal = "Tôi không thể cung cấp đoạn trích được yêu cầu."
+  const out = await runFetch({ url: "https://cafef.vn/vcb", prompt: "x?" }, signal(), {
+    ...deps, extract: async () => ({ text: refusal, finishReason: "stop" }),
+  })
+  expect(out).toEndWith(refusal)
+  expect(out).not.toContain("10.000 tỷ đồng")
+  expect(out).not.toContain("bị provider chặn")
+})
+
 test("the side model's limit fits in what the download left of the call's 125s", async () => {
   const { deps } = article()
   let t = 0
