@@ -90,3 +90,13 @@ test("parseCli: --profile machine with -p only; terminal is the default", () => 
   expect(parseCli(["-p", "x", "--profile"]).kind).toBe("error")
   expect(parseCli(["--profile", "machine"]).kind).toBe("error")
 })
+
+test("a prompt folder without citations-machine.md (a benchmark's own variant) still gets the bundled one", async () => {
+  const { mkdirSync, writeFileSync } = await import("node:fs")
+  const dir = path.join(root, "variant")
+  mkdirSync(dir, { recursive: true })
+  for (const id of ["identity", "tools", "citations", "style"]) writeFileSync(path.join(dir, `${id}.md`), readFileSync(path.join(prompts, `${id}.md`), "utf8"))
+  const machine = assemble(base({ profile: "machine" }), dir)
+  expect(machine.system).toContain("Ngày theo dạng YYYY-MM-DD")
+  expect(machine.system).not.toContain("<style>")
+})

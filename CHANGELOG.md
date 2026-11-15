@@ -7,6 +7,14 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ### Added
 
+- A caller's cap on model requests per turn (issue #278 R3): `ot -p --max-requests N`, eval `--turn-requests N`, and
+  `RunOptions.maxRequests` for runners that call `runAgent` directly (a benchmark's 24-request cap cut OT at its
+  25th request, before the summary step ran). Every request the process sends during the turn counts, retries,
+  stop-gate recoveries and subagents included, and none is sent past the cap (`src/core/request-budget.ts`; a
+  guard in the provider fetch refuses it). When two requests are left the loop forces the summary step (tools
+  off). If a retry spends that reserve, the turn ends with an error instead of an answer. The cap is per turn:
+  a caller running several turns passes each what is left. A cap of 1 or 2 is honoured (the first step is the
+  answer, tools off).
 - `--profile machine` for a program caller that sets its own output format (issue #278 P2/P3/P4/N3): `ot -p
   --profile machine`, eval `--profile machine`, `RunOptions.profile` for runners that call `runAgent`. The system
   prompt drops `style.md`, uses `prompts/citations-machine.md` (dot decimals, no thousands separator, full

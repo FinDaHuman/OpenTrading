@@ -177,6 +177,8 @@ export interface EvalRun {
   memory?: MemoryChoice
   /** --profile machine: the prompt for a program caller (prompt/assemble.ts), and the calculator shell. */
   profile?: PromptProfile
+  /** --turn-requests: each question's cap on model requests (core/request-budget.ts), as a benchmark sets one. */
+  turnRequests?: number
 }
 
 /** A fresh empty notebook for the next question: the last one is closed (Windows locks it) and its files removed. */
@@ -316,6 +318,7 @@ async function ask(run: EvalRun, question: EvalQuestion, asked: Asked, now: Date
       history: [],
       input: question.question,
       ...(run.profile ? { profile: run.profile } : {}),
+      ...(run.turnRequests !== undefined ? { maxRequests: run.turnRequests } : {}),
       skills: skillsFor(run.skills, run.ablated),
       registry: runtime.registry,
       memory: runtime.memory,

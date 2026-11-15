@@ -234,7 +234,7 @@ export function assemble(input: AssembleInput, promptsDir = PROMPTS_DIR): Assemb
   else add(system, "identity", 1, "system", identityLayer("main", promptsDir))
   const machine = input.profile === "machine"
   if (input.tools.length > 0) add(system, "tools", 7, "system", machine ? machineTools(promptFile("tools", promptsDir)) : promptFile("tools", promptsDir))
-  if (!input.disabled?.has("citations-prompt")) add(system, "citations", 1, "system", promptFile(machine ? "citations-machine" : "citations", promptsDir), "citations")
+  if (!input.disabled?.has("citations-prompt")) add(system, "citations", 1, "system", (machine ? (promptFile("citations-machine", promptsDir) ?? promptFile("citations-machine")) : promptFile("citations", promptsDir)), "citations")
   // Investor profile rides the static system prefix (cache-marked on Anthropic) like
   // CLAUDE.md at boot. Re-read per request but byte-identical while the file is unchanged,
   // so it caches the same — while an edit still applies the very next request.

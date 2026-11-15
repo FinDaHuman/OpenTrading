@@ -37,6 +37,8 @@ export interface PrintOptions {
   format: PrintFormat
   /** `--profile machine`: a program reads the answer (prompt/assemble.ts PromptProfile). */
   profile?: "machine"
+  /** `--max-requests`: the turn's cap on model requests (core/request-budget.ts). */
+  maxRequests?: number
 }
 
 export interface PrintResult {
@@ -131,6 +133,7 @@ export async function runPrint(opts: PrintOptions, deps: { runtime?: Runtime; ta
       history: [],
       input: prompt,
       ...(opts.profile ? { profile: opts.profile } : {}),
+      ...(opts.maxRequests !== undefined ? { maxRequests: opts.maxRequests } : {}),
       skills,
       registry: runtime.registry,
       target,
