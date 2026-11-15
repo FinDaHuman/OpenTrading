@@ -17,7 +17,7 @@ build/
 .vscode/
 
 # TypeScript
-node_modules/
+node_modules
 *.tsbuildinfo
 
 # Playwright MCP writes screenshots into the working directory
