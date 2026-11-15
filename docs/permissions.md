@@ -119,7 +119,7 @@ Mọi thứ khác đi đường duyệt bình thường:
 - ổ ảo của PowerShell (`env:`, `HKLM:`, `Function:`), đệ quy (`-R`, `-Recurse`, `-Depth`), cờ không có trong danh sách, nối lệnh, pipe, chuyển hướng;
 - `git`, `pip`, `npm` và `--version`: các chương trình này có thể chạy chương trình khác mà file trong thư mục cấu hình (`core.fsmonitor`, script của npm). Ở ▸▸ chúng vẫn không tốn request của model duyệt như trước.
 
-`ls -l` và `ls -F` in cả đích của symlink (`lien-ket -> /đường/dẫn/ngoài`): liệt kê một thư mục có liên kết trỏ ra ngoài cho thấy tên đường dẫn đó, nhưng không cho thấy gì bên trong. Muốn liệt kê chính liên kết đó thì lệnh phải hỏi. bash hay sh trên Windows (Git Bash) không được nhận, vì cách nó hiểu `/d/x` hay `/tmp` khác phép kiểm đường dẫn.
+`ls -l` và `ls -F` in cả đích của symlink (`lien-ket -> /đường/dẫn/ngoài`): liệt kê một thư mục có liên kết trỏ ra ngoài cho thấy tên đường dẫn đó, nhưng không cho thấy gì bên trong. Muốn liệt kê chính liên kết đó thì lệnh phải hỏi. bash hay sh trên Windows (Git Bash) không được nhận, vì cách nó hiểu `/d/x` hay `/tmp` khác phép kiểm đường dẫn. Trên Linux/macOS, lệnh do model chạy nhận `PATH` đã bỏ mục rỗng và mục tương đối (`:`, `.`, `bin`): nếu không, `ls` hay `awk` trần (chạy không hỏi) có thể chạy một file `ls` nằm trong workspace, ví dụ repo vừa clone.
 
 Lệnh liệt kê chạy với giới hạn 20 giây. Quy tắc `deny`/`ask` của bạn vẫn áp dụng.
 

@@ -61,6 +61,7 @@ adopt Semantic Versioning when it exposes a stable public API.
   space is refused (Windows drops them), and a network or device path is refused before anything resolves it.
   The ‖ mode line of the `<quyen_tep>` reminder says these two kinds of commands need no approval. git, pip, npm and `--version` stay ▸▸-only: files in the folder can make them run other programs.
   Such a listing runs with a 20 s limit.
+- `shell` on Linux/macOS: the child's `PATH` keeps absolute entries only (an empty entry, `.` or `bin` made the shell look in the working folder), so a bare `ls` or `awk`, which run unasked, can never run an `ls` file of the workspace (review of #290).
 
 - `shell`: arithmetic written in a form the math grammar does not take now comes back as a tool error that says
   why and shows the form to use, instead of an approval prompt (TUI) or a denial that forbids rewriting the

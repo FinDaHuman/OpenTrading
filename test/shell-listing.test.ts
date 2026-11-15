@@ -6,6 +6,7 @@ import { readScope } from "../src/core/fs/path-safety"
 import { realish, Workspace } from "../src/core/fs/workspace"
 import { PermissionGate } from "../src/core/permission"
 import { listingCommand } from "../src/core/tools/shell/read-only"
+import { absolutePathOnly, runShell } from "../src/core/tools/shell/run"
 import { LISTING_TIMEOUT_MS, shellTool } from "../src/core/tools/shell/shell"
 import { RwLock, runTool } from "../src/core/tools/wrap"
 
@@ -316,5 +317,21 @@ test("bash or sh on Windows (Git Bash, MSYS) is refused: it maps /d/x and /tmp u
   for (const kind of ["bash", "sh"] as const) {
     const onWindows = { shell: { kind }, platform: "win32" as const, resolve: (raw: string) => raw, readable: () => true }
     for (const c of ["pwd", "ls", "ls src", "ls /d/x"]) expect([kind, c, listingCommand(c, onWindows)]).toEqual([kind, c, false])
+  }
+})
+
+test("a relative or empty PATH entry never makes a bare ls run a file of the workspace", async () => {
+  expect(absolutePathOnly(":/usr/bin:.:bin:/bin:")).toBe("/usr/bin:/bin")
+  if (process.platform === "win32") return
+  const dir = mkdtempSync(path.join(os.tmpdir(), "ot-path-"))
+  const saved = process.env.PATH
+  try {
+    writeFileSync(path.join(dir, "ls"), "#!/bin/sh\necho PLANTED\n", { mode: 0o755 })
+    process.env.PATH = `.:${saved}`
+    const out = await runShell("ls", { cwd: dir, timeoutMs: 10_000, signal: new AbortController().signal })
+    expect(out.output).not.toContain("PLANTED")
+  } finally {
+    process.env.PATH = saved
+    rmSync(dir, { recursive: true, force: true })
   }
 })

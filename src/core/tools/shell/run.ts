@@ -108,10 +108,25 @@ export function childEnv(env: NodeJS.ProcessEnv): Record<string, string> {
   return out
 }
 
+/**
+ * POSIX PATH without empty or relative entries (`PATH=:/usr/bin`, `.`, `bin`): those make the
+ * shell look in the working directory, so a bare `ls` or `awk` (which run unasked: read-only.ts,
+ * math.ts) would run an `ls` file of a freshly cloned repo. Review of #290.
+ */
+export function absolutePathOnly(value: string): string {
+  return value.split(":").filter((entry) => entry.startsWith("/")).join(":")
+}
+
 /** Collected output is capped in memory: past this, the middle is dropped. */
 const MEMORY_CAP = 4 * 1024 * 1024
 /** A runaway command must not fill the disk: the spill file stops here. */
 export const SPILL_CAP = 64 * 1024 * 1024
+
+/** The child's PATH on POSIX: absolute entries only (Windows PowerShell never searches the current folder). */
+function posixPath(env: Record<string, string>): Record<string, string> {
+  if (process.platform === "win32" || env.PATH === undefined) return env
+  return { ...env, PATH: absolutePathOnly(env.PATH) }
+}
 
 export async function runShell(
   command: string,
@@ -135,7 +150,7 @@ export async function runShell(
     // Python prints Vietnamese as UTF-8 even on a Windows console code page. Provider keys
     // set as environment variables stay out of the child: `printenv` would put them in the
     // transcript the model provider receives.
-    env: { ...childEnv(process.env), PYTHONIOENCODING: "utf-8", PYTHONUTF8: "1", ...opts.env },
+    env: posixPath({ ...childEnv(process.env), PYTHONIOENCODING: "utf-8", PYTHONUTF8: "1", ...opts.env }),
     windowsHide: true,
     // POSIX: its own process group, so a timeout kills the children too.
     detached: process.platform !== "win32",
