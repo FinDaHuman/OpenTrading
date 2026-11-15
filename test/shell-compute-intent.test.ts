@@ -209,3 +209,18 @@ test("a read-only agent's calculator gives the same hint for arithmetic, and its
   const refusal = await failure(calculator.execute({ command: "cat gia.csv" }, ctx()))
   expect(refusal).toContain("không phải phép tính thuần")
 })
+
+test("15/11: a series built with a .NET List and .Add gets the hint; New-Object of anything else does not", () => {
+  const PSK = { kind: "powershell" as const }
+  const listed =
+    "$prices = @(61.2, 61.9, 61.4, 62.3)\n$returns = New-Object System.Collections.Generic.List[double]\nfor ($i = 1; $i -lt $prices.Count; $i++) {\n    $r = [Math]::Log($prices[$i] / $prices[$i-1])\n    $returns.Add($r)\n}\n$mean = ($returns | Measure-Object -Average).Average\n$sumSq = 0\nforeach ($r in $returns) {\n    $sumSq += [Math]::Pow($r - $mean, 2)\n}\n$stdDev = [Math]::Sqrt($sumSq / ($returns.Count - 1))\n\"{0:N3}%\" -f ($stdDev * [Math]::Sqrt(250) * 100)"
+  expect(computeIntent(listed, PSK)).toBe("series")
+  expect(computeIntent("$a = New-Object System.Collections.ArrayList\n$a.Add(1.5)\n$a.Add(2)\n($a | Measure-Object -Sum).Sum / 2", PSK)).toBe("series")
+  for (const c of [
+    "$c = New-Object System.Net.WebClient; $c.DownloadString('http://x')",
+    "$p = New-Object System.Diagnostics.Process; 1+1",
+    "$l = New-Object System.Collections.Generic.List[string]; $l.Add('a')",
+    "New-Object -ComObject WScript.Shell",
+    "$f = New-Object System.IO.StreamWriter('a.txt'); $f.Write(1)",
+  ]) expect([c, computeIntent(c, PSK)]).toEqual([c, undefined])
+})
