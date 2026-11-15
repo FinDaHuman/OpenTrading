@@ -40,6 +40,13 @@ const SELF_COMPUTED = /tự tính/iu
 const CONSTANTS = new Set([0, 1, 2, 3, 4, 10, 12, 100, 250, 252, 365])
 const isConstant = (value: number) => CONSTANTS.has(value) || (value >= 1000 && Number.isInteger(Math.log10(value)))
 
+/**
+ * Scales an operand may differ from its source by: a unit change (đồng, nghìn, triệu, tỷ), and a
+ * percent typed as a fraction (40% as 0.40). Not ×100: with it `21500000` traced to `215000` (a
+ * reading of `215.000.000`), so a dropped zero passed for a copied figure (15/11 run).
+ */
+const OPERAND_SCALES = [1, 0.01, 1e3, 1e-3, 1e6, 1e-6, 1e9, 1e-9]
+
 /** A number literal that is not part of a name (`log10`, `$x2`) or of a format (`%.2f` is inside quotes). */
 const LITERAL = /(?<![\w.$])\d+(?:\.\d+)?(?:[eE][+-]?\d{1,3})?(?![\w.])/g
 
@@ -78,7 +85,7 @@ function attemptOperands(attempt: Attempt) {
         // A decimal may be the source rounded as typed (66.3 for 66.27); an integer must be the
         // number itself, or among thirty volumes nearly any small integer would trace by chance.
         const near = operand.decimals > 0 ? 0.5 * 10 ** -operand.decimals + 1e-9 : 1e-9
-        if (valueTracesTo(operand.value, near, known)) traced++
+        if (valueTracesTo(operand.value, near, known, OPERAND_SCALES)) traced++
         else untraced.push({ q: attempt.q, rep: attempt.rep, value: operand.text, command })
       }
     }

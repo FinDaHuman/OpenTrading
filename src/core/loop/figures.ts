@@ -126,10 +126,10 @@ export const ungroundedFigures = (text: string, numbers: Set<number>) =>
 const SCALES = [1, 100, 0.01, 1e3, 1e-3, 1e6, 1e-6, 1e9, 1e-9]
 
 /** Whether `value` is one of `numbers` at a common scale, within `near`. */
-export function valueTracesTo(value: number, near: number, numbers: Set<number>) {
+export function valueTracesTo(value: number, near: number, numbers: Set<number>, scales: readonly number[] = SCALES) {
   for (const number of numbers) {
     // "giảm 3,2%" writes the sign in words.
-    if (SCALES.some((scale) => Math.abs(Math.abs(number) * scale - value) <= near)) return true
+    if (scales.some((scale) => Math.abs(Math.abs(number) * scale - value) <= near)) return true
   }
   return false
 }
