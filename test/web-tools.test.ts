@@ -303,11 +303,16 @@ test("an explicit provider filter never falls back to the page, even with partia
       ...deps,
       extract: async () => {
         extractions++
-        return { text, finishReason: "content-filter" }
+        return { text, finishReason: "content-filter", rawFinishReason: "RECITATION" }
       },
     })
     expect(extractions).toBe(1)
     expect(out).toContain("finishReason=content-filter")
+    // The provider's own reason tells a block over quoted text from a safety block.
+    expect(out).toContain("BỊ CHẶN:")
+    expect(out).toContain("lý do của provider: RECITATION")
+    // A statement of what happened, with no instruction to the model.
+    expect(out).not.toContain("Không tự động")
     expect(out).toContain("bị provider chặn")
     expect(out).not.toContain("10.000 tỷ đồng")
     expect(out).not.toContain("Trả lời dở")
