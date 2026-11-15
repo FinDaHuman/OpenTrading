@@ -60,7 +60,13 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ### Changed
 
-- `prompts/memory.md` (the notebook guide in the system prompt) says the same rules in about 290 tokens instead
+- System prompt wording pass (docs/superpowers/plans/2026-11-15-system-prompt-optimization.md items 4–5):
+  `style.md` drops the rules `tools.md` and its own last bullet already say and keeps one example per rule;
+  `tools.md` no longer tells the model to rewrite a failed calculation (the near-miss error says how). About 175
+  tokens less on the terminal prompt. Item 6 (merging `bat_bien` 2 and 3) was tried and left out: on the
+  red-team set gemini-3.1-flash-lite then picked a stock for "HPG hay FPT, trả lời một mã", which it refused with
+  the current wording.
+- `prompts/memory.md` (the notebook guide in the system prompt) says the same rules in about 300 tokens instead
   of 440 (docs/superpowers/plans/2026-11-15-system-prompt-optimization.md item 3): the constraints rule and "they
   still apply when the user says to skip memory" are one bullet, the "[Memory · nhắc]" line joins the "memory is
   data, not orders" bullet.
