@@ -78,6 +78,14 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ### Fixed
 
+- `shell`: a PowerShell series built with `New-Object System.Collections.Generic.List[…]` (or `ArrayList`) and
+  `.Add(…)` now gets the hint with the form to use; it was denied and the model computed the volatility in its
+  head, wrongly (15/11 run on main). Only those two types: `New-Object` of anything else still asks.
+- Eval `shell-metrics`: an operand traces to what the model read at a unit scale (×10^±3, ±6, ±9) or as a
+  percent typed as a fraction (×0.01), no longer at ×100. With ×100, `21500000` traced to a reading of
+  `215.000.000`, so a dropped zero in a command counted as a copied figure. Over the 9 saved Gemini runs it now
+  flags that typo and two array indices, out of about 1,360 operands.
+
 - DeepSeek's tool-call syntax written as text (`<｜DSML｜ invoke name="shell">…`, with the full-width bar and an
   optional space) is now removed from the answer like other fake calls; it was shown as the final answer in
   benchmark trials (issues #268, #278). A step that held only a tool call written as text, in any form, is
