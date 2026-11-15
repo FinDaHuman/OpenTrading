@@ -87,6 +87,12 @@ test("parseCli: -p takes the question, flags in any order; stdin when it is miss
   expect(parseCli(["-p", "x", "--model", "m"]).kind).toBe("error")
   expect(parseCli(["-p", "x", "-c"]).kind).toBe("error")
   expect(parseCli(["--model", "groq/m"]).kind).toBe("error")
+  // --turn-requests: a whole number the answer and its retry fit in, with -p only.
+  expect(parseCli(["-p", "x", "--turn-requests", "24"])).toEqual({ kind: "print", prompt: "x", format: "text", maxRequests: 24 })
+  expect(parseCli(["-p", "x", "--turn-requests", "1"])).toMatchObject({ maxRequests: 1 })
+  for (const v of ["0", "-1", "2.5", "abc"]) expect(parseCli(["-p", "x", "--turn-requests", v]).kind).toBe("error")
+  expect(parseCli(["-p", "x", "--turn-requests"]).kind).toBe("error")
+  expect(parseCli(["--turn-requests", "24"]).kind).toBe("error")
 })
 
 test("text: stdout is only the answer, exit 0, and the turn is saved as a session", async () => {

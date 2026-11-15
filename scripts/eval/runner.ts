@@ -174,6 +174,8 @@ export interface EvalRun {
    * and memory_read reach the prompt, nothing carries over); "none" (the product default) has none.
    */
   memory?: MemoryChoice
+  /** --turn-requests: each question's cap on model requests (core/request-budget.ts), as a benchmark sets one. */
+  turnRequests?: number
 }
 
 /** A fresh empty notebook for the next question: the last one is closed (Windows locks it) and its files removed. */
@@ -310,6 +312,7 @@ async function ask(run: EvalRun, question: EvalQuestion, asked: Asked, now: Date
     for await (const event of runAgent({
       history: [],
       input: question.question,
+      ...(run.turnRequests !== undefined ? { maxRequests: run.turnRequests } : {}),
       skills: skillsFor(run.skills, run.ablated),
       registry: runtime.registry,
       memory: runtime.memory,
