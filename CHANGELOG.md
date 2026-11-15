@@ -39,8 +39,8 @@ adopt Semantic Versioning when it exposes a stable public API.
   be done in the head; every other computation goes through one arithmetic-only `shell` command. A command that
   fails is rewritten in the form its error names before the "tự tính" fallback (issue #278 P4/N4).
 - `prompts/identity.md` priority order (issue #278 P1): the user's direct request, including the format, schema
-  and units of the answer, now ranks above the remaining system instructions (working rules and default
-  presentation); invariants stay first. `style.md` ("no JSON or raw tool output") and `citations.md` (thousands
+  and units of the answer, now ranks above the default presentation rules; the system's working rules (figures
+  from tools, no mental arithmetic, sources) stay above the user's request, and invariants first. `style.md` ("no JSON or raw tool output") and `citations.md` (thousands
   separators, one-decimal percent) say these are defaults. Static prompt about 2.15k tokens (guard 2,120 → 2,160).
 - `shell` description: the multi-step example, no "Python script for figures" among its uses, and a line saying
   that arithmetic in Python, arrays or loops comes back with the form to use.
