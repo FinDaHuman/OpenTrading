@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test"
 import { writeFile } from "node:fs/promises"
 import path from "node:path"
-import { assemble, identityLayer, type AssembleInput } from "../src/core/prompt/assemble"
+import { assemble, gateContext, identityLayer, type AssembleInput } from "../src/core/prompt/assemble"
 import { BUDGETS, fit, tierOf } from "../src/core/prompt/budget"
 import { clockState, loadCalendar, renderClock, sameSnapshot } from "../src/core/prompt/market-clock"
 import type { Skill } from "../src/core/skills/schema"
@@ -252,8 +252,8 @@ test("the investor profile is escaped: no text can close its block or open anoth
 
 test("identityLayer is exactly the identity text each role's system part starts with", () => {
   const main = assemble(base())
-  expect(main.system.startsWith(`<identity>\n${identityLayer("main")}\n</identity>`)).toBe(true)
+  expect(main.system.startsWith(`<identity>\n${identityLayer("main", undefined, gateContext(base()))}\n</identity>`)).toBe(true)
   expect(identityLayer(undefined)).toBe(identityLayer("main"))
   const sub = assemble(base({ role: "subagent" }))
-  expect(sub.system.startsWith(`<subagent>\n${identityLayer("subagent")}\n</subagent>`)).toBe(true)
+  expect(sub.system.startsWith(`<subagent>\n${identityLayer("subagent", undefined, gateContext(base({ role: "subagent" })))}\n</subagent>`)).toBe(true)
 })

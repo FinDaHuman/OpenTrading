@@ -5,7 +5,7 @@ import path from "node:path"
 import { parseCli } from "../src/cli/args"
 import { Workspace } from "../src/core/fs/workspace"
 import { judgeStop, unfetchedFigures } from "../src/core/loop/stop-gate"
-import { assemble, MACHINE_DROPPED_TOOL_LINES, type AssembleInput } from "../src/core/prompt/assemble"
+import { assemble, type AssembleInput } from "../src/core/prompt/assemble"
 import { ToolRegistry } from "../src/core/tools/registry"
 import { shellTool, useCalculatorShell } from "../src/core/tools/shell/shell"
 
@@ -26,6 +26,8 @@ const base = (over: Partial<AssembleInput> = {}): AssembleInput => ({
   ...over,
 })
 const prompts = path.join(import.meta.dir, "..", "prompts")
+/** How the tools.md lines that only serve a person watching a terminal begin. */
+const TERMINAL_ONLY = ["- Nói theo việc đã làm", "- Trước lượt tool đầu hoặc khi đổi hướng"]
 
 test("machine: no style guide, the machine citations, tools.md without the lines for a person watching", () => {
   const terminal = assemble(base())
@@ -34,21 +36,22 @@ test("machine: no style guide, the machine citations, tools.md without the lines
   expect(machine.system).not.toContain("<style>")
   expect(machine.system).toContain("Ngày theo dạng YYYY-MM-DD")
   expect(machine.system).not.toContain("128.400đ")
-  for (const start of MACHINE_DROPPED_TOOL_LINES) {
+  for (const start of TERMINAL_ONLY) {
     expect(terminal.system).toContain(start)
     expect(machine.system).not.toContain(start)
   }
-  // The invariants, the priority order and the computing rule stay.
-  for (const kept of ["<bat_bien>", "<thu_tu_uu_tien>", "Không tính nhẩm"]) expect(machine.system).toContain(kept)
+  // The invariants, the priority order, the computing rule and the stop rule stay.
+  for (const kept of ["<bat_bien>", "<thu_tu_uu_tien>", "Không tính nhẩm", "Chỉ dừng khi đã trả lời đủ"]) expect(machine.system).toContain(kept)
   // What it saves on every request, in the chars/4 estimate the budget guard uses.
   const saved = Math.ceil(terminal.system.length / 4) - Math.ceil(machine.system.length / 4)
   expect(saved).toBeGreaterThan(900)
   expect(machine.report.find((l) => l.id === "citations")).toBeDefined()
 })
 
-test("every line the machine profile drops is still in tools.md, once: a rewording would silently keep it", () => {
+test("the lines for a person watching are marked terminal-only in tools.md, and the stop rule is not", () => {
   const tools = readFileSync(path.join(prompts, "tools.md"), "utf8").split("\n")
-  for (const start of MACHINE_DROPPED_TOOL_LINES) expect([start, tools.filter((l) => l.startsWith(start)).length]).toEqual([start, 1])
+  for (const start of TERMINAL_ONLY) expect([start, tools.filter((l) => l.startsWith(start) && l.endsWith("<!-- khi: terminal -->")).length]).toEqual([start, 1])
+  expect(tools.filter((l) => l.startsWith("- Chỉ dừng khi") && !l.includes("<!--")).length).toBe(1)
 })
 
 test("the stop gate accepts machine-format answers (dot decimals, ISO dates, no thousands separator): no recovery request", () => {

@@ -475,11 +475,11 @@ test("a subagent model that cannot be used falls back to the session's model", a
 })
 
 test("the main agent's prompt does not change with the subagent role in place; identity.md is sent whole", async () => {
-  const { assemble, promptFile } = await import("../src/core/prompt/assemble")
+  const { assemble, gateContext, identityLayer } = await import("../src/core/prompt/assemble")
   const input = { tier: "A" as const, tools: ["current_time", "spawn_subagent"], skills: [], sticky: [], input: "x", now: new Date("2026-10-07T03:00:00Z") }
   const plain = assemble(input)
   expect(assemble({ ...input, role: "main" }).system).toBe(plain.system)
-  expect(plain.system).toContain(promptFile("identity")!)
+  expect(plain.system).toContain(identityLayer("main", undefined, gateContext(input))!)
   expect(plain.system).not.toContain("<subagent>")
   const child = assemble({ ...input, role: "subagent", agentPrompt: "CHỈ-DẪN" })
   expect(child.system).toContain("<subagent>")
