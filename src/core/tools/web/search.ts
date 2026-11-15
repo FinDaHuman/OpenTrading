@@ -351,8 +351,8 @@ export function webSearchTool(deps: SearchDeps = {}): ToolDef<WebSearchInput> {
   return {
     name: "web_search",
     description:
-      `Tìm kiếm web, trả kết quả đánh số (tiêu đề, URL, ngày, đoạn trích). Dùng khi cần tin, công bố, sự kiện mới (tháng hiện tại ${month}). Không dùng khi số liệu thị trường đã có tool dữ liệu. ` +
-      "Ưu tiên nguồn gốc (HOSE/HNX, SBV, GSO, IR doanh nghiệp). Đọc chi tiết bằng web_fetch.",
+      `Tìm kiếm web, trả kết quả đánh số (tiêu đề, URL, ngày, đoạn trích). Dùng khi cần tin, công bố, sự kiện mới; tháng hiện tại ${month}, tìm tin mới thì ghi đúng năm hiện tại. Không dùng khi số liệu thị trường đã có tool dữ liệu. ` +
+      "Ưu tiên nguồn gốc (HOSE/HNX, SBV, GSO, IR doanh nghiệp). Đọc chi tiết bằng web_fetch. Câu trả lời trích nguồn bằng link markdown cạnh khẳng định, cuối có mục \"Nguồn:\".",
     input: z.object({
       query: z.string().min(2),
       allowed_domains: z.array(z.string()).max(20).optional().describe("Chỉ các domain này, ví dụ [\"cafef.vn\"]"),

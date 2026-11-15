@@ -1,10 +1,13 @@
 import { matchToolPattern } from "../tools/patterns"
+import { renamedToolMatches } from "../tools/renamed"
 import type { ToolDef } from "../tools/types"
 import type { AgentDefinition } from "./schema"
 
 export const READ_ONLY = "@chi-doc"
 
 const matches = (patterns: string[] | undefined, name: string) => !!patterns?.some((p) => matchToolPattern(p, [name]).length > 0)
+/** Also an old name of this tool (renamed.ts): an agent file written before #278 keeps its meaning. */
+const names = (patterns: string[] | undefined, name: string) => matches(patterns, name) || renamedToolMatches((old) => matches(patterns, old), name)
 
 /**
  * Which of the subagent-eligible tools this agent type gets (the manager has already
@@ -16,9 +19,9 @@ export function toolFilter(def: Pick<AgentDefinition, "tools" | "disallowedTools
   const patterns = listed.filter((p) => p !== READ_ONLY)
   const all = patterns.length === 0 || patterns.includes("*")
   return (tool) => {
-    if (matches(def.disallowedTools, tool.name)) return false
+    if (names(def.disallowedTools, tool.name)) return false
     if (readOnly && !tool.readOnly) return false
-    return all || matches(patterns, tool.name)
+    return all || names(patterns, tool.name)
   }
 }
 

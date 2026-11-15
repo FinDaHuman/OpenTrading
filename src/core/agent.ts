@@ -46,6 +46,7 @@ import { isContextOverflow, pruneAttachments, pruneToolResults, tokensOf } from 
 import { isAttachmentText } from "./mentions"
 import { classifyFailure, retryMiddleware, type RetryNotice, type RetryOptions } from "./retry"
 import { loadedTools } from "./tools/loaded"
+import { RENAMED_TOOLS } from "./tools/renamed"
 import { operandNote, untracedOperands } from "./loop/operands"
 import { mathOnlyCommand } from "./tools/shell/math"
 import { detectShell } from "./tools/shell/run"
@@ -487,7 +488,7 @@ export function lastReminder(history: readonly ModelMessage[], id: string): stri
  * with its parameters, and the model calls it again instead of spending a tool_search step.
  * `null` = keep the SDK's own error.
  */
-async function repairCall<T extends { toolName: string }>(
+async function repairCall<T extends { toolName: string; input?: string }>(
   registry: ToolRegistry,
   built: BuiltToolSet | undefined,
   active: string[] | undefined,
@@ -498,6 +499,17 @@ async function repairCall<T extends { toolName: string }>(
   if (!built) return null
   const deferring = built.deferring || built.deferred.length > 0
   if (!NoSuchToolError.isInstance(error)) return null
+  // A tool #278 folded into another (a resumed conversation, a model copying its history): the call
+  // runs as the new tool with the action/kind the old one stood for.
+  const renamed = RENAMED_TOOLS[toolCall.toolName]
+  if (renamed && renamed.tool in built.tools && (!active || active.includes(renamed.tool))) {
+    let input: Record<string, unknown> = {}
+    try {
+      const parsed = JSON.parse(toolCall.input || "{}")
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) input = parsed
+    } catch {}
+    return { ...toolCall, toolName: renamed.tool, input: JSON.stringify({ ...input, [renamed.field]: renamed.value }) }
+  }
   const names = resolveToolName(registry, toolCall.toolName).filter((n) => n in built.tools)
   if (names.length === 1 && (!active || active.includes(names[0]!))) return { ...toolCall, toolName: names[0]! }
   if (names.length === 1 && deferring) {

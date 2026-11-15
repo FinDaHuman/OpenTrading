@@ -258,6 +258,7 @@ export function localWatchlistTools(home: string): ToolDef[] {
     input: z.object({ action: z.enum(ACTIONS), ...fields }),
     readOnly: false,
     readOnlyVariant,
+    annotationsFor: (input) => (input?.action === "delete" ? { destructive: true } : undefined),
     askFor: (input) => {
       const action = (input as Partial<WatchlistInput> | undefined)?.action
       if (action && READ_ACTIONS.includes(action)) return undefined
