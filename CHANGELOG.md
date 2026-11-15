@@ -12,7 +12,9 @@ adopt Semantic Versioning when it exposes a stable public API.
   25th request, before the summary step ran). Every request the process sends during the turn counts, retries,
   stop-gate recoveries and subagents included, and none is sent past the cap (`src/core/request-budget.ts`; a
   guard in the provider fetch refuses it). When two requests are left the loop forces the summary step (tools
-  off). If a retry spends that reserve, the turn ends with an error instead of an answer. Smallest cap: 3.
+  off). If a retry spends that reserve, the turn ends with an error instead of an answer. The cap is per turn:
+  a caller running several turns passes each what is left. A cap of 1 or 2 is honoured (the first step is the
+  answer, tools off).
 
 - Eval: how `shell` served the model's arithmetic is now measured (issue #268). Each `shell` result in a trace
   carries `shell: { route, exec_ms }` (`math`, `read-only`, `approved`, `near-miss`, `denied`, `error`) and the

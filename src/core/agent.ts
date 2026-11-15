@@ -1112,6 +1112,7 @@ export async function previewContext(opts: TurnInput) {
 export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
   // A subagent spends its parent's budget (the parent's counter sees its requests).
   if (opts.maxRequests === undefined || opts.role === "subagent") return yield* runTurn(opts)
+  // The caller's number as it is: raising a cap of 1 or 2 would pass it.
   const budget = new RequestBudget(Math.max(MIN_REQUEST_BUDGET, Math.floor(opts.maxRequests)))
   try {
     yield* runTurn(opts, budget)

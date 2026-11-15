@@ -10,6 +10,9 @@ import { guardModelRequests, onModelRequest } from "./requests"
  * request is refused before it is sent (requests.ts guard). When what is left covers only the
  * answer and one retry, the loop forces the summary step (tools off, SUMMARY_PROMPT).
  *
+ * The cap is per turn: a caller running several turns (a benchmark trial with memory turns) passes
+ * each turn what is left of its own cap.
+ *
  * What is not promised: if a retry spends that reserve, the summary itself may be refused and the
  * turn ends with an error instead of an answer. One budget per process at a time: two turns
  * running together (a TUI with background work) would count each other's requests.
@@ -44,5 +47,5 @@ export class RequestBudget {
 /** Requests kept back for the answer step and one retry of it. */
 export const BUDGET_RESERVE = 2
 
-/** The smallest budget a run accepts: the answer and its retry, plus one step that may call tools. */
-export const MIN_REQUEST_BUDGET = BUDGET_RESERVE + 1
+/** The smallest budget a caller may set. Below BUDGET_RESERVE + 1 the first step is already the answer, tools off. */
+export const MIN_REQUEST_BUDGET = 1

@@ -1710,10 +1710,39 @@ test("a request budget: a model that keeps calling tools gets the summary step i
 
 test("a request budget counts retries: rate-limited requests spend it, and nothing is sent past the cap", async () => {
   failFirst = 3 // three 429s, each a request the retry wrapper sends again
-  respond = (body) => (body.tool_choice === "none" ? answer("Tổng kết.") : toolCall("current_time", {}, `call_${bodies.length}`))
-  await collect(runAgent({ history: [], input: "Giá HPG?", skills: [], registry: registry(), maxRequests: 5 }))
+  // `respond` must stay out of the way while the 429s are served (the fake fetch asks it first).
+  respond = (body, n) => (n < 3 ? undefined : body.tool_choice === "none" ? answer("Tổng kết.") : toolCall("current_time", {}, `call_${bodies.length}`))
+  const events = await collect(runAgent({ history: [], input: "Giá HPG?", skills: [], registry: registry(), maxRequests: 6 }))
   const sent = bodies.filter((b) => (b as { stream?: boolean }).stream)
-  expect(sent.length).toBeLessThanOrEqual(5)
+  expect(failFirst).toBe(0) // all three 429s were really served
+  expect(sent.length).toBeLessThanOrEqual(6)
+  expect(events.some((e) => e.type === "retry")).toBe(true)
+})
+
+test("a request budget: when retries spend the reserve the summary is refused, the turn ends with an error, and nothing loops", async () => {
+  // Tool steps until the budget closes, then the summary meets 429s until nothing is left.
+  let summaryTries = 0
+  respond = (body) => {
+    if (body.tool_choice !== "none") return toolCall("current_time", {}, `call_${bodies.length}`)
+    summaryTries++
+    return Response.json({ error: { message: "rate limited" } }, { status: 429 })
+  }
+  const started = Date.now()
+  const events = await collect(runAgent({ history: [], input: "Giá HPG?", skills: [], registry: registry(), maxRequests: 4 }))
+  const sent = bodies.filter((b) => (b as { stream?: boolean }).stream)
+  expect(sent.length).toBe(4)
+  // Two tool steps, then the summary and one retry of it: the third try was refused, not sent.
+  expect(summaryTries).toBe(2)
+  expect(events.some((e) => e.type === "error")).toBe(true)
+  expect(Date.now() - started).toBeLessThan(5_000)
+})
+
+test("a request budget of 1 is honoured: the first step is the answer, tools off", async () => {
+  respond = (body) => (body.tool_choice === "none" ? answer("Chưa lấy dữ liệu: trần 1 request.") : toolCall("current_time", {}, "c"))
+  await collect(runAgent({ history: [], input: "Giá HPG?", skills: [], registry: registry(), maxRequests: 1 }))
+  const sent = bodies.filter((b) => (b as { stream?: boolean }).stream)
+  expect(sent).toHaveLength(1)
+  expect(sent[0]!.tool_choice).toBe("none")
 })
 
 test("a request budget: a stop-gate recovery fits in it, and the budget is released after the turn", async () => {
