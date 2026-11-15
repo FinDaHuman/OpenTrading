@@ -37,11 +37,12 @@ const BASH = { kind: "bash" as const, path: "bash" }
 const env = (shell: { kind: "powershell" | "bash" }) => {
   const w = ws()
   // The same check the shell tool makes (shell.ts `readable`).
-  return { shell, resolve: (raw: string) => path.resolve(project, raw), readable: (abs: string) => (w.contains(abs) || w.inScratch(abs)) && readScope(abs, w.env(), realish) === undefined }
+  // The bash table reads as on Linux or macOS: bash on Windows is refused (see the test below).
+  return { shell, platform: shell.kind === "bash" ? ("linux" as const) : process.platform, resolve: (raw: string) => path.resolve(project, raw), readable: (abs: string) => (w.contains(abs) || w.inScratch(abs)) && readScope(abs, w.env(), realish) === undefined }
 }
 
 /** Runs unasked. */
-const BASH_OK = ["pwd", "ls", "ls src", "ls -la", "ls -la src/core", 'ls -1 src "Bao cao (Q3)"', 'ls -l "Bao cao (Q3)"', "ls dữ-liệu-không-có", "ls ./src/../src", "ls -d src", `ls ${project.split(path.sep).join("/")}/src`]
+const BASH_OK = ["pwd", "ls", "ls src", "ls -la", "ls -la src/core", 'ls -1 src "Bao cao (Q3)"', 'ls -l "Bao cao (Q3)"', "ls dữ-liệu-không-có", "ls ./src/../src", "ls -d src", ...(win ? [] : [`ls ${project}/src`])]
 const PS_OK = [
   "pwd",
   "Get-Location",
@@ -160,7 +161,9 @@ test("PowerShell: listings of the workspace run, anything else asks", () => {
 })
 
 test("the shell tool: read: in the workspace, after outside: and protected:; key files and links that leave the workspace ask", () => {
-  for (const shell of [PS, BASH]) {
+  // bash on Windows is refused (read-only.ts), so on Windows only PowerShell is the shell under test.
+  if (win) expect(shellTool(ws(), { shell: BASH }).askFor!({ command: "ls src" })).not.toStartWith("read:")
+  for (const shell of win ? [PS] : [PS, BASH]) {
     const tool = shellTool(ws(), { shell })
     expect(tool.askFor!({ command: "ls src" })).toBe("read:ls src")
     expect(tool.askFor!({ command: "pwd" })).toBe("read:pwd")
@@ -307,4 +310,11 @@ test("characters PowerShell reads as a dash, a quote or a space are refused", ()
   const ch = (code: number) => String.fromCharCode(code)
   for (const c of [`dir ${ch(0x2013)}Recurse`, `dir ${ch(0x2014)}Recurse`, `dir ${ch(0x201c)}src${ch(0x201d)}`, `dir ${ch(0x2018)}src${ch(0x2019)}`, `dir${ch(0xa0)}src`, `dir src${ch(0x3000)}x`, `dir ${ch(0xff0d)}Recurse`])
     expect([c, listingCommand(c, env(PS))]).toEqual([c, false])
+})
+
+test("bash or sh on Windows (Git Bash, MSYS) is refused: it maps /d/x and /tmp unlike the path check", () => {
+  for (const kind of ["bash", "sh"] as const) {
+    const onWindows = { shell: { kind }, platform: "win32" as const, resolve: (raw: string) => raw, readable: () => true }
+    for (const c of ["pwd", "ls", "ls src", "ls /d/x"]) expect([kind, c, listingCommand(c, onWindows)]).toEqual([kind, c, false])
+  }
 })

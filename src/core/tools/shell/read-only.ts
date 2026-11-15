@@ -116,6 +116,10 @@ export function listingCommand(command: string, env: ListingEnv): boolean {
   const all = words(text)
   if (!all || all.length === 0 || all[0]!.quoted) return false
   const ps = env.shell.kind === "pwsh" || env.shell.kind === "powershell"
+  // bash or sh on Windows (Git Bash, MSYS) maps `/d/x` to `D:\x` and `/tmp` into its own install,
+  // where the path check (Node) reads `D:\d\x`: the two would look at different folders. Defensive:
+  // OpenTrading starts PowerShell on Windows.
+  if (!ps && (env.platform ?? process.platform) === "win32") return false
   // The command's name as typed: `./ls`, `C:\x\ls.exe` or `LS` on a POSIX shell is another program.
   const name = ps ? all[0]!.text.toLowerCase() : all[0]!.text
   const args = all.slice(1)
