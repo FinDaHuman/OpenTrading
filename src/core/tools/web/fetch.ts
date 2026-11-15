@@ -151,7 +151,9 @@ export async function runFetch(input: WebFetchInput, signal: AbortSignal, deps: 
     // A provider block is a terminal result, not an incomplete extraction to replace with the page.
     // The line states what happened and nothing else: no advice the model could read as an order.
     if (got.finishReason === "content-filter") {
-      const raw = got.rawFinishReason ? `, lý do của provider: ${got.rawFinishReason}` : ""
+      // A code word of the provider (RECITATION, SAFETY, content_filter…): anything else is not copied into the result.
+      const reason = got.rawFinishReason && /^[A-Za-z0-9_-]{1,40}$/.test(got.rawFinishReason) ? got.rawFinishReason : undefined
+      const raw = reason ? `, lý do của provider: ${reason}` : ""
       return `${header}
 
 ${FILTERED_PREFIX} model phụ đọc trang bị provider chặn đầu ra (finishReason=content-filter${raw}). Chưa có kết quả đọc cho yêu cầu này.`
