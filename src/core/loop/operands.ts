@@ -65,8 +65,9 @@ const textOf = (message: ModelMessage) =>
 
 /**
  * Operands of the arithmetic commands in the last assistant step that ran and that nothing the
- * model read before holds: the messages before that step, and `sources` (the system prompt and
- * the context, which are not messages). `isArithmetic` says which shell commands count (the
+ * model read before holds: the messages before that step, and `sources` (what the user gave the
+ * harness outside the messages: the investor profile, the constraints, the memory index; not the
+ * whole system prompt, whose examples hold numbers of their own). `isArithmetic` says which shell commands count (the
  * grammar of the shell that ran them). At most `max`, each once.
  */
 export function untracedOperands(messages: readonly ModelMessage[], isArithmetic: (command: string) => boolean, sources = "", max = 5): string[] {
@@ -76,8 +77,8 @@ export function untracedOperands(messages: readonly ModelMessage[], isArithmetic
   if (typeof step.content === "string") return []
   const calls = step.content.flatMap((p) => (p.type === "tool-call" && p.toolName === "shell" ? [p] : []))
   if (calls.length === 0) return []
-  // What the user told the harness rides outside the messages: the system prompt (investor
-  // profile, constraints) and the context (memory index). The caller passes them.
+  // What the user told the harness rides outside the messages (profile, constraints, memory
+  // index). The caller passes them.
   const known = sourceNumbers(sources)
   for (const message of messages.slice(0, at)) {
     // An earlier answer's figures count too: a follow-up computes on them.

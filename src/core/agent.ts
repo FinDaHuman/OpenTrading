@@ -49,8 +49,6 @@ import { loadedTools } from "./tools/loaded"
 import { operandNote, untracedOperands } from "./loop/operands"
 import { mathOnlyCommand } from "./tools/shell/math"
 import { detectShell } from "./tools/shell/run"
-/** A shell command the math grammar takes, for the shell this machine runs. */
-const isArithmetic = (command: string) => mathOnlyCommand(command, detectShell())
 import { modeNote } from "./permission/mode"
 import { NOTE as NOTICE_NOTE } from "./subagents/notification"
 import { currentTodos, retiredNote, retireLeftTodos, todoMark, TODO_WRITE } from "./tools/todos"
@@ -65,6 +63,9 @@ import { cleanToolErrors, toolErrorText } from "./tools/errors"
 import { TOOL_SEARCH } from "./tools/builtin/tool-search"
 import { LOCAL_SOURCE, type ToolResult } from "./tools/types"
 import type { ChartData } from "./tools/chart/data"
+
+/** A shell command the math grammar takes, for the shell this machine runs (loop/operands.ts). */
+const isArithmetic = (command: string) => mathOnlyCommand(command, detectShell())
 
 /** Unlimited: the turn ends when the model stops calling tools. A cap is opt-in via
  *  config `maxSteps` or the caller's `opts.maxSteps`; when capped, the last step forces a summary. */
@@ -1296,7 +1297,7 @@ async function* runTurn(opts: RunOptions, budget?: RequestBudget): AsyncGenerato
               : undefined
           // Numbers typed into an arithmetic command that nothing read holds (loop/operands.ts): a
           // one-step note, on the same routes as the other nudges. The command already ran.
-          const operands = nudge && afterTool && !opts.disabled?.has("operand-note") ? untracedOperands(messages, isArithmetic, `${typeof system === "string" ? system : JSON.stringify(system)}\n${assembled.context ?? ""}`) : []
+          const operands = nudge && afterTool && !opts.disabled?.has("operand-note") ? untracedOperands(messages, isArithmetic, [bound.profile, bound.constraints, assembled.context].filter(Boolean).join("\n")) : []
           const tail = [base, added, operands.length > 0 ? operandNote(operands) : undefined].filter(Boolean).join("\n") || undefined
           const choice = stopped || rescueNow?.toolChoice === "none" || (rescueNow && !tail) ? { toolChoice: "none" as const } : {}
           return { ...(active ? { activeTools: active } : {}), ...choice, messages: tail ? withNudge(messages, tail) : messages }
