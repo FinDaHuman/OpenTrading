@@ -34,6 +34,8 @@ export interface PrintOptions {
   /** `provider/model`. */
   model?: string
   format: PrintFormat
+  /** `--max-requests`: the turn's cap on model requests (core/request-budget.ts). */
+  maxRequests?: number
 }
 
 export interface PrintResult {
@@ -125,6 +127,7 @@ export async function runPrint(opts: PrintOptions, deps: { runtime?: Runtime; ta
     for await (const event of runAgent({
       history: [],
       input: prompt,
+      ...(opts.maxRequests !== undefined ? { maxRequests: opts.maxRequests } : {}),
       skills,
       registry: runtime.registry,
       target,

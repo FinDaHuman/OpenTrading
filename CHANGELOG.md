@@ -7,6 +7,13 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ### Added
 
+- A caller's cap on model requests per turn (issue #278 R3): `ot -p --max-requests N`, eval `--turn-requests N`, and
+  `RunOptions.maxRequests` for runners that call `runAgent` directly (a benchmark's 24-request cap cut OT at its
+  25th request, before the summary step ran). Every request the process sends during the turn counts, retries,
+  stop-gate recoveries and subagents included, and none is sent past the cap (`src/core/request-budget.ts`; a
+  guard in the provider fetch refuses it). When two requests are left the loop forces the summary step (tools
+  off). If a retry spends that reserve, the turn ends with an error instead of an answer. Smallest cap: 3.
+
 - Eval: how `shell` served the model's arithmetic is now measured (issue #268). Each `shell` result in a trace
   carries `shell: { route, exec_ms }` (`math`, `read-only`, `approved`, `near-miss`, `denied`, `error`) and the
   header records the machine's shell. `scripts/dev/shell-metrics.ts` counts commands per route, attempts where

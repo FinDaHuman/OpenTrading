@@ -1691,3 +1691,40 @@ test("v46-update reused SDK id in two actual provider generations has two origin
  expect(replays.every(x=>x.sdk_call_id==="same-sdk"&&x.replay_of.origin_sdk_call_id==="same-sdk")).toBe(true)
  expect(done(events).unanswered).toBeUndefined()
 })
+
+// --- Request budget (request-budget.ts, issue #278 R3) ---
+
+test("a request budget: a model that keeps calling tools gets the summary step in time and never passes the cap", async () => {
+  // Never answers on its own: every step calls a tool unless tools are off.
+  respond = (body) => (body.tool_choice === "none" ? answer("Tổng kết: HPG chưa đủ dữ liệu.") : toolCall("current_time", {}, `call_${bodies.length}`))
+  const events = await collect(runAgent({ history: [], input: "Giá HPG?", skills: [], registry: registry(), maxRequests: 6 }))
+  const sent = bodies.filter((b) => (b as { stream?: boolean }).stream)
+  expect(sent.length).toBeLessThanOrEqual(6)
+  // The summary request is the last one, with tools off, sent while the reserve was left.
+  expect(sent.at(-1)!.tool_choice).toBe("none")
+  expect(sent.length).toBe(6 - 2 + 1)
+  expect(events.some((e) => e.type === "notice" && e.text.includes("Gần chạm trần 6 request"))).toBe(true)
+  const shown = events.flatMap((e) => (e.type === "text-delta" ? [e.text] : [])).join("")
+  expect(shown).toContain("Tổng kết")
+})
+
+test("a request budget counts retries: rate-limited requests spend it, and nothing is sent past the cap", async () => {
+  failFirst = 3 // three 429s, each a request the retry wrapper sends again
+  respond = (body) => (body.tool_choice === "none" ? answer("Tổng kết.") : toolCall("current_time", {}, `call_${bodies.length}`))
+  await collect(runAgent({ history: [], input: "Giá HPG?", skills: [], registry: registry(), maxRequests: 5 }))
+  const sent = bodies.filter((b) => (b as { stream?: boolean }).stream)
+  expect(sent.length).toBeLessThanOrEqual(5)
+})
+
+test("a request budget: a stop-gate recovery fits in it, and the budget is released after the turn", async () => {
+  // First an empty answer (the gate sends it back), then a real one.
+  respond = (_body, n) => (n === 0 ? answer("") : answer("HPG 27.100 đồng."))
+  const events = await collect(runAgent({ history: [], input: "Giá HPG?", skills: [], registry: registry(), maxRequests: 3 }))
+  expect(bodies.filter((b) => (b as { stream?: boolean }).stream).length).toBeLessThanOrEqual(3)
+  expect(done(events).unanswered).toBeUndefined()
+  // A later turn without a budget is not limited by the one before.
+  bodies.length = 0
+  respond = (_body, n) => (n < 6 ? toolCall("current_time", {}, `c${n}`) : answer("Xong."))
+  await collect(runAgent({ history: [], input: "Giá HPG?", skills: [], registry: registry() }))
+  expect(bodies.filter((b) => (b as { stream?: boolean }).stream).length).toBe(7)
+})
