@@ -58,6 +58,13 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ### Changed
 
+- System prompt wording pass (docs/superpowers/plans/2026-11-15-system-prompt-optimization.md items 4–6):
+  `bat_bien` 2 keeps the scenario rule and "no own price target or entry/exit point", 3 keeps "no personalised
+  buy/sell advice, no orders" (the cross-reference and the repeated reason are gone); `style.md` drops the rules
+  `tools.md` and its own last bullet already say and keeps one example per rule; `tools.md` no longer tells the
+  model to rewrite a failed calculation (the near-miss error says how). About 220 tokens less on the terminal
+  prompt, 50 on the machine prompt and a subagent's.
+
 - `shell`: arithmetic written in a form the math grammar does not take now comes back as a tool error that says
   why and shows the form to use, instead of an approval prompt (TUI) or a denial that forbids rewriting the
   command (`ot -p`, evals): a series walked with an array or a loop (`split` + `for`, `@(…)` + `foreach`,

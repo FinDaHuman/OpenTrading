@@ -44,7 +44,7 @@ test("machine: no style guide, the machine citations, tools.md without the lines
   for (const kept of ["<bat_bien>", "<thu_tu_uu_tien>", "Không tính nhẩm", "Chỉ dừng khi đã trả lời đủ"]) expect(machine.system).toContain(kept)
   // What it saves on every request, in the chars/4 estimate the budget guard uses.
   const saved = Math.ceil(terminal.system.length / 4) - Math.ceil(machine.system.length / 4)
-  expect(saved).toBeGreaterThan(900)
+  expect(saved).toBeGreaterThan(800)
   expect(machine.report.find((l) => l.id === "citations")).toBeDefined()
 })
 

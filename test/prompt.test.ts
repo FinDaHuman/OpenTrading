@@ -111,7 +111,7 @@ test("tier C keeps style (reader-language rules cannot be dropped) and the marke
   const c = assemble(base({ tier: "C" }))
   expect(c.report.find((r) => r.id === "style")!.dropped).toBe(false)
   expect(c.system).toContain("Ngôn ngữ cho người đọc")
-  expect(c.system).toContain("chú giải ngay trong cùng câu")
+  expect(c.system).toContain("chú giải ngay trong câu")
   expect(c.system).toContain("<identity>")
   expect(c.reminders.some((r) => r.startsWith("<phien_giao_dich>"))).toBe(true)
 })
@@ -196,8 +196,10 @@ test("tool guidance lives in one place and the format example carries no real-lo
   // computed figure comes from a tool; since 13/11/2026 an arithmetic-only shell command), ≈2.11k
   // after the 13/11/2026 no-harness-markup line (the model copied <nhac_nho> into its answer),
   // ≈2.15k after the 15/11/2026 priority order (issue #278 P1: the user's format, schema and units
-  // rank above the default presentation rules; plan allowed the guard +40).
-  expect(Math.ceil(a.system.length / 4)).toBeLessThan(2_160)
+  // rank above the default presentation rules; plan allowed the guard +40), ≈1.91k after the
+  // 15/11/2026 dedupe (bat_bien 2/3, style's repeated rules and examples, the shell retry line;
+  // docs/superpowers/plans/2026-11-15-system-prompt-optimization.md items 4–6).
+  expect(Math.ceil(a.system.length / 4)).toBeLessThan(1_950)
 })
 
 test("the constraints budget key is explicit and never cuts on any tier", () => {
