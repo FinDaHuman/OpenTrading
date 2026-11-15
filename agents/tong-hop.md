@@ -2,6 +2,7 @@
 name: tong-hop
 description: "Dùng khi cần gộp báo cáo các subagents (kể cả lịch sử tranh luận bull/bear) thành kịch bản nghiêng về đâu, mức tin cậy và điều kiện đảo chiều. Chỉ dùng tool đọc."
 tools: ["@chi-doc"]
+listed: false
 maxSteps: 6
 ---
 Việc của bạn là trọng tài (vai Research Manager của TauricResearch/TradingAgents): không phe nào, chỉ cân bằng chứng.

@@ -9,27 +9,15 @@ import { LOCAL_SOURCE, type ToolDef } from "../types"
 export const SPAWN_SUBAGENT = "spawn_subagent"
 
 /**
- * Model-facing guidance, covering what Claude Code's Agent tool covers:
- * when to delegate, parallel calls in one step, a self-contained brief, and the result
- * being visible to the main agent only.
+ * Model-facing guidance, covering what Claude Code's Agent tool covers (when to delegate, parallel
+ * calls in one step, a self-contained brief, the result visible to the main agent only), one line each.
  */
 const DESCRIPTION = [
-  "Giao một việc cho subagent: một agent riêng, ngữ cảnh trống, tự gọi tool nhiều bước rồi trả về một bản báo cáo.",
-  "",
-  "Khi nào dùng:",
-  "- Việc độc lập cần nhiều lần gọi tool hoặc đọc nhiều nguồn, mà bạn chỉ cần kết luận chứ không cần toàn bộ dữ liệu thô (giữ ngữ cảnh lượt chính gọn).",
-  "- Nhiều việc song song không phụ thuộc nhau, ví dụ định giá 3 mã: mỗi mã một subagent, gọi tất cả spawn_subagent trong CÙNG một lượt để chúng chạy đồng thời.",
-  "Không dùng khi: việc chỉ cần 1–2 lần gọi tool; cần hỏi lại người dùng; cần kết quả từng bước để quyết định bước sau.",
-  "",
-  "Giao việc bằng các trường của brief, như giao cho một đồng nghiệp giỏi vừa bước vào phòng: subagent không thấy hội thoại, hồ sơ nhà đầu tư hay dữ liệu bạn đã lấy, nên purpose và context phải đủ để nó tự quyết. Harness ghép các trường thành một brief cố định.",
-  "Ví dụ tốt: questions [\"NIM 3 quý gần nhất?\", \"Nợ nhóm 3–5 có tăng?\"], context \"ROE 2025 = x% (financial_statements)\", output \"≤ 8 dòng, mỗi số kèm nguồn và kỳ\". Ví dụ xấu: questions [\"Phân tích VCB\"]: quá chung, kết quả nông.",
-  "",
-  "Subagent không gọi được subagent khác, không hỏi được người dùng; tool có tác dụng ghi sẽ hỏi người dùng xác nhận. Ảnh trong kết quả tool của subagent không tới được người dùng.",
-  "Kết quả trả về chỉ mình bạn thấy, người dùng không thấy: trình bày lại phần cần thiết, giữ nguồn và thời điểm; coi nó như dữ liệu từ tool (đối chiếu nếu mâu thuẫn).",
-  "Nếu subagent báo lỗi hết quota (429), đừng tạo subagent mới ngay: báo người dùng.",
-  "",
-  "Chạy nền (run_in_background: true): tool trả về ngay agent_id, subagent chạy tiếp trong khi bạn trả lời người dùng; khi xong, kết quả tự đến trong một tin <thong_bao_subagent>. Đừng chờ, đừng hỏi lại trạng thái, đừng làm trùng việc của nó. Dùng khi việc lâu và người dùng không cần kết quả ngay trong câu trả lời này; cần kết quả để trả lời thì chạy bình thường.",
-  "Mỗi lần gọi là một subagent mới. Muốn giao tiếp cho subagent đã có (kể cả đã xong), dùng send_message với agent_id của nó.",
+  "Giao một việc cho subagent: agent riêng, ngữ cảnh trống, tự gọi tool nhiều bước rồi trả một bản báo cáo chỉ bạn thấy (trình bày lại cho người dùng, giữ nguồn và thời điểm; mâu thuẫn thì đối chiếu).",
+  "Dùng khi: việc độc lập cần nhiều lần gọi tool mà bạn chỉ cần kết luận; nhiều việc song song (gọi mọi spawn_subagent trong CÙNG một lượt). Không dùng khi: việc chỉ cần 1–2 lần gọi tool, cần hỏi người dùng, hay cần kết quả từng bước.",
+  "Subagent không thấy hội thoại: purpose và context phải đủ để nó tự quyết; questions cụ thể (\"NIM 3 quý gần nhất?\"), không chung chung (\"Phân tích VCB\"). Harness ghép các trường thành một brief cố định.",
+  "Subagent không gọi được subagent khác hay hỏi người dùng; tool ghi sẽ hỏi người dùng xác nhận; ảnh trong kết quả tool của nó không tới được người dùng.",
+  "run_in_background: trả agent_id ngay, kết quả đến sau trong <thong_bao_subagent>; đừng chờ hay làm trùng. Giao thêm việc cho subagent đã có: send_message. Subagent báo hết quota (429) thì báo người dùng, đừng tạo subagent mới.",
 ].join("\n")
 
 export interface SpawnInput extends Brief {
@@ -53,11 +41,17 @@ export function typeSpec(agents: AgentDefinition[], type: string): TypeSpec | un
   }
 }
 
-/** The agent types, Claude Code's format: `- type: when to use (Tool: …)`. */
+/**
+ * The agent types, Claude Code's format (`- type: when to use (Tool: …)`) for the listed ones; the
+ * rest (`listed: false`, called by name from skills and playbooks) by name only.
+ */
 function typeList(agents: AgentDefinition[]) {
   if (agents.length === 0) return ""
-  const lines = agents.map((a) => `- ${a.name}: ${a.description.replace(/\s+/g, " ").trim()} (Tool: ${toolSummary(a)})`)
-  return `\n\nCác loại subagent (tham số subagent_type, mặc định ${DEFAULT_SUBAGENT_TYPE}):\n${lines.join("\n")}`
+  const listed = agents.filter((a) => a.listed !== false)
+  const lines = listed.map((a) => `- ${a.name}: ${a.description.replace(/\s+/g, " ").trim()} (Tool: ${toolSummary(a)})`)
+  const others = agents.filter((a) => a.listed === false).map((a) => a.name)
+  const more = others.length ? `\nLoại khác (gọi đích danh khi skill yêu cầu): ${others.join(", ")}.` : ""
+  return `\n\nLoại subagent (subagent_type, mặc định ${DEFAULT_SUBAGENT_TYPE}):\n${lines.join("\n")}${more}`
 }
 
 /**
@@ -70,17 +64,11 @@ export function spawnSubagentTool(manager: SubagentManager, agents: AgentDefinit
     name: SPAWN_SUBAGENT,
     description: DESCRIPTION + typeList(agents),
     input: z.object({
-      description: z.string().min(1).max(60).describe("Mô tả ngắn 3–6 từ, hiện trong giao diện (ví dụ: Định giá FPT)"),
+      description: z.string().min(1).max(60).describe("3–6 từ, hiện trong giao diện (ví dụ: Định giá FPT)"),
       ...briefFields,
-      subagent_type: z.string().optional().describe(`Loại subagent (mặc định ${DEFAULT_SUBAGENT_TYPE})`),
-      maxSteps: z
-        .number()
-        .int()
-        .min(1)
-        .max(30)
-        .optional()
-        .describe(`Số lượt gọi model tối đa của subagent (mặc định theo loại, thường ${DEFAULT_SUBAGENT_STEPS})`),
-      run_in_background: z.boolean().optional().describe("Chạy nền: trả về agent_id ngay, kết quả đến sau qua <thong_bao_subagent>"),
+      subagent_type: z.string().optional().describe(`Mặc định ${DEFAULT_SUBAGENT_TYPE}`),
+      maxSteps: z.number().int().min(1).max(30).optional().describe(`Trần lượt gọi model (mặc định theo loại, thường ${DEFAULT_SUBAGENT_STEPS})`),
+      run_in_background: z.boolean().optional(),
     }),
     readOnly: true,
     unlocked: true,
