@@ -5,6 +5,7 @@ import path from "node:path"
 import type { ModelMessage } from "ai"
 import { z } from "zod"
 import { loadedTools } from "../src/core/tools/loaded"
+import { chartRenderTool } from "../src/core/tools/chart/render"
 import { chunkFor, sse } from "./helpers/chat"
 
 // Isolated state dir before core modules read it.
@@ -671,6 +672,31 @@ test("tool search: the exact name of a deferred tool is loaded by the call itsel
   const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: r }))
   expect(ends(events)[0]!.output).toContain("gọi lại đúng lệnh với tên mcp__big__t007")
   expect(toolNames(bodies[1])).toContain("mcp__big__t007")
+})
+
+test("a call by a tool name #278 folded away runs as the new tool, its old arguments mapped", async () => {
+  const r = registry()
+  r.register(chartRenderTool())
+  // chart_depth took `depth`; chart_render takes `levels` (1 level per side here).
+  const book = { bids: [{ price: 10, volume: 5 }, { price: 9.9, volume: 3 }], asks: [{ price: 10.1, volume: 4 }, { price: 10.2, volume: 2 }], depth: 1 }
+  script = [{ tool: "chart_depth", args: book }]
+  const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: r }))
+  const end = ends(events)[0]!
+  expect(end.ok).toBe(true)
+  expect(end.output).toContain("10.1")
+  expect(end.output).not.toContain("10.2")
+})
+
+test("a call by a folded-away name whose new tool is deferred loads it and names the field to pass", async () => {
+  const r = bigRegistry(60)
+  r.register(chartRenderTool())
+  script = [{ tool: "chart_compare", args: { from_calls: ["r1", "r2"] } }]
+  const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: r }))
+  const end = ends(events)[0]!
+  expect(end.ok).toBe(false)
+  expect(end.output.startsWith("Đã nạp tool: chart_render\n")).toBe(true)
+  expect(end.output).toContain('kind="compare"')
+  expect(toolNames(bodies[1])).toContain("chart_render")
 })
 
 test("tool search: sessions saved with the SDK's raw error strings still load the tool", () => {

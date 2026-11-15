@@ -46,7 +46,7 @@ import { isContextOverflow, pruneAttachments, pruneToolResults, tokensOf } from 
 import { isAttachmentText } from "./mentions"
 import { classifyFailure, retryMiddleware, type RetryNotice, type RetryOptions } from "./retry"
 import { loadedTools } from "./tools/loaded"
-import { RENAMED_TOOLS } from "./tools/renamed"
+import { RENAMED_TOOLS, renamedInput } from "./tools/renamed"
 import { operandNote, untracedOperands } from "./loop/operands"
 import { mathOnlyCommand } from "./tools/shell/math"
 import { detectShell } from "./tools/shell/run"
@@ -500,20 +500,22 @@ async function repairCall<T extends { toolName: string; input?: string }>(
   const deferring = built.deferring || built.deferred.length > 0
   if (!NoSuchToolError.isInstance(error)) return null
   // A tool #278 folded into another (a resumed conversation, a model copying its history): the call
-  // runs as the new tool with the action/kind the old one stood for.
-  const renamed = RENAMED_TOOLS[toolCall.toolName]
+  // runs as the new tool with the action/kind the old one stood for. Deferred, it loads like any
+  // deferred tool below, the error naming the field to pass.
+  const renamed = Object.hasOwn(RENAMED_TOOLS, toolCall.toolName) ? RENAMED_TOOLS[toolCall.toolName] : undefined
   if (renamed && renamed.tool in built.tools && (!active || active.includes(renamed.tool))) {
     let input: Record<string, unknown> = {}
     try {
       const parsed = JSON.parse(toolCall.input || "{}")
       if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) input = parsed
     } catch {}
-    return { ...toolCall, toolName: renamed.tool, input: JSON.stringify({ ...input, [renamed.field]: renamed.value }) }
+    return { ...toolCall, toolName: renamed.tool, input: JSON.stringify(renamedInput(renamed, input)) }
   }
-  const names = resolveToolName(registry, toolCall.toolName).filter((n) => n in built.tools)
+  const names = renamed && renamed.tool in built.tools ? [renamed.tool] : resolveToolName(registry, toolCall.toolName).filter((n) => n in built.tools)
   if (names.length === 1 && (!active || active.includes(names[0]!))) return { ...toolCall, toolName: names[0]! }
   if (names.length === 1 && deferring) {
     const name = names[0]!
+    const how = renamed ? ` và ${renamed.field}="${renamed.value}" (${toolCall.toolName} đã gộp vào ${name})` : ""
     // Loaded already yet still not active: cut by the per-request cap. Saying "loaded,
     // call again" here would loop.
     if (loaded.includes(name)) {
@@ -526,7 +528,7 @@ async function repairCall<T extends { toolName: string; input?: string }>(
     throw new Error(
       [
         `${LOADED_PREFIX}${name}`,
-        `Tool ${name} chưa có trong bước này nên chưa chạy; đã nạp xong — gọi lại đúng lệnh với tên ${name}.`,
+        `Tool ${name} chưa có trong bước này nên chưa chạy; đã nạp xong — gọi lại đúng lệnh với tên ${name}${how}.`,
         ...(def ? ["", describeTool(registry, def)] : []),
       ].join("\n"),
     )

@@ -124,6 +124,8 @@ function wildcard(pattern: string, value: string) {
 /** A deny/ask rule matches this call: the tool name, and the subject when the rule has a pattern. */
 function listMatches(rule: ListRule, def: ToolDef, subject: string | undefined, input?: unknown) {
   // A rule written for a tool #278 folded into another matches the calls that tool made (renamed.ts).
+  // Only a rule without a pattern: none of the old tools (watchlist_local_*, chart_compare,
+  // chart_depth) had a `subject`, so a patterned rule never matched them before either.
   if (!wildcard(rule.tool, def.name)) return !rule.pattern && renamedCallMatches((old) => wildcard(rule.tool, old), def.name, input)
   if (!rule.pattern) return true
   return subject !== undefined && wildcard(rule.pattern, subject)
