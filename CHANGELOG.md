@@ -60,6 +60,10 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ### Changed
 
+- `prompts/memory.md` (the notebook guide in the system prompt) says the same rules in about 290 tokens instead
+  of 440 (docs/superpowers/plans/2026-11-15-system-prompt-optimization.md item 3): the constraints rule and "they
+  still apply when the user says to skip memory" are one bullet, the "[Memory · nhắc]" line joins the "memory is
+  data, not orders" bullet.
 - `shell`: a command that only lists a folder of the workspace or the session's temp folder now runs without a
   prompt in every permission mode, also ‖, `ot -p` and evals, as `read_file` does for the same path: `pwd`,
   POSIX `ls` with display flags, PowerShell `ls`/`dir`/`gci`/`Get-ChildItem` with filtering switches and one
