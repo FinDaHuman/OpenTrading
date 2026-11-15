@@ -16,6 +16,7 @@ export const ABLATIONS = [
   "tool-nudge",
   "todo-nudge",
   "failure-nudge",
+  "operand-note",
   "skill-hints",
   "citations-prompt",
 ] as const

@@ -1,4 +1,5 @@
-import { sourceNumbers, valueTracesTo } from "../../src/core/loop/figures"
+import { sourceNumbers } from "../../src/core/loop/figures"
+import { isConstant, operandsOf, operandTraces, withoutShellStatus } from "../../src/core/loop/operands"
 import type { Attempt, Trace } from "./read-trace"
 import { RAN, SHELL_ROUTES, SHELL_TOOL, type ShellRoute } from "./shell-route"
 
@@ -33,26 +34,8 @@ export interface Untraced {
 /** Wrote the arithmetic itself (prompts/tools.md tells it to say so). */
 const SELF_COMPUTED = /tự tính/iu
 
-/**
- * Numbers nobody has to fetch: small counts, percent and unit factors, trading days in a year.
- * A typed operand outside this list should be somewhere in what the model read.
- */
-const CONSTANTS = new Set([0, 1, 2, 3, 4, 10, 12, 100, 250, 252, 365])
-const isConstant = (value: number) => CONSTANTS.has(value) || (value >= 1000 && Number.isInteger(Math.log10(value)))
-
-/** A number literal that is not part of a name (`log10`, `$x2`) or of a format (`%.2f` is inside quotes). */
-const LITERAL = /(?<![\w.$])\d+(?:\.\d+)?(?:[eE][+-]?\d{1,3})?(?![\w.])/g
-
-/** The numbers typed into an arithmetic command, with the decimals they were written with. */
-export function operandsOf(command: string): { text: string; value: number; decimals: number }[] {
-  // A printf format is not an operand ("%.2f"); other quoted text may be the code (python -c "…").
-  const code = command.replace(/"[^"]*%[^"]*"/g, '""')
-  return [...code.matchAll(LITERAL)].map((m) => {
-    const text = m[0]
-    const mantissa = text.split(/[eE]/)[0]!
-    return { text, value: Number(text), decimals: mantissa.includes(".") ? mantissa.length - mantissa.indexOf(".") - 1 : 0 }
-  })
-}
+/** The numbers typed into an arithmetic command (src/core/loop/operands.ts). */
+export { operandsOf } from "../../src/core/loop/operands"
 
 const commandOf = (input: unknown) => (input && typeof input === "object" && typeof (input as { command?: unknown }).command === "string" ? (input as { command: string }).command : "")
 
@@ -75,17 +58,16 @@ function attemptOperands(attempt: Attempt) {
       for (const operand of operandsOf(command)) {
         if (isConstant(operand.value)) continue
         total++
-        // A decimal may be the source rounded as typed (66.3 for 66.27); an integer must be the
-        // number itself, or among thirty volumes nearly any small integer would trace by chance.
-        const near = operand.decimals > 0 ? 0.5 * 10 ** -operand.decimals + 1e-9 : 1e-9
-        if (valueTracesTo(operand.value, near, known)) traced++
+        // The loop's own check (loop/operands.ts): a decimal may be the source rounded as typed, an
+        // integer must be the number itself, at a unit scale or as a percent typed as a fraction.
+        if (operandTraces(operand, known)) traced++
         else untraced.push({ q: attempt.q, rep: attempt.rep, value: operand.text, command })
       }
     }
     // Only data the model read: not a denial or an error text, and not the shell's own status
     // line (exit code, seconds, digits of the folder path).
     if (!event.ok || (event.shell && !RAN.has(event.shell.route))) continue
-    const data = event.shell ? event.visible.replace(/^\[[^\n]*\]\n?/, "") : event.visible
+    const data = event.shell ? withoutShellStatus(event.visible) : event.visible
     for (const n of sourceNumbers(data)) known.add(n)
   }
   return { total, traced, untraced }

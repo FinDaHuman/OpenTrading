@@ -8,6 +8,7 @@ import { dataDir } from "../../src/core/paths"
 import { initRuntime, setAgents } from "../../src/core/runtime"
 import { loadSkills, skillRoots } from "../../src/core/skills/loader"
 import { detectShell } from "../../src/core/tools/shell/run"
+import { MIN_REQUEST_BUDGET } from "../../src/core/request-budget"
 import pkg from "../../package.json"
 import { Cassette } from "./cassette"
 import { ledgerFile, RequestLedger, spentToday } from "./ledger"
@@ -25,6 +26,7 @@ import { traceFile, type TraceEvent } from "./trace"
  *            --memory notebook|none
  *            [--mcp-record tape.jsonl | --mcp-replay tape.jsonl] [--ablate a,b] [--yolo]
  *   --max-requests  trần request của model này trong ngày, cộng dồn qua các lần chạy
+ *   --turn-requests trần request của mỗi câu (như trần của benchmark); gần chạm thì model tổng kết
  *   --mcp-record    ghi câu trả lời MCP; câu đã có trong file thì không gọi server nữa
  *   --mcp-replay    chỉ dùng file đã ghi, không gọi server MCP
  *   --ablate        tắt từng phần của harness để đo (xem docs/eval/runner.md)
@@ -59,6 +61,11 @@ const only = arg("--only")?.split(",")
 const repeat = Number(arg("--repeat") ?? 1)
 const minutes = Number(arg("--timeout-min") ?? 15)
 const cap = Number(arg("--max-requests") ?? DEFAULT_MAX_REQUESTS)
+const profileArg = arg("--profile")
+if (profileArg !== undefined && profileArg !== "machine" && profileArg !== "terminal") stop("--profile chỉ nhận machine hoặc terminal.")
+const profile = profileArg === "machine" ? ("machine" as const) : undefined
+const turnRequests = arg("--turn-requests") === undefined ? undefined : Number(arg("--turn-requests"))
+if (turnRequests !== undefined && !(Number.isInteger(turnRequests) && turnRequests >= MIN_REQUEST_BUDGET)) stop(`--turn-requests cần số nguyên từ ${MIN_REQUEST_BUDGET} trở lên.`)
 const record = arg("--mcp-record")
 const replay = arg("--mcp-replay")
 if (record && replay) stop("Chỉ dùng một trong --mcp-record và --mcp-replay.")
@@ -112,7 +119,7 @@ try {
   const target = await resolveTarget(model)
   const { effort, toolSearch, maxSteps } = await loadConfig()
   // The shell decides which arithmetic form runs unasked (awk on bash/sh, expressions on PowerShell).
-  const settings = { effort, toolSearch, maxSteps, ablate, memory, shell: detectShell().kind, permissions: yolo ? "bypass" : "unattended", mcp: cassette?.mode ?? "live", ...(routing ? { openrouter_routing: routing } : {}), ...(tape ? { mcp_tape: path.basename(tape), mcp_answers: cassette!.size } : {}) }
+  const settings = { effort, toolSearch, maxSteps, ablate, memory, shell: detectShell().kind, profile: profile ?? "terminal", ...(turnRequests !== undefined ? { turn_requests: turnRequests } : {}), permissions: yolo ? "bypass" : "unattended", mcp: cassette?.mode ?? "live", ...(routing ? { openrouter_routing: routing } : {}), ...(tape ? { mcp_tape: path.basename(tape), mcp_answers: cassette!.size } : {}) }
   // Tallied from this run's own answers: --out may name a file that already holds earlier runs.
   const answers: TraceEvent[] = []
   const toFile = traceFile(out)
@@ -120,7 +127,7 @@ try {
     if (event.type === "answer") answers.push(event)
     toFile(event)
   }
-  await runEval({ runtime, skills, target, questions, repeat, timeoutMs: minutes * 60_000, write, version: pkg.version, commit, settings, ledger: requests, ablated, yolo, memory })
+  await runEval({ runtime, skills, target, questions, repeat, timeoutMs: minutes * 60_000, write, version: pkg.version, commit, settings, ledger: requests, ablated, yolo, memory, ...(profile ? { profile } : {}), ...(turnRequests !== undefined ? { turnRequests } : {}) })
   console.log(`Trace: ${out}`)
   const served = servedSummary(answers)
   if (Object.keys(served).length > 0) console.log(`Provider đã trả lời (số bước): ${Object.entries(served).map(([by, n]) => `${by} ${n}`).join(", ")}`)

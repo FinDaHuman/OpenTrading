@@ -434,11 +434,14 @@ function awkRedirects(body: string): boolean {
  */
 const POWERSHELL_PIECES = [
   /#[^\n]*/g,
+  // A list of numbers built with .NET (seen 15/11: `New-Object System.Collections.Generic.List[double]`,
+  // then `.Add($r)`). Only these two types: New-Object of anything else may do anything.
+  /\bNew-Object\s+(?:System\.Collections\.Generic\.List(?=\[)|System\.Collections\.ArrayList\b)/gi,
   /"[\w\s{}:.,%#=()\-+/]*"|'[\w\s{}:.,%#=()\-+/]*'/g,
   /\[math\]::[a-z0-9]+/gi,
   /\[(?:double|single|float|decimal|int|int32|int64|long)(?:\[\])?\]/gi,
   /\$(?:_|[a-z_]\w*)(?![\w:])/gi,
-  /\.(?:Count|Length|Sum|Average|Maximum|Minimum|ToString)\b/gi,
+  /\.(?:Count|Length|Sum|Average|Maximum|Minimum|ToString|Add)\b/gi,
   /\b(?:Measure-Object|ForEach-Object|Write-Output|Write-Host)\b/gi,
   /-(?:Sum|Average|Maximum|Minimum|lt|le|gt|ge|eq|ne|and|or|not|f)\b/gi,
   /\b(?:foreach|for|in|if|else|elseif|while)\b/gi,

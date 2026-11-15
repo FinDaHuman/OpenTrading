@@ -32,6 +32,10 @@ Each question has an `id`, a `group` (A–F), the `question`, and `now`, the mom
 
 `answer.text` is the answer the harness kept. `answer.markup_stripped` names the harness tags the loop took out of the turn's text (a step it dropped included), when there were any. `answer.fallback: true` means the model gave no answer after every recovery while sources failed, and the harness wrote the answer: the missing sources, no figure. `answer.streamed` is everything the user saw, including a draft the stop gate sent back.
 
+## Profile
+
+`--profile machine` measures OT the way a program calls it (`RunOptions.profile`): no `style.md`, `prompts/citations-machine.md` for citations, two `tools.md` lines for a person watching the terminal left out, and, without `--yolo`, the calculator shell. The header's `settings.profile` records it. Compare runs per profile only. Two limits of the profile: the calculator shell runs arithmetic only, so a workspace listing (`ls`, `dir`), which the full shell runs unasked, is refused there; and subagents keep the terminal prompt (the profile is not passed to them). A benchmark runner that registers MCP tools only has neither shell listings nor subagents. Each `answer` carries `cached_input_tokens` when the provider reported the part of the input it read from its prompt cache.
+
 ## Shell commands
 
 A `tool_result` of the `shell` tool also carries `shell: { route, exec_ms }`: what became of the command.
@@ -75,6 +79,7 @@ bun scripts/dev/shell-replay.ts test/fixtures/shell-commands.jsonl [--ask]
 | Name | Without it |
 |---|---|
 | `gate-empty`, `gate-length`, `gate-malformed`, `gate-text-call`, `gate-promise`, `gate-unfetched`, `gate-fragment` | That stop-gate rule never sends the model back. An empty or malformed answer ends the turn unanswered. |
+| `operand-note` | No note after an arithmetic command with a typed number nothing read holds. |
 | `strip-echoes` | Echoed todo lines stay in the saved messages. The gate's own reading of an answer still strips them. |
 | `strip-markup` | Harness markup (`<nhac_nho>`, tool calls written as text, `<thought>` notes; see `src/core/loop/markup.ts`) stays in the stream and the saved messages. The gate's own reading of an answer still strips it. |
 | `tool-nudge`, `todo-nudge` | The reminder after tool results, or only its open-todo part. |
@@ -90,6 +95,8 @@ bun scripts/dev/shell-replay.ts test/fixtures/shell-commands.jsonl [--ask]
 ## Request cap
 
 Every model request is counted at the provider's fetch and added to `<home>/usage/YYYY-MM-DD.json`, by the `provider/model` it went to, in the real home. `--max-requests` (default 500) is a cap for the `--model` model for the day, across runs; a side model on another provider is booked under its own name and does not spend it. The run stops before the next question at the cap, and a question that reaches it mid-way is aborted; a `stopped` line records it. The ledger counts only eval runs, not requests made in the TUI, and the day is the local day, while a provider's quota may reset at another hour.
+
+`--turn-requests N` is a different cap: each question's own, as a benchmark sets one (`maxRequests` in `runAgent`, `ot -p --turn-requests N`). Every request the process sends during the question counts, retries, recoveries and subagents included, and none is sent past N. With two requests left the loop forces the summary step, so the question still ends with an answer unless a retry spent that reserve. The header's `settings.turn_requests` records it.
 
 ## Scoring
 

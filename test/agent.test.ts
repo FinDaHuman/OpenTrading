@@ -1194,6 +1194,29 @@ test("read-only sends write_file/edit_file by name only; ask mode declares them;
   expect(userOf(0)).toContain("sửa có hỏi")
 })
 
+// --- Operand note (loop/operands.ts, issue #278 N2) ---
+
+test("after an arithmetic command with a number nothing read holds, the next request carries a one-step note", async () => {
+  const win = process.platform === "win32"
+  const typo = win ? "$e = 1315800000000; $s = 21500000; $e / $s" : "awk 'BEGIN{ e = 1315800000000; s = 21500000; print e / s }'"
+  const right = typo.replace("21500000", "215000000")
+  for (const [command, disabled, expected] of [
+    [typo, undefined, true],
+    [right, undefined, false],
+    [typo, new Set(["operand-note"] as const), false],
+  ] as const) {
+    bodies.length = 0
+    const r = registry()
+    // The result a shell would give; only the command's grammar and the result's first line are read.
+    r.register({ name: "shell", description: "shell", input: z.object({ command: z.string() }), readOnly: true, execute: async () => "[mã thoát 0 · 0.2s · /w]\n61200" })
+    respond = (_body, n) => (n === 0 ? toolCall("shell", { command }, "call_1") : answer("EPS 61.200 đồng."))
+    await collect(runAgent({ history: [], input: "Lợi nhuận sau thuế 1.315.800.000.000 đồng, 215.000.000 cổ phiếu. EPS?", skills: [], registry: r, ...(disabled ? { disabled } : {}) }))
+    const second = lastSent(1)
+    expect([command, disabled?.size ?? 0, second.includes("trong lệnh tính vừa rồi")]).toEqual([command, disabled?.size ?? 0, expected])
+    if (expected) expect(second).toContain("21500000")
+  }
+})
+
 // --- Stop gate (loop/stop-gate.ts): a turn never ends without an answer ---
 
 const toolCall = (name: string, args: object, id = "call_x", text?: string) =>
@@ -1690,4 +1713,78 @@ test("v46-update reused SDK id in two actual provider generations has two origin
  expect(replays.map(x=>x.replay_of.origin_provider_request_index)).toEqual([1,2])
  expect(replays.every(x=>x.sdk_call_id==="same-sdk"&&x.replay_of.origin_sdk_call_id==="same-sdk")).toBe(true)
  expect(done(events).unanswered).toBeUndefined()
+})
+
+// --- Request budget (request-budget.ts, issue #278 R3) ---
+
+test("a request budget: a model that keeps calling tools gets the summary step in time and never passes the cap", async () => {
+  // Never answers on its own: every step calls a tool unless tools are off.
+  respond = (body) => (body.tool_choice === "none" ? answer("Tổng kết: HPG chưa đủ dữ liệu.") : toolCall("current_time", {}, `call_${bodies.length}`))
+  const events = await collect(runAgent({ history: [], input: "Giá HPG?", skills: [], registry: registry(), maxRequests: 6 }))
+  const sent = bodies.filter((b) => (b as { stream?: boolean }).stream)
+  expect(sent.length).toBeLessThanOrEqual(6)
+  // The summary request is the last one, with tools off, sent while the reserve was left.
+  expect(sent.at(-1)!.tool_choice).toBe("none")
+  expect(sent.length).toBe(6 - 2 + 1)
+  expect(events.some((e) => e.type === "notice" && e.text.includes("Gần chạm trần 6 request"))).toBe(true)
+  const shown = events.flatMap((e) => (e.type === "text-delta" ? [e.text] : [])).join("")
+  expect(shown).toContain("Tổng kết")
+})
+
+test("a request budget counts retries: rate-limited requests spend it, and nothing is sent past the cap", async () => {
+  failFirst = 3 // three 429s, each a request the retry wrapper sends again
+  // `respond` must stay out of the way while the 429s are served (the fake fetch asks it first).
+  respond = (body, n) => (n < 3 ? undefined : body.tool_choice === "none" ? answer("Tổng kết.") : toolCall("current_time", {}, `call_${bodies.length}`))
+  const events = await collect(runAgent({ history: [], input: "Giá HPG?", skills: [], registry: registry(), maxRequests: 6 }))
+  const sent = bodies.filter((b) => (b as { stream?: boolean }).stream)
+  expect(failFirst).toBe(0) // all three 429s were really served
+  expect(sent.length).toBeLessThanOrEqual(6)
+  expect(events.some((e) => e.type === "retry")).toBe(true)
+})
+
+test("a request budget: when retries spend the reserve the summary is refused, the turn ends with an error, and nothing loops", async () => {
+  // Tool steps until the budget closes, then the summary meets 429s until nothing is left.
+  let summaryTries = 0
+  respond = (body) => {
+    if (body.tool_choice !== "none") return toolCall("current_time", {}, `call_${bodies.length}`)
+    summaryTries++
+    return Response.json({ error: { message: "rate limited" } }, { status: 429 })
+  }
+  const started = Date.now()
+  const events = await collect(runAgent({ history: [], input: "Giá HPG?", skills: [], registry: registry(), maxRequests: 4 }))
+  const sent = bodies.filter((b) => (b as { stream?: boolean }).stream)
+  expect(sent.length).toBe(4)
+  // Two tool steps, then the summary and one retry of it: the third try was refused, not sent.
+  expect(summaryTries).toBe(2)
+  expect(events.some((e) => e.type === "error")).toBe(true)
+  expect(Date.now() - started).toBeLessThan(5_000)
+})
+
+test("a request budget of 1 is honoured: the first step is the answer, tools off", async () => {
+  respond = (body) => (body.tool_choice === "none" ? answer("Chưa lấy dữ liệu: trần 1 request.") : toolCall("current_time", {}, "c"))
+  await collect(runAgent({ history: [], input: "Giá HPG?", skills: [], registry: registry(), maxRequests: 1 }))
+  const sent = bodies.filter((b) => (b as { stream?: boolean }).stream)
+  expect(sent).toHaveLength(1)
+  expect(sent[0]!.tool_choice).toBe("none")
+})
+
+test("a request budget: a stop-gate recovery fits in it, and the budget is released after the turn", async () => {
+  // First an empty answer (the gate sends it back), then a real one.
+  respond = (_body, n) => (n === 0 ? answer("") : answer("HPG 27.100 đồng."))
+  const events = await collect(runAgent({ history: [], input: "Giá HPG?", skills: [], registry: registry(), maxRequests: 3 }))
+  expect(bodies.filter((b) => (b as { stream?: boolean }).stream).length).toBeLessThanOrEqual(3)
+  expect(done(events).unanswered).toBeUndefined()
+  // A later turn without a budget is not limited by the one before.
+  bodies.length = 0
+  respond = (_body, n) => (n < 6 ? toolCall("current_time", {}, `c${n}`) : answer("Xong."))
+  await collect(runAgent({ history: [], input: "Giá HPG?", skills: [], registry: registry() }))
+  expect(bodies.filter((b) => (b as { stream?: boolean }).stream).length).toBe(7)
+})
+
+test("a request budget that is not a whole number of at least 1 is a setup error, before any request", async () => {
+  for (const maxRequests of [Number.NaN, 0, -3, 2.5, Number.POSITIVE_INFINITY]) {
+    bodies.length = 0
+    await expect(collect(runAgent({ history: [], input: "Giá HPG?", skills: [], registry: registry(), maxRequests }))).rejects.toThrow("maxRequests")
+    expect(bodies.filter((b) => (b as { stream?: boolean }).stream)).toHaveLength(0)
+  }
 })
