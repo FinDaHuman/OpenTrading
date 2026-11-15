@@ -88,12 +88,12 @@ test("parseCli: -p takes the question, flags in any order; stdin when it is miss
   expect(parseCli(["-p", "x", "--model", "m"]).kind).toBe("error")
   expect(parseCli(["-p", "x", "-c"]).kind).toBe("error")
   expect(parseCli(["--model", "groq/m"]).kind).toBe("error")
-  // --max-requests: a whole number the answer and its retry fit in, with -p only.
-  expect(parseCli(["-p", "x", "--max-requests", "24"])).toEqual({ kind: "print", prompt: "x", format: "text", maxRequests: 24 })
-  expect(parseCli(["-p", "x", "--max-requests", "1"])).toMatchObject({ maxRequests: 1 })
-  for (const v of ["0", "-1", "2.5", "abc"]) expect(parseCli(["-p", "x", "--max-requests", v]).kind).toBe("error")
-  expect(parseCli(["-p", "x", "--max-requests"]).kind).toBe("error")
-  expect(parseCli(["--max-requests", "24"]).kind).toBe("error")
+  // --turn-requests: a whole number the answer and its retry fit in, with -p only.
+  expect(parseCli(["-p", "x", "--turn-requests", "24"])).toEqual({ kind: "print", prompt: "x", format: "text", maxRequests: 24 })
+  expect(parseCli(["-p", "x", "--turn-requests", "1"])).toMatchObject({ maxRequests: 1 })
+  for (const v of ["0", "-1", "2.5", "abc"]) expect(parseCli(["-p", "x", "--turn-requests", v]).kind).toBe("error")
+  expect(parseCli(["-p", "x", "--turn-requests"]).kind).toBe("error")
+  expect(parseCli(["--turn-requests", "24"]).kind).toBe("error")
 })
 
 test("text: stdout is only the answer, exit 0, and the turn is saved as a session", async () => {
@@ -174,7 +174,7 @@ test("question from stdin; a provider error is exit 1 and listed in errors", asy
   }
 })
 
-test("--profile machine --max-requests: the request carries the machine prompt and the calculator shell, and the cap holds", async () => {
+test("--profile machine --turn-requests: the request carries the machine prompt and the calculator shell, and the cap holds", async () => {
   // A model that keeps calling tools: the cap must end it with the summary step.
   replies = Array.from({ length: 10 }, () => ({ tool: "current_time", args: {} }))
   const rt = runtime()
@@ -188,4 +188,6 @@ test("--profile machine --max-requests: the request carries the machine prompt a
   expect(shell?.function.description).toStartWith("Máy tính")
   expect(seen.at(-1)!.body!.tool_choice).toBe("none")
   expect([0, 1]).toContain(code)
+  // The caller's own runtime gets its full shell back after the turn.
+  expect(rt.registry.get("shell")?.description).not.toStartWith("Máy tính")
 })

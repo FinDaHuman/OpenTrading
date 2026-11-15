@@ -194,8 +194,10 @@ test("tool guidance lives in one place and the format example carries no real-lo
   // deferred-tools header shortened, and style's budget raised (400/250/0 → 1000/900/800) so
   // the rules survive every tier), ≈2.05k after the 08/11/2026 no-mental-math line (every
   // computed figure comes from a tool; since 13/11/2026 an arithmetic-only shell command), ≈2.11k
-  // after the 13/11/2026 no-harness-markup line (the model copied <nhac_nho> into its answer).
-  expect(Math.ceil(a.system.length / 4)).toBeLessThan(2_120)
+  // after the 13/11/2026 no-harness-markup line (the model copied <nhac_nho> into its answer),
+  // ≈2.15k after the 15/11/2026 priority order (issue #278 P1: the user's format, schema and units
+  // rank above the default presentation rules; plan allowed the guard +40).
+  expect(Math.ceil(a.system.length / 4)).toBeLessThan(2_160)
 })
 
 test("the constraints budget key is explicit and never cuts on any tier", () => {

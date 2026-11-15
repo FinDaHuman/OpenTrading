@@ -7,7 +7,7 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ### Added
 
-- A caller's cap on model requests per turn (issue #278 R3): `ot -p --max-requests N`, eval `--turn-requests N`, and
+- A caller's cap on model requests per turn (issue #278 R3): `ot -p --turn-requests N`, eval `--turn-requests N`, and
   `RunOptions.maxRequests` for runners that call `runAgent` directly (a benchmark's 24-request cap cut OT at its
   25th request, before the summary step ran). Every request the process sends during the turn counts, retries,
   stop-gate recoveries and subagents included, and none is sent past the cap (`src/core/request-budget.ts`; a
@@ -56,6 +56,10 @@ adopt Semantic Versioning when it exposes a stable public API.
 - `prompts/tools.md`: figures already in the data are used as they are and a one-step unit change (×/÷ 10^n) may
   be done in the head; every other computation goes through one arithmetic-only `shell` command. A command that
   fails is rewritten in the form its error names before the "tự tính" fallback (issue #278 P4/N4).
+- `prompts/identity.md` priority order (issue #278 P1): the user's direct request, including the format, schema
+  and units of the answer, now ranks above the default presentation rules; the system's working rules (figures
+  from tools, no mental arithmetic, sources) stay above the user's request, and invariants first. `style.md` ("no JSON or raw tool output") and `citations.md` (thousands
+  separators, one-decimal percent) say these are defaults. Static prompt about 2.15k tokens (guard 2,120 → 2,160).
 - `shell` description: the multi-step example, no "Python script for figures" among its uses, and a line saying
   that arithmetic in Python, arrays or loops comes back with the form to use.
 - `shell` arithmetic-only commands take the forms models really write (issue #268: 56% of the commands of a
@@ -91,6 +95,14 @@ adopt Semantic Versioning when it exposes a stable public API.
   `financial-source.ts` and `finance-policy.ts` (benchmark path) stay; `calculate/units.ts` moved to `tools/units.ts`.
 
 ### Fixed
+
+- `shell`: a PowerShell series built with `New-Object System.Collections.Generic.List[…]` (or `ArrayList`) and
+  `.Add(…)` now gets the hint with the form to use; it was denied and the model computed the volatility in its
+  head, wrongly (15/11 run on main). Only those two types: `New-Object` of anything else still asks.
+- Eval `shell-metrics`: an operand traces to what the model read at a unit scale (×10^±3, ±6, ±9) or as a
+  percent typed as a fraction (×0.01), no longer at ×100. With ×100, `21500000` traced to a reading of
+  `215.000.000`, so a dropped zero in a command counted as a copied figure. Over the 9 saved Gemini runs it now
+  flags that typo and two array indices, out of about 1,360 operands.
 
 - DeepSeek's tool-call syntax written as text (`<｜DSML｜ invoke name="shell">…`, with the full-width bar and an
   optional space) is now removed from the answer like other fake calls; it was shown as the final answer in

@@ -33,7 +33,7 @@ export const HELP = `OpenTrading — harness AI phân tích chứng khoán Việ
       --yolo                       ở -p: chạy luôn tool ghi; không có thì tool cần duyệt bị từ chối
       --profile machine            người gọi là chương trình tự đặt định dạng: bỏ hướng dẫn trình bày
                                    cho terminal; shell chỉ còn tính số (trừ khi có --yolo)
-      --max-requests N             trần request tới model của lượt (gồm thử lại, subagent); gần chạm
+      --turn-requests N            trần request tới model của lượt (gồm thử lại, subagent); gần chạm
                                    trần thì model trả lời tổng kết, không bao giờ vượt
   opentrading mcp …                quản lý MCP server (opentrading mcp --help)
   opentrading update [--check]     cập nhật lên bản mới (opentrading update --help)
@@ -108,12 +108,12 @@ export function parseCli(argv: string[]): Cli {
       profile = v
       continue
     }
-    if (arg === "--max-requests") {
+    if (arg === "--turn-requests") {
       const v = value(i, arg)
       if (typeof v !== "string") return v
       i++
       const n = Number(v)
-      if (!Number.isInteger(n) || n < MIN_REQUEST_BUDGET) return { kind: "error", message: `--max-requests cần số nguyên từ ${MIN_REQUEST_BUDGET} trở lên (nhận "${v}").` }
+      if (!Number.isInteger(n) || n < MIN_REQUEST_BUDGET) return { kind: "error", message: `--turn-requests cần số nguyên từ ${MIN_REQUEST_BUDGET} trở lên (nhận "${v}").` }
       maxRequests = n
       continue
     }
@@ -141,7 +141,7 @@ export function parseCli(argv: string[]): Cli {
     if (resume !== undefined) return { kind: "error", message: "-p luôn mở phiên mới: không dùng cùng -c/-r." }
     return { kind: "print", format: format ?? "text", ...(prompt !== undefined ? { prompt } : {}), ...(dir !== undefined ? { dir } : {}), ...(yolo ? { yolo } : {}), ...(model ? { model } : {}), ...(profile ? { profile } : {}), ...(maxRequests !== undefined ? { maxRequests } : {}) }
   }
-  if (model || format || profile || maxRequests !== undefined) return { kind: "error", message: "--model, --output-format, --profile và --max-requests chỉ dùng với -p." }
+  if (model || format || profile || maxRequests !== undefined) return { kind: "error", message: "--model, --output-format, --profile và --turn-requests chỉ dùng với -p." }
   return { kind: "tui", dir, resume, ...(yolo ? { yolo } : {}) }
 }
 

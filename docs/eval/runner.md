@@ -34,7 +34,7 @@ Each question has an `id`, a `group` (A–F), the `question`, and `now`, the mom
 
 ## Profile
 
-`--profile machine` measures OT the way a program calls it (`RunOptions.profile`): no `style.md`, `prompts/citations-machine.md` for citations, two `tools.md` lines for a person watching the terminal left out, and, without `--yolo`, the calculator shell. The header's `settings.profile` records it. Compare runs per profile only. Each `answer` carries `cached_input_tokens` when the provider reported the part of the input it read from its prompt cache.
+`--profile machine` measures OT the way a program calls it (`RunOptions.profile`): no `style.md`, `prompts/citations-machine.md` for citations, two `tools.md` lines for a person watching the terminal left out, and, without `--yolo`, the calculator shell. The header's `settings.profile` records it. Compare runs per profile only. Two limits of the profile: the calculator shell runs arithmetic only, so a workspace listing (`ls`, `dir`), which the full shell runs unasked, is refused there; and subagents keep the terminal prompt (the profile is not passed to them). A benchmark runner that registers MCP tools only has neither shell listings nor subagents. Each `answer` carries `cached_input_tokens` when the provider reported the part of the input it read from its prompt cache.
 
 ## Shell commands
 
@@ -95,7 +95,7 @@ bun scripts/dev/shell-replay.ts test/fixtures/shell-commands.jsonl [--ask]
 
 Every model request is counted at the provider's fetch and added to `<home>/usage/YYYY-MM-DD.json`, by the `provider/model` it went to, in the real home. `--max-requests` (default 500) is a cap for the `--model` model for the day, across runs; a side model on another provider is booked under its own name and does not spend it. The run stops before the next question at the cap, and a question that reaches it mid-way is aborted; a `stopped` line records it. The ledger counts only eval runs, not requests made in the TUI, and the day is the local day, while a provider's quota may reset at another hour.
 
-`--turn-requests N` is a different cap: each question's own, as a benchmark sets one (`maxRequests` in `runAgent`, `ot -p --max-requests N`). Every request the process sends during the question counts, retries, recoveries and subagents included, and none is sent past N. With two requests left the loop forces the summary step, so the question still ends with an answer unless a retry spent that reserve. The header's `settings.turn_requests` records it.
+`--turn-requests N` is a different cap: each question's own, as a benchmark sets one (`maxRequests` in `runAgent`, `ot -p --turn-requests N`). Every request the process sends during the question counts, retries, recoveries and subagents included, and none is sent past N. With two requests left the loop forces the summary step, so the question still ends with an answer unless a retry spent that reserve. The header's `settings.turn_requests` records it.
 
 ## Scoring
 

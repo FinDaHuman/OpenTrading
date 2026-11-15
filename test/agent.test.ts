@@ -1757,3 +1757,11 @@ test("a request budget: a stop-gate recovery fits in it, and the budget is relea
   await collect(runAgent({ history: [], input: "Giá HPG?", skills: [], registry: registry() }))
   expect(bodies.filter((b) => (b as { stream?: boolean }).stream).length).toBe(7)
 })
+
+test("a request budget that is not a whole number of at least 1 is a setup error, before any request", async () => {
+  for (const maxRequests of [Number.NaN, 0, -3, 2.5, Number.POSITIVE_INFINITY]) {
+    bodies.length = 0
+    await expect(collect(runAgent({ history: [], input: "Giá HPG?", skills: [], registry: registry(), maxRequests }))).rejects.toThrow("maxRequests")
+    expect(bodies.filter((b) => (b as { stream?: boolean }).stream)).toHaveLength(0)
+  }
+})

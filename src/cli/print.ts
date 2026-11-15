@@ -37,7 +37,7 @@ export interface PrintOptions {
   format: PrintFormat
   /** `--profile machine`: a program reads the answer (prompt/assemble.ts PromptProfile). */
   profile?: "machine"
-  /** `--max-requests`: the turn's cap on model requests (core/request-budget.ts). */
+  /** `--turn-requests`: the turn's cap on model requests (core/request-budget.ts). */
   maxRequests?: number
 }
 
@@ -121,6 +121,8 @@ export async function runPrint(opts: PrintOptions, deps: { runtime?: Runtime; ta
   const controller = new AbortController()
   const onSigint = () => controller.abort()
   process.on("SIGINT", onSigint)
+  // Put back after the turn: a caller may pass its own runtime (deps.runtime) and keep using it.
+  let restoreShell = () => {}
   try {
     const slash = opts.model?.indexOf("/") ?? -1
     target = deps.target ?? (await resolveTarget(opts.model ? { provider: opts.model.slice(0, slash), model: opts.model.slice(slash + 1) } : undefined))
@@ -128,7 +130,7 @@ export async function runPrint(opts: PrintOptions, deps: { runtime?: Runtime; ta
     setConversation(session.id)
     const before = new Set(runtime.subagents.list().map((v) => v.id))
     // Nobody can approve a command here unless --yolo: the calculator is all of shell that runs.
-    if (opts.profile === "machine" && !opts.yolo) useCalculatorShell(runtime.registry)
+    if (opts.profile === "machine" && !opts.yolo) restoreShell = useCalculatorShell(runtime.registry)
     for await (const event of runAgent({
       history: [],
       input: prompt,
@@ -179,6 +181,7 @@ export async function runPrint(opts: PrintOptions, deps: { runtime?: Runtime; ta
     err(message)
   } finally {
     process.off("SIGINT", onSigint)
+    restoreShell()
     stopMeter()
     await runtime.mcp.stop()
   }
