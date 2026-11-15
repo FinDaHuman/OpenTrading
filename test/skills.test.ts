@@ -118,7 +118,7 @@ test("ve-bieu-do references đọc được qua load_skill file=", async () => {
   const { skills } = await loadSkills(skillRoots(await root()).filter((r) => r.source === "bundled"))
   const viz = skills.find((s) => s.name === "ve-bieu-do")!
   expect(viz.requires_tools).toEqual(["chart_render"])
-  expect(viz.uses_tools).toEqual(["chart_render", "chart_compare", "chart_depth"])
+  expect(viz.uses_tools).toEqual(["chart_render"])
   for (const f of ["references/choosing-a-form.md", "references/time-series.md", "references/comparison.md", "references/part-to-whole.md", "references/relationship.md", "references/anti-patterns.md"]) {
     const body = await readSkillFile(viz, f)
     expect(body.length).toBeGreaterThan(100)
@@ -255,7 +255,7 @@ test("cây quyết định choosing-a-form bao phủ đủ kinds + có lưới a
     expect(tree, `thiếu nút ${q}`).toContain(q)
   }
   // Mọi kind tool hỗ trợ đều xuất hiện trong cây (không chart mồ côi).
-  for (const kind of ["candlestick", "line", "area", "sparkline", "sparkcolumn", "linebox", "multiline", "chart_compare", "bar", "pie", "donut", "waterfall", "stacked", "histogram", "boxplot", "scatter", "heatmap", "gauge", "chart_depth", "winloss"]) {
+  for (const kind of ["candlestick", "line", "area", "sparkline", "sparkcolumn", "linebox", "multiline", "kind=compare", "bar", "pie", "donut", "waterfall", "stacked", "histogram", "boxplot", "scatter", "heatmap", "gauge", "kind=depth", "winloss"]) {
     expect(tree, `kind ${kind} không có trong cây`).toContain(kind)
   }
   // Quy tắc dừng ở node cha + lưới an toàn + cấm bịa.

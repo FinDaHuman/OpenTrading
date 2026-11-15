@@ -58,6 +58,19 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ### Changed
 
+- `shell`: a command that only lists a folder of the workspace or the session's temp folder now runs without a
+  prompt in every permission mode, also ‖, `ot -p` and evals, as `read_file` does for the same path: `pwd`,
+  POSIX `ls` with display flags, PowerShell `ls`/`dir`/`gci`/`Get-ChildItem` with filtering switches and one
+  path (`src/core/tools/shell/read-only.ts`, scope `read:`). Anything the shell expands (`$`, `~`, `%VAR%`, globs,
+  braces, backticks, single quotes), a path outside the workspace, a key file, a link leading out, a network
+  path, a PowerShell provider drive, recursion, an unlisted flag or a second command still asks. pwsh on Linux
+  and macOS takes a backslash as a separator, so the path check does too (defensive: OpenTrading starts
+  PowerShell on Windows only); bash takes it as an escape, so it is refused. A path part that ends in a dot or a
+  space is refused (Windows drops them), and a network or device path is refused before anything resolves it.
+  The ‖ mode line of the `<quyen_tep>` reminder says these two kinds of commands need no approval. git, pip, npm and `--version` stay ▸▸-only: files in the folder can make them run other programs.
+  Such a listing runs with a 20 s limit.
+- `shell` on Linux/macOS: the child's `PATH` keeps absolute entries only (an empty entry, `.` or `bin` made the shell look in the working folder), so a bare `ls` or `awk`, which run unasked, can never run an `ls` file of the workspace (review of #290).
+
 - `shell`: arithmetic written in a form the math grammar does not take now comes back as a tool error that says
   why and shows the form to use, instead of an approval prompt (TUI) or a denial that forbids rewriting the
   command (`ot -p`, evals): a series walked with an array or a loop (`split` + `for`, `@(…)` + `foreach`,
@@ -87,6 +100,19 @@ adopt Semantic Versioning when it exposes a stable public API.
   computes with 0 or `$null` without an error). `print` in awk keeps 15 significant digits (awk's default is 6).
   The tool description shows the multi-step form and says to round only the final result (issue #278 N1: the
   old `%.2f` example was copied into intermediate values).
+- Tool search `auto` (the default, issue #278) now defers, below the 40-tool / 10%-of-context threshold too, the local tools turns rarely use: `grep_files`, `glob_files`, `session_list`, `session_get`, `doctor_local`, `send_message` and `stop_agent` (new `ToolDef.deferByDefault`). They go out by name only and load with `tool_search`, without a notice. Charts, web, file writes, watchlist and MCP tools keep the threshold (a deferred `chart_render` cost about two more requests per chart question in the #296 run). A `spawn_subagent` call loads `send_message` and `stop_agent`. Subagents defer nothing. `toolSearch: "off"` restores the old behaviour.
+- Tool search and the prompt cache: a loaded tool is appended after the visible tools (in load order, also in later turns) instead of being sorted into the middle of the list, and `<tool_hoan>` lists every tool the policy defers, loaded or not (its opening line says a tool already declared is called directly), so loading one no longer changes the system prompt. The request right after a load still changes the tool block, and providers that cache tools before system and messages (Anthropic, OpenAI) miss most of the cache on that request; what this keeps is a stable prefix on the requests after it.
+- **Compatibility (issue #278).** Renamed tools: `watchlist_local_list|get|create|add|remove|rename|delete` → `watchlist_local` with `action`; `chart_compare` → `chart_render kind="compare"`; `chart_depth` → `chart_render kind="depth"` (`src/core/tools/renamed.ts`). A `permissions.deny`/`ask` rule written for an old name matches the calls with that action/kind (a deny for `watchlist_local_delete` still refuses deletes, and only deletes); an agent file's old names never grant more than before: `tools` with only `watchlist_local_list`/`_get` gets the list/get variant, a partial set of write names gets no write (narrower than before), the full tool needs every old name (`watchlist_local_*`); `disallowedTools` with a write name keeps list/get, with a read name removes the tool. A call by an old name in a resumed conversation runs as the new tool with its arguments mapped (`chart_depth.depth` → `levels`, `chart_compare.series` → `labels` + `matrix`), and loads it first when it is deferred. An "always allow" saved for an old name is not carried over: the first such write asks once. Removed parameters: `web_search.blocked_domains`, `web_fetch.format` and `timeoutSeconds`, `chart_compare.ymin`/`ymax`; a call that still sends them runs with the field dropped (zod strips unknown keys): `blocked_domains` no longer filters, `ymin`/`ymax` no longer fix the scale. Only `delete` shows the destructive badge in the approval prompt (`ToolDef.annotationsFor`).
+- Shorter descriptions for `todo_write`, `read_file`, `grep_files`, `glob_files`, `write_file`, `web_search`, `web_fetch`, `ask_user` and `tool_search` (issue #278); `web_search` drops `blocked_domains`, `web_fetch` drops `format` and `timeoutSeconds`.
+- Watchlists (issue #278): the seven `watchlist_local_*` tools are one `watchlist_local` with `action` (list, get, create, add, remove, rename, delete), as charts take `kind`. list/get run without asking; the writes ask, `delete` on its own scope, so an "always allow" saved for an old `watchlist_local_*` name asks once more. Read-only subagents get the same name with list/get only. `/watchlist`, `watchlists.json` and the MCP server's `watchlist_*` tools are unchanged.
+- `spawn_subagent` (issue #278): the typed brief stays (decision of #207); its field and tool descriptions are one line each. Agent types with `listed: false` in their frontmatter are named only in the tool description (11 bundled types: bull, bear, tong-hop, vi-mo…), still callable by name.
+- Charts (issue #278): `chart_compare` and `chart_depth` are folded into `chart_render` as `kind="compare"` (`from_calls`, `symbols`, or `labels` + `matrix`) and `kind="depth"` (`bids`, `asks`, `levels`). Every chart kind and typed field stays; parameter descriptions are shorter and `ymin`/`ymax` of compare are gone. Three schemas (8.3 KB) become one.
+- TUI: when the stop gate sends the model back (a promise, a draft, a fragment, figures with no tool), the text
+  of that step leaves the screen too, as it leaves history; its notice line and any tool rows stay, so the user no
+  longer reads two answers in a row (13/11, eval m3). A cut answer (`length`) and a step-cap summary stay as before.
+  After an empty step history also drops the preamble written beside the previous step's tool call, and the screen
+  takes that off too. New agent event `retract` (`steps`: 1, or 2 for that case); `ot -p` text output and eval
+  `streamed` still carry both.
 - `prompts/tools.md`: computed figures (ratios, %, CAGR, P/E, unit changes) come from one arithmetic-only `shell`
   command per step, large amounts scaled to tỷ đồng inside the expression; the answer states the formula and inputs.
   A command that still fails after one fix may be computed by hand, labelled "tự tính" with formula and inputs.
@@ -114,6 +140,11 @@ adopt Semantic Versioning when it exposes a stable public API.
 - `--profile machine` dropped the stop rule ("Chỉ dừng khi đã trả lời đủ, cần hỏi lại, hoặc bị chặn"): it shared a
   `tools.md` line with the sentence before a tool call. The two are now separate lines and only the sentence is
   terminal-only.
+- `web_fetch` with a prompt: a `RECITATION` block (the side model's provider refused to quote the page) still opens with `BỊ CHẶN:` and the provider's reason, then gives the page as `web_fetch` without a prompt would; it left the model with nothing to read, and financial news trips it often. Safety blocks (`SAFETY`, `PROHIBITED_CONTENT`…) stay a bare `BỊ CHẶN:` line. `web_search`'s description again says facts that may have changed (people, rules, company events) are searched, not answered from memory (dropped in #288). The unused `format`/`timeoutSeconds` handling of `web_fetch` is gone.
+- `web_fetch` with a prompt: when the side model's provider filters its output (`finishReason=content-filter`), the
+  result now says so, opening with `BỊ CHẶN:` (except `RECITATION`, see above) and naming the provider's own reason when it gives one (Gemini's
+  `RECITATION`, `SAFETY`…). It was treated as an unfinished read and replaced by the whole page. An empty answer,
+  a cut one and a timeout still fall back to the page as before.
 
 - `shell`: a PowerShell series built with `New-Object System.Collections.Generic.List[…]` (or `ArrayList`) and
   `.Add(…)` now gets the hint with the form to use; it was denied and the model computed the volatility in its

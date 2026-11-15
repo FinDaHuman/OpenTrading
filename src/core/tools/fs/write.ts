@@ -124,14 +124,11 @@ export function writeFileTool(deps: WriteDeps): ToolDef<WriteFileInput> {
   return {
     name: "write_file",
     description:
-      "Tạo file mới hoặc ghi đè cả một file text trên máy người dùng (đường dẫn tuyệt đối, hoặc tương đối tính từ workspace; thư mục cha được tạo nếu thiếu). " +
-      "Dùng khi người dùng muốn lưu kết quả thành file: kế hoạch/báo cáo/ghi chú .md, bảng .csv, trang .html trực quan (biểu đồ, bảng; viết tự chứa: CSS, JS, SVG nội tuyến, không tải script từ mạng), dữ liệu .json. " +
-      "Đặt file trong workspace, tên file không dấu, ví dụ bao-cao/ke-hoach-FPT.md. Ghi đè file đã có thì phải read_file toàn bộ file đó trước. " +
-      "Không dùng khi chỉ sửa vài chỗ trong file có sẵn (dùng edit_file) hoặc khi người dùng chỉ hỏi đáp (trả lời trực tiếp, không tạo file). " +
-      "Mỗi lần ghi người dùng duyệt (diff hiện trong hộp thoại) và có thể hoàn tác.",
+      "Tạo hoặc ghi đè cả một file text (đường dẫn tính từ workspace, tên không dấu). Dùng khi người dùng muốn lưu kết quả thành file (.md, .csv, .json, .html tự chứa). " +
+      "Không dùng khi chỉ sửa vài chỗ (dùng edit_file) hay khi người dùng chỉ hỏi đáp. Ghi đè file có sẵn thì read_file trước.",
     input: z.object({
-      path: z.string().min(1).describe("Đường dẫn file, ví dụ bao-cao/ke-hoach-FPT.md hoặc D:\\Dau-tu\\so-sanh.csv"),
-      content: z.string().describe("Toàn bộ nội dung file"),
+      path: z.string().min(1),
+      content: z.string(),
     }),
     ...gateHooks(deps),
     validate,

@@ -165,11 +165,12 @@ Notion, Linear, Sentry, Atlassian… dùng OAuth: không cần token, chỉ cầ
 
     | Chế độ | Hành vi |
     | --- | --- |
-    | `auto` (mặc định) | Hoãn mọi tool MCP khi có hơn 40 tool (`toolSearchMinTools`) hoặc schema chiếm hơn 10% context của model |
+    | `auto` (mặc định) | Luôn hoãn các tool local ít dùng (`grep_files`, `glob_files`, `session_*`, `doctor_local`, `send_message`, `stop_agent`; không gồm biểu đồ); hoãn thêm mọi tool hoãn được (MCP, web, file…) khi có hơn 40 tool (`toolSearchMinTools`) hoặc schema chiếm hơn 10% context của model. Subagent không hoãn |
     | `on` | Luôn hoãn |
     | `off` | Gửi mọi tool như trước |
 
   - Danh sách tên tool hoãn nằm trong system prompt (`<tool_hoan>`), nhóm theo server. Danh sách quá dài thì chỉ ghi số tool của mỗi server.
+  - Giữ cache: `<tool_hoan>` liệt kê mọi tool bị hoãn theo chính sách, kể cả tool đã nạp, nên nạp tool không làm đổi system prompt. Tool đã nạp được nối sau các tool hiện sẵn theo thứ tự nạp, không chen vào giữa. Request ngay sau lần nạp vẫn đổi khối tools, nên provider đặt tools trước system và messages trong cache (Anthropic, OpenAI) vẫn trượt gần hết cache ở request đó; phần giữ được là tiền tố ổn định ở các request sau.
   - `tool_search` nhận `select:a,b` (tên đầy đủ, `server/tool` hoặc tên ngắn) hoặc từ khoá. Tìm từ khoá không phân biệt dấu và hiểu một số thuật ngữ tiếng Việt như "lịch sử giá", "khối ngoại", "BCTC".
   - Tool đã nạp gọi được ngay ở bước kế tiếp và giữ nguyên trong cả phiên, kể cả sau `--resume`, vì OpenTrading suy ra từ lịch sử hội thoại. Model gọi thẳng tên ngắn thì OpenTrading tự đổi sang tên đầy đủ.
   - Muốn một server luôn gửi đủ schema thì đặt `"alwaysLoad": true` trong cấu hình server đó.

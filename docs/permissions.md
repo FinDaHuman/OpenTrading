@@ -104,6 +104,25 @@ Khi model gửi một lệnh rõ ràng chỉ để tính số nhưng không đú
 
 Điều này chỉ áp dụng ở chỗ lệnh lẽ ra phải hỏi. Lệnh bạn đã cho phép (quy tắc "luôn cho phép", duyệt cả phiên, ▸▸▸) vẫn chạy nguyên văn, và lệnh khớp quy tắc `ask` của bạn vẫn hiện hộp duyệt. Lệnh làm nhiều hơn in ra con số (đọc file, `import` thư viện khác, pipe, biến môi trường) không được coi là phép tính và đi đường duyệt bình thường. Ở ▸▸, lệnh loại này không tốn request của model duyệt.
 
+## Lệnh chỉ liệt kê thư mục
+
+Lệnh chỉ liệt kê một thư mục trong workspace (hoặc thư mục tạm của phiên) chạy ngay ở mọi chế độ, kể cả ‖ chỉ đọc, `ot -p` và eval, giống `read_file` với cùng đường dẫn. Bộ lệnh cố ý nhỏ:
+
+- `pwd`; trên PowerShell thêm `Get-Location`, `gl`; không đối số.
+- macOS, Linux: `ls` với cờ `-l -a -A -h -1 -t -r -S -F -d` và tối đa 8 đường dẫn.
+- Windows (PowerShell): `ls`, `dir`, `gci`, `Get-ChildItem` với `-Force -Name -File -Directory -Hidden`, `-Path`/`-LiteralPath`, và một đường dẫn.
+
+Mọi thứ khác đi đường duyệt bình thường:
+
+- thư mục ngoài workspace, file hay thư mục nhạy cảm (`.env`, `.ssh`, `auth.json`…), liên kết hoặc junction dẫn ra ngoài, đường dẫn mạng (`\\host\share`);
+- thứ shell tự mở rộng: `$`, `~`, `%VAR%`, backtick, ký tự đại diện (`* ? [ ]`), ngoặc nhọn, nháy đơn;
+- ổ ảo của PowerShell (`env:`, `HKLM:`, `Function:`), đệ quy (`-R`, `-Recurse`, `-Depth`), cờ không có trong danh sách, nối lệnh, pipe, chuyển hướng;
+- `git`, `pip`, `npm` và `--version`: các chương trình này có thể chạy chương trình khác mà file trong thư mục cấu hình (`core.fsmonitor`, script của npm). Ở ▸▸ chúng vẫn không tốn request của model duyệt như trước.
+
+`ls -l` và `ls -F` in cả đích của symlink (`lien-ket -> /đường/dẫn/ngoài`): liệt kê một thư mục có liên kết trỏ ra ngoài cho thấy tên đường dẫn đó, nhưng không cho thấy gì bên trong. Muốn liệt kê chính liên kết đó thì lệnh phải hỏi. bash hay sh trên Windows (Git Bash) không được nhận, vì cách nó hiểu `/d/x` hay `/tmp` khác phép kiểm đường dẫn. Trên Linux/macOS, lệnh do model chạy nhận `PATH` đã bỏ mục rỗng và mục tương đối (`:`, `.`, `bin`): nếu không, `ls` hay `awk` trần (chạy không hỏi) có thể chạy một file `ls` nằm trong workspace, ví dụ repo vừa clone.
+
+Lệnh liệt kê chạy với giới hạn 20 giây. Quy tắc `deny`/`ask` của bạn vẫn áp dụng.
+
 ## Luôn hỏi bạn, không quy tắc hay model nào duyệt thay
 
 - **Đọc file chứa khoá/mật khẩu:**
