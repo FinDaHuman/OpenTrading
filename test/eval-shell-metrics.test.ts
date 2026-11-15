@@ -25,6 +25,12 @@ test("shellRoute: what ran is named by its scope, what did not by the text the m
   expect(shellRoute({ ...refused, scope: "cmd!python a.py", visible: DENIED })).toBe("denied")
   expect(shellRoute({ ...refused, scope: "cmd!x", visible: "Người dùng từ chối chạy tool này. Lời nhắn của người dùng: eval: không có người duyệt" })).toBe("denied")
   expect(shellRoute({ ...refused, visible: "Không có thư mục /x." })).toBe("error")
+  // The calculator variant answers from execute: an executed call that failed with the hint.
+  expect(shellRoute({ executed: true, ok: false, readOnly: true, visible: `${MATH_NEAR_MISS_PREFIX} nên chưa chạy` })).toBe("near-miss")
+  // … and its refusal of a command that is not arithmetic did not run either.
+  expect(shellRoute({ executed: true, ok: false, readOnly: true, visible: "Lệnh này không phải phép tính thuần nên không chạy (agent này chỉ dùng shell để tính số)." })).toBe("denied")
+  // A command that ran and failed still ran.
+  expect(shellRoute({ executed: true, ok: false, readOnly: false, scope: "cmd!x", visible: "[mã thoát 1 · 0.1s · /w]\nLỖI" })).toBe("approved")
 })
 
 test("shellExecMs reads the run time the tool writes, and nothing from another first line", () => {

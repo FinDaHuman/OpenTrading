@@ -15,6 +15,15 @@ adopt Semantic Versioning when it exposes a stable public API.
   off). If a retry spends that reserve, the turn ends with an error instead of an answer. The cap is per turn:
   a caller running several turns passes each what is left. A cap of 1 or 2 is honoured (the first step is the
   answer, tools off).
+- `--profile machine` for a program caller that sets its own output format (issue #278 P2/P3/P4/N3): `ot -p
+  --profile machine`, eval `--profile machine`, `RunOptions.profile` for runners that call `runAgent`. The system
+  prompt drops `style.md`, uses `prompts/citations-machine.md` (dot decimals, no thousands separator, full
+  precision, ISO dates, the caller's schema) and leaves out two `tools.md` lines written for a person watching
+  the terminal. Without `--yolo` the shell becomes the arithmetic-only calculator, since nothing else could be
+  approved. Measured with gemini-3.1-flash-lite: about 12–16% fewer input tokens per request; 12/12 compute
+  answers and 4/4 raw JSON answers right. The terminal prompt is unchanged.
+- Eval traces record `cached_input_tokens` per answer when the provider reports the part of the input it served
+  from its prompt cache.
 
 - Eval: how `shell` served the model's arithmetic is now measured (issue #268). Each `shell` result in a trace
   carries `shell: { route, exec_ms }` (`math`, `read-only`, `approved`, `near-miss`, `denied`, `error`) and the

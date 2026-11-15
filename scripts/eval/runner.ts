@@ -7,7 +7,7 @@ import { ABLATIONS, type Ablation, type Ablations } from "../../src/core/ablatio
 import { runAgent } from "../../src/core/agent"
 import type { Target } from "../../src/core/chat"
 import { cleanRouting, type OpenRouterRouting } from "../../src/core/openrouter-routing"
-import { promptVersion } from "../../src/core/prompt/assemble"
+import { promptVersion, type PromptProfile } from "../../src/core/prompt/assemble"
 import { onModelRequest } from "../../src/core/requests"
 import { closeMemory, createMemory, switchMemory, type MemoryChoice, type Runtime } from "../../src/core/runtime"
 import type { Skill } from "../../src/core/skills/schema"
@@ -19,6 +19,7 @@ import type { ToolRegistry } from "../../src/core/tools/registry"
 import { answerUnattended } from "./approvals"
 import type { RequestLedger } from "./ledger"
 import { SHELL_TOOL, shellExecMs, shellRoute } from "./shell-route"
+import { useCalculatorShell } from "../../src/core/tools/shell/shell"
 import { TRACE_VERSION, type TraceEvent, type TraceWriter } from "./trace"
 
 const QUESTIONS = z
@@ -174,6 +175,8 @@ export interface EvalRun {
    * and memory_read reach the prompt, nothing carries over); "none" (the product default) has none.
    */
   memory?: MemoryChoice
+  /** --profile machine: the prompt for a program caller (prompt/assemble.ts), and the calculator shell. */
+  profile?: PromptProfile
   /** --turn-requests: each question's cap on model requests (core/request-budget.ts), as a benchmark sets one. */
   turnRequests?: number
 }
@@ -199,6 +202,7 @@ export async function runEval(run: EvalRun) {
     runtime.permissions.setMode("bypass")
   }
   const stopAnswering = run.yolo ? () => {} : answerUnattended(runtime.permissions, "eval")
+  const restoreShell = run.profile === "machine" && !run.yolo ? useCalculatorShell(registry) : () => {}
   runtime.subagents.disabled = run.ablated?.loop
   if (run.ablated?.setup.has("todo")) registry.unregister(TODO_WRITE)
   if (run.ablated?.setup.has("skills")) registry.unregister("load_skill")
@@ -262,6 +266,7 @@ export async function runEval(run: EvalRun) {
   } finally {
     stopMeter()
     stopAnswering()
+    restoreShell()
     closeMemory(runtime)
     if (run.yolo) {
       runtime.permissions.setMode("read-only")
@@ -303,7 +308,7 @@ async function ask(run: EvalRun, question: EvalQuestion, asked: Asked, now: Date
   write({ type: "question", ...asked, group: question.group, question: question.question, now: question.now })
   const before = new Set(runtime.subagents.list().map((v) => v.id))
   const started = Date.now()
-  const result = { text: "", streamed: "", steps: 0, input: 0, output: 0, outcome: "failed", unanswered: false, recoveries: [] as { kind: string; attempt: number }[], gaps: [] as string[], ungrounded: [] as string[], markup: [] as string[], fallback: false }
+  const result = { text: "", streamed: "", steps: 0, input: 0, output: 0, outcome: "failed", unanswered: false, recoveries: [] as { kind: string; attempt: number }[], gaps: [] as string[], ungrounded: [] as string[], markup: [] as string[], fallback: false, cached: undefined as number | undefined }
   const served: Record<string, number> = {}
   const serve = (by: string, n = 1) => (served[by] = (served[by] ?? 0) + n)
   const say = (event: TraceEvent) => write(event)
@@ -312,6 +317,7 @@ async function ask(run: EvalRun, question: EvalQuestion, asked: Asked, now: Date
     for await (const event of runAgent({
       history: [],
       input: question.question,
+      ...(run.profile ? { profile: run.profile } : {}),
       ...(run.turnRequests !== undefined ? { maxRequests: run.turnRequests } : {}),
       skills: skillsFor(run.skills, run.ablated),
       registry: runtime.registry,
@@ -341,6 +347,7 @@ async function ask(run: EvalRun, question: EvalQuestion, asked: Asked, now: Date
       }
       else if (event.type === "step-usage") {
         result.input += event.inputTokens
+        if (event.cachedInputTokens !== undefined) result.cached = (result.cached ?? 0) + event.cachedInputTokens
         result.output += event.outputTokens
       } else if (event.type === "done") {
         result.text = finalText(event.messages)
@@ -383,6 +390,7 @@ async function ask(run: EvalRun, question: EvalQuestion, asked: Asked, now: Date
     ...(Object.keys(served).length > 0 ? { served_by: served } : {}),
     requests: meter.requests,
     input_tokens: result.input,
+    ...(result.cached !== undefined ? { cached_input_tokens: result.cached } : {}),
     output_tokens: result.output,
     duration_ms: Date.now() - started,
   })

@@ -38,7 +38,8 @@ export type AgentEvent =
   /** One finished model request; `servedBy` = the upstream provider that answered, when the gateway says (OpenRouter). */
   | { type: "step"; servedBy?: string }
   /** Billed tokens of one model request (sent after each step that reported usage). */
-  | { type: "step-usage"; inputTokens: number; outputTokens: number }
+  /** `cachedInputTokens`: the part of `inputTokens` read from the provider's prompt cache, when it reports one. */
+  | { type: "step-usage"; inputTokens: number; outputTokens: number; cachedInputTokens?: number }
   /** The model is streaming reasoning: never shown, but it is progress (stall timer, subagent watchdog). */
   | { type: "progress" }
   /** Messages to append to history. Never contains a tool call without its result. */

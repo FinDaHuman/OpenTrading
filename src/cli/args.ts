@@ -16,7 +16,7 @@ export type Cli =
   | { kind: "update"; args: string[] }
   | { kind: "tui"; dir?: string; resume?: string; yolo?: boolean }
   /** `-p`: one turn without the TUI (src/cli/print.ts). No prompt = read stdin. */
-  | { kind: "print"; prompt?: string; dir?: string; yolo?: boolean; model?: string; format: PrintFormat; maxRequests?: number }
+  | { kind: "print"; prompt?: string; dir?: string; yolo?: boolean; model?: string; format: PrintFormat; profile?: "machine"; maxRequests?: number }
   | { kind: "error"; message: string }
 
 export const HELP = `OpenTrading — harness AI phân tích chứng khoán Việt Nam
@@ -31,6 +31,8 @@ export const HELP = `OpenTrading — harness AI phân tích chứng khoán Việ
       --model provider/model       model cho lượt này (mặc định: model trong config)
       --output-format text|json    json: câu trả lời, file phiên, số request, token
       --yolo                       ở -p: chạy luôn tool ghi; không có thì tool cần duyệt bị từ chối
+      --profile machine            người gọi là chương trình tự đặt định dạng: bỏ hướng dẫn trình bày
+                                   cho terminal; shell chỉ còn tính số (trừ khi có --yolo)
       --turn-requests N            trần request tới model của lượt (gồm thử lại, subagent); gần chạm
                                    trần thì model trả lời tổng kết, không bao giờ vượt
   opentrading mcp …                quản lý MCP server (opentrading mcp --help)
@@ -58,6 +60,7 @@ export function parseCli(argv: string[]): Cli {
   let prompt: string | undefined
   let model: string | undefined
   let format: PrintFormat | undefined
+  let profile: "machine" | undefined
   let maxRequests: number | undefined
   /** The value after a flag, or the error to return. */
   const value = (i: number, flag: string): string | Cli => {
@@ -96,6 +99,15 @@ export function parseCli(argv: string[]): Cli {
       }
       continue
     }
+    if (arg === "--profile") {
+      const v = value(i, arg)
+      if (typeof v !== "string") return v
+      i++
+      if (v === "terminal") continue
+      if (v !== "machine") return { kind: "error", message: `--profile chỉ nhận machine hoặc terminal (nhận "${v}").` }
+      profile = v
+      continue
+    }
     if (arg === "--turn-requests") {
       const v = value(i, arg)
       if (typeof v !== "string") return v
@@ -127,9 +139,9 @@ export function parseCli(argv: string[]): Cli {
   }
   if (print) {
     if (resume !== undefined) return { kind: "error", message: "-p luôn mở phiên mới: không dùng cùng -c/-r." }
-    return { kind: "print", format: format ?? "text", ...(prompt !== undefined ? { prompt } : {}), ...(dir !== undefined ? { dir } : {}), ...(yolo ? { yolo } : {}), ...(model ? { model } : {}), ...(maxRequests !== undefined ? { maxRequests } : {}) }
+    return { kind: "print", format: format ?? "text", ...(prompt !== undefined ? { prompt } : {}), ...(dir !== undefined ? { dir } : {}), ...(yolo ? { yolo } : {}), ...(model ? { model } : {}), ...(profile ? { profile } : {}), ...(maxRequests !== undefined ? { maxRequests } : {}) }
   }
-  if (model || format || maxRequests !== undefined) return { kind: "error", message: "--model, --output-format và --turn-requests chỉ dùng với -p." }
+  if (model || format || profile || maxRequests !== undefined) return { kind: "error", message: "--model, --output-format, --profile và --turn-requests chỉ dùng với -p." }
   return { kind: "tui", dir, resume, ...(yolo ? { yolo } : {}) }
 }
 
