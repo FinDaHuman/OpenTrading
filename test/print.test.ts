@@ -20,7 +20,7 @@ const CATALOG = { groq: { id: "groq", name: "Groq", env: ["GROQ_API_KEY"], npm: 
 /** Each model request takes the next scripted reply: a tool call or a text answer. */
 type Reply = { text: string } | { tool: string; args: object }
 let replies: Reply[] = []
-const seen: { model: string }[] = []
+const seen: { model: string; body?: Record<string, unknown> }[] = []
 const chunk = (delta: object, finish: string | null = null) =>
   `data: ${JSON.stringify({ id: "c1", object: "chat.completion.chunk", created: 1, model: "m", choices: [{ index: 0, delta, finish_reason: finish }] })}\n\n`
 const realFetch = globalThis.fetch
@@ -28,7 +28,8 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   const url = String(input instanceof Request ? input.url : input)
   if (url.endsWith("/api.json")) return Response.json(CATALOG)
   if (url.endsWith("/chat/completions")) {
-    seen.push({ model: JSON.parse(String(init?.body)).model })
+    const sent = JSON.parse(String(init?.body))
+    seen.push({ model: sent.model, body: sent })
     const reply = replies.shift() ?? { text: "Xong." }
     const body =
       "tool" in reply
@@ -171,4 +172,22 @@ test("question from stdin; a provider error is exit 1 and listed in errors", asy
   } finally {
     globalThis.fetch = failing
   }
+})
+
+test("--profile machine --turn-requests: the request carries the machine prompt and the calculator shell, and the cap holds", async () => {
+  // A model that keeps calling tools: the cap must end it with the summary step.
+  replies = Array.from({ length: 10 }, () => ({ tool: "current_time", args: {} }))
+  const rt = runtime()
+  const code = await runPrint({ prompt: "Trả lời JSON: giá FPT?", format: "json", profile: "machine", maxRequests: 3 }, { runtime: rt })
+  expect(seen.length).toBeLessThanOrEqual(3)
+  const first = seen[0]!.body!
+  const system = JSON.stringify((first.messages as { role: string; content: unknown }[]).filter((m) => m.role === "system"))
+  expect(system).not.toContain("<style>")
+  expect(system).toContain("YYYY-MM-DD")
+  const shell = (first.tools as { function: { name: string; description: string } }[] | undefined)?.find((t) => t.function.name === "shell")
+  expect(shell?.function.description).toStartWith("Máy tính")
+  expect(seen.at(-1)!.body!.tool_choice).toBe("none")
+  expect([0, 1]).toContain(code)
+  // The caller's own runtime gets its full shell back after the turn.
+  expect(rt.registry.get("shell")?.description).not.toStartWith("Máy tính")
 })

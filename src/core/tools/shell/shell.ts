@@ -180,3 +180,15 @@ function mathShellTool(full: ToolDef<ShellInput>, shell: ShellInfo): ToolDef<She
     },
   }
 }
+
+/**
+ * A program caller (`--profile machine`) with nobody to approve anything: the shell becomes the
+ * read-only agents' calculator (arithmetic only, a short description). Any other command would be
+ * refused anyway; its longer description is only input tokens. Returns how to put it back.
+ */
+export function useCalculatorShell(registry: { get(name: string): ToolDef | undefined; register(def: ToolDef): void }): () => void {
+  const full = registry.get("shell")
+  if (!full?.readOnlyVariant) return () => {}
+  registry.register(full.readOnlyVariant)
+  return () => registry.register(full)
+}

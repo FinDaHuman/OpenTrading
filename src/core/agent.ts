@@ -55,6 +55,7 @@ import { currentTodos, retiredNote, retireLeftTodos, todoMark, TODO_WRITE } from
 import { FAILURE_STREAK_FINAL, FAILURE_STREAK_STOP, failureNudge, gapsAnswer, turnFailures } from "./loop/failures"
 import { answerAfterTools } from "./loop/history-shape"
 import { markupStreamFilter, stripMarkup, type MarkupFilter } from "./loop/markup"
+import type { PromptProfile } from "./prompt/assemble"
 import { MIN_REQUEST_BUDGET, RequestBudget } from "./request-budget"
 import { answeredAndClosedTodos, figureSources, isEmptyAnswer, isUnfetched, GAPS_RESCUE_START, judgeStop, MAX_RECOVERIES, sourcesFailed, ranDataTool, stripEchoes, ungroundedInTurn, unfetchedFigures, type RecoveryKind, type Verdict } from "./loop/stop-gate"
 import { MAX_TOOLS_PER_REQUEST, modelOutput, stripImages, type BuiltToolSet, type ToolRegistry, type ToolSetOptions } from "./tools/registry"
@@ -199,6 +200,8 @@ export interface RunOptions {
    * with `subagents.idleMs` set passes it, so a longer idle limit is not undercut by the stall.
    */
   stallMs?: number
+  /** Who reads the answer (prompt/assemble.ts PromptProfile); default the terminal. */
+  profile?: PromptProfile
   maxSteps?: number
   /**
    * The caller's cap on model requests for this turn (request-budget.ts): never passed; the loop
@@ -676,7 +679,9 @@ async function* relay(
           const output = part.usage?.outputTokens
           if (input === undefined && output === undefined) break
           outcome.usage = { input: (outcome.usage?.input ?? 0) + (input ?? 0), output: (outcome.usage?.output ?? 0) + (output ?? 0) }
-          yield { type: "step-usage", inputTokens: input ?? 0, outputTokens: output ?? 0 }
+          // Input the provider served from its prompt cache, when it says (#278: 74% of B0's input).
+          const cached = part.usage?.inputTokenDetails?.cacheReadTokens
+          yield { type: "step-usage", inputTokens: input ?? 0, outputTokens: output ?? 0, ...(cached !== undefined ? { cachedInputTokens: cached } : {}) }
           break
         }
         case "text-delta":
@@ -898,6 +903,7 @@ async function assembleFor(opts: TurnInput, target: Target | undefined, bound: B
     sticky: opts.sticky ?? [],
     role: opts.role,
     agentPrompt: opts.agentPrompt,
+    ...(opts.profile ? { profile: opts.profile } : {}),
     // A subagent works for the main agent: no investor profile (bindTurn never reads it for one).
     investorProfile: bound.profile,
     constraints: bound.constraints,
