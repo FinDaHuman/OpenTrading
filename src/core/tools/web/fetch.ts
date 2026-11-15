@@ -24,6 +24,8 @@ const PROMPT_INPUT = 100_000
 
 /** The whole call's limit (wrap.ts races it): download and the side model share it. */
 export const FETCH_TOOL_TIMEOUT_MS = 125_000
+/** How a result opens when the side model's provider blocked its output (stable, like `REDIRECT:`, for tests and traces). */
+export const FILTERED_PREFIX = "BỊ CHẶN:"
 /** The side model's own limit, inside what the download left of the call's. */
 const EXTRACT_MAX_MS = 90_000
 /** Kept back so the page and a note still come back before the call's limit fires. */
@@ -145,6 +147,16 @@ export async function runFetch(input: WebFetchInput, signal: AbortSignal, deps: 
       // The user's Esc and the side model's own errors (quota…) stay errors; its limit does not.
       if (signal.aborted || (error as { name?: string })?.name !== "TimeoutError") throw error
       return withPage(header, body, `quá ${Math.round(budget / 1000)}s`)
+    }
+    // A provider block is a terminal result, not an incomplete extraction to replace with the page.
+    // The line states what happened and nothing else: no advice the model could read as an order.
+    if (got.finishReason === "content-filter") {
+      // A code word of the provider (RECITATION, SAFETY, content_filter…): anything else is not copied into the result.
+      const reason = got.rawFinishReason && /^[A-Za-z0-9_-]{1,40}$/.test(got.rawFinishReason) ? got.rawFinishReason : undefined
+      const raw = reason ? `, lý do của provider: ${reason}` : ""
+      return `${header}
+
+${FILTERED_PREFIX} model phụ đọc trang bị provider chặn đầu ra (finishReason=content-filter${raw}). Chưa có kết quả đọc cho yêu cầu này.`
     }
     const text = got.text.trim()
     if (!text) return withPage(header, body, `không trả lời${got.finishReason ? `, finishReason=${got.finishReason}` : ""}`)

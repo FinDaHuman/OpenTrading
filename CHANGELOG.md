@@ -103,6 +103,11 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ### Fixed
 
+- `web_fetch` with a prompt: when the side model's provider filters its output (`finishReason=content-filter`), the
+  result now says so, opening with `BỊ CHẶN:` and naming the provider's own reason when it gives one (Gemini's
+  `RECITATION`, `SAFETY`…). It was treated as an unfinished read and replaced by the whole page. An empty answer,
+  a cut one and a timeout still fall back to the page as before.
+
 - `shell`: a PowerShell series built with `New-Object System.Collections.Generic.List[…]` (or `ArrayList`) and
   `.Add(…)` now gets the hint with the form to use; it was denied and the model computed the volatility in its
   head, wrongly (15/11 run on main). Only those two types: `New-Object` of anything else still asks.
