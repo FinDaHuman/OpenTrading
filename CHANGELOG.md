@@ -50,6 +50,15 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ### Changed
 
+- MCP server instructions leave the system prompt. They ride in the request as reference text
+  (`<huong_dan_mcp>` inside `<nhac_nho>`, `src/core/prompt/mcp-guidance.ts`), only for servers that have a tool the
+  model can call at that step (eager, loaded by `tool_search`, a skill, a preload or a repaired call), each once,
+  under the tier's `mcp_instructions` budget. The block says the text is the server's, serves to choose a tool and
+  read its result, and grants nothing. It is rebuilt from the host at every step and never saved in history, so a
+  resumed or compacted session gets the server's current text. A server with no callable tool sends nothing. The
+  permission gate, the auto reviewer's log and memory blocks do not read it (tests pin each). Proposal and the
+  paired runs behind it: `docs/proposals/prompt-injection-safe-guard.md` (PR #259).
+
 - `shell`: arithmetic written in a form the math grammar does not take now comes back as a tool error that says
   why and shows the form to use, instead of an approval prompt (TUI) or a denial that forbids rewriting the
   command (`ot -p`, evals): a series walked with an array or a loop (`split` + `for`, `@(…)` + `foreach`,
