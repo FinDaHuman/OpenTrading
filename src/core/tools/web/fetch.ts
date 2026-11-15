@@ -45,11 +45,10 @@ interface Page {
   title?: string
   markdown: string
   /** Plain text of the page (markdown without its syntax) or the raw HTML. */
-  html?: string
   note?: string
 }
 
-const cache = new LRUCache<string, Page>({ maxSize: 50 * 1024 * 1024, sizeCalculation: (p) => p.markdown.length + (p.html?.length ?? 0) + 1, ttl: 15 * 60_000 })
+const cache = new LRUCache<string, Page>({ maxSize: 50 * 1024 * 1024, sizeCalculation: (p) => p.markdown.length + 1, ttl: 15 * 60_000 })
 
 export interface FetchDeps {
   fetch?: typeof fetch
@@ -84,7 +83,6 @@ async function load(url: URL, signal: AbortSignal, deps: FetchDeps): Promise<Pag
         ...base,
         title,
         markdown,
-        html: text,
         note: thin ? "Trang gần như trống sau khi lấy nội dung: có thể render bằng JavaScript; số liệu thị trường hãy lấy bằng tool dữ liệu MCP." : extracted ? undefined : "Không tách được bài chính; đây là toàn trang (đã bỏ menu/chân trang).",
       }
     } else page = { ...base, markdown: text }
@@ -152,6 +150,8 @@ export async function runFetch(input: WebFetchInput, signal: AbortSignal, deps: 
       // RECITATION is a block over quoting the page, not over what the page says: the page is what
       // web_fetch without a prompt returns anyway, so it comes back (as data, after the stated
       // block). Financial news trips it often; a bare block left the model with nothing to read.
+      // The side model was never an injection barrier (a timeout or an empty answer returns the raw
+      // page too, and the model may fetch without a prompt): the barrier is "tool results are data".
       if (reason === "RECITATION") return `${header}\n\n${line} Dưới đây là nội dung trang.${pageChunk(body, 0)}`
       return `${header}\n\n${line} Chưa có kết quả đọc cho yêu cầu này.`
     }

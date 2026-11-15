@@ -305,7 +305,7 @@ test("the provider's reason is copied only when it is a code word", async () => 
   }
 })
 
-test("an explicit provider filter never falls back to the page, even with partial text", async () => {
+test("a safety filter never falls back to the page, even with partial text", async () => {
   for (const text of ["  ", "Trả lời dở của provider"]) {
     const { deps } = article()
     let extractions = 0
@@ -340,6 +340,18 @@ test("a RECITATION block still says so, then gives the page (what web_fetch with
   expect(out.indexOf("BỊ CHẶN:")).toBeLessThan(out.indexOf("10.000 tỷ đồng"))
   // The cut partial answer is still dropped: only the page itself comes back.
   expect(out).not.toContain("Trả lời dở")
+})
+
+test("only the exact RECITATION code gives the page: other spellings and no reason stay a bare block", async () => {
+  for (const raw of ["recitation", "RECITATION_ACTION", undefined]) {
+    const { deps } = article()
+    const out = await runFetch({ url: "https://cafef.vn/vcb", prompt: "lợi nhuận quý 3?" }, signal(), {
+      ...deps,
+      extract: async () => ({ text: "", finishReason: "content-filter", ...(raw ? { rawFinishReason: raw } : {}) }),
+    })
+    expect([raw, out.includes("BỊ CHẶN:")]).toEqual([raw, true])
+    expect([raw, out.includes("10.000 tỷ đồng")]).toEqual([raw, false])
+  }
 })
 
 test("ordinary empty output still recovers the page and a textual refusal is preserved as text", async () => {
