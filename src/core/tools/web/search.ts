@@ -351,16 +351,14 @@ export function webSearchTool(deps: SearchDeps = {}): ToolDef<WebSearchInput> {
   return {
     name: "web_search",
     description:
-      `Tìm kiếm web (tin tức, công bố, sự kiện, tài liệu) — trả về danh sách kết quả đánh số có tiêu đề, URL, domain, ngày đăng, đoạn trích. Tháng hiện tại: ${month}; dùng đúng năm hiện tại khi tìm tin mới. ` +
-      "Giá, chỉ số, lãi suất, nhân sự doanh nghiệp có thể đã đổi: phải tìm, không nhớ; nhưng số liệu thị trường ưu tiên tool dữ liệu MCP. Ưu tiên nguồn gốc (HOSE/HNX, SBV, GSO, trang IR doanh nghiệp). " +
-      "preset vn_finance / vn_news / vn_official để giới hạn nguồn Việt Nam; recency_days cho tin mới. Đọc chi tiết một kết quả bằng web_fetch. Trong câu trả lời: trích nguồn bằng link markdown cạnh khẳng định, cuối có mục \"Nguồn:\".",
+      `Tìm kiếm web, trả kết quả đánh số (tiêu đề, URL, ngày, đoạn trích). Dùng khi cần tin, công bố, sự kiện mới; tháng hiện tại ${month}, tìm tin mới thì ghi đúng năm hiện tại. Không dùng khi số liệu thị trường đã có tool dữ liệu. ` +
+      "Ưu tiên nguồn gốc (HOSE/HNX, SBV, GSO, IR doanh nghiệp). Đọc chi tiết bằng web_fetch. Câu trả lời trích nguồn bằng link markdown cạnh khẳng định, cuối có mục \"Nguồn:\".",
     input: z.object({
-      query: z.string().min(2).describe("Câu truy vấn"),
-      allowed_domains: z.array(z.string()).max(20).optional().describe("Chỉ lấy kết quả từ các domain này, ví dụ [\"cafef.vn\"]"),
-      blocked_domains: z.array(z.string()).max(20).optional().describe("Loại kết quả từ các domain này (không dùng cùng allowed_domains)"),
-      preset: z.enum(["vn_finance", "vn_news", "vn_official"]).optional().describe("Nhóm nguồn Việt Nam: tài chính, báo chí, cơ quan nhà nước"),
-      recency_days: z.number().int().min(1).max(3650).optional().describe("Chỉ kết quả trong N ngày gần đây"),
-      num_results: z.number().int().min(1).max(20).optional().describe("Số kết quả (mặc định 8)"),
+      query: z.string().min(2),
+      allowed_domains: z.array(z.string()).max(20).optional().describe("Chỉ các domain này, ví dụ [\"cafef.vn\"]"),
+      preset: z.enum(["vn_finance", "vn_news", "vn_official"]).optional().describe("Nguồn VN: tài chính, báo chí, nhà nước"),
+      recency_days: z.number().int().min(1).max(3650).optional(),
+      num_results: z.number().int().min(1).max(20).optional().describe("Mặc định 8"),
     }),
     readOnly: true,
     deferrable: true,

@@ -1,3 +1,4 @@
+import { renamedCallMatches } from "../tools/renamed"
 import { loadConfig, saveConfig } from "../config"
 import { isInside, isSensitiveScope } from "../fs/path-safety"
 import type { AgentOrigin, ApprovalPreview, ToolDef } from "../tools/types"
@@ -121,8 +122,11 @@ function wildcard(pattern: string, value: string) {
 }
 
 /** A deny/ask rule matches this call: the tool name, and the subject when the rule has a pattern. */
-function listMatches(rule: ListRule, def: ToolDef, subject: string | undefined) {
-  if (!wildcard(rule.tool, def.name)) return false
+function listMatches(rule: ListRule, def: ToolDef, subject: string | undefined, input?: unknown) {
+  // A rule written for a tool #278 folded into another matches the calls that tool made (renamed.ts).
+  // Only a rule without a pattern: none of the old tools (watchlist_local_*, chart_compare,
+  // chart_depth) had a `subject`, so a patterned rule never matched them before either.
+  if (!wildcard(rule.tool, def.name)) return !rule.pattern && renamedCallMatches((old) => wildcard(rule.tool, old), def.name, input)
   if (!rule.pattern) return true
   return subject !== undefined && wildcard(rule.pattern, subject)
 }
@@ -308,15 +312,15 @@ export class PermissionGate {
     if (blocked) return { allow: false, reason: "blocked", message: blocked }
     const subject = def.subject?.(input)
     // Deny rules first, from memory: they stop reads too (refreshRules loads them).
-    if (this.lists?.deny.some((r) => listMatches(r, def, subject))) return this.refused(def, input, agent)
+    if (this.lists?.deny.some((r) => listMatches(r, def, subject, input))) return this.refused(def, input, agent)
     // Calls that never ask run at once, as before: no await, so parallel calls keep their order.
     if (!userOnly(scope) && !needsApproval(def, input) && !(this.current === "auto" && def.autoReview)) return this.ran()
     const lists = this.lists ?? (await this.rules.lists?.()) ?? { deny: [], ask: [] }
-    if (!this.lists && lists.deny.some((r) => listMatches(r, def, subject))) return this.refused(def, input, agent)
+    if (!this.lists && lists.deny.some((r) => listMatches(r, def, subject, input))) return this.refused(def, input, agent)
     const key = this.keyOf(def, input)
     if (userOnly(scope)) {
       if (sessionOk(scope) && this.session.has(key)) return { allow: true }
-    } else if (!lists.ask.some((r) => listMatches(r, def, subject))) {
+    } else if (!lists.ask.some((r) => listMatches(r, def, subject, input))) {
       // A shell command that only computes numbers (tools/shell/math.ts): every mode, also
       // ‖ read-only, headless and evals; no classifier request. Deny and ask rules still apply.
       if (scope?.startsWith("math:")) return this.ran()
@@ -331,13 +335,13 @@ export class PermissionGate {
     // Nothing above lets it run. Before anyone is asked (the user, or the ▸▸ classifier with a
     // request): a call the tool runs unasked once it is written its way goes back to the model
     // with that form. An ask rule means the user wants to see such calls, so it is not used then.
-    if (!userOnly(scope) && !lists.ask.some((r) => listMatches(r, def, subject))) {
+    if (!userOnly(scope) && !lists.ask.some((r) => listMatches(r, def, subject, input))) {
       const rewrite = def.rewrite?.(input)
       if (rewrite) return { allow: false, reason: "rewrite", message: rewrite }
     }
     let notice: string | undefined
     let handedOver: AutoBlock | undefined
-    if (this.current === "auto" && this.auto && !userOnly(scope) && !lists.ask.some((r) => listMatches(r, def, subject))) {
+    if (this.current === "auto" && this.auto && !userOnly(scope) && !lists.ask.some((r) => listMatches(r, def, subject, input))) {
       // A new file, or one this run created, in the workspace (the copy in /undo is the safety
       // net), or a shell command that only reads: no classifier request.
       if (await def.autoSafe?.(input)) return this.ran()
@@ -360,7 +364,7 @@ export class PermissionGate {
         label,
         description: def.description,
         input,
-        annotations: def.annotations,
+        annotations: def.annotationsFor?.(input) ?? def.annotations,
         choices: choicesFor(def, scope, this.current),
         mode: this.current,
         ...(def.effect ? { effect: def.effect } : {}),

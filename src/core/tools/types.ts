@@ -90,6 +90,13 @@ export interface ToolDef<I = any> {
    */
   deferrable?: boolean
   /**
+   * With tool search "auto", sent by name only even while the deferrable tools are few: an
+   * optional local tool that turns rarely use (grep/glob, sessions, doctor, send/stop). Not charts:
+   * a chart question would pay one more request each time (#296 measurement).
+   * Other deferrable tools wait for the 40-tool / 10%-of-context threshold.
+   */
+  deferByDefault?: boolean
+  /**
    * Never declared, listed as deferred or found by tool_search; it exists for a request only
    * when the turn preloads it (or history already called it). desk_run: only a request that
    * opted into ultradesk sees it, and it never crowds other tools out of search results.
@@ -101,6 +108,8 @@ export interface ToolDef<I = any> {
   displayName?: string
   /** MCP tool annotations, shown in /mcp and in the approval prompt. */
   annotations?: { title?: string; destructive?: boolean; openWorld?: boolean }
+  /** Per-call annotations for a tool whose calls differ (watchlist_local: only `delete` is destructive). */
+  annotationsFor?(input: I): ToolDef["annotations"]
   /**
    * Who may run this without asking. Read-only tools never ask. `"never"` exempts a
    * non-read-only tool whose effect is already reviewed elsewhere (todo_write only edits

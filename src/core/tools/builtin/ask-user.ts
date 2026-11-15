@@ -3,15 +3,15 @@ import { type AskBroker, type AskResult, formatAskResult } from "../../ask"
 import type { ToolDef } from "../types"
 
 const Option = z.object({
-  label: z.string().min(1).max(60).describe("Nhãn ngắn của lựa chọn (1–5 từ)"),
-  description: z.string().max(200).optional().describe("Giải thích ngắn lựa chọn này nghĩa là gì"),
+  label: z.string().min(1).max(60).describe("1–5 từ"),
+  description: z.string().max(200).optional(),
 })
 
 const Question = z.object({
-  header: z.string().min(1).max(30).describe("Nhãn rất ngắn cho tab, 1–2 từ, ví dụ: Thời hạn, Rủi ro"),
-  question: z.string().min(3).max(300).describe("Câu hỏi đầy đủ, kết thúc bằng dấu ?"),
-  options: z.array(Option).min(2).max(4).describe("2–4 lựa chọn rõ ràng, loại trừ nhau (trừ khi multiSelect)"),
-  multiSelect: z.boolean().optional().describe("true nếu người dùng được chọn nhiều đáp án"),
+  header: z.string().min(1).max(30).describe("1–2 từ, ví dụ: Rủi ro"),
+  question: z.string().min(3).max(300),
+  options: z.array(Option).min(2).max(4),
+  multiSelect: z.boolean().optional(),
 })
 
 export const AskUserInput = z
@@ -37,10 +37,8 @@ export function askUserTool(broker: AskBroker): ToolDef<Input> {
   return {
     name: "ask_user",
     description:
-      "Hỏi người dùng 1–4 câu trắc nghiệm khi cần CHÍNH HỌ quyết định. " +
-      "Dùng khi: khung thời gian đầu tư, mức chấp nhận rủi ro, chọn giữa phương án. " +
-      "Không dùng khi: thông tin đã có trong hồ sơ nhà đầu tư hoặc hội thoại; xin phép chạy tool (harness tự hỏi). " +
-      "Mỗi câu 2–4 lựa chọn ngắn, rõ ràng; người dùng luôn có thể tự nhập câu trả lời khác.",
+      "Hỏi người dùng 1–4 câu trắc nghiệm (2–4 lựa chọn mỗi câu; họ luôn tự nhập được câu khác). " +
+      "Dùng khi cần chính họ quyết định: thời hạn đầu tư, mức rủi ro, chọn phương án. Không dùng khi thông tin đã có trong hồ sơ hay hội thoại, hoặc để xin phép chạy tool.",
     input: AskUserInput,
     readOnly: true,
     summarize: (input) => `Hỏi bạn ${input.questions.length} câu`,

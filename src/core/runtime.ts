@@ -16,8 +16,7 @@ import type { Skill } from "./skills/schema"
 import { currentTimeTool } from "./tools/builtin/current-time"
 import { readResultTool } from "./tools/builtin/read-result"
 import { loadSkillTool } from "./tools/builtin/load-skill"
-import { chartDepthTool, chartRenderTool } from "./tools/chart/render"
-import { chartCompareTool } from "./tools/chart/compare"
+import { chartRenderTool } from "./tools/chart/render"
 import { doctorLocalTool, sessionHistoryTools } from "./tools/session/history"
 import { sendMessageTool, spawnSubagentTool, stopAgentTool } from "./tools/subagent/spawn"
 import { SubagentManager } from "./subagents/manager"
@@ -166,8 +165,6 @@ export function initRuntime(opts: {
     ),
   )
   registry.register(chartRenderTool())
-  registry.register(chartCompareTool())
-  registry.register(chartDepthTool())
   const redaction = createRedactionCheck(path.join(home, "memory.db"))
   for (const tool of sessionHistoryTools({ redaction })) registry.register(tool)
   for (const tool of localWatchlistTools(home)) registry.register(tool)

@@ -2,6 +2,7 @@
 name: kiem-chien-luoc
 description: "Dùng khi cần backtest một chiến lược: chạy quant, đọc Sharpe/drawdown/winrate, kết luận dùng được không. Chỉ dùng tool đọc."
 tools: ["@chi-doc"]
+listed: false
 maxSteps: 10
 ---
 Việc của bạn là trả lời: chiến lược này có dùng được bằng tiền thật không.

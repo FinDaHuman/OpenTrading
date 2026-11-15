@@ -335,6 +335,15 @@ test("awk arithmetic runs under a POSIX shell", async () => {
   expect(printed).toContain("833333333333.333 0.333333333333333")
 }, 30_000)
 
+test("the described form (%.15g) keeps full digits for đồng-sized values, without exponents", async () => {
+  if (win || !Bun.which("awk")) return
+  const tool = shellTool(ws())
+  expect(tool.description).toContain("%.15g")
+  const out = text(await tool.execute({ command: String.raw`awk 'BEGIN{printf "%.15g %.15g\n", 2.5e12/3, 31250/4520}'` }, ctx()))
+  expect(out).toContain("833333333333.333 6.91371681415929")
+  expect(out).not.toMatch(/e\+/)
+}, 30_000)
+
 test("every accepted form really runs in this machine's shell and prints only numbers", async () => {
   const tool = shellTool(ws())
   const cases = win ? PS_OK : Bun.which("awk") ? AWK_OK : []

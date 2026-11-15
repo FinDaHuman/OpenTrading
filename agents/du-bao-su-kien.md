@@ -2,6 +2,7 @@
 name: du-bao-su-kien
 description: "Dùng khi cần dự báo một sự kiện (Fed/bầu cử/xung đột): odds thị trường, kịch bản, tác động lên VN. Chỉ dùng tool đọc."
 tools: ["@chi-doc"]
+listed: false
 maxSteps: 8
 ---
 Việc của bạn là trả lời: các kịch bản, xác suất thị trường gán cho mỗi kịch bản, và tác động từng kịch bản lên VN.

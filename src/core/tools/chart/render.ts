@@ -1,5 +1,6 @@
 import { z } from "zod"
 import { LOCAL_SOURCE, type ToolDef } from "../types"
+import { chartCompareTool, type ChartCompareInput } from "./compare"
 import { renderBoxplot } from "./boxplot"
 import type { ChartData } from "./data"
 import { extractFromRef } from "./extract"
@@ -76,50 +77,79 @@ export type ChartRenderInput = {
   height?: number
 }
 
+/** The tool's kinds: the renderer's, plus compare (chart_compare) and depth (chart_depth) folded in. */
+const TOOL_KINDS = [...KINDS, "compare", "depth"] as const
+
+export type ChartToolInput = Omit<ChartRenderInput, "kind"> & {
+  kind: (typeof TOOL_KINDS)[number]
+  /** kind=compare: refs of price results, 2–5 series in all. */
+  from_calls?: string[]
+  /** kind=compare: keep only these symbols from from_calls. */
+  symbols?: string[]
+  /** kind=depth: order book levels. */
+  bids?: { price: number; volume: number }[]
+  asks?: { price: number; volume: number }[]
+  /** kind=depth: levels per side (default 5). */
+  levels?: number
+}
+
+const DESCRIPTION = [
+  "Vẽ biểu đồ màu trong terminal từ dữ liệu đã có; hình tự hiện cho người dùng, bạn nhận tóm tắt số để nhận xét. Dùng khi người dùng muốn xem hình, hoặc chuỗi số khó đọc dạng bảng. Không dùng khi chưa có dữ liệu: lấy bằng tool dữ liệu trước.",
+  "Ưu tiên from_call = mã rN trong [ref rN] của kết quả tool (harness tự lấy số, không gõ lại); kết quả gộp nhiều mã thì chọn bằng from_symbol.",
+  "kind=compare: 2–5 chuỗi giá theo % thay đổi trên cùng thang (from_calls, lọc bằng symbols; hoặc labels + matrix), dùng thay multiline khi các chuỗi khác độ lớn. kind=depth: sổ lệnh (bids, asks).",
+  "Số tay theo kind: candlestick bars (≥5); line/area/sparkline/sparkcolumn/linebox/histogram/winloss series; bar/pie series + labels; heatmap/multiline/stacked/boxplot matrix + labels; waterfall start + series; scatter points; gauge/donut value + max.",
+].join("\n")
+
 /** Text charts from data the model already has (MCP results); renders only, never fetches. */
-export function chartRenderTool(): ToolDef<ChartRenderInput> {
+export function chartRenderTool(): ToolDef<ChartToolInput> {
   return {
     name: "chart_render",
-    description:
-      "Vẽ biểu đồ màu trong TUI từ dữ liệu đã có. Dùng khi người dùng xin hình/nến/biểu đồ; muốn so sánh nhiều chuỗi thì dùng chart_compare. " +
-      "Ưu tiên from_call: mã rN trong [ref rN] ở đầu kết quả tool dữ liệu — harness tự lấy số, không gõ lại (candlestick, line/area/sparkline/linebox/sparkcolumn/histogram/winloss, bar/pie). Kết quả gọi gộp nhiều mã: chọn mã bằng from_symbol. Chỉ truyền số tay khi dữ liệu không đến từ tool: candlestick (bars ≥5), line… (series), bar/pie (series+labels), heatmap/multiline/stacked/boxplot (matrix), waterfall (start+series), scatter (points), gauge/donut (value+max). Trả về tóm tắt số để nhận xét; hình tự hiện cho người dùng.",
+    description: DESCRIPTION,
     input: z.object({
-      kind: z.enum(KINDS).describe("Loại biểu đồ"),
-      from_call: z.string().regex(/^r\d+$/, "dạng r12").optional().describe("Mã rN từ [ref rN] của kết quả tool dữ liệu"),
-      field: z.string().max(40).optional().describe("Trường số cần vẽ khi dùng from_call (mặc định giá đóng cửa/giá trị), ví dụ volume"),
-      label_field: z.string().max(40).optional().describe("Trường tên cho bar/pie khi dùng from_call, ví dụ symbol"),
-      path: z.string().max(80).optional().describe("Đường dẫn mảng trong kết quả khi có nhiều mảng, ví dụ data.candles"),
-      from_symbol: z.string().max(20).optional().describe("Mã cần vẽ khi kết quả from_call chứa nhiều mã (gọi gộp), ví dụ SHB"),
-      symbol: z.string().optional().describe("Mã hoặc tiêu đề, ví dụ VCB; bắt đầu bằng mã thì mã đó phải khớp dữ liệu"),
-      bars: z.array(BarSchema).max(500).optional().describe("Nến OHLC cho kind=candlestick (tối thiểu 5)"),
-      series: z
-        .array(z.number())
-        .max(2000)
-        .optional()
-        .describe("Chuỗi số cho line/sparkline/sparkcolumn/area/bar/histogram/winloss; deltas cho waterfall"),
-      dirs: z.array(z.boolean()).max(2000).optional().describe("Hướng từng cột sparkcolumn (màu xanh/đỏ theo giá, vd volume kèm close so phiên trước)"),
-      labels: z.array(z.string()).max(200).optional().describe("Nhãn: bar/pie (mỗi cột), waterfall (mỗi bước), multiline/stacked/boxplot/heatmap (nhãn hàng rồi nhãn cột)"),
+      kind: z.enum(TOOL_KINDS).describe("Loại biểu đồ; compare = so % nhiều chuỗi, depth = sổ lệnh"),
+      from_call: z.string().regex(/^r\d+$/, "dạng r12").optional().describe("rN từ [ref rN]"),
+      from_calls: z.array(z.string().regex(/^r\d+$/)).min(1).max(5).optional().describe("compare: các rN"),
+      symbols: z.array(z.string().max(20)).max(5).optional().describe("compare: chỉ lấy các mã này"),
+      field: z.string().max(40).optional().describe("Trường số khi dùng from_call (mặc định giá đóng cửa), ví dụ volume"),
+      label_field: z.string().max(40).optional().describe("bar/pie: trường tên, ví dụ symbol"),
+      path: z.string().max(80).optional().describe("Đường dẫn mảng khi kết quả có nhiều mảng, ví dụ data.candles"),
+      from_symbol: z.string().max(20).optional().describe("Mã cần vẽ trong kết quả gộp nhiều mã"),
+      symbol: z.string().optional().describe("Mã hoặc tiêu đề"),
+      bars: z.array(BarSchema).max(500).optional().describe("candlestick: nến OHLC(v), tối thiểu 5"),
+      series: z.array(z.number()).max(2000).optional().describe("line/area/spark*/bar/pie/histogram/winloss: chuỗi số; waterfall: các bước tăng giảm"),
+      dirs: z.array(z.boolean()).max(2000).optional().describe("sparkcolumn: tăng/giảm từng cột"),
+      labels: z.array(z.string()).max(200).optional().describe("Nhãn cột/bước; với matrix: nhãn hàng rồi nhãn cột"),
       matrix: z
         .array(z.array(z.number()).max(500))
         .max(30)
         .refine((m) => m.reduce((a, r) => a + r.length, 0) <= 5000, "matrix tối đa 5000 số")
         .optional()
-        .describe("Ma trận, chỉ cho kind=heatmap; multiline/boxplot (mỗi dòng 1 series); stacked (mỗi hàng 1 nhóm). bar/line… nhận series, không nhận matrix"),
-      points: z.array(z.object({ x: z.number(), y: z.number() })).max(500).optional().describe("Điểm (x,y) cho kind=scatter (ít nhất 3)"),
-      groups: z.array(z.number().int().nonnegative()).max(500).optional().describe("Nhóm từng điểm scatter (mỗi nhóm 1 màu + legend)"),
-      times: z.array(z.string()).max(2000).optional().describe("Nhãn trục X theo thời gian (nến/line/area/multiline/spark, vd 09-01)"),
-      start: z.number().optional().describe("Giá trị đầu cho kind=waterfall"),
-      value: z.number().optional().describe("Giá trị cho kind=gauge/donut"),
-      max: z.number().positive().optional().describe("Thang tối đa cho gauge/donut"),
+        .describe("heatmap/multiline/stacked/boxplot (và compare thay from_calls): mỗi hàng một chuỗi/nhóm; bar/line dùng series"),
+      points: z.array(z.object({ x: z.number(), y: z.number() })).max(500).optional().describe("scatter: điểm (x, y), tối thiểu 3"),
+      groups: z.array(z.number().int().nonnegative()).max(500).optional().describe("scatter: nhóm từng điểm"),
+      times: z.array(z.string()).max(2000).optional().describe("Nhãn trục X"),
+      start: z.number().optional().describe("waterfall: giá trị đầu"),
+      value: z.number().optional().describe("gauge/donut: giá trị"),
+      max: z.number().positive().optional().describe("gauge/donut: thang tối đa"),
+      bids: z.array(LevelSchema).max(200).optional().describe("depth: mức giá mua (giá, khối lượng)"),
+      asks: z.array(LevelSchema).max(200).optional().describe("depth: mức giá bán (giá, khối lượng)"),
+      levels: z.number().int().min(1).max(20).optional().describe("depth: số mức mỗi bên (mặc định 5)"),
       unit: z.string().max(10).optional().describe("Đơn vị hiển thị, ví dụ %"),
-      width: z.number().int().min(20).max(MAX_CHART_WIDTH).optional().describe("Rộng (ký tự, mặc định theo kind)"),
-      height: z.number().int().min(3).max(40).optional().describe("Cao (dòng, mặc định theo kind)"),
+      width: z.number().int().min(20).max(MAX_CHART_WIDTH).optional(),
+      height: z.number().int().min(3).max(40).optional(),
     }),
     readOnly: true,
     deferrable: true,
     source: LOCAL_SOURCE,
-    summarize: (input) => `chart_render ${input.kind}${input.symbol ? ` ${input.symbol}` : ""}${input.from_call ? ` ← ${input.from_call}` : ""}`,
-    async execute(raw) {
+    summarize: (input) =>
+      `chart_render ${input.kind}${input.symbol ? ` ${input.symbol}` : ""}${input.from_call ? ` ← ${input.from_call}` : ""}${input.from_calls ? ` ← ${input.from_calls.join(", ")}` : ""}`,
+    async execute(tool, ctx) {
+      if (tool.kind === "compare") return chartCompareTool().execute(compareInput(tool), ctx)
+      if (tool.kind === "depth") {
+        if (!tool.bids || !tool.asks) throw new Error("kind=depth cần bids và asks (giá + khối lượng).")
+        return chartDepthTool().execute({ symbol: tool.symbol, bids: tool.bids, asks: tool.asks, depth: tool.levels, unit: tool.unit }, ctx)
+      }
+      const raw = tool as ChartRenderInput
       const input = raw.from_call ? fromCall(raw) : raw
       checkLengths(input)
       await render(input) // validates minimum points; the text itself is not sent
@@ -127,6 +157,16 @@ export function chartRenderTool(): ToolDef<ChartRenderInput> {
       return { output: summarizeChart(chart, raw.from_call ? `${raw.from_call}` : undefined), chart }
     },
   }
+}
+
+/** kind=compare in chart_render's shape → chart_compare's input (labels + matrix = manual series). */
+function compareInput(tool: ChartToolInput): ChartCompareInput {
+  const base = { title: tool.symbol, from_calls: tool.from_calls, symbols: tool.symbols, field: tool.field, times: tool.times, unit: tool.unit }
+  if (tool.from_calls) return base
+  const rows = tool.matrix ?? []
+  if (rows.length < 2 || rows.length > 5) throw new Error("kind=compare cần from_calls, hoặc 2–5 hàng matrix kèm labels.")
+  if (rows.some((r) => r.length < 2)) throw new Error("kind=compare: mỗi hàng matrix cần ít nhất 2 điểm.")
+  return { ...base, series: rows.map((values, i) => ({ label: (tool.labels?.[i] ?? `#${i + 1}`).slice(0, 20), values })) }
 }
 
 /** Fill a render input from a stored tool result (refs.ts). Explicit numbers are ignored. */

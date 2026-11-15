@@ -46,6 +46,7 @@ import { isContextOverflow, pruneAttachments, pruneToolResults, tokensOf } from 
 import { isAttachmentText } from "./mentions"
 import { classifyFailure, retryMiddleware, type RetryNotice, type RetryOptions } from "./retry"
 import { loadedTools } from "./tools/loaded"
+import { RENAMED_TOOLS, renamedInput } from "./tools/renamed"
 import { operandNote, untracedOperands } from "./loop/operands"
 import { mathOnlyCommand } from "./tools/shell/math"
 import { detectShell } from "./tools/shell/run"
@@ -487,7 +488,7 @@ export function lastReminder(history: readonly ModelMessage[], id: string): stri
  * with its parameters, and the model calls it again instead of spending a tool_search step.
  * `null` = keep the SDK's own error.
  */
-async function repairCall<T extends { toolName: string }>(
+async function repairCall<T extends { toolName: string; input?: string }>(
   registry: ToolRegistry,
   built: BuiltToolSet | undefined,
   active: string[] | undefined,
@@ -498,10 +499,23 @@ async function repairCall<T extends { toolName: string }>(
   if (!built) return null
   const deferring = built.deferring || built.deferred.length > 0
   if (!NoSuchToolError.isInstance(error)) return null
-  const names = resolveToolName(registry, toolCall.toolName).filter((n) => n in built.tools)
+  // A tool #278 folded into another (a resumed conversation, a model copying its history): the call
+  // runs as the new tool with the action/kind the old one stood for. Deferred, it loads like any
+  // deferred tool below, the error naming the field to pass.
+  const renamed = Object.hasOwn(RENAMED_TOOLS, toolCall.toolName) ? RENAMED_TOOLS[toolCall.toolName] : undefined
+  if (renamed && renamed.tool in built.tools && (!active || active.includes(renamed.tool))) {
+    let input: Record<string, unknown> = {}
+    try {
+      const parsed = JSON.parse(toolCall.input || "{}")
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) input = parsed
+    } catch {}
+    return { ...toolCall, toolName: renamed.tool, input: JSON.stringify(renamedInput(renamed, input)) }
+  }
+  const names = renamed && renamed.tool in built.tools ? [renamed.tool] : resolveToolName(registry, toolCall.toolName).filter((n) => n in built.tools)
   if (names.length === 1 && (!active || active.includes(names[0]!))) return { ...toolCall, toolName: names[0]! }
   if (names.length === 1 && deferring) {
     const name = names[0]!
+    const how = renamed ? ` và ${renamed.field}="${renamed.value}" (${toolCall.toolName} đã gộp vào ${name})` : ""
     // Loaded already yet still not active: cut by the per-request cap. Saying "loaded,
     // call again" here would loop.
     if (loaded.includes(name)) {
@@ -514,7 +528,7 @@ async function repairCall<T extends { toolName: string }>(
     throw new Error(
       [
         `${LOADED_PREFIX}${name}`,
-        `Tool ${name} chưa có trong bước này nên chưa chạy; đã nạp xong — gọi lại đúng lệnh với tên ${name}.`,
+        `Tool ${name} chưa có trong bước này nên chưa chạy; đã nạp xong — gọi lại đúng lệnh với tên ${name}${how}.`,
         ...(def ? ["", describeTool(registry, def)] : []),
       ].join("\n"),
     )
@@ -818,7 +832,10 @@ export const DEFAULT_DEFER_MIN_TOOLS = 40
 
 /**
  * Whether deferrable tools (MCP and the optional built-in ones) go out by name only this
- * request (tool search). "auto" defers once the deferrable tools are many (tool choice degrades past ~30–50) or heavy for the context.
+ * request (tool search). "auto" defers all of them once they are many (tool choice degrades
+ * past ~30–50) or heavy for the context; below that it defers only the `deferByDefault` local
+ * tools that turns rarely use (grep/glob, sessions, doctor, send/stop). A subagent's
+ * tools are already narrowed by its type, so it keeps them visible.
  */
 export function shouldDefer(
   config: Pick<Config, "toolSearch" | "toolSearchMinTools">,
@@ -832,7 +849,9 @@ export function shouldDefer(
   if (deferrable.length === 0) return false
   if (mode === "on") return true
   if (deferrable.length > (config.toolSearchMinTools ?? DEFAULT_DEFER_MIN_TOOLS)) return true
-  return !!context && registry.estimateTokens(deferrable, flavor) > context * DEFER_CONTEXT_SHARE
+  if (context && registry.estimateTokens(deferrable, flavor) > context * DEFER_CONTEXT_SHARE) return true
+  if (registry.origin) return false
+  return deferrable.some((d) => d.deferByDefault) ? "default" : false
 }
 
 /** Deferred tool names grouped by MCP server, short names where they are unambiguous. */
@@ -918,7 +937,8 @@ async function assembleFor(opts: TurnInput, target: Target | undefined, bound: B
     now: opts.now ?? new Date(),
     clockPolicy: opts.clockPolicy,
     prevClock: opts.prevClock,
-    deferredTools: built && built.deferred.length > 0 ? deferredByServer(opts.registry, built.deferred) : undefined,
+    // Every tool the policy defers, loaded or not: loading one must not change the system prompt.
+    deferredTools: built && built.deferrable.length > 0 ? deferredByServer(opts.registry, built.deferrable) : undefined,
     declaredTools: built ? Object.keys(built.tools) : undefined,
     mcpInstructions: opts.serverInstructions?.(),
     todos: currentTodos(opts.history ?? []),
@@ -1195,7 +1215,8 @@ async function* runTurn(opts: RunOptions, budget?: RequestBudget): AsyncGenerato
   }
   // Tell the user once whenever deferral or the hidden tools change. Keyed on every
   // deferrable tool, not on those still unloaded: loading tools must not repeat the notice.
-  const deferrable = built?.deferring ? opts.registry.list().filter((d) => d.deferrable).map((d) => d.name) : []
+  // Deferring only the default local tools is the normal state and stays silent (/tools shows it).
+  const deferrable = built?.deferring === true ? opts.registry.list().filter((d) => d.deferrable).map((d) => d.name) : []
   const hiddenKey = JSON.stringify([built?.hidden ?? [], deferrable.length])
   if (hiddenKey !== opts.registry.lastHiddenNotice) {
     opts.registry.lastHiddenNotice = hiddenKey

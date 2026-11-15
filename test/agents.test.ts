@@ -96,7 +96,10 @@ test("spawn_subagent lists the types in its description and rejects an unknown t
   parent.register(tool("current_time", true))
   const { agents } = await loadAgents(agentRoots(tmp).filter((r) => r.source === "bundled"))
   const spawn = spawnSubagentTool(new SubagentManager({ parent }), agents)
-  expect(spawn.description).toContain("Các loại subagent (tham số subagent_type, mặc định nghien-cuu):")
+  expect(spawn.description).toContain("Loại subagent (subagent_type, mặc định nghien-cuu):")
+  // Types marked listed: false are named only, still callable by name.
+  expect(spawn.description).toMatch(/Loại khác \(gọi đích danh khi skill yêu cầu\): .*\bbear\b.*\bvi-mo\b/)
+  expect(spawn.description).not.toMatch(/- bear: /)
   expect(spawn.description).toMatch(/- tra-cuu: Dùng khi cần tra cứu nhanh .* \(Tool: chỉ đọc\)/)
   expect(spawn.description).toMatch(/- tin-tuc: .*\(Tool: web_search, web_fetch, \*news\*, \*sentiment\*, current_time\)/)
   expect(spawn.summarize!({ description: "Giá FPT", task: "x", purpose: "x", questions: ["x"], output: "x", subagent_type: "tra-cuu" })).toBe("tra-cuu(Giá FPT)")
