@@ -118,7 +118,7 @@ test("the command forms of issue #268 against the grammar: where each one ends u
   // run are in. A PR that widens the grammar or the near-miss moves these numbers, on purpose.
   const commands = parseCommands(await Bun.file(path.join(import.meta.dir, "fixtures", "shell-commands.jsonl")).text())
   const report = replayAll(commands)
-  const synthetic = replayAll(commands.filter((c) => c.source !== "r0-gemini-flash-lite"))
+  const synthetic = replayAll(commands.filter((c) => c.source === "issue-268" || c.source === "synthetic"))
   expect(synthetic.commands).toBe(14)
   // Grammar v2: every awk form of the issue runs (was run 3, near 1, ask 10). The python forms
   // get the form to use: nothing reaches the approval gate any more.
@@ -186,4 +186,22 @@ test("the compute question set parses as questions and every question has a labe
   const questions = parseQuestions(text)
   expect(questions).toHaveLength(12)
   expect(parseLabels(text).size).toBe(12)
+})
+
+test("15/11: a dropped zero is untraced; a unit change still traces", () => {
+  const events: TraceEvent[] = [
+    head,
+    { type: "question", q: "a", rep: 1, group: "A", question: "Lợi nhuận sau thuế 1.315.800.000.000 đồng, 215.000.000 cổ phiếu, giá 52,7 nghìn đồng. EPS?", now: "2026-03-10T10:00:00+07:00" },
+    call("a", "c1", "shell", "$earnings = 1315800000000; $shares = 21500000; $earnings / $shares; 52700 / 1000"),
+    { type: "tool_result", q: "a", rep: 1, call_id: "c1", ok: true, visible: "[mã thoát 0 · 0.2s · /w]\n61200\n52.7", duration_ms: 250, shell: { route: "math", exec_ms: 200 } },
+    answer("a", "EPS 61.200 đồng.", 2),
+  ]
+  const m = shellMetrics(readTrace(events.map((e) => JSON.stringify(e)).join("\n")))
+  expect(m.operands.untraced.map((u) => u.value)).toEqual(["21500000"])
+  expect(m.operands.traced).toBe(2)
+})
+
+test("the commands of the 15/11 runs on main that #289 still denied now get the hint", async () => {
+  const commands = parseCommands(await Bun.file(path.join(import.meta.dir, "fixtures", "shell-commands.jsonl")).text()).filter((c) => c.source === "r2-gemini-flash-lite")
+  expect(replayAll(commands).total).toEqual({ run: 0, near: commands.length, ask: 0 })
 })
