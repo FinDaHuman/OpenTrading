@@ -59,6 +59,9 @@ const only = arg("--only")?.split(",")
 const repeat = Number(arg("--repeat") ?? 1)
 const minutes = Number(arg("--timeout-min") ?? 15)
 const cap = Number(arg("--max-requests") ?? DEFAULT_MAX_REQUESTS)
+const profileArg = arg("--profile")
+if (profileArg !== undefined && profileArg !== "machine" && profileArg !== "terminal") stop("--profile chỉ nhận machine hoặc terminal.")
+const profile = profileArg === "machine" ? ("machine" as const) : undefined
 const record = arg("--mcp-record")
 const replay = arg("--mcp-replay")
 if (record && replay) stop("Chỉ dùng một trong --mcp-record và --mcp-replay.")
@@ -112,7 +115,7 @@ try {
   const target = await resolveTarget(model)
   const { effort, toolSearch, maxSteps } = await loadConfig()
   // The shell decides which arithmetic form runs unasked (awk on bash/sh, expressions on PowerShell).
-  const settings = { effort, toolSearch, maxSteps, ablate, memory, shell: detectShell().kind, permissions: yolo ? "bypass" : "unattended", mcp: cassette?.mode ?? "live", ...(routing ? { openrouter_routing: routing } : {}), ...(tape ? { mcp_tape: path.basename(tape), mcp_answers: cassette!.size } : {}) }
+  const settings = { effort, toolSearch, maxSteps, ablate, memory, shell: detectShell().kind, profile: profile ?? "terminal", permissions: yolo ? "bypass" : "unattended", mcp: cassette?.mode ?? "live", ...(routing ? { openrouter_routing: routing } : {}), ...(tape ? { mcp_tape: path.basename(tape), mcp_answers: cassette!.size } : {}) }
   // Tallied from this run's own answers: --out may name a file that already holds earlier runs.
   const answers: TraceEvent[] = []
   const toFile = traceFile(out)
@@ -120,7 +123,7 @@ try {
     if (event.type === "answer") answers.push(event)
     toFile(event)
   }
-  await runEval({ runtime, skills, target, questions, repeat, timeoutMs: minutes * 60_000, write, version: pkg.version, commit, settings, ledger: requests, ablated, yolo, memory })
+  await runEval({ runtime, skills, target, questions, repeat, timeoutMs: minutes * 60_000, write, version: pkg.version, commit, settings, ledger: requests, ablated, yolo, memory, ...(profile ? { profile } : {}) })
   console.log(`Trace: ${out}`)
   const served = servedSummary(answers)
   if (Object.keys(served).length > 0) console.log(`Provider đã trả lời (số bước): ${Object.entries(served).map(([by, n]) => `${by} ${n}`).join(", ")}`)

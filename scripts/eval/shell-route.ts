@@ -32,6 +32,9 @@ export interface ShellCall {
 }
 
 export function shellRoute(call: ShellCall): ShellRoute {
+  // The calculator variant (read-only agents, `--profile machine`) answers from its execute, so
+  // its hint arrives as an executed call that failed.
+  if (!call.ok && call.visible.startsWith(MATH_NEAR_MISS_PREFIX)) return "near-miss"
   if (call.executed) {
     if (call.scope?.startsWith("math:")) return "math"
     return call.readOnly || call.scope?.startsWith("read:") ? "read-only" : "approved"

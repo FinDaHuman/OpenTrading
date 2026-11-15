@@ -32,6 +32,10 @@ Each question has an `id`, a `group` (A–F), the `question`, and `now`, the mom
 
 `answer.text` is the answer the harness kept. `answer.markup_stripped` names the harness tags the loop took out of the turn's text (a step it dropped included), when there were any. `answer.fallback: true` means the model gave no answer after every recovery while sources failed, and the harness wrote the answer: the missing sources, no figure. `answer.streamed` is everything the user saw, including a draft the stop gate sent back.
 
+## Profile
+
+`--profile machine` measures OT the way a program calls it (`RunOptions.profile`): no `style.md`, `prompts/citations-machine.md` for citations, two `tools.md` lines for a person watching the terminal left out, and, without `--yolo`, the calculator shell. The header's `settings.profile` records it. Compare runs per profile only. Each `answer` carries `cached_input_tokens` when the provider reported the part of the input it read from its prompt cache.
+
 ## Shell commands
 
 A `tool_result` of the `shell` tool also carries `shell: { route, exec_ms }`: what became of the command.

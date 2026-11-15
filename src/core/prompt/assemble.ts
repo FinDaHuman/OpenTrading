@@ -88,6 +88,25 @@ export interface AssembleInput {
   role?: "main" | "subagent"
   /** The subagent type's own instructions. */
   agentPrompt?: string
+  /**
+   * "machine": the caller is a program that sets its own output format (`ot -p --profile machine`,
+   * a benchmark runner). No style.md, citations-machine.md for citations.md, and tools.md without
+   * the lines written for a person watching a terminal (MACHINE_DROPPED_TOOL_LINES).
+   */
+  profile?: PromptProfile
+}
+
+export type PromptProfile = "terminal" | "machine"
+
+/** How the tools.md lines that only serve a person watching a terminal begin. */
+export const MACHINE_DROPPED_TOOL_LINES = ["- Nói theo việc đã làm", "- Trước lượt tool đầu hoặc khi đổi hướng"]
+
+/** tools.md for a program caller: the lines above left out. */
+export function machineTools(text: string | undefined): string | undefined {
+  return text
+    ?.split("\n")
+    .filter((line) => !MACHINE_DROPPED_TOOL_LINES.some((start) => line.startsWith(start)))
+    .join("\n")
 }
 
 export interface Assembled {
@@ -213,8 +232,9 @@ export function assemble(input: AssembleInput, promptsDir = PROMPTS_DIR): Assemb
   const subagent = input.role === "subagent"
   if (subagent) add(system, "subagent", 1, "system", identityLayer("subagent", promptsDir), "identity")
   else add(system, "identity", 1, "system", identityLayer("main", promptsDir))
-  if (input.tools.length > 0) add(system, "tools", 7, "system", promptFile("tools", promptsDir))
-  if (!input.disabled?.has("citations-prompt")) add(system, "citations", 1, "system", promptFile("citations", promptsDir))
+  const machine = input.profile === "machine"
+  if (input.tools.length > 0) add(system, "tools", 7, "system", machine ? machineTools(promptFile("tools", promptsDir)) : promptFile("tools", promptsDir))
+  if (!input.disabled?.has("citations-prompt")) add(system, "citations", 1, "system", promptFile(machine ? "citations-machine" : "citations", promptsDir), "citations")
   // Investor profile rides the static system prefix (cache-marked on Anthropic) like
   // CLAUDE.md at boot. Re-read per request but byte-identical while the file is unchanged,
   // so it caches the same — while an edit still applies the very next request.
@@ -228,7 +248,8 @@ export function assemble(input: AssembleInput, promptsDir = PROMPTS_DIR): Assemb
   else {
     add(system, "memory_policy", 4, "system", input.memoryInstructions?.trim() || undefined)
     if (input.memoryCards) add(system, "memory_cards", 4, "system", promptFile("memory-cards", promptsDir))
-    add(system, "style", 8, "system", promptFile("style", promptsDir))
+    // A program sets its own format: the terminal style guide would only argue with it.
+    if (!machine) add(system, "style", 8, "system", promptFile("style", promptsDir))
   }
 
   // ── system: per-session (changes only when skills or tools change) ────

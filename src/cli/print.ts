@@ -9,6 +9,7 @@ import { FolderTrust, projectExtras } from "../core/folder-trust"
 import { MODE_LABEL, startMode } from "../core/permission/mode"
 import { promptVersion } from "../core/prompt/assemble"
 import { onModelRequest } from "../core/requests"
+import { useCalculatorShell } from "../core/tools/shell/shell"
 import { closeMemory, createMemory, initRuntime, setAgents, type Runtime } from "../core/runtime"
 import { useResultSession } from "../core/tools/refs"
 import { Session, sessionsDir } from "../core/session/store"
@@ -34,6 +35,8 @@ export interface PrintOptions {
   /** `provider/model`. */
   model?: string
   format: PrintFormat
+  /** `--profile machine`: a program reads the answer (prompt/assemble.ts PromptProfile). */
+  profile?: "machine"
 }
 
 export interface PrintResult {
@@ -122,9 +125,12 @@ export async function runPrint(opts: PrintOptions, deps: { runtime?: Runtime; ta
     await runtime.mcp.start()
     setConversation(session.id)
     const before = new Set(runtime.subagents.list().map((v) => v.id))
+    // Nobody can approve a command here unless --yolo: the calculator is all of shell that runs.
+    if (opts.profile === "machine" && !opts.yolo) useCalculatorShell(runtime.registry)
     for await (const event of runAgent({
       history: [],
       input: prompt,
+      ...(opts.profile ? { profile: opts.profile } : {}),
       skills,
       registry: runtime.registry,
       target,
