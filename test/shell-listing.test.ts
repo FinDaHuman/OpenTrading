@@ -243,7 +243,7 @@ test("pwsh on Linux and macOS: a backslash is a separator there too, and there i
 test("a tilde runs only inside an 8.3 short name; at a word start or after = or : it is home", () => {
   const w = env(PS)
   const short = { ...w, readable: () => true }
-  for (const c of ["dir RUNNER~1", "dir src/PROGRA~2/x", 'dir "C:/Users/RUNNER~1/AppData"']) expect([c, listingCommand(c, short)]).toEqual([c, true])
+  for (const c of ["dir RUNNER~1", "dir src/PROGRA~2/x", 'dir "src/RUNNER~1/AppData"']) expect([c, listingCommand(c, short)]).toEqual([c, true])
   for (const c of ["dir ~", "dir ~/x", "dir ~1", "dir a~", "dir a~b", "dir a=~/x", "dir a:~/x", "dir src/~x", 'dir "~"', 'dir "a/~/b"']) expect([c, listingCommand(c, short)]).toEqual([c, false])
   for (const c of ["ls ~", "ls a=~/x", "ls x:~/y"]) expect([c, listingCommand(c, { ...env(BASH), readable: () => true })]).toEqual([c, false])
 })
