@@ -201,6 +201,19 @@ test("loaded deferred tools follow the visible ones in load order; <tool_hoan> k
   expect(after.deferred).toEqual(["grep_files"])
 })
 
+test("at the per-request cap, the always-visible tools stay and the latest-loaded tool is cut first", () => {
+  const r = defaultsRegistry()
+  const visible = r.toToolSet({ defer: "default" }).names.length
+  const capped = r.toToolSet({ defer: "default", loaded: new Set(["session_list", "grep_files"]), maxTools: visible + 1 })
+  expect(capped.names.slice(visible)).toEqual(["session_list"])
+  expect(capped.hidden).toEqual([{ source: "local", count: 1 }])
+})
+
+test("<tool_hoan> says a tool already declared is called directly (it lists loaded tools too)", () => {
+  const text = renderDeferred([{ server: "local", tools: ["grep_files"] }], 1_000).text
+  expect(text).toContain("Đã có schema thì gọi thẳng;")
+})
+
 test("spawning a subagent loads send_message and stop_agent", () => {
   const history: ModelMessage[] = [
     { role: "assistant", content: [{ type: "tool-call", toolCallId: "c1", toolName: "spawn_subagent", input: {} }] },
