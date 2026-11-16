@@ -115,7 +115,10 @@ function writeResultFile(ref: string, text: string) {
 export function rememberResult(tool: string, text: string, source: Partial<Pick<StoredResult, "callId" | "sourceInput" | "rawText" | "rawSha256" | "visibleSha256">> = {}): string {
   const ref = `r${++counter}`
   store.set(ref, { ref, tool, text, at: Date.now(), session, ...source })
-  writeResultFile(ref, source.rawText ?? text)
+  // The text the model read (dates already ISO, normalizeNetDates in wrap.ts; not yet capped), not the raw
+  // reply: a script must see the same dates as the model. Its sha256 is the evidence row's `visibleSha256`
+  // when the result is plain JSON (#311 review F5).
+  writeResultFile(ref, text)
   bytes += text.length
   while (store.size > MAX_ENTRIES || bytes > MAX_BYTES) {
     const oldest = store.keys().next().value

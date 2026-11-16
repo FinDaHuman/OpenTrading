@@ -33,6 +33,8 @@ import { traceFile, type TraceEvent } from "./trace"
  *   --memory        notebook: mỗi câu một sổ ghi nhớ rỗng (prompt có hướng dẫn memory, tool memory_read);
  *                   none: không memory (mặc định của sản phẩm). Bắt buộc nêu rõ, như --model.
  *   --yolo          chế độ ▸▸▸ bỏ qua quyền thay cho danh sách duyệt hẹp (chỉ web_fetch)
+ *   --result-files  thư mục trong thư mục làm việc (vd ot-data): mỗi kết quả dữ liệu cũng ghi thành rN.json
+ *                   cho script đọc, như config results.exportDir (#309 A2); không có cờ thì không ghi
  *   --or-provider   (chỉ model openrouter/…) ghim provider theo thứ tự, vd deepseek hoặc deepinfra/fp8 → provider.order
  *   --or-no-fallback  không cho OpenRouter chuyển sang provider khác → allow_fallbacks: false
  *   --or-quant      chỉ dùng các mức quantization này, vd fp8 → provider.quantizations
@@ -76,6 +78,7 @@ const routing = pin.routing
 const ablate = arg("--ablate")?.split(",") ?? []
 const ablated = parseAblations(ablate)
 const yolo = process.argv.includes("--yolo")
+const resultFiles = arg("--result-files")
 const memoryArg = arg("--memory") ?? stop("Thiếu --memory notebook|none: mỗi lần chạy phải nêu rõ có memory hay không.")
 const memory = memoryArg === "notebook" || memoryArg === "none" ? memoryArg : stop(`--memory chỉ nhận notebook hoặc none (nhận "${memoryArg}").`)
 const questions = parseQuestions(await readFile(file, "utf8")).filter((q) => !only || only.includes(q.id))
@@ -110,7 +113,7 @@ process.on("SIGINT", () => {
 })
 
 const { skills } = await loadSkills(skillRoots(work, { project: false }))
-const runtime = initRuntime({ home, cwd: work, skills: () => skillsFor(skills, ablated), mcpTransport: cassette && ((server, real) => cassette.transport(server, real)) })
+const runtime = initRuntime({ home, cwd: work, resultFiles, skills: () => skillsFor(skills, ablated), mcpTransport: cassette && ((server, real) => cassette.transport(server, real)) })
 try {
   setAgents(runtime, (await loadAgents(agentRoots(work, { project: false }))).agents)
   await runtime.mcp.start()
@@ -119,7 +122,7 @@ try {
   const target = await resolveTarget(model)
   const { effort, toolSearch, maxSteps } = await loadConfig()
   // The shell decides which arithmetic form runs unasked (awk on bash/sh, expressions on PowerShell).
-  const settings = { effort, toolSearch, maxSteps, ablate, memory, shell: detectShell().kind, profile: profile ?? "terminal", ...(turnRequests !== undefined ? { turn_requests: turnRequests } : {}), permissions: yolo ? "bypass" : "unattended", mcp: cassette?.mode ?? "live", ...(routing ? { openrouter_routing: routing } : {}), ...(tape ? { mcp_tape: path.basename(tape), mcp_answers: cassette!.size } : {}) }
+  const settings = { effort, toolSearch, maxSteps, ablate, memory, shell: detectShell().kind, profile: profile ?? "terminal", ...(turnRequests !== undefined ? { turn_requests: turnRequests } : {}), permissions: yolo ? "bypass" : "unattended", ...(resultFiles ? { result_files: resultFiles } : {}), mcp: cassette?.mode ?? "live", ...(routing ? { openrouter_routing: routing } : {}), ...(tape ? { mcp_tape: path.basename(tape), mcp_answers: cassette!.size } : {}) }
   // Tallied from this run's own answers: --out may name a file that already holds earlier runs.
   const answers: TraceEvent[] = []
   const toFile = traceFile(out)
