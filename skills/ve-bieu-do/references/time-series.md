@@ -1,28 +1,28 @@
 # Time-series: nến, line, area, sparkline
 
-Chuẩn TradingView (lightweight-charts scaleMargins mặc định): padding giá
-top 20% / bottom 10% — đường/nến không chạm viền.
+The TradingView standard (lightweight-charts default scaleMargins): price padding
+top 20% / bottom 10% — lines/candles never touch the border.
 
 ## Candlestick + volume
 
-- Input: `bars: [{o, h, l, c, v?}]` (≥5 nến) + `times` (ngày, vd 09-01).
-- Có `v` → pane volume 4 dòng dưới giá, cùng cột nến, màu theo hướng nến
-  (xanh lá tăng / đỏ giảm), tiêu đề ghi tổng Vol.
-- Nến compact dính liền: mỗi nến 2 cột (thân + khoảng).
-- Trục X khớp cột nến: ngày đầu dưới nến đầu, ngày cuối dưới nến cuối.
-  Date quá dài/chật → quay dọc (mỗi ký tự một dòng tại cột nến).
+- Input: `bars: [{o, h, l, c, v?}]` (≥5 candles) + `times` (dates, e.g. 09-01).
+- With `v` → a 4-line volume pane under the price, in the same columns as the candles, coloured by candle direction
+  (green up / red down), the title showing total Vol.
+- Compact adjoining candles: each candle 2 columns (body + gap).
+- The X axis matches the candle columns: the first date under the first candle, the last date under the last.
+  Dates too long/crowded → rotated vertically (one character per line at the candle column).
 
 ## Trục X (mọi chart time-series)
 
-- Đường ngang `└───` + chấm `●` tại đúng cột từng điểm thời gian.
-- Nhãn ngày: đầu trái — cuối phải (dài/chật thì quay dọc).
-- `┤` cố định cột 7, plot rộng cố định → trục X các chart thẳng hàng khi so sánh.
+- A horizontal `└───` line + a `●` dot at the exact column of each time point.
+- Date labels: first on the left — last on the right (rotated vertically if long/crowded).
+- `┤` fixed at column 7, a fixed plot width → the X axes of several charts line up for comparison.
 
 ## Line / area / sparkline
 
-- Input: `series` (≥2 điểm) + `times` trục X + `unit` (vd kVND, hiện `[unit]` ở tiêu đề).
-- Line braille mượt, màu theo trend (lên xanh / xuống đỏ).
-- Area = line ký tự box bo góc (╭╮╰╯) + fill mờ dưới đường (nội suy cột trống).
-- Sparkline = đường mini braille cao 4 dòng (không phải dải khối).
-- Sparkcolumn = cột cao 6 dòng; `dirs` (hướng giá từng cột) để tô xanh/đỏ
-  theo giá — volume luôn dương nên tô theo dấu thì toàn xanh.
+- Input: `series` (≥2 points) + `times` for the X axis + `unit` (e.g. kVND, shown as `[unit]` in the title).
+- A smooth braille line, coloured by trend (up green / down red).
+- Area = a line of rounded box characters (╭╮╰╯) + a faint fill under the line (empty columns interpolated).
+- Sparkline = a mini braille line 4 lines tall (not a block strip).
+- Sparkcolumn = columns 6 lines tall; `dirs` (each column's price direction) colours them green/red
+  by price — volume is always positive, so colouring by sign would make everything green.

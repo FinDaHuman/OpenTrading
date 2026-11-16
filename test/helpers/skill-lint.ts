@@ -80,16 +80,25 @@ const COPIED_RESULT_RULES: { name: string; res: RegExp[] }[] = [
       /(mạnh nhất|cao nhất|hit cao nhất|dẫn đầu)[^\n]{0,40}(bảng|nhóm|cả hai|tuyệt đối|thứ \d)/i,
       // "top 3 cả hai", "top cả 2 đáy" — nhưng "top 3 ở mọi đáy" là tiêu chí, không bắt
       /\btop\s+(?:cả\s+)?\d+\s*(?:đáy|bảng|nhóm|cả)/i,
+      // English references: "strongest in the whole table", "highest hit in the group", "led both troughs"
+      /\b(strongest|highest|top hit|leads?|led)\b[^\n]{0,40}\b(table|group|both|overall|absolute|rank(?:ed)? \d)/i,
+      /\btop\s+\d+\s*(?:in\s+)?(?:both|troughs?|table|groups?)/i,
     ],
   },
-  { name: "số mẫu", res: [/(mẫu|số mã|quy mắc)(\s+\S+){0,2}\s*~\s*\d+/i] },
-  { name: "kết quả gắn năm", res: [/(năm|đáy)\s*(19|20)\d{2}[^\n]{0,50}(dẫn|top|rơi|mạnh|yếu|nhất|trung bình)/i] },
+  { name: "số mẫu", res: [/(mẫu|số mã|quy mắc)(\s+\S+){0,2}\s*~\s*\d+/i, /\b(samples?|tickers)(\s+\S+){0,2}\s*~\s*\d+/i] },
+  {
+    name: "kết quả gắn năm",
+    res: [
+      /(năm|đáy)\s*(19|20)\d{2}[^\n]{0,50}(dẫn|top|rơi|mạnh|yếu|nhất|trung bình)/i,
+      /\b(year|trough|bottom)\s*(19|20)\d{2}[^\n]{0,50}\b(led|leads?|top|fell|strong(?:est)?|weak(?:est)?|best|worst|average)\b/i,
+    ],
+  },
 ]
 const ALLOW_RESULT = /<!--\s*lint:allow-result\s*-->/
 
 /** A ticker with an amount on one line: a real figure that would leak into answers as fact. */
 export const issuerFigure = (line: string) =>
-  !ALLOW_RESULT.test(line) && /\b[A-Z]{3}\b[^\n]{0,200}?\d[\d.,]*\s*(?:nghìn tỷ|tỷ|triệu)/.test(line)
+  !ALLOW_RESULT.test(line) && /\b[A-Z]{3}\b[^\n]{0,200}?\d[\d.,]*\s*(?:nghìn tỷ|tỷ|triệu|trillion|billion|million|bn\b|tn\b)/.test(line)
 
 /** Tên rule vi phạm trong một dòng references, hoặc null nếu dòng đó sạch. */
 export function copiedResultHit(line: string): string | null {

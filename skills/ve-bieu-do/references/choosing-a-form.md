@@ -1,98 +1,98 @@
 # Cây quyết định chọn hình theo shape data
 
-Duyệt từ Q0 xuống. Mỗi nút là 1 câu hỏi yes/no về SHAPE data (không hỏi tên
-tool — tool mới sau này trả shape nào thì rơi đúng nhánh đó).
-**DỪNG ở node ★ đầu tiên khớp**: lấy danh sách candidates → chọn 1 theo
-context câu hỏi user (gợi ý chọn ghi dưới mỗi node ★).
-Không khớp nhánh nào → Q8. Thiếu ngưỡng tối thiểu → báo thiếu data,
-KHÔNG vẽ chay, KHÔNG bịa số.
+Go down from Q0. Each node is 1 yes/no question about the data SHAPE (never about the
+tool name — whatever shape a future tool returns falls into the right branch).
+**STOP at the first matching ★ node**: take its list of candidates → pick 1 by the
+context of the user's question (selection hints are written under each ★ node).
+No branch matches → Q8. Below a minimum threshold → report the missing data;
+NEVER draw an empty chart, NEVER invent numbers.
 
-Q0. User đã nêu rõ muốn chart gì (nến/line/pie...)?
-    CÓ → bỏ qua cây, vẽ thẳng.  |  KHÔNG → Q1.
+Q0. Has the user said clearly which chart they want (candles/line/pie...)?
+    YES → skip the tree, draw it directly.  |  NO → Q1.
 
-Q1. Data có deltas CỘNG DỒN theo thứ tự không? (bước trước → bước sau,
-    có running total: dòng tiền ròng từng phiên, P&L từng bước, base → shocked)
-    CÓ → ★ [waterfall]  (cần start + ≥1 delta; mỗi bước ghi delta + running total)
-    KHÔNG → Q2.
+Q1. Does the data have CUMULATIVE ordered deltas? (step before → step after,
+    with a running total: net money flow per session, step-by-step P&L, base → shocked)
+    YES → ★ [waterfall]  (needs start + ≥1 delta; each step shows the delta + running total)
+    NO → Q2.
 
-Q2. Data có cột TIME liên tục không? (date/datetime/phiên thứ tự. Nhãn năm
-rời rạc — vd cổ tức 2022/2023/2024 — tính là CATEGORY, không phải time.)
-├─ CÓ → Q3 (nhánh TIME)
-└─ KHÔNG → Q4 (nhánh KHÔNG-TIME)
+Q2. Does the data have a continuous TIME column? (date/datetime/ordered sessions. Discrete
+year labels — e.g. dividends 2022/2023/2024 — count as CATEGORY, not time.)
+├─ YES → Q3 (the TIME branch)
+└─ NO → Q4 (the NON-TIME branch)
 
 ── NHÁNH TIME ──
-Q3. Mỗi điểm có đủ O/H/L/C không?
-├─ CÓ → ★ [candlestick]  (+volume pane nếu có cột v; times → trục X; cần ≥5 nến)
-└─ KHÔNG (chỉ giá trị đơn) → Q3b. Mấy chuỗi số?
-    ├─ 1 chuỗi → ★ [line, area, sparkline, sparkcolumn, linebox, winloss]
-    │    line: trend chi tiết (mặc định)  |  area: nhấn khối tích lũy dưới đường
-    │    sparkline: gọn/nhanh, chuỗi ngắn ≤6 điểm  |  sparkcolumn: dạng cột theo
-    │    thứ tự + dirs (vd volume từng phiên)  |  linebox: phong cách ký tự box
-    │    winloss: chỉ khi DẤU từng phiên mới là thông điệp (thắng/thua), không
-    │    phải trend giá trị (returns ±% theo phiên vẫn là line).
-    │    (Ngưỡng chung: ≥2 điểm/phiên.)
-    ├─ ≥2 chuỗi CÙNG đơn vị (RSI/PE/PB/%, lợi suất, yields)? → ★ [multiline]
-    │    Mỗi series 1 màu + legend. Mỗi series ≥2 điểm, cần ≥2 series.
-    │    (Giá nhiều mã tuy cùng đơn vị tiền nhưng magnitude lệch → KHÔNG vào đây.)
-    └─ ≥2 chuỗi KHÁC magnitude (giá nhiều mã, mã vs index)? → ★ [chart_render kind=compare]
-         Chuẩn hóa % từ điểm đầu, mỗi mã 9 dòng + trục Y riêng.
-         2–5 chuỗi, mỗi chuỗi ≥2 điểm.
+Q3. Does each point have full O/H/L/C?
+├─ YES → ★ [candlestick]  (+a volume pane if there is a v column; times → X axis; needs ≥5 candles)
+└─ NO (single values only) → Q3b. How many number series?
+    ├─ 1 series → ★ [line, area, sparkline, sparkcolumn, linebox, winloss]
+    │    line: a detailed trend (default)  |  area: stresses the accumulated block under the line
+    │    sparkline: compact/quick, short series ≤6 points  |  sparkcolumn: ordered columns
+    │    + dirs (e.g. per-session volume)  |  linebox: box-character style
+    │    winloss: only when the SIGN of each session is the message (win/loss), not
+    │    the value trend (±% returns per session are still a line).
+    │    (Common threshold: ≥2 points/sessions.)
+    ├─ ≥2 series in the SAME unit (RSI/PE/PB/%, returns, yields)? → ★ [multiline]
+    │    Each series 1 colour + a legend. Each series ≥2 points, ≥2 series needed.
+    │    (Several tickers' prices share a money unit but differ in magnitude → NOT here.)
+    └─ ≥2 series of DIFFERENT magnitude (several tickers' prices, ticker vs index)? → ★ [chart_render kind=compare]
+         Normalised to % from the first point, each ticker 9 lines + its own Y axis.
+         2–5 series, each ≥2 points.
 
 ── NHÁNH KHÔNG-TIME ──
-Q4. Data có NHÃN NHÓM/category không? (mã, ngành, sự kiện, tháng, outcomes...)
-├─ CÓ → Q5.
-└─ KHÔNG (số thuần / cấu trúc đặc biệt) → Q6.
+Q4. Does the data have GROUP/category labels? (tickers, sectors, events, months, outcomes...)
+├─ YES → Q5.
+└─ NO (plain numbers / a special structure) → Q6.
 
-Q5. Mỗi nhóm có dạng số gì?
-├─ 1 value/nhóm, có ÂM lẫn DƯƠNG? → ★ [bar diverging]
-│    (âm trái, dương phải, gốc 0 chung. Vd: % tăng/giảm, dòng tiền ròng,
-│    premium/discount, odds ±, thay đổi giá.)
-├─ 1 value/nhóm, KHÔNG âm:
-│   ├─ Tổng các nhóm ≈100% VÀ ≤7 nhóm? → ★ [pie, bar]
-│   │    pie: nhìn tỷ trọng một cái nhìn (thanh 100% + legend);
-│   │    bar: cần so chính xác từng %.  (Vd: holders, weights, breadth 4 nhóm,
-│   │    rating mix buy/hold/sell. pie cần ≥2 lát, ít nhất 1 lát >0.)
-│   ├─ Tổng ≈100% nhưng >7 nhóm? → [bar].  (pie >7 lát không đọc được.)
-│   └─ Còn lại (doanh thu, target, odds %, counts, giá snapshot nhiều mã,
-│       1 metric của bảng peer)? → [bar].  (1 nhóm duy nhất vẫn vẽ bar 1 cột được.)
-├─ Nhóm × THÀNH PHẦN (mỗi nhóm chia nhiều phần)? → ★ [stacked]
-│    Mỗi thành phần 1 màu + legend. Vd: mua/bán theo phiên, DT/LN theo quý.
-└─ Thắng/thua từng phiên + biên độ (dấu ± là chính)? → ★ [winloss]
-     Mỗi phiên 1 dòng ▲+số / ▼−số. Cần ≥2 phiên.
+Q5. What kind of number does each group have?
+├─ 1 value/group, with BOTH NEGATIVE and POSITIVE? → ★ [bar diverging]
+│    (negative left, positive right, a shared zero. E.g.: % up/down, net money flow,
+│    premium/discount, ± odds, price changes.)
+├─ 1 value/group, NOT negative:
+│   ├─ The groups total ≈100% AND ≤7 groups? → ★ [pie, bar]
+│   │    pie: shares at a glance (a 100% bar + legend);
+│   │    bar: when each % must be compared precisely.  (E.g.: holders, weights, 4-group breadth,
+│   │    buy/hold/sell rating mix. A pie needs ≥2 slices, at least 1 slice >0.)
+│   ├─ Totals ≈100% but >7 groups? → [bar].  (A pie with >7 slices is unreadable.)
+│   └─ Everything else (revenue, targets, odds %, counts, a price snapshot of several tickers,
+│       1 metric of a peer table)? → [bar].  (A single group can still be a 1-column bar.)
+├─ Group × COMPONENTS (each group split into several parts)? → ★ [stacked]
+│    Each component 1 colour + a legend. E.g.: buy/sell per session, revenue/profit by quarter.
+└─ Per-session win/loss + magnitude (the ± sign is the point)? → ★ [winloss]
+     One line per session ▲+number / ▼−number. Needs ≥2 sessions.
 
-Q6. Data có phải PHÂN PHỐI (nhiều giá trị đo cùng hiện tượng)?
-├─ 1 nhóm nhiều giá trị → ★ [histogram]
-│    Bins tự động. Cần ≥5 điểm. Vd: CARs các sự kiện, tương quan các cửa sổ,
-│    returns 1 mã.
-├─ Nhiều nhóm CÙNG magnitude → ★ [boxplot]
-│    Mỗi nhóm ≥4 điểm. Vd: lợi suất % nhiều mã, CAR theo nhóm sự kiện.
-│    (Khác magnitude → box xẹp: chuẩn hóa % trước, hoặc rẽ sang bar.)
-└─ Không phải phân phối → Q7.
+Q6. Is the data a DISTRIBUTION (many measurements of the same phenomenon)?
+├─ 1 group of many values → ★ [histogram]
+│    Automatic bins. Needs ≥5 points. E.g.: CARs of events, correlations of windows,
+│    returns of 1 ticker.
+├─ Several groups of the SAME magnitude → ★ [boxplot]
+│    Each group ≥4 points. E.g.: % returns of several tickers, CAR by event group.
+│    (Different magnitudes → flattened boxes: normalise to % first, or switch to bar.)
+└─ Not a distribution → Q7.
 
-Q7. Cấu trúc đặc biệt nào?
-├─ 2 biến số (x, y) từng quan sát? → ★ [scatter] (+groups từng mã + legend)
-│    Vd: volume↔giá. Ngưỡng ≥3 điểm. Braille cùng cỡ → phân biệt bằng MÀU.
-├─ Ma trận 2D thật (hàng×cột đều có labels)? → ★ [heatmap]
-│    Vd: ma trận tương quan, param grid fast×slow, tháng×metric.
-│    (Hàng đơn + cột đơn thuần túy → về Q5 bar.)
-├─ Bid/ask ladder (price+volume mua/bán)? → ★ [chart_render kind=depth]
-│    ASK đỏ / BID xanh. Sổ rỗng cả 2 bên (ngoài giờ) → báo trung thực.
-├─ 1 số + max (index, score /100, % hoàn thành)? → ★ [gauge, donut]
-│    gauge: index/ngưỡng (sợ hãi, RSI snapshot...);
-│    donut: 1 phần của tổng (thanh 2 segment). Cần value + max.
-│    (Score thang khác — vd sentiment −1..1 — chuẩn hóa về max trước.)
-├─ Dict nhiều chỉ số KHÁC đơn vị, không vẽ chung được? → text + tùy chọn
-│    gauge riêng cho chỉ số đơn lẻ có max (vd RSI trong signals snapshot).
-│    (Vd: signals_technical, vs_trading_info, stock_overview.)
-├─ Bảng peer (hàng × metric)? → chọn 1 metric → về Q5 [bar].
-│    (Vd: peer_compare, compare_equities, financial_ratios.)
-└─ 1 giá trị đơn, không trend, không max? → [KHÔNG VẼ — ghi số + text]
-     Vd: giá latest, index value.
-     (Lịch ngày mà KHÔNG có values — event_calendar, corporate_calendar... —
-     luôn text, đừng ép vào nhánh nào.)
+Q7. Which special structure?
+├─ 2 numeric variables (x, y) per observation? → ★ [scatter] (+groups per ticker + legend)
+│    E.g.: volume↔price. Threshold ≥3 points. Same-size braille → distinguish by COLOUR.
+├─ A real 2D matrix (rows×columns both labelled)? → ★ [heatmap]
+│    E.g.: a correlation matrix, a fast×slow param grid, month×metric.
+│    (A plain single row + single column → back to Q5 bar.)
+├─ A bid/ask ladder (price+volume buy/sell)? → ★ [chart_render kind=depth]
+│    ASK red / BID green. An empty book on both sides (off-hours) → report it honestly.
+├─ 1 number + max (an index, a score /100, % complete)? → ★ [gauge, donut]
+│    gauge: an index/threshold (fear, an RSI snapshot...);
+│    donut: 1 part of a total (a 2-segment bar). Needs value + max.
+│    (A score on another scale — e.g. sentiment −1..1 — normalise to max first.)
+├─ A dict of many indicators in DIFFERENT units that cannot be drawn together? → text + optionally
+│    a separate gauge for a single indicator with a max (e.g. RSI in a signals snapshot).
+│    (E.g.: signals_technical, vs_trading_info, stock_overview.)
+├─ A peer table (rows × metrics)? → pick 1 metric → back to Q5 [bar].
+│    (E.g.: peer_compare, compare_equities, financial_ratios.)
+└─ 1 single value, no trend, no max? → [DO NOT DRAW — write the number + text]
+     E.g.: the latest price, an index value.
+     (Date calendars WITHOUT values — event_calendar, corporate_calendar... —
+     always text; never force them into a branch.)
 
-Q8. [Bắt mọi trường hợp còn lại — tool mới sau này] Không khớp nhánh nào?
-→ Đừng đoán mò: so với node gần nhất theo thứ tự ưu tiên
-   (có time → nhánh TIME; có nhãn → Q5; ma trận → heatmap; odds/prob → Q5 bar),
-   hoặc KHÔNG VẼ và báo lại shape đã thấy (dạng cột + ví dụ 2-3 dòng đầu)
-   để bổ sung cây sau. Không bao giờ bịa data cho vừa chart.
+Q8. [Catches every remaining case — future tools] No branch matches?
+→ Do not guess: compare with the nearest node in priority order
+   (has time → the TIME branch; has labels → Q5; a matrix → heatmap; odds/prob → Q5 bar),
+   or DO NOT DRAW and report the shape you saw (column types + an example of the first 2–3 rows)
+   so the tree can be extended later. Never invent data to fit a chart.

@@ -13,8 +13,8 @@ import { kiemChung } from "./kiem-chung"
  */
 
 const Args = z.object({
-  ticker: Ticker.describe("Mã cần tranh biện, ví dụ FPT"),
-  cau_hoi: z.string().max(300).optional().describe("Điều người dùng muốn biết, ví dụ \"có nên giữ qua BCTC quý 3\""),
+  ticker: Ticker.describe("The ticker to debate, e.g. FPT"),
+  cau_hoi: z.string().max(300).optional().describe("What the user wants to know, e.g. \"có nên giữ qua BCTC quý 3\""),
 })
 type Args = z.infer<typeof Args>
 
@@ -24,13 +24,13 @@ interface Analyst {
 }
 
 const CORE: Analyst[] = [
-  { type: "co-ban", role: "cơ bản: chất lượng lợi nhuận, dòng tiền, sức khỏe tài chính" },
-  { type: "dinh-gia", role: "định giá: vùng giá trị hợp lý và biên an toàn" },
-  { type: "tin-tuc", role: "tin tức và sự kiện 30 ngày gần nhất" },
+  { type: "co-ban", role: "fundamentals: earnings quality, cash flow, financial health" },
+  { type: "dinh-gia", role: "valuation: the fair-value range and margin of safety" },
+  { type: "tin-tuc", role: "news and events of the last 30 days" },
 ]
 const MORE: Analyst[] = [
-  { type: "ky-thuat", role: "kỹ thuật: xu hướng, động lượng, điểm vô hiệu" },
-  { type: "vi-mo", role: "vĩ mô: gió thuận hay nghịch cho mã này" },
+  { type: "ky-thuat", role: "technicals: trend, momentum, invalidation point" },
+  { type: "vi-mo", role: "macro: tailwind or headwind for this ticker" },
 ]
 
 const TIERS = {
@@ -44,52 +44,52 @@ const CHECK = kiemChung.meta.estimate(kiemChung.meta.args.parse({ noi_dung: "x".
 
 function analystPrompt(a: Analyst, args: Args) {
   return [
-    `Phân tích mã ${args.ticker} ở góc ${a.role}.${args.cau_hoi ? ` Người dùng quan tâm: ${args.cau_hoi}.` : ""}`,
-    "- Gọi ít tool nhất đủ để kết luận; các tool độc lập gọi cùng lúc. Nạp skill chỉ khi thật cần.",
-    "- Báo cáo tối đa 12 dòng: kết luận một câu, rồi các ý có số. Mọi số kèm nguồn và thời điểm. Thiếu dữ liệu thì nói thiếu, không ước đoán.",
-    "- Báo cáo này sẽ được hai phe lạc quan và thận trọng dùng làm bằng chứng: chỉ nêu sự thật và đánh giá của góc mình, không khuyến nghị mua bán.",
+    `Analyse ${args.ticker} from the angle of ${a.role}.${args.cau_hoi ? ` The user cares about: ${args.cau_hoi}.` : ""}`,
+    "- Call the fewest tools that let you conclude; call independent tools together. Load a skill only when truly needed.",
+    "- Report in at most 12 lines: a one-sentence conclusion, then points with numbers. Every number with its source and time. If data is missing, say so; never estimate.",
+    "- The bull and bear sides will use this report as evidence: state only the facts and your angle's assessment; never recommend buying or selling.",
   ].join("\n")
 }
 
 function reportsBlock(reports: { a: Analyst; text: string }[]) {
-  return reports.map((r) => evidence(r.text, `báo cáo ${r.a.type}`)).join("\n")
+  return reports.map((r) => evidence(r.text, `${r.a.type} report`)).join("\n")
 }
 
 function openingPrompt(side: "bull" | "bear", ticker: string, reports: string) {
   return [
-    `Dựng lập luận ${side === "bull" ? "lạc quan (giá có thể tăng)" : "thận trọng (rủi ro giá giảm)"} mạnh nhất cho ${ticker} từ các báo cáo dưới đây.`,
+    `Build the strongest ${side === "bull" ? "bull case (the price may rise)" : "bear case (downside risk)"} for ${ticker} from the reports below.`,
     EVIDENCE_NOTE,
     reports,
-    "- 4–6 luận điểm, mỗi luận điểm dẫn bằng chứng (số, nguồn, thời điểm) từ báo cáo; tối đa 1–2 tool để đối chiếu số đang tranh cãi.",
-    "- Nói rõ điều gì sẽ khiến lập luận của bạn sai. Không khuyên người dùng mua hay bán.",
+    "- 4–6 points, each citing evidence (number, source, time) from the reports; at most 1–2 tools to check a disputed number.",
+    "- Say clearly what would make your case wrong. Never advise the user to buy or sell.",
   ].join("\n")
 }
 
 function rebuttalPrompt(side: "bull" | "bear", ticker: string, round: number, mine: string, theirs: string) {
   return [
-    `Vòng phản bác ${round} về ${ticker}. Bạn là phe ${side === "bull" ? "lạc quan" : "thận trọng"}.`,
+    `Rebuttal round ${round} on ${ticker}. You are the ${side === "bull" ? "bull" : "bear"} side.`,
     EVIDENCE_NOTE,
-    evidence(mine, "lập luận gần nhất của bạn"),
-    evidence(theirs, `lập luận gần nhất của phe ${side === "bull" ? "thận trọng" : "lạc quan"}`),
-    "- Bẻ từng điểm mạnh nhất của phe kia bằng số liệu cụ thể; thừa nhận điểm nào của họ đứng vững.",
-    "- Cập nhật lập luận của bạn (tối đa 10 dòng). Không lặp lại nguyên văn vòng trước, không khuyến nghị mua bán.",
+    evidence(mine, "your latest case"),
+    evidence(theirs, `the ${side === "bull" ? "bear" : "bull"} side's latest case`),
+    "- Break each of the other side's strongest points with specific figures; concede the points of theirs that hold.",
+    "- Update your case (at most 10 lines). Never repeat the previous round verbatim; never recommend buying or selling.",
   ].join("\n")
 }
 
 function judgePrompt(args: Args, reports: string, bull: string[], bear: string[], check: string | undefined, missing: string[]) {
   return [
-    `Làm trọng tài cuộc tranh biện về ${args.ticker}${args.cau_hoi ? ` (người dùng hỏi: ${args.cau_hoi})` : ""}. Cân bằng chứng, không theo phe nói sau.`,
+    `Referee the debate on ${args.ticker}${args.cau_hoi ? ` (the user asks: ${args.cau_hoi})` : ""}. Weigh the evidence; do not side with whoever spoke last.`,
     EVIDENCE_NOTE,
     reports,
-    ...bull.map((t, i) => evidence(t, i === 0 ? "phe lạc quan mở màn" : `phe lạc quan vòng ${i}`)),
-    ...bear.map((t, i) => evidence(t, i === 0 ? "phe thận trọng mở màn" : `phe thận trọng vòng ${i}`)),
-    ...(check ? [evidence(check, "kết quả kiểm chứng số liệu của hai phe")] : []),
-    "Trình bày bằng tiếng Việt, gọn:",
-    "1. Kịch bản chính (nghiêng tăng / giảm / đi ngang) và mức tin cậy (cao / trung bình / thấp), với 2–3 bằng chứng quyết định (số, nguồn, thời điểm).",
-    "2. Ba kịch bản tích cực / cơ sở / tiêu cực: khả năng định tính, điều kiện kích hoạt, mốc cần theo dõi.",
-    "3. Luận điểm mạnh nhất còn đứng vững của mỗi phe; số liệu nào bị kiểm chứng là sai thì nói rõ.",
-    `4. Giới hạn: ${missing.length > 0 ? `thiếu báo cáo ${missing.join(", ")}; ` : ""}dữ liệu nào cũ hoặc chưa kiểm chứng.`,
-    "Không khuyến nghị mua, bán, giữ hay tỷ trọng: quyết định thuộc về người dùng.",
+    ...bull.map((t, i) => evidence(t, i === 0 ? "bull opening" : `bull round ${i}`)),
+    ...bear.map((t, i) => evidence(t, i === 0 ? "bear opening" : `bear round ${i}`)),
+    ...(check ? [evidence(check, "fact-check of both sides' figures")] : []),
+    "Write in Vietnamese, concisely:",
+    "1. The main scenario (nghiêng tăng / giảm / đi ngang) and confidence (cao / trung bình / thấp), with 2–3 deciding pieces of evidence (number, source, time).",
+    "2. Three scenarios tích cực / cơ sở / tiêu cực: qualitative likelihood, triggers, milestones to watch.",
+    "3. Each side's strongest point that still stands; say clearly which figures the fact-check found wrong.",
+    `4. Limits: ${missing.length > 0 ? `missing ${missing.join(", ")} reports; ` : ""}which data is old or unchecked.`,
+    "Never recommend buying, selling, holding or a weighting: the decision belongs to the user.",
   ].join("\n")
 }
 
@@ -134,7 +134,7 @@ async function run(ctx: DeskContext<Args>): Promise<string> {
     // The numbers both sides lean on, checked at the small tier (5 claims, 1 voter each).
     const noi_dung = [bull.at(-1), bear.at(-1)].filter(Boolean).join("\n\n")
     if (noi_dung.length < 40) ctx.log("Lập luận quá ngắn để kiểm chứng số liệu.")
-    else check = await ctx.playbook<string>("kiem-chung", { noi_dung: noi_dung.slice(0, 30_000), boi_canh: `mã ${ticker}` }, { size: "small" }).catch(() => undefined)
+    else check = await ctx.playbook<string>("kiem-chung", { noi_dung: noi_dung.slice(0, 30_000), boi_canh: `ticker ${ticker}` }, { size: "small" }).catch(() => undefined)
   }
 
   if (ctx.stopping()) return ["Run bị cắt trước bước trọng tài. Lập luận đã có:", ...bull.map((t) => `**Lạc quan:** ${t}`), ...bear.map((t) => `**Thận trọng:** ${t}`)].join("\n\n")
@@ -152,7 +152,7 @@ export const tranhBien: Playbook<Args, string> = {
     name: "tranh-bien",
     version: "1",
     description: "Tranh biện một mã: các analyst báo cáo song song, phe lạc quan và thận trọng phản bác nhau, trọng tài đưa ra kịch bản",
-    whenToUse: "Phân tích nhiều chiều một mã kèm phản biện lạc quan/thận trọng, ví dụ \"FPT có đáng giữ không, nhìn cả hai phía\". Không dùng cho câu hỏi một chiều (chỉ RSI, chỉ P/E).",
+    whenToUse: "A multi-angle analysis of one ticker with a bull/bear debate, e.g. \"FPT có đáng giữ không, nhìn cả hai phía\". Not for one-dimensional questions (only RSI, only P/E).",
     args: Args,
     // kiem-chung (large) runs with its own agent types.
     agentTypes: ["co-ban", "dinh-gia", "tin-tuc", "ky-thuat", "vi-mo", "bull", "bear", "tong-hop"],

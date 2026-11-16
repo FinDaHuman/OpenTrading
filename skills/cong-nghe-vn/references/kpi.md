@@ -1,47 +1,47 @@
 # Chỉ báo ngành công nghệ — đơn ký, backlog và chất lượng nhân công
 
-> File này giữ **cách đọc**, không giữ con số kỳ nào. Mọi giá trị lấy từ
-> `financial_detail` / `news_market` gần nhất và ghi kỳ kèm theo. Luật về đơn ký
-> dẫn doanh thu chỉ nằm ở §Trụ cột driver của SKILL.md — không lặp lại ở đây.
+> This file keeps **how to read**, not any period's numbers. Every value comes from the latest
+> `financial_detail` / `news_market`, with the period stated. The rule on signed orders
+> leading revenue lives only in the SKILL.md §Trụ cột driver — not repeated here.
 
 ## 1. Nhóm đơn hàng
 
-| Chỉ báo | Đọc từ | Cách đọc |
+| Indicator | Read from | How to read |
 |---|---|---|
-| Doanh thu ký | Công bố công ty (`news_symbol`/`company_events`) | Tín hiệu **dẫn**; kỳ ký mạnh chưa vào doanh thu ngay. Ghi kỳ ký |
-| Thời hạn hợp đồng | Công bố công ty | Hợp đồng 2–3 năm cho doanh thu bền hơn đơn ngắn hạn |
-| Tỷ trọng đơn lớn | Công bố công ty | Đơn lớn tạo lãi bất thường: đánh dấu một lần, không nội suy |
-| Backlog / doanh thu chưa nhận | `financial_detail` (nếu có) | Tồn kho doanh thu tương lai; giảm = đang tiêu backlog |
+| Signed revenue | Company disclosures (`news_symbol`/`company_events`) | A **leading** signal; a strong signing period does not reach revenue at once. State the signing period |
+| Contract duration | Company disclosures | 2–3-year contracts give more durable revenue than short-term orders |
+| Share of large orders | Company disclosures | Large orders create unusual profit: mark them as one-off; never extrapolate |
+| Backlog / unrecognised revenue | `financial_detail` (if available) | The stock of future revenue; falling = the backlog is being used up |
 
 ## 2. Nhóm mảng
 
-| Chỉ báo | Đọc từ | Cách đọc |
+| Indicator | Read from | How to read |
 |---|---|---|
-| Doanh thu nước ngoài | `financial_detail` / công bố công ty | Chu kỳ khách hàng quốc tế; nhạy tỷ giá |
-| Doanh thu nội địa | `financial_detail` / công bố công ty | Phụ thuộc chính phủ điện tử và ngân sách công |
-| Doanh thu sản phẩm riêng | `financial_detail` | Mảng biên cao hơn dịch vụ; đọc kỳ vọng doanh thu sản phẩm |
+| Foreign revenue | `financial_detail` / company disclosures | The international client cycle; FX-sensitive |
+| Domestic revenue | `financial_detail` / company disclosures | Depends on e-government and public budgets |
+| Own-product revenue | `financial_detail` | Higher-margin than services; read product revenue expectations |
 
 ## 3. Nhóm chất lượng vận hành
 
-| Chỉ báo | Đọc từ | Cách đọc |
+| Indicator | Read from | How to read |
 |---|---|---|
-| Doanh thu trên mỗi nhân viên | Tự tính (ghi rõ) | Tăng trong khi doanh thu tăng = hiệu quả cải thiện |
-| Số nhân viên | `financial_detail` / công bố công ty | Tăng nhanh hơn doanh thu = mở rộng bằng đầu người |
-| Biên lãi gộp | `financial_detail` | Giảm trong 2 quý liền với tăng trưởng mở rộng = chi phí nhân công đang ép biên |
-| Biên lợi nhuận trước thuế | `financial_detail` | Đọc cùng phân hoá mảng: nội địa và nước ngoài khác biên |
+| Revenue per employee | Computed yourself (state it) | Rising while revenue rises = efficiency improving |
+| Headcount | `financial_detail` / company disclosures | Growing faster than revenue = expanding by headcount |
+| Gross margin | `financial_detail` | Falling for 2 consecutive quarters during expansion = labour costs squeezing margins |
+| Pre-tax margin | `financial_detail` | Read with the segment split: domestic and foreign margins differ |
 
 ## 4. Nhóm đối chiếu
 
-| Nguồn | Đọc gì | Cách dùng |
+| Source | What to read | How to use it |
 |---|---|---|
-| `news_symbol` / `company_events` | Công bố đơn hàng ký và thị trường khách hàng; `news_market` chỉ cho chính sách/bối cảnh | Tín hiệu dẫn; ghi rõ nguồn + ngày |
-| `planned_targets` | Kế hoạch doanh thu/lãi | Neo kỳ vọng |
-| `peer_compare` | Key tổng quan thực sự trả về, như P/E, P/B, ROE | So cùng phân khúc; KPI vận hành lấy từ `financial_detail` từng peer cùng kỳ và công bố doanh nghiệp, không tạo key bằng `metrics` |
-| `yf_commodities` | Chu kỳ kim loại (bối cảnh chi phí) | Chỉ dùng khi xét cơ sở hạ tầng/cấu phần |
+| `news_symbol` / `company_events` | Signed-order disclosures and client markets; `news_market` only for policy/context | A leading signal; state the source + date |
+| `planned_targets` | Revenue/profit plans | Expectation anchor |
+| `peer_compare` | The overview keys it really returns, such as P/E, P/B, ROE | Compare within the segment; operating KPIs come from each peer's `financial_detail` for the same period and company disclosures; `metrics` creates no keys |
+| `yf_commodities` | The metals cycle (cost context) | Only when considering infrastructure/components |
 
 ## 5. Bẫy đọc thường gặp
 
-- Doanh thu nhận chững nhưng đơn ký mạnh: đọc backlog, đừng kết luận chững.
-- Biên một quý nhờ một đơn lớn: đánh dấu một lần.
-- Thu nhập trên người giảm do thuê trước doanh thu: đây là đầu tư, không phải lỗ —
-  nhưng đọc 2 quý liền để xem có chuyển thành doanh thu không.
+- Recognised revenue stalling while signings are strong: read the backlog; do not conclude a stall.
+- One quarter's margin from one large order: mark it as one-off.
+- Income per head falling because of hiring ahead of revenue: this is investment, not loss —
+  but read 2 consecutive quarters to see whether it turns into revenue.

@@ -1,9 +1,9 @@
 # Refresh bảng VN multi-asset (tool-driven)
 
-1. `vn_asset_check()` → stale (>90 ngày) + user đồng ý mới chạy.
-2. `vn_asset_refresh()` → fetch incremental 6 assets (VCI/yfinance/petrol-API) + recompute monthly. Anchors KHÔNG auto (báo cáo kỳ) — cập nhật thủ công mỗi quý từ VBMA/TCBS/báo chí, giữ nguyên tắc provenance.
-3. Không sửa file skill sau refresh (xem `dinh-vi-chu-ky-vn/references/refresh.md` mục 6): số mới phủ định quy tắc nào thì nêu trong câu trả lời.
+1. `vn_asset_check()` → run only if stale (>90 days) + the user agrees.
+2. `vn_asset_refresh()` → incremental fetch of 6 assets (VCI/yfinance/petrol API) + recompute monthly. Anchors are NOT automatic (periodic reports) — update them by hand each quarter from VBMA/TCBS/the press, keeping the provenance principle.
+3. Do not edit skill files after a refresh (see `dinh-vi-chu-ky-vn/references/refresh.md` section 6): if new numbers contradict a rule, say so in the answer.
 
 ## Changelog
 
-- [2026-10-10] stats v1 (khởi tạo từ research 10/2026): seed monthly/anchors/chains. Định nghĩa gốc theo file này.
+- [2026-10-10] stats v1 (initialised from the 10/2026 research): seeded monthly/anchors/chains. Original definitions per this file.
