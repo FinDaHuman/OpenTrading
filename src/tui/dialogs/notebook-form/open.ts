@@ -72,12 +72,13 @@ export function openNotebookForm(memory: MemoryProvider, name: NotebookCommand, 
 
 /**
  * A constraint or style card saved as its form would save it unchanged (config `memory.cardsAutoSave`,
- * tui/cards.ts autoSaveCard). Only a card whose quote was checked against the user's own words of the turn;
- * a lesson, a card without a quote or a notebook that cannot be written is not saved. Lives here: only the
- * notebook forms hold the write handle.
+ * tui/cards.ts autoSaveCard). Only a card whose rule is itself the user's own words of the turn
+ * (`verbatim`, cards/check.ts): a rule the model wrote, even next to a valid quote, may carry text a web page
+ * or a tool planted, so it waits for the user in the form. A lesson or a notebook that cannot be written is
+ * not saved either. Lives here: only the notebook forms hold the write handle.
  */
 export function saveCardNow(memory: MemoryProvider, card: CardDraft): { group: "constraint" | "style"; id: number } | undefined {
-  if (card.kind === "lesson" || !card.quote || !card.text) return undefined
+  if (card.kind === "lesson" || !card.verbatim || !card.quote || !card.text) return undefined
   const admin = notebookAdmin(memory)
   if (!admin) return undefined
   const result = admin.saveConstraint({ kind: card.kind, text: card.text }, undefined, { card: true })

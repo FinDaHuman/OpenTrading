@@ -178,9 +178,9 @@ export function memoryChoiceOf(config: Config): "none" | "notebook" {
 export const cardsSwitchOn = (config: Config) => config.memory?.cards !== false
 
 /**
- * `memory.cardsAutoSave` (off unless true; issue #307, #309 C2): a constraint or style card that carries the
- * user's own words of this turn, verbatim (cards/check.ts), is saved at once instead of waiting for the form.
- * A lesson card has no quote to check, so it always waits for the user.
+ * `memory.cardsAutoSave` (off unless true; issue #307, #309 C2): a constraint or style card whose rule is
+ * itself the user's own words of this turn, verbatim (cards/check.ts `verbatim`), is saved at once instead of
+ * waiting for the form. A rule the model reworded, and every lesson card, still waits for the user.
  */
 export const cardsAutoSave = (config: Config) => config.memory?.cardsAutoSave === true
 
