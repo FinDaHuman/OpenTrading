@@ -7,6 +7,9 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ### Fixed
 
+- Figure reading (`loop/figures.ts`): a decimal with four or more digits after the separator ("6,9034",
+  "6.9034") is read whole. A three-digit group must end there to count as thousands; before, "6,9034" read as
+  6,903 and dropped the 4, so a copied figure looked ungrounded (MyToDoList 43j/43z).
 - `watchlist_local` `create` with `symbols` holds them from the start, in the same write, and names invalid
   ones. Before, it made an empty list and the model then said the list held the symbols (15/11 real-key round).
 - `shell` in ▸▸▸ bypass names Python only when `python3`/`python` really runs a script on this machine (checked
