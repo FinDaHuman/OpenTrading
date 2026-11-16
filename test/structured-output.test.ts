@@ -267,7 +267,7 @@ test("desk_run (on demand) exists only in an opted-in turn: never in tool_search
   const found = String(await search.execute({ query: "sàng lọc playbook" } as never, { signal: new AbortController().signal, callId: "s" }))
   expect(found).toContain("sang_loc_data")
   expect(found).not.toContain("desk_run")
-  expect(String(await search.execute({ query: "select:desk_run" } as never, { signal: new AbortController().signal, callId: "s" }))).toContain("chỉ dùng được khi người dùng bật")
+  expect(String(await search.execute({ query: "select:desk_run" } as never, { signal: new AbortController().signal, callId: "s" }))).toContain("is only available when the user turns it on")
   await saveConfig({ provider: "groq", model: "tooly", toolSearch: "on" })
   try {
     replies = [{ text: "Đã rõ." }]

@@ -115,14 +115,14 @@ test("the hint says what was wrong and shows the form to use; it reads as a tool
   const ps = shellTool(ws(), { shell: PS })
   const series = sh.rewrite!({ command: AWK_LOOP })!
   expect(series).toStartWith(MATH_NEAR_MISS_PREFIX)
-  expect(series).toContain("mảng hoặc vòng lặp")
+  expect(series).toContain("arrays or loops")
   expect(series).toContain("(a+b+c)/3")
   expect(series).toContain("awk 'BEGIN{ g = ")
   expect(ps.rewrite!({ command: PS_FOREACH })).toContain("$g = 128.4/112 - 1")
-  expect(sh.rewrite!({ command: PY_MULTILINE })).toContain("Python hoặc Node. Viết lại phép tính đó bằng awk")
-  expect(ps.rewrite!({ command: 'python -c "print(1.2*3)"' })).toContain("bằng biểu thức PowerShell")
+  expect(sh.rewrite!({ command: PY_MULTILINE })).toContain("Python or Node. Rewrite that calculation as awk")
+  expect(ps.rewrite!({ command: 'python -c "print(1.2*3)"' })).toContain("as a PowerShell expression")
   // The right form with a folder it does not need.
-  expect(ps.rewrite!({ command: "3/2", workdir: project })).toContain("không kèm workdir")
+  expect(ps.rewrite!({ command: "3/2", workdir: project })).toContain("without workdir")
   expect(ps.rewrite!({ command: "3/2" })).toBeUndefined()
   expect(sh.rewrite!({ command: "python3 phan_tich.py" })).toBeUndefined()
   // Stop-gate and eval traces sort it with tool errors (the model fixes those), never with denials.
@@ -194,7 +194,7 @@ test("through runTool: the model reads the hint as the tool's error, and the sam
   const win = process.platform === "win32"
   const error = await failure(runTool(tool, { command: win ? PS_FOREACH : AWK_LOOP }, ctx(), new RwLock(), gate))
   expect(error).toStartWith(MATH_NEAR_MISS_PREFIX)
-  expect(error).toContain("mảng hoặc vòng lặp")
+  expect(error).toContain("arrays or loops")
   if (!win && !Bun.which("awk")) return
   const rewritten = win ? "$s = 12000000 + 13419003 + 14838006\n$avg = $s/3\n14838006/$avg*100" : `awk 'BEGIN{ s = 25.1 + 25.3 + 25 + 24.8; printf "%.3f\\n", s/4 }'`
   const out = await runTool(tool, { command: rewritten }, ctx(), new RwLock(), gate)
@@ -205,9 +205,9 @@ test("a read-only agent's calculator gives the same hint for arithmetic, and its
   const calculator = shellTool(ws(), { shell: BASH }).readOnlyVariant!
   const hint = await failure(calculator.execute({ command: AWK_LOOP }, ctx()))
   expect(hint).toStartWith(MATH_NEAR_MISS_PREFIX)
-  expect(hint).toContain("mảng hoặc vòng lặp")
+  expect(hint).toContain("arrays or loops")
   const refusal = await failure(calculator.execute({ command: "cat gia.csv" }, ctx()))
-  expect(refusal).toContain("không phải phép tính thuần")
+  expect(refusal).toContain("is not pure arithmetic")
 })
 
 test("15/11: a series built with a .NET List and .Add gets the hint; New-Object of anything else does not", () => {

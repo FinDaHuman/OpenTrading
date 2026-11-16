@@ -119,7 +119,7 @@ export function untracedOperands(messages: readonly ModelMessage[], isArithmetic
   }
   const results = messages.slice(at + 1).filter((m) => m.role === "tool")
   const ran = (id: string) =>
-    results.some((m) => typeof m.content !== "string" && m.content.some((p) => p.type === "tool-result" && p.toolCallId === id && /^\[mã thoát 0 /.test(outputText(p.output))))
+    results.some((m) => typeof m.content !== "string" && m.content.some((p) => p.type === "tool-result" && p.toolCallId === id && /^\[(?:exit code|mã thoát) 0 /.test(outputText(p.output))))
   const out: string[] = []
   for (const call of calls) {
     const command = (call.input as { command?: unknown } | undefined)?.command

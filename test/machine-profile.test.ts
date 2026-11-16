@@ -77,7 +77,7 @@ test("useCalculatorShell swaps in the arithmetic-only shell and puts the full on
   registry.register(full)
   const restore = useCalculatorShell(registry)
   const swapped = registry.get("shell")!
-  expect(swapped.description).toStartWith("Máy tính")
+  expect(swapped.description).toStartWith("Calculator")
   expect(swapped.readOnly).toBe(true)
   expect(swapped.description.length).toBeLessThan(full.description.length)
   restore()

@@ -7,9 +7,9 @@ import type { ChartRenderInput } from "./render"
  */
 export function renderPie(input: ChartRenderInput): { subtitle: string; body: string } {
   const series = input.series ?? []
-  if (series.length < 2) throw new Error(`pie cần series ít nhất 2 lát, đang có ${series.length}.`)
+  if (series.length < 2) throw new Error(`pie needs a series of at least 2 slices, got ${series.length}.`)
   const positive = series.filter((v) => v > 0)
-  if (positive.length === 0) throw new Error("pie cần ít nhất một lát > 0, đang toàn số ≤ 0.")
+  if (positive.length === 0) throw new Error("pie needs at least one slice > 0; all values are ≤ 0.")
   const total = positive.reduce((s, v) => s + v, 0)
   const barMax = Math.min(input.width ?? 24, 60)
   const rows = series
@@ -22,7 +22,7 @@ export function renderPie(input: ChartRenderInput): { subtitle: string; body: st
     })
   const skipped = series.length - rows.length
   return {
-    subtitle: `pie (${rows.length} lát${skipped ? `, bỏ ${skipped} lát ≤0` : ""}, tổng 100%)`,
+    subtitle: `pie (${rows.length} slices${skipped ? `, ${skipped} slices ≤0 dropped` : ""}, total 100%)`,
     body: rows.join("\n"),
   }
 }

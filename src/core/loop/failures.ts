@@ -39,12 +39,12 @@ const NEUTRAL = new Set<ToolOutcome>(["deferred", "denied", "aborted"])
 const DATA_LOST = new Set<ToolOutcome>(["source-unavailable", "timeout", "rate-limited", "quota", "transport"])
 
 const DEFERRED = /chưa (được nạp|có trong bước)/
-const DENIED = [AUTO_BLOCK_PREFIX, USER_DENY_PREFIX, RULE_DENY_PREFIX, "Người dùng dừng vòng lặp", "Lời gọi tool đã bị huỷ", "Không chạy được", "Lời gọi này cần người dùng xác nhận"]
-const INVALID = /^(Tham số (không hợp lệ|của )|Không có tool|Model tried to call)/
-const ABORTED = /^Đã huỷ|^Tool bị ngắt/
+const DENIED = [AUTO_BLOCK_PREFIX, USER_DENY_PREFIX, RULE_DENY_PREFIX, "Người dùng dừng vòng lặp", "The user stopped a loop", "Lời gọi tool đã bị huỷ", "Không chạy được", "Lời gọi này cần người dùng xác nhận"]
+const INVALID = /^(Tham số (không hợp lệ|của )|Không có tool|No tool "|Model tried to call)/
+const ABORTED = /^Đã huỷ|^Cancelled\.|^Stopped\.|^Tool bị ngắt/
 const QUOTA = /hết quota/
 const RATE_LIMITED = /giới hạn tốc độ|Server yêu cầu chờ/
-const TIMEOUT = /quá thời gian|timed out|Hết thời gian/i
+const TIMEOUT = /quá thời gian|timed out|stopped after \d+s|Hết thời gian/i
 const TRANSPORT = /lỗi tạm thời|đang lỗi kết nối|chưa kết nối|Connection closed|Streamable HTTP|fetch failed|ECONN/
 
 /** The kind of a tool result, from what the harness wrote in it. */

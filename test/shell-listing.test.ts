@@ -220,7 +220,7 @@ test("a listing really runs through runTool in ‖ with nobody to ask, under the
   const tool = shellTool(ws())
   const out = await runTool(tool, { command: win ? "dir -Name" : "ls" }, { signal: new AbortController().signal, callId: "l" }, new RwLock(), gate)
   const text = typeof out === "string" ? out : out.output
-  expect(text).toContain("mã thoát 0")
+  expect(text).toContain("exit code 0")
   expect(text).toContain("src")
   expect(LISTING_TIMEOUT_MS).toBeLessThanOrEqual(20_000)
 }, 30_000)
@@ -233,7 +233,7 @@ test("every accepted form really runs in this machine's shell and exits 0", asyn
     return typeof r === "string" ? r : r.output
   }))
   cases.forEach((command, i) => {
-    expect([command, outs[i]!.split("\n")[0]!.includes("mã thoát 0")]).toEqual([command, true])
+    expect([command, outs[i]!.split("\n")[0]!.includes("exit code 0")]).toEqual([command, true])
     expect(outs[i], command).not.toContain("LỖI:")
   })
 }, 60_000)

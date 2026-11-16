@@ -47,15 +47,15 @@ test("chart_render from_call draws candles from the stored result, oldest first,
   const chart = res.chart as { bars: { c: number; v?: number }[]; times: string[] }
   expect(chart.bars.map((b) => b.c)).toEqual([100, 101, 102, 103, 104, 106])
   expect(chart.times[0]).toBe("2026-09-01")
-  expect(res.output).toContain(`Đã vẽ nến FPT 6 phiên 2026-09-01→2026-09-06 (số lấy từ ${ref})`)
-  expect(res.output).toContain("đóng cửa cuối 106")
+  expect(res.output).toContain(`Drew candles FPT 6 sessions 2026-09-01→2026-09-06 (numbers taken from ${ref})`)
+  expect(res.output).toContain("last close 106")
 
   const vol = (await chartRenderTool().execute({ kind: "sparkcolumn", from_call: ref, field: "volume" }, ctx())) as ToolResult
   expect(vol.chart).toMatchObject({ kind: "sparkcolumn", series: [1000, 2000, 3000, 4000, 5000, 6000], dirs: [true, true, true, true, true, true] })
 
-  await expect(chartRenderTool().execute({ kind: "line", from_call: ref, field: "eps" }, ctx())).rejects.toThrow("Trường số có")
-  await expect(chartRenderTool().execute({ kind: "heatmap", from_call: ref }, ctx())).rejects.toThrow("chưa hỗ trợ from_call")
-  await expect(chartRenderTool().execute({ kind: "line", from_call: "r99" }, ctx())).rejects.toThrow("Không còn kết quả")
+  await expect(chartRenderTool().execute({ kind: "line", from_call: ref, field: "eps" }, ctx())).rejects.toThrow("Numeric fields")
+  await expect(chartRenderTool().execute({ kind: "heatmap", from_call: ref }, ctx())).rejects.toThrow("does not support from_call")
+  await expect(chartRenderTool().execute({ kind: "line", from_call: "r99" }, ctx())).rejects.toThrow("is no longer in the open session")
 })
 
 test("chart_compare from_calls compares the close series of two results", async () => {
@@ -63,13 +63,13 @@ test("chart_compare from_calls compares the close series of two results", async 
   const b = refOf(await callTool(candleTool("CMG", [50, 45, 40])))!
   const res = (await chartCompareTool().execute({ from_calls: [a, b] }, ctx())) as ToolResult
   expect(res.output).toContain("FPT +10%, CMG -20%")
-  await expect(chartCompareTool().execute({ from_calls: [a, b], ymin: 5 }, ctx())).rejects.toThrow("đi cùng nhau")
+  await expect(chartCompareTool().execute({ from_calls: [a, b], ymin: 5 }, ctx())).rejects.toThrow("go together")
 })
 
 test("input checks: OHLC must be consistent, times must match the points, multiline takes 60 points", async () => {
   const bad = [{ o: 10, h: 9, l: 8, c: 9.5 }, ...Array.from({ length: 4 }, () => ({ o: 10, h: 11, l: 9, c: 10 }))]
   expect(chartRenderTool().input.safeParse({ kind: "candlestick", bars: bad }).success).toBe(false)
-  await expect(chartRenderTool().execute({ kind: "line", series: [1, 2, 3], times: ["a", "b"] }, ctx())).rejects.toThrow("times có 2 nhãn")
+  await expect(chartRenderTool().execute({ kind: "line", series: [1, 2, 3], times: ["a", "b"] }, ctx())).rejects.toThrow("times has 2 labels")
   const long = Array.from({ length: 60 }, (_, i) => i + 1)
   expect(chartRenderTool().input.safeParse({ kind: "multiline", matrix: [long, long.map((v) => v * 2)] }).success).toBe(true)
   const res = (await chartRenderTool().execute({ kind: "sparkcolumn", series: [3, 1, 2], dirs: [true, false, true] }, ctx())) as ToolResult
@@ -132,8 +132,8 @@ test("batch ref: chart_compare splits one result into one labelled series per sy
   expect((res.chart as { series: { label: string }[] }).series.map((s) => s.label)).toEqual(["FPT", "SHB", "NVL"])
   const two = (await chartCompareTool().execute({ from_calls: [ref], symbols: ["nvl", "FPT"] }, ctx())) as ToolResult
   expect(two.output).toContain("FPT +10%, NVL +25%")
-  await expect(chartCompareTool().execute({ from_calls: [ref], symbols: ["VCB"] }, ctx())).rejects.toThrow("không có mã VCB")
-  await expect(chartCompareTool().execute({ from_calls: [ref], symbols: ["FPT"] }, ctx())).rejects.toThrow("cần 2–5")
+  await expect(chartCompareTool().execute({ from_calls: [ref], symbols: ["VCB"] }, ctx())).rejects.toThrow("no ticker VCB")
+  await expect(chartCompareTool().execute({ from_calls: [ref], symbols: ["FPT"] }, ctx())).rejects.toThrow("2–5 are needed")
 })
 
 test("single-symbol results in the batch shape are labelled by their symbol, not the ref", async () => {
@@ -146,13 +146,13 @@ test("single-symbol results in the batch shape are labelled by their symbol, not
 
 test("batch ref: chart_render never draws the first symbol by default; from_symbol or a leading ticker picks one", async () => {
   const ref = refOf(await callTool(batchTool({ FPT: five(100, 1), SHB: five(10, -1), NVL: five(20, 1) })))!
-  await expect(render({ kind: "candlestick", from_call: ref })).rejects.toThrow("nhiều mã: FPT, SHB, NVL")
+  await expect(render({ kind: "candlestick", from_call: ref })).rejects.toThrow("several tickers: FPT, SHB, NVL")
   const byName = await render({ kind: "candlestick", from_call: ref, symbol: "SHB — 90 ngày" })
   expect((byName.chart as { bars: { c: number }[] }).bars.map((b) => b.c)).toEqual(five(10, -1))
-  expect(byName.output).toContain("Đã vẽ nến SHB — 90 ngày")
+  expect(byName.output).toContain("Drew candles SHB — 90 ngày")
   const explicit = await render({ kind: "line", from_call: ref, from_symbol: "nvl" })
   expect(explicit.chart).toMatchObject({ symbol: "NVL", series: five(20, 1) })
-  await expect(render({ kind: "line", from_call: ref, from_symbol: "VCB" })).rejects.toThrow("Mã có trong kết quả: FPT, SHB, NVL")
+  await expect(render({ kind: "line", from_call: ref, from_symbol: "VCB" })).rejects.toThrow("Tickers in the result: FPT, SHB, NVL")
 })
 
 test("a single-symbol ref refuses a display name naming another stored result's symbol, or another from_symbol", async () => {
@@ -161,10 +161,10 @@ test("a single-symbol ref refuses a display name naming another stored result's 
   for (const symbol of ["KLGD FPT 20 phiên", "LNST FPT theo quý", "ROE FPT", "SHB — 90 ngày", "Giá đóng cửa 2026"]) {
     expect((await render({ kind: "line", from_call: ref, symbol })).chart).toMatchObject({ kind: "line" })
   }
-  await expect(render({ kind: "candlestick", from_call: ref, from_symbol: "SHB" })).rejects.toThrow("không có dữ liệu mã SHB")
+  await expect(render({ kind: "candlestick", from_call: ref, from_symbol: "SHB" })).rejects.toThrow("has no data for SHB")
   // Once SHB's data is stored, "SHB — …" on FPT's ref is the r38/r39 mix-up: refused.
   refOf(await callTool(batchTool({ SHB: five(10, 1) })))
-  await expect(render({ kind: "candlestick", from_call: ref, symbol: "SHB — 90 ngày" })).rejects.toThrow(`${ref} là dữ liệu mã FPT`)
+  await expect(render({ kind: "candlestick", from_call: ref, symbol: "SHB — 90 ngày" })).rejects.toThrow(`${ref} holds FPT data`)
   expect((await render({ kind: "candlestick", from_call: ref, symbol: "FPT — 90 ngày" })).chart).toMatchObject({ kind: "candlestick" })
   expect((await render({ kind: "line", from_call: ref, symbol: "SHB so với", from_symbol: "FPT" })).chart).toMatchObject({ kind: "line" })
 })
@@ -186,7 +186,7 @@ test("% over the period is close to close everywhere: candle summary, candle hea
   // First bar opens at 101 but closes at 100; the last close is 110 → +10%, not +8.91%.
   const ref = refOf(await callTool(batchTool({ FPT: [100, 102, 104, 106, 110] })))!
   const candle = await render({ kind: "candlestick", from_call: ref })
-  expect(candle.output).toContain("(+10% cả kỳ)")
+  expect(candle.output).toContain("(+10% over the period)")
   const title = buildChart(candle.chart as Parameters<typeof buildChart>[0], 80).title.map((r) => r.text).join("")
   expect(title).toContain("+10.0%")
   const other = refOf(await callTool(batchTool({ SHB: [10, 10, 10, 10, 10] })))!
@@ -194,8 +194,8 @@ test("% over the period is close to close everywhere: candle summary, candle hea
 })
 
 test("bar with a matrix (grouped bars) says which kinds draw several series", async () => {
-  await expect(render({ kind: "bar", labels: ["a", "b"], matrix: [[1, 2], [3, 4]] })).rejects.toThrow("không nhận matrix. Nhiều mã theo thời gian: kind=multiline")
-  await expect(render({ kind: "bar", series: [] })).rejects.toThrow("cần series ít nhất 1 cột")
+  await expect(render({ kind: "bar", labels: ["a", "b"], matrix: [[1, 2], [3, 4]] })).rejects.toThrow("takes no matrix. Several tickers over time: kind=multiline")
+  await expect(render({ kind: "bar", series: [] })).rejects.toThrow("needs a series of at least 1 columns")
 })
 
 test("chart_compare symbols filter the union of refs: r1 holds FPT, r2 holds HPG", async () => {
@@ -207,7 +207,7 @@ test("chart_compare symbols filter the union of refs: r1 holds FPT, r2 holds HPG
   const err = await chartCompareTool()
     .execute({ from_calls: [a, b], symbols: ["FPT", "VCB"] }, ctx())
     .catch((e: Error) => e.message)
-  expect(err).toContain("không có mã VCB")
+  expect(err).toContain("no ticker VCB")
   expect(err).not.toContain("không có mã FPT")
 })
 
@@ -235,7 +235,7 @@ test("refs belong to the session they were fetched in; a resumed session never r
     expect(vcb).toBe("r1")
     // Resume A, whose history names r1 (FPT) and r4.
     useResultSession("A", JSON.stringify([{ content: "FPT [ref r1] … [ref r4]" }]))
-    await expect(render({ kind: "line", from_call: "r1" })).rejects.toThrow("Không còn kết quả")
+    await expect(render({ kind: "line", from_call: "r1" })).rejects.toThrow("is no longer in the open session")
     expect(recallResult("r1")).toBeUndefined()
     const next = refOf(await callTool(candleTool("FPT", [100, 101, 102])))!
     expect(next).toBe("r5")

@@ -136,8 +136,8 @@ const fmt = (n: number) => n.toLocaleString("vi-VN")
 
 /** "120 dòng", "dòng 1–410/1.400" from read_file's header. */
 function linesNote(output: string) {
-  const total = /· (\d+) (?:dòng|trang)/.exec(output)?.[1]
-  const shown = /đang hiện (?:dòng|trang) (\d+)–(\d+)/.exec(output)
+  const total = /· (\d+) (?:lines|pages|dòng|trang)/.exec(output)?.[1]
+  const shown = /(?:showing (?:lines|page)|đang hiện (?:dòng|trang)) (\d+)–(\d+)/.exec(output)
   if (shown && total) return `dòng ${fmt(Number(shown[1]))}–${fmt(Number(shown[2]))}/${fmt(Number(total))}`
   return total ? `${fmt(Number(total))} dòng` : undefined
 }

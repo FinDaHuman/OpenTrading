@@ -103,7 +103,7 @@ describe("attachMentions", () => {
   test("a big file is cut at the per-file cap, with where to read on", async () => {
     const a = await attach("@lon.txt")
     expect(a.parts[0]!.length).toBeLessThan(MENTION_FILE_CHARS + 1_500)
-    expect(a.parts[0]).toMatch(/còn \d+ dòng; đọc tiếp với offset=\d+/)
+    expect(a.parts[0]).toMatch(/\d+ lines left; continue with offset=\d+/)
     expect(a.files[0]!.note).toMatch(/^Đã đọc lon\.txt \(dòng 1–[\d.]+\/3\.000\)$/)
   })
 

@@ -316,7 +316,7 @@ test("a child that fails with nothing to show fails the call; the error reaches 
   const events = await collect(runAgent({ history: [], input: "x", skills: [], registry }))
   const [end] = ends(events)
   expect(end!.ok).toBe(false)
-  expect(end!.output).toContain("Subagent lỗi")
+  expect(end!.output).toContain("Subagent failed")
   expect(end!.output).toContain("upstream down")
 })
 
@@ -545,7 +545,7 @@ test("background: the call returns at once with the id; the result arrives throu
   const events = await collect(runAgent({ history: [], input: "x", skills: [], registry, signal: controller.signal }))
   const [end] = ends(events)
   expect(end!.ok).toBe(true)
-  expect(end!.output).toMatch(/^Đã chạy nền subagent ag-[a-z0-9]{6} \(nghien-cuu · Định giá FPT\)/)
+  expect(end!.output).toMatch(/^Subagent ag-[a-z0-9]{6} started in the background \(nghien-cuu · Định giá FPT\)/)
   const id = /ag-[a-z0-9]{6}/.exec(end!.output)![0]
   controller.abort() // the parent turn is over (and even aborted): the background agent goes on
   expect(manager.get(id)).toMatchObject({ background: true })
@@ -568,7 +568,7 @@ test("send_message: queued for a running agent, resumes a finished one with its 
   childGate = new Promise((r) => (release = r))
   const run = manager.start({ description: "FPT", prompt: "VIỆC-ĐẦU", background: true })
   await waitFor(() => childBodies.length === 1)
-  expect(await send.execute({ to: run.id, message: "VIỆC-THÊM" }, ctxOf())).toContain("Đã xếp tin")
+  expect(await send.execute({ to: run.id, message: "VIỆC-THÊM" }, ctxOf())).toContain("Message queued")
   release()
   await run.done
   expect(childBodies).toHaveLength(2)
@@ -579,7 +579,7 @@ test("send_message: queued for a running agent, resumes a finished one with its 
 
   // Finished, in memory: resumes in the background with the whole conversation.
   childGate = undefined
-  expect(await send.execute({ to: run.id, message: "VIỆC-BA" }, ctxOf())).toContain("đang chạy tiếp ở chế độ nền")
+  expect(await send.execute({ to: run.id, message: "VIỆC-BA" }, ctxOf())).toContain("is continuing in the background")
   await waitFor(() => finished.length === 2)
   expect(JSON.stringify(childBodies[2]!.messages)).toContain("VIỆC-THÊM")
   expect(JSON.stringify(childBodies[2]!.messages)).toContain("VIỆC-BA")
@@ -612,11 +612,11 @@ test("stop_agent stops a running background agent; its partial result still noti
   const run = manager.start({ description: "FPT", prompt: "x", background: true })
   await waitFor(() => childBodies.length === 1)
   const stop = stopAgentTool(manager)
-  expect(await stop.execute({ id: run.id }, ctxOf())).toBe(`Đã dừng subagent ${run.id}.`)
+  expect(await stop.execute({ id: run.id }, ctxOf())).toBe(`Stopped subagent ${run.id}.`)
   await run.done
   expect(finished).toEqual(["stopped"])
-  expect(await stop.execute({ id: run.id }, ctxOf())).toContain("không còn chạy")
-  await expect(stop.execute({ id: "ag-nope00" }, ctxOf())).rejects.toThrow("Không có subagent")
+  expect(await stop.execute({ id: run.id }, ctxOf())).toContain("is no longer running")
+  await expect(stop.execute({ id: "ag-nope00" }, ctxOf())).rejects.toThrow("No subagent")
 })
 
 test("a subagent's sidechain holds tool errors cleaned, like the main history", async () => {

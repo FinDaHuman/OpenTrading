@@ -111,7 +111,7 @@ test("ensure creates the folder lazily and again after the OS emptied the temp d
 
 test("the <quyen_tep> reminder names this session's folder; none when off", () => {
   const { workspace, scratch } = setup("nhac")
-  expect(workspace.describe()).toContain(`Thư mục tạm của phiên: ${scratch.dir()}`)
+  expect(workspace.describe()).toContain(`Session temp folder: ${scratch.dir()}`)
   scratch.enabled = false
   expect(workspace.describe()).not.toContain("Thư mục tạm")
   expect(new Workspace(project, { home, data }).describe()).not.toContain("Thư mục tạm")
