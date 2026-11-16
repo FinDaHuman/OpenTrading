@@ -19,10 +19,15 @@ test("off unless set to true", () => {
 
 test("a quoted constraint or style card is saved; a lesson or an unquoted card is not", () => {
   const memory = openNotebook(path.join(root, "memory.db"))
+  // Windows locks an open database file: close it before afterAll removes the folder.
+  try {
   const saved = saveCardNow(memory, { kind: "constraint", text: "Không gợi ý cổ phiếu ngân hàng", quote: "không bao giờ gợi ý cổ phiếu ngân hàng" })
   expect(saved?.group).toBe("constraint")
   expect(notebookAdmin(memory)!.entries().some((e) => e.group === "constraint" && e.id === saved!.id && e.text === "Không gợi ý cổ phiếu ngân hàng")).toBe(true)
   expect(saveCardNow(memory, { kind: "style", text: "Luôn có bảng so sánh", quote: "luôn có bảng so sánh nhé" })?.group).toBe("style")
   expect(saveCardNow(memory, { kind: "lesson", title: "Cắt lỗ", summary: "Cắt lỗ 7%" })).toBeUndefined()
   expect(saveCardNow(memory, { kind: "constraint", text: "Không margin" })).toBeUndefined()
+  } finally {
+    memory.close()
+  }
 })
