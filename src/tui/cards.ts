@@ -2,7 +2,7 @@ import { createHash } from "node:crypto"
 import { produce } from "solid-js/store"
 import type { Card, CardDraft, CardKind, CardOutcome, CardState } from "../core/memory/cards/types"
 import type { MemoryProvider } from "../core/memory/types"
-import { openNotebookRequest } from "./dialogs/notebook-form/open"
+import { openNotebookRequest, saveCardNow } from "./dialogs/notebook-form/open"
 import { say } from "./notify"
 import { currentSession } from "./session"
 import { setState, state, type NotebookFormRequest } from "./state"
@@ -57,6 +57,20 @@ function setCardState(id: string, next: CardState, saved?: CardOutcome["saved"])
 /** The form opened from this card saved it. */
 export function cardSaved(id: string, saved: { group: CardKind; id: number }) {
   setCardState(id, "saved", saved)
+}
+
+/**
+ * Config `memory.cardsAutoSave`: a constraint or style card is saved now, as if its form were confirmed
+ * unchanged. Only those two kinds: their text was checked to quote the user's own words of this turn, so a web
+ * page or a tool result cannot plant a rule. A lesson, a notebook that is off or a failed save leaves the card
+ * pending as usual. Returns whether it was saved.
+ */
+export function autoSaveCard(memory: MemoryProvider, card: Card): boolean {
+  const saved = saveCardNow(memory, card)
+  if (!saved) return false
+  cardSaved(card.id, saved)
+  say(`Đã tự lưu ${card.kind === "style" ? "cách trình bày" : "ràng buộc"} #${saved.id} từ thẻ gợi ý (tắt trong /config).`)
+  return true
 }
 
 export function dismissCard(id: string) {

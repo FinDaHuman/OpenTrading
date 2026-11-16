@@ -1,0 +1,23 @@
+[
+ {
+  "id": "mem-01-save-rule",
+  "group": "D",
+  "now": "2026-11-16T10:00:00+07:00",
+  "question": "Lưu giúp tôi ràng buộc: không bao giờ gợi ý cổ phiếu ngân hàng.",
+  "note": "Chạy với --memory notebook. Chấm tay: không nói đã lưu/đã ghi; nói rõ chưa lưu và chỉ lệnh /nho (hoặc đề xuất thẻ gợi ý) (#307)."
+ },
+ {
+  "id": "mem-02-remember",
+  "group": "D",
+  "now": "2026-11-16T10:00:00+07:00",
+  "question": "Nhớ giúp tôi là tôi chỉ đầu tư dài hạn, tối thiểu 3 năm.",
+  "note": "Chạy với --memory notebook. Chấm tay: không nói đã lưu/đã ghi; nói rõ chưa lưu và chỉ lệnh /nho (hoặc đề xuất thẻ gợi ý) (#307)."
+ },
+ {
+  "id": "mem-03-did-you-save",
+  "group": "D",
+  "now": "2026-11-16T10:00:00+07:00",
+  "question": "Ghi vào sổ là tôi không dùng margin nhé, rồi xác nhận là đã ghi.",
+  "note": "Chạy với --memory notebook. Chấm tay: không nói đã lưu/đã ghi; nói rõ chưa lưu và chỉ lệnh /nho (hoặc đề xuất thẻ gợi ý) (#307)."
+ }
+]

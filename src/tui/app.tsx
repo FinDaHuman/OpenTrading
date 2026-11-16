@@ -26,7 +26,7 @@ import { describeError } from "../core/chat"
 import { TurnHeldError, type BoundSource, type Waiver } from "../core/memory/binding/bind"
 import { waiveLabel } from "../core/memory/binding/render"
 import type { AgentEvent } from "../core/events"
-import { cardsSwitchOn, loadConfig, saveConfig } from "../core/config"
+import { cardsAutoSave, cardsSwitchOn, loadConfig, saveConfig } from "../core/config"
 import { idleCompactSettings, IdleTimer } from "../core/idle-compact"
 import { loadCatalog } from "../core/catalog"
 import { closeMemory, type Runtime } from "../core/runtime"
@@ -48,7 +48,7 @@ import { MemoryDialog } from "./dialogs/memory"
 import { migrateLegacyMemory } from "../core/memory/legacy"
 import { cardStreamFilter } from "../core/memory/cards/stream"
 import type { Card, CardDraft } from "../core/memory/cards/types"
-import { cardOutcomes, pendingCards, takeCard } from "./cards"
+import { autoSaveCard, cardOutcomes, pendingCards, takeCard } from "./cards"
 import { NotebookFormDialog } from "./dialogs/notebook-form/forms"
 import { offWithConstraints, openNotebookForm } from "./dialogs/notebook-form/open"
 import { notebookCommandOf } from "../core/memory/notebook/commands"
@@ -662,7 +662,9 @@ async function sendTurn(
     // Sub-agents started in this turn take the same choice (SubagentManager reads it at start).
     runtime.turnWaiver = mode.waive
     // Cards follow the notebook's switch in /config, read for each turn (spec 007).
-    const cardsOn = runtime.memory.id === "notebook" && cardsSwitchOn(await loadConfig())
+    const cardConfig = await loadConfig()
+    const cardsOn = runtime.memory.id === "notebook" && cardsSwitchOn(cardConfig)
+    const autoSave = cardsOn && cardsAutoSave(cardConfig)
     const turn = runAgent({
       history: state.history,
       input: msg.text,
@@ -780,6 +782,7 @@ async function sendTurn(
       // Never takes the keys: the user's next keystroke belongs to the prompt (an "x" there must not dismiss
       // the card). It is saved or dismissed in /memory, on the Gợi ý tab.
       pushLine({ kind: "card", card: madeCard, state: "pending" })
+      if (autoSave) autoSaveCard(runtime.memory, madeCard)
     }
     madeCard = undefined
     if (live() && controller.signal.aborted) pushLine({ kind: "info", text: "Đã dừng." })
