@@ -177,5 +177,9 @@ export function describeTool(registry: ToolRegistry, def: ToolDef) {
     const note = p.description ? ` — ${clip(p.description, 80)}` : ""
     return `- ${name} (${bits.filter(Boolean).join(", ")})${note}`
   })
-  return [`## ${def.name}`, clip(def.description, 400), params.length > 0 ? `Tham số:\n${params.join("\n")}` : "Không có tham số."].join("\n")
+  // The text the request declares for this mode (toToolSet does the same): in ▸▸▸ bypass the static
+  // description says commands wait for approval, which contradicts the declared one.
+  const present = new Set(registry.list().map((d) => d.name))
+  const description = def.descriptionFor?.(present, registry.gate?.mode) ?? def.description
+  return [`## ${def.name}`, clip(description, 400), params.length > 0 ? `Tham số:\n${params.join("\n")}` : "Không có tham số."].join("\n")
 }

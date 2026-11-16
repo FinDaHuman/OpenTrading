@@ -214,3 +214,26 @@ test("Windows PowerShell 5.1 (what most users have; CI's default is pwsh): UTF-8
   expect(text(await tool.execute({ command: "Start-Sleep -Seconds 30", timeout_ms: 1500 }, ctx()))).toContain("dừng vì quá")
   expect(Date.now() - started).toBeLessThan(15_000)
 }, 60_000)
+
+test("a network workdir is refused before anything resolves or stats it (an SMB lookup can leak the NTLM hash)", () => {
+  const workspace = ws()
+  // Resolving the path (realpath) is itself the network access: the checks must not get there.
+  workspace.contains = () => {
+    throw new Error("contains() resolved a network path")
+  }
+  const tool = shellTool(workspace)
+  for (const workdir of ["\\\\attacker\\share", "\\\\attacker\\share\\sub"]) {
+    const input = { command: "dir", workdir }
+    expect(tool.askFor!(input)).toStartWith("outside:")
+    expect(tool.blockFor!(input)).toContain("đường dẫn mạng")
+  }
+  if (process.platform === "win32") expect(tool.blockFor!({ command: "dir", workdir: "//attacker/share/x" })).toContain("đường dẫn mạng")
+  // The device prefixes isUncPath leaves out, and a file:// URL that resolves to a share.
+  for (const workdir of [String.raw`\\?\UNC\attacker\share`, String.raw`\\.\pipe\x`, "file://attacker/share/x"]) {
+    const input = { command: "dir", workdir }
+    if (workdir.startsWith("file:") && process.platform !== "win32") continue
+    expect([workdir, tool.askFor!(input)?.startsWith("outside:")]).toEqual([workdir, true])
+    expect(tool.blockFor!(input)).toContain("đường dẫn mạng")
+  }
+  expect(tool.blockFor!({ command: "dir", workdir: "sub" })).toBeUndefined()
+})

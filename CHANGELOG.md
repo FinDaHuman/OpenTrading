@@ -9,6 +9,22 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 - `watchlist_local` `create` with `symbols` holds them from the start, in the same write, and names invalid
   ones. Before, it made an empty list and the model then said the list held the symbols (15/11 real-key round).
+- `shell` in ▸▸▸ bypass names Python only when `python3`/`python` really runs a script on this machine (checked
+  once, only for the bypass text), and on PowerShell says to write PowerShell arrays and `foreach` directly,
+  never wrapped in another `powershell -Command`. The #310 text ("Python … nếu máy có") sent the model to the
+  Windows Store alias and then to nested PowerShell whose `$variables` the outer shell erased: on 16/11, 22 of 33
+  commands failed and a turn took 4.3 requests instead of 2.9 (gemini-3.1-flash-lite, Windows).
+  `OPENTRADING_PYTHON` (a command name, or `none`) replaces the check for a host whose commands run elsewhere
+  (a benchmark sandbox).
+- `tool_search` shows a tool's description as the request declares it (the mode, the tools present), not the
+  static one: with only `shell` registered the card sent the model to `read_file`, which the turn lacked.
+
+### Security
+
+- `shell` refuses a network `workdir` (`\\host\share`, `\\?\UNC\host\share`, `\\.\…`, and on Windows
+  `//host/share` and `file://host/share`) by
+  its spelling alone. Before, the approval check resolved it (realpath in `workspace.contains`) before
+  anything asked the user, and that SMB lookup can leak the user's NTLM hash to the host (MyToDoList 43y).
 
 ### Changed
 
