@@ -149,6 +149,12 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ### Fixed
 
+- A host that keeps `shell` but drops the file tools (a benchmark runner with MCP + shell) no longer
+  sends the model after them: the `shell` description, the `<quyen_tep>` workspace line and its ‖ mode
+  line name only the file tools the registry holds (deferred ones count). `ToolDef.descriptionFor`
+  gives a tool the registry's tool names when the request is built. With every file tool registered
+  the text is unchanged.
+
 - `--profile machine` dropped the stop rule ("Chỉ dừng khi đã trả lời đủ, cần hỏi lại, hoặc bị chặn"): it shared a
   `tools.md` line with the sentence before a tool call. The two are now separate lines and only the sentence is
   terminal-only.
