@@ -5,6 +5,17 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ## [Unreleased]
 
+### Changed
+
+- Data results as `<ref>.json` (#311) without a configured `results.exportDir` are written, and named in
+  `<quyen_tep>`, only in ▸▸▸ bypass. In ‖ and ▸ a script that opens such a file always asks the user, while a
+  typed arithmetic command runs unasked, so the reminder turned every series calculation into a prompt. A
+  configured folder (host, `ot -p`, benchmark) is used in every mode, as before (#311 review).
+- The file holds the text the model read (dates already ISO), not the raw reply, so a script sees the same
+  dates as the model; its sha256 is the evidence row's `visibleSha256` for a plain JSON result.
+- `scripts/eval/run.ts --result-files <dir>`: the eval runner writes those files too (the trace's settings
+  name it), so the #309 A2 effect can be measured.
+
 ### Fixed
 
 - The operand note no longer flags what a Python script reading a result file types besides figures: digits in a

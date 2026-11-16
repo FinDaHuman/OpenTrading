@@ -30,10 +30,11 @@ test("a data result is written as <ref>.json, the JSON only (no label line)", ()
   useResultSession("s1")
   const ref = rememberResult("vn_quote_history", `[nguồn: snapshot]\n${quotes}`)
   expect(JSON.parse(readFileSync(path.join(dir, `${ref}.json`), "utf8"))).toEqual(JSON.parse(quotes))
-  // The raw text wins over the visible one (the model may have seen a truncated table).
-  const raw = JSON.stringify({ closes: [1, 2, 3, 4] })
-  const ref2 = rememberResult("vn_quote_history", "bảng đã rút gọn", { rawText: raw })
-  expect(readFileSync(path.join(dir, `${ref2}.json`), "utf8")).toBe(raw)
+  // The text the model read is written, not the raw reply: a script sees the same (ISO) dates as the model.
+  const raw = JSON.stringify({ closes: [{ date: "/Date(1761782400000)/", close: 1 }] })
+  const seen = JSON.stringify({ closes: [{ date: "2026-10-30T00:00:00.000Z", close: 1 }] })
+  const ref2 = rememberResult("vn_quote_history", seen, { rawText: raw })
+  expect(readFileSync(path.join(dir, `${ref2}.json`), "utf8")).toBe(seen)
 })
 
 test("nothing is written without a folder, for text that is not JSON, or past the size caps", () => {
@@ -67,4 +68,34 @@ test("config results.exportDir: used inside the workspace, ignored outside it", 
   expect(resultExportDir()).toBeUndefined()
   initRuntime({ cwd: project, home: data, skills: () => [], scratchpad: false })
   expect(resultExportDir()).toBeUndefined()
+})
+
+test("without a configured folder, files and the reminder line exist only in ▸▸▸ bypass (#311 review F2)", () => {
+  const tmp = path.join(root, "tmp-scratch")
+  mkdirSync(tmp, { recursive: true })
+  const runtime = initRuntime({ cwd: project, home: data, skills: () => [], scratchpad: { tmp } })
+  runtime.workspace.scratch!.attach("s-mode")
+  runtime.registry.register(shellTool(runtime.workspace, { shell: { kind: "bash", path: "/bin/bash" } }))
+  useResultSession("s-mode")
+  for (const mode of ["read-only", "ask", "auto"] as const) {
+    runtime.permissions.setMode(mode)
+    // ‖ and ▸: a script that opens a file asks the user each time, unlike a typed arithmetic command.
+    expect(resultExportDir()).toBeUndefined()
+    expect(fileAccessNote(runtime.registry, mode)).not.toContain("rN.json")
+    const ref = rememberResult("vn_quote_history", quotes)
+    expect(existsSync(path.join(runtime.workspace.scratch!.dir()!, "ket-qua", `${ref}.json`))).toBe(false)
+  }
+  runtime.permissions.bypassAvailable = true // as --yolo does
+  runtime.permissions.setMode("bypass")
+  const dir = resultExportDir()!
+  expect(dir).toBe(path.join(runtime.workspace.scratch!.dir()!, "ket-qua"))
+  expect(fileAccessNote(runtime.registry, "bypass")).toContain("rN.json")
+  const ref = rememberResult("vn_quote_history", quotes)
+  expect(existsSync(path.join(dir, `${ref}.json`))).toBe(true)
+})
+
+test("a configured folder is used in every mode: the host chose it", () => {
+  const runtime = initRuntime({ cwd: project, home: data, skills: () => [], scratchpad: false, resultFiles: "ot-data" })
+  runtime.permissions.setMode("read-only")
+  expect(resultExportDir()).toBe(path.join(project, "ot-data"))
 })
