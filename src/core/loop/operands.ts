@@ -28,6 +28,14 @@ const LITERAL = /(?<![\w.$])\d+(?:\.\d+)?(?:[eE][+-]?\d{1,3})?(?![\w.])/g
 /** An array index (`data[6]`, `$prices[$i-1]`): a position, not a figure. */
 const INDEX = /([A-Za-z_]\w*)\s*\[[^\]\n]*\]/g
 
+/**
+ * A one-shot Python computation: `python3 -c "…"`, a heredoc fed to Python, or a heredoc written to a
+ * .py file and run in the same command. With bypass (--yolo, a sandboxed benchmark) the model computes
+ * series in Python, and its typed literals are re-typed figures like awk's (issue #309 A3).
+ */
+const PYTHON_RUN = /^\s*(?:(?:python3?|py)(?:\s+-[A-Za-z]+)*\s+(?:-c\b|-?\s*<<)|cat\s+>\s*\S+\.py\s+<<[\s\S]*\n\s*python3?\s+\S+\.py)/
+export const pythonComputation = (command: string) => PYTHON_RUN.test(command)
+
 /** The numbers typed into an arithmetic command, with the decimals they were written with. */
 export function operandsOf(command: string): { text: string; value: number; decimals: number }[] {
   // A printf format is not an operand ("%.2f"); other quoted text may be the code (python -c "…").

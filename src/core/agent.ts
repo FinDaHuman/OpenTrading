@@ -1,4 +1,6 @@
 import { FinancePolicyState, type FinancePolicyOptions } from "./finance-policy"
+import path from "node:path"
+import { resultExportDir } from "./tools/refs"
 import {
   generateText,
   NoSuchToolError,
@@ -47,7 +49,7 @@ import { isAttachmentText } from "./mentions"
 import { classifyFailure, retryMiddleware, type RetryNotice, type RetryOptions } from "./retry"
 import { loadedTools } from "./tools/loaded"
 import { RENAMED_TOOLS, renamedInput } from "./tools/renamed"
-import { operandNote, untracedOperands } from "./loop/operands"
+import { operandNote, pythonComputation, untracedOperands } from "./loop/operands"
 import { mathOnlyCommand } from "./tools/shell/math"
 import { detectShell } from "./tools/shell/run"
 import { modeNote } from "./permission/mode"
@@ -67,7 +69,7 @@ import { LOCAL_SOURCE, type ToolResult } from "./tools/types"
 import type { ChartData } from "./tools/chart/data"
 
 /** A shell command the math grammar takes, for the shell this machine runs (loop/operands.ts). */
-const isArithmetic = (command: string) => mathOnlyCommand(command, detectShell())
+const isArithmetic = (command: string) => mathOnlyCommand(command, detectShell()) || pythonComputation(command)
 
 /** Unlimited: the turn ends when the model stops calling tools. A cap is opt-in via
  *  config `maxSteps` or the caller's `opts.maxSteps`; when capped, the last step forces a summary. */
@@ -916,9 +918,16 @@ const FILE_TOOLS = ["read_file", "write_file", "shell"]
 const fileTool = (registry: TurnInput["registry"], name: string) => FILE_TOOLS.includes(name) && (name !== "shell" || registry.get(name)?.effect === "shell")
 
 /** `<quyen_tep>`: the workspace and the mode line, naming only the file tools the registry holds. */
-function fileAccessNote(registry: TurnInput["registry"], mode: Parameters<typeof modeNote>[0], profile?: "terminal" | "machine"): string {
+export function fileAccessNote(registry: TurnInput["registry"], mode: Parameters<typeof modeNote>[0], profile?: "terminal" | "machine"): string {
   const present = new Set(registry.list().map((d) => d.name))
-  return `${registry.workspace!.describe(present)}\n${modeNote(mode, present, profile)}`
+  const workspace = registry.workspace!
+  // Issue #309 A2: data results are also files a script can read, so the model never re-types numbers.
+  const files = resultExportDir()
+  const shown = files && workspace.contains(files) ? path.relative(workspace.primary, files) || "." : files
+  const filesLine = shown
+    ? `Kết quả dữ liệu có nhãn [ref rN] có bản JSON đầy đủ ở ${shown}/rN.json: phép tính trên chuỗi số thì để script đọc file đó, không chép tay số.`
+    : undefined
+  return [workspace.describe(present), filesLine, modeNote(mode, present, profile)].filter(Boolean).join("\n")
 }
 
 async function assembleFor(opts: TurnInput, target: Target | undefined, bound: Bound, extras: TurnExtras = {}) {

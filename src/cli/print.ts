@@ -96,7 +96,7 @@ export async function runPrint(opts: PrintOptions, deps: { runtime?: Runtime; ta
   if (!trusted) err(`Bỏ qua skill/agent riêng của ${extras!.dir}: thư mục chưa được tin (mở bằng TUI một lần để chọn).`)
   const { skills } = await loadSkills(skillRoots(folder, { project: trusted }))
   const runtime =
-    deps.runtime ?? initRuntime({ skills: () => skills, memory: createMemory(memoryChoiceOf(config)), workspaceDirs: config.workspace?.dirs, scratchpad: false })
+    deps.runtime ?? initRuntime({ skills: () => skills, memory: createMemory(memoryChoiceOf(config)), workspaceDirs: config.workspace?.dirs, scratchpad: false, resultFiles: config.results?.exportDir })
   const gate = runtime.permissions
   gate.setMode(startMode(config.permissions))
   if (opts.yolo) {

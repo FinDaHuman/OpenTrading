@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test"
 import type { ModelMessage } from "ai"
-import { operandNote, operandsOf, untracedOperands } from "../src/core/loop/operands"
+import { operandNote, operandsOf, pythonComputation, untracedOperands } from "../src/core/loop/operands"
 
 /** The note after an arithmetic command whose typed numbers nothing read holds (issue #278 N2). */
 
@@ -68,4 +68,18 @@ test("what the user told the harness counts: constraints and profile (system), t
   expect(untracedOperands(turn, arithmetic, "Sổ ghi nhớ: ngưỡng P/E 12.5 cho cổ phiếu công nghệ")).toEqual([])
   const followUp: ModelMessage[] = [{ role: "user", content: "Ngưỡng?" }, { role: "assistant", content: "Ngưỡng P/E bạn đặt là 12,5 lần." }, ...turn]
   expect(untracedOperands(followUp, arithmetic)).toEqual([])
+})
+
+test("a one-shot Python computation counts as arithmetic; other Python does not (issue #309 A3)", () => {
+  for (const command of [
+    'python3 -c "print(1315800000000 / 21500000)"',
+    "python3 - <<'EOF'\nprint(1315800000000 / 215000000)\nEOF",
+    "python <<EOF\nprint(1)\nEOF",
+    "cat > calc.py <<'EOF'\nprint(1)\nEOF\npython3 calc.py",
+  ])
+    expect([command, pythonComputation(command)]).toEqual([command, true])
+  for (const command of ["python3 scripts/plot.py", "pip install pandas", "awk 'BEGIN{print 1}'"]) expect([command, pythonComputation(command)]).toEqual([command, false])
+  // The dropped zero is flagged in Python as in awk; the right figure, an index and a format are not.
+  expect(untracedOperands(step('python3 -c "e = 1315800000000; s = 21500000; print(f\'{e/s:.2f}\')"'), pythonComputation)).toEqual(["21500000"])
+  expect(untracedOperands(step('python3 -c "x = [1315800000000, 215000000]; print(x[0] / x[1])"'), pythonComputation)).toEqual([])
 })

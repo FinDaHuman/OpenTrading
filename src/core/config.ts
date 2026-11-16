@@ -15,6 +15,8 @@ export interface Config {
    * on unless false; only with the notebook.
    */
   memory?: { provider?: "none" | "file" | "notebook"; cards?: boolean }
+  /** `exportDir`: folder inside the workspace for data results as `<ref>.json` (default: the session's temp folder). */
+  results?: { exportDir?: string }
   /**
    * Permissions (core/permission): `allow` = "always allow" answers; `deny` / `ask` = rules the
    * user writes by hand (tool name with `*`, optional `pattern` on the path or command);
