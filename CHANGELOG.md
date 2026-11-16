@@ -7,7 +7,8 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ### Security
 
-- `shell` refuses a network `workdir` (`\\host\share`, `file://host/share`, and `//host/share` on Windows) by
+- `shell` refuses a network `workdir` (`\\host\share`, `\\?\UNC\host\share`, `\\.\…`, and on Windows
+  `//host/share` and `file://host/share`) by
   its spelling alone. Before, the approval check resolved it (realpath in `workspace.contains`) before
   anything asked the user, and that SMB lookup can leak the user's NTLM hash to the host (MyToDoList 43y).
 

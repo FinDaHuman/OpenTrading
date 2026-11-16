@@ -228,5 +228,12 @@ test("a network workdir is refused before anything resolves or stats it (an SMB 
     expect(tool.blockFor!(input)).toContain("đường dẫn mạng")
   }
   if (process.platform === "win32") expect(tool.blockFor!({ command: "dir", workdir: "//attacker/share/x" })).toContain("đường dẫn mạng")
+  // The device prefixes isUncPath leaves out, and a file:// URL that resolves to a share.
+  for (const workdir of [String.raw`\\?\UNC\attacker\share`, String.raw`\\.\pipe\x`, "file://attacker/share/x"]) {
+    const input = { command: "dir", workdir }
+    if (workdir.startsWith("file:") && process.platform !== "win32") continue
+    expect([workdir, tool.askFor!(input)?.startsWith("outside:")]).toEqual([workdir, true])
+    expect(tool.blockFor!(input)).toContain("đường dẫn mạng")
+  }
   expect(tool.blockFor!({ command: "dir", workdir: "sub" })).toBeUndefined()
 })

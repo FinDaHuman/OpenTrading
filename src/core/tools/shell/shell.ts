@@ -92,7 +92,9 @@ export function shellTool(workspace: Workspace, opts: { shell?: ShellInfo } = {}
     if (typeof raw !== "string" || !raw) return undefined
     const abs = cwdOf(input)
     const windows = process.platform === "win32"
-    return [raw, abs].find((p) => isUncPath(p) && (windows || p.startsWith("\\\\")))
+    // `\\?\UNC\host\share` and `\\.\…` too: isUncPath leaves those prefixes out on purpose.
+    const device = (p: string) => /^[\\/]{2}[?.][\\/]/.test(p)
+    return [raw, abs].find((p) => device(p) || (isUncPath(p) && (windows || p.startsWith("\\\\"))))
   }
   // The same answer read_file gives for a path: inside the workspace or the temp folder, and not
   // a key file, a network path or an odd Windows spelling, symlinks and junctions followed.
