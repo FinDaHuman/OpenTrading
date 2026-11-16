@@ -1,6 +1,6 @@
 ---
 name: chung-khoan-vn
-description: "Phase/wave: cycle skill. Analyses VN brokerages by leverage and revenue mix: margin loans vs equity, margin spread, the shift from fees to balance-sheet businesses. Use when reading a securities company's results."
+description: "Phase/wave: use dinh-vi-chu-ky-vn. Analyses VN brokerages by leverage and revenue mix: margin loans vs equity, margin spread, the shift from fees to balance-sheet businesses. Use for brokerage results."
 match_text: "Pha/sóng: dùng skill chu kỳ. Phân tích ngành chứng khoán VN theo đòn bẩy và cơ cấu doanh thu: dư nợ margin so vốn chủ, spread margin, sự dịch chuyển từ phí sang mảng cân đối. Dùng khi đọc kết quả công ty chứng khoán."
 activation: auto
 requires_tools: [financial_detail, vs_financial_norms]

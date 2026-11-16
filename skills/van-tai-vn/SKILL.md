@@ -1,6 +1,6 @@
 ---
 name: van-tai-vn
-description: "Phase/wave: cycle skill. Analyses VN transport and logistics by freight rates, export demand, port capacity and fuel costs. Use for transport group trends, port companies or freight rates."
+description: "Phase/wave: use dinh-vi-chu-ky-vn. Analyses VN transport and logistics by freight rates, export demand, port capacity and fuel costs. Use for transport trends, port companies or freight rates."
 match_text: "Pha/sóng: dùng skill chu kỳ. Phân tích ngành vận tải và logistics Việt Nam theo cước vận chuyển, cầu xuất khẩu, công suất cảng và chi phí nhiên liệu. Dùng khi hỏi xu hướng nhóm vận tải, công ty cảng hay cước vận chuyển."
 activation: auto
 requires_tools: [financial_detail, vs_xnk_detail]

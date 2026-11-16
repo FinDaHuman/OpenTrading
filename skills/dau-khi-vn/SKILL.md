@@ -1,6 +1,6 @@
 ---
 name: dau-khi-vn
-description: "Phase/wave: cycle skill. Analyses VN oil and gas by world oil prices, shipping routes, reserve replacement and upstream vs refining. Use for oil & gas trends or a company's exposure."
+description: "Phase/wave: use dinh-vi-chu-ky-vn. Analyses VN oil and gas by world oil prices, shipping routes, reserve replacement and upstream vs refining. Use for oil & gas trends or a company's exposure."
 match_text: "Pha/sóng: dùng skill chu kỳ. Phân tích ngành dầu khí VN theo giá dầu quốc tế, tuyến vận chuyển, thay thế trữ lượng và ranh giới giữa khai thác với lọc hoá dầu. Dùng khi hỏi xu hướng nhóm dầu khí hay công ty dầu khí chịu gì."
 activation: auto
 requires_tools: [yf_commodities, financial_detail]

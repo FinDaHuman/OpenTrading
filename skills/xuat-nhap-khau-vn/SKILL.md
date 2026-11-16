@@ -1,6 +1,6 @@
 ---
 name: xuat-nhap-khau-vn
-description: "Phase/wave: cycle skill. Analyses VN trade by tariffs by origin/product/destination/date, product mix, FDI drivers and imports as a leading signal. Use for export sectors and trade effects."
+description: "Phase/wave: use dinh-vi-chu-ky-vn. Analyses VN trade by tariffs by origin/product/destination/date, product mix, FDI drivers and imports as a leading signal. Use for export sectors and trade effects."
 match_text: "Pha/sóng: dùng skill chu kỳ. Phân tích xuất nhập khẩu Việt Nam theo thuế theo xuất xứ/hàng/đích/ngày, cơ cấu ngành hàng, động lực FDI và dòng nhập khẩu làm tín hiệu dẫn. Dùng khi hỏi ngành xuất khẩu và tác động thương mại."
 activation: auto
 requires_tools: [vs_xnk_detail, vs_indicator_data]

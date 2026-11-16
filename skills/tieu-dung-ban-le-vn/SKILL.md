@@ -1,6 +1,6 @@
 ---
 name: tieu-dung-ban-le-vn
-description: "Phase/wave: cycle skill. Analyses VN consumer and retail by real retail sales, household income, tax policy and modern-retail penetration. Use for consumer group trends or retail chain results."
+description: "Phase/wave: use dinh-vi-chu-ky-vn. Analyses VN consumer and retail by real retail sales, household income, tax policy and modern-retail penetration. Use for consumer trends or retail chain results."
 match_text: "Pha/sóng: dùng skill chu kỳ. Phân tích ngành tiêu dùng và bán lẻ Việt Nam theo bán lẻ thực, thu nhập hộ gia đình, chính sách thuế và độ thâm nhập bán lẻ hiện đại. Dùng khi hỏi xu hướng nhóm tiêu dùng hoặc kết quả chuỗi bán lẻ."
 activation: auto
 requires_tools: [financial_detail, vs_indicator_data]

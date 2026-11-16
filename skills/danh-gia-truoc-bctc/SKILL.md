@@ -1,6 +1,6 @@
 ---
 name: danh-gia-truoc-bctc
-description: "Grades a ticker A/B/C before its earnings release (trend, manipulation, expectations, valuation cushion). Use when asked whether to buy/hold through the reporting period."
+description: "Grades a ticker A/B/C before its earnings release (trend, manipulation, expectations, valuation cushion). Use when asked whether to hold through the report."
 match_text: "Chấm hạng A/B/C cho một mã trước khi ra BCTC (xu hướng, thao túng, kỳ vọng, đệm định giá). Dùng khi hỏi có nên mua/giữ qua kỳ báo cáo."
 activation: auto
 requires_tools: [mcp__opentrading__company_events]

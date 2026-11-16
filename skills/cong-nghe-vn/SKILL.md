@@ -1,6 +1,6 @@
 ---
 name: cong-nghe-vn
-description: "Phase/wave: cycle skill. Analyses VN technology by signed contract value, domestic vs international split, long-term orders and staff utilisation. Use for tech group trends or IT services companies."
+description: "Phase/wave: use dinh-vi-chu-ky-vn. Analyses VN technology by signed contract value, domestic vs international split, long-term orders and staff utilisation. Use for tech trends or IT services companies."
 match_text: "Pha/sóng: dùng skill chu kỳ. Phân tích ngành công nghệ Việt Nam theo giá trị hợp đồng ký, phân hoá nội địa và quốc tế, đơn hàng dài hạn và tỷ lệ sử dụng nhân công. Dùng khi hỏi xu hướng nhóm công nghệ hoặc công ty dịch vụ công nghệ."
 activation: auto
 requires_tools: [financial_detail, planned_targets]

@@ -1,6 +1,6 @@
 ---
 name: tao-ho-so
-description: "Interviews the user with 5 questions via ask_user to build an investor profile (goals, horizon, capital, experience, assets), then writes INVESTOR.md. Use for onboarding or refreshing the profile."
+description: "Interviews the user (5 questions via ask_user) to build an investor profile — goals, horizon, capital, experience, assets — then writes INVESTOR.md. Use for onboarding or a profile refresh."
 match_text: "Phỏng vấn 5 câu qua ask_user để lập hồ sơ nhà đầu tư (mục tiêu, khung thời gian, vốn, kinh nghiệm, tài sản) rồi soạn INVESTOR.md. Dùng khi onboarding hoặc làm mới hồ sơ."
 activation: manual
 triggers:

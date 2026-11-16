@@ -1,6 +1,6 @@
 ---
 name: bao-hiem-vn
-description: "Phase/wave: cycle skill. Analyses life and non-life insurance: new premiums, policy retention, claims, combined ratio, reinsurance and investment income; splits by business line and distribution channel."
+description: "Phase/wave: use dinh-vi-chu-ky-vn. Analyses life and non-life insurance: new premiums, policy retention, claims, combined ratio, reinsurance and investment income; splits by business line and distribution channel."
 match_text: "Pha/sóng: dùng skill chu kỳ. Phân tích bảo hiểm nhân thọ/phi nhân thọ: phí mới, duy trì hợp đồng, bồi thường, combined ratio, tái bảo hiểm và thu nhập đầu tư; tách nghiệp vụ và kênh phân phối."
 activation: auto
 requires_tools: [financial_detail, vs_financial_norms]

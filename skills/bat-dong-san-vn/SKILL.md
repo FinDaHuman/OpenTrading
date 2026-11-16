@@ -1,6 +1,6 @@
 ---
 name: bat-dong-san-vn
-description: "Phase/wave: cycle skill. Analyses VN real estate by capital flows and legal status: sector credit, bonds and their maturity wall, borrowing limits, housing vs industrial parks. Use for real-estate trends or a developer's statements."
+description: "Phase/wave: use dinh-vi-chu-ky-vn. Analyses VN real estate by capital flows and legal status: sector credit, bonds and maturity wall, borrowing limits, housing vs industrial parks. Use for real-estate trends or developers."
 match_text: "Pha/sóng: dùng skill chu kỳ. Phân tích ngành bất động sản VN theo dòng vốn và pháp lý: tín dụng ngành, kênh trái phiếu và tường đáo hạn, giới hạn vay áp dụng, cơ cấu nhà ở so khu công nghiệp. Dùng khi hỏi xu hướng nhóm BĐS hay đọc BCTC chủ đầu tư."
 activation: auto
 requires_tools: [financial_detail, planned_targets]

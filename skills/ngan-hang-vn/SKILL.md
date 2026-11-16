@@ -1,6 +1,6 @@
 ---
 name: ngan-hang-vn
-description: "Phase/wave: cycle skill. Analyses VN banks: credit quotas, NIM and rate spread, 3-layer asset quality, off-balance-sheet items, liquidity ratios. Use for bank trends or a bank's financial statements."
+description: "Phase/wave: use dinh-vi-chu-ky-vn. Analyses VN banks: credit quotas, NIM and rate spread, 3-layer asset quality, off-balance-sheet items, liquidity ratios. Use for bank trends or a bank's financial statements."
 match_text: "Pha/sóng: dùng skill chu kỳ. Phân tích ngành ngân hàng VN theo bộ chỉ báo riêng: hạn mức tín dụng, NIM và spread lãi, chất lượng tài sản 3 lớp, ngoại bảng và chuẩn mực thanh khoản. Dùng khi hỏi xu hướng nhóm ngân hàng hoặc đọc BCTC ngân hàng."
 activation: auto
 requires_tools: [financial_detail, vs_financial_norms]

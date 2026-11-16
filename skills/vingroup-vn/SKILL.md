@@ -1,6 +1,6 @@
 ---
 name: vingroup-vn
-description: "Vin group KPIs; phase/wave: cycle skill. SOTP for VIC: Vinhomes handovers, VinFast cash burn, Vincom leasing; checks related-party deals, refinancing and the Vingroup index weight."
+description: "Vin group KPIs; phase/wave: use dinh-vi-chu-ky-vn. SOTP for VIC: Vinhomes handovers, VinFast cash burn, Vincom leasing; checks related-party deals, refinancing and the Vingroup index weight."
 match_text: "KPI nhóm Vin; pha/sóng dùng skill chu kỳ. SOTP VIC: Vinhomes bàn giao, VinFast đốt tiền, Vincom cho thuê; kiểm tra giao dịch liên kết, tái cấp vốn và trọng số chỉ số Vingroup."
 activation: auto
 requires_tools: [financial_detail, company_events]

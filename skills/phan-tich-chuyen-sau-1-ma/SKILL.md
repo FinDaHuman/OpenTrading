@@ -1,6 +1,6 @@
 ---
 name: phan-tich-chuyen-sau-1-ma
-description: "Coordinates a full analysis of one ticker: the company, sector, news, events, then technicals and valuation, merged into a positives/negatives/drivers table. Use for \"phân tích FPT\", \"VCB thế nào\"."
+description: "Coordinates a full analysis of one ticker: company, sector, news, events, technicals, valuation, merged into a positives/negatives/drivers table. Use for \"phân tích FPT\", \"VCB thế nào\"."
 match_text: "Điều phối phân tích toàn diện một mã: mã, ngành, tin, sự kiện, rồi kỹ thuật và định giá, gộp thành bảng tích cực/tiêu cực/động lực. Dùng khi hỏi \"phân tích FPT\", \"VCB thế nào\"."
 activation: auto
 requires_tools: [symbol_lookup, financial_detail]

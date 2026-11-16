@@ -1,6 +1,6 @@
 ---
 name: dien-luc-vn
-description: "Phase/wave: cycle skill. Analyses VN power by electricity price reform, generation mix, hydrology and grid development plans. Use for power group trends, power plant results or electricity price effects."
+description: "Phase/wave: use dinh-vi-chu-ky-vn. Analyses VN power by electricity price reform, generation mix, hydrology and grid development plans. Use for power trends, power plant results or electricity price effects."
 match_text: "Pha/sóng: dùng skill chu kỳ. Phân tích ngành điện Việt Nam theo cải cách giá điện, cơ cấu nguồn, thủy văn và kế hoạch phát triển lưới. Dùng khi hỏi xu hướng nhóm điện, đọc kết quả nhà máy điện hay tác động giá điện."
 activation: auto
 requires_tools: [financial_detail, yf_commodities]
