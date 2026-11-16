@@ -38,7 +38,7 @@ After `vs_auth_status`, run 2 data calls in parallel: `financial_detail` (statem
 - Trend/ratios: `financial_statements` · `financial_ratios` · `vn_fundamentals` (at most 3 calls).
 - Ownership/plan (`sohuu`/`cophieu`/`kehoach`): `planned_targets` · `holders` · `insider_trading` · `dividends_splits` (+ Bước 1 if a base is needed).
 - Reference: `vs_financial_norms` / `vs_financial_terms` / `vs_company_info` — only to explain a norm_id/period.
-- Never call `vs_documents` here (that is `tim-co-hoi-bao-cao-ctck`'s tool). Call the cash-flow statement/balance sheet only when the user explicitly asks about cash flow/the balance sheet, via the `statement` param.
+- Never call `vs_documents` here (that is `tim-co-hoi-bao-cao-ctck`'s tool). Call LCTT/CDKT (cash flow/balance sheet) only when the user explicitly asks about cash flow/the balance sheet, via the `statement` param.
 
 **Bước 3: Validate before the verdict.**
 

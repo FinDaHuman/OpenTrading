@@ -17,7 +17,7 @@ Ask with the `ask_user` tool; do NOT list the questions as long text. Make 2 cal
 - Use when: a new user, or an old profile the user wants refreshed.
 - Do NOT use: the user only wants to change one item (tell them to edit INVESTOR.md directly).
 
-## Lượt 1 — câu 1–4 (one single ask_user call)
+## Lượt 1 — câu 1–4 (một lệnh ask_user duy nhất)
 
 **Câu 1** (header: "Mục tiêu")
 Question: "Mục tiêu chính của bạn khi tham gia thị trường trong 1–3 năm tới là gì?"
@@ -47,7 +47,7 @@ Question: "Mức độ am hiểu và kinh nghiệm của bạn đối với th�
 - C. label "Thành thạo" / description: "Đã qua cả mùa Uptrend & Downtrend, hiểu cơ chế thị trường, phân tích kỹ thuật/cơ bản nâng cao."
 - D. label "Chuyên gia" / description: "Kiến thức chuyên sâu về tài chính, derivatives, hoặc hệ thống giao dịch tự động (algorithmic)."
 
-## Lượt 2 — câu 5 (a separate ask_user call)
+## Lượt 2 — câu 5 (một lệnh ask_user riêng)
 
 **Câu 5** (header: "Tài sản")
 Question: "Khung danh mục bạn muốn tập trung đầu tư bao gồm các loại tài sản tài chính (phi vật thể) nào dưới đây?"
