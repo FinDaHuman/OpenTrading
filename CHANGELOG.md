@@ -5,6 +5,12 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ## [Unreleased]
 
+### Security
+
+- `shell` refuses a network `workdir` (`\\host\share`, `file://host/share`, and `//host/share` on Windows) by
+  its spelling alone. Before, the approval check resolved it (realpath in `workspace.contains`) before
+  anything asked the user, and that SMB lookup can leak the user's NTLM hash to the host (MyToDoList 43y).
+
 ### Changed
 
 - Data results as `<ref>.json` (#311) without a configured `results.exportDir` are written, and named in
