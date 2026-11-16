@@ -78,7 +78,7 @@ const JSON_NUMBER = /-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/g
  * groups with commas ("90,300đ", "53,442 tỷ"): both readings are kept, as for an answer. A group of three
  * digits must end there: "6,9034" is a decimal, not 6,903 and a stray 4 (MyToDoList 43j).
  */
-const VIETNAMESE_NUMBER = /\d{1,3}(?:\.\d{3})+(?!\d)(?:,\d+)?|\d{1,3}(?:,\d{3})+(?!\d)(?:\.\d+)?|\d+,\d{1,2}(?!\d)|\d+,\d{4,}/g
+const VIETNAMESE_NUMBER = /\d{1,3}(?:\.\d{3})+(?!\d)(?:,\d+)?|\d{1,3}(?:,\d{3})+(?!\d)(?:\.\d+)?|\d+,\d{1,2}(?!\d)|(?<![\d.,])\d{1,3},\d{4,}(?![\d.,])/g
 
 /** A JSON string literal's content, the last one possibly cut before its closing quote. */
 const JSON_STRING = /"((?:[^"\\]|\\.)*)(?:"|$)/g

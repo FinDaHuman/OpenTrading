@@ -24,4 +24,8 @@ test("a decimal with four or more digits is read whole in a source text too", ()
   expect(numbers.has(6903)).toBe(false)
   expect(sourceNumbers("giá 1.234,5").has(1234.5)).toBe(true)
   expect(sourceNumbers("24,1 tỷ").has(24.1)).toBe(true)
+  // A comma list of whole numbers in plain text is not one long decimal.
+  const list = sourceNumbers("giá: 48500,50200 và 51800")
+  expect(list.has(48500.502)).toBe(false)
+  expect([...list].some((n) => n > 48500 && n < 48501)).toBe(false)
 })
