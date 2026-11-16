@@ -5,6 +5,14 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ## [Unreleased]
 
+### Fixed
+
+- `shell` in ▸▸▸ bypass names Python only when `python3`/`python` really runs a script on this machine (checked
+  once, only for the bypass text), and on PowerShell says to write PowerShell arrays and `foreach` directly,
+  never wrapped in another `powershell -Command`. The #310 text ("Python … nếu máy có") sent the model to the
+  Windows Store alias and then to nested PowerShell whose `$variables` the outer shell erased: on 16/11, 22 of 33
+  commands failed and a turn took 4.3 requests instead of 2.9 (gemini-3.1-flash-lite, Windows).
+
 ### Changed
 
 - Data results as `<ref>.json` (#311) without a configured `results.exportDir` are written, and named in
