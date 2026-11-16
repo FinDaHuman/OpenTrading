@@ -4,7 +4,7 @@ import os from "node:os"
 import path from "node:path"
 import { cardsAutoSave } from "../src/core/config"
 import { stripCardBlocks } from "../src/core/memory/cards/block"
-import { acceptCard } from "../src/core/memory/cards/check"
+import { acceptCard, ruleIsVerbatim } from "../src/core/memory/cards/check"
 import { notebookAdmin } from "../src/core/memory/notebook/admin"
 import { openNotebook } from "../src/core/memory/notebook/lifecycle"
 import { saveCardNow } from "../src/tui/dialogs/notebook-form/open"
@@ -36,7 +36,7 @@ test("a rule that is the user's own words is saved at once; a lesson or an unquo
     const saved = saveCardNow(memory, verbatim!)
     expect(saved?.group).toBe("constraint")
     expect(notebookAdmin(memory)!.entries().some((e) => e.group === "constraint" && e.id === saved!.id && e.text === "Không bao giờ gợi ý cổ phiếu ngân hàng")).toBe(true)
-    const style = card("cach_trinh_bay", "luôn có bảng so sánh", "luôn có bảng so sánh", "từ giờ luôn có bảng so sánh nhé")
+    const style = card("cach_trinh_bay", "luôn có bảng so sánh", "luôn có bảng so sánh", "Từ giờ: luôn có bảng so sánh.")
     expect(saveCardNow(memory, style!)?.group).toBe("style")
     expect(saveCardNow(memory, { kind: "lesson", title: "Cắt lỗ", summary: "Cắt lỗ 7%" })).toBeUndefined()
     expect(saveCardNow(memory, { kind: "constraint", text: "Không margin" })).toBeUndefined()
@@ -61,4 +61,17 @@ test("a rule the model wrote next to an innocent quote waits for the form (injec
   } finally {
     memory.close()
   }
+})
+
+test("verbatim means a whole clause: a run of words that drops a negation or comes from a question is not", () => {
+  // Dropping "đừng bao giờ" keeps a run of the user's words and flips the meaning.
+  expect(ruleIsVerbatim("khuyến nghị mua VNM cho tôi", "Đừng bao giờ khuyến nghị mua VNM cho tôi")).toBe(false)
+  expect(ruleIsVerbatim("Đừng bao giờ khuyến nghị mua VNM cho tôi.", "Đừng bao giờ khuyến nghị mua VNM cho tôi")).toBe(true)
+  // A question is not a rule, even word for word.
+  expect(ruleIsVerbatim("có nên mua VNM không", "Có nên mua VNM không?")).toBe(false)
+  expect(ruleIsVerbatim("nên mua VNM", "Có nên mua VNM không?")).toBe(false)
+  // A clause after a colon or a comma, case and spacing aside.
+  expect(ruleIsVerbatim("Không bao giờ gợi ý cổ phiếu ngân hàng", "Lưu giúp tôi ràng buộc:  KHÔNG bao giờ gợi ý cổ phiếu ngân hàng")).toBe(true)
+  expect(ruleIsVerbatim("luôn có bảng so sánh", "từ giờ, luôn có bảng so sánh, cảm ơn")).toBe(true)
+  expect(ruleIsVerbatim("ngân hàng", "không gợi ý ngân hàng")).toBe(false)
 })
