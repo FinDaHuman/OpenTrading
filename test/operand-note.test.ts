@@ -119,4 +119,7 @@ test("a Python script that reads a result file: its path, slices, rounding and w
   const call = (typed[3]!.content as { input: { command: string } }[])[0]!
   call.input.command = call.input.command.replace("print(round(v, 6)", "print(round(v * 25350 / 100, 6)")
   expect(untracedOperands(typed, pythonComputation)).toEqual(["25350"])
+  // Only slice syntax is a position: a list of dicts keeps its figures, and a slice with a step goes.
+  expect(operandsOf(`python3 -c 'rows = [{"p": 21500000}, {"p": 1315800000000}]; print(rows[0]["p"])'`).map((o) => o.text)).toEqual(["21500000", "1315800000000"])
+  expect(operandsOf("python3 -c 'print(sum(c[-61:-1:2]), c[a:b])'").map((o) => o.text)).toEqual([])
 })

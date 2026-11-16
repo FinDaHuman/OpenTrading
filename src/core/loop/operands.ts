@@ -27,8 +27,12 @@ export const OPERAND_SCALES = [1, 0.01, 1e3, 1e-3, 1e6, 1e-6, 1e9, 1e-9]
 const LITERAL = /(?<![\w.$])\d+(?:\.\d+)?(?:[eE][+-]?\d{1,3})?(?![\w.])/g
 /** An array index (`data[6]`, `$prices[$i-1]`): a position, not a figure. */
 const INDEX = /([A-Za-z_]\w*)\s*\[[^\]\n]*\]/g
-/** A slice (`c[-61:]`, `[...][1:]`, after INDEX took the name): positions too. */
-const SLICE = /\[[^\]\n]*:[^\]\n]*\]/g
+/**
+ * A slice (`c[-61:]`, `[...][1:]` after INDEX took the name, `[a:b:2]`): positions too. Only slice syntax
+ * (numbers or names around the colons), so a list of dicts (`[{"p": 21500000}]`) keeps its figures.
+ */
+const BOUND = String.raw`\s*-?(?:\d+|[A-Za-z_]\w*)?\s*`
+const SLICE = new RegExp(String.raw`\[${BOUND}:${BOUND}(?::${BOUND})?\]`, "g")
 /**
  * A quoted file path (`open('/tmp/…/ket-qua/r3.json')`): only path characters, a separator and a letter. Its
  * digits (a session id, a date) are no operands (#311 review F4). Code in quotes (`python3 -c "…"`) keeps its
