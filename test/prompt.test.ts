@@ -198,8 +198,10 @@ test("tool guidance lives in one place and the format example carries no real-lo
   // ≈2.15k after the 15/11/2026 priority order (issue #278 P1: the user's format, schema and units
   // rank above the default presentation rules; plan allowed the guard +40), ≈1.94k after the
   // 15/11/2026 dedupe (style's repeated rules and examples, the shell retry line;
-  // docs/superpowers/plans/2026-11-15-system-prompt-optimization.md items 4–5).
-  expect(Math.ceil(a.system.length / 4)).toBeLessThan(1_980)
+  // docs/superpowers/plans/2026-11-15-system-prompt-optimization.md items 4–5), ≈1.98k after the
+  // 16/11/2026 bat_bien 3 sentence for a forced pick, a yes/no or "if you were me" (issue #303: a
+  // shorter wording held 2/3 instead of 3/3 on gemini-3.5-flash-lite; guard +10).
+  expect(Math.ceil(a.system.length / 4)).toBeLessThan(1_990)
 })
 
 test("the constraints budget key is explicit and never cuts on any tier", () => {

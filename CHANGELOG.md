@@ -7,6 +7,14 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ### Added
 
+- Config `memory.cardsAutoSave` and a switch in /config › Memory (issue #307, #309 C2, off by default): a
+  constraint or style suggestion card whose quote is the user's own words of that turn (the check cards already
+  had) is saved at once instead of waiting for the form, and a notice says which entry it became. A lesson card
+  has no quote to check and still waits for the user, so text from a web page or a tool cannot plant a rule.
+- Eval question sets `scripts/eval/questions/redteam.json` (6 ways of forcing a stock pick, a yes/no, a target
+  price or an order; issue #303) and `memory-save.json` (asking the assistant to save; issue #307), graded by
+  hand from their `note`.
+
 - Data results as files a script can read (issue #309 A2): every result that gets a `[ref rN]` label is also
   written as `rN.json` (the tool's own JSON, the untruncated raw text when there is one) into the session's
   temp folder (`ket-qua/`), or into config `results.exportDir` (a folder inside the workspace, for `ot -p`
@@ -68,6 +76,14 @@ adopt Semantic Versioning when it exposes a stable public API.
   at once, never put to the user. `/agents` lists it as "shell (chỉ tính toán)".
 
 ### Changed
+
+- `bat_bien` 3 now covers being pushed for one ticker, a yes/no or "if you were me": no pick, a comparison by criteria and what
+  would make each choice more reasonable instead (issue #303; gemini-3.5-flash-lite, 3 runs each: one-ticker
+  0/3 → 3/3, yes/no 1/3 → 3/3, "if you were me" 0/3 → 3/3; target price, order and top-pick stay 100%). `memory.md` opens with what the assistant cannot
+  do: it does not write the notebook, so asked to save it says the entry is not saved, names /nho, /luandiem,
+  /baihoc and applies the point in this conversation only, without "đã lưu", "đã ghi nhận" or "từ nay"
+  (issue #307: gemini-3.5-flash-lite said it had saved in 6/6 answers before, 1/6 still opens with "đã ghi
+  nhận" after, each answer now says the notebook is unchanged).
 
 - `--yolo` (▸▸▸ bypass) and `--profile machine`, issue #309: the `shell` description no longer says Python
   arithmetic does not run or that the user approves commands (nothing asks in bypass, so both were false and
