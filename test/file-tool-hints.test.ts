@@ -109,6 +109,20 @@ test("▸▸▸ bypass names Python only when it really runs, and never sends Po
   expect(probes).toBe(0)
 })
 
+test("tool_search shows the description the request declares for the mode, not the static one", async () => {
+  const { describeTool } = await import("../src/core/tools/search")
+  const registry = new ToolRegistry()
+  const shell = shellTool(ws(), { shell: BASH, python: () => "python3" })
+  registry.register(shell)
+  registry.gate = { mode: "bypass" } as never
+  // The card is the declared text (clipped): with only the shell registered it names no file tool,
+  // where the static description sends the model to read_file.
+  const card = describeTool(registry, shell)
+  expect(card).toContain(shell.descriptionFor!(new Set(["shell"]), "bypass").slice(0, 300))
+  expect(card).not.toContain("read_file")
+  expect(shell.description).toContain("read_file")
+})
+
 test("detectPython returns only a command that ran a script (a Store alias or a missing one gives undefined)", async () => {
   const { detectPython } = await import("../src/core/tools/shell/run")
   const py = detectPython()

@@ -12,6 +12,10 @@ adopt Semantic Versioning when it exposes a stable public API.
   never wrapped in another `powershell -Command`. The #310 text ("Python … nếu máy có") sent the model to the
   Windows Store alias and then to nested PowerShell whose `$variables` the outer shell erased: on 16/11, 22 of 33
   commands failed and a turn took 4.3 requests instead of 2.9 (gemini-3.1-flash-lite, Windows).
+  `OPENTRADING_PYTHON` (a command name, or `none`) replaces the check for a host whose commands run elsewhere
+  (a benchmark sandbox).
+- `tool_search` shows a tool's description as the request declares it (the mode, the tools present), not the
+  static one: with only `shell` registered the card sent the model to `read_file`, which the turn lacked.
 
 ### Changed
 

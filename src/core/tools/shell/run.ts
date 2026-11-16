@@ -25,10 +25,16 @@ let pythonCached: string | undefined
  * Found on PATH is not enough: Windows ships `python3`/`python` aliases that only open the Microsoft
  * Store and exit 9009/49, so each candidate must print the answer to a tiny script (16/11 measurement:
  * 10 of 33 commands hit that alias). Checked once per process, only when a description asks.
+ * `OPENTRADING_PYTHON` (a command name, or "none") replaces the check for a host whose commands run in
+ * another environment than OT itself.
  */
 export function detectPython(): string | undefined {
   if (pythonChecked) return pythonCached
   pythonChecked = true
+  // A host whose commands run elsewhere (a benchmark's Docker sandbox) says what is there: a command
+  // name, or "none". The machine OT itself runs on may differ.
+  const told = process.env.OPENTRADING_PYTHON?.trim()
+  if (told) return (pythonCached = told === "none" ? undefined : told)
   for (const cmd of ["python3", "python"]) {
     if (!Bun.which(cmd)) continue
     try {
