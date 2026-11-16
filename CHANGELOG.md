@@ -7,6 +7,15 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ### Added
 
+- Data results as files a script can read (issue #309 A2): every result that gets a `[ref rN]` label is also
+  written as `rN.json` (the tool's own JSON, the untruncated raw text when there is one) into the session's
+  temp folder (`ket-qua/`), or into config `results.exportDir` (a folder inside the workspace, for `ot -p`
+  and hosts). The `<quyen_tep>` reminder says where, once: a series computation then reads the file instead
+  of re-typing the numbers, the commonest source of wrong arithmetic. 5 MB per file, 50 MB per session;
+  text that is not JSON is not written; a write that fails loses only the copy.
+- The one-step operand note (#295) also checks one-shot Python computations (`python3 -c`, a heredoc fed
+  to Python or written to a .py file and run in the same command), not only the awk grammar (issue #309 A3).
+
 - Conditional prompt lines (`src/core/prompt/gate.ts`): a line in `prompts/*.md` that ends with
   `<!-- khi: shell -->`, or a block between `<!-- khi: … -->` and `<!-- /khi -->`, is sent only when the turn
   meets the condition: a tool name, `terminal`/`machine`, `memory`, `!` to negate, `,` for and, `|` for or. Tools

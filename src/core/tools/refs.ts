@@ -14,6 +14,8 @@
  * answer for it.
  */
 
+import { mkdirSync, writeFileSync } from "node:fs"
+import path from "node:path"
 import { appendEvidence, evidenceFile, readEvidence, type Evidence } from "./evidence"
 
 const MAX_ENTRIES = 40
@@ -33,7 +35,19 @@ export interface StoredResult {
   session: string
 }
 
+/** A data result written as <ref>.json is at most this big; larger ones stay in RAM and evidence only. */
+export const RESULT_FILE_MAX_BYTES = 5 * 1024 * 1024
+/** All result files of a session together. */
+export const RESULT_FILES_MAX_BYTES = 50 * 1024 * 1024
+
 const store = new Map<string, StoredResult>()
+/**
+ * Where each data result is also written as `<ref>.json` for scripts (issue #309 A2): a shell
+ * command cannot read the tool results the model sees, so without a file it re-types the numbers,
+ * the commonest source of wrong arithmetic. undefined: not written.
+ */
+let exportDir: (() => string | undefined) | undefined
+let exportedBytes = 0
 let counter = 0
 let bytes = 0
 let session = ""
@@ -47,6 +61,7 @@ let evidence: string | undefined
  */
 export function useResultSession(id: string, history?: string, dir?: string) {
   session = id
+  exportedBytes = 0
   evidence = dir ? evidenceFile(dir) : undefined
   for (const m of history?.matchAll(/\[ref r(\d+)\]/g) ?? []) counter = Math.max(counter, Number(m[1]))
   for (const saved of evidence ? readEvidence(evidence) : []) counter = Math.max(counter, Number(saved.ref?.slice(1) ?? 0))
@@ -57,9 +72,50 @@ export function keepEvidence(record: Omit<Evidence, "at">) {
   if (evidence) appendEvidence(evidence, { ...record, at: new Date().toISOString() })
 }
 
+/** Write data results as `<ref>.json` into this folder (a function: the session's temp folder may move); undefined stops it. */
+export function exportResultsTo(dir: string | (() => string | undefined) | undefined) {
+  exportDir = typeof dir === "string" ? () => dir : dir
+}
+
+/** The folder data results are written to now, if any. */
+export function resultExportDir(): string | undefined {
+  return exportDir?.()
+}
+
+/** The JSON a result carries (the text after any label line), or undefined when it holds none. */
+function resultJson(text: string): string | undefined {
+  // A label line may itself open with "[" ("[nguồn: …]"): try each opening within the head.
+  for (let start = 0; start <= 200 && start < text.length; start++) {
+    if (text[start] !== "[" && text[start] !== "{") continue
+    const body = text.slice(start)
+    try {
+      JSON.parse(body)
+      return body
+    } catch {}
+  }
+  return undefined
+}
+
+function writeResultFile(ref: string, text: string) {
+  const dir = resultExportDir()
+  if (!dir || text.length > RESULT_FILE_MAX_BYTES) return
+  const body = resultJson(text)
+  if (body === undefined) return
+  const size = Buffer.byteLength(body)
+  if (size > RESULT_FILE_MAX_BYTES || exportedBytes + size > RESULT_FILES_MAX_BYTES) return
+  try {
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(path.join(dir, `${ref}.json`), body)
+    exportedBytes += size
+  } catch {
+    // A full disk or a read-only folder only loses the copy; the result itself is unaffected.
+  }
+}
+
 export function rememberResult(tool: string, text: string, source: Partial<Pick<StoredResult, "callId" | "sourceInput" | "rawText" | "rawSha256" | "visibleSha256">> = {}): string {
   const ref = `r${++counter}`
   store.set(ref, { ref, tool, text, at: Date.now(), session, ...source })
+  writeResultFile(ref, source.rawText ?? text)
   bytes += text.length
   while (store.size > MAX_ENTRIES || bytes > MAX_BYTES) {
     const oldest = store.keys().next().value
@@ -97,6 +153,8 @@ export function clearResults() {
   store.clear()
   counter = 0
   bytes = 0
+  exportDir = undefined
+  exportedBytes = 0
   session = ""
   evidence = undefined
 }
