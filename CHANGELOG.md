@@ -127,6 +127,11 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ### Changed
 
+- `read_result` is offered to the model only once a message names it (issue #309 B2): a pruned result's
+  line, the compaction summary or a capped table's note, the only ways to need it. It stays declared from the
+  start, so the declared set never shifts; requests that cannot use it no longer carry its ~200 tokens. In
+  or16, 10 of 309 OpenTrading trials called it.
+
 - `bat_bien` 3 now covers being pushed for one ticker, a yes/no or "if you were me": no pick, a comparison by criteria and what
   would make each choice more reasonable instead (issue #303; gemini-3.5-flash-lite, 3 runs each: one-ticker
   0/3 → 3/3, yes/no 1/3 → 3/3, "if you were me" 0/3 → 3/3; target price, order and top-pick stay 100%). `memory.md` opens with what the assistant cannot
