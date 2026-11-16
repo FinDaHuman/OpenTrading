@@ -8,7 +8,7 @@ import { LOCAL_SOURCE, type ToolDef } from "../types"
 import { commandPrefix, criticalDelete, mentionsSensitive, readOnlyCommand, startsInterpreter } from "./command"
 import { computeIntent, mathHint, mathOnlyCommand, rewriteAdvice } from "./math"
 import { listingCommand } from "./read-only"
-import { readScope } from "../../fs/path-safety"
+import { isUncPath, readScope } from "../../fs/path-safety"
 import { realish } from "../../fs/workspace"
 import { detectPython, detectShell, runShell, SPILL_CAP, type ShellInfo } from "./run"
 
@@ -100,6 +100,17 @@ export function shellTool(workspace: Workspace, opts: { shell?: ShellInfo; pytho
   const shell = opts.shell ?? detectShell()
   const python = opts.python ?? detectPython
   const cwdOf = (input: ShellInput) => (input.workdir ? workspace.resolve(input.workdir) : workspace.primary)
+  // A network workdir (\\host\share, or //host/share on Windows): refused by string alone. Resolving it
+  // (realpath in workspace.contains) or stat-ing it is already the SMB lookup that can leak the NTLM hash.
+  const networkDir = (input: ShellInput) => {
+    const raw = input.workdir
+    if (typeof raw !== "string" || !raw) return undefined
+    const abs = cwdOf(input)
+    const windows = process.platform === "win32"
+    // `\\?\UNC\host\share` and `\\.\…` too: isUncPath leaves those prefixes out on purpose.
+    const device = (p: string) => /^[\\/]{2}[?.][\\/]/.test(p)
+    return [raw, abs].find((p) => device(p) || (isUncPath(p) && (windows || p.startsWith("\\\\"))))
+  }
   // The same answer read_file gives for a path: inside the workspace or the temp folder, and not
   // a key file, a network path or an odd Windows spelling, symlinks and junctions followed.
   // readScope first: its string checks refuse a network path before anything resolves it.
@@ -125,6 +136,8 @@ export function shellTool(workspace: Workspace, opts: { shell?: ShellInfo; pytho
     timeoutMs: MAX_TIMEOUT_MS + 15_000,
     maxOutputChars: SHELL_OUTPUT_CHARS + 2_000,
     blockFor: (input) => {
+      const network = networkDir(input)
+      if (network) return `workdir ${network} là đường dẫn mạng: không chạy lệnh ở đó. Chép dữ liệu vào workspace rồi chạy`
       const why = critical(input)
       return why ? `${why}. Xoá đúng thư mục con cần xoá, bằng đường dẫn cụ thể` : undefined
     },
@@ -133,6 +146,9 @@ export function shellTool(workspace: Workspace, opts: { shell?: ShellInfo; pytho
       if (typeof command !== "string") return undefined
       // Arithmetic only, in the workspace: runs in every mode (permission/index.ts `math:`).
       if (!(input as ShellInput).workdir && mathOnlyCommand(command, shell)) return `math:${command.trim()}`
+      // Before anything resolves the folder (the gate asks askFor before blockFor refuses).
+      const network = networkDir(input as ShellInput)
+      if (network) return `outside:${network}`
       const cwd = cwdOf(input as ShellInput)
       // The session's temp folder is a fine place to run a script; the command still asks.
       if (!workspace.contains(cwd) && !workspace.inScratch(cwd)) return `outside:${cwd}`
