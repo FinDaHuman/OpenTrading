@@ -388,7 +388,7 @@ test("empty after every source failed: the gap rescue, tools off then on; then g
   expect(judgeStop(some, ["empty", "empty"])).toMatchObject({ action: "continue", nudge: RESCUE_ANSWER_NOW, toolChoice: "none" })
   expect(rescueGaps(["a", "b"])).toContain("a, b")
   // 13/11 m6: no claim that someone is fixing or reconnecting the source.
-  expect(rescueGaps(["a"])).toContain("Không viết là bạn đang khắc phục hay kết nối lại nguồn.")
+  expect(rescueGaps(["a"])).toContain("Do not say you are fixing or reconnecting the source.")
   expect(rescueGaps(["a"]).match(/\n/g)).toHaveLength(2)
   // A clock or file tool worked but no data source did: still the gap rescue, and no answer-only rescue.
   const clock = step({ afterTools: true, dataInTurn: true, gaps: ["vn_quote_history"], usableData: true, fetchedData: false })

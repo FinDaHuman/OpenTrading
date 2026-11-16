@@ -18,20 +18,20 @@ test("truncate keeps head and tail with a marker", () => {
   const out = truncate(text, 1000)
   expect(out.startsWith("A".repeat(700))).toBe(true)
   expect(out.endsWith("C".repeat(300))).toBe(true)
-  expect(out).toContain("đã lược 1000 ký tự")
+  expect(out).toContain("1000 characters omitted")
   expect(truncate("short", 1000)).toBe("short")
 })
 
 test("long output is truncated before the model sees it", async () => {
   const { output: out } = await runTool(def({ maxOutputChars: 100, execute: async () => "x".repeat(500) }), {}, ctx(), new RwLock())
   expect(out.length).toBeLessThan(200)
-  expect(out).toContain("đã lược")
+  expect(out).toContain("omitted")
 })
 
 test("a tool that ignores its signal still times out and releases the lock", async () => {
   const lock = new RwLock()
   const hang = def({ readOnly: false, timeoutMs: 50, execute: () => new Promise(() => {}) })
-  await expect(runTool(hang, {}, ctx(), lock)).rejects.toThrow("quá thời gian")
+  await expect(runTool(hang, {}, ctx(), lock)).rejects.toThrow("timed out")
   // The write lock must be free again.
   const ok = await runTool(def({ readOnly: false, execute: async () => "ok" }), {}, ctx(), lock)
   expect(ok).toEqual({ output: "ok" })
@@ -75,7 +75,7 @@ test("abort rejects a running tool", async () => {
   const controller = new AbortController()
   const running = runTool(def({ execute: () => new Promise(() => {}) }), {}, { signal: controller.signal, callId: "c" }, new RwLock())
   controller.abort()
-  await expect(running).rejects.toThrow("Đã huỷ")
+  await expect(running).rejects.toThrow("Cancelled")
 })
 
 test("finished tool calls do not leave abort listeners on the turn's signal", async () => {

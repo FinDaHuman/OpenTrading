@@ -11,7 +11,7 @@ test("tool results carry images only to models that can see them", () => {
   })
   expect(modelOutput({ output: "chụp xong", images: [png] }, false)).toEqual({
     type: "text",
-    value: "chụp xong\n[ảnh image/png — model này không xem được ảnh]",
+    value: "chụp xong\n[image image/png — this model cannot view images]",
   })
   const huge = { data: "A".repeat(8 * 1024 * 1024), mediaType: "image/png" }
   const out = modelOutput({ output: "", images: [huge] }, true)
@@ -35,7 +35,7 @@ test("stripImages turns stored image results into text", () => {
   ]
   const [m] = stripImages(messages)
   expect(JSON.stringify(m)).not.toContain(png.data)
-  expect((m!.content[0] as { output: unknown }).output).toEqual({ type: "text", value: "ok\n[ảnh image/png — không còn trong lịch sử]" })
+  expect((m!.content[0] as { output: unknown }).output).toEqual({ type: "text", value: "ok\n[image image/png — no longer in the history]" })
 })
 
 test("schema flavor follows the provider and model", () => {

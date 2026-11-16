@@ -25,19 +25,19 @@ export function blockToParts(block: ContentBlock): { text?: string; image?: Tool
       return { text: block.text ?? "" }
     case "image":
       if (block.data && block.mimeType && IMAGE_TYPES.test(block.mimeType)) return { image: { data: block.data, mediaType: block.mimeType } }
-      return { text: `[ảnh: ${block.mimeType ?? "không rõ định dạng"} — định dạng chưa hỗ trợ]` }
+      return { text: `[image: ${block.mimeType ?? "unknown format"} — format not supported]` }
     case "audio":
-      return { text: `[âm thanh: ${block.mimeType ?? "không rõ định dạng"} — chưa hỗ trợ]` }
+      return { text: `[audio: ${block.mimeType ?? "unknown format"} — not supported]` }
     case "resource": {
       const r = block.resource
       if (r?.text !== undefined) return { text: r.text }
       if (r?.blob && r.mimeType && IMAGE_TYPES.test(r.mimeType)) return { image: { data: r.blob, mediaType: r.mimeType } }
-      return { text: `[tài nguyên: ${r?.uri ?? "không rõ"}${r?.mimeType ? ` (${r.mimeType})` : ""}]` }
+      return { text: `[resource: ${r?.uri ?? "unknown"}${r?.mimeType ? ` (${r.mimeType})` : ""}]` }
     }
     case "resource_link":
-      return { text: `[liên kết tài nguyên: ${block.name ?? ""} ${block.uri ?? ""}]`.replace(/\s+\]/, "]") }
+      return { text: `[resource link: ${block.name ?? ""} ${block.uri ?? ""}]`.replace(/\s+\]/, "]") }
     default:
-      return { text: `[nội dung loại ${block.type} chưa hỗ trợ]` }
+      return { text: `[content of type ${block.type} not supported]` }
   }
 }
 
@@ -56,9 +56,9 @@ export function resultToOutput(result: CallToolResultLike): string | ToolResult 
   }
   if (parts.length === 0 && images.length === 0 && result.structuredContent !== undefined) parts.push(JSON.stringify(result.structuredContent, null, 2))
   const text = parts.join("\n\n")
-  if (result.isError) throw new Error(text || "MCP tool báo lỗi nhưng không kèm thông điệp.")
-  if (images.length > 0) return { output: text || `(tool trả về ${images.length} ảnh)`, images }
-  return text || "(tool không trả về nội dung)"
+  if (result.isError) throw new Error(text || "The MCP tool reported an error without a message.")
+  if (images.length > 0) return { output: text || `(the tool returned ${images.length} images)`, images }
+  return text || "(the tool returned no content)"
 }
 
 /** Text-only view of a result (tests, logs). */

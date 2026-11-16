@@ -226,7 +226,7 @@ test("reading a key file asks first, per exact path, and never offers 'always'",
   if (process.platform === "win32") expect(tool.askFor?.({ path: "\\\\fileserver\\share\\bctc.pdf" })).toStartWith("unc:")
   // Headless: nobody to ask, so the read never happens.
   const gate = new PermissionGate({ load: async () => [], save: async () => {} })
-  await expect(runTool(tool, { path: path.join(data, "auth.json") }, ctx(), new RwLock(), gate)).rejects.toThrow("cần người dùng xác nhận")
+  await expect(runTool(tool, { path: path.join(data, "auth.json") }, ctx(), new RwLock(), gate)).rejects.toThrow("needs the user's confirmation")
   // "always" on a key file is downgraded to the session, nothing is saved.
   let saved = 0
   const ui = new PermissionGate({ load: async () => [], save: async () => void saved++ })

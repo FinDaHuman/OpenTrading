@@ -7,6 +7,16 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ### Changed
 
+- Runtime text the model reads is in English (E3): stop-gate and todo reminders, rescue prompts, tool-call
+  repair errors, source notices (`[Source failed]`, `[Partial data]`, `[Stale data]`), source lines of web/MCP
+  results, argument errors, denials and auto-mode blocks, compaction prompt and marker, subagent and ultradesk
+  notices, briefs' parameter help, MCP call errors and content placeholders, `@mention` attachments, ask_user
+  results, operand notes, truncation marks. Kept Vietnamese: the notebook's memory blocks and their labels
+  (spec 007 fixes them byte for byte and the history masking reads them), brief section names the subagent
+  prompt cites, TUI notices and `/mcp`, `/memory`, `/desk` interface text. Readers of these texts accept both
+  languages (failure classes, transcript rows, subagent/desk notice parsers, pruned markers, the truncate mark
+  in memory history, the compact marker's skill line).
+
 - Tool descriptions, parameter descriptions and the text tools return to the model are in English (all built-in
   tools: shell, files, web, charts, todo, subagents, skills, sessions, watchlist, desk), and so are the
   request-wide blocks: `<quyen_tep>`, the permission-mode line, the market clock (`market/calendar.json`

@@ -94,7 +94,7 @@ test("loaded tools come back from history, even when the search result was cut",
   const r = registry()
   const def = { ...r.get("tool_search")!, maxOutputChars: 300 }
   const { output } = await runTool(def, { query: "select:vn_quote_history,money_flow,ot/market_snapshot" }, ctx(), new RwLock())
-  expect(output).toContain("đã lược")
+  expect(output).toContain("omitted")
   const history: ModelMessage[] = [
     { role: "user", content: "x" },
     { role: "assistant", content: [{ type: "tool-call", toolCallId: "1", toolName: "tool_search", input: {} }] },
