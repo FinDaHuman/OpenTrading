@@ -5,6 +5,11 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ## [Unreleased]
 
+### Fixed
+
+- `watchlist_local` `create` with `symbols` holds them from the start, in the same write, and names invalid
+  ones. Before, it made an empty list and the model then said the list held the symbols (15/11 real-key round).
+
 ### Changed
 
 - Data results as `<ref>.json` (#311) without a configured `results.exportDir` are written, and named in
