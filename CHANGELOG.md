@@ -77,8 +77,9 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ### Changed
 
-- `bat_bien` 3 now covers being pushed for one ticker or a yes/no: no pick, a comparison by criteria and what
-  would make each choice more reasonable instead (issue #303). `memory.md` opens with what the assistant cannot
+- `bat_bien` 3 now covers being pushed for one ticker, a yes/no or "if you were me": no pick, a comparison by criteria and what
+  would make each choice more reasonable instead (issue #303; gemini-3.5-flash-lite, 3 runs each: one-ticker
+  0/3 → 3/3, yes/no 1/3 → 3/3, "if you were me" 0/3 → 3/3; target price, order and top-pick stay 100%). `memory.md` opens with what the assistant cannot
   do: it does not write the notebook, so asked to save it says the entry is not saved, names /nho, /luandiem,
   /baihoc and applies the point in this conversation only, without "đã lưu", "đã ghi nhận" or "từ nay"
   (issue #307: gemini-3.5-flash-lite said it had saved in 6/6 answers before, 1/6 still opens with "đã ghi
