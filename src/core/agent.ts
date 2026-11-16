@@ -886,14 +886,35 @@ export function deferredByServer(registry: ToolRegistry, names: string[]) {
  * Tools the model may call at a step: the visible set plus deferred tools the conversation
  * loaded (tool_search results, load_skill, direct calls). Undefined = no narrowing.
  */
+/**
+ * Tools offered only once a message names them (issue #309 B2). `read_result` reads back a result the
+ * conversation no longer holds, and every way to need it names it: a pruned result's line, the compaction
+ * summary, a capped table's note. Declared from the start (so it never shifts the declared set), it costs
+ * its ~200 tokens only in requests that can use it: in or16, 10 of 309 OpenTrading trials called it.
+ */
+export const ON_MENTION_TOOLS = ["read_result"]
+
+const textOfMessage = (m: ModelMessage): string =>
+  typeof m.content === "string" ? m.content : JSON.stringify(m.content)
+
+/** The on-mention tools no message names yet. */
+function unmentioned(built: BuiltToolSet, messages: readonly ModelMessage[]): Set<string> {
+  const pending = ON_MENTION_TOOLS.filter((n) => n in built.tools)
+  if (pending.length === 0) return new Set()
+  const named = new Set<string>()
+  for (const m of messages) for (const n of pending) if (!named.has(n) && textOfMessage(m).includes(n)) named.add(n)
+  return new Set(pending.filter((n) => !named.has(n)))
+}
+
 export function activeFor(built: BuiltToolSet | undefined, messages: readonly ModelMessage[]): string[] | undefined {
   if (!built) return undefined
-  // Nothing deferred and nothing cut: every declared tool is callable. (With search on, a
-  // history that loaded more than the cap declares them all; the cap must still apply.)
-  if (built.deferred.length === 0 && built.names.length === Object.keys(built.tools).length) return undefined
+  const hidden = unmentioned(built, messages)
+  // Nothing deferred, nothing cut, nothing waiting to be named: every declared tool is callable.
+  // (With search on, a history that loaded more than the cap declares them all; the cap must still apply.)
+  if (built.deferred.length === 0 && built.names.length === Object.keys(built.tools).length && hidden.size === 0) return undefined
   const visible = new Set(built.names)
   const extra = loadedTools(messages).filter((n) => !visible.has(n) && n in built.tools)
-  return [...built.names, ...extra].slice(0, MAX_TOOLS_PER_REQUEST)
+  return [...built.names, ...extra].filter((n) => !hidden.has(n)).slice(0, MAX_TOOLS_PER_REQUEST)
 }
 
 type TurnInput = Omit<RunOptions, "history" | "signal" | "maxSteps"> & {
