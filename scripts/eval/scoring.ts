@@ -28,11 +28,21 @@ export function parseLabels(text: string) {
   return labels
 }
 
+/**
+ * A figure's values with the sign written right before it ("-3,749%", "− 2,1"): figures are read unsigned,
+ * so a negative label never matched, even for an answer that wrote it exactly (16/11, series-03).
+ */
+function signedValues(f: Figure) {
+  const at = f.line.indexOf(f.text)
+  const negative = at > 0 && /[-−–]\s*$/.test(f.line.slice(0, at))
+  return plainValues(f).map((v) => (negative ? -v : v))
+}
+
 function isCorrect(expected: Expected, text: string, figures: Figure[]) {
   if (expected.kind === "number") {
     const margin = (Math.abs(expected.value) * expected.tolerance_pct) / 100
     const anchored = expected.line_has === undefined ? figures : figures.filter((f) => f.line.includes(expected.line_has!))
-    return anchored.some((f) => plainValues(f).some((v) => Math.abs(v - expected.value) <= margin))
+    return anchored.some((f) => signedValues(f).some((v) => Math.abs(v - expected.value) <= margin))
   }
   if (expected.kind === "contains") return expected.any.some((s) => text.includes(s))
   if (expected.kind === "no_figures") return figures.every((f) => f.derived)

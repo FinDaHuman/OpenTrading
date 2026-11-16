@@ -17,6 +17,35 @@ export interface ShellInfo {
 }
 
 let cached: ShellInfo | undefined
+let pythonChecked = false
+let pythonCached: string | undefined
+
+/**
+ * The Python command that really runs on this machine (`python3`, then `python`), or undefined.
+ * Found on PATH is not enough: Windows ships `python3`/`python` aliases that only open the Microsoft
+ * Store and exit 9009/49, so each candidate must print the answer to a tiny script (16/11 measurement:
+ * 10 of 33 commands hit that alias). Checked once per process, only when a description asks.
+ * `OPENTRADING_PYTHON` (a command name, or "none") replaces the check for a host whose commands run in
+ * another environment than OT itself.
+ */
+export function detectPython(): string | undefined {
+  if (pythonChecked) return pythonCached
+  pythonChecked = true
+  // A host whose commands run elsewhere (a benchmark's Docker sandbox) says what is there: a command
+  // name, or "none". The machine OT itself runs on may differ.
+  const told = process.env.OPENTRADING_PYTHON?.trim()
+  if (told) return (pythonCached = told === "none" ? undefined : told)
+  for (const cmd of ["python3", "python"]) {
+    if (!Bun.which(cmd)) continue
+    try {
+      const run = Bun.spawnSync([cmd, "-c", "print(6*7)"], { stdout: "pipe", stderr: "ignore", stdin: "ignore", timeout: 5_000 })
+      if (run.exitCode === 0 && run.stdout.toString().trim() === "42") return (pythonCached = cmd)
+    } catch {
+      // not runnable: try the next one
+    }
+  }
+  return undefined
+}
 
 export function detectShell(platform: NodeJS.Platform = process.platform): ShellInfo {
   if (cached && platform === process.platform) return cached

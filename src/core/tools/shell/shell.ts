@@ -10,7 +10,7 @@ import { computeIntent, mathHint, mathOnlyCommand, rewriteAdvice } from "./math"
 import { listingCommand } from "./read-only"
 import { isUncPath, readScope } from "../../fs/path-safety"
 import { realish } from "../../fs/workspace"
-import { detectShell, runShell, SPILL_CAP, type ShellInfo } from "./run"
+import { detectPython, detectShell, runShell, SPILL_CAP, type ShellInfo } from "./run"
 
 /**
  * shell: run one command on the user's machine (a Python script that crunches a CSV, a
@@ -51,6 +51,20 @@ function nearMiss(command: string, shell: ShellInfo, workdir: boolean): string |
 const FILE_TOOLS = ["read_file", "glob_files", "grep_files", "write_file", "edit_file"]
 
 /**
+ * How to compute in ▸▸▸ bypass, for this machine. Python is named only when `detectPython` saw it run:
+ * naming it "if the machine has it" sent the model to the Windows Store alias, then to a nested
+ * `powershell -Command "…$x…"` whose variables the outer PowerShell erased (16/11: 22 of 33 commands
+ * failed, 2.9 → 4.3 requests a turn). PowerShell already runs the command, so it is never wrapped again.
+ */
+function bypassMath(ps: boolean, python: string | undefined): string {
+  const short = ps
+    ? "Tính số: viết thẳng biểu thức PowerShell, mảng và foreach chạy được, ví dụ `$p = 48.5, 50.2, 51.8; ($p | Measure-Object -Average).Average`; lệnh đã chạy trong PowerShell nên không bọc thêm `powershell -Command`."
+    : "Tính số: dùng awk, mảng và vòng lặp chạy được, ví dụ `awk 'BEGIN{ g = 128.4/112 - 1; printf \"%.15g\\n\", g*100 }'`."
+  if (!python) return short
+  return `${short} Phép tính nhiều bước hay trên chuỗi số có thể viết bằng Python: \`${python} -c\`${ps ? "" : " hoặc heredoc"}.`
+}
+
+/**
  * `present`: the tools the registry holds; the description names only those (a host that keeps the
  * shell but drops the file tools, like a benchmark runner, must not send the model to read_file).
  * Without it every file tool is named.
@@ -58,7 +72,7 @@ const FILE_TOOLS = ["read_file", "glob_files", "grep_files", "write_file", "edit
  * grammar and the rewrite hint for Python (they exist to spare the user a prompt) do not apply, and
  * saying they do kept the model off Python for series work (issue #309). Other modes: unchanged.
  */
-function describe(shell: ShellInfo, present?: ReadonlySet<string>, mode?: PermissionMode): string {
+function describe(shell: ShellInfo, present?: ReadonlySet<string>, mode?: PermissionMode, python: () => string | undefined = detectPython): string {
   const has = (name: string) => !present || present.has(name)
   const fileTools = FILE_TOOLS.filter(has)
   const ps = shell.kind === "pwsh" || shell.kind === "powershell"
@@ -75,15 +89,16 @@ function describe(shell: ShellInfo, present?: ReadonlySet<string>, mode?: Permis
       ? `Không dùng khi đọc, tìm hay sửa file (dùng ${fileTools.join(", ")}), cũng không dùng cho lệnh chờ nhập từ bàn phím hay chạy mãi (server). `
       : "Không dùng cho lệnh chờ nhập từ bàn phím hay chạy mãi (server). ") +
     (mode === "bypass"
-      ? `Lệnh chạy ngay như đã viết, không ai duyệt. Tính số: phép tính ngắn viết một lệnh ${ps ? "PowerShell, ví dụ `$g = 128.4/112 - 1; $g*100`" : "awk, ví dụ `awk 'BEGIN{ g = 128.4/112 - 1; printf \"%.15g\\n\", g*100 }'`"}; phép tính nhiều bước hay trên chuỗi số viết bằng Python (\`python3 -c\` hoặc heredoc) nếu máy có. Giữ đủ chữ số ở bước trung gian, chỉ làm tròn ở kết quả cuối. Ghi description ngắn cho biết lệnh làm gì. Timeout mặc định`
+      ? `Lệnh chạy ngay như đã viết, không ai duyệt. ${bypassMath(ps, python())} Giữ đủ chữ số ở bước trung gian, chỉ làm tròn ở kết quả cuối. Ghi description ngắn cho biết lệnh làm gì. Timeout mặc định`
       : `${mathHint(shell)} ` +
         `Phép tính viết bằng Python, mảng hay vòng lặp không chạy mà trả lại dạng đúng để viết lại. Liệt kê thư mục trong workspace (ls, dir, pwd) cũng chạy ngay. Lệnh khác người dùng duyệt; ghi description ngắn để người dùng biết lệnh làm gì. Timeout mặc định`) +
     ` ${DEFAULT_TIMEOUT_MS / 1000}s, tối đa ${MAX_TIMEOUT_MS / 1000}s; output dài được lưu ra file${has("read_file") ? " để đọc tiếp bằng read_file" : ""}.`
   )
 }
 
-export function shellTool(workspace: Workspace, opts: { shell?: ShellInfo } = {}): ToolDef<ShellInput> {
+export function shellTool(workspace: Workspace, opts: { shell?: ShellInfo; python?: () => string | undefined } = {}): ToolDef<ShellInput> {
   const shell = opts.shell ?? detectShell()
+  const python = opts.python ?? detectPython
   const cwdOf = (input: ShellInput) => (input.workdir ? workspace.resolve(input.workdir) : workspace.primary)
   // A network workdir (\\host\share, or //host/share on Windows): refused by string alone. Resolving it
   // (realpath in workspace.contains) or stat-ing it is already the SMB lookup that can leak the NTLM hash.
@@ -105,7 +120,7 @@ export function shellTool(workspace: Workspace, opts: { shell?: ShellInfo } = {}
   const def: ToolDef<ShellInput> = {
     name: "shell",
     description: describe(shell),
-    descriptionFor: (present, mode) => describe(shell, present, mode),
+    descriptionFor: (present, mode) => describe(shell, present, mode, python),
     input: z.object({
       command: z.string().min(1).describe("Lệnh cần chạy"),
       description: z.string().max(200).optional().describe("Lệnh này làm gì, 5–10 từ, ví dụ: Vẽ biểu đồ giá FPT ra file PNG"),
