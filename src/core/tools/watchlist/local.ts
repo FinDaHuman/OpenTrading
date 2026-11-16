@@ -116,13 +116,16 @@ function need(store: WatchlistStore, name: string) {
 }
 
 export const watchlistOps = {
-  async create(home: string, rawName: string) {
+  /** `items`: symbols to hold from the start, in the same write (a create that dropped them left an empty list). */
+  async create(home: string, rawName: string, items: string[] = []) {
     const name = normName(rawName)
     if (!name) throw new Error("Cần tên watchlist.")
+    const { symbols, invalid } = parseSymbols(items)
     return updateWatchlists(home, (store) => {
       if (store[name]) throw new Error(`Watchlist "${name}" đã có.`)
-      store[name] = { name, symbols: [], updatedAt: stamp() }
-      return `Đã tạo watchlist "${name}".`
+      store[name] = { name, symbols: [...symbols].sort(), updatedAt: stamp() }
+      const held = symbols.length ? `: ${store[name]!.symbols.join(", ")}` : " (trống)"
+      return `Đã tạo watchlist "${name}"${held}.${invalid.length ? ` Bỏ qua mã không hợp lệ: ${invalid.join(", ")}.` : ""}`
     })
   },
   async add(home: string, rawName: string, items: string[]) {
@@ -209,7 +212,7 @@ async function runAction(home: string, input: WatchlistInput): Promise<string> {
     case "get":
       return getOne(home, name())
     case "create":
-      return watchlistOps.create(home, name())
+      return watchlistOps.create(home, name(), input.symbols)
     case "add":
       return watchlistOps.add(home, name(), symbols())
     case "remove":
@@ -234,7 +237,7 @@ function summarize(input: WatchlistInput) {
 export function localWatchlistTools(home: string): ToolDef[] {
   const fields = {
     name: z.string().min(1).optional().describe("Tên watchlist (mọi action trừ list)"),
-    symbols: z.array(z.string()).min(1).optional().describe('add/remove: các mã, ví dụ ["VCB", "HPG"]'),
+    symbols: z.array(z.string()).min(1).optional().describe('create/add/remove: các mã, ví dụ ["VCB", "HPG"]'),
     to: z.string().min(1).optional().describe("rename: tên mới"),
   }
   const base = {

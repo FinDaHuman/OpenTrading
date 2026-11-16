@@ -7,6 +7,8 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ### Fixed
 
+- `watchlist_local` `create` with `symbols` holds them from the start, in the same write, and names invalid
+  ones. Before, it made an empty list and the model then said the list held the symbols (15/11 real-key round).
 - `shell` in ▸▸▸ bypass names Python only when `python3`/`python` really runs a script on this machine (checked
   once, only for the bypass text), and on PowerShell says to write PowerShell arrays and `foreach` directly,
   never wrapped in another `powershell -Command`. The #310 text ("Python … nếu máy có") sent the model to the
