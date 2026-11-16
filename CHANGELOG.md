@@ -5,6 +5,12 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ## [Unreleased]
 
+### Fixed
+
+- Figure reading (`loop/figures.ts`): a decimal with four or more digits after the separator ("6,9034",
+  "6.9034") is read whole. A three-digit group must end there to count as thousands; before, "6,9034" read as
+  6,903 and dropped the 4, so a copied figure looked ungrounded (MyToDoList 43j/43z).
+
 ### Changed
 
 - Data results as `<ref>.json` (#311) without a configured `results.exportDir` are written, and named in
