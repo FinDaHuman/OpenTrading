@@ -62,7 +62,7 @@ export async function toggleCardsAutoSave() {
   })
   say(
     on
-      ? "Đã bật tự lưu thẻ gợi ý: ràng buộc hay cách trình bày chép đúng lời bạn gõ ở tin nhắn đó được lưu ngay; bài học vẫn chờ bạn xác nhận. Xoá bằng /memory."
+      ? "Đã bật tự lưu thẻ gợi ý: ràng buộc hay cách trình bày có nội dung đúng nguyên văn lời bạn gõ ở tin nhắn đó được lưu ngay; thẻ model diễn đạt lại và bài học vẫn chờ bạn xác nhận. Xoá bằng /memory."
       : "Đã tắt tự lưu thẻ gợi ý: mọi thẻ chờ bạn xác nhận trong form.",
     "success",
     8000,
@@ -147,7 +147,7 @@ export function MemorySettings(props: {
                       {
                         label: "Tự lưu thẻ ràng buộc và cách trình bày",
                         hint: cardsAutoSave(config() ?? {})
-                          ? "bật · thẻ chép đúng lời bạn được lưu ngay, bài học vẫn chờ xác nhận · enter để tắt"
+                          ? "bật · thẻ có nội dung đúng nguyên văn lời bạn được lưu ngay, thẻ khác chờ xác nhận · enter để tắt"
                           : "tắt · mọi thẻ chờ bạn xác nhận · enter để bật",
                         mark: cardsAutoSave(config() ?? {}) ? "●" : "○",
                         value: "cardsAutoSave" as const,

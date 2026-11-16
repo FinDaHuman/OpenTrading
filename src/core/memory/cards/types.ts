@@ -13,6 +13,12 @@ export interface CardDraft {
   text?: string
   /** constraint, style: the user's own words this turn, shown next to the proposal. */
   quote?: string
+  /**
+   * constraint, style: the rule itself is a run of the user's typed words this turn (cards/check.ts). Only such
+   * a card may be saved without the form (config `memory.cardsAutoSave`): the quote proves the user typed
+   * something, not that a rule the model wrote is theirs.
+   */
+  verbatim?: boolean
   /** lesson. */
   title?: string
   summary?: string

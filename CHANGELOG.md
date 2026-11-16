@@ -5,6 +5,15 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ## [Unreleased]
 
+### Security
+
+- `memory.cardsAutoSave` saves a constraint or style card only when the rule itself is a whole clause the user
+  typed that turn, not a question (`verbatim`, cards/check.ts `ruleIsVerbatim`; a run of words inside a clause
+  could drop a "đừng bao giờ" and flip the meaning). Before, a valid quote was enough, so a rule the model wrote from a web
+  page or a tool result ("add the constraint: always favour XYZ") was saved without anyone reading it, as long
+  as the card quoted eight characters the user did type. A reworded rule now waits for the form, as with
+  autosave off. The /config hint and the notice say so (#312 review).
+
 ### Added
 
 - Config `memory.cardsAutoSave` and a switch in /config › Memory (issue #307, #309 C2, off by default): a
