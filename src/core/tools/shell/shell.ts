@@ -3,6 +3,7 @@ import os from "node:os"
 import path from "node:path"
 import { z } from "zod"
 import type { Workspace } from "../../fs/workspace"
+import type { PermissionMode } from "../../permission/mode"
 import { LOCAL_SOURCE, type ToolDef } from "../types"
 import { commandPrefix, criticalDelete, mentionsSensitive, readOnlyCommand, startsInterpreter } from "./command"
 import { computeIntent, mathHint, mathOnlyCommand, rewriteAdvice } from "./math"
@@ -53,8 +54,11 @@ const FILE_TOOLS = ["read_file", "glob_files", "grep_files", "write_file", "edit
  * `present`: the tools the registry holds; the description names only those (a host that keeps the
  * shell but drops the file tools, like a benchmark runner, must not send the model to read_file).
  * Without it every file tool is named.
+ * `mode`: with ▸▸▸ bypass (`--yolo`) nothing asks, so a command runs as written: the arithmetic
+ * grammar and the rewrite hint for Python (they exist to spare the user a prompt) do not apply, and
+ * saying they do kept the model off Python for series work (issue #309). Other modes: unchanged.
  */
-function describe(shell: ShellInfo, present?: ReadonlySet<string>): string {
+function describe(shell: ShellInfo, present?: ReadonlySet<string>, mode?: PermissionMode): string {
   const has = (name: string) => !present || present.has(name)
   const fileTools = FILE_TOOLS.filter(has)
   const ps = shell.kind === "pwsh" || shell.kind === "powershell"
@@ -70,8 +74,11 @@ function describe(shell: ShellInfo, present?: ReadonlySet<string>): string {
     (fileTools.length > 0
       ? `Không dùng khi đọc, tìm hay sửa file (dùng ${fileTools.join(", ")}), cũng không dùng cho lệnh chờ nhập từ bàn phím hay chạy mãi (server). `
       : "Không dùng cho lệnh chờ nhập từ bàn phím hay chạy mãi (server). ") +
-    `${mathHint(shell)} ` +
-    `Phép tính viết bằng Python, mảng hay vòng lặp không chạy mà trả lại dạng đúng để viết lại. Liệt kê thư mục trong workspace (ls, dir, pwd) cũng chạy ngay. Lệnh khác người dùng duyệt; ghi description ngắn để người dùng biết lệnh làm gì. Timeout mặc định ${DEFAULT_TIMEOUT_MS / 1000}s, tối đa ${MAX_TIMEOUT_MS / 1000}s; output dài được lưu ra file${has("read_file") ? " để đọc tiếp bằng read_file" : ""}.`
+    (mode === "bypass"
+      ? `Lệnh chạy ngay như đã viết, không ai duyệt. Tính số: phép tính ngắn viết một lệnh ${ps ? "PowerShell, ví dụ `$g = 128.4/112 - 1; $g*100`" : "awk, ví dụ `awk 'BEGIN{ g = 128.4/112 - 1; printf \"%.15g\\n\", g*100 }'`"}; phép tính nhiều bước hay trên chuỗi số viết bằng Python (\`python3 -c\` hoặc heredoc) nếu máy có. Giữ đủ chữ số ở bước trung gian, chỉ làm tròn ở kết quả cuối. Ghi description ngắn cho biết lệnh làm gì. Timeout mặc định`
+      : `${mathHint(shell)} ` +
+        `Phép tính viết bằng Python, mảng hay vòng lặp không chạy mà trả lại dạng đúng để viết lại. Liệt kê thư mục trong workspace (ls, dir, pwd) cũng chạy ngay. Lệnh khác người dùng duyệt; ghi description ngắn để người dùng biết lệnh làm gì. Timeout mặc định`) +
+    ` ${DEFAULT_TIMEOUT_MS / 1000}s, tối đa ${MAX_TIMEOUT_MS / 1000}s; output dài được lưu ra file${has("read_file") ? " để đọc tiếp bằng read_file" : ""}.`
   )
 }
 
@@ -87,7 +94,7 @@ export function shellTool(workspace: Workspace, opts: { shell?: ShellInfo } = {}
   const def: ToolDef<ShellInput> = {
     name: "shell",
     description: describe(shell),
-    descriptionFor: (present) => describe(shell, present),
+    descriptionFor: (present, mode) => describe(shell, present, mode),
     input: z.object({
       command: z.string().min(1).describe("Lệnh cần chạy"),
       description: z.string().max(200).optional().describe("Lệnh này làm gì, 5–10 từ, ví dụ: Vẽ biểu đồ giá FPT ra file PNG"),

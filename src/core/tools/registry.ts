@@ -203,7 +203,7 @@ export class ToolRegistry {
     // Every registered tool, deferred ones included: a description names only tools the turn can reach.
     const present = new Set(this.list().map((d) => d.name))
     for (const def of declared) {
-      const description = def.descriptionFor?.(present) ?? def.description
+      const description = def.descriptionFor?.(present, this.gate?.mode) ?? def.description
       const execute = async (input: unknown, options: { abortSignal?: AbortSignal; toolCallId: string; messages?: ModelMessage[] }) => {
         let reservedOrigin:FinanceAuditOrigin|undefined
         try { reservedOrigin=opts.financeState?.before(def,input,options.toolCallId) } catch(error) {

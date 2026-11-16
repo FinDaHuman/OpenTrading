@@ -60,6 +60,15 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ### Changed
 
+- `--yolo` (▸▸▸ bypass) and `--profile machine`, issue #309: the `shell` description no longer says Python
+  arithmetic does not run or that the user approves commands (nothing asks in bypass, so both were false and
+  kept the model on one-line awk for series work); it says commands run as written and names Python for
+  multi-step and series arithmetic. A program caller (`--profile machine`) in bypass gets a 78-token mode
+  line in `<quyen_tep>` instead of 137, keeping the no-delete, no-exfiltration and no-real-order rules; other
+  modes and profiles keep both texts byte for byte. The MCP guidance header is shorter in every mode (same
+  rank: like a skill, below the user, never above the invariants). About 175 tokens less per request in a
+  benchmark-shaped run (MCP + shell + read_result, machine, bypass).
+
 - System prompt wording pass (docs/superpowers/plans/2026-11-15-system-prompt-optimization.md items 4–5):
   `style.md` drops the rules `tools.md` and its own last bullet already say and keeps one example per rule;
   `tools.md` no longer tells the model to rewrite a failed calculation (the near-miss error says how). About 175

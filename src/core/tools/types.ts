@@ -1,3 +1,4 @@
+import type { PermissionMode } from "../permission/mode"
 import type { JSONSchema7 } from "@ai-sdk/provider"
 import type { z } from "zod"
 import type { ChartData } from "./chart/data"
@@ -58,9 +59,10 @@ export interface ToolDef<I = any> {
   /**
    * The description for a registry that holds exactly these tools (deferred ones included), when it
    * names other tools: a hint to use a tool the turn does not have sends the model after it.
-   * `description` stays the widest text (every tool present).
+   * `description` stays the widest text (every tool present). `mode`: the gate's permission mode,
+   * for a tool whose text says what runs without asking.
    */
-  descriptionFor?: (present: ReadonlySet<string>) => string
+  descriptionFor?: (present: ReadonlySet<string>, mode?: PermissionMode) => string
   /** zod for native tools, plain JSON Schema for MCP tools. */
   input: z.ZodType<I> | JSONSchema7
   /** Read-only tools may run in parallel; anything else runs alone. */
