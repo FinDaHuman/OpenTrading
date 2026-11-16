@@ -62,17 +62,18 @@ test("<quyen_tep>: the workspace line and the read-only mode line name only regi
 })
 
 test("shell description in ▸▸▸ bypass: commands run as written, Python is named, no grammar limits (issue #309)", () => {
-  const shell = shellTool(ws(), { shell: BASH })
+  const shell = shellTool(ws(), { shell: BASH, python: () => "python3" })
   const present = new Set(["shell", ...FILE_TOOLS])
   for (const mode of ["read-only", "ask", "auto"] as const) expect(shell.descriptionFor!(present, mode)).toBe(shell.description)
   const bypass = shell.descriptionFor!(present, "bypass")
   expect(bypass).toContain("Lệnh chạy ngay như đã viết, không ai duyệt")
   expect(bypass).toContain("python3 -c")
+  expect(bypass).toContain(String.raw`printf "%.15g\n"`)
   expect(bypass).not.toContain("không chạy mà trả lại dạng đúng")
   expect(bypass).not.toContain("người dùng duyệt")
   expect(bypass).not.toContain("không mảng")
   const registry = new ToolRegistry()
-  registry.register(shellTool(ws(), { shell: BASH }))
+  registry.register(shellTool(ws(), { shell: BASH, python: () => undefined }))
   registry.gate = { mode: "bypass" } as never
   expect((registry.toToolSet({}).tools.shell as { description?: string }).description).toContain("Lệnh chạy ngay như đã viết")
 })
@@ -84,4 +85,47 @@ test("▸▸▸ mode line: short for a program caller, unchanged for a person (i
   expect(program.length).toBeLessThan(person.length * 0.6)
   for (const kept of ["không ai duyệt", "Không xoá hay ghi đè dữ liệu có sẵn", "không gửi dữ liệu ra ngoài", "không đặt lệnh hay chuyển tiền thật"]) expect(program).toContain(kept)
   expect(modeNote("read-only", undefined, "machine")).toBe(modeNote("read-only"))
+})
+
+test("▸▸▸ bypass names Python only when it really runs, and never sends PowerShell into a nested powershell (16/11)", () => {
+  const present = new Set(["shell"])
+  const PS = { kind: "powershell" as const, path: "powershell.exe" }
+  // Windows with only the Store alias: no Python in the text, PowerShell arrays instead, no wrapping.
+  const none = shellTool(ws(), { shell: PS, python: () => undefined }).descriptionFor!(present, "bypass")
+  expect(none).not.toContain("Python")
+  expect(none).toContain("Measure-Object")
+  expect(none).toContain("không bọc thêm `powershell -Command`")
+  const withPy = shellTool(ws(), { shell: PS, python: () => "python" }).descriptionFor!(present, "bypass")
+  expect(withPy).toContain("`python -c`")
+  expect(withPy).not.toContain("heredoc")
+  // bash without Python: awk with arrays and loops.
+  const bash = shellTool(ws(), { shell: BASH, python: () => undefined }).descriptionFor!(present, "bypass")
+  expect(bash).not.toContain("Python")
+  expect(bash).toContain("mảng và vòng lặp chạy được")
+  // The probe runs only for the bypass text.
+  let probes = 0
+  const lazy = shellTool(ws(), { shell: BASH, python: () => (probes++, "python3") })
+  for (const mode of ["read-only", "ask", "auto"] as const) lazy.descriptionFor!(present, mode)
+  expect(probes).toBe(0)
+})
+
+test("tool_search shows the description the request declares for the mode, not the static one", async () => {
+  const { describeTool } = await import("../src/core/tools/search")
+  const registry = new ToolRegistry()
+  const shell = shellTool(ws(), { shell: BASH, python: () => "python3" })
+  registry.register(shell)
+  registry.gate = { mode: "bypass" } as never
+  // The card is the declared text (clipped): with only the shell registered it names no file tool,
+  // where the static description sends the model to read_file.
+  const card = describeTool(registry, shell)
+  expect(card).toContain(shell.descriptionFor!(new Set(["shell"]), "bypass").slice(0, 300))
+  expect(card).not.toContain("read_file")
+  expect(shell.description).toContain("read_file")
+})
+
+test("detectPython returns only a command that ran a script (a Store alias or a missing one gives undefined)", async () => {
+  const { detectPython } = await import("../src/core/tools/shell/run")
+  const py = detectPython()
+  expect(detectPython()).toBe(py) // checked once per process
+  if (py) expect(Bun.spawnSync([py, "-c", "print(1)"]).exitCode).toBe(0)
 })
