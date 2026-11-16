@@ -30,6 +30,29 @@ export function quoteMatches(quote: string, typed: string): boolean {
   return q.length >= MIN_QUOTE_CHARS && norm(typed).includes(q)
 }
 
+/** Ends a clause of the user's message: a rule must start and end at one. */
+const CLAUSE_EDGE = /[.,;:!"“”'()\-–—]/
+
+/**
+ * The rule is a whole clause the user typed (config `memory.cardsAutoSave`): it starts at the start of the
+ * message or after a punctuation mark and ends at the end or before one, never a question. A run of words
+ * inside a clause is not enough: "khuyến nghị mua VNM" is inside "đừng bao giờ khuyến nghị mua VNM", with the
+ * opposite meaning (#312 review F1).
+ */
+export function ruleIsVerbatim(rule: string, typed: string): boolean {
+  const r = norm(rule.replace(/^["“«]|["”»]$/g, "").replace(/[.!;]+\s*$/, ""))
+  if (r.length < MIN_QUOTE_CHARS) return false
+  const t = norm(typed)
+  for (let at = t.indexOf(r); at >= 0; at = t.indexOf(r, at + 1)) {
+    const before = t.slice(0, at).trimEnd()
+    const after = t.slice(at + r.length).trimStart()
+    const starts = before === "" || CLAUSE_EDGE.test(before.at(-1)!)
+    const ends = after === "" || (CLAUSE_EDGE.test(after[0]!) && after[0] !== "?")
+    if (starts && ends) return true
+  }
+  return false
+}
+
 /** `typed`: the user's own words this turn, notifications stripped (topics.ts typedText). */
 export function acceptCard(raw: RawCardBlock, ctx: { typed: string }): CardDraft | undefined {
   const spec = raw.loai ? KINDS[raw.loai] : undefined
@@ -47,7 +70,7 @@ export function acceptCard(raw: RawCardBlock, ctx: { typed: string }): CardDraft
   if (spec.quote) {
     const quote = raw.fields.cau_goc?.trim()
     if (!quote || !quoteMatches(quote, ctx.typed)) return undefined
-    return { kind: spec.kind, text: values.noi_dung, quote }
+    return { kind: spec.kind, text: values.noi_dung, quote, verbatim: ruleIsVerbatim(values.noi_dung!, ctx.typed) }
   }
   return { kind: spec.kind, title: values.tieu_de, summary: values.tom_tat }
 }
