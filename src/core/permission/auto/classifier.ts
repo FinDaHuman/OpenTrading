@@ -194,5 +194,5 @@ export async function classify(input: ClassifyInput, target: Target, signal: Abo
   if (block === undefined) return { kind: "unavailable", requests, why: "model duyệt trả lời không đúng định dạng" }
   if (!block) return { kind: "allow", stage: 2, requests }
   const rule = parseTag(second, "rule")
-  return { kind: "block", stage: 2, requests, rule: rule ? labelOf(rule) : undefined, reason: parseTag(second, "reason") ?? "khớp một luật chặn của auto mode" }
+  return { kind: "block", stage: 2, requests, rule: rule ? labelOf(rule) : undefined, reason: parseTag(second, "reason") ?? "it matches an auto-mode block rule" }
 }
