@@ -60,3 +60,28 @@ test("<quyen_tep>: the workspace line and the read-only mode line name only regi
   expect(note).toContain("Chạy lệnh (shell) cần người dùng duyệt")
   expect(modeNote("read-only", new Set(["write_file"]))).toContain("Ghi file (write_file) và chạy lệnh")
 })
+
+test("shell description in ▸▸▸ bypass: commands run as written, Python is named, no grammar limits (issue #309)", () => {
+  const shell = shellTool(ws(), { shell: BASH })
+  const present = new Set(["shell", ...FILE_TOOLS])
+  for (const mode of ["read-only", "ask", "auto"] as const) expect(shell.descriptionFor!(present, mode)).toBe(shell.description)
+  const bypass = shell.descriptionFor!(present, "bypass")
+  expect(bypass).toContain("Lệnh chạy ngay như đã viết, không ai duyệt")
+  expect(bypass).toContain("python3 -c")
+  expect(bypass).not.toContain("không chạy mà trả lại dạng đúng")
+  expect(bypass).not.toContain("người dùng duyệt")
+  expect(bypass).not.toContain("không mảng")
+  const registry = new ToolRegistry()
+  registry.register(shellTool(ws(), { shell: BASH }))
+  registry.gate = { mode: "bypass" } as never
+  expect((registry.toToolSet({}).tools.shell as { description?: string }).description).toContain("Lệnh chạy ngay như đã viết")
+})
+
+test("▸▸▸ mode line: short for a program caller, unchanged for a person (issue #309)", () => {
+  const person = modeNote("bypass")
+  expect(modeNote("bypass", undefined, "terminal")).toBe(person)
+  const program = modeNote("bypass", undefined, "machine")
+  expect(program.length).toBeLessThan(person.length * 0.6)
+  for (const kept of ["không ai duyệt", "Không xoá hay ghi đè dữ liệu có sẵn", "không gửi dữ liệu ra ngoài", "không đặt lệnh hay chuyển tiền thật"]) expect(program).toContain(kept)
+  expect(modeNote("read-only", undefined, "machine")).toBe(modeNote("read-only"))
+})

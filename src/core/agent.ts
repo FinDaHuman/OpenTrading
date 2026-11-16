@@ -916,9 +916,9 @@ const FILE_TOOLS = ["read_file", "write_file", "shell"]
 const fileTool = (registry: TurnInput["registry"], name: string) => FILE_TOOLS.includes(name) && (name !== "shell" || registry.get(name)?.effect === "shell")
 
 /** `<quyen_tep>`: the workspace and the mode line, naming only the file tools the registry holds. */
-function fileAccessNote(registry: TurnInput["registry"], mode: Parameters<typeof modeNote>[0]): string {
+function fileAccessNote(registry: TurnInput["registry"], mode: Parameters<typeof modeNote>[0], profile?: "terminal" | "machine"): string {
   const present = new Set(registry.list().map((d) => d.name))
-  return `${registry.workspace!.describe(present)}\n${modeNote(mode, present)}`
+  return `${registry.workspace!.describe(present)}\n${modeNote(mode, present, profile)}`
 }
 
 async function assembleFor(opts: TurnInput, target: Target | undefined, bound: Bound, extras: TurnExtras = {}) {
@@ -960,7 +960,7 @@ async function assembleFor(opts: TurnInput, target: Target | undefined, bound: B
     declaredTools: built ? Object.keys(built.tools) : undefined,
     mcpInstructions: opts.serverInstructions?.(),
     todos: currentTodos(opts.history ?? []),
-    fileAccess: toolNames.some((t) => fileTool(opts.registry, t)) && opts.registry.workspace ? fileAccessNote(opts.registry, mode) : undefined,
+    fileAccess: toolNames.some((t) => fileTool(opts.registry, t)) && opts.registry.workspace ? fileAccessNote(opts.registry, mode, opts.profile) : undefined,
     prevFileAccess: lastReminder(opts.history ?? [], "quyen_tep"),
     disabled: opts.disabled,
   }, opts.promptDir === undefined ? undefined : validatePromptDir(opts.promptDir))
