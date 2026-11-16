@@ -83,3 +83,43 @@ test("a one-shot Python computation counts as arithmetic; other Python does not 
   expect(untracedOperands(step('python3 -c "e = 1315800000000; s = 21500000; print(f\'{e/s:.2f}\')"'), pythonComputation)).toEqual(["21500000"])
   expect(untracedOperands(step('python3 -c "x = [1315800000000, 215000000]; print(x[0] / x[1])"'), pythonComputation)).toEqual([])
 })
+
+test("a Python script that reads a result file: its path, slices, rounding and window are not typed figures (#311 review F4)", () => {
+  const closes = Array.from({ length: 61 }, (_, i) => Math.round((95.2 + Math.sin(i) * 3.1) * 100) / 100)
+  const messages: ModelMessage[] = [
+    { role: "user", content: "Tính độ biến động năm hoá của FPT trong 60 phiên gần nhất." },
+    { role: "assistant", content: [{ type: "tool-call", toolCallId: "q", toolName: "mcp__opentrading__vn_quote_history", input: { symbol: "FPT" } }] },
+    { role: "tool", content: [{ type: "tool-result", toolCallId: "q", toolName: "mcp__opentrading__vn_quote_history", output: { type: "text", value: `[ref r3] ${JSON.stringify({ data: closes.map((close, i) => ({ date: `2026-08-${10 + (i % 20)}`, close })) })}` } }] },
+    {
+      role: "assistant",
+      content: [{
+        type: "tool-call",
+        toolCallId: "c1",
+        toolName: "shell",
+        input: {
+          command: [
+            "python3 - <<'EOF'",
+            "import json, math",
+            "d = json.load(open('/tmp/opentrading/D--VsCode-Harness-ws-f6ce0c6b/7b2e9d41-5c3a-4e8f-9a1b-20261116/scratchpad/ket-qua/r3.json'))",
+            "c = [x['close'] for x in d['data']][-61:]",
+            "r = [math.log(c[i] / c[i - 1]) for i in range(1, len(c))]",
+            "m = sum(r) / len(r)",
+            "v = math.sqrt(sum((x - m) ** 2 for x in r) / (len(r) - 1)) * math.sqrt(252) * 100",
+            "print(round(v, 6), len(r) == 60)",
+            "EOF",
+          ].join("\n"),
+        },
+      }],
+    },
+    { role: "tool", content: [{ type: "tool-result", toolCallId: "c1", toolName: "shell", output: { type: "text", value: "[mã thoát 0 · 0.3s · /w]\n41.207315 True" } }] },
+  ]
+  expect(untracedOperands(messages, pythonComputation)).toEqual([])
+  // A figure typed next to the file read is still checked: a price nothing returned is flagged.
+  const typed = structuredClone(messages)
+  const call = (typed[3]!.content as { input: { command: string } }[])[0]!
+  call.input.command = call.input.command.replace("print(round(v, 6)", "print(round(v * 25350 / 100, 6)")
+  expect(untracedOperands(typed, pythonComputation)).toEqual(["25350"])
+  // Only slice syntax is a position: a list of dicts keeps its figures, and a slice with a step goes.
+  expect(operandsOf(`python3 -c 'rows = [{"p": 21500000}, {"p": 1315800000000}]; print(rows[0]["p"])'`).map((o) => o.text)).toEqual(["21500000", "1315800000000"])
+  expect(operandsOf("python3 -c 'print(sum(c[-61:-1:2]), c[a:b])'").map((o) => o.text)).toEqual([])
+})
