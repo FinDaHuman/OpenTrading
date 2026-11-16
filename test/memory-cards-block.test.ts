@@ -59,7 +59,7 @@ describe("acceptCard", () => {
   const parsed = (block: string) => stripCardBlocks(`${ANSWER}\n${block}`).last!
 
   test("constraint, style, lesson: accepted with their content", () => {
-    expect(acceptCard(parsed(constraint()), { typed: TYPED })).toEqual({ kind: "constraint", text: "Không gợi ý cổ phiếu penny", quote: TYPED })
+    expect(acceptCard(parsed(constraint()), { typed: TYPED })).toEqual({ kind: "constraint", text: "Không gợi ý cổ phiếu penny", quote: TYPED, verbatim: false })
     const style = constraint().replace("rang_buoc", "cach_trinh_bay")
     expect(acceptCard(parsed(style), { typed: TYPED })?.kind).toBe("style")
     expect(acceptCard(parsed(lesson), { typed: "bài học là đừng mua đuổi" })).toEqual({

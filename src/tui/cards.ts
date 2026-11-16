@@ -61,15 +61,16 @@ export function cardSaved(id: string, saved: { group: CardKind; id: number }) {
 
 /**
  * Config `memory.cardsAutoSave`: a constraint or style card is saved now, as if its form were confirmed
- * unchanged. Only those two kinds: their text was checked to quote the user's own words of this turn, so a web
- * page or a tool result cannot plant a rule. A lesson, a notebook that is off or a failed save leaves the card
- * pending as usual. Returns whether it was saved.
+ * unchanged, only when its rule is itself the user's own words of this turn (`verbatim`): a rule the model
+ * wrote may carry what a web page or a tool result planted, even next to a valid quote. Any other card, a
+ * lesson, a notebook that is off or a failed save leaves the card pending as usual; the card row then says
+ * "✓ Đã lưu thành …" for a saved one. Returns whether it was saved.
  */
 export function autoSaveCard(memory: MemoryProvider, card: Card): boolean {
   const saved = saveCardNow(memory, card)
   if (!saved) return false
   cardSaved(card.id, saved)
-  say(`Đã tự lưu ${card.kind === "style" ? "cách trình bày" : "ràng buộc"} #${saved.id} từ thẻ gợi ý (tắt trong /config).`)
+  say(`Đã tự lưu ${card.kind === "style" ? "cách trình bày" : "ràng buộc"} #${saved.id}: đúng nguyên văn lời bạn gõ (tắt trong /config).`)
   return true
 }
 

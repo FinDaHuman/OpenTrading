@@ -47,7 +47,7 @@ export function acceptCard(raw: RawCardBlock, ctx: { typed: string }): CardDraft
   if (spec.quote) {
     const quote = raw.fields.cau_goc?.trim()
     if (!quote || !quoteMatches(quote, ctx.typed)) return undefined
-    return { kind: spec.kind, text: values.noi_dung, quote }
+    return { kind: spec.kind, text: values.noi_dung, quote, verbatim: quoteMatches(values.noi_dung!, ctx.typed) }
   }
   return { kind: spec.kind, title: values.tieu_de, summary: values.tom_tat }
 }
