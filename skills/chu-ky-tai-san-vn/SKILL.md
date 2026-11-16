@@ -1,6 +1,7 @@
 ---
 name: chu-ky-tai-san-vn
-description: "Định vị pha chu kỳ đa tài sản VN (cổ phiếu, trái phiếu, tiết kiệm, vàng, USD, phái sinh) từ dòng tiền liên thị trường, mùa vụ và lãi suất SBV. Dùng khi hỏi tiền đang chảy giữa các lớp tài sản VN thế nào."
+description: "Locates the VN multi-asset cycle phase (stocks, bonds, savings, gold, USD, derivatives) from cross-market flows, seasonality and SBV rates. Use when asked how money is moving between VN asset classes."
+match_text: "Định vị pha chu kỳ đa tài sản VN (cổ phiếu, trái phiếu, tiết kiệm, vàng, USD, phái sinh) từ dòng tiền liên thị trường, mùa vụ và lãi suất SBV. Dùng khi hỏi tiền đang chảy giữa các lớp tài sản VN thế nào."
 activation: auto
 triggers:
   keywords: [tài sản việt nam, luân chuyển tiền, dòng tiền liên thị trường, lãi suất tiết kiệm, trái phiếu doanh nghiệp, maturity wall, basis phái sinh, tiền rẻ, stagflation việt nam]

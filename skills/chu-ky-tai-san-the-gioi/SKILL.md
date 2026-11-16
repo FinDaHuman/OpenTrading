@@ -1,6 +1,7 @@
 ---
 name: chu-ky-tai-san-the-gioi
-description: "Định vị pha chu kỳ tài sản toàn cầu (cổ phiếu, trái phiếu, hàng hoá, vàng, USD, BTC) từ lợi suất theo pha, tương quan cổ phiếu–trái phiếu và outlook các quỹ lớn. Dùng khi hỏi phân bổ tài sản toàn cầu."
+description: "Locates the global asset-cycle phase (stocks, bonds, commodities, gold, USD, BTC) from returns by phase, the stock–bond correlation and big funds' outlooks. Use for global asset allocation questions."
+match_text: "Định vị pha chu kỳ tài sản toàn cầu (cổ phiếu, trái phiếu, hàng hoá, vàng, USD, BTC) từ lợi suất theo pha, tương quan cổ phiếu–trái phiếu và outlook các quỹ lớn. Dùng khi hỏi phân bổ tài sản toàn cầu."
 activation: auto
 triggers:
   keywords: [tài sản toàn cầu, global allocation, investment clock, stock bond correlation, suy thoái mỹ, recession mỹ, nber, all weather, risk parity, outlook jpmorgan blackrock, overweight underweight]

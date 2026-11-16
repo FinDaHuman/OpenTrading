@@ -1,6 +1,7 @@
 ---
 name: danh-gia-vi-mo-viet-nam
-description: "Đọc vĩ mô Việt Nam: GDP, CPI, XNK, tỷ giá, lãi suất SBV, câu chuyện dẫn dắt và lịch công bố. Dùng khi hỏi số liệu hoặc bối cảnh vĩ mô VN."
+description: "Reads VN macro: GDP, CPI, trade, exchange rate, SBV rates, the driving narrative and the release calendar. Use for VN macro figures or backdrop."
+match_text: "Đọc vĩ mô Việt Nam: GDP, CPI, XNK, tỷ giá, lãi suất SBV, câu chuyện dẫn dắt và lịch công bố. Dùng khi hỏi số liệu hoặc bối cảnh vĩ mô VN."
 activation: auto
 requires_tools: [mcp__opentrading__vs_indicator_data]
 triggers:

@@ -12,6 +12,11 @@ export const SkillFrontmatter = z.object({
   /** When the model should pick this skill. Vague descriptions never get picked. */
   when_to_use: z.string().optional(),
   /**
+   * Vietnamese words for soft routing only (catalog.ts matchSoft), never sent to the model: the
+   * description is English (cheaper per request) while users ask in Vietnamese.
+   */
+  match_text: z.string().optional(),
+  /**
    * auto: listed in the catalog, the model loads it when relevant (default)
    * always: body is always in the system prompt (keep these few and short)
    * manual: not listed; only the user turns it on with /skill <name>

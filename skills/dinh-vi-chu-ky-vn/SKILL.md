@@ -1,6 +1,7 @@
 ---
 name: dinh-vi-chu-ky-vn
-description: "Định vị pha thị trường VN (phục hồi, giữa sóng, cuối sóng, suy yếu) từ sức mạnh tương đối các nhóm ngành (kể cả Vin), mùa vụ và lãi suất SBV, rồi gợi ý 1–2 nhóm có thể dẫn dắt tiếp. Dùng khi hỏi thị trường đang ở giai đoạn nào, sóng ngành tiếp theo."
+description: "Locates the VN market phase (recovery, mid-wave, late wave, weakening) from sector relative strength (Vin included), seasonality and SBV rates; suggests 1–2 groups that may lead next. Use for market stage or the next sector wave."
+match_text: "Định vị pha thị trường VN (phục hồi, giữa sóng, cuối sóng, suy yếu) từ sức mạnh tương đối các nhóm ngành (kể cả Vin), mùa vụ và lãi suất SBV, rồi gợi ý 1–2 nhóm có thể dẫn dắt tiếp. Dùng khi hỏi thị trường đang ở giai đoạn nào, sóng ngành tiếp theo."
 activation: auto
 triggers:
   keywords: [giai đoạn nào, pha tiếp theo, dẫn sóng, pha nào, chu kỳ ngành, sóng tiếp theo, đầu sóng, chu kỳ thị trường, giai đoạn thị trường, pha thị trường, luân chuyển ngành, rotation, sóng ngành, đỉnh chu kỳ, giai đoạn phân phối, đầu phục hồi, bank dẫn, chứng dẫn, dòng tiền ngành, cuối sóng, giữa sóng, mùa vụ ngành, mảng vin, họ vin]

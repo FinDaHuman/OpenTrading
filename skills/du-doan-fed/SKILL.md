@@ -1,6 +1,7 @@
 ---
 name: du-doan-fed
-description: "Đọc xác suất và kịch bản lãi suất Fed kỳ tới, đường cong lợi suất, lịch FOMC và hàm ý cho VN. Dùng khi hỏi Fed, FOMC, dot plot."
+description: "Reads the probabilities and scenarios for the next Fed rate decision, the yield curve, the FOMC calendar and what it means for Vietnam. Use for Fed, FOMC, dot plot questions."
+match_text: "Đọc xác suất và kịch bản lãi suất Fed kỳ tới, đường cong lợi suất, lịch FOMC và hàm ý cho VN. Dùng khi hỏi Fed, FOMC, dot plot."
 activation: auto
 requires_tools: [mcp__opentrading__world_prediction_odds]
 triggers:

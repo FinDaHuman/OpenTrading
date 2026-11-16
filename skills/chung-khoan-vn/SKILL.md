@@ -1,6 +1,7 @@
 ---
 name: chung-khoan-vn
-description: "Pha/sóng: dùng skill chu kỳ. Phân tích ngành chứng khoán VN theo đòn bẩy và cơ cấu doanh thu: dư nợ margin so vốn chủ, spread margin, sự dịch chuyển từ phí sang mảng cân đối. Dùng khi đọc kết quả công ty chứng khoán."
+description: "Phase/wave: cycle skill. Analyses VN brokerages by leverage and revenue mix: margin loans vs equity, margin spread, the shift from fees to balance-sheet businesses. Use when reading a securities company's results."
+match_text: "Pha/sóng: dùng skill chu kỳ. Phân tích ngành chứng khoán VN theo đòn bẩy và cơ cấu doanh thu: dư nợ margin so vốn chủ, spread margin, sự dịch chuyển từ phí sang mảng cân đối. Dùng khi đọc kết quả công ty chứng khoán."
 activation: auto
 requires_tools: [financial_detail, vs_financial_norms]
 uses_tools: [financial_detail, vs_financial_norms, financial_ratios, stock_overview, planned_targets, analyst_consensus, peer_compare, market_overview, breadth_scan, news_symbol, news_market, symbol_lookup, vn_company, vs_market_info, valuation_run]

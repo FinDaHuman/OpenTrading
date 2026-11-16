@@ -5,6 +5,14 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ## [Unreleased]
 
+### Changed
+
+- Skill descriptions (the `<skill_catalog>` sent with every request) and the subagent types (description and
+  prompt, `agents/*.md`) are in English; report wording the user reads stays Vietnamese. Soft skill routing
+  (`matchSoft`) scores the new `match_text` frontmatter, which keeps the former Vietnamese description, so
+  suggestions for Vietnamese questions are unchanged (routing eval: same floors). Skill catalog: o200k 2 662 →
+  ~2 090, DeepSeek 3 585 → ~2 120 tokens.
+
 ### Fixed
 
 - Figure reading (`loop/figures.ts`): a decimal with four or more digits after the separator ("6,9034",

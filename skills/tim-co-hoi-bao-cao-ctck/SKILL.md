@@ -1,6 +1,7 @@
 ---
 name: tim-co-hoi-bao-cao-ctck
-description: "Tổng hợp khuyến nghị của CTCK: rating, giá mục tiêu, upside đã đối chiếu giá khớp lệnh. Dùng khi hỏi CTCK khuyên mua gì hoặc target mới của một mã."
+description: "Collects brokerages' recommendations: rating, target price, upside checked against the matched price. Use when asked what brokerages recommend or a ticker's new targets."
+match_text: "Tổng hợp khuyến nghị của CTCK: rating, giá mục tiêu, upside đã đối chiếu giá khớp lệnh. Dùng khi hỏi CTCK khuyên mua gì hoặc target mới của một mã."
 activation: auto
 requires_tools: [mcp__opentrading__analyst_consensus]
 triggers:

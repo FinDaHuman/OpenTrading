@@ -1,6 +1,7 @@
 ---
 name: so-sanh-cung-nganh
-description: "Xếp hạng 2–6 mã cùng ngành theo chất lượng và đà tăng, chọn mã dẫn đầu. Dùng khi hỏi so sánh các mã cùng ngành, mã nào mạnh nhất."
+description: "Ranks 2–6 tickers in one sector by quality and momentum and picks the leader. Use when asked to compare tickers in a sector or which is strongest."
+match_text: "Xếp hạng 2–6 mã cùng ngành theo chất lượng và đà tăng, chọn mã dẫn đầu. Dùng khi hỏi so sánh các mã cùng ngành, mã nào mạnh nhất."
 activation: auto
 requires_tools: [mcp__opentrading__compare_equities]
 triggers:

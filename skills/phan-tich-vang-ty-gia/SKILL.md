@@ -1,6 +1,7 @@
 ---
 name: phan-tich-vang-ty-gia
-description: "Phân tích vàng SJC, chênh lệch với giá thế giới, tỷ giá USDVND và lãi suất SBV–Fed. Dùng khi hỏi giá vàng, premium vàng, áp lực tỷ giá."
+description: "Analyses SJC gold, its gap to the world price, the USDVND rate and SBV–Fed rates. Use for gold prices, the gold premium, exchange-rate pressure."
+match_text: "Phân tích vàng SJC, chênh lệch với giá thế giới, tỷ giá USDVND và lãi suất SBV–Fed. Dùng khi hỏi giá vàng, premium vàng, áp lực tỷ giá."
 activation: auto
 requires_tools: [mcp__opentrading__vn_retail_gold]
 triggers:

@@ -1,6 +1,7 @@
 ---
 name: tao-ho-so
-description: "Phỏng vấn 5 câu qua ask_user để lập hồ sơ nhà đầu tư (mục tiêu, khung thời gian, vốn, kinh nghiệm, tài sản) rồi soạn INVESTOR.md. Dùng khi onboarding hoặc làm mới hồ sơ."
+description: "Interviews the user with 5 questions via ask_user to build an investor profile (goals, horizon, capital, experience, assets), then writes INVESTOR.md. Use for onboarding or refreshing the profile."
+match_text: "Phỏng vấn 5 câu qua ask_user để lập hồ sơ nhà đầu tư (mục tiêu, khung thời gian, vốn, kinh nghiệm, tài sản) rồi soạn INVESTOR.md. Dùng khi onboarding hoặc làm mới hồ sơ."
 activation: manual
 triggers:
   keywords: [tạo hồ sơ, lập hồ sơ, khảo sát, onboarding, hồ sơ nhà đầu tư]

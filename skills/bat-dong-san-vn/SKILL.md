@@ -1,6 +1,7 @@
 ---
 name: bat-dong-san-vn
-description: "Pha/sóng: dùng skill chu kỳ. Phân tích ngành bất động sản VN theo dòng vốn và pháp lý: tín dụng ngành, kênh trái phiếu và tường đáo hạn, giới hạn vay áp dụng, cơ cấu nhà ở so khu công nghiệp. Dùng khi hỏi xu hướng nhóm BĐS hay đọc BCTC chủ đầu tư."
+description: "Phase/wave: cycle skill. Analyses VN real estate by capital flows and legal status: sector credit, bonds and their maturity wall, borrowing limits, housing vs industrial parks. Use for real-estate trends or a developer's statements."
+match_text: "Pha/sóng: dùng skill chu kỳ. Phân tích ngành bất động sản VN theo dòng vốn và pháp lý: tín dụng ngành, kênh trái phiếu và tường đáo hạn, giới hạn vay áp dụng, cơ cấu nhà ở so khu công nghiệp. Dùng khi hỏi xu hướng nhóm BĐS hay đọc BCTC chủ đầu tư."
 activation: auto
 requires_tools: [financial_detail, planned_targets]
 uses_tools: [financial_detail, planned_targets, analyst_consensus, peer_compare, financial_ratios, stock_overview, news_symbol, news_market, company_events, event_calendar_vn, dividends_splits, symbol_lookup, vn_company]
