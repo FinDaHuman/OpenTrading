@@ -5,6 +5,12 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ## [Unreleased]
 
+### Fixed
+
+- The operand note no longer flags what a Python script reading a result file types besides figures: digits in a
+  quoted file path (a session id, a date in the temp folder), slice bounds (`c[-61:]`) and the digits argument of
+  `round`/`[math]::Round`. A figure typed next to the file read is still checked (#311 review F4).
+
 ### Added
 
 - Config `memory.cardsAutoSave` and a switch in /config › Memory (issue #307, #309 C2, off by default): a
