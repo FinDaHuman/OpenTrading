@@ -13,154 +13,153 @@ version: 1.0.0
 
 # Tiêu dùng & bán lẻ Việt Nam — framework phân tích
 
-Ngành này không đọc bằng doanh thu danh nghĩa: số liệu bán lẻ danh nghĩa gồm cả
-lạm phát, còn sức mua thật nằm ở **tăng trưởng thực (bỏ lạm phát)** và **thu nhập
-hộ gia đình**. Skill này đọc ngành qua bán lẻ thực, thu nhập (rào cản cầu), chính
-sách hỗ trợ sức mua, và **độ thâm nhập bán lẻ hiện đại** — động cơ dài hạn của
-ngành và là thứ phân biệt chuỗi hiện đại với chợ truyền thống.
+This sector is not read through nominal revenue: nominal retail figures include
+inflation, while real purchasing power lies in **real growth (inflation removed)** and **household
+income**. This skill reads the sector through real retail sales, income (the demand barrier), policies
+supporting purchasing power, and **modern-retail penetration** — the sector's long-term engine and
+what separates modern chains from traditional markets.
 
-Lưu ý phân loại: **bán lẻ điện tử tiêu dùng** (máy tính, điện thoại, thiết bị) là
-chu kỳ thay thế thiết bị, khác chu kỳ thực phẩm – hàng thiết yếu. Cả hai cùng nằm
-trong nhãn "bán lẻ" nhưng driver không dùng chung.
+A classification note: **consumer-electronics retail** (computers, phones, appliances) follows a
+device-replacement cycle, different from the food/staples cycle. Both sit under the "retail" label
+but do not share drivers.
 
 ## Khi nào dùng
 
-- Dùng khi: user hỏi xu hướng nhóm tiêu dùng/bán lẻ, một chuỗi bán lẻ có còn tăng
-  trưởng mở rộng không, sức mua đang thế nào.
-- Khi KHÔNG dùng (dùng skill khác thay thế):
-  - Hỏi pha thị trường / luân chuyển ngành / sóng ngành tiếp theo → `dinh-vi-chu-ky-vn`.
-  - Phân tích toàn diện một mã → `phan-tich-chuyen-sau-1-ma`.
-  - Chỉ định giá một mã → `dinh-gia-chuyen-sau`.
-  - Chỉ đọc BCTC một mã không có mảng ngành → `co-ban-chuyen-sau`.
-  - Số liệu vĩ mô VN chi tiết → `danh-gia-vi-mo-viet-nam`.
-  - Xuất khẩu thực phẩm/nông sản → `xuat-nhap-khau-vn`.
+- Use when: the user asks about consumer/retail trends, whether a retail chain can keep growing
+  through expansion, how purchasing power is.
+- Do NOT use (use another skill instead):
+  - Market phase / sector rotation / the next sector wave → `dinh-vi-chu-ky-vn`.
+  - A full ticker analysis → `phan-tich-chuyen-sau-1-ma`.
+  - Valuing one ticker only → `dinh-gia-chuyen-sau`.
+  - Only one ticker's statements without the sector angle → `co-ban-chuyen-sau`.
+  - Detailed Vietnamese macro figures → `danh-gia-vi-mo-viet-nam`.
+  - Food/agricultural exports → `xuat-nhap-khau-vn`.
 
 ## Trụ cột driver
 
-| Driver | Kênh truyền dẫn | Đọc/xác minh bằng |
+| Driver | Transmission channel | Read/verify with |
 |---|---|---|
-| Bán lẻ thực | Chênh lệch bán lẻ danh nghĩa và thực là lạm phát. Đọc số danh nghĩa sẽ thấy "tăng trưởng tốt" trong khi thể tích tăng ít | `vs_indicator_data` (tổng mức bán lẻ + chỉ số giá) — đọc cả hai rồi mới kết luận thực |
-| Thu nhập hộ gia đình | Thu nhập là rào cản cầu. Tạo việc làm chậm + tiền lương công vụ đóng băng làm thu nhập tăng chậm, kéo sức mua | `vs_indicator_data` (thu nhập/tiền lương nếu có) + `news_market` (chính sách thu nhập). Thiếu → ghi rõ |
-| Chính sách hỗ trợ sức mua | Giảm thuế giá trị gia tăng hàng thiết yếu hỗ trợ sức mua trong thời hạn nhất định; chính sách "chính thức hoá thị trường" (hoá đơn, niêm yết) làm giảm lợi thế giá của kênh truyền thống | `news_market` (văn bản + hiệu lực), ghi rõ nguồn + ngày |
-| Độ thâm nhập bán lẻ hiện đại | Bán lẻ hiện đại chiếm tỷ trọng thấp so với khu vực → mở chuỗi là động cơ tăng trưởng dài hạn. Chuỗi mở cửa vượt tốc độ thị trường thì tăng thị phần | Diễn biến chuỗi (số cửa, diện tích) + thị phần: `news_symbol`/`company_events` hoặc `web_search` nguồn doanh nghiệp |
-| Doanh thu cùng cửa hàng | Mở cửa hàng mới và tăng trưởng cùng cửa hàng là hai tăng trưởng khác nhau. Cùng cửa tăng nghĩa là thị phần đang ăn vào đối thủ | `financial_detail` + công bố công ty qua `news_symbol`/`company_events`; tự tính nếu công bố cho phép, ghi rõ |
-| Phân khúc | Hàng thực phẩm thiết yếu (chu kỳ ổn) khác điện tử tiêu dùng (chu kỳ thay thế thiết bị). Không dùng chung một driver | Mảng trong `financial_detail` + `vn_company` |
+| Real retail sales | The gap between nominal and real retail is inflation. Reading the nominal figure shows "good growth" while volume barely rises | `vs_indicator_data` (total retail sales + price index) — read both before concluding on real terms |
+| Household income | Income is the demand barrier. Slow job creation + frozen public-sector pay slow income growth and drag purchasing power | `vs_indicator_data` (income/wages if available) + `news_market` (income policy). If missing → say so |
+| Purchasing-power policy | VAT cuts on essentials support purchasing power for a set period; "formalising the market" policies (invoices, price listing) reduce the price edge of traditional channels | `news_market` (texts + effective dates), stating the source + date |
+| Modern-retail penetration | Modern retail has a low share versus the region → opening stores is the long-term growth engine. Chains opening faster than the market gain share | Chain developments (store count, floor area) + market share: `news_symbol`/`company_events` or `web_search` on company sources |
+| Same-store sales | New-store openings and same-store growth are two different kinds of growth. Rising same-store sales means taking share from competitors | `financial_detail` + company disclosures via `news_symbol`/`company_events`; compute it yourself if disclosures allow, stating so |
+| Segment | Food staples (a steady cycle) differ from consumer electronics (a device-replacement cycle). Do not share one driver | Segments in `financial_detail` + `vn_company` |
 
 ## Các bước
 
-**Bước 1: Nhận diện phân khúc (song song).**
+**Bước 1: Identify the segment (in parallel).**
 
-`symbol_lookup` · `vn_company` (mảng: thực phẩm/điện tử/dịch vụ) · `financial_detail`
-(doanh thu theo mảng). Ghi rõ phân khúc đang phân tích.
+`symbol_lookup` · `vn_company` (segments: food/electronics/services) · `financial_detail`
+(revenue by segment). State which segment you are analysing.
 
-**Bước 2: Sức mua thật (song song — tra catalogue TRƯỚC).**
+**Bước 2: Real purchasing power (in parallel — look up the catalogue FIRST).**
 
-`vs_indicator_data` chỉ có preset sẵn cho GDP/CPI/XK; các chuỗi khác (tổng mức bán
-lẻ, CPI lõi, thu nhập) phải lấy `category_id` từ `vs_categories` trước, rồi truyền
-kèm `term_type_id` phù hợp. Gọi `vs_categories` → chọn category + term_type →
-`vs_indicator_data(category_id=…, term_type_id=…)`; preset `CPI` dùng trực tiếp
-`vs_indicator_data(indicator="CPI")`. Kèm `news_market` (chính sách thuế, thu nhập,
-tiền lương công vụ).
+`vs_indicator_data` has presets only for GDP/CPI/XK; other series (total retail
+sales, core CPI, income) need a `category_id` from `vs_categories` first, then passed
+with the matching `term_type_id`. Call `vs_categories` → choose category + term_type →
+`vs_indicator_data(category_id=…, term_type_id=…)`; the `CPI` preset uses
+`vs_indicator_data(indicator="CPI")` directly. Add `news_market` (tax policy, income,
+public-sector pay).
 
-**Bước 3: Chất lượng tăng trưởng (song song).**
+**Bước 3: Growth quality (in parallel).**
 
-`financial_detail` (doanh thu, biên lãi gộp, tồn kho, công nợ; số điểm bán nếu
-công bố) · `news_symbol`/`company_events` hoặc `web_search` nguồn doanh nghiệp (mở/đóng cửa, thị phần); `news_market` chỉ dùng cho bối cảnh chung.
+`financial_detail` (revenue, gross margin, inventory, receivables/payables; store count if
+disclosed) · `news_symbol`/`company_events` or `web_search` on company sources (openings/closures, market share); use `news_market` only for general context.
 
-**Bước 4: Neo kỳ vọng + vị thế nhóm (song song).**
+**Bước 4: Expectation anchor + position in the group (in parallel).**
 
-`planned_targets` · `analyst_consensus` · hai mảng đối chiếu khác nhau: (a) tỷ lệ
-định giá (P/E, P/B, ROE) dùng `peer_compare`; (b) chỉ báo vận hành (biên lãi gộp,
-tồn kho, công nợ) đọc bằng `financial_detail` **từng peer**, số điểm bán/tốc độ mở
-rộng lấy từ công bố công ty qua `news_symbol`/`company_events` — `peer_compare` không trả được
-những dòng này.
+`planned_targets` · `analyst_consensus` · two separate comparisons: (a) valuation
+ratios (P/E, P/B, ROE) use `peer_compare`; (b) operating indicators (gross margin,
+inventory, receivables/payables) are read with `financial_detail` **for each peer**, store counts/expansion speed
+from company disclosures via `news_symbol`/`company_events` — `peer_compare` cannot return
+those lines.
 
-Đối chiếu công cụ: `peer_compare` chỉ dùng các key tổng quan thực sự có trong kết quả (như P/E, P/B, ROE); tham số `metrics` không tạo thêm chỉ tiêu. Biên, sản lượng, chi phí, tồn kho và KPI vận hành phải đọc `financial_detail` từng peer cùng kỳ; nếu không có thì tra công bố doanh nghiệp qua `news_symbol`/`web_search`, ghi nguồn, công thức và kỳ. Thiếu dữ liệu thì để trống, không xếp hạng.
+Tool check: `peer_compare` uses only the overview keys actually present in the result (such as P/E, P/B, ROE); its `metrics` parameter does not create extra metrics. Margins, volumes, costs, inventory and operating KPIs must be read from each peer's `financial_detail` for the same period; if missing, look up company disclosures via `news_symbol`/`web_search`, stating the source, formula and period. With missing data, leave it blank and do not rank.
 
 ## Cây quyết định chuỗi bán lẻ đang được tiếp sức hay siết
 
+Follow the matching branch; record intermediate states and stop only at ★. Every conclusion must separate known data from what is missing; never fill in numbers or turn "chưa rõ" into "xấu".
 
-Đi theo nhánh phù hợp; ghi nhận trạng thái trung gian và chỉ dừng ở ★. Mọi kết luận phải tách dữ liệu đã biết và phần còn thiếu, không bù số hay đổi "chưa rõ" thành "xấu".
+Q1. Where does growth come from?
+├─ Same-store sales rising → record favourable, continue Q2
+├─ Mainly new openings, same-store flat → record dependence on expansion, continue Q2
+└─ Cannot separate → record missing, continue Q2
 
-Q1. Tăng trưởng đến từ đâu?
-├─ Cùng cửa hàng tăng → ghi thuận lợi, tiếp Q2
-├─ Chủ yếu mở mới, cùng cửa chững → ghi phụ thuộc mở rộng, tiếp Q2
-└─ Chưa phân tách được → ghi thiếu, tiếp Q2
+Q2. Is real retail still growing?
+├─ Growing after the matching price-index adjustment, same period → record favourable, continue Q3
+├─ Falling, even though nominal rises → record purchasing-power pressure, continue Q3
+└─ No comparable price index/total retail → record missing, continue Q3
 
-Q2. Bán lẻ thực còn tăng không?
-├─ Tăng sau điều chỉnh chỉ số giá phù hợp, cùng kỳ → ghi thuận lợi, tiếp Q3
-├─ Giảm, dù danh nghĩa tăng → ghi áp lực sức mua, tiếp Q3
-└─ Chưa có chỉ số giá/tổng bán lẻ so sánh được → ghi thiếu, tiếp Q3
+Q3. Does income support purchasing power?
+├─ Real income improving or a policy already in effect → record favourable, continue Q4
+├─ Real income falling per a verified source → record pressure, continue Q4
+└─ No data → record missing, continue Q4
 
-Q3. Thu nhập có hỗ trợ sức mua không?
-├─ Thu nhập thực cải thiện hoặc chính sách đã có hiệu lực → ghi thuận lợi, tiếp Q4
-├─ Thu nhập thực giảm theo nguồn xác minh → ghi áp lực, tiếp Q4
-└─ Chưa có dữ liệu → ghi thiếu, tiếp Q4
+Q4. How does policy affect the segment and the chain?
+├─ Support with verified recipients/effective dates → record the specific effect, continue Q5
+├─ No specific incentive or rising competition → record a neutral/risk state, continue Q5
+└─ Unclear → record missing, continue Q5
 
-Q4. Chính sách ảnh hưởng phân khúc và chuỗi thế nào?
-├─ Có hỗ trợ đã xác minh đối tượng/hiệu lực → ghi tác động cụ thể, tiếp Q5
-├─ Không có ưu đãi riêng hoặc cạnh tranh tăng → ghi trạng thái trung tính/rủi ro, tiếp Q5
-└─ Chưa rõ → ghi thiếu, tiếp Q5
-
-Q5. Biên, tồn kho và công nợ xác nhận điều gì?
-├─ Tăng trưởng thực/cùng cửa và biên giữ được, tồn kho/công nợ phù hợp → ★ "Được tiếp sức bởi vận hành và sức mua đã xác minh"
-├─ Biên giảm do khuyến mại hoặc tồn kho/công nợ tăng bất lợi → ★ "Tăng trưởng có chi phí; nêu yếu tố gây áp lực đã xác minh"
-└─ Dữ liệu thiếu hoặc trái chiều → ★ "Chưa đủ dữ liệu kết luận tổng thể; thiếu thu nhập/chính sách không tự thành nhận định xấu"
+Q5. What do margins, inventory and receivables confirm?
+├─ Real/same-store growth and margins held, inventory/receivables in line → ★ "Được tiếp sức bởi vận hành và sức mua đã xác minh"
+├─ Margins down on promotions or adverse rises in inventory/receivables → ★ "Tăng trưởng có chi phí; nêu yếu tố gây áp lực đã xác minh"
+└─ Data missing or conflicting → ★ "Chưa đủ dữ liệu kết luận tổng thể; thiếu thu nhập/chính sách không tự thành nhận định xấu"
 
 ## Chỉ báo đặc thù ngành
 
-Bảng chỉ báo ngành tiêu dùng/bán lẻ + cách đọc ở `references/kpi.md`.
+The consumer/retail indicator table + how to read it is in `references/kpi.md`.
 
 ## Định giá theo đặc thù ngành
 
-Tiêu dùng/bán lẻ định giá bằng **P/E** (ngành có lợi nhuận ổn định) và **EV/
-chỉ số vốn hoá theo doanh thu** cho giai đoạn mở rộng chưa có lãi. Đọc kèm quy mô
-doanh thu cùng cửa để tránh nhầm "mở rộng" với "tăng trưởng thật". Neo kỳ vọng
-bằng `planned_targets` và `analyst_consensus`. Giai đoạn khuyến mại: một kỳ biên
-giảm có thể là cố ý, đọc 2 quý liền.
+Value consumer/retail with **P/E** (the sector's profits are steady) and **EV/
+revenue-based multiples** for expansion phases without profit. Read alongside
+same-store revenue to avoid mistaking "expansion" for "real growth". Anchor expectations
+with `planned_targets` and `analyst_consensus`. During promotions, one period of lower margins
+may be deliberate; read 2 consecutive quarters.
 
 ## Rủi ro đặc thù
 
-- **Rủi ro đọc sai danh nghĩa**: báo cáo "bán lẻ tăng trưởng tốt" trong khi thể
-  tích tăng ít.
-- **Rủi ro thu nhập đứng**: rào cản cầu không phá được trong ngắn hạn.
-- **Rủi ro biên bằng khuyến mại**: tăng trưởng mua bằng giá, biến đổi khi đối thủ
-  theo sau.
-- **Rủi ro chi phí đầu vào**: giá nguyên liệu thực phẩm và chi phí vận hành chuỗi
-  áp biên.
-- **Rủi ro nhầm phân khúc**: chu kỳ điện tử tiêu dùng khác chu kỳ thực phẩm.
+- **Nominal-misreading risk**: reporting "good retail growth" while volume
+  barely rises.
+- **Stagnant-income risk**: the demand barrier cannot be broken in the short term.
+- **Promotion-margin risk**: growth bought with price, which changes when competitors
+  follow.
+- **Input-cost risk**: food raw-material prices and chain operating costs
+  press on margins.
+- **Segment-confusion risk**: the consumer-electronics cycle differs from the food cycle.
 
 ## Ranh giới
 
-- Không xác định pha thị trường, không suy "tiêu dùng là nơi trú ẩn" theo chu kỳ →
-  `dinh-vi-chu-ky-vn` (nơi giữ vai trò các mảng theo pha).
-- Không chọn mã khuyến nghị mua/bán → `phan-tich-chuyen-sau-1-ma`.
-- Không dùng số danh nghĩa thay tăng trưởng thực trong kết luận.
-- Không suy chính sách thuế từ trí nhớ: tra văn bản hiện hành, ghi nguồn + ngày.
+- Do not determine the market phase or infer "tiêu dùng là nơi trú ẩn" by cycle →
+  `dinh-vi-chu-ky-vn` (which holds the roles of segments by phase).
+- Do not pick tickers to buy/sell → `phan-tich-chuyen-sau-1-ma`.
+- Never use nominal figures in place of real growth in the conclusion.
+- Never infer tax policy from memory: look up the current text, stating the source + date.
 
 ## Giới hạn
 
-- Chỉ số giá tiêu dùng và lõi cập nhật theo tháng, độ trễ — ghi rõ kỳ đang dùng.
-- Doanh thu cùng cửa không phải kỳ nào công ty cũng công bố: khi thiếu, hạ độ tin
-  cậy nhánh Q1.
-- Bán lẻ hiện đại thâm nhập là con số ước tính ngành, ghi rõ nguồn.
+- The CPI and core CPI are monthly with a lag — state the period used.
+- Companies do not disclose same-store revenue every period: when missing, lower the confidence
+  of the Q1 branch.
+- Modern-retail penetration is a sector estimate; state the source.
 
 ## Ví dụ
 
 **Ví dụ 1:**
 Hỏi: Chuỗi bán lẻ này còn tăng trưởng được nữa không?
-Đạt khi: phân biệt được tăng trưởng mở cửa với cùng cửa, có bán lẻ thực, biên 2 quý,
-và verdict theo cây Q1→Q5.
+Đạt khi: new-store growth told apart from same-store growth, real retail sales, 2 quarters of margins,
+and a verdict following the Q1→Q5 tree.
 
 ## Trực quan hóa
 
-Chỉ vẽ khi người dùng muốn xem hình; tối đa 1 biểu đồ. Hợp với dữ liệu skill này:
-multiline bán lẻ danh nghĩa vs thực, bar biên lãi gộp theo phân khúc, scatter số
-điểm bán với doanh thu cùng cửa. Vẽ bằng `chart_render` với `from_call` (mã
-`[ref …]`) từ kết quả tool đã có; cần chọn loại hình thì nạp `ve-bieu-do`.
+Draw only when the user wants a picture; at most 1 chart. Fitting this skill's data:
+multiline nominal vs real retail, bar gross margin by segment, scatter store
+count against same-store revenue. Draw with `chart_render` using `from_call` (the
+`[ref …]` code) from tool results you have; load `ve-bieu-do` to choose the chart type.
 
 ## File tham chiếu
 
-| File | Dùng khi |
+| File | Use when |
 |---|---|
-| `references/kpi.md` | Cần cách tính bán lẻ thực, đọc tăng trưởng cùng cửa, và chỉ báo biên/tồn kho theo phân khúc |
+| `references/kpi.md` | You need to compute real retail, read same-store growth, and margin/inventory indicators by segment |

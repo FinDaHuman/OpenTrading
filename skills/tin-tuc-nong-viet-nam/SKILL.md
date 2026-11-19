@@ -11,41 +11,41 @@ version: 1.3.0
 
 # Tin nóng Việt Nam
 
-Digest nhanh tin VN trong ngày — headline + phân loại + sentiment, có provenance rõ ràng. Không suy diễn sentiment heuristic thành khuyến nghị mua/bán.
+A quick digest of today's Vietnamese news — headline + classification + sentiment, with clear provenance. Never turn heuristic sentiment into a buy/sell recommendation.
 
 ## Khi nào dùng
 
-- Dùng khi: hỏi tin nóng VN hôm nay, VN30, thị trường/doanh nghiệp VN, cần 5–7 headline nhanh.
-- Khi KHÔNG dùng (dùng skill khác thay thế): có mã/từ khóa cụ thể hoặc rumor → `tim-kiem-tin-tuc`; tin Mỹ/Trung/toàn cầu → `tin-tuc-nong-quoc-te`; đào sâu crowd/FOMO 1 mã → `phan-tich-sentiment`; rating/target CTCK → `tim-co-hoi-bao-cao-ctck`.
+- Use when: asked for today's hot Vietnamese news, VN30, Vietnamese market/corporate news, when 5–7 quick headlines are needed.
+- Do NOT use (use another skill instead): a specific ticker/keyword or rumour → `tim-kiem-tin-tuc`; US/China/global news → `tin-tuc-nong-quoc-te`; digging into one ticker's crowd/FOMO → `phan-tich-sentiment`; brokerage ratings/targets → `tim-co-hoi-bao-cao-ctck`.
 
 ## Các bước
 
-**Bước 1: Tin chung + lịch công bố (song song).**
+**Bước 1: General news + disclosure calendar (in parallel).**
 
-Chạy `news_market` (limit=15) + `corporate_calendar` (limit=20).
+Run `news_market` (limit=15) + `corporate_calendar` (limit=20).
 
-**Bước 2: Đào mã nổi bật (tuần tự sau Bước 1).**
+**Bước 2: Dig into the prominent tickers (sequential, after Bước 1).**
 
-Chạy `news_symbol` × 2–3 mã xuất hiện nhiều nhất trong tin — chọn theo tần suất xuất hiện, không theo cảm tính, tối đa 3 mã.
+Run `news_symbol` × the 2–3 tickers that appear most in the news — chosen by frequency, not by feel, at most 3 tickers.
 
-**Bước 3: Sentiment + đối chiếu (song song).**
+**Bước 3: Sentiment + cross-check (in parallel).**
 
-Chạy `sentiment_score` (mã nóng nhất) + `company_events` (mã đó, chỉ để đối chiếu, không đào toàn bộ lịch sử). Thiếu Groq → dùng heuristic + warning, bắt buộc nhãn `heuristic` trong verdict.
+Run `sentiment_score` (the hottest ticker) + `company_events` (that ticker, only to cross-check, not to dig through its whole history). Without Groq → use the heuristic + warning, and the verdict must carry the label `heuristic`.
 
-**Bước 4: Validate trước khi chốt.**
+**Bước 4: Validate before concluding.**
 
-Fireant chết → tự GDELT fallback trong tool, không retry Fireant vô hạn. Cả hai chết → đọc `snapshot_history` (kind=news_feed) cache 1 ngày, bắt buộc ghi rõ là cache + ngày cache. Feed rỗng cuối tuần/nghỉ lễ → empty hợp lệ, ghi rõ "phiên nghỉ, ít tin mới". Đủ 5 headline có provenance thì dừng; đủ verdict Bước 3 cho mã nóng nhất thì dừng. Không call lại `sentiment_score` với limit lớn hơn.
+Fireant down → the tool falls back to GDELT itself; do not retry Fireant endlessly. Both down → read `snapshot_history` (kind=news_feed), a 1-day cache, and state clearly that it is cached + the cache date. An empty feed at the weekend/holidays is a valid empty; write "phiên nghỉ, ít tin mới". Stop once you have 5 headlines with provenance; stop once Bước 3 gives a verdict for the hottest ticker. Never call `sentiment_score` again with a larger limit.
 
 ## Cấu trúc câu trả lời
 
-Trình bày kết luận đúng cấu trúc sau, mỗi headline gồm: **tiêu đề + mã liên quan + phân loại** (catalyst / đồn đoán / tin vĩ mô) + **sentiment** nếu đủ dữ kiện + **provenance** (Fireant/GDELT) + **tuổi tin**. Tin đồn bắt buộc nhãn `CHƯA XÁC NHẬN`.
+Present the conclusion in exactly this structure, each headline with: **title + related ticker + classification** (catalyst / đồn đoán / tin vĩ mô) + **sentiment** when there is enough data + **provenance** (Fireant/GDELT) + **age**. Rumours must carry the label `CHƯA XÁC NHẬN`.
 
 ## Ví dụ
 
 **Ví dụ 1:**
 Hỏi: Tin nóng hôm nay
-Đạt khi: ≥5 headline có provenance, ≤9 calls. Thiếu provenance hoặc thiếu phân loại thì chưa đạt; sentiment không nhãn nguồn thì chưa đạt.
+Đạt khi: ≥5 headlines with provenance, ≤9 calls. Missing provenance or classification → not met; sentiment without a source label → not met.
 
 ## Trực quan hóa
 
-Chỉ vẽ khi người dùng muốn xem hình, hoặc khi có chuỗi thời gian / so sánh mà bảng khó đọc; tối đa 1 biểu đồ mỗi câu trả lời. Vẽ bằng `chart_render` với `from_call` (mã `[ref …]` ở đầu kết quả tool) để không phải gõ lại số; cần chọn loại hình thì nạp `ve-bieu-do`.
+Draw only when the user wants a picture, or when a time series / comparison is hard to read as a table; at most 1 chart per answer. Draw with `chart_render` using `from_call` (the `[ref …]` code at the top of a tool result) so you never retype numbers; load `ve-bieu-do` to choose the chart type.

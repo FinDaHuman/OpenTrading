@@ -13,142 +13,141 @@ version: 1.0.0
 
 # Thép Việt Nam — framework phân tích
 
-Lợi nhuận ngành thép đến từ **spread giá thành phẩm trừ chi phí nguyên liệu**, nên
-skill này đọc ngành bằng bốn biến: giá bán, chi phí đầu vào (quặng sắt và than cốc),
-khối lượng thật bán được, và **rào phòng vệ thương mại** — thứ quyết định giá bán
-trong nước có giữ được hay mất vào nhập khẩu. Đọc riêng giá thành phẩm mà không
-đọc cặp giá đầu vào sẽ cho kết luận ngược: đã có kỳ bán nhiều hơn, giá giảm và
-nguyên liệu tăng cùng lúc khiến lãi giảm dù sản lượng tăng.
+Steel profits come from **the finished-product price minus raw-material costs**, so
+this skill reads the sector through four variables: the selling price, input costs (iron ore and coking coal),
+the volume actually sold, and **trade-defence barriers** — which decide whether domestic selling
+prices hold or are lost to imports. Reading finished-product prices without the matching input prices
+leads to the opposite conclusion: there have been periods of higher sales where falling prices and
+rising raw materials at once cut profit even as output rose.
 
 ## Khi nào dùng
 
-- Dùng khi: user hỏi xu hướng nhóm thép, tại sao bán nhiều hơn mà lãi không theo,
-  thép chịu gì từ thuế chống bán phá giá hay giá than/quặng.
-- Khi KHÔNG dùng (dùng skill khác thay thế):
-  - Hỏi pha thị trường / luân chuyển ngành / sóng ngành tiếp theo → `dinh-vi-chu-ky-vn`.
-  - Phân tích toàn diện một mã → `phan-tich-chuyen-sau-1-ma`.
-  - Chỉ định giá một mã → `dinh-gia-chuyen-sau`.
-  - Chỉ đọc BCTC một mã không có mảng ngành → `co-ban-chuyen-sau`.
-  - Số liệu vĩ mô VN chi tiết → `danh-gia-vi-mo-viet-nam`.
-  - Phân khúc xây dựng nói chung (xi măng, kính, vật liệu khác) → đọc cùng `thep-vn`
-    nhưng ghi rõ phân khúc, không suy luận chéo.
+- Use when: the user asks about steel-group trends, why selling more did not lift profit,
+  what steel faces from anti-dumping duties or coal/ore prices.
+- Do NOT use (use another skill instead):
+  - Market phase / sector rotation / the next sector wave → `dinh-vi-chu-ky-vn`.
+  - A full ticker analysis → `phan-tich-chuyen-sau-1-ma`.
+  - Valuing one ticker only → `dinh-gia-chuyen-sau`.
+  - Only one ticker's statements without the sector angle → `co-ban-chuyen-sau`.
+  - Detailed Vietnamese macro figures → `danh-gia-vi-mo-viet-nam`.
+  - Construction materials in general (cement, glass, others) → read alongside `thep-vn`
+    but state the segment; never cross-infer.
 
 ## Trụ cột driver
 
-| Driver | Kênh truyền dẫn | Đọc/xác minh bằng |
+| Driver | Transmission channel | Read/verify with |
 |---|---|---|
-| Spread thành phẩm − nguyên liệu | Spread là chênh lệch giá bán và chi phí nguyên liệu quy về cùng đơn vị; biên lãi gộp = (doanh thu − giá vốn) / doanh thu, không đồng nhất với spread. Quặng sắt và than cốc chiếm phần lớn giá vốn. Chú ý: chi phí nguyên liệu lọt vào báo cáo **chậm** qua tồn kho và thời gian vận chuyển | Giá thành phẩm + quặng/than từ công bố nhà máy, sàn giao dịch hoặc cơ quan ngành qua `web_search`; cùng kỳ, đơn vị, chủng loại và điều kiện giao hàng; đối chiếu `financial_detail` |
-| Khối lượng thật | Sản lượng sản xuất và tỷ lệ sử dụng công suất giải thích phân bổ chi phí cố định trên mỗi đơn vị; không nhân sản lượng với tỷ lệ sử dụng lần nữa. Nhà máy mới vận hành chưa đủ công suất làm biên thấp dù doanh thu cao | Sản lượng và tỷ lệ sử dụng: `news_market`/`web_search` (công bố nhà máy) + `financial_detail` (doanh thu, giá vốn) |
-| Phòng vệ thương mại | Thuế chống bán phá giá / tự vệ đặt một bức tường giá cho nhập khẩu. Hết hoặc thay đổi phạm vi → giá trong nước chịu áp lực ngay | Văn bản phòng vệ + thay đổi: `news_market`/`web_search`, có nguồn và ngày; nhập khẩu theo nhóm thép lấy từ Hải quan/cơ quan ngành qua `web_search`, có kỳ/đơn vị rõ |
-| Cơ cấu sản phẩm | Thép xây dựng phục vụ công trình trong nước, giá bám mùa xây dựng. Thép cuộn nóng giao dịch quốc tế, giá bám khu vực và đơn xuất khẩu — hai logic giá khác nhau | Tỷ trọng sản phẩm: công bố nhà máy trong `news_market`; biên theo mảng trong `financial_detail` |
-| Nhu cầu đầu tư công | Giải ngân đầu tư công kéo cầu thép xây dựng phục vụ hạ tầng | Tiến độ giải ngân: `news_market`; số hệ thống qua `danh-gia-vi-mo-viet-nam` nếu user cần sâu |
-| Xuất khẩu và thuế thị trường đích | Xuất khẩu là cửa xả dư thừa, nhưng là nơi chịu điều tra chống bán phá giá đầu tiên | Xuất khẩu theo nhóm thép: Hải quan/cơ quan ngành qua `web_search`; rủi ro điều tra: `news_market` |
+| Finished-product − raw-material spread | The spread is the selling price minus raw-material costs on the same unit; gross margin = (revenue − cost of goods) / revenue, not the same as the spread. Iron ore and coking coal are most of the cost of goods. Note: raw-material costs reach the reports **with a lag** through inventory and shipping time | Finished-product + ore/coal prices from mill, exchange or industry-body releases via `web_search`; same period, unit, grade and delivery terms; cross-check `financial_detail` |
+| Real volume | Production and capacity utilisation explain fixed costs spread per unit; never multiply output by utilisation again. A new mill below capacity has low margins even with high revenue | Output and utilisation: `news_market`/`web_search` (mill releases) + `financial_detail` (revenue, cost of goods) |
+| Trade defence | Anti-dumping/safeguard duties set a price wall for imports. Expiry or a scope change → immediate pressure on domestic prices | Trade-defence texts + changes: `news_market`/`web_search`, with source and date; imports by steel group from Customs/industry bodies via `web_search`, with clear period/unit |
+| Product mix | Construction steel serves domestic projects, priced with the construction season. Hot-rolled coil trades internationally, priced with the region and export orders — two different price logics | Product weights: mill releases in `news_market`; margins by segment in `financial_detail` |
+| Public investment demand | Public-investment disbursement drives demand for construction steel for infrastructure | Disbursement progress: `news_market`; system figures via `danh-gia-vi-mo-viet-nam` if the user needs depth |
+| Exports and destination tariffs | Exports are the outlet for surplus, but the first place anti-dumping investigations hit | Exports by steel group: Customs/industry bodies via `web_search`; investigation risk: `news_market` |
 
 ## Các bước
 
-**Bước 1: Nhận diện mã + cơ cấu sản phẩm (song song).**
+**Bước 1: Identify the ticker + product mix (in parallel).**
 
-`symbol_lookup` · `vn_company` (mảng: xây dựng/HRC/ống tôn/mạ kẽm). Tỷ trọng sản
-phẩm lấy từ công bố nhà máy (`news_market`), ghi rõ kỳ.
+`symbol_lookup` · `vn_company` (segments: construction/HRC/pipes and sheets/galvanised). Product
+weights from mill releases (`news_market`), stating the period.
 
-**Bước 2: Hai đầu spread (song song).**
+**Bước 2: Both ends of the spread (in parallel).**
 
-`web_search` tìm giá từ công bố nhà máy/sàn giao dịch/cơ quan ngành (quặng sắt, than cốc, thép); ghi ngày, kỳ, đơn vị, chủng loại và điều kiện giao hàng trước khi so. `financial_detail` lấy doanh thu, giá vốn → biên lãi gộp theo quý. Bộ COMMO mặc định của `yf_commodities` không có quặng sắt/than cốc/thép: không dùng để dựng spread. Thiếu giá so sánh được thì không tính spread; biên gộp chỉ là dữ liệu bổ trợ.
+`web_search` for prices from mill/exchange/industry-body releases (iron ore, coking coal, steel); record the date, period, unit, grade and delivery terms before comparing. `financial_detail` for revenue, cost of goods → quarterly gross margin. The default COMMO set of `yf_commodities` has no iron ore/coking coal/steel: do not use it to build the spread. Without comparable prices, do not compute the spread; the gross margin is only supporting data.
 
-**Bước 3: Khối lượng + rào phòng vệ (song song).**
+**Bước 3: Volume + defence barriers (in parallel).**
 
-`news_market` (sản lượng, tỷ lệ sử dụng công suất, văn bản phòng vệ thương mại,
-nhập khẩu) · `web_search` (xuất khẩu thép theo nhóm hàng từ Hải quan/cơ quan ngành; không lấy chuỗi theo quốc gia từ `vs_xnk_detail` làm nhóm hàng).
+`news_market` (output, capacity utilisation, trade-defence texts,
+imports) · `web_search` (steel exports by product group from Customs/industry bodies; never take `vs_xnk_detail`'s by-country series as a product group).
 
-**Bước 4: Neo kỳ vọng + vị thế nhóm.**
+**Bước 4: Expectation anchor + position in the group.**
 
-`planned_targets` (kế hoạch năm) · `peer_compare` (so chỉ tiêu tổng quan cùng phân khúc) · `analyst_consensus` (neo kỳ vọng).
+`planned_targets` (the yearly plan) · `peer_compare` (overview metrics within the segment) · `analyst_consensus` (expectation anchor).
 
-Đối chiếu công cụ: `peer_compare` chỉ dùng các key tổng quan thực sự có trong kết quả (như P/E, P/B, ROE); tham số `metrics` không tạo thêm chỉ tiêu. Biên, sản lượng, chi phí, tồn kho và KPI vận hành phải đọc `financial_detail` từng peer cùng kỳ; nếu không có thì tra công bố doanh nghiệp qua `news_symbol`/`web_search`, ghi nguồn, công thức và kỳ. Thiếu dữ liệu thì để trống, không xếp hạng.
+Tool check: `peer_compare` uses only the overview keys actually present in the result (such as P/E, P/B, ROE); its `metrics` parameter does not create extra metrics. Margins, volumes, costs, inventory and operating KPIs must be read from each peer's `financial_detail` for the same period; if missing, look up company disclosures via `news_symbol`/`web_search`, stating the source, formula and period. With missing data, leave it blank and do not rank.
 
 ## Cây quyết định nhà máy thép đang được tiếp sức hay siết
 
+Follow the matching branch; record intermediate states and stop only at ★. Every conclusion must separate known data from what is missing; never fill in numbers or turn "chưa rõ" into "xấu".
 
-Đi theo nhánh phù hợp; ghi nhận trạng thái trung gian và chỉ dừng ở ★. Mọi kết luận phải tách dữ liệu đã biết và phần còn thiếu, không bù số hay đổi "chưa rõ" thành "xấu".
+Q1. Is the finished-product − raw-material price pair comparable?
+├─ Spread widening, same period/unit/grade → record favourable, continue Q2
+├─ Spread narrow → record cost/price pressure and the inventory lag, continue Q2
+└─ Spread cannot be built → record missing, use the gross margin only as support, continue Q2
 
-Q1. Cặp giá thành phẩm − nguyên liệu có so sánh được không?
-├─ Spread nở, cùng kỳ/đơn vị/chủng loại → ghi thuận lợi, tiếp Q2
-├─ Spread hẹp → ghi áp lực chi phí/giá bán và độ trễ tồn kho, tiếp Q2
-└─ Chưa dựng được spread → ghi thiếu, chỉ dùng biên gộp bổ trợ, tiếp Q2
+Q2. How are sales volume and capacity utilisation?
+├─ Rising, enough to absorb fixed costs → record favourable, continue Q3
+├─ Falling or a new mill below capacity → record capacity pressure, continue Q3
+└─ No figures → record missing output data, continue Q3
 
-Q2. Khối lượng bán và tỷ lệ sử dụng công suất ra sao?
-├─ Tăng, đủ phân bổ chi phí cố định → ghi thuận lợi, tiếp Q3
-├─ Giảm hoặc nhà máy mới chưa đủ tải → ghi áp lực công suất, tiếp Q3
-└─ Chưa có số liệu → ghi thiếu dữ liệu sản lượng, tiếp Q3
+Q3. How are defence barriers and the product mix changing?
+├─ Selling prices held, destination markets stable → record favourable, continue Q4
+├─ Duty/scope changes creating import or export pressure → record the risk with text/date, continue Q4
+└─ Unverified → record policy/mix unclear, continue Q4
 
-Q3. Rào phòng vệ và cơ cấu sản phẩm đang thay đổi thế nào?
-├─ Giá bán giữ được, thị trường đích ổn → ghi thuận lợi, tiếp Q4
-├─ Thuế/phạm vi thay đổi gây áp lực nhập khẩu hoặc xuất khẩu → ghi rủi ro có văn bản/ngày, tiếp Q4
-└─ Chưa xác minh được → ghi chưa rõ chính sách/cơ cấu, tiếp Q4
-
-Q4. Tồn kho và biên gộp có xác nhận tín hiệu giá/khối lượng không?
-├─ Spread nở + sản lượng tăng + biên cải thiện, có nguồn cùng kỳ → ★ "Được tiếp sức; tách tác động giá, lượng và tồn kho"
-├─ Có bằng chứng spread hẹp hoặc công suất thấp, biên co → ★ "Bị siết theo yếu tố đã xác minh; không khẳng định đã ở đáy"
-└─ Dữ liệu thiếu, trái chiều hoặc chỉ có biên gộp → ★ "Chưa đủ dữ liệu kết luận tổng thể; nêu tín hiệu đã biết và cần bổ sung"
+Q4. Do inventory and gross margin confirm the price/volume signal?
+├─ Spread widening + output rising + margins improving, with same-period sources → ★ "Được tiếp sức; tách tác động giá, lượng và tồn kho"
+├─ Evidence of a narrow spread or low capacity, margins contracting → ★ "Bị siết theo yếu tố đã xác minh; không khẳng định đã ở đáy"
+└─ Data missing, conflicting or only the gross margin → ★ "Chưa đủ dữ liệu kết luận tổng thể; nêu tín hiệu đã biết và cần bổ sung"
 
 ## Chỉ báo đặc thù ngành
 
-Bảng chỉ báo ngành thép + cách đọc ở `references/kpi.md`.
+The steel indicator table + how to read it is in `references/kpi.md`.
 
 ## Định giá theo đặc thù ngành
 
-Thép là ngành chu kỳ: định giá bằng **EV/EBITDA theo vòng** và **P/B so mức đáy
-của chính ngành**, không dùng P/E tại đỉnh chu kỳ. Lãi trên mỗi tấn thép phải đọc
-cùng tỷ lệ sử dụng công suất — cùng một mức P/E có thể là đỉnh hoặc đáy tuỳ vị thế
-trong vòng. Neo kỳ vọng bằng `planned_targets` và `analyst_consensus`. Nhà máy
-trong giai đoạn ramp-up: ghi rõ công suất đã vận hành so với thiết kế.
+Steel is cyclical: value with **EV/EBITDA through the cycle** and **P/B against the sector's
+own troughs**, never P/E at the cycle peak. Profit per tonne must be read
+with capacity utilisation — the same P/E can be a peak or a trough depending on the position
+in the loop. Anchor expectations with `planned_targets` and `analyst_consensus`. For mills
+in ramp-up: state the capacity running versus design.
 
 ## Rủi ro đặc thù
 
-- **Rủi ro spread hai chiều kép**: giá bán giảm và nguyên liệu tăng cùng lúc —
-  đây là trạng thái thường nhất của giai đoạn khó, không phải ngoại lệ.
-- **Rủi ro tồn kho nguyên liệu**: giá đầu vào vào báo cáo với độ trễ, biên còn xấu
-  thêm vài quý sau khi giá thị trường đã đảo chiều.
-- **Rủi ro phòng vệ thương mại đổi chiều**: hết hoặc thay đổi phạm vi văn bản là
-  cú sốc giá trực tiếp cho thị phần trong nước.
-- **Rủi ro điều tra từ thị trường đích**: xuất khẩu cao đồng nghĩa rủi ro điều tra
-  cao ở chính thị trường đó.
-- **Rủi ro nhà máy mới**: tỷ lệ sử dụng công suất thấp trong giai đoạn ramp-up.
+- **Double two-way spread risk**: selling prices falling and raw materials rising at once —
+  the most common state in hard times, not an exception.
+- **Raw-material inventory risk**: input prices reach the reports with a lag; margins keep
+  worsening for a few quarters after market prices have turned.
+- **Trade-defence reversal risk**: a text expiring or changing scope is a
+  direct price shock to domestic market share.
+- **Destination-market investigation risk**: high exports mean a high risk of investigation
+  in that very market.
+- **New-mill risk**: low capacity utilisation during ramp-up.
 
 ## Ranh giới
 
-- Không xác định pha thị trường, không suy "thép sắp dẫn sóng" → `dinh-vi-chu-ky-vn`.
-- Không chọn mã khuyến nghị mua/bán, không đặt tỷ trọng → `phan-tich-chuyen-sau-1-ma`.
-- Không suy ngưỡng thuế chống bán phá giá hay diện tích điều tra từ trí nhớ: tra
-  văn bản hiện hành, ghi nguồn và ngày (luật này chỉ nằm ở đây).
-- Không dùng giá thép thế giới của nguồn ngoài thay giá bán thực tế của công ty —
-  công bố giá bán trong `news_market` mới là giá áp dụng.
+- Do not determine the market phase or infer "thép sắp dẫn sóng" → `dinh-vi-chu-ky-vn`.
+- Do not pick tickers to buy/sell or set weights → `phan-tich-chuyen-sau-1-ma`.
+- Never infer anti-dumping duty thresholds or investigation scope from memory: look up
+  the current texts, citing the source and date (this rule lives only here).
+- Never use outside world steel prices in place of the company's actual selling prices —
+  the selling prices published in `news_market` are the ones that apply.
 
 ## Giới hạn
 
-- Giá nguyên liệu từ nguồn công bố có ngày là giá tham chiếu, không
-  phải giá hợp đồng thực mua của từng nhà máy — ghi rõ khi dùng.
-- Tỷ trọng sản phẩm và tỷ lệ sử dụng công suất là công bố không định kỳ; thiếu thì
-  hạ độ tin cậy nhánh Q2/Q4.
-- Văn bản phòng vệ thương mại có thời hạn và phạm vi thay đổi: kết luận phải ghi
-  ngày văn bản đang áp dụng.
+- Raw-material prices from dated releases are reference prices, not
+  each mill's actual contract purchase prices — say so when using them.
+- Product weights and capacity utilisation are disclosed irregularly; when missing,
+  lower the confidence of the Q2/Q4 branches.
+- Trade-defence texts have changing terms and scope: conclusions must state the
+  date of the text in force.
 
 ## Ví dụ
 
 **Ví dụ 1:**
 Hỏi: Bán nhiều thép hơn mà lãi không theo, tại sao?
-Đạt khi: có cặp giá thành phẩm − nguyên liệu với 2 đầu kỳ nào, sản lượng/tỷ lệ sử
-dụng, biên lãi gộp theo quý, độ trễ tồn kho, và verdict theo cây Q1→Q4.
+Đạt khi: the finished-product − raw-material pair with both ends' periods, output/utilisation,
+quarterly gross margin, the inventory lag, and a verdict following the Q1→Q4 tree.
 
 ## Trực quan hóa
 
-Chỉ vẽ khi người dùng muốn xem hình; tối đa 1 biểu đồ. Hợp với dữ liệu skill này:
-waterfall từ giá bán trừ nguyên liệu ra biên/tấn, multiline giá thành phẩm với
-giá quặng/than, bar biên lãi gộp của nhóm. Vẽ bằng `chart_render` với `from_call`
-(mã `[ref …]`) từ kết quả tool đã có; cần chọn loại hình thì nạp `ve-bieu-do`.
+Draw only when the user wants a picture; at most 1 chart. Fitting this skill's data:
+waterfall from selling price minus raw materials to margin per tonne, multiline finished-product prices with
+ore/coal prices, bar gross margins of the group. Draw with `chart_render` using `from_call`
+(the `[ref …]` code) from tool results you have; load `ve-bieu-do` to choose the chart type.
 
 ## File tham chiếu
 
-| File | Dùng khi |
+| File | Use when |
 |---|---|
-| `references/kpi.md` | Cần cách đọc biên lãi gộp, chi phí tài chính phục vụ tồn kho, sản lượng và cách đối chiếu đầu vào–đầu ra |
+| `references/kpi.md` | You need to read gross margin, financial costs carrying inventory, output and how to match inputs to outputs |

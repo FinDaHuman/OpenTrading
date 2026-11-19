@@ -11,52 +11,52 @@ version: 1.3.0
 
 # Tìm tin và kiểm chứng tin đồn
 
-Rumor có trước tin chính thống — săn cả hai nhưng bắt buộc phân loại rõ chính thống vs CHƯA XÁC NHẬN. Không bao giờ suy diễn rumor thành sự thật, không bỏ nhãn độ tin.
+Rumours come before official news — hunt both, but you must clearly classify official vs CHƯA XÁC NHẬN. Never treat a rumour as fact; never drop the reliability label.
 
 ## Khi nào dùng
 
-- Dùng khi: user nêu mã/từ khóa/phạm vi cụ thể, muốn săn tin + rumor + dư luận, muốn xác minh tin đồn, muốn phân tích chi tiết 1 tin.
-- Khi KHÔNG dùng (dùng skill khác thay thế): digest mặc định không từ khóa → `tin-tuc-nong-viet-nam` / `tin-tuc-nong-quoc-te`; chỉ hỏi crowd/FOMO → `phan-tich-sentiment`; chỉ hỏi rating/target CTCK → `tim-co-hoi-bao-cao-ctck`; chỉ hỏi backtest chiến lược → `kiem-chien-luoc-backtest`.
+- Use when: the user names a specific ticker/keyword/scope, wants to hunt news + rumours + opinion, wants a rumour verified, or wants one story analysed in detail.
+- Do NOT use (use another skill instead): a default digest without keywords → `tin-tuc-nong-viet-nam` / `tin-tuc-nong-quoc-te`; only crowd/FOMO → `phan-tich-sentiment`; only brokerage ratings/targets → `tim-co-hoi-bao-cao-ctck`; only strategy backtests → `kiem-chien-luoc-backtest`.
 
 ## Các bước
 
-Chọn ĐÚNG 1 mode dưới đây.
+Choose EXACTLY 1 mode below.
 
-**Mode A — Theo mã (+ rumor).**
+**Mode A — By ticker (+ rumours).**
 
-1. Chạy `news_symbol` (symbol, limit=20) trước. CẤM đi web_search trước khi có kết quả `news_symbol` — web chỉ để xác minh chéo sau.
-2. Săn web + comments song song: `web_search` ("tên mã" + "đồn"/"tin đồn"/rumor, tối đa 2 query) → `web_fetch` 1–2 URL đáng ngờ nhất + `fireant_thread` (post_id từ bước 1 — rumor nằm ở replies; Fireant posts giờ có id thật, không bịa post_id).
-3. Đối chiếu tuần tự: `corporate_calendar` (symbol) + `company_events` (symbol) — tin có khớp công bố không?
-4. Dư luận: `sentiment_score` (symbol). Đủ ≥5 tin đạt chuẩn thì dừng.
+1. Run `news_symbol` (symbol, limit=20) first. NEVER go to web_search before you have `news_symbol` results — the web is only for cross-checking afterwards.
+2. Hunt the web + comments in parallel: `web_search` ("ticker name" + "đồn"/"tin đồn"/rumor, at most 2 queries) → `web_fetch` the 1–2 most suspicious URLs + `fireant_thread` (post_id from step 1 — rumours live in the replies; Fireant posts now have real ids, never invent a post_id).
+3. Cross-check sequentially: `corporate_calendar` (symbol) + `company_events` (symbol) — does the story match disclosures?
+4. Opinion: `sentiment_score` (symbol). Stop once you have ≥5 qualifying stories.
 
-**Mode B — VN.**
+**Mode B — Vietnam.**
 
-1. Chạy song song `news_market` (limit=15) + `corporate_calendar` (limit=20).
-2. Tuần tự: `news_symbol` × 2–3 mã nổi bật + `web_search` tin nóng nhất để xác minh chéo. Không đào thêm mã ngoài 2–3 mã.
+1. Run `news_market` (limit=15) + `corporate_calendar` (limit=20) in parallel.
+2. Sequentially: `news_symbol` × the 2–3 prominent tickers + `web_search` on the hottest story to cross-check. Do not dig into tickers beyond those 2–3.
 
-**Mode C — Toàn cầu.**
+**Mode C — Global.**
 
-1. Chạy song song `news_market` (sources=gdelt, limit=10).
-2. Song song: `geo_intel` (topic) / `event_stats` (query) + `web_search` (từ khóa EN). GDELT rỗng → thử English 1 lần rồi kết luận "ít coverage ngôn ngữ đó".
+1. Run `news_market` (sources=gdelt, limit=10).
+2. In parallel: `geo_intel` (topic) / `event_stats` (query) + `web_search` (English keywords). GDELT empty → try English once, then conclude "ít coverage ngôn ngữ đó".
 
-**Validate chung.**
+**Common validation.**
 
-`web_search` báo không tìm được kết quả (bị chặn, không có key) → chỉ dùng Fireant+GDELT + ghi rõ "chưa quét web". Cả 2 nguồn news chết → đọc `snapshot_history` (kind=news_feed), bắt buộc ghi rõ "cache <ngày>".
+`web_search` reports no results (blocked, no key) → use only Fireant+GDELT + state "chưa quét web". Both news sources down → read `snapshot_history` (kind=news_feed) and state "cache <ngày>" explicitly.
 
 ## Cấu trúc câu trả lời
 
-Trình bày kết luận đúng cấu trúc sau:
+Present the conclusion in exactly this structure:
 
 | Tiêu đề | Tuổi tin | Độ tin cậy + provenance | Triển vọng |
-- **Tiêu đề** đầy đủ, có mã liên quan. **Tuổi tin** (mấy giờ/ngày trước — tin cũ >3 ngày với bluechip coi như đã phản ánh giá). **Độ tin cậy** (chính thống / CTCK / Fireant-crowd / ẩn danh-nguồn mở) + provenance (`news_symbol`/`news_market`/Fireant/GDELT/web). **Triển vọng** (tác động tới DN: doanh thu/lợi nhuận/giá — hay chỉ là noise). Tin đồn bắt buộc nhãn `CHƯA XÁC NHẬN` + điều kiện xác nhận (chờ công bố nào, ngày nào).
-- Phân tích chi tiết tin quan trọng nhất: Ai nói → nói gì → bằng chứng kèm theo → tác động định lượng được không (VD cổ tức bao nhiêu đồng, thương vụ bao nhiêu tỷ) → kịch bản nếu đúng/sai.
+- **Title** in full, with the related ticker. **Age** (hours/days ago — news older than 3 days on a bluechip counts as priced in). **Reliability** (chính thống / CTCK / Fireant-crowd / ẩn danh-nguồn mở) + provenance (`news_symbol`/`news_market`/Fireant/GDELT/web). **Outlook** (impact on the company: revenue/profit/price — or just noise). Rumours must carry the label `CHƯA XÁC NHẬN` + the confirming condition (which disclosure, which date).
+- A detailed analysis of the most important story: who said it → what they said → supporting evidence → whether the impact is quantifiable (e.g. dividend per share, deal size in tỷ) → scenarios if true/false.
 
 ## Ví dụ
 
 **Ví dụ 1:**
 Hỏi: Nghe đồn HPG ... thật không
-Đạt khi: kết luận đủ 4 cột + phân tích chi tiết + nhãn xác nhận, ≤10 calls. Thiếu 1 trong 4 cột → chưa đạt; tin đồn thiếu nhãn `CHƯA XÁC NHẬN` → chưa đạt.
+Đạt khi: a conclusion with all 4 columns + a detailed analysis + confirmation labels, ≤10 calls. Missing 1 of the 4 columns → not met; a rumour without `CHƯA XÁC NHẬN` → not met.
 
 ## Trực quan hóa
 
-Chỉ vẽ khi người dùng muốn xem hình, hoặc khi có chuỗi thời gian / so sánh mà bảng khó đọc; tối đa 1 biểu đồ mỗi câu trả lời. Vẽ bằng `chart_render` với `from_call` (mã `[ref …]` ở đầu kết quả tool) để không phải gõ lại số; cần chọn loại hình thì nạp `ve-bieu-do`.
+Draw only when the user wants a picture, or when a time series / comparison is hard to read as a table; at most 1 chart per answer. Draw with `chart_render` using `from_call` (the `[ref …]` code at the top of a tool result) so you never retype numbers; load `ve-bieu-do` to choose the chart type.

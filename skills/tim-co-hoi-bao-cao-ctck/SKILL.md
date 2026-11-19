@@ -11,45 +11,45 @@ version: 1.5.0
 
 # Cơ hội từ báo cáo CTCK
 
-Khuyến nghị CTCK là INPUT, không phải chân lý — bắt buộc kiểm chứng upside bằng giá hiện tại và kèm disclaimer. Không bao giờ suy diễn khuyến nghị thành "nên mua", không bịa giá mục tiêu khi feed không có.
+Brokerage recommendations are INPUT, not truth — you must check the upside against the current price and add a disclaimer. Never turn a recommendation into "nên mua"; never invent a target price when the feed has none.
 
 ## Khi nào dùng
 
-- Dùng khi: hỏi rating/target/báo cáo CTCK theo feed chung hoặc theo mã cụ thể, cần bảng upside %.
-- Khi KHÔNG dùng (dùng skill khác thay thế): rumor/crowd → `phan-tich-sentiment` / `tim-kiem-tin-tuc`; tự định giá → `dinh-gia-chuyen-sau`; backtest → `kiem-chien-luoc-backtest`.
+- Use when: asked for brokerage ratings/targets/reports from the general feed or for a specific ticker, when an upside % table is needed.
+- Do NOT use (use another skill instead): rumours/crowd → `phan-tich-sentiment` / `tim-kiem-tin-tuc`; your own valuation → `dinh-gia-chuyen-sau`; backtests → `kiem-chien-luoc-backtest`.
 
 ## Các bước
 
-**Bước 1: Feed chung (1 call duy nhất).**
+**Bước 1: General feed (a single call).**
 
-Chạy `analyst_consensus` (limit=30, days=7) — feed chung không symbol, parse rating + giá mục tiêu từ titles. `days` lọc N ngày gần nhất; dòng không đọc được ngày vẫn giữ, gắn `date_uncertain:true`. Báo cáo vĩ mô thì thêm `analyst_consensus` (report_type=macro): lọc báo cáo vĩ mô CTCK (entry section/report); không có dated reports thì dùng số liệu gốc. Feed rỗng thật (cuối tuần) → empty hợp lệ, nới `days` 1 lần duy nhất rồi kết luận.
+Run `analyst_consensus` (limit=30, days=7) — the general feed without a symbol; parse the rating + target price from titles. `days` keeps the last N days; lines whose date cannot be read stay, tagged `date_uncertain:true`. For macro reports add `analyst_consensus` (report_type=macro): it filters brokerages' macro reports (section/report entries); without dated reports, use the source figures. A truly empty feed (weekend) is a valid empty; widen `days` exactly once, then conclude.
 
-**Bước 2: Mã cụ thể + tài liệu gốc (tuần tự sau Bước 1).**
+**Bước 2: A specific ticker + source documents (sequential, after Bước 1).**
 
-Chạy `analyst_consensus` (symbol, limit=15) + `vs_documents` (symbol, chỉ lấy 1 mã đáng giá nhất).
+Run `analyst_consensus` (symbol, limit=15) + `vs_documents` (symbol, only the 1 most valuable ticker).
 
-Tiêu đề trong feed là đủ cho câu hỏi "CTCK khuyên gì". Chỉ `web_fetch` trang báo cáo khi câu hỏi cần nội dung ngoài tiêu đề (luận điểm, lý do giá mục tiêu), tối đa 3 báo cáo, ưu tiên MUA và mới nhất; truyền `prompt` để chỉ lấy khuyến nghị, giá mục tiêu, luận điểm chính. PDF không đọc được chữ thì đưa link và nói rõ chưa đọc nội dung. Hỏi mã cụ thể mà `analyst_consensus` (symbol) empty → đọc feed chung và lọc title chứa mã (title-scrape filter có thể sót), không retry đổi limit.
+Feed titles are enough for "CTCK khuyên gì". Use `web_fetch` on a report page only when the question needs content beyond the title (thesis, reasons for the target), at most 3 reports, preferring MUA and the newest; pass `prompt` to take only the recommendation, target price and main thesis. If a PDF's text cannot be read, give the link and say its content was not read. Asked about a specific ticker and `analyst_consensus` (symbol) is empty → read the general feed and filter titles containing the ticker (the title-scrape filter may miss some); do not retry with a different limit.
 
-**Bước 3: Kiểm chứng upside (tuần tự, 1–2 mã nổi bật nhất).**
+**Bước 3: Verify the upside (sequential, the 1–2 most prominent tickers).**
 
-Chạy `stock_overview` (1–2 call) so giá hiện tại vs mục tiêu → upside %. Chỉ kiểm chứng top, không kiểm chứng tất cả.
+Run `stock_overview` (1–2 calls) to compare the current price with the target → upside %. Verify only the top ones, not all.
 
 ## Cấu trúc câu trả lời
 
-Trình bày kết luận đúng cấu trúc sau:
+Present the conclusion in exactly this structure:
 
-- Bảng {mã · CTCK · rating · giá mục tiêu · ngày · upside % so giá hiện tại}, lọc trong `days` (default 7).
-- Top 3 cơ hội (upside lớn + rating MUA + còn hiệu lực).
-- Cột **"đã kiểm chứng"** bắt buộc = Bước 3 chạy cho 1–2 mã nổi bật nhất (có `stock_overview`); mã chưa kiểm chứng ghi rõ "chưa kiểm chứng giá hiện tại".
-- Disclaimer bắt buộc: khuyến nghị CTCK là INPUT, không phải chân lý — không suy diễn thành "nên mua".
-- Provenance: nguồn ngày từ URL/title; nếu `source/date null` (đặc trưng parse titles) → suy ngày từ URL/title + ghi rõ nguồn ngày "không chắc chắn". Đủ bảng ≥5 dòng + kiểm chứng 2 mã top thì dừng, không đào thêm mã ngoài top.
+- Table {ticker · brokerage · rating · target price · date · upside % vs the current price}, filtered within `days` (default 7).
+- Top 3 by brokerage upside (large upside + MUA rating + still valid) — these are the brokerages' views, never your own recommendation.
+- A **"đã kiểm chứng"** column is required = Bước 3 ran for the 1–2 most prominent tickers (with `stock_overview`); unverified tickers say "chưa kiểm chứng giá hiện tại".
+- Required disclaimer: brokerage recommendations are INPUT, not truth — never read them as "nên mua".
+- Provenance: the date source from the URL/title; if `source/date null` (a feature of title parsing) → infer the date from the URL/title + state the date source as "không chắc chắn". Stop once the table has ≥5 rows + 2 top tickers are verified; do not dig into tickers beyond the top.
 
 ## Ví dụ
 
 **Ví dụ 1:**
 Hỏi: CTCK khuyên mua gì tuần này
-Đạt khi: bảng ≥5 dòng có upside %, kiểm chứng 2 mã top, ≤8 calls. Thiếu cột "đã kiểm chứng" hoặc thiếu disclaimer thì chưa đạt; bịa target khi feed rỗng thì chưa đạt.
+Đạt khi: a table of ≥5 rows with upside %, 2 top tickers verified, ≤8 calls. Missing the "đã kiểm chứng" column or the disclaimer → not met; inventing a target when the feed is empty → not met.
 
 ## Trực quan hóa
 
-Chỉ vẽ khi người dùng muốn xem hình, hoặc khi có chuỗi thời gian / so sánh mà bảng khó đọc; tối đa 1 biểu đồ mỗi câu trả lời. Vẽ bằng `chart_render` với `from_call` (mã `[ref …]` ở đầu kết quả tool) để không phải gõ lại số; cần chọn loại hình thì nạp `ve-bieu-do`. Hình hợp với dữ liệu skill này: bar diverging upside.
+Draw only when the user wants a picture, or when a time series / comparison is hard to read as a table; at most 1 chart per answer. Draw with `chart_render` using `from_call` (the `[ref …]` code at the top of a tool result) so you never retype numbers; load `ve-bieu-do` to choose the chart type. Fitting this skill's data: bar diverging upside.

@@ -10,52 +10,52 @@ version: 1.3.0
 
 # Bản đồ rủi ro chính trị toàn cầu
 
-Skill tổ chức cross-ref (không có home tool riêng — ghép odds + tin từ nhiều nguồn). Mỗi mục verdict bắt buộc có event URL + tin URL, thiếu một trong hai thì ghi rõ.
+A cross-referencing skill (no home tool of its own — it combines odds + news from several sources). Every verdict item must have an event URL + a news URL; if one is missing, say so.
 
 ## Khi nào dùng
 
-- Dùng khi: user hỏi bản đồ rủi ro chính trị toàn cầu, bầu cử, chính sách, căng thẳng quốc tế (nhiều sự kiện, cần ghép odds + tin).
-- Khi KHÔNG dùng (dùng skill khác thay thế):
-  - Xung đột vũ trang cụ thể → dùng `danh-gia-tinh-hinh-xung-dot`.
-  - Bất ổn 1 nước → dùng `bat-on-quoc-gia`.
-  - Chỉ xin odds/bảng Polymarket thuần → dùng `du-doan-polymarket`.
-  - Fed cắt/giữ thuần → dùng `du-doan-fed`.
+- Use when: the user asks for a global political risk map, elections, policy, international tensions (several events, combining odds + news).
+- Do NOT use (use another skill instead):
+  - A specific armed conflict → use `danh-gia-tinh-hinh-xung-dot`.
+  - Unrest in one country → use `bat-on-quoc-gia`.
+  - Only a plain Polymarket odds table → use `du-doan-polymarket`.
+  - Only Fed cut/hold → use `du-doan-fed`.
 
 ## Các bước
 
-**Bước 1: Odds + intel (song song, bắt buộc).**
+**Bước 1: Odds + intel (in parallel, required).**
 
-Chạy `world_prediction_odds` (tag=fed/politics/elections theo câu hỏi) + `geo_intel` (topic). Odds đã sort vol24h nên chỉ lấy top 5 — kéo cả 20 events là tràn lan.
+Run `world_prediction_odds` (tag=fed/politics/elections per the question) + `geo_intel` (topic). Odds are sorted by vol24h, so take only the top 5 — pulling all 20 events sprawls.
 
-**Bước 2: Drill-down (song song, tuần tự sau Bước 1).**
+**Bước 2: Drill-down (in parallel, after Bước 1).**
 
-Chạy `polymarket_event` (slug top 1-2) + `event_stats` (query). Chỉ drill event thật sự liên quan câu hỏi, tối đa 2 slugs/run. Không gọi chồng chéo `geo_intel` + `event_stats` + `news_market` cùng query quá 1 vòng.
+Run `polymarket_event` (top 1–2 slugs) + `event_stats` (query). Drill only events truly relevant to the question, at most 2 slugs per run. Never overlap `geo_intel` + `event_stats` + `news_market` on the same query for more than 1 round.
 
-**Bước 3: Xác minh tin (tuần tự sau Bước 2).**
+**Bước 3: Verify the news (sequential, after Bước 2).**
 
-Chạy `news_market` (sources=gdelt) + `web_fetch` 1-2 URL nguồn chính thức trong tin. Đủ 4 mục có prob + tin xác nhận thì dừng.
+Run `news_market` (sources=gdelt) + `web_fetch` 1–2 official-source URLs from the news. Stop once 4 items have probabilities + confirming news.
 
-**Bước 4: Validate trước khi chốt.**
+**Bước 4: Validate before concluding.**
 
-GDELT rate-limit → backoff 20s, retry tối đa 1 lần → vẫn lỗi thì ghi trung thực "thiếu tin GDELT, verdict chỉ dựa trên odds". Gamma chậm thì tool tự fallback direct, chờ 1 lần. Odds stale (end-date qua) → lọc `end > today`, loại event hết hạn. Hai đường chết hết thì ghi "không có odds", không bịa xác suất.
+GDELT rate-limited → back off 20s, retry at most once → if it still fails, state honestly "thiếu tin GDELT, verdict chỉ dựa trên odds". If Gamma is slow the tool falls back to direct itself; wait once. Stale odds (end-date passed) → filter `end > today`, drop expired events. Both paths down → write "không có odds"; never invent probabilities.
 
 ## Cấu trúc câu trả lời
 
-Trình bày kết luận đúng cấu trúc sau:
+Present the conclusion in exactly this structure:
 
-1. **Sự kiện:** tên + bối cảnh 1 dòng.
-2. **Xác suất:** prob_pct từng outcome (đơn vị %) + end-date.
-3. **Độ tin odds:** volume 24h + liquidity (đơn vị USD; <50k thì cờ "odds kém tin").
-4. **Tin GDELT xác nhận:** 1 dòng + URL.
-5. **Market-impact nếu có:** kênh truyền dẫn + URL.
-6. **Provenance:** mỗi mục bắt buộc event URL + tin URL.
+1. **Event:** name + a 1-line background.
+2. **Probability:** prob_pct per outcome (%) + end-date.
+3. **Odds reliability:** 24h volume + liquidity (USD; <50k → flag "odds kém tin").
+4. **Confirming GDELT news:** 1 line + URL.
+5. **Market impact if any:** transmission channel + URL.
+6. **Provenance:** every item must have an event URL + a news URL.
 
 ## Ví dụ
 
 **Ví dụ 1:**
 Hỏi: Rủi ro chính trị toàn cầu
-Đạt khi: mỗi mục có xác suất (prob_pct), khối lượng giao dịch và link sự kiện làm nguồn.
+Đạt khi: every item has a probability (prob_pct), trading volume and an event link as its source.
 
 ## Trực quan hóa
 
-Chỉ vẽ khi người dùng muốn xem hình, hoặc khi có chuỗi thời gian / so sánh mà bảng khó đọc; tối đa 1 biểu đồ mỗi câu trả lời. Vẽ bằng `chart_render` với `from_call` (mã `[ref …]` ở đầu kết quả tool) để không phải gõ lại số; cần chọn loại hình thì nạp `ve-bieu-do`. Hình hợp với dữ liệu skill này: bar odds per event, line event counts.
+Draw only when the user wants a picture, or when a time series / comparison is hard to read as a table; at most 1 chart per answer. Draw with `chart_render` using `from_call` (the `[ref …]` code at the top of a tool result) so you never retype numbers; load `ve-bieu-do` to choose the chart type. Fitting this skill's data: bar odds per event, line event counts.

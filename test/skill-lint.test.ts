@@ -127,6 +127,8 @@ Q99. Ngoài cây
    tiếp Q1`)
   expect(decisionTreeIssues(terminalTransition)).toContain("Q3: ★ vừa kết luận vừa chuyển Q")
   expect(decisionTreeIssues(body.replace('Có → ★ "Thuận lợi"', 'Có → Q1 rồi ★ "Thuận lợi"'))).toContain("Q3: ★ vừa kết luận vừa chuyển Q")
+  // English skill bodies (E4) write "continue Q2"
+  expect(decisionTreeIssues(body.replace('Có → ★ "Thuận lợi"', 'Có → ★ "Thuận lợi", continue Q1'))).toContain("Q3: ★ vừa kết luận vừa chuyển Q")
   expect(decisionTreeIssues(`## Ví dụ
 Q1. Không phải cây
 ├─ thử → Q99`)).toEqual([])

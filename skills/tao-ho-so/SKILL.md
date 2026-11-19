@@ -10,12 +10,12 @@ version: 1.1.1
 
 # Tạo hồ sơ nhà đầu tư
 
-Hỏi bằng tool `ask_user`, KHÔNG liệt kê câu hỏi dạng văn bản dài. Gọi 2 lượt liên tiếp: lượt 1 câu 1–4, lượt 2 câu 5 (tool giới hạn 4 câu/lượt). Mỗi câu giữ nguyên văn câu hỏi và 4 lựa chọn A–D ở dưới; nhãn option ngắn, phần mô tả dài đưa vào `description`. User luôn có thể tự nhập đáp án khác. Hết 2 lượt thì soạn INVESTOR.md, hiện bản thảo, hướng dẫn lưu bằng `/profile`.
+Ask with the `ask_user` tool; do NOT list the questions as long text. Make 2 calls in a row: call 1 with questions 1–4, call 2 with question 5 (the tool allows 4 questions per call). Keep each question's wording and its 4 options A–D below exactly as written; option labels are short, the long text goes in `description`. The user can always type another answer. After the 2 calls, draft INVESTOR.md, show the draft, and explain how to save it with `/profile`.
 
 ## Khi nào dùng
 
-- Dùng khi: user mới, hoặc hồ sơ đã cũ và muốn làm mới.
-- Khi KHÔNG dùng: user chỉ muốn sửa 1 mục (bảo họ sửa trực tiếp file INVESTOR.md).
+- Use when: a new user, or an old profile the user wants refreshed.
+- Do NOT use: the user only wants to change one item (tell them to edit INVESTOR.md directly).
 
 ## Lượt 1 — câu 1–4 (một lệnh ask_user duy nhất)
 
@@ -58,16 +58,16 @@ Question: "Khung danh mục bạn muốn tập trung đầu tư bao gồm các l
 
 ## Map câu trả lời sang hành vi agent (dùng khi soạn INVESTOR.md)
 
-| Câu | Đáp án → hành vi |
+| Câu | Answer → agent behaviour |
 |---|---|
-| 1 | A: ưu tiên vốn + cổ tức, cảnh báo rủi ro mạnh; B: cân bằng tăng trưởng/rủi ro; C: chấp nhận biến động, săn cơ hội; D: ưu tiên yield/cổ tức |
-| 2 | A: dùng dữ liệu T+/ngày, theo dõi sát; B: sóng ngành 1–6 tháng; C: chu kỳ/nền tảng, ít làm phiền; D: linh hoạt theo tín hiệu thị trường |
-| 3 | A: phân tích theo khung thời gian dài; B: lưu ý rủi ro khóa vốn dài; C: phân tích được tính cả rủi ro của margin/đòn bẩy; D: nhấn mạnh rủi ro mất vốn và bảo toàn vốn |
-| 4 | A: giải thích mọi thuật ngữ, trình bày đơn giản; B: giải thích khi gặp khái niệm mới; C: dùng thuật ngữ chuyên ngành; D: trao đổi ngang hàng, đi sâu kỹ thuật |
-| 5 | A: chỉ dùng tool chứng khoán cơ sở; B: thêm trái phiếu/lãi suất; C: thêm phái sinh + crypto; D: toàn bộ vũ trụ tài sản |
+| 1 | A: prioritise capital + dividends, strong risk warnings; B: balance growth/risk; C: accept volatility, look for opportunities; D: prioritise yield/dividends |
+| 2 | A: use T+/daily data, follow closely; B: 1–6 month sector waves; C: cycles/fundamentals, few interruptions; D: flexible, by market signals |
+| 3 | A: analyse on a long horizon; B: flag the risk of locking capital up long; C: include margin/leverage risk in the analysis; D: stress the risk of capital loss and preservation |
+| 4 | A: explain every term, keep it simple; B: explain new concepts as they come; C: use professional terms; D: talk as peers, go deep technically |
+| 5 | A: only cash-equity tools; B: add bonds/rates; C: add derivatives + crypto; D: the whole asset universe |
 
 ## Soạn và lưu
 
-1. Từ câu trả lời, viết INVESTOR.md theo 4 mục: Khung đầu tư (câu 1+2) / Khấu hao vốn & đòn bẩy (câu 3) / Kinh nghiệm & Vũ trụ tài sản (câu 4+5) / Cách muốn được hỗ trợ (suy từ câu 4).
-2. Hiện nguyên văn bản thảo trong chat để user duyệt.
-3. Hướng dẫn lưu: chạy `/profile` để tạo file, rồi dán bản thảo vào file INVESTOR.md được chỉ (thay đổi có hiệu lực từ lượt hỏi tiếp theo).
+1. From the answers, write INVESTOR.md in 4 sections, in Vietnamese: Khung đầu tư (questions 1+2) / Khấu hao vốn & đòn bẩy (question 3) / Kinh nghiệm & Vũ trụ tài sản (questions 4+5) / Cách muốn được hỗ trợ (inferred from question 4).
+2. Show the draft verbatim in the chat for the user to review.
+3. How to save: run `/profile` to create the file, then paste the draft into the INVESTOR.md it points to (changes apply from the next question).

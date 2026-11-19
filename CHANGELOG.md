@@ -33,6 +33,12 @@ adopt Semantic Versioning when it exposes a stable public API.
   Parsers of these texts accept both languages (failure classes, operand notes, `@mentions` line counts,
   eval shell routes, saved todo prefixes). Tool definitions: o200k 8 104 → 7 886, DeepSeek 9 325 → 8 295
   tokens; always-sent tools DeepSeek 3 773 → 3 184.
+- Skill bodies (`skills/*/SKILL.md`, read when a skill loads) are in English: steps, driver tables, decision
+  trees and boundaries. Section headings, example questions, the quoted ★ verdicts and every line the model
+  copies to the user stay Vietnamese, as do the `tao-ho-so` questions. Four skills now say outright that a
+  comparison or opportunity list is never a personal buy recommendation (`so-sanh-cung-nganh`,
+  `danh-gia-truoc-bctc`, `tim-co-hoi-bao-cao-ctck`, `phan-tich-chuyen-sau-1-ma`). The 43 bodies: DeepSeek
+  98 878 → 71 815 tokens (−27%), o200k 75 667 → 66 259. `references/` and desk playbooks follow separately.
 - Skill descriptions (the `<skill_catalog>` sent with every request) and the subagent types (description and
   prompt, `agents/*.md`) are in English; report wording the user reads stays Vietnamese. Soft skill routing
   (`matchSoft`) scores the new `match_text` frontmatter, which keeps the former Vietnamese description, so

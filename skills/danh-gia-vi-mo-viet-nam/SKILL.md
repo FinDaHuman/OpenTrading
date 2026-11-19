@@ -13,56 +13,56 @@ version: 1.6.1
 
 # Vĩ mô Việt Nam
 
-Mở đầu bắt buộc bằng pre-flight 2 calls (source_status + vs_auth_status) vì macro VN phụ thuộc JWT và HAR-session dễ chết. GDP, CPI, XK gọi bằng `indicator`, server tự điền cặp id.
+You must open with a 2-call pre-flight (source_status + vs_auth_status), since Vietnamese macro depends on a JWT and a HAR session that die easily. Call GDP, CPI, exports by `indicator`; the server fills in the id pair.
 
 ## Khi nào dùng
 
-- Dùng khi: user hỏi số liệu VN (GDP/CPI/XK/NK), lãi suất SBV, tỷ giá USDVND bối cảnh vĩ mô, lịch công bố NSO, báo cáo vĩ mô CTCK, câu chuyện dẫn dắt thị trường VN.
-- Khi KHÔNG dùng (dùng skill khác thay thế):
-  - Vĩ mô Mỹ/toàn cầu, Fed bối cảnh, risk regime → dùng `danh-gia-vi-mo-quoc-te`.
-  - Xác suất Fed cắt/giữ thuần odds → dùng `du-doan-fed`.
-  - Thao tác vàng-tỷ giá chi tiết → dùng `phan-tich-vang-ty-gia`.
+- Use when: the user asks for Vietnamese figures (GDP/CPI/exports/imports), SBV rates, USDVND in a macro context, the NSO release calendar, brokerages' macro reports, the narrative driving the Vietnamese market.
+- Do NOT use (use another skill instead):
+  - US/global macro, Fed context, risk regime → use `danh-gia-vi-mo-quoc-te`.
+  - Pure Fed cut/hold odds → use `du-doan-fed`.
+  - Detailed gold/FX work → use `phan-tich-vang-ty-gia`.
 
 ## Các bước
 
-**Bước 0: Pre-flight (song song, bắt buộc).**
+**Bước 0: Pre-flight (in parallel, required).**
 
-Chạy `source_status` + `vs_auth_status` trước mọi wave.
+Run `source_status` + `vs_auth_status` before any wave.
 
-**Bước 1: Data VN bắt buộc.**
+**Bước 1: Required Vietnamese data.**
 
-Song song `vs_indicator_data` với `indicator` = "GDP", "CPI", "XK" và `vs_xnk_detail` (chỉ 1 direction xk hoặc nk theo câu hỏi). Chỉ tiêu khác: lấy `category_id` + `term_type_id` từ `vs_categories` (cặp phải khớp, sai là rows rỗng). Rows rỗng → retry tối đa 1 lần → vẫn rỗng thì ghi "không có số liệu kỳ này".
+In parallel, `vs_indicator_data` with `indicator` = "GDP", "CPI", "XK" and `vs_xnk_detail` (only 1 direction, exports or imports, per the question). Other indicators: take `category_id` + `term_type_id` from `vs_categories` (the pair must match; a wrong pair gives empty rows). Empty rows → retry at most once → still empty, write "không có số liệu kỳ này".
 
-**Bước 2: Tin vĩ mô (song song).**
+**Bước 2: Macro news (in parallel).**
 
-Chạy `news_market` (lọc vĩ mô/lãi suất/tỷ giá) + `macro_events_vn` + `economic_calendar`.
+Run `news_market` (filtered for macro/rates/FX) + `macro_events_vn` + `economic_calendar`.
 
-**Bước 3: Báo cáo CTCK (1 call duy nhất).**
+**Bước 3: Brokerage reports (a single call).**
 
-Chạy `analyst_consensus` (report_type=macro, limit=30) feed chung; lấy section pointers + dated reports. Không bắn theo từng từ khóa.
+Run `analyst_consensus` (report_type=macro, limit=30) on the general feed; take section pointers + dated reports. Never fire one call per keyword.
 
-**Bước 4: Data bổ sung + lịch (song song, mỗi thứ tối đa 1 call).**
+**Bước 4: Extra data + calendar (in parallel, at most 1 call each).**
 
-Chạy `snapshot_history` (macro_curated) + `yf_yield_curve` + `sbv_rates` + `vn_retail_fx` + `macro_events_vn` (NSO) + kỳ họp Fed/Mỹ (cross-ref `du-doan-fed`). Thiếu HAR session → macro trả permission message: ghi trung thực "macro cần session", fallback sang `snapshot_history`, không diễn giải message permission thành dữ liệu. Curve/DXY flaky → retry 1 lần sau backoff rồi bỏ.
+Run `snapshot_history` (macro_curated) + `yf_yield_curve` + `sbv_rates` + `vn_retail_fx` + `macro_events_vn` (NSO) + Fed/US meetings (cross-ref `du-doan-fed`). Without a HAR session, macro returns a permission message: state honestly "macro cần session", fall back to `snapshot_history`, and never read the permission message as data. A flaky curve/DXY → retry once after a backoff, then drop it.
 
 ## Cấu trúc câu trả lời
 
-Trình bày kết luận đúng cấu trúc sau:
+Present the conclusion in exactly this structure:
 
-1. **Tăng trưởng:** GDP, ≥8 điểm cuối, đơn vị % yoy + URL/provenance.
-2. **Lạm phát:** CPI, ≥8 điểm cuối, đơn vị % yoy + URL.
-3. **Thương mại:** XK/NK/XNK-detail, đơn vị triệu USD + URL.
-4. **Tỷ giá:** USDVND (đơn vị VND), SBV rates (tái cấp vốn/tái chiết khấu, đơn vị %) + URL.
-5. **Lãi suất:** lãi suất điều hành SBV + bối cảnh hút vốn ngoại (curve/DXY) + URL.
-6. **Điểm tích cực / tiêu cực + triển vọng tương lai.**
-7. **Câu chuyện dẫn dắt thị trường + lịch sự kiện** (mỗi câu chuyện: sự kiện nào, ngày nào, tác động gì).
+1. **Growth:** GDP, ≥8 latest points, in % yoy + URL/provenance.
+2. **Inflation:** CPI, ≥8 latest points, in % yoy + URL.
+3. **Trade:** exports/imports/trade detail, in million USD + URL.
+4. **Exchange rate:** USDVND (VND), SBV rates (refinancing/rediscount, %) + URL.
+5. **Interest rates:** the SBV policy rate + the foreign-capital backdrop (curve/DXY) + URL.
+6. **Positives / negatives + outlook.**
+7. **The narrative driving the market + the event calendar** (for each story: which event, which date, what impact).
 
 ## Ví dụ
 
 **Ví dụ 1:**
 Hỏi: Vĩ mô VN
-Đạt khi: verdict đủ 6 mục + câu chuyện dẫn dắt có lịch sự kiện, ≤12 calls.
+Đạt khi: a verdict with all 6 items + a driving narrative with an event calendar, ≤12 calls.
 
 ## Trực quan hóa
 
-Chỉ vẽ khi người dùng muốn xem hình, hoặc khi có chuỗi thời gian / so sánh mà bảng khó đọc; tối đa 1 biểu đồ mỗi câu trả lời. Vẽ bằng `chart_render` với `from_call` (mã `[ref …]` ở đầu kết quả tool) để không phải gõ lại số; cần chọn loại hình thì nạp `ve-bieu-do`. Hình hợp với dữ liệu skill này: line GDP/CPI + times, bar diverging XNK, bar rates.
+Draw only when the user wants a picture, or when a time series / comparison is hard to read as a table; at most 1 chart per answer. Draw with `chart_render` using `from_call` (the `[ref …]` code at the top of a tool result) so you never retype numbers; load `ve-bieu-do` to choose the chart type. Fitting this skill's data: line GDP/CPI + times, bar diverging XNK, bar rates.

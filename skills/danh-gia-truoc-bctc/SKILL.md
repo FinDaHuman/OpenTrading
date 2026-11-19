@@ -11,53 +11,53 @@ version: 1.4.0
 
 # Chấm setup trước BCTC
 
-Chấm grade cho setup trước BCTC. Không forecast KQKD — không bao giờ đưa số DT/LN dự báo. BCTC đã ra rồi thì dừng ngay, chuyển sang `co-ban-chuyen-sau`, không cố chấm grade.
+Grade the setup ahead of an earnings release. Do not forecast results — never give forecast revenue/profit figures. If the statements are already out, stop at once and switch to `co-ban-chuyen-sau`; do not force a grade.
 
 ## Khi nào dùng
 
-- Dùng khi: BCTC chưa ra và user hỏi setup trước BCTC (`FPT sắp ra báo cáo`, `đánh giá setup HPG trước BCTC`, `pre-earnings`).
-- Khi KHÔNG dùng (dùng skill khác thay thế):
-  - Phân tích mã thường (không gắn BCTC) → `phan-tich-chuyen-sau-1-ma`.
-  - BCTC đã công bố, cần đọc số/M-Score → `co-ban-chuyen-sau`.
-  - Hỏi kỹ thuật lẻ → `ky-thuat-chuyen-sau`.
-  - Hỏi định giá lẻ → `dinh-gia-chuyen-sau`.
+- Use when: the statements are not out yet and the user asks about the pre-earnings setup (`FPT sắp ra báo cáo`, `đánh giá setup HPG trước BCTC`, `pre-earnings`).
+- Do NOT use (use another skill instead):
+  - Ordinary ticker analysis (not tied to earnings) → `phan-tich-chuyen-sau-1-ma`.
+  - Statements already published, figures/M-Score needed → `co-ban-chuyen-sau`.
+  - A technicals-only question → `ky-thuat-chuyen-sau`.
+  - A valuation-only question → `dinh-gia-chuyen-sau`.
 
 ## Các bước
 
-**Bước 1: Kiểm tra ngày công bố (chỉ đối chiếu, KHÔNG chốt dated).**
+**Bước 1: Check the release date (cross-check only, NOT a fixed date).**
 
-Ngày công bố BCTC tại VN thường KHÔNG công khai chính xác (công ty chỉ báo trước tháng/quý; `event_calendar_vn` không có earnings-date type). Chạy `company_events` + `news_symbol` chỉ để đối chiếu tin lịch công bố nếu user hỏi; nếu không thấy ngày rõ ràng → coi như `unknown ngày`, các leg ghi accordingly và grade tối đa B (đây là mặc định, không cần cố chốt ngày).
+Vietnamese earnings dates are usually NOT published precisely (companies announce only the month/quarter; `event_calendar_vn` has no earnings-date type). Run `company_events` + `news_symbol` only to cross-check calendar news if the user asks; with no clear date → treat it as `unknown ngày`, record the legs accordingly and cap the grade at B (this is the default; do not strain to pin a date).
 
-**Bước 2: Reuse trend + thao túng (không gọi tool gốc).**
+**Bước 2: Reuse trend + manipulation (no source tools).**
 
-LOAD `co-ban-chuyen-sau` (gọi `load_skill` CHỈ với tên skill — không có file phụ `aspect=...`, aspect là các section trong body; load_skill file lạ sẽ fail). Sau khi load: dùng leg "Chất lượng tăng trưởng" (trend) + leg "M-Score + F-score" (thao túng) từ body skill đó. Lý do reuse thay vì gọi trực tiếp `financial_detail`/`stock_forensic`: tránh gọi chồng chéo cùng nguồn số trong 1 run. Ghi rõ reuse ở từng leg.
+LOAD `co-ban-chuyen-sau` (call `load_skill` WITH THE SKILL NAME ONLY — there is no `aspect=...` extra file; aspects are sections in the body; loading an unknown file fails). After loading: use the "Chất lượng tăng trưởng" leg (trend) + the "M-Score + F-score" leg (manipulation) from that skill's body. Why reuse instead of calling `financial_detail`/`stock_forensic` directly: to avoid overlapping calls on the same data in one run. State the reuse in each leg.
 
-**Bước 3: Kỳ vọng + positioning (gọi trực tiếp).**
+**Bước 3: Expectations + positioning (direct calls).**
 
-Chạy `planned_targets` + `analyst_consensus` + `news_symbol` + `sentiment_score` (anchor = kế hoạch DN vì VN không có consensus EPS; sentiment là heuristic, không tính là leg xanh) và `insider_trading` + `money_flow` + `block_trades`. `planned_targets` trả số THẬT từ Vietstock CTKH (chain verified live) nhưng session-gated: Render/không session → `unavailable` — ghi trung thực "thiếu neo kế hoạch", không bịa số kế hoạch.
+Run `planned_targets` + `analyst_consensus` + `news_symbol` + `sentiment_score` (the anchor is the company's plan, since Vietnam has no EPS consensus; sentiment is a heuristic and never counts as a green leg) and `insider_trading` + `money_flow` + `block_trades`. `planned_targets` returns REAL figures from Vietstock CTKH (chain verified live) but is session-gated: on Render/without a session → `unavailable` — say honestly "thiếu neo kế hoạch"; never invent plan figures.
 
-**Bước 4: Reuse đệm định giá + chấm grade.**
+**Bước 4: Reuse the valuation cushion + grade.**
 
-LOAD `dinh-gia-chuyen-sau` + chạy `scenario_simulate` (−5%) để lấy size gợi ý. `scenario_simulate` là PHÉP TÍNH TUYẾN TÍNH chính xác trên giá close gần nhất (shock × giá, P/L/1000cp) — dùng để đệm cỡ vị thế, KHÔNG phải dự báo giá. Không gọi trực tiếp `valuation_run` ở đây. Đủ 6 leg evidence (kể cả partial) thì dừng — không gọi thêm vòng tin/dòng tiền thứ hai, không thêm leg thứ 7.
+LOAD `dinh-gia-chuyen-sau` + run `scenario_simulate` (−5%) for a suggested size. `scenario_simulate` is an exact LINEAR CALCULATION on the latest close (shock × price, P/L per 1000 shares) — for cushioning position size, NOT a price forecast. Do not call `valuation_run` directly here. Once all 6 legs have evidence (even partial), stop — no second round of news/flows, no 7th leg.
 
 ## Cấu trúc câu trả lời
 
-Trình bày kết luận đúng cấu trúc sau:
+Present the conclusion in exactly this structure:
 
-1. Grade **A/B/C** có nhãn tạm thời khi thiếu dữ liệu (rubric: A = ≥5 leg xanh có bằng chứng, kế hoạch rõ và các mô hình forensic áp dụng đều `complete` mà không có cờ cần rà soát; B = 4–5 leg hoặc thiếu độ chắc để đạt A; C = <4 leg đạt khi cả 6 leg đã được đánh giá). Chỉ diễn giải M-Score khi Beneish 8 biến theo năm đúng kỳ/phạm vi và `status=complete`; ngưỡng nghiên cứu −1.78 là cờ cần rà soát, chưa hiệu chuẩn cho Việt Nam và không tự nó kết luận gian lận hay quyết định grade C. `partial`/`score=null`, `not_applicable`, `unsupported` không tính là leg xanh hoặc đỏ; nêu `passed/evaluated` của F-score thay vì chấm phần thiếu thành 0/9. Với bank/CTCK/bảo hiểm, không dùng Beneish/Piotroski của doanh nghiệp thường để chấm grade.
-2. 1 dòng evidence/leg (6 dòng, mỗi dòng số + trend + provenance).
-3. Size đề xuất (từ `scenario_simulate` −5%).
-4. Unknowns tường minh (liệt kê điều chưa biết).
-5. Kết luận 1 câu: grade + có nên giữ/mua trước BCTC + rủi ro lớn nhất.
+1. Grade **A/B/C**, labelled provisional when data is missing (rubric: A = ≥5 green legs with evidence, a clear plan and every applicable forensic model `complete` with no review flag; B = 4–5 legs or not certain enough for A; C = <4 legs pass once all 6 legs were assessed). Interpret the M-Score only when the 8-variable yearly Beneish is for the right period/scope and `status=complete`; the research threshold −1.78 is a flag for review, not calibrated for Vietnam, and on its own never concludes fraud or decides a C grade. `partial`/`score=null`, `not_applicable`, `unsupported` count as neither green nor red legs; give the F-score's `passed/evaluated` instead of scoring the missing part as 0/9. For banks/brokerages/insurers, do not grade with the ordinary-company Beneish/Piotroski.
+2. 1 line of evidence per leg (6 lines, each with figure + trend + provenance).
+3. Suggested size (from `scenario_simulate` −5%).
+4. Explicit unknowns (list what is not known).
+5. 1-sentence conclusion: the grade + the setup's main strength + the biggest risk going into the release. Never a personal buy/hold recommendation.
 
-Partial data (thiếu positioning, kỳ vọng hoặc forensic) → verdict tạm thời + unknowns. `sentiment_score` âm/dương nhẹ thì ghi đúng là heuristic, không nâng thành leg xanh/đỏ.
+Partial data (missing positioning, expectations or forensics) → a provisional verdict + unknowns. A mildly negative/positive `sentiment_score` is reported as the heuristic it is, never promoted to a green/red leg.
 
 ## Ví dụ
 
 **Ví dụ 1:**
 Hỏi: Đánh giá trước BCTC HPG
-Đạt khi: grade B + 6 leg evidence + unknowns, ≤10 calls (reuse legs).
+Đạt khi: grade B + 6 legs of evidence + unknowns, ≤10 calls (legs reused).
 
 ## Trực quan hóa
 
-Chỉ vẽ khi người dùng muốn xem hình, hoặc khi có chuỗi thời gian / so sánh mà bảng khó đọc; tối đa 1 biểu đồ mỗi câu trả lời. Vẽ bằng `chart_render` với `from_call` (mã `[ref …]` ở đầu kết quả tool) để không phải gõ lại số; cần chọn loại hình thì nạp `ve-bieu-do`. Hình hợp với dữ liệu skill này: line trend, gauge sentiment, waterfall NN flow.
+Draw only when the user wants a picture, or when a time series / comparison is hard to read as a table; at most 1 chart per answer. Draw with `chart_render` using `from_call` (the `[ref …]` code at the top of a tool result) so you never retype numbers; load `ve-bieu-do` to choose the chart type. Fitting this skill's data: line trend, gauge sentiment, waterfall NN flow.
