@@ -155,7 +155,7 @@ test("catalog lists auto skills only and stays within budget", () => {
     ...Array.from({ length: 30 }, (_, i) => make({ name: `bulk-${i}`, description: "x".repeat(400) })),
   ]
   const full = renderCatalog(skills.slice(0, 3), 1_000)!
-  expect(full.text).toContain("- auto-a: mô tả auto-a Dùng khi: khi hỏi A")
+  expect(full.text).toContain("- auto-a: mô tả auto-a Use when: khi hỏi A")
   expect(full.text).not.toContain("hand")
   expect(full.text).not.toContain("always-on")
   expect(full.truncated).toBe(false)
@@ -243,7 +243,7 @@ test("ve-bieu-do được gợi ý khi hỏi vẽ chart + có trong catalog", as
   expect(matchTriggers("ve bieu do tron", skills).map((s) => s.name)).toContain("ve-bieu-do")
   const catalog = renderCatalog(skills, 10_000)!
   expect(catalog.text).toContain("- ve-bieu-do:")
-  expect(catalog.text).toContain("trực quan hóa")
+  expect(catalog.text).toContain("hard to read as a table")
 })
 
 test("cây quyết định choosing-a-form bao phủ đủ kinds + có lưới an toàn", async () => {
@@ -259,11 +259,11 @@ test("cây quyết định choosing-a-form bao phủ đủ kinds + có lưới a
     expect(tree, `kind ${kind} không có trong cây`).toContain(kind)
   }
   // Quy tắc dừng ở node cha + lưới an toàn + cấm bịa.
-  expect(tree).toContain("DỪNG ở node ★")
-  expect(tree).toContain("KHÔNG VẼ")
-  expect(tree).toContain("Không bao giờ bịa data")
+  expect(tree).toContain("STOP at the first matching ★ node")
+  expect(tree).toContain("DO NOT DRAW")
+  expect(tree).toContain("Never invent data")
   // Ngưỡng khớp đúng validation trong code (render.ts / pie.ts / waterfall.ts / boxplot.ts / multiline.ts / compare.ts).
-  for (const t of ["≥5 nến", "≥2 điểm", "≥2 lát", "≥1 delta", "Mỗi nhóm ≥4 điểm", "≥3 điểm", "value + max", "2–5 chuỗi"]) {
+  for (const t of ["≥5 candles", "≥2 points", "≥2 slices", "≥1 delta", "Each group ≥4 points", "≥3 points", "value + max", "2–5 series"]) {
     expect(tree, `thiếu ngưỡng ${t}`).toContain(t)
   }
 })
@@ -273,7 +273,7 @@ test("SKILL.md trỏ sang cây thay vì bảng phẳng", async () => {
   const viz = skills.find((s) => s.name === "ve-bieu-do")!
   expect(viz.body).not.toContain("## Bảng chọn hình")
   expect(viz.body).toContain("choosing-a-form.md")
-  expect(viz.body).toContain("DỪNG ở node")
+  expect(viz.body).toContain("STOP at the first matching ★ node")
 })
 
 test("exclusion metadata is optional, typed, and uses the trigger word boundaries", () => {

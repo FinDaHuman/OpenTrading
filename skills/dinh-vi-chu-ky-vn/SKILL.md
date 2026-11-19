@@ -1,6 +1,7 @@
 ---
 name: dinh-vi-chu-ky-vn
-description: "Định vị pha thị trường VN (phục hồi, giữa sóng, cuối sóng, suy yếu) từ sức mạnh tương đối các nhóm ngành (kể cả Vin), mùa vụ và lãi suất SBV, rồi gợi ý 1–2 nhóm có thể dẫn dắt tiếp. Dùng khi hỏi thị trường đang ở giai đoạn nào, sóng ngành tiếp theo."
+description: "Locates the VN market phase (recovery, mid-wave, late wave, weakening) from sector relative strength (Vin included), seasonality and SBV rates; suggests 1–2 groups that may lead next. Use for market stage or the next sector wave."
+match_text: "Định vị pha thị trường VN (phục hồi, giữa sóng, cuối sóng, suy yếu) từ sức mạnh tương đối các nhóm ngành (kể cả Vin), mùa vụ và lãi suất SBV, rồi gợi ý 1–2 nhóm có thể dẫn dắt tiếp. Dùng khi hỏi thị trường đang ở giai đoạn nào, sóng ngành tiếp theo."
 activation: auto
 triggers:
   keywords: [giai đoạn nào, pha tiếp theo, dẫn sóng, pha nào, chu kỳ ngành, sóng tiếp theo, đầu sóng, chu kỳ thị trường, giai đoạn thị trường, pha thị trường, luân chuyển ngành, rotation, sóng ngành, đỉnh chu kỳ, giai đoạn phân phối, đầu phục hồi, bank dẫn, chứng dẫn, dòng tiền ngành, cuối sóng, giữa sóng, mùa vụ ngành, mảng vin, họ vin]
@@ -11,110 +12,110 @@ version: 1.8.0
 
 # Định vị pha chu kỳ thị trường Việt Nam
 
-Skill suy luận pha hiện tại từ 4 trụ cột live (RS mảng, timing đỉnh, mùa vụ tháng, tiền tệ) + bảng thống kê dài hạn trong PG (`cycle_*`, version trong `cycle_meta`). Kết luận luôn kèm hit-rate và provenance, không nói chắc chắn.
+This skill infers the current phase from 4 live pillars (sector RS, peak timing, monthly seasonality, monetary conditions) + long-run statistics tables in PG (`cycle_*`, versioned in `cycle_meta`). Conclusions always carry the hit rate and provenance; never state them with certainty.
 
-**Phạm vi skill này là PHA và LUÂN CHUYỂN ngành.** Phân tích ngành theo driver/KPI/định
-giá của ngành đó thuộc 13 skill ngành — bảng dưới. Hai bên không dò quyền của nhau:
-skill ngành không xác định pha, skill này không đọc KPI ngành.
+**This skill's scope is PHASES and SECTOR ROTATION.** Analysing a sector by its own drivers/KPIs/
+valuation belongs to the 13 sector skills — table below. Neither side encroaches on the other:
+sector skills do not determine phases, and this skill does not read sector KPIs.
 
 ## Khi nào dùng
 
-- Dùng khi: user hỏi thị trường đang ở giai đoạn/pha nào, sóng ngành nào dẫn dắt tiếp theo, có phải cuối sóng/phân phối không, nên ưu tiên mảng nào theo chu kỳ.
-- Khi KHÔNG dùng (dùng skill khác thay thế):
-  - Số liệu vĩ mô VN chi tiết (GDP/CPI/XNK/lãi suất điều hành) → dùng `danh-gia-vi-mo-viet-nam`.
-  - Kiểm chứng chiến lược giao dịch cụ thể bằng backtest → dùng `kiem-chien-luoc-backtest`.
-  - Phân tích kỹ thuật 1 mã/1 chart → dùng `ky-thuat-chuyen-sau`.
-  - Chu kỳ đa tài sản VN (vàng/USD/trái phiếu/xăng) → dùng `chu-ky-tai-san-vn`.
-  - Chỉ muốn XEM biểu đồ RS/heatmap → dùng `ve-bieu-do`.
+- Use when: the user asks which stage/phase the market is in, which sector wave leads next, whether this is the end of a wave/distribution, which groups to favour by the cycle.
+- Do NOT use (use another skill instead):
+  - Detailed Vietnamese macro figures (GDP/CPI/trade/policy rates) → use `danh-gia-vi-mo-viet-nam`.
+  - Backtesting a specific trading strategy → use `kiem-chien-luoc-backtest`.
+  - Technicals of 1 ticker/1 chart → use `ky-thuat-chuyen-sau`.
+  - Vietnam's multi-asset cycle (gold/USD/bonds/petrol) → use `chu-ky-tai-san-vn`.
+  - Only wanting to SEE an RS chart/heatmap → use `ve-bieu-do`.
 
 ## Bản đồ skill ngành (13 skill — định tuyến khi user hỏi đúng ngành)
 
-Mỗi skill ngành đọc ngành đó bằng driver + KPI riêng và **không** xác định pha.
-Hỏi "ngành X đang thế nào" / "BCTC ngành X đọc gì" / "driver của X là gì" → dùng
-skill ngành bên dưới. Hỏi "thị trường đang ở pha nào / mảng nào dẫn tiếp" → ở lại
-skill này.
+Each sector skill reads its sector through its own drivers + KPIs and does **not** determine the phase.
+"ngành X đang thế nào" / "BCTC ngành X đọc gì" / "driver của X là gì" → use the
+sector skill below. "thị trường đang ở pha nào / mảng nào dẫn tiếp" → stay in
+this skill.
 
-| Skill ngành | Dùng khi hỏi về |
+| Sector skill | Use for questions about |
 |---|---|
-| `ngan-hang-vn` | hạn mức tín dụng, spread lãi thuần, nợ xấu/nhóm 2, chuẩn mực thanh khoản ngân hàng |
-| `chung-khoan-vn` | dư nợ margin, mức đòn bẩy công ty chứng khoán, cơ cấu doanh thu 4 mảng |
-| `bat-dong-san-vn` | tín dụng BĐS, kênh trái phiếu và tường đáo hạn, phân khúc nhà ở vs khu công nghiệp |
-| `thep-vn` | spread quặng–than cốc, cơ cấu thép cuộn nóng, phòng vệ thương mại thép |
-| `dau-khi-vn` | giá dầu, tuyến vận chuyển/tonne-mile, 4 vòng kinh doanh dầu khí |
-| `dien-luc-vn` | giá điện và cải cách giá bán lẻ, cơ cấu nguồn, thủy văn, quy hoạch phát triển lưới |
-| `van-tai-vn` | cước tuyến, công suất cảng, tỷ lệ khóa giá, cầu xuất khẩu |
-| `hoa-chat-vn` | chu kỳ giá ure/phân bón, chính sách xuất khẩu Trung Quốc, tỷ lệ xuất khẩu |
-| `tieu-dung-ban-le-vn` | bán lẻ thực (bỏ lạm phát), thu nhập hộ gia đình, độ thâm nhập hiện đại |
-| `cong-nghe-vn` | doanh thu ký/backlog, phân hoá nội địa–nước ngoài, thu nhập trên nhân viên |
-| `bao-hiem-vn` | phí bảo hiểm mới, nghiệp vụ so với thu nhập tài chính, cơ cấu kênh |
-| `vingroup-vn` | SOTP từng mảng, vòng xe điện đốt tiền mặt, giao dịch liên kết, tỷ trọng nhóm Vin trong chỉ số |
-| `xuat-nhap-khau-vn` | thuế hai lớp, cơ cấu ngành hàng, nhập khẩu máy móc làm chỉ báo dẫn, dòng vốn ngoại |
+| `ngan-hang-vn` | credit quotas, the net interest spread, NPLs/group 2 loans, banks' liquidity ratios |
+| `chung-khoan-vn` | margin debt, brokerage leverage, the 4-business revenue mix |
+| `bat-dong-san-vn` | real-estate credit, the bond channel and maturity wall, housing vs industrial parks |
+| `thep-vn` | the ore–coking coal spread, the hot-rolled coil mix, steel trade defence |
+| `dau-khi-vn` | oil prices, shipping routes/tonne-miles, the 4 oil & gas business loops |
+| `dien-luc-vn` | electricity prices and retail tariff reform, generation mix, hydrology, grid development plans |
+| `van-tai-vn` | route freight rates, port capacity, rate-locking share, export demand |
+| `hoa-chat-vn` | the urea/fertiliser price cycle, China's export policy, export share |
+| `tieu-dung-ban-le-vn` | real retail sales (inflation removed), household income, modern-retail penetration |
+| `cong-nghe-vn` | signed revenue/backlog, the domestic–foreign split, revenue per employee |
+| `bao-hiem-vn` | new insurance premiums, underwriting vs financial income, channel mix |
+| `vingroup-vn` | SOTP by segment, the EV cash-burn loop, related-party transactions, the Vin group's index weight |
+| `xuat-nhap-khau-vn` | two-layer tariffs, product mix, machinery imports as a leading indicator, foreign capital flows |
 
 ## Các bước
 
-**Bước 0: Kiểm tra độ tươi (bắt buộc, đầu tiên).**
+**Bước 0: Check freshness (required, first).**
 
-Gọi `cycle_stats_check`.
-- `as_of` rỗng hoặc `cached_symbols` = 0 → bảng **chưa có dữ liệu**: dừng, báo "chưa có dữ liệu chu kỳ trên server", không kết luận pha, không dùng con số nào trong `references/` thay thế.
-- `needs_refresh` true, hoặc vừa qua Tết mà bảng Tết chưa cập nhật → cảnh báo + đề xuất refresh theo `references/refresh.md` (user đồng ý mới chạy). Không kết luận pha chắc chắn khi bảng cũ. Chú ý cảnh báo "cấu hình cũ (members_version=...)" — bảng đó tính theo danh sách ngành đời trước, phải refresh + finalize xong mới dùng.
+Call `cycle_stats_check`.
+- Empty `as_of` or `cached_symbols` = 0 → the tables **have no data yet**: stop, say "chưa có dữ liệu chu kỳ trên server", conclude no phase, never substitute any number from `references/`.
+- `needs_refresh` true, or just after Tết with the Tết table not updated → warn + suggest a refresh per `references/refresh.md` (run it only if the user agrees). Never conclude a phase with certainty on old tables. Watch for the warning "cấu hình cũ (members_version=...)" — that table was computed from an older sector list and must be refreshed + finalised before use.
 
-**Bước 1: RS mảng live (song song).**
+**Bước 1: Live sector RS (in parallel).**
 
-Chạy `vn_index_ohlcv` cho VNINDEX + VN30 + VNFIN + VNREAL + VNUTI + VNMAT + VNIT (count=64, interval=1D: nến đầu là giá 63 phiên trước, nến cuối là phiên gần nhất; bảng dài bị lược ở giữa nhưng luôn giữ nến đầu và cuối; không dùng summary), mỗi lượt tối đa 3 chỉ số để không dồn tải lên server. Tính RS 3 tháng (≈63 nến) từng chỉ số ngành vs VNINDEX = % thay đổi chỉ số ngành − % thay đổi VNINDEX; ghi rõ ngày đầu/cuối dùng để tính. Mảng Vin không có chỉ số riêng: chạy `market_candles_batch` cho VIC, VHM, VRE, VPL (days=64) rồi tính RS 3 tháng bằng trung bình % thay đổi 4 mã trừ VNINDEX (ghi rõ cách tính và mã nào thiếu nến). Đối chiếu quy tắc đọc RS trong `references/rotation-chains.md` + tra `cycle_trough_events` so mẫu hồi sau đáy. Song song chạy `market_movers` + `breadth_scan` (sóng thật cần breadth > 50%). Muốn đọc nhanh mảng nào đang khỏe thì `sector_performance` (heatmap GICS) để đối chiếu — nhưng RS chính tính như trên từ giá đóng cửa đầu/cuối cửa sổ 63 phiên (mỗi chỉ số ngành và VNINDEX: 4 số, ghi rõ ngày), mọi chỉ số gộp vào một lệnh `shell`; RS của skill này không lấy từ heatmap.
+Run `vn_index_ohlcv` for VNINDEX + VN30 + VNFIN + VNREAL + VNUTI + VNMAT + VNIT (count=64, interval=1D: the first candle is the price 63 sessions ago, the last is the latest session; long tables are cut in the middle but always keep the first and last candles; do not use summary), at most 3 indices per round so as not to overload the server. Compute 3-month RS (≈63 candles) for each sector index vs VNINDEX = sector index % change − VNINDEX % change; state the start/end dates used. The Vin group has no index of its own: run `market_candles_batch` for VIC, VHM, VRE, VPL (days=64), then compute 3-month RS as the average % change of the 4 tickers minus VNINDEX (state the method and which tickers lack candles). Compare with the RS reading rules in `references/rotation-chains.md` + look up `cycle_trough_events` against post-trough recovery patterns. In parallel run `market_movers` + `breadth_scan` (a real wave needs breadth > 50%). For a quick read of which groups are strong, `sector_performance` (the GICS heatmap) can be compared — but the main RS is computed as above from the start/end closes of the 63-session window (each sector index and VNINDEX: 4 numbers, dates stated), all indices in one `shell` command; this skill's RS never comes from the heatmap.
 
-Tham số `basket` của các tool `cycle_*` nhận cả tên tiếng Việt không dấu ("bất động sản", "dầu khí", "CNTT"...) — danh sách ngành đầy đủ nằm trong mô tả tool `cycle_seasonality`; không cần chép vào câu trả lời.
+The `basket` parameter of the `cycle_*` tools accepts Vietnamese names without diacritics ("bất động sản", "dầu khí", "CNTT"...) — the full sector list is in the `cycle_seasonality` tool description; no need to copy it into the answer.
 
-**Bước 2: Timing đỉnh (tuần tự sau Bước 1).**
+**Bước 2: Peak timing (sequential, after Bước 1).**
 
-Tra `cycle_turning` đỉnh gần nhất VNFIN vs VNINDEX + đỉnh live từ data Bước 1. Áp quy tắc timing trong `references/rotation-chains.md`. Nghi ngờ vùng đỉnh → chạy `event_study` quanh đỉnh để đo CAR sau đỉnh.
+Look up `cycle_turning` for the latest VNFIN peak vs VNINDEX + the live peak from the Bước 1 data. Apply the timing rules in `references/rotation-chains.md`. Suspecting a peak zone → run `event_study` around the peak to measure the post-peak CAR.
 
-**Bước 3: Mùa vụ tháng hiện tại (song song).**
+**Bước 3: The current month's seasonality (in parallel).**
 
-Tra `cycle_seasonality(month=<M>)` (bias + hit-rate theo từng mảng, tính sẵn trong bảng PG) + gọi `seasonality` cho VNINDEX (tính trực tiếp từ nến, chỉ một mã) để xác nhận bias còn hiệu lực. Hai tool có thể lệch nhau vì khác giai đoạn dữ liệu: ghi rõ số nào từ tool nào. Nếu trong cửa sổ ±10 phiên quanh Tết → tra `cycle_tet` (pre-Tết bank/bán lẻ/vận tải; post-Tết thép/hóa chất/vận tải/dầu khí).
+Look up `cycle_seasonality(month=<M>)` (bias + hit rate per group, precomputed in the PG table) + call `seasonality` for VNINDEX (computed directly from candles, one ticker only) to confirm the bias still holds. The two tools may differ because of different data periods: state which number comes from which tool. Within ±10 sessions of Tết → look up `cycle_tet` (pre-Tết banks/retail/transport; post-Tết steel/chemicals/transport/oil & gas).
 
-**Bước 4: Trạng thái tiền tệ (song song).**
+**Bước 4: Monetary conditions (in parallel).**
 
-Chạy `sbv_rates`. Nới lỏng = ủng hộ Pha 1–2; thắt chặt/giữ cao + hút tín phiếu = ủng hộ Pha 3–4. Cần số GDP/tín dụng sâu → cross-ref skill `danh-gia-vi-mo-viet-nam`, không tự suy diễn macro.
+Run `sbv_rates`. Easing = supports Phases 1–2; tightening/holding high + bill absorption = supports Phases 3–4. For deeper GDP/credit figures → cross-ref the `danh-gia-vi-mo-viet-nam` skill; never infer macro yourself.
 
-**Bước 5: Kết luận pha + gợi ý mảng.**
+**Bước 5: Conclude the phase + suggest groups.**
 
-Chấm 4 trụ cột theo checklist trong `references/phase-playbook.md`, chọn pha có nhiều điểm khớp nhất. Gợi ý 1–2 mảng tiếp theo: tra `cycle_chains` lấy hit-rate MỚI NHẤT (không dùng số trong file). Mảng Vin: áp đúng điều kiện Vin trong `references/rotation-chains.md` §1 (một luật duy nhất, đừng tự suy ra ngưỡng khác); ngoài chuỗi chỉ nêu Vin khi hàng `vin` của `cycle_seasonality(month=<M>)` ở Bước 3 đạt ngưỡng `references/seasonality-vn.md` §1 **hoặc** cột `vin` của `cycle_trough_events` ở Bước 1 đủ điều kiện (xem `references/market-history.md` §2). CẤM picking mã cổ phiếu cụ thể, CẤM quy tắc mua/bán (đó là việc của skill khác).
+Score the 4 pillars with the checklist in `references/phase-playbook.md` and pick the phase with the most matches. Suggest the next 1–2 groups: look up `cycle_chains` for the LATEST hit rates (never the numbers in the file). Vin group: apply exactly the Vin condition in `references/rotation-chains.md` §1 (one single rule; do not derive other thresholds); outside the chain, mention Vin only when the `vin` row of `cycle_seasonality(month=<M>)` in Bước 3 reaches the threshold in `references/seasonality-vn.md` §1 **or** the `vin` column of `cycle_trough_events` in Bước 1 qualifies (see `references/market-history.md` §2). NEVER pick specific stocks, NEVER give buy/sell rules (that is another skill's job).
 
 ## Cấu trúc câu trả lời
 
-Trình bày đúng thứ tự: độ tươi bảng (`as_of` từ check) · verdict pha (1 dòng + độ tin cậy) · bằng chứng 4 trụ cột (mỗi số kèm provenance tool) · 1–2 mảng gợi ý kèm hit-rate live · pha lịch sử tương đồng nhất · thay đổi định nghĩa trong lần refresh này (nếu có, trích changelog) · caveat + đề xuất refresh nếu bảng cũ. Khoảng 14–18 lệnh gọi, gom song song trong từng bước.
+In exactly this order: table freshness (`as_of` from the check) · phase verdict (1 line + confidence) · evidence from the 4 pillars (each number with tool provenance) · 1–2 suggested groups with live hit rates · the most similar historical phase · definition changes in this refresh (if any, quoting the changelog) · caveats + a refresh suggestion if the tables are old. About 14–18 calls, batched in parallel within each step.
 
 ## Ngôn ngữ trình bày
 
-Viết tắt trong `references/` dùng để bạn làm việc, không viết ra cho người dùng:
+The abbreviations in `references/` are for your work, not for writing to the user:
 
-| Ký hiệu nội bộ | Viết cho người dùng |
+| Internal notation | Write for the user |
 | --- | --- |
-| RS 3M, RS 1M, RS mảng | sức mạnh tương đối 3 tháng/1 tháng của nhóm ngành so với VN-Index (lần đầu nói rõ nghĩa của "sức mạnh tương đối") |
+| RS 3M, RS 1M, RS mảng | sức mạnh tương đối 3 tháng/1 tháng của nhóm ngành so với VN-Index (the first time, explain what "sức mạnh tương đối" means) |
 | VNI, VNFIN, CK, BĐS, utilities, consumer | VN-Index, VN-Finindex, chứng khoán, bất động sản, tiện ích, tiêu dùng |
 | vin, mảng Vin | nhóm cổ phiếu Vin (VIC, VHM, VRE, VPL) |
 | drawdown, bear, bull | mức sụt giảm sâu nhất, pha suy yếu, pha phục hồi |
 | bias tháng, hit-rate, breadth | xu hướng thường thấy của tháng đó, tỷ lệ đúng theo lịch sử, độ rộng thị trường |
 | pre-Tết, post-Tết, turning | trước Tết, sau Tết, đảo chiều |
 
-Tên chỉ số và mã giữ nguyên (VN-Index, VN30). Quy tắc và ngưỡng trong `references/` dùng để ra quyết định, không phải để chép lại cho người dùng; mọi số liệu, thứ hạng và tỷ lệ đều lấy từ tool. Chốt pha bằng lời của bạn, kèm độ tin cậy và nguồn.
+Keep index names and tickers as they are (VN-Index, VN30). The rules and thresholds in `references/` are for deciding, not for copying out to the user; every figure, ranking and rate comes from tools. State the phase in your own words, with confidence and sources.
 
 ## Ví dụ
 
 **Ví dụ 1:**
 Hỏi: Thị trường đang ở giai đoạn nào, sóng ngành nào tiếp theo?
-Đạt khi: có độ tươi bảng (`as_of`), kết luận pha kèm độ tin cậy, 4 trụ cột có số + tool nguồn, 1–2 mảng gợi ý kèm hit-rate lấy từ `cycle_chains`, và caveat mẫu nhỏ.
+Đạt khi: table freshness (`as_of`), a phase conclusion with confidence, the 4 pillars with numbers + source tools, 1–2 suggested groups with hit rates from `cycle_chains`, and the small-sample caveat.
 
 ## Trực quan hóa
 
-Chỉ vẽ khi người dùng muốn xem hình, hoặc khi có chuỗi thời gian / so sánh mà bảng khó đọc; tối đa 1 biểu đồ mỗi câu trả lời. Vẽ bằng `chart_render` với `from_call` (mã `[ref …]` ở đầu kết quả tool) để không phải gõ lại số; cần chọn loại hình thì nạp `ve-bieu-do`.
+Draw only when the user wants a picture, or when a time series / comparison is hard to read as a table; at most 1 chart per answer. Draw with `chart_render` using `from_call` (the `[ref …]` code at the top of a tool result) so you never retype numbers; load `ve-bieu-do` to choose the chart type.
 
 ## File tham khảo
 
-| File | Trả lời câu hỏi |
+| File | Answers |
 |---|---|
-| `references/seasonality-vn.md` | Cách đọc bảng mùa vụ + ngưỡng diễn giải + cơ chế Tết (số tra tool) |
-| `references/rotation-chains.md` | Định nghĩa chuỗi + quy tắc đọc RS + quy tắc timing đỉnh |
-| `references/phase-playbook.md` | Định nghĩa 4 pha + ma trận pha→mảng + checklist chấm pha |
-| `references/market-history.md` | Timeline chu kỳ VN 2011→ (narrative; số tra tool) |
-| `references/refresh.md` | Khi nào + cách refresh qua MCP tools + changelog |
+| `references/seasonality-vn.md` | How to read the seasonality table + interpretation thresholds + the Tết mechanism (numbers from tools) |
+| `references/rotation-chains.md` | Chain definitions + RS reading rules + peak timing rules |
+| `references/phase-playbook.md` | The 4 phase definitions + the phase→group matrix + the phase scoring checklist |
+| `references/market-history.md` | Vietnam's cycle timeline since 2011 (narrative; numbers from tools) |
+| `references/refresh.md` | When + how to refresh via MCP tools + changelog |

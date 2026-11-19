@@ -37,7 +37,7 @@ export function shellRoute(call: ShellCall): ShellRoute {
   if (!call.ok && call.visible.startsWith(MATH_NEAR_MISS_PREFIX)) return "near-miss"
   // Reached execute but never started a shell: the calculator refusing a command that is not
   // arithmetic. A command that ran always opens with the tool's status line.
-  if (call.executed && !call.ok && !/^\[(?:mã thoát|dừng vì|đã huỷ)/.test(call.visible)) return "denied"
+  if (call.executed && !call.ok && !/^\[(?:exit code|stopped after|cancelled|mã thoát|dừng vì|đã huỷ)/.test(call.visible)) return "denied"
   if (call.executed) {
     if (call.scope?.startsWith("math:")) return "math"
     return call.readOnly || call.scope?.startsWith("read:") ? "read-only" : "approved"

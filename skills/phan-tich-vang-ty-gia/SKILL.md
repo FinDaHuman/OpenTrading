@@ -1,6 +1,7 @@
 ---
 name: phan-tich-vang-ty-gia
-description: "Phân tích vàng SJC, chênh lệch với giá thế giới, tỷ giá USDVND và lãi suất SBV–Fed. Dùng khi hỏi giá vàng, premium vàng, áp lực tỷ giá."
+description: "Analyses SJC gold, its gap to the world price, the USDVND rate and SBV–Fed rates. Use for gold prices, the gold premium, exchange-rate pressure."
+match_text: "Phân tích vàng SJC, chênh lệch với giá thế giới, tỷ giá USDVND và lãi suất SBV–Fed. Dùng khi hỏi giá vàng, premium vàng, áp lực tỷ giá."
 activation: auto
 requires_tools: [mcp__opentrading__vn_retail_gold]
 triggers:
@@ -10,45 +11,45 @@ version: 1.3.0
 
 # Vàng và tỷ giá
 
-Trả về: giá TG + TA 3 dòng · premium % + dự đoán khung vàng VN (theo TG / ngược TG khi premium nở) · lãi suất 2 đầu + hàm ý tỷ giá · kịch bản odds. Không point-forecast giá cụ thể ("vàng sẽ lên X triệu") — chỉ nêu premium + driver + kịch bản odds.
+Return: world price + 3 lines of TA · premium % + the expected direction of Vietnamese gold (following the world / against it when the premium widens) · rates at both ends + exchange-rate implications · odds scenarios. No point forecast of a price ("vàng sẽ lên X triệu") — only the premium + drivers + odds scenarios.
 
 ## Khi nào dùng
 
-- Dùng khi: user hỏi giá vàng SJC/vàng miếng, chênh lệch (premium) VN–TG, giá vàng thế giới + TA vàng, áp lực tỷ giá USDVND, dự đoán khung vàng VN, lãi suất 2 đầu SBV–Fed và hàm ý tỷ giá.
-- Khi KHÔNG dùng (dùng skill khác thay thế): lãi suất điều hành VN chung (chỉ dùng `danh-gia-vi-mo-viet-nam`); nhịp đập crypto (chỉ dùng `nhip-dap-crypto`); TA mã chứng khoán VN (chỉ dùng `ky-thuat-chuyen-sau`).
+- Use when: the user asks about SJC/bar gold prices, the Vietnam–world gap (premium), world gold prices + gold TA, USDVND pressure, the expected direction of Vietnamese gold, SBV–Fed rates at both ends and exchange-rate implications.
+- Do NOT use (use another skill instead): Vietnam's policy rates in general (use `danh-gia-vi-mo-viet-nam` only); crypto (use `nhip-dap-crypto` only); TA of Vietnamese stocks (use `ky-thuat-chuyen-sau` only).
 
 ## Các bước
 
-**Bước 1: Giá vàng quốc tế + TA vàng.**
+**Bước 1: World gold price + gold TA.**
 
-Chạy `yf_commodities` (GC — 1 call đã gồm GC+DXY, không tách tick riêng lẻ) + `vn_msn_fx_gold`. Đọc trend/momentum trên nến daily (giá vs SMA20/50 + RSI ước từ series). `signals_technical` chỉ hỗ trợ mã VN — không ép dùng cho GC=F, đọc TA từ series có sẵn.
+Run `yf_commodities` (GC — 1 call already includes GC+DXY; do not split ticks) + `vn_msn_fx_gold`. Read trend/momentum on daily candles (price vs SMA20/50 + RSI estimated from the series). `signals_technical` supports only Vietnamese tickers — do not force it on GC=F; read TA from the series you have.
 
-**Bước 2: Rủi ro địa chính trị (cross-ref, không gọi lại).**
+**Bước 2: Geopolitical risk (cross-reference, no new calls).**
 
-Tham chiếu `danh-gia-tinh-hinh-xung-dot` / `bat-on-quoc-gia` nếu vừa chạy ở skill trước (leo thang = vàng lên); không gọi lại tốn budget.
+Refer to `danh-gia-tinh-hinh-xung-dot` / `bat-on-quoc-gia` if a previous skill just ran them (escalation = gold up); do not call them again and waste budget.
 
-**Bước 3: So lệch VN–TG → premium.**
+**Bước 3: Vietnam–world gap → premium.**
 
-Chạy `vn_retail_gold` (SJC mua/bán). Premium = (SJC mua vào − giá TG quy đổi) / giá TG — bắt buộc ghi giả định quy đổi đơn vị (SJC VND/lượng vs XAUUSD USD/oz). Premium nở = vàng VN khó giảm theo TG.
+Run `vn_retail_gold` (SJC buy/sell). Premium = (SJC buy − converted world price) / world price — you must state the unit-conversion assumption (SJC VND/lượng vs XAUUSD USD/oz). A widening premium = Vietnamese gold is slow to fall with the world.
 
-**Bước 4: Lãi suất 2 đầu.**
+**Bước 4: Rates at both ends.**
 
-Chạy `sbv_rates` + `fred_series` (DGS10) + `yf_yield_curve`: SBV (tái cấp vốn/chiết khấu) vs US (DGS10/curve) — chênh lệch hút vốn, hàm ý tỷ giá.
+Run `sbv_rates` + `fred_series` (DGS10) + `yf_yield_curve`: SBV (refinancing/discount) vs US (DGS10/curve) — the gap drives capital flows and the exchange rate.
 
-**Bước 5: Kịch bản odds + validate.**
+**Bước 5: Odds scenarios + validate.**
 
-Tham chiếu `world_prediction_odds` (cross-ref `du-doan-fed`) + `macro_events_vn` cho bối cảnh. Chỉ nêu premium + driver + kịch bản odds, không point-forecast.
+Refer to `world_prediction_odds` (cross-ref `du-doan-fed`) + `macro_events_vn` for context. Give only the premium + drivers + odds scenarios, no point forecast.
 
 ## Cấu trúc câu trả lời
 
-Trình bày kết luận đúng cấu trúc sau: giá TG + TA 3 dòng · premium % + dự đoán khung vàng VN (theo TG / ngược TG khi premium nở) · lãi suất 2 đầu + hàm ý tỷ giá · kịch bản odds · KHÔNG point-forecast giá.
+Present the conclusion in exactly this structure: world price + 3 lines of TA · premium % + expected direction of Vietnamese gold (following the world / against it when the premium widens) · rates at both ends + exchange-rate implications · odds scenarios · NO point price forecast.
 
 ## Ví dụ
 
 **Ví dụ 1:**
 Hỏi: Vàng SJC hôm nay đắt hơn thế giới bao nhiêu
-Đạt khi: số premium % + giả định + 2 driver, ≤10 calls.
+Đạt khi: the premium % + assumption + 2 drivers, ≤10 calls.
 
 ## Trực quan hóa
 
-Chỉ vẽ khi người dùng muốn xem hình, hoặc khi có chuỗi thời gian / so sánh mà bảng khó đọc; tối đa 1 biểu đồ mỗi câu trả lời. Vẽ bằng `chart_render` với `from_call` (mã `[ref …]` ở đầu kết quả tool) để không phải gõ lại số; cần chọn loại hình thì nạp `ve-bieu-do`. Hình hợp với dữ liệu skill này: candlestick/line giá vàng, multiline SMA, bar diverging premium/rate gap.
+Draw only when the user wants a picture, or when a time series / comparison is hard to read as a table; at most 1 chart per answer. Draw with `chart_render` using `from_call` (the `[ref …]` code at the top of a tool result) so you never retype numbers; load `ve-bieu-do` to choose the chart type. Fitting this skill's data: candlestick/line gold price, multiline SMA, bar diverging premium/rate gap.

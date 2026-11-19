@@ -1,6 +1,7 @@
 ---
 name: ve-bieu-do
-description: "Vẽ biểu đồ màu trong terminal từ dữ liệu tool đã có (nến + khối lượng, đường giá, bar, pie, waterfall, heatmap, sổ lệnh…). Dùng khi người dùng muốn xem biểu đồ, hoặc khi chuỗi số khó đọc dạng bảng và cần trực quan hóa."
+description: "Draws colour charts in the terminal from tool data you already have (candles + volume, line, bar, pie, waterfall, heatmap, order book…). Use when the user wants a chart, or a series is hard to read as a table."
+match_text: "Vẽ biểu đồ màu trong terminal từ dữ liệu tool đã có (nến + khối lượng, đường giá, bar, pie, waterfall, heatmap, sổ lệnh…). Dùng khi người dùng muốn xem biểu đồ, hoặc khi chuỗi số khó đọc dạng bảng và cần trực quan hóa."
 activation: auto
 requires_tools: [chart_render]
 uses_tools: [chart_render]
@@ -11,29 +12,29 @@ version: 1.1.1
 
 # Vẽ biểu đồ màu trong terminal
 
-Skill hiển thị: số liệu luôn lấy từ kết quả tool trong phiên, không bao giờ bịa số minh họa.
+A display skill: figures always come from tool results in the session, never invented for illustration.
 
 ## Các bước
 
-1. **Vẽ theo tham chiếu.** Mỗi kết quả tool có dữ liệu dạng mảng mở đầu bằng mã `[ref rN]`. Gọi `chart_render({from_call: "rN", kind})` (so sánh nhiều mã: `chart_render({kind: "compare", from_calls: ["r1", "r2"]})`) để harness tự lấy số — không gõ lại từng con số. Kết quả gọi gộp nhiều mã (một `rN` chứa FPT, SHB, NVL): `chart_render({kind: "compare", from_calls: ["rN"]})` tự tách từng mã; vẽ một mã thì thêm `from_symbol: "SHB"`. Chỉ truyền số tay khi dữ liệu không đến từ tool.
-2. **Chưa chắc chọn hình nào** thì đọc `references/choosing-a-form.md`, đi theo cây yes/no và DỪNG ở node ★ đầu tiên khớp. Chỉ đọc thêm file reference của đúng loại hình đó.
-3. **Thiếu điểm tối thiểu** (ngưỡng ghi trong cây) thì báo thiếu dữ liệu, không vẽ.
-4. **Nhận xét 2–3 câu** từ hình và số (xu hướng, đỉnh/đáy, vị trí trong biên độ, đơn vị). Hình tự hiện trong TUI: không chép hình vào câu trả lời.
+1. **Draw by reference.** Every tool result with array data starts with a `[ref rN]` code. Call `chart_render({from_call: "rN", kind})` (several tickers: `chart_render({kind: "compare", from_calls: ["r1", "r2"]})`) so the harness takes the numbers itself — never retype them one by one. A combined multi-ticker result (one `rN` holding FPT, SHB, NVL): `chart_render({kind: "compare", from_calls: ["rN"]})` splits it per ticker; for one ticker add `from_symbol: "SHB"`. Pass numbers by hand only when the data did not come from a tool.
+2. **Not sure which chart** → read `references/choosing-a-form.md`, follow the yes/no tree and STOP at the first matching ★ node. Read only the reference file for that chart type.
+3. **Too few points** (the minimum noted in the tree) → report missing data; do not draw.
+4. **Comment in 2–3 sentences** from the picture and the numbers (trend, highs/lows, position in the range, units). The picture shows itself in the TUI: do not copy it into the answer.
 
 ## Lưu ý
 
-- Giá nhiều mã dùng `chart_render kind=compare` (% thay đổi), không vẽ chung một `multiline`.
-- Pie quá 7 lát thì dùng bar; một giá trị trên tổng thì dùng donut/gauge.
-- Luôn truyền `unit` khi biết (kVND, %, tỷ, triệu cp).
-- Mỗi câu trả lời tối đa 1 biểu đồ, trừ khi người dùng yêu cầu thêm.
+- Prices of several tickers use `chart_render kind=compare` (% change), not one shared `multiline`.
+- A pie with more than 7 slices becomes a bar; one value over a total becomes a donut/gauge.
+- Always pass `unit` when known (kVND, %, tỷ, triệu cp).
+- At most 1 chart per answer, unless the user asks for more.
 
 ## File tham khảo
 
-| File | Dùng khi |
+| File | Use when |
 |---|---|
-| `references/choosing-a-form.md` | Chọn loại hình theo dạng dữ liệu, và hình nên tránh |
-| `references/time-series.md` | Nến + khối lượng, đường giá, area, sparkline |
-| `references/comparison.md` | Bar, boxplot, histogram, so sánh % |
+| `references/choosing-a-form.md` | Choosing a chart by data shape, and charts to avoid |
+| `references/time-series.md` | Candles + volume, price line, area, sparkline |
+| `references/comparison.md` | Bar, boxplot, histogram, % comparison |
 | `references/part-to-whole.md` | Pie/donut, stacked, waterfall |
-| `references/relationship.md` | Scatter, multiline chỉ số, heatmap |
-| `references/anti-patterns.md` | Những gì không nên vẽ |
+| `references/relationship.md` | Scatter, multiline indicators, heatmap |
+| `references/anti-patterns.md` | What not to draw |

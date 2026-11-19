@@ -1,6 +1,7 @@
 ---
 name: chung-khoan-vn
-description: "Pha/sóng: dùng skill chu kỳ. Phân tích ngành chứng khoán VN theo đòn bẩy và cơ cấu doanh thu: dư nợ margin so vốn chủ, spread margin, sự dịch chuyển từ phí sang mảng cân đối. Dùng khi đọc kết quả công ty chứng khoán."
+description: "Phase/wave: use dinh-vi-chu-ky-vn. Analyses VN brokerages by leverage and revenue mix: margin loans vs equity, margin spread, the shift from fees to balance-sheet businesses. Use for brokerage results."
+match_text: "Pha/sóng: dùng skill chu kỳ. Phân tích ngành chứng khoán VN theo đòn bẩy và cơ cấu doanh thu: dư nợ margin so vốn chủ, spread margin, sự dịch chuyển từ phí sang mảng cân đối. Dùng khi đọc kết quả công ty chứng khoán."
 activation: auto
 requires_tools: [financial_detail, vs_financial_norms]
 uses_tools: [financial_detail, vs_financial_norms, financial_ratios, stock_overview, planned_targets, analyst_consensus, peer_compare, market_overview, breadth_scan, news_symbol, news_market, symbol_lookup, vn_company, vs_market_info, valuation_run]
@@ -12,152 +13,151 @@ version: 1.0.0
 
 # Chứng khoán Việt Nam — framework phân tích
 
-Ngành chứng khoán VN đã rời mô hình "sống bằng phí môi giới": doanh thu đang dịch
-sang **mảng cân đối** (đầu tư tự doanh + cho vay ký quỹ). Vì vậy skill này đọc
-ngành qua **đòn bẩy** (dư nợ margin so vốn chủ và so trần cho phép), **chất lượng
-đòn bẩy đó** (spread margin) và **cơ cấu doanh thu** (mảng nào đang nuôi lãi),
-không đọc bằng doanh thu môi giới — mảng này bị cạnh tranh phí 0 làm méo giá trị
-chỉ báo.
+Vietnamese brokerages have left the "live on brokerage fees" model: revenue is shifting
+to the **balance-sheet businesses** (proprietary investment + margin lending). So this skill reads
+the sector through **leverage** (margin loans vs equity and vs the permitted cap), **the quality of
+that leverage** (the margin spread) and **the revenue mix** (which business feeds profit),
+not through brokerage revenue — zero-fee competition distorts that indicator's value.
 
-BCTC công ty chứng khoán đọc qua chuẩn mực riêng (`vs_financial_norms(btype=2)`).
+Brokerage statements are read under their own standards (`vs_financial_norms(btype=2)`).
 
 ## Khi nào dùng
 
-- Dùng khi: user hỏi xu hướng ngành chứng khoán, kết quả một công ty chứng khoán,
-  dư nợ margin có rủi ro không, ngành hưởng gì từ nâng hạng thị trường.
-- Khi KHÔNG dùng (dùng skill khác thay thế):
-  - Hỏi pha thị trường / luân chuyển ngành / sóng ngành tiếp theo → `dinh-vi-chu-ky-vn`.
-  - Phân tích toàn diện một mã → `phan-tich-chuyen-sau-1-ma`.
-  - Chỉ định giá một mã → `dinh-gia-chuyen-sau`.
-  - Chỉ đọc BCTC một mã không có mảng ngành → `co-ban-chuyen-sau`.
-  - Số liệu vĩ mô VN chi tiết → `danh-gia-vi-mo-viet-nam`.
+- Use when: the user asks about brokerage-sector trends, a securities company's results,
+  whether margin debt is risky, what the sector gains from a market upgrade.
+- Do NOT use (use another skill instead):
+  - Market phase / sector rotation / the next sector wave → `dinh-vi-chu-ky-vn`.
+  - A full ticker analysis → `phan-tich-chuyen-sau-1-ma`.
+  - Valuing one ticker only → `dinh-gia-chuyen-sau`.
+  - Only one ticker's statements without the sector angle → `co-ban-chuyen-sau`.
+  - Detailed Vietnamese macro figures → `danh-gia-vi-mo-viet-nam`.
 
 ## Trụ cột driver
 
-| Driver | Kênh truyền dẫn | Đo/xác minh bằng |
+| Driver | Transmission channel | Measure/verify with |
 |---|---|---|
-| Dư nợ margin | Một nguồn thu lãi của ngành: nhà đầu tư vay mua cổ phiếu. Dư nợ tăng liên tục = nhận thức rủi ro đang mở ra; giảm đột ngột = thị trường vừa xả hoặc CTCK siết gọi ký quỹ | Tổng dư nợ margin ngành + của mã: `news_market`/`web_search` (các CTCK lớn công bố dư nợ theo quý), riêng mã đọc `financial_detail` |
-| Mức đòn bẩy | Dư nợ margin so vốn chủ so với **trần quy định đang áp dụng** (tra văn bản cơ quan quản lý: số hiệu, ngày hiệu lực, phạm vi, công thức và điều kiện áp dụng; chưa xác minh thì không chốt dư địa) quyết định còn bao nhiêu chỗ tăng trưởng. Gần trần → khả năng tăng dư nợ có thể cần vốn mới; tự doanh là nguồn rủi ro riêng, không mặc định bù được tăng trưởng | Tính từ `financial_detail` (dư nợ cho vay ký quỹ, vốn chủ) — ghi rõ công thức tự tính |
-| Spread margin | Lãi margin điều chỉnh theo từng CTCK và gói ký quỹ, trong khi chi phí huy động của CTCK tăng theo tiền gửi và giấy tờ có giá → spread nén là rủi ro lợi nhuận trực tiếp | Lãi margin trung bình (từng gói, công bố từng công ty) + chi phí vốn: `news_market` + `financial_detail` — lấy số của kỳ đang xét, không mang số cũ giữa các kỳ |
-| Cơ cấu doanh thu | Ngành dịch từ phí sang cân đối. Nhóm nội địa phụ thuộc đầu tư + margin; nhóm nước ngoài cân bằng hơn. Cơ cấu quyết định nhóm nào chịu thị trường giảm | `financial_detail` (chuẩn CTCK): doanh thu môi giới · cho vay ký quỹ · đầu tư · tư vấn |
-| Thanh khoản thị trường | Phí môi giới bị cạnh tranh phí 0 làm mất giá trị đo lường, nhưng thanh khoản vẫn là nền cho ký quỹ và tự doanh | `market_overview` · `breadth_scan` · `vs_market_info` |
-| Cơ chế mới | Non-prefunding, hệ thống bù trừ (CCP), nâng hạng thị trường theo đợt, pipeline IPO/ECM → phí tư vấn bảo lãnh và vốn chủ mở rộng | `news_market`/`web_search`; ghi rõ nguồn và mốc thời gian |
+| Margin debt | One of the sector's interest sources: investors borrow to buy shares. Steadily rising debt = risk appetite opening up; a sudden drop = the market just sold off or brokerages tightened margin calls | Total sector margin debt + the ticker's: `news_market`/`web_search` (large brokerages publish margin debt quarterly); for the ticker read `financial_detail` |
+| Leverage level | Margin debt vs equity against the **regulatory cap in force** (look up the regulator's text: number, effective date, scope, formula and conditions; unverified → do not conclude the headroom) decides how much room for growth is left. Near the cap → growing the loan book may need new capital; proprietary trading is a separate source of risk and does not by default make up for growth | Computed from `financial_detail` (margin loans, equity) — state your formula |
+| Margin spread | Margin rates vary by brokerage and margin package, while brokerages' funding costs move with deposits and valuable papers → a compressed spread is a direct profit risk | Average margin rate (per package, published by each company) + funding cost: `news_market` + `financial_detail` — take the figures for the period in question; never carry old figures across periods |
+| Revenue mix | The sector is moving from fees to the balance sheet. Domestic groups rely on investment + margin; foreign groups are more balanced. The mix decides which group suffers in a falling market | `financial_detail` (brokerage standards): brokerage · margin lending · investment · advisory revenue |
+| Market liquidity | Zero-fee competition strips brokerage fees of measurement value, but liquidity remains the base for margin and proprietary trading | `market_overview` · `breadth_scan` · `vs_market_info` |
+| New mechanisms | Non-prefunding, a clearing system (CCP), market upgrades in stages, the IPO/ECM pipeline → underwriting/advisory fees and equity expansion | `news_market`/`web_search`; state the source and the dates |
 
 ## Các bước
 
-Khoảng 4 lượt gọi tool. Bắt buộc có `vs_financial_norms(btype=2)` TRƯỚC khi đọc
-dòng BCTC công ty chứng khoán.
+About 4 tool rounds. `vs_financial_norms(btype=2)` is required BEFORE reading
+brokerage statement lines.
 
-**Bước 1: Chuẩn mực + nhận diện mã (song song).**
+**Bước 1: Standards + identify the ticker (in parallel).**
 
-`vs_financial_norms(btype=2)` · `symbol_lookup` (nếu user đưa tên công ty) ·
-`vn_company` (mô hình kinh doanh, nhóm cổ đông — công ty con ngân hàng hay độc lập).
+`vs_financial_norms(btype=2)` · `symbol_lookup` (if the user gives a company name) ·
+`vn_company` (business model, shareholder group — a bank subsidiary or independent).
 
-**Bước 2: Đòn bẩy + cơ cấu doanh thu (song song).**
+**Bước 2: Leverage + revenue mix (in parallel).**
 
-`financial_detail`: dư nợ cho vay ký quỹ · vốn chủ · doanh thu theo 4 mảng ·
-các khoản phải thu. Tự tính mức đòn bẩy (ghi rõ công thức) và so trần quy định.
+`financial_detail`: margin loans · equity · revenue by the 4 businesses ·
+receivables. Compute the leverage level yourself (state the formula) and compare with the regulatory cap.
 
-**Bước 3: Nhịp thị trường + spread (song song).**
+**Bước 3: Market rhythm + spread (in parallel).**
 
-`market_overview` (giá bluechip, movers, độ rộng) · `breadth_scan` (độ rộng có
-thật không) · `news_market` (dư nợ margin ngành, lãi margin, chi phí vốn CTCK).
+`market_overview` (bluechip prices, movers, breadth) · `breadth_scan` (is the breadth
+real) · `news_market` (sector margin debt, margin rates, brokerages' funding costs).
 
-**Bước 4: Neo kỳ vọng + vị thế nhóm.**
+**Bước 4: Expectation anchor + position in the group.**
 
-`planned_targets` (kế hoạch năm) · `peer_compare` (chỉ key tổng quan thực trả như P/B, ROE) · `financial_detail`/công bố từng peer cùng kỳ để so dư nợ/vốn chủ và cơ cấu doanh thu · `analyst_consensus` (neo kỳ vọng, không thay
-thế kết luận).
+`planned_targets` (the yearly plan) · `peer_compare` (only the overview keys it really returns, such as P/B, ROE) · each peer's `financial_detail`/disclosures for the same period to compare debt/equity and revenue mix · `analyst_consensus` (an expectation anchor, never a substitute
+for the conclusion).
 
 ## Cây quyết định ngành đang được tiếp sức hay bị siết
 
-Duyệt các node theo thứ tự; ghi trạng thái trung gian rồi đi tiếp. Chỉ dừng ở ★.
-Thiếu dữ liệu phải ghi rõ và hạ độ tin cậy; không coi thiếu là tín hiệu xấu.
+Go through the nodes in order; record the intermediate state and move on. Stop only at ★.
+Missing data must be stated and lowers confidence; never treat missing data as a negative signal.
 
-Q1. Dư nợ margin ngành đang tăng hay giảm?
-├─ Tăng liên tục → ghi cầu ký quỹ tăng → Q2
-├─ Giảm/đi ngang → ghi động lực ký quỹ yếu; chưa suy tự doanh bù được → Q2
-└─ Thiếu chuỗi ngành → ghi chưa rõ cầu ký quỹ → Q2
+Q1. Is sector margin debt rising or falling?
+├─ Rising steadily → record rising margin demand → Q2
+├─ Falling/flat → record weak margin momentum; do not infer that proprietary trading makes up for it → Q2
+└─ No sector series → record margin demand unclear → Q2
 
-Q2. Dư nợ margin/vốn chủ còn cách trần đang áp dụng bao xa?
-├─ Gần trần đã xác minh → ghi hạn chế dư địa, cần vốn mới → Q3
-├─ Còn cách xa trần đã xác minh → ghi còn dư địa → Q3
-└─ Thiếu số liệu/văn bản → ghi chưa xác nhận dư địa pháp lý → Q3
+Q2. How far is margin debt/equity from the cap in force?
+├─ Near the cap, verified → record limited headroom, new capital needed → Q3
+├─ Well below the cap, verified → record headroom left → Q3
+└─ Missing figures/texts → record legal headroom unconfirmed → Q3
 
-Q3. Spread margin đang nở hay nén?
-├─ Nén → ghi áp lực lợi nhuận ký quỹ → Q4
-├─ Nở/ổn định → ghi biên ký quỹ thuận/ổn → Q4
-└─ Thiếu lãi suất hoặc chi phí vốn cùng kỳ → ghi chưa đo được spread → Q4
+Q3. Is the margin spread widening or compressing?
+├─ Compressing → record pressure on margin profit → Q4
+├─ Widening/stable → record a favourable/stable margin → Q4
+└─ No rates or funding costs for the same period → record the spread unmeasurable → Q4
 
-Q4. Chất lượng cơ cấu doanh thu ra sao?
-├─ Phụ thuộc môi giới → ghi rủi ro cạnh tranh phí → Q5
-├─ Ký quỹ tăng, chi phí vốn được kiểm soát → ghi nguồn lãi ký quỹ → Q5
-├─ Phụ thuộc tự doanh → ghi biến động danh mục, tách lãi đã/chưa thực hiện; không mặc định tích cực → Q5
-└─ Thiếu chi tiết hoặc cơ cấu hỗn hợp → ghi chưa rõ mức bền vững → Q5
+Q4. How good is the revenue mix?
+├─ Dependent on brokerage → record fee-competition risk → Q5
+├─ Margin lending rising, funding costs under control → record a margin-interest source → Q5
+├─ Dependent on proprietary trading → record portfolio volatility, separate realised/unrealised gains; not positive by default → Q5
+└─ Missing detail or a mixed mix → record sustainability unclear → Q5
 
-Q5. Cơ chế mới và pipeline tư vấn có bằng chứng thực hiện không?
-├─ Có mốc và tác động doanh thu/vốn được xác minh → ★ "Có động lực bổ sung; đánh giá cùng rủi ro ký quỹ và tự doanh đã ghi"
-├─ Chưa thực hiện/đã phản ánh → ★ "Đánh giá tăng trưởng từ hoạt động thực tế; không nội suy lợi nhuận từ tên chính sách"
-└─ Chưa xác minh → ★ "Chưa đủ dữ liệu về động lực thể chế; kết luận giới hạn theo các mảng đã xác minh"
+Q5. Is there evidence the new mechanisms and the advisory pipeline are being delivered?
+├─ Dates and revenue/capital effects verified → ★ "Có động lực bổ sung; đánh giá cùng rủi ro ký quỹ và tự doanh đã ghi"
+├─ Not delivered/already priced in → ★ "Đánh giá tăng trưởng từ hoạt động thực tế; không nội suy lợi nhuận từ tên chính sách"
+└─ Unverified → ★ "Chưa đủ dữ liệu về động lực thể chế; kết luận giới hạn theo các mảng đã xác minh"
 
 ## Chỉ báo đặc thù ngành
 
-Bảng dòng BCTC công ty chứng khoán + cách đọc từng chỉ báo ở `references/kpi.md`.
+The table of brokerage statement lines + how to read each indicator is in `references/kpi.md`.
 
 ## Định giá theo đặc thù ngành
 
-Ngành chứng khoán định giá bằng **P/B neo ROE**: cùng một P/B, CTCK ROE 13% và
-ROE 25% là hai giá trị khác nhau. Nhóm theo mô hình kinh doanh (nội địa cân bằng /
-nội địa theo ngân hàng / nước ngoài) rồi so P/B trong nhóm (`valuation_run` cho
-vùng, `peer_compare` để xếp hạng). Kỳ vọng neo bằng `planned_targets` và
-`analyst_consensus`. Lợi nhuận phụ thuộc tự doanh → một quý lãi bất thường không
-kéo dài: ghi rõ chất lượng lãi trước khi dùng P/E.
+Value brokerages with **P/B anchored on ROE**: at the same P/B, a brokerage with 13% ROE and one with
+25% ROE are worth different amounts. Group by business model (balanced domestic /
+bank-linked domestic / foreign), then compare P/B within the group (`valuation_run` for the
+range, `peer_compare` for ranking). Anchor expectations with `planned_targets` and
+`analyst_consensus`. Profit dependent on proprietary trading → one unusually profitable quarter does not
+last: state the profit quality before using P/E.
 
 ## Rủi ro đặc thù
 
-- **Rủi ro đòn bẩy hai chiều**: dư nợ margin giảm nhanh khi thị trường xả → cả
-  doanh thu ký quỹ lẫn chất lượng danh mục tự doanh xấu đi cùng lúc.
-- **Rủi ro gần trần**: gần trần ký quỹ thì một đợt tăng thị trường cũng không
-  tạo thêm tăng trưởng cho mảng này.
-- **Rủi ro cạnh tranh phí**: phí môi giới bị nén cấu trúc, không phá được bằng
-  cách nào.
-- **Rủi ro chất lượng danh mục**: tự doanh giữ trái phiếu doanh nghiệp → rủi ro
-  tín dụng của khách hàng doanh nghiệp lọt vào bảng CTCK.
-- **Rủi ro phụ thuộc nhịp phiên**: thanh khoản giảm kéo cả 3 mảng.
+- **Two-way leverage risk**: margin debt falls fast when the market sells off → both
+  margin revenue and the proprietary portfolio's quality worsen at once.
+- **Near-the-cap risk**: near the margin cap, even a market rally adds no
+  growth to this business.
+- **Fee-competition risk**: brokerage fees are structurally compressed, with no way
+  around it.
+- **Portfolio-quality risk**: proprietary books holding corporate bonds → corporate
+  clients' credit risk leaks onto the brokerage's balance sheet.
+- **Session-rhythm dependence**: falling liquidity drags all 3 businesses.
 
 ## Ranh giới
 
-- Không xác định pha thị trường, không bảo "chứng khoán sắp dẫn sóng", không đọc
-  chuỗi luân chuyển hay chỉ báo dẫn dắt theo tuần → `dinh-vi-chu-ky-vn`.
-- Không chọn mã khuyến nghị mua/bán → `phan-tich-chuyen-sau-1-ma`.
-- Không suy dư nợ margin ngành từ một CTCK: đó là số riêng của mã. Số ngành lấy
-  từ công bố hoặc báo chí có nguồn, ghi kỳ.
-- Luật về trần ký quỹ chỉ nằm ở đây, không lặp trong `references/kpi.md`.
+- Do not determine the market phase, say "chứng khoán sắp dẫn sóng", or read
+  rotation chains or weekly leading indicators → `dinh-vi-chu-ky-vn`.
+- Do not pick tickers to buy/sell → `phan-tich-chuyen-sau-1-ma`.
+- Never infer sector margin debt from one brokerage: that is the ticker's own figure. Sector figures come
+  from disclosures or sourced press, with the period stated.
+- The rules on the margin cap live only here, not repeated in `references/kpi.md`.
 
 ## Giới hạn
 
-- Dư nợ margin ngành tổng hợp từng quý, có độ trễ: kết luận theo tháng cần ghi rõ
-  đang dùng số kỳ nào.
-- Cơ cấu doanh thu thay đổi theo quý do tự doanh — đọc 4–8 quý trước khi xếp
-  nhóm.
-- Chi phí vốn của CTCK không công bố đồng nhất: phép so spread mang tính ước lượng,
-  ghi rõ là ước tính.
+- Sector margin debt is aggregated quarterly, with a lag: monthly conclusions must state
+  which period's figure is used.
+- The revenue mix shifts quarter to quarter with proprietary trading — read 4–8 quarters before
+  grouping.
+- Brokerages do not disclose funding costs uniformly: spread comparisons are estimates;
+  say so.
 
 ## Ví dụ
 
 **Ví dụ 1:**
 Hỏi: Chứng khoán còn dư địa tăng trưởng không?
-Đạt khi: có dư nợ margin ngành + nguồn, mức đòn bẩy của mã so trần, spread margin
-nở/nén, cơ cấu doanh thu 4 mảng, và verdict theo cây Q1→Q5 kèm nhánh dừng.
+Đạt khi: sector margin debt + source, the ticker's leverage vs the cap, the margin spread
+widening/compressing, the 4-business revenue mix, and a verdict following the Q1→Q5 tree with its stop branch.
 
 ## Trực quan hóa
 
-Chỉ vẽ khi người dùng muốn xem hình; tối đa 1 biểu đồ. Hợp với dữ liệu skill này:
-stacked doanh thu theo 4 mảng, multiline dư nợ margin của nhóm, bar mức đòn bẩy
-các mã. Vẽ bằng `chart_render` với `from_call` (mã `[ref …]`) từ kết quả
-`financial_detail`/`peer_compare` đã có; cần chọn loại hình thì nạp `ve-bieu-do`.
+Draw only when the user wants a picture; at most 1 chart. Fitting this skill's data:
+stacked revenue by the 4 businesses, multiline margin debt of the group, bar leverage of
+the tickers. Draw with `chart_render` using `from_call` (the `[ref …]` code) from
+`financial_detail`/`peer_compare` results you have; load `ve-bieu-do` to choose the chart type.
 
 ## File tham chiếu
 
-| File | Dùng khi |
+| File | Use when |
 |---|---|
-| `references/kpi.md` | Cần đúng dòng BCTC công ty chứng khoán trong `vs_financial_norms(btype=2)`, cách tính mức đòn bẩy, ngưỡng diễn giải |
+| `references/kpi.md` | You need the exact brokerage statement lines in `vs_financial_norms(btype=2)`, how to compute leverage, interpretation thresholds |

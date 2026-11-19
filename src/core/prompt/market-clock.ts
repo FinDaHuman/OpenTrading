@@ -35,7 +35,7 @@ export function loadCalendar(file = CALENDAR_FILE): Calendar {
   return JSON.parse(readFileSync(file, "utf8")) as Calendar
 }
 
-const WEEKDAYS = ["Chủ nhật", "Thứ hai", "Thứ ba", "Thứ tư", "Thứ năm", "Thứ sáu", "Thứ bảy"]
+const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
 
 /** Wall-clock parts in the calendar's timezone. */
 function localParts(now: Date, timezone: string) {
@@ -70,12 +70,12 @@ export function clockState(now: Date, calendar: Calendar = loadCalendar()): Cloc
   const { date, time, weekday } = localParts(now, calendar.timezone)
   const tradingDay = weekday >= 1 && weekday <= 5 && !calendar.holidays.includes(date)
   const exchanges = Object.entries(calendar.exchanges).map(([name, slots]) => {
-    if (!tradingDay) return { name, phase: "closed-day", label: "nghỉ giao dịch" }
+    if (!tradingDay) return { name, phase: "closed-day", label: "no trading today" }
     const slot = slots.find((s) => time >= s.from && time < s.to)
-    if (slot) return { name, phase: slot.phase, label: `${slot.label}, tới ${slot.to}` }
+    if (slot) return { name, phase: slot.phase, label: `${slot.label}, until ${slot.to}` }
     const first = slots[0]
-    if (first && time < first.from) return { name, phase: "pre-open", label: `chưa mở cửa, mở lúc ${first.from}` }
-    return { name, phase: "closed", label: "đã đóng cửa" }
+    if (first && time < first.from) return { name, phase: "pre-open", label: `not open yet, opens at ${first.from}` }
+    return { name, phase: "closed", label: "closed" }
   })
   return {
     snapshot: { date, phases: Object.fromEntries(exchanges.map((e) => [e.name, e.phase])) },
@@ -94,10 +94,10 @@ export function sameSnapshot(a?: ClockSnapshot, b?: ClockSnapshot) {
 export function renderClock(state: ClockState, calendar: Calendar = loadCalendar()) {
   const [y, m, d] = state.date.split("-")
   const lines = [
-    `Cập nhật lúc ${state.time} (giờ Việt Nam), ${state.weekday} ${d}/${m}/${y}.${state.tradingDay ? "" : " Hôm nay không phải ngày giao dịch."}`,
+    `As of ${state.time} (Vietnam time), ${state.weekday} ${d}/${m}/${y}.${state.tradingDay ? "" : " Today is not a trading day."}`,
     ...state.exchanges.map((e) => `${e.name}: ${e.label}`),
-    "Khối này chỉ gửi lại khi phiên thay đổi; cần giờ chính xác thì gọi tool current_time.",
+    "This block is resent only when the session phase changes; call current_time for the exact time.",
   ]
-  if (!calendar.verified) lines.push(`(Lịch phiên chưa kiểm chứng, dữ liệu tới ${calendar.asof}: nhắc người dùng đối chiếu thông báo của sàn.)`)
+  if (!calendar.verified) lines.push(`(Trading calendar not verified, data up to ${calendar.asof}: remind the user to check the exchange's notices.)`)
   return lines.join("\n")
 }

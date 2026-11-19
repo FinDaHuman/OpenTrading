@@ -13,14 +13,14 @@ export type Depth = (typeof DEPTHS)[number]
 const DEPTH_LABEL: Record<Depth, string> = { quick: "nhanh", medium: "vừa", thorough: "rất kỹ" }
 
 export const briefFields = {
-  task: z.string().min(1).max(200).describe("Một dòng: loại việc + đối tượng"),
-  depth: z.enum(DEPTHS).optional().describe("quick: 1–3 lần gọi tool; medium (mặc định); thorough: đối chiếu nhiều nguồn"),
-  purpose: z.string().min(1).describe("Vì sao cần, kết quả dùng làm gì"),
-  context: z.string().optional().describe("Số liệu, kết luận đã có (kèm nguồn, thời điểm), điều đã loại trừ"),
-  questions: z.array(z.string().min(1)).min(1).max(10).describe("Câu hỏi/việc cụ thể, mỗi mục một ý"),
-  scope: z.string().optional().describe("Mã, kỳ, nguồn ưu tiên; việc KHÔNG cần làm"),
-  output: z.string().min(1).describe("Dạng và độ dài kết quả, ví dụ \"≤ 10 dòng, mỗi số kèm nguồn và kỳ\""),
-  done_when: z.string().optional().describe("Khi nào là xong"),
+  task: z.string().min(1).max(200).describe("One line: kind of work + subject"),
+  depth: z.enum(DEPTHS).optional().describe("quick: 1–3 tool calls; medium (default); thorough: cross-check several sources"),
+  purpose: z.string().min(1).describe("Why it is needed, what the result is for"),
+  context: z.string().optional().describe("Figures and conclusions already known (with source, time), things ruled out"),
+  questions: z.array(z.string().min(1)).min(1).max(10).describe("Specific questions/tasks, one per item"),
+  scope: z.string().optional().describe("Tickers, periods, preferred sources; what NOT to do"),
+  output: z.string().min(1).describe("Form and length of the result, e.g. \"≤ 10 dòng, mỗi số kèm nguồn và kỳ\""),
+  done_when: z.string().optional().describe("When the task is done"),
 }
 
 export type Brief = z.infer<z.ZodObject<typeof briefFields>>

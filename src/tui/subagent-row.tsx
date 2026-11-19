@@ -58,7 +58,7 @@ interface AgentInfo {
   background?: boolean
 }
 
-const TRAILER_STATUS: Record<string, AgentStatus> = { xong: "completed", lỗi: "failed", "đã dừng": "stopped" }
+const TRAILER_STATUS: Record<string, AgentStatus> = { xong: "completed", lỗi: "failed", "đã dừng": "stopped", done: "completed", failed: "failed", stopped: "stopped" }
 
 /** What a row shows: the live view when this session started the agent, else the stored result. */
 function infoFor(line: ToolLine): AgentInfo {

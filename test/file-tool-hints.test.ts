@@ -30,11 +30,11 @@ test("shell description names every file tool when they are registered, none whe
   for (const name of FILE_TOOLS) expect(all).toContain(name)
   const bare = shell.descriptionFor!(new Set(["shell", "read_result"]))
   for (const name of FILE_TOOLS) expect(bare).not.toContain(name)
-  expect(bare).toContain("lệnh chờ nhập từ bàn phím")
-  expect(bare).toContain("output dài được lưu ra file.")
+  expect(bare).toContain("commands that wait for keyboard input")
+  expect(bare).toContain("long output is saved to a file.")
   const some = shell.descriptionFor!(new Set(["shell", "read_file"]))
-  expect(some).toContain("(dùng read_file)")
-  expect(some).toContain("để đọc tiếp bằng read_file")
+  expect(some).toContain("(use read_file)")
+  expect(some).toContain("to read on with read_file")
 })
 
 test("the request's shell definition follows the registry", () => {
@@ -46,19 +46,19 @@ test("the request's shell definition follows the registry", () => {
 
 test("<quyen_tep>: the workspace line and the read-only mode line name only registered file tools", () => {
   const w = ws()
-  expect(w.describe()).toContain("read_file; tìm file bằng glob_files, tìm chữ trong file bằng grep_files")
+  expect(w.describe()).toContain("read_file; find files with glob_files, search text in files with grep_files")
   expect(w.describe(new Set(FILE_TOOLS))).toBe(w.describe())
   const bare = w.describe(new Set(["shell"]))
   for (const name of FILE_TOOLS) expect(bare).not.toContain(name)
-  expect(bare).toContain("Đường dẫn tương đối tính từ workspace.")
-  expect(w.describe(new Set(["shell", "grep_files"]))).toContain("Đường dẫn tương đối tính từ workspace. Tìm chữ trong file bằng grep_files.")
+  expect(bare).toContain("Relative paths are from the workspace.")
+  expect(w.describe(new Set(["shell", "grep_files"]))).toContain("Relative paths are from the workspace. Search text in files with grep_files.")
 
   expect(modeNote("read-only", new Set(FILE_TOOLS))).toBe(modeNote("read-only"))
   const note = modeNote("read-only", new Set(["shell"]))
   expect(note).not.toContain("write_file")
   expect(note).not.toContain("edit_file")
-  expect(note).toContain("Chạy lệnh (shell) cần người dùng duyệt")
-  expect(modeNote("read-only", new Set(["write_file"]))).toContain("Ghi file (write_file) và chạy lệnh")
+  expect(note).toContain("Running commands (shell) needs the user's approval")
+  expect(modeNote("read-only", new Set(["write_file"]))).toContain("Writing files (write_file) and running commands")
 })
 
 test("shell description in ▸▸▸ bypass: commands run as written, Python is named, no grammar limits (issue #309)", () => {
@@ -66,7 +66,7 @@ test("shell description in ▸▸▸ bypass: commands run as written, Python is 
   const present = new Set(["shell", ...FILE_TOOLS])
   for (const mode of ["read-only", "ask", "auto"] as const) expect(shell.descriptionFor!(present, mode)).toBe(shell.description)
   const bypass = shell.descriptionFor!(present, "bypass")
-  expect(bypass).toContain("Lệnh chạy ngay như đã viết, không ai duyệt")
+  expect(bypass).toContain("Commands run immediately as written; nobody approves them")
   expect(bypass).toContain("python3 -c")
   expect(bypass).toContain(String.raw`printf "%.15g\n"`)
   expect(bypass).not.toContain("không chạy mà trả lại dạng đúng")
@@ -75,7 +75,7 @@ test("shell description in ▸▸▸ bypass: commands run as written, Python is 
   const registry = new ToolRegistry()
   registry.register(shellTool(ws(), { shell: BASH, python: () => undefined }))
   registry.gate = { mode: "bypass" } as never
-  expect((registry.toToolSet({}).tools.shell as { description?: string }).description).toContain("Lệnh chạy ngay như đã viết")
+  expect((registry.toToolSet({}).tools.shell as { description?: string }).description).toContain("Commands run immediately as written")
 })
 
 test("▸▸▸ mode line: short for a program caller, unchanged for a person (issue #309)", () => {
@@ -83,7 +83,7 @@ test("▸▸▸ mode line: short for a program caller, unchanged for a person (i
   expect(modeNote("bypass", undefined, "terminal")).toBe(person)
   const program = modeNote("bypass", undefined, "machine")
   expect(program.length).toBeLessThan(person.length * 0.6)
-  for (const kept of ["không ai duyệt", "Không xoá hay ghi đè dữ liệu có sẵn", "không gửi dữ liệu ra ngoài", "không đặt lệnh hay chuyển tiền thật"]) expect(program).toContain(kept)
+  for (const kept of ["nobody approves them", "Do not delete or overwrite existing data", "do not send data out", "do not place real orders or move money"]) expect(program).toContain(kept)
   expect(modeNote("read-only", undefined, "machine")).toBe(modeNote("read-only"))
 })
 
@@ -94,14 +94,14 @@ test("▸▸▸ bypass names Python only when it really runs, and never sends Po
   const none = shellTool(ws(), { shell: PS, python: () => undefined }).descriptionFor!(present, "bypass")
   expect(none).not.toContain("Python")
   expect(none).toContain("Measure-Object")
-  expect(none).toContain("không bọc thêm `powershell -Command`")
+  expect(none).toContain("never wrap it in another `powershell -Command`")
   const withPy = shellTool(ws(), { shell: PS, python: () => "python" }).descriptionFor!(present, "bypass")
   expect(withPy).toContain("`python -c`")
   expect(withPy).not.toContain("heredoc")
   // bash without Python: awk with arrays and loops.
   const bash = shellTool(ws(), { shell: BASH, python: () => undefined }).descriptionFor!(present, "bypass")
   expect(bash).not.toContain("Python")
-  expect(bash).toContain("mảng và vòng lặp chạy được")
+  expect(bash).toContain("arrays and loops work")
   // The probe runs only for the bypass text.
   let probes = 0
   const lazy = shellTool(ws(), { shell: BASH, python: () => (probes++, "python3") })

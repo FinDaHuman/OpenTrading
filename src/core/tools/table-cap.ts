@@ -35,7 +35,7 @@ function slots(value: unknown, depth = 0, out: Slot[] = []): Slot[] {
 function shorten(rows: unknown[], keep: number, where: string) {
   const head = Math.ceil(keep / 2)
   const tail = keep - head
-  return [...rows.slice(0, head), `[... đã lược ${rows.length - keep}/${rows.length} hàng ở giữa; ${where} ...]`, ...rows.slice(rows.length - tail)]
+  return [...rows.slice(0, head), `[... ${rows.length - keep}/${rows.length} middle rows omitted; ${where} ...]`, ...rows.slice(rows.length - tail)]
 }
 
 /** The result within `max` chars, or undefined when rows are not what makes it long. */
@@ -49,7 +49,7 @@ export function capTable(output: string, max: number): string | undefined {
     return undefined
   }
   const prefix = ref ? `${REF_PREFIX}${ref[1]}] ` : ""
-  const where = ref ? `đủ ở ref ${ref[1]}: chart đọc thẳng, read_result đọc nguyên văn` : "gọi tool với phạm vi hẹp hơn nếu cần"
+  const where = ref ? `full in ref ${ref[1]}: charts read it directly, read_result reads it verbatim` : "call the tool with a narrower range if needed"
   const room = max - prefix.length
   const list = slots(parsed)
   if (list.length === 0) return undefined

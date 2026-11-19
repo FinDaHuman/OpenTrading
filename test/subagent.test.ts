@@ -211,7 +211,7 @@ test("end to end: the child runs its own loop and the parent gets its report wit
   expect(end!.ok).toBe(true)
   expect(end!.output).toContain("Báo cáo: FPT ổn.")
   const trailer = parseTrailer(end!.output)!
-  expect(trailer).toMatchObject({ type: "nghien-cuu", status: "xong", tools: 1, tokens: 1_200 }) // only the answer reports usage in this mock
+  expect(trailer).toMatchObject({ type: "nghien-cuu", status: "done", tools: 1, tokens: 1_200 }) // only the answer reports usage in this mock
   expect(trailer.agentId).toMatch(/^ag-[a-z0-9]{6}$/)
 
   // The child's own prompt: subagent notes + invariants, no identity/style; no nesting tools.
@@ -316,7 +316,7 @@ test("a child that fails with nothing to show fails the call; the error reaches 
   const events = await collect(runAgent({ history: [], input: "x", skills: [], registry }))
   const [end] = ends(events)
   expect(end!.ok).toBe(false)
-  expect(end!.output).toContain("Subagent lỗi")
+  expect(end!.output).toContain("Subagent failed")
   expect(end!.output).toContain("upstream down")
 })
 
@@ -426,7 +426,7 @@ test("config subagents.model sends children to another model; a model without to
   childBodies.length = 0
   const events = await collect(runAgent({ history: [], input: "x", skills: [], registry }))
   expect(childBodies).toHaveLength(0)
-  expect(ends(events)[0]!.output).toContain("không hỗ trợ gọi tool")
+  expect(ends(events)[0]!.output).toContain("does not support tool calls")
 })
 
 test("a denied child write reaches the child as a denial; without a UI (headless) it is refused", async () => {
@@ -453,7 +453,7 @@ test("a denied child write reaches the child as a denial; without a UI (headless
   await turn
   expect(wrote).toBe(0)
   const toolResult = JSON.stringify(childBodies.at(-1)!.messages.find((m) => m.role === "tool"))
-  expect(toolResult).toContain("Người dùng từ chối chạy tool này")
+  expect(toolResult).toContain("The user declined to run this tool")
   expect(toolResult).toContain("đừng thêm")
 
   // Headless (scripts, chat.ts): nobody to ask, so the child's write is refused.
@@ -461,7 +461,7 @@ test("a denied child write reaches the child as a denial; without a UI (headless
   childBodies.length = 0
   await collect(runAgent({ history: [], input: "x", skills: [], registry }))
   expect(wrote).toBe(0)
-  expect(JSON.stringify(childBodies.at(-1)!.messages.find((m) => m.role === "tool"))).toContain("không có giao diện để hỏi")
+  expect(JSON.stringify(childBodies.at(-1)!.messages.find((m) => m.role === "tool"))).toContain("there is no interface to ask")
 })
 
 test("a subagent model that cannot be used falls back to the session's model", async () => {
@@ -485,7 +485,7 @@ test("the main agent's prompt does not change with the subagent role in place; i
   expect(child.system).toContain("<subagent>")
   expect(child.system).toContain("<thu_tu_uu_tien>")
   expect(child.system).toContain("<chi_dan_agent>\nCHỈ-DẪN\n</chi_dan_agent>")
-  expect(child.system).not.toContain("Bạn là OpenTrading, trợ lý")
+  expect(child.system).not.toContain("You are OpenTrading, a Vietnamese")
 })
 
 test("an agent type brings its instructions, tool filter, step limit and model", async () => {
@@ -545,7 +545,7 @@ test("background: the call returns at once with the id; the result arrives throu
   const events = await collect(runAgent({ history: [], input: "x", skills: [], registry, signal: controller.signal }))
   const [end] = ends(events)
   expect(end!.ok).toBe(true)
-  expect(end!.output).toMatch(/^Đã chạy nền subagent ag-[a-z0-9]{6} \(nghien-cuu · Định giá FPT\)/)
+  expect(end!.output).toMatch(/^Subagent ag-[a-z0-9]{6} started in the background \(nghien-cuu · Định giá FPT\)/)
   const id = /ag-[a-z0-9]{6}/.exec(end!.output)![0]
   controller.abort() // the parent turn is over (and even aborted): the background agent goes on
   expect(manager.get(id)).toMatchObject({ background: true })
@@ -568,7 +568,7 @@ test("send_message: queued for a running agent, resumes a finished one with its 
   childGate = new Promise((r) => (release = r))
   const run = manager.start({ description: "FPT", prompt: "VIỆC-ĐẦU", background: true })
   await waitFor(() => childBodies.length === 1)
-  expect(await send.execute({ to: run.id, message: "VIỆC-THÊM" }, ctxOf())).toContain("Đã xếp tin")
+  expect(await send.execute({ to: run.id, message: "VIỆC-THÊM" }, ctxOf())).toContain("Message queued")
   release()
   await run.done
   expect(childBodies).toHaveLength(2)
@@ -579,7 +579,7 @@ test("send_message: queued for a running agent, resumes a finished one with its 
 
   // Finished, in memory: resumes in the background with the whole conversation.
   childGate = undefined
-  expect(await send.execute({ to: run.id, message: "VIỆC-BA" }, ctxOf())).toContain("đang chạy tiếp ở chế độ nền")
+  expect(await send.execute({ to: run.id, message: "VIỆC-BA" }, ctxOf())).toContain("is continuing in the background")
   await waitFor(() => finished.length === 2)
   expect(JSON.stringify(childBodies[2]!.messages)).toContain("VIỆC-THÊM")
   expect(JSON.stringify(childBodies[2]!.messages)).toContain("VIỆC-BA")
@@ -597,10 +597,10 @@ test("send_message: queued for a running agent, resumes a finished one with its 
   expect(rebuilt).toContain("VIỆC-BA")
   expect(rebuilt).toContain("VIỆC-BỐN")
 
-  await expect(sendMessageTool(other).execute({ to: "ag-zzzzzz", message: "x" }, ctxOf())).rejects.toThrow('Không có subagent "ag-zzzzzz"')
+  await expect(sendMessageTool(other).execute({ to: "ag-zzzzzz", message: "x" }, ctxOf())).rejects.toThrow('No subagent "ag-zzzzzz"')
   // Another session's agent cannot be continued from here.
   other.attachSession({ id: "s-3", dir: path.join(dir, "khac") })
-  await expect(sendMessageTool(other).execute({ to: run.id, message: "x" }, ctxOf())).rejects.toThrow("Không có subagent")
+  await expect(sendMessageTool(other).execute({ to: run.id, message: "x" }, ctxOf())).rejects.toThrow("No subagent")
   await rm(dir, { recursive: true, force: true })
 })
 
@@ -612,11 +612,11 @@ test("stop_agent stops a running background agent; its partial result still noti
   const run = manager.start({ description: "FPT", prompt: "x", background: true })
   await waitFor(() => childBodies.length === 1)
   const stop = stopAgentTool(manager)
-  expect(await stop.execute({ id: run.id }, ctxOf())).toBe(`Đã dừng subagent ${run.id}.`)
+  expect(await stop.execute({ id: run.id }, ctxOf())).toBe(`Stopped subagent ${run.id}.`)
   await run.done
   expect(finished).toEqual(["stopped"])
-  expect(await stop.execute({ id: run.id }, ctxOf())).toContain("không còn chạy")
-  await expect(stop.execute({ id: "ag-nope00" }, ctxOf())).rejects.toThrow("Không có subagent")
+  expect(await stop.execute({ id: run.id }, ctxOf())).toContain("is no longer running")
+  await expect(stop.execute({ id: "ag-nope00" }, ctxOf())).rejects.toThrow("No subagent")
 })
 
 test("a subagent's sidechain holds tool errors cleaned, like the main history", async () => {
@@ -668,7 +668,7 @@ test("the watchdog reads idleMs: a silent run stops after idleMs, not 5 minutes"
   await collect(runAgent({ history: [], input: "phân tích HPG", skills: [], registry }))
   const view = manager.list()[0]!
   expect(view.status).toBe("stopped")
-  expect(view.error).toContain("không có tiến triển trong 1.2 giây")
+  expect(view.error).toContain("made no progress for 1.2 s")
 })
 
 test("a request that hangs before its first part is cut with the stall error", async () => {

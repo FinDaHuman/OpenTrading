@@ -218,7 +218,7 @@ describe("memoryLines: cut blocks", () => {
     const cut = truncate(raw, DEFAULT_MAX_OUTPUT_CHARS)
     const found = memoryLines([toolResult(cut)]).blocks
     // The block that runs into the mark is cut; every block wholly before it is complete.
-    const mark = cut.indexOf("\n\n[... đã lược ")
+    const mark = cut.indexOf("\n\n[... ")
     const beforeMark = found.filter((b) => b.at.end <= mark)
     expect(beforeMark.length).toBeGreaterThan(0)
     expect(beforeMark.slice(0, -1).every((b) => b.complete)).toBe(true)

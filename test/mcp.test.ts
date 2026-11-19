@@ -75,11 +75,11 @@ test("MCP results: text, structured fallback, images kept for the model, isError
     images: [{ data: "AAA=", mediaType: "image/png" }],
   })
   expect(resultToOutput({ content: [{ type: "resource", resource: { uri: "file:///a.png", blob: "BBB=", mimeType: "image/png" } }] })).toEqual({
-    output: "(tool trả về 1 ảnh)",
+    output: "(the tool returned 1 images)",
     images: [{ data: "BBB=", mediaType: "image/png" }],
   })
   expect(resultToOutput({ content: [{ type: "resource", resource: { uri: "file:///a.pdf", blob: "CCC=", mimeType: "application/pdf" } }] })).toBe(
-    "[tài nguyên: file:///a.pdf (application/pdf)]",
+    "[resource: file:///a.pdf (application/pdf)]",
   )
 })
 

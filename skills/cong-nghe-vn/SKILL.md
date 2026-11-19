@@ -1,6 +1,7 @@
 ---
 name: cong-nghe-vn
-description: "Pha/sóng: dùng skill chu kỳ. Phân tích ngành công nghệ Việt Nam theo giá trị hợp đồng ký, phân hoá nội địa và quốc tế, đơn hàng dài hạn và tỷ lệ sử dụng nhân công. Dùng khi hỏi xu hướng nhóm công nghệ hoặc công ty dịch vụ công nghệ."
+description: "Phase/wave: use dinh-vi-chu-ky-vn. Analyses VN technology by signed contract value, domestic vs international split, long-term orders and staff utilisation. Use for tech trends or IT services companies."
+match_text: "Pha/sóng: dùng skill chu kỳ. Phân tích ngành công nghệ Việt Nam theo giá trị hợp đồng ký, phân hoá nội địa và quốc tế, đơn hàng dài hạn và tỷ lệ sử dụng nhân công. Dùng khi hỏi xu hướng nhóm công nghệ hoặc công ty dịch vụ công nghệ."
 activation: auto
 requires_tools: [financial_detail, planned_targets]
 uses_tools: [financial_detail, planned_targets, financial_ratios, analyst_consensus, peer_compare, news_symbol, company_events, news_market, symbol_lookup, vn_company, yf_commodities]
@@ -12,151 +13,150 @@ version: 1.0.0
 
 # Công nghệ Việt Nam — framework phân tích
 
-Ngành công nghệ VN là ngành **thuê ngoài kỹ thuật (IT services)**, không phải ngành
-sản phẩm tiêu dùng. Vì vậy driver của nó là đơn hàng ký được, chất lượng hợp đồng
-(thời hạn dài, đơn lớn), phân hoá giữa thị trường nước ngoài và trong nước, và tỷ
-lệ sử dụng nhân công. Skill này đọc ngành bằng bốn thứ đó, **không đọc bằng giá
-chứng khoán hay chỉ số ngành công nghệ quốc tế**.
+Vietnamese technology is an **outsourced engineering (IT services)** sector, not a consumer-product
+sector. Its drivers are therefore signed orders, contract quality
+(long terms, large orders), the split between foreign and domestic markets, and staff
+utilisation. This skill reads the sector through those four things, **not through stock prices
+or international tech indices**.
 
-Điểm dễ đọc sai nhất: **doanh thu ký (signed revenue) đi trước doanh thu nhận**.
-Hợp đồng kỳ hạn 2–3 năm được ký trong kỳ này chưa vào doanh thu ngay — nó chỉ vào
-theo từng quý. Đọc doanh thu nhận mà không đọc đơn ký sẽ thấy ngành "chững" trong
-đúng kỳ nó đang mạnh.
+The most common misreading: **signed revenue leads recognised revenue**.
+A 2–3 year contract signed this period does not enter revenue at once — it comes in
+quarter by quarter. Reading recognised revenue without signed orders makes the sector look "flat" in
+exactly the period it is strong.
 
 ## Khi nào dùng
 
-- Dùng khi: user hỏi xu hướng nhóm công nghệ, đơn hàng ký có ý nghĩa gì, công ty
-  công nghệ có còn tăng trưởng không, tỷ lệ sử dụng nhân công nói lên điều gì.
-- Khi KHÔNG dùng (dùng skill khác thay thế):
-  - Hỏi pha thị trường / luân chuyển ngành / sóng ngành tiếp theo → `dinh-vi-chu-ky-vn`.
-  - Phân tích toàn diện một mã → `phan-tich-chuyen-sau-1-ma`.
-  - Chỉ định giá một mã → `dinh-gia-chuyen-sau`.
-  - Chỉ đọc BCTC một mã không có mảng ngành → `co-ban-chuyen-sau`.
-  - Chỉ đọc kỹ thuật biểu đồ → `ky-thuat-chuyen-sau`.
+- Use when: the user asks about tech-group trends, what signed orders mean, whether a tech company
+  can still grow, what staff utilisation says.
+- Do NOT use (use another skill instead):
+  - Market phase / sector rotation / the next sector wave → `dinh-vi-chu-ky-vn`.
+  - A full ticker analysis → `phan-tich-chuyen-sau-1-ma`.
+  - Valuing one ticker only → `dinh-gia-chuyen-sau`.
+  - Only one ticker's statements without the sector angle → `co-ban-chuyen-sau`.
+  - Only chart technicals → `ky-thuat-chuyen-sau`.
 
 ## Trụ cột driver
 
-| Driver | Kênh truyền dẫn | Đọc/xác minh bằng |
+| Driver | Transmission channel | Read/verify with |
 |---|---|---|
-| Doanh thu ký | Ký được hợp đồng dài hạn là điều kiện của doanh thu tương lai. Kỳ ký mạnh là tín hiệu dẫn cho 1–3 kỳ sau, kể cả khi doanh thu nhận của kỳ hiện tại chững | Công bố của **riêng công ty**: `news_symbol(symbol=…)` (tin gắn mã) + `company_events`; `news_market` chỉ cho bối cảnh thị trường/chính sách vì nó không tra được theo mã |
-| Phân hoá nước ngoài – nội địa | Nước ngoài phụ thuộc chu kỳ khách hàng quốc tế (Nhật/EU/Mỹ); nội địa phụ thuộc chính phủ điện tử và doanh nghiệp. Hai chu kỳ khác nhau | Mảng nội địa/nước ngoài trong `financial_detail` hoặc công bố công ty |
-| Chất lượng hợp đồng | Đơn lớn (trên ngưỡng) và kỳ hạn 2–3 năm cho doanh thu bền vững hơn đơn nhỏ lẻ | Tỷ trọng đơn lớn + kỳ hạn: công bố của riêng công ty qua `news_symbol`/`company_events` |
-| Nhân công và năng suất | Tỷ lệ sử dụng = giờ tính phí / giờ khả dụng theo định nghĩa công ty; tỷ lệ thấp có thể do tuyển trước hợp đồng, đào tạo hoặc thiếu việc, không tự chứng minh cơ cấu lỗi thời | Tỷ lệ sử dụng từ công bố công ty; doanh thu/nhân viên bình quân từ `financial_detail` và công bố nhân sự chỉ là chỉ báo năng suất, không thay tỷ lệ sử dụng |
-| Chi phí đầu vào AI | Máy tính và cơ sở hạ tầng tăng do nhu cầu AI toàn cầu; đẩy chi phí cung cấp | `yf_commodities` (chu kỳ kim loại nếu cần bối cảnh) + `news_market` |
+| Signed revenue | Signing long-term contracts is the condition for future revenue. A strong signing period leads 1–3 periods later, even if current recognised revenue is flat | **The company's own** disclosures: `news_symbol(symbol=…)` (ticker-tagged news) + `company_events`; `news_market` only for market/policy context since it cannot be queried by ticker |
+| Foreign vs domestic split | Foreign depends on international clients' cycles (Japan/EU/US); domestic depends on e-government and businesses. Two different cycles | Domestic/foreign segments in `financial_detail` or company disclosures |
+| Contract quality | Large orders (above a threshold) with 2–3 year terms give more durable revenue than small one-offs | Large-order share + terms: the company's own disclosures via `news_symbol`/`company_events` |
+| Staff and productivity | Utilisation = billable hours / available hours per the company's definition; a low rate may come from hiring ahead of contracts, training or a lack of work, and does not by itself prove an outdated structure | Utilisation from company disclosures; revenue per average employee from `financial_detail` and staffing disclosures is only a productivity indicator, not a substitute for utilisation |
+| AI input costs | Computers and infrastructure get dearer with global AI demand, pushing up delivery costs | `yf_commodities` (the metals cycle if context is needed) + `news_market` |
 
 ## Các bước
 
-**Bước 1: Nhận diện mảng (song song).**
+**Bước 1: Identify the segments (in parallel).**
 
-`symbol_lookup` · `vn_company` (mảng: dịch vụ nước ngoài / trong nước / sản phẩm
-riêng / viễn thông) · `financial_detail` (doanh thu theo mảng).
+`symbol_lookup` · `vn_company` (segments: foreign services / domestic / own
+products / telecom) · `financial_detail` (revenue by segment).
 
-**Bước 2: Đơn hàng và tín hiệu dẫn (song song).**
+**Bước 2: Orders and leading signals (in parallel).**
 
-`news_symbol(symbol=…)` + `company_events` cho công bố đơn hàng ký của riêng công ty
-(giá trị hợp đồng, kỳ hạn, thị trường khách hàng) — `news_market` **không** nhận
-tham số theo mã, chỉ dùng cho bối cảnh thị trường · `financial_detail` (backlog và
-doanh thu chưa nhận nếu có).
+`news_symbol(symbol=…)` + `company_events` for the company's own signed-order disclosures
+(contract value, term, client market) — `news_market` does **not** take a ticker
+parameter, use it only for market context · `financial_detail` (backlog and
+unearned revenue if available).
 
-**Bước 3: Chất lượng hoạt động (song song).**
+**Bước 3: Operating quality (in parallel).**
 
-`financial_detail`: doanh thu, lợi nhuận, chi phí, số nhân viên. Tự tính doanh thu
-trên nhân viên bình quân cùng kỳ (ghi rõ phương pháp); tỷ lệ sử dụng cần giờ tính phí/giờ khả dụng từ công bố công ty. Thiếu số thì không suy tỷ lệ này từ doanh thu/nhân viên.
+`financial_detail`: revenue, profit, costs, headcount. Compute revenue
+per average employee for the same period yourself (state the method); utilisation needs billable/available hours from company disclosures. Without those figures, do not infer utilisation from revenue per employee.
 
-**Bước 4: Neo kỳ vọng + vị thế nhóm.**
+**Bước 4: Expectation anchor + position in the group.**
 
-`planned_targets` (kế hoạch doanh thu/lãi) · `peer_compare` (chỉ tiêu tổng quan trong nhóm) · `analyst_consensus`.
+`planned_targets` (revenue/profit plan) · `peer_compare` (overview metrics within the group) · `analyst_consensus`.
 
-Đối chiếu công cụ: `peer_compare` chỉ dùng các key tổng quan thực sự có trong kết quả (như P/E, P/B, ROE); tham số `metrics` không tạo thêm chỉ tiêu. Biên, sản lượng, chi phí, tồn kho và KPI vận hành phải đọc `financial_detail` từng peer cùng kỳ; nếu không có thì tra công bố doanh nghiệp qua `news_symbol`/`web_search`, ghi nguồn, công thức và kỳ. Thiếu dữ liệu thì để trống, không xếp hạng.
+Tool check: `peer_compare` uses only the overview keys actually present in the result (such as P/E, P/B, ROE); its `metrics` parameter does not create extra metrics. Margins, volumes, costs, inventory and operating KPIs must be read from each peer's `financial_detail` for the same period; if missing, look up company disclosures via `news_symbol`/`web_search`, stating the source, formula and period. With missing data, leave it blank and do not rank.
 
 ## Cây quyết định công ty công nghệ đang được tiếp sức hay siết
 
+Follow the matching branch; record intermediate states and stop only at ★. Every conclusion must separate known data from what is missing; never fill in numbers or turn "chưa rõ" into "xấu".
 
-Đi theo nhánh phù hợp; ghi nhận trạng thái trung gian và chỉ dừng ở ★. Mọi kết luận phải tách dữ liệu đã biết và phần còn thiếu, không bù số hay đổi "chưa rõ" thành "xấu".
+Q1. How are signed orders and the backlog?
+├─ Signed orders up, long terms → record favourable, continue Q2
+├─ Signed orders down, backlog falling, verified → record pressure on future revenue, continue Q2
+└─ Not disclosed → record missing data, continue Q2
 
-Q1. Đơn ký và backlog đang thế nào?
-├─ Đơn ký tăng, kỳ hạn dài → ghi thuận lợi, tiếp Q2
-├─ Đơn ký giảm, backlog giảm được xác minh → ghi áp lực nguồn doanh thu, tiếp Q2
-└─ Chưa công bố → ghi thiếu dữ liệu, tiếp Q2
+Q2. Which segment drives revenue/profit?
+├─ Foreign → Q3 (international)
+├─ Domestic → Q4 (domestic)
+├─ Mixed → consider Q3 and Q4 separately by the disclosed weights
+└─ Mix unclear → record missing, continue Q5
 
-Q2. Mảng nào đang kéo doanh thu/lợi nhuận?
-├─ Nước ngoài → Q3 (quốc tế)
-├─ Nội địa → Q4 (nội địa)
-├─ Hỗn hợp → xét riêng Q3 và Q4 theo tỷ trọng công bố
-└─ Chưa rõ cơ cấu → ghi thiếu, tiếp Q5
+Q3 (international). How are contract quality and concentration?
+├─ Long-term, diversified clients → record favourable, continue Q5
+├─ Short-term or concentrated in one client/market → record concentration risk, continue Q5
+└─ No terms/mix → record missing, continue Q5
 
-Q3 (quốc tế). Chất lượng và độ tập trung hợp đồng ra sao?
-├─ Dài hạn, khách hàng đa dạng → ghi thuận lợi, tiếp Q5
-├─ Ngắn hạn hoặc tập trung một khách hàng/thị trường → ghi rủi ro tập trung, tiếp Q5
-└─ Chưa có kỳ hạn/cơ cấu → ghi thiếu, tiếp Q5
+Q4 (domestic). How are the client base and budgets?
+├─ Public budgets/contracts with verified progress → record acceptance conditions, continue Q5
+├─ Private clients → assess the backlog, demand and private clients' payments, continue Q5
+├─ Verified slow public budgets → record pressure, continue Q5
+└─ Unclear → record missing, continue Q5
 
-Q4 (nội địa). Nguồn khách hàng và ngân sách ra sao?
-├─ Ngân sách/hợp đồng công đã xác minh tiến độ → ghi điều kiện nghiệm thu, tiếp Q5
-├─ Khách hàng tư nhân → đánh giá backlog, nhu cầu và thu tiền của khách tư, tiếp Q5
-├─ Ngân sách công chậm đã xác minh → ghi áp lực, tiếp Q5
-└─ Chưa rõ → ghi thiếu, tiếp Q5
-
-Q5 (chung). Năng suất, nhân công và biên có xác nhận không?
-├─ Doanh thu trên nhân viên và biên giữ/cải thiện nhiều kỳ, đơn ký thuận lợi → ★ "Được tiếp sức bởi đơn hàng và vận hành đã xác minh"
-├─ Năng suất/biên giảm kéo dài hoặc đơn ký yếu → ★ "Có áp lực cần kiểm tra thời gian thuê trước doanh thu; không mặc định mở nhân sự là lỗ"
-└─ Thiếu số nhân viên bình quân, biên hoặc đơn ký, hay dữ liệu trái chiều → ★ "Chưa đủ dữ liệu kết luận tổng thể; doanh thu/nhân viên không thay tỷ lệ sử dụng nhân công"
+Q5 (common). Do productivity, staff and margins confirm it?
+├─ Revenue per employee and margins held/improving over several periods, favourable signings → ★ "Được tiếp sức bởi đơn hàng và vận hành đã xác minh"
+├─ Productivity/margins falling for long or weak signings → ★ "Có áp lực cần kiểm tra thời gian thuê trước doanh thu; không mặc định mở nhân sự là lỗ"
+└─ Missing average headcount, margins or signings, or conflicting data → ★ "Chưa đủ dữ liệu kết luận tổng thể; doanh thu/nhân viên không thay tỷ lệ sử dụng nhân công"
 
 ## Chỉ báo đặc thù ngành
 
-Bảng chỉ báo ngành công nghệ + cách đọc ở `references/kpi.md`.
+The tech indicator table + how to read it is in `references/kpi.md`.
 
 ## Định giá theo đặc thù ngành
 
-Công nghệ định giá bằng **P/E** (ngành có lãi ổn định hơn chu kỳ hàng hoá) và **P/E
-trên lãi thuần từ đơn ký dài hạn** khi biên đang cải thiện. Neo kỳ vọng bằng
-`planned_targets` (kế hoạch doanh thu/lãi năm) và `analyst_consensus`. Không dùng
-P/E tại đỉnh khi lãi phụ thuộc một đơn lớn nhất thời — ghi rõ chất lượng lãi.
+Value tech with **P/E** (its profits are steadier than commodity cycles) and **P/E
+on net profit from long-term signed orders** when margins are improving. Anchor expectations with
+`planned_targets` (the yearly revenue/profit plan) and `analyst_consensus`. Do not use
+peak P/E when profit depends on one large temporary order — state the profit quality.
 
 ## Rủi ro đặc thù
 
-- **Rủi ro cạn backlog**: doanh thu đang tiêu backlog mà ký yếu → tăng trưởng chững
-  sau 2–3 kỳ.
-- **Rủi ro tự động hoá**: tác vụ thuê ngoài truyền thống bị thay thế → thu nhập trên
-  người giảm và biên co lại.
-- **Rủi ro tập trung thị trường**: một thị trường khách hàng (Nhật/EU/Mỹ) đảo
-  chiều kéo cả mảng nước ngoài.
-- **Rủi ro nội địa theo chính sách**: mảng trong nước dựa chính phủ điện tử, nhạy
-  ngân sách.
-- **Rủi ro chi phí đầu vào AI**: giá máy tính và cơ sở hạ tầng làm chi phí đội lên
-  khi công ty mở rộng cơ sở hạ tầng riêng.
+- **Backlog exhaustion risk**: revenue consumes the backlog while signings are weak → growth flattens
+  after 2–3 periods.
+- **Automation risk**: traditional outsourced tasks get replaced → revenue per
+  head falls and margins shrink.
+- **Market concentration risk**: one client market (Japan/EU/US) reversing
+  drags down the whole foreign segment.
+- **Policy-driven domestic risk**: the domestic segment relies on e-government, sensitive to
+  budgets.
+- **AI input-cost risk**: computer and infrastructure prices push costs up
+  when the company builds its own infrastructure.
 
 ## Ranh giới
 
-- Không xác định pha thị trường, không suy "công nghệ sắp dẫn sóng" → `dinh-vi-chu-ky-vn`.
-- Không chọn mã khuyến nghị mua/bán → `phan-tich-chuyen-sau-1-ma`.
-- Không nội suy doanh thu từ một đơn ký lớn: đơn kỳ hạn dài vào doanh thu theo từng
-  quý, ghi rõ tiến độ nhận.
-- Không dùng chỉ số công nghệ quốc tế thay driver trong nước.
+- Do not determine the market phase or infer "công nghệ sắp dẫn sóng" → `dinh-vi-chu-ky-vn`.
+- Do not pick tickers to buy/sell → `phan-tich-chuyen-sau-1-ma`.
+- Never extrapolate revenue from one large signed order: long-term orders enter revenue quarter
+  by quarter; state the recognition schedule.
+- Never use international tech indices in place of domestic drivers.
 
 ## Giới hạn
 
-- Đơn hàng ký là công bố không định kỳ: khi thiếu, hạ độ tin cậy nhánh Q1.
-- Thu nhập trên nhân viên là tự tính, chưa trừ người bán thời vụ và hợp đồng phụ —
-  ghi rõ.
-- Mảng nước ngoài chịu tỷ giá: biên lãi gộp quý có thể nhảy do tỷ giá, không phải do
-  vận hành.
+- Signed orders are disclosed irregularly: when missing, lower the confidence of the Q1 branch.
+- Revenue per employee is self-computed, before removing seasonal staff and subcontractors —
+  say so.
+- The foreign segment carries FX: a quarter's gross margin can jump on the exchange rate, not on
+  operations.
 
 ## Ví dụ
 
 **Ví dụ 1:**
 Hỏi: Công ty công nghệ này còn tăng trưởng được nữa không?
-Đạt khi: có doanh thu ký + backlog, mảng nước ngoài/nội địa, thu nhập trên nhân
-viên 2 quý, và verdict theo cây Q1→Q5.
+Đạt khi: signed revenue + backlog, the foreign/domestic segments, 2 quarters of revenue per
+employee, and a verdict following the Q1→Q5 tree.
 
 ## Trực quan hóa
 
-Chỉ vẽ khi người dùng muốn xem hình; tối đa 1 biểu đồ. Hợp với dữ liệu skill này:
-waterfall từ đơn ký → backlog → doanh thu nhận, multiline doanh thu theo mảng,
-bar thu nhập trên nhân viên theo kỳ. Vẽ bằng `chart_render` với `from_call` (mã
-`[ref …]`) từ kết quả tool đã có; cần chọn loại hình thì nạp `ve-bieu-do`.
+Draw only when the user wants a picture; at most 1 chart. Fitting this skill's data:
+waterfall from signed orders → backlog → recognised revenue, multiline revenue by segment,
+bar revenue per employee by period. Draw with `chart_render` using `from_call` (the
+`[ref …]` code) from tool results you have; load `ve-bieu-do` to choose the chart type.
 
 ## File tham chiếu
 
-| File | Dùng khi |
+| File | Use when |
 |---|---|
-| `references/kpi.md` | Cần cách đọc đơn ký/backlog, tính thu nhập trên người và chỉ báo biên theo mảng |
+| `references/kpi.md` | You need to read signed orders/backlog, compute revenue per head and margin indicators by segment |

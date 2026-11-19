@@ -1,6 +1,7 @@
 ---
 name: kiem-chien-luoc-backtest
-description: "Kiểm chứng chiến lược bằng backtest (SMA cross, RSI, momentum, mùa vụ, theo dầu/vàng), báo cả kết quả tốt nhất và tệ nhất. Dùng khi hỏi chiến lược có hiệu quả không."
+description: "Tests a strategy by backtest (SMA cross, RSI, momentum, seasonality, following oil/gold), reporting both the best and the worst results. Use when asked whether a strategy works."
+match_text: "Kiểm chứng chiến lược bằng backtest (SMA cross, RSI, momentum, mùa vụ, theo dầu/vàng), báo cả kết quả tốt nhất và tệ nhất. Dùng khi hỏi chiến lược có hiệu quả không."
 activation: auto
 requires_tools: [mcp__opentrading__quant_backtest]
 triggers:
@@ -10,51 +11,51 @@ version: 1.3.0
 
 # Backtest chiến lược giao dịch
 
-Pipeline chuẩn mỗi run: baseline → chiến lược → sweep → seasonality/event → kết luận. Best bắt buộc kèm worst (chống overfit); thiếu worst hoặc thiếu caveat engine thì chưa đạt. Engine numpy-only, cost mặc định, T+2 VN chưa model — mọi kết luận đều kèm caveat này.
+The standard pipeline per run: baseline → strategy → sweep → seasonality/event → conclusion. The best result must come with the worst (against overfitting); missing the worst or the engine caveat → not met. The engine is numpy-only, with default costs, and Vietnam's T+2 is not modelled — every conclusion carries this caveat.
 
 ## Khi nào dùng
 
-- Dùng khi: kiểm chứng điều kiện kỹ thuật (SMA/momentum/RSI), thời gian (tháng/quý), sau sự kiện (Tết/cổ tức/ĐHĐCĐ), theo giá hàng hóa (dầu/vàng).
-- Khi KHÔNG dùng (dùng skill khác thay thế): sizing vị thế cụ thể → leg Đệm trong `danh-gia-truoc-bctc`; định giá → `dinh-gia-chuyen-sau`; tin/sentiment → `tim-kiem-tin-tuc` / `phan-tich-sentiment`.
+- Use when: testing technical conditions (SMA/momentum/RSI), timing (month/quarter), post-event behaviour (Tết/dividends/AGMs), conditions on commodity prices (oil/gold).
+- Do NOT use (use another skill instead): sizing a specific position → the cushion leg in `danh-gia-truoc-bctc`; valuation → `dinh-gia-chuyen-sau`; news/sentiment → `tim-kiem-tin-tuc` / `phan-tich-sentiment`.
 
 ## Các bước
 
-**Bước 1: Dữ liệu (tuần tự đầu tiên).**
+**Bước 1: Data (first, sequential).**
 
-Chạy `vn_quote_history` (stock) hoặc `dnse_ohlc_history` (futures/index) + `vn_index_ohlcv` (benchmark). Chỉ 1 symbol mỗi lần sweep. Mã cổ phiếu VN thì dùng nến equity — CẤM dùng `vn_crypto_ohlcv`.
+Run `vn_quote_history` (stocks) or `dnse_ohlc_history` (futures/index) + `vn_index_ohlcv` (benchmark). Only 1 symbol per sweep. For Vietnamese stock tickers use equity candles — NEVER `vn_crypto_ohlcv`.
 
-**Bước 2: Điều kiện kỹ thuật.**
+**Bước 2: Technical conditions.**
 
-Chạy `backtest_strategies` (strategy=sma_cross/momentum/**rsi_meanrev** + rsi_low/rsi_high). rsi_meanrev: mua RSI<30, thoát RSI>70. `quant_backtest` đã deprecated cho chiến lược (chỉ còn baseline buy-hold) — mọi so sánh timing rule đi qua `backtest_strategies`, không gọi `quant_backtest` ở step này.
+Run `backtest_strategies` (strategy=sma_cross/momentum/**rsi_meanrev** + rsi_low/rsi_high). rsi_meanrev: buy at RSI<30, exit at RSI>70. `quant_backtest` is deprecated for strategies (baseline buy-hold only) — every timing-rule comparison goes through `backtest_strategies`; do not call `quant_backtest` in this step.
 
-**Bước 3: Điều kiện thời gian.**
+**Bước 3: Timing conditions.**
 
-Chạy `backtest_strategies` + `months`/`quarters` + `seasonality` (mô tả tháng/quý). Entries chỉ kỳ chọn, exits luôn mở. Months=[1] trên nến tháng 3 → 0 trades + warning là hợp lệ, không retry đổi timeframe.
+Run `backtest_strategies` + `months`/`quarters` + `seasonality` (month/quarter description). Entries only in the chosen periods, exits always open. Months=[1] on monthly candles giving 0 trades + a warning is valid; do not retry with another timeframe.
 
-**Bước 4: Điều kiện sau sự kiện.**
+**Bước 4: Post-event conditions.**
 
-Chạy `event_study` (symbol, dates, window ±N) — CAR quanh Tết/cổ tức/ĐHĐCĐ, ngày từ `event_calendar_vn`, nearest-day 3 phiên, kèm hit-rate/best-worst.
+Run `event_study` (symbol, dates, window ±N) — CAR around Tết/dividends/AGMs, dates from `event_calendar_vn`, nearest day within 3 sessions, with hit rate/best-worst.
 
-**Bước 5: Điều kiện giá hàng hóa.**
+**Bước 5: Commodity-price conditions.**
 
-Chạy `backtest_strategies` + `condition_symbol` (BZ=F/GC=F...) + `condition_rule` above_sma/rising. `condition_symbol` chết thì cả call unavailable — nói rõ, không thay symbol khác. Fallback vnstock→yfinance nằm trong tool, không tự đổi nguồn tay.
+Run `backtest_strategies` + `condition_symbol` (BZ=F/GC=F...) + `condition_rule` above_sma/rising. If `condition_symbol` is down, the whole call is unavailable — say so; do not swap in another symbol. The vnstock→yfinance fallback lives inside the tool; never switch sources by hand.
 
-**Bước 6: Tổng hợp.**
+**Bước 6: Synthesis.**
 
-Chạy `param_sweep` (tối đa 30 combos có sẵn, không tự nới; passthrough months/quarters) + `correlation_matrix` + `portfolio_optimize` (nhiều mã). Không sweep quá 3 symbol/run.
+Run `param_sweep` (at most the 30 built-in combos, never widened; passes months/quarters through) + `correlation_matrix` + `portfolio_optimize` (several tickers). Never sweep more than 3 symbols per run.
 
 ## Cấu trúc câu trả lời
 
-Trình bày kết luận đúng cấu trúc sau: mua và nắm giữ làm chuẩn so sánh → từng điều kiện (số lệnh, lợi nhuận ròng, tỷ lệ lệnh thắng) → cấu hình tốt nhất + tệ nhất → ảnh hưởng mùa vụ/sự kiện → kết luận "đáng tin / đáng nghi + lý do" + giới hạn của phép thử (chưa mô hình hoá T+2, phí giao dịch giả định bao nhiêu) + nguồn (nguồn nến, mốc so sánh, ngày sự kiện).
+Present the conclusion in exactly this structure: buy-and-hold as the benchmark → each condition (number of trades, net return, win rate) → best + worst configuration → seasonality/event effects → a conclusion "đáng tin / đáng nghi + lý do" + the test's limits (T+2 not modelled, the assumed trading cost) + sources (candle source, benchmark, event dates).
 
-Nhãn trong bảng viết tiếng Việt: "số lệnh" (không "trades"), "lợi nhuận ròng" (không "net return"), "tỷ lệ lệnh thắng" (không "win rate"), "mức sụt giảm sâu nhất" (không "max drawdown"), "chiến lược mua và nắm giữ" (không "buy & hold"). Phí "10 bps" viết thành "10 điểm cơ bản (0,1%)" — 1 bps là 0,01%, không phải 1 điểm phần trăm. "Whipsaw" và "overfit" nói thẳng bằng lời: "đảo chiều liên tục trong giao dịch", "học kỹ quá khứ".
+Table labels in Vietnamese: "số lệnh" (not "trades"), "lợi nhuận ròng" (not "net return"), "tỷ lệ lệnh thắng" (not "win rate"), "mức sụt giảm sâu nhất" (not "max drawdown"), "chiến lược mua và nắm giữ" (not "buy & hold"). Write a "10 bps" cost as "10 điểm cơ bản (0,1%)" — 1 bps is 0.01%, not 1 percentage point. Say "whipsaw" and "overfit" in plain words: "đảo chiều liên tục trong giao dịch", "học kỹ quá khứ".
 
 ## Ví dụ
 
 **Ví dụ 1:**
 Hỏi: Backtest mua RSI<30 FPT + backtest sau Tết
-Đạt khi: bảng từng điều kiện (trades/net/win) + best/worst + kết luận, kèm caveat T+2/cost.
+Đạt khi: a table per condition (trades/net/win) + best/worst + a conclusion, with the T+2/cost caveat.
 
 ## Trực quan hóa
 
-Chỉ vẽ khi người dùng muốn xem hình, hoặc khi có chuỗi thời gian / so sánh mà bảng khó đọc; tối đa 1 biểu đồ mỗi câu trả lời. Vẽ bằng `chart_render` với `from_call` (mã `[ref …]` ở đầu kết quả tool) để không phải gõ lại số; cần chọn loại hình thì nạp `ve-bieu-do`. Hình hợp với dữ liệu skill này: bar diverging best/worst, line CAR path, bar/heatmap seasonality, heatmap correlation.
+Draw only when the user wants a picture, or when a time series / comparison is hard to read as a table; at most 1 chart per answer. Draw with `chart_render` using `from_call` (the `[ref …]` code at the top of a tool result) so you never retype numbers; load `ve-bieu-do` to choose the chart type. Fitting this skill's data: bar diverging best/worst, line CAR path, bar/heatmap seasonality, heatmap correlation.

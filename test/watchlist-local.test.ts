@@ -36,7 +36,7 @@ function tool(name: string) {
 
 test("local watchlist CRUD roundtrip, stored under the runtime's home", async () => {
   await tool("watchlist_local_create").execute({ name: "core" }, ctx())
-  await expect(tool("watchlist_local_create").execute({ name: "core" }, ctx())).rejects.toThrow("đã có")
+  await expect(tool("watchlist_local_create").execute({ name: "core" }, ctx())).rejects.toThrow("already exists")
   await tool("watchlist_local_add").execute({ name: "core", symbols: ["vcb", "HPG", "VCB"] }, ctx())
   const list = (await tool("watchlist_local_list").execute({}, ctx())) as string
   expect(list).toContain("HPG")
@@ -47,7 +47,7 @@ test("local watchlist CRUD roundtrip, stored under the runtime's home", async ()
   expect(after).not.toContain("VCB")
   expect(after).toContain("HPG")
   await tool("watchlist_local_delete").execute({ name: "core" }, ctx())
-  expect((await tool("watchlist_local_list").execute({}, ctx())) as string).toContain("Chưa có")
+  expect((await tool("watchlist_local_list").execute({}, ctx())) as string).toContain("No personal watchlists")
 })
 
 test("one deferrable watchlist tool: list/get never ask, writes ask, delete on its own scope", async () => {
@@ -65,18 +65,18 @@ test("one deferrable watchlist tool: list/get never ask, writes ask, delete on i
   expect(ro.name).toBe("watchlist_local")
   expect(ro.readOnly).toBe(true)
   expect(JSON.stringify(ro.input)).not.toContain("delete")
-  await expect(t!.execute({ action: "add", name: "core" }, ctx())).rejects.toThrow("cần trường symbols")
+  await expect(t!.execute({ action: "add", name: "core" }, ctx())).rejects.toThrow("needs the symbols field")
 })
 
 test("a corrupted watchlists.json is refused, never overwritten with an empty store", async () => {
   const file = path.join(home, "watchlists.json")
   await writeFile(file, '{"CORE": {"name": "CORE", "symbols": ["VCB"]', "utf8")
-  await expect(tool("watchlist_local_create").execute({ name: "new" }, ctx())).rejects.toThrow("bị hỏng")
-  await expect(tool("watchlist_local_list").execute({}, ctx())).rejects.toThrow("bị hỏng")
+  await expect(tool("watchlist_local_create").execute({ name: "new" }, ctx())).rejects.toThrow("is damaged")
+  await expect(tool("watchlist_local_list").execute({}, ctx())).rejects.toThrow("is damaged")
   // The user's data is still there to repair.
   expect(await Bun.file(file).text()).toContain('"VCB"')
   await writeFile(file, '["not", "a", "store"]', "utf8")
-  await expect(tool("watchlist_local_add").execute({ name: "core", symbols: ["FPT"] }, ctx())).rejects.toThrow("sai cấu trúc")
+  await expect(tool("watchlist_local_add").execute({ name: "core", symbols: ["FPT"] }, ctx())).rejects.toThrow("wrong structure")
 })
 
 test("symbols given as one comma string are split, uppercased and checked", async () => {
@@ -85,8 +85,8 @@ test("symbols given as one comma string are split, uppercased and checked", asyn
   await tool("watchlist_local_create").execute({ name: "core" }, ctx())
   const out = (await tool("watchlist_local_add").execute({ name: "core", symbols: ["VCB, HPG", "x!"] }, ctx())) as string
   expect(out).toContain('"CORE": HPG, VCB')
-  expect(out).toContain("bỏ qua mã không hợp lệ: x!")
-  await expect(tool("watchlist_local_add").execute({ name: "core", symbols: ["!!"] }, ctx())).rejects.toThrow("Không có mã hợp lệ")
+  expect(out).toContain("skipped invalid tickers: x!")
+  await expect(tool("watchlist_local_add").execute({ name: "core", symbols: ["!!"] }, ctx())).rejects.toThrow("No valid tickers")
 })
 
 test("rename and get; an unknown list names the existing ones", async () => {
@@ -94,7 +94,7 @@ test("rename and get; an unknown list names the existing ones", async () => {
   await tool("watchlist_local_add").execute({ name: "core", symbols: ["FPT"] }, ctx())
   await tool("watchlist_local_rename").execute({ name: "core", to: "dai han" }, ctx())
   expect((await tool("watchlist_local_get").execute({ name: "Dai Han" }, ctx())) as string).toContain("FPT")
-  await expect(tool("watchlist_local_get").execute({ name: "core" }, ctx())).rejects.toThrow("Đang có: DAI HAN")
+  await expect(tool("watchlist_local_get").execute({ name: "core" }, ctx())).rejects.toThrow("Existing: DAI HAN")
 })
 
 test("parallel adds in one step keep every symbol", async () => {

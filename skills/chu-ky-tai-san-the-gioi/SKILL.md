@@ -1,6 +1,7 @@
 ---
 name: chu-ky-tai-san-the-gioi
-description: "Định vị pha chu kỳ tài sản toàn cầu (cổ phiếu, trái phiếu, hàng hoá, vàng, USD, BTC) từ lợi suất theo pha, tương quan cổ phiếu–trái phiếu và outlook các quỹ lớn. Dùng khi hỏi phân bổ tài sản toàn cầu."
+description: "Locates the global asset-cycle phase (stocks, bonds, commodities, gold, USD, BTC) from returns by phase, the stock–bond correlation and big funds' outlooks. Use for global allocation."
+match_text: "Định vị pha chu kỳ tài sản toàn cầu (cổ phiếu, trái phiếu, hàng hoá, vàng, USD, BTC) từ lợi suất theo pha, tương quan cổ phiếu–trái phiếu và outlook các quỹ lớn. Dùng khi hỏi phân bổ tài sản toàn cầu."
 activation: auto
 triggers:
   keywords: [tài sản toàn cầu, global allocation, investment clock, stock bond correlation, suy thoái mỹ, recession mỹ, nber, all weather, risk parity, outlook jpmorgan blackrock, overweight underweight]
@@ -11,49 +12,49 @@ version: 1.1.0
 
 # Chu kỳ tài sản toàn cầu (multi-asset)
 
-Skill suy luận pha toàn cầu từ ML Clock + mốc suy thoái NBER + 17 ETF đại diện các nhóm tài sản. Số liệu sống trong PG (`g_asset_*`), tra bằng tools — file này chỉ giữ logic.
+This skill infers the global phase from the ML Clock + NBER recession dates + 17 ETFs representing asset groups. The data lives in PG (`g_asset_*`) and is read through tools — this file keeps only the logic.
 
 ## Khi nào dùng
 
-- Dùng khi: user hỏi phân bổ tài sản global, Mỹ suy thoái hay chưa, stock-bond correlation regime nào, outlook banks/quỹ lớn, nhóm nào dẫn theo pha NBER.
-- Khi KHÔNG dùng (dùng skill khác thay thế):
-  - Tài sản VN → dùng `chu-ky-tai-san-vn` / `dinh-vi-chu-ky-vn`.
-  - Fed policy odds thuần → dùng `du-doan-fed`.
-  - Vĩ mô quốc tế chi tiết → dùng `danh-gia-vi-mo-quoc-te`.
+- Use when: the user asks about global asset allocation, whether the US is in recession, which stock-bond correlation regime holds, big banks'/funds' outlooks, which groups lead in each NBER phase.
+- Do NOT use (use another skill instead):
+  - Vietnamese assets → use `chu-ky-tai-san-vn` / `dinh-vi-chu-ky-vn`.
+  - Pure Fed policy odds → use `du-doan-fed`.
+  - Detailed international macro → use `danh-gia-vi-mo-quoc-te`.
 
 ## Các bước
 
-**Bước 0: Kiểm tra độ tươi.**
+**Bước 0: Check freshness.**
 
-Gọi `g_asset_check`.
-- `as_of` rỗng hoặc bảng không có dòng nào → **chưa có dữ liệu**: dừng, báo "chưa có dữ liệu chu kỳ trên server", không kết luận pha, không dùng con số nào trong `references/` thay thế.
-- Stale (>90 ngày) → cảnh báo + đề xuất refresh theo `references/refresh.md` (tool ghi, tìm bằng `tool_search`; user đồng ý mới chạy).
-- Outlook (`g_asset_outlook`) cập nhật thủ công theo quý — luôn nêu quý của nhận định khi trích; bảng trống thì bỏ Bước 3.
+Call `g_asset_check`.
+- Empty `as_of` or a table with no rows → **no data yet**: stop, say "chưa có dữ liệu chu kỳ trên server", conclude no phase, and never substitute any number from `references/`.
+- Stale (>90 days) → warn + suggest a refresh per `references/refresh.md` (a write tool, found with `tool_search`; run it only if the user agrees).
+- The outlook (`g_asset_outlook`) is updated by hand each quarter — always give the quarter of a view you quote; if the table is empty, skip Bước 3.
 
-**Bước 1: Định pha (song song).**
+**Bước 1: Determine the phase (in parallel).**
 
-Tra `g_asset_phase`: so lợi suất theo pha Early/Late/Mid/Recession, đọc số từ bảng. **Caveat bắt buộc**: Early/Late/Recession hiện chỉ có 1 suy thoái (2020) trong dữ liệu, mẫu rất nhỏ — chỉ pha Mid đủ mẫu để tin; không gọi kết quả các pha kia là "đã kiểm chứng". Tra `g_asset_corr(regime="post22")` kiểm tra stock-bond correlation hiện tại (dương từ 2022 = bonds không còn hedge tốt).
+Read `g_asset_phase`: compare returns by phase Early/Late/Mid/Recession, taking numbers from the table. **Required caveat**: Early/Late/Recession currently have only 1 recession (2020) in the data, a very small sample — only the Mid phase has enough samples to trust; never call the other phases' results "verified". Read `g_asset_corr(regime="post22")` for the current stock-bond correlation (positive since 2022 = bonds no longer hedge well).
 
-**Bước 2: Mùa vụ + sự kiện (song song).**
+**Bước 2: Seasonality + events (in parallel).**
 
-Tra `g_asset_seasonality(month=<M>)` cho tháng hiện tại; số lấy từ bảng, không dùng tháng mạnh/yếu nhớ sẵn.
+Read `g_asset_seasonality(month=<M>)` for the current month; take numbers from the table, never strong/weak months from memory.
 
-**Bước 3: Đối chiếu street (song song).**
+**Bước 3: Compare with the street (in parallel).**
 
-Tra `g_asset_outlook` nhận định mới nhất (JPM/BlackRock/GS/MS/BofA/PIMCO...): tăng/giảm tỷ trọng (OW/UW) nhóm nào, mục tiêu số nào, quý nào. Street là đối trọng với thống kê, không phải chân lý — nêu cả hai khi mâu thuẫn.
+Read the latest `g_asset_outlook` views (JPM/BlackRock/GS/MS/BofA/PIMCO...): which groups are overweight/underweight (OW/UW), which numeric targets, which quarter. The street is a counterweight to the statistics, not the truth — give both when they conflict.
 
-**Bước 4: Kết luận tilt phân bổ.**
+**Bước 4: Conclude the allocation tilt.**
 
-Verdict pha + nghiêng phân bổ (tăng/giảm tỷ trọng theo nhóm, không picking mã/ETF cụ thể trừ khi user hỏi) + bằng chứng (provenance tool) + caveat NBER-mỏng + regime hiện tại.
+Phase verdict + allocation tilt (over/underweight by group; no specific tickers/ETFs unless the user asks) + evidence (tool provenance) + the thin-NBER caveat + the current regime.
 
 ## Cấu trúc câu trả lời
 
-Độ tươi bảng + quarter outlook · verdict pha · bằng chứng (phase table + corr regime + seasonality) · tilt gợi ý · đối chiếu street (đồng/thuận + mâu thuẫn) · caveat mẫu NBER nhỏ.
+Table freshness + outlook quarter · phase verdict · evidence (phase table + corr regime + seasonality) · suggested tilt · comparison with the street (agreeing + conflicting) · the small NBER sample caveat.
 
 ## File tham khảo
 
-| File | Trả lời câu hỏi |
+| File | Answers |
 |---|---|
-| `references/ml-clock.md` | 4 pha ML Clock + mapping tài sản + hạn chế đã biết |
-| `references/regime-guide.md` | Đọc corr regimes (pre22/post22), stock-bond flip, BTC-gold spike |
-| `references/refresh.md` | Khi nào + cách refresh qua tools + changelog |
+| `references/ml-clock.md` | The 4 ML Clock phases + asset mapping + known limits |
+| `references/regime-guide.md` | Reading corr regimes (pre22/post22), the stock-bond flip, BTC-gold spikes |
+| `references/refresh.md` | When + how to refresh via tools + changelog |

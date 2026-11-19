@@ -284,10 +284,10 @@ test("--memory notebook: each question gets an empty notebook (guide in the prom
     const system = streamed.map((b) => JSON.stringify(b.messages.find((m) => m.role === "system")?.content ?? ""))
     const offered = streamed.map((b) => (b.tools ?? []).some((t) => t.function.name === "memory_read"))
     if (memory === "notebook") {
-      expect(system.every((s) => s.includes("Sổ ghi nhớ là ghi chép"))).toBe(true)
+      expect(system.every((s) => s.includes("The notebook (sổ ghi nhớ) holds notes"))).toBe(true)
       expect(offered.some(Boolean)).toBe(true)
     } else {
-      expect(system.some((s) => s.includes("Sổ ghi nhớ là ghi chép"))).toBe(false)
+      expect(system.some((s) => s.includes("The notebook (sổ ghi nhớ) holds notes"))).toBe(false)
       expect(offered.some(Boolean)).toBe(false)
     }
     expect(opened).toEqual([memory, memory])
@@ -308,10 +308,10 @@ test("a rule switched off stays off, notice included, and the rest still run", a
 test("the nudge after tool results can go, alone or with only its todo part", async () => {
   const sent = () => JSON.stringify(bodies.at(-1)!.messages)
   await run([question("q1")])
-  expect(sent()).toContain("Nếu còn cần dữ liệu, gọi cùng lúc")
+  expect(sent()).toContain("If you still need data, call every independent tool at once")
   bodies.length = 0
   await run([question("q1")], 1, undefined, parseAblations(["tool-nudge"]))
-  expect(sent()).not.toContain("Nếu còn cần dữ liệu, gọi cùng lúc")
+  expect(sent()).not.toContain("If you still need data, call every independent tool at once")
 })
 
 test("setup ablations take their tools away and reach the config", async () => {

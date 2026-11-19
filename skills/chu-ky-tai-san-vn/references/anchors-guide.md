@@ -1,9 +1,9 @@
 # Đọc anchors VN (tra `vn_asset_anchors`, luôn ghi nguồn)
 
-Anchors là dữ liệu báo cáo kỳ (không daily) — mỗi dòng có provenance. Cách đọc:
-- **deposit/lãi gửi**: E/P thị trường − lãi gửi 12M > 0 → tiền rời gửi sang CK; < 0 kéo dài → tiền về gửi. Mốc lịch sử: tra trong `vn_asset_anchors`, ghi nguồn.
-- **govbond yields**: 10Y tăng suốt = reflation + cung lớn; đảo chiều giảm = Reflation trade (mua duration).
-- **corpbond wall**: đáo hạn quý hiện tại + 2 quý tới; BĐS > 60% wall hoặc lãi phát hành > 10% = stress hệ thống.
-- **gold spread**: SJC premium > 10% = đầu cơ hoặc sắp can thiệp; co về < 3% = bình thường hóa.
-- **foreign flows**: bán ròng + USD căng đồng thời = vòng xoáy rút vốn; mua ròng trở lại + nâng hạng = gió đổi chiều.
-- Thiếu: margin aggregate không tồn tại công khai — proxy bằng basis + thanh khoản, ghi rõ khi dùng proxy.
+Anchors are periodic report data (not daily) — each row has provenance. How to read them:
+- **deposit/deposit rates**: market E/P − the 12M deposit rate > 0 → money leaves deposits for stocks; < 0 for long → money returns to deposits. Historical marks: look them up in `vn_asset_anchors` and cite the source.
+- **govbond yields**: 10Y rising throughout = reflation + heavy supply; a turn lower = the Reflation trade (buy duration).
+- **corpbond wall**: maturities in the current quarter + the next 2 quarters; real estate > 60% of the wall or issuance coupons > 10% = systemic stress.
+- **gold spread**: SJC premium > 10% = speculation or imminent intervention; narrowing to < 3% = normalisation.
+- **foreign flows**: net selling + tight USD at the same time = a capital-outflow spiral; net buying returning + the upgrade = the wind turning.
+- Missing: no public margin aggregate exists — proxy with the basis + liquidity, and say so when using the proxy.

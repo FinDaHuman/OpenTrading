@@ -182,10 +182,10 @@ export function promptVersion(dir = PROMPTS_DIR): string {
 }
 
 const TODO_RECITE_HEADER =
-  "Danh sách việc bạn đã lập ([x] xong, [>] đang làm, [ ] chờ, [-] bỏ). Tin nhắn mới vẫn thuộc việc này thì làm tiếp và gọi todo_write khi xong một việc; người dùng chuyển việc khác thì trả lời câu mới và đánh dấu cancelled các việc bỏ."
+  "The task list you made ([x] done, [>] in progress, [ ] pending, [-] dropped). If the new message still belongs to this work, carry on and call todo_write when a task is done; if the user moved to something else, answer the new message and mark the dropped tasks cancelled."
 
 const DEFERRED_HEADER =
-  "Tool dưới đây đang hoãn: chỉ có tên. Gọi tool_search để nạp — biết tên thì \"select:a,b,c\" nạp một lần nhiều tool, chưa biết thì tìm theo từ khoá. Đã có schema thì gọi thẳng; đừng đoán tham số của tool chưa nạp; chỉ kết luận hết dữ liệu sau khi đã tìm."
+  "The tools below are deferred: names only. Call tool_search to load them — if you know the names, \"select:a,b,c\" loads several at once; if not, search by keyword. A tool whose schema you already have is called directly; never guess the parameters of a tool not yet loaded; conclude that data is unavailable only after searching."
 
 /**
  * Deferred tool names per server, within a token budget; over budget each server shrinks
@@ -198,7 +198,7 @@ export function renderDeferred(groups: { server: string; tools: string[] }[], bu
   const short = groups.map((g) =>
     g.server === LOCAL_SOURCE
       ? `${g.server} (${g.tools.length}): ${g.tools.join(", ")}`
-      : `${g.server}: ${g.tools.length} tool — tìm bằng tool_search (từ khoá hoặc "mcp__${g.server}")`,
+      : `${g.server}: ${g.tools.length} tools — find them with tool_search (keywords or "mcp__${g.server}")`,
   )
   return { text: [DEFERRED_HEADER, ...short].join("\n"), truncated: true }
 }
@@ -312,14 +312,14 @@ export function assemble(input: AssembleInput, promptsDir = PROMPTS_DIR): Assemb
         "goi_y_skill",
         6,
         "reminder",
-        `Câu hỏi này có thể liên quan tới skill: ${hits.map((s) => s.name).join(", ")}. Nếu đúng, gọi load_skill trước khi trả lời.`,
+        `This question may relate to the skill(s): ${hits.map((s) => s.name).join(", ")}. If so, call load_skill before answering.`,
       )
     }
   }
 
   return {
     system: system.join("\n\n"),
-    context: context.length > 0 ? `Thông tin về người dùng và phiên làm việc (dùng khi liên quan):\n\n${context.join("\n\n")}` : undefined,
+    context: context.length > 0 ? `About the user and this session (use when relevant):\n\n${context.join("\n\n")}` : undefined,
     reminders,
     clock: clock.snapshot,
     report,

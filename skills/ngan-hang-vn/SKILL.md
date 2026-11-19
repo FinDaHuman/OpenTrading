@@ -1,6 +1,7 @@
 ---
 name: ngan-hang-vn
-description: "Pha/sóng: dùng skill chu kỳ. Phân tích ngành ngân hàng VN theo bộ chỉ báo riêng: hạn mức tín dụng, NIM và spread lãi, chất lượng tài sản 3 lớp, ngoại bảng và chuẩn mực thanh khoản. Dùng khi hỏi xu hướng nhóm ngân hàng hoặc đọc BCTC ngân hàng."
+description: "Phase/wave: use dinh-vi-chu-ky-vn. Analyses VN banks: credit quotas, NIM and rate spread, 3-layer asset quality, off-balance-sheet items, liquidity ratios. Use for bank trends or a bank's financial statements."
+match_text: "Pha/sóng: dùng skill chu kỳ. Phân tích ngành ngân hàng VN theo bộ chỉ báo riêng: hạn mức tín dụng, NIM và spread lãi, chất lượng tài sản 3 lớp, ngoại bảng và chuẩn mực thanh khoản. Dùng khi hỏi xu hướng nhóm ngân hàng hoặc đọc BCTC ngân hàng."
 activation: auto
 requires_tools: [financial_detail, vs_financial_norms]
 uses_tools: [financial_detail, vs_financial_norms, financial_ratios, financial_statements, stock_overview, planned_targets, sbv_rates, analyst_consensus, peer_compare, compare_equities, news_symbol, news_market, dividends_splits, symbol_lookup, vn_company, valuation_run]
@@ -12,166 +13,166 @@ version: 1.0.0
 
 # Ngân hàng Việt Nam — framework phân tích
 
-Skill đọc ngành ngân hàng bằng **chỉ báo của ngành ngân hàng**: dòng tiền tăng
-trưởng (hạn mức tín dụng), chất lượng dòng tiền đó (spread), rủi ro của nó
-(chất lượng tài sản 3 lớp + ngoại bảng) và khung siết/nới (thanh khoản, chuẩn
-mực). BCTC ngân hàng đọc qua chuẩn mực riêng của loại hình (`vs_financial_norms`
-với báo cáo loại ngân hàng), không đọc bằng bộ dòng CTCP chung.
+This skill reads banks through **the banking sector's own indicators**: the growth
+flow (credit quotas), that flow's quality (the spread), its risk
+(3-layer asset quality + off-balance-sheet) and the tightening/easing frame (liquidity, prudential
+ratios). Bank statements are read under the type's own standards (`vs_financial_norms`
+with bank-type reports), not with the generic joint-stock company line set.
 
 ## Khi nào dùng
 
-- Dùng khi: user hỏi xu hướng nhóm ngân hàng, chỉ tiêu một ngân hàng nên xem gì,
-  chất lượng tài sản, hay ngành đang được tiếp sức hay bị siết (`ngân hàng đang
+- Use when: the user asks about bank-group trends, which metrics to watch for a bank,
+  asset quality, or whether the sector is supported or squeezed (`ngân hàng đang
   thế nào`, `NPL của VCB`, `tăng trưởng tín dụng ảnh hưởng gì`).
-- Khi KHÔNG dùng (dùng skill khác thay thế):
-  - Hỏi pha thị trường / luân chuyển ngành / sóng ngành tiếp theo → `dinh-vi-chu-ky-vn`.
-  - Phân tích toàn diện một mã (kỹ thuật + định giá + tin) → `phan-tich-chuyen-sau-1-ma`.
-  - Chỉ định giá một mã (fair value, vùng P/B) → `dinh-gia-chuyen-sau`.
-  - Chỉ đọc BCTC/cổ đông một mã không có mảng ngành → `co-ban-chuyen-sau`; Beneish doanh nghiệp thường không áp dụng cho ngân hàng, Piotroski hiện chưa hỗ trợ.
-  - Số liệu vĩ mô VN chi tiết (GDP, lãi suất điều hành) → `danh-gia-vi-mo-viet-nam`.
+- Do NOT use (use another skill instead):
+  - Market phase / sector rotation / the next sector wave → `dinh-vi-chu-ky-vn`.
+  - A full ticker analysis (technicals + valuation + news) → `phan-tich-chuyen-sau-1-ma`.
+  - Valuing one ticker only (fair value, P/B range) → `dinh-gia-chuyen-sau`.
+  - Only one ticker's statements/shareholders without the sector angle → `co-ban-chuyen-sau`; the corporate Beneish score does not apply to banks, Piotroski is not supported yet.
+  - Detailed Vietnamese macro figures (GDP, policy rates) → `danh-gia-vi-mo-viet-nam`.
 
 ## Trụ cột driver
 
-| Driver | Kênh truyền dẫn | Đo/xác minh bằng |
+| Driver | Transmission channel | Measure/verify with |
 |---|---|---|
-| Hạn mức tín dụng | Nếu cơ chế hạn mức áp dụng tại kỳ phân tích, đối chiếu hạn mức và tăng trưởng thực tế từng ngân hàng; phân bổ theo kỳ hoặc nhiệm vụ tái cơ cấu chỉ được dùng khi có nguồn xác nhận. Không mặc định hạn mức theo quý hay mùa vụ tăng trưởng | Xác minh cơ chế hạn mức có áp dụng tại kỳ phân tích; tăng trưởng tín dụng YTD của mã so hạn mức được công bố: `financial_detail` (theo dòng BCTC ngân hàng) + phân phối hạn mức trong `news_market`/`web_search`. Ghi rõ hạn mức đọc từ đâu |
-| Spread lãi thuần | Thu nhập lãi thuần = thu nhập lãi − chi phí lãi; NIM khác spread lợi suất tài sản trừ chi phí vốn vì hai chỉ tiêu có mẫu số khác nhau. Khi chi phí huy động (giấy tờ có giá, tiền gửi kỳ hạn) lên nhanh hơn tỷ suất cho vay → spread nén; ngân hàng giữ được nhóm khách hàng ít nhạy giá và cơ cấu vốn rẻ thì nén ít hơn | `financial_detail`: thu nhập lãi, chi phí lãi và thu nhập lãi thuần theo quý + cơ cấu huy động; `sbv_rates` cho trần lãi huy động điều hành |
-| CASA | Cơ cấu vốn không kỳ hạn là đệm chi phí vốn: nhóm khách hàng bán lẻ càng lớn, spread càng giữ được | Cơ cấu nguồn vốn trong `financial_detail` (chuẩn mực ngân hàng); so với nhóm cùng phân khúc bằng `financial_detail`/thuyết minh từng ngân hàng, cùng kỳ |
-| Chất lượng tài sản 3 lớp | Nợ xấu chỉ là lớp trên cùng. Nợ nhóm 2 (cần chú ý) tăng trong khi nợ xấu phẳng = rủi ro đang hình thành nhưng chưa lên báo cáo; tỷ lệ bao phủ rủi ro giảm = đệm provision đang mỏng. Đọc **3 lớp cùng lúc** mới có kết luận | `financial_detail`: tỷ lệ nợ xấu, tỷ lệ nợ nhóm 2, tỷ lệ bao phủ nợ xấu, chi phí rủi ro tín dụng — mỗi quý, kèm xu hướng QoQ |
-| Ngoại bảng | Tín dụng tương đương ngoại bảng (bảo lãnh, cam kết) không nằm trong nợ xấu và dự phòng đã công bố → rủi ro thật lớn hơn bảng | `financial_detail` dòng ngoại bảng nếu kỳ báo cáo có; số tổng hợp ngành lấy từ `news_market`/`web_search`, ghi rõ nguồn và kỳ |
-| Thanh khoản + chuẩn mực | Tín dụng tăng nhanh hơn tiền gửi có thể tạo áp lực huy động. LDR, CAR, LCR/NSFR có định nghĩa và phạm vi áp dụng khác nhau; không giả định Basel III thay thế hoặc miễn LDR khi chưa có văn bản áp dụng cho ngân hàng và kỳ phân tích | Xác nhận bằng văn bản: tra `news_market`/`web_search` để lấy **số hiệu văn bản + ngày hiệu lực + trần/lộ trình đang áp dụng**, rồi ghi nguồn trong câu trả lời. **Không suy ngưỡng mới từ trí nhớ** — nếu chưa tra được văn bản, nói "chưa xác nhận", không đoán |
+| Credit quotas | If a quota mechanism applies in the period analysed, compare each bank's quota with actual growth; allocation by period or restructuring mandates may be used only with a confirming source. Never assume quarterly quotas or seasonal growth | Verify whether a quota mechanism applies in the period analysed; the ticker's YTD credit growth vs its published quota: `financial_detail` (bank statement lines) + quota allocation in `news_market`/`web_search`. State where the quota comes from |
+| Net interest spread | Net interest income = interest income − interest expense; NIM differs from the asset yield minus funding cost spread because the two metrics have different denominators. When funding costs (valuable papers, term deposits) rise faster than lending yields → the spread compresses; banks keeping price-insensitive customers and cheap funding compress less | `financial_detail`: interest income, interest expense and net interest income by quarter + funding mix; `sbv_rates` for the policy deposit-rate cap |
+| CASA | The non-term funding share cushions funding costs: the larger the retail customer base, the better the spread holds | Funding mix in `financial_detail` (bank standards); compare with same-segment peers via each bank's `financial_detail`/notes, same period |
+| 3-layer asset quality | NPLs are only the top layer. Group 2 (special mention) loans rising while NPLs stay flat = risk forming but not yet reported; a falling coverage ratio = a thinning provision buffer. Only reading **all 3 layers together** gives a conclusion | `financial_detail`: NPL ratio, group 2 ratio, NPL coverage, credit cost — each quarter, with the QoQ trend |
+| Off-balance-sheet | Off-balance-sheet credit equivalents (guarantees, commitments) are outside published NPLs and provisions → the real risk exceeds the balance sheet | `financial_detail` off-balance-sheet lines if the period has them; sector aggregates from `news_market`/`web_search`, stating the source and period |
+| Liquidity + prudential ratios | Credit growing faster than deposits can pressure funding. LDR, CAR, LCR/NSFR have different definitions and scopes; never assume Basel III replaces or exempts LDR without a text applying to that bank and period | Confirm with texts: look up `news_market`/`web_search` for **the text number + effective date + cap/roadmap in force**, then cite the source in the answer. **Never infer new thresholds from memory** — if no text is found, say "chưa xác nhận"; do not guess |
 
 ## Các bước
 
-Khoảng 4 lượt gọi tool. Bắt buộc có `vs_financial_norms(btype=3)` TRƯỚC khi đọc dòng
-BCTC ngân hàng — dùng dòng chuẩn ngành thay vì đoán tên dòng CTCP chung.
+About 4 tool rounds. `vs_financial_norms(btype=3)` is required BEFORE reading bank
+statement lines — use the sector-standard lines instead of guessing generic company line names.
 
-**Bước 1: Chuẩn mực + một mã làm gốc (song song).**
+**Bước 1: Standards + one anchor ticker (in parallel).**
 
-`vs_financial_norms(btype=3)` (dòng BCTC ngân hàng) · `symbol_lookup` (nếu user
-đưa tên công ty) · `vn_company` (hồ sơ, mô hình). Thiếu hạn mức tín dụng công bố
-→ ghi "không lấy được hạn mức", không đoán.
+`vs_financial_norms(btype=3)` (bank statement lines) · `symbol_lookup` (if the user
+gives a company name) · `vn_company` (profile, model). No published credit quota
+→ write "không lấy được hạn mức"; do not guess.
 
-**Bước 2: Đọc 3 lớp chất lượng tài sản + spread (song song — 3 lời gọi `financial_detail`, mỗi lời gọi MỘT `statement`).**
+**Bước 2: Read the 3 asset-quality layers + the spread (in parallel — 3 `financial_detail` calls, each with ONE `statement`).**
 
-`financial_detail` chỉ nhận **một** `statement` mỗi lời gọi (mặc định `KQKD`) nên phải
-gọi riêng, gom song song trong một lượt:
+`financial_detail` accepts only **one** `statement` per call (default `KQKD`), so
+call them separately, batched in parallel in one round:
 
-- `financial_detail(symbol, statement=KQKD)`: thu nhập lãi, chi phí lãi và thu nhập lãi thuần · chi phí rủi ro
-  tín dụng · lãi thuần ngoài lãi → phục vụ đọc spread.
-- `financial_detail(symbol, statement=CDKT)`: cho vay khách hàng · tiền gửi · tài sản sinh lãi ·
-  vốn chủ sở hữu → phục vụ đọc tăng trưởng, khoảng cách tín dụng − tiền gửi và đòn bẩy.
-- `financial_detail(symbol, statement=TM)`: nợ xấu · nợ nhóm 2 · tỷ lệ bao phủ nợ xấu ·
-  ngoại bảng → phục vụ **3 lớp chất lượng tài sản** (các chỉ tiêu này nằm ở thuyết minh,
-  không nằm trong KQKD).
+- `financial_detail(symbol, statement=KQKD)`: interest income, interest expense and net interest income · credit
+  cost · net non-interest income → for reading the spread.
+- `financial_detail(symbol, statement=CDKT)`: customer loans · deposits · earning assets ·
+  equity → for reading growth, the credit − deposit gap and leverage.
+- `financial_detail(symbol, statement=TM)`: NPLs · group 2 loans · NPL coverage ·
+  off-balance-sheet → for **the 3 asset-quality layers** (these metrics sit in the notes,
+  not in KQKD).
 
-So QoQ/YoY từng chỉ tiêu, ghi số + kỳ + `statement` nào ra số đó.
+Compare each metric QoQ/YoY, recording the number + period + which `statement` it came from.
 
-**Bước 3: Bối cảnh vốn + chuẩn mực (song song).**
+**Bước 3: Funding context + prudential ratios (in parallel).**
 
-`sbv_rates` (chế độ lãi suất điều hành) · `news_market` (phân phối hạn mức tín
-dụng, văn bản chuẩn mực mới, điều chỉnh room). Ghi rõ số nào từ tool nào.
+`sbv_rates` (the policy rate regime) · `news_market` (credit quota allocation,
+new prudential texts, room adjustments). State which number comes from which tool.
 
-**Bước 4: Neo kỳ vọng + vị thế trong nhóm.**
+**Bước 4: Expectation anchor + position in the group.**
 
-`planned_targets` (kế hoạch năm của mã) · `peer_compare` (chỉ số tổng quan thực trả như P/B, ROE; không có NIM/CASA/NPL) · `financial_detail` và công bố từng peer để so NIM/CASA/NPL cùng kỳ · `analyst_consensus` (neo quan điểm CTCK — làm kỳ vọng,
-không thay thế kết luận).
+`planned_targets` (the ticker's yearly plan) · `peer_compare` (only the overview metrics it really returns, such as P/B, ROE; no NIM/CASA/NPL) · each peer's `financial_detail` and disclosures to compare NIM/CASA/NPL for the same period · `analyst_consensus` (brokerages' views — as expectations,
+never replacing the conclusion).
 
 ## Cây quyết định ngành đang tiếp sức hay siết
 
-Duyệt các node theo thứ tự; ghi trạng thái trung gian rồi đi tiếp. Chỉ dừng ở ★.
-Thiếu dữ liệu phải ghi rõ và hạ độ tin cậy; không coi thiếu là tín hiệu xấu.
+Go through the nodes in order; record the intermediate state and move on. Stop only at ★.
+Missing data must be stated and lowers confidence; never treat missing data as a negative signal.
 
-Q1. Hạn mức tín dụng có áp dụng, được công bố và còn dư địa không?
-├─ Còn dư địa → ghi tăng trưởng tín dụng còn chỗ → Q2
-├─ Đã hết/gần hết → ghi hạn chế tăng trưởng, cần xét spread/phí → Q2
-├─ Cơ chế không áp dụng tại kỳ phân tích (có nguồn xác nhận) → ghi không dùng hạn mức làm rào cản → Q2
-└─ Chưa công bố/chưa xác nhận cơ chế → ghi chưa biết dư địa, hạ độ tin cậy → Q2
+Q1. Does a credit quota apply, is it published, and is there headroom?
+├─ Headroom left → record room for credit growth → Q2
+├─ Used up/nearly used up → record limited growth; consider the spread/fees → Q2
+├─ The mechanism does not apply in the period analysed (source confirms) → record the quota is not a barrier → Q2
+└─ Unpublished/mechanism unconfirmed → record headroom unknown, lower confidence → Q2
 
-Q2. NIM và spread lãi đang giãn hay nén, với kỳ và mẫu số tương thích?
-├─ Nén → ghi áp lực biên → Q3
-├─ Giãn/đi ngang → ghi trạng thái biên → Q4
-└─ Thiếu thu nhập hoặc tài sản sinh lãi bình quân → ghi chưa tính được NIM → Q4
+Q2. Are NIM and the interest spread widening or compressing, with compatible periods and denominators?
+├─ Compressing → record margin pressure → Q3
+├─ Widening/flat → record the margin state → Q4
+└─ Missing income or average earning assets → record NIM not computable → Q4
 
-Q3. Nguyên nhân nén là gì?
-├─ Chi phí vốn tăng/CASA giảm → ghi rủi ro chi phí vốn → Q4
-├─ Lợi suất tài sản giảm/cơ cấu tài sản thay đổi → ghi áp lực lợi suất; chưa suy là nợ xấu → Q4
-└─ Chưa tách được → ghi chưa rõ nguyên nhân → Q4
+Q3. What causes the compression?
+├─ Rising funding costs/falling CASA → record funding-cost risk → Q4
+├─ Falling asset yields/changing asset mix → record yield pressure; do not infer bad debt → Q4
+└─ Cannot separate → record the cause unclear → Q4
 
-Q4. Nợ xấu, nợ nhóm 2 và bao phủ nợ xấu có cùng chiều không?
-├─ Cả ba xấu → ghi áp lực dự phòng → Q5
-├─ NPL chưa tăng nhưng nợ nhóm 2 tăng hoặc bao phủ giảm → ghi rủi ro sớm → Q5
-├─ Cả ba ổn/cải thiện → ghi chất lượng tài sản ổn → Q5
-└─ Thiếu/chỉ báo trái chiều → ghi chất lượng chưa đủ rõ → Q5
+Q4. Do NPLs, group 2 loans and NPL coverage move the same way?
+├─ All three worse → record provisioning pressure → Q5
+├─ NPLs not rising but group 2 rising or coverage falling → record early risk → Q5
+├─ All three stable/improving → record stable asset quality → Q5
+└─ Missing/conflicting indicators → record quality not clear enough → Q5
 
-Q5. Rủi ro ngoại bảng có đáng kể không?
-├─ Có, tăng nhanh → ★ "Rủi ro ngoại bảng đáng kể; tổng hợp với áp lực vốn, biên và chất lượng tài sản đã ghi"
-├─ Không đáng kể, dữ liệu đầy đủ → ★ "Kết luận tiếp sức/siết từ các trạng thái đã ghi; không kết luận tín dụng thuận nếu hạn mức bị chặn"
-└─ Chưa có thuyết minh → ★ "Chưa đủ dữ liệu để kết luận toàn diện; nêu các trạng thái xác minh được và phần ngoại bảng còn thiếu"
+Q5. Is off-balance-sheet risk material?
+├─ Yes, rising fast → ★ "Rủi ro ngoại bảng đáng kể; tổng hợp với áp lực vốn, biên và chất lượng tài sản đã ghi"
+├─ Immaterial, complete data → ★ "Kết luận tiếp sức/siết từ các trạng thái đã ghi; không kết luận tín dụng thuận nếu hạn mức bị chặn"
+└─ No notes yet → ★ "Chưa đủ dữ liệu để kết luận toàn diện; nêu các trạng thái xác minh được và phần ngoại bảng còn thiếu"
 
 ## Chỉ báo đặc thù ngành
 
-Bảng dòng BCTC ngân hàng + cách đọc từng tỷ lệ ở `references/kpi.md`. Đọc file đó
-khi cần đúng tên dòng trong `vs_financial_norms(btype=3)` hoặc ngưỡng diễn giải.
+The bank statement line table + how to read each ratio is in `references/kpi.md`. Read that file
+when you need the exact line names in `vs_financial_norms(btype=3)` or interpretation thresholds.
 
 ## Định giá theo đặc thù ngành
 
-Ngân hàng định giá bằng **P/B neo ROE**, không bằng P/E: cùng một P/B, ngân hàng
-ROE 20% và ROE 13% là hai giá trị hoàn toàn khác nhau. Nhóm theo ROE rồi so P/B
-trong nhóm (`valuation_run` cho vùng; `peer_compare` để xếp hạng trong nhóm cùng
-phân khúc). Neo kỳ vọng bằng `planned_targets` (kế hoạch lãi của năm) và
-`analyst_consensus`. Ngân hàng lỗ/lãi đột biến một lần → P/E vô nghĩa, ghi rõ
-thay vì bịa fair value.
+Value banks with **P/B anchored on ROE**, not P/E: at the same P/B, a bank with
+20% ROE and one with 13% ROE are worth entirely different amounts. Group by ROE, then compare P/B
+within the group (`valuation_run` for the range; `peer_compare` to rank within the same-segment
+group). Anchor expectations with `planned_targets` (the year's profit plan) and
+`analyst_consensus`. A bank with a one-off loss/gain → P/E is meaningless; say so
+instead of inventing a fair value.
 
 ## Rủi ro đặc thù
 
-- **Rủi ro hình thành trễ**: nợ xấu là kết quả đã xảy ra; nợ nhóm 2 + bao phủ là
-  chỉ báo trước. Chỉ nhìn nợ xấu sẽ đọc muộn cả chu kỳ.
-- **Rủi ro chuẩn mực**: LCR/NSFR theo lộ trình khiến ngân hàng nhỏ phải giữ tài
-  sản thanh khoản dư thừa → nới lỏng tín dụng chậm lại hoặc đắt hơn.
-- **Rủi ro hạn mức**: dùng hạn mức xong trước Q4 thì quý cuối tăng trưởng sụt.
-- **Rủi ro tập trung**: nhóm khách hàng hoặc một ngành cho vay chiếm tỷ trọng lớn
-  thì chu kỳ của ngành đó thành chu kỳ của ngân hàng.
-- **Rủi ro thành viên yếu**: kỳ vọng tiếp nhận/tái cơ cấu lan sang vốn và dòng
-  tiền của cả nhóm — đọc riêng ở bước `news_market`.
+- **Late-formation risk**: NPLs are an outcome that already happened; group 2 loans + coverage are
+  leading indicators. Watching only NPLs reads the whole cycle late.
+- **Prudential risk**: LCR/NSFR roadmaps force small banks to hold excess liquid
+  assets → credit easing slows or gets more expensive.
+- **Quota risk**: using up the quota before Q4 makes the last quarter's growth drop.
+- **Concentration risk**: when one customer group or one lending sector has a large share,
+  that sector's cycle becomes the bank's cycle.
+- **Weak-member risk**: expectations of takeovers/restructuring spread to the capital and cash
+  flow of the whole group — read separately in the `news_market` step.
 
 ## Ranh giới
 
-- Không xác định pha thị trường, không bảo "ngân hàng sắp dẫn sóng", không đọc
-  chuỗi luân chuyển → đó là nhiệm vụ của `dinh-vi-chu-ky-vn`.
-- Không chọn mã khuyến nghị mua/bán, không đặt tỷ trọng → `phan-tich-chuyen-sau-1-ma`.
-- Không suy ngưỡng chuẩn mực từ trí nhớ: mọi trần/tỷ lệ pháp lý phải tra văn bản
-  hiện hành rồi ghi nguồn + ngày văn bản (luật này chỉ nằm ở đây, không lặp lại
-  trong `references/kpi.md`).
-- Chỉ đọc dòng BCTC theo chuẩn ngành (`vs_financial_norms(btype=3)`); đoán tên
-  dòng CTCP chung sẽ lấy nhầm chỉ tiêu.
+- Do not determine the market phase, say "ngân hàng sắp dẫn sóng", or read
+  rotation chains → that is `dinh-vi-chu-ky-vn`'s job.
+- Do not pick tickers to buy/sell or set weights → `phan-tich-chuyen-sau-1-ma`.
+- Never infer prudential thresholds from memory: every legal cap/ratio must be looked up in the current
+  texts, citing the source + text date (this rule lives only here, not repeated
+  in `references/kpi.md`).
+- Read statement lines only under the sector standards (`vs_financial_norms(btype=3)`); guessing generic
+  company line names picks the wrong metrics.
 
 ## Giới hạn
 
-- Hạn mức tín dụng là phân bổ hành chính, không công bố đều cho mọi mã: thiếu thì
-  hạ độ tin cậy, không suy.
-- Nợ nhóm 2 và ngoại bảng không phải kỳ báo cáo nào cũng công bố đầy đủ — ghi rõ
-  kỳ còn thiếu thay vì nội suy.
-- Chuẩn mực thanh khoản đang trong lộ trình chuyển tiếp: kết luận riêng cho một
-  năm có thể không đúng sau khi văn bản mới có hiệu lực.
+- Credit quotas are an administrative allocation, not published evenly for every ticker: when missing,
+  lower confidence; never infer.
+- Group 2 loans and off-balance-sheet items are not fully disclosed every period — state
+  the missing periods instead of interpolating.
+- Liquidity standards are in a transition roadmap: a conclusion for one
+  year may not hold after a new text takes effect.
 
 ## Ví dụ
 
 **Ví dụ 1:**
 Hỏi: Ngân hàng đang bị siết bởi cái gì?
-Đạt khi: có hạn mức tín dụng + nguồn, spread nén/giãn với 2 số QoQ/YoY, 3 lớp
-chất lượng tài sản đọc cùng lúc, và verdict đi theo cây Q1→Q5 kèm nhánh dừng.
+Đạt khi: the credit quota + source, the spread compressing/widening with 2 QoQ/YoY numbers, the 3
+asset-quality layers read together, and a verdict following the Q1→Q5 tree with its stop branch.
 
 ## Trực quan hóa
 
-Chỉ vẽ khi người dùng muốn xem hình; tối đa 1 biểu đồ. Hợp với dữ liệu skill này:
-stacked thu nhập lãi thuần/ngoài lãi theo quý, multiline NIM+CASA của nhóm cùng
-phân khúc, bar nợ xấu/nhóm 2/bao phủ. Vẽ bằng `chart_render` với `from_call`
-(mã `[ref …]`) từ kết quả `financial_detail`/`peer_compare` đã có; cần chọn loại
-hình thì nạp `ve-bieu-do`.
+Draw only when the user wants a picture; at most 1 chart. Fitting this skill's data:
+stacked net interest/non-interest income by quarter, multiline NIM+CASA of same-segment
+peers, bar NPL/group 2/coverage. Draw with `chart_render` using `from_call`
+(the `[ref …]` code) from `financial_detail`/`peer_compare` results you have; load
+`ve-bieu-do` to choose the chart type.
 
 ## File tham chiếu
 
-| File | Dùng khi |
+| File | Use when |
 |---|---|
-| `references/kpi.md` | Cần đúng dòng BCTC ngân hàng trong `vs_financial_norms(btype=3)`, ngưỡng diễn giải từng tỷ lệ, và bảng KPI theo báo cáo |
+| `references/kpi.md` | You need the exact bank statement lines in `vs_financial_norms(btype=3)`, interpretation thresholds for each ratio, and the KPI table by report |

@@ -1,42 +1,42 @@
 # Chỉ báo bảo hiểm — phân khúc, công thức và cơ sở
 
-Lấy BCTC/thuyết minh hãng cùng kỳ, sau khi tra `vs_financial_norms(btype=5)`.
-Gọi `financial_detail` riêng từng `statement=KQKD`, `CDKT`, `TM`; chỉ tiêu không
-có trong kết quả phải lấy công bố hãng/hiệp hội có nguồn, không giả định tool trả sẵn.
-Ghi rõ chuẩn mực kế toán, đơn vị, kỳ, gộp hay ròng tái bảo hiểm và công thức.
+Take the insurer's statements/notes for the same period, after looking up `vs_financial_norms(btype=5)`.
+Call `financial_detail` separately for each `statement=KQKD`, `CDKT`, `TM`; metrics not
+in the result must come from sourced insurer/association disclosures; never assume the tool returns them.
+State the accounting standard, unit, period, gross or net of reinsurance, and the formula.
 
 ## Nhân thọ
 
-| KPI | Cách đọc |
+| KPI | How to read |
 |---|---|
-| Phí mới, APE, phí tái tục | Chỉ so cùng định nghĩa APE và cùng kỳ; tổng doanh thu phí không thay phí mới |
-| Tỷ lệ duy trì hợp đồng | Số/giá trị hợp đồng còn hiệu lực / cohort ban đầu theo đúng tháng 13/25/... và công bố hãng; không suy từ doanh thu phí |
-| Chi phí khai thác | Hoa hồng, chi phí phân phối theo bộ phí tương ứng; không so tùy tiện với phí tổng |
-| Dự phòng/nghĩa vụ và biên khả năng thanh toán | Đọc giả định lãi suất, tỷ lệ hủy và phạm vi pháp lý; dự phòng tăng không tự là chất lượng tốt |
+| New premiums, APE, renewal premiums | Compare only under the same APE definition and period; total premium revenue does not replace new premiums |
+| Persistency | Number/value of policies in force / the original cohort for the exact month 13/25/... and the insurer's disclosure; never infer it from premium revenue |
+| Acquisition costs | Commissions and distribution costs for the matching premium set; never compare loosely with total premiums |
+| Reserves/liabilities and solvency margin | Read the interest-rate and lapse assumptions and the legal scope; rising reserves are not by themselves good quality |
 
 ## Phi nhân thọ
 
-| KPI | Công thức và điều kiện |
+| KPI | Formula and conditions |
 |---|---|
-| Phí được hưởng | Phí ghi nhận trong kỳ − phần tăng dự phòng phí chưa được hưởng, theo định nghĩa báo cáo; tách phí gốc, nhận tái và nhượng tái |
-| Tỷ lệ bồi thường | Bồi thường phát sinh (chi trả + biến động dự phòng bồi thường) / phí được hưởng cùng cơ sở gộp hoặc ròng; không dùng chi trả tiền mặt thay phát sinh |
-| Tỷ lệ chi phí | Chi phí khai thác và quản lý nghiệp vụ phân bổ / phí được hưởng cùng cơ sở; nếu hãng dùng phí ghi nhận thì ghi rõ và không cộng trực tiếp với tỷ lệ khác cơ sở |
-| Combined ratio | Tỷ lệ bồi thường + tỷ lệ chi phí khi cùng mẫu số và phạm vi. Dưới 100% thường cho thấy lãi nghiệp vụ trước đầu tư, không đồng nghĩa lãi ròng hợp nhất |
-| Phát triển dự phòng | Đối chiếu ước tính tổn thất các năm cũ với cập nhật kỳ này; giải phóng dự phòng có thể tạo lãi một lần |
+| Earned premiums | Premiums written in the period − the increase in the unearned premium reserve, per the report's definition; separate direct, assumed and ceded premiums |
+| Loss ratio | Incurred claims (paid + change in claim reserves) / earned premiums on the same gross or net basis; never use cash paid in place of incurred |
+| Expense ratio | Allocated acquisition and underwriting admin costs / earned premiums on the same basis; if the insurer uses written premiums, say so and never add it directly to a ratio on a different basis |
+| Combined ratio | Loss ratio + expense ratio when they share a denominator and scope. Below 100% usually shows an underwriting profit before investment, not consolidated net profit |
+| Reserve development | Compare prior years' loss estimates with this period's update; reserve releases can create one-off profit |
 
 ## Tái bảo hiểm và đầu tư (cả hai mảng)
 
-| KPI | Công thức và cách dùng |
+| KPI | Formula and use |
 |---|---|
-| Tỷ lệ nhượng tái | Phí nhượng / phí gốc cộng phí nhận tái cùng phạm vi (hoặc cơ sở hãng công bố); ghi mẫu số |
-| Tỷ lệ giữ lại | Phí sau nhượng / phí trước nhượng cùng kỳ; không trộn phí được hưởng với phí ghi nhận |
-| Thu hồi bồi thường | Khoản phải thu/thu hồi từ nhà tái bảo hiểm, tuổi nợ và chất lượng đối tác; tách gộp và ròng |
-| Lợi suất đầu tư | Thu nhập đầu tư thường xuyên của kỳ quy đổi năm / tài sản đầu tư bình quân đầu/cuối đúng kỳ; quý độc lập ×4, YTD n tháng ×12/n, TTM không nhân. Tách lãi/lỗ bán tài sản, đánh giá lại và ghi rõ có/không đưa vào tử số |
-| Lệch kỳ hạn | Kỳ hạn, thanh khoản và tiền tệ tài sản so với nghĩa vụ bảo hiểm; không suy từ lợi suất đơn lẻ |
+| Cession ratio | Ceded premiums / direct plus assumed premiums of the same scope (or the insurer's published basis); state the denominator |
+| Retention ratio | Premiums after cession / premiums before cession, same period; never mix earned with written premiums |
+| Claim recoveries | Receivables/recoveries from reinsurers, their ageing and counterparty quality; separate gross and net |
+| Investment yield | Annualised recurring investment income of the period / average opening/closing investment assets of the same period; standalone quarter ×4, YTD n months ×12/n, TTM not multiplied. Separate gains/losses on disposals and revaluations, and state whether they are in the numerator |
+| Duration mismatch | Asset duration, liquidity and currency versus insurance liabilities; never infer from a single yield |
 
-Tách doanh thu, chi phí và lợi nhuận từng mảng trên cùng cơ sở; không tự tạo tỷ trọng
-lãi khi tổng lãi gần không hoặc âm. Không lấy thu nhập đầu tư trừ lãi hợp nhất để suy
-lãi nghiệp vụ. Hỗn hợp cần tỷ trọng mảng và loại trừ hợp nhất trước so sánh.
+Separate each segment's revenue, costs and profit on the same basis; never create profit weights
+when total profit is near zero or negative. Never subtract investment income from consolidated profit to infer
+underwriting profit. A mix needs segment weights and consolidation eliminations before comparison.
 
-`peer_compare` chỉ dùng key tổng quan thực trả như P/B/ROE; `metrics` không tạo
-phí mới, duy trì hay combined ratio. So KPI đặc thù bằng dữ liệu từng peer cùng kỳ.
+`peer_compare` uses only the overview keys it really returns, such as P/B/ROE; `metrics` does not create
+new premiums, persistency or the combined ratio. Compare the specific KPIs with each peer's data for the same period.

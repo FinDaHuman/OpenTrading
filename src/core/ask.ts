@@ -102,11 +102,11 @@ export function formatAskResult(result: AskResult) {
   if (result.answered) {
     // JSON strings, so a typed answer containing " cannot break the format.
     const pairs = Object.entries(result.answers).map(([q, a]) => `${JSON.stringify(q)}=${JSON.stringify(a)}`)
-    return `Người dùng đã trả lời: ${pairs.join(", ")}. Tiếp tục dựa trên các câu trả lời này.`
+    return `The user answered: ${pairs.join(", ")}. Carry on based on these answers.`
   }
   if (result.reason === "headless") {
-    return "Không có giao diện để hỏi người dùng bằng lựa chọn. Hãy hỏi bằng một câu hỏi ngắn trong câu trả lời rồi dừng lại."
+    return "There is no interface to ask the user with choices. Ask one short question in your answer, then stop."
   }
-  if (result.reason === "cancelled") return "Lượt hỏi đã bị huỷ."
-  return "Người dùng bỏ qua các câu hỏi. Tự chọn phương án hợp lý nhất, nêu giả định ở đầu câu trả lời rồi làm tiếp; nếu thật sự không làm tiếp được khi thiếu câu trả lời thì nói cần thông tin gì rồi dừng."
+  if (result.reason === "cancelled") return "The question was cancelled."
+  return "The user skipped the questions. Pick the most reasonable option yourself, state the assumption at the start of the answer and carry on; if you really cannot continue without an answer, say what information you need and stop."
 }

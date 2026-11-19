@@ -1,6 +1,7 @@
 ---
 name: dinh-gia-chuyen-sau
-description: "Tính vùng giá hợp lý và % upside/downside của một mã (P/E, P/B so với lịch sử 2–3 năm). Dùng khi hỏi mã đắt hay rẻ, fair value, còn upside không."
+description: "Computes a fair price range and % upside/downside for a ticker (P/E, P/B vs its 2–3 year history). Use when asked whether a stock is expensive or cheap, fair value, remaining upside."
+match_text: "Tính vùng giá hợp lý và % upside/downside của một mã (P/E, P/B so với lịch sử 2–3 năm). Dùng khi hỏi mã đắt hay rẻ, fair value, còn upside không."
 activation: auto
 requires_tools: [mcp__opentrading__valuation_run]
 uses_tools: [mcp__opentrading__valuation_run]
@@ -11,54 +12,54 @@ version: 1.3.0
 
 # Định giá một mã
 
-Trả về đúng 6 mục: giá vs vùng fair → PER/PB vs lịch sử → vì sao rẻ/đắt → UPSIDE/DOWNSIDE % → neo target CTCK → kết luận 1 câu. EPS âm (công ty lỗ) thì per_pb vô nghĩa — nói thẳng không đủ cơ sở định giá thay vì bịa fair value.
+Return exactly 6 items: price vs the fair range → PER/PB vs history → why cheap/expensive → UPSIDE/DOWNSIDE % → the brokerage target anchor → a 1-sentence conclusion. With negative EPS (a loss-making company) per_pb is meaningless — say plainly there is not enough basis to value it instead of inventing a fair value.
 
 ## Khi nào dùng
 
-- Dùng khi: user hỏi định giá 1 mã (`FPT đắt chưa`, `VCB fair value`, `định giá theo PER`, `upside còn bao nhiêu`).
-- Khi KHÔNG dùng (dùng skill khác thay thế):
-  - So sánh nhiều mã → `so-sanh-cung-nganh`.
-  - Cơ bản thuần (BCTC, M-Score, sở hữu) → `co-ban-chuyen-sau`.
-  - Kỹ thuật thuần → `ky-thuat-chuyen-sau`.
-  - Giá mục tiêu của CTCK (tổng hợp báo cáo sẵn có) → `tim-co-hoi-bao-cao-ctck` (chỉ cross-ref để neo kỳ vọng, không thay thế định giá tự tính).
+- Use when: the user asks to value 1 ticker (`FPT đắt chưa`, `VCB fair value`, `định giá theo PER`, `upside còn bao nhiêu`).
+- Do NOT use (use another skill instead):
+  - Comparing several tickers → `so-sanh-cung-nganh`.
+  - Pure fundamentals (financial statements, M-Score, ownership) → `co-ban-chuyen-sau`.
+  - Pure technicals → `ky-thuat-chuyen-sau`.
+  - Brokerages' target prices (summarising existing reports) → `tim-co-hoi-bao-cao-ctck` (cross-ref only to anchor expectations, never replacing your own valuation).
 
 ## Các bước
 
-**Bước 1: Fair value lõi (song song, gọi trực tiếp).**
+**Bước 1: Core fair value (in parallel, direct calls).**
 
-Chạy `valuation_run` (symbol, method mặc định auto — chỉ đổi method khi user khăng khăng) + `vs_overview_trading` (symbol).
+Run `valuation_run` (symbol, default method auto — change the method only if the user insists) + `vs_overview_trading` (symbol).
 
-**Bước 2: Neo lịch sử (song song, gọi trực tiếp).**
+**Bước 2: Historical anchor (in parallel, direct calls).**
 
-Chạy `financial_ratios` (symbol) + `vn_quote_history` (symbol, days=365), tính PER/PB trung bình 2–3 năm từ các kỳ PER/PB mà `financial_ratios` trả (period mặc định là năm: 2–3 số; có số theo quý thì dùng quý): cộng các kỳ rồi chia số kỳ trong một lệnh `shell`, ghi rõ số kỳ và kỳ đầu/cuối. `vn_quote_history` cho giá hiện tại để đối chiếu. Thiếu lịch sử giá thì bỏ so lịch sử, verdict partial + ghi thiếu.
+Run `financial_ratios` (symbol) + `vn_quote_history` (symbol, days=365), and compute the 2–3 year average PER/PB from the PER/PB periods `financial_ratios` returns (the default period is yearly: 2–3 figures; if quarterly figures exist, use quarters): sum the periods and divide by their count in one `shell` command, stating the number of periods and the first/last period. `vn_quote_history` gives the current price for comparison. Without price history, drop the historical comparison: a partial verdict + note what is missing.
 
-**Bước 3: Bối cảnh lãi suất (chỉ khi cần).**
+**Bước 3: Rate backdrop (only when needed).**
 
-Chạy `yf_yield_curve` + `vs_trading_info` khi mã PB-heavy (bank). Có fair value + so lịch sử thì dừng, không mở Bước 3 để câu giờ. Một `method` mỗi run; `method` sai enum → warning → về auto, không retry method lạ.
+Run `yf_yield_curve` + `vs_trading_info` for PB-heavy tickers (banks). Once you have the fair value + the historical comparison, stop; do not open Bước 3 to fill time. One `method` per run; a `method` outside the enum → warning → back to auto; do not retry odd methods.
 
-**Bước 4: Validate trước khi chốt.**
+**Bước 4: Validate before concluding.**
 
-Không tự dựng lại DCF (đã tính sẵn trong `valuation_run`). Không gọi `signals_technical` / `financial_detail` / `stock_forensic` ở đây; cần chất lượng cơ bản thì cross-ref `co-ban-chuyen-sau`, không gọi lại tool của skill đó. Bank ưu tiên per_pb, ghi rõ lý do.
+Do not rebuild a DCF yourself (it is already computed in `valuation_run`). Do not call `signals_technical` / `financial_detail` / `stock_forensic` here; for fundamental quality cross-ref `co-ban-chuyen-sau` without calling that skill's tools again. For banks prefer per_pb and say why.
 
 ## Cấu trúc câu trả lời
 
-Trình bày kết luận đúng cấu trúc sau, mỗi mục ghi số + trend + provenance:
+Present the conclusion in exactly this structure, each item with figures + trend + provenance:
 
-1. Giá hiện tại so với vùng giá hợp lý: phương pháp nào dẫn dắt, chênh bao nhiêu % (`provenance: valuation_run` + `vs_overview_trading`).
-2. PER/PB hiện tại so với trung bình 2–3 năm (tính từ các kỳ PER/PB của `financial_ratios`; `provenance: financial_ratios` + `vn_quote_history`).
-3. Rẻ/đắt vì sao: tăng trưởng + chất lượng (cross-ref `co-ban-chuyen-sau`) + lãi suất.
-4. Dư địa tăng/giảm % + độ tin (cao nếu 2 phương pháp đồng thuận).
-5. Dòng neo kỳ vọng: mức giá mục tiêu của CTCK (`provenance: tim-co-hoi-bao-cao-ctck` cross-ref, chỉ tham chiếu).
-6. Kết luận 1 câu: ĐẮT/HỢP LÝ/RẺ + dư địa tăng/giảm %.
+1. Current price vs the fair range: which method leads, the gap in % (`provenance: valuation_run` + `vs_overview_trading`).
+2. Current PER/PB vs the 2–3 year average (computed from the PER/PB periods of `financial_ratios`; `provenance: financial_ratios` + `vn_quote_history`).
+3. Why cheap/expensive: growth + quality (cross-ref `co-ban-chuyen-sau`) + rates.
+4. Upside/downside % + confidence (high if 2 methods agree).
+5. Expectation anchor: brokerages' target price (`provenance: tim-co-hoi-bao-cao-ctck` cross-ref, reference only).
+6. 1-sentence conclusion: ĐẮT/HỢP LÝ/RẺ + upside/downside %.
 
-Tiêu đề cột và kết luận viết tiếng Việt: "tỷ lệ giá trên lợi nhuận (P/E)" chứ không để trần "PER"; "vùng giá hợp lý" chứ không "fair"; "dư địa tăng/giảm" chứ không "upside/downside".
+Write column headings and the conclusion in Vietnamese: "tỷ lệ giá trên lợi nhuận (P/E)", never a bare "PER"; "vùng giá hợp lý", never "fair"; "dư địa tăng/giảm", never "upside/downside".
 
 ## Ví dụ
 
 **Ví dụ 1:**
 Hỏi: FPT đắt chưa
-Đạt khi: UPSIDE % + so lịch sử 2 dòng, ≤7 calls.
+Đạt khi: UPSIDE % + 2 lines comparing with history, ≤7 calls.
 
 ## Trực quan hóa
 
-Chỉ vẽ khi người dùng muốn xem hình, hoặc khi có chuỗi thời gian / so sánh mà bảng khó đọc; tối đa 1 biểu đồ mỗi câu trả lời. Vẽ bằng `chart_render` với `from_call` (mã `[ref …]` ở đầu kết quả tool) để không phải gõ lại số; cần chọn loại hình thì nạp `ve-bieu-do`. Hình hợp với dữ liệu skill này: multiline PER hiện vs TB, bar PER/PB history, bar diverging upside.
+Draw only when the user wants a picture, or when a time series / comparison is hard to read as a table; at most 1 chart per answer. Draw with `chart_render` using `from_call` (the `[ref …]` code at the top of a tool result) so you never retype numbers; load `ve-bieu-do` to choose the chart type. Fitting this skill's data: multiline current PER vs average, bar PER/PB history, bar diverging upside.

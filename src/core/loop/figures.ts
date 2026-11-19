@@ -70,7 +70,7 @@ const REF = /^\[ref r\d+\]\s*/
 /** Notice lines the harness puts before a result: `[Dữ liệu một phần] …`. */
 const NOTICES = /^(?:\[[^\]\n]*\p{L}[^\n]*\n)+(?=\[ref |[[{])/u
 /** The source line after a web or MCP result (`provenanceOf`): with it, the JSON does not parse. */
-const SOURCE_LINE = /\n\[Nguồn: [^\n]*\]\s*$/u
+const SOURCE_LINE = /\n\[(?:Source|Nguồn): [^\n]*\]\s*$/u
 /** The numbers of JSON too long to parse whole, or of plain text. */
 const JSON_NUMBER = /-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/g
 /**

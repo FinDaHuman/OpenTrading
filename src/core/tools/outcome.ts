@@ -10,7 +10,7 @@
  */
 
 /** First line of a result whose source failed; the UI and compaction recognise it. */
-export const SOURCE_FAILED_PREFIX = "[Nguồn lỗi]"
+export const SOURCE_FAILED_PREFIX = "[Source failed]"
 
 const MAX_WARNING_CHARS = 160
 const MAX_ENVELOPE_CHARS = 5_000_000
@@ -26,13 +26,13 @@ export interface SourceState {
 
 /** Why a source failed, for the `reason` values the server sends. */
 const REASONS: Record<string, string> = {
-  upstream_timeout: "nguồn quá thời gian",
-  upstream_down: "nguồn đang lỗi",
-  upstream_rate_limited: "nguồn đang giới hạn tốc độ",
-  not_configured: "nguồn chưa được cấu hình",
-  auth_missing: "nguồn cần đăng nhập",
-  recent_failure: "nguồn vừa lỗi",
-  busy: "server đang quá tải",
+  upstream_timeout: "the source timed out",
+  upstream_down: "the source is down",
+  upstream_rate_limited: "the source is rate-limiting",
+  not_configured: "the source is not configured",
+  auth_missing: "the source needs a login",
+  recent_failure: "the source just failed",
+  busy: "the server is overloaded",
 }
 
 const strings = (value: unknown) => (Array.isArray(value) ? value.filter((v): v is string => typeof v === "string" && v.length > 0) : [])
@@ -72,29 +72,30 @@ const shortName = (name: string) => name.replace(/^mcp__.+?__/, "")
 function nextStep(state: SourceState) {
   const alternatives = state.alternatives.join(", ")
   if (alternatives) {
-    const later = state.retryable !== false && state.retryAfterS !== undefined ? ` Nguồn này thử lại được sau ${state.retryAfterS}s.` : ""
-    return `Gọi ${alternatives} ngay ở bước kế tiếp.${later}`
+    const later = state.retryable !== false && state.retryAfterS !== undefined ? ` This source can be retried after ${state.retryAfterS}s.` : ""
+    return `Call ${alternatives} in the very next step.${later}`
   }
-  if (state.retryable === false) return "Gọi lại không giúp được."
-  if (state.retryAfterS !== undefined) return `Nguồn này thử lại được sau ${state.retryAfterS}s.`
-  return "Gọi lại đúng lời gọi này một lần ở bước kế tiếp trước khi kết luận thiếu dữ liệu."
+  if (state.retryable === false) return "Calling again will not help."
+  if (state.retryAfterS !== undefined) return `This source can be retried after ${state.retryAfterS}s.`
+  return "Repeat this exact call once in the next step before concluding the data is missing."
 }
 
-const ALTERNATIVES = /Gọi (.+?) ngay ở bước kế tiếp/
+const ALTERNATIVES = /(?:Call (.+?) in the very next step|Gọi (.+?) ngay ở bước kế tiếp)/
 
 /**
  * The tools a stored notice named. Read from the notice because it is always the first line:
  * the envelope below it is followed by the provenance line, so the text as a whole is not JSON.
  */
 export function noticeAlternatives(text: string): string[] {
-  return ALTERNATIVES.exec(text.split("\n", 1)[0]!)?.[1]?.split(", ") ?? []
+  const m = ALTERNATIVES.exec(text.split("\n", 1)[0]!)
+  return (m?.[1] ?? m?.[2])?.split(", ") ?? []
 }
 
 /** The line put before the result, so it is read before the envelope. */
 export function sourceNotice(toolName: string, state: SourceState): string {
   const detail = state.warning ? `: ${state.warning}` : ""
-  if (state.availability === "partial") return `[Dữ liệu một phần]${detail || ": kết quả chưa đầy đủ"}. Nêu rõ giới hạn này khi dùng số liệu.`
-  if (state.availability === "stale") return `[Dữ liệu cũ]${detail || ": kết quả không phải mới nhất"}. Nêu rõ thời điểm của số liệu khi dùng.`
-  const why = (state.reason && REASONS[state.reason]) ?? state.warning ?? "nguồn tạm không khả dụng"
-  return `${SOURCE_FAILED_PREFIX} ${shortName(toolName)}: ${why}. ${nextStep(state)} Nếu vẫn không có, báo phần còn thiếu, không tự điền số.`
+  if (state.availability === "partial") return `[Partial data]${detail || ": the result is incomplete"}. State this limit when using the figures.`
+  if (state.availability === "stale") return `[Stale data]${detail || ": the result is not the latest"}. State the figures' date when using them.`
+  const why = (state.reason && REASONS[state.reason]) ?? state.warning ?? "the source is temporarily unavailable"
+  return `${SOURCE_FAILED_PREFIX} ${shortName(toolName)}: ${why}. ${nextStep(state)} If it is still missing, report what is missing; never fill in numbers yourself.`
 }

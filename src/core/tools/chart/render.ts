@@ -22,7 +22,7 @@ export const MAX_CHART_WIDTH = 120
 
 const BarSchema = z
   .object({ o: z.number(), h: z.number(), l: z.number(), c: z.number(), v: z.number().nonnegative().optional() })
-  .refine((b) => b.h >= Math.max(b.o, b.c) && b.l <= Math.min(b.o, b.c), "Nến sai: cần thấp ≤ mở/đóng ≤ cao")
+  .refine((b) => b.h >= Math.max(b.o, b.c) && b.l <= Math.min(b.o, b.c), "Invalid candle: needs low ≤ open/close ≤ high")
 
 /** Kinds `from_call` can fill from a stored result; the rest need their numbers passed. */
 const FROM_CALL_KINDS = new Set(["candlestick", "line", "area", "sparkline", "linebox", "sparkcolumn", "histogram", "winloss", "bar", "pie"])
@@ -94,10 +94,10 @@ export type ChartToolInput = Omit<ChartRenderInput, "kind"> & {
 }
 
 const DESCRIPTION = [
-  "Vẽ biểu đồ màu trong terminal từ dữ liệu đã có; hình tự hiện cho người dùng, bạn nhận tóm tắt số để nhận xét. Dùng khi người dùng muốn xem hình, hoặc chuỗi số khó đọc dạng bảng. Không dùng khi chưa có dữ liệu: lấy bằng tool dữ liệu trước.",
-  "Ưu tiên from_call = mã rN trong [ref rN] của kết quả tool (harness tự lấy số, không gõ lại); kết quả gộp nhiều mã thì chọn bằng from_symbol.",
-  "kind=compare: 2–5 chuỗi giá theo % thay đổi trên cùng thang (from_calls, lọc bằng symbols; hoặc labels + matrix), dùng thay multiline khi các chuỗi khác độ lớn. kind=depth: sổ lệnh (bids, asks).",
-  "Số tay theo kind: candlestick bars (≥5); line/area/sparkline/sparkcolumn/linebox/histogram/winloss series; bar/pie series + labels; heatmap/multiline/stacked/boxplot matrix + labels; waterfall start + series; scatter points; gauge/donut value + max.",
+  "Draws a colour chart in the terminal from data you already have; the picture is shown to the user and you get a numeric summary to comment on. Use when the user wants a picture, or a series is hard to read as a table. Do not use before you have the data: get it with a data tool first.",
+  "Prefer from_call = the rN in a tool result's [ref rN] (the harness takes the numbers itself; do not retype them); for a result holding several tickers, pick one with from_symbol.",
+  "kind=compare: 2–5 price series as % change on one scale (from_calls, filtered with symbols; or labels + matrix); use instead of multiline when the series differ in magnitude. kind=depth: order book (bids, asks).",
+  "Hand-typed numbers by kind: candlestick bars (≥5); line/area/sparkline/sparkcolumn/linebox/histogram/winloss series; bar/pie series + labels; heatmap/multiline/stacked/boxplot matrix + labels; waterfall start + series; scatter points; gauge/donut value + max.",
 ].join("\n")
 
 /** Text charts from data the model already has (MCP results); renders only, never fetches. */
@@ -106,35 +106,35 @@ export function chartRenderTool(): ToolDef<ChartToolInput> {
     name: "chart_render",
     description: DESCRIPTION,
     input: z.object({
-      kind: z.enum(TOOL_KINDS).describe("Loại biểu đồ; compare = so % nhiều chuỗi, depth = sổ lệnh"),
-      from_call: z.string().regex(/^r\d+$/, "dạng r12").optional().describe("rN từ [ref rN]"),
-      from_calls: z.array(z.string().regex(/^r\d+$/)).min(1).max(5).optional().describe("compare: các rN"),
-      symbols: z.array(z.string().max(20)).max(5).optional().describe("compare: chỉ lấy các mã này"),
-      field: z.string().max(40).optional().describe("Trường số khi dùng from_call (mặc định giá đóng cửa), ví dụ volume"),
-      label_field: z.string().max(40).optional().describe("bar/pie: trường tên, ví dụ symbol"),
-      path: z.string().max(80).optional().describe("Đường dẫn mảng khi kết quả có nhiều mảng, ví dụ data.candles"),
-      from_symbol: z.string().max(20).optional().describe("Mã cần vẽ trong kết quả gộp nhiều mã"),
-      symbol: z.string().optional().describe("Mã hoặc tiêu đề"),
-      bars: z.array(BarSchema).max(500).optional().describe("candlestick: nến OHLC(v), tối thiểu 5"),
-      series: z.array(z.number()).max(2000).optional().describe("line/area/spark*/bar/pie/histogram/winloss: chuỗi số; waterfall: các bước tăng giảm"),
-      dirs: z.array(z.boolean()).max(2000).optional().describe("sparkcolumn: tăng/giảm từng cột"),
-      labels: z.array(z.string()).max(200).optional().describe("Nhãn cột/bước; với matrix: nhãn hàng rồi nhãn cột"),
+      kind: z.enum(TOOL_KINDS).describe("Chart type; compare = % comparison of several series, depth = order book"),
+      from_call: z.string().regex(/^r\d+$/, "like r12").optional().describe("rN from [ref rN]"),
+      from_calls: z.array(z.string().regex(/^r\d+$/)).min(1).max(5).optional().describe("compare: the rNs"),
+      symbols: z.array(z.string().max(20)).max(5).optional().describe("compare: only these tickers"),
+      field: z.string().max(40).optional().describe("Numeric field with from_call (default: close), e.g. volume"),
+      label_field: z.string().max(40).optional().describe("bar/pie: the name field, e.g. symbol"),
+      path: z.string().max(80).optional().describe("Array path when the result has several arrays, e.g. data.candles"),
+      from_symbol: z.string().max(20).optional().describe("Ticker to draw from a multi-ticker result"),
+      symbol: z.string().optional().describe("Ticker or title"),
+      bars: z.array(BarSchema).max(500).optional().describe("candlestick: OHLC(v) candles, at least 5"),
+      series: z.array(z.number()).max(2000).optional().describe("line/area/spark*/bar/pie/histogram/winloss: the series; waterfall: the up/down steps"),
+      dirs: z.array(z.boolean()).max(2000).optional().describe("sparkcolumn: up/down per column"),
+      labels: z.array(z.string()).max(200).optional().describe("Column/step labels; with matrix: row labels, then column labels"),
       matrix: z
         .array(z.array(z.number()).max(500))
         .max(30)
-        .refine((m) => m.reduce((a, r) => a + r.length, 0) <= 5000, "matrix tối đa 5000 số")
+        .refine((m) => m.reduce((a, r) => a + r.length, 0) <= 5000, "matrix holds at most 5000 numbers")
         .optional()
-        .describe("heatmap/multiline/stacked/boxplot (và compare thay from_calls): mỗi hàng một chuỗi/nhóm; bar/line dùng series"),
-      points: z.array(z.object({ x: z.number(), y: z.number() })).max(500).optional().describe("scatter: điểm (x, y), tối thiểu 3"),
-      groups: z.array(z.number().int().nonnegative()).max(500).optional().describe("scatter: nhóm từng điểm"),
-      times: z.array(z.string()).max(2000).optional().describe("Nhãn trục X"),
-      start: z.number().optional().describe("waterfall: giá trị đầu"),
-      value: z.number().optional().describe("gauge/donut: giá trị"),
-      max: z.number().positive().optional().describe("gauge/donut: thang tối đa"),
-      bids: z.array(LevelSchema).max(200).optional().describe("depth: mức giá mua (giá, khối lượng)"),
-      asks: z.array(LevelSchema).max(200).optional().describe("depth: mức giá bán (giá, khối lượng)"),
-      levels: z.number().int().min(1).max(20).optional().describe("depth: số mức mỗi bên (mặc định 5)"),
-      unit: z.string().max(10).optional().describe("Đơn vị hiển thị, ví dụ %"),
+        .describe("heatmap/multiline/stacked/boxplot (and compare instead of from_calls): one series/group per row; bar/line use series"),
+      points: z.array(z.object({ x: z.number(), y: z.number() })).max(500).optional().describe("scatter: (x, y) points, at least 3"),
+      groups: z.array(z.number().int().nonnegative()).max(500).optional().describe("scatter: the group of each point"),
+      times: z.array(z.string()).max(2000).optional().describe("X-axis labels"),
+      start: z.number().optional().describe("waterfall: starting value"),
+      value: z.number().optional().describe("gauge/donut: the value"),
+      max: z.number().positive().optional().describe("gauge/donut: scale maximum"),
+      bids: z.array(LevelSchema).max(200).optional().describe("depth: bid levels (price, volume)"),
+      asks: z.array(LevelSchema).max(200).optional().describe("depth: ask levels (price, volume)"),
+      levels: z.number().int().min(1).max(20).optional().describe("depth: levels per side (default 5)"),
+      unit: z.string().max(10).optional().describe("Display unit, e.g. %"),
       width: z.number().int().min(20).max(MAX_CHART_WIDTH).optional(),
       height: z.number().int().min(3).max(40).optional(),
     }),
@@ -146,7 +146,7 @@ export function chartRenderTool(): ToolDef<ChartToolInput> {
     async execute(tool, ctx) {
       if (tool.kind === "compare") return chartCompareTool().execute(compareInput(tool), ctx)
       if (tool.kind === "depth") {
-        if (!tool.bids || !tool.asks) throw new Error("kind=depth cần bids và asks (giá + khối lượng).")
+        if (!tool.bids || !tool.asks) throw new Error("kind=depth needs bids and asks (price + volume).")
         return chartDepthTool().execute({ symbol: tool.symbol, bids: tool.bids, asks: tool.asks, depth: tool.levels, unit: tool.unit }, ctx)
       }
       const raw = tool as ChartRenderInput
@@ -164,15 +164,15 @@ function compareInput(tool: ChartToolInput): ChartCompareInput {
   const base = { title: tool.symbol, from_calls: tool.from_calls, symbols: tool.symbols, field: tool.field, times: tool.times, unit: tool.unit }
   if (tool.from_calls) return base
   const rows = tool.matrix ?? []
-  if (rows.length < 2 || rows.length > 5) throw new Error("kind=compare cần from_calls, hoặc 2–5 hàng matrix kèm labels.")
-  if (rows.some((r) => r.length < 2)) throw new Error("kind=compare: mỗi hàng matrix cần ít nhất 2 điểm.")
+  if (rows.length < 2 || rows.length > 5) throw new Error("kind=compare needs from_calls, or 2–5 matrix rows with labels.")
+  if (rows.some((r) => r.length < 2)) throw new Error("kind=compare: each matrix row needs at least 2 points.")
   return { ...base, series: rows.map((values, i) => ({ label: (tool.labels?.[i] ?? `#${i + 1}`).slice(0, 20), values })) }
 }
 
 /** Fill a render input from a stored tool result (refs.ts). Explicit numbers are ignored. */
 export function fromCall(input: ChartRenderInput): ChartRenderInput {
   if (!FROM_CALL_KINDS.has(input.kind)) {
-    throw new Error(`kind ${input.kind} chưa hỗ trợ from_call; truyền số tay (matrix/points/value…).`)
+    throw new Error(`kind ${input.kind} does not support from_call yet; pass the numbers by hand (matrix/points/value…).`)
   }
   const got = extractFromRef(input.from_call!, {
     ohlc: input.kind === "candlestick",
@@ -185,7 +185,7 @@ export function fromCall(input: ChartRenderInput): ChartRenderInput {
   const base = { kind: input.kind, symbol: input.symbol ?? got.symbol, unit: input.unit, width: input.width, height: input.height, from_call: input.from_call }
   const tail = <T,>(xs: T[] | undefined, max: number) => (xs && xs.length > max ? xs.slice(-max) : xs)
   if (input.kind === "candlestick") {
-    if (!got.bars?.length) throw new Error(`${input.from_call} không có nến hợp lệ.`)
+    if (!got.bars?.length) throw new Error(`${input.from_call} has no valid candles.`)
     return { ...base, bars: tail(got.bars, 500), times: tail(got.times, 500) }
   }
   // bar/pie take at most 200 labels: values and labels are cut at the same index, or a
@@ -194,7 +194,7 @@ export function fromCall(input: ChartRenderInput): ChartRenderInput {
   const series = tail(got.series, labelled ? 200 : 2000) ?? []
   const labels = labelled ? tail(got.labels, 200) : undefined
   if (labels && labels.length !== series.length) {
-    throw new Error(`${input.from_call}: ${labels.length} nhãn nhưng ${series.length} giá trị, không ghép được; chọn label_field/field khác hoặc truyền số tay.`)
+    throw new Error(`${input.from_call}: ${labels.length} labels but ${series.length} values, cannot pair them; choose another label_field/field or pass the numbers by hand.`)
   }
   return {
     ...base,
@@ -210,10 +210,10 @@ function checkLengths(input: ChartRenderInput) {
   const points = input.bars?.length ?? input.series?.length ?? input.matrix?.[0]?.length
   if (points === undefined) return
   if (input.times && input.times.length !== points) {
-    throw new Error(`times có ${input.times.length} nhãn nhưng dữ liệu có ${points} điểm; cần bằng nhau (hoặc bỏ times).`)
+    throw new Error(`times has ${input.times.length} labels but the data has ${points} points; they must match (or drop times).`)
   }
   if (input.dirs && input.series && input.dirs.length !== input.series.length) {
-    throw new Error(`dirs có ${input.dirs.length} phần tử nhưng series có ${input.series.length}.`)
+    throw new Error(`dirs has ${input.dirs.length} items but series has ${input.series.length}.`)
   }
 }
 
@@ -279,13 +279,13 @@ async function render(input: ChartRenderInput): Promise<string> {
     // Several series as a matrix (grouped bars, several tickers): name the kinds that take one.
     if (series.length === 0 && input.matrix?.length) {
       throw new Error(
-        `${input.kind} vẽ một chuỗi (series${input.kind === "bar" || input.kind === "pie" ? " + labels" : ""}), không nhận matrix. Nhiều mã theo thời gian: kind=multiline (cùng đơn vị) hoặc chart_compare (so % thay đổi). Nhóm × thành phần: kind=stacked.`,
+        `${input.kind} draws one series (series${input.kind === "bar" || input.kind === "pie" ? " + labels" : ""}) and takes no matrix. Several tickers over time: kind=multiline (same unit) or chart_compare (% change). Groups × parts: kind=stacked.`,
       )
     }
-    if (series.length < min) throw new Error(`${input.kind} cần series ít nhất ${min} ${what}.`)
+    if (series.length < min) throw new Error(`${input.kind} needs a series of at least ${min} ${what}.`)
   }
   const needValue = (example: string) => {
-    if (input.value === undefined || input.max === undefined) throw new Error(`${input.kind} cần value + max (ví dụ ${example}).`)
+    if (input.value === undefined || input.max === undefined) throw new Error(`${input.kind} needs value + max (e.g. ${example}).`)
     return { value: input.value, max: input.max }
   }
   const withUnit = (out: string) => (input.unit && !out.trimEnd().endsWith(input.unit) ? `${out} ${input.unit}` : out)
@@ -297,20 +297,20 @@ async function render(input: ChartRenderInput): Promise<string> {
 
   switch (input.kind) {
     case "sparkline":
-      needSeries(2, "điểm")
-      return head(lib.sparkline(byRange(series)), `sparkline (${series.length} điểm)`)
+      needSeries(2, "points")
+      return head(lib.sparkline(byRange(series)), `sparkline (${series.length} points)`)
     case "area":
-      needSeries(2, "điểm")
-      return head(lib.sparkArea(byRange(series), { width: W(64), height: H(10) }), `area (${series.length} điểm)`)
+      needSeries(2, "points")
+      return head(lib.sparkArea(byRange(series), { width: W(64), height: H(10) }), `area (${series.length} points)`)
     case "line": {
-      needSeries(2, "điểm")
+      needSeries(2, "points")
       const rows = series.map((c, t) => ({ t, c }))
       const builder = lib.chart({ width: W(64), height: H(10) }).data(rows, { xKey: "t" }).line({ key: "c" }).yAxis()
-      return head(lib.renderToString(builder), `line (${series.length} điểm)`)
+      return head(lib.renderToString(builder), `line (${series.length} points)`)
     }
     case "candlestick": {
       const bars = input.bars ?? []
-      if (bars.length < 5) throw new Error(`candlestick cần ít nhất 5 nến, đang có ${bars.length}.`)
+      if (bars.length < 5) throw new Error(`candlestick needs at least 5 candles, got ${bars.length}.`)
       const rows = bars.map((bar, t) => ({ t, ...bar }))
       const builder = lib
         .chart({ width: W(64), height: H(14) })
@@ -318,23 +318,23 @@ async function render(input: ChartRenderInput): Promise<string> {
         .candlestick({ open: "o", high: "h", low: "l", close: "c" })
         .yAxis()
         .xAxis()
-      return head(lib.renderToString(builder), `nến (${bars.length} phiên)`)
+      return head(lib.renderToString(builder), `candles (${bars.length} sessions)`)
     }
     case "bar": {
-      needSeries(1, "cột")
+      needSeries(1, "columns")
       const maxAbs = Math.max(1e-9, ...series.map((v) => Math.abs(v)))
       const lines = series.map((v, i) => {
         const bar = (v >= 0 ? "█" : "░").repeat(Math.max(1, Math.round((Math.abs(v) / maxAbs) * 20)))
         return `${(input.labels?.[i] ?? `#${i + 1}`).padEnd(12)} ${bar} ${v}`
       })
-      return head(lines.join("\n"), `bar (${series.length} cột; █ dương, ░ âm)`)
+      return head(lines.join("\n"), `bar (${series.length} columns; █ positive, ░ negative)`)
     }
     case "histogram":
-      needSeries(5, "điểm")
-      return head(lib.sparkHistogram(series, { height: H(8) }), `phân phối (${series.length} điểm)`)
+      needSeries(5, "points")
+      return head(lib.sparkHistogram(series, { height: H(8) }), `distribution (${series.length} points)`)
     case "heatmap": {
       const matrix = input.matrix ?? []
-      if (matrix.length === 0 || !matrix[0]?.length) throw new Error("heatmap cần matrix 2D.")
+      if (matrix.length === 0 || !matrix[0]?.length) throw new Error("heatmap needs a 2D matrix.")
       const n = matrix[0].length
       const rows = input.labels?.slice(0, matrix.length)
       const cols = input.labels?.slice(matrix.length, matrix.length + n)
@@ -346,14 +346,14 @@ async function render(input: ChartRenderInput): Promise<string> {
       return head(withUnit(lib.sparkGauge(value, max)), "gauge")
     }
     case "donut": {
-      const { value, max } = needValue("tỷ trọng 35/100")
+      const { value, max } = needValue("weight 35/100")
       return head(withUnit(lib.sparkDonut(value, max)), "donut")
     }
     case "winloss":
-      needSeries(2, "phiên")
+      needSeries(2, "sessions")
       return head(
         series.map((v) => `${v >= 0 ? "▲" : "▼"}${v >= 0 ? "+" : ""}${Number(v.toFixed(2))}`).join(" "),
-        `thắng/thua (${series.length} phiên; ▲ tăng, ▼ giảm)`,
+        `win/loss (${series.length} sessions; ▲ up, ▼ down)`,
       )
     case "pie": {
       const r = renderPie(input)
@@ -377,19 +377,19 @@ async function render(input: ChartRenderInput): Promise<string> {
     }
     case "scatter": {
       const points = input.points ?? []
-      if (points.length < 3) throw new Error(`scatter cần ít nhất 3 điểm (x,y), đang có ${points.length}.`)
+      if (points.length < 3) throw new Error(`scatter needs at least 3 (x,y) points, got ${points.length}.`)
       const rows = points.map((p) => ({ x: p.x, y: p.y }))
       const builder = lib.chart({ width: W(56), height: H(10) }).data(rows, { xKey: "x" }).scatter({ key: "y" }).xAxis().yAxis()
-      return head(lib.renderToString(builder), `scatter (${points.length} điểm)`)
+      return head(lib.renderToString(builder), `scatter (${points.length} points)`)
     }
     case "sparkcolumn":
-      needSeries(2, "điểm")
-      return head(lib.sparkColumn(byRange(series)), `sparkcolumn (${series.length} điểm)`)
+      needSeries(2, "points")
+      return head(lib.sparkColumn(byRange(series)), `sparkcolumn (${series.length} points)`)
     case "linebox": {
-      needSeries(2, "điểm")
+      needSeries(2, "points")
       const rows = series.map((c, t) => ({ t, c }))
       const builder = lib.chart({ width: W(56), height: H(10), charset: "box" }).data(rows, { xKey: "t" }).line({ key: "c" }).yAxis()
-      return head(lib.renderToString(builder), `linebox (${series.length} điểm)`)
+      return head(lib.renderToString(builder), `linebox (${series.length} points)`)
     }
   }
 }
@@ -409,13 +409,13 @@ export function chartDepthTool(): ToolDef<ChartDepthInput> {
   return {
     name: "chart_depth",
     description:
-      "Vẽ sổ lệnh mua/bán dạng text từ dữ liệu orderbook đã có (dnse_orderbook, vn_trades). Dùng khi hỏi cung cầu, bid/ask. Không dùng khi chưa có dữ liệu orderbook.",
+      "Draws the bid/ask order book as text from order-book data you already have (dnse_orderbook, vn_trades). Use for supply/demand and bid/ask questions. Do not use without order-book data.",
     input: z.object({
-      symbol: z.string().optional().describe("Mã để ghi tiêu đề"),
-      bids: z.array(LevelSchema).max(200).describe("Các mức mua (giá + khối lượng)"),
-      asks: z.array(LevelSchema).max(200).describe("Các mức bán (giá + khối lượng)"),
-      depth: z.number().int().min(1).max(20).optional().describe("Số mức mỗi bên (mặc định 5)"),
-      unit: z.string().max(10).optional().describe("Đơn vị hiển thị, ví dụ kVND"),
+      symbol: z.string().optional().describe("Ticker for the title"),
+      bids: z.array(LevelSchema).max(200).describe("Bid levels (price + volume)"),
+      asks: z.array(LevelSchema).max(200).describe("Ask levels (price + volume)"),
+      depth: z.number().int().min(1).max(20).optional().describe("Levels per side (default 5)"),
+      unit: z.string().max(10).optional().describe("Display unit, e.g. kVND"),
     }),
     readOnly: true,
     deferrable: true,
@@ -425,13 +425,13 @@ export function chartDepthTool(): ToolDef<ChartDepthInput> {
       const depth = input.depth ?? 5
       const bids = [...input.bids].sort((a, b) => b.price - a.price).slice(0, depth)
       const asks = [...input.asks].sort((a, b) => a.price - b.price).slice(0, depth)
-      if (bids.length === 0 && asks.length === 0) throw new Error("Sổ lệnh rỗng cả hai bên (ngoài giờ giao dịch thì đúng là vậy); báo trung thực.")
+      if (bids.length === 0 && asks.length === 0) throw new Error("The order book is empty on both sides (normal outside trading hours); report that honestly.")
       const maxVol = Math.max(1, ...bids.map((b) => b.volume), ...asks.map((a) => a.volume))
       const bar = (vol: number) => "█".repeat(Math.max(1, Math.round((vol / maxVol) * 16)))
       const output = [
-        `${input.symbol ? `${input.symbol} · ` : ""}sổ lệnh (top ${depth}):`,
+        `${input.symbol ? `${input.symbol} · ` : ""}order book (top ${depth}):`,
         ...[...asks].reverse().map((a) => `ASK ${a.price.toFixed(2).padStart(10)} ${bar(a.volume)} ${a.volume}`),
-        "──────────── giữa ────────────",
+        "──────────── mid ────────────",
         ...bids.map((b) => `BID ${b.price.toFixed(2).padStart(10)} ${bar(b.volume)} ${b.volume}`),
       ].join("\n")
       const chart: ChartData = {

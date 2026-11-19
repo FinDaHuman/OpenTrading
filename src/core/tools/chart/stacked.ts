@@ -11,14 +11,14 @@ const SHADES = ["█", "▓", "▒", "░"]
 export function renderStacked(input: ChartRenderInput): { subtitle: string; body: string } {
   const matrix = input.matrix ?? []
   const n = matrix[0]?.length ?? 0
-  if (matrix.some((row) => row.length !== n)) throw new Error("stacked cần các hàng cùng số cột.")
-  if (n < 2) throw new Error("stacked cần mỗi nhóm ít nhất 2 thành phần.")
+  if (matrix.some((row) => row.length !== n)) throw new Error("stacked needs rows with the same number of columns.")
+  if (n < 2) throw new Error("stacked needs at least 2 parts per group.")
   const rows = input.labels?.slice(0, matrix.length)
   const cols = input.labels?.slice(matrix.length, matrix.length + n)
   const barW = Math.min(input.width ?? 30, 60)
   const lines = matrix.map((row, i) => {
     const total = row.reduce((s, v) => s + Math.max(0, v), 0)
-    if (total <= 0) throw new Error(`Nhóm ${rows?.[i] ?? `#${i + 1}`} toàn số ≤ 0, không xếp được.`)
+    if (total <= 0) throw new Error(`Group ${rows?.[i] ?? `#${i + 1}`} is all ≤ 0 and cannot be stacked.`)
     let bar = ""
     for (let c = 0; c < n; c++) bar += SHADES[c % SHADES.length]!.repeat(Math.round((Math.max(0, row[c]!) / total) * barW))
     return `${(rows?.[i] ?? `#${i + 1}`).padEnd(12)} ${bar} ${Number(total.toFixed(2))}`
@@ -26,7 +26,7 @@ export function renderStacked(input: ChartRenderInput): { subtitle: string; body
   const legend = cols?.length === n ? cols.map((l, c) => `${SHADES[c % SHADES.length]} ${l}`).join("  ") : ""
   const out = legend ? [...lines, legend] : lines
   return {
-    subtitle: `stacked (${matrix.length} nhóm x ${n} thành phần)`,
+    subtitle: `stacked (${matrix.length} groups x ${n} parts)`,
     body: out.join("\n"),
   }
 }

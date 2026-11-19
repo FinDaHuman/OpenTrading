@@ -18,9 +18,9 @@ const fmt = (v: number) => `${Number(v.toFixed(2))}`
  */
 export function renderBoxplot(input: ChartRenderInput): { subtitle: string; body: string } {
   const matrix = input.matrix ?? []
-  if (matrix.length < 1) throw new Error("boxplot cần matrix (mỗi dòng 1 nhóm).")
+  if (matrix.length < 1) throw new Error("boxplot needs a matrix (one group per row).")
   const short = matrix.findIndex((s) => s.length < 4)
-  if (short >= 0) throw new Error(`boxplot cần mỗi nhóm ít nhất 4 điểm, nhóm ${input.labels?.[short] ?? `#${short + 1}`} đang có ${matrix[short]!.length}.`)
+  if (short >= 0) throw new Error(`boxplot needs at least 4 points per group; group ${input.labels?.[short] ?? `#${short + 1}`} has ${matrix[short]!.length}.`)
   const W = Math.min(input.width ?? 26, 60)
   const lo = Math.min(...matrix.flat())
   const hi = Math.max(...matrix.flat())
@@ -40,7 +40,7 @@ export function renderBoxplot(input: ChartRenderInput): { subtitle: string; body
     return `${(input.labels?.[i] ?? `#${i + 1}`).padEnd(labelWidth)} [${bar}] ${fmt(s.min)} ─ ${fmt(s.q1)} ─ ${fmt(s.med)} ─ ${fmt(s.q3)} ─ ${fmt(s.max)}`
   })
   return {
-    subtitle: `boxplot min ─ Q1 ─ median ─ Q3 ─ max (${matrix.length} nhóm)`,
+    subtitle: `boxplot min ─ Q1 ─ median ─ Q3 ─ max (${matrix.length} groups)`,
     body: lines.join("\n"),
   }
 }

@@ -95,7 +95,7 @@ test("scopes: a simple command by prefix, others exactly; outside the workspace 
   expect(tool.askFor?.({ command: "Set-Content .git/hooks/pre-commit x" })).toStartWith("protected:")
   expect(tool.askFor?.({ command: "ls", workdir: root })).toBe(`outside:${root}`)
   expect(tool.askFor?.({ command: "type auth.json" })).toStartWith("protected:")
-  expect(tool.blockFor?.({ command: "rm -rf ~" })).toContain("xoá đệ quy")
+  expect(tool.blockFor?.({ command: "rm -rf ~" })).toContain("recursive delete")
 })
 
 test("an 'always' rule for git status runs git status -s but never a chained command; read-only asks anyway", async () => {
@@ -140,26 +140,26 @@ test("choices: prefix commands may be allowed always, chained/interpreter ones f
 test("runs in the workspace, returns UTF-8 output and the exit code", async () => {
   const tool = shellTool(ws())
   const out = text(await tool.execute({ command: win ? "Write-Output 'Lợi nhuận quý 3'; (Get-Location).Path" : "printf 'Lợi nhuận quý 3\\n'; pwd" }, ctx()))
-  expect(out).toContain("mã thoát 0")
+  expect(out).toContain("exit code 0")
   expect(out).toContain("Lợi nhuận quý 3")
   expect(out.toLowerCase()).toContain(path.basename(project).toLowerCase())
   const failed = text(await tool.execute({ command: win ? "Write-Output 'trước'; cmd /c exit 3" : "echo trước; exit 3" }, ctx()))
-  expect(failed).toContain("mã thoát 3")
+  expect(failed).toContain("exit code 3")
   expect(failed).toContain("trước")
   if (win) {
     const err = text(await tool.execute({ command: "Write-Error 'hỏng rồi'" }, ctx()))
     expect(err).toContain("LỖI: hỏng rồi")
     expect(err).not.toContain("CLIXML")
-    expect(err).toContain("mã thoát 1")
+    expect(err).toContain("exit code 1")
   }
-  expect(await tool.validate!({ command: "ls", workdir: path.join(project, "khong-co") })).toContain("Không có thư mục")
+  expect(await tool.validate!({ command: "ls", workdir: path.join(project, "khong-co") })).toContain("No directory")
 }, 30_000)
 
 test("a timeout kills the command and says so", async () => {
   const tool = shellTool(ws())
   const started = Date.now()
   const out = text(await tool.execute({ command: win ? "Start-Sleep -Seconds 30" : "sleep 30", timeout_ms: 1500 }, ctx()))
-  expect(out).toContain("dừng vì quá 2s")
+  expect(out).toContain("stopped after 2s")
   expect(Date.now() - started).toBeLessThan(15_000)
 }, 30_000)
 
@@ -188,7 +188,7 @@ test("output past the memory cap: the saved file still has every character, the 
   const result = await runTool(tool, { command }, ctx("call-rat-dai"), new RwLock())
   const file = path.join(data, "tool-output", "call-rat-dai.txt")
   // The shell may add a line ending or two around the program's output.
-  const reported = Number(/bản đầy đủ \((\d+) ký tự\) ở (.*?), đọc tiếp/.exec(result.output.slice(0, 2000))?.[1])
+  const reported = Number(/the full output \((\d+) characters\) is in (.*?); read on/.exec(result.output.slice(0, 2000))?.[1])
   expect(result.output.slice(0, 2000).includes(file)).toBe(true)
   const saved = readFileSync(file, "utf8")
   expect(saved.length).toBe(reported)
@@ -207,9 +207,9 @@ test("Windows PowerShell 5.1 (what most users have; CI's default is pwsh): UTF-8
   expect(out).toContain("Lợi nhuận quý 3")
   expect(out).toContain("LỖI: hỏng rồi")
   expect(out).not.toContain("CLIXML")
-  expect(out).toContain("mã thoát 3")
-  expect(text(await tool.execute({ command: "Write-Error 'chỉ lỗi'" }, ctx()))).toContain("mã thoát 1")
-  expect(text(await tool.execute({ command: "Get-ChildItem | Select-Object -First 1 | Out-Null; Write-Output 'xong'" }, ctx()))).toContain("mã thoát 0")
+  expect(out).toContain("exit code 3")
+  expect(text(await tool.execute({ command: "Write-Error 'chỉ lỗi'" }, ctx()))).toContain("exit code 1")
+  expect(text(await tool.execute({ command: "Get-ChildItem | Select-Object -First 1 | Out-Null; Write-Output 'xong'" }, ctx()))).toContain("exit code 0")
   const started = Date.now()
   expect(text(await tool.execute({ command: "Start-Sleep -Seconds 30", timeout_ms: 1500 }, ctx()))).toContain("dừng vì quá")
   expect(Date.now() - started).toBeLessThan(15_000)
@@ -225,15 +225,15 @@ test("a network workdir is refused before anything resolves or stats it (an SMB 
   for (const workdir of ["\\\\attacker\\share", "\\\\attacker\\share\\sub"]) {
     const input = { command: "dir", workdir }
     expect(tool.askFor!(input)).toStartWith("outside:")
-    expect(tool.blockFor!(input)).toContain("đường dẫn mạng")
+    expect(tool.blockFor!(input)).toContain("network path")
   }
-  if (process.platform === "win32") expect(tool.blockFor!({ command: "dir", workdir: "//attacker/share/x" })).toContain("đường dẫn mạng")
+  if (process.platform === "win32") expect(tool.blockFor!({ command: "dir", workdir: "//attacker/share/x" })).toContain("network path")
   // The device prefixes isUncPath leaves out, and a file:// URL that resolves to a share.
   for (const workdir of [String.raw`\\?\UNC\attacker\share`, String.raw`\\.\pipe\x`, "file://attacker/share/x"]) {
     const input = { command: "dir", workdir }
     if (workdir.startsWith("file:") && process.platform !== "win32") continue
     expect([workdir, tool.askFor!(input)?.startsWith("outside:")]).toEqual([workdir, true])
-    expect(tool.blockFor!(input)).toContain("đường dẫn mạng")
+    expect(tool.blockFor!(input)).toContain("network path")
   }
   expect(tool.blockFor!({ command: "dir", workdir: "sub" })).toBeUndefined()
 })

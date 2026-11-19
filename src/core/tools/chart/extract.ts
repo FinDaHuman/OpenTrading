@@ -156,10 +156,10 @@ interface Located {
 function locate(ref: string, ohlc: boolean | undefined): Located {
   const stored = recallResult(ref)
   if (!stored) {
-    throw new Error(`Không còn kết quả "${ref}" trong phiên đang mở). Gọi lại tool dữ liệu rồi dùng ref mới.`)
+    throw new Error(`Result "${ref}" is no longer in the open session. Call the data tool again and use the new ref.`)
   }
   const value = parseResult(stored.text)
-  if (value === undefined) throw new Error(`Kết quả ${ref} (${stored.tool}) không phải JSON, không trích được số.`)
+  if (value === undefined) throw new Error(`Result ${ref} (${stored.tool}) is not JSON; no numbers can be extracted.`)
   const all = candidates(value)
   const objectArrays = all.filter((c) => typeof c.rows[0] === "object")
   const withOhlc = objectArrays.filter((c) => {
@@ -188,7 +188,7 @@ export function extractFromRef(ref: string, opts: ExtractOptions = {}): Extracte
   if (opts.path) {
     const picked = at(value, opts.path)
     chosen = all.find((c) => c.path === opts.path) ?? (Array.isArray(picked) ? candidates(picked, opts.path)[0] : undefined)
-    if (!chosen) throw new Error(`Không có mảng dữ liệu ở "${opts.path}" trong ${ref}. Có: ${all.map((c) => `${c.path || "(gốc)"} (${c.rows.length})`).join(", ") || "không có"}.`)
+    if (!chosen) throw new Error(`No data array at "${opts.path}" in ${ref}. Present: ${all.map((c) => `${c.path || "(root)"} (${c.rows.length})`).join(", ") || "none"}.`)
   } else {
     const known = symbolsIn(pool)
     // In a batch, a display name starting with one of its symbols picks it ("SHB — 90 ngày").
@@ -197,21 +197,21 @@ export function extractFromRef(ref: string, opts: ExtractOptions = {}): Extracte
     if (wanted && known.length > 0) {
       chosen = pool.find((c) => c.symbol === wanted)
       if (!chosen) {
-        throw new Error(`Kết quả ${ref} không có dữ liệu mã ${wanted}. Mã có trong kết quả: ${known.join(", ")} — chọn bằng from_symbol.`)
+        throw new Error(`Result ${ref} has no data for ${wanted}. Tickers in the result: ${known.join(", ")} — choose with from_symbol.`)
       }
     } else if (known.length > 1) {
       // A batch: taking the longest array would silently draw the first symbol.
-      throw new Error(`Kết quả ${ref} có dữ liệu nhiều mã: ${known.join(", ")}. Chọn một mã bằng from_symbol (ví dụ from_symbol: "${known[0]}").`)
+      throw new Error(`Result ${ref} holds several tickers: ${known.join(", ")}. Choose one with from_symbol (e.g. from_symbol: "${known[0]}").`)
     } else chosen = pool[0]
   }
   if (!chosen) {
     throw new Error(
       opts.ohlc
-        ? `Kết quả ${ref} (${stored.tool}) không có mảng nến mở/cao/thấp/đóng. Dùng kind khác (line) hoặc gọi tool nến.`
-        : `Kết quả ${ref} (${stored.tool}) không có mảng số để vẽ.`,
+        ? `Result ${ref} (${stored.tool}) has no open/high/low/close candle array. Use another kind (line) or call a candle tool.`
+        : `Result ${ref} (${stored.tool}) has no numeric array to draw.`,
     )
   }
-  const base = { ref, tool: stored.tool, path: chosen.path || "(gốc)" }
+  const base = { ref, tool: stored.tool, path: chosen.path || "(root)" }
   if (typeof chosen.rows[0] === "number") return { ...base, series: chosen.rows as number[] }
 
   let rows = chosen.rows as Row[]
@@ -241,7 +241,7 @@ export function extractFromRef(ref: string, opts: ExtractOptions = {}): Extracte
   const fieldKey = keyOf(sample, ALIASES.close, opts.field) ?? (opts.field ? undefined : Object.keys(sample).find((k) => k !== timeKey && num(sample[k]) !== undefined))
   if (!fieldKey) {
     const numeric = Object.keys(sample).filter((k) => num(sample[k]) !== undefined)
-    throw new Error(`Không có trường "${opts.field}" trong ${ref}. Trường số có: ${numeric.join(", ") || "không có"}.`)
+    throw new Error(`No field "${opts.field}" in ${ref}. Numeric fields: ${numeric.join(", ") || "none"}.`)
   }
   const labelKey = keyOf(sample, ALIASES.label, opts.labelField)
   const series: number[] = []
@@ -277,7 +277,7 @@ function checkSymbol(ref: string, symbol: string | undefined, opts: ExtractOptio
   if (!symbol) return
   const named = opts.symbol?.trim().toUpperCase()
   if (named) {
-    if (named !== symbol) throw new Error(`Kết quả ${ref} là dữ liệu mã ${symbol}, không phải ${named}. Dùng ref của lần gọi lấy dữ liệu ${named}.`)
+    if (named !== symbol) throw new Error(`Result ${ref} holds ${symbol} data, not ${named}. Use the ref of the call that fetched ${named}.`)
     return
   }
   // Only a token that is another stored result's symbol counts: chart titles often start
@@ -285,7 +285,7 @@ function checkSymbol(ref: string, symbol: string | undefined, opts: ExtractOptio
   const lead = leadingTicker(opts.hint)
   if (lead && lead !== symbol && otherRefHolds(lead, ref)) {
     throw new Error(
-      `Tên biểu đồ bắt đầu bằng "${lead}" nhưng ${ref} là dữ liệu mã ${symbol}. Dùng ref của mã ${lead}, hoặc nếu "${lead}" không phải mã thì truyền from_symbol: "${symbol}".`,
+      `The chart title starts with "${lead}" but ${ref} holds ${symbol} data. Use the ref for ${lead}, or if "${lead}" is not a ticker, pass from_symbol: "${symbol}".`,
     )
   }
 }
@@ -300,13 +300,13 @@ export function extractAllFromRef(ref: string, opts: { field?: string; symbols?:
   if (known.length <= 1) {
     const one = extractFromRef(ref, { field: opts.field })
     if (wanted?.length && one.symbol && !wanted.includes(one.symbol)) {
-      throw new Error(`Kết quả ${ref} là dữ liệu mã ${one.symbol}, không có ${wanted.join(", ")}.`)
+      throw new Error(`Result ${ref} holds ${one.symbol} data and has no ${wanted.join(", ")}.`)
     }
     return [one]
   }
   const picked = wanted?.length ? known.filter((s) => wanted.includes(s)) : known
   const missing = wanted?.filter((s) => !known.includes(s)) ?? []
-  if (missing.length > 0) throw new Error(`Kết quả ${ref} không có mã ${missing.join(", ")}. Mã có: ${known.join(", ")}.`)
+  if (missing.length > 0) throw new Error(`Result ${ref} has no ticker ${missing.join(", ")}. Tickers present: ${known.join(", ")}.`)
   return picked.map((symbol) => extractFromRef(ref, { field: opts.field, symbol }))
 }
 

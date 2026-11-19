@@ -69,16 +69,16 @@ export async function readWatchlists(home: string): Promise<WatchlistStore> {
     text = await readFile(file, "utf8")
   } catch (error) {
     if ((error as { code?: string }).code === "ENOENT") return {}
-    throw new Error(`Không đọc được ${file}: ${(error as Error).message}`)
+    throw new Error(`Could not read ${file}: ${(error as Error).message}`)
   }
   let parsed: unknown
   try {
     parsed = JSON.parse(text)
   } catch {
-    throw new Error(`File watchlist bị hỏng (JSON không hợp lệ): ${file}. Sửa hoặc đổi tên file này rồi thử lại; dữ liệu cũ chưa bị ghi đè.`)
+    throw new Error(`The watchlist file is damaged (invalid JSON): ${file}. Fix or rename it and try again; the old data has not been overwritten.`)
   }
   if (!isStore(parsed)) {
-    throw new Error(`File watchlist sai cấu trúc: ${file}. Sửa hoặc đổi tên file này rồi thử lại; dữ liệu cũ chưa bị ghi đè.`)
+    throw new Error(`The watchlist file has the wrong structure: ${file}. Fix or rename it and try again; the old data has not been overwritten.`)
   }
   return parsed
 }
@@ -110,7 +110,7 @@ function need(store: WatchlistStore, name: string) {
   const list = store[name]
   if (!list) {
     const names = Object.keys(store)
-    throw new Error(`Không có watchlist "${name}".${names.length ? ` Đang có: ${names.join(", ")}.` : ""}`)
+    throw new Error(`No watchlist "${name}".${names.length ? ` Existing: ${names.join(", ")}.` : ""}`)
   }
   return list
 }
@@ -119,24 +119,24 @@ export const watchlistOps = {
   /** `items`: symbols to hold from the start, in the same write (a create that dropped them left an empty list). */
   async create(home: string, rawName: string, items: string[] = []) {
     const name = normName(rawName)
-    if (!name) throw new Error("Cần tên watchlist.")
+    if (!name) throw new Error("A watchlist name is required.")
     const { symbols, invalid } = parseSymbols(items)
     return updateWatchlists(home, (store) => {
-      if (store[name]) throw new Error(`Watchlist "${name}" đã có.`)
+      if (store[name]) throw new Error(`Watchlist "${name}" already exists.`)
       store[name] = { name, symbols: [...symbols].sort(), updatedAt: stamp() }
-      const held = symbols.length ? `: ${store[name]!.symbols.join(", ")}` : " (trống)"
-      return `Đã tạo watchlist "${name}"${held}.${invalid.length ? ` Bỏ qua mã không hợp lệ: ${invalid.join(", ")}.` : ""}`
+      const held = symbols.length ? `: ${store[name]!.symbols.join(", ")}` : " (empty)"
+      return `Created watchlist "${name}"${held}.${invalid.length ? ` Skipped invalid tickers: ${invalid.join(", ")}.` : ""}`
     })
   },
   async add(home: string, rawName: string, items: string[]) {
     const name = normName(rawName)
     const { symbols, invalid } = parseSymbols(items)
-    if (symbols.length === 0) throw new Error(`Không có mã hợp lệ${invalid.length ? ` (bỏ qua: ${invalid.join(", ")})` : ""}.`)
+    if (symbols.length === 0) throw new Error(`No valid tickers${invalid.length ? ` (skipped: ${invalid.join(", ")})` : ""}.`)
     return updateWatchlists(home, (store) => {
       const list = need(store, name)
       list.symbols = [...new Set([...list.symbols, ...symbols])].sort()
       list.updatedAt = stamp()
-      return `"${name}": ${list.symbols.join(", ")}${invalid.length ? ` (bỏ qua mã không hợp lệ: ${invalid.join(", ")})` : ""}`
+      return `"${name}": ${list.symbols.join(", ")}${invalid.length ? ` (skipped invalid tickers: ${invalid.join(", ")})` : ""}`
     })
   },
   async remove(home: string, rawName: string, items: string[]) {
@@ -147,19 +147,19 @@ export const watchlistOps = {
       const missing = [...drop].filter((s) => !list.symbols.includes(s))
       list.symbols = list.symbols.filter((s) => !drop.has(s))
       list.updatedAt = stamp()
-      return `"${name}": ${list.symbols.join(", ") || "(trống)"}${missing.length ? ` (không có sẵn: ${missing.join(", ")})` : ""}`
+      return `"${name}": ${list.symbols.join(", ") || "(empty)"}${missing.length ? ` (not in the list: ${missing.join(", ")})` : ""}`
     })
   },
   async rename(home: string, rawName: string, rawTo: string) {
     const name = normName(rawName)
     const to = normName(rawTo)
-    if (!to) throw new Error("Cần tên mới.")
+    if (!to) throw new Error("A new name is required.")
     return updateWatchlists(home, (store) => {
       const list = need(store, name)
-      if (to !== name && store[to]) throw new Error(`Watchlist "${to}" đã có.`)
+      if (to !== name && store[to]) throw new Error(`Watchlist "${to}" already exists.`)
       delete store[name]
       store[to] = { ...list, name: to, updatedAt: stamp() }
-      return `Đã đổi "${name}" thành "${to}".`
+      return `Renamed "${name}" to "${to}".`
     })
   },
   async delete(home: string, rawName: string) {
@@ -167,7 +167,7 @@ export const watchlistOps = {
     return updateWatchlists(home, (store) => {
       need(store, name)
       delete store[name]
-      return `Đã xóa watchlist "${name}".`
+      return `Deleted watchlist "${name}".`
     })
   },
 }
@@ -185,7 +185,7 @@ interface WatchlistInput {
 
 function required<T>(value: T | undefined, action: Action, field: string): T {
   if (value === undefined || (typeof value === "string" && !value.trim()) || (Array.isArray(value) && value.length === 0)) {
-    throw new Error(`action "${action}" cần trường ${field}.`)
+    throw new Error(`action "${action}" needs the ${field} field.`)
   }
   return value
 }
@@ -193,13 +193,13 @@ function required<T>(value: T | undefined, action: Action, field: string): T {
 async function listAll(home: string) {
   const store = await readWatchlists(home)
   const names = Object.keys(store)
-  if (names.length === 0) return "Chưa có watchlist cá nhân nào."
-  return names.map((n) => `- ${n}: ${store[n]!.symbols.join(", ") || "(trống)"}`).join("\n")
+  if (names.length === 0) return "No personal watchlists yet."
+  return names.map((n) => `- ${n}: ${store[n]!.symbols.join(", ") || "(empty)"}`).join("\n")
 }
 
 async function getOne(home: string, name: string) {
   const w = need(await readWatchlists(home), normName(name))
-  return `"${w.name}" (${w.symbols.length} mã, cập nhật ${w.updatedAt}): ${w.symbols.join(", ") || "(trống)"}`
+  return `"${w.name}" (${w.symbols.length} tickers, updated ${w.updatedAt}): ${w.symbols.join(", ") || "(empty)"}`
 }
 
 async function runAction(home: string, input: WatchlistInput): Promise<string> {
@@ -236,9 +236,9 @@ function summarize(input: WatchlistInput) {
  */
 export function localWatchlistTools(home: string): ToolDef[] {
   const fields = {
-    name: z.string().min(1).optional().describe("Tên watchlist (mọi action trừ list)"),
-    symbols: z.array(z.string()).min(1).optional().describe('create/add/remove: các mã, ví dụ ["VCB", "HPG"]'),
-    to: z.string().min(1).optional().describe("rename: tên mới"),
+    name: z.string().min(1).optional().describe("Watchlist name (every action except list)"),
+    symbols: z.array(z.string()).min(1).optional().describe('create/add/remove: tickers, e.g. ["VCB", "HPG"]'),
+    to: z.string().min(1).optional().describe("rename: the new name"),
   }
   const base = {
     name: "watchlist_local",
@@ -249,15 +249,15 @@ export function localWatchlistTools(home: string): ToolDef[] {
   } as const
   const readOnlyVariant: ToolDef<WatchlistInput> = {
     ...base,
-    description: "Xem watchlist CÁ NHÂN trên máy này: list (mọi danh sách) hoặc get (các mã của một danh sách).",
+    description: "Views the PERSONAL watchlists on this machine: list (every list) or get (the tickers of one list).",
     input: z.object({ action: z.enum(["list", "get"]), name: fields.name }),
     readOnly: true,
   }
   const tool: ToolDef<WatchlistInput> = {
     ...base,
     description:
-      "Watchlist CÁ NHÂN trên máy này (không share team; share team dùng watchlist_* của MCP server). " +
-      "action: list, get, create, add, remove (mã tự viết hoa, bỏ trùng), rename, delete.",
+      "PERSONAL watchlists on this machine (not shared with a team; team lists use the MCP server's watchlist_* tools). " +
+      "action: list, get, create, add, remove (tickers are upper-cased and de-duplicated), rename, delete.",
     input: z.object({ action: z.enum(ACTIONS), ...fields }),
     readOnly: false,
     readOnlyVariant,

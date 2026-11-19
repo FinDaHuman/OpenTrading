@@ -6,24 +6,24 @@
   "holidays": [],
   "exchanges": {
     "HOSE": [
-      { "from": "09:00", "to": "09:15", "phase": "ATO", "label": "khớp lệnh định kỳ mở cửa (ATO)" },
-      { "from": "09:15", "to": "11:30", "phase": "continuous", "label": "khớp lệnh liên tục (sáng)" },
-      { "from": "11:30", "to": "13:00", "phase": "break", "label": "nghỉ trưa" },
-      { "from": "13:00", "to": "14:30", "phase": "continuous", "label": "khớp lệnh liên tục (chiều)" },
-      { "from": "14:30", "to": "14:45", "phase": "ATC", "label": "khớp lệnh định kỳ đóng cửa (ATC)" },
-      { "from": "14:45", "to": "15:00", "phase": "put-through", "label": "chỉ giao dịch thoả thuận" }
+      { "from": "09:00", "to": "09:15", "phase": "ATO", "label": "opening call auction (ATO)" },
+      { "from": "09:15", "to": "11:30", "phase": "continuous", "label": "continuous matching (morning)" },
+      { "from": "11:30", "to": "13:00", "phase": "break", "label": "lunch break" },
+      { "from": "13:00", "to": "14:30", "phase": "continuous", "label": "continuous matching (afternoon)" },
+      { "from": "14:30", "to": "14:45", "phase": "ATC", "label": "closing call auction (ATC)" },
+      { "from": "14:45", "to": "15:00", "phase": "put-through", "label": "put-through trades only" }
     ],
     "HNX": [
-      { "from": "09:00", "to": "11:30", "phase": "continuous", "label": "khớp lệnh liên tục (sáng)" },
-      { "from": "11:30", "to": "13:00", "phase": "break", "label": "nghỉ trưa" },
-      { "from": "13:00", "to": "14:30", "phase": "continuous", "label": "khớp lệnh liên tục (chiều)" },
-      { "from": "14:30", "to": "14:45", "phase": "ATC", "label": "khớp lệnh định kỳ đóng cửa (ATC)" },
-      { "from": "14:45", "to": "15:00", "phase": "post-close", "label": "phiên sau giờ (PLO)" }
+      { "from": "09:00", "to": "11:30", "phase": "continuous", "label": "continuous matching (morning)" },
+      { "from": "11:30", "to": "13:00", "phase": "break", "label": "lunch break" },
+      { "from": "13:00", "to": "14:30", "phase": "continuous", "label": "continuous matching (afternoon)" },
+      { "from": "14:30", "to": "14:45", "phase": "ATC", "label": "closing call auction (ATC)" },
+      { "from": "14:45", "to": "15:00", "phase": "post-close", "label": "post-close session (PLO)" }
     ],
     "UPCoM": [
-      { "from": "09:00", "to": "11:30", "phase": "continuous", "label": "khớp lệnh liên tục (sáng)" },
-      { "from": "11:30", "to": "13:00", "phase": "break", "label": "nghỉ trưa" },
-      { "from": "13:00", "to": "15:00", "phase": "continuous", "label": "khớp lệnh liên tục (chiều)" }
+      { "from": "09:00", "to": "11:30", "phase": "continuous", "label": "continuous matching (morning)" },
+      { "from": "11:30", "to": "13:00", "phase": "break", "label": "lunch break" },
+      { "from": "13:00", "to": "15:00", "phase": "continuous", "label": "continuous matching (afternoon)" }
     ]
   }
 }

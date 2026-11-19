@@ -46,6 +46,7 @@ test("agents and prompts hold no issuer figures: every number must come from a t
   expect(hits).toEqual([])
   expect(issuerFigure("VD: HPG Q1/2026 chuyển nhượng cổ phần, ~3.800–4.900 tỷ")).toBe(true)
   expect(issuerFigure("VD: XYZ thu về M tỷ")).toBe(false)
+  expect(issuerFigure("e.g. HPG sold a stake for ~3,800–4,900 billion")).toBe(true)
 })
 
 test("copiedResults bắt đúng các dạng kết quả bảng, và không bắt luật/ngưỡng", () => {
@@ -56,6 +57,13 @@ test("copiedResults bắt đúng các dạng kết quả bảng, và không bắ
   expect(copiedResultHit("Mẫu ~8 Tết cho baskets (từ 2019), ~15 cho VNINDEX")).toBe("số mẫu")
   expect(copiedResultHit("mẫu mảng ~8–9 năm (từ 2018-10)")).toBe("số mẫu")
   expect(copiedResultHit("CNTT rất mạnh ở đáy 2020 nhưng chỉ trung bình ở đáy 2022")).toBe("kết quả gắn năm")
+  // the same shapes in English references
+  expect(copiedResultHit("steel **strongest in the whole table** after Tết")).toBe("so sánh nhất")
+  expect(copiedResultHit("**steel led both troughs**; securities in the top 3 in both")).toBe("so sánh nhất")
+  expect(copiedResultHit("Samples ~8 Tết for baskets (since 2019)")).toBe("số mẫu")
+  expect(copiedResultHit("IT very strong at the trough 2020 but only average at the trough 2022")).toBe("kết quả gắn năm")
+  expect(copiedResultHit("Interpretation thresholds: hit ≥ 75% = strong bias; 60–75% = moderate.")).toBeNull()
+  expect(copiedResultHit("- Q1 (especially T1–T2) is usually the strongest of the year; T12→T3 is a good window.")).toBeNull()
   // luật, ngưỡng, cơ chế, prior có nhãn → không bắt
   expect(copiedResultHit("Ngưỡng diễn giải: hit ≥ 75% = bias mạnh; 60–75% = vừa; < 50% = không bias.")).toBeNull()
   expect(copiedResultHit("thép mạnh T2 (sau Tết); dầu khí mạnh T1–T2/T5, yếu T3–T4")).toBeNull()
@@ -98,7 +106,7 @@ test("load_skill preloads uses_tools (not every gate tool) and refuses a skill w
   expect(out).not.toContain("cycle_stats_refresh")
 
   const missing = loadSkillTool(() => [skill], () => [], () => new Set(["current_time"]))
-  await expect(missing.execute({ name: "chu-ky" }, ctx)).rejects.toThrow("đang tắt vì thiếu tool: cycle_stats_check")
+  await expect(missing.execute({ name: "chu-ky" }, ctx)).rejects.toThrow("is off because tools are missing: cycle_stats_check")
 })
 
 
@@ -127,6 +135,8 @@ Q99. Ngoài cây
    tiếp Q1`)
   expect(decisionTreeIssues(terminalTransition)).toContain("Q3: ★ vừa kết luận vừa chuyển Q")
   expect(decisionTreeIssues(body.replace('Có → ★ "Thuận lợi"', 'Có → Q1 rồi ★ "Thuận lợi"'))).toContain("Q3: ★ vừa kết luận vừa chuyển Q")
+  // English skill bodies (E4) write "continue Q2"
+  expect(decisionTreeIssues(body.replace('Có → ★ "Thuận lợi"', 'Có → ★ "Thuận lợi", continue Q1'))).toContain("Q3: ★ vừa kết luận vừa chuyển Q")
   expect(decisionTreeIssues(`## Ví dụ
 Q1. Không phải cây
 ├─ thử → Q99`)).toEqual([])
