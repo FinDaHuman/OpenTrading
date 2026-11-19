@@ -42,9 +42,9 @@ test("the tool row shows a one-line summary and the coloured chart is drawn once
   setup = await testRender(() => <Transcript />, { width: 100, height: 60 })
   const frame = await frameWith("Xu hướng tăng nhẹ.")
   expect(frame).not.toContain(String.fromCharCode(27))
-  expect(frame).toContain("Đã vẽ nến VCB")
+  expect(frame).toContain("Drew candles VCB")
   // The model's text never carries the picture, so the transcript shows it once (the chart line).
-  expect(frame.split("Đã vẽ nến VCB").length - 1).toBe(1)
+  expect(frame.split("Drew candles VCB").length - 1).toBe(1)
   expect(frame).toContain("Xu hướng tăng nhẹ.")
 })
 

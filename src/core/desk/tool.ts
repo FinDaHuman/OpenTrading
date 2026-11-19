@@ -31,7 +31,7 @@ export const keyOf = (name: string) => name.replace(/-/g, "_")
 export function chosen(playbooks: Playbook[], input: Input): { playbook: Playbook; args: unknown } {
   const set = playbooks.filter((p) => input[keyOf(p.meta.name)] !== undefined && input[keyOf(p.meta.name)] !== null)
   if (set.length !== 1) {
-    throw new Error(`Điền đúng một playbook (một trong: ${playbooks.map((p) => keyOf(p.meta.name)).join(", ") || "chưa có"}), mỗi key là tham số của playbook đó.`)
+    throw new Error(`Fill exactly one playbook (one of: ${playbooks.map((p) => keyOf(p.meta.name)).join(", ") || "none"}); each key holds that playbook's arguments.`)
   }
   return { playbook: set[0]!, args: input[keyOf(set[0]!.meta.name)] }
 }
@@ -39,10 +39,10 @@ export function chosen(playbooks: Playbook[], input: Input): { playbook: Playboo
 function describe(playbooks: Playbook[]) {
   const lines = playbooks.map((p) => `- ${keyOf(p.meta.name)}: ${p.meta.whenToUse.replace(/\s+/g, " ").trim()}`)
   return [
-    "Chạy một playbook ultradesk: nhiều subagent nghiên cứu theo kịch bản cố định (thu thập song song, kiểm chứng chéo, tổng hợp), chạy nền; kết quả về sau trong <thong_bao_desk>.",
-    "Dùng khi người dùng bật ultradesk (keyword, /desk on, lệnh playbook) hoặc yêu cầu rõ một nghiên cứu lớn khớp playbook; người dùng duyệt trước khi chạy.",
-    "Không dùng khi câu hỏi trả lời được bằng vài tool: một run tốn nhiều request hơn hẳn.",
-    lines.length > 0 ? `Điền đúng một key, là tham số của playbook đó:\n${lines.join("\n")}` : "Chưa có playbook nào.",
+    "Runs an ultradesk playbook: many research subagents on a fixed script (parallel gathering, cross-checking, synthesis), in the background; the result arrives later in <thong_bao_desk>.",
+    "Use when the user turned ultradesk on (keyword, /desk on, a playbook command) or clearly asks for a large study that fits a playbook; the user approves before it runs.",
+    "Do not use when a few tool calls can answer: a run costs far more requests.",
+    lines.length > 0 ? `Fill exactly one key, holding that playbook's arguments:\n${lines.join("\n")}` : "No playbooks yet.",
   ].join("\n")
 }
 
@@ -62,13 +62,13 @@ export function argsSummary(playbook: Playbook, args: unknown): string {
 export function deskRunTool(deps: DeskToolDeps): ToolDef<Input> {
   const playbooks = deps.playbooks()
   // Each playbook's args as a typed key: providers (Gemini) and the model see the real schema.
-  const shape = Object.fromEntries(playbooks.map((p) => [keyOf(p.meta.name), p.meta.args.optional().describe(`Chạy ${p.meta.name}`)]))
+  const shape = Object.fromEntries(playbooks.map((p) => [keyOf(p.meta.name), p.meta.args.optional().describe(`Run ${p.meta.name}`)]))
   return {
     name: DESK_RUN,
     description: describe(playbooks),
     input: z.object({
       ...shape,
-      size: z.enum(DESK_SIZES as [DeskSize, ...DeskSize[]]).optional().describe("Quy mô; bỏ trống = cài đặt của người dùng"),
+      size: z.enum(DESK_SIZES as [DeskSize, ...DeskSize[]]).optional().describe("Size; empty = the user's setting"),
     }) as unknown as z.ZodType<Input>,
     readOnly: true,
     unlocked: true,
@@ -114,7 +114,7 @@ export function deskRunTool(deps: DeskToolDeps): ToolDef<Input> {
       const decision = ctx.prepared as DeskDecision
       const { playbook, args } = chosen(playbooks, input)
       const name = playbook.meta.name
-      if (!decision.run) return `Người dùng không cho chạy playbook ${name}. Trả lời bằng cách thông thường hoặc hỏi người dùng muốn làm gì.`
+      if (!decision.run) return `The user did not allow playbook ${name} to run. Answer the usual way or ask the user what they want.`
       if (decision.remember) {
         await saveConfig((current) => ({ desk: { ...current.desk, approved: [...new Set([...(current.desk?.approved ?? []), name])] } }))
       }
@@ -125,8 +125,8 @@ export function deskRunTool(deps: DeskToolDeps): ToolDef<Input> {
       const { id } = await deps.engine.start(name, args, { size: decision.size, effort })
       const estimate = await deps.engine.estimate(name, args, decision.size)
       return [
-        `Đã bắt đầu run ultradesk ${id}: playbook ${name}, quy mô ${decision.size} (~${estimate.agents} agent, ~${estimate.requests} request).`,
-        "Run chạy nền; kết quả sẽ tới trong <thong_bao_desk>. Bây giờ chỉ báo ngắn cho người dùng là run đang chạy (theo dõi bằng /desk), đừng tự làm lại việc của run.",
+        `Started ultradesk run ${id}: playbook ${name}, size ${decision.size} (~${estimate.agents} agents, ~${estimate.requests} requests).`,
+        "The run is in the background; the result will arrive in <thong_bao_desk>. Now just tell the user briefly that the run is going (follow it with /desk); do not redo the run's work yourself.",
       ].join("\n")
     },
   }

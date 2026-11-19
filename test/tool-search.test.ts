@@ -65,8 +65,8 @@ test("select: an ambiguous or unknown name is explained, the rest still loads", 
   expect(resolveToolName(r, "market_snapshot")).toHaveLength(2)
   const out = await search(r, "select:market_snapshot,money_flow,nope")
   expect(firstLine(out)).toBe(`${LOADED_PREFIX}mcp__ot__money_flow`)
-  expect(out).toContain('"market_snapshot" khớp nhiều tool')
-  expect(out).toContain('Không có tool "nope"')
+  expect(out).toContain('"market_snapshot" matches several tools')
+  expect(out).toContain('No tool "nope"')
 })
 
 test("keywords match names, hints, descriptions and parameters, without diacritics", async () => {
@@ -79,7 +79,7 @@ test("keywords match names, hints, descriptions and parameters, without diacriti
   expect(firstLine(await search(r, "+snapshot realtime"))).toBe(`${LOADED_PREFIX}mcp__ot__market_snapshot, mcp__other__market_snapshot`)
   // max_results caps the list; built-in tools are never search results.
   expect(firstLine(await search(r, "symbol", 1))!.split(",")).toHaveLength(1)
-  expect(await search(r, "gio hien tai")).toContain("Không tìm thấy tool")
+  expect(await search(r, "gio hien tai")).toContain("No tool matches")
 })
 
 test("mcp__server lists one server's tools; no match names the servers", async () => {
@@ -137,7 +137,7 @@ test("deferred local tools keep their names: they have no mcp__ prefix to search
   r.register(mcp("ot", "vn_quote_history", "Price history"))
   const out = (await toolSearchTool(r).execute({ query: "zzz" }, ctx())) as string
   expect(out).toContain("ot (1 tool)")
-  expect(out).toContain('nạp bằng "select:<tên>"): chart_render.')
+  expect(out).toContain('load with "select:<name>"): chart_render.')
   expect(out).not.toContain("local (")
 })
 
@@ -211,7 +211,7 @@ test("at the per-request cap, the always-visible tools stay and the latest-loade
 
 test("<tool_hoan> says a tool already declared is called directly (it lists loaded tools too)", () => {
   const text = renderDeferred([{ server: "local", tools: ["grep_files"] }], 1_000).text
-  expect(text).toContain("Đã có schema thì gọi thẳng;")
+  expect(text).toContain("A tool whose schema you already have is called directly;")
 })
 
 test("spawning a subagent loads send_message and stop_agent", () => {

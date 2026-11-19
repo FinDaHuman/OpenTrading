@@ -8,7 +8,9 @@ export const TODO_WRITE = "todo_write"
  * The result reads as an instruction, not as prose an answer could reuse: the old "Đã cập nhật
  * việc cần làm: 1/3 xong" was copied into answers, then became a whole answer (29/10).
  */
-export const TODO_PREFIX = "[todo_write] Đã lưu"
+export const TODO_PREFIX = "[todo_write] Saved"
+/** The prefix from 29/10 to 16/11/2026 (Vietnamese tool text), still in saved sessions. */
+export const VI_TODO_PREFIX = "[todo_write] Đã lưu"
 /** The prefix before 29/10, still in saved sessions. */
 export const LEGACY_TODO_PREFIX = "Đã cập nhật việc cần làm"
 /**
@@ -26,13 +28,13 @@ export const TodoStatus = z.enum(["pending", "in_progress", "completed", "cancel
 export type TodoStatus = z.infer<typeof TodoStatus>
 
 export const Todo = z.object({
-  content: z.string().trim().min(1).max(200).describe("Việc cần làm, viết như một mệnh lệnh ngắn, ví dụ: Lấy BCTC 4 quý gần nhất của FPT"),
-  status: TodoStatus.describe("pending: chưa làm · in_progress: đang làm (tối đa 1) · completed: đã xong · cancelled: bỏ"),
+  content: z.string().trim().min(1).max(200).describe("The task as a short imperative, in Vietnamese, e.g.: Lấy BCTC 4 quý gần nhất của FPT"),
+  status: TodoStatus.describe("pending: not started · in_progress: in progress (at most 1) · completed: done · cancelled: dropped"),
 })
 export type Todo = z.infer<typeof Todo>
 
 export const TodoWriteInput = z.object({
-  todos: z.array(Todo).max(MAX_TODOS).describe("Toàn bộ danh sách; danh sách mới thay hẳn danh sách cũ"),
+  todos: z.array(Todo).max(MAX_TODOS).describe("The whole list; a new list replaces the old one"),
 })
 export type TodoWriteInput = z.infer<typeof TodoWriteInput>
 
@@ -40,11 +42,11 @@ export type TodoWriteInput = z.infer<typeof TodoWriteInput>
 export function todoProblems(todos: readonly Todo[]): string[] {
   const problems: string[] = []
   const running = todos.filter((t) => t.status === "in_progress").length
-  if (running > 1) problems.push(`Có ${running} việc in_progress; chỉ để một việc đang làm, các việc khác để pending.`)
+  if (running > 1) problems.push(`${running} tasks are in_progress; keep one in progress and the others pending.`)
   const seen = new Set<string>()
   for (const t of todos) {
     const key = t.content.trim().toLowerCase()
-    if (seen.has(key)) problems.push(`Việc bị trùng: "${t.content}". Mỗi việc chỉ ghi một lần.`)
+    if (seen.has(key)) problems.push(`Duplicate task: "${t.content}". List each task once.`)
     seen.add(key)
   }
   return problems

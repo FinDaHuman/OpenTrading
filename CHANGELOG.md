@@ -14,6 +14,15 @@ adopt Semantic Versioning when it exposes a stable public API.
   choice, LaTeX as a prohibition, Vietnamese also in free-text JSON fields, the three things a "save this"
   answer must say. Terminal system prompt: o200k 3 376 → 3 015 tokens, DeepSeek 4 635 → 3 180. Paired evals
   (16/11, nemotron-3.5-super-vl): red-team 18/18 vs 17/18, memory 8/9 vs 6/9, compute 15/15 both.
+- Tool descriptions, parameter descriptions and the text tools return to the model are in English (all built-in
+  tools: shell, files, web, charts, todo, subagents, skills, sessions, watchlist, desk), and so are the
+  request-wide blocks: `<quyen_tep>`, the permission-mode line, the market clock (`market/calendar.json`
+  labels), the MCP and deferred-tool headers, the skill hint and the `ot-data` line. Interface-only text
+  (`summarize`, approval previews, the mode label) stays Vietnamese; the model is told to write
+  user-visible fields (ask_user questions, todo items, shell and subagent descriptions) in Vietnamese.
+  Parsers of these texts accept both languages (failure classes, operand notes, `@mentions` line counts,
+  eval shell routes, saved todo prefixes). Tool definitions: o200k 8 104 → 7 886, DeepSeek 9 325 → 8 295
+  tokens; always-sent tools DeepSeek 3 773 → 3 184.
 
 ### Fixed
 

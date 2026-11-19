@@ -265,7 +265,7 @@ export async function runShell(
       saved = undefined
     }
   }
-  const output = dropped > 0 ? `${head}\n[... đã bỏ ${dropped} ký tự ở giữa ...]\n${tail}` : head + tail
+  const output = dropped > 0 ? `${head}\n[... ${dropped} characters dropped from the middle ...]\n${tail}` : head + tail
   // Chunks are normalised as they come; a \r\n split across two chunks is joined here.
   return { output: output.replace(/\r\n/g, "\n"), exitCode: proc.exitCode, timedOut, aborted, ms: Date.now() - started, dropped, ...(saved ? { saved } : {}) }
 }

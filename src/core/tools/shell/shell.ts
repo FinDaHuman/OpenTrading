@@ -28,7 +28,7 @@ import { detectPython, detectShell, runShell, SPILL_CAP, type ShellInfo } from "
 export type ShellInput = { command: string; description?: string; timeout_ms?: number; workdir?: string }
 
 /** How the tool error for arithmetic in a form the grammar does not take starts (eval traces count it). */
-export const MATH_NEAR_MISS_PREFIX = "Lệnh này là phép tính nhưng chưa đúng dạng chỉ-toán"
+export const MATH_NEAR_MISS_PREFIX = "This command is a calculation but not in the arithmetic-only form"
 
 export const DEFAULT_TIMEOUT_MS = 120_000
 /** A listing of the workspace runs unasked (read-only.ts), so it gets a short limit. */
@@ -41,10 +41,10 @@ export const SHELL_OUTPUT_CHARS = 30_000
 function nearMiss(command: string, shell: ShellInfo, workdir: boolean): string | undefined {
   if (typeof command !== "string") return undefined
   // The right form in another folder: arithmetic needs none.
-  if (workdir && mathOnlyCommand(command, shell)) return `${MATH_NEAR_MISS_PREFIX} vì có workdir nên chưa chạy; phép tính không cần thư mục: gọi lại không kèm workdir thì chạy ngay, không cần duyệt.`
+  if (workdir && mathOnlyCommand(command, shell)) return `${MATH_NEAR_MISS_PREFIX} because it has a workdir, so it did not run; a calculation needs no folder: call again without workdir and it runs at once, with no approval.`
   const miss = computeIntent(command, shell)
   if (!miss) return undefined
-  return [`${MATH_NEAR_MISS_PREFIX} nên chưa chạy; viết lại đúng dạng thì chạy ngay, không cần duyệt.`, rewriteAdvice(miss, shell), mathHint(shell)].filter(Boolean).join(" ")
+  return [`${MATH_NEAR_MISS_PREFIX}, so it did not run; rewritten in that form it runs at once, with no approval.`, rewriteAdvice(miss, shell), mathHint(shell)].filter(Boolean).join(" ")
 }
 
 /** The file tools the shell description sends the model to instead of a command. */
@@ -58,10 +58,10 @@ const FILE_TOOLS = ["read_file", "glob_files", "grep_files", "write_file", "edit
  */
 function bypassMath(ps: boolean, python: string | undefined): string {
   const short = ps
-    ? "Tính số: viết thẳng biểu thức PowerShell, mảng và foreach chạy được, ví dụ `$p = 48.5, 50.2, 51.8; ($p | Measure-Object -Average).Average`; lệnh đã chạy trong PowerShell nên không bọc thêm `powershell -Command`."
-    : "Tính số: dùng awk, mảng và vòng lặp chạy được, ví dụ `awk 'BEGIN{ g = 128.4/112 - 1; printf \"%.15g\\n\", g*100 }'`."
+    ? "Numbers: write PowerShell expressions directly; arrays and foreach work, e.g. `$p = 48.5, 50.2, 51.8; ($p | Measure-Object -Average).Average`; the command already runs in PowerShell, so never wrap it in another `powershell -Command`."
+    : "Numbers: use awk; arrays and loops work, e.g. `awk 'BEGIN{ g = 128.4/112 - 1; printf \"%.15g\\n\", g*100 }'`."
   if (!python) return short
-  return `${short} Phép tính nhiều bước hay trên chuỗi số có thể viết bằng Python: \`${python} -c\`${ps ? "" : " hoặc heredoc"}.`
+  return `${short} Multi-step calculations or work on a series of numbers can be written in Python: \`${python} -c\`${ps ? "" : " or a heredoc"}.`
 }
 
 /**
@@ -78,21 +78,21 @@ function describe(shell: ShellInfo, present?: ReadonlySet<string>, mode?: Permis
   const ps = shell.kind === "pwsh" || shell.kind === "powershell"
   const notes = ps
     ? shell.kind === "powershell"
-      ? "Shell: Windows PowerShell 5.1. Không có && và ||: nối lệnh bằng ; hoặc `if ($?) { … }`; đọc file text bằng Get-Content -Encoding UTF8; biến môi trường $env:TEN; đường dẫn có dấu cách đặt trong ngoặc kép."
-      : "Shell: PowerShell 7 (pwsh). Nối lệnh bằng ; hoặc &&; biến môi trường $env:TEN; đường dẫn có dấu cách đặt trong ngoặc kép."
-    : `Shell: ${shell.kind}. Nối lệnh bằng && ; đường dẫn có dấu cách đặt trong ngoặc kép.`
+      ? "Shell: Windows PowerShell 5.1. There is no && or ||: chain commands with ; or `if ($?) { … }`; read text files with Get-Content -Encoding UTF8; environment variables are $env:NAME; quote paths containing spaces."
+      : "Shell: PowerShell 7 (pwsh). Chain commands with ; or &&; environment variables are $env:NAME; quote paths containing spaces."
+    : `Shell: ${shell.kind}. Chain commands with && ; quote paths containing spaces.`
   return (
-    "Chạy một lệnh shell trên máy người dùng, thư mục chạy mặc định là workspace; trả output (stdout và stderr) cùng mã thoát. " +
+    "Runs one shell command on the user's machine, in the workspace by default; returns the output (stdout and stderr) and the exit code. " +
     `${notes} ` +
-    "Dùng khi cần chạy chương trình: script đọc file dữ liệu hay vẽ biểu đồ ra file, chuyển đổi định dạng, cài thư viện người dùng đồng ý. " +
+    "Use it to run programs: scripts that read data files or draw charts to a file, format conversion, installing libraries the user agreed to. " +
     (fileTools.length > 0
-      ? `Không dùng khi đọc, tìm hay sửa file (dùng ${fileTools.join(", ")}), cũng không dùng cho lệnh chờ nhập từ bàn phím hay chạy mãi (server). `
-      : "Không dùng cho lệnh chờ nhập từ bàn phím hay chạy mãi (server). ") +
+      ? `Not for reading, finding or editing files (use ${fileTools.join(", ")}), and not for commands that wait for keyboard input or run forever (servers). `
+      : "Not for commands that wait for keyboard input or run forever (servers). ") +
     (mode === "bypass"
-      ? `Lệnh chạy ngay như đã viết, không ai duyệt. ${bypassMath(ps, python())} Giữ đủ chữ số ở bước trung gian, chỉ làm tròn ở kết quả cuối. Ghi description ngắn cho biết lệnh làm gì. Timeout mặc định`
+      ? `Commands run immediately as written; nobody approves them. ${bypassMath(ps, python())} Keep all digits in intermediate steps; round only the final result. Write a short description of what the command does. Default timeout`
       : `${mathHint(shell)} ` +
-        `Phép tính viết bằng Python, mảng hay vòng lặp không chạy mà trả lại dạng đúng để viết lại. Liệt kê thư mục trong workspace (ls, dir, pwd) cũng chạy ngay. Lệnh khác người dùng duyệt; ghi description ngắn để người dùng biết lệnh làm gì. Timeout mặc định`) +
-    ` ${DEFAULT_TIMEOUT_MS / 1000}s, tối đa ${MAX_TIMEOUT_MS / 1000}s; output dài được lưu ra file${has("read_file") ? " để đọc tiếp bằng read_file" : ""}.`
+        `A calculation written in Python, or with arrays or loops, does not run; the reply gives the form to rewrite it in. Listing workspace directories (ls, dir, pwd) also runs at once. Any other command needs the user's approval; write a short description so the user knows what it does. Default timeout`) +
+    ` ${DEFAULT_TIMEOUT_MS / 1000}s, max ${MAX_TIMEOUT_MS / 1000}s; long output is saved to a file${has("read_file") ? " to read on with read_file" : ""}.`
   )
 }
 
@@ -122,10 +122,10 @@ export function shellTool(workspace: Workspace, opts: { shell?: ShellInfo; pytho
     description: describe(shell),
     descriptionFor: (present, mode) => describe(shell, present, mode, python),
     input: z.object({
-      command: z.string().min(1).describe("Lệnh cần chạy"),
-      description: z.string().max(200).optional().describe("Lệnh này làm gì, 5–10 từ, ví dụ: Vẽ biểu đồ giá FPT ra file PNG"),
-      timeout_ms: z.number().int().min(1000).max(MAX_TIMEOUT_MS).optional().describe(`Thời gian tối đa (ms, mặc định ${DEFAULT_TIMEOUT_MS})`),
-      workdir: z.string().optional().describe("Thư mục chạy lệnh (mặc định workspace)"),
+      command: z.string().min(1).describe("Command to run"),
+      description: z.string().max(200).optional().describe("What this command does, 5–10 Vietnamese words shown to the user, e.g.: Vẽ biểu đồ giá FPT ra file PNG"),
+      timeout_ms: z.number().int().min(1000).max(MAX_TIMEOUT_MS).optional().describe(`Maximum time (ms, default ${DEFAULT_TIMEOUT_MS})`),
+      workdir: z.string().optional().describe("Working directory (default: the workspace)"),
     }),
     readOnly: false,
     effect: "shell",
@@ -137,9 +137,9 @@ export function shellTool(workspace: Workspace, opts: { shell?: ShellInfo; pytho
     maxOutputChars: SHELL_OUTPUT_CHARS + 2_000,
     blockFor: (input) => {
       const network = networkDir(input)
-      if (network) return `workdir ${network} là đường dẫn mạng: không chạy lệnh ở đó. Chép dữ liệu vào workspace rồi chạy`
+      if (network) return `workdir ${network} is a network path: commands do not run there. Copy the data into the workspace and run it there`
       const why = critical(input)
-      return why ? `${why}. Xoá đúng thư mục con cần xoá, bằng đường dẫn cụ thể` : undefined
+      return why ? `${why}. Delete exactly the subfolder you mean, by its specific path` : undefined
     },
     askFor: (input) => {
       const { command } = input as ShellInput
@@ -168,9 +168,9 @@ export function shellTool(workspace: Workspace, opts: { shell?: ShellInfo; pytho
     async validate(input) {
       const cwd = cwdOf(input)
       try {
-        if (!(await stat(cwd)).isDirectory()) return `${cwd} không phải thư mục.`
+        if (!(await stat(cwd)).isDirectory()) return `${cwd} is not a directory.`
       } catch {
-        return `Không có thư mục ${cwd}.`
+        return `No directory ${cwd}.`
       }
       return undefined
     },
@@ -188,21 +188,21 @@ export function shellTool(workspace: Workspace, opts: { shell?: ShellInfo; pytho
       const file = path.join(workspace.env().data!, "tool-output", `${ctx.callId.replace(/[^\w-]/g, "_")}.txt`)
       const result = await runShell(input.command, { cwd, timeoutMs, signal: ctx.signal, shell, spill: { file, after: SHELL_OUTPUT_CHARS } })
       const status = result.timedOut
-        ? `dừng vì quá ${Math.round(timeoutMs / 1000)}s (đã giết cả các tiến trình con); lệnh chạy lâu hơn thì tăng timeout_ms, lệnh chờ nhập thì không chạy được`
+        ? `stopped after ${Math.round(timeoutMs / 1000)}s (child processes killed too); raise timeout_ms for longer commands; commands waiting for input cannot run`
         : result.aborted
-          ? "đã huỷ"
-          : `mã thoát ${result.exitCode ?? "?"}`
+          ? "cancelled"
+          : `exit code ${result.exitCode ?? "?"}`
       const meta = `[${status} · ${(result.ms / 1000).toFixed(1)}s · ${cwd}]`
       const output = result.output.trimEnd()
-      if (output.length <= SHELL_OUTPUT_CHARS && !result.dropped) return `${meta}\n${output || "(không có output)"}`
+      if (output.length <= SHELL_OUTPUT_CHARS && !result.dropped) return `${meta}\n${output || "(no output)"}`
       // Long output: in the file as it came, head and tail here (wrap.ts cuts the middle).
       const saved = result.saved
       const where = !saved
-        ? `không lưu được ra file${result.dropped ? `; phần giữa (${result.dropped} ký tự) đã mất` : ""}`
+        ? `could not be saved to a file${result.dropped ? `; the middle (${result.dropped} characters) is lost` : ""}`
         : saved.cut
-          ? `file ${saved.file} chỉ giữ ${saved.chars} ký tự đầu (giới hạn ${SPILL_CAP / 1024 / 1024} MB), phần sau không được lưu; đọc bằng read_file với offset hoặc tìm bằng grep_files`
-          : `bản đầy đủ (${saved.chars} ký tự) ở ${saved.file}, đọc tiếp bằng read_file với offset hoặc tìm bằng grep_files`
-      return `${meta}\n(Output dài${result.dropped ? "" : ` ${output.length} ký tự`}; ${where}.)\n${output}`
+          ? `file ${saved.file} keeps only the first ${saved.chars} characters (limit ${SPILL_CAP / 1024 / 1024} MB), the rest was not saved; read it with read_file and offset or search it with grep_files`
+          : `the full output (${saved.chars} characters) is in ${saved.file}; read on with read_file and offset or search it with grep_files`
+      return `${meta}\n(Long output${result.dropped ? "" : ` of ${output.length} characters`}; ${where}.)\n${output}`
     },
   }
   return { ...def, readOnlyVariant: mathShellTool(def, shell) }
@@ -214,16 +214,16 @@ export function shellTool(workspace: Workspace, opts: { shell?: ShellInfo; pytho
  */
 function mathShellTool(full: ToolDef<ShellInput>, shell: ShellInfo): ToolDef<ShellInput> {
   // A tool error, not a permission denial: the model should retry as arithmetic, not stop.
-  const refusal = `Lệnh này không phải phép tính thuần nên không chạy (agent này chỉ dùng shell để tính số). Viết lại thành biểu thức số. ${mathHint(shell)}`
+  const refusal = `This command is not pure arithmetic, so it did not run (this agent uses the shell only to compute numbers). Rewrite it as a numeric expression. ${mathHint(shell)}`
   return {
     name: "shell",
     description:
-      "Máy tính: chạy một lệnh chỉ gồm phép tính số và trả kết quả. " +
-      "Dùng khi: cần số tính ra từ số đã có (tỷ lệ, % thay đổi, CAGR, P/E, đổi đơn vị); gộp nhiều phép vào một lệnh. " +
-      `Không dùng khi: chạy chương trình, đọc hay ghi file (bị từ chối). ${mathHint(shell)}`,
+      "Calculator: runs one command made only of arithmetic and returns the result. " +
+      "Use when: you need a figure computed from figures you have (ratios, % change, CAGR, P/E, unit conversion); put several operations in one command. " +
+      `Do not use for: running programs, reading or writing files (refused). ${mathHint(shell)}`,
     input: z.object({
-      command: z.string().min(1).describe("Biểu thức cần tính"),
-      description: z.string().max(200).optional().describe("Phép tính này để làm gì, 5–10 từ"),
+      command: z.string().min(1).describe("Expression to compute"),
+      description: z.string().max(200).optional().describe("What this calculation is for, 5–10 Vietnamese words"),
     }),
     readOnly: true,
     source: LOCAL_SOURCE,
