@@ -254,7 +254,9 @@ test("tool guidance lives in one place and the format example carries no real-lo
   // shorter wording held 2/3 instead of 3/3 on gemini-3.5-flash-lite; guard +10), ≈2.22k after the
   // 16/11/2026 English prompt files: chars/4 counts English higher than Vietnamese although real tokens
   // fell (terminal system o200k 3 376 → 3 015, DeepSeek 4 635 → 3 180); the guard follows the proxy.
-  expect(Math.ceil(a.system.length / 4)).toBeLessThan(2_230)
+  // Combined English headers (#355/#357/#358): 2,236 proxy tokens; offline o200k_base
+  // with shell/read_file/chart_render/load_skill/memory_read/spawn_subagent: 2,369 → 2,021.
+  expect(Math.ceil(a.system.length / 4)).toBeLessThan(2_250)
 })
 
 test("the constraints budget key is explicit and never cuts on any tier", () => {
