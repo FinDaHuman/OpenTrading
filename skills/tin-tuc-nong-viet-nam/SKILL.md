@@ -1,6 +1,7 @@
 ---
 name: tin-tuc-nong-viet-nam
-description: "Tóm tắt 5–7 tin chứng khoán/doanh nghiệp VN trong ngày, phân loại và đánh giá tác động. Dùng khi hỏi chung tin nóng hôm nay."
+description: "Summarises 5–7 VN stock-market/corporate news items of the day, classified with their impact. Use for today's hot news in general."
+match_text: "Tóm tắt 5–7 tin chứng khoán/doanh nghiệp VN trong ngày, phân loại và đánh giá tác động. Dùng khi hỏi chung tin nóng hôm nay."
 activation: auto
 requires_tools: [mcp__opentrading__news_market]
 triggers:

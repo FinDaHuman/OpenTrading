@@ -1,6 +1,7 @@
 ---
 name: ky-thuat-chuyen-sau
-description: "Đọc kỹ thuật một mã đa khung 1D/1W/1M (RSI, MACD, Bollinger, Ichimoku, ADX, hỗ trợ/kháng cự, breakout). Dùng khi hỏi kỹ thuật hay xu hướng giá của một mã."
+description: "Reads one ticker's technicals across 1D/1W/1M (RSI, MACD, Bollinger, Ichimoku, ADX, support/resistance, breakout). Use for a ticker's technicals or price trend."
+match_text: "Đọc kỹ thuật một mã đa khung 1D/1W/1M (RSI, MACD, Bollinger, Ichimoku, ADX, hỗ trợ/kháng cự, breakout). Dùng khi hỏi kỹ thuật hay xu hướng giá của một mã."
 activation: auto
 requires_tools: [mcp__opentrading__signals_technical]
 triggers:

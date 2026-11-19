@@ -1,6 +1,7 @@
 ---
 name: kiem-chien-luoc-backtest
-description: "Kiểm chứng chiến lược bằng backtest (SMA cross, RSI, momentum, mùa vụ, theo dầu/vàng), báo cả kết quả tốt nhất và tệ nhất. Dùng khi hỏi chiến lược có hiệu quả không."
+description: "Tests a strategy by backtest (SMA cross, RSI, momentum, seasonality, following oil/gold), reporting both the best and the worst results. Use when asked whether a strategy works."
+match_text: "Kiểm chứng chiến lược bằng backtest (SMA cross, RSI, momentum, mùa vụ, theo dầu/vàng), báo cả kết quả tốt nhất và tệ nhất. Dùng khi hỏi chiến lược có hiệu quả không."
 activation: auto
 requires_tools: [mcp__opentrading__quant_backtest]
 triggers:

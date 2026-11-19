@@ -1,6 +1,7 @@
 ---
 name: hoa-chat-vn
-description: "Pha/sóng: dùng skill chu kỳ. Phân tích ngành hoá chất và phân bón Việt Nam theo chu kỳ giá ure, chính sách xuất khẩu Trung Quốc, tỷ lệ xuất khẩu và chi phí khí đầu vào. Dùng khi hỏi xu hướng nhóm hoá chất hoặc công ty phân bón."
+description: "Phase/wave: use dinh-vi-chu-ky-vn. Analyses VN chemicals and fertilisers by the urea price cycle, Chinese export policy, export share and gas input costs. Use for chemicals trends or fertiliser companies."
+match_text: "Pha/sóng: dùng skill chu kỳ. Phân tích ngành hoá chất và phân bón Việt Nam theo chu kỳ giá ure, chính sách xuất khẩu Trung Quốc, tỷ lệ xuất khẩu và chi phí khí đầu vào. Dùng khi hỏi xu hướng nhóm hoá chất hoặc công ty phân bón."
 activation: auto
 requires_tools: [financial_detail, yf_commodities]
 uses_tools: [financial_detail, yf_commodities, financial_ratios, planned_targets, analyst_consensus, peer_compare, vs_categories, vs_indicator_data, news_symbol, news_market, symbol_lookup, vn_company]

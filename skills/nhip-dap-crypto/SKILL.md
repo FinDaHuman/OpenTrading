@@ -1,6 +1,7 @@
 ---
 name: nhip-dap-crypto
-description: "Tóm tắt crypto bằng lời thường: xu hướng giá, funding/OI, fear & greed, giá quy ra VND. Dùng khi hỏi BTC/ETH/SOL hay thị trường crypto."
+description: "Summarises crypto in plain words: price trend, funding/OI, fear & greed, prices in VND. Use for BTC/ETH/SOL or the crypto market."
+match_text: "Tóm tắt crypto bằng lời thường: xu hướng giá, funding/OI, fear & greed, giá quy ra VND. Dùng khi hỏi BTC/ETH/SOL hay thị trường crypto."
 activation: auto
 requires_tools: [mcp__opentrading__crypto_spot]
 triggers:

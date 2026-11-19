@@ -1,6 +1,7 @@
 ---
 name: bat-on-quoc-gia
-description: "Chấm độ ổn định chính trị của MỘT nước theo thang 4 mức, có bằng chứng. Dùng khi hỏi một nước có bất ổn, biểu tình, đảo chính không."
+description: "Rates the political stability of ONE country on a 4-level scale, with evidence. Use when asked whether a country faces unrest, protests or a coup."
+match_text: "Chấm độ ổn định chính trị của MỘT nước theo thang 4 mức, có bằng chứng. Dùng khi hỏi một nước có bất ổn, biểu tình, đảo chính không."
 activation: auto
 requires_tools: [mcp__opentrading__geo_intel]
 triggers:

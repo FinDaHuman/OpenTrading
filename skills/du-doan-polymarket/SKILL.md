@@ -1,6 +1,7 @@
 ---
 name: du-doan-polymarket
-description: "Bảng xác suất Polymarket theo chủ đề (xác suất, khối lượng, độ tin cậy). Dùng khi hỏi odds một sự kiện hoặc \"bao giờ X\". Câu hỏi về Fed dùng du-doan-fed."
+description: "A table of Polymarket probabilities by topic (probability, volume, confidence). Use when asked the odds of an event or \"when will X\". Fed questions use du-doan-fed."
+match_text: "Bảng xác suất Polymarket theo chủ đề (xác suất, khối lượng, độ tin cậy). Dùng khi hỏi odds một sự kiện hoặc \"bao giờ X\". Câu hỏi về Fed dùng du-doan-fed."
 activation: auto
 requires_tools: [mcp__opentrading__world_prediction_odds]
 triggers:

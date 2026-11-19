@@ -1,6 +1,7 @@
 ---
 name: tim-kiem-tin-tuc
-description: "Tìm tin theo mã hoặc từ khoá, kể cả tin đồn, đối chiếu công bố chính thức và gắn nhãn chưa xác nhận. Dùng khi hỏi tin về một mã hoặc hỏi tin đồn có thật không."
+description: "Finds news by ticker or keyword, rumours included, checks them against official disclosures and labels the unconfirmed. Use for news on a ticker or whether a rumour is true."
+match_text: "Tìm tin theo mã hoặc từ khoá, kể cả tin đồn, đối chiếu công bố chính thức và gắn nhãn chưa xác nhận. Dùng khi hỏi tin về một mã hoặc hỏi tin đồn có thật không."
 activation: auto
 requires_tools: [mcp__opentrading__news_symbol]
 triggers:

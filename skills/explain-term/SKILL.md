@@ -1,6 +1,7 @@
 ---
 name: explain-term
-description: "Giải thích một thuật ngữ chứng khoán (P/E, EPS, ROE, margin, ATO/ATC, room ngoại, T+2) bằng tiếng Việt đơn giản, ví dụ giả định và bẫy hay gặp. Dùng khi hỏi X là gì."
+description: "Explains a stock-market term (P/E, EPS, ROE, margin, ATO/ATC, foreign room, T+2) in plain Vietnamese, with a hypothetical example and common traps. Use when asked what X is."
+match_text: "Giải thích một thuật ngữ chứng khoán (P/E, EPS, ROE, margin, ATO/ATC, room ngoại, T+2) bằng tiếng Việt đơn giản, ví dụ giả định và bẫy hay gặp. Dùng khi hỏi X là gì."
 activation: auto
 triggers:
   keywords: [nghĩa là gì, khái niệm, thuật ngữ, giải thích thuật ngữ]

@@ -1,6 +1,7 @@
 ---
 name: phan-tich-sentiment
-description: "Đo dư luận về một mã trên Fireant: điểm sentiment, trích dẫn, cảnh báo FOMO. Dùng khi hỏi nhà đầu tư đang nói gì về một mã."
+description: "Measures opinion about a ticker on Fireant: sentiment score, quotes, FOMO warnings. Use when asked what investors are saying about a ticker."
+match_text: "Đo dư luận về một mã trên Fireant: điểm sentiment, trích dẫn, cảnh báo FOMO. Dùng khi hỏi nhà đầu tư đang nói gì về một mã."
 activation: auto
 requires_tools: [mcp__opentrading__sentiment_score]
 triggers:

@@ -1,6 +1,7 @@
 ---
 name: dau-khi-vn
-description: "Pha/sóng: dùng skill chu kỳ. Phân tích ngành dầu khí VN theo giá dầu quốc tế, tuyến vận chuyển, thay thế trữ lượng và ranh giới giữa khai thác với lọc hoá dầu. Dùng khi hỏi xu hướng nhóm dầu khí hay công ty dầu khí chịu gì."
+description: "Phase/wave: use dinh-vi-chu-ky-vn. Analyses VN oil and gas by world oil prices, shipping routes, reserve replacement and upstream vs refining. Use for oil & gas trends or a company's exposure."
+match_text: "Pha/sóng: dùng skill chu kỳ. Phân tích ngành dầu khí VN theo giá dầu quốc tế, tuyến vận chuyển, thay thế trữ lượng và ranh giới giữa khai thác với lọc hoá dầu. Dùng khi hỏi xu hướng nhóm dầu khí hay công ty dầu khí chịu gì."
 activation: auto
 requires_tools: [yf_commodities, financial_detail]
 uses_tools: [yf_commodities, financial_detail, financial_ratios, planned_targets, analyst_consensus, peer_compare, company_events, news_symbol, news_market, symbol_lookup, vn_company]

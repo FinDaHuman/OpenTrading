@@ -1,6 +1,7 @@
 ---
 name: van-tai-vn
-description: "Pha/sóng: dùng skill chu kỳ. Phân tích ngành vận tải và logistics Việt Nam theo cước vận chuyển, cầu xuất khẩu, công suất cảng và chi phí nhiên liệu. Dùng khi hỏi xu hướng nhóm vận tải, công ty cảng hay cước vận chuyển."
+description: "Phase/wave: use dinh-vi-chu-ky-vn. Analyses VN transport and logistics by freight rates, export demand, port capacity and fuel costs. Use for transport trends, port companies or freight rates."
+match_text: "Pha/sóng: dùng skill chu kỳ. Phân tích ngành vận tải và logistics Việt Nam theo cước vận chuyển, cầu xuất khẩu, công suất cảng và chi phí nhiên liệu. Dùng khi hỏi xu hướng nhóm vận tải, công ty cảng hay cước vận chuyển."
 activation: auto
 requires_tools: [financial_detail, vs_xnk_detail]
 uses_tools: [financial_detail, vs_xnk_detail, financial_ratios, planned_targets, analyst_consensus, peer_compare, yf_commodities, news_symbol, news_market, symbol_lookup, vn_company]

@@ -11,7 +11,7 @@ export function availableSkills(skills: Skill[], tools: ReadonlySet<string>) {
 
 function entry(skill: Skill, withDescription: boolean) {
   if (!withDescription) return `- ${skill.name}`
-  const text = skill.when_to_use ? `${skill.description} Dùng khi: ${skill.when_to_use}` : skill.description
+  const text = skill.when_to_use ? `${skill.description} Use when: ${skill.when_to_use}` : skill.description
   const oneLine = text.replace(/\s+/g, " ").trim()
   return `- ${skill.name}: ${oneLine.length > MAX_ENTRY_CHARS ? oneLine.slice(0, MAX_ENTRY_CHARS - 1) + "…" : oneLine}`
 }
@@ -24,7 +24,7 @@ export function renderCatalog(skills: Skill[], budgetTokens: number): { text: st
   const auto = skills.filter((s) => s.activation === "auto")
   if (auto.length === 0 || budgetTokens <= 0) return undefined
   const header =
-    "Các skill dưới đây là hướng dẫn phân tích chuyên sâu. Khi câu hỏi khớp với một skill, gọi tool load_skill với tên skill để nạp hướng dẫn rồi làm theo. Không đoán nội dung skill khi chưa nạp."
+    "The skills below are in-depth analysis guides. When one fits the question, load it with load_skill and follow it. Never guess a skill's content before loading it."
   const full = [header, ...auto.map((s) => entry(s, true))].join("\n")
   if (estimateTokens(full) <= budgetTokens) return { text: full, truncated: false }
 
@@ -80,7 +80,7 @@ const SOFT_MARGIN = 1.5
 function skillIndex(skills: Skill[]) {
   const docs = skills.map((skill) => {
     // Name, description, when_to_use and keywords only: the body made routing worse in the eval.
-    const fields = [skill.name.replace(/-/g, " "), skill.description, skill.when_to_use ?? "", ...(skill.triggers?.keywords ?? [])]
+    const fields = [skill.name.replace(/-/g, " "), skill.match_text ?? skill.description, skill.when_to_use ?? "", ...(skill.triggers?.keywords ?? [])]
     return { skill, words: new Set(fields.flatMap(terms)), pairs: new Set(fields.flatMap((f) => pairs(terms(f)))) }
   })
   const df = { words: new Map<string, number>(), pairs: new Map<string, number>() }

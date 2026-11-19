@@ -1,6 +1,7 @@
 ---
 name: co-ban-chuyen-sau
-description: "Đọc BCTC một mã: chất lượng lợi nhuận, M-Score, F-score, cổ đông lớn, insider, cổ tức. Dùng khi hỏi BCTC có gì lạ, có thao túng không, cổ tức."
+description: "Reads one ticker's financial statements: earnings quality, M-Score, F-score, major shareholders, insiders, dividends. Use when asked whether the statements look odd or manipulated, or about dividends."
+match_text: "Đọc BCTC một mã: chất lượng lợi nhuận, M-Score, F-score, cổ đông lớn, insider, cổ tức. Dùng khi hỏi BCTC có gì lạ, có thao túng không, cổ tức."
 activation: auto
 requires_tools: [mcp__opentrading__financial_detail]
 triggers:

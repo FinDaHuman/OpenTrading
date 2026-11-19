@@ -155,7 +155,7 @@ test("catalog lists auto skills only and stays within budget", () => {
     ...Array.from({ length: 30 }, (_, i) => make({ name: `bulk-${i}`, description: "x".repeat(400) })),
   ]
   const full = renderCatalog(skills.slice(0, 3), 1_000)!
-  expect(full.text).toContain("- auto-a: mô tả auto-a Dùng khi: khi hỏi A")
+  expect(full.text).toContain("- auto-a: mô tả auto-a Use when: khi hỏi A")
   expect(full.text).not.toContain("hand")
   expect(full.text).not.toContain("always-on")
   expect(full.truncated).toBe(false)
@@ -243,7 +243,7 @@ test("ve-bieu-do được gợi ý khi hỏi vẽ chart + có trong catalog", as
   expect(matchTriggers("ve bieu do tron", skills).map((s) => s.name)).toContain("ve-bieu-do")
   const catalog = renderCatalog(skills, 10_000)!
   expect(catalog.text).toContain("- ve-bieu-do:")
-  expect(catalog.text).toContain("trực quan hóa")
+  expect(catalog.text).toContain("hard to read as a table")
 })
 
 test("cây quyết định choosing-a-form bao phủ đủ kinds + có lưới an toàn", async () => {
