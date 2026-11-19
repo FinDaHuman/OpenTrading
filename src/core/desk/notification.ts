@@ -32,6 +32,10 @@ const STATUS: Record<DeskRunStatus, string> = {
 export const DESK_NOTE =
   "This is the harness's automatic notice that an ultradesk run finished, not the user's words. The user has not seen the result: present it to them, keeping data sources and times, and say clearly which parts are unverified or cut."
 
+/** Kept for sessions saved before the English runtime text migration. */
+const LEGACY_DESK_NOTE =
+  "Đây là thông báo tự động của harness khi một run ultradesk kết thúc, không phải lời người dùng. Người dùng chưa thấy kết quả: trình bày cho họ, giữ nguồn và thời điểm dữ liệu, và nói rõ phần chưa kiểm chứng hoặc bị cắt."
+
 function resultText(view: DeskRunView) {
   if (view.result === undefined) return view.error ? `Error: ${view.error}` : "(no result)"
   const raw = typeof view.result === "string" ? view.result : JSON.stringify(view.result, null, 2)
@@ -41,7 +45,7 @@ function resultText(view: DeskRunView) {
 
 /** A stored desk notice, for transcript lines on resume (subagents/notification.ts splitNotices). */
 export const DESK_NOTICE_PATTERN = new RegExp(
-  `<${DESK_TAG}>\\nrun_id: (\\S+) · playbook: (\\S+) · (?:size|quy mô): \\S+ · (?:status|trạng thái): ([^\\n]+)\\n[\\s\\S]*?\\n([^\\n]*)\\n</${DESK_TAG}>(?:\\n${escape(DESK_NOTE)})?`,
+  `<${DESK_TAG}>\\nrun_id: (\\S+) · playbook: (\\S+) · (?:size|quy mô): \\S+ · (?:status|trạng thái): ([^\\n]+)\\n[\\s\\S]*?\\n([^\\n]*)\\n</${DESK_TAG}>(?:\\n${escape(DESK_NOTE)}|\\n${escape(LEGACY_DESK_NOTE)})?`,
   "g",
 )
 
