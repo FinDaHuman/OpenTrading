@@ -1395,7 +1395,7 @@ test("a number written in a server's guide is not one the model read: the operan
   const sent = bodies.filter((b) => (b as { stream?: boolean }).stream)[1]!
   // The guide rides in the request, and the typed 21500000 is still reported as read from nowhere.
   expect(JSON.stringify(sent.messages)).toContain("Số cổ phiếu lưu hành mặc định")
-  expect(lastSent(1)).toContain("trong lệnh tính vừa rồi")
+  expect(lastSent(1)).toContain("in the last calculation")
   expect(lastSent(1)).toContain("21500000")
 })
 
