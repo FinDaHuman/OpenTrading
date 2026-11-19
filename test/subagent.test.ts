@@ -485,7 +485,7 @@ test("the main agent's prompt does not change with the subagent role in place; i
   expect(child.system).toContain("<subagent>")
   expect(child.system).toContain("<thu_tu_uu_tien>")
   expect(child.system).toContain("<chi_dan_agent>\nCHỈ-DẪN\n</chi_dan_agent>")
-  expect(child.system).not.toContain("Bạn là OpenTrading, trợ lý")
+  expect(child.system).not.toContain("You are OpenTrading, a Vietnamese")
 })
 
 test("an agent type brings its instructions, tool filter, step limit and model", async () => {

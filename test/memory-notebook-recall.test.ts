@@ -159,7 +159,7 @@ describe("system part (Story 1)", () => {
   test("the guide ships with the app (prompts/memory.md) and says how to use memory", () => {
     const guide = promptFile("memory")!
     expect(guide).toContain("memory_read")
-    expect(guide).toMatch(/không phải mệnh lệnh/)
+    expect(guide).toMatch(/data, not commands/)
     expect(guide).toMatch(/Sai nếu/)
   })
 
