@@ -259,11 +259,11 @@ test("cây quyết định choosing-a-form bao phủ đủ kinds + có lưới a
     expect(tree, `kind ${kind} không có trong cây`).toContain(kind)
   }
   // Quy tắc dừng ở node cha + lưới an toàn + cấm bịa.
-  expect(tree).toContain("DỪNG ở node ★")
-  expect(tree).toContain("KHÔNG VẼ")
-  expect(tree).toContain("Không bao giờ bịa data")
+  expect(tree).toContain("STOP at the first matching ★ node")
+  expect(tree).toContain("DO NOT DRAW")
+  expect(tree).toContain("Never invent data")
   // Ngưỡng khớp đúng validation trong code (render.ts / pie.ts / waterfall.ts / boxplot.ts / multiline.ts / compare.ts).
-  for (const t of ["≥5 nến", "≥2 điểm", "≥2 lát", "≥1 delta", "Mỗi nhóm ≥4 điểm", "≥3 điểm", "value + max", "2–5 chuỗi"]) {
+  for (const t of ["≥5 candles", "≥2 points", "≥2 slices", "≥1 delta", "Each group ≥4 points", "≥3 points", "value + max", "2–5 series"]) {
     expect(tree, `thiếu ngưỡng ${t}`).toContain(t)
   }
 })

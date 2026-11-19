@@ -150,7 +150,7 @@ test("runs in the workspace, returns UTF-8 output and the exit code", async () =
     const err = text(await tool.execute({ command: "Write-Error 'hỏng rồi'" }, ctx()))
     expect(err).toContain("LỖI: hỏng rồi")
     expect(err).not.toContain("CLIXML")
-    expect(err).toContain("mã thoát 1")
+    expect(err).toContain("exit code 1")
   }
   expect(await tool.validate!({ command: "ls", workdir: path.join(project, "khong-co") })).toContain("No directory")
 }, 30_000)
@@ -208,7 +208,7 @@ test("Windows PowerShell 5.1 (what most users have; CI's default is pwsh): UTF-8
   expect(out).toContain("LỖI: hỏng rồi")
   expect(out).not.toContain("CLIXML")
   expect(out).toContain("exit code 3")
-  expect(text(await tool.execute({ command: "Write-Error 'chỉ lỗi'" }, ctx()))).toContain("mã thoát 1")
+  expect(text(await tool.execute({ command: "Write-Error 'chỉ lỗi'" }, ctx()))).toContain("exit code 1")
   expect(text(await tool.execute({ command: "Get-ChildItem | Select-Object -First 1 | Out-Null; Write-Output 'xong'" }, ctx()))).toContain("exit code 0")
   const started = Date.now()
   expect(text(await tool.execute({ command: "Start-Sleep -Seconds 30", timeout_ms: 1500 }, ctx()))).toContain("dừng vì quá")

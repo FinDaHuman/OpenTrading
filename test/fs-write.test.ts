@@ -283,7 +283,7 @@ test("protected and outside writes ask each time with no session option; odd pat
   if (process.platform === "win32") {
     const odd = await viaGate(gate, s.write, { path: `${path.join(project, "a.md")}:stream`, content: "x" })
     expect(odd.asked).toBeUndefined()
-    expect(odd.result.output).toContain("Không chạy được")
+    expect(odd.result.output).toContain("Could not run")
   }
   expect(store.saved).toBe(0)
 })
