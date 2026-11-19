@@ -154,6 +154,10 @@ test("a stored desk notice becomes a transcript notice on resume, not user text"
   const { notices, rest } = splitNotices(stored)
   expect(notices).toEqual([{ agentId: "dk-abc123", type: "ultradesk", description: "sang-loc", status: "done", stats: expect.stringContaining("3 agent") }])
   expect(rest).toBe("Câu hỏi tiếp")
+  const legacy = deskNotification(view).replace(" · size: ", " · quy mô: ").replace(" · status: done", " · trạng thái: xong")
+  const restored = splitNotices(`${legacy}\n${"Đây là thông báo tự động của harness khi một run ultradesk kết thúc, không phải lời người dùng. Người dùng chưa thấy kết quả: trình bày cho họ, giữ nguồn và thời điểm dữ liệu, và nói rõ phần chưa kiểm chứng hoặc bị cắt."}\n\nCâu hỏi cũ`)
+  expect(restored.notices[0]?.status).toBe("xong")
+  expect(restored.rest).toBe("Câu hỏi cũ")
 })
 
 test("desk_run passes an effort to the run only when the user changed it on the card (an inherited one follows desk.effort on resume)", async () => {
