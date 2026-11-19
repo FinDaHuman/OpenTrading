@@ -11,10 +11,12 @@ import { LOADED_PREFIX } from "./tools/search"
 
 export const COMPACT_TAG = "tom_tat_hoi_thoai"
 const TODOS_TAG = "viec_can_lam_luu"
-const SKILLS_PREFIX = "Skill đã nạp: "
+const SKILLS_PREFIX = "Skills loaded: "
+/** The line before 16/11/2026 (Vietnamese), still in saved sessions. */
+const VI_SKILLS_PREFIX = "Skill đã nạp: "
 
 const COMPACT_HEADER =
-  "Phần đầu cuộc hội thoại đã được nén thành bản tóm tắt ở tin nhắn ngay sau. Số liệu trong tóm tắt giữ nguyên nguồn và thời điểm. Chi tiết đã lược: đọc bằng read_result nếu tóm tắt có id; cần số mới hơn thì gọi lại tool."
+  "The start of the conversation was compressed into the summary in the next message. Figures in the summary keep their source and time. Omitted details: read them with read_result if the summary has an id; call the tool again for newer figures."
 
 interface CarriedTodo {
   content: string
@@ -29,10 +31,10 @@ export const isCompactMarker = (m: ModelMessage) => m.role === "user" && markerT
 /** What the harness wrote into a compact marker. */
 export function compactCarry(m: ModelMessage): { tools: string[]; skills: string[]; todos?: unknown } {
   const text = markerText(m)
-  const skillLine = text.split("\n").find((l) => l.startsWith(SKILLS_PREFIX))
+  const skillLine = text.split("\n").find((l) => l.startsWith(SKILLS_PREFIX) || l.startsWith(VI_SKILLS_PREFIX))
   const skills = skillLine
     ? skillLine
-        .slice(SKILLS_PREFIX.length)
+        .slice((skillLine.startsWith(SKILLS_PREFIX) ? SKILLS_PREFIX : VI_SKILLS_PREFIX).length)
         .split(" — ")[0]!
         .split(",")
         .map((s) => s.trim())
@@ -61,7 +63,7 @@ export function compactCarry(m: ModelMessage): { tools: string[]; skills: string
 export function compactPair(summary: string, carry: { tools: string[]; skills: string[]; todos: CarriedTodo[] }): ModelMessage[] {
   const lines = [`<${REMINDER_TAG}>`, `<${COMPACT_TAG}>`, COMPACT_HEADER]
   if (carry.tools.length > 0) lines.push(`${LOADED_PREFIX}${carry.tools.join(", ")}`)
-  if (carry.skills.length > 0) lines.push(`${SKILLS_PREFIX}${carry.skills.join(", ")} — gọi lại load_skill nếu cần hướng dẫn chi tiết.`)
+  if (carry.skills.length > 0) lines.push(`${SKILLS_PREFIX}${carry.skills.join(", ")} — call load_skill again if you need the detailed guide.`)
   if (carry.todos.length > 0) lines.push(`<${TODOS_TAG}>${JSON.stringify(carry.todos)}</${TODOS_TAG}>`)
   lines.push(`</${COMPACT_TAG}>`, `</${REMINDER_TAG}>`)
   return [

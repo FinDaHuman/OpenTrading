@@ -14,6 +14,16 @@ adopt Semantic Versioning when it exposes a stable public API.
   choice, LaTeX as a prohibition, Vietnamese also in free-text JSON fields, the three things a "save this"
   answer must say. Terminal system prompt: o200k 3 376 → 3 015 tokens, DeepSeek 4 635 → 3 180. Paired evals
   (16/11, nemotron-3.5-super-vl): red-team 18/18 vs 17/18, memory 8/9 vs 6/9, compute 15/15 both.
+- Runtime text the model reads is in English (E3): stop-gate and todo reminders, rescue prompts, tool-call
+  repair errors, source notices (`[Source failed]`, `[Partial data]`, `[Stale data]`), source lines of web/MCP
+  results, argument errors, denials and auto-mode blocks, compaction prompt and marker, subagent and ultradesk
+  notices, briefs' parameter help, MCP call errors and content placeholders, `@mention` attachments, ask_user
+  results, operand notes, truncation marks. Kept Vietnamese: the notebook's memory blocks and their labels
+  (spec 007 fixes them byte for byte and the history masking reads them), brief section names the subagent
+  prompt cites, TUI notices and `/mcp`, `/memory`, `/desk` interface text. Readers of these texts accept both
+  languages (failure classes, transcript rows, subagent/desk notice parsers, pruned markers, the truncate mark
+  in memory history, the compact marker's skill line).
+
 - Tool descriptions, parameter descriptions and the text tools return to the model are in English (all built-in
   tools: shell, files, web, charts, todo, subagents, skills, sessions, watchlist, desk), and so are the
   request-wide blocks: `<quyen_tep>`, the permission-mode line, the market clock (`market/calendar.json`

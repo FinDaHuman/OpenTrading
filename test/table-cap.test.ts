@@ -27,12 +27,12 @@ test("it says how many rows went, and where to read them", () => {
   expect(out).toStartWith("[ref r7] ")
   const marker = parse(out).data.candles.find((r) => typeof r === "string") as string
   const shown = parse(out).data.candles.length - 1
-  expect(marker).toContain(`đã lược ${5000 - shown}/5000 hàng`)
+  expect(marker).toContain(`${5000 - shown}/5000 middle rows omitted`)
   expect(marker).toContain("ref r7")
 })
 
 test("a result without a ref says how to get less instead", () => {
-  expect(capTable(envelope(5000), 3000)).toContain("phạm vi hẹp hơn")
+  expect(capTable(envelope(5000), 3000)).toContain("narrower range")
 })
 
 test("as many rows as fit are kept", () => {
@@ -66,7 +66,7 @@ test("an MCP table goes through it, with its ref; other text keeps the plain cut
   expect(table.output.length).toBeLessThanOrEqual(2000)
   expect(parse(table.output).data.candles.length).toBeGreaterThan(5)
   const local = await call(tool({ source: "local" }))
-  expect(local.output).toContain("đã lược")
+  expect(local.output).toContain("omitted")
   expect(() => JSON.parse(local.output)).toThrow()
   clearResults()
 })

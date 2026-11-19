@@ -10,23 +10,23 @@ import type { AgentStatus, SubagentView } from "./types"
 export const NOTICE_TAG = "thong_bao_subagent"
 
 const STATUS: Record<AgentStatus, string> = {
-  queued: "đang chờ",
-  running: "đang chạy",
-  completed: "xong",
-  failed: "lỗi",
-  stopped: "đã dừng",
+  queued: "queued",
+  running: "running",
+  completed: "done",
+  failed: "failed",
+  stopped: "stopped",
 }
 
 export const NOTE =
-  "Đây là thông báo tự động của harness khi một subagent chạy nền kết thúc, không phải lời người dùng. Người dùng chưa thấy kết quả này: nếu liên quan tới việc họ đang hỏi thì tóm tắt cho họ (giữ nguồn và thời điểm)."
+  "This is the harness's automatic notice that a background subagent finished, not the user's words. The user has not seen this result: if it relates to what they are asking, summarise it for them (keeping sources and times)."
 
 export function notificationText(view: SubagentView): string {
   const tokens = view.usage.input + view.usage.output
   const seconds = Math.round(((view.endedAt ?? Date.now()) - (view.startedAt ?? view.createdAt)) / 1000)
-  const result = view.status === "completed" ? view.text || "(subagent không trả lời)" : [view.error ? `Lỗi: ${view.error}` : "", view.text].filter(Boolean).join("\n\n") || "(không có kết quả)"
+  const result = view.status === "completed" ? view.text || "(the subagent gave no answer)" : [view.error ? `Error: ${view.error}` : "", view.text].filter(Boolean).join("\n\n") || "(no result)"
   return [
     `<${NOTICE_TAG}>`,
-    `agent_id: ${view.id} · loại: ${view.type} · mô tả: ${view.description} · trạng thái: ${STATUS[view.status]}`,
+    `agent_id: ${view.id} · type: ${view.type} · description: ${view.description} · status: ${STATUS[view.status]}`,
     `<ket_qua>\n${result}\n</ket_qua>`,
     `${view.toolCount} tool · ${groupDigits(tokens)} token · ${seconds}s`,
     `</${NOTICE_TAG}>`,
@@ -50,7 +50,7 @@ export interface ParsedNotice {
  */
 export function splitNotices(text: string): { notices: ParsedNotice[]; rest: string } {
   const notices: ParsedNotice[] = []
-  const pattern = new RegExp(`<${NOTICE_TAG}>\\nagent_id: (\\S+) · loại: (\\S+) · mô tả: (.*?) · trạng thái: ([^\\n]+)\\n[\\s\\S]*?\\n([^\\n]*)\\n</${NOTICE_TAG}>`, "g")
+  const pattern = new RegExp(`<${NOTICE_TAG}>\\nagent_id: (\\S+) · (?:type|loại): (\\S+) · (?:description|mô tả): (.*?) · (?:status|trạng thái): ([^\\n]+)\\n[\\s\\S]*?\\n([^\\n]*)\\n</${NOTICE_TAG}>`, "g")
   let rest = text.replace(pattern, (_m, agentId, type, description, status, stats) => {
     notices.push({ agentId, type, description, status, stats })
     return ""

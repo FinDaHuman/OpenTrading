@@ -152,7 +152,7 @@ test("a stored desk notice becomes a transcript notice on resume, not user text"
   }
   const stored = `${deskNotification(view)}\n${DESK_NOTE}\n\nCâu hỏi tiếp`
   const { notices, rest } = splitNotices(stored)
-  expect(notices).toEqual([{ agentId: "dk-abc123", type: "ultradesk", description: "sang-loc", status: "xong", stats: expect.stringContaining("3 agent") }])
+  expect(notices).toEqual([{ agentId: "dk-abc123", type: "ultradesk", description: "sang-loc", status: "done", stats: expect.stringContaining("3 agent") }])
   expect(rest).toBe("Câu hỏi tiếp")
 })
 

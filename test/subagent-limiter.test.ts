@@ -37,9 +37,9 @@ test("limiter: aborting while queued leaves the queue; an aborted signal never t
   await tick()
   expect(limiter.stats().waiting).toBe(1)
   controller.abort()
-  await expect(waiting).rejects.toThrow("Đã huỷ.")
+  await expect(waiting).rejects.toThrow("Cancelled.")
   expect(limiter.stats()).toEqual({ running: 1, waiting: 0, max: 1 })
-  await expect(limiter.acquire(controller.signal)).rejects.toThrow("Đã huỷ.")
+  await expect(limiter.acquire(controller.signal)).rejects.toThrow("Cancelled.")
   held()
   expect(limiter.stats().running).toBe(0)
 })
@@ -72,8 +72,8 @@ test("result: trailer round-trips, report survives without it, token counts read
     { id: "ag-abc123", type: "nghien-cuu" },
     { status: "completed", text: "FPT ổn.", toolCount: 6, usage: { input: 15_000, output: 3_234 }, durationMs: 42_400 },
   )
-  expect(output).toContain("Người dùng không thấy kết quả này")
-  expect(parseTrailer(output)).toEqual({ agentId: "ag-abc123", type: "nghien-cuu", status: "xong", tools: 6, tokens: 18_234, seconds: 42 })
+  expect(output).toContain("The user does not see this result")
+  expect(parseTrailer(output)).toEqual({ agentId: "ag-abc123", type: "nghien-cuu", status: "done", tools: 6, tokens: 18_234, seconds: 42 })
   expect(stripTrailer(output)).toBe("FPT ổn.")
   expect(parseTrailer("old output")).toBeUndefined()
 
@@ -81,8 +81,8 @@ test("result: trailer round-trips, report survives without it, token counts read
     { id: "ag-x", type: "nghien-cuu" },
     { status: "failed", text: "một phần", error: "429", toolCount: 1, usage: { input: 1, output: 1 }, durationMs: 1000 },
   )
-  expect(failed).toStartWith("⚠ Subagent gặp lỗi giữa chừng: 429.")
-  expect(parseTrailer(failed)?.status).toBe("lỗi")
+  expect(failed).toStartWith("⚠ The subagent failed partway: 429.")
+  expect(parseTrailer(failed)?.status).toBe("failed")
 
   expect(fmtTokens(850)).toBe("850")
   expect(fmtTokens(12_345)).toBe("12,3k")
@@ -110,15 +110,15 @@ test("notifications: built from a view, split back out of a user message (resume
     text: "FPT ổn.",
   }
   const one = notificationText(view)
-  expect(one).toContain("<thong_bao_subagent>\nagent_id: ag-abc123 · loại: nghien-cuu · mô tả: Định giá FPT · trạng thái: xong")
+  expect(one).toContain("<thong_bao_subagent>\nagent_id: ag-abc123 · type: nghien-cuu · description: Định giá FPT · status: done")
   expect(one).toContain("<ket_qua>\nFPT ổn.\n</ket_qua>")
   expect(one).toContain("6 tool · 18.234 token · 42s")
   const failed = notificationText({ ...view, id: "ag-def456", status: "failed", error: "429", text: "" })
   const message = `${noticesMessage([one, failed])}\n\ncòn câu hỏi của tôi`
   const { notices, rest } = splitNotices(message)
   expect(notices).toEqual([
-    { agentId: "ag-abc123", type: "nghien-cuu", description: "Định giá FPT", status: "xong", stats: "6 tool · 18.234 token · 42s" },
-    { agentId: "ag-def456", type: "nghien-cuu", description: "Định giá FPT", status: "lỗi", stats: "6 tool · 18.234 token · 42s" },
+    { agentId: "ag-abc123", type: "nghien-cuu", description: "Định giá FPT", status: "done", stats: "6 tool · 18.234 token · 42s" },
+    { agentId: "ag-def456", type: "nghien-cuu", description: "Định giá FPT", status: "failed", stats: "6 tool · 18.234 token · 42s" },
   ])
   expect(rest).toBe("còn câu hỏi của tôi")
   expect(splitNotices(noticesMessage([one])).rest).toBe("")

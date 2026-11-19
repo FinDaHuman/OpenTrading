@@ -147,7 +147,7 @@ function capped(output: string, max: number, display: string) {
   if (output.length <= max + 2_000) return { text: output, cut: false }
   const at = output.lastIndexOf("\n", max)
   return {
-    text: `${output.slice(0, at > 0 ? at : max)}\n\n(đã cắt ở ${fmt(max)} ký tự để tiết kiệm context; gọi read_file(path="${display}") với offset/pages để đọc phần còn lại)`,
+    text: `${output.slice(0, at > 0 ? at : max)}\n\n(cut at ${fmt(max)} characters to save context; call read_file(path="${display}") with offset/pages to read the rest)`,
     cut: true,
   }
 }
@@ -198,18 +198,18 @@ export async function attachMentions(text: string, opts: AttachOptions): Promise
 
     // Key files, credential folders, network paths: read_file asks first; so does this.
     if (readScope(abs, ws.env(), realish)) {
-      out.parts.push(attachmentTag({ ...attrs, bo_qua: "1" }, `Người dùng gắn @${display} nhưng đây là file nhạy cảm (khoá, mật khẩu hoặc đường dẫn mạng) nên harness không tự đọc. Nếu thật sự cần, gọi read_file: người dùng sẽ được hỏi.`))
+      out.parts.push(attachmentTag({ ...attrs, bo_qua: "1" }, `The user attached @${display}, but it is a sensitive file (keys, passwords or a network path), so the harness did not read it. If it is really needed, call read_file: the user will be asked.`))
       out.files.push({ path: display, ok: false, note: `Không tự đọc ${display}: file nhạy cảm` })
       continue
     }
     if (sent.has(key)) {
-      out.parts.push(attachmentTag({ ...attrs, da_gui: "1" }, `Người dùng gắn lại @${display}; file không đổi so với bản đã gắn ở trên trong hội thoại.`))
+      out.parts.push(attachmentTag({ ...attrs, da_gui: "1" }, `The user attached @${display} again; the file is unchanged from the copy attached above.`))
       out.files.push({ path: display, ok: true, note: `${display} (không đổi, đã gửi trước)` })
       continue
     }
     const room = MENTION_TOTAL_CHARS - used
     if (room < MIN_ROOM) {
-      out.parts.push(attachmentTag({ ...attrs, tham_chieu: "1" }, `Người dùng gắn @${display} nhưng tin nhắn đã đủ giới hạn nội dung file gắn kèm; gọi read_file(path="${display}") nếu cần.`))
+      out.parts.push(attachmentTag({ ...attrs, tham_chieu: "1" }, `The user attached @${display}, but the message already holds the attachment limit; call read_file(path="${display}") if needed.`))
       out.files.push({ path: display, ok: true, note: `${display} (chưa gửi nội dung: quá giới hạn của tin nhắn)` })
       continue
     }
@@ -220,7 +220,7 @@ export async function attachMentions(text: string, opts: AttachOptions): Promise
       result = await readFileAt(abs, { offset: mention.from, limit: mention.to ? mention.to - mention.from! + 1 : undefined, maxChars: cap }, opts.files)
     } catch (error) {
       const why = error instanceof Error ? error.message : String(error)
-      out.parts.push(attachmentTag({ ...attrs, loi: "1" }, `Người dùng gắn @${display}; harness gọi ${call} nhưng lỗi: ${why}`))
+      out.parts.push(attachmentTag({ ...attrs, loi: "1" }, `The user attached @${display}; the harness called ${call} but it failed: ${why}`))
       out.files.push({ path: display, ok: false, note: `Không đọc được ${display}: ${why}` })
       continue
     }
@@ -228,17 +228,17 @@ export async function attachMentions(text: string, opts: AttachOptions): Promise
       // An image: it goes with the message when the model can see it.
       if (opts.images && result.images?.length) {
         out.images.push(...result.images)
-        out.parts.push(attachmentTag(attrs, `Người dùng gắn ảnh @${display}; ảnh đi kèm tin nhắn này. ${result.output}`))
+        out.parts.push(attachmentTag(attrs, `The user attached the image @${display}; it comes with this message. ${result.output}`))
         out.files.push({ path: display, ok: true, note: `Đã gắn ảnh ${display}` })
       } else {
-        out.parts.push(attachmentTag({ ...attrs, bo_qua: "1" }, `Người dùng gắn ảnh @${display} nhưng model hiện tại không đọc được ảnh.`))
+        out.parts.push(attachmentTag({ ...attrs, bo_qua: "1" }, `The user attached the image @${display}, but the current model cannot read images.`))
         out.files.push({ path: display, ok: false, note: `Không gửi ảnh ${display}: model này không đọc được ảnh` })
       }
       continue
     }
     const body = capped(result, cap, display)
     used += body.text.length
-    out.parts.push(attachmentTag(attrs, `Người dùng gắn @${display} nên harness đã đọc sẵn bằng ${call}; không cần đọc lại phần này. Kết quả:\n${body.text}`))
+    out.parts.push(attachmentTag(attrs, `The user attached @${display}, so the harness already read it with ${call}; no need to read this part again. Result:\n${body.text}`))
     const lines = dir ? undefined : linesNote(result)
     out.files.push({ path: display, ok: true, note: `Đã đọc ${dir ? `thư mục ${display}` : display}${lines ? ` (${lines})` : ""}${body.cut ? " · đã cắt bớt" : ""}` })
   }
@@ -275,7 +275,7 @@ export function withoutOrphanStubs(messages: readonly ModelMessage[]): ModelMess
       if (carriesContent(a)) present.add(keyOf(a))
       if (!a.da_gui || present.has(keyOf(a))) return part
       changed = true
-      return { ...part, text: attachmentTag({ path: a.path, mtime: a.mtime, dong: a.dong, da_don: "1" }, `(nội dung @${a.path} không còn trong hội thoại; gọi read_file nếu cần)`) }
+      return { ...part, text: attachmentTag({ path: a.path, mtime: a.mtime, dong: a.dong, da_don: "1" }, `(the content of @${a.path} is no longer in the conversation; call read_file if needed)`) }
     })
     return changed ? ({ ...message, content } as ModelMessage) : message
   })
@@ -285,5 +285,5 @@ export function withoutOrphanStubs(messages: readonly ModelMessage[]): ModelMess
 export function clearedAttachment(text: string): string | undefined {
   const a = attachmentAttrs(text)
   if (!a || !carriesContent(a)) return undefined
-  return attachmentTag({ path: a.path, mtime: a.mtime, dong: a.dong, da_don: "1" }, `(nội dung @${a.path} đã dọn để tiết kiệm context; gọi read_file nếu cần)`)
+  return attachmentTag({ path: a.path, mtime: a.mtime, dong: a.dong, da_don: "1" }, `(the content of @${a.path} was pruned to save context; call read_file if needed)`)
 }

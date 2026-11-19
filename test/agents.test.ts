@@ -84,7 +84,7 @@ test("tool filter: @chi-doc keeps read-only tools, patterns narrow, disallowedTo
   expect(names({ tools: ["*news*", "web_search"] })).toEqual(["mcp__opentrading__news_symbol", "web_search"])
   expect(names({ tools: ["opentrading/*", "@chi-doc"] })).toEqual(["mcp__opentrading__news_symbol"])
   expect(names({ disallowedTools: ["opentrading/*", "watchlist_*"] })).toEqual(["current_time", "web_search"])
-  expect(() => names({ tools: ["spawn_subagent", "ask_user"] })).toThrow("không có tool nào")
+  expect(() => names({ tools: ["spawn_subagent", "ask_user"] })).toThrow("has no tools to use")
 
   expect(toolSummary({})).toBe("tất cả")
   expect(toolSummary({ tools: ["@chi-doc"] })).toBe("chỉ đọc")
