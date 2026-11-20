@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test"
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
-import { FileIndex, indexFiles, matchPaths } from "../src/core/fs/file-index"
+import { FileIndex, indexFiles, matchPaths, WorkspaceIndex } from "../src/core/fs/file-index"
 
 let base: string
 
@@ -93,4 +93,28 @@ test("FileIndex builds once, then again only when stale", async () => {
   expect(index.current()).toBe(first)
   await index.refresh(Date.now() + 10_000)
   expect(index.current().map((p) => p.rel)).toContain("moi.md")
+})
+
+test("#345: @ finds files in /add-dir folders too, by absolute path; a root added later is indexed on refresh", async () => {
+  const main = await mkdtemp(path.join(os.tmpdir(), "ot-idx-main-"))
+  const extra = await mkdtemp(path.join(os.tmpdir(), "ot-idx-extra-"))
+  await writeFile(path.join(main, "bao-cao.md"), "a")
+  await writeFile(path.join(extra, "du-lieu-fpt.csv"), "b")
+  const roots = [main]
+  const index = new WorkspaceIndex(() => roots)
+  await index.refresh()
+  expect(matchPaths(index.current(), "fpt", 10)).toEqual([])
+  roots.push(extra) // /add-dir
+  expect(await index.refresh()).toBe(true)
+  const hit = matchPaths(index.current(), "fpt", 10)
+  expect(hit.map((p) => p.rel)).toEqual([`${extra.split(path.sep).join("/")}/du-lieu-fpt.csv`])
+  // The first root keeps its relative paths.
+  expect(matchPaths(index.current(), "bao-cao", 10).map((p) => p.rel)).toEqual(["bao-cao.md"])
+  // Same build, same array: no remapping on every key press.
+  expect(index.current()).not.toBe(index.current()) // concatenated per call…
+  expect(index.current()[1]).toBe(index.current()[1]) // …but extra entries are cached
+  roots.pop()
+  expect(matchPaths(index.current(), "fpt", 10)).toEqual([])
+  await rm(main, { recursive: true, force: true })
+  await rm(extra, { recursive: true, force: true })
 })

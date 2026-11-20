@@ -170,3 +170,52 @@ export class FileIndex {
     return this.building
   }
 }
+
+/**
+ * The `@` index over every workspace root (#345): the first root as before (paths relative to
+ * it), each /add-dir folder by its absolute path, which is how a mention outside the first root
+ * resolves. Roots added later are indexed the next time the list opens; removed ones are dropped.
+ */
+export class WorkspaceIndex {
+  private indexes = new Map<string, FileIndex>()
+  private mapped = new WeakMap<readonly IndexedPath[], IndexedPath[]>()
+
+  constructor(
+    private roots: () => string[],
+    private env?: SafetyEnv,
+  ) {}
+
+  private sync(): FileIndex[] {
+    const roots = this.roots()
+    for (const root of roots) if (!this.indexes.has(root)) this.indexes.set(root, new FileIndex(root, this.env))
+    for (const root of [...this.indexes.keys()]) if (!roots.includes(root)) this.indexes.delete(root)
+    return roots.map((root) => this.indexes.get(root)!)
+  }
+
+  refresh(now = Date.now(), maxAge = INDEX_FRESH_MS): Promise<boolean> {
+    return Promise.all(this.sync().map((index) => index.refresh(now, maxAge))).then((built) => built.some(Boolean))
+  }
+
+  refreshAfter(maxAge: number): Promise<boolean> {
+    return Promise.all(this.sync().map((index) => index.refreshAfter(maxAge))).then((built) => built.some(Boolean))
+  }
+
+  current(): readonly IndexedPath[] {
+    const [first, ...extra] = this.sync()
+    if (!first) return []
+    if (extra.length === 0) return first.current()
+    return [...first.current(), ...extra.flatMap((index) => this.absolute(index))]
+  }
+
+  /** An extra root's paths as absolute, `/` separated mentions; cached per build. */
+  private absolute(index: FileIndex): IndexedPath[] {
+    const paths = index.current()
+    let out = this.mapped.get(paths)
+    if (!out) {
+      const root = index.root.split(path.sep).join("/").replace(/\/+$/, "")
+      out = paths.map((p) => ({ ...p, rel: `${root}/${p.rel}` }))
+      this.mapped.set(paths, out)
+    }
+    return out
+  }
+}
