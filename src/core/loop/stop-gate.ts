@@ -87,7 +87,7 @@ export const RESCUE_DRAFT =
 export const RESCUE_DRAFT_FETCH =
   "<nhac_nho>\nYou have not written the answer for the user and no data was fetched this turn. Call tools for the data in this step, then answer; do not write an outline, a plan or tool names.\n</nhac_nho>"
 /** Tools off (it brought 2.5-flash-lite's empty answers back). */
-export const RESCUE_EMPTY_FINAL = "Answer the user's question from the tool results above. Call no more tools. Any figure still to compute, compute yourself from exactly the numbers the tools returned and state the formula and every input."
+export const RESCUE_EMPTY_FINAL = "Answer the user's question from the tool results above. Call no more tools. Use only verified tool results for calculated figures. If a calculation has no verified result, mark that value as missing and give the formula and available inputs; do not do mental arithmetic or invent precise figures."
 
 /** Data sources failed this turn and none brought data (a clock or file tool may still have run). */
 export const sourcesFailed = (last: Pick<LastStep, "gaps" | "fetchedData">) => !!last.gaps?.length && last.fetchedData === false
@@ -106,7 +106,7 @@ export function rescueGaps(gaps: readonly string[]): string {
 
 /** Last empty-answer rescue: data is in the turn, write the final answer now. */
 export const RESCUE_ANSWER_NOW =
-  "Write the final answer for the user NOW, in the requested format, using only the numbers the tools returned above (compute any missing figure yourself and state the formula and every input). No long reasoning, no tool calls, no empty answer."
+  "Write the final answer for the user NOW, in the requested format, using only verified tool results, including for calculated figures. If a calculation has no verified result, mark that value as missing and give the formula and available inputs; do not do mental arithmetic or invent precise figures. No long reasoning, no tool calls, no empty answer."
 
 export function judgeStop(last: LastStep, done: readonly RecoveryKind[], disabled?: Ablations): Verdict {
   // Still calling tools: the step cap ended the run, and its summary step has its own rules.

@@ -19,7 +19,7 @@
 | Indicator | Read from | How to read |
 |---|---|---|
 | Revenue | `financial_detail` | Separate price and volume if disclosures allow; growth from prices is less durable than growth from volume |
-| Average selling price | Computed yourself (state it) or company disclosures | Compare with international/domestic prices to see whether the company captures the full window |
+| Average selling price | Company disclosures, or computed with `shell` from comparable sales value and volume returned by tools; state the formula and every input | Compare with international/domestic prices to see whether the company captures the full window |
 | Gross margin | `financial_detail` | Read **2 consecutive quarters**: one widened quarter may be low-cost inventory |
 | Cost of goods | `financial_detail` | Where gas/raw-material costs sit; read with inventory |
 

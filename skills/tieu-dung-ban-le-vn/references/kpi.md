@@ -20,14 +20,14 @@
 | Nominal total retail sales | `vs_indicator_data(category_id from vs_categories)` | Only a starting point — conclude nothing yet. No preset; look up the category first |
 | Consumer price index | `vs_indicator_data(indicator="CPI")` | The denominator for real growth — CPI has a preset |
 | Core price index | `vs_indicator_data(category_id from vs_categories)` | Core above target = pressure on purchasing power — no preset |
-| Real retail sales | Computed yourself (state the formula) | Negative real growth = the nominal growth came from prices |
+| Real retail sales | Computed with `shell` using only numbers returned by tools; state the formula and every input | Negative real growth = the nominal growth came from prices |
 
 ## 3. Nhóm chất lượng tăng trưởng
 
 | Indicator | Read from | How to read |
 |---|---|---|
 | Revenue | `financial_detail` | Read with store count and margins, not alone |
-| Same-store growth | Computed if disclosures allow (state it) | Weighs more than growth from new stores when judging market share |
+| Same-store growth | Computed with `shell` if disclosures provide comparable same-store inputs returned by tools; state the formula and every input | Weighs more than growth from new stores when judging market share |
 | Gross margin | `financial_detail` | Falling for 2 consecutive quarters alongside strong growth = a sign of buying growth with promotions |
 | Inventory | `financial_detail` | Inventory growing faster than revenue = selling slower than expected |
 | Receivables | `financial_detail` | Customer receivables growing fast = selling on credit, especially in traditional channels |

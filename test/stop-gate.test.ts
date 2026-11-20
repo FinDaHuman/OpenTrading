@@ -395,3 +395,17 @@ test("empty after every source failed: the gap rescue, tools off then on; then g
   expect(judgeStop(clock, [])).toMatchObject({ nudge: rescueGaps(["vn_quote_history"]) })
   expect(judgeStop(clock, ["empty", "empty"])).toEqual({ action: "give-up", kind: "empty" })
 })
+
+
+test("answer-only rescues keep tools disabled and withhold unverified derived numbers", async () => {
+  const { RESCUE_EMPTY_FINAL } = await import("../src/core/loop/stop-gate")
+  const empty = step({ afterTools: true, dataInTurn: true, usableData: true, fetchedData: true })
+  expect(judgeStop(empty, [])).toMatchObject({ action: "continue", toolChoice: "none", nudge: RESCUE_EMPTY_FINAL })
+  expect(judgeStop(empty, Array(MAX_RECOVERIES).fill("empty"))).toMatchObject({ action: "continue", toolChoice: "none", nudge: RESCUE_ANSWER_NOW })
+  for (const rescue of [RESCUE_EMPTY_FINAL, RESCUE_ANSWER_NOW]) {
+    expect(rescue).toContain("If a calculation has no verified result, mark that value as missing")
+    expect(rescue).toContain("formula and available inputs")
+    expect(rescue).toContain("do not do mental arithmetic")
+    expect(rescue).not.toContain("compute yourself")
+  }
+})

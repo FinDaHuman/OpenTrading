@@ -11,7 +11,7 @@
 |---|---|---|
 | Margin loans outstanding | `financial_detail` | The 4–8 quarter trend. Steady growth shows rising margin demand but does not prove credit quality; a sudden drop = the market just sold off or the brokerage tightened margin calls |
 | Equity | `financial_detail` | The denominator for leverage. Stock dividends usually reclassify within equity and do not by themselves cut total equity; check actual equity movements |
-| Leverage | Computed with `shell` (a command made only of arithmetic): loans / equity (state that it is derived) | Compare with the regulatory cap in force. This indicates **remaining room for growth**, not quality |
+| Leverage | Computed with `shell` (a command made only of arithmetic): loans / equity, using only numbers returned by tools (state the formula, every input and that it is derived) | Compare with the regulatory cap in force. This indicates **remaining room for growth**, not quality |
 | Receivables | `financial_detail` | Receivables from margin trades growing faster than loans = receivables piling up |
 
 ## 2. Nhóm doanh thu

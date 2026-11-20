@@ -20,7 +20,7 @@
 | Indicator | Read from | How to read |
 |---|---|---|
 | Revenue | `financial_detail` | Up from prices or volume: compare with published throughput |
-| Average realised rate / volume | Computed yourself (state it) | Compare QoQ/YoY. Prices up + volume down is unsustainable growth |
+| Average realised rate / volume | Computed with `shell` using only comparable revenue and volume returned by tools; state the formula and every input | Compare QoQ/YoY. Prices up + volume down is unsustainable growth |
 | Route rates (external) | `news_market` | State the route and check date; rates are a short cycle |
 | Berth utilisation | `news_market` | New berths not yet filled = fixed costs running ahead of revenue |
 

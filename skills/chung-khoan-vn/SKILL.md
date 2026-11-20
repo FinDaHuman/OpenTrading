@@ -37,7 +37,7 @@ Brokerage statements are read under their own standards (`vs_financial_norms(bty
 | Driver | Transmission channel | Measure/verify with |
 |---|---|---|
 | Margin debt | One of the sector's interest sources: investors borrow to buy shares. Steadily rising debt = risk appetite opening up; a sudden drop = the market just sold off or brokerages tightened margin calls | Total sector margin debt + the ticker's: `news_market`/`web_search` (large brokerages publish margin debt quarterly); for the ticker read `financial_detail` |
-| Leverage level | Margin debt vs equity against the **regulatory cap in force** (look up the regulator's text: number, effective date, scope, formula and conditions; unverified → do not conclude the headroom) decides how much room for growth is left. Near the cap → growing the loan book may need new capital; proprietary trading is a separate source of risk and does not by default make up for growth | Computed from `financial_detail` (margin loans, equity) — state your formula |
+| Leverage level | Margin debt vs equity against the **regulatory cap in force** (look up the regulator's text: number, effective date, scope, formula and conditions; unverified → do not conclude the headroom) decides how much room for growth is left. Near the cap → growing the loan book may need new capital; proprietary trading is a separate source of risk and does not by default make up for growth | Compute with `shell` from `financial_detail` (margin loans, equity); use only numbers returned by tools, and state the formula and every input |
 | Margin spread | Margin rates vary by brokerage and margin package, while brokerages' funding costs move with deposits and valuable papers → a compressed spread is a direct profit risk | Average margin rate (per package, published by each company) + funding cost: `news_market` + `financial_detail` — take the figures for the period in question; never carry old figures across periods |
 | Revenue mix | The sector is moving from fees to the balance sheet. Domestic groups rely on investment + margin; foreign groups are more balanced. The mix decides which group suffers in a falling market | `financial_detail` (brokerage standards): brokerage · margin lending · investment · advisory revenue |
 | Market liquidity | Zero-fee competition strips brokerage fees of measurement value, but liquidity remains the base for margin and proprietary trading | `market_overview` · `breadth_scan` · `vs_market_info` |
@@ -56,7 +56,7 @@ brokerage statement lines.
 **Bước 2: Leverage + revenue mix (in parallel).**
 
 `financial_detail`: margin loans · equity · revenue by the 4 businesses ·
-receivables. Compute the leverage level yourself (state the formula) and compare with the regulatory cap.
+receivables. Compute the leverage level with `shell`, using only numbers returned by tools (state the formula and every input) and compare with the regulatory cap.
 
 **Bước 3: Market rhythm + spread (in parallel).**
 
