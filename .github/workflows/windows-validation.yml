@@ -1,0 +1,37 @@
+name: Repeated Windows validation
+
+on:
+  push:
+    branches: [codex/windows-validation]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  repeated-tests:
+    runs-on: windows-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+      - uses: actions/cache@v6
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+      - run: bun install --frozen-lockfile
+      # Ten sequential executions on one immutable checkout, stopping at the first failure.
+      # This is one CI job with ten repetitions, not ten separate successful CI runs.
+      - name: Repeat the full suite ten times without reruns
+        shell: pwsh
+        run: |
+          $head = git rev-parse HEAD
+          for ($attempt = 1; $attempt -le 10; $attempt++) {
+            if ((git rev-parse HEAD) -ne $head) { throw "HEAD changed during validation" }
+            Write-Output "Windows execution $attempt/10 at $head"
+            bun test --parallel --timeout=20000
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }

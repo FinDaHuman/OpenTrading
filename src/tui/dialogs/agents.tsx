@@ -15,8 +15,9 @@ const SOURCE: Record<string, string> = { bundled: "Có sẵn", user: "Người d
 const ORDER = ["bundled", "user", "project"]
 
 /** Load agent types and re-register spawn_subagent so its description lists them. */
-export async function reloadAgents(runtime: Runtime) {
+export async function reloadAgents(runtime: Runtime, live: () => boolean = () => true) {
   const { agents, problems } = await loadAgents(agentRoots(runtime.mcp.cwd, { project: state.projectAllowed }))
+  if (!live()) return 0
   setState({ agentDefs: agents, agentProblems: problems })
   setAgents(runtime, agents)
   return agents.length

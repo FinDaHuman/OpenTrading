@@ -112,7 +112,7 @@ export type NotebookFormRequest =
   | { group: "decision"; alias?: string }
   | { group: "export" }
 
-export const [state, setState] = createStore({
+export const freshState = () => ({
   lines: [] as Line[],
   /** What the model sees next turn, including tool calls and results. */
   history: [] as ModelMessage[],
@@ -236,6 +236,15 @@ export const [state, setState] = createStore({
   /** Run /desk opens on (enter on a panel row). */
   deskFocus: undefined as string | undefined,
 })
+
+export const [state, setState] = createStore(freshState())
+
+/** Replace nested arrays/maps too; test harnesses must not retain fields from another App. */
+export function resetState() {
+  clearTimeout(exitTimer)
+  // Replace each top-level value. Reconciliation would mutate shared catalog/cache objects.
+  setState(freshState())
+}
 
 /** Window, reserve and auto-compaction threshold of the selected model (see core/compact). */
 export const contextLimits = (): ContextLimits | undefined =>

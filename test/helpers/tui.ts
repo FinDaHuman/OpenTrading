@@ -1,3 +1,5 @@
+import { testRender as nativeTestRender } from "@opentui/solid"
+
 /**
  * Waits that hold up on a busy machine.
  *
@@ -31,7 +33,7 @@ interface Renders extends Capturable {
  * shows X" cannot pass on the frame from before the change, and a wait that never succeeds fails
  * there instead of handing the next assertion a stale frame.
  */
-export async function renderedFrame(setup: Renders, text: string | ((frame: string) => boolean), ms = 5_000) {
+export async function renderedFrame(setup: Renders, text: string | ((frame: string) => boolean | Promise<boolean>), ms = 5_000) {
   const ok = typeof text === "string" ? (f: string) => f.includes(text) : text
   const end = Date.now() + ms
   let frame = ""
@@ -39,7 +41,7 @@ export async function renderedFrame(setup: Renders, text: string | ((frame: stri
     await new Promise((r) => setTimeout(r, 10))
     await setup.renderOnce()
     frame = setup.captureCharFrame()
-    if (ok(frame)) return frame
+    if (await ok(frame)) return frame
   } while (Date.now() < end)
   throw new Error(`frame never showed ${typeof text === "string" ? JSON.stringify(text) : "the expected state"} in ${ms} ms:\n${frame}`)
 }
@@ -51,4 +53,20 @@ export async function renderedFrame(setup: Renders, text: string | ((frame: stri
 export async function captureIdle(setup: Capturable, ms = 5_000) {
   await until(() => !setup.renderer.getSchedulerState().isRendering, ms, "the renderer to finish a frame")
   return setup.captureCharFrame()
+}
+
+/** Shared native renderer setup: clipboard is deterministic and frame waits use wall time. */
+export async function testRender(...args: Parameters<typeof nativeTestRender>) {
+  const setup = await nativeTestRender(...args)
+  setup.renderer.copyToClipboardOSC52 = () => true
+  setup.waitForFrame = (check) => renderedFrame(setup, check)
+  setup.waitFor = (check) => until(check, 5_000)
+  return setup
+}
+
+export async function destroyTui(setup?: Awaited<ReturnType<typeof nativeTestRender>>) {
+  if (setup) {
+    setup.renderer.destroy()
+    await setup.renderer.closed
+  }
 }

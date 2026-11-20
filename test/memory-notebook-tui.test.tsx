@@ -1,10 +1,11 @@
 import { afterAll, afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test"
+import { waitForOutput } from "./helpers/process"
 import { Database } from "bun:sqlite"
 import { existsSync, readdirSync, renameSync, rmSync } from "node:fs"
 import { mkdtemp, readFile, rm } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
-import { testRender } from "@opentui/solid"
+import { testRender, destroyTui } from "./helpers/tui"
 import type { ModelMessage } from "ai"
 import { HPG_BLOCK_V3, seedExample, LESSON_7 } from "./helpers/memory-notebook"
 import { testClock } from "./helpers/memory-store"
@@ -36,7 +37,7 @@ const { MemoryDialog } = await import("../src/tui/dialogs/memory")
 const { App, clearTranscript, compact } = await import("../src/tui/app")
 const { userMessage } = await import("../src/core/agent")
 const { renderLessonBlock } = await import("../src/core/memory/notebook/render")
-const { state, setState } = await import("../src/tui/state")
+const { state, setState, resetState } = await import("../src/tui/state")
 const { resetNotifications } = await import("../src/tui/notify")
 const { closeMemory, createMemory, initRuntime, switchMemory } = await import("../src/core/runtime")
 const { loadConfig, saveConfig } = await import("../src/core/config")
@@ -57,7 +58,7 @@ beforeEach(async () => {
   await saveConfig({ provider: "groq", model: "m", update: { check: false }, memory: undefined })
 })
 afterEach(async () => {
-  setup?.renderer.destroy()
+  await destroyTui(setup)
   setup = undefined
   if (runtime) {
     closeMemory(runtime)
@@ -67,6 +68,7 @@ afterEach(async () => {
   runtime = undefined
   for (const s of opened.splice(0)) s.close()
   resetNotifications()
+  resetState()
   setState({ dialog: undefined, lines: [] })
   // Nothing may still hold the store: removing it fails on Windows otherwise.
   for (const name of readdirSync(home).filter((n) => n.startsWith("memory.db"))) rmSync(path.join(home, name))
@@ -295,9 +297,7 @@ describe("/memory with the notebook", () => {
     await openEntry("dinh gia", "Dùng P/B và ROE")
     const child = Bun.spawn([process.execPath, contender, "hold", STORE, "4000"], { stdout: "pipe", stderr: "inherit" })
     try {
-      const reader = child.stdout.getReader()
-      let out = ""
-      while (!out.includes("held")) out += new TextDecoder().decode((await reader.read()).value)
+      await waitForOutput(child.stdout, "held")
       setup!.mockInput.pressKey("d")
       await frameWith("enter xác nhận · esc huỷ")
       const start = performance.now()
@@ -537,6 +537,31 @@ describe("masking memory blocks (spec 006)", () => {
       expect(file === undefined || (await redactLines(file)).length === 0).toBe(true)
     } finally {
       spy.mockRestore()
+    }
+  })
+
+  test("resume interrupted while session-end waits cannot publish into a replacement App", async () => {
+    const { s, id } = await sessionWith([hpgTurn()])
+    await s.startSession(runtime!, "clear")
+    const fresh = s.currentSession().id
+    let release!: () => void
+    let entered = false
+    const waiting = new Promise<void>((resolve) => { release = resolve })
+    const off = runtime!.hooks.on("session-end", async () => { entered = true; await waiting })
+    let mounted = true
+    try {
+      const resuming = s.resumeSession(runtime!, id, () => mounted)
+      await until(() => entered)
+      mounted = false
+      setState({ lines: [{ kind: "info", text: "replacement App" }], history: [] })
+      release()
+      await resuming
+      expect(s.currentSession().id).toBe(fresh)
+      expect(state.lines).toEqual([{ kind: "info", text: "replacement App" }])
+      expect(state.history).toEqual([])
+    } finally {
+      release()
+      off()
     }
   })
 

@@ -394,14 +394,16 @@ export async function startSession(runtime: Runtime, source: "startup" | "clear"
 }
 
 /** Reopen a stored session: rebuild history and transcript, then keep appending to its file. */
-export async function resumeSession(runtime: Runtime, id: string) {
+export async function resumeSession(runtime: Runtime, id: string, live: () => boolean = () => true) {
   const target = await openForResume(current, id, SETTLE_MS, runtime.redaction).catch((error) => {
     // Refused after the current session was left: what leaving it said is still shown.
-    for (const line of (error as { left?: Notice[] }).left ?? []) pushLine(line)
+    if (live()) for (const line of (error as { left?: Notice[] }).left ?? []) pushLine(line)
     throw error
   })
+  if (!live()) return
   const { session, loaded, left } = target
   await runtime.hooks.emit({ type: "session-end", sessionId: current.id })
+  if (!live()) return
   current = session
   attachSubagents(runtime, JSON.stringify(loaded.display))
   setState("agents", reconcile({}))
@@ -472,12 +474,13 @@ export async function resumeSession(runtime: Runtime, id: string) {
  * `--continue` → newest session opened in this folder (Claude Code keeps sessions per project);
  * `--resume <id>` → that one, from any folder (id prefix is enough).
  */
-export async function resumeFromArgs(runtime: Runtime, target: string) {
+export async function resumeFromArgs(runtime: Runtime, target: string, live: () => boolean = () => true) {
   const id = target === "latest" ? (await listSessions({ cwd: process.cwd() }))[0]?.id : target
+  if (!live()) return
   if (!id) return pushLine({ kind: "info", text: "Chưa có phiên nào ở thư mục này để mở lại. /sessions → tab để xem phiên ở thư mục khác." })
   try {
-    await resumeSession(runtime, id)
+    await resumeSession(runtime, id, live)
   } catch (error) {
-    pushLine({ kind: "error", text: error instanceof Error ? error.message : String(error) })
+    if (live()) pushLine({ kind: "error", text: error instanceof Error ? error.message : String(error) })
   }
 }

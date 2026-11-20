@@ -4,7 +4,7 @@ import { mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs"
 import { mkdtemp, rm } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
-import { testRender } from "@opentui/solid"
+import { testRender, destroyTui } from "./helpers/tui"
 import { seedExample } from "./helpers/memory-notebook"
 import { testClock } from "./helpers/memory-store"
 import { pastEnterGrace, realClock } from "./helpers/clock"
@@ -49,7 +49,7 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
 
 const { App, deliverNotices } = await import("../src/tui/app")
 const { ConfigDialog } = await import("../src/tui/dialogs/config")
-const { state, setState } = await import("../src/tui/state")
+const { state, setState, resetState } = await import("../src/tui/state")
 const { resetNotifications } = await import("../src/tui/notify")
 const { closeMemory, createMemory, initRuntime, switchMemory } = await import("../src/core/runtime")
 const { saveConfig } = await import("../src/core/config")
@@ -83,7 +83,7 @@ afterEach(async () => {
   for (const r of restores.splice(0)) r()
   // A card left open would keep its turn waiting: answer it before the session goes.
   state.turnHold?.choose("cancel")
-  setup?.renderer.destroy()
+  await destroyTui(setup)
   setup = undefined
   if (runtime) {
     await startSession(runtime, "clear")
@@ -94,6 +94,7 @@ afterEach(async () => {
   runtime = undefined
   for (const s of opened.splice(0)) s.close()
   resetNotifications()
+  resetState()
   setState({ dialog: undefined, lines: [], notices: [], noticeHold: false, queue: [] })
   await historyFlushed()
   resetHistory()
@@ -126,6 +127,7 @@ function newerStore() {
 async function start(choice: MemoryChoice = "none") {
   runtime = initRuntime({ home, skills: () => [], memory: createMemory(choice, home) })
   setup = await testRender(() => <App runtime={runtime!} onExit={() => {}} />, { width: 110, height: 44, exitOnCtrlC: false })
+  await until(() => Object.keys(state.catalog).length > 0, 10_000, "App startup catalog")
   await frameWith("Hỏi về thị trường")
 }
 const frameWith = (text: string | ((f: string) => boolean)) => renderedFrame(setup!, text)
@@ -232,7 +234,8 @@ describe("a turn held because a source cannot be read", () => {
     expect(system).toContain("Hồ sơ nhà đầu tư của người dùng không nạp được ở lượt này")
     expect(system).not.toContain("ho_so_nha_dau_tu")
     expect(runtime!.turnWaiver).toBeUndefined()
-    await frameWith("Hỏi về thị trường")
+    await until(() => Object.keys(state.catalog).length > 0, 10_000, "App startup catalog")
+  await frameWith("Hỏi về thị trường")
     await ask("Còn HSG?")
     await until(() => state.turnHold !== undefined)
     expect(turns()).toHaveLength(1)
@@ -293,7 +296,8 @@ describe("a turn held because a source cannot be read", () => {
     await until(() => state.turnHold === undefined)
     expect(state.notices).toEqual(["◆ Subagent nền ag-1 xong: KẾT-QUẢ-NỀN-9a"])
     rmSync(PROFILE, { recursive: true })
-    await frameWith("Hỏi về thị trường")
+    await until(() => Object.keys(state.catalog).length > 0, 10_000, "App startup catalog")
+  await frameWith("Hỏi về thị trường")
     await ask("Câu sau")
     await answered(1)
     const sent = JSON.stringify(turns()[0]!.messages.at(-1))

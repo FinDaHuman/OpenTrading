@@ -1,10 +1,11 @@
 import { afterAll, afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from "bun:test"
+import { waitForOutput } from "./helpers/process"
 import { Database } from "bun:sqlite"
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { mkdtemp, readdir, rm } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
-import { testRender } from "@opentui/solid"
+import { testRender, destroyTui } from "./helpers/tui"
 import { DECISION_MARKER, HPG_V3, seedExample, seedRenamed } from "./helpers/memory-notebook"
 import { testClock } from "./helpers/memory-store"
 import { pastEnterGrace, realClock } from "./helpers/clock"
@@ -52,7 +53,7 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
 }) as typeof fetch
 
 const { App } = await import("../src/tui/app")
-const { state, setState } = await import("../src/tui/state")
+const { state, setState, resetState } = await import("../src/tui/state")
 const { resetNotifications } = await import("../src/tui/notify")
 const { closeMemory, createMemory, initRuntime, switchMemory } = await import("../src/core/runtime")
 const { saveConfig } = await import("../src/core/config")
@@ -84,7 +85,7 @@ beforeEach(async () => {
 })
 afterEach(async () => {
   realClock()
-  setup?.renderer.destroy()
+  await destroyTui(setup)
   setup = undefined
   if (runtime) {
     // A turn here opened a session file; the next test file must start on a fresh, unsaved session.
@@ -96,6 +97,7 @@ afterEach(async () => {
   runtime = undefined
   for (const s of opened.splice(0)) s.close()
   resetNotifications()
+  resetState()
   // exitArmed and notebookFormBack too: a Ctrl+C at the end of one test armed exit for 800 ms, and the next
   // test's first Ctrl+C exited instead of asking; a form opened from /memory made the next test's form
   // (set directly) go back to /memory on save. Both seen with --randomize.
@@ -126,6 +128,7 @@ function otherWindow() {
 async function start(choice: MemoryChoice = "notebook", height = 44) {
   runtime = initRuntime({ home, skills: () => [], memory: createMemory(choice, home) })
   setup = await testRender(() => <App runtime={runtime!} onExit={() => {}} />, { width: 110, height, exitOnCtrlC: false })
+  await until(() => Object.keys(state.catalog).length > 0, 10_000, "App startup catalog")
   await frameWith("Hỏi về thị trường")
 }
 
@@ -222,7 +225,8 @@ describe("prompt history keeps only the command name (four ways out of the box)"
     enter()
     await until(() => state.dialog === "notebook-form")
     setState({ dialog: undefined, notebookForm: undefined })
-    await frameWith("Hỏi về thị trường")
+    await until(() => Object.keys(state.catalog).length > 0, 10_000, "App startup catalog")
+  await frameWith("Hỏi về thị trường")
     await type("Phân tích HPG")
     enter()
     await until(() => !state.streaming && mainBodies().length === 1)
@@ -839,9 +843,7 @@ describe("two windows on one entry", () => {
     await frameWith("Xác nhận")
     const child = Bun.spawn([process.execPath, contender, "hold", STORE, "4000"], { stdout: "pipe", stderr: "inherit" })
     try {
-      const reader = child.stdout.getReader()
-      let out = ""
-      while (!out.includes("held")) out += new TextDecoder().decode((await reader.read()).value)
+      await waitForOutput(child.stdout, "held")
       const started = performance.now()
       enter()
       await until(() => notice().startsWith("Kho memory đang bận"))
@@ -1071,7 +1073,8 @@ describe("/baihoc: lessons, and hard rules saved in the wrong place", () => {
     tab()
     await setup!.mockInput.typeText(" ")
     setState({ dialog: undefined })
-    await frameWith("Hỏi về thị trường")
+    await until(() => Object.keys(state.catalog).length > 0, 10_000, "App startup catalog")
+  await frameWith("Hỏi về thị trường")
     await command("/baihoc", "Bài học mới")
     await fillLesson("Giải ngân", "tuyệt đối không dồn một lần")
     expect(flat(await frameWith("luật cứng"))).toContain("(«tuyệt đối không»)")

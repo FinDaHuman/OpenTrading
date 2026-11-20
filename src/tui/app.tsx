@@ -1058,12 +1058,16 @@ export function App(props: {
     props.runtime.permissions.denyAll()
   })
 
+  let mounted = true
+  const liveMount = () => mounted
+  onCleanup(() => { mounted = false })
   onMount(async () => {
     void props.runtime.mcp.start()
     // The folder's own skills/agents wait for the user to trust it (src/core/folder-trust.ts).
     const folder = props.runtime.mcp.cwd
     const extras = await projectExtras(folder)
     const allowed = !extras || (await new FolderTrust().isTrusted(folder))
+    if (!liveMount()) return
     setState({ projectAllowed: allowed, folderTrust: allowed ? undefined : extras })
     const [config, skillSet, catalog, modelPrefs] = await Promise.all([
       loadConfig(),
@@ -1072,6 +1076,7 @@ export function App(props: {
       loadModelPrefs(),
     ])
     const connected = await connectedProviders()
+    if (!liveMount()) return
     // A key from an env var counts as connected even before /connect is used.
     setState({
       provider: config.provider ?? connected[0],
@@ -1100,14 +1105,16 @@ export function App(props: {
     // Set to open in ▸▸ auto without ever having said yes (config or /config): ask now.
     if (config.permissions?.defaultMode === "auto" && !state.autoAcknowledged) setState("autoOptIn", { from: props.runtime.permissions.mode })
     attachSubagents(props.runtime)
-    await reloadAgents(props.runtime)
+    await reloadAgents(props.runtime, liveMount)
+    if (!liveMount()) return
     if (state.agentProblems.length > 0) {
       pushLine({ kind: "error", text: `${state.agentProblems.length} file subagent bị lỗi và không được nạp. Xem /agents.` })
     }
     if (config.subagents?.maxConcurrent) props.runtime.subagents.setMax(config.subagents.maxConcurrent)
     setState("agentSlots", props.runtime.subagents.limiter.stats())
-    if (props.resume) await resumeFromArgs(props.runtime, props.resume)
+    if (props.resume) await resumeFromArgs(props.runtime, props.resume, liveMount)
     else await props.runtime.hooks.emit({ type: "session-start", sessionId: currentSession().id, source: "startup" })
+    if (!liveMount()) return
     // After the session is known: a resumed one keeps its temp folder however old it is.
     void pruneOldScratch(props.runtime)
     if (skillSet.problems.length > 0) {
@@ -1115,6 +1122,7 @@ export function App(props: {
     }
     // A config still naming the removed legacy memory: written back as the notebook and said once (spec 007).
     const moved = await migrateLegacyMemory(props.runtime.home).catch(() => undefined)
+    if (!liveMount()) return
     if (moved) pushLine({ kind: "info", text: moved })
     // A notebook that did not open says why at once (chat still works); it is also in /config and /memory.
     if (props.runtime.memory.id === "notebook") {
