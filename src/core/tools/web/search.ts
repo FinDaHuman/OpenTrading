@@ -362,6 +362,8 @@ export function webSearchTool(deps: SearchDeps = {}): ToolDef<WebSearchInput> {
     }),
     readOnly: true,
     deferrable: true,
+    // tool_search: "tin tức" must find web_search, not send_message ("thông tin"), on a score tie (#316).
+    searchHint: "tin tức thời sự báo chí sự kiện news headlines",
     source: LOCAL_SOURCE,
     timeoutMs: 60_000,
     summarize: (input) => `web_search "${input.query.slice(0, 50)}"${input.preset ? ` · ${input.preset}` : ""}${input.recency_days ? ` · ${input.recency_days} ngày` : ""}`,

@@ -109,7 +109,7 @@ export function doctorLocalTool(deps: {
     input: z.object({}),
     readOnly: true,
     deferrable: true,
-    deferByDefault: true,
+    // Not deferred by default (#317): hidden, turns listed files or checked config with shell instead.
     source: LOCAL_SOURCE,
     summarize: () => "doctor_local()",
     async execute() {

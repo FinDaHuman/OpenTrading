@@ -848,7 +848,7 @@ export const DEFAULT_DEFER_MIN_TOOLS = 40
  * Whether deferrable tools (MCP and the optional built-in ones) go out by name only this
  * request (tool search). "auto" defers all of them once they are many (tool choice degrades
  * past ~30–50) or heavy for the context; below that it defers only the `deferByDefault` local
- * tools that turns rarely use (grep/glob, sessions, doctor, send/stop). A subagent's
+ * tools that turns rarely use (grep, sessions, send/stop; glob_files and doctor_local stay visible, #317). A subagent's
  * tools are already narrowed by its type, so it keeps them visible.
  */
 export function shouldDefer(

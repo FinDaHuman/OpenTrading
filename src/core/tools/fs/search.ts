@@ -66,7 +66,7 @@ export function globFilesTool(workspace: Workspace): ToolDef<GlobInput> {
     }),
     readOnly: true,
     deferrable: true,
-    deferByDefault: true,
+    // Not deferred by default (#317): hidden, turns listed files or checked config with shell instead.
     source: LOCAL_SOURCE,
     askFor: secretRoot(workspace),
     subject: (input) => rootOf(workspace, input.path),
