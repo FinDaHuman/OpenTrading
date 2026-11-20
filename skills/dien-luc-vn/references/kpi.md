@@ -1,50 +1,50 @@
 # Chỉ báo ngành điện — nhóm nguồn và cách đọc
 
-> File này giữ **cách phân nhóm nguồn** và cách đọc từng chỉ báo, không giữ con số
-> kỳ nào. Mọi giá trị lấy từ `financial_detail` / `news_market` gần nhất và ghi kỳ
-> kèm theo. Hai luật chỉ nằm ở SKILL.md và KHÔNG lặp lại ở đây: cơ chế một người
-> mua và giá điện (§Trụ cột driver) + luật chỉ so sánh trong cùng nhóm nguồn
-> (§Ranh giới). Cột "So với ai" bên dưới là cách áp dụng, không phải bản sao luật.
+> This file keeps **the source grouping** and how to read each indicator, not any
+> period's numbers. Every value comes from the latest `financial_detail` / `news_market`, with the period
+> stated. Two rules live only in SKILL.md and are NOT repeated here: the single-buyer
+> mechanism and electricity prices (§Trụ cột driver) + the rule of comparing only within the same source group
+> (§Ranh giới). The "Compare with" column below is how to apply it, not a copy of the rule.
 
 ## 1. Phân nhóm nguồn
 
-| Nhóm | Chu kỳ bám | Mùa/quy luật riêng | So với ai |
+| Group | Cycle it tracks | Its own season/pattern | Compare with |
 |---|---|---|---|
-| Thủy điện | Mực nước và lưu lượng (thủy văn) | Mùa khô giảm sản lượng, kéo dài nhiều kỳ | Cùng nhóm thủy điện |
-| Nhiệt điện (than) | Giá điện + tỷ trọng khai thác + giá than | Khi thủy điện sụt, nhiệt điện chạy bù → tỷ trọng tăng | Cùng nhóm nhiệt |
-| Khí / LNG | Giá điện + chi phí khí nhập + tỷ giá | Nhạy với tỷ giá và nhập khẩu trong các nhóm nhiệt | Cùng nhóm khí |
-| Truyền tải / thiết bị | Chi tiêu đầu tư lưới, quy hoạch | Theo chu kỳ đầu tư công, không theo mùa khô | Cùng nhóm thiết bị |
+| Hydropower | Water levels and flow (hydrology) | The dry season cuts output, for several periods | The same hydropower group |
+| Thermal (coal) | Electricity prices + dispatch share + coal prices | When hydropower drops, thermal runs as backup → its share rises | The same thermal group |
+| Gas / LNG | Electricity prices + imported gas costs + the exchange rate | The most FX- and import-sensitive of the thermal groups | The same gas group |
+| Transmission / equipment | Grid investment spending, plans | Follows the public-investment cycle, not the dry season | The same equipment group |
 
 ## 2. Nhóm dòng thu và công nợ
 
-| Chỉ báo | Đọc từ | Cách đọc |
+| Indicator | Read from | How to read |
 |---|---|---|
-| Doanh thu | `financial_detail` | Đọc cùng sản lượng: doanh thu tăng do giá hay do khối lượng |
-| Phải thu người mua bán điện | `financial_detail` | **Chỗ chứa rủi ro chính của ngành**: tăng nhanh hơn doanh thu là tín hiệu kiểm tra chất lượng thu tiền; không tự chứng minh nguyên nhân do giá bán lẻ |
-| Biên lãi gộp | `financial_detail` | Đọc theo nhóm nguồn; biên hợp nhất che sự chênh lệch giữa thủy/khí/nhiệt |
-| Chi phí tài chính | `financial_detail` | Dự án BOT có vốn vay lớn: chi phí lãi cố định khi chưa vận hành |
+| Revenue | `financial_detail` | Read with output: is revenue up from prices or volume |
+| Receivables from the power buyer | `financial_detail` | **Where the sector's main risk sits**: growing faster than revenue signals checking collection quality; it does not by itself prove retail prices are the cause |
+| Gross margin | `financial_detail` | Read by source group; the consolidated margin hides gaps between hydro/gas/thermal |
+| Financial costs | `financial_detail` | BOT projects with large borrowings: fixed interest costs before operation |
 
 ## 3. Nhóm sản lượng
 
-| Chỉ báo | Đọc từ | Cách đọc |
+| Indicator | Read from | How to read |
 |---|---|---|
-| Sản lượng kỳ | `news_market` (công bố ngành/công ty) | Đọc kèm cơ cấu nguồn: sản lượng giảm có thể do khan hiếm nguồn, không phải nhu cầu giảm |
-| Tỷ trọng khai thác | `news_market` | Đọc cùng chi phí biến đổi, ràng buộc lưới/kỹ thuật và hợp đồng; dự phòng công suất không quyết định riêng thứ tự huy động |
-| Tỷ lệ sử dụng công suất | `news_market` | Nhà máy mới chưa đủ tải chi phí cố định |
+| Period output | `news_market` (sector/company releases) | Read with the source mix: falling output may come from scarce sources, not falling demand |
+| Dispatch share | `news_market` | Read with variable costs, grid/technical constraints and contracts; the reserve margin alone does not decide dispatch order |
+| Capacity utilisation | `news_market` | A new plant not yet covering fixed costs |
 
 ## 4. Nhóm đối chiếu bên ngoài
 
-| Nguồn | Đọc gì | Cách dùng |
+| Source | What to read | How to use it |
 |---|---|---|
-| `news_market` | Cơ cấu phát điện theo kỳ, mực nước hồ chứa, khung giá và điều chỉnh, tiến độ dự án | Số ngành; ghi rõ nguồn và kỳ |
-| `yf_commodities` | Khí tự nhiên tham chiếu; than nhiệt/LNG từ công bố nguồn ngành qua `web_search`, không giả định bộ COMMO mặc định có đủ | Chi phí đầu vào nhóm nhiệt/khí — giá tham chiếu, không phải giá hợp đồng |
-| `company_events` | Sự kiện dự án, hợp đồng mua bán điện mới | Xác nhận dòng thu tương lai |
-| `planned_targets` | Kế hoạch sản lượng/doanh thu/lãi | Neo kỳ vọng và đối chiếu kết quả |
+| `news_market` | Generation mix by period, reservoir levels, price frameworks and adjustments, project progress | Sector figures; state the source and period |
+| `yf_commodities` | Reference natural gas; thermal coal/LNG from sector releases via `web_search` — do not assume the default COMMO set has them | Thermal/gas input costs — reference prices, not contract prices |
+| `company_events` | Project events, new power purchase agreements | Confirming future revenue |
+| `planned_targets` | Output/revenue/profit plans | Expectation anchor and cross-check against results |
 
 ## 5. Bẫy đọc thường gặp
 
-- Nhu cầu điện tăng nhưng một nhà máy lãi giảm: xem giá điện và công nợ trước khi
-  kết luận "quản trị kém".
-- So nhóm thủy với nhóm nhiệt trong cùng một kỳ: hai chu kỳ khác nhau, kết luận sẽ
-  ngược.
-- Doanh thu tăng nhờ một lần bù giá: đánh dấu một lần, không nội suy.
+- Power demand rising but one plant's profit falling: check electricity prices and receivables before
+  concluding "quản trị kém".
+- Comparing the hydro group with the thermal group in the same period: two different cycles; the conclusion will be
+  backwards.
+- Revenue up from a one-off price compensation: mark it as one-off; never extrapolate.

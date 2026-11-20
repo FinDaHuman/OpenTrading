@@ -8,15 +8,15 @@ import type { ChartRenderInput } from "./render"
 export function renderWaterfall(input: ChartRenderInput): { subtitle: string; body: string } {
   const start = input.start
   const deltas = input.series ?? []
-  if (start === undefined || Number.isNaN(start)) throw new Error("waterfall cần start (giá trị đầu, ví dụ 57.3).")
-  if (deltas.length < 1) throw new Error(`waterfall cần series ít nhất 1 bước (deltas), đang có ${deltas.length}.`)
+  if (start === undefined || Number.isNaN(start)) throw new Error("waterfall needs start (the starting value, e.g. 57.3).")
+  if (deltas.length < 1) throw new Error(`waterfall needs a series of at least 1 step (deltas), got ${deltas.length}.`)
   const cum = [start]
   for (const d of deltas) cum.push(cum[cum.length - 1]! + d)
   const lo = Math.min(...cum)
   const hi = Math.max(...cum)
   const span = hi - lo || 1
   const fmt = (v: number) => `${Number(v.toFixed(2))}`
-  const names = ["Bắt đầu", ...deltas.map((_, i) => input.labels?.[i] ?? `Bước ${i + 1}`), "Kết thúc"]
+  const names = ["Start", ...deltas.map((_, i) => input.labels?.[i] ?? `Step ${i + 1}`), "End"]
   const labelWidth = Math.max(...names.map((n) => n.length))
   const W = Math.min(input.width ?? 28, 60)
   const at = (v: number) => Math.round(((v - lo) / span) * (W - 1))
@@ -35,7 +35,7 @@ export function renderWaterfall(input: ChartRenderInput): { subtitle: string; bo
   const last = cum[cum.length - 1]!
   rows.push(`${names[names.length - 1]!.padEnd(labelWidth)} ${pad(at(last))}│${pad(W - at(last))} ${fmt(last)}`)
   return {
-    subtitle: `waterfall (${deltas.length} bước, ${fmt(start)} → ${fmt(last)})`,
+    subtitle: `waterfall (${deltas.length} steps, ${fmt(start)} → ${fmt(last)})`,
     body: rows.join("\n"),
   }
 }

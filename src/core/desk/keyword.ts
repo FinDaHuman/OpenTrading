@@ -27,9 +27,9 @@ export function deskKeywordRange(text: string): { start: number; end: number } |
 export type DeskOptIn = "keyword" | "session" | "command"
 
 const WHY: Record<DeskOptIn, string> = {
-  keyword: "Người dùng gõ ultradesk trong yêu cầu này",
-  session: "Chế độ ultradesk đang bật cho cả phiên (/desk on)",
-  command: "Người dùng chạy lệnh playbook",
+  keyword: "The user typed ultradesk in this request",
+  session: "Ultradesk mode is on for the whole session (/desk on)",
+  command: "The user ran a playbook command",
 }
 
 /**
@@ -49,12 +49,12 @@ export function deskReminder(optIn: DeskOptIn, playbooks: Playbook[]): string {
   const list = playbooks.map((p) => `- ${p.meta.name.replace(/-/g, "_")}: ${p.meta.whenToUse.replace(/\s+/g, " ").trim()}`).join("\n")
   const scope =
     optIn === "session"
-      ? "Với yêu cầu nghiên cứu lớn khớp một playbook, chạy nó bằng desk_run; câu hỏi nhỏ thì trả lời bình thường."
-      : "Nếu yêu cầu khớp một playbook, gọi desk_run và điền key của playbook đó (ví dụ sang_loc) bằng tham số đúng schema. Không khớp playbook nào thì làm như bình thường và nói ngắn vì sao."
+      ? "For a large research request that fits a playbook, run it with desk_run; answer small questions as usual."
+      : "If the request fits a playbook, call desk_run and fill that playbook's key (e.g. sang_loc) with arguments matching its schema. If no playbook fits, work as usual and say briefly why."
   return [
     `${WHY[optIn]}. ${scope}`,
-    "Run chạy nền; kết quả về sau trong <thong_bao_desk>. Sau khi gọi desk_run, chỉ báo ngắn là run đang chạy (xem /desk), không tự làm lại việc của run.",
-    "Có gợi ý skill làm cùng việc với một playbook (ví dụ so sánh nhiều mã) thì chạy playbook, thay vì tự điều phối theo skill.",
-    list ? `Playbook:\n${list}` : "Chưa có playbook nào.",
+    "The run works in the background; its result arrives later in <thong_bao_desk>. After calling desk_run, only say briefly that the run is going (see /desk); do not redo the run's work yourself.",
+    "When a skill hint does the same job as a playbook (e.g. comparing several tickers), run the playbook instead of orchestrating the skill yourself.",
+    list ? `Playbooks:\n${list}` : "No playbooks yet.",
   ].join("\n")
 }

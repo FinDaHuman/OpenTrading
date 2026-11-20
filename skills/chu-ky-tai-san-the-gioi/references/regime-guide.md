@@ -1,6 +1,6 @@
 # Đọc corr regimes (tra `g_asset_corr`)
 
-- `regime="full"` (2010→): baseline dài hạn. `pre22` vs `post22`: break cấu trúc 2022.
-- Điểm đã verify: SPY–TLT lật âm→dương sau 2022 (bonds mất vai trò hedge); BTC–SPY tăng (ETF-ization); DBC–SPY rớt (commodity idiosyncratic); GLD–UUP seesaw mạnh lên.
-- Tương quan BTC–vàng tăng vọt gần đây là đặc điểm của giai đoạn, không phải bản chất (dài hạn thấp; vàng là tài sản trú ẩn tốt hơn, BTC chỉ đa dạng hoá) — đọc số theo regime trong `g_asset_corr`.
-- Quy tắc: mọi kết luận corr phải nêu regime; corr full-sample trung bình che giấu break thì ghi rõ.
+- `regime="full"` (2010→): the long-run baseline. `pre22` vs `post22`: the 2022 structural break.
+- Verified points: SPY–TLT flipped negative→positive after 2022 (bonds lost their hedge role); BTC–SPY rose (ETF-ization); DBC–SPY dropped (commodities idiosyncratic); the GLD–UUP seesaw strengthened.
+- The recent spike in BTC–gold correlation is a feature of the period, not its nature (low long-run; gold is the better safe haven, BTC only diversifies) — read the numbers by regime in `g_asset_corr`.
+- Rule: every correlation conclusion must state the regime; when the average full-sample correlation hides a break, say so.

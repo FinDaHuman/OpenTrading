@@ -1,6 +1,7 @@
 ---
 name: ky-thuat-chuyen-sau
-description: "Đọc kỹ thuật một mã đa khung 1D/1W/1M (RSI, MACD, Bollinger, Ichimoku, ADX, hỗ trợ/kháng cự, breakout). Dùng khi hỏi kỹ thuật hay xu hướng giá của một mã."
+description: "Reads one ticker's technicals across 1D/1W/1M (RSI, MACD, Bollinger, Ichimoku, ADX, support/resistance, breakout). Use for a ticker's technicals or price trend."
+match_text: "Đọc kỹ thuật một mã đa khung 1D/1W/1M (RSI, MACD, Bollinger, Ichimoku, ADX, hỗ trợ/kháng cự, breakout). Dùng khi hỏi kỹ thuật hay xu hướng giá của một mã."
 activation: auto
 requires_tools: [mcp__opentrading__signals_technical]
 triggers:
@@ -10,44 +11,44 @@ version: 1.4.0
 
 # Phân tích kỹ thuật một mã
 
-Mặc định 2 khung (1D+1W); khung 1M chỉ khi user hỏi dài hạn. Một call `signals_technical` đã đủ 80% verdict — đây là skill "1 tool trụ cột" mẫu mực, đừng gọi thêm tool cho đủ số.
+Default to 2 timeframes (1D+1W); the 1M timeframe only when the user asks about the long term. One `signals_technical` call already gives 80% of the verdict — this is a model "one pillar tool" skill; do not call extra tools to pad the count.
 
 ## Khi nào dùng
 
-- Dùng khi: user hỏi kỹ thuật 1 mã (`VCB kỹ thuật đa khung sao`, `FPT có breakout không`, `đọc băng HPG`, `higher-high hay lower-low`, `sóng Elliott`).
-- Khi KHÔNG dùng (dùng skill khác thay thế):
-  - Hỏi BCTC/cơ bản/M-Score → `co-ban-chuyen-sau`.
-  - Hỏi định giá/fair value/PER/upside → `dinh-gia-chuyen-sau`.
-  - Phân tích toàn diện 1 mã → `phan-tich-chuyen-sau-1-ma` (skill đó sẽ dispatch skill này).
-  - So sánh nhiều mã → `so-sanh-cung-nganh`.
+- Use when: the user asks about one ticker's technicals (`VCB kỹ thuật đa khung sao`, `FPT có breakout không`, `đọc băng HPG`, `higher-high hay lower-low`, `sóng Elliott`).
+- Do NOT use (use another skill instead):
+  - Financial statements/fundamentals/M-Score → `co-ban-chuyen-sau`.
+  - Valuation/fair value/PER/upside → `dinh-gia-chuyen-sau`.
+  - A full analysis of one ticker → `phan-tich-chuyen-sau-1-ma` (that skill dispatches this one).
+  - Comparing several tickers → `so-sanh-cung-nganh`.
 
 ## Các bước
 
-**Bước 1: Nến đa khung.**
+**Bước 1: Multi-timeframe candles.**
 
-Chạy `signals_technical` (symbol, interval=1D) + (interval=1W) [+ (interval=1M) nếu hỏi dài hạn]. Mỗi khung 1 call: RSI/MACD/BB/Ichimoku/S-R/patterns. Interval chỉ nhận 1D/1W/1M (1W cần ≥30 bars, 1M ≥24 bars); interval lạ → `unavailable`, không retry.
+Run `signals_technical` (symbol, interval=1D) + (interval=1W) [+ (interval=1M) for long-term questions]. One call per timeframe: RSI/MACD/BB/Ichimoku/S-R/patterns. interval accepts only 1D/1W/1M (1W needs ≥30 bars, 1M ≥24 bars); an unknown interval → `unavailable`, no retry.
 
-**Bước 2: Đọc cấu trúc sóng (không gọi tool mới).**
+**Bước 2: Read the wave structure (no new tool calls).**
 
-Từ output Bước 1 đọc swings + swing_trend + fib + elliott + wyckoff; tự dán nhãn HH/HL/LH/LL + Fibonacci 7 mức + Elliott (impulse/corrective/developing + invalidation) + Wyckoff phase.
+From the Bước 1 output read swings + swing_trend + fib + elliott + wyckoff; label HH/HL/LH/LL yourself + the 7 Fibonacci levels + Elliott (impulse/corrective/developing + invalidation) + the Wyckoff phase.
 
-**Bước 3: Xác nhận theo câu hỏi (tối đa 3 calls).**
+**Bước 3: Confirm per the question (at most 3 calls).**
 
-Chỉ gọi khi user hỏi tới: `pattern_match` (analogy lịch sử) · `dnse_latest_trade` / `dnse_orderbook` / `vn_trades` (intraday) · `vn_index_ohlcv` (trend index). Không gọi `financial_detail` / `valuation_run` / `stock_forensic` ở đây.
+Call only when the user asks: `pattern_match` (historical analogy) · `dnse_latest_trade` / `dnse_orderbook` / `vn_trades` (intraday) · `vn_index_ohlcv` (index trend). Do not call `financial_detail` / `valuation_run` / `stock_forensic` here.
 
-**Bước 4: Validate trước khi chốt.**
+**Bước 4: Validate before concluding.**
 
-Mã mới <60 nến → indicators null → báo "thiếu lịch sử", không bịa RSI/MACD. DNSE hết giờ → orderbook rỗng là đúng data, ghi rõ phiên đóng. `pattern_match` corr <0.4 = không có analogy đáng tin → ghi đúng. Giá theo kVND (`signals_technical.last 57.3` = 57,300đ) → bắt buộc qui đổi + ghi đơn vị. Khung nào thiếu → verdict partial khung còn lại + ghi khung thiếu. Elliott/Wyckoff là heuristic → bắt buộc ghi confidence + invalidation.
+A new ticker with <60 candles → null indicators → report "thiếu lịch sử"; never invent RSI/MACD. DNSE after hours → an empty order book is correct data; say the session is closed. `pattern_match` corr <0.4 = no trustworthy analogy → say so. Prices are in kVND (`signals_technical.last 57.3` = 57,300đ) → you must convert + state the unit. A missing timeframe → a partial verdict on the remaining ones + name the missing one. Elliott/Wyckoff are heuristics → you must state confidence + invalidation.
 
 ## Cấu trúc câu trả lời
 
-Trình bày kết luận đúng cấu trúc sau, cho MỖI khung (1D/1W[/1M]), mỗi mục ghi số + trend + provenance:
+Present the conclusion in exactly this structure, for EACH timeframe (1D/1W[/1M]), each item with figures + trend + provenance:
 
-1. Trend: SMA stack + ADX. 2. Momentum: RSI/MACD/stoch/CCI cụ thể từng chỉ báo. 3. S-R của khung đó. 4. Cấu trúc: HH/HL/LH/LL + Fibo + Elliott pattern/invalidation + Wyckoff phase + confidence. 5. Kết luận khung: higher-high hay lower-low. 6. Tổng hợp: đồng thuận đa khung hay phân kỳ + trigger giá → timing MUA/CHỜ/BÁN. 7. Kết luận 1 câu chốt toàn mã.
+1. Trend: SMA stack + ADX. 2. Momentum: RSI/MACD/stoch/CCI, each indicator specifically. 3. That timeframe's S-R. 4. Structure: HH/HL/LH/LL + Fibo + Elliott pattern/invalidation + Wyckoff phase + confidence. 5. Timeframe conclusion: higher-high or lower-low. 6. Synthesis: multi-timeframe agreement or divergence → scenarios (tích cực / cơ sở / tiêu cực), each with the price behaviour that would confirm it and the one that would invalidate it (e.g. a close above or below a support–resistance zone), and a likelihood (cao / trung bình / thấp) with the reason. A confirming or invalidating level is a condition of the scenario, never an entry, exit or stop-loss point and never a buy/wait/sell timing call. 7. A 1-sentence conclusion for the whole ticker: the most likely scenario, not a personal buy/sell recommendation.
 
 ## Ngôn ngữ trình bày
 
-Ký hiệu trong cấu trúc trên dùng để bạn đọc kết quả tool. Giữ nguyên 7 mục khi viết ra, nhưng chữ bên trong mục thì dịch sang lời thường:
+The notation in the structure above is for you to read tool results. Keep all 7 items when writing, but render the words inside them in plain language:
 
 | Ký hiệu khi đọc tool | Viết cho người dùng |
 | --- | --- |
@@ -61,14 +62,14 @@ Ký hiệu trong cấu trúc trên dùng để bạn đọc kết quả tool. Gi
 | momentum, sideway, trigger | động lượng, đi ngang, mức giá kích hoạt |
 | 1D/1W/1M | khung ngày/tuần/tháng |
 
-Tên chỉ báo viết tắt quen thuộc (RSI, MACD, ADX, SMA20) thì giữ nguyên, chú giải một câu ngắn lần đầu: "RSI (thang đo sức mua bán của 14 phiên gần nhất)". Tên mô hình lạ (Wyckoff, Elliott) chỉ nêu khi kèm một câu nói nó đang chỉ cái gì; không thì bỏ — kết luận đứng được mà không cần tên đó.
+Keep familiar indicator abbreviations (RSI, MACD, ADX, SMA20), with a short gloss the first time: "RSI (thang đo sức mua bán của 14 phiên gần nhất)". Mention unfamiliar model names (Wyckoff, Elliott) only with a sentence saying what they indicate; otherwise drop them — the conclusion stands without the name.
 
 ## Ví dụ
 
 **Ví dụ 1:**
 Hỏi: FPT kỹ thuật 1D+1W
-Đạt khi: verdict 2 khung + HH/LL + Ichimoku signal, ≤8 calls, và trong câu trả lời không còn nhãn kỹ thuật tiếng Anh nào chưa dịch.
+Đạt khi: a 2-timeframe verdict + HH/LL + the Ichimoku signal, ≤8 calls, and no untranslated English technical label left in the answer.
 
 ## Trực quan hóa
 
-Chỉ vẽ khi người dùng muốn xem hình, hoặc khi có chuỗi thời gian / so sánh mà bảng khó đọc; tối đa 1 biểu đồ mỗi câu trả lời. Vẽ bằng `chart_render` với `from_call` (mã `[ref …]` ở đầu kết quả tool) để không phải gõ lại số; cần chọn loại hình thì nạp `ve-bieu-do`. Hình hợp với dữ liệu skill này: candlestick+volume, multiline chỉ số, depth orderbook.
+Draw only when the user wants a picture, or when a time series / comparison is hard to read as a table; at most 1 chart per answer. Draw with `chart_render` using `from_call` (the `[ref …]` code at the top of a tool result) so you never retype numbers; load `ve-bieu-do` to choose the chart type. Fitting this skill's data: candlestick+volume, multiline indices, depth orderbook.

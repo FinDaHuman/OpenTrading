@@ -1,54 +1,54 @@
 # Chỉ báo ngành dầu khí — tách vòng kinh doanh và cách đọc
 
-> File này giữ **bốn vòng kinh doanh khác nhau** và cách đọc từng vòng, không giữ
-> con số kỳ nào. Mọi giá trị lấy từ `financial_detail` / `yf_commodities` /
-> `news_market` gần nhất và ghi kỳ kèm theo. Luật về không đặt ngành vào chuỗi luân
-> chuyển chỉ nằm ở §Ranh giới của SKILL.md — không lặp lại ở đây.
+> This file keeps **four different business loops** and how to read each, not any
+> period's numbers. Every value comes from the latest `financial_detail` / `yf_commodities` /
+> `news_market`, with the period stated. The rule against placing the sector in the rotation
+> chain lives only in the SKILL.md §Ranh giới — not repeated here.
 
 ## 1. Tách vòng kinh doanh
 
-| Vòng | Đặc điểm nhận dạng | Chu kỳ bám | So với ai |
+| Loop | Identifying features | Cycle it tracks | Compare with |
 |---|---|---|---|
-| Thượng nguồn (khai thác) | Sản lượng khai thác, trữ lượng, chi phí thăm dò | Giá dầu + trữ lượng | Cùng vòng thượng nguồn |
-| Lọc hoá dầu | Doanh thu bán sản phẩm lọc − giá dầu thô đầu vào | Chênh lệch tinh chế | Cùng vòng lọc dầu |
-| Vận chuyển | Cước tàu, hợp đồng thuê | Cước tàu + độ dài đường đi | Cùng vòng vận chuyển |
-| Dịch vụ kỹ thuật | Doanh thu hợp đồng, backlog | Chi tiêu đầu tư của tập đoàn | Cùng vòng dịch vụ |
+| Upstream (production) | Output, reserves, exploration costs | Oil prices + reserves | The same upstream loop |
+| Refining/petrochemicals | Refined product sales − input crude price | The refining spread | The same refining loop |
+| Shipping | Freight rates, charter contracts | Freight rates + voyage distance | The same shipping loop |
+| Technical services | Contract revenue, backlog | The group's capital spending | The same services loop |
 
-Bước bắt buộc trước khi so sánh: xác định vòng nào nuôi lãi của mã bằng mảng trong
-`financial_detail` + bảng mảng trong `vn_company`. Không rõ → xử lý như nhiều vòng
-và đọc cả các nhánh, không chọn một vòng đại diện.
+A required step before comparing: identify which loop feeds the ticker's profit from the segments in
+`financial_detail` + the segment table in `vn_company`. Unclear → treat it as several loops
+and read all the branches; never pick one representative loop.
 
 ## 2. Nhóm biên theo vòng
 
-| Chỉ báo | Đọc từ | Cách đọc |
+| Indicator | Read from | How to read |
 |---|---|---|
-| Doanh thu hợp nhất | `financial_detail` | Đọc kèm cơ cấu mảng: doanh thu tăng nhưng không nói được vòng nào kéo là vô nghĩa |
-| Biên lãi gộp theo mảng (nếu công bố) | `financial_detail` | Chỉ báo cốt lõi. Biên hợp nhất che sự dịch chuyển giữa các vòng |
-| Chi phí thăm dò | `financial_detail` | Xu hướng 4 quý: chi tiêu tăng báo hiệu sản lượng tương lai; chi tiêu cắt báo hiệu suy giảm về sau |
-| Tỷ lệ chi phí | `financial_detail` (tính bằng `shell`, ghi rõ) | Tỷ lệ thấp khi giá dầu cao không phải năng lực — đo lại ở vùng giá thấp |
+| Consolidated revenue | `financial_detail` | Read with the segment mix: revenue up without knowing which loop drove it is meaningless |
+| Gross margin by segment (if disclosed) | `financial_detail` | The core indicator. The consolidated margin hides shifts between loops |
+| Exploration costs | `financial_detail` | The 4-quarter trend: rising spending signals future output; cuts signal later decline |
+| Cost ratio | `financial_detail` (computed with `shell`, stated) | A low ratio when oil is high is not capability — measure it again in a low-price zone |
 
 ## 3. Nhóm khối lượng và trữ lượng
 
-| Chỉ báo | Đọc từ | Cách đọc |
+| Indicator | Read from | How to read |
 |---|---|---|
-| Sản lượng kỳ | `news_market` (công bố ngành/công ty) | Bù đắp trữ lượng chỉ có nghĩa khi đọc cạnh sản lượng |
-| Trữ lượng bù đắp | `news_market` | Thấp hơn sản lượng liên tiếp = sản lượng đang tiêu từ trữ lượng cũ |
-| Thứ tự dự án / khởi công | `company_events` · `news_market` | Quyết định sản lượng 2–5 năm tới; thứ tự lùi làm dòng thu trễ |
-| Hợp đồng dài hạn | `news_market` | Co giãn thu nhập qua chu kỳ; tỷ trọng cao giảm nhạy giá ngắn hạn |
+| Period output | `news_market` (sector/company releases) | Reserve replacement only means something next to output |
+| Reserve replacement | `news_market` | Below output repeatedly = output drawing down old reserves |
+| Project order / groundbreakings | `company_events` · `news_market` | Decides output 2–5 years out; a delayed order pushes revenue back |
+| Long-term contracts | `news_market` | Smooth income through the cycle; a high share lowers short-term price sensitivity |
 
 ## 4. Nhóm giá và tuyến
 
-| Nguồn | Đọc gì | Cách dùng |
+| Source | What to read | How to use it |
 |---|---|---|
-| `yf_commodities` | Giá dầu theo chu kỳ tra được | Làm mốc đối chiếu, **không** thay giá thực hiện hợp đồng |
-| `news_market` | Tình trạng tuyến vận chuyển, cước tàu dầu, diễn biến địa chính trị | Driver của vòng vận chuyển; ghi rõ ngày nguồn |
-| `planned_targets` | Kế hoạch năm của công ty | Neo kỳ vọng sản lượng/doanh thu |
-| `peer_compare` | Key tổng quan thực sự trả về, như P/E, P/B, ROE | So cùng phân khúc; KPI vận hành lấy từ `financial_detail` từng peer cùng kỳ và công bố doanh nghiệp, không tạo key bằng `metrics` |
+| `yf_commodities` | Oil prices by the cycle available | As a reference mark; it does **not** replace realised contract prices |
+| `news_market` | Shipping-route status, tanker rates, geopolitical developments | The shipping loop's driver; state the source date |
+| `planned_targets` | The company's yearly plan | Anchor for output/revenue expectations |
+| `peer_compare` | The overview keys it really returns, such as P/E, P/B, ROE | Compare within the segment; operating KPIs come from each peer's `financial_detail` for the same period and company disclosures; `metrics` creates no keys |
 
 ## 5. Bẫy đọc thường gặp
 
-- Tin giá dầu thì "cả ngành cùng hưởng": sai — lọc dầu có thể đi ngược, dịch vụ
-  đi sau 6–12 tháng.
-- Doanh thu tăng vì một giao dịch bất thường trong kỳ: đánh dấu là một lần, không
-  nội suy.
-- Sản lượng hiện tại đẹp: kiểm tra bù đắp trữ lượng trước khi kết luận bền vững.
+- Oil price news means "the whole sector benefits": wrong — refining can move the other way, services
+  follow 6–12 months later.
+- Revenue up because of an unusual transaction in the period: mark it as one-off; never
+  extrapolate.
+- Current output looks good: check reserve replacement before concluding it is sustainable.

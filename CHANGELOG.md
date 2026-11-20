@@ -5,6 +5,61 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ## [Unreleased]
 
+### Changed
+
+- Skill references (`skills/*/references/*.md`, read on demand) and the model-facing text of the desk playbooks
+  (agent prompts, lenses, `.describe()` of arguments and result schemas, `whenToUse`, the evidence note) are in
+  English. Kept Vietnamese: headings, quoted user wording, the ranking/fact-check tables and reports the user
+  reads, phase names, logs, the approval-card description, zod keys and enum values. The references lint that
+  stops copied table results now also catches the English shapes ("strongest in the whole table", "samples ~8",
+  "led both troughs") and English amounts ("billion"). References: DeepSeek 31 262 → 21 589 tokens (−31%).
+
+- Skill bodies (`skills/*/SKILL.md`, read when a skill loads) are in English: steps, driver tables, decision
+  trees and boundaries. Section headings, example questions, the quoted ★ verdicts and every line the model
+  copies to the user stay Vietnamese, as do the `tao-ho-so` questions. Four skills now say outright that a
+  comparison or opportunity list is never a personal buy recommendation (`so-sanh-cung-nganh`,
+  `danh-gia-truoc-bctc`, `tim-co-hoi-bao-cao-ctck`, `phan-tich-chuyen-sau-1-ma`). The 43 bodies: DeepSeek
+  98 878 → 71 815 tokens (−27%), o200k 75 667 → 66 259. `references/` and desk playbooks follow separately.
+
+
+- Skill descriptions (the `<skill_catalog>` sent with every request) and the subagent types (description and
+  prompt, `agents/*.md`) are in English; report wording the user reads stays Vietnamese. Soft skill routing
+  (`matchSoft`) scores the new `match_text` frontmatter, which keeps the former Vietnamese description, so
+  suggestions for Vietnamese questions are unchanged (routing eval: same floors). Skill catalog: o200k 2 662 →
+  ~2 090, DeepSeek 3 585 → ~2 120 tokens.
+
+
+
+- Runtime text the model reads is in English (E3): stop-gate and todo reminders, rescue prompts, tool-call
+  repair errors, source notices (`[Source failed]`, `[Partial data]`, `[Stale data]`), source lines of web/MCP
+  results, argument errors, denials and auto-mode blocks, compaction prompt and marker, subagent and ultradesk
+  notices, briefs' parameter help, MCP call errors and content placeholders, `@mention` attachments, ask_user
+  results, operand notes, truncation marks. Kept Vietnamese: the notebook's memory blocks and their labels
+  (spec 007 fixes them byte for byte and the history masking reads them), brief section names the subagent
+  prompt cites, TUI notices and `/mcp`, `/memory`, `/desk` interface text. Readers of these texts accept both
+  languages (failure classes, transcript rows, subagent/desk notice parsers, pruned markers, the truncate mark
+  in memory history, the compact marker's skill line).
+
+
+- Tool descriptions, parameter descriptions and the text tools return to the model are in English (all built-in
+  tools: shell, files, web, charts, todo, subagents, skills, sessions, watchlist, desk), and so are the
+  request-wide blocks: `<quyen_tep>`, the permission-mode line, the market clock (`market/calendar.json`
+  labels), the MCP and deferred-tool headers, the skill hint and the `ot-data` line. Interface-only text
+  (`summarize`, approval previews, the mode label) stays Vietnamese; the model is told to write
+  user-visible fields (ask_user questions, todo items, shell and subagent descriptions) in Vietnamese.
+  Parsers of these texts accept both languages (failure classes, operand notes, `@mentions` line counts,
+  eval shell routes, saved todo prefixes). Tool definitions: o200k 8 104 → 7 886, DeepSeek 9 325 → 8 295
+  tokens; always-sent tools DeepSeek 3 773 → 3 184.
+
+
+- System prompt files (`prompts/*.md`) are in English, same rules in the same order. Tags, gate markers, slash
+  commands, the Vietnamese phrases the model must not write ("đã lưu"…) and Vietnamese examples stay as they
+  were. A literal translation weakened rules (memory disclosure 3/9 vs 9/9 on gemini-3.5-flash-lite), so a few
+  rules spell out what the Vietnamese implied: no target range or buy zone, no bare ticker or yes/no as the
+  choice, LaTeX as a prohibition, Vietnamese also in free-text JSON fields, the three things a "save this"
+  answer must say. Terminal system prompt: o200k 3 376 → 3 015 tokens, DeepSeek 4 635 → 3 180. Paired evals
+  (16/11, nemotron-3.5-super-vl): red-team 18/18 vs 17/18, memory 8/9 vs 6/9, compute 15/15 both.
+
 ### Fixed
 
 - `tool_search "tin tức"` finds `web_search`. "tin tức" expanded to `news`, which no tool carried, so only "tin"

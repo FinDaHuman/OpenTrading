@@ -1,6 +1,7 @@
 ---
 name: hoa-chat-vn
-description: "Pha/sóng: dùng skill chu kỳ. Phân tích ngành hoá chất và phân bón Việt Nam theo chu kỳ giá ure, chính sách xuất khẩu Trung Quốc, tỷ lệ xuất khẩu và chi phí khí đầu vào. Dùng khi hỏi xu hướng nhóm hoá chất hoặc công ty phân bón."
+description: "Phase/wave: use dinh-vi-chu-ky-vn. Analyses VN chemicals and fertilisers by the urea price cycle, Chinese export policy, export share and gas input costs. Use for chemicals trends or fertiliser companies."
+match_text: "Pha/sóng: dùng skill chu kỳ. Phân tích ngành hoá chất và phân bón Việt Nam theo chu kỳ giá ure, chính sách xuất khẩu Trung Quốc, tỷ lệ xuất khẩu và chi phí khí đầu vào. Dùng khi hỏi xu hướng nhóm hoá chất hoặc công ty phân bón."
 activation: auto
 requires_tools: [financial_detail, yf_commodities]
 uses_tools: [financial_detail, yf_commodities, financial_ratios, planned_targets, analyst_consensus, peer_compare, vs_categories, vs_indicator_data, news_symbol, news_market, symbol_lookup, vn_company]
@@ -12,148 +13,147 @@ version: 1.0.0
 
 # Hoá chất & phân bón Việt Nam — framework phân tích
 
-Ngành này sinh lời theo **cửa sổ giá**: lợi nhuận đến từ giai đoạn giá bán vượt
-chi phí đầu vào, và cửa sổ đó có thể mở rồi đóng trong một quý. Skill này đọc ngành
-bằng chu kỳ giá phân bón, **chính sách xuất khẩu của Trung Quốc** (biến số cung toàn
-cầu), tỷ lệ xuất khẩu (quyết định công ty bám giá nội địa hay bám giá quốc tế), và
-chi phí khí đầu vào.
+This sector earns by **price windows**: profit comes from periods when the selling price exceeds
+input costs, and such a window can open and close within a quarter. This skill reads the sector
+through the fertiliser price cycle, **China's export policy** (the global supply
+variable), the export share (whether a company tracks domestic or international prices), and
+gas input costs.
 
-Một điểm dễ đọc sai nằm ở bảng driver dưới (**tồn kho giá gốc**): khi giá thị trường
-nhảy, biên còn được hỗ trợ vài quý bởi tồn kho mua trước khi giá lên, rồi đảo chiều —
-biên một quý tốt chưa nói lên năng lực.
+One easy misreading sits in the driver table below (**historical-cost inventory**): when market prices
+jump, margins stay supported for a few quarters by inventory bought before the rise, then reverse —
+one good quarter's margin says nothing about capability yet.
 
 ## Khi nào dùng
 
-- Dùng khi: user hỏi xu hướng nhóm hoá chất/phân bón, tại sao lãi nhảy rồi sụt,
-  công ty phân bón chịu gì từ giá quốc tế và Trung Quốc.
-- Khi KHÔNG dùng (dùng skill khác thay thế):
-  - Hỏi pha thị trường / luân chuyển ngành / sóng ngành tiếp theo → `dinh-vi-chu-ky-vn`.
-  - Phân tích toàn diện một mã → `phan-tich-chuyen-sau-1-ma`.
-  - Chỉ định giá một mã → `dinh-gia-chuyen-sau`.
-  - Chỉ đọc BCTC một mã không có mảng ngành → `co-ban-chuyen-sau`.
-  - Xuất khẩu nông sản (gạo, cà phê, hạt điều) → `xuat-nhap-khau-vn`.
+- Use when: the user asks about chemicals/fertiliser trends, why profit jumped then fell,
+  what fertiliser companies face from international prices and China.
+- Do NOT use (use another skill instead):
+  - Market phase / sector rotation / the next sector wave → `dinh-vi-chu-ky-vn`.
+  - A full ticker analysis → `phan-tich-chuyen-sau-1-ma`.
+  - Valuing one ticker only → `dinh-gia-chuyen-sau`.
+  - Only one ticker's statements without the sector angle → `co-ban-chuyen-sau`.
+  - Agricultural exports (rice, coffee, cashews) → `xuat-nhap-khau-vn`.
 
 ## Trụ cột driver
 
-| Driver | Kênh truyền dẫn | Đọc/xác minh bằng |
+| Driver | Transmission channel | Read/verify with |
 |---|---|---|
-| Chu kỳ giá phân bón | Giá bán là biến số số 1: giá nhảy theo cú sốc cung (địa chính trị, thời tiết, xuất khẩu) rồi thu về. Ngành ăn theo **cửa sổ giá**, không theo xu hướng dài | Giá phân bón quốc tế và nội địa: `news_market`/`web_search`, ghi rõ chỉ số giá + ngày |
-| Chính sách xuất khẩu Trung Quốc | Trung Quốc là nguồn cung lớn; kiểm soát xuất khẩu (hạn ngạch, cấm, thuế) làm giá toàn cầu nhảy và ngược lại | Chính sách xuất khẩu: `news_market`/`web_search`, ghi rõ văn bản/thông báo + ngày |
-| Tỷ lệ xuất khẩu | Công ty xuất phần lớn sản lượng thì bám giá quốc tế và giao dịch ngoại thương; công ty bán nội địa thì lãi bị khung giá trong nước và nhu cầu nội địa quyết định | Tỷ lệ xuất khẩu: công bố công ty qua `news_symbol`/`web_search`; xuất khẩu phân bón theo nhóm hàng: số liệu Hải quan có kỳ và đơn vị rõ, tra qua `web_search` |
-| Chi phí khí đầu vào | Chi phí khí đầu vào theo hợp đồng dài hạn là khoản chi phí lớn thay đổi theo sản lượng và điều khoản giá; nhiên liệu tham chiếu đỡ phần dự báo | Chi phí nhiên liệu tham chiếu: `yf_commodities` theo chu kỳ; chi phí giá vốn trong `financial_detail` |
-| Nhu cầu nội địa | Nhu cầu nội địa nhạy giá nông sản (như lúa); yếu khi giá nông sản thấp hoặc giá phân bón cao | Nhu cầu nội địa: `news_market`, `vs_categories` → `vs_indicator_data` (tra mã danh mục sản xuất nông nghiệp thực có; thiếu thì dùng công bố cơ quan thống kê) |
-| Tồn kho giá gốc | Tồn kho mua trước khi giá lên hỗ trợ biên 1–2 quý rồi đảo chiều — nhãn "cửa sổ" của toàn ngành | Tồn kho trong `financial_detail`; tỷ lệ xuất trong công bố công ty |
+| Fertiliser price cycle | The selling price is variable no. 1: prices jump on supply shocks (geopolitics, weather, exports) then fall back. The sector lives on **price windows**, not long trends | International and domestic fertiliser prices: `news_market`/`web_search`, stating the price index + date |
+| China's export policy | China is a large supplier; export controls (quotas, bans, duties) make global prices jump, and the reverse | Export policy: `news_market`/`web_search`, stating the text/notice + date |
+| Export share | A company exporting most of its output tracks international prices and trade; a domestic seller's profit is set by the domestic price frame and demand | Export share: company disclosures via `news_symbol`/`web_search`; fertiliser exports by product group: Customs figures with a clear period and unit, via `web_search` |
+| Gas input costs | Gas under long-term contracts is a large cost that moves with volume and price terms; reference fuels help the forecast | Reference fuel costs: `yf_commodities` by cycle; cost of goods in `financial_detail` |
+| Domestic demand | Domestic demand is sensitive to farm prices (e.g. rice); weak when farm prices are low or fertiliser prices high | Domestic demand: `news_market`, `vs_categories` → `vs_indicator_data` (look up the agricultural-production category codes that exist; if missing, use the statistics office's releases) |
+| Historical-cost inventory | Inventory bought before a rise supports margins for 1–2 quarters, then reverses — the "window" label of the whole sector | Inventory in `financial_detail`; export share in company disclosures |
 
 ## Các bước
 
-**Bước 1: Nhận diện cơ cấu mảng (song song).**
+**Bước 1: Identify the segment mix (in parallel).**
 
-`symbol_lookup` · `vn_company` (mảng: phân bón / hoá chất / thương mại) ·
-`financial_detail` (doanh thu theo mảng). Ghi rõ tỷ lệ xuất khẩu nếu công bố.
+`symbol_lookup` · `vn_company` (segments: fertiliser / chemicals / trading) ·
+`financial_detail` (revenue by segment). State the export share if disclosed.
 
-**Bước 2: Hai đầu giá (song song).**
+**Bước 2: Both ends of the price (in parallel).**
 
-`news_market` (giá phân bón quốc tế + nội địa, chính sách Trung Quốc, tình trạng
-cung) · `yf_commodities` (năng lượng tham chiếu cho chi phí đầu vào) ·
-`web_search` (xuất khẩu phân bón theo nhóm hàng từ Hải quan, có kỳ và đơn vị rõ; `vs_xnk_detail` không cung cấp chuỗi nhóm hàng).
+`news_market` (international + domestic fertiliser prices, China policy, supply
+status) · `yf_commodities` (reference energy for input costs) ·
+`web_search` (fertiliser exports by product group from Customs, with a clear period and unit; `vs_xnk_detail` does not provide product-group series).
 
-**Bước 3: Biên + tồn kho (song song).**
+**Bước 3: Margin + inventory (in parallel).**
 
-`financial_detail`: doanh thu, giá vốn → biên lãi gộp theo quý; tồn kho; chi phí
-tài chính. Đọc 4 quý liền để phân biệt "cửa sổ giá" với năng lực bền.
+`financial_detail`: revenue, cost of goods → quarterly gross margin; inventory; financial
+costs. Read 4 consecutive quarters to tell a "price window" from durable capability.
 
-**Bước 4: Neo kỳ vọng + vị thế nhóm.**
+**Bước 4: Expectation anchor + position in the group.**
 
-`planned_targets` · `peer_compare` (chỉ tiêu tổng quan trong nhóm) · `analyst_consensus`.
+`planned_targets` · `peer_compare` (overview metrics within the group) · `analyst_consensus`.
 
-Đối chiếu công cụ: `peer_compare` chỉ dùng các key tổng quan thực sự có trong kết quả (như P/E, P/B, ROE); tham số `metrics` không tạo thêm chỉ tiêu. Biên, sản lượng, chi phí, tồn kho và KPI vận hành phải đọc `financial_detail` từng peer cùng kỳ; nếu không có thì tra công bố doanh nghiệp qua `news_symbol`/`web_search`, ghi nguồn, công thức và kỳ. Thiếu dữ liệu thì để trống, không xếp hạng.
+Tool check: `peer_compare` uses only the overview keys actually present in the result (such as P/E, P/B, ROE); its `metrics` parameter does not create extra metrics. Margins, volumes, costs, inventory and operating KPIs must be read from each peer's `financial_detail` for the same period; if missing, look up company disclosures via `news_symbol`/`web_search`, stating the source, formula and period. With missing data, leave it blank and do not rank.
 
 ## Cây quyết định công ty hoá chất đang được tiếp sức hay siết
 
+Follow the matching branch; record intermediate states and stop only at ★. Every conclusion must separate known data from what is missing; never fill in numbers or turn "chưa rõ" into "xấu".
 
-Đi theo nhánh phù hợp; ghi nhận trạng thái trung gian và chỉ dừng ở ★. Mọi kết luận phải tách dữ liệu đã biết và phần còn thiếu, không bù số hay đổi "chưa rõ" thành "xấu".
+Q1. What is the company's market mix?
+├─ Exports most of its output → Q2 (international)
+├─ Sells mainly domestically → Q4 (domestic)
+├─ Mixed → consider Q2 and Q4 separately by the disclosed mix
+└─ Share unclear → record the missing mix, continue Q2 and Q4 with low confidence
 
-Q1. Cơ cấu thị trường của công ty thế nào?
-├─ Xuất phần lớn sản lượng → Q2 (quốc tế)
-├─ Bán chủ yếu nội địa → Q4 (nội địa)
-├─ Hỗn hợp → xét riêng Q2 và Q4 theo cơ cấu công bố
-└─ Chưa rõ tỷ lệ → ghi thiếu cơ cấu, tiếp Q2 và Q4 với độ tin cậy thấp
+Q2 (international). Is the selling-price window widening?
+├─ Selling prices rising relative to costs → record favourable, continue Q3
+├─ Selling prices falling or costs catching up → record pressure, continue Q3
+└─ No comparable price pair → record missing, continue Q3
 
-Q2 (quốc tế). Cửa sổ giá bán có mở rộng không?
-├─ Giá bán tăng tương đối so với chi phí → ghi thuận lợi, tiếp Q3
-├─ Giá bán giảm hoặc chi phí đuổi kịp → ghi áp lực, tiếp Q3
-└─ Chưa có cặp giá so sánh được → ghi thiếu, tiếp Q3
+Q3 (international). What does verified Chinese export policy say?
+├─ Export controls reducing supply in target markets → record source/date and conditional benefit, continue Q5
+├─ Easing or supply returning → record competitive pressure, continue Q5
+└─ Unverified or irrelevant to the product → assume no effect, continue Q5
 
-Q3 (quốc tế). Chính sách xuất khẩu Trung Quốc đã xác minh ra sao?
-├─ Kiểm soát xuất khẩu làm giảm cung thị trường đích → ghi nguồn/ngày và thuận lợi có điều kiện, tiếp Q5
-├─ Nới hoặc nguồn cung tăng lại → ghi áp lực cạnh tranh, tiếp Q5
-└─ Chưa xác minh hoặc không liên quan sản phẩm → không giả định tác động, tiếp Q5
+Q4 (domestic). How are demand and realised prices?
+├─ Sales volume up, prices held → record favourable, continue Q5
+├─ Volume down or prices not covering costs → record pressure, continue Q5
+└─ Not disclosed → record missing, continue Q5
 
-Q4 (nội địa). Nhu cầu và giá bán thực hiện ra sao?
-├─ Sản lượng bán tăng, giá giữ được → ghi thuận lợi, tiếp Q5
-├─ Sản lượng giảm hoặc giá không bù được chi phí → ghi áp lực, tiếp Q5
-└─ Chưa công bố → ghi thiếu, tiếp Q5
-
-Q5 (chung). Biên và tồn kho có xác nhận tín hiệu không?
-├─ Biên cải thiện nhiều kỳ, giá/khối lượng thuận lợi, không chỉ do tồn kho rẻ → ★ "Được tiếp sức; nêu điều kiện duy trì cửa sổ giá"
-├─ Biên co hoặc tồn kho giá cao gây áp lực có bằng chứng → ★ "Bị siết theo giá/chi phí đã xác minh"
-└─ Dữ liệu thiếu hoặc trái chiều → ★ "Chưa đủ dữ liệu kết luận tổng thể; không coi chính sách chưa rõ là bất lợi"
+Q5 (common). Do margins and inventory confirm the signal?
+├─ Margins improving over several periods, favourable price/volume, not just cheap inventory → ★ "Được tiếp sức; nêu điều kiện duy trì cửa sổ giá"
+├─ Margins contracting or high-cost inventory creating pressure, with evidence → ★ "Bị siết theo giá/chi phí đã xác minh"
+└─ Data missing or conflicting → ★ "Chưa đủ dữ liệu kết luận tổng thể; không coi chính sách chưa rõ là bất lợi"
 
 ## Chỉ báo đặc thù ngành
 
-Bảng chỉ báo ngành hoá chất/phân bón + cách đọc ở `references/kpi.md`.
+The chemicals/fertiliser indicator table + how to read it is in `references/kpi.md`.
 
 ## Định giá theo đặc thù ngành
 
-Hoá chất/phân bón là chu kỳ giá: định giá bằng **EV/EBITDA theo vòng** và **P/B so
-đáy của chính ngành**, không dùng P/E tại đỉnh cửa sổ giá. Đánh dấu rõ một kỳ lãi
-bất thường là "cửa sổ giá" và không nội suy. Neo kỳ vọng bằng `planned_targets` và
+Chemicals/fertilisers are a price cycle: value with **EV/EBITDA through the cycle** and **P/B against
+the sector's own troughs**, never P/E at the peak of a price window. Mark an unusual profit period clearly
+as a "price window" and do not extrapolate it. Anchor expectations with `planned_targets` and
 `analyst_consensus`.
 
 ## Rủi ro đặc thù
 
-- **Rủi ro cửa sổ đóng**: giá hồi sau cú sốc cung và biên co về trong 1–2 quý.
-- **Rủi ro chính sách Trung Quốc đảo chiều**: nới xuất khẩu làm giá toàn cầu giảm,
-  tác động đến cả công ty bán nội địa qua khung giá.
-- **Rủi ro tồn kho giá cao**: mua đầu vào trước khi giá lên rồi giá giảm → biên bị
-  nén hai chiều.
-- **Rủi ro cầu nội địa**: nhu cầu nhạy giá nông sản; nông sản yếu thì phân bón yếu
-  theo.
-- **Rủi ro khung giá trong nước**: công ty bán nội địa không hưởng trọn cửa sổ
-  quốc tế.
+- **Window-closing risk**: prices recover after a supply shock and margins shrink back within 1–2 quarters.
+- **Chinese policy reversal risk**: easing exports lowers global prices,
+  affecting domestic sellers too through the price frame.
+- **High-cost inventory risk**: inputs bought before a rise, then prices fall → margins squeezed
+  from both sides.
+- **Domestic demand risk**: demand is sensitive to farm prices; weak farm prices mean weak fertiliser
+  demand.
+- **Domestic price-frame risk**: domestic sellers do not capture the full international
+  window.
 
 ## Ranh giới
 
-- Không xác định pha thị trường, không suy "hoá chất sắp dẫn sóng" → `dinh-vi-chu-ky-vn`.
-- Không chọn mã khuyến nghị mua/bán → `phan-tich-chuyen-sau-1-ma`.
-- Không suy chính sách xuất khẩu Trung Quốc từ trí nhớ: tra thông báo/văn bản hiện
-  hành, ghi nguồn và ngày.
-- Không dùng giá quốc tế thay giá bán thực tế của công ty — giá bán trong công bố
-  công ty mới là giá áp dụng.
+- Do not determine the market phase or infer "hoá chất sắp dẫn sóng" → `dinh-vi-chu-ky-vn`.
+- Do not pick tickers to buy/sell → `phan-tich-chuyen-sau-1-ma`.
+- Never infer Chinese export policy from memory: look up current notices/texts,
+  stating the source and date.
+- Never use international prices in place of the company's actual selling prices — the prices in the company's
+  disclosures are the ones that apply.
 
 ## Giới hạn
 
-- Giá năng lượng từ `yf_commodities` là tham chiếu, không phải giá khí hợp đồng dài
-  hạn của từng nhà máy.
-- Tỷ lệ xuất khẩu là công bố không định kỳ: khi thiếu, hạ độ tin cậy nhánh Q1.
-- Chu kỳ giá ngắn: mọi kết luận phải ghi ngày tra giá.
+- Energy prices from `yf_commodities` are a reference, not each plant's long-term contract gas
+  price.
+- The export share is disclosed irregularly: when missing, lower the confidence of the Q1 branch.
+- Price cycles are short: every conclusion must state the date prices were checked.
 
 ## Ví dụ
 
 **Ví dụ 1:**
 Hỏi: Giá ure tăng mạnh thì công ty phân bón hưởng không?
-Đạt khi: có giá quốc tế + ngày tra, chính sách Trung Quốc, tỷ lệ xuất khẩu, biên 2
-quý liền, và verdict theo cây Q1→Q5.
+Đạt khi: the international price + check date, China policy, the export share, 2 consecutive quarters of
+margins, and a verdict following the Q1→Q5 tree.
 
 ## Trực quan hóa
 
-Chỉ vẽ khi người dùng muốn xem hình; tối đa 1 biểu đồ. Hợp với dữ liệu skill này:
-multiline giá phân bón với biên lãi gộp, bar biên theo nhóm, waterfall giá bán
-trừ chi phí đầu vào. Vẽ bằng `chart_render` với `from_call` (mã `[ref …]`) từ kết
-quả tool đã có; cần chọn loại hình thì nạp `ve-bieu-do`.
+Draw only when the user wants a picture; at most 1 chart. Fitting this skill's data:
+multiline fertiliser prices with the gross margin, bar margins by group, waterfall selling price
+minus input costs. Draw with `chart_render` using `from_call` (the `[ref …]` code) from
+tool results you have; load `ve-bieu-do` to choose the chart type.
 
 ## File tham chiếu
 
-| File | Dùng khi |
+| File | Use when |
 |---|---|
-| `references/kpi.md` | Cần cách đọc cửa sổ giá, phân biệt nội địa – quốc tế, và cách đọc tồn kho giá gốc |
+| `references/kpi.md` | You need to read price windows, separate domestic from international, and read historical-cost inventory |

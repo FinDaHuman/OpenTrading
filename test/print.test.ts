@@ -132,7 +132,7 @@ test("--yolo still refuses what bypass keeps for the user: a write into .git", a
   await runPrint({ prompt: "Ghi hook", format: "json", yolo: true }, { runtime: runtime() })
   expect(existsSync(path.join(work, ".git", "hooks", "pre-commit"))).toBe(false)
   // Refused by the gate (nobody to ask), not failed for some other reason.
-  expect(readFileSync(JSON.parse(out.join("")).session_file, "utf8")).toContain("không có giao diện để hỏi")
+  expect(readFileSync(JSON.parse(out.join("")).session_file, "utf8")).toContain("there is no interface to ask")
 })
 
 test("--yolo never starts an untrusted project .mcp.json server", async () => {
@@ -185,9 +185,9 @@ test("--profile machine --turn-requests: the request carries the machine prompt 
   expect(system).not.toContain("<style>")
   expect(system).toContain("YYYY-MM-DD")
   const shell = (first.tools as { function: { name: string; description: string } }[] | undefined)?.find((t) => t.function.name === "shell")
-  expect(shell?.function.description).toStartWith("Máy tính")
+  expect(shell?.function.description).toStartWith("Calculator")
   expect(seen.at(-1)!.body!.tool_choice).toBe("none")
   expect([0, 1]).toContain(code)
   // The caller's own runtime gets its full shell back after the turn.
-  expect(rt.registry.get("shell")?.description).not.toStartWith("Máy tính")
+  expect(rt.registry.get("shell")?.description).not.toStartWith("Calculator")
 })

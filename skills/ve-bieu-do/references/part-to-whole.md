@@ -2,25 +2,25 @@
 
 ## Pie THANH TỶ LỆ 100%
 
-- Input: `series` + `labels` (≥2 lát, ít nhất 1 lát >0; lát ≤0 bị bỏ).
-- Một thanh ngang full-width chia segment theo % (lát nhỏ nhất ≥1 ký tự,
-  phần dư dồn vào lát lớn nhất), mỗi lát 1 màu + legend (hộp màu + tên + %).
-- Tổng các lát phải ≈100%.
+- Input: `series` + `labels` (≥2 slices, at least 1 slice >0; slices ≤0 are dropped).
+- One full-width horizontal bar split into segments by % (the smallest slice ≥1 character,
+  the remainder going to the largest slice), each slice 1 colour + a legend (colour box + name + %).
+- The slices must total ≈100%.
 
 ## Donut THANH TỶ LỆ (giống pie)
 
-- Input: `value` + `max` (1 số duy nhất).
-- Thanh ngang 2 segment: phần đạt xanh + phần còn lại xám + legend
-  (tên + %). Dòng trống ngăn cách thanh với legend.
+- Input: `value` + `max` (1 single number).
+- A horizontal bar with 2 segments: the achieved part green + the remainder grey + a legend
+  (name + %). A blank line separates the bar from the legend.
 
 ## Stacked
 
-- Input: `matrix` (mỗi hàng 1 nhóm) + labels (hàng nhóm rồi cột thành phần).
-- Mỗi thành phần 1 màu + legend dưới. Mỗi hàng là 100% của nhóm đó.
+- Input: `matrix` (each row 1 group) + labels (group rows, then component columns).
+- Each component 1 colour + a legend below. Each row is 100% of that group.
 
 ## Waterfall
 
-- Input: `start` + `series` deltas (≥1 bước) + `labels` từng bước.
-- Mỗi bước 1 thanh từ tổng cũ → tổng mới (├█┤ xanh tăng / ├░┤ đỏ giảm),
-  ghi delta và running total. Dòng trống giữa các bước.
-- Hàng đầu `Bắt đầu │` và cuối `Kết thúc │`.
+- Input: `start` + `series` deltas (≥1 step) + `labels` for each step.
+- Each step is 1 bar from the old total → the new total (├█┤ green up / ├░┤ red down),
+  showing the delta and the running total. A blank line between steps.
+- The first row `Bắt đầu │` and the last `Kết thúc │`.

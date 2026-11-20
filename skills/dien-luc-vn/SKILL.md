@@ -1,6 +1,7 @@
 ---
 name: dien-luc-vn
-description: "Pha/sóng: dùng skill chu kỳ. Phân tích ngành điện Việt Nam theo cải cách giá điện, cơ cấu nguồn, thủy văn và kế hoạch phát triển lưới. Dùng khi hỏi xu hướng nhóm điện, đọc kết quả nhà máy điện hay tác động giá điện."
+description: "Phase/wave: use dinh-vi-chu-ky-vn. Analyses VN power by electricity price reform, generation mix, hydrology and grid development plans. Use for power trends, power plant results or electricity price effects."
+match_text: "Pha/sóng: dùng skill chu kỳ. Phân tích ngành điện Việt Nam theo cải cách giá điện, cơ cấu nguồn, thủy văn và kế hoạch phát triển lưới. Dùng khi hỏi xu hướng nhóm điện, đọc kết quả nhà máy điện hay tác động giá điện."
 activation: auto
 requires_tools: [financial_detail, yf_commodities]
 uses_tools: [financial_detail, yf_commodities, financial_ratios, planned_targets, analyst_consensus, peer_compare, news_symbol, news_market, company_events, symbol_lookup, vn_company, vn_forex_ohlcv]
@@ -12,151 +13,150 @@ version: 1.0.0
 
 # Điện lực Việt Nam — framework phân tích
 
-Ngành điện VN có **một điểm cấu trúc quyết định mọi phần còn lại**: phần lớn dòng thu nhà máy dựa vào hợp đồng mua bán điện với bên mua điện; phải xác minh cơ chế hợp đồng và mua bán điện trực tiếp áp dụng cho từng dự án. Vì vậy biến then chốt là **cơ chế giá điện và hợp đồng**, cùng nhu cầu/huy động thực tế: giá bán lẻ không bù đủ chi phí có thể tạo áp lực tài chính cho bên mua và rủi ro thanh toán. Điều chỉnh giá có thể giảm áp lực nhưng vẫn phải kiểm tra thu tiền thực tế của nhà máy. Kỳ vọng tăng trưởng nhu cầu mà bỏ qua biến này sẽ đọc sai cả ngành.
+Vietnamese power has **one structural point that decides everything else**: most plant revenue rests on power purchase agreements with the power buyer; verify the contract mechanism and any direct power purchase arrangement that applies to each project. So the key variable is **the electricity pricing and contract mechanism**, together with real demand/dispatch: retail prices that do not cover costs can create financial pressure on the buyer and payment risk. Price adjustments can ease that pressure, but the plant's actual collections must still be checked. Expecting demand growth while ignoring this variable misreads the whole sector.
 
-Yếu tố thứ hai: **loại nguồn**. Thủy điện, khí, than và thiết bị lưới nằm trong
-bốn chu kỳ hoàn toàn khác nhau, và thủy văn (mực nước hồ) quyết định nhóm nào bị
-hạ định giá trong mùa khô.
+The second factor: **the source type**. Hydropower, gas, coal and grid equipment are
+four entirely different cycles, and hydrology (reservoir levels) decides which group gets
+de-rated in the dry season.
 
 ## Khi nào dùng
 
-- Dùng khi: user hỏi xu hướng nhóm điện, một nhà máy điện chịu gì, giá điện điều
-  chỉnh tác động ra sao, thủy văn hại nhóm nào.
-- Khi KHÔNG dùng (dùng skill khác thay thế):
-  - Hỏi pha thị trường / luân chuyển ngành / sóng ngành tiếp theo → `dinh-vi-chu-ky-vn`.
-  - Phân tích toàn diện một mã → `phan-tich-chuyen-sau-1-ma`.
-  - Chỉ định giá một mã → `dinh-gia-chuyen-sau`.
-  - Chỉ đọc BCTC một mã không có mảng ngành → `co-ban-chuyen-sau`.
-  - Số liệu vĩ mô VN chi tiết → `danh-gia-vi-mo-viet-nam`.
-  - Khu công nghiệp (bất động sản công nghiệp nói chung) → `bat-dong-san-vn`.
+- Use when: the user asks about power-group trends, what a power plant faces, how electricity price
+  adjustments act, which group hydrology hurts.
+- Do NOT use (use another skill instead):
+  - Market phase / sector rotation / the next sector wave → `dinh-vi-chu-ky-vn`.
+  - A full ticker analysis → `phan-tich-chuyen-sau-1-ma`.
+  - Valuing one ticker only → `dinh-gia-chuyen-sau`.
+  - Only one ticker's statements without the sector angle → `co-ban-chuyen-sau`.
+  - Detailed Vietnamese macro figures → `danh-gia-vi-mo-viet-nam`.
+  - Industrial parks (industrial real estate in general) → `bat-dong-san-vn`.
 
 ## Trụ cột driver
 
-| Driver | Kênh truyền dẫn | Đọc/xác minh bằng |
+| Driver | Transmission channel | Read/verify with |
 |---|---|---|
-| Giá điện và cải cách giá bán lẻ | Phần lớn nhà máy bán điện theo hợp đồng với bên mua điện; xác minh cả cơ chế mua bán trực tiếp nếu áp dụng. Giá bán lẻ không đủ chi phí có thể gây áp lực tài chính và thanh toán; điều chỉnh giá cần được xác nhận bằng công nợ và dòng tiền thực tế. Đây là biến re-rate ngành | Khung giá và cơ chế điều chỉnh: `news_market`/`web_search`, ghi văn bản + ngày. Công nợ nhà máy với mua bán: `financial_detail` |
-| Cơ cấu nguồn | Cơ cấu phát điện theo loại nguồn quyết định nhóm nào được ưu tiên khai thác. Nước sụt giảm làm tăng tỷ trọng nhiệt điện chạy bù | Cơ cấu phát điện theo kỳ: `news_market` (báo cáo ngành), nếu không có thì `web_search` có nguồn |
-| Thủy văn | Mực nước hồ chứa quyết định sản lượng thủy điện và thứ tự khai thác chạy bù. Mùa khô kéo dài làm nhóm thủy điện bị hạ định giá trong nhiều kỳ | Mực nước/vận hành hồ chứa: `news_market`, ghi kỳ và vùng miền |
-| Kế hoạch phát triển lưới | Quyết định quy mô công suất và dự phòng công suất tương lai; điều chỉnh quy hoạch thay đổi thứ tự dự án được ưu tiên vốn | Văn bản quy hoạch + điều chỉnh: `news_market`/`web_search`, ghi văn bản + ngày |
-| Tải trọng mới | Tải trung tâm dữ liệu (chạy phẳng) và xe điện làm đổi hình đường cong nhu cầu: ưu tiên nguồn chạy nền và truyền tải | Kỳ vọng tải mới: `news_market`/`web_search` |
-| Nhiên liệu đầu vào | Than, khí nhập khẩu và tỷ giá quyết định chi phí vùng phát nhiệt; khí nhập nhạy tỷ giá mạnh hơn than nội địa | Khí tự nhiên tham chiếu: `yf_commodities`; than nhiệt/LNG và giá hợp đồng: `web_search` nguồn công bố có ngày, đơn vị và chủng loại; tỷ giá: `vn_forex_ohlcv` nếu cần bối cảnh |
+| Electricity prices and retail tariff reform | Most plants sell power under contracts with the power buyer; also verify direct purchase mechanisms where they apply. Retail prices below cost can cause financial and payment pressure; price adjustments must be confirmed by receivables and actual cash flow. This is the sector's re-rating variable | Price frameworks and adjustment mechanisms: `news_market`/`web_search`, stating the text + date. Plant receivables from the power buyer: `financial_detail` |
+| Generation mix | The generation mix by source type decides which group is dispatched first. Falling water raises the share of thermal power running as backup | Generation mix by period: `news_market` (sector reports), otherwise sourced `web_search` |
+| Hydrology | Reservoir levels decide hydropower output and the backup dispatch order. A long dry season de-rates the hydropower group for several periods | Reservoir levels/operations: `news_market`, stating the period and region |
+| Grid development plans | Decide future capacity scale and reserve margins; plan revisions change which projects get capital priority | Plan texts + revisions: `news_market`/`web_search`, stating the text + date |
+| New load | Data-centre load (flat) and EVs reshape the demand curve: favouring baseload and transmission | New-load expectations: `news_market`/`web_search` |
+| Input fuel | Coal, imported gas and the exchange rate decide thermal costs; imported gas is more FX-sensitive than domestic coal | Reference natural gas: `yf_commodities`; thermal coal/LNG and contract prices: dated published sources via `web_search`, with unit and grade; exchange rate: `vn_forex_ohlcv` if context is needed |
 
 ## Các bước
 
-**Bước 1: Nhận diện nhóm nguồn (song song).**
+**Bước 1: Identify the source group (in parallel).**
 
-`symbol_lookup` · `vn_company` (mảng: thủy / khí / nhiệt / tái tạo / truyền tải /
-thiết bị) · `financial_detail` (doanh thu theo mảng nếu có). Ghi rõ nhóm nguồn
-đang phân tích.
+`symbol_lookup` · `vn_company` (segments: hydro / gas / thermal / renewable / transmission /
+equipment) · `financial_detail` (revenue by segment if available). State the source group
+being analysed.
 
-**Bước 2: Giá điện + công nợ (song song).**
+**Bước 2: Electricity prices + receivables (in parallel).**
 
-`financial_detail` (doanh thu, các khoản phải thu — phải thu người mua bán điện là
-chỗ chứa rủi ro chính của ngành) · `news_market` (khung giá, điều chỉnh giá bán lẻ,
-cơ chế giá ưu đãi).
+`financial_detail` (revenue, receivables — receivables from the power buyer are
+where the sector's main risk sits) · `news_market` (price frameworks, retail tariff adjustments,
+incentive pricing mechanisms).
 
-**Bước 3: Cơ cấu + thủy văn + dự án (song song).**
+**Bước 3: Mix + hydrology + projects (in parallel).**
 
-`news_market` (cơ cấu phát điện theo kỳ, tình trạng hồ chứa, tiến độ dự án) ·
-`company_events` (sự kiện dự án của riêng mã, PPA mới) · `yf_commodities` (khí tự nhiên tham chiếu; than nhiệt/LNG tra nguồn công bố qua `web_search`, không giả định có trong bộ COMMO mặc định).
+`news_market` (generation mix by period, reservoir status, project progress) ·
+`company_events` (the ticker's own project events, new PPAs) · `yf_commodities` (reference natural gas; look up thermal coal/LNG from published sources via `web_search`; do not assume they are in the default COMMO set).
 
-**Bước 4: Neo kỳ vọng + vị thế nhóm.**
+**Bước 4: Expectation anchor + position in the group.**
 
-`planned_targets` · `analyst_consensus` · `peer_compare` (so trong cùng nhóm
-nguồn — luật ở §Ranh giới, không lặp lại ở đây).
+`planned_targets` · `analyst_consensus` · `peer_compare` (compare within the same source
+group — the rule is in §Ranh giới, not repeated here).
 
-Đối chiếu công cụ: `peer_compare` chỉ dùng các key tổng quan thực sự có trong kết quả (như P/E, P/B, ROE); tham số `metrics` không tạo thêm chỉ tiêu. Biên, sản lượng, chi phí, tồn kho và KPI vận hành phải đọc `financial_detail` từng peer cùng kỳ; nếu không có thì tra công bố doanh nghiệp qua `news_symbol`/`web_search`, ghi nguồn, công thức và kỳ. Thiếu dữ liệu thì để trống, không xếp hạng.
+Tool check: `peer_compare` uses only the overview keys actually present in the result (such as P/E, P/B, ROE); its `metrics` parameter does not create extra metrics. Margins, volumes, costs, inventory and operating KPIs must be read from each peer's `financial_detail` for the same period; if missing, look up company disclosures via `news_symbol`/`web_search`, stating the source, formula and period. With missing data, leave it blank and do not rank.
 
 ## Cây quyết định nhà máy điện đang được tiếp sức hay siết
 
+Follow the matching branch; record intermediate states and stop only at ★. Every conclusion must separate known data from what is missing; never fill in numbers or turn "chưa rõ" into "xấu".
 
-Đi theo nhánh phù hợp; ghi nhận trạng thái trung gian và chỉ dừng ở ★. Mọi kết luận phải tách dữ liệu đã biết và phần còn thiếu, không bù số hay đổi "chưa rõ" thành "xấu".
+Q1. Which source group is the company in?
+├─ Hydropower → Q3 (hydro)
+├─ Gas/LNG or coal → Q2 (thermal)
+├─ Renewables → record the PPA mechanism, curtailment and grid connection, continue Q4
+├─ Transmission/equipment → ★ "Đánh giá đầu tư lưới, backlog và hợp đồng; thiếu thì chưa đủ dữ liệu mảng thiết bị"
+├─ Several sources → assess each source separately per Q1, then combine by the disclosed weights
+└─ Mix unclear → ★ "Chưa đủ dữ liệu phân nguồn; không chọn một nguồn đại diện"
 
-Q1. Công ty thuộc nhóm nguồn nào?
-├─ Thủy điện → Q3 (thủy)
-├─ Khí/LNG hoặc than → Q2 (nhiệt)
-├─ Tái tạo → ghi cơ chế PPA, cắt giảm công suất và khả năng đấu nối, tiếp Q4
-├─ Truyền tải/thiết bị → ★ "Đánh giá đầu tư lưới, backlog và hợp đồng; thiếu thì chưa đủ dữ liệu mảng thiết bị"
-├─ Nhiều nguồn → đánh giá riêng mỗi nguồn theo Q1 rồi tổng hợp theo tỷ trọng công bố
-└─ Chưa rõ cơ cấu → ★ "Chưa đủ dữ liệu phân nguồn; không chọn một nguồn đại diện"
+Q2 (thermal). Do contract and fuel prices allow profitable generation?
+├─ A suitable cost pass-through/contract price mechanism exists → record favourable, continue Q5
+├─ Fuel rising but prices not yet compensating, with evidence → record margin pressure, continue Q5
+└─ PPA/realised fuel prices unclear → record missing, continue Q5
 
-Q2 (nhiệt). Giá hợp đồng và nhiên liệu có cho phép phát điện có lãi không?
-├─ Có cơ chế chuyển chi phí/giá hợp đồng phù hợp → ghi thuận lợi, tiếp Q5
-├─ Nhiên liệu tăng nhưng giá chưa bù, có bằng chứng → ghi áp lực biên, tiếp Q5
-└─ Chưa rõ PPA/giá nhiên liệu thực hiện → ghi thiếu, tiếp Q5
+Q3 (hydro). How are hydrology and output?
+├─ Favourable water flow/output → record favourable, continue Q4
+├─ Low reservoirs/falling output confirmed → record hydrology pressure, continue Q4
+└─ No data by region/period → record missing, continue Q4
 
-Q3 (thủy). Thủy văn và sản lượng đang thế nào?
-├─ Lưu lượng nước/sản lượng thuận lợi → ghi thuận lợi, tiếp Q4
-├─ Hồ thấp/sản lượng giảm được xác nhận → ghi áp lực thủy văn, tiếp Q4
-└─ Chưa có dữ liệu theo vùng/kỳ → ghi thiếu, tiếp Q4
+Q4 (common). Do cash flow and receivables confirm revenue?
+├─ Collections on time, margins/output confirm the favourable state → ★ "Được tiếp sức trong nguồn đang phân tích"
+├─ Receivables rising with evidence of late payment or falling margins → ★ "Có áp lực dòng tiền/biên; xác minh nguyên nhân, không mặc định do giá bán lẻ"
+└─ Data missing or conflicting → ★ "Chưa đủ dữ liệu kết luận tổng thể; nêu tín hiệu nguồn và công nợ đã biết"
 
-Q4 (chung). Dòng tiền và công nợ có xác nhận doanh thu không?
-├─ Thu tiền đúng hạn, biên/sản lượng xác nhận trạng thái thuận lợi → ★ "Được tiếp sức trong nguồn đang phân tích"
-├─ Phải thu tăng và có bằng chứng thanh toán chậm hoặc biên giảm → ★ "Có áp lực dòng tiền/biên; xác minh nguyên nhân, không mặc định do giá bán lẻ"
-└─ Dữ liệu thiếu hoặc trái chiều → ★ "Chưa đủ dữ liệu kết luận tổng thể; nêu tín hiệu nguồn và công nợ đã biết"
+Q5 (thermal). How are dispatch and variable costs?
+├─ Dispatched output rising, contract costs under control → record favourable, continue Q4
+├─ Low dispatch due to variable costs, grid or contract constraints → record pressure with its cause, continue Q4
+└─ Dispatch order/output unclear → record missing, continue Q4
 
-Q5 (nhiệt). Khả năng được huy động và chi phí biến đổi ra sao?
-├─ Sản lượng huy động tăng, chi phí hợp đồng kiểm soát được → ghi thuận lợi, tiếp Q4
-├─ Huy động thấp do chi phí biến đổi, ràng buộc lưới hoặc hợp đồng → ghi áp lực có nguyên nhân, tiếp Q4
-└─ Chưa rõ thứ tự huy động/sản lượng → ghi thiếu, tiếp Q4
-
-Dự phòng công suất là độ dư công suất khả dụng so với phụ tải đỉnh; thứ tự huy động phụ thuộc chi phí biến đổi, ràng buộc kỹ thuật, lưới và hợp đồng. Không dùng dự phòng cao để tự kết luận một nhà máy bị giảm huy động.
+The reserve margin is available capacity in excess of peak load; dispatch order depends on variable costs, technical constraints, the grid and contracts. Never use a high reserve margin alone to conclude that a plant's dispatch falls.
 
 ## Chỉ báo đặc thù ngành
 
-Bảng chỉ báo ngành điện + cách đọc ở `references/kpi.md`.
+The power indicator table + how to read it is in `references/kpi.md`.
 
 ## Định giá theo đặc thù ngành
 
-Điện định giá **theo nhóm nguồn**, không có một cặp multiple cho cả ngành: nhóm
-nhiệt trong mùa khô và nhóm thủy điện trong cùng kỳ là hai chu kỳ khác nhau. Dùng
-P/E và P/B trong **cùng nhóm nguồn** (luật so sánh ở §Ranh giới), kèm dòng tiền từ
-phải thu để đánh giá chất lượng doanh thu. Neo kỳ vọng bằng `planned_targets` (kế hoạch sản
-lượng/doanh thu) và `analyst_consensus`. Nhà máy trong giai đoạn chưa ký hợp đồng
-mua bán điện: ghi rõ là dòng thu chưa chắc chắn.
+Value power **by source group**; there is no single multiple pair for the whole sector: the
+thermal group in the dry season and the hydropower group in the same period are two different cycles. Use
+P/E and P/B within **the same source group** (the comparison rule is in §Ranh giới), with cash flow from
+receivables to judge revenue quality. Anchor expectations with `planned_targets` (output/revenue
+plans) and `analyst_consensus`. For plants that have not yet signed a power purchase
+agreement: state that the revenue is not yet certain.
 
 ## Rủi ro đặc thù
 
-- **Rủi ro giá điện đứng**: giá bán lẻ không đủ chi phí kéo dài → thu nhập bị chuyển
-  thành công nợ.
-- **Rủi ro thủy văn**: mùa khô kéo dài hạ định giá nhóm thủy điện nhiều kỳ liền.
-- **Rủi ro nhiên liệu nhập khẩu**: khí nhập và tỷ giá quyết định chi phí vùng khí.
-- **Rủi ro huy động**: dự phòng công suất cao tạo cạnh tranh, nhưng sản lượng từng nhà máy còn phụ thuộc chi phí biến đổi, lưới, kỹ thuật và hợp đồng.
-- **Rủi ro văn bản hóa**: dự án chưa ký hợp đồng mua bán thì dòng thu chưa chắc
-  chắn, dù hạ tầng đã xong.
+- **Frozen-tariff risk**: retail prices below cost for long → income turns
+  into receivables.
+- **Hydrology risk**: a long dry season de-rates the hydropower group for several periods in a row.
+- **Imported-fuel risk**: imported gas and the exchange rate decide gas-power costs.
+- **Dispatch risk**: a high reserve margin creates competition, but each plant's output also depends on variable costs, the grid, technical factors and contracts.
+- **Contracting risk**: projects without a signed purchase agreement have uncertain revenue,
+  even with the infrastructure finished.
 
 ## Ranh giới
 
-- Không xác định pha thị trường, không bảo "điện sắp dẫn sóng" → `dinh-vi-chu-ky-vn`.
-- Không chọn mã khuyến nghị mua/bán → `phan-tich-chuyen-sau-1-ma`.
-- Không suy ngưỡng giá hoặc kỳ vọng điều chỉnh từ trí nhớ: tra văn bản hiện hành,
-  ghi nguồn và ngày.
-- Chỉ xếp hạng trong cùng nhóm nguồn; so thủy điện với nhiệt điện bị cấm.
+- Do not determine the market phase or say "điện sắp dẫn sóng" → `dinh-vi-chu-ky-vn`.
+- Do not pick tickers to buy/sell → `phan-tich-chuyen-sau-1-ma`.
+- Never infer price thresholds or expected adjustments from memory: look up the current texts,
+  citing the source and date.
+- Rank only within the same source group; comparing hydropower with thermal power is forbidden.
 
 ## Giới hạn
 
-- Cơ cấu phát điện và mực nước hồ là công bố theo kỳ của ngành, độ trễ 1–2 tháng.
-- Cải cách giá điện là quá trình nhiều bước: kết luận giai đoạn phải ghi mốc văn bản
-  đang áp dụng.
-- Công nợ với người mua bán điện không công bố riêng ở mọi kỳ: khi thiếu, hạ độ tin
-  cậy nhánh Q4.
+- The generation mix and reservoir levels are periodic sector releases, lagging 1–2 months.
+- Electricity price reform is a multi-step process: conclusions about the stage must state the text
+  milestone in force.
+- Receivables from the power buyer are not disclosed separately every period: when missing, lower the
+  confidence of the Q4 branch.
 
 ## Ví dụ
 
 **Ví dụ 1:**
 Hỏi: Nhóm thủy điện đang bị siết vì đâu?
-Đạt khi: có cơ cấu phát điện + nguồn, tình trạng thủy văn, phải thu với người mua
-bán, và verdict theo cây Q1→Q3 ghi rõ nhóm nguồn.
+Đạt khi: the generation mix + source, hydrology status, receivables from the power
+buyer, and a verdict following the Q1→Q3 tree stating the source group.
 
 ## Trực quan hóa
 
-Chỉ vẽ khi người dùng muốn xem hình; tối đa 1 biểu đồ. Hợp với dữ liệu skill này:
-stacked bar cơ cấu nguồn theo kỳ, multiline sản lượng/giá vốn theo nhóm, scatter phải
-thu so với doanh thu. Vẽ bằng `chart_render` với `from_call` (mã `[ref …]`) từ kết
-quả tool đã có; cần chọn loại hình thì nạp `ve-bieu-do`.
+Draw only when the user wants a picture; at most 1 chart. Fitting this skill's data:
+stacked bar of the source mix by period, multiline output/cost of goods by group, scatter
+receivables versus revenue. Draw with `chart_render` using `from_call` (the `[ref …]` code) from
+tool results you have; load `ve-bieu-do` to choose the chart type.
 
 ## File tham chiếu
 
-| File | Dùng khi |
+| File | Use when |
 |---|---|
-| `references/kpi.md` | Cần cách phân nhóm nguồn, đọc phải thu với người mua bán điện, và chỉ báo sản lượng/biên theo nhóm |
+| `references/kpi.md` | You need the source grouping, reading receivables from the power buyer, and output/margin indicators by group |

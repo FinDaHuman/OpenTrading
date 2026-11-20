@@ -1,7 +1,7 @@
 import type { ModelMessage } from "ai"
 import { compactCarry, isCompactMarker } from "../compact-marker"
 import { toolErrorText } from "./errors"
-import { LOADED_PREFIX } from "./search"
+import { loadedPrefixOf } from "./search"
 
 /** A call that makes other deferred tools callable: a spawned subagent can be messaged or stopped. */
 const IMPLIES: Record<string, string[]> = { spawn_subagent: ["send_message", "stop_agent"] }
@@ -27,7 +27,7 @@ function errorText(output: unknown): string | undefined {
 
 /**
  * Deferred tools the conversation has made callable, in order of first appearance: tools
- * named in a `Đã nạp tool:` line of a tool_search / load_skill result, plus every tool the
+ * named in a `Tools loaded:` line (`Đã nạp tool:` before 20/11/2026) of a tool_search / load_skill result, plus every tool the
  * model called. Derived from history alone, so resumed sessions recover it and the set only
  * grows — a tool that appears in history is always declared again.
  */
@@ -49,8 +49,9 @@ export function loadedTools(messages: readonly ModelMessage[]): string[] {
       if (loads) {
         const text = firstText(part.output) ?? errorText(part.output)
         const line = text?.split("\n", 1)[0]
-        if (line?.startsWith(LOADED_PREFIX)) {
-          for (const name of line.slice(LOADED_PREFIX.length).split(",")) if (name.trim()) seen.add(name.trim())
+        const prefix = loadedPrefixOf(line)
+        if (line && prefix) {
+          for (const name of line.slice(prefix.length).split(",")) if (name.trim()) seen.add(name.trim())
         }
       }
     }

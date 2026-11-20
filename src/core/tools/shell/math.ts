@@ -376,7 +376,26 @@ export const AWK_NUMBER_FORMAT = "%.15g"
  * so `print 2.5e12/3` showed 8.33333e+11). Only for a command mathOnlyCommand accepted.
  */
 export function awkWithPrecision(command: string): string {
-  return command.trim().replace(/^awk[ \t]+/, `awk -v OFMT=${AWK_NUMBER_FORMAT} -v CONVFMT=${AWK_NUMBER_FORMAT} `)
+  return spacedOperators(command.trim()).replace(/^awk[ \t]+/, `awk -v OFMT=${AWK_NUMBER_FORMAT} -v CONVFMT=${AWK_NUMBER_FORMAT} `)
+}
+
+/**
+ * The awk program with a space around each binary + and - that follows a number or `)`. The awk
+ * of macOS (onetrue awk) reads a run like `12000000+12000001+…` as one number token and dies past
+ * about 108 characters ("pushed back too much"), while the same sum with spaces runs (measured
+ * with original-awk, #372). The spaces change nothing for awk. Strings (the printf format, a label)
+ * are left as they are, and so is an exponent's sign (`1e+5`: the sign follows a letter).
+ */
+export function spacedOperators(command: string): string {
+  const open = command.indexOf("'")
+  const close = command.lastIndexOf("'")
+  if (open < 0 || close <= open) return command
+  const program = command
+    .slice(open + 1, close)
+    .split(/("[^"]*")/)
+    .map((part, i) => (i % 2 === 1 ? part : part.replace(/([0-9.)])\s*([+-])\s*/g, "$1 $2 ")))
+    .join("")
+  return command.slice(0, open + 1) + program + command.slice(close)
 }
 
 /** Only numbers, operators, brackets, commas and a few function names: an expression, whatever its form. */
@@ -498,14 +517,14 @@ export const mathNearMiss = (command: string, shell: Pick<ShellInfo, "kind">): b
 /** What to tell the model about its command, before the accepted form (mathHint). */
 export function rewriteAdvice(miss: ComputeMiss, shell: Pick<ShellInfo, "kind">): string {
   const ps = shell.kind === "pwsh" || shell.kind === "powershell"
-  if (miss === "series") return "Lệnh dùng mảng hoặc vòng lặp. Viết thẳng từng số của chuỗi vào biểu thức (trung bình là (a+b+c)/3) và gán mỗi bước trung gian vào một biến."
-  if (miss === "interpreter") return `Lệnh dùng Python hoặc Node. Viết lại phép tính đó bằng ${ps ? "biểu thức PowerShell" : "awk"} theo dạng dưới đây.`
+  if (miss === "series") return "The command uses arrays or loops. Write each number of the series into the expression (an average is (a+b+c)/3) and assign each intermediate step to a variable."
+  if (miss === "interpreter") return `The command uses Python or Node. Rewrite that calculation as ${ps ? "a PowerShell expression" : "awk"} in the form below.`
   return ""
 }
 
 /** The arithmetic form for this machine's shell, for the tool description. */
 export function mathHint(shell: Pick<ShellInfo, "kind">): string {
   return shell.kind === "pwsh" || shell.kind === "powershell"
-    ? "Tính số: lệnh chỉ gồm phép tính, ví dụ `$g = 128.4/112 - 1; $g*100; [math]::Pow(1 + $g, 3)` (mỗi câu lệnh cách nhau bằng ; hoặc xuống dòng; biến $ten phải gán trước khi dùng; biểu thức trần in ra giá trị; hàm chỉ [math]::Round/Abs/Sqrt/Pow/Log/Log10/Exp/Max/Min/Floor/Ceiling/Truncate; không mảng, không vòng lặp: chuỗi số thì viết thẳng (a+b+c)/3) chạy ngay, không cần người dùng duyệt. Giữ đủ chữ số ở bước trung gian, chỉ làm tròn ở kết quả cuối."
-    : "Tính số: lệnh dạng `awk 'BEGIN{ g = 128.4/112 - 1; printf \"%.15g %.15g\\n\", g*100, (1+g)^3 }'` (mỗi câu lệnh cách nhau bằng ; hoặc xuống dòng; biến phải gán trước khi dùng; in bằng print hoặc printf; hàm chỉ sqrt/log/exp/int; so sánh và ?: đặt trong ngoặc; không mảng, split hay vòng lặp: chuỗi số thì viết thẳng (a+b+c)/3) chạy ngay, không cần người dùng duyệt. Giữ đủ chữ số ở bước trung gian, chỉ làm tròn ở kết quả cuối."
+    ? "Numbers: a command made only of arithmetic, e.g. `$g = 128.4/112 - 1; $g*100; [math]::Pow(1 + $g, 3)` (statements separated by ; or newlines; a $name must be assigned before use; a bare expression prints its value; functions only [math]::Round/Abs/Sqrt/Pow/Log/Log10/Exp/Max/Min/Floor/Ceiling/Truncate; no arrays, no loops: write a series out, (a+b+c)/3) runs at once, with no approval from the user. Keep all digits in intermediate steps; round only the final result."
+    : "Numbers: a command of the form `awk 'BEGIN{ g = 128.4/112 - 1; printf \"%.15g %.15g\\n\", g*100, (1+g)^3 }'` (statements separated by ; or newlines; variables must be assigned before use; print with print or printf; functions only sqrt/log/exp/int; put comparisons and ?: in parentheses; no arrays, split or loops: write a series out, (a+b+c)/3) runs at once, with no approval from the user. Keep all digits in intermediate steps; round only the final result."
 }

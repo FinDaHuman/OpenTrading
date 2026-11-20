@@ -1,6 +1,7 @@
 ---
 name: co-ban-chuyen-sau
-description: "Đọc BCTC một mã: chất lượng lợi nhuận, M-Score, F-score, cổ đông lớn, insider, cổ tức. Dùng khi hỏi BCTC có gì lạ, có thao túng không, cổ tức."
+description: "Reads one ticker's financial statements: earnings quality, M-Score, F-score, major shareholders, insiders, dividends. Use when asked whether the statements look odd or manipulated, or about dividends."
+match_text: "Đọc BCTC một mã: chất lượng lợi nhuận, M-Score, F-score, cổ đông lớn, insider, cổ tức. Dùng khi hỏi BCTC có gì lạ, có thao túng không, cổ tức."
 activation: auto
 requires_tools: [mcp__opentrading__financial_detail]
 triggers:
@@ -10,66 +11,65 @@ version: 1.6.0
 
 # Phân tích cơ bản một mã
 
-Phân tích THUẦN cơ bản 1 mã theo aspect: hỏi khía cạnh nào thì chỉ chạy leg đó rồi dừng — đừng quét hết BCTC vì "cho chắc".
+PURE fundamental analysis of 1 ticker, by aspect: run only the leg for the aspect asked, then stop — do not sweep all the statements "to be safe".
 
 ## Khi nào dùng
 
-- Dùng khi: user hỏi BCTC, chất lượng lợi nhuận, M-Score/thao túng, F-score, kế hoạch kinh doanh, cổ đông lớn, insider, cổ tức của 1 mã.
-- Khi KHÔNG dùng (dùng skill khác thay thế):
-  - Hỏi kỹ thuật (RSI, MACD, breakout, hỗ trợ/kháng cự) → `ky-thuat-chuyen-sau`.
-  - Hỏi định giá (fair value, PER, upside) → `dinh-gia-chuyen-sau`.
-  - So sánh 2-6 mã → `so-sanh-cung-nganh`.
-  - Phân tích toàn diện 1 mã → `phan-tich-chuyen-sau-1-ma`.
-  - Đọc báo cáo CTCK (không phải BCTC gốc) → `tim-co-hoi-bao-cao-ctck`.
+- Use when: the user asks about one ticker's financial statements, earnings quality, M-Score/manipulation, F-score, business plan, major shareholders, insiders, dividends.
+- Do NOT use (use another skill instead):
+  - Technicals (RSI, MACD, breakout, support/resistance) → `ky-thuat-chuyen-sau`.
+  - Valuation (fair value, PER, upside) → `dinh-gia-chuyen-sau`.
+  - Comparing 2–6 tickers → `so-sanh-cung-nganh`.
+  - A full analysis of 1 ticker → `phan-tich-chuyen-sau-1-ma`.
+  - Reading brokerage reports (not the original statements) → `tim-co-hoi-bao-cao-ctck`.
 
 ## Các bước
 
-**Bước 0: Kiểm tra JWT (bắt buộc, gọi trực tiếp đầu tiên).**
+**Bước 0: Check the JWT (required, the first direct call).**
 
-Chạy `vs_auth_status`. JWT sống thì được dùng `financial_detail`; JWT chết thì chuyển nhánh mirror `vs_financeinfo` — hai tool này không bao giờ chạy song song vì cùng một nguồn số.
+Run `vs_auth_status`. With a live JWT you may use `financial_detail`; with a dead JWT switch to the mirror branch `vs_financeinfo` — these two tools never run in parallel since they share one data source.
 
-**Bước 1: Lõi BCTC + chất lượng.**
+**Bước 1: Core statements + quality.**
 
-Sau `vs_auth_status`, chạy song song 2 data calls: `financial_detail` (statement=KQKD, periods_n=4) + `stock_forensic` (symbol). Đây là 3 calls tổng cộng khi JWT sống. Nếu JWT chết, dùng `vs_financeinfo` thay `financial_detail` như Bước 0. Nếu user chỉ hỏi chất lượng (`chataluong`) thì dừng ngay tại đây.
+After `vs_auth_status`, run 2 data calls in parallel: `financial_detail` (statement=KQKD, periods_n=4) + `stock_forensic` (symbol). That is 3 calls in total with a live JWT. With a dead JWT, use `vs_financeinfo` instead of `financial_detail` as in Bước 0. If the user asks only about quality (`chataluong`), stop right here.
 
-**Bước 2: Mở rộng theo aspect (mỗi aspect là 1 leg, chỉ chạy leg được hỏi).**
+**Bước 2: Expand by aspect (each aspect is 1 leg; run only the leg asked).**
 
-- Trend/ratios: `financial_statements` · `financial_ratios` · `vn_fundamentals` (tối đa 3 calls).
-- Sở hữu/kế hoạch (`sohuu`/`cophieu`/`kehoach`): `planned_targets` · `holders` · `insider_trading` · `dividends_splits` (+ Bước 1 nếu cần nền).
-- Tham chiếu: `vs_financial_norms` / `vs_financial_terms` / `vs_company_info` — chỉ khi cần giải thích norm_id/kỳ.
-- Không bao giờ gọi `vs_documents` ở đây (đó là tool của `tim-co-hoi-bao-cao-ctck). LCTT/CDKT chỉ gọi khi user hỏi explicitly dòng tiền/bảng cân đối qua param `statement`.
+- Trend/ratios: `financial_statements` · `financial_ratios` · `vn_fundamentals` (at most 3 calls).
+- Ownership/plan (`sohuu`/`cophieu`/`kehoach`): `planned_targets` · `holders` · `insider_trading` · `dividends_splits` (+ Bước 1 if a base is needed).
+- Reference: `vs_financial_norms` / `vs_financial_terms` / `vs_company_info` — only to explain a norm_id/period.
+- Never call `vs_documents` here (that is `tim-co-hoi-bao-cao-ctck`'s tool). Call LCTT/CDKT (cash flow/balance sheet) only when the user explicitly asks about cash flow/the balance sheet, via the `statement` param.
 
-**Bước 3: Validate trước khi chốt verdict.**
+**Bước 3: Validate before the verdict.**
 
-Leg nào rỗng thì verdict partial + ghi rõ nguồn thiếu, không bịa số lấp chỗ trống. Trong `stock_forensic`, kiểm tra `schema_version` ở cấp cao nhất; kiểm tra riêng `beneish.version`, `beneish.status`, `beneish.missing_inputs`, `piotroski.version`, `piotroski.status`, `piotroski.missing_inputs`, kỳ năm tài chính và phạm vi BCTC. Báo cáo quý ở leg tăng trưởng không thay được đầu vào năm của forensic. Chỉ đọc điểm của từng mô hình khi `status=complete` và `score` có giá trị; `partial`, `not_applicable`, `unsupported` hoặc `score=null` thì trình bày độ phủ và dữ liệu thiếu, không gán 0. Với ngân hàng/CTCK/bảo hiểm, Beneish `not_applicable`, Piotroski `unsupported`; không áp công thức doanh nghiệp thông thường. Một mã như FPT cũng có thể chuyển từ complete sang partial khi nguồn một dòng BCTC chưa được chứng minh đúng nghĩa. `financial_detail` periods vượt gói → rows rỗng + warning → degrade sang `vs_financeinfo` đúng 1 lần, ghi rõ fallback. `vn_company` chậm ~30s khi throttle thì đặt cuối, thiếu thì ghi thiếu.
+An empty leg → a partial verdict + state the missing source; never invent numbers to fill gaps. In `stock_forensic`, check the top-level `schema_version`; check separately `beneish.version`, `beneish.status`, `beneish.missing_inputs`, `piotroski.version`, `piotroski.status`, `piotroski.missing_inputs`, the fiscal-year period and the statement scope. Quarterly reports in the growth leg cannot replace forensics' yearly inputs. Read a model's score only when `status=complete` and `score` has a value; for `partial`, `not_applicable`, `unsupported` or `score=null`, present the coverage and missing data, never 0. For banks/brokerages/insurers, Beneish is `not_applicable` and Piotroski `unsupported`; never apply the ordinary-company formulas. A ticker like FPT can also move from complete to partial when the source of one statement line is not proven to mean the right thing. `financial_detail` periods beyond the plan → empty rows + a warning → degrade to `vs_financeinfo` exactly once and state the fallback. `vn_company` is slow (~30s) when throttled, so put it last; if missing, say so.
 
 ## Cấu trúc câu trả lời
 
-Trình bày kết luận đúng cấu trúc sau, mỗi mục ghi số + trend + provenance:
+Present the conclusion in exactly this structure, each item with figures + trend + provenance:
 
-1. Chất lượng tăng trưởng: DT/LN 4 quý + trend QoQ/YoY + biên (`provenance: financial_detail`).
-2. Ratios chủ chốt (`provenance: financial_ratios` / `vn_fundamentals`).
-3. M-Score + F-score theo năm nếu hoàn chỉnh; nếu thiếu thì ghi `status`, độ phủ và nguồn thiếu (`provenance: stock_forensic`).
-4. So với kế hoạch: vượt/hụt % (`provenance: planned_targets`).
-5. Cấu trúc sở hữu + thay đổi insider (`provenance: holders` / `insider_trading`).
-6. Chính sách cổ tức (`provenance: dividends_splits`).
-7. Kết luận 1 câu: mức đánh giá cơ bản theo các leg có bằng chứng + 3 rủi ro lớn nhất; đánh dấu tạm thời khi forensic thiếu.
+1. Growth quality: revenue/profit for 4 quarters + QoQ/YoY trend + margins (`provenance: financial_detail`).
+2. Key ratios (`provenance: financial_ratios` / `vn_fundamentals`).
+3. Yearly M-Score + F-score when complete; if incomplete, give the `status`, coverage and missing sources (`provenance: stock_forensic`).
+4. Against the plan: beat/miss in % (`provenance: planned_targets`).
+5. Ownership structure + insider changes (`provenance: holders` / `insider_trading`).
+6. Dividend policy (`provenance: dividends_splits`).
+7. A 1-sentence conclusion: the fundamental assessment from the legs with evidence + the 3 biggest risks; mark it provisional when forensics are missing.
 
-**Giải thích con số forensic (bắt buộc khi có leg 3):** không chỉ liệt kê số. Beneish chuẩn ở đây là mô hình **8 biến theo năm, có phiên bản**: DSRI (phải thu/doanh thu), GMI (biên gộp), AQI (tài sản ngoài tài sản ngắn hạn và PPE ròng), SGI (tăng trưởng doanh thu), DEPI (tỷ lệ khấu hao), SGAI (chi phí bán hàng và quản lý/doanh thu), LVGI (nợ dài hạn cộng nợ ngắn hạn/tổng tài sản), TATA (lợi nhuận kế toán trừ CFO, chia tổng tài sản cuối kỳ). Chỉ so ngưỡng nghiên cứu −1.78 khi đủ cả 8 biến, đúng kỳ/phạm vi/nguồn, `status=complete`; đây không phải ngưỡng đã hiệu chuẩn trên Việt Nam, và điểm ở hai phía đều không chứng minh có hay không gian lận. Không suy DEPI từ dòng không được kiểm chứng, không dùng số 0 hay biến trung tính để lấp chỗ trống. Cờ thành phần từ tool là tín hiệu cần rà soát, không phải bằng chứng thao túng; không tự đặt DSRI/SGI cutoff.
+**Explaining forensic numbers (required when leg 3 is present):** do not just list numbers. The standard Beneish here is the **versioned 8-variable yearly** model: DSRI (receivables/revenue), GMI (gross margin), AQI (assets other than current assets and net PPE), SGI (revenue growth), DEPI (depreciation rate), SGAI (selling and admin expenses/revenue), LVGI (long-term debt plus current liabilities/total assets), TATA (accounting profit minus CFO, over year-end total assets). Compare with the research threshold −1.78 only when all 8 variables are present, for the right period/scope/source, with `status=complete`; this threshold is not calibrated for Vietnam, and a score on either side proves neither fraud nor its absence. Never infer DEPI from unverified lines; never fill gaps with 0 or neutral variables. Component flags from the tool are signals for review, not evidence of manipulation; never set your own DSRI/SGI cutoffs.
 
-Piotroski chuẩn có **9 tín hiệu**: ROA dương, CFO dương, ROA tăng, CFO lớn hơn lợi nhuận trên cùng cơ sở tài sản, đòn bẩy giảm, current ratio tăng, không phát hành cổ phần mới, biên gộp tăng, vòng quay tài sản tăng. Chỉ báo điểm `x/9` khi đủ 9 tín hiệu hợp lệ; nếu thiếu, ghi `score=null`, `passed/evaluated`, `missing_inputs`, kỳ và dòng nguồn; đặc biệt không đoán current_portion_long_term_debt hoặc equity_issued. Không biến tín hiệu thiếu thành tín hiệu trượt. Kết luận phải dẫn số, kỳ, phạm vi và trạng thái mô hình, không gọi BCTC "sạch" chỉ vì điểm thấp hay thiếu dữ liệu.
+The standard Piotroski has **9 signals**: positive ROA, positive CFO, rising ROA, CFO above profit on the same asset base, falling leverage, a rising current ratio, no new share issuance, a rising gross margin, rising asset turnover. Report an `x/9` score only when all 9 signals are valid; otherwise give `score=null`, `passed/evaluated`, `missing_inputs`, the period and source lines; in particular never guess current_portion_long_term_debt or equity_issued. Never turn a missing signal into a failed one. The conclusion must cite figures, period, scope and model status, and never call statements "sạch" just because the score is low or data is missing.
 
 ## Ví dụ
 
 **Ví dụ 1:**
 Hỏi: BCTC FPT có gì lạ
-Trả lời (Wave 1 đủ: 1 call `vs_auth_status` rồi 2 data calls): trạng thái/độ phủ M-Score và F-score theo năm + 4 quý DT/LN + verdict 7 mục; chỉ nêu điểm khi tool trả mô hình complete, không mở Wave 3–4.
+Trả lời (Wave 1 is enough: 1 `vs_auth_status` call, then 2 data calls): yearly M-Score and F-score status/coverage + 4 quarters of revenue/profit + a 7-item verdict; give scores only when the tool returns a complete model; do not open Waves 3–4.
 
 **Ví dụ 2:**
 Hỏi: cơ bản FPT
-Đạt khi: đã kiểm tra trạng thái M-Score/F-score (điểm có thể null), 4 quý doanh thu/lợi nhuận, cổ đông lớn và cổ tức lấy từ tool; mục nào tool trả rỗng (ví dụ insider) thì ghi rõ là dữ liệu trống.
-
+Đạt khi: the M-Score/F-score status was checked (scores may be null), 4 quarters of revenue/profit, major shareholders and dividends from tools; any item the tool returned empty (e.g. insiders) is stated as empty data.
 
 ## Trực quan hóa
 
-Chỉ vẽ khi người dùng muốn xem hình, hoặc khi có chuỗi thời gian / so sánh mà bảng khó đọc; tối đa 1 biểu đồ mỗi câu trả lời. Vẽ bằng `chart_render` với `from_call` (mã `[ref …]` ở đầu kết quả tool) để không phải gõ lại số; cần chọn loại hình thì nạp `ve-bieu-do`. Hình hợp với dữ liệu skill này: stacked P&L cấu phần, waterfall P&L, pie ownership, bar KH/dividends.
+Draw only when the user wants a picture, or when a time series / comparison is hard to read as a table; at most 1 chart per answer. Draw with `chart_render` using `from_call` (the `[ref …]` code at the top of a tool result) so you never retype numbers; load `ve-bieu-do` to choose the chart type. Fitting this skill's data: stacked P&L components, waterfall P&L, pie ownership, bar KH/dividends.

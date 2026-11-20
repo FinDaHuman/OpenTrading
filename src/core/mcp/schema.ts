@@ -71,7 +71,7 @@ function inlineRefs(root: Node): Node {
       const target = lookup(ref)
       // A cycle (or an external ref) cannot be inlined: leave an open object with a hint.
       if (!isObj(target) || stack.includes(ref)) {
-        const description = [siblings.description, `(kiểu ${ref.split("/").pop()})`].filter(Boolean).join(" ")
+        const description = [siblings.description, `(type ${ref.split("/").pop()})`].filter(Boolean).join(" ")
         return { type: "object", description }
       }
       return walk({ ...target, ...siblings }, [...stack, ref])
@@ -140,7 +140,7 @@ function cleanNode(input: unknown, flavor: SchemaFlavor): unknown {
     // where the server expects 5 — so drop the enum and say the allowed values instead.
     if (Array.isArray(node.enum) && node.enum.some((v) => typeof v !== "string")) {
       const values = node.enum.map((v) => JSON.stringify(v)).join(", ")
-      node.description = [node.description, `Một trong: ${values}.`].filter(Boolean).join(" ")
+      node.description = [node.description, `One of: ${values}.`].filter(Boolean).join(" ")
       delete node.enum
     }
     if (typeof node.format === "string" && !GEMINI_FORMATS.has(node.format)) delete node.format

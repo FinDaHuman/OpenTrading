@@ -18,10 +18,10 @@ test("create with symbols holds them at once; invalid ones are named; create alo
   const made = await run({ action: "create", name: "cong nghe", symbols: ["fpt", "HPG", "hpg", "??"] })
   expect(made).toContain("FPT, HPG")
   expect(made).toContain("??")
-  expect(await run({ action: "get", name: "cong nghe" })).toContain("(2 mã")
+  expect(await run({ action: "get", name: "cong nghe" })).toContain("(2 tickers")
   await run({ action: "create", name: "trong" })
-  expect(await run({ action: "get", name: "trong" })).toContain("(trống)")
+  expect(await run({ action: "get", name: "trong" })).toContain("(empty)")
   // A name taken stays an error, and nothing is added to the existing list.
-  await expect(run({ action: "create", name: "cong nghe", symbols: ["VCB"] })).rejects.toThrow("đã có")
+  await expect(run({ action: "create", name: "cong nghe", symbols: ["VCB"] })).rejects.toThrow("already exists")
   expect(await run({ action: "get", name: "cong nghe" })).not.toContain("VCB")
 })

@@ -217,7 +217,7 @@ describe("memoryLines: cut blocks", () => {
     const cut = truncate(raw, DEFAULT_MAX_OUTPUT_CHARS)
     const found = memoryLines([toolResult(cut)]).blocks
     // The block that runs into the mark is cut; every block wholly before it is complete.
-    const mark = cut.indexOf("\n\n[... đã lược ")
+    const mark = cut.indexOf("\n\n[... ")
     const beforeMark = found.filter((b) => b.at.end <= mark)
     expect(beforeMark.length).toBeGreaterThan(0)
     expect(beforeMark.slice(0, -1).every((b) => b.complete)).toBe(true)
@@ -249,6 +249,23 @@ describe("memoryLines: cut blocks", () => {
       [3, false],
       [8, false],
     ])
+  })
+
+  test("the marks of sessions saved before 20/11/2026 ('[… đã cắt bớt]', the Vietnamese budget line) still end a block early", () => {
+    const a = renderLessonBlock(lesson(3))
+    const b = renderLessonBlock(long(4))
+    const body = [a, b].map((t) => `- ${t}`).join("\n")
+    for (const mark of ["[… cut]", "[… đã cắt bớt]", "[… the rest was cut to fit the context budget]", "[… phần còn lại đã được cắt bớt để vừa ngân sách ngữ cảnh]"]) {
+      const capped = body.slice(0, a.length + 300) + `\n${mark}`
+      const blocks = memoryLines([userWith([`<memory_lien_quan>\n${capped}\n</memory_lien_quan>`])]).blocks
+      expect([mark, blocks.map((x) => [x.ref, x.complete])]).toEqual([
+        mark,
+        [
+          [3, true],
+          [4, false],
+        ],
+      ])
+    }
   })
 
   test("the reminder cap '[… đã cắt bớt]' and the layer budget mark end a block early", () => {

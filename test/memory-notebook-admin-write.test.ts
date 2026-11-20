@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test"
-import { readFileSync, writeFileSync } from "node:fs"
+import { readdirSync, readFileSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import { countChars } from "../src/core/memory/limits"
 import { createNotebookAdmin, notebookAdmin, type NotebookAdmin } from "../src/core/memory/notebook/admin"
 import type { NewSubjectDraft, ThesisDraft } from "../src/core/memory/notebook/drafts"
-import { exportFileName, renderNotebookMarkdown } from "../src/core/memory/notebook/export"
+import { exportFileName, renderNotebookFolder, renderNotebookMarkdown, slug, writeNotebookFolderExport } from "../src/core/memory/notebook/export"
 import { MemoryStoreError } from "../src/core/memory/store/errors"
 import type { MemoryStore, MemoryWriter } from "../src/core/memory/store/open"
 import { DECISION_MARKER, seedExample, seedRenamed, useNotebookDir } from "./helpers/memory-notebook"
@@ -531,6 +531,62 @@ describe("export to Markdown", () => {
     expect(second.file).not.toBe(first.file)
     expect(readFileSync(second.file, "utf8")).toContain(DECISION_MARKER)
     expect(readFileSync(first.file, "utf8")).not.toContain(DECISION_MARKER)
+  })
+
+  test("#346 folder: README index, a folder per group, one file per entry with a frontmatter; no decision unless asked", () => {
+    const { admin } = setup()
+    const files = renderNotebookFolder(admin.entries(), { decisions: false, at: AT })
+    const byPath = new Map(files.map((f) => [f.path, f.text]))
+    const index = byPath.get("README.md")!
+    expect(index).toStartWith("# Sổ ghi nhớ\n")
+    expect(index).toContain("Xuất lúc 15:04 ngày 03/11/2026 (giờ Việt Nam).")
+    expect(index).toContain("## Luận điểm")
+    expect(index).not.toContain("## Quyết định")
+    // Every entry file is listed in the index, and every listed file exists.
+    const listed = [...index.matchAll(/\]\(([^)]+)\)/g)].map((m) => m[1]!)
+    expect(listed.sort()).toEqual(files.filter((f) => f.path !== "README.md").map((f) => f.path).sort())
+    const constraint = byPath.get("rang-buoc/001-khong-dung-margin-ke-ca-t-0.md")!
+    expect(constraint).toStartWith('---\nname: "#1 · bản 2"\ndescription: ')
+    expect(constraint).toContain('type: "constraint"\nid: 1\nversion: 2\n')
+    expect(constraint).toContain("Không dùng margin, kể cả T+0")
+    expect(files.some((f) => f.path.startsWith("luan-diem/hpg"))).toBe(true)
+    expect(files.some((f) => f.path.startsWith("quyet-dinh/"))).toBe(false)
+    expect(files.every((f) => /^(README.md|[a-z0-9/.-]+)$/.test(f.path))).toBe(true)
+    const withLog = renderNotebookFolder(admin.entries(), { decisions: true, at: AT })
+    expect(withLog.some((f) => f.path.startsWith("quyet-dinh/") && f.text.includes(DECISION_MARKER))).toBe(true)
+  })
+
+  test("#346 folder: names are ASCII slugs, a clash gets -2, a quote or a heading mark in a title stays text", () => {
+    expect(slug("Không dùng margin, kể cả T+0")).toBe("khong-dung-margin-ke-ca-t-0")
+    expect(slug("Đ ồ !!")).toBe("d-o")
+    expect(slug("***")).toBe("muc")
+    const entry = (id: number, title: string) => ({ group: "lesson" as const, id, version: 1, title, detail: `# ${title}`, createdAt: "2026-11-03T00:00:00Z" })
+    const files = renderNotebookFolder([entry(7, 'Bài "học"'), entry(7, "Bài học")], { decisions: false, at: AT })
+    expect(files.map((f) => f.path)).toEqual(["README.md", "bai-hoc/007-bai-hoc.md", "bai-hoc/007-bai-hoc-2.md"])
+    expect(files[1]!.text).toContain('description: "Bài \\"học\\""')
+    expect(files[1]!.text).toContain("\n\\# Bài")
+  })
+
+  test("#346 exportMarkdown({ folder }): a new folder in exports/, never written into twice", async () => {
+    const { admin } = setup()
+    const first = await admin.exportMarkdown({ decisions: false, folder: true })
+    if (!first.ok) throw new Error(first.message)
+    expect(path.dirname(first.file)).toBe(path.join(nb.dir(), "exports"))
+    expect(path.basename(first.file)).toMatch(/^so-ghi-nho-\d{2}-\d{2}-\d{4}(-\d{6})?$/)
+    expect(readFileSync(path.join(first.file, "README.md"), "utf8")).toContain("## Ràng buộc")
+    const second = await admin.exportMarkdown({ decisions: false, folder: true })
+    if (!second.ok) throw new Error(second.message)
+    expect(second.file).not.toBe(first.file)
+  })
+
+  test("#346 a folder export that fails half way leaves nothing behind", async () => {
+    const dir = path.join(nb.dir(), "exports-fail")
+    const files = [
+      { path: "README.md", text: "x" },
+      { path: "README.md", text: "same path twice: wx refuses the second write" },
+    ]
+    await expect(writeNotebookFolderExport(dir, files, AT)).rejects.toThrow()
+    expect(readdirSync(dir)).toEqual([])
   })
 
   test("a folder that cannot be written: an error, never 'exported'", async () => {

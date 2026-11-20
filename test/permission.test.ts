@@ -48,8 +48,8 @@ test("a denied call becomes a tool error the model reads, with the user's note",
   expect(head.label).toBe("gh · create_issue")
   await gate.respond(head.id, "deny", "dùng repo khác")
   const text = String(await running)
-  expect(text.split("\n")[0]).toBe("Người dùng từ chối chạy tool này. Lời nhắn của người dùng: dùng repo khác")
-  expect(text).toContain("Đừng làm đúng việc này bằng tool hay lệnh khác")
+  expect(text.split("\n")[0]).toBe("The user declined to run this tool. The user's message: dùng repo khác")
+  expect(text).toContain("Do not do this same thing with another tool or command")
   // A plain "no" asks the user what to do instead; it never says "go on with other work".
   expect(text).not.toContain("làm tiếp")
 })
@@ -81,7 +81,7 @@ test("parallel calls queue; 'for this session' lets the queued ones through with
   expect(gate.head()!.tool).toBe("mcp__gh__delete_repo")
   expect(shown).toHaveLength(2)
   await gate.respond(gate.head()!.id, "deny")
-  expect(await other.catch((e: Error) => e.message)).toContain("từ chối")
+  expect(await other.catch((e: Error) => e.message)).toContain("declined")
   // Later calls to the session-allowed tool run without asking.
   expect(await runTool(write(), {}, ctx(), lock, gate)).toEqual({ output: "đã tạo" })
 })
@@ -94,7 +94,7 @@ test("aborting the turn denies what is waiting", async () => {
   await tick()
   expect(gate.head()).toBeDefined()
   controller.abort()
-  expect(await running).toBe("Lời gọi tool đã bị huỷ.")
+  expect(await running).toBe("The tool call was cancelled.")
   expect(gate.head()).toBeUndefined()
 })
 
@@ -133,7 +133,7 @@ test("'always' whose save fails: the call is denied with the reason, nothing is 
   await tick()
   await gate.respond(gate.head()!.id, "always")
   const message = await running
-  expect(message).toContain("không lưu được quyền")
+  expect(message).toContain("permission could not be saved")
   expect(message).toContain("EACCES")
   expect(gate.head()).toBeUndefined()
   expect(heads.at(-1)).toBeUndefined()
@@ -156,7 +156,7 @@ test("a write cancelled while it waits for the lock never runs", async () => {
   const reader = runTool({ ...def, readOnly: true }, {}, ctx(), lock)
   await tick()
   controller.abort()
-  expect(await waiting).toBe("Đã huỷ.")
+  expect(await waiting).toBe("Cancelled.")
   holder()
   expect(await reader).toEqual({ output: "đã ghi" })
   await tick()
@@ -177,7 +177,7 @@ test("the registry passes its gate to every tool call", async () => {
   const out = await (set["mcp__gh__create_issue"] as unknown as { execute: (i: unknown, o: { toolCallId: string; messages: [] }) => Promise<unknown> })
     .execute({}, { toolCallId: "t", messages: [] })
     .catch((e: Error) => e.message)
-  expect(out).toContain("không có giao diện để hỏi")
+  expect(out).toContain("there is no interface to ask")
 })
 
 test("startMode: a session opens in the configured mode, but never in ▸▸ auto the user has not accepted", () => {

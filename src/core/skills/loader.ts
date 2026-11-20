@@ -60,9 +60,9 @@ export async function readSkillFile(skill: Skill, relative: string) {
   const target = path.resolve(skill.dir, relative)
   const inside = path.relative(skill.dir, target)
   if (!inside || inside.startsWith("..") || path.isAbsolute(inside)) {
-    throw new Error(`Đường dẫn "${relative}" nằm ngoài thư mục của skill ${skill.name}.`)
+    throw new Error(`The path "${relative}" is outside the folder of skill ${skill.name}.`)
   }
   return readFile(target, "utf8").catch(() => {
-    throw new Error(`Không có file "${relative}" trong skill ${skill.name}.`)
+    throw new Error(`No file "${relative}" in skill ${skill.name}.`)
   })
 }

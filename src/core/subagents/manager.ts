@@ -3,7 +3,7 @@ import type { Ablations } from "../ablation"
 import { readFile } from "node:fs/promises"
 import type { z } from "zod"
 import { runAgent } from "../agent"
-import { gapsLine } from "../loop/failures"
+import { gapsNote } from "../loop/failures"
 import { describeError, resolveTarget, type Target } from "../chat"
 import { loadConfig, type Config } from "../config"
 import type { Waiver } from "../memory/binding/bind"
@@ -11,6 +11,8 @@ import type { ConstraintReader } from "../memory/binding/constraints"
 import { isEffort, type Effort } from "../effort"
 import { classifyFailure, retryText } from "../retry"
 import { closeDanglingToolCalls } from "../session/store"
+import type { PromptProfile } from "../prompt/assemble"
+import { activeBudget, SUBAGENT_MIN_REQUESTS } from "../request-budget"
 import type { Skill } from "../skills/schema"
 import { loadSkillTool } from "../tools/builtin/load-skill"
 import { toolSearchTool } from "../tools/builtin/tool-search"
@@ -30,7 +32,7 @@ export const DEFAULT_SUBAGENT_TYPE = "nghien-cuu"
 /** A subagent that reports nothing for this long (not queued, not waiting on the user) is stopped. */
 export const SUBAGENT_IDLE_MS = 5 * 60_000
 /** "5 phút" for the default, "0.4 giây" for a test-sized idleMs. */
-const idleText = (ms: number) => (ms >= 60_000 ? `${Math.round(ms / 60_000)} phút` : `${(ms / 1000).toFixed(ms % 1000 ? 1 : 0)} giây`)
+const idleText = (ms: number) => (ms >= 60_000 ? `${Math.round(ms / 60_000)} min` : `${(ms / 1000).toFixed(ms % 1000 ? 1 : 0)} s`)
 /** How often the idle watchdog checks a run. */
 const watchdogTick = (idleMs: number) => Math.min(10_000, idleMs)
 /** Finished runs kept in memory (the sidechain files keep the rest). */
@@ -71,7 +73,7 @@ export function childRegistry(parent: ToolRegistry, origin: AgentOrigin, filter?
   child.gate = parent.gate
   child.workspace = parent.workspace
   const candidates = childTools(parent.list(), filter)
-  if (candidates.length === 0) throw new Error("Subagent không có tool nào để dùng (danh sách tool rỗng hoặc không khớp).")
+  if (candidates.length === 0) throw new Error("The subagent has no tools to use (the tool list is empty or matches nothing).")
   for (const def of candidates) child.register(def)
   if (candidates.some((t) => t.deferrable)) child.register(toolSearchTool(child))
   if (skills) {
@@ -155,6 +157,8 @@ interface RunContext {
    * it waits for a slot. Later turns (messages sent meanwhile) read the waiver in force then.
    */
   waiver?: Waiver
+  /** The prompt profile of the main turn that started it (#328): a child of a `machine` run is `machine` too. */
+  profile?: PromptProfile
 }
 
 const newId = () => `ag-${Math.random().toString(36).slice(2, 8).padEnd(6, "0")}`
@@ -282,6 +286,18 @@ export class SubagentManager {
    * (model setup, provider errors, aborts) ends up in the result.
    */
   start(spec: StartSpec): SubagentRun {
+    // A child shares the turn's request budget but not the reserve for the parent's answer (#328):
+    // with too little left it would end before doing anything, so the main agent answers itself.
+    // Children still running or waiting share that room: each keeps SUBAGENT_MIN_REQUESTS of it, so a
+    // batch of parallel spawns cannot all pass and then starve each other.
+    const room = activeBudget()?.childRoom()
+    const others = [...this.runs.values()].filter((r) => r.status === "running" || r.status === "queued").length
+    const left = room === undefined ? undefined : room - others * SUBAGENT_MIN_REQUESTS
+    if (left !== undefined && left < SUBAGENT_MIN_REQUESTS) {
+      throw new Error(
+        `Not started: ${Math.max(0, left)} model requests are left for another subagent in this turn's budget (at least ${SUBAGENT_MIN_REQUESTS} needed). Do the step yourself, or answer with the data you already have.`,
+      )
+    }
     const id = newId()
     const type = spec.type ?? DEFAULT_SUBAGENT_TYPE
     const child = childRegistry(this.deps.parent, { id, type, description: spec.description }, spec.toolFilter, this.deps.skills)
@@ -306,7 +322,7 @@ export class SubagentManager {
       sessionId: this.session?.id,
       deskRunId: spec.deskRunId,
     }
-    const context: RunContext = { child, spec, inbox: [], parentSignal: spec.parentSignal, waiver: spec.waiver ?? this.deps.waiver?.() }
+    const context: RunContext = { child, spec, inbox: [], parentSignal: spec.parentSignal, waiver: spec.waiver ?? this.deps.waiver?.(), profile: this.deps.parent.turnProfile }
     if (spec.schema) child.register(resultTool(spec.schema, (data) => (context.data = data)))
     this.runs.set(id, run)
     this.owners.set(id, this.session?.id)
@@ -348,7 +364,7 @@ export class SubagentManager {
     const known = this.list()
       .filter((v) => this.owners.get(v.id) === this.session?.id)
       .map((v) => v.id)
-    const missing = () => new Error(`Không có subagent "${id}".${known.length > 0 ? ` Các subagent hiện có: ${known.join(", ")}.` : ""}`)
+    const missing = () => new Error(`No subagent "${id}".${known.length > 0 ? ` Existing subagents: ${known.join(", ")}.` : ""}`)
     if (!this.session || !/^ag-[a-z0-9]+$/.test(id)) throw missing()
     const text = await readFile(new Sidechain(this.session.dir, id).file, "utf8").catch(() => undefined)
     if (!text) throw missing()
@@ -442,7 +458,7 @@ export class SubagentManager {
       const fell = fallback.find((e) => e.type === "notice")
       if (fell?.type === "notice") run.notice = fell.text
       if (target.provider.models[target.model]?.tool_call === false) {
-        throw new Error(`Model ${target.model} không hỗ trợ gọi tool nên không chạy được subagent. Đổi "Model cho subagent" trong /config.`)
+        throw new Error(`Model ${target.model} does not support tool calls, so the subagent cannot run. Change "Model cho subagent" in /config.`)
       }
       this.emit(run)
       if (sidechain && session && first) {
@@ -526,6 +542,8 @@ export class SubagentManager {
           // The first turn and the result reminders are the same task: the waiver kept at start/continue.
           // A message sent meanwhile is new work: the waiver in force now (a desk run's own, if any).
           waive: attempts === 1 || reminding ? context.waiver : (spec.waiver ?? this.deps.waiver?.()),
+          // Rebuilt from its sidechain (send_message after a restart): the profile of the turn now running.
+          profile: context.profile ?? this.deps.parent.turnProfile,
           effort,
           ...(spec.schema ? { finalTool: RESULT_TOOL, finalPrompt: RESULT_LAST_STEP } : {}),
         })) {
@@ -588,7 +606,7 @@ export class SubagentManager {
                 const text = lastAssistantText(event.messages)
                 run.text = text === "(không có câu trả lời)" ? "" : text
                 // The parent only reads the report: what the child did not get must be in it.
-                if (event.dataGaps && !spec.schema) run.text = `${run.text}\n\n${gapsLine(event.dataGaps)}`.trim()
+                if (event.dataGaps && !spec.schema) run.text = `${run.text}\n\n${gapsNote(event.dataGaps)}`.trim()
                 run.status = "completed"
               } else if (missedTool && event.outcome === "failed") {
                 run.text = streamed.trim()
@@ -608,15 +626,15 @@ export class SubagentManager {
       // Messages that arrived for a turn that never came: say so rather than drop them.
       if (context.inbox.length > 0) {
         const lost = context.inbox.splice(0)
-        run.error = `${run.error ? `${run.error}. ` : ""}Chưa xử lý ${lost.length} tin nhắn gửi thêm: ${lost.join(" / ").slice(0, 300)}`
+        run.error = `${run.error ? `${run.error}. ` : ""}${lost.length} follow-up messages were not handled: ${lost.join(" / ").slice(0, 300)}`
       }
       if (idleStop) {
-        run.error = `Subagent không có tiến triển trong ${idleText(this.idleMs)} nên đã bị dừng.`
+        run.error = `The subagent made no progress for ${idleText(this.idleMs)}, so it was stopped.`
         failure = "stall"
       }
       if (spec.schema && run.status === "completed" && context.data === undefined) {
         run.status = "failed"
-        run.error = `Subagent không trả kết quả đúng schema qua ${RESULT_TOOL} sau ${attempts} lượt.`
+        run.error = `The subagent did not return a schema-valid result through ${RESULT_TOOL} after ${attempts} turns.`
         failure = "invalid-output"
       }
     } catch (error) {

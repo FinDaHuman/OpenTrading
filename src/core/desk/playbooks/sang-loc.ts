@@ -11,8 +11,8 @@ import { capList, cardFor, listSummary, num, table, Ticker, tierOf } from "./com
  */
 
 const Args = z.object({
-  tickers: z.array(Ticker).min(2, "cần ít nhất 2 mã").max(60).describe("Các mã cần sàng lọc, ví dụ [\"FPT\",\"MWG\"]"),
-  tieu_chi: z.string().max(300).optional().describe("Tiêu chí người dùng nhấn mạnh, ví dụ \"định giá rẻ, nợ thấp\""),
+  tickers: z.array(Ticker).min(2, "needs at least 2 tickers").max(60).describe("The tickers to screen, e.g. [\"FPT\",\"MWG\"]"),
+  tieu_chi: z.string().max(300).optional().describe("Criteria the user stresses, e.g. \"định giá rẻ, nợ thấp\""),
 })
 type Args = z.infer<typeof Args>
 
@@ -21,29 +21,29 @@ const score = z.number().min(0).max(10)
 
 export const SCORECARD = z.object({
   ticker: z.string(),
-  nganh: z.string().optional().describe("Ngành của mã"),
-  data_time: z.string().describe("Thời điểm số liệu mới nhất, ví dụ Q2/2026 hoặc ngày giá"),
+  nganh: z.string().optional().describe("The ticker's sector"),
+  data_time: z.string().describe("Time of the latest figures, e.g. Q2/2026 or the price date"),
   chi_so: z.object({
-    pe: metric.describe("P/E (lần)"),
-    pb: metric.describe("P/B (lần)"),
+    pe: metric.describe("P/E (times)"),
+    pb: metric.describe("P/B (times)"),
     roe: metric.describe("ROE (%)"),
-    tang_truong_lnst: metric.describe("Tăng trưởng LNST so với cùng kỳ (%)"),
-    bien_gop: metric.describe("Biên lợi nhuận gộp (%)"),
-    no_vay_von_chu: metric.describe("Nợ vay / vốn chủ (lần)"),
-    ocf_lnst: metric.describe("Dòng tiền HĐKD / LNST, 4 quý gần nhất (lần)"),
+    tang_truong_lnst: metric.describe("Net profit growth year on year (%)"),
+    bien_gop: metric.describe("Gross margin (%)"),
+    no_vay_von_chu: metric.describe("Borrowings / equity (times)"),
+    ocf_lnst: metric.describe("Operating cash flow / net profit, last 4 quarters (times)"),
   }),
   diem: z.object({ chat_luong: score, dinh_gia: score, tang_truong: score, suc_khoe: score }),
   diem_manh: z.array(z.string()).max(3),
   rui_ro: z.array(z.string()).max(3),
   thieu_du_lieu: z.array(z.string()).max(8),
-  nguon: z.array(z.string()).max(6).describe("Tool hoặc nguồn đã dùng"),
+  nguon: z.array(z.string()).max(6).describe("Tools or sources used"),
 })
 export type Scorecard = z.infer<typeof SCORECARD>
 
 export const VERDICT = z.object({
-  giu_nguyen: z.boolean().describe("true chỉ khi các số liệu quyết định thứ hạng khớp và điểm hợp lý"),
-  dieu_chinh: z.number().int().min(-3).max(3).describe("Cộng/trừ vào tổng điểm 0–10"),
-  so_lieu_sai: z.array(z.string()).max(5).describe("Số sai hoặc khác kỳ: giá trị đúng, nguồn, thời điểm"),
+  giu_nguyen: z.boolean().describe("true only when the figures that decide the rank match and the scores are reasonable"),
+  dieu_chinh: z.number().int().min(-3).max(3).describe("Plus/minus to the 0–10 total score"),
+  so_lieu_sai: z.array(z.string()).max(5).describe("Wrong or mismatched-period figures: the correct value, source, time"),
   ly_do: z.string(),
 })
 type Verdict = z.infer<typeof VERDICT>
@@ -56,7 +56,7 @@ const TIERS = {
 } as const
 
 const STEPS = { card: 6, verify: 6, referee: 6 }
-const LENSES = ["số liệu gốc (kiểm lại từng con số bằng tool)", "so với cùng ngành (điểm có hợp lý không)", "chất lượng lợi nhuận (lãi thật hay lãi giấy, khoản bất thường)"]
+const LENSES = ["source data (recheck each number with a tool)", "against the sector (are the scores reasonable)", "earnings quality (real or paper profit, one-offs)"]
 
 const unique = (tickers: string[]) => [...new Set(tickers)]
 
@@ -131,39 +131,39 @@ export function rank(cards: Scorecard[], tieuChi?: string): Ranked[] {
 
 function cardPrompt(ticker: string, tieuChi?: string) {
   return [
-    `Lập thẻ điểm cơ bản cho mã ${ticker}${tieuChi ? `, người dùng nhấn mạnh: ${tieuChi}` : ""}.`,
-    "Cách làm:",
-    "- Lấy số liệu mới nhất bằng tool đọc: P/E, P/B, ROE, biên gộp, nợ vay/vốn chủ (vn_fundamentals hoặc financial_ratios); tăng trưởng LNST cùng kỳ và dòng tiền HĐKD 4 quý (financial_statements). Gọi các tool độc lập cùng lúc.",
-    "- Không nạp skill, không phân tích ngoài thẻ điểm. Số nào không lấy được thì để null và ghi vào thieu_du_lieu; không ước đoán.",
-    "- Chấm 0–10 từng chiều, so với mặt bằng ngành của mã: chat_luong (ROE, biên, lãi có phải tiền thật), dinh_gia (10 = rẻ so với lịch sử và ngành), tang_truong (LNST, doanh thu gần nhất), suc_khoe (nợ vay, dòng tiền HĐKD so với LNST).",
-    "- data_time là thời điểm của số liệu mới nhất; nguon là tool hoặc nguồn đã dùng.",
-    "Trả kết quả bằng tra_ket_qua.",
+    `Build a fundamentals scorecard for ${ticker}${tieuChi ? `; the user stresses: ${tieuChi}` : ""}.`,
+    "How:",
+    "- Get the latest figures with read tools: P/E, P/B, ROE, gross margin, borrowings/equity (vn_fundamentals or financial_ratios); year-on-year net profit growth and 4 quarters of operating cash flow (financial_statements). Call independent tools together.",
+    "- Load no skills and analyse nothing beyond the scorecard. A number you cannot get stays null and goes into thieu_du_lieu; never estimate.",
+    "- Score each dimension 0–10 against the ticker's sector level: chat_luong (ROE, margins, whether profit is real cash), dinh_gia (10 = cheap vs its history and sector), tang_truong (latest net profit, revenue), suc_khoe (borrowings, operating cash flow vs net profit).",
+    "- data_time is the time of the latest figures; nguon is the tools or sources used.",
+    "Return the result with tra_ket_qua.",
   ].join("\n")
 }
 
 function verifyPrompt(r: Ranked, place: number, n: number, lens: string) {
   return [
-    `Phản biện thẻ điểm của mã ${r.card.ticker}, đang xếp hạng ${place}/${n} (điểm ${num(r.score, 1)}). Góc nhìn của bạn: ${lens}.`,
+    `Challenge the scorecard of ${r.card.ticker}, ranked ${place}/${n} (score ${num(r.score, 1)}). Your lens: ${lens}.`,
     EVIDENCE_NOTE,
-    evidence(JSON.stringify(r.card), "thẻ điểm do agent khác lập"),
-    "- Kiểm lại bằng tool 2–3 số liệu quyết định thứ hạng (P/E, ROE, tăng trưởng LNST…). Số sai hoặc khác kỳ ghi vào so_lieu_sai kèm giá trị đúng, nguồn, thời điểm.",
-    "- giu_nguyen=true chỉ khi các số đó khớp và điểm hợp lý; nghi ngờ thì để false. dieu_chinh là điểm cộng/trừ (−3..3) cho tổng điểm.",
-    "Trả kết quả bằng tra_ket_qua.",
+    evidence(JSON.stringify(r.card), "scorecard built by another agent"),
+    "- Recheck with tools the 2–3 figures that decide the rank (P/E, ROE, net profit growth…). Wrong or mismatched-period figures go into so_lieu_sai with the correct value, source, time.",
+    "- giu_nguyen=true only when those figures match and the scores are reasonable; in doubt, false. dieu_chinh is the plus/minus (−3..3) to the total score.",
+    "Return the result with tra_ket_qua.",
   ].join("\n")
 }
 
 function refereePrompt(rows: Ranked[], tieuChi: string | undefined, missing: string[], unverified: boolean) {
   const data = rows.map((r, i) => ({ hang: i + 1, tong_diem: Number(r.score.toFixed(1)), ...r.card, ...(r.note ? { phan_bien: r.note } : {}) }))
   return [
-    `Viết kết quả sàng lọc ${rows.length} mã cho người dùng${tieuChi ? ` (tiêu chí: ${tieuChi})` : ""}. Thứ hạng đã được tính; không xếp lại.`,
+    `Write the screening result for ${rows.length} tickers for the user${tieuChi ? ` (criteria: ${tieuChi})` : ""}. The ranking is already computed; do not re-rank.`,
     EVIDENCE_NOTE,
-    evidence(JSON.stringify(data), "thẻ điểm và kết quả phản biện"),
-    "Trình bày bằng tiếng Việt, gọn:",
-    "1. Bảng xếp hạng: hạng, mã, điểm, P/E, P/B, ROE, tăng trưởng LNST, một ghi chú ngắn (điểm mạnh hoặc rủi ro chính, bị phản biện thì nói). Một dòng nguồn và thời điểm dữ liệu dưới bảng.",
-    "2. Nhóm dẫn đầu nổi bật ở đâu, nhóm cuối yếu ở đâu (2–4 gạch đầu dòng, có số).",
-    "3. Kịch bản cho nhóm dẫn đầu: tích cực / cơ sở / tiêu cực, mỗi kịch bản kèm điều kiện kích hoạt. Không khuyến nghị mua, bán hay tỷ trọng.",
-    `4. Giới hạn: ${[missing.length > 0 ? `không lấy được dữ liệu của ${missing.join(", ")}` : "", unverified ? "thứ hạng chưa được phản biện ở quy mô này" : "", "số liệu thiếu trong các thẻ"].filter(Boolean).join("; ")}.`,
-    "Không gọi tool, trừ khi cần đối chiếu một con số mâu thuẫn.",
+    evidence(JSON.stringify(data), "scorecards and challenge results"),
+    "Write in Vietnamese, concisely:",
+    "1. The ranking table: rank, ticker, score, P/E, P/B, ROE, net profit growth, a short note (main strength or risk; say if it was challenged). One line of source and data time under the table.",
+    "2. Where the top group stands out, where the bottom group is weak (2–4 bullets, with numbers).",
+    "3. Scenarios for the top group: tích cực / cơ sở / tiêu cực, each with its triggers. Never recommend buying, selling or a weighting.",
+    `4. Limits: ${[missing.length > 0 ? `could not get data for ${missing.join(", ")}` : "", unverified ? "the ranking was not challenged at this size" : "", "figures missing from the scorecards"].filter(Boolean).join("; ")}.`,
+    "Call no tools, unless you need to check a conflicting number.",
   ].join("\n")
 }
 
@@ -187,7 +187,7 @@ async function run(ctx: DeskContext<Args>): Promise<string> {
   const missing = tickers.filter((_, i) => !cards[i])
   if (missing.length > 0) ctx.log(`Không lấy được thẻ điểm: ${missing.join(", ")}`)
   if (valid.length < 2) {
-    throw new DeskNoData(`Không đủ dữ liệu để sàng lọc: chỉ lấy được ${valid.length}/${tickers.length} thẻ điểm${missing.length ? ` (thiếu ${missing.join(", ")})` : ""}. Có thể do hết quota hoặc nguồn dữ liệu lỗi; chạy tiếp bằng /desk resume.`)
+    throw new DeskNoData(`Not enough data to screen: only ${valid.length}/${tickers.length} scorecards${missing.length ? ` (missing ${missing.join(", ")})` : ""}. The quota may be exhausted or a data source failed; the user can continue with /desk resume.`)
   }
 
   let ranked = rank(valid, ctx.args.tieu_chi)
@@ -252,7 +252,7 @@ export const sangLoc: Playbook<Args, string> = {
     name: "sang-loc",
     version: "1",
     description: "Sàng lọc và xếp hạng nhiều mã: thẻ điểm cơ bản từng mã (song song), xếp hạng bằng code, phản biện các mã dẫn đầu, bảng xếp hạng kèm kịch bản",
-    whenToUse: "So sánh, xếp hạng hoặc lọc từ 2 mã trở lên theo cơ bản/định giá (ví dụ 8 mã ngân hàng, rổ VN30 theo ROE). 1 mã thì không dùng.",
+    whenToUse: "Compare, rank or filter 2 or more tickers on fundamentals/valuation (e.g. 8 bank tickers, the VN30 basket by ROE). Not for 1 ticker.",
     args: Args,
     agentTypes: ["co-ban", "phan-bien", "tong-hop"],
     phases: ["Thu thập", "Kiểm chứng", "Tổng hợp"],

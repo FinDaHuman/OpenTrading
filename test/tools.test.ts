@@ -18,20 +18,20 @@ test("truncate keeps head and tail with a marker", () => {
   const out = truncate(text, 1000)
   expect(out.startsWith("A".repeat(700))).toBe(true)
   expect(out.endsWith("C".repeat(300))).toBe(true)
-  expect(out).toContain("đã lược 1000 ký tự")
+  expect(out).toContain("1000 characters omitted")
   expect(truncate("short", 1000)).toBe("short")
 })
 
 test("long output is truncated before the model sees it", async () => {
   const { output: out } = await runTool(def({ maxOutputChars: 100, execute: async () => "x".repeat(500) }), {}, ctx(), new RwLock())
   expect(out.length).toBeLessThan(200)
-  expect(out).toContain("đã lược")
+  expect(out).toContain("omitted")
 })
 
 test("a tool that ignores its signal still times out and releases the lock", async () => {
   const lock = new RwLock()
   const hang = def({ readOnly: false, timeoutMs: 50, execute: () => new Promise(() => {}) })
-  await expect(runTool(hang, {}, ctx(), lock)).rejects.toThrow("quá thời gian")
+  await expect(runTool(hang, {}, ctx(), lock)).rejects.toThrow("timed out")
   // The write lock must be free again.
   const ok = await runTool(def({ readOnly: false, execute: async () => "ok" }), {}, ctx(), lock)
   expect(ok).toEqual({ output: "ok" })
@@ -75,7 +75,7 @@ test("abort rejects a running tool", async () => {
   const controller = new AbortController()
   const running = runTool(def({ execute: () => new Promise(() => {}) }), {}, { signal: controller.signal, callId: "c" }, new RwLock())
   controller.abort()
-  await expect(running).rejects.toThrow("Đã huỷ")
+  await expect(running).rejects.toThrow("Cancelled")
 })
 
 test("finished tool calls do not leave abort listeners on the turn's signal", async () => {
@@ -94,7 +94,7 @@ test("finished tool calls do not leave abort listeners on the turn's signal", as
 test("current_time reports Vietnam time", async () => {
   const tool = currentTimeTool(() => new Date("2026-09-28T02:30:00Z"))
   const out = (await tool.execute({}, ctx())) as string
-  expect(out).toContain("Thứ hai, 28/09/2026 09:30:00")
+  expect(out).toContain("Monday, 28/09/2026 09:30:00")
   expect(out).toContain("+07:00")
 })
 
@@ -105,8 +105,8 @@ test("load_skill returns a body, refuses manual skills and unknown names", async
     { ...base, name: "hand-only", activation: "manual" },
   ])
   expect(await tool.execute({ name: "devil-advocate" }, ctx())).toContain("BODY")
-  await expect(tool.execute({ name: "hand-only" }, ctx())).rejects.toThrow("chỉ người dùng bật")
-  await expect(tool.execute({ name: "x" }, ctx())).rejects.toThrow("Không có skill")
+  await expect(tool.execute({ name: "hand-only" }, ctx())).rejects.toThrow("can only be switched on by the user")
+  await expect(tool.execute({ name: "x" }, ctx())).rejects.toThrow("No skill")
 })
 
 test("load_skill loads the deferred tools a skill requires (first line, for the agent loop)", async () => {
@@ -120,9 +120,9 @@ test("load_skill loads the deferred tools a skill requires (first line, for the 
     () => deferred,
   )
   const out = (await tool.execute({ name: "prices" }, ctx())) as string
-  expect(out.split("\n")[0]).toBe("Đã nạp tool: mcp__ot__vn_quote_history, mcp__ot__vn_index_ohlcv")
+  expect(out.split("\n")[0]).toBe("Tools loaded: mcp__ot__vn_quote_history, mcp__ot__vn_index_ohlcv")
   expect(out).toContain("BODY")
-  expect(((await tool.execute({ name: "plain" }, ctx())) as string).startsWith("Thư mục skill")).toBe(true)
+  expect(((await tool.execute({ name: "plain" }, ctx())) as string).startsWith("Skill folder")).toBe(true)
 })
 
 test("registry builds a sorted AI SDK tool set and unregisters by prefix", () => {

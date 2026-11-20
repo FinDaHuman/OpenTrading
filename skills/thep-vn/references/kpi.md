@@ -1,48 +1,48 @@
 # Chỉ báo ngành thép — dòng báo cáo và cách đọc
 
-> File này giữ **cách đọc**, không giữ con số kỳ nào. Mọi giá trị lấy từ
-> `financial_detail` / công bố nhà máy, sàn giao dịch hoặc cơ quan ngành gần nhất và ghi kỳ kèm
-> theo. Luật về đọc spread theo độ trễ tồn kho chỉ nằm ở §Trụ cột driver của
-> SKILL.md — không lặp lại ở đây.
+> This file keeps **how to read**, not any period's numbers. Every value comes from the latest
+> `financial_detail` / mill, exchange or industry-body releases, with the period
+> stated. The rule on reading the spread with the inventory lag lives only in the SKILL.md §Trụ cột driver —
+> not repeated here.
 
 ## 1. Nhóm đầu ra
 
-| Chỉ báo | Đọc từ | Cách đọc |
+| Indicator | Read from | How to read |
 |---|---|---|
-| Doanh thu | `financial_detail` | Tách phần tăng do giá và do khối lượng nếu công bố cho phép; cùng mức doanh thu có thể là giá lên hoặc khối lượng lên |
-| Giá vốn hàng bán | `financial_detail` | Nơi chứa giá nguyên liệu. Tăng nhanh hơn doanh thu = biên đang nén |
-| Biên lãi gộp | `financial_detail` (hoặc tính bằng `shell`, ghi rõ) | Đọc theo quý liên tiếp; một quý nén có thể là giãn tồn kho, không phải xấu |
-| Chi phí tài chính phục vụ tồn kho | `financial_detail` | Tồn kho lớn + lãi suất cao = chi phí mang vốn nặng, đặc biệt khi nguyên liệu nhập |
+| Revenue | `financial_detail` | Separate the price and volume contributions if disclosures allow; the same revenue can come from higher prices or higher volume |
+| Cost of goods sold | `financial_detail` | Where raw-material prices sit. Growing faster than revenue = margins compressing |
+| Gross margin | `financial_detail` (or computed with `shell`, stated) | Read over consecutive quarters; one compressed quarter may be inventory timing, not deterioration |
+| Financial costs carrying inventory | `financial_detail` | Large inventory + high rates = heavy carrying costs, especially for imported raw materials |
 
 ## 2. Nhóm đầu vào
 
-| Chỉ báo | Đọc từ | Cách đọc |
+| Indicator | Read from | How to read |
 |---|---|---|
-| Giá quặng sắt | `web_search` (nguồn công bố có ngày, đơn vị, chủng loại) | Giá tham chiếu quốc tế theo chu kỳ — ghi rõ kỳ và là giá tham chiếu, không phải giá hợp đồng |
-| Giá than cốc | `web_search` (nguồn công bố có ngày, đơn vị, chủng loại) | Biến động mạnh hơn quặng; thường là nguyên nhân chính bóp biên trong nửa năm |
-| Giá thép tham chiếu quốc tế | `web_search` (công bố sàn/nhà máy có ngày) | Dùng cho nhóm sản phẩm giao dịch quốc tế, **không** thay giá bán trong nước |
+| Iron ore price | `web_search` (published sources with date, unit, grade) | An international reference price by cycle — state the period and that it is a reference, not a contract price |
+| Coking coal price | `web_search` (published sources with date, unit, grade) | More volatile than ore; often the main margin squeeze within half a year |
+| International reference steel price | `web_search` (dated exchange/mill releases) | For internationally traded products; it does **not** replace domestic selling prices |
 
 ## 3. Nhóm khối lượng và công suất
 
-| Chỉ báo | Đọc từ | Cách đọc |
+| Indicator | Read from | How to read |
 |---|---|---|
-| Sản lượng bán theo nhóm | `news_market` / báo cáo nhà máy | Phân biệt sản phẩm nội địa với sản phẩm giao dịch quốc tế — hai logic giá |
-| Tỷ lệ sử dụng công suất | `news_market` / báo cáo nhà máy | Nhà máy mới chưa đủ công suất làm biên thấp dù doanh thu cao |
-| Tồn kho nguyên liệu | `financial_detail` | Quyết định độ trễ chi phí: tồn kho giá cao còn chưa tiêu thì biên còn bị nén thêm |
+| Sales volume by group | `news_market` / mill reports | Separate domestic products from internationally traded ones — two price logics |
+| Capacity utilisation | `news_market` / mill reports | A new mill below capacity has low margins even with high revenue |
+| Raw-material inventory | `financial_detail` | Decides the cost lag: while high-priced inventory is unused, margins stay compressed |
 
 ## 4. Nhóm thương mại
 
-| Nguồn | Đọc gì | Khi nào |
+| Source | What to read | When |
 |---|---|---|
-| `news_market` | Văn bản phòng vệ thương mại (thuế, phạm vi, thời hạn), nhập khẩu, khởi công/dự án mới | Mỗi lần kết luận về giá bán hoặc thị phần |
-| `web_search` | Xuất nhập khẩu nhóm thép từ Hải quan/cơ quan ngành, có kỳ và đơn vị rõ | Đo tỷ trọng xuất khẩu theo nhóm hàng; không dùng chuỗi quốc gia của `vs_xnk_detail` làm nhóm hàng |
-| `planned_targets` | Kế hoạch doanh thu/lãi/sản lượng | Neo kỳ vọng của công ty |
-| `peer_compare` | Key tổng quan thực sự trả về, như P/E, P/B, ROE | So cùng phân khúc; KPI vận hành lấy từ `financial_detail` từng peer cùng kỳ và công bố doanh nghiệp, không tạo key bằng `metrics` |
+| `news_market` | Trade-defence texts (duties, scope, terms), imports, groundbreakings/new projects | Whenever concluding on selling prices or market share |
+| `web_search` | Steel-group exports/imports from Customs/industry bodies, with a clear period and unit | To measure export share by product group; never use `vs_xnk_detail`'s by-country series as a product group |
+| `planned_targets` | Revenue/profit/output plans | The company's expectation anchor |
+| `peer_compare` | The overview keys it really returns, such as P/E, P/B, ROE | Compare within the segment; operating KPIs come from each peer's `financial_detail` for the same period and company disclosures; `metrics` creates no keys |
 
 ## 5. Bẫy đọc thường gặp
 
-- Doanh thu tăng nhưng lãi giảm: xem spread trước khi kết luận "quản trị kém".
-- Giá thành phẩm quốc tế đang lên trong khi giá bán trong nước giảm: đó là tín
-  hiệu rào phòng vệ đang yếu đi, không phải cơ hội.
-- Biên một quý phục hồi mạnh: kiểm tra có phải giãn tồn kho giá rẻ không trước khi
-  nội suy thành xu hướng.
+- Revenue up but profit down: check the spread before concluding "quản trị kém".
+- International finished-product prices rising while domestic selling prices fall: that signals
+  weakening trade defence, not an opportunity.
+- One quarter's margin rebounding strongly: check whether it is cheap inventory being used before
+  extrapolating it into a trend.

@@ -13,8 +13,8 @@ const fmt = (v: number) => `${Number(v.toFixed(1))}`
  */
 export function renderMultiline(input: ChartRenderInput): { subtitle: string; body: string } {
   const matrix = input.matrix ?? []
-  if (matrix.length < 2) throw new Error(`multiline cần matrix ít nhất 2 dòng (mỗi dòng 1 series), đang có ${matrix.length}.`)
-  if (matrix.some((s) => s.length < 2)) throw new Error("multiline cần mỗi series ít nhất 2 điểm.")
+  if (matrix.length < 2) throw new Error(`multiline needs a matrix of at least 2 rows (one series per row), got ${matrix.length}.`)
+  if (matrix.some((s) => s.length < 2)) throw new Error("multiline needs at least 2 points per series.")
   const W = Math.min(input.width ?? 56, 120 - 14)
   const H = Math.min(input.height ?? 10, 40)
   const all = matrix.flat()
@@ -57,7 +57,7 @@ export function renderMultiline(input: ChartRenderInput): { subtitle: string; bo
     .join("  ")
   lines.push(legend)
   return {
-    subtitle: `multiline (${matrix.length} series, ${Math.max(...matrix.map((s) => s.length))} điểm, trục ${fmt(lo)} … ${fmt(hi)})`,
+    subtitle: `multiline (${matrix.length} series, ${Math.max(...matrix.map((s) => s.length))} points, axis ${fmt(lo)} … ${fmt(hi)})`,
     body: lines.join("\n"),
   }
 }

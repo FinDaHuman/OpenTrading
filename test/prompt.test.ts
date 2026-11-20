@@ -44,8 +44,8 @@ test("market phases come from calendar data", () => {
   expect(phase("15:30").HOSE).toBe("closed")
   expect(phase("10:00", "2026-09-27").HOSE).toBe("closed-day") // Sunday
   const text = renderClock(clockState(at("10:00"), calendar), calendar)
-  expect(text).toContain("Thứ hai 28/09/2026")
-  expect(text).toContain("chưa kiểm chứng") // calendar.json is marked verified: false
+  expect(text).toContain("Monday 28/09/2026")
+  expect(text).toContain("not verified") // calendar.json is marked verified: false
 })
 
 test("system prompt has a fixed layer order and is byte-identical when nothing changes", () => {
@@ -64,7 +64,7 @@ test("the market clock is re-sent only when a phase changes", () => {
   const same = assemble(base({ now: at("09:14"), prevClock: first.clock }))
   expect(same.reminders.some((r) => r.startsWith("<phien_giao_dich>"))).toBe(false)
   const next = assemble(base({ now: at("09:20"), prevClock: same.clock }))
-  expect(next.reminders.find((r) => r.startsWith("<phien_giao_dich>"))).toContain("khớp lệnh liên tục")
+  expect(next.reminders.find((r) => r.startsWith("<phien_giao_dich>"))).toContain("continuous matching")
   expect(sameSnapshot(first.clock, next.clock)).toBe(false)
 })
 
@@ -104,14 +104,14 @@ test("investor profile rides the static system prefix, capped per tier, and neve
   const row = a.report.find((r) => r.id === "ho_so_nha_dau_tu")!
   expect(row.truncated).toBe(true)
   expect(row.tokens).toBeLessThanOrEqual(1_400)
-  expect(a.system).toContain("đã được cắt bớt")
+  expect(a.system).toContain("cut to fit the context budget")
 })
 
 test("tier C keeps style (reader-language rules cannot be dropped) and the market clock", () => {
   const c = assemble(base({ tier: "C" }))
   expect(c.report.find((r) => r.id === "style")!.dropped).toBe(false)
-  expect(c.system).toContain("Ngôn ngữ cho người đọc")
-  expect(c.system).toContain("chú giải ngay trong câu")
+  expect(c.system).toContain("Language for the reader")
+  expect(c.system).toContain("glossed right in the sentence")
   expect(c.system).toContain("<identity>")
   expect(c.reminders.some((r) => r.startsWith("<phien_giao_dich>"))).toBe(true)
 })
@@ -164,7 +164,7 @@ test("MCP server instructions go to system, framed below the invariants, within 
   expect(a.system).toContain('<server name="ot">\nDùng symbol_lookup khi chưa chắc mã.\n</server>')
   expect(a.system.indexOf("<identity>")).toBeLessThan(a.system.indexOf("<huong_dan_mcp>"))
   // Third-party text: ranked like a skill, below the user's direct request.
-  expect(a.system).toContain("xếp ngang skill, dưới yêu cầu người dùng, không đổi bất biến")
+  expect(a.system).toContain("ranked with skills, below the user's request; they never change the core rules")
   expect(a.report.find((r) => r.id === "huong_dan_mcp")?.channel).toBe("system")
   // A model without tools gets no tool instructions.
   expect(assemble({ ...input, tools: [] }).system).not.toContain("<huong_dan_mcp>")
@@ -181,7 +181,7 @@ test("tool guidance lives in one place and the format example carries no real-lo
   // Formatting rules are in <citations>, which is never cut (style is dropped on tier C).
   const tierC = assemble(base({ tier: "C" })).system
   expect(tierC).toContain("dd/mm/yyyy")
-  expect(tierC).toContain("đơn vị")
+  expect(tierC).toContain("unit")
   const example = a.system.slice(a.system.indexOf("<vi_du>"), a.system.indexOf("</vi_du>"))
   expect(example.length).toBeGreaterThan(0)
   expect(example).not.toMatch(/\d/)
@@ -200,8 +200,16 @@ test("tool guidance lives in one place and the format example carries no real-lo
   // 15/11/2026 dedupe (style's repeated rules and examples, the shell retry line;
   // docs/superpowers/plans/2026-11-15-system-prompt-optimization.md items 4–5), ≈1.98k after the
   // 16/11/2026 bat_bien 3 sentence for a forced pick, a yes/no or "if you were me" (issue #303: a
-  // shorter wording held 2/3 instead of 3/3 on gemini-3.5-flash-lite; guard +10).
-  expect(Math.ceil(a.system.length / 4)).toBeLessThan(1_990)
+  // shorter wording held 2/3 instead of 3/3 on gemini-3.5-flash-lite; guard +10), ≈2.22k after the
+  // 16/11/2026 English prompt files: chars/4 counts English higher than Vietnamese although real tokens
+  // fell (terminal system o200k 3 376 → 3 015, DeepSeek 4 635 → 3 180); the guard follows the proxy.
+  // ≈2.25k after the 20/11/2026 #355 review: bat_bien 3 keeps the general "do not choose in any
+  // form" ban, and the no-tags rule exempts the the_goi_y card (guard +30).
+  // The 16/11/2026 English tool texts (the <tool_hoan> and MCP headers) also count higher in chars/4
+  // although real tokens fell: 2 260 measured with all six English PRs merged. 2 309 after the
+  // 20/11/2026 style.md rule against mixing languages (mixed answers 5/27 vs 1/27 in the #357 eval).
+  // 2 338 after the 21/11/2026 skill-catalog header (load only the skill the question is about).
+  expect(Math.ceil(a.system.length / 4)).toBeLessThan(2_350)
 })
 
 test("the constraints budget key is explicit and never cuts on any tier", () => {
@@ -273,6 +281,6 @@ test("sourced 2026 exchange holidays close all exchanges; administrative Saturda
   for (const day of ["2026-01-05", "2026-02-23", "2026-04-28", "2026-09-03", "2026-11-25"]) {
     expect(clockState(at("10:00", day), calendar).tradingDay).toBe(true)
   }
-  expect(renderClock(clockState(at("10:00", "2027-01-04"), calendar), calendar)).toContain("Lịch nghỉ ngày 2027-01-04 chưa kiểm chứng")
-  expect(renderClock(clockState(at("10:00", "2026-11-25"), calendar), calendar)).not.toContain("Lịch nghỉ ngày")
+  expect(renderClock(clockState(at("10:00", "2027-01-04"), calendar), calendar)).toContain("Holiday calendar not verified for 2027-01-04")
+  expect(renderClock(clockState(at("10:00", "2026-11-25"), calendar), calendar)).not.toContain("Holiday calendar not verified")
 })

@@ -56,7 +56,7 @@ export interface SearchPlan {
 
 export function planSearch(input: WebSearchInput, now = new Date()): SearchPlan {
   if ((input.allowed_domains?.length ?? 0) > 0 && (input.blocked_domains?.length ?? 0) > 0) {
-    throw new Error("Không truyền cùng lúc allowed_domains và blocked_domains.")
+    throw new Error("Do not pass allowed_domains and blocked_domains together.")
   }
   const allowed = [...new Set([...cleanDomains(input.allowed_domains), ...(input.preset ? PRESETS[input.preset] : [])])]
   const since = input.recency_days ? vnDay(now.getTime() - input.recency_days * 86_400_000) : undefined
@@ -246,7 +246,7 @@ const duckduckgo: Backend = {
     })
     if (!res.ok) throw new Error(`DuckDuckGo HTTP ${res.status}`)
     const items = parseDuckDuckGo(await res.text(), plan.n)
-    if (items.length === 0) throw new Error("DuckDuckGo không trả kết quả đọc được (có thể bị chặn)")
+    if (items.length === 0) throw new Error("DuckDuckGo returned no readable results (it may be blocked)")
     return items
   },
 }
@@ -263,22 +263,22 @@ export function keyedBackends(env: Record<string, string | undefined> = process.
 }
 
 const CITE =
-  'NHẮC: trích nguồn bằng link markdown [Tiêu đề](URL) ngay cạnh số liệu/khẳng định lấy từ kết quả; cuối câu trả lời có mục "Nguồn:". Ghi ngày đăng với tin tức. Giá và chỉ số thị trường kiểm lại bằng tool dữ liệu MCP khi có.'
+  'REMINDER: cite with a markdown link [Title](URL) right next to each figure/claim taken from the results; end the answer with a "Nguồn:" section. Give the publication date for news. Check prices and market indices with the MCP data tools when available.'
 
 export function formatResults(query: string, backend: string, hits: Hit[], summary?: string, notes: string[] = [], since?: string) {
   const day = vnDay()
   const lines = hits.map((h, i) => {
     // With a recency window, an undated hit says so: it passed the date filter unchecked.
-    const date = h.date ?? (since ? "không rõ ngày" : undefined)
+    const date = h.date ?? (since ? "date unknown" : undefined)
     const meta = [hostOf(h.url), date].filter(Boolean).join(" — ")
     const snippet = h.snippet ? `\n    ${h.snippet.replace(/\s+/g, " ").slice(0, 300)}` : ""
-    return `[${i + 1}] ${h.title || "(không tiêu đề)"}${meta ? ` — ${meta}` : ""}\n    ${h.url}${snippet}`
+    return `[${i + 1}] ${h.title || "(untitled)"}${meta ? ` — ${meta}` : ""}\n    ${h.url}${snippet}`
   })
   return [
-    `Kết quả tìm kiếm "${query}" (nguồn: ${backend} · ${day})`,
+    `Search results for "${query}" (source: ${backend} · ${day})`,
     ...notes,
     ...lines,
-    ...(summary ? ["", `Tóm tắt của bộ tìm kiếm: ${summary.slice(0, 1500)}`] : []),
+    ...(summary ? ["", `Search engine summary: ${summary.slice(0, 1500)}`] : []),
     "",
     CITE,
   ].join("\n")
@@ -304,12 +304,12 @@ export async function runSearch(input: WebSearchInput, signal: AbortSignal, deps
   const plan = planSearch(input)
   const key = JSON.stringify(plan)
   const cached = cache.get(key)
-  if (cached) return `${cached}\n(kết quả lưu trong 5 phút)`
+  if (cached) return `${cached}\n(cached result, up to 5 minutes old)`
   const failures: string[] = []
   // Its own budget: a slow or throttled provider search must leave time for the fallbacks.
   const nativeSignal = AbortSignal.any([signal, AbortSignal.timeout(NATIVE_TIMEOUT_MS)])
   const native = await (deps.native ?? defaultNative)(plan.query, plan, nativeSignal).catch((error: unknown) => {
-    failures.push(`tìm kiếm của model: ${error instanceof Error ? error.message.slice(0, 120) : String(error)}`)
+    failures.push(`model search: ${error instanceof Error ? error.message.slice(0, 120) : String(error)}`)
     return undefined
   })
   if (native && native.sources.length > 0) {
@@ -318,21 +318,21 @@ export async function runSearch(input: WebSearchInput, signal: AbortSignal, deps
       // The provider's summary may quote any source it used: once one is filtered out (a
       // blocked or off-list domain), the summary goes too and only the kept sources remain.
       const filtered = kept.length < native.sources.length
-      const notes = filtered ? ["(Đã bỏ các nguồn ngoài bộ lọc domain và cả phần tóm tắt của bộ tìm kiếm, vì nó có thể trích từ các nguồn đó.)"] : []
+      const notes = filtered ? ["(Sources outside the domain filter were dropped, and so was the search engine summary, since it may quote them.)"] : []
       const out = formatResults(plan.query, native.backend, kept.slice(0, plan.n), filtered ? undefined : native.text, notes, plan.since)
       cache.set(key, out)
       return out
     }
-    failures.push("tìm kiếm của model: mọi nguồn đều bị bộ lọc domain loại")
+    failures.push("model search: every source was removed by the domain filter")
   }
   for (const backend of (deps.backends ?? keyedBackends)()) {
     try {
       const hits = filterHits(await backend.run(plan, signal), plan).slice(0, plan.n)
       if (hits.length === 0) {
-        failures.push(`${backend.name}: không có kết quả`)
+        failures.push(`${backend.name}: no results`)
         continue
       }
-      const notes = failures.length > 0 ? [`(đã thử: ${failures.join("; ")})`] : []
+      const notes = failures.length > 0 ? [`(tried: ${failures.join("; ")})`] : []
       const out = formatResults(plan.query, backend.name, hits, undefined, notes, plan.since)
       cache.set(key, out)
       return out
@@ -342,7 +342,7 @@ export async function runSearch(input: WebSearchInput, signal: AbortSignal, deps
     }
   }
   throw new Error(
-    `Không tìm được kết quả cho "${plan.query}". Đã thử: ${failures.join("; ")}. Đặt EXA_API_KEY, TAVILY_API_KEY hoặc BRAVE_API_KEY để tìm ổn định hơn, hoặc nới lọc domain/ngày.`,
+    `No results for "${plan.query}". Tried: ${failures.join("; ")}. Set EXA_API_KEY, TAVILY_API_KEY or BRAVE_API_KEY for steadier search, or loosen the domain/date filters.`,
   )
 }
 
@@ -351,14 +351,14 @@ export function webSearchTool(deps: SearchDeps = {}): ToolDef<WebSearchInput> {
   return {
     name: "web_search",
     description:
-      `Tìm kiếm web, trả kết quả đánh số (tiêu đề, URL, ngày, đoạn trích). Dùng khi cần tin tức, thời sự, công bố, sự kiện mới; tháng hiện tại ${month}, tìm tin mới thì ghi đúng năm hiện tại. Thông tin có thể đã đổi (nhân sự, quy định, sự kiện doanh nghiệp) thì tìm, không trả lời theo trí nhớ. Không dùng khi số liệu thị trường đã có tool dữ liệu. ` +
-      "Ưu tiên nguồn gốc (HOSE/HNX, SBV, GSO, IR doanh nghiệp). Đọc chi tiết bằng web_fetch. Câu trả lời trích nguồn bằng link markdown cạnh khẳng định, cuối có mục \"Nguồn:\".",
+      `Searches the web and returns numbered results (title, URL, date, snippet). Use for news (tin tức, thời sự), announcements and recent events; the current month is ${month}, so put the current year in queries for recent news. Search when information may have changed (people, regulations, corporate events) instead of answering from memory. Do not use when a data tool already covers the market figures. ` +
+      "Prefer primary sources (HOSE/HNX, SBV, GSO, company IR). Read details with web_fetch. The answer cites sources with markdown links next to each claim and ends with a \"Nguồn:\" section.",
     input: z.object({
       query: z.string().min(2),
-      allowed_domains: z.array(z.string()).max(20).optional().describe("Chỉ các domain này, ví dụ [\"cafef.vn\"]"),
-      preset: z.enum(["vn_finance", "vn_news", "vn_official"]).optional().describe("Nguồn VN: tài chính, báo chí, nhà nước"),
+      allowed_domains: z.array(z.string()).max(20).optional().describe("Only these domains, e.g. [\"cafef.vn\"]"),
+      preset: z.enum(["vn_finance", "vn_news", "vn_official"]).optional().describe("Vietnamese sources: finance, press, government"),
       recency_days: z.number().int().min(1).max(3650).optional(),
-      num_results: z.number().int().min(1).max(20).optional().describe("Mặc định 8"),
+      num_results: z.number().int().min(1).max(20).optional().describe("Default 8"),
     }),
     readOnly: true,
     deferrable: true,

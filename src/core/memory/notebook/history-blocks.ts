@@ -1,6 +1,6 @@
 import type { ModelMessage } from "ai"
-import { fit } from "../../prompt/budget"
-import { REMINDER_CAP_MARK, REMINDER_TAG } from "../../reminder-tag"
+import { fit, LEGACY_BUDGET_MARK } from "../../prompt/budget"
+import { LEGACY_REMINDER_CAP_MARK, REMINDER_CAP_MARK, REMINDER_TAG } from "../../reminder-tag"
 import { truncate } from "../../tools/wrap"
 import { memoryReadTool } from "./read-tool"
 import { labelOf, maskedLesson, maskedThesis, reminders, renderLessonBlock, renderThesisBlock } from "./render"
@@ -168,11 +168,13 @@ function parseMasked(line: string): HistoryLine | undefined {
 }
 
 type CutMark = "truncate" | "cap" | "budget"
+/** truncate()'s mark before 16/11/2026 (Vietnamese), still in saved sessions. */
+const LEGACY_TRUNCATE_MARK = /^\[\.\.\. đã lược \d+ ký tự \.\.\.\]$/u
 function cutMark(line: string): CutMark | undefined {
   const p = patterns()
-  if (p.truncateMark.test(line)) return "truncate"
-  if (line === REMINDER_CAP_MARK) return "cap"
-  if (line === p.budgetMark) return "budget"
+  if (p.truncateMark.test(line) || LEGACY_TRUNCATE_MARK.test(line)) return "truncate"
+  if (line === REMINDER_CAP_MARK || line === LEGACY_REMINDER_CAP_MARK) return "cap"
+  if (line === p.budgetMark || line === LEGACY_BUDGET_MARK) return "budget"
   return undefined
 }
 

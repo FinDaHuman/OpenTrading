@@ -123,7 +123,7 @@ test("ve-bieu-do references đọc được qua load_skill file=", async () => {
     const body = await readSkillFile(viz, f)
     expect(body.length).toBeGreaterThan(100)
   }
-  await expect(readSkillFile(viz, "../SKILL.md")).rejects.toThrow("nằm ngoài thư mục")
+  await expect(readSkillFile(viz, "../SKILL.md")).rejects.toThrow("is outside the folder")
 })
 
 test("every supporting file a bundled skill names exists in its directory", async () => {
@@ -142,9 +142,9 @@ test("supporting files are readable only inside the skill directory", async () =
   await writeFile(path.join(dir, "secret.txt"), "không được đọc")
   const bank = (await loadSkills([{ dir, source: "user" }])).skills[0]!
   expect(await readSkillFile(bank, "kpi.md")).toBe("NIM, CASA")
-  await expect(readSkillFile(bank, "../secret.txt")).rejects.toThrow("nằm ngoài thư mục")
-  await expect(readSkillFile(bank, path.join(dir, "secret.txt"))).rejects.toThrow("nằm ngoài thư mục")
-  await expect(readSkillFile(bank, "missing.md")).rejects.toThrow("Không có file")
+  await expect(readSkillFile(bank, "../secret.txt")).rejects.toThrow("is outside the folder")
+  await expect(readSkillFile(bank, path.join(dir, "secret.txt"))).rejects.toThrow("is outside the folder")
+  await expect(readSkillFile(bank, "missing.md")).rejects.toThrow("No file")
 })
 
 test("catalog lists auto skills only and stays within budget", () => {
@@ -155,7 +155,7 @@ test("catalog lists auto skills only and stays within budget", () => {
     ...Array.from({ length: 30 }, (_, i) => make({ name: `bulk-${i}`, description: "x".repeat(400) })),
   ]
   const full = renderCatalog(skills.slice(0, 3), 1_000)!
-  expect(full.text).toContain("- auto-a: mô tả auto-a Dùng khi: khi hỏi A")
+  expect(full.text).toContain("- auto-a: mô tả auto-a Use when: khi hỏi A")
   expect(full.text).not.toContain("hand")
   expect(full.text).not.toContain("always-on")
   expect(full.truncated).toBe(false)
@@ -243,7 +243,7 @@ test("ve-bieu-do được gợi ý khi hỏi vẽ chart + có trong catalog", as
   expect(matchTriggers("ve bieu do tron", skills).map((s) => s.name)).toContain("ve-bieu-do")
   const catalog = renderCatalog(skills, 10_000)!
   expect(catalog.text).toContain("- ve-bieu-do:")
-  expect(catalog.text).toContain("trực quan hóa")
+  expect(catalog.text).toContain("hard to read as a table")
 })
 
 test("cây quyết định choosing-a-form bao phủ đủ kinds + có lưới an toàn", async () => {
@@ -259,11 +259,11 @@ test("cây quyết định choosing-a-form bao phủ đủ kinds + có lưới a
     expect(tree, `kind ${kind} không có trong cây`).toContain(kind)
   }
   // Quy tắc dừng ở node cha + lưới an toàn + cấm bịa.
-  expect(tree).toContain("DỪNG ở node ★")
-  expect(tree).toContain("KHÔNG VẼ")
-  expect(tree).toContain("Không bao giờ bịa data")
+  expect(tree).toContain("STOP at the first matching ★ node")
+  expect(tree).toContain("DO NOT DRAW")
+  expect(tree).toContain("Never invent data")
   // Ngưỡng khớp đúng validation trong code (render.ts / pie.ts / waterfall.ts / boxplot.ts / multiline.ts / compare.ts).
-  for (const t of ["≥5 nến", "≥2 điểm", "≥2 lát", "≥1 delta", "Mỗi nhóm ≥4 điểm", "≥3 điểm", "value + max", "2–5 chuỗi"]) {
+  for (const t of ["≥5 candles", "≥2 points", "≥2 slices", "≥1 delta", "Each group ≥4 points", "≥3 points", "value + max", "2–5 series"]) {
     expect(tree, `thiếu ngưỡng ${t}`).toContain(t)
   }
 })
@@ -273,7 +273,7 @@ test("SKILL.md trỏ sang cây thay vì bảng phẳng", async () => {
   const viz = skills.find((s) => s.name === "ve-bieu-do")!
   expect(viz.body).not.toContain("## Bảng chọn hình")
   expect(viz.body).toContain("choosing-a-form.md")
-  expect(viz.body).toContain("DỪNG ở node")
+  expect(viz.body).toContain("STOP at the first matching ★ node")
 })
 
 test("exclusion metadata is optional, typed, and uses the trigger word boundaries", () => {
@@ -305,7 +305,9 @@ test("real bundled catalog fits A with headroom; B preserves descriptions and C 
   const names = skills.filter((s) => s.activation === "auto").map((s) => s.name).sort()
   const full = renderCatalog(skills, 100_000)!
   expect(BUDGETS.skill_catalog).toEqual({ A: 2_600, B: 1_200, C: 280 })
-  expect(estimateTokens(full.text)).toBeLessThanOrEqual(BUDGETS.skill_catalog!.A! * 0.8)
+  // 82%: the English header asks for only the skill the question is about (20/11/2026 live routing eval:
+  // the shorter header picked an extra skill twice as often); 2 104 of 2 600 tokens measured.
+  expect(estimateTokens(full.text)).toBeLessThanOrEqual(BUDGETS.skill_catalog!.A! * 0.82)
   for (const tier of ["A", "B", "C"] as const) {
     const catalog = renderCatalog(skills, BUDGETS.skill_catalog![tier]!)!
     const entries = catalog.text.split("\n").filter((line) => line.startsWith("- "))

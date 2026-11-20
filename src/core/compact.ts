@@ -3,7 +3,7 @@ import { estimateTokens } from "./prompt/budget"
 import { loadedTools } from "./tools/loaded"
 import { compactCarry, compactPair, isCompactMarker } from "./compact-marker"
 import { SOURCE_FAILED_PREFIX } from "./tools/outcome"
-import { LOADED_PREFIX } from "./tools/search"
+import { loadedPrefixOf } from "./tools/search"
 import { currentTodos } from "./tools/todos"
 import { attachmentAttrs, attachmentKey, attachmentsOf, clearedAttachment, withoutOrphanStubs } from "./mentions"
 
@@ -106,17 +106,31 @@ export const ATTACHMENT_PRUNE_TOKENS = 20_000
 /** Consecutive automatic failures before auto-compaction stops for the session. */
 export const MAX_AUTO_FAILURES = 3
 
-export const PRUNED_TEXT = "(đã dọn kết quả cũ để tiết kiệm context; gọi lại tool nếu cần số liệu này)"
+export const PRUNED_TEXT = "(old result pruned to save context; call the tool again if you need these figures)"
 /**
  * For a data result, whose full text is in the session's evidence. A fresh fetch of market data
  * differs from the figures already cited, so the way back must not be calling the tool again.
  */
 export const prunedEvidence = (id: string) =>
-  `(đã dọn kết quả cũ để tiết kiệm context; bản đúng như lúc lấy: read_result id="${id}". Cần số mới hơn mới gọi lại tool.)`
-const PRUNED_PREFIX = "(đã dọn kết quả cũ"
+  `(old result pruned to save context; the exact copy as fetched: read_result id="${id}". Call the tool again only for newer figures.)`
+const PRUNED_PREFIX = "(old result pruned"
+/** The marker before 16/11/2026 (Vietnamese), still in saved sessions. */
+const VI_PRUNED_PREFIX = "(đã dọn kết quả cũ"
 /** After the first line of a failed call: there was no data to fetch again. */
-export const PRUNED_ERROR_TEXT = "(lần gọi cũ này đã lỗi, chi tiết đã được dọn; lần gọi đó không trả về số liệu)"
+export const PRUNED_ERROR_TEXT = "(this old call failed and its details were pruned; it returned no figures)"
 const PRUNED_ERROR_HEAD_CHARS = 200
+/** A kept turn's tool result longer than this is cut to its start and end when the kept turn alone is too large (#335). */
+export const TAIL_RESULT_MAX_CHARS = 8_000
+/** Of what a cut result keeps, the share from its end: a table's totals or a report's conclusion are often there. */
+export const SHRUNK_TAIL_SHARE = 0.25
+/** How a cut recent result starts its note; a result starting with it is never cut again. */
+const SHRUNK_PREFIX = "(large result shortened"
+export const shrunkNote = (id: string | undefined, head: number, tail: number, total: number) =>
+  id
+    ? `${SHRUNK_PREFIX}: kept the first ${head} and the last ${tail} of ${total} characters; the exact copy as fetched: read_result id="${id}".)`
+    : `${SHRUNK_PREFIX}: kept the first ${head} and the last ${tail} of ${total} characters; the middle is no longer in context.)`
+/** Between the start and the end a cut result keeps. */
+export const SHRUNK_GAP = "\n[… middle cut …]\n"
 /** Their results are small and carry state the harness or the model still needs. */
 const PROTECTED = new Set(["todo_write", "load_skill", "ask_user"])
 
@@ -130,18 +144,18 @@ export type CompactVariant = "full" | "lean"
  * in the answer, in no tool result, summarized with "MCP opentrading" as its source).
  */
 const OWN_FIGURES =
-  'Số chỉ có trong câu trả lời trước (không có trong kết quả tool nào) thì ghi nguồn là "câu trả lời trước", không ghi tên tool. Kết quả đã dọn có id read_result thì ghi id đó vào cột nguồn.'
+  'A figure found only in an earlier answer (in no tool result) gets the source "câu trả lời trước", never a tool name. For a pruned result with a read_result id, put that id in the source column.'
 
 /**
  * Spec 007: memory, the user's saved constraints and the investor profile are sent again with every
  * request, so a summary that copies them only keeps an old copy a later edit or delete cannot reach.
  */
 const MEMORY_LABELS =
-  'Không chép nội dung khối memory ("[Memory · …]"), ràng buộc đã lưu hay hồ sơ nhà đầu tư: chúng được gửi lại ở mọi lượt. Cần nhắc tới thì ghi nhãn, ví dụ "bài học #7", "luận điểm HPG".'
+  'Do not copy the content of memory blocks ("[Memory · …]"), saved constraints or the investor profile: they are resent every turn. To refer to one, use its label, e.g. "bài học #7", "luận điểm HPG".'
 
-const PREFERENCES = "Điều người dùng đã nói trong hội thoại này về khẩu vị rủi ro, khung thời gian, mã đang quan tâm, cách trình bày mong muốn."
+const PREFERENCES = "What the user said in this conversation about risk appetite, time horizon, tickers of interest and preferred presentation."
 
-const MISSING_DATA = "Tool hoặc nguồn nào đã lỗi, đã xử lý thế nào, và số liệu nào vẫn chưa lấy được. Không điền số thay cho phần thiếu."
+const MISSING_DATA = "Which tools or sources failed, how that was handled, and which figures are still missing. Never fill in numbers for the missing parts."
 
 /**
  * Sent after the head when summarizing; the summary must stand in for everything above it.
@@ -154,39 +168,39 @@ export function compactPrompt(instructions?: string, variant: CompactVariant = "
     variant === "lean"
       ? [
           "## Yêu cầu của người dùng",
-          "Mục tiêu và từng yêu cầu, giữ sát lời gốc.",
+          "The goal and each request, close to the original words.",
           "## Ràng buộc và sở thích",
           PREFERENCES,
           "## Số liệu đã xác minh",
-          `Bảng: chỉ tiêu | giá trị | đơn vị | nguồn | thời điểm. Chép nguyên văn, không làm tròn. Số nào không có nguồn và thời điểm thì bỏ. ${OWN_FIGURES}`,
+          `Table: chỉ tiêu | giá trị | đơn vị | nguồn | thời điểm. Copy verbatim, no rounding. Drop any figure without a source and time. ${OWN_FIGURES}`,
           "## Lỗi và dữ liệu còn thiếu",
           MISSING_DATA,
           "## Việc đang dở và bước tiếp theo",
-          "Việc chưa xong và việc nên làm tiếp.",
+          "Unfinished work and what should be done next.",
         ]
       : [
           "## Yêu cầu của người dùng",
-          "Mục tiêu và từng yêu cầu của người dùng, giữ sát lời gốc.",
+          "The user's goal and each request, close to the original words.",
           "## Ràng buộc và sở thích",
           PREFERENCES,
           "## Số liệu đã xác minh",
-          `Bảng: chỉ tiêu | giá trị | đơn vị | nguồn | thời điểm. Chép nguyên văn từ kết quả tool, không làm tròn, không đổi đơn vị. Số nào không có nguồn và thời điểm thì bỏ. ${OWN_FIGURES}`,
+          `Table: chỉ tiêu | giá trị | đơn vị | nguồn | thời điểm. Copy verbatim from the tool results, no rounding, no unit changes. Drop any figure without a source and time. ${OWN_FIGURES}`,
           "## Phân tích và kết luận đã đưa ra",
-          "Các nhận định chính, giả định đi kèm, rủi ro đã nêu.",
+          "The main views, their assumptions, the risks raised.",
           "## Lỗi và dữ liệu còn thiếu",
           MISSING_DATA,
           "## Việc đang dở và bước tiếp theo",
-          "Việc chưa xong và việc nên làm tiếp nếu người dùng muốn.",
+          "Unfinished work and what to do next if the user wants.",
         ]
   return [
-    "Tóm tắt toàn bộ cuộc hội thoại ở trên để tiếp tục làm việc mà không cần đọc lại nó. Chỉ trả lời bằng chữ, không gọi tool. Viết bằng ngôn ngữ của cuộc hội thoại.",
+    "Summarise the whole conversation above so work can continue without rereading it. Reply in text only, no tool calls. Write in the conversation's language, keeping the section headings below as they are.",
     "",
-    "Trước hết viết một khối <analysis> ngắn để kiểm kê, không nhận định: mỗi tool đã gọi và số lần; tool nào lỗi và vì sao; chuỗi số liệu đã lấy (mã, kỳ, nguồn); từng câu hỏi của người dùng; skill đã nạp. Khối này chỉ là nháp và sẽ bị bỏ.",
-    "Sau đó viết bản tóm tắt trong khối <summary>, giữ đúng các mục sau, mục nào không có thì ghi \"(không có)\":",
+    "First write a short <analysis> block as an inventory, no opinions: each tool called and how often; which tools failed and why; the data series fetched (ticker, period, source); each user question; skills loaded. This block is scratch and will be dropped.",
+    "Then write the summary in a <summary> block with exactly these sections; write \"(không có)\" for an empty one:",
     MEMORY_LABELS,
     "",
     ...sections,
-    ...(instructions?.trim() ? ["", `Yêu cầu thêm của người dùng cho bản tóm tắt: ${instructions.trim()}`] : []),
+    ...(instructions?.trim() ? ["", `The user's extra instructions for the summary: ${instructions.trim()}`] : []),
   ].join("\n")
 }
 
@@ -270,13 +284,13 @@ export function pruneToolResults(messages: readonly ModelMessage[], keepTurns = 
         if (p.type !== "tool-result" || (p.toolName && PROTECTED.has(p.toolName))) return part
         const size = JSON.stringify(p.output ?? "").length
         const head = firstLine(p.output)
-        if (size < PRUNE_MIN_CHARS || head?.startsWith(PRUNED_PREFIX) || isPrunedError(p.output)) return part
+        if (size < PRUNE_MIN_CHARS || head?.startsWith(PRUNED_PREFIX) || head?.startsWith(VI_PRUNED_PREFIX) || isPrunedError(p.output)) return part
         pruned++
         // The loaded-tools line is how later turns know which deferred tools are callable;
         // a subagent's metadata block keeps its agent_id reachable for send_message.
         const meta = subagentMeta(p.output)
         const failed = p.output?.type === "error-text" || p.output?.type === "error-json"
-        const value = head?.startsWith(LOADED_PREFIX)
+        const value = loadedPrefixOf(head)
           ? `${head}\n${PRUNED_TEXT}`
           : meta
             ? `${PRUNED_TEXT}\n${meta}`
@@ -388,6 +402,44 @@ export function pruneAttachmentsForRequest(history: readonly ModelMessage[], con
   return { messages, pruned, contextTokens: contextTokens === undefined ? undefined : scaled(contextTokens, history, messages) }
 }
 
+/**
+ * Emergency step for the turns compaction keeps (#335): when they alone exceed their share of the
+ * window, every large tool result there keeps its start and its end plus a note. The tool-call/result pairing
+ * stays; the loaded-tools line, a subagent's metadata, errors and protected tools are untouched.
+ * A result the model read back with read_result is not cut again, so compaction cannot loop on
+ * "cut → read_result → cut".
+ */
+export function shrinkRecentResults(messages: readonly ModelMessage[], maxChars = TAIL_RESULT_MAX_CHARS): { messages: ModelMessage[]; shrunk: number } {
+  let shrunk = 0
+  const out = messages.map((message) => {
+    if (message.role !== "tool") return message
+    const content = message.content.map((part) => {
+      const p = part as ResultPart
+      if (p.type !== "tool-result" || (p.toolName && (PROTECTED.has(p.toolName) || p.toolName === "read_result"))) return part
+      if (p.output?.type !== "text" && p.output?.type !== "json") return part
+      const text = typeof p.output.value === "string" ? p.output.value : JSON.stringify(p.output.value)
+      const head = firstLine(p.output)
+      if (
+        text.length <= maxChars ||
+        head?.startsWith(SHRUNK_PREFIX) ||
+        head?.startsWith(PRUNED_PREFIX) ||
+        head?.startsWith(VI_PRUNED_PREFIX) ||
+        loadedPrefixOf(head) ||
+        subagentMeta(p.output)
+      )
+        return part
+      shrunk++
+      const id = p.toolName?.startsWith("mcp__") ? p.toolCallId : undefined
+      const tailChars = Math.floor(maxChars * SHRUNK_TAIL_SHARE)
+      const start = text.slice(0, maxChars - tailChars)
+      const end = text.slice(text.length - tailChars)
+      return { ...part, output: { type: "text", value: `${shrunkNote(id, start.length, end.length, text.length)}\n${start}${SHRUNK_GAP}${end}` } } as typeof part
+    })
+    return { ...message, content } as ModelMessage
+  })
+  return { messages: out, shrunk }
+}
+
 export async function compactHistory(history: readonly ModelMessage[], opts: CompactOptions): Promise<CompactResult> {
   const before = opts.contextTokens ?? tokensOf(history)
   const tools = pruneToolResults(history)
@@ -401,11 +453,19 @@ export async function compactHistory(history: readonly ModelMessage[], opts: Com
 
   const turns = splitTurns(prunedMessages)
   let keep = KEEP_TURNS
-  if (opts.limits && tokensOf(turns.slice(-keep).flat()) > opts.limits.window * TAIL_MAX_SHARE) keep = 1
-  // Too short to summarize: worth saying only when the user asked.
-  if (turns.length <= keep) return { ...base, error: opts.manual && turns.length > 0 ? "Hội thoại còn quá ngắn để tóm tắt." : undefined }
+  const tailShare = opts.limits ? opts.limits.window * TAIL_MAX_SHARE : Infinity
+  if (tokensOf(turns.slice(-keep).flat()) > tailShare) keep = 1
+  // Even one kept turn is too large: cut its large results to their start, keeping a way back.
+  let tail = turns.slice(-keep).flat()
+  let shrunk = 0
+  if (tokensOf(tail) > tailShare) ({ messages: tail, shrunk } = shrinkRecentResults(tail))
+  // Too short to summarize: worth saying only when the user asked, unless cutting results helped.
+  if (turns.length <= keep) {
+    if (shrunk === 0) return { ...base, error: opts.manual && turns.length > 0 ? "Hội thoại còn quá ngắn để tóm tắt." : undefined }
+    const messages = [...turns.slice(0, -keep).flat(), ...tail]
+    return { messages, before, after: scaled(before, history, messages), pruned: pruned + shrunk }
+  }
   const head = turns.slice(0, -keep).flat()
-  const tail = turns.slice(-keep).flat()
 
   let summary: string
   opts.onSummarize?.()
@@ -423,7 +483,7 @@ export async function compactHistory(history: readonly ModelMessage[], opts: Com
   }
   // A kept "unchanged, see above" file stub may point into the summarized head.
   const messages = withoutOrphanStubs([...compactPair(summary, carry), ...tail])
-  return { messages, before, after: scaled(before, history, messages), pruned, summary }
+  return { messages, before, after: scaled(before, history, messages), pruned: pruned + shrunk, summary }
 }
 
 /** Whether the next turn should compact first. */

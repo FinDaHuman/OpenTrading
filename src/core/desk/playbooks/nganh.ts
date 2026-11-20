@@ -14,22 +14,22 @@ import { rank, rankingTable, SCORECARD, type Scorecard } from "./sang-loc"
  */
 
 const Args = z.object({
-  nganh: z.string().min(2).max(80).describe("Tên ngành, ví dụ \"ngân hàng\", \"thép\""),
-  tickers: z.array(Ticker).max(30).optional().describe("Các mã muốn xét; bỏ trống để agent tự chọn doanh nghiệp đầu ngành"),
-  cau_hoi: z.string().max(300).optional().describe("Điều người dùng muốn biết về ngành"),
+  nganh: z.string().min(2).max(80).describe("Sector name, e.g. \"ngân hàng\", \"thép\""),
+  tickers: z.array(Ticker).max(30).optional().describe("Tickers to consider; leave empty for the agent to pick the sector leaders"),
+  cau_hoi: z.string().max(300).optional().describe("What the user wants to know about the sector"),
 })
 type Args = z.infer<typeof Args>
 
 export const SCOPE = z.object({
-  nganh: z.string().describe("Tên ngành chuẩn"),
-  doanh_nghiep: z.array(z.object({ ma: z.string(), ly_do: z.string().optional() })).max(15).describe("Doanh nghiệp đầu ngành, vốn hóa lớn trước"),
-  dong_luc: z.array(z.string()).max(6).describe("Các động lực chính của ngành (giá đầu vào, chính sách, cầu…)"),
-  chi_tieu_nganh: z.array(z.string()).max(4).describe("2–4 chỉ tiêu riêng của ngành để chấm doanh nghiệp, ví dụ NIM, CASA, NPL với ngân hàng"),
+  nganh: z.string().describe("The standard sector name"),
+  doanh_nghiep: z.array(z.object({ ma: z.string(), ly_do: z.string().optional() })).max(15).describe("Sector-leading companies, largest market cap first"),
+  dong_luc: z.array(z.string()).max(6).describe("The sector's main drivers (input prices, policy, demand…)"),
+  chi_tieu_nganh: z.array(z.string()).max(4).describe("2–4 sector-specific metrics for scoring companies, e.g. NIM, CASA, NPL for banks"),
 })
 type Scope = z.infer<typeof SCOPE>
 
 export const GAPS = z.object({
-  thieu: z.array(z.object({ cau_hoi: z.string().describe("Một câu hỏi trả lời được bằng dữ liệu"), ma: z.string().optional() })).max(4),
+  thieu: z.array(z.object({ cau_hoi: z.string().describe("A question answerable with data"), ma: z.string().optional() })).max(4),
 })
 type Gaps = z.infer<typeof GAPS>
 
@@ -38,9 +38,9 @@ interface Theme {
   ask: (nganh: string) => string
 }
 
-const CYCLE: Theme = { type: "chu-ky-nganh", ask: (n) => `Dòng tiền và vị trí chu kỳ của ngành ${n}: tiền đang vào hay ra ngành này, ngành ở pha nào, 1 tháng tới thế nào.` }
-const MACRO: Theme = { type: "vi-mo", ask: (n) => `Các yếu tố vĩ mô VN và thế giới tác động lên ngành ${n} (lãi suất, tỷ giá, tín dụng, chính sách); mỗi yếu tố: hỗ trợ / trung lập / gây áp lực.` }
-const GLOBAL: Theme = { type: "tai-san-toan-cau", ask: (n) => `Giá hàng hóa và tài sản toàn cầu liên quan tới ngành ${n} (đầu vào, đầu ra) và trạng thái rủi ro chung; tác động lên ngành ở VN.` }
+const CYCLE: Theme = { type: "chu-ky-nganh", ask: (n) => `Money flow and cycle position of the ${n} sector: is money flowing in or out, which phase is the sector in, what about the next month.` }
+const MACRO: Theme = { type: "vi-mo", ask: (n) => `Vietnamese and global macro factors acting on the ${n} sector (rates, exchange rate, credit, policy); for each factor: hỗ trợ / trung lập / gây áp lực.` }
+const GLOBAL: Theme = { type: "tai-san-toan-cau", ask: (n) => `Global commodity and asset prices relevant to the ${n} sector (inputs, outputs) and the general risk state; the effect on the sector in Vietnam.` }
 
 const TIERS = {
   small: { companies: 3, themes: [CYCLE, MACRO], steps: 6, critic: false, gaps: 0 },
@@ -74,19 +74,19 @@ export function sectorSkill(nganh: string): string | undefined {
 
 function scopePrompt(args: Args, skill: string | undefined) {
   return [
-    `Xác định phạm vi ngành ${args.nganh} ở thị trường chứng khoán Việt Nam${args.cau_hoi ? ` cho câu hỏi: ${args.cau_hoi}` : ""}.`,
-    args.tickers?.length ? `- Người dùng đã chọn các mã: ${args.tickers.join(", ")}. Giữ đúng các mã này và thứ tự của chúng.` : "- Chọn các doanh nghiệp đầu ngành theo vốn hóa (dùng vs_industry_tree hoặc tool ngành), lớn trước.",
-    skill ? `- Nạp skill ${skill} bằng load_skill để chọn 2–4 chỉ tiêu riêng của ngành (chi_tieu_nganh) dùng chấm doanh nghiệp.` : "- Chọn 2–4 chỉ tiêu riêng của ngành (chi_tieu_nganh) dùng chấm doanh nghiệp.",
-    "- Nêu 3–6 động lực chính của ngành. Không phân tích từng doanh nghiệp ở bước này.",
-    "Trả kết quả bằng tra_ket_qua.",
+    `Scope the ${args.nganh} sector on the Vietnamese stock market${args.cau_hoi ? ` for the question: ${args.cau_hoi}` : ""}.`,
+    args.tickers?.length ? `- The user picked these tickers: ${args.tickers.join(", ")}. Keep exactly these tickers and their order.` : "- Pick the sector leaders by market cap (use vs_industry_tree or a sector tool), largest first.",
+    skill ? `- Load skill ${skill} with load_skill to choose 2–4 sector-specific metrics (chi_tieu_nganh) for scoring companies.` : "- Choose 2–4 sector-specific metrics (chi_tieu_nganh) for scoring companies.",
+    "- Name the sector's 3–6 main drivers. Do not analyse individual companies at this step.",
+    "Return the result with tra_ket_qua.",
   ].join("\n")
 }
 
 function themePrompt(theme: Theme, args: Args, scope: Scope | null) {
   return [
     theme.ask(scope?.nganh ?? args.nganh),
-    scope?.dong_luc.length ? `Động lực đã xác định: ${scope.dong_luc.join("; ")}.` : "",
-    "- Báo cáo tối đa 10 dòng, mọi số kèm nguồn và thời điểm; không khuyến nghị mã cụ thể.",
+    scope?.dong_luc.length ? `Drivers identified: ${scope.dong_luc.join("; ")}.` : "",
+    "- Report in at most 10 lines, every number with its source and time; never recommend specific tickers.",
   ]
     .filter(Boolean)
     .join("\n")
@@ -94,14 +94,14 @@ function themePrompt(theme: Theme, args: Args, scope: Scope | null) {
 
 function cardPrompt(ticker: string, args: Args, metrics: string[]) {
   return [
-    `Lập thẻ điểm cơ bản cho mã ${ticker} trong ngành ${args.nganh}.`,
-    "- Lấy số liệu mới nhất bằng tool đọc: P/E, P/B, ROE, biên gộp, nợ vay/vốn chủ (vn_fundamentals hoặc financial_ratios); tăng trưởng LNST cùng kỳ và dòng tiền HĐKD 4 quý (financial_statements). Các tool độc lập gọi cùng lúc.",
+    `Build a fundamentals scorecard for ${ticker} in the ${args.nganh} sector.`,
+    "- Get the latest figures with read tools: P/E, P/B, ROE, gross margin, borrowings/equity (vn_fundamentals or financial_ratios); year-on-year net profit growth and 4 quarters of operating cash flow (financial_statements). Call independent tools together.",
     metrics.length > 0
-      ? `- Lấy thêm chỉ tiêu riêng của ngành: ${metrics.join(", ")}; ghi vào diem_manh hoặc rui_ro, kèm số.`
-      : "- Chỉ tiêu riêng của ngành (ví dụ NIM với ngân hàng, giá bán với thép) ghi vào diem_manh hoặc rui_ro, kèm số.",
-    "- Không nạp skill.",
-    "- Số nào không lấy được thì để null và ghi vào thieu_du_lieu; không ước đoán. Chấm 0–10 từng chiều, so với các doanh nghiệp cùng ngành.",
-    "Trả kết quả bằng tra_ket_qua.",
+      ? `- Also get the sector-specific metrics: ${metrics.join(", ")}; put them in diem_manh or rui_ro, with numbers.`
+      : "- Sector-specific metrics (e.g. NIM for banks, selling prices for steel) go in diem_manh or rui_ro, with numbers.",
+    "- Load no skills.",
+    "- A number you cannot get stays null and goes into thieu_du_lieu; never estimate. Score each dimension 0–10 against companies in the same sector.",
+    "Return the result with tra_ket_qua.",
   ]
     .filter(Boolean)
     .join("\n")
@@ -109,29 +109,29 @@ function cardPrompt(ticker: string, args: Args, metrics: string[]) {
 
 function criticPrompt(args: Args, themes: { type: string; text: string }[], cards: Scorecard[], max: number) {
   return [
-    `Đọc kết quả nghiên cứu ngành ${args.nganh}${args.cau_hoi ? ` (câu hỏi: ${args.cau_hoi})` : ""} và chỉ ra tối đa ${max} chỗ còn thiếu để trả lời đầy đủ.`,
+    `Read the research on the ${args.nganh} sector${args.cau_hoi ? ` (question: ${args.cau_hoi})` : ""} and name at most ${max} gaps that keep it from a full answer.`,
     EVIDENCE_NOTE,
-    ...themes.map((t) => evidence(t.text, `báo cáo ${t.type}`)),
-    evidence(JSON.stringify(cards), "thẻ điểm doanh nghiệp"),
-    "- Mỗi chỗ thiếu là một câu hỏi cụ thể trả lời được bằng dữ liệu (một chỉ tiêu, một mã, một kỳ). Đủ rồi thì để danh sách rỗng.",
-    "- Không gọi tool. Trả kết quả bằng tra_ket_qua.",
+    ...themes.map((t) => evidence(t.text, `${t.type} report`)),
+    evidence(JSON.stringify(cards), "company scorecards"),
+    "- Each gap is one specific question answerable with data (one metric, one ticker, one period). If nothing is missing, leave the list empty.",
+    "- No tool calls. Return the result with tra_ket_qua.",
   ].join("\n")
 }
 
 function refereePrompt(args: Args, scope: Scope | null, themes: { type: string; text: string }[], ranked: ReturnType<typeof rank>, extra: { q: string; a: string }[], missing: string[]) {
   return [
-    `Viết báo cáo ngành ${scope?.nganh ?? args.nganh} cho người dùng${args.cau_hoi ? ` (câu hỏi: ${args.cau_hoi})` : ""}. Thứ hạng doanh nghiệp đã được tính; không xếp lại.`,
+    `Write the ${scope?.nganh ?? args.nganh} sector report for the user${args.cau_hoi ? ` (question: ${args.cau_hoi})` : ""}. The company ranking is already computed; do not re-rank.`,
     EVIDENCE_NOTE,
-    scope?.dong_luc.length ? evidence(scope.dong_luc.join("\n"), "động lực ngành") : "",
-    ...themes.map((t) => evidence(t.text, `báo cáo ${t.type}`)),
-    evidence(JSON.stringify(ranked.map((r, i) => ({ hang: i + 1, tong_diem: Number(r.score.toFixed(1)), ...r.card }))), "thẻ điểm doanh nghiệp đã xếp hạng"),
-    ...extra.map((e) => evidence(`${e.q}\n${e.a}`, "nghiên cứu bổ sung")),
-    "Trình bày bằng tiếng Việt, gọn:",
-    "1. Bức tranh ngành: động lực, vị trí chu kỳ và dòng tiền, gió vĩ mô (có số, nguồn, thời điểm).",
-    "2. Bảng doanh nghiệp: hạng, mã, điểm, P/E, P/B, ROE, tăng trưởng LNST, một ghi chú ngắn. Một dòng nguồn và thời điểm dưới bảng.",
-    "3. Kịch bản ngành tích cực / cơ sở / tiêu cực, mỗi kịch bản kèm điều kiện kích hoạt và mốc theo dõi.",
-    `4. Giới hạn: ${missing.length > 0 ? `thiếu ${missing.join(", ")}; ` : ""}dữ liệu cũ hoặc thiếu trong thẻ.`,
-    "Không khuyến nghị mua, bán hay tỷ trọng.",
+    scope?.dong_luc.length ? evidence(scope.dong_luc.join("\n"), "sector drivers") : "",
+    ...themes.map((t) => evidence(t.text, `${t.type} report`)),
+    evidence(JSON.stringify(ranked.map((r, i) => ({ hang: i + 1, tong_diem: Number(r.score.toFixed(1)), ...r.card }))), "ranked company scorecards"),
+    ...extra.map((e) => evidence(`${e.q}\n${e.a}`, "follow-up research")),
+    "Write in Vietnamese, concisely:",
+    "1. The sector picture: drivers, cycle position and money flow, macro winds (with numbers, sources, times).",
+    "2. The company table: rank, ticker, score, P/E, P/B, ROE, net profit growth, a short note. One line of source and time under the table.",
+    "3. Sector scenarios tích cực / cơ sở / tiêu cực, each with its triggers and milestones to watch.",
+    `4. Limits: ${missing.length > 0 ? `missing ${missing.join(", ")}; ` : ""}old data or data missing from the scorecards.`,
+    "Never recommend buying, selling or a weighting.",
   ]
     .filter(Boolean)
     .join("\n")
@@ -168,7 +168,7 @@ async function run(ctx: DeskContext<Args>): Promise<string> {
   const cards = cardResults.flatMap((c, i) => (c ? [{ ...c, ticker: companies[i]! }] : []))
   const missing = [...tier.themes.filter((_, i) => !themeResults[i]).map((t) => `báo cáo ${t.type}`), ...companies.filter((_, i) => !cardResults[i])]
   if (missing.length > 0) ctx.log(`Thiếu: ${missing.join(", ")}`)
-  if (cards.length === 0 && themes.length === 0) throw new DeskNoData(`Không lấy được dữ liệu nào cho ngành ${ctx.args.nganh}. Chạy tiếp bằng /desk resume.`)
+  if (cards.length === 0 && themes.length === 0) throw new DeskNoData(`No data could be fetched for the sector ${ctx.args.nganh}. The user can continue with /desk resume.`)
   const ranked = rank(cards, ctx.args.cau_hoi)
 
   const extra: { q: string; a: string }[] = []
@@ -181,7 +181,7 @@ async function run(ctx: DeskContext<Args>): Promise<string> {
       const answers = await ctx.parallel(
         asks.map((g, i) => () =>
           ctx.agent<string>(
-            [`Trả lời ngắn, có số, nguồn và thời điểm (tối đa 6 dòng), cho nghiên cứu ngành ${ctx.args.nganh}:`, g.cau_hoi, g.ma ? `Mã liên quan: ${g.ma}.` : ""].filter(Boolean).join("\n"),
+            [`Answer briefly, with numbers, sources and times (at most 6 lines), for the ${ctx.args.nganh} sector research:`, g.cau_hoi, g.ma ? `Related ticker: ${g.ma}.` : ""].filter(Boolean).join("\n"),
             { label: `bổ sung #${i + 1}`, type: "tra-cuu", phase: "Bổ sung", maxSteps: STEPS.gap },
           ),
         ),
@@ -205,7 +205,7 @@ export const nganh: Playbook<Args, string> = {
     name: "nganh",
     version: "1",
     description: "Phân tích sâu một ngành: phạm vi và động lực, chu kỳ dòng tiền, vĩ mô, hàng hóa toàn cầu, thẻ điểm doanh nghiệp đầu ngành, phê bình mức đầy đủ, báo cáo ngành kèm kịch bản",
-    whenToUse: "Nghiên cứu toàn cảnh một ngành ở VN (\"ngành thép đang thế nào\", \"triển vọng nhóm ngân hàng\") cần cả bối cảnh lẫn doanh nghiệp. Chỉ xếp hạng vài mã thì dùng sang_loc.",
+    whenToUse: "A full study of one Vietnamese sector (\"ngành thép đang thế nào\", \"triển vọng nhóm ngân hàng\") needing both context and companies. To rank only a few tickers, use sang_loc.",
     args: Args,
     agentTypes: ["nganh", "chu-ky-nganh", "vi-mo", "tai-san-toan-cau", "co-ban", "phan-bien", "tra-cuu", "tong-hop"],
     phases: ["Phạm vi", "Bối cảnh", "Doanh nghiệp", "Phê bình", "Bổ sung", "Tổng hợp"],

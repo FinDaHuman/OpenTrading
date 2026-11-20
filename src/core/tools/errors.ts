@@ -27,11 +27,11 @@ interface Issue {
 }
 
 const TYPES: Record<string, string> = {
-  string: "chuỗi",
-  number: "số",
-  int: "số nguyên",
+  string: "a string",
+  number: "a number",
+  int: "an integer",
   boolean: "true/false",
-  array: "mảng",
+  array: "an array",
   object: "object",
 }
 
@@ -48,19 +48,19 @@ function describeIssue(issue: Issue): string {
     case "too_big": {
       const small = issue.code === "too_small"
       const bound = small ? issue.minimum : issue.maximum
-      if (issue.origin === "array") return `${at}cần ${small ? "ít nhất" : "tối đa"} ${bound} phần tử`
-      if (issue.origin === "string") return `${at}cần ${small ? "ít nhất" : "tối đa"} ${bound} ký tự`
-      return `${at}phải ${small ? (issue.inclusive === false ? ">" : "≥") : issue.inclusive === false ? "<" : "≤"} ${bound}`
+      if (issue.origin === "array") return `${at}needs ${small ? "at least" : "at most"} ${bound} items`
+      if (issue.origin === "string") return `${at}needs ${small ? "at least" : "at most"} ${bound} characters`
+      return `${at}must be ${small ? (issue.inclusive === false ? ">" : "≥") : issue.inclusive === false ? "<" : "≤"} ${bound}`
     }
     case "invalid_type":
-      if (/received undefined/.test(issue.message ?? "")) return `${at}thiếu (bắt buộc)`
-      return `${at}phải là ${TYPES[issue.expected ?? ""] ?? issue.expected ?? "kiểu khác"}`
+      if (/received undefined/.test(issue.message ?? "")) return `${at}missing (required)`
+      return `${at}must be ${TYPES[issue.expected ?? ""] ?? issue.expected ?? "another type"}`
     case "invalid_value":
-      return `${at}phải là một trong: ${(issue.values ?? []).map((v) => JSON.stringify(v)).join(", ")}`
+      return `${at}must be one of: ${(issue.values ?? []).map((v) => JSON.stringify(v)).join(", ")}`
     case "unrecognized_keys":
-      return `${at}không có tham số ${(issue.keys ?? []).join(", ")}`
+      return `${at}no such parameter ${(issue.keys ?? []).join(", ")}`
     default:
-      return `${at}${issue.message ?? "không hợp lệ"}`
+      return `${at}${issue.message ?? "invalid"}`
   }
 }
 
@@ -79,10 +79,10 @@ function issuesOf(text: string): Issue[] | undefined {
 function invalidInput(tool: string, rest: string): string {
   const issues = issuesOf(rest)
   if (issues && issues.length > 0) {
-    return [`Tham số không hợp lệ cho ${tool}:`, ...issues.slice(0, 10).map((i) => `- ${describeIssue(i)}`), "Sửa tham số rồi gọi lại."].join("\n")
+    return [`Invalid arguments for ${tool}:`, ...issues.slice(0, 10).map((i) => `- ${describeIssue(i)}`), "Fix the arguments and call again."].join("\n")
   }
-  if (/JSON/i.test(rest)) return `Tham số của ${tool} không phải JSON hợp lệ. Sửa tham số rồi gọi lại.`
-  return `Tham số không hợp lệ cho ${tool}: ${stripPrefixes(rest).slice(0, 300)}`
+  if (/JSON/i.test(rest)) return `The arguments of ${tool} are not valid JSON. Fix the arguments and call again.`
+  return `Invalid arguments for ${tool}: ${stripPrefixes(rest).slice(0, 300)}`
 }
 
 function stripPrefixes(text: string) {
@@ -98,7 +98,7 @@ export function toolErrorText(error: unknown): string {
   const invalid = /^Invalid input for tool ([^:\s]+): ([\s\S]*)$/.exec(text)
   if (invalid) return invalidInput(invalid[1]!, invalid[2]!).slice(0, MAX_CHARS)
   const missing = /^Model tried to call unavailable tool '([^']+)'/.exec(text)
-  if (missing) return `Không có tool "${missing[1]}".`
+  if (missing) return `No tool "${missing[1]}".`
   return text.slice(0, MAX_CHARS)
 }
 

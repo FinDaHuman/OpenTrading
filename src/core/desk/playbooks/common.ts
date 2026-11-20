@@ -6,7 +6,7 @@ export const Ticker = z
   .string()
   .trim()
   .transform((s) => s.toUpperCase())
-  .pipe(z.string().regex(/^[A-Z0-9]{3,5}$/, "mã chứng khoán 3–5 ký tự, ví dụ FPT"))
+  .pipe(z.string().regex(/^[A-Z0-9]{3,5}$/, "a 3–5 character ticker, e.g. FPT"))
 
 /**
  * For AgentOpts.accept on a scorecard: the card must be about the ticker that was asked for
@@ -15,7 +15,7 @@ export const Ticker = z
 export function cardFor(ticker: string) {
   return (card: { ticker?: unknown } | null | undefined): string | undefined => {
     const got = typeof card?.ticker === "string" ? Ticker.safeParse(card.ticker) : undefined
-    return got?.success && got.data === ticker ? undefined : `thẻ điểm của mã ${String(card?.ticker ?? "(trống)")}, không phải ${ticker}`
+    return got?.success && got.data === ticker ? undefined : `a scorecard for ${String(card?.ticker ?? "(empty)")}, not ${ticker}`
   }
 }
 

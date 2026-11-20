@@ -13,11 +13,11 @@ export const SPAWN_SUBAGENT = "spawn_subagent"
  * calls in one step, a self-contained brief, the result visible to the main agent only), one line each.
  */
 const DESCRIPTION = [
-  "Giao một việc cho subagent: agent riêng, ngữ cảnh trống, tự gọi tool nhiều bước rồi trả một bản báo cáo chỉ bạn thấy (trình bày lại cho người dùng, giữ nguồn và thời điểm; mâu thuẫn thì đối chiếu).",
-  "Dùng khi: việc độc lập cần nhiều lần gọi tool mà bạn chỉ cần kết luận; nhiều việc song song (gọi mọi spawn_subagent trong CÙNG một lượt). Không dùng khi: việc chỉ cần 1–2 lần gọi tool, cần hỏi người dùng, hay cần kết quả từng bước.",
-  "Subagent không thấy hội thoại: purpose và context phải đủ để nó tự quyết; questions cụ thể (\"NIM 3 quý gần nhất?\"), không chung chung (\"Phân tích VCB\"). Harness ghép các trường thành một brief cố định.",
-  "Subagent không gọi được subagent khác hay hỏi người dùng; tool ghi sẽ hỏi người dùng xác nhận; ảnh trong kết quả tool của nó không tới được người dùng.",
-  "run_in_background: trả agent_id ngay, kết quả đến sau trong <thong_bao_subagent>; đừng chờ hay làm trùng. Giao thêm việc cho subagent đã có: send_message. Subagent báo hết quota (429) thì báo người dùng, đừng tạo subagent mới.",
+  "Hands a task to a subagent: a separate agent with an empty context that calls tools over several steps and returns a report only you see (present it to the user, keeping sources and times; reconcile contradictions).",
+  "Use when: an independent task needs many tool calls and you only need the conclusion; several tasks in parallel (make every spawn_subagent call in the SAME round). Do not use when: the task needs only 1–2 tool calls, needs to ask the user, or you need each step's result.",
+  "The subagent cannot see the conversation: purpose and context must be enough for it to decide on its own; questions specific (\"NIM 3 quý gần nhất?\"), not vague (\"Phân tích VCB\"). The harness assembles the fields into a fixed brief.",
+  "A subagent cannot call other subagents or ask the user; its write tools ask the user to confirm; images in its tool results never reach the user.",
+  "run_in_background: returns the agent_id at once; the result arrives later in <thong_bao_subagent>; do not wait or duplicate its work. More work for an existing subagent: send_message. If a subagent reports quota exhausted (429), tell the user; do not start a new subagent.",
 ].join("\n")
 
 export interface SpawnInput extends Brief {
@@ -48,10 +48,10 @@ export function typeSpec(agents: AgentDefinition[], type: string): TypeSpec | un
 function typeList(agents: AgentDefinition[]) {
   if (agents.length === 0) return ""
   const listed = agents.filter((a) => a.listed !== false)
-  const lines = listed.map((a) => `- ${a.name}: ${a.description.replace(/\s+/g, " ").trim()} (Tool: ${toolSummary(a)})`)
+  const lines = listed.map((a) => `- ${a.name}: ${a.description.replace(/\s+/g, " ").trim()} (Tools: ${toolSummary(a, "en")})`)
   const others = agents.filter((a) => a.listed === false).map((a) => a.name)
-  const more = others.length ? `\nLoại khác (gọi đích danh khi skill yêu cầu): ${others.join(", ")}.` : ""
-  return `\n\nLoại subagent (subagent_type, mặc định ${DEFAULT_SUBAGENT_TYPE}):\n${lines.join("\n")}${more}`
+  const more = others.length ? `\nOther types (call by name when a skill asks): ${others.join(", ")}.` : ""
+  return `\n\nSubagent types (subagent_type, default ${DEFAULT_SUBAGENT_TYPE}):\n${lines.join("\n")}${more}`
 }
 
 /**
@@ -64,10 +64,10 @@ export function spawnSubagentTool(manager: SubagentManager, agents: AgentDefinit
     name: SPAWN_SUBAGENT,
     description: DESCRIPTION + typeList(agents),
     input: z.object({
-      description: z.string().min(1).max(60).describe("3–6 từ, hiện trong giao diện (ví dụ: Định giá FPT)"),
+      description: z.string().min(1).max(60).describe("3–6 Vietnamese words, shown in the interface (e.g.: Định giá FPT)"),
       ...briefFields,
-      subagent_type: z.string().optional().describe(`Mặc định ${DEFAULT_SUBAGENT_TYPE}`),
-      maxSteps: z.number().int().min(1).max(30).optional().describe(`Trần lượt gọi model (mặc định theo loại, thường ${DEFAULT_SUBAGENT_STEPS})`),
+      subagent_type: z.string().optional().describe(`Default ${DEFAULT_SUBAGENT_TYPE}`),
+      maxSteps: z.number().int().min(1).max(30).optional().describe(`Cap on model calls (default by type, usually ${DEFAULT_SUBAGENT_STEPS})`),
       run_in_background: z.boolean().optional(),
     }),
     readOnly: true,
@@ -78,7 +78,7 @@ export function spawnSubagentTool(manager: SubagentManager, agents: AgentDefinit
       const type = input.subagent_type || DEFAULT_SUBAGENT_TYPE
       const spec = typeSpec(agents, type)
       if (!spec) {
-        throw new Error(`Không có loại subagent "${type}". Các loại hiện có: ${agents.map((a) => a.name).join(", ") || DEFAULT_SUBAGENT_TYPE}.`)
+        throw new Error(`No subagent type "${type}". Available types: ${agents.map((a) => a.name).join(", ") || DEFAULT_SUBAGENT_TYPE}.`)
       }
       const background = !!input.run_in_background
       const run = manager.start({
@@ -94,15 +94,15 @@ export function spawnSubagentTool(manager: SubagentManager, agents: AgentDefinit
       })
       if (background) {
         return [
-          `Đã chạy nền subagent ${run.id} (${type} · ${input.description}).`,
-          "Kết quả sẽ tự đến trong một tin <thong_bao_subagent> khi xong: đừng chờ, đừng hỏi lại trạng thái, đừng làm trùng việc của nó.",
-          `Giao thêm việc: send_message với to="${run.id}". Dừng: stop_agent.`,
+          `Subagent ${run.id} started in the background (${type} · ${input.description}).`,
+          "The result will arrive by itself in a <thong_bao_subagent> message when done: do not wait, do not poll its status, do not duplicate its work.",
+          `More work: send_message with to="${run.id}". Stop: stop_agent.`,
         ].join("\n")
       }
       const result = await run.done
       // Claude Code: partial output is still worth returning; with nothing at all, fail.
-      if (result.status === "stopped" && ctx.signal.aborted) throw new Error("Đã dừng.")
-      if (result.status === "failed" && !result.text) throw new Error(`Subagent lỗi: ${result.error ?? "không rõ nguyên nhân"}`)
+      if (result.status === "stopped" && ctx.signal.aborted) throw new Error("Stopped.")
+      if (result.status === "failed" && !result.text) throw new Error(`Subagent failed: ${result.error ?? "unknown cause"}`)
       return formatResult(run, result)
     },
   }
@@ -117,10 +117,10 @@ export function sendMessageTool(manager: SubagentManager, agents: AgentDefinitio
   return {
     name: "send_message",
     description:
-      "Gửi thêm việc hoặc thông tin cho một subagent đã có, theo agent_id (trong <subagent_meta> hay kết quả chạy nền). Subagent giữ nguyên ngữ cảnh cũ. Đang chạy: nhận tin sau lượt hiện tại. Đã xong: chạy tiếp ở chế độ nền, kết quả đến qua <thong_bao_subagent>. Viết tin đủ rõ như giao việc mới.",
+      "Sends more work or information to an existing subagent, by agent_id (from <subagent_meta> or a background start). The subagent keeps its context. Running: it gets the message after its current turn. Finished: it continues in the background and the result arrives in <thong_bao_subagent>. Write the message as clearly as a new task.",
     input: z.object({
-      to: z.string().min(1).describe("agent_id, ví dụ ag-k3f9x2"),
-      message: z.string().min(1).describe("Nội dung giao thêm"),
+      to: z.string().min(1).describe("agent_id, e.g. ag-k3f9x2"),
+      message: z.string().min(1).describe("The additional task"),
     }),
     readOnly: true,
     // Only useful once a subagent exists: spawn_subagent loads it (tools/loaded.ts).
@@ -131,8 +131,8 @@ export function sendMessageTool(manager: SubagentManager, agents: AgentDefinitio
     async execute(input) {
       const outcome = await manager.continue(input.to.trim(), input.message, (type) => typeSpec(agents, type))
       return outcome === "queued"
-        ? `Đã xếp tin cho subagent ${input.to}; nó nhận sau khi xong lượt hiện tại. Kết quả đến cùng thông báo khi nó xong.`
-        : `Subagent ${input.to} đang chạy tiếp ở chế độ nền với tin này. Kết quả sẽ đến trong <thong_bao_subagent>.`
+        ? `Message queued for subagent ${input.to}; it gets it after its current turn. The result comes with its completion notice.`
+        : `Subagent ${input.to} is continuing in the background with this message. The result will arrive in <thong_bao_subagent>.`
     },
   }
 }
@@ -141,7 +141,7 @@ export function sendMessageTool(manager: SubagentManager, agents: AgentDefinitio
 export function stopAgentTool(manager: SubagentManager): ToolDef<{ id: string }> {
   return {
     name: "stop_agent",
-    description: "Dừng một subagent đang chạy hoặc đang chờ slot, theo agent_id. Dùng khi việc của nó không còn cần nữa.",
+    description: "Stops a subagent that is running or waiting for a slot, by agent_id. Use when its work is no longer needed.",
     input: z.object({ id: z.string().min(1).describe("agent_id") }),
     readOnly: true,
     deferrable: true,
@@ -150,10 +150,10 @@ export function stopAgentTool(manager: SubagentManager): ToolDef<{ id: string }>
     summarize: (input) => `stop_agent(${input.id})`,
     async execute(input) {
       const id = input.id.trim()
-      if (manager.stop(id)) return `Đã dừng subagent ${id}.`
+      if (manager.stop(id)) return `Stopped subagent ${id}.`
       const view = manager.get(id)
-      if (view) return `Subagent ${id} không còn chạy (trạng thái: ${view.status}).`
-      throw new Error(`Không có subagent "${id}".`)
+      if (view) return `Subagent ${id} is no longer running (status: ${view.status}).`
+      throw new Error(`No subagent "${id}".`)
     },
   }
 }

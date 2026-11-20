@@ -17,6 +17,12 @@ for (const env of ["GROQ_API_KEY", "GOOGLE_GENERATIVE_AI_API_KEY", "GEMINI_API_K
   delete process.env[env]
 
 // A tiny models.dev-shaped catalog: two supported providers and one that must stay hidden.
+/**
+ * How long a wait for a frame or a state keeps trying. 5 s was too short on the busy Windows runner
+ * (#341: a correct approval flow failed at 5.5 s); under the 20 s test timeout, so a wait that never
+ * succeeds still fails on its own condition rather than on the test's timeout.
+ */
+const PATIENCE_MS = 15_000
 const text = { input: ["text"], output: ["text"] }
 const CATALOG = {
   groq: {
@@ -165,7 +171,7 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
       })
     }
     // The todo test keeps its turn running (slow tool) right after the list is saved.
-    if (callSlowTool && last.includes("[todo_write] Đã lưu")) {
+    if (callSlowTool && last.includes("[todo_write] Saved")) {
       const call = { index: 0, id: "call_slow", type: "function", function: { name: "cho_lau", arguments: "{}" } }
       return new Response(chunk({ role: "assistant", tool_calls: [call] }) + chunk({}, "tool_calls") + "data: [DONE]\n\n", {
         headers: { "content-type": "text/event-stream" },
@@ -233,7 +239,7 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     }
     // "HỨA-GIỜ": a bare promise; after the stop gate's reminder (joined onto the same user message), the clock.
     if (last.includes("HỨA-GIỜ") && !answeredThisTurn) {
-      if (!last.includes("không gọi tool nào")) return sseOf(chunk({ role: "assistant", content: "Mình sẽ lấy giờ hiện tại:" }) + chunk({}, "stop") + "data: [DONE]\n\n")
+      if (!last.includes("without any tool call")) return sseOf(chunk({ role: "assistant", content: "Mình sẽ lấy giờ hiện tại:" }) + chunk({}, "stop") + "data: [DONE]\n\n")
       const call = { index: 0, id: "call_promised", type: "function", function: { name: "current_time", arguments: "{}" } }
       return sseOf(chunk({ role: "assistant", tool_calls: [call] }) + chunk({}, "tool_calls") + "data: [DONE]\n\n")
     }
@@ -253,7 +259,7 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     // "NHÁP-TODO": the clock, then a draft beside a closing todo_write (08/11), then, reminded, the answer.
     const draftAt = request.messages.findLastIndex((m) => m.role === "user" && JSON.stringify(m.content ?? "").includes("NHÁP-TODO"))
     const draftTurn = draftAt >= 0 && request.messages.slice(draftAt + 1).every((m) => m.role !== "user" || JSON.stringify(m.content ?? "").includes("<nhac_nho>"))
-    if (draftTurn && !last.includes("chưa viết câu trả lời")) {
+    if (draftTurn && !last.includes("have not written the answer")) {
       const sent = JSON.stringify(request.messages.slice(draftAt))
       if (!sent.includes("call_draft_clock")) {
         const call = { index: 0, id: "call_draft_clock", type: "function", function: { name: "current_time", arguments: "{}" } }
@@ -334,10 +340,10 @@ beforeAll(async () => {
   setup.renderer.requestLive()
   // OpenTUI's waitFor/waitForFrame give up after 20 frames (~0.33 s), whatever the test timeout says.
   // With every CPU busy the app is correct but late: a streamed answer reached the screen after more
-  // than 20 frames. In this file both keep their own behaviour but try again until 5 s have passed.
+  // than 20 frames. In this file both keep their own behaviour but try again until PATIENCE_MS have passed.
   const patient = <A extends unknown[], R>(wait: (...args: A) => Promise<R>) =>
     async (...args: A): Promise<R> => {
-      const end = Date.now() + 5_000
+      const end = Date.now() + PATIENCE_MS
       for (;;) {
         try {
           return await wait(...args)
@@ -1057,7 +1063,7 @@ test("a tool call renders as a ● row with its result under ⎿, then the answe
   expect(frame).toContain("  ⎿  ")
   expect(frame).toContain("❯ MẤY-GIỜ rồi?")
   expect(frame).not.toContain("◆ OpenTrading")
-  expect(frame).toContain("giờ Việt Nam")
+  expect(frame).toContain("Vietnam time")
   show(frame)
   await setup.waitFor(() => !state.streaming)
   const roles = state.history.map((m) => m.role)
@@ -1171,6 +1177,34 @@ test("a deferred tool loaded by its first call reads as a grey note, wrapped, no
   }
 })
 
+test("a session saved before the English runtime text (20/11/2026) still shows its blocks, refusals and loaded tools as such", async () => {
+  // The texts exactly as denial.ts and the tool loader wrote them in Vietnamese.
+  const blocked = "Auto mode chặn shell [Git phá huỷ]: Xoá nhánh remote khi người dùng chưa nêu tên NHÁNH-CŨ.\n\nĐừng làm đúng việc này bằng tool hay lệnh khác (write_file, edit_file, tool MCP, subagent, script, lệnh viết lại): HƯỚNG-DẪN-CŨ."
+  const refused =
+    "Người dùng từ chối chạy tool này (auto mode đã chặn [Gửi dữ liệu ra ngoài]: Gửi file ra HOST-CŨ). Lời nhắn của người dùng: SAU\n\nĐừng làm đúng việc này bằng tool hay lệnh khác."
+  const loaded = "Đã nạp tool: mcp__opentrading__market_movers\nTool mcp__opentrading__market_movers chưa có trong bước này nên chưa chạy. NẠP-CŨ"
+  const before = state.lines.length
+  setState("lines", (lines) => [
+    ...lines,
+    { kind: "tool", callId: "c-old-block", name: "shell", label: "shell git push origin --delete x", status: "error", output: blocked },
+    { kind: "tool", callId: "c-old-refused", name: "mcp__x__create", label: "x · create", status: "error", output: refused },
+    { kind: "tool", callId: "c-old-loaded", name: "market_movers", label: "market_movers()", status: "error", output: loaded },
+  ])
+  try {
+    const frame = await setup.waitForFrame((f) => f.includes("NHÁNH-CŨ") && f.includes("HOST-CŨ") && f.includes("NẠP-CŨ"))
+    show(frame)
+    expect(frame).toContain("✘ Auto mode chặn shell [Git phá huỷ]")
+    expect(frame).toContain("/permissions để cho thử lại")
+    expect(frame).toContain('✘ Đã từ chối (auto mode đã chặn [Gửi dữ liệu ra ngoài]: Gửi file ra HOST-CŨ) — "SAU"')
+    // The deferred tool its first call loaded: the grey one-line note, not the loader line.
+    expect(frame).not.toContain("Đã nạp tool:")
+    // Collapsed like a new session: the old guidance for the model stays out of view.
+    expect(frame).not.toContain("HƯỚNG-DẪN-CŨ")
+  } finally {
+    setState("lines", (lines) => lines.slice(0, before))
+  }
+})
+
 test("a source that failed shows its notice, not the envelope, and no green dot", async () => {
   const notice = `${SOURCE_FAILED_PREFIX} vn_fundamentals: nguồn quá thời gian. Có thể thử lại một lần ở bước sau. CUỐI-CÂU`
   const output = `${notice}\n{"availability":"unavailable","ENVELOPE":1}`
@@ -1197,13 +1231,13 @@ test("an auto-mode block reads as one line with its rule and reason; ctrl+o show
   try {
     let frame = await setup.waitForFrame((f) => f.includes("NHÁNH-X") && f.includes("HOST-LẠ"))
     show(frame)
-    expect(frame).toContain("✘ Auto mode chặn shell [Git phá huỷ]")
+    expect(frame).toContain("✘ Auto mode blocked shell [Git phá huỷ]")
     expect(frame).toContain("/permissions để cho thử lại")
-    expect(frame).toContain("✘ Đã từ chối (auto mode đã chặn [Gửi dữ liệu ra ngoài]")
+    expect(frame).toContain("✘ Đã từ chối (auto mode had blocked it [Gửi dữ liệu ra ngoài]")
     // The guidance for the model stays out of the collapsed view.
-    expect(frame).not.toContain("Đừng làm đúng việc này")
+    expect(frame).not.toContain("Do not do this same thing")
     setState("expandTools", true)
-    frame = await setup.waitForFrame((f) => f.includes("Đừng làm đúng việc này"))
+    frame = await setup.waitForFrame((f) => f.includes("Do not do this same thing"))
     show(frame)
   } finally {
     setState("expandTools", false)
@@ -1330,7 +1364,7 @@ test("a write tool asks first: esc denies just that call (the turn goes on), 2 a
   // The still background can leave a dot in the left gutter of any row: match past it.
   frame = await setup.waitForFrame((f) => /● demo · ghi_chu.*\n[^\n]*⎿  ✘ Đã từ chối/.test(f))
   await waitMcp(() => !state.streaming)
-  expect(toolResult()).toContain("Người dùng từ chối chạy tool này")
+  expect(toolResult()).toContain("The user declined to run this tool")
   expect(state.approval).toBeUndefined()
   const answer = state.history.at(-1)
   expect(answer?.role).toBe("assistant")
@@ -1571,7 +1605,7 @@ test("ask_user: one single-choice question sends on pick and the turn goes on", 
     expect(frame).not.toContain("Hỏi về thị trường") // the prompt input is hidden meanwhile
     await setup.mockInput.typeText("2")
     await waitMcp(() => !state.streaming)
-    expect(lastTool()).toContain('Người dùng đã trả lời: \\"Bạn đầu tư trong bao lâu?\\"=\\"1–3 năm\\"')
+    expect(lastTool()).toContain('The user answered: \\"Bạn đầu tư trong bao lâu?\\"=\\"1–3 năm\\"')
     expect(JSON.stringify(state.history.at(-1)?.content)).toContain("HẾT-CÂU-TRẢ-LỜI")
     expect(state.question).toBeUndefined()
   } finally {
@@ -1587,7 +1621,7 @@ test("ask_user: esc declines without stopping the turn; 'Khác' takes a typed an
     await questionShown()
     setup.mockInput.pressEscape()
     await waitMcp(() => !state.streaming && state.question === undefined)
-    expect(lastTool()).toContain("Người dùng bỏ qua các câu hỏi")
+    expect(lastTool()).toContain("The user skipped the questions")
     expect(JSON.stringify(state.history.at(-1)?.content)).toContain("HẾT-CÂU-TRẢ-LỜI")
     expect(JSON.stringify(state.history.at(-1)?.content)).not.toContain("đã dừng")
 
@@ -2575,6 +2609,28 @@ test("prompt: Ctrl+J and \ + Enter add a line; Enter alone sends", async () => {
   await clearPrompt()
 })
 
+test("prompt: ui.pasteBurst on, a paste typed out key by key keeps its line breaks; a burst that ends in Enter still sends (#353)", async () => {
+  const { setState: set } = await import("../src/tui/state")
+  set("pasteBurst", true)
+  try {
+    // The mock types every key at once, like a terminal typing out a paste: the Enter is held, and
+    // the next key behind it makes it a line break.
+    await setup.mockInput.typeText("dong-mot-cua-ban-dan")
+    setup.mockInput.pressEnter()
+    await setup.mockInput.typeText("dong-hai")
+    const frame = await setup.waitForFrame((f) => promptRows(f).includes("dong-hai"))
+    expect(promptRows(frame)).toEqual(["dong-mot-cua-ban-dan", "dong-hai"])
+    await clearPrompt()
+    // Nothing behind the Enter: it sends (keys a busy app read all at once end like this).
+    const before = chatCalls.length
+    await setup.mockInput.typeText("Gửi ngay cả khi gõ rất nhanh")
+    setup.mockInput.pressEnter()
+    await setup.waitFor(() => chatCalls.length > before && !state.streaming)
+  } finally {
+    set("pasteBurst", false)
+  }
+})
+
 test("prompt: a pasted CR or CRLF (Windows Terminal) becomes a line break", async () => {
   await setup.mockInput.pasteBracketedText("a\r\nb\rc")
   const frame = await setup.waitForFrame((f) => promptRows(f).includes("c"))
@@ -2808,11 +2864,11 @@ test("/kiem-chung with a pasted multi-line report: the whole text reaches the mo
   show(frame)
   await sendWith("test-model", "/kiem-chung")
   const sent = lastUserContent()
-  expect(sent).toContain("Chạy playbook ultradesk kiem-chung")
+  expect(sent).toContain("Run the ultradesk playbook kiem-chung")
   expect(sent).toContain("dòng-báo-cáo-1:")
   expect(sent).toContain("dòng-báo-cáo-30")
   // The <ultradesk> reminder rides on the message, and desk_run is declared for this turn only.
-  expect(sent).toContain("thay vì tự điều phối theo skill")
+  expect(sent).toContain("instead of orchestrating the skill yourself")
   const tools = (chatBodies.at(-1) as unknown as { tools?: { function: { name: string } }[] }).tools ?? []
   expect(tools.some((t) => t.function.name === "desk_run")).toBe(true)
   // The fake model answered in text: the transcript says the playbook never started.
@@ -2889,7 +2945,7 @@ test("prompt: Alt+V pastes a clipboard image as [Image #N]; blocked for a text-o
     await sendWith("test-model", "còn gì nữa?")
     const all = JSON.stringify(chatBodies.at(-1)!.messages)
     expect(all).not.toContain(png)
-    expect(all).toContain("không xem được ảnh")
+    expect(all).toContain("cannot view images")
   } finally {
     setImageReader(undefined)
   }
@@ -3222,8 +3278,8 @@ test("/agents lists the subagent types by source; ctrl+r picks up a new file; en
   // Picker shows 10 rows per page so tra-cuu sits on page 2: its presence
   // is asserted on the spawn description (full list, no pagination).
   show(frame)
-  expect(runtime.registry.get("spawn_subagent")!.description).toContain("- tra-cuu: Dùng khi cần tra cứu nhanh")
-  expect(runtime.registry.get("spawn_subagent")!.description).toContain("- rieng-tui: Loại riêng để thử (Tool: current_time)")
+  expect(runtime.registry.get("spawn_subagent")!.description).toContain("- tra-cuu: Use for a quick lookup")
+  expect(runtime.registry.get("spawn_subagent")!.description).toContain("- rieng-tui: Loại riêng để thử (Tools: current_time)")
   await setup.mockInput.typeText("rieng")
   setup.mockInput.pressEnter()
   frame = await setup.waitForFrame((f) => f.includes("Subagent · rieng-tui") && f.includes("Tool hiện có (1): current_time"), { maxPasses: 60 })
@@ -3242,7 +3298,7 @@ test("background subagent: the answer ends at once; /tasks and the mode line sho
   try {
     await setup.mockInput.typeText("SUBAGENT-NEN")
     setup.mockInput.pressEnter()
-    await waitMcp(() => !state.streaming && state.history.some((m) => m.role === "tool" && JSON.stringify(m.content).includes("Đã chạy nền subagent")))
+    await waitMcp(() => !state.streaming && state.history.some((m) => m.role === "tool" && JSON.stringify(m.content).includes("started in the background")))
     let frame = await setup.waitForFrame((f) => f.includes("1 subagent · 1 nền · ↓ quản lý") && f.includes("nghien-cuu (Nền FPT) · chạy nền"))
     show(frame)
     const id = Object.values(state.agents).find((a) => a.background && a.status !== "completed")!.id

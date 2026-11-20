@@ -10,38 +10,42 @@ export const DESK_TAG = "thong_bao_desk"
 
 /** Why a run ended early, for its log and its notice. */
 export const CUT_TEXT: Record<NonNullable<DeskRunView["cut"]>, string> = {
-  quota: "Hết quota ngày của model: không chạy thêm agent mới.",
-  agents: "Đã chạm trần số agent của run (desk.maxAgents).",
-  requests: "Đã chạm trần số request của run (desk.maxRequests).",
-  rate: "Model liên tục báo giới hạn tốc độ (429): dừng run, chạy tiếp sau bằng /desk resume.",
-  stop: "Run đã bị dừng.",
+  quota: "The model's daily quota is exhausted: no new agents run.",
+  agents: "The run hit its agent cap (desk.maxAgents).",
+  requests: "The run hit its request cap (desk.maxRequests).",
+  rate: "The model kept reporting rate limits (429): the run stopped; continue later with /desk resume.",
+  stop: "The run was stopped.",
 }
 
 /** The result block is capped so one run cannot flood the main context. */
 export const MAX_RESULT_CHARS = 20_000
 
 const STATUS: Record<DeskRunStatus, string> = {
-  running: "đang chạy",
-  paused: "tạm dừng",
-  done: "xong",
-  partial: "xong một phần",
-  failed: "lỗi",
-  stopped: "đã dừng",
+  running: "running",
+  paused: "paused",
+  done: "done",
+  partial: "partly done",
+  failed: "failed",
+  stopped: "stopped",
 }
 
 export const DESK_NOTE =
+  "This is the harness's automatic notice that an ultradesk run finished, not the user's words. The user has not seen the result: present it to them, keeping data sources and times, and say clearly which parts are unverified or cut."
+
+/** Kept for sessions saved before the English runtime text migration. */
+const LEGACY_DESK_NOTE =
   "Đây là thông báo tự động của harness khi một run ultradesk kết thúc, không phải lời người dùng. Người dùng chưa thấy kết quả: trình bày cho họ, giữ nguồn và thời điểm dữ liệu, và nói rõ phần chưa kiểm chứng hoặc bị cắt."
 
 function resultText(view: DeskRunView) {
-  if (view.result === undefined) return view.error ? `Lỗi: ${view.error}` : "(không có kết quả)"
+  if (view.result === undefined) return view.error ? `Error: ${view.error}` : "(no result)"
   const raw = typeof view.result === "string" ? view.result : JSON.stringify(view.result, null, 2)
   const text = cleanText(raw)
-  return text.length > MAX_RESULT_CHARS ? `${text.slice(0, MAX_RESULT_CHARS)}\n… (cắt bớt ${groupDigits(text.length - MAX_RESULT_CHARS)} ký tự)` : text
+  return text.length > MAX_RESULT_CHARS ? `${text.slice(0, MAX_RESULT_CHARS)}\n… (${groupDigits(text.length - MAX_RESULT_CHARS)} characters cut)` : text
 }
 
 /** A stored desk notice, for transcript lines on resume (subagents/notification.ts splitNotices). */
 export const DESK_NOTICE_PATTERN = new RegExp(
-  `<${DESK_TAG}>\\nrun_id: (\\S+) · playbook: (\\S+) · quy mô: \\S+ · trạng thái: ([^\\n]+)\\n[\\s\\S]*?\\n([^\\n]*)\\n</${DESK_TAG}>(?:\\n${escape(DESK_NOTE)})?`,
+  `<${DESK_TAG}>\\nrun_id: (\\S+) · playbook: (\\S+) · (?:size|quy mô): \\S+ · (?:status|trạng thái): ([^\\n]+)\\n[\\s\\S]*?\\n([^\\n]*)\\n</${DESK_TAG}>(?:\\n${escape(DESK_NOTE)}|\\n${escape(LEGACY_DESK_NOTE)})?`,
   "g",
 )
 
@@ -56,12 +60,12 @@ export function deskNotification(view: DeskRunView): string {
   const seconds = Math.round(((view.endedAt ?? Date.now()) - view.createdAt) / 1000)
   const lines = [
     `<${DESK_TAG}>`,
-    `run_id: ${view.id} · playbook: ${view.playbook} · quy mô: ${view.size} · trạng thái: ${STATUS[view.status]}`,
+    `run_id: ${view.id} · playbook: ${view.playbook} · size: ${view.size} · status: ${STATUS[view.status]}`,
   ]
-  if (view.cut && view.cut !== "stop") lines.push(`Bị cắt: ${CUT_TEXT[view.cut]} Chạy tiếp: /desk resume ${view.id}`)
-  if (failed + skipped > 0) lines.push(`${failed} agent lỗi, ${skipped} agent không chạy (kết quả của chúng là "chưa kiểm chứng", không phải "sai").`)
+  if (view.cut && view.cut !== "stop") lines.push(`Cut short: ${CUT_TEXT[view.cut]} Continue: /desk resume ${view.id}`)
+  if (failed + skipped > 0) lines.push(`${failed} agents failed, ${skipped} agents did not run (their results are "unverified", not "wrong").`)
   lines.push(`<ket_qua>\n${resultText(view)}\n</ket_qua>`)
-  lines.push(`${c.agents} agent (${c.cached} lấy lại từ journal) · ${groupDigits(c.requests)} request · ${groupDigits(c.input + c.output)} token · ${seconds}s`)
+  lines.push(`${c.agents} agents (${c.cached} reused from the journal) · ${groupDigits(c.requests)} request · ${groupDigits(c.input + c.output)} token · ${seconds}s`)
   lines.push(`</${DESK_TAG}>`)
   return lines.join("\n")
 }

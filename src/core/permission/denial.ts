@@ -29,25 +29,40 @@ export interface DenyInfo {
   auto?: AutoBlock
 }
 
-export const AUTO_BLOCK_PREFIX = "Auto mode chặn "
-export const USER_DENY_PREFIX = "Người dùng từ chối chạy tool này"
-export const RULE_DENY_PREFIX = "Quy tắc chặn của người dùng"
-export const USER_NOTE = "Lời nhắn của người dùng: "
+export const AUTO_BLOCK_PREFIX = "Auto mode blocked "
+export const USER_DENY_PREFIX = "The user declined to run this tool"
+export const RULE_DENY_PREFIX = "A block rule of the user's"
+export const USER_NOTE = "The user's message: "
+
+/**
+ * The same prefixes as written before the runtime text moved to English (20/11/2026). Sessions
+ * saved earlier still hold them, so every reader takes both lists.
+ */
+export const LEGACY_AUTO_BLOCK_PREFIX = "Auto mode chặn "
+export const LEGACY_USER_DENY_PREFIX = "Người dùng từ chối chạy tool này"
+export const LEGACY_RULE_DENY_PREFIX = "Quy tắc chặn của người dùng"
+export const LEGACY_USER_NOTE = "Lời nhắn của người dùng: "
+export const AUTO_BLOCK_PREFIXES = [AUTO_BLOCK_PREFIX, LEGACY_AUTO_BLOCK_PREFIX] as const
+export const USER_DENY_PREFIXES = [USER_DENY_PREFIX, LEGACY_USER_DENY_PREFIX] as const
+export const RULE_DENY_PREFIXES = [RULE_DENY_PREFIX, LEGACY_RULE_DENY_PREFIX] as const
+
+/** The prefix of `prefixes` that `text` starts with, or undefined. */
+export const prefixOf = (text: string, prefixes: readonly string[]) => prefixes.find((p) => text.startsWith(p))
 
 const NO_WORKAROUND =
-  "Đừng làm đúng việc này bằng tool hay lệnh khác (write_file, edit_file, tool MCP, subagent, script, lệnh viết lại): như vậy là lách quyết định này, và cũng sẽ bị chặn. " +
-  "Chỉ được chọn cách an toàn hơn hẳn mà không gây ra tác dụng đó (ví dụ ghi ra file mới thay vì ghi đè, hoặc đưa lệnh để người dùng tự chạy)."
+  "Do not do this same thing with another tool or command (write_file, edit_file, an MCP tool, a subagent, a script, a rewritten command): that works around this decision and will be blocked too. " +
+  "Only a clearly safer way that does not have that effect is allowed (e.g. writing a new file instead of overwriting, or giving the command for the user to run)."
 
 const THEN_STOP =
-  "Còn việc khác không phụ thuộc vào hành động này thì làm tiếp. Nếu nó bắt buộc để xong yêu cầu: làm hết phần còn lại, rồi DỪNG và nói với người dùng bạn định làm gì, vì sao cần, và cách họ cho phép; để người dùng quyết."
+  "Carry on with other work that does not depend on this action. If it is essential to finish the request: do everything else, then STOP and tell the user what you meant to do, why it is needed, and how they can allow it; let the user decide."
 
 const THEN_REPORT =
-  "Bạn là subagent, không hỏi được người dùng: làm tiếp phần việc không phụ thuộc vào hành động này, rồi ghi rõ trong kết quả việc nào bị chặn, lý do, và vì sao cần nó, để agent chính báo người dùng."
+  "You are a subagent and cannot ask the user: carry on with the work that does not depend on this action, then state in your result what was blocked, the reason, and why it is needed, so the main agent can tell the user."
 
 const ALLOW_AUTO =
-  "Cách cho phép (người dùng tự làm; bạn đừng tự sửa cấu hình quyền): /permissions → chọn lần chặn → ctrl+r để chạy lại một lần; nói rõ trong tin nhắn đúng hành động và đối tượng của nó; chuyển sang ▸ sửa có hỏi (Shift+Tab) để tự duyệt; hoặc thêm luật autoMode.allow trong ~/.opentrading/config.json."
+  "How to allow it (the user does this; never change the permission settings yourself): /permissions → pick the block → ctrl+r to run it once; name the exact action and its target in a message; switch to ▸ ask before changes (Shift+Tab) to approve it themselves; or add an autoMode.allow rule in ~/.opentrading/config.json."
 
-const ALLOW_RULE = "Cách cho phép (người dùng tự làm; bạn đừng tự sửa cấu hình quyền): bỏ hoặc sửa luật đó trong /permissions."
+const ALLOW_RULE = "How to allow it (the user does this; never change the permission settings yourself): remove or edit that rule in /permissions."
 
 /** "Lý do." with one final period whatever the classifier wrote. */
 const sentence = (text: string) => `${text.trim().replace(/[.。\s]+$/, "")}.`
@@ -66,29 +81,29 @@ export function blockedMessage(tool: string, block: AutoBlock, agent?: AgentOrig
 
 /** The error the model reads when a call does not run. `tool` is the model-visible name. */
 export function deniedMessage(decision: DenyInfo, opts: { tool?: string; agent?: AgentOrigin } = {}) {
-  const tool = opts.tool ?? "tool này"
+  const tool = opts.tool ?? "this tool"
   switch (decision.reason) {
     case "cancelled":
-      return "Lời gọi tool đã bị huỷ."
+      return "The tool call was cancelled."
     case "rewrite":
       // Not a denial: the tool says how to write the call so that it runs (ToolDef.rewrite).
-      return decision.message ?? "Viết lại lời gọi này đúng dạng tool nhận."
+      return decision.message ?? "Rewrite this call in the form the tool accepts."
     case "unsaved":
-      return `Không chạy được: ${decision.message ?? "chưa lưu được quyền"}.`
+      return `Could not run: ${decision.message ?? "the permission could not be saved"}.`
     case "classifier":
-      return blockedMessage(tool, decision.auto ?? { reason: "khớp một luật chặn của auto mode" }, opts.agent)
+      return blockedMessage(tool, decision.auto ?? { reason: "it matches an auto-mode block rule" }, opts.agent)
     case "headless":
       // Auto mode blocked it and wanted the user to decide, but nobody can be asked: it is a block.
       if (decision.auto) return blockedMessage(tool, decision.auto, opts.agent)
-      return paragraphs("Lời gọi này cần người dùng xác nhận, nhưng không có giao diện để hỏi. Không chạy.", NO_WORKAROUND, afterBlock(opts.agent))
+      return paragraphs("This call needs the user's confirmation, but there is no interface to ask. Not run.", NO_WORKAROUND, afterBlock(opts.agent))
     case "blocked":
-      return paragraphs(`Không chạy được: ${decision.message ?? "lời gọi này bị chặn"}. Đừng thử lại cùng cách.`, NO_WORKAROUND)
+      return paragraphs(`Could not run: ${decision.message ?? "this call is blocked"}. Do not retry the same way.`, NO_WORKAROUND)
     case "rule":
-      return paragraphs(`${RULE_DENY_PREFIX} (permissions.deny) không cho chạy ${tool}.`, NO_WORKAROUND, afterBlock(opts.agent), ALLOW_RULE)
+      return paragraphs(`${RULE_DENY_PREFIX} (permissions.deny) does not allow ${tool}.`, NO_WORKAROUND, afterBlock(opts.agent), ALLOW_RULE)
     default: {
-      const why = decision.auto ? ` (auto mode đã chặn${labelled(decision.auto).replace(/\.$/, "")})` : ""
+      const why = decision.auto ? ` (auto mode had blocked it${labelled(decision.auto).replace(/\.$/, "")})` : ""
       const note = decision.message ? ` ${USER_NOTE}${decision.message}` : ""
-      const next = decision.message ? undefined : opts.agent ? "Ghi việc bị từ chối vào kết quả." : "Đừng thử lại cùng lời gọi; hỏi người dùng muốn làm gì khác."
+      const next = decision.message ? undefined : opts.agent ? "Record the declined action in your result." : "Do not retry the same call; ask the user what else they want."
       return paragraphs(`${USER_DENY_PREFIX}${why}.${note}`, next, NO_WORKAROUND)
     }
   }
@@ -96,9 +111,9 @@ export function deniedMessage(decision: DenyInfo, opts: { tool?: string; agent?:
 
 /** The user's note in a denial the model read (the TUI's one-line summary). */
 export function userNoteOf(text: string): string | undefined {
-  const at = text.indexOf(USER_NOTE)
-  if (at < 0) return undefined
-  const rest = text.slice(at + USER_NOTE.length)
+  const mark = [USER_NOTE, LEGACY_USER_NOTE].find((m) => text.includes(m))
+  if (!mark) return undefined
+  const rest = text.slice(text.indexOf(mark) + mark.length)
   const end = rest.indexOf("\n\n")
   return (end < 0 ? rest : rest.slice(0, end)).trim() || undefined
 }

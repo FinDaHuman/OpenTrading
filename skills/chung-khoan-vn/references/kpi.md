@@ -1,52 +1,52 @@
 # Chỉ báo ngành chứng khoán — dòng BCTC và cách đọc
 
-> Tra `vs_financial_norms(btype=2)` để lấy đúng tên dòng BCTC loại chứng khoán; file
-> này giữ **cách đọc**, không giữ con số kỳ nào. Mọi giá trị lấy từ `financial_detail`
-> gần nhất và ghi kỳ báo cáo kèm theo. Luật về trần ký quỹ và cách tính mức đòn
-> bẩy chỉ nằm ở §Trụ cột driver của SKILL.md — không lặp lại ở đây.
+> Look up `vs_financial_norms(btype=2)` for the exact brokerage statement line names; this file
+> keeps **how to read them**, not any period's numbers. Every value comes from the latest `financial_detail`,
+> with the reporting period stated. The rules on the margin cap and how to compute
+> leverage live only in the SKILL.md §Trụ cột driver — not repeated here.
 
 ## 1. Nhóm đòn bẩy
 
-| Chỉ báo | Đọc từ | Cách đọc |
+| Indicator | Read from | How to read |
 |---|---|---|
-| Dư nợ cho vay ký quỹ | `financial_detail` | Xu hướng 4–8 quý. Tăng đều cho thấy nhu cầu ký quỹ tăng, chưa chứng minh chất lượng tín dụng; giảm đột ngột = thị trường vừa xả hoặc CTCK siết gọi |
-| Vốn chủ sở hữu | `financial_detail` | Dùng làm mẫu số cho mức đòn bẩy. Cổ tức bằng cổ phiếu thường tái phân loại trong vốn chủ, không tự làm giảm tổng vốn chủ; kiểm tra biến động vốn thực tế |
-| Mức đòn bẩy | Tính bằng `shell` (lệnh chỉ gồm phép tính): dư nợ / vốn chủ (ghi rõ là số tính ra) | So trần quy định hiện hành. Đây là chỉ báo **chỗ tăng trưởng còn lại**, không phải chỉ báo chất lượng |
-| Các khoản phải thu | `financial_detail` | Phải thu từ giao dịch margin tăng nhanh hơn dư nợ = công nợ đang ùn lại |
+| Margin loans outstanding | `financial_detail` | The 4–8 quarter trend. Steady growth shows rising margin demand but does not prove credit quality; a sudden drop = the market just sold off or the brokerage tightened margin calls |
+| Equity | `financial_detail` | The denominator for leverage. Stock dividends usually reclassify within equity and do not by themselves cut total equity; check actual equity movements |
+| Leverage | Computed with `shell` (a command made only of arithmetic): loans / equity (state that it is derived) | Compare with the regulatory cap in force. This indicates **remaining room for growth**, not quality |
+| Receivables | `financial_detail` | Receivables from margin trades growing faster than loans = receivables piling up |
 
 ## 2. Nhóm doanh thu
 
-| Chỉ báo | Đọc từ | Cách đọc |
+| Indicator | Read from | How to read |
 |---|---|---|
-| Doanh thu môi giới | `financial_detail` | Phí đang bị nén cấu trúc bởi cạnh tranh phí 0. Doanh thu môi giới giảm **không** đồng nghĩa ngành xấu |
-| Doanh thu cho vay ký quỹ | `financial_detail` | Đọc kèm dư nợ và lãi suất trung bình: doanh thu tăng nhưng dư nợ giảm = lãi suất tăng, không phải khối lượng |
-| Doanh thu đầu tư | `financial_detail` | Mảng biến động nhất. Đọc 4 quý và tách phần thực hiện lãi định kỳ |
-| Doanh thu tư vấn | `financial_detail` | Mảng nhỏ nhưng ổn định nhất; tăng theo pipeline IPO/ECM |
-| Tỷ trọng 4 mảng | Tự tính (ghi rõ) | Cơ cấu quyết định nhóm nào chịu thị trường giảm. Đọc 4 quý liền mới xếp nhóm |
+| Brokerage revenue | `financial_detail` | Fees are structurally compressed by zero-fee competition. Falling brokerage revenue does **not** mean the sector is worse |
+| Margin lending revenue | `financial_detail` | Read with loans and the average rate: revenue up while loans fall = higher rates, not volume |
+| Investment revenue | `financial_detail` | The most volatile business. Read 4 quarters and separate the realised recurring part |
+| Advisory revenue | `financial_detail` | Small but the most stable; grows with the IPO/ECM pipeline |
+| Weights of the 4 businesses | Computed yourself (state it) | The mix decides which group suffers in a falling market. Read 4 consecutive quarters before grouping |
 
 ## 3. Nhóm vốn và hiệu quả
 
-| Chỉ báo | Đọc từ | Cách đọc |
+| Indicator | Read from | How to read |
 |---|---|---|
-| ROE | `financial_ratios` | Dùng neo chất lượng P/B. ROE từ tự doanh lên bất thường thì giảm trọng số kỳ đó |
-| Chi phí hoạt động | `financial_detail` | So với doanh thu: chi phí tăng nhanh hơn doanh thu là ép biên dài hạn |
-| Tỷ lệ vốn khả dụng | Báo cáo an toàn tài chính do CTCK công bố | Dùng định nghĩa và ngưỡng văn bản hiện hành; không suy từ vốn chủ hoặc thay bằng chỉ tiêu không xác định |
+| ROE | `financial_ratios` | Used to anchor P/B quality. If ROE jumps unusually from proprietary trading, down-weight that period |
+| Operating expenses | `financial_detail` | Against revenue: costs growing faster than revenue squeeze margins long-term |
+| Liquid capital ratio | The financial safety report published by the brokerage | Use the definition and thresholds of the text in force; never infer it from equity or replace it with an undefined metric |
 
 ## 4. Nhóm đối chiếu
 
-| Nguồn | Đọc gì | Khi nào |
+| Source | What to read | When |
 |---|---|---|
-| `news_market` | Dư nợ margin toàn ngành, lãi margin trung bình, chi phí vốn CTCK | Mỗi lần cần số ngành; ghi rõ số ngành lấy từ công bố nào |
-| `market_overview` | Giá bluechip, movers, độ rộng | Cần bối cảnh nhịp phiên trước khi đọc kết quả CTCK |
-| `breadth_scan` | Độ rộng tăng/giảm | Kiểm tra câu chuyện thanh khoản có lan tỏa hay chỉ vài mã lớn |
-| `planned_targets` | Kế hoạch năm (doanh thu, lợi nhuận, vốn) | Neo kỳ vọng; đặc biệt cần khi xét vấn đề huy động vốn mở rộng |
+| `news_market` | Sector margin debt, average margin rates, brokerages' funding costs | Whenever sector figures are needed; state which disclosure the sector figure comes from |
+| `market_overview` | Bluechip prices, movers, breadth | For session context before reading brokerage results |
+| `breadth_scan` | Advance/decline breadth | To check whether the liquidity story is broad or only a few large tickers |
+| `planned_targets` | The yearly plan (revenue, profit, capital) | Expectation anchor; especially when considering capital raising for expansion |
 
 ## 5. Bẫy đọc thường gặp
 
-- Doanh thu môi giới giảm trong khi ngành vẫn lãi: đừng kết luận "ngành xấu" —
-  cạnh tranh phí là cấu trúc, không phải chu kỳ.
-- Dư nợ ký quỹ tăng cùng lúc với thị trường chỉ là hệ quả, không kéo theo lãi
-  CTCK bằng vốn chủ mới.
-- Quý lãi bất thường từ tự doanh: xử lý như một lần, không nội suy thành năng lực.
+- Brokerage revenue falling while the sector still makes money: do not conclude "ngành xấu" —
+  fee competition is structural, not cyclical.
+- Margin loans rising together with the market are only a consequence; they do not bring
+  brokerage profit from new equity.
+- An unusually profitable quarter from proprietary trading: treat it as one-off; never extrapolate it into capability.
 
-So KPI vận hành bằng `financial_detail`/công bố từng peer cùng kỳ; `peer_compare` chỉ cho key tổng quan thực trả, không tạo dư nợ/vốn chủ hay cơ cấu doanh thu qua `metrics`.
+Compare operating KPIs with each peer's `financial_detail`/disclosures for the same period; `peer_compare` gives only the overview keys it really returns and does not create loans/equity or the revenue mix through `metrics`.

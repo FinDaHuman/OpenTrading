@@ -1,6 +1,7 @@
 ---
 name: bat-dong-san-vn
-description: "Pha/sóng: dùng skill chu kỳ. Phân tích ngành bất động sản VN theo dòng vốn và pháp lý: tín dụng ngành, kênh trái phiếu và tường đáo hạn, giới hạn vay áp dụng, cơ cấu nhà ở so khu công nghiệp. Dùng khi hỏi xu hướng nhóm BĐS hay đọc BCTC chủ đầu tư."
+description: "Phase/wave: use dinh-vi-chu-ky-vn. Analyses VN real estate by capital flows and legal status: sector credit, bonds and maturity wall, borrowing limits, housing vs industrial parks. Use for real-estate trends or developers."
+match_text: "Pha/sóng: dùng skill chu kỳ. Phân tích ngành bất động sản VN theo dòng vốn và pháp lý: tín dụng ngành, kênh trái phiếu và tường đáo hạn, giới hạn vay áp dụng, cơ cấu nhà ở so khu công nghiệp. Dùng khi hỏi xu hướng nhóm BĐS hay đọc BCTC chủ đầu tư."
 activation: auto
 requires_tools: [financial_detail, planned_targets]
 uses_tools: [financial_detail, planned_targets, analyst_consensus, peer_compare, financial_ratios, stock_overview, news_symbol, news_market, company_events, event_calendar_vn, dividends_splits, symbol_lookup, vn_company]
@@ -12,152 +13,152 @@ version: 1.0.0
 
 # Bất động sản Việt Nam — framework phân tích
 
-BĐS VN là ngành **dòng vốn + pháp lý**, không phải ngành "cung – cầu nhà ở" theo
-nghĩa đơn giản. Skill này đọc ngành qua bốn dòng vốn vào dự án (tín dụng ngành,
-trái phiếu doanh nghiệp, vốn chủ, tiền ứng từ khách hàng), rào pháp lý chặn từng
-dòng, và **tách hai chu kỳ khác nhau** của ngành: nhà ở thương mại (dẫn bởi lãi
-suất vay và khả năng hấp thụ) so với bất động sản công nghiệp (dẫn bởi dòng vốn
-nước ngoài và giá thuê). Nhìn chung một ngành sẽ đọc sai cả hai.
+Vietnamese real estate is a **capital-flow + legal** sector, not a simple "housing supply–demand"
+sector. This skill reads it through the four flows of capital into projects (sector credit,
+corporate bonds, equity, customer advances), the legal barriers blocking each
+flow, and **two separate cycles** within the sector: commercial housing (driven by borrowing
+rates and absorption) versus industrial real estate (driven by foreign capital
+and rents). Reading it as one sector misreads both.
 
 ## Khi nào dùng
 
-- Dùng khi: user hỏi xu hướng nhóm BĐS, một chủ đầu tư có bị siết vốn không, phân
-  khúc nào đang khác gì nhau, tường đáo hạn trái phiếu ảnh hưởng ra sao.
-- Khi KHÔNG dùng (dùng skill khác thay thế):
-  - Hỏi pha thị trường / luân chuyển ngành / sóng ngành tiếp theo → `dinh-vi-chu-ky-vn`.
-  - Phân tích toàn diện một mã → `phan-tich-chuyen-sau-1-ma`.
-  - Chỉ định giá một mã → `dinh-gia-chuyen-sau`.
-  - Chỉ đọc BCTC một mã không có mảng ngành → `co-ban-chuyen-sau`.
-  - Số liệu vĩ mô VN chi tiết (lãi suất, tín dụng toàn ngành) → `danh-gia-vi-mo-viet-nam`.
+- Use when: the user asks about real-estate group trends, whether a developer is capital-squeezed,
+  how segments differ, how the bond maturity wall affects things.
+- Do NOT use (use another skill instead):
+  - Market phase / sector rotation / the next sector wave → `dinh-vi-chu-ky-vn`.
+  - A full ticker analysis → `phan-tich-chuyen-sau-1-ma`.
+  - Valuing one ticker only → `dinh-gia-chuyen-sau`.
+  - Only one ticker's statements without the sector angle → `co-ban-chuyen-sau`.
+  - Detailed Vietnamese macro figures (rates, system-wide credit) → `danh-gia-vi-mo-viet-nam`.
 
 ## Trụ cột driver
 
-| Driver | Kênh truyền dẫn | Đọc/xác minh bằng |
+| Driver | Transmission channel | Read/verify with |
 |---|---|---|
-| Tín dụng ngành | Dư nợ cho lĩnh vực BĐS quyết định dòng tiền vào dự án. Ngân hàng bị giới hạn tăng trưởng cho từng lĩnh vực theo kỳ → siết/nới là **hành chính**, không phải nhu cầu | Dư nợ BĐS + biên tăng trưởng: `news_market`/`web_search` (số hệ thống theo kỳ); riêng mã đọc nợ vay trong `financial_detail` |
-| Kênh trái phiếu + tường đáo hạn | Phát hành trái phiếu tăng nhanh đổi lấy rủi ro tái cơ cấu trung hạn: tường đáo hạn tập trung vài quý là điểm nghẽn. Lãi phát hành tăng = thị trường phát giá rủi ro ngành cao hơn | Phát hành + lãi + tường đáo hạn: `news_market`/`web_search`; riêng mã đọc trái phiếu phát hành trong `financial_detail` |
-| Rào pháp lý | Quy định giới hạn (vay ngân hàng + trái phiếu)/vốn chủ theo quy mô dự án làm trần đòn bẩy của cả ngành; Luật Đất đai định kỳ công bố bảng giá đất (+ quy định thay thế khác) đổi chi phí đầu vào | Nội dung văn bản + hiệu lực: `news_market`/`web_search`. **Không suy ngưỡng mới** — tra văn bản hiện hành rồi ghi nguồn |
-| Phân khúc | Nhà ở thương mại: lãi vay + khả năng hấp thụ + cung mới. Công nghiệp: dòng vốn nước ngoài + giá thuê + hấp thụ đất. Hai chu kỳ khác chiều được | Bán trước/bàn giao và giá thuê/hấp thụ: `news_market`/`web_search`; riêng mã trong `financial_detail` và `planned_targets` |
-| Thanh khoản thị trường | Cung mới đổ về cùng lúc làm giảm khả năng tính giá → biên lãi gộp mảng BĐS bị nén dù doanh thu tăng | Biên lãi gộp mảng BĐS: `financial_detail` |
-| Kỳ vọng + phê duyệt | Dự án phải qua chuỗi phê duyệt; kỳ vọng chững lại làm tiến độ chậm và chi phí tài chính đội lên | Tiến độ + sự kiện phê duyệt: `company_events` · `event_calendar_vn` |
+| Sector credit | Loans to real estate decide the cash flowing into projects. Banks face per-sector growth limits each period → tightening/easing is **administrative**, not demand | Real-estate loans + growth limits: `news_market`/`web_search` (system figures by period); for the ticker read borrowings in `financial_detail` |
+| The bond channel + maturity wall | Fast bond issuance trades for medium-term restructuring risk: a maturity wall concentrated in a few quarters is a bottleneck. Rising issuance coupons = the market pricing the sector's risk higher | Issuance + coupons + maturity wall: `news_market`/`web_search`; for the ticker read issued bonds in `financial_detail` |
+| Legal barriers | Rules capping (bank loans + bonds)/equity by project size set a leverage ceiling for the whole sector; the Land Law periodically publishes land price tables (+ other replacing rules), changing input costs | Text content + effective dates: `news_market`/`web_search`. **Never infer new thresholds** — look up the current text and cite it |
+| Segment | Commercial housing: borrowing rates + absorption + new supply. Industrial: foreign capital + rents + land absorption. The two cycles can move in opposite directions | Pre-sales/handovers and rents/absorption: `news_market`/`web_search`; for the ticker in `financial_detail` and `planned_targets` |
+| Market liquidity | New supply arriving at once reduces pricing power → the real-estate gross margin is compressed even as revenue rises | Real-estate gross margin: `financial_detail` |
+| Expectations + approvals | Projects must pass a chain of approvals; stalled expectations slow progress and push up financial costs | Progress + approval events: `company_events` · `event_calendar_vn` |
 
 ## Các bước
 
-**Bước 1: Nhận diện mã + phân khúc (song song).**
+**Bước 1: Identify the ticker + segment (in parallel).**
 
-`symbol_lookup` · `vn_company` (bảng mảng kinh doanh: nhà ở / công nghiệp / bán lẻ
-/ dịch vụ). Thiếu phân khúc rõ → ghi "chưa rõ phân khúc", đọc cả hai nhánh cây.
+`symbol_lookup` · `vn_company` (the business-segment table: housing / industrial / retail
+/ services). Without a clear segment → write "chưa rõ phân khúc" and read both branches of the tree.
 
-**Bước 2: Dòng vốn + trần nợ (song song).**
+**Bước 2: Capital flows + the debt ceiling (in parallel).**
 
-`financial_detail`: nợ vay, trái phiếu phát hành, vốn chủ, chi phí lãi thuần.
-`news_market`: dư nợ tín dụng ngành, phát hành trái phiếu ngành, tường đáo hạn.
+`financial_detail`: borrowings, issued bonds, equity, net interest cost.
+`news_market`: sector credit, sector bond issuance, the maturity wall.
 
-**Bước 3: Chất lượng bán hàng + tiến độ (song song).**
+**Bước 3: Sales quality + progress (in parallel).**
 
-`financial_detail`: tiền người mua trả trước, chi phí dở dang; doanh số ký bán/backlog lấy từ công bố doanh nghiệp nếu không có dòng tách rõ;
-biên lãi gộp mảng BĐS. `planned_targets`: kế hoạch năm làm neo kỳ vọng.
+`financial_detail`: buyer advances, work in progress; contracted sales/backlog from company disclosures if no separate line exists;
+the real-estate gross margin. `planned_targets`: the yearly plan as the expectation anchor.
 
-**Bước 4: Riêng phân khúc + vị thế nhóm.**
+**Bước 4: Segment specifics + position in the group.**
 
-Công nghiệp: `news_market` (hấp thụ đất, giá thuê, dòng vốn nước ngoài).
-Nhà ở: `news_market` (cung mới, lãi vay, chính sách nhà ở). `peer_compare`:
-chỉ key tổng quan thực trả như P/B, ROE; so biên, đòn bẩy và chi phí dở dang bằng `financial_detail`/công bố từng peer cùng phân khúc, cùng kỳ.
+Industrial: `news_market` (land absorption, rents, foreign capital).
+Housing: `news_market` (new supply, borrowing rates, housing policy). `peer_compare`:
+only the overview keys it really returns, such as P/B, ROE; compare margins, leverage and work in progress with each peer's `financial_detail`/disclosures in the same segment and period.
 
 ## Cây quyết định doanh nghiệp đang được tiếp sức hay siết
 
-Duyệt các node theo thứ tự; ghi trạng thái trung gian rồi đi tiếp. Chỉ dừng ở ★.
-Thiếu dữ liệu phải ghi rõ và hạ độ tin cậy; không coi thiếu là tín hiệu xấu.
+Go through the nodes in order; record the intermediate state and move on. Stop only at ★.
+Missing data must be stated and lowers confidence; never treat missing data as a negative signal.
 
-Q1. Doanh nghiệp thuộc phân khúc nào?
-├─ Nhà ở → Q2
-├─ Công nghiệp → Q4
-├─ Cho thuê bán lẻ/dịch vụ → ghi cần doanh thu thuê, lấp đầy và chi phí vận hành → Q5
-├─ Đa phân khúc → đánh giá riêng Q2 và Q4, tổng hợp theo tỷ trọng công bố → Q5
-└─ Chưa rõ → ★ "Chưa đủ dữ liệu phân khúc để chọn bộ KPI"
+Q1. Which segment is the company in?
+├─ Housing → Q2
+├─ Industrial → Q4
+├─ Retail leasing/services → record that rental revenue, occupancy and operating costs are needed → Q5
+├─ Multi-segment → assess Q2 and Q4 separately, combine by the disclosed weights → Q5
+└─ Unclear → ★ "Chưa đủ dữ liệu phân khúc để chọn bộ KPI"
 
-Q2. Dòng vốn nhà ở đang thế nào?
-├─ Tín dụng/trái phiếu nới → ghi vốn thuận → Q3
-├─ Tín dụng siết/lãi huy động cao → ghi áp lực vốn → Q3
-└─ Thiếu hoặc trái chiều → ghi chưa rõ dòng vốn → Q3
+Q2. How is capital flowing into housing?
+├─ Credit/bonds easing → record favourable capital → Q3
+├─ Credit tightening/high funding rates → record capital pressure → Q3
+└─ Missing or conflicting → record capital flow unclear → Q3
 
-Q3. Lịch đáo hạn và giới hạn vay áp dụng có gây áp lực không?
-├─ Đáo hạn tập trung/gần giới hạn đã xác minh → ghi rủi ro tái cấp vốn → Q5
-├─ Nguồn thanh toán đủ, còn dư địa → ghi áp lực vốn được kiểm soát → Q5
-└─ Thiếu lịch nợ hoặc căn cứ pháp lý → ghi chưa xác nhận rủi ro vốn → Q5
+Q3. Do the maturity schedule and applicable borrowing limits create pressure?
+├─ Concentrated maturities/near the limit, verified → record refinancing risk → Q5
+├─ Enough repayment sources, headroom left → record capital pressure under control → Q5
+└─ Missing debt schedule or legal basis → record capital risk unconfirmed → Q5
 
-Q4. FDI, hấp thụ đất và giá thuê công nghiệp có thuận không?
-├─ Hấp thụ/giá thuê tăng, có dự án và FDI giải ngân hỗ trợ → ghi cầu thuận → Q5
-├─ Hấp thụ/giá thuê yếu → ghi áp lực cầu → Q5
-└─ Thiếu/trái chiều → ghi chưa rõ cầu → Q5
+Q4. Are FDI, land absorption and industrial rents favourable?
+├─ Absorption/rents rising, supported by projects and disbursed FDI → record favourable demand → Q5
+├─ Weak absorption/rents → record demand pressure → Q5
+└─ Missing/conflicting → record demand unclear → Q5
 
-Q5. KPI bán hàng/cho thuê và dòng tiền có cải thiện không?
-├─ Bán trước/cho thuê, biên và thu tiền cùng cải thiện → ★ "Hoạt động được tiếp sức, nhưng kết luận vốn phải giữ các rủi ro đã ghi"
-├─ Doanh số tăng nhưng biên hoặc thu tiền xấu → ★ "Tăng trưởng chưa chuyển thành chất lượng lợi nhuận/dòng tiền"
-├─ Bán chậm, lấp đầy giảm hoặc lãi vay tăng → ★ "Áp lực hoạt động và vốn; phân biệt theo phân khúc"
-└─ Thiếu hoặc kết quả hỗn hợp → ★ "Chưa đủ dữ liệu kết luận toàn diện; nêu riêng điểm đã xác minh"
+Q5. Are sales/leasing KPIs and cash flow improving?
+├─ Pre-sales/leasing, margins and collections improving together → ★ "Hoạt động được tiếp sức, nhưng kết luận vốn phải giữ các rủi ro đã ghi"
+├─ Sales up but margins or collections worse → ★ "Tăng trưởng chưa chuyển thành chất lượng lợi nhuận/dòng tiền"
+├─ Slow sales, falling occupancy or rising interest → ★ "Áp lực hoạt động và vốn; phân biệt theo phân khúc"
+└─ Missing or mixed results → ★ "Chưa đủ dữ liệu kết luận toàn diện; nêu riêng điểm đã xác minh"
 
 ## Chỉ báo đặc thù ngành
 
-Bảng chỉ báo BĐS + cách đọc từng chỉ số ở `references/kpi.md`.
+The real-estate indicator table + how to read each one is in `references/kpi.md`.
 
 ## Định giá theo đặc thù ngành
 
-BĐS định giá bằng **P/B lấy chiết khấu so giá trị sổ sách làm trung tâm** và
-**P/E trên lợi nhuận dự phóng từ backlog có phương pháp rõ**, không chỉ P/E theo lãi đã nhận — doanh thu
-BĐS nhận theo đợt bàn giao nên P/E nhảy theo tiến độ. Không chia giá cho doanh thu backlog để gọi là P/E; lợi nhuận dự phóng cần biên, tiến độ và thuế có căn cứ. P/E phải ghi rõ **có bao nhiêu doanh thu chưa ghi nhận** đi kèm. Neo kỳ vọng bằng `planned_targets` (kế
-hoạch bán trước/bàn giao) và `analyst_consensus`. So sánh **trong cùng phân
-khúc**: so P/B nhà ở với công nghiệp là vô nghĩa.
+Value real estate with **P/B centred on the discount to book value** and
+**P/E on profit projected from the backlog with a clear method**, not only P/E on recognised profit — real-estate
+revenue is recognised by handover batch, so P/E jumps with progress. Never divide the price by backlog revenue and call it P/E; projected profit needs margins, progress and tax on a sound basis. A P/E must state **how much unrecognised revenue** comes with it. Anchor expectations with `planned_targets` (the
+pre-sales/handover plan) and `analyst_consensus`. Compare **within the same
+segment**: comparing housing P/B with industrial is meaningless.
 
 ## Rủi ro đặc thù
 
-- **Rủi ro tái cấu trúc**: tường đáo hạn trái phiếu + lãi phát hành tăng là rủi ro
-  đầu tiên của ngành, xuất hiện trước khi doanh thu giảm.
-- **Rủi ro đòn bẩy pháp định**: vượt trần nợ theo quy mô dự án thì phải huy động
-  vốn chủ hoặc chậm tiến độ, cả hai đều làm giảm tăng trưởng.
-- **Rủi ro cung – cầu**: cung mới đổ về cùng kỳ làm giảm khả năng tính giá → biên
-  lãi gộp giảm dù doanh thu tăng.
-- **Rủi ro tiến độ phê duyệt**: phụ thuộc bảng giá đất công bố định kỳ và chuỗi
-  phê duyệt; chậm một bước làm chi phí tài chính đội lên.
-- **Rủi ro khác biệt phân khúc**: đọc một con số "ngành BĐS" sẽ lỗi khi nhà ở và
-  công nghiệp đi ngược chiều.
+- **Restructuring risk**: the bond maturity wall + rising issuance coupons are the sector's first
+  risk, appearing before revenue falls.
+- **Statutory leverage risk**: exceeding the debt ceiling for a project's size forces raising
+  equity or slowing progress, both of which cut growth.
+- **Supply–demand risk**: new supply arriving in the same period reduces pricing power → gross margin
+  falls even as revenue rises.
+- **Approval-progress risk**: depends on periodically published land price tables and the approval
+  chain; one delayed step pushes up financial costs.
+- **Segment-divergence risk**: one "real-estate sector" number fails when housing and
+  industrial move in opposite directions.
 
 ## Ranh giới
 
-- Không xác định pha thị trường, không bảo "BĐS sắp dẫn sóng" hay "cuối sóng" →
+- Do not determine the market phase or say "BĐS sắp dẫn sóng" or "cuối sóng" →
   `dinh-vi-chu-ky-vn`.
-- Không chọn mã khuyến nghị mua/bán, không đặt tỷ trọng → `phan-tich-chuyen-sau-1-ma`.
-- Không suy ngưỡng pháp lý từ trí nhớ: trần nợ, bảng giá đất, quy định nhà ở phải
-  tra văn bản hiện hành rồi ghi nguồn + ngày văn bản (luật này chỉ nằm ở đây).
-- Không đọc doanh thu BĐS như hàng tiêu dùng đều đặn: nhận theo đợt bàn giao, đọc
-  kèm tích luỹ chi phí dở.
+- Do not pick tickers to buy/sell or set weights → `phan-tich-chuyen-sau-1-ma`.
+- Never infer legal thresholds from memory: debt ceilings, land price tables and housing rules must be
+  looked up in the current texts, citing the source + text date (this rule lives only here).
+- Never read real-estate revenue like steady consumer goods: it is recognised by handover batch; read
+  it with accumulated work in progress.
 
 ## Giới hạn
 
-- Dư nợ tín dụng và tường đáo hạn trái phiếu là số ngành, độ trễ theo kỳ; ghi rõ
-  đang dùng số kỳ nào.
-- Phân khúc không rõ ràng ở nhiều doanh nghiệp niêm yết (mảng BĐS trộn dịch vụ,
-  bán lẻ): ghi rõ phân khúc nào đang đọc.
-- Biên lãi gộp nhà ở có thể nhảy mạnh do một dự án bàn giao — đọc 4 quý trước khi
-  kết luận xu hướng.
+- Credit outstanding and the bond maturity wall are sector figures with period lags; state
+  which period's figure is used.
+- Segments are unclear at many listed companies (real estate mixed with services,
+  retail): state which segment you are reading.
+- Housing gross margin can jump on one project's handover — read 4 quarters before
+  concluding a trend.
 
 ## Ví dụ
 
 **Ví dụ 1:**
 Hỏi: Chủ đầu tư BĐS có bị siết vốn không?
-Đạt khi: có dư nợ tín dụng ngành + nguồn, nợ vay/trái phiếu/vốn chủ của mã, tường
-đáo hạn, biên lãi gộp mảng BĐS, và verdict theo cây Q1→Q5 ghi rõ phân khúc nào.
+Đạt khi: sector credit + source, the ticker's borrowings/bonds/equity, the maturity
+wall, the real-estate gross margin, and a verdict following the Q1→Q5 tree stating which segment.
 
 ## Trực quan hóa
 
-Chỉ vẽ khi người dùng muốn xem hình; tối đa 1 biểu đồ. Hợp với dữ liệu skill này:
-waterfall từ bán trước → doanh thu chưa ghi nhận → doanh thu nhận, multiline
-chi phí lãi thuần/tổng nợ của nhóm, bar mức đòn bẩy và tích luỹ chi phí. Vẽ bằng
-`chart_render` với `from_call` (mã `[ref …]`) từ kết quả `financial_detail`/
-`peer_compare` đã có; cần chọn loại hình thì nạp `ve-bieu-do`.
+Draw only when the user wants a picture; at most 1 chart. Fitting this skill's data:
+waterfall from pre-sales → unrecognised revenue → recognised revenue, multiline
+net interest cost/total debt of the group, bar leverage and accumulated costs. Draw with
+`chart_render` using `from_call` (the `[ref …]` code) from `financial_detail`/
+`peer_compare` results you have; load `ve-bieu-do` to choose the chart type.
 
 ## File tham chiếu
 
-| File | Dùng khi |
+| File | Use when |
 |---|---|
-| `references/kpi.md` | Cần cách đọc bán trước, doanh thu chưa ghi nhận, tích luỹ chi phí, biên lãi gộp và cách tính đòn bẩy theo trần quy định |
+| `references/kpi.md` | You need to read pre-sales, unrecognised revenue, accumulated costs, gross margin and compute leverage against the regulatory ceiling |

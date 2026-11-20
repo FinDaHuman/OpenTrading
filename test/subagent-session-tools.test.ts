@@ -35,7 +35,7 @@ function childNames(parent: InstanceType<typeof ToolRegistry>, filter?: (def: To
       .list()
       .map((t) => t.name)
   } catch (error) {
-    expect(String(error)).toContain("không có tool nào")
+    expect(String(error)).toContain("has no tools to use")
     return []
   }
 }
@@ -73,8 +73,8 @@ test("SubagentManager.start never hands a subagent the history tools", () => {
   const parent = new ToolRegistry()
   for (const def of sessionHistoryTools()) parent.register(def)
   const manager = new SubagentManager({ parent })
-  expect(() => manager.start({ description: "x", prompt: "đọc phiên cũ" })).toThrow("không có tool nào")
+  expect(() => manager.start({ description: "x", prompt: "đọc phiên cũ" })).toThrow("has no tools to use")
   expect(() => manager.start({ description: "x", prompt: "đọc phiên cũ", toolFilter: toolFilter({ tools: ["session_*"] }) })).toThrow(
-    "không có tool nào",
+    "has no tools to use",
   )
 })

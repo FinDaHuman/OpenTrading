@@ -249,7 +249,7 @@ test("a daily quota cuts the run: later agents never start, and they are unverif
   const notice = deskNotification(view)
   expect(notice).toContain(`<${DESK_TAG}>`)
   expect(notice).toContain(`/desk resume ${view.id}`)
-  expect(notice).toContain("chưa kiểm chứng")
+  expect(notice).toContain("unverified")
 })
 
 test("resume after a restart: answered agents come back from the journal, identical calls keep their own slots", async () => {
@@ -390,13 +390,13 @@ test("nested playbook: one level, its phases are prefixed, the outer phase comes
   expect(view.result).toEqual(["inner-a", "outer-b"])
   expect(view.agents.map((a) => a.phase)).toEqual(["inner › Kiểm chứng", "Thu thập"])
   const failed = await (await e.start("deep", {})).done
-  expect(failed.error).toContain("một cấp")
+  expect(failed.error).toContain("one level")
 })
 
 test("bad args are refused before anything runs", async () => {
   const e = engine(starter((s) => ok(s.prompt)), [playbook("p", async () => 1)])
-  await expect(e.start("p", { tickers: "FPT" })).rejects.toThrow("không hợp lệ")
-  await expect(e.start("nope", {})).rejects.toThrow('Không có playbook "nope"')
+  await expect(e.start("p", { tickers: "FPT" })).rejects.toThrow("Invalid arguments")
+  await expect(e.start("nope", {})).rejects.toThrow('No playbook "nope"')
 })
 
 test("estimate warns above warnRequests", async () => {
@@ -624,7 +624,7 @@ test("accept: a rejected answer fails the agent and is not journaled; a journal 
   const run1 = await (await e1.start("p", {})).done
   await e1.flush()
   expect(run1.result).toEqual([null])
-  expect(run1.agents[0]).toMatchObject({ status: "failed", error: "Kết quả không dùng được: mã HPG" })
+  expect(run1.agents[0]).toMatchObject({ status: "failed", error: "Unusable result: mã HPG" })
   expect((await new DeskJournal(session, run1.id).load()).size).toBe(0)
 
   // A journal written before the check existed (same call, no accept): its wrong answer is kept...

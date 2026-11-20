@@ -82,7 +82,7 @@ test("readZip reads stored and deflated entries; an entry inflating past the cap
   expect(() => readZip(new TextEncoder().encode("not a zip"))).toThrow("ZIP")
   // 200 KB of zeros deflates to almost nothing: the cap is on what it inflates to.
   const bomb = readZip(zip({ "a.txt": "x", "big.xml": "0".repeat(200_000) }), 10_000)
-  expect(() => bomb.get("big.xml")!()).toThrow("quá lớn")
+  expect(() => bomb.get("big.xml")!()).toThrow("too large")
 })
 
 test("numbers as Excel shows them: 15 significant digits", () => {
@@ -99,7 +99,7 @@ test("xlsx: only the chosen sheet is parsed; shared/inline strings, rich text, b
   expect(book.index).toBe(0)
   expect(book.rows).toEqual([["Mã", "Giá đóng cửa"], ["FPT", "120500", "0.3", "TRUE"], [], ["VCB", "96400", "0.12"]])
   expect(readXlsx(zip(XLSX), "BCTC").rows).toEqual([["Doanh thu, tỷ", "62000"]])
-  expect(() => readXlsx(zip(XLSX), "Khác")).toThrow("Các sheet: 1. Giá · 2. BCTC")
+  expect(() => readXlsx(zip(XLSX), "Khác")).toThrow("Sheets: 1. Giá · 2. BCTC")
 })
 
 test("read_file on .xlsx shows the first sheet as numbered CSV, lists the others, picks one by name or number", async () => {
@@ -108,15 +108,15 @@ test("read_file on .xlsx shows the first sheet as numbered CSV, lists the others
   const tool = readFileTool(ws())
   const first = text(await tool.execute({ path: "gia.xlsx" }, ctx()))
   expect(first).toContain('sheet "Giá"')
-  expect(first).toContain("2. BCTC (1 dòng)")
-  expect(first).toContain("0,12 = 12%")
+  expect(first).toContain("2. BCTC (1 rows)")
+  expect(first).toContain("0.12 = 12%")
   expect(first).toContain("1\tMã,Giá đóng cửa")
   expect(first).toContain("2\tFPT,120500,0.3,TRUE")
   expect(first).toContain("4\tVCB,96400,0.12")
   const second = text(await tool.execute({ path: "gia.xlsx", sheet: "bctc" }, ctx()))
   expect(second).toContain('1\t"Doanh thu, tỷ",62000')
   expect(text(await tool.execute({ path: "gia.xlsx", sheet: "2" }, ctx()))).toContain("Doanh thu")
-  await expect(tool.execute({ path: "gia.xlsx", sheet: "Khác" }, ctx())).rejects.toThrow("Các sheet: 1. Giá · 2. BCTC")
+  await expect(tool.execute({ path: "gia.xlsx", sheet: "Khác" }, ctx())).rejects.toThrow("Sheets: 1. Giá · 2. BCTC")
 })
 
 test("docx: headings, list items, paragraphs and tables as markdown; old .doc/.xls are explained", async () => {
@@ -133,9 +133,9 @@ test("docx: headings, list items, paragraphs and tables as markdown; old .doc/.x
   expect(out).toContain("1\t# Báo cáo FPT")
   expect(out).toContain("| Doanh thu | 62.000 |")
   writeFileSync(path.join(project, "cu.xls"), new Uint8Array([0xd0, 0xcf, 0x11, 0xe0]))
-  await expect(readFileTool(ws()).execute({ path: "cu.xls" }, ctx())).rejects.toThrow("định dạng Office cũ")
+  await expect(readFileTool(ws()).execute({ path: "cu.xls" }, ctx())).rejects.toThrow("old (binary) Office format")
   writeFileSync(path.join(project, "hong.xlsx"), "không phải zip")
-  await expect(readFileTool(ws()).execute({ path: "hong.xlsx" }, ctx())).rejects.toThrow("Không đọc được")
+  await expect(readFileTool(ws()).execute({ path: "hong.xlsx" }, ctx())).rejects.toThrow("Could not read")
 })
 
 // Regression tests for the QA reports of 25/10/2026.
@@ -170,7 +170,7 @@ test("xlsx: a sheet named like a number is picked by its name first, then by pos
   expect(readXlsx(book, "2026").rows).toEqual([["YEAR2026_QA"]])
   expect(readXlsx(book, "2").rows).toEqual([["YEAR2026_QA"]])
   expect(readXlsx(book, "1").rows).toEqual([["OVERVIEW"]])
-  expect(() => readXlsx(book, "3")).toThrow('không có sheet "3"')
+  expect(() => readXlsx(book, "3")).toThrow('no sheet "3"')
 })
 
 test("xlsx: SpreadsheetML written with a namespace prefix (x:workbook, x:sheet) reads like the default-namespace one", () => {

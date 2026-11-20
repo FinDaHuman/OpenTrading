@@ -108,7 +108,7 @@ test("the log keeps the user's words and the agent's actions, never assistant te
 test("long payloads keep head and tail with a marker; old actions drop before any user message", () => {
   const tail = "rm -rf ~ # the dangerous last line"
   const clipped = clip(`${"x".repeat(5000)}${tail}`)
-  expect(clipped).toContain("[đã lược")
+  expect(clipped).toContain("chars omitted]")
   expect(clipped.endsWith(tail)).toBe(true)
   const shell = { name: "shell", readOnly: false } as ToolDef
   expect(compactInput(shell, { command: `${"a".repeat(3000)};${tail}` })).toContain(tail)
@@ -418,23 +418,23 @@ test("sub-agent return check: only agents that changed something are reviewed; f
   expect(model.seen).toHaveLength(0)
   auto.log.action(mcpWrite, { a: 1 }, agent)
   const warning = await auto.handoff(agent, signal())
-  expect(warning).toContain("[Cảnh báo an toàn từ auto mode]")
+  expect(warning).toContain("[Auto mode safety warning]")
   expect(warning).toContain("[Xoá/ghi đè không hoàn tác]")
   expect(model.seen[0]!.prompt).toContain('"by": "nghien-cuu#a1"')
   expect(auto.consecutive).toBe(0)
   expect(await auto.handoff(agent, signal())).toBeUndefined()
   // No verdict (the fake has no answers left): a neutral note, not a warning.
   const note = await auto.handoff(agent, signal())
-  expect(note).toContain("Chưa rà được")
+  expect(note).toContain("could not be reviewed")
   expect(note).not.toContain("Cảnh báo")
 })
 
 test("web and MCP results carry a neutral source line for the model; local tools do not", async () => {
   const { provenanceOf } = await import("../src/core/tools/wrap")
   const { modelOutput } = await import("../src/core/tools/registry")
-  expect(provenanceOf({ name: "mcp__notes__search", source: "mcp:notes" }, {})).toStartWith("Nguồn: MCP notes;")
-  expect(provenanceOf({ name: "web_fetch" }, { url: "https://cafef.vn/a" })).toStartWith("Nguồn: web cafef.vn;")
-  expect(provenanceOf({ name: "web_search" }, { query: "FPT" })).toStartWith("Nguồn: kết quả tìm kiếm web;")
+  expect(provenanceOf({ name: "mcp__notes__search", source: "mcp:notes" }, {})).toStartWith("Source: MCP notes;")
+  expect(provenanceOf({ name: "web_fetch" }, { url: "https://cafef.vn/a" })).toStartWith("Source: web cafef.vn;")
+  expect(provenanceOf({ name: "web_search" }, { query: "FPT" })).toStartWith("Source: web search results;")
   expect(provenanceOf({ name: "read_file" }, { path: "a" })).toBeUndefined()
   const line = provenanceOf({ name: "web_fetch" }, { url: "https://cafef.vn/a" })!
   expect(line).not.toMatch(/nguy hiểm|độc hại|đáng ngờ|cảnh báo/i)

@@ -28,9 +28,9 @@ const LIST: Todo[] = [
 test("todo_write accepts a valid list and reports progress on the first line", async () => {
   const result = await run(LIST)
   // An instruction, not prose an answer could reuse (29/10), and no list to copy.
-  expect(result.output.startsWith("[todo_write] Đã lưu (1/3 xong).")).toBe(true)
-  expect(result.output).toContain("KHÔNG chép")
-  expect(result.output).toContain("Làm tiếp: Lấy BCTC 4 quý.")
+  expect(result.output.startsWith("[todo_write] Saved (1/3 done).")).toBe(true)
+  expect(result.output).toContain("do NOT copy")
+  expect(result.output).toContain("Next: Lấy BCTC 4 quý.")
   expect(result.output).not.toContain("[x]")
   expect(todoWriteTool().summarize!({ todos: LIST })).toBe("Cập nhật việc cần làm (1/3 xong)")
 })
@@ -40,12 +40,12 @@ test("todo_write rejects two in_progress items and duplicates with a fix-it mess
     { content: "A", status: "in_progress" },
     { content: "B", status: "in_progress" },
   ])
-  expect(two).toContain("chỉ để một việc đang làm")
+  expect(two).toContain("keep one in progress")
   const dup = await errorOf([
     { content: "Lấy giá", status: "pending" },
     { content: "lấy giá ", status: "pending" },
   ])
-  expect(dup).toContain("bị trùng")
+  expect(dup).toContain("Duplicate task")
   // An empty item fails the schema itself.
   expect(todoWriteTool().input.safeParse({ todos: [{ content: " ", status: "pending" }] }).success).toBe(false)
 })
@@ -147,8 +147,8 @@ test("the nudge names the running item once the list is two steps behind", async
     { role: "tool", content: [{ type: "tool-result", toolCallId: id, toolName: "current_time", output: { type: "text", value: "x" } }] },
   ]
   const base: ModelMessage[] = [{ role: "user", content: "x" }, call("1", list), result("1")]
-  expect(toolNudge([...base, ...step("a")])).not.toContain("bước chưa cập nhật")
-  expect(toolNudge([...base, ...step("a"), ...step("b")])).toContain('Đã 2 bước chưa cập nhật danh sách: nếu dữ liệu cho "Lấy dữ liệu 3 mã"')
+  expect(toolNudge([...base, ...step("a")])).not.toContain("has not been updated for")
+  expect(toolNudge([...base, ...step("a"), ...step("b")])).toContain('The list has not been updated for 2 steps: if the data for "Lấy dữ liệu 3 mã"')
 })
 
 test("a retired list is shown again on resume and in /export: the items stay unconfirmed", async () => {

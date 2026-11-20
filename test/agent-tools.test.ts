@@ -53,7 +53,7 @@ test("a subagent gets the parent's tools minus spawn/ask/todo/memory, the same g
   expect(child.get("load_skill")).not.toBe(parent.get("load_skill"))
 
   // A filter can narrow, never re-add an excluded tool.
-  expect(() => childRegistry(parent, origin, (t) => t.name === "spawn_subagent")).toThrow("không có tool nào")
+  expect(() => childRegistry(parent, origin, (t) => t.name === "spawn_subagent")).toThrow("has no tools to use")
   expect(childRegistry(parent, origin, (t) => t.readOnly).list().map((t) => t.name)).toEqual(["current_time", "mcp__data__quote", "tool_search"])
 })
 
@@ -63,5 +63,5 @@ test("spawn_subagent holds no lock, has no timeout, and reports an empty tool se
   const spawn = spawnSubagentTool(new SubagentManager({ parent }))
   expect(spawn.unlocked).toBe(true)
   expect(spawn.timeoutMs).toBe(0)
-  await expect(spawn.execute({ description: "t", task: "x", purpose: "x", questions: ["x"], output: "x" }, ctx())).rejects.toThrow("không có tool nào")
+  await expect(spawn.execute({ description: "t", task: "x", purpose: "x", questions: ["x"], output: "x" }, ctx())).rejects.toThrow("has no tools to use")
 })

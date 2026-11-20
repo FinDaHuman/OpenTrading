@@ -13,6 +13,8 @@ import {
   compactHistory,
   compactPrompt,
   pruneToolResults,
+  shrinkRecentResults,
+  TAIL_RESULT_MAX_CHARS,
   shouldAutoCompact,
   splitTurns,
 } from "../src/core/compact"
@@ -141,7 +143,7 @@ test("manual: the head is summarized; marker + summary + kept turns, and the har
   // The todo list was written in the summarized head and is still current: it is carried.
   expect(currentTodos(history)).toEqual([...todos])
   expect(currentTodos(result.messages)).toEqual([...todos])
-  expect(JSON.stringify(result.messages[0])).toContain("Skill đã nạp: devil-advocate")
+  expect(JSON.stringify(result.messages[0])).toContain("Skills loaded: devil-advocate")
   // The transcript shows one compact item for the marker + summary.
   expect(transcriptFromMessages(result.messages)[0]).toEqual({ kind: "compact", text: "## Yêu cầu của người dùng\nphân tích FPT" })
 })
@@ -197,8 +199,8 @@ test("auto-compaction triggers at the threshold, waits for growth after a compac
 test("the summary prompt asks for verbatim sourced figures and carries the user's extra instructions", () => {
   const prompt = compactPrompt("tập trung vào ngân hàng")
   expect(prompt).toContain("## Số liệu đã xác minh")
-  expect(prompt).toContain("không làm tròn")
-  expect(prompt).toContain("không gọi tool")
+  expect(prompt).toContain("no rounding")
+  expect(prompt).toContain("no tool calls")
   expect(prompt).toContain("tập trung vào ngân hàng")
   expect(compactPrompt()).not.toContain("Yêu cầu thêm")
 })
@@ -207,7 +209,7 @@ test("one request: an <analysis> scratchpad then the <summary>; lean drops the a
   const full = compactPrompt()
   expect(full).toContain("<analysis>")
   expect(full).toContain("<summary>")
-  expect(full).toContain("không gọi tool")
+  expect(full).toContain("no tool calls")
   expect(full).toContain("## Phân tích và kết luận đã đưa ra")
   const lean = compactPrompt(undefined, "lean")
   expect(lean).toContain("## Số liệu đã xác minh")
@@ -217,13 +219,13 @@ test("one request: an <analysis> scratchpad then the <summary>; lean drops the a
   // Spec 007 (design.md L7): the lean variant keeps what the user said about risk, horizon and style too.
   for (const prompt of [full, lean]) {
     expect(prompt).toContain("## Ràng buộc và sở thích")
-    expect(prompt).toContain("Điều người dùng đã nói trong hội thoại này")
+    expect(prompt).toContain("What the user said in this conversation")
     // Memory, saved constraints and the profile are sent again with every request: labels only.
-    expect(prompt).toContain('Không chép nội dung khối memory ("[Memory · …]"), ràng buộc đã lưu hay hồ sơ nhà đầu tư')
+    expect(prompt).toContain('Do not copy the content of memory blocks ("[Memory · …]"), saved constraints or the investor profile')
     expect(prompt).toContain('"bài học #7"')
   }
   // A figure only an earlier answer gave is not sourced to a tool (30/10, AAA "LNTT +29,3%").
-  for (const prompt of [full, lean]) expect(prompt).toContain('ghi nguồn là "câu trả lời trước", không ghi tên tool')
+  for (const prompt of [full, lean]) expect(prompt).toContain('gets the source "câu trả lời trước", never a tool name')
 })
 
 test("the stored summary drops the scratchpad; a cut-off analysis is no summary", () => {
@@ -297,9 +299,9 @@ test("loaded skills survive a second compaction (read back from the first marker
     { role: "assistant", content: "ok" },
   ]
   const first = await compactHistory([...skillTurn, ...turn(2), ...turn(3)], { manual: true, summarize: async () => "t1" })
-  expect(JSON.stringify(first.messages[0])).toContain("Skill đã nạp: devil-advocate")
+  expect(JSON.stringify(first.messages[0])).toContain("Skills loaded: devil-advocate")
   const second = await compactHistory([...first.messages, ...turn(4), ...turn(5)], { manual: true, summarize: async () => "t2" })
-  expect(JSON.stringify(second.messages[0])).toContain("Skill đã nạp: devil-advocate")
+  expect(JSON.stringify(second.messages[0])).toContain("Skills loaded: devil-advocate")
 })
 
 test("tokensOf counts an image as IMAGE_TOKENS, but a long non-image `data` string as text", async () => {
@@ -366,4 +368,57 @@ test("idle: pruning alone brings it under summarizeAbove → no request; too sho
   const one = await compactHistory(turn(1, "x", "1"), { contextTokens: 250_000, limits: limits(1_000_000, 900_000), summarizeAbove: 200_000, summarize: neverSummarize })
   expect(one.summary).toBeUndefined()
   expect(one.error).toBeUndefined()
+})
+
+// --- #335: the kept turn alone is too large ---
+
+test("#335: a 27k result in the only turn keeps its start and its end, with a read_result way back, without a summary", async () => {
+  const huge = `DAU-BANG\n${"d".repeat(26_981)}\nTONG-CUOI`
+  expect(huge).toHaveLength(27_000)
+  const history = turn(1, "mcp__ot__financials", huge)
+  const result = await compactHistory(history, { manual: false, limits: limits(8_000), summarize: neverSummarize })
+  const out = outputOf(result.messages, "c1")!
+  expect(out.length).toBeLessThan(TAIL_RESULT_MAX_CHARS + 300)
+  expect(out).toContain(`read_result id="c1"`)
+  expect(out).toContain(`kept the first 6000 and the last 2000 of 27000 characters`)
+  // A table's head and its totals at the end are both still there.
+  expect(out).toContain("DAU-BANG")
+  expect(out).toContain("TONG-CUOI")
+  expect(out).toContain("[… middle cut …]")
+  // The pairing and the rest of the turn are intact.
+  expect(result.messages.map((m) => m.role)).toEqual(["user", "assistant", "tool", "assistant"])
+  expect(result.after).toBeLessThan(result.before)
+  expect(result.pruned).toBe(1)
+})
+
+test("#335: with older turns, the summarized head is dropped and the kept turn's large result is cut too", async () => {
+  const history = [...turn(1), ...turn(2), ...turn(3, "mcp__ot__financials", "d".repeat(27_000))]
+  const result = await compactHistory(history, { manual: false, limits: limits(8_000), summarize: async () => "tóm tắt" })
+  expect(isCompactMarker(result.messages[0]!)).toBe(true)
+  expect(outputOf(result.messages, "c3")).toContain(`read_result id="c3"`)
+})
+
+test("#335: read_result output, a cut result, subagent metadata and the loaded-tools line are never cut", () => {
+  const big = "z".repeat(20_000)
+  const read = turn(1, "read_result", big)
+  const { messages: once } = shrinkRecentResults(turn(2, "mcp__ot__x", big))
+  expect(shrinkRecentResults(read).shrunk).toBe(0)
+  expect(shrinkRecentResults(once).shrunk).toBe(0)
+  expect(shrinkRecentResults(turn(3, "spawn_agent", `${big}\n<subagent_meta>id=a1</subagent_meta>`)).shrunk).toBe(0)
+  // A non-MCP tool has no evidence copy: the note says so instead of offering read_result.
+  const local = shrinkRecentResults(turn(4, "shell", big)).messages
+  expect(outputOf(local, "c4")).toContain("the middle is no longer in context")
+})
+
+test("#335: the model reads the full result back right after: the next compaction neither cuts it again nor asks for a summary", async () => {
+  const huge = "d".repeat(27_000)
+  const first = await compactHistory(turn(1, "mcp__ot__financials", huge), { manual: false, limits: limits(8_000), summarize: neverSummarize })
+  // Same turn, then read_result brings the full 27k back.
+  const readBack: ModelMessage[] = [
+    { role: "assistant", content: [{ type: "tool-call", toolCallId: "r1", toolName: "read_result", input: { id: "c1" } }] },
+    { role: "tool", content: [{ type: "tool-result", toolCallId: "r1", toolName: "read_result", output: { type: "text", value: huge } }] },
+  ]
+  const again = await compactHistory([...first.messages, ...readBack], { manual: false, limits: limits(8_000), summarize: neverSummarize })
+  expect(outputOf(again.messages, "r1")).toBe(huge)
+  expect(outputOf(again.messages, "c1")).toBe(outputOf(first.messages, "c1"))
 })
