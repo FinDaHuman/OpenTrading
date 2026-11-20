@@ -211,7 +211,7 @@ test("Windows PowerShell 5.1 (what most users have; CI's default is pwsh): UTF-8
   expect(text(await tool.execute({ command: "Write-Error 'chỉ lỗi'" }, ctx()))).toContain("exit code 1")
   expect(text(await tool.execute({ command: "Get-ChildItem | Select-Object -First 1 | Out-Null; Write-Output 'xong'" }, ctx()))).toContain("exit code 0")
   const started = Date.now()
-  expect(text(await tool.execute({ command: "Start-Sleep -Seconds 30", timeout_ms: 1500 }, ctx()))).toContain("dừng vì quá")
+  expect(text(await tool.execute({ command: "Start-Sleep -Seconds 30", timeout_ms: 1500 }, ctx()))).toContain("stopped after 2s")
   expect(Date.now() - started).toBeLessThan(15_000)
 }, 60_000)
 
