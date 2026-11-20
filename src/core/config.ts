@@ -79,6 +79,12 @@ export interface Config {
    */
   update?: { check?: boolean }
   /**
+   * Saved sessions. `images` (default on): the images you attach are kept beside the session file
+   * (`<session>.images/`, readable by you only where the OS has file modes), so `--resume` gives
+   * them back to the model; off, the session keeps a placeholder in their place, as before (#344).
+   */
+  sessions?: { images?: boolean }
+  /**
    * Cap, in tokens, on the context window used for the threshold and ctx %. Unset (default):
    * the model's whole window (models.dev `limit.input`, else `limit.context`). Gemini's free
    * tier takes at most 250k input tokens a minute, so a larger request always fails there:
