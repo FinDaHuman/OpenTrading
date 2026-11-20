@@ -2581,6 +2581,28 @@ test("prompt: Ctrl+J and \ + Enter add a line; Enter alone sends", async () => {
   await clearPrompt()
 })
 
+test("prompt: ui.pasteBurst on, a paste typed out key by key keeps its line breaks; a burst that ends in Enter still sends (#353)", async () => {
+  const { setState: set } = await import("../src/tui/state")
+  set("pasteBurst", true)
+  try {
+    // The mock types every key at once, like a terminal typing out a paste: the Enter is held, and
+    // the next key behind it makes it a line break.
+    await setup.mockInput.typeText("dong-mot-cua-ban-dan")
+    setup.mockInput.pressEnter()
+    await setup.mockInput.typeText("dong-hai")
+    const frame = await setup.waitForFrame((f) => promptRows(f).includes("dong-hai"))
+    expect(promptRows(frame)).toEqual(["dong-mot-cua-ban-dan", "dong-hai"])
+    await clearPrompt()
+    // Nothing behind the Enter: it sends (keys a busy app read all at once end like this).
+    const before = chatCalls.length
+    await setup.mockInput.typeText("Gửi ngay cả khi gõ rất nhanh")
+    setup.mockInput.pressEnter()
+    await setup.waitFor(() => chatCalls.length > before && !state.streaming)
+  } finally {
+    set("pasteBurst", false)
+  }
+})
+
 test("prompt: a pasted CR or CRLF (Windows Terminal) becomes a line break", async () => {
   await setup.mockInput.pasteBracketedText("a\r\nb\rc")
   const frame = await setup.waitForFrame((f) => promptRows(f).includes("c"))
