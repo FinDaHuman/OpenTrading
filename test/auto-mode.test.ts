@@ -432,9 +432,9 @@ test("sub-agent return check: only agents that changed something are reviewed; f
 test("web and MCP results carry a neutral source line for the model; local tools do not", async () => {
   const { provenanceOf } = await import("../src/core/tools/wrap")
   const { modelOutput } = await import("../src/core/tools/registry")
-  expect(provenanceOf({ name: "mcp__notes__search", source: "mcp:notes" }, {})).toStartWith("Nguồn: MCP notes;")
-  expect(provenanceOf({ name: "web_fetch" }, { url: "https://cafef.vn/a" })).toStartWith("Nguồn: web cafef.vn;")
-  expect(provenanceOf({ name: "web_search" }, { query: "FPT" })).toStartWith("Nguồn: kết quả tìm kiếm web;")
+  expect(provenanceOf({ name: "mcp__notes__search", source: "mcp:notes" }, {})).toStartWith("Source: MCP notes;")
+  expect(provenanceOf({ name: "web_fetch" }, { url: "https://cafef.vn/a" })).toStartWith("Source: web cafef.vn;")
+  expect(provenanceOf({ name: "web_search" }, { query: "FPT" })).toStartWith("Source: web search results;")
   expect(provenanceOf({ name: "read_file" }, { path: "a" })).toBeUndefined()
   const line = provenanceOf({ name: "web_fetch" }, { url: "https://cafef.vn/a" })!
   expect(line).not.toMatch(/nguy hiểm|độc hại|đáng ngờ|cảnh báo/i)

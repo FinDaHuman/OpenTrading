@@ -45,6 +45,6 @@ export function loopDef(def: ToolDef, count: number): ToolDef {
 
 /** What the model reads when the user stops the loop. */
 export function loopDenied(def: ToolDef, count: number, message?: string): string {
-  const base = `Người dùng dừng vòng lặp: bạn đã gọi ${def.name} với cùng tham số ${count} lần liên tiếp. Đừng gọi lại lời gọi này; đổi cách khác hoặc trả lời bằng dữ liệu đã có.`
-  return message ? `${base} Lời nhắn của người dùng: ${message}` : base
+  const base = `The user stopped a loop: you called ${def.name} with the same arguments ${count} times in a row. Do not make this call again; try another way or answer with the data you have.`
+  return message ? `${base} The user's message: ${message}` : base
 }

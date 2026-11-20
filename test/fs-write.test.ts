@@ -128,23 +128,23 @@ test("write_file creates a new file (parents too) and refuses to overwrite one i
   const s = setup()
   const out = await s.write.execute({ path: "bao-cao/ke-hoach-FPT.md", content: "# Kế hoạch\n- Theo dõi FPT\n" }, ctx())
   const file = path.join(project, "bao-cao", "ke-hoach-FPT.md")
-  expect(out).toContain(`Đã tạo ${file}`)
+  expect(out).toContain(`Created ${file}`)
   expect(readFileSync(file, "utf8")).toBe("# Kế hoạch\n- Theo dõi FPT\n")
   expect(s.history.createdThisRun(file)).toBe(true)
   // Written by the tool: it counts as read, so it can be rewritten at once.
-  expect(await s.write.execute({ path: file, content: "# v2\n" }, ctx())).toContain("Đã ghi đè")
+  expect(await s.write.execute({ path: file, content: "# v2\n" }, ctx())).toContain("Overwrote")
 
   const notes = path.join(project, "ghi-chu.md")
   writeFileSync(notes, Array.from({ length: 10 }, (_, i) => `dòng ${i}`).join("\n"))
   const fresh = setup()
-  expect(await fresh.write.validate!({ path: notes, content: "x" })).toContain("Chưa đọc")
+  expect(await fresh.write.validate!({ path: notes, content: "x" })).toContain("has not been read")
   await fresh.read.execute({ path: notes, offset: 3 }, ctx())
-  expect(await fresh.write.validate!({ path: notes, content: "x" })).toContain("một phần")
+  expect(await fresh.write.validate!({ path: notes, content: "x" })).toContain("Only part")
   await fresh.read.execute({ path: notes }, ctx())
   expect(await fresh.write.validate!({ path: notes, content: "x" })).toBeUndefined()
   writeFileSync(notes, "người dùng vừa sửa")
-  expect(await fresh.write.validate!({ path: notes, content: "x" })).toContain("đã thay đổi")
-  await expect(fresh.write.execute({ path: notes, content: "x" }, ctx())).rejects.toThrow("đã thay đổi")
+  expect(await fresh.write.validate!({ path: notes, content: "x" })).toContain("changed since")
+  await expect(fresh.write.execute({ path: notes, content: "x" }, ctx())).rejects.toThrow("changed since")
 })
 
 test("pages read in order up to EOF count as a full read; a gap or a changed file does not", async () => {
@@ -156,7 +156,7 @@ test("pages read in order up to EOF count as a full read; a gap or a changed fil
   for (let page = 0; page < 4; page++) {
     const out = (await s.read.execute({ path: file, offset, limit: 50 }, ctx())) as string
     const next = /offset=(\d+)/.exec(out)?.[1]
-    if (page < 3) expect(await s.write.validate!({ path: file, content: "x" })).toContain("một phần")
+    if (page < 3) expect(await s.write.validate!({ path: file, content: "x" })).toContain("Only part")
     if (!next) break
     offset = Number(next)
   }
@@ -166,14 +166,14 @@ test("pages read in order up to EOF count as a full read; a gap or a changed fil
   const gap = setup()
   await gap.read.execute({ path: file, offset: 1, limit: 50 }, ctx())
   await gap.read.execute({ path: file, offset: 101, limit: 100 }, ctx())
-  expect(await gap.write.validate!({ path: file, content: "x" })).toContain("một phần")
+  expect(await gap.write.validate!({ path: file, content: "x" })).toContain("Only part")
 
   // Pages of different bytes do not add up.
   const changed = setup()
   await changed.read.execute({ path: file, offset: 1, limit: 100 }, ctx())
   writeFileSync(file, Array.from({ length: 180 }, (_, i) => `DÒNG ${i + 1}`).join("\n"))
   await changed.read.execute({ path: file, offset: 101, limit: 100 }, ctx())
-  expect(await changed.write.validate!({ path: file, content: "x" })).toContain("một phần")
+  expect(await changed.write.validate!({ path: file, content: "x" })).toContain("Only part")
 })
 
 test("a line cut at 2000 characters keeps the file partial: write_file cannot overwrite the unseen tail", async () => {
@@ -182,10 +182,10 @@ test("a line cut at 2000 characters keeps the file partial: write_file cannot ov
   writeFileSync(file, json)
   const s = setup()
   const out = (await s.read.execute({ path: file }, ctx())) as string
-  expect(out).toContain("dòng bị cắt")
+  expect(out).toContain("line cut")
   expect(out).not.toContain("PHẦN-ĐUÔI")
-  expect(await s.write.validate!({ path: file, content: "{}" })).toContain("một phần")
-  await expect(s.write.execute({ path: file, content: "{}" }, ctx())).rejects.toThrow("một phần")
+  expect(await s.write.validate!({ path: file, content: "{}" })).toContain("Only part")
+  await expect(s.write.execute({ path: file, content: "{}" }, ctx())).rejects.toThrow("Only part")
   expect(readFileSync(file, "utf8")).toBe(json)
 })
 
@@ -203,9 +203,9 @@ test("write_file keeps an existing file's CRLF and UTF-16 encoding", async () =>
 test("applyEdit: unique match, replace_all, not found, same text, curly quotes from Word", () => {
   expect(applyEdit("a b a", "b", "c")).toEqual({ text: "a c a", count: 1 })
   expect(applyEdit("a b a", "a", "x")).toHaveProperty("error")
-  expect((applyEdit("a b a", "a", "x") as { error: string }).error).toContain("2 lần")
+  expect((applyEdit("a b a", "a", "x") as { error: string }).error).toContain("2 times")
   expect(applyEdit("a b a", "a", "x", true)).toEqual({ text: "x b x", count: 2 })
-  expect((applyEdit("abc", "zzz", "y") as { error: string }).error).toContain("Không tìm thấy")
+  expect((applyEdit("abc", "zzz", "y") as { error: string }).error).toContain("was not found")
   expect(applyEdit("abc", "b", "b")).toHaveProperty("error")
   expect(applyEdit("abc", "", "y")).toHaveProperty("error")
   // The file says “mục tiêu”, the model typed "mục tiêu".
@@ -218,20 +218,20 @@ test("edit_file needs a read, keeps CRLF, and reports a bad edit before anyone i
   const s = setup()
   const file = path.join(project, "bang.csv")
   writeFileSync(file, "ma,gia\r\nFPT,120\r\nVCB,90\r\n")
-  expect(await s.edit.validate!({ path: file, old_string: "FPT,120", new_string: "FPT,125" })).toContain("Chưa đọc")
+  expect(await s.edit.validate!({ path: file, old_string: "FPT,120", new_string: "FPT,125" })).toContain("has not been read")
   await s.read.execute({ path: file }, ctx())
-  expect(await s.edit.validate!({ path: file, old_string: "HPG", new_string: "x" })).toContain("Không tìm thấy")
+  expect(await s.edit.validate!({ path: file, old_string: "HPG", new_string: "x" })).toContain("was not found")
   const preview = await s.edit.preview!({ path: file, old_string: "FPT,120", new_string: "FPT,125" })
   expect(preview?.title).toContain("+1 −1")
   expect(preview?.diff?.filter((l) => l.kind !== " ").map((l) => `${l.kind}${l.text}`)).toEqual(["-FPT,120", "+FPT,125"])
-  expect(await s.edit.execute({ path: file, old_string: "FPT,120", new_string: "FPT,125" }, ctx())).toContain("Đã sửa")
+  expect(await s.edit.execute({ path: file, old_string: "FPT,120", new_string: "FPT,125" }, ctx())).toContain("Edited")
   expect(readFileSync(file, "utf8")).toBe("ma,gia\r\nFPT,125\r\nVCB,90\r\n")
   // A rejected edit never reaches the gate: no prompt, the model reads the error.
   const gate = new PermissionGate(memoryStore())
   gate.interactive = true
   const { asked, result } = await viaGate(gate, s.edit, { path: file, old_string: "không có", new_string: "x" })
   expect(asked).toBeUndefined()
-  expect(result.output).toContain("Không tìm thấy")
+  expect(result.output).toContain("was not found")
 })
 
 // ── the gate pipeline ───────────────────────────────────────────────────────
@@ -278,12 +278,12 @@ test("protected and outside writes ask each time with no session option; odd pat
   expect(again.asked).toBeDefined()
   const denied = await viaGate(gate, s.write, { path: path.join(project, "khoa", "a.md"), content: "x" })
   expect(denied.asked).toBeUndefined()
-  expect(denied.result.output).toContain("Quy tắc chặn của người dùng")
-  expect(denied.result.output).toContain("Đừng làm đúng việc này bằng tool hay lệnh khác")
+  expect(denied.result.output).toContain("A block rule of the user's")
+  expect(denied.result.output).toContain("Do not do this same thing with another tool or command")
   if (process.platform === "win32") {
     const odd = await viaGate(gate, s.write, { path: `${path.join(project, "a.md")}:stream`, content: "x" })
     expect(odd.asked).toBeUndefined()
-    expect(odd.result.output).toContain("Không chạy được")
+    expect(odd.result.output).toContain("Could not run")
   }
   expect(store.saved).toBe(0)
 })

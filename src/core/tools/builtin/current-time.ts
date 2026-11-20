@@ -1,14 +1,14 @@
 import { z } from "zod"
 import type { ToolDef } from "../types"
 
-const WEEKDAYS = ["Chủ nhật", "Thứ hai", "Thứ ba", "Thứ tư", "Thứ năm", "Thứ sáu", "Thứ bảy"]
+const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
 
 /** Vietnam wall-clock time. Deterministic, so the model never guesses "now". */
 export function currentTimeTool(now: () => Date = () => new Date()): ToolDef<Record<string, never>> {
   return {
     name: "current_time",
     description:
-      "Trả về ngày giờ hiện tại theo giờ Việt Nam (Asia/Ho_Chi_Minh, UTC+7) và thứ trong tuần. Dùng khi cần biết hôm nay là ngày nào hoặc bây giờ là mấy giờ.",
+      "Returns the current date and time in Vietnam (Asia/Ho_Chi_Minh, UTC+7) and the weekday. Use when you need today's date or the current time.",
     input: z.object({}),
     readOnly: true,
     summarize: () => "current_time()",
@@ -31,7 +31,7 @@ export function currentTimeTool(now: () => Date = () => new Date()): ToolDef<Rec
       )
       const weekday = WEEKDAYS[new Date(`${parts.year}-${parts.month}-${parts.day}T00:00:00Z`).getUTCDay()]
       return [
-        `${weekday}, ${parts.day}/${parts.month}/${parts.year} ${parts.hour}:${parts.minute}:${parts.second} (giờ Việt Nam, UTC+7)`,
+        `${weekday}, ${parts.day}/${parts.month}/${parts.year} ${parts.hour}:${parts.minute}:${parts.second} (Vietnam time, UTC+7)`,
         `ISO: ${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:${parts.second}+07:00`,
       ].join("\n")
     },

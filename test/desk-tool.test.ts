@@ -89,7 +89,7 @@ test("desk_run without an opt-in always shows the card, even for an approved pla
   h.approvals.answer({ run: false, size: "small", remember: false })
   const decision = await deciding
   expect(decision.run).toBe(false)
-  expect(await h.tool.execute({ sang_loc: {} }, { ...h.ctx, prepared: decision })).toContain("không cho chạy")
+  expect(await h.tool.execute({ sang_loc: {} }, { ...h.ctx, prepared: decision })).toContain("did not allow")
   expect(h.started).toHaveLength(0)
 })
 
@@ -100,8 +100,8 @@ test("opted in and approved before: no card; opted in, first time: the card, and
   h.approvals.answer({ run: true, size: "medium", effort: "high", remember: true })
   const decision = await first
   const out = await h.tool.execute({ sang_loc: { tickers: ["FPT"] } }, { ...h.ctx, prepared: decision })
-  expect(out).toContain("Đã bắt đầu run ultradesk dk-")
-  expect(out).toContain("quy mô medium")
+  expect(out).toContain("Started ultradesk run dk-")
+  expect(out).toContain("size medium")
   expect((await loadConfig()).desk?.approved).toEqual(["sang-loc"])
 
   const again = await h.prepare({ sang_loc: { tickers: ["HPG"] } })
@@ -119,7 +119,7 @@ test("▸▸ auto with an opt-in asks once per playbook: yes remembers it", asyn
 
 test("bad playbook or args go back to the model before any card", async () => {
   const h = harness({ optIn: "keyword" })
-  await expect(h.prepare({ khong_co: {} })).rejects.toThrow("Điền đúng một playbook")
+  await expect(h.prepare({ khong_co: {} })).rejects.toThrow("Fill exactly one playbook")
   await expect(h.prepare({ sang_loc: { tickers: [] } })).rejects.toThrow("không hợp lệ")
   expect(h.asked).toHaveLength(0)
 })
@@ -152,8 +152,12 @@ test("a stored desk notice becomes a transcript notice on resume, not user text"
   }
   const stored = `${deskNotification(view)}\n${DESK_NOTE}\n\nCâu hỏi tiếp`
   const { notices, rest } = splitNotices(stored)
-  expect(notices).toEqual([{ agentId: "dk-abc123", type: "ultradesk", description: "sang-loc", status: "xong", stats: expect.stringContaining("3 agent") }])
+  expect(notices).toEqual([{ agentId: "dk-abc123", type: "ultradesk", description: "sang-loc", status: "done", stats: expect.stringContaining("3 agent") }])
   expect(rest).toBe("Câu hỏi tiếp")
+  const legacy = deskNotification(view).replace(" · size: ", " · quy mô: ").replace(" · status: done", " · trạng thái: xong")
+  const restored = splitNotices(`${legacy}\n${"Đây là thông báo tự động của harness khi một run ultradesk kết thúc, không phải lời người dùng. Người dùng chưa thấy kết quả: trình bày cho họ, giữ nguồn và thời điểm dữ liệu, và nói rõ phần chưa kiểm chứng hoặc bị cắt."}\n\nCâu hỏi cũ`)
+  expect(restored.notices[0]?.status).toBe("xong")
+  expect(restored.rest).toBe("Câu hỏi cũ")
 })
 
 test("desk_run passes an effort to the run only when the user changed it on the card (an inherited one follows desk.effort on resume)", async () => {

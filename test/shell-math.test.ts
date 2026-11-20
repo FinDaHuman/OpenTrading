@@ -312,7 +312,7 @@ test("PowerShell arithmetic is printed in the invariant culture (vi-VN would pri
   if (!win) return
   const tool = shellTool(ws())
   const out = text(await tool.execute({ command: "3/2; [math]::Round(31250/4520, 2); (128.4/112-1)*100" }, ctx()))
-  expect(out).toContain("mã thoát 0")
+  expect(out).toContain("exit code 0")
   expect(out).toContain("1.5")
   expect(out).toContain("6.91")
   expect(out).toContain("14.642857142857")
@@ -354,7 +354,7 @@ test("every accepted form really runs in this machine's shell and prints only nu
     outs.push(...(await Promise.all(cases.slice(i, i + 4).map(async (command) => text(await tool.execute({ command }, ctx()))))))
   }
   cases.forEach((command, i) => {
-    expect(outs[i], command).toContain("mã thoát 0")
+    expect(outs[i], command).toContain("exit code 0")
     expect(outs[i]!.split(/\r?\n/).slice(1).join(" ").trim(), command).toMatch(/^[\s\d.=;:a-z+-]+$/i)
   })
 }, 60_000)
@@ -386,7 +386,7 @@ test("a near miss is a tool error with the accepted form, before any approval: n
       () => "",
       (e: Error) => e.message,
     )
-    expect(error, command).toContain("chưa đúng dạng chỉ-toán")
+    expect(error, command).toContain("not in the arithmetic-only form")
     expect(error, command).toContain(win ? "[math]::Round" : "awk 'BEGIN{")
     expect(error, command).not.toContain("Không chạy.")
     expect(error, command).not.toContain("DỪNG")

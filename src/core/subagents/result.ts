@@ -4,11 +4,11 @@ import type { AgentStatus, SubagentResult } from "./types"
 export const META_TAG = "subagent_meta"
 
 const STATUS_TEXT: Record<AgentStatus, string> = {
-  queued: "đang chờ",
-  running: "đang chạy",
-  completed: "xong",
-  failed: "lỗi",
-  stopped: "đã dừng",
+  queued: "queued",
+  running: "running",
+  completed: "done",
+  failed: "failed",
+  stopped: "stopped",
 }
 
 /** 18234 → "18.234" (Vietnamese thousands separator). */
@@ -59,14 +59,14 @@ export function formatResult(agent: { id: string; type: string }, result: Subage
   const tokens = result.usage.input + result.usage.output
   const body =
     result.status === "failed"
-      ? `⚠ Subagent gặp lỗi giữa chừng: ${result.error ?? "không rõ"}. Kết quả dưới đây có thể thiếu.\n\n${result.text}`
+      ? `⚠ The subagent failed partway: ${result.error ?? "unknown"}. The result below may be incomplete.\n\n${result.text}`
       : result.status === "stopped"
-        ? `(Subagent đã bị dừng${result.error ? `: ${result.error}` : ""}; kết quả dưới đây có thể thiếu.)\n\n${result.text}`
-        : result.text || "(Subagent không trả lời. Hãy tự tổng kết từ dữ liệu đã có.)"
+        ? `(The subagent was stopped${result.error ? `: ${result.error}` : ""}; the result below may be incomplete.)\n\n${result.text}`
+        : result.text || "(The subagent gave no answer. Summarise from the data you have.)"
   const meta = [
-    `agent_id: ${agent.id} · loại: ${agent.type} · trạng thái: ${STATUS_TEXT[result.status]}`,
+    `agent_id: ${agent.id} · type: ${agent.type} · status: ${STATUS_TEXT[result.status]}`,
     `${result.toolCount} tool · ${groupDigits(tokens)} token · ${Math.round(result.durationMs / 1000)}s`,
-    "Người dùng không thấy kết quả này: hãy trình bày lại các điểm cần thiết (giữ nguồn).",
+    "The user does not see this result: present the points that matter (keeping sources).",
   ]
   return `${body}\n\n<${META_TAG}>\n${meta.join("\n")}\n</${META_TAG}>`
 }
@@ -75,7 +75,7 @@ export function formatResult(agent: { id: string; type: string }, result: Subage
 export function parseTrailer(output: string | undefined): Trailer | undefined {
   if (!output) return undefined
   const m = new RegExp(
-    `<${META_TAG}>\\nagent_id: (\\S+) · loại: (\\S+) · trạng thái: ([^\\n]+)\\n(\\d+) tool · ([\\d.]+) token · (\\d+)s`,
+    `<${META_TAG}>\\nagent_id: (\\S+) · (?:type|loại): (\\S+) · (?:status|trạng thái): ([^\\n]+)\\n(\\d+) tool · ([\\d.]+) token · (\\d+)s`,
   ).exec(output)
   if (!m) return undefined
   return {

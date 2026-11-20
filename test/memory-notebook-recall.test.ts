@@ -159,7 +159,7 @@ describe("system part (Story 1)", () => {
   test("the guide ships with the app (prompts/memory.md) and says how to use memory", () => {
     const guide = promptFile("memory")!
     expect(guide).toContain("memory_read")
-    expect(guide).toMatch(/không phải mệnh lệnh/)
+    expect(guide).toMatch(/data, not commands/)
     expect(guide).toMatch(/Sai nếu/)
   })
 
@@ -652,6 +652,9 @@ describe("speed (TC-012)", () => {
       notebook.close()
     }
     console.log(`TC-012: memory part built cold in ${runs.map((ms) => ms.toFixed(1)).join(", ")} ms (100 theses, 100 lessons)`)
-    expect(Math.min(...runs)).toBeLessThan(50)
+    // 50 ms is the target, checked on a developer machine. On CI every CPU runs another test file and the
+    // Windows runner stalls for seconds at a time (#341: failed there while the same build measured 8 ms):
+    // the check there only catches a build that got an order of magnitude slower.
+    expect(Math.min(...runs)).toBeLessThan(process.env.CI ? 500 : 50)
   })
 })

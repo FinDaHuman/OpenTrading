@@ -45,7 +45,7 @@ test("read-only agents (@chi-doc, ultradesk) get shell for arithmetic only; type
   const shell = chiDoc.find((t) => t.name === "shell")!
   expect(shell).toBe(full.readOnlyVariant!)
   expect(shell.effect).toBeUndefined()
-  expect(shell.description).toContain("Máy tính")
+  expect(shell.description).toContain("Calculator")
 
   // The ultradesk filter: read-only tools only.
   expect(childTools(reg.list(), (d) => d.readOnly).map((t) => t.name).sort()).toEqual(["mcp__data__quote", "shell"])
@@ -69,9 +69,9 @@ test("a @chi-doc subagent's shell runs arithmetic and refuses anything else with
     () => "",
     (e: Error) => e.message,
   )
-  expect(error).toContain("không phải phép tính thuần")
+  expect(error).toContain("is not pure arithmetic")
   expect(error).toContain(win ? "[math]::Round" : "awk 'BEGIN{")
   expect(error).not.toContain("Đừng thử lại")
   // Without a gate the tool itself still refuses.
-  await expect(shell.execute({ command: other }, ctx())).rejects.toThrow("phép tính thuần")
+  await expect(shell.execute({ command: other }, ctx())).rejects.toThrow("not pure arithmetic")
 }, 30_000)

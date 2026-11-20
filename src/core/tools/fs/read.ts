@@ -37,13 +37,13 @@ export function parsePages(spec: string, total: number): number[] | string {
   const pages = new Set<number>()
   for (const part of spec.split(",").map((s) => s.trim()).filter(Boolean)) {
     const m = part.match(/^(\d+)(?:\s*-\s*(\d+))?$/)
-    if (!m) return `pages "${spec}" không hợp lệ (ví dụ "3", "1-5", "2,4-6").`
+    if (!m) return `Invalid pages "${spec}" (e.g. "3", "1-5", "2,4-6").`
     const from = Number(m[1])
     const to = m[2] ? Number(m[2]) : from
-    if (from < 1 || to < from) return `pages "${spec}" không hợp lệ.`
+    if (from < 1 || to < from) return `Invalid pages "${spec}".`
     for (let p = from; p <= Math.min(to, total); p++) pages.add(p)
   }
-  if (pages.size === 0) return `PDF chỉ có ${total} trang.`
+  if (pages.size === 0) return `The PDF has only ${total} pages.`
   return [...pages].sort((a, b) => a - b)
 }
 
@@ -53,13 +53,13 @@ async function readPdf(abs: string, bytes: Uint8Array, spec: string | undefined)
   const { text, totalPages } = await extractText(doc, { mergePages: false })
   const wanted = spec ? parsePages(spec, totalPages) : Array.from({ length: Math.min(totalPages, PDF_DEFAULT_PAGES) }, (_, i) => i + 1)
   if (typeof wanted === "string") throw new Error(wanted)
-  if (wanted.length > PDF_MAX_PAGES) throw new Error(`Tối đa ${PDF_MAX_PAGES} trang mỗi lần; chia pages thành nhiều lần gọi.`)
+  if (wanted.length > PDF_MAX_PAGES) throw new Error(`At most ${PDF_MAX_PAGES} pages per call; split pages over several calls.`)
   const body = wanted.map((p) => `--- Trang ${p} ---\n${String(text[p - 1] ?? "").replace(/[ \t]+\n/g, "\n").trim()}`).join("\n\n")
   const chars = wanted.reduce((n, p) => n + String(text[p - 1] ?? "").trim().length, 0)
   const notes = [
-    `PDF ${abs} · ${totalPages} trang · đang hiện trang ${wanted.length === 1 ? wanted[0] : `${wanted[0]}–${wanted.at(-1)}`}${wanted.length > 1 && wanted.at(-1)! - wanted[0]! + 1 !== wanted.length ? ` (${wanted.join(", ")})` : ""}`,
-    ...(chars < 50 * wanted.length ? ["Các trang này gần như không có lớp chữ (bản scan): không đọc được nội dung. Nhờ người dùng gửi ảnh chụp trang cần đọc hoặc bản có chữ."] : []),
-    ...(!spec && totalPages > wanted.length ? [`Còn ${totalPages - wanted.length} trang; đọc tiếp bằng pages, ví dụ pages="${wanted.length + 1}-${Math.min(totalPages, wanted.length + PDF_DEFAULT_PAGES)}".`] : []),
+    `PDF ${abs} · ${totalPages} pages · showing page ${wanted.length === 1 ? wanted[0] : `${wanted[0]}–${wanted.at(-1)}`}${wanted.length > 1 && wanted.at(-1)! - wanted[0]! + 1 !== wanted.length ? ` (${wanted.join(", ")})` : ""}`,
+    ...(chars < 50 * wanted.length ? ["These pages have almost no text layer (a scan): their content cannot be read. Ask the user for a screenshot of the pages needed or a version with text."] : []),
+    ...(!spec && totalPages > wanted.length ? [`${totalPages - wanted.length} pages left; continue with pages, e.g. pages="${wanted.length + 1}-${Math.min(totalPages, wanted.length + PDF_DEFAULT_PAGES)}".`] : []),
   ]
   return `${notes.join("\n")}\n\n${body}`
 }
@@ -74,11 +74,11 @@ async function listDir(abs: string): Promise<string> {
   const shown = names.slice(0, MAX_DIR_ENTRIES)
   const more = names.length - shown.length
   return [
-    `Thư mục ${abs} · ${entries.filter((e) => e.isDirectory()).length} thư mục, ${entries.filter((e) => !e.isDirectory()).length} file`,
+    `Directory ${abs} · ${entries.filter((e) => e.isDirectory()).length} directories, ${entries.filter((e) => !e.isDirectory()).length} files`,
     "",
     ...shown,
-    ...(more > 0 ? ["", `(còn ${more} mục; dùng glob_files để lọc)`] : []),
-    ...(names.length === 0 ? ["(thư mục trống)"] : []),
+    ...(more > 0 ? ["", `(${more} more entries; filter with glob_files)`] : []),
+    ...(names.length === 0 ? ["(empty directory)"] : []),
   ].join("\n")
 }
 
@@ -129,7 +129,7 @@ export function numberLines(
   for (let n = offset; n <= Math.min(lines.length, offset + limit - 1); n++) {
     let line = lines[n - 1]!
     const long = line.length > MAX_LINE_CHARS
-    if (long) line = `${line.slice(0, MAX_LINE_CHARS)}… (dòng bị cắt, dài ${line.length} ký tự)`
+    if (long) line = `${line.slice(0, MAX_LINE_CHARS)}… (line cut, ${line.length} characters long)`
     const row = `${n}\t${line}`
     if (out.length > 0 && chars + row.length + 1 > maxChars) break
     out.push(row)
@@ -142,12 +142,12 @@ export function numberLines(
 
 /** Numbered rows from `offset`, with the same paging note as text files. */
 function paged(label: string, lines: string[], input: ReadOptions, unit: string) {
-  if (lines.length === 0) return `${label} · trống.`
+  if (lines.length === 0) return `${label} · empty.`
   const offset = Math.max(1, input.offset ?? 1)
-  if (offset > lines.length) throw new Error(`offset ${offset} vượt quá số ${unit} (${lines.length}).`)
+  if (offset > lines.length) throw new Error(`offset ${offset} is past the number of ${unit} (${lines.length}).`)
   const { body, first, last } = numberLines(lines, offset, Math.max(1, input.limit ?? MAX_LINES), input.maxChars)
-  const footer = last < lines.length ? `\n\n(còn ${lines.length - last} ${unit}; đọc tiếp với offset=${last + 1})` : ""
-  return `${label} · ${lines.length} ${unit}${first === 1 && last === lines.length ? "" : ` · đang hiện ${unit} ${first}–${last}`}\n${body}${footer}`
+  const footer = last < lines.length ? `\n\n(${lines.length - last} ${unit} left; continue with offset=${last + 1})` : ""
+  return `${label} · ${lines.length} ${unit}${first === 1 && last === lines.length ? "" : ` · showing ${unit} ${first}–${last}`}\n${body}${footer}`
 }
 
 /** One sheet of a workbook as CSV rows numbered like Excel rows; the other sheets are listed. */
@@ -158,14 +158,14 @@ function readSheet(abs: string, bytes: Uint8Array, input: ReadOptions) {
   } catch (error) {
     throw new Error(`Không đọc được ${abs}: ${error instanceof Error ? error.message : String(error)}`)
   }
-  if (book.sheets.length === 0) return `Excel ${abs} · không có sheet nào.`
+  if (book.sheets.length === 0) return `Excel ${abs} · no sheets.`
   const list =
-    book.sheets.length > 1 ? `\nCác sheet: ${book.sheets.map((s, i) => `${i + 1}. ${s.name} (${s.rows} dòng)${i === book.index ? " ← đang đọc" : ""}`).join(" · ")}; chọn sheet khác bằng tham số sheet.` : ""
+    book.sheets.length > 1 ? `\nSheets: ${book.sheets.map((s, i) => `${i + 1}. ${s.name} (${s.rows} rows)${i === book.index ? " ← reading" : ""}`).join(" · ")}; pick another with the sheet parameter.` : ""
   const width = maxLength(book.rows)
   const head =
-    `Excel ${abs} · sheet "${book.sheets[book.index]!.name}" · ${width} cột (dạng CSV, số đầu dòng là số dòng Excel; giá trị là số gốc, không theo định dạng hiển thị: ô phần trăm là phân số, 0,12 = 12%; ngày có thể là số seri Excel, 45658 = 2025-01-01)` +
+    `Excel ${abs} · sheet "${book.sheets[book.index]!.name}" · ${width} columns (as CSV; the number at the start of each line is the Excel row number; values are raw numbers, not the displayed format: a percentage cell is a fraction, 0.12 = 12%; a date may be an Excel serial number, 45658 = 2025-01-01)` +
     list
-  return paged(head, book.rows.map(toCsvRow), input, "dòng")
+  return paged(head, book.rows.map(toCsvRow), input, "lines")
 }
 
 export async function readFileAt(abs: string, input: ReadOptions, state?: FileState): Promise<string | ToolResult> {
@@ -174,58 +174,58 @@ export async function readFileAt(abs: string, input: ReadOptions, state?: FileSt
     info = await stat(abs)
   } catch {
     const near = await nearNames(abs)
-    throw new Error(`Không có file hoặc thư mục ${abs}.${near.length > 0 ? ` Có phải ý bạn là: ${near.join(" · ")}?` : ""}`)
+    throw new Error(`No file or directory ${abs}.${near.length > 0 ? ` Did you mean: ${near.join(" · ")}?` : ""}`)
   }
   if (info.isDirectory()) return listDir(abs)
   const ext = path.extname(abs).toLowerCase()
 
   const imageType = IMAGE_TYPES[ext]
   if (imageType) {
-    if (info.size > MAX_IMAGE_BYTES) throw new Error(`Ảnh ${abs} nặng ${Math.round(info.size / 1024)} KB, quá ${Math.round(MAX_IMAGE_BYTES / 1024)} KB: nhờ người dùng thu nhỏ hoặc cắt ảnh.`)
+    if (info.size > MAX_IMAGE_BYTES) throw new Error(`Image ${abs} is ${Math.round(info.size / 1024)} KB, over ${Math.round(MAX_IMAGE_BYTES / 1024)} KB: ask the user to shrink or crop it.`)
     const bytes = new Uint8Array(await Bun.file(abs).arrayBuffer())
     return { output: `Ảnh ${abs} (${Math.round(info.size / 1024)} KB).`, images: [{ data: Buffer.from(bytes).toString("base64"), mediaType: imageType }] }
   }
 
   if (ext === ".pdf") {
-    if (info.size > MAX_PDF_BYTES) throw new Error(`PDF ${abs} quá lớn (${Math.round(info.size / 1024 / 1024)} MB).`)
+    if (info.size > MAX_PDF_BYTES) throw new Error(`PDF ${abs} is too large (${Math.round(info.size / 1024 / 1024)} MB).`)
     const bytes = new Uint8Array(await Bun.file(abs).arrayBuffer())
     return readPdf(abs, bytes, input.pages)
   }
   if (ext === ".xlsx" || ext === ".xlsm") {
-    if (info.size > MAX_TEXT_BYTES) throw new Error(`File Excel ${abs} quá lớn (${Math.round(info.size / 1024 / 1024)} MB).`)
+    if (info.size > MAX_TEXT_BYTES) throw new Error(`Excel file ${abs} is too large (${Math.round(info.size / 1024 / 1024)} MB).`)
     return readSheet(abs, new Uint8Array(await Bun.file(abs).arrayBuffer()), input)
   }
   if (ext === ".docx") {
-    if (info.size > MAX_TEXT_BYTES) throw new Error(`File Word ${abs} quá lớn (${Math.round(info.size / 1024 / 1024)} MB).`)
+    if (info.size > MAX_TEXT_BYTES) throw new Error(`Word file ${abs} is too large (${Math.round(info.size / 1024 / 1024)} MB).`)
     let text: string
     try {
       text = readDocx(new Uint8Array(await Bun.file(abs).arrayBuffer()))
     } catch (error) {
       throw new Error(`Không đọc được ${abs}: ${error instanceof Error ? error.message : String(error)}`)
     }
-    return paged(`Word ${abs}`, text.split("\n"), input, "dòng")
+    return paged(`Word ${abs}`, text.split("\n"), input, "lines")
   }
-  if (ext === ".xls" || ext === ".doc") throw new Error(`${ext} là định dạng Office cũ (nhị phân), chưa đọc được. Nhờ người dùng lưu lại thành ${ext === ".xls" ? ".xlsx hoặc .csv" : ".docx hoặc .pdf"}.`)
+  if (ext === ".xls" || ext === ".doc") throw new Error(`${ext} is an old (binary) Office format that cannot be read yet. Ask the user to save it as ${ext === ".xls" ? ".xlsx or .csv" : ".docx or .pdf"}.`)
 
-  if (info.size > MAX_TEXT_BYTES) throw new Error(`File ${abs} quá lớn (${Math.round(info.size / 1024 / 1024)} MB) để đọc cả: tìm phần cần đọc bằng grep_files rồi đọc theo offset/limit.`)
+  if (info.size > MAX_TEXT_BYTES) throw new Error(`File ${abs} is too large (${Math.round(info.size / 1024 / 1024)} MB) to read whole: find the part you need with grep_files, then read it with offset/limit.`)
   const bytes = new Uint8Array(await Bun.file(abs).arrayBuffer())
-  if (isBinary(abs, bytes)) throw new Error(`${abs} là file nhị phân, read_file không đọc được (đọc được: text, CSV, JSON, Markdown, HTML, PDF, ảnh).`)
+  if (isBinary(abs, bytes)) throw new Error(`${abs} is a binary file that read_file cannot read (it reads text, CSV, JSON, Markdown, HTML, PDF, images).`)
   const { text } = decodeFile(bytes)
   const lines = splitLines(text)
   const offset = Math.max(1, input.offset ?? 1)
   const limit = Math.max(1, input.limit ?? MAX_LINES)
   if (lines.length === 0) {
     state?.record(abs, { mtimeMs: info.mtimeMs, size: info.size, hash: hashBytes(bytes), full: true })
-    return `${abs} · file rỗng.`
+    return `${abs} · empty file.`
   }
-  if (offset > lines.length) throw new Error(`offset ${offset} vượt quá số dòng của file (${lines.length}).`)
+  if (offset > lines.length) throw new Error(`offset ${offset} is past the file's line count (${lines.length}).`)
   const { body, first, last, cut } = numberLines(lines, offset, limit, input.maxChars)
   const whole = first === 1 && last === lines.length
   // A cut line hid part of the file: it was not fully read, however the pages add up.
   state?.record(abs, { mtimeMs: info.mtimeMs, size: info.size, hash: hashBytes(bytes), full: whole && !cut }, cut ? undefined : { first, last, lines: lines.length })
-  const header = `${abs} · ${lines.length} dòng${whole ? "" : ` · đang hiện dòng ${first}–${last}`}`
-  const footer = last < lines.length ? `\n\n(còn ${lines.length - last} dòng; đọc tiếp với offset=${last + 1})` : ""
-  const note = cut ? "\n\n(Có dòng bị cắt: chưa thấy hết file nên write_file không ghi đè cả file được; sửa đúng chỗ bằng edit_file.)" : ""
+  const header = `${abs} · ${lines.length} lines${whole ? "" : ` · showing lines ${first}–${last}`}`
+  const footer = last < lines.length ? `\n\n(${lines.length - last} lines left; continue with offset=${last + 1})` : ""
+  const note = cut ? "\n\n(Some lines were cut: the whole file has not been seen, so write_file cannot overwrite it; edit the exact place with edit_file.)" : ""
   return `${header}\n${body}${footer}${note}`
 }
 
@@ -233,14 +233,14 @@ export function readFileTool(workspace: Workspace, state?: FileState): ToolDef<R
   return {
     name: "read_file",
     description:
-      "Đọc file hoặc thư mục trên máy (đường dẫn tuyệt đối hay tính từ workspace). Text trả từng dòng có số dòng (tối đa 2000, đọc tiếp bằng offset/limit); .xlsx trả CSV theo sheet; .docx trả markdown; PDF trả chữ theo trang (pages, tối đa 20/lần); ảnh trả ảnh. " +
-      "Dùng khi người dùng nhắc tới một file hay thư mục. Không dùng khi đọc URL (dùng web_fetch). File chứa khoá cần người dùng cho phép.",
+      "Reads a file or directory on the machine (absolute path or relative to the workspace). Text comes back line by line with line numbers (at most 2000; continue with offset/limit); .xlsx as CSV per sheet; .docx as markdown; PDF as text per page (pages, at most 20 per call); images as images. " +
+      "Use when the user mentions a file or directory. Not for URLs (use web_fetch). Files holding keys need the user's permission.",
     input: z.object({
       path: z.string().min(1),
       offset: z.number().int().min(1).optional(),
       limit: z.number().int().min(1).max(MAX_LINES).optional(),
-      pages: z.string().optional().describe('Ví dụ "1-5"'),
-      sheet: z.string().optional().describe("Tên hoặc số thứ tự sheet"),
+      pages: z.string().optional().describe('E.g. "1-5"'),
+      sheet: z.string().optional().describe("Sheet name or number"),
     }),
     readOnly: true,
     timeoutMs: 60_000,

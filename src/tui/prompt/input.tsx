@@ -20,6 +20,10 @@ export const PROMPT_KEYS: KeyBinding[] = [
   { name: "y", ctrl: true, action: "redo" },
 ]
 
+/** Undo and redo in the prompt: PROMPT_KEYS plus OpenTUI's own (Ctrl+- / Ctrl+. / Cmd+Z). */
+export const isUndoKey = (evt: { name?: string; ctrl?: boolean; super?: boolean }) =>
+  (!!evt.ctrl && (evt.name === "z" || evt.name === "y" || evt.name === "-" || evt.name === ".")) || (!!evt.super && evt.name === "z")
+
 /** A thin blinking bar, like a document editor, instead of the terminal's block. */
 export const PROMPT_CURSOR = { style: "line", blinking: true } as const
 

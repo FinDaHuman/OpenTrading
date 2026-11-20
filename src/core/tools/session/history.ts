@@ -41,8 +41,8 @@ export function sessionHistoryTools(deps: { redaction?: RedactionCheck } = {}): 
   const list: ToolDef<{ limit?: number }> = {
     name: "session_list",
     description:
-      "Liệt kê các phiên hội thoại đã lưu trên máy này (mới nhất trước). Dùng khi user hỏi lại phiên cũ. Không dùng cho dữ liệu thị trường (đó là MCP tools).",
-    input: z.object({ limit: z.number().int().min(1).max(30).optional().describe("Số phiên (mặc định 10)") }),
+      "Lists the conversations saved on this machine (newest first). Use when the user asks about an earlier session. Not for market data (that is the MCP tools).",
+    input: z.object({ limit: z.number().int().min(1).max(30).optional().describe("Number of sessions (default 10)") }),
     readOnly: true,
     deferrable: true,
     deferByDefault: true,
@@ -57,15 +57,15 @@ export function sessionHistoryTools(deps: { redaction?: RedactionCheck } = {}): 
         updatedAt: s.updatedAt,
         model: s.model,
       }))
-      if (rows.length === 0) return "Chưa có phiên nào được lưu."
-      return rows.map((r) => `- ${r.id} · ${r.turns} lượt · ${r.title} (${r.updatedAt})`).join("\n")
+      if (rows.length === 0) return "No saved sessions yet."
+      return rows.map((r) => `- ${r.id} · ${r.turns} turns · ${r.title} (${r.updatedAt})`).join("\n")
     },
   }
   const get: ToolDef<{ id: string }> = {
     name: "session_get",
     description:
-      "Đọc lại một phiên cũ theo id: từng câu hỏi của user và kết luận đã trả lời (rút gọn). Dùng khi cần nhắc lại ngữ cảnh hoặc kết luận phiên trước.",
-    input: z.object({ id: z.string().min(4).describe("Id phiên lấy từ session_list (cho phép tiền tố, ít nhất 4 ký tự)") }),
+      "Reads an earlier session by id: each user question and the conclusion given (shortened). Use when you need the context or conclusions of an earlier session.",
+    input: z.object({ id: z.string().min(4).describe("Session id from session_list (a prefix of at least 4 characters is fine)") }),
     readOnly: true,
     deferrable: true,
     deferByDefault: true,
@@ -74,15 +74,15 @@ export function sessionHistoryTools(deps: { redaction?: RedactionCheck } = {}): 
     async execute(input) {
       const matches = (await listSessions()).filter((s) => s.id === input.id || s.id.startsWith(input.id))
       if (matches.length > 1 && !matches.some((s) => s.id === input.id)) {
-        throw new Error(`Tiền tố "${input.id}" khớp ${matches.length} phiên: ${matches.slice(0, 5).map((s) => s.id).join(", ")}. Dùng id dài hơn.`)
+        throw new Error(`Prefix "${input.id}" matches ${matches.length} sessions: ${matches.slice(0, 5).map((s) => s.id).join(", ")}. Use a longer id.`)
       }
       // Read with the masks (never written here): what the user deleted does not come back through an old session.
       const loaded = await loadSession(input.id, { check: deps.redaction })
       // The whole conversation (display), not just what is left after the last compaction.
       const turns = turnsOf(loaded.display).slice(-12)
       return [
-        `Phiên ${loaded.summary.id} · ${loaded.summary.turns} lượt · ${loaded.summary.title} (${loaded.summary.updatedAt})`,
-        ...turns.map((t, i) => `${i + 1}. Hỏi: ${clip(t.question, 200)}${t.answer ? `\n   Đáp: ${clip(t.answer, 400)}` : ""}`),
+        `Session ${loaded.summary.id} · ${loaded.summary.turns} turns · ${loaded.summary.title} (${loaded.summary.updatedAt})`,
+        ...turns.map((t, i) => `${i + 1}. Q: ${clip(t.question, 200)}${t.answer ? `\n   A: ${clip(t.answer, 400)}` : ""}`),
       ].join("\n")
     },
   }
@@ -105,11 +105,11 @@ export function doctorLocalTool(deps: {
   return {
     name: "doctor_local",
     description:
-      "Tự kiểm tra OpenTrading trên máy này: model, provider đã có key (không lộ key), thư mục dữ liệu, MCP server và số tool, skill đang bị ẩn vì thiếu tool. Dùng khi người dùng hỏi về cài đặt hoặc lỗi kết nối. Không kiểm tra nguồn dữ liệu phía server (đó là tool doctor của server).",
+      "Checks OpenTrading on this machine: the model, providers with a key (keys are never shown), the data folder, MCP servers and their tool counts, skills hidden for missing tools. Use when the user asks about the setup or connection errors. It does not check the server's data sources (that is the server's own doctor tool).",
     input: z.object({}),
     readOnly: true,
     deferrable: true,
-    deferByDefault: true,
+    // Not deferred by default (#317): hidden, turns listed files or checked config with shell instead.
     source: LOCAL_SOURCE,
     summarize: () => "doctor_local()",
     async execute() {
@@ -117,13 +117,13 @@ export function doctorLocalTool(deps: {
       const providers = (await deps.providers?.()) ?? []
       const hidden = deps.hiddenSkills?.() ?? []
       return [
-        `Model: ${(await deps.model()) ?? "chưa chọn (gõ /model)"}`,
-        `Provider đã có key: ${providers.length > 0 ? providers.join(", ") : "chưa có (gõ /connect)"}`,
-        `Thư mục dữ liệu: ${deps.home}${process.env.OPENTRADING_HOME ? " (từ biến OPENTRADING_HOME)" : ""}`,
-        servers.length > 0 ? "MCP:" : "MCP: chưa cấu hình server nào",
+        `Model: ${(await deps.model()) ?? "none selected (type /model)"}`,
+        `Providers with a key: ${providers.length > 0 ? providers.join(", ") : "none (type /connect)"}`,
+        `Data folder: ${deps.home}${process.env.OPENTRADING_HOME ? " (from OPENTRADING_HOME)" : ""}`,
+        servers.length > 0 ? "MCP:" : "MCP: no server configured",
         ...servers.map((s) => `- ${s.name}: ${s.state} (${s.tools.length} tool)${s.error ? ` — ${s.error.slice(0, 160)}` : ""}`),
-        hidden.length > 0 ? `Skill bị ẩn (${hidden.length}) vì thiếu tool:` : "Skill: không có skill nào bị ẩn vì thiếu tool.",
-        ...hidden.map((h) => `- ${h.name}: thiếu ${h.missing.join(", ")}`),
+        hidden.length > 0 ? `Skills hidden (${hidden.length}) for missing tools:` : "Skills: none hidden for missing tools.",
+        ...hidden.map((h) => `- ${h.name}: missing ${h.missing.join(", ")}`),
       ].join("\n")
     },
   }

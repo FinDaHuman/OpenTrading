@@ -154,7 +154,7 @@ test("read_result gives a result back as fetched, by ref or by call id", async (
   expect(await read({ id: "r1" })).toContain("[ref r1]")
   expect(await read({ id: "call-1" })).toContain('"c":64')
   expect(await read({ id: "call-2" })).toContain('"price":7')
-  expect(await read({ id: "nope" })).toContain("Không còn kết quả")
+  expect(await read({ id: "nope" })).toContain("is no longer in the open session")
 })
 
 test("read_result pages a long result, and a headless run reads from RAM", async () => {

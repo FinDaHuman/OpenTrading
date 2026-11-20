@@ -18,13 +18,13 @@ test("invalid input: one Vietnamese line per issue, without the echoed input or 
     cause: new TypeValidationError({ value: { from_calls: ["r1"], secret: "x".repeat(5000) }, cause: parsed.error }),
   })
   const expected = [
-    "Tham số không hợp lệ cho chart_compare:",
-    "- from_calls: cần ít nhất 2 phần tử",
-    '- kind: phải là một trong: "a", "b"',
-    "- n: thiếu (bắt buộc)",
-    "- name: cần tối đa 3 ký tự",
-    "- không có tham số extra",
-    "Sửa tham số rồi gọi lại.",
+    "Invalid arguments for chart_compare:",
+    "- from_calls: needs at least 2 items",
+    '- kind: must be one of: "a", "b"',
+    "- n: missing (required)",
+    "- name: needs at most 3 characters",
+    "- no such parameter extra",
+    "Fix the arguments and call again.",
   ].join("\n")
   expect(toolErrorText(error)).toBe(expected)
   // The same from the string the SDK stored (what saved sessions and the model hold).
@@ -34,7 +34,7 @@ test("invalid input: one Vietnamese line per issue, without the echoed input or 
 test("repair and unknown-tool errors lose the SDK wrapping; plain errors lose 'Error: '", () => {
   const repair = new ToolCallRepairError({ cause: new Error("Đã nạp tool: x\nGọi lại."), originalError: new NoSuchToolError({ toolName: "x" }) })
   expect(toolErrorText(sdkString(repair))).toBe("Đã nạp tool: x\nGọi lại.")
-  expect(toolErrorText(sdkString(new NoSuchToolError({ toolName: "y", availableTools: ["a", "b"] })))).toBe('Không có tool "y".')
+  expect(toolErrorText(sdkString(new NoSuchToolError({ toolName: "y", availableTools: ["a", "b"] })))).toBe('No tool "y".')
   expect(toolErrorText("Error: bar cần series ít nhất 1 cột.")).toBe("bar cần series ít nhất 1 cột.")
   expect(toolErrorText(new Error("nguồn sập"))).toBe("nguồn sập")
   expect(toolErrorText("x".repeat(5000))).toHaveLength(2000)

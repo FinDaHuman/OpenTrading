@@ -20,7 +20,7 @@ const bars = [
 
 test("chart_render candlestick needs >=5 bars", async () => {
   const tool = chartRenderTool()
-  await expect(tool.execute({ kind: "candlestick", bars: bars.slice(0, 3) }, ctx())).rejects.toThrow("ít nhất 5 nến")
+  await expect(tool.execute({ kind: "candlestick", bars: bars.slice(0, 3) }, ctx())).rejects.toThrow("at least 5 candles")
   expect(await text({ kind: "candlestick", bars, symbol: "VCB" })).toContain("VCB")
 })
 
@@ -28,7 +28,7 @@ test("chart_render line and sparkline", async () => {
   const tool = chartRenderTool()
   expect(await text({ kind: "line", series: [1, 2, 1.5, 3] })).toContain("line")
   expect(await text({ kind: "sparkline", series: [1, 2, 3] })).toBeTruthy()
-  await expect(tool.execute({ kind: "line", series: [1] }, ctx())).rejects.toThrow("ít nhất 2 điểm")
+  await expect(tool.execute({ kind: "line", series: [1] }, ctx())).rejects.toThrow("at least 2 points")
 })
 
 test("chart_depth renders ladder and rejects empty book", async () => {
@@ -37,7 +37,7 @@ test("chart_depth renders ladder and rejects empty book", async () => {
   expect(res.output).toContain("BID")
   expect(res.output).toContain("ASK")
   expect(res.chart).toEqual({ kind: "depth", symbol: "VCB", bids: [{ price: 57.3, volume: 100 }], asks: [{ price: 57.4, volume: 50 }], depth: 5 })
-  await expect(tool.execute({ bids: [], asks: [] }, ctx())).rejects.toThrow("rỗng")
+  await expect(tool.execute({ bids: [], asks: [] }, ctx())).rejects.toThrow("empty")
 })
 
 test("chart output is plain text: no ANSI codes reach the model or the transcript", async () => {
@@ -58,18 +58,18 @@ test("chart output is plain text: no ANSI codes reach the model or the transcrip
   for (const input of inputs) expect(await text(input)).not.toContain(ESC)
   const bar = await text({ kind: "bar", series, labels: ["Vật liệu"] })
   expect(bar).toContain("Vật liệu")
-  expect(bar).toContain("█ dương, ░ âm")
+  expect(bar).toContain("█ positive, ░ negative")
 })
 
 test("chart_render gauge donut histogram heatmap winloss", async () => {
   const tool = chartRenderTool()
   expect(await text({ kind: "gauge", value: 72, max: 100, unit: "%" })).toContain("72%")
   expect(await text({ kind: "donut", value: 35, max: 100, unit: "%" })).toContain("35%")
-  await expect(tool.execute({ kind: "gauge", value: 1 }, ctx())).rejects.toThrow("cần value + max")
-  expect(await text({ kind: "histogram", series: [1, 2, 2, 3, 3, 3, 4, 5] })).toContain("phân phối")
+  await expect(tool.execute({ kind: "gauge", value: 1 }, ctx())).rejects.toThrow("needs value + max")
+  expect(await text({ kind: "histogram", series: [1, 2, 2, 3, 3, 3, 4, 5] })).toContain("distribution")
   const heat = await text({ kind: "heatmap", matrix: [[1, 0.5], [0.5, 1]], labels: ["VCB", "HPG", "VCB", "HPG"] })
   expect(heat).toContain("heatmap (2x2)")
-  await expect(tool.execute({ kind: "heatmap", matrix: [] }, ctx())).rejects.toThrow("matrix 2D")
+  await expect(tool.execute({ kind: "heatmap", matrix: [] }, ctx())).rejects.toThrow("2D matrix")
   expect(await text({ kind: "winloss", series: [1, -1, 1] })).toContain("▲+1 ▼-1 ▲+1")
 })
 
@@ -77,8 +77,8 @@ test("chart_render returns structured chart data for the TUI, text only for the 
   const tool = chartRenderTool()
   const res = (await tool.execute({ kind: "candlestick", bars, symbol: "VCB" }, ctx())) as ToolResult
   expect(res.chart).toEqual({ kind: "candlestick", symbol: "VCB", bars })
-  expect(res.output).toContain("Đã vẽ nến VCB 5 phiên")
-  expect(res.output).toContain("đóng cửa cuối 58,4")
+  expect(res.output).toContain("Drew candles VCB 5 sessions")
+  expect(res.output).toContain("last close 58,4")
   // No ASCII art for the model: it cost 1-3k tokens and differed from the TUI picture.
   expect(res.output).not.toMatch(/[│┤╭╮╰╯]/)
   // The model sees the text only: chart data costs zero tokens.
@@ -96,7 +96,7 @@ test("chart_compare puts each series on its own row, on one shared % scale", asy
   expect(res.output).toContain("VCB +10% , HPG -10%".replace(" ,", ","))
   const out = compareText(input)
   const lines = out.split("\n")
-  expect(lines[0]).toBe("VCB vs HPG · % thay đổi từ điểm đầu, cùng thang -10.0% … +10.0%:")
+  expect(lines[0]).toBe("VCB vs HPG · % change from the first point, one scale -10.0% … +10.0%:")
   expect(lines[1]).toMatch(/^VCB .+ \+10\.0%$/)
   expect(lines[2]).toMatch(/^HPG .+ -10\.0%$/)
   // The shorter series is right-aligned, so the last points line up.
@@ -107,7 +107,7 @@ test("chart_compare puts each series on its own row, on one shared % scale", asy
     title: "VCB vs HPG",
     series: [{ label: "VCB", values: [50, 55] }, { label: "HPG", values: [20, 19, 18] }],
   })
-  await expect(tool.execute({ series: [{ label: "A", values: [0, 1] }, { label: "B", values: [1, 2] }] }, ctx())).rejects.toThrow("bắt đầu bằng 0")
+  await expect(tool.execute({ series: [{ label: "A", values: [0, 1] }, { label: "B", values: [1, 2] }] }, ctx())).rejects.toThrow("starts at 0")
 })
 
 const matrix3 = [
@@ -120,13 +120,13 @@ test("chart_render pie: proportional rows sorted desc, % of total, skips <=0 sli
   const tool = chartRenderTool()
   const out = await text({ kind: "pie", series: [25, 18, 15], labels: ["Ngân hàng", "Vật liệu", "BĐS"] })
   const lines = out.split("\n")
-  expect(lines[0]!).toContain("3 lát")
+  expect(lines[0]!).toContain("3 slices")
   expect(lines[1]!).toMatch(/^Ngân hàng\s+█+ 43\.1%$/)
   expect(lines[2]!).toContain("Vật liệu")
   expect(lines[3]!).toContain("BĐS")
   const withZero = await text({ kind: "pie", series: [10, 0, 5], labels: ["A", "B", "C"] })
-  expect(withZero).toContain("bỏ 1 lát ≤0")
-  await expect(tool.execute({ kind: "pie", series: [5] }, ctx())).rejects.toThrow("ít nhất 2 lát")
+  expect(withZero).toContain("1 slices ≤0 dropped")
+  await expect(tool.execute({ kind: "pie", series: [5] }, ctx())).rejects.toThrow("at least 2 slices")
   await expect(tool.execute({ kind: "pie", series: [0, -1] }, ctx())).rejects.toThrow("≤ 0")
   expect(out).not.toContain(ESC)
 })
@@ -141,15 +141,15 @@ test("chart_render waterfall: cumulative bars, delta and running total, start/en
     symbol: "VCB",
   })
   const lines = out.split("\n")
-  expect(lines[0]!).toContain("3 bước")
+  expect(lines[0]!).toContain("3 steps")
   expect(lines[0]!).toContain("57.3 → 58.4")
-  expect(lines[1]!).toContain("Bắt đầu")
+  expect(lines[1]!).toContain("Start")
   expect(lines[2]!).toMatch(/^KTQL\s+├█+┤\s+\+0\.8 → 58\.1$/)
   expect(lines[3]!).toMatch(/^Khối ngoại\s+├░+┤\s+-0\.7 → 57\.4$/)
   expect(lines[4]!).toMatch(/^Dòng tiền\s+├█+┤\s+\+1 → 58\.4$/)
-  expect(lines[5]!).toContain("Kết thúc")
-  await expect(tool.execute({ kind: "waterfall", series: [1] }, ctx())).rejects.toThrow("cần start")
-  await expect(tool.execute({ kind: "waterfall", start: 1, series: [] }, ctx())).rejects.toThrow("ít nhất 1 bước")
+  expect(lines[5]!).toContain("End")
+  await expect(tool.execute({ kind: "waterfall", series: [1] }, ctx())).rejects.toThrow("needs start")
+  await expect(tool.execute({ kind: "waterfall", start: 1, series: [] }, ctx())).rejects.toThrow("at least 1 step")
   expect(out).not.toContain(ESC)
 })
 
@@ -164,8 +164,8 @@ test("chart_render multiline: distinct markers per series on one axes, legend af
   // The two series sit on one grid, so both markers appear in the plot rows.
   const plotRows = out.split("\n").filter((l) => l.includes("●") || l.includes("◆"))
   expect(plotRows.length).toBeGreaterThan(2)
-  await expect(tool.execute({ kind: "multiline", matrix: [[1, 2]] }, ctx())).rejects.toThrow("ít nhất 2 dòng")
-  await expect(tool.execute({ kind: "multiline", matrix: [[1, 2], [1]] }, ctx())).rejects.toThrow("ít nhất 2 điểm")
+  await expect(tool.execute({ kind: "multiline", matrix: [[1, 2]] }, ctx())).rejects.toThrow("at least 2 rows")
+  await expect(tool.execute({ kind: "multiline", matrix: [[1, 2], [1]] }, ctx())).rejects.toThrow("at least 2 points")
   expect(out).not.toContain(ESC)
 })
 
@@ -173,12 +173,12 @@ test("chart_render stacked: shades per component, totals and legend", async () =
   const tool = chartRenderTool()
   const out = await text({ kind: "stacked", matrix: matrix3, labels: ["VCB", "HPG", "VNM", "Lãi", "Dịch vụ", "Khác"] })
   const lines = out.split("\n")
-  expect(lines[0]!).toContain("3 nhóm x 3 thành phần")
+  expect(lines[0]!).toContain("3 groups x 3 parts")
   expect(lines[1]!).toMatch(/^VCB\s+[█▓▒]+ 58$/)
   expect(lines[3]!).toContain("VNM")
   expect(lines[4]!).toContain("█ Lãi  ▓ Dịch vụ  ▒ Khác")
-  await expect(tool.execute({ kind: "stacked", matrix: [[5], [4]] }, ctx())).rejects.toThrow("ít nhất 2 thành phần")
-  await expect(tool.execute({ kind: "stacked", matrix: [[5, 3], [4]] }, ctx())).rejects.toThrow("cùng số cột")
+  await expect(tool.execute({ kind: "stacked", matrix: [[5], [4]] }, ctx())).rejects.toThrow("at least 2 parts")
+  await expect(tool.execute({ kind: "stacked", matrix: [[5, 3], [4]] }, ctx())).rejects.toThrow("same number of columns")
   expect(out).not.toContain(ESC)
 })
 
@@ -186,25 +186,25 @@ test("chart_render boxplot: whiskers, box, median and min/Q1/median/Q3/max value
   const tool = chartRenderTool()
   const out = await text({ kind: "boxplot", matrix: [[56.8, 57.2, 57.4, 58.1, 58.9], [19.8, 20.1, 20.4, 20.8, 21.2]], labels: ["VCB", "HPG"] })
   const lines = out.split("\n")
-  expect(lines[0]!).toContain("2 nhóm")
+  expect(lines[0]!).toContain("2 groups")
   expect(lines[1]!).toMatch(/^VCB\s+\[.+\] 56.8 ─ 57.2 ─ 57.4 ─ 58.1 ─ 58.9$/)
   expect(lines[1]!).toContain("◆")
   expect(lines[2]!).toContain("HPG")
-  await expect(tool.execute({ kind: "boxplot", matrix: [[1, 2, 3]] }, ctx())).rejects.toThrow("ít nhất 4 điểm")
+  await expect(tool.execute({ kind: "boxplot", matrix: [[1, 2, 3]] }, ctx())).rejects.toThrow("at least 4 points")
   expect(out).not.toContain(ESC)
 })
 
 test("chart_render scatter sparkcolumn linebox from the library", async () => {
   const tool = chartRenderTool()
   const scatter = await text({ kind: "scatter", points: [{ x: 1, y: 20 }, { x: 2, y: 21 }, { x: 3, y: 19.5 }, { x: 4, y: 22 }] })
-  expect(scatter).toContain("4 điểm")
+  expect(scatter).toContain("4 points")
   expect(scatter).toContain("┤")
   const column = await text({ kind: "sparkcolumn", series: [1, 2, 3, 2, 4] })
   expect(column).toContain("▃")
   const linebox = await text({ kind: "linebox", series: [57.3, 58.1, 57.4, 58.4] })
   expect(linebox).toContain("╭")
-  await expect(tool.execute({ kind: "scatter", points: [{ x: 1, y: 2 }] }, ctx())).rejects.toThrow("ít nhất 3 điểm")
-  await expect(tool.execute({ kind: "sparkcolumn", series: [1] }, ctx())).rejects.toThrow("ít nhất 2 điểm")
+  await expect(tool.execute({ kind: "scatter", points: [{ x: 1, y: 2 }] }, ctx())).rejects.toThrow("at least 3 (x,y) points")
+  await expect(tool.execute({ kind: "sparkcolumn", series: [1] }, ctx())).rejects.toThrow("at least 2 points")
   expect(scatter).not.toContain(ESC)
   expect(linebox).not.toContain(ESC)
 })
@@ -237,8 +237,8 @@ test("chart_render folds compare and depth in: same chart data as the old tools"
   const cmp = (await tool.execute({ kind: "compare", symbol: "VCB vs HPG", labels: ["VCB", "HPG"], matrix: [[10, 11, 12], [20, 19, 22]] }, c)) as { chart: { kind: string; series: { label: string }[] } }
   expect(cmp.chart.kind).toBe("compare")
   expect(cmp.chart.series.map((s) => s.label)).toEqual(["VCB", "HPG"])
-  await expect(tool.execute({ kind: "compare", matrix: [[1, 2]] }, c)).rejects.toThrow("2–5 hàng")
+  await expect(tool.execute({ kind: "compare", matrix: [[1, 2]] }, c)).rejects.toThrow("2–5 matrix rows")
   const depth = (await tool.execute({ kind: "depth", symbol: "FPT", bids: [{ price: 99, volume: 10 }], asks: [{ price: 101, volume: 5 }], levels: 3 }, c)) as { chart: { kind: string; depth: number } }
   expect(depth.chart).toMatchObject({ kind: "depth", depth: 3 })
-  await expect(tool.execute({ kind: "depth", bids: [] }, c)).rejects.toThrow("cần bids và asks")
+  await expect(tool.execute({ kind: "depth", bids: [] }, c)).rejects.toThrow("needs bids and asks")
 })

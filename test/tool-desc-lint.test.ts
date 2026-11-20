@@ -75,8 +75,8 @@ const BUILTIN_CAP = 1600
 const BUILTIN_CAPS: Record<string, number> = { spawn_subagent: 2000, desk_run: 2000 }
 
 const descOf = (t: CatalogTool) => (t.description ?? "").replace(/\s+/g, " ").trim()
-const hasUse = (d: string) => /Dùng khi|Use (for|when|to|this)|Dùng để|Dùng lúc/i.test(d)
-const hasNotUse = (d: string) => /Không dùng khi|Do NOT call|Don'?t (use|call)|prefer .* over|use .* instead|dùng .* thay/i.test(d)
+const hasUse = (d: string) => /Dùng khi|Use (for|when|to|this|it)|Dùng để|Dùng lúc/i.test(d)
+const hasNotUse = (d: string) => /Không dùng khi|Do NOT call|Do not use|Not for|Don'?t (use|call)|prefer .* over|use .* instead|dùng .* thay/i.test(d)
 
 // ── MCP catalog ──────────────────────────────────────────────────────────────
 
@@ -191,5 +191,5 @@ test("todo_write input keeps the Claude state contract (2 forms of wording are n
   const desc = (builtin("todo_write").description ?? "").replace(/\s+/g, " ")
   expect(desc).toMatch(/completed/)
   expect(desc).toMatch(/in_progress/)
-  expect(desc).toMatch(/CHỈ đánh completed/i)
+  expect(desc).toMatch(/Mark completed ONLY/i)
 })
