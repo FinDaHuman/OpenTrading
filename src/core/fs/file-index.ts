@@ -25,6 +25,11 @@ export interface IndexedPath {
   /** Lowercased, accents removed: what queries match against. */
   folded: string
   base: string
+  /**
+   * An /add-dir root's path is listed by its absolute path (#345): this many characters of `folded`
+   * are that root, which a typed query must not match (every file under C:/Users/… would).
+   */
+  rootLength?: number
 }
 
 async function gitFiles(root: string): Promise<string[] | undefined> {
@@ -101,8 +106,8 @@ export function matchPaths(paths: readonly IndexedPath[], query: string, limit =
     let score: number
     if (p.base.startsWith(q)) score = 4000
     else if (p.base.includes(q)) score = 3000
-    else if (p.folded.includes(q)) score = 2000
-    else if (subsequence(p.folded, q)) score = 1000
+    else if (own(p).includes(q)) score = 2000
+    else if (subsequence(own(p), q)) score = 1000
     else continue
     scored.push({ p, score: score - Math.min(999, p.rel.length) })
   }
@@ -111,6 +116,9 @@ export function matchPaths(paths: readonly IndexedPath[], query: string, limit =
     .slice(0, limit)
     .map((s) => s.p)
 }
+
+/** The part of a path a query matches: under its root. */
+const own = (p: IndexedPath) => (p.rootLength ? p.folded.slice(p.rootLength) : p.folded)
 
 function subsequence(text: string, query: string) {
   let i = 0
@@ -168,5 +176,56 @@ export class FileIndex {
         this.building = undefined
       })
     return this.building
+  }
+}
+
+/**
+ * The `@` index over every workspace root (#345): the first root as before (paths relative to
+ * it), each /add-dir folder by its absolute path, which is how a mention outside the first root
+ * resolves. Roots added later are indexed the next time the list opens; removed ones are dropped.
+ */
+export class WorkspaceIndex {
+  private indexes = new Map<string, FileIndex>()
+  private mapped = new WeakMap<readonly IndexedPath[], IndexedPath[]>()
+
+  constructor(
+    private roots: () => string[],
+    private env?: SafetyEnv,
+  ) {}
+
+  private sync(): FileIndex[] {
+    const roots = this.roots()
+    for (const root of roots) if (!this.indexes.has(root)) this.indexes.set(root, new FileIndex(root, this.env))
+    for (const root of [...this.indexes.keys()]) if (!roots.includes(root)) this.indexes.delete(root)
+    return roots.map((root) => this.indexes.get(root)!)
+  }
+
+  refresh(now = Date.now(), maxAge = INDEX_FRESH_MS): Promise<boolean> {
+    return Promise.all(this.sync().map((index) => index.refresh(now, maxAge))).then((built) => built.some(Boolean))
+  }
+
+  refreshAfter(maxAge: number): Promise<boolean> {
+    return Promise.all(this.sync().map((index) => index.refreshAfter(maxAge))).then((built) => built.some(Boolean))
+  }
+
+  current(): readonly IndexedPath[] {
+    const [first, ...extra] = this.sync()
+    if (!first) return []
+    if (extra.length === 0) return first.current()
+    return [...first.current(), ...extra.flatMap((index) => this.absolute(index))]
+  }
+
+  /** An extra root's paths as absolute, `/` separated mentions; cached per build. */
+  private absolute(index: FileIndex): IndexedPath[] {
+    const paths = index.current()
+    let out = this.mapped.get(paths)
+    if (!out) {
+      const root = index.root.split(path.sep).join("/").replace(/\/+$/, "")
+      // Folded with its root, so `@D:/data/` lists that folder; queries skip the root (rootLength).
+      const prefix = fold(`${root}/`)
+      out = paths.map((p) => ({ ...p, rel: `${root}/${p.rel}`, folded: prefix + p.folded, rootLength: prefix.length }))
+      this.mapped.set(paths, out)
+    }
+    return out
   }
 }

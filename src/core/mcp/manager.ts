@@ -1,6 +1,7 @@
 import path from "node:path"
 import { UnauthorizedError } from "@modelcontextprotocol/sdk/client/auth.js"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
+import { appVersion } from "../build-info"
 import { SSEClientTransport, SseError } from "@modelcontextprotocol/sdk/client/sse.js"
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { StreamableHTTPClientTransport, StreamableHTTPError } from "@modelcontextprotocol/sdk/client/streamableHttp.js"
@@ -838,7 +839,7 @@ export class McpManager {
       for (let i = 0; ; i++) {
         const real = () => this.transport(entry, config, kind, stderr)
         const transport = this.opts.transport?.(entry.name, real) ?? real()
-        const client = new Client({ name: "opentrading", version: "0.1.0" }, { capabilities: {} })
+        const client = new Client({ name: "opentrading", version: appVersion }, { capabilities: {} })
         try {
           const left = Math.max(1, deadline - Date.now())
           await withTimeout(client.connect(transport), left, `Kết nối quá ${timeoutMs / 1000}s.`)
@@ -944,7 +945,7 @@ export class McpManager {
       await provider.invalidateCredentials("tokens")
       const kind = this.statuses.get(name)?.transport === "sse" || remote.type === "sse" ? "sse" : "http"
       const transport = this.transport(entry, remote, kind, [], provider) as StreamableHTTPClientTransport | SSEClientTransport
-      const client = new Client({ name: "opentrading", version: "0.1.0" }, { capabilities: {} })
+      const client = new Client({ name: "opentrading", version: appVersion }, { capabilities: {} })
       try {
         await client.connect(transport)
       } catch (error) {

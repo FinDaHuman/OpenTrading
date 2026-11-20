@@ -11,6 +11,8 @@ import { languageModel } from "../../src/core/providers"
 import { initRuntime, setAgents } from "../../src/core/runtime"
 import { loadSkills } from "../../src/core/skills/loader"
 import { answerUnattended } from "../eval/approvals"
+import { ledgerFile, RequestLedger } from "../eval/ledger"
+import { requestCap } from "../eval/request-cap"
 import {
   caseProblems,
   loadDeskCases,
@@ -36,6 +38,9 @@ import {
  *   --size      quy mô desk (mặc định: desk.size trong config, thường là small)
  *   --arm       chỉ chạy một nhánh (không chấm)
  *   --judge     model chấm (mặc định: model của phiên); nên dùng model mạnh hơn hai nhánh
+ *   --max-requests  trần cứng số request của lần chạy, đếm ở fetch (retry, subagent, agent desk, judge
+ *               đều tính); mặc định 1,2× số dự kiến (retry và ca dài cần chỗ). Request vượt trần bị chặn trước khi gửi (#350)
+ *   --daily-cap trần request trong ngày của model phiên, cộng dồn qua các lần chạy (mặc định 500)
  *   --out       nơi ghi kết quả JSON (mặc định ~/.opentrading/exports/desk-eval-<thời điểm>.json)
  *   --yes       chạy thật; không có cờ này thì chỉ in số ca và request dự kiến rồi thoát
  */
@@ -68,6 +73,21 @@ if (!process.argv.includes("--yes")) {
   console.log("Chỉ in ước tính. Thêm --yes để chạy thật (tốn quota của bạn); thu hẹp bằng --only / --playbook.")
   process.exit(0)
 }
+
+// Headroom over the projection: retries and a long case would otherwise cut the last cases as "infrastructure".
+const maxRequests = Number(arg("--max-requests") ?? Math.ceil(projected * 1.2))
+const dailyCap = Number(arg("--daily-cap") ?? 500)
+if (!(maxRequests > 0) || !(dailyCap > 0)) {
+  console.error("--max-requests và --daily-cap cần số dương.")
+  process.exit(1)
+}
+const ledger = await RequestLedger.open(ledgerFile(dataDir()), `${session.provider.id}/${session.model}`, dailyCap)
+if (ledger.exhausted) {
+  console.error(`Đã dùng ${ledger.spent}/${dailyCap} request hôm nay cho ${session.provider.id}/${session.model}: dừng trước khi chạy.`)
+  process.exit(1)
+}
+const meter = requestCap(maxRequests, ledger)
+console.log(`Trần cứng: ${maxRequests} request cho lần chạy này · đã dùng hôm nay ${ledger.spent}/${dailyCap}.`)
 
 const { skills } = await loadSkills()
 const runtime = initRuntime({ skills: () => skills })
@@ -117,7 +137,14 @@ async function judge(prompt: string) {
   return { text: result.text, requests: 1 }
 }
 
-const rows = await runDeskEval(cases, { single, desk, judge, log: (line) => console.log(line) }, arms)
+// Each arm and the judge report the requests really sent (fetch), not steps or a fixed 1.
+const rows = await runDeskEval(
+  cases,
+  { single: (c) => meter.measure(() => single(c)), desk: (c) => meter.measure(() => desk(c)), judge: (p) => meter.measure(() => judge(p)), log: (line) => console.log(line) },
+  arms,
+)
+meter.stop()
+if (meter.capped) console.log(`Chạm trần request (${meter.sent}/${maxRequests}, hôm nay ${ledger.spent}/${dailyCap}): các ca sau đó lỗi vì bị chặn, không phải vì chất lượng.`)
 const s = summarize(rows)
 const pct = (x: number) => `${(100 * x).toFixed(0)}%`
 console.log("")
@@ -127,7 +154,7 @@ for (const [name, p] of Object.entries(s.perPlaybook)) {
 console.log("")
 console.log(`Chấm được ${s.judged}/${rows.length} ca (ca có nhánh lỗi/bị cắt không chấm) · điểm trung bình desk ${s.deskMean.toFixed(2)} vs mặc định ${s.singleMean.toFixed(2)} (chênh ${(s.deskMean - s.singleMean).toFixed(2)})`)
 console.log(`Thắng: desk ${s.deskWins} · mặc định ${s.singleWins} · hoà ${s.ties} (desk thắng ${s.judged ? pct(s.deskWins / s.judged) : "-"})`)
-console.log(`Request: desk ${s.requests.desk} · mặc định ${s.requests.single} · judge ${s.requests.judge}`)
+console.log(`Request (đếm ở fetch): desk ${s.requests.desk} · mặc định ${s.requests.single} · judge ${s.requests.judge} · tổng gửi ${meter.sent}`)
 const unreferenced = cases.filter((c) => c.playbook === "kiem-chung" && !c.tham_chieu).length
 if (unreferenced > 0) console.log(`Lưu ý: ${unreferenced} ca kiem-chung chưa có tham_chieu: điểm chinh_xac của chúng chưa nói lên đúng/sai.`)
 console.log(

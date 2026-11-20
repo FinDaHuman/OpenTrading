@@ -4,6 +4,7 @@ import type { JSONSchema7 } from "@ai-sdk/provider"
 import { z } from "zod"
 import type { Workspace } from "../fs/workspace"
 import type { PermissionGate } from "../permission"
+import type { PromptProfile } from "../prompt/assemble"
 import { sanitizeSchema, type SchemaFlavor } from "../mcp/schema"
 import type { AgentOrigin, ToolDef, ToolResult } from "./types"
 import { RwLock, runTool } from "./wrap"
@@ -98,6 +99,8 @@ export class ToolRegistry {
   gate?: PermissionGate
   /** Folders the file tools work in; its description reaches the model as `<quyen_tep>`. */
   workspace?: Workspace
+  /** The prompt profile of the main turn now running (agent.ts); subagents it starts run with it (#328). */
+  turnProfile?: PromptProfile
 
   constructor(opts: { lock?: RwLock; origin?: AgentOrigin } = {}) {
     // A subagent shares its parent's lock, so its writes exclude the parent's and siblings'.

@@ -1,6 +1,6 @@
 # ADR 0001: Python modular monolith
 
-Status: accepted
+Status: superseded — the product was rebuilt in TypeScript on Bun (`src/`, OpenTUI for the terminal). This record is kept as the history of the first decision; it does not describe the current code.
 
 ## Decision
 

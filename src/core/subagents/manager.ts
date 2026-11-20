@@ -11,6 +11,8 @@ import type { ConstraintReader } from "../memory/binding/constraints"
 import { isEffort, type Effort } from "../effort"
 import { classifyFailure, retryText } from "../retry"
 import { closeDanglingToolCalls } from "../session/store"
+import type { PromptProfile } from "../prompt/assemble"
+import { activeBudget, SUBAGENT_MIN_REQUESTS } from "../request-budget"
 import type { Skill } from "../skills/schema"
 import { loadSkillTool } from "../tools/builtin/load-skill"
 import { toolSearchTool } from "../tools/builtin/tool-search"
@@ -155,6 +157,8 @@ interface RunContext {
    * it waits for a slot. Later turns (messages sent meanwhile) read the waiver in force then.
    */
   waiver?: Waiver
+  /** The prompt profile of the main turn that started it (#328): a child of a `machine` run is `machine` too. */
+  profile?: PromptProfile
 }
 
 const newId = () => `ag-${Math.random().toString(36).slice(2, 8).padEnd(6, "0")}`
@@ -282,6 +286,18 @@ export class SubagentManager {
    * (model setup, provider errors, aborts) ends up in the result.
    */
   start(spec: StartSpec): SubagentRun {
+    // A child shares the turn's request budget but not the reserve for the parent's answer (#328):
+    // with too little left it would end before doing anything, so the main agent answers itself.
+    // Children still running or waiting share that room: each keeps SUBAGENT_MIN_REQUESTS of it, so a
+    // batch of parallel spawns cannot all pass and then starve each other.
+    const room = activeBudget()?.childRoom()
+    const others = [...this.runs.values()].filter((r) => r.status === "running" || r.status === "queued").length
+    const left = room === undefined ? undefined : room - others * SUBAGENT_MIN_REQUESTS
+    if (left !== undefined && left < SUBAGENT_MIN_REQUESTS) {
+      throw new Error(
+        `Not started: ${Math.max(0, left)} model requests are left for another subagent in this turn's budget (at least ${SUBAGENT_MIN_REQUESTS} needed). Do the step yourself, or answer with the data you already have.`,
+      )
+    }
     const id = newId()
     const type = spec.type ?? DEFAULT_SUBAGENT_TYPE
     const child = childRegistry(this.deps.parent, { id, type, description: spec.description }, spec.toolFilter, this.deps.skills)
@@ -306,7 +322,7 @@ export class SubagentManager {
       sessionId: this.session?.id,
       deskRunId: spec.deskRunId,
     }
-    const context: RunContext = { child, spec, inbox: [], parentSignal: spec.parentSignal, waiver: spec.waiver ?? this.deps.waiver?.() }
+    const context: RunContext = { child, spec, inbox: [], parentSignal: spec.parentSignal, waiver: spec.waiver ?? this.deps.waiver?.(), profile: this.deps.parent.turnProfile }
     if (spec.schema) child.register(resultTool(spec.schema, (data) => (context.data = data)))
     this.runs.set(id, run)
     this.owners.set(id, this.session?.id)
@@ -526,6 +542,8 @@ export class SubagentManager {
           // The first turn and the result reminders are the same task: the waiver kept at start/continue.
           // A message sent meanwhile is new work: the waiver in force now (a desk run's own, if any).
           waive: attempts === 1 || reminding ? context.waiver : (spec.waiver ?? this.deps.waiver?.()),
+          // Rebuilt from its sidechain (send_message after a restart): the profile of the turn now running.
+          profile: context.profile ?? this.deps.parent.turnProfile,
           effort,
           ...(spec.schema ? { finalTool: RESULT_TOOL, finalPrompt: RESULT_LAST_STEP } : {}),
         })) {

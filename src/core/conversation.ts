@@ -16,3 +16,6 @@ export const conversationId = () => current
 
 /** A subagent's own conversation id: stable for that agent, grouped under its session. */
 export const childConversation = (session: string | undefined, agentId: string) => `${session || "session"}/${agentId}`
+
+/** Whether a request's conversation is a subagent's (childConversation); the main one never has a `/`. */
+export const isChildConversation = (id: string | undefined) => !!id && id.includes("/")

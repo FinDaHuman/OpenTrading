@@ -3,6 +3,7 @@ import os from "node:os"
 import path from "node:path"
 import { discoverOAuthServerInfo } from "@modelcontextprotocol/sdk/client/auth.js"
 import { maskKey } from "../core/auth"
+import { appVersion } from "../core/build-info"
 import {
   configFiles,
   deleteServer,
@@ -435,7 +436,7 @@ export async function runMcpCli(argv: string[], opts: { home?: string; cwd?: str
                 jsonrpc: "2.0",
                 id: 1,
                 method: "initialize",
-                params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "opentrading-debug", version: "0.1.0" } },
+                params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "opentrading-debug", version: appVersion } },
               }),
               signal: AbortSignal.timeout(config.startupTimeoutMs ?? 30_000),
             })

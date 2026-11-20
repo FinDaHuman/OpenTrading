@@ -17,6 +17,7 @@ adopt Semantic Versioning when it exposes a stable public API.
   languages (failure classes, transcript rows, subagent/desk notice parsers, pruned markers, the truncate mark
   in memory history, the compact marker's skill line).
 
+
 - Tool descriptions, parameter descriptions and the text tools return to the model are in English (all built-in
   tools: shell, files, web, charts, todo, subagents, skills, sessions, watchlist, desk), and so are the
   request-wide blocks: `<quyen_tep>`, the permission-mode line, the market clock (`market/calendar.json`
@@ -26,6 +27,15 @@ adopt Semantic Versioning when it exposes a stable public API.
   Parsers of these texts accept both languages (failure classes, operand notes, `@mentions` line counts,
   eval shell routes, saved todo prefixes). Tool definitions: o200k 8 104 → 7 886, DeepSeek 9 325 → 8 295
   tokens; always-sent tools DeepSeek 3 773 → 3 184.
+
+
+- System prompt files (`prompts/*.md`) are in English, same rules in the same order. Tags, gate markers, slash
+  commands, the Vietnamese phrases the model must not write ("đã lưu"…) and Vietnamese examples stay as they
+  were. A literal translation weakened rules (memory disclosure 3/9 vs 9/9 on gemini-3.5-flash-lite), so a few
+  rules spell out what the Vietnamese implied: no target range or buy zone, no bare ticker or yes/no as the
+  choice, LaTeX as a prohibition, Vietnamese also in free-text JSON fields, the three things a "save this"
+  answer must say. Terminal system prompt: o200k 3 376 → 3 015 tokens, DeepSeek 4 635 → 3 180. Paired evals
+  (16/11, nemotron-3.5-super-vl): red-team 18/18 vs 17/18, memory 8/9 vs 6/9, compute 15/15 both.
 
 ### Fixed
 

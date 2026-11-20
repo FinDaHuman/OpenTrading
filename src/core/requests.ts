@@ -6,6 +6,8 @@
 export interface ModelRequest {
   provider: string
   model: string
+  /** The conversation that sent it when the caller named one (a subagent's own); unset for the main one. */
+  conversation?: string
 }
 
 type Listener = (request: ModelRequest) => void
@@ -33,13 +35,14 @@ export function guardModelRequests(guard: Guard) {
 }
 
 /** The fetch a provider SDK sends through. `globalThis.fetch` is read per call, as the SDKs do. */
-export function countedFetch(provider: string, model: string): typeof globalThis.fetch {
+export function countedFetch(provider: string, model: string, conversation?: string): typeof globalThis.fetch {
+  const request: ModelRequest = conversation ? { provider, model, conversation } : { provider, model }
   return ((input: RequestInfo | URL, init?: RequestInit) => {
     for (const guard of guards) {
-      const why = guard({ provider, model })
+      const why = guard(request)
       if (why) return Promise.reject(Object.assign(new Error(why), { name: "RequestBudgetExceeded" }))
     }
-    for (const listener of listeners) listener({ provider, model })
+    for (const listener of listeners) listener(request)
     return globalThis.fetch(input, init)
   }) as typeof globalThis.fetch
 }
