@@ -106,6 +106,67 @@ export class PromptParts {
     return label
   }
 
+  /** Each pill's mark with what it covers now: intact or cut. */
+  private all() {
+    const input = this.input()
+    if (!input || this.typeId === undefined) return []
+    const text = input.plainText
+    return input.extmarks.getAllForTypeId(this.typeId).flatMap((m) => {
+      const id = this.marks.get(m.id)
+      const part = id === undefined ? undefined : this.parts.get(id)
+      if (id === undefined || !part) return []
+      const slice = offsetSlice(text, m.start, m.end)
+      return [{ mark: m.id, start: m.start, end: m.end, id, part, intact: slice === labelOf(id, part) }]
+    })
+  }
+
+  private sweeping = false
+
+  /**
+   * A pill is one thing (#353): an edit that cut part of it (Ctrl+W, Alt+Backspace, a selection
+   * that took half of it) removes the rest too, instead of leaving its label as plain text.
+   * Called after every change of the box; returns how many pills it removed.
+   */
+  sweep(): number {
+    const input = this.input()
+    if (!input || this.sweeping) return 0
+    const cut = this.all().filter((m) => !m.intact)
+    if (cut.length === 0) return 0
+    this.sweeping = true
+    try {
+      // Right to left: removing one leaves the offsets of those before it as they were.
+      for (const m of cut.sort((a, b) => b.start - a.start)) {
+        input.extmarks.delete(m.mark)
+        this.marks.delete(m.mark)
+        this.parts.delete(m.id)
+        if (m.end > m.start) {
+          input.setSelection(m.start, m.end)
+          input.deleteSelection()
+        }
+      }
+    } finally {
+      this.sweeping = false
+    }
+    return cut.length
+  }
+
+  /**
+   * What a copy of the box between two offsets holds (#353): each whole pill in it is what it
+   * stands for (the pasted text, the file mention), not its label. An image stays its label: a
+   * terminal clipboard holds text.
+   */
+  copyText(start: number, end: number): string {
+    const input = this.input()
+    const text = input?.plainText ?? ""
+    let out = ""
+    let at = start
+    for (const m of this.live().filter((m) => m.start >= start && m.end <= end)) {
+      out += offsetSlice(text, at, m.start) + (m.part.kind === "text" ? m.part.text : m.part.kind === "file" ? m.part.mention : imageLabel(m.id))
+      at = m.end
+    }
+    return out + offsetSlice(text, at, end)
+  }
+
   /** Pills still in the prompt and still intact, left to right. */
   private live() {
     const input = this.input()
@@ -117,7 +178,7 @@ export class PromptParts {
       .flatMap((m) => {
         const part = m.id === undefined ? undefined : this.parts.get(m.id)
         if (!part || m.id === undefined) return []
-        // Partly deleted (Ctrl+W, a selection): what is left is plain text.
+        // Partly deleted and not swept yet (sweep() runs on the next change): not a pill any more.
         return m.slice === labelOf(m.id, part) ? [{ ...m, id: m.id, part }] : []
       })
       .sort((a, b) => a.start - b.start)

@@ -192,6 +192,8 @@ export const [state, setState] = createStore({
   askEffort: true,
   /** Config `ui.terminalNotify`: notifications and the tab progress ring (attention.ts). */
   terminalNotify: true,
+  /** Config `ui.pasteBurst`: an Enter inside keys typed faster than anyone types adds a line (prompt/burst.ts). */
+  pasteBurst: false,
   /** Config `ui.scrollSpeed` / `ui.scrollAcceleration`: transcript rows per wheel notch. */
   scroll: { speed: DEFAULT_SCROLL_SPEED, accelerate: false },
   /** Config `autoCompact: "off"`: the status bar warns when the context runs low. */

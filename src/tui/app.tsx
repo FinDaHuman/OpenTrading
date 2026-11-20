@@ -117,6 +117,7 @@ import { PromptInput } from "./prompt/input"
 import { addHistory, HistoryCursor, loadHistory, pastesFor, searchHistory } from "./prompt/history"
 import { imagePath, MAX_IMAGE_BASE64, readClipboardImage, readImageFile, type PromptImage } from "./prompt/image"
 import { isLargePaste, offsetSlice, offsetWidth, pasteLabel, PromptParts, type DraftSnapshot, type ExpandedPrompt } from "./prompt/parts"
+import { BURST_HOLD_MS, PasteBurst } from "./prompt/burst"
 import { editInEditor } from "./prompt/editor"
 import { TODO_WRITE, TodoWriteInput } from "../core/tools/todos"
 import { gapsLine } from "../core/loop/failures"
@@ -923,7 +924,11 @@ export function App(props: {
    * copied. `keep` leaves the highlight in place.
    */
   function copySelection(keep = false) {
-    const text = cleanSelection(renderer.getSelection()?.getSelectedText() ?? "")
+    // Inside the prompt a pill copies as what it holds, not as its label (#353).
+    const selected = renderer.getSelection()?.selectedRenderables ?? []
+    const inPrompt = !!input && input.hasSelection() && selected.length > 0 && selected.every((r) => r === input)
+    const range = inPrompt ? input!.getSelection() : null
+    const text = range ? parts.copyText(range.start, range.end) : cleanSelection(renderer.getSelection()?.getSelectedText() ?? "")
     if (!keep) renderer.clearSelection()
     if (!text) return false
     writeClipboard(text, (t) => renderer.copyToClipboardOSC52(t))
@@ -1085,6 +1090,7 @@ export function App(props: {
       tips: config.ui?.tips !== false,
       askEffort: config.ui?.askEffort !== false,
       terminalNotify: config.ui?.terminalNotify !== false,
+      pasteBurst: config.ui?.pasteBurst === true,
       scroll: scrollSetting(config.ui),
       autoCompactOff: config.autoCompact === "off",
       // The raw setting: "Tự nén hội thoại" off is state.autoCompactOff, which the timer follows.
@@ -1371,6 +1377,11 @@ export function App(props: {
       say(`/${command.name}: ${error instanceof Error ? error.message : String(error)}`, "error")
     }
   }
+
+  /** Keys typed faster than anyone types: a paste without bracketed paste (#353). */
+  const burst = new PasteBurst()
+  let heldEnter: ReturnType<typeof setTimeout> | undefined
+  onCleanup(() => clearTimeout(heldEnter))
 
   /** Pills in the prompt: `[Pasted text #1 +49 lines]`, `[Image #2]`, `@src/x.ts`. */
   const parts = new PromptParts(
@@ -1892,6 +1903,14 @@ export function App(props: {
 
   useKeyboard((evt) => {
     if (evt.eventType === "release") return
+    // An Enter held back as part of a paste (below): a key right behind it means it was a line break.
+    if (heldEnter !== undefined) {
+      clearTimeout(heldEnter)
+      heldEnter = undefined
+      input?.newLine()
+    }
+    // Keys that type a character feed the paste-burst detector (#353).
+    if (!evt.ctrl && !evt.meta && evt.sequence?.length === 1 && evt.sequence >= " ") burst.key()
     // Typing is not being away.
     idleTimer.poke()
     if (search() && !owner() && !state.dialog) return searchKey(evt)
@@ -1909,6 +1928,18 @@ export function App(props: {
     }
     if (owner() || state.dialog) return
     if (state.panelFocus !== undefined) return panelKey(evt)
+    // A terminal without bracketed paste types a paste out key by key (#353). An Enter inside such a
+    // burst waits BURST_HOLD_MS: more keys behind it make it a line break (above); none, and it sends,
+    // so keys a busy app received all at once still end in a send.
+    const plainEnter = (evt.name === "return" || evt.name === "kpenter") && !evt.ctrl && !evt.meta && !evt.shift
+    if (plainEnter && state.pasteBurst && input && !search() && suggestions().length === 0 && fileMatches().length === 0 && burst.enterIsPaste()) {
+      evt.preventDefault()
+      heldEnter = setTimeout(() => {
+        heldEnter = undefined
+        submit()
+      }, BURST_HOLD_MS)
+      return
+    }
     // The chat scrolls from the keyboard too (opencode): PageUp/PageDown half a screen,
     // Ctrl+Home/Ctrl+End to the start/end (plain Home/End stay with the prompt).
     const move =
@@ -2164,6 +2195,8 @@ export function App(props: {
             state.streaming ? "đang trả lời… esc để dừng · enter để xếp hàng tin tiếp" : "Hỏi về thị trường, hoặc gõ / để xem lệnh · ↑ lịch sử · ctrl+j xuống dòng"
           }
           onChange={(v) => {
+            // A pill cut in part (Ctrl+W, a selection) goes whole (#353); the sweep's own change comes back here.
+            if (parts.sweep() > 0) return
             if (input) setCursor(input.cursorOffset)
             if (v === draft()) return
             setDraft(v)
