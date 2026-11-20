@@ -107,7 +107,9 @@ test("grounding not in the key's plan (30/10 body): skipped until Gemini's quota
   let runs = 0
   const count = () => ((runs += 1), Promise.resolve("ok"))
   now += NATIVE_PAUSE_MS + 1
-  await expect(guardedNative("google/gemini-3.1-flash-lite", count, clock)).rejects.toThrow("skipped until 14:00")
+  await expect(guardedNative("google/gemini-3.1-flash-lite", count, clock)).rejects.toThrow("skipped until 14:00: Google Search grounding is not in this key's plan")
+  // #343: a plan without grounding is not a spent quota.
+  await expect(guardedNative("google/gemini-3.1-flash-lite", count, clock)).rejects.not.toThrow("quota is exhausted")
   expect(runs).toBe(0)
   now = Date.parse("2026-10-30T07:00:01Z")
   expect(await guardedNative("google/gemini-3.1-flash-lite", count, clock)).toBe("ok")
