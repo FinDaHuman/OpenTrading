@@ -23,11 +23,16 @@ const root = path.resolve(import.meta.dir, "../..")
 const dryRun = process.argv.includes("--dry-run") || !process.argv.includes("--yes")
 if (dryRun && !process.argv.includes("--dry-run")) console.log("Dry run: add --yes to call the model (uses your quota).")
 const catalogOnly = process.argv.includes("--catalog-only")
-const only = (arg("--only") ?? "278,279,280,282,283,284,288,289,290,291").split(",").map(Number)
+// --only all: every case of the fixture that names its skills (an empty list means "no skill").
+const onlyArg = arg("--only") ?? "278,279,280,282,283,284,288,289,290,291"
+const only = onlyArg === "all" ? [] : onlyArg.split(",").map(Number)
+// --temperature > 0 with several runs shows the spread; 0 repeats the same choice.
+const temperature = Number(arg("--temperature") ?? 0)
+if (!(temperature >= 0 && temperature <= 2)) throw new Error("--temperature must be between 0 and 2")
 const tiers = (arg("--tiers") ?? "A,B").split(",")
 if (tiers.some((tier) => tier !== "A" && tier !== "B")) throw new Error("--tiers must be A, B or A,B")
-const cases = (await loadCases(root)).filter((c) => only.includes(c.id))
-if (new Set(only).size !== cases.length) throw new Error("Unknown or duplicate --only IDs")
+const cases = (await loadCases(root)).filter((c) => (onlyArg === "all" ? c.skills !== undefined : only.includes(c.id)))
+if (onlyArg !== "all" && new Set(only).size !== cases.length) throw new Error("Unknown or duplicate --only IDs")
 const { skills, problems } = await loadSkills(skillRoots(root).filter((r) => r.source === "bundled"))
 if (problems.length) throw new Error(JSON.stringify(problems))
 const registry = await catalogRegistry(root)
@@ -54,7 +59,7 @@ const requests = cases.flatMap((c) => tiers.map((tier) => {
     layers: assembled.report,
   }
 }))
-const settings = { temperature: 0, maxRetries: 0, maxOutputTokens: 1_024, timeoutMs: 45_000 }
+const settings = { temperature, maxRetries: 0, maxOutputTokens: 1_024, timeoutMs: 45_000 }
 const providerOptions = target ? lowThinking(target) : undefined
 const evidence: Record<string, unknown> = {
   version: 1, createdAt: now.toISOString(), dryRun, catalogOnly,

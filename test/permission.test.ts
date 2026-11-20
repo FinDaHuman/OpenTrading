@@ -133,7 +133,7 @@ test("'always' whose save fails: the call is denied with the reason, nothing is 
   await tick()
   await gate.respond(gate.head()!.id, "always")
   const message = await running
-  expect(message).toContain("không lưu được quyền")
+  expect(message).toContain("permission could not be saved")
   expect(message).toContain("EACCES")
   expect(gate.head()).toBeUndefined()
   expect(heads.at(-1)).toBeUndefined()

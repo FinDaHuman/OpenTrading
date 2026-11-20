@@ -48,7 +48,7 @@ export function typeSpec(agents: AgentDefinition[], type: string): TypeSpec | un
 function typeList(agents: AgentDefinition[]) {
   if (agents.length === 0) return ""
   const listed = agents.filter((a) => a.listed !== false)
-  const lines = listed.map((a) => `- ${a.name}: ${a.description.replace(/\s+/g, " ").trim()} (Tool: ${toolSummary(a)})`)
+  const lines = listed.map((a) => `- ${a.name}: ${a.description.replace(/\s+/g, " ").trim()} (Tools: ${toolSummary(a, "en")})`)
   const others = agents.filter((a) => a.listed === false).map((a) => a.name)
   const more = others.length ? `\nOther types (call by name when a skill asks): ${others.join(", ")}.` : ""
   return `\n\nSubagent types (subagent_type, default ${DEFAULT_SUBAGENT_TYPE}):\n${lines.join("\n")}${more}`

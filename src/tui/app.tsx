@@ -1724,7 +1724,7 @@ export function App(props: {
     const playbook = PLAYBOOKS.find((p) => p.meta.name === cmd.name)
     if (playbook) {
       if (!cmd.args) return say(`Dùng: /${playbook.meta.name} <yêu cầu>`, "error")
-      const text = `Chạy playbook ultradesk ${playbook.meta.name} cho yêu cầu sau (gọi desk_run với args đúng schema): ${cmd.args}`
+      const text = `Run the ultradesk playbook ${playbook.meta.name} for the request below (call desk_run with arguments matching its schema): ${cmd.args}`
       // The transcript shows the start of a long pasted argument; the model gets all of it.
       const outgoing = { text, display: `/${playbook.meta.name} ${truncate(cmd.args.replace(/\s+/g, " "), 200)}`, desk: "command" as const }
       if (state.streaming) return void setState("queue", (q) => [...q, { ...outgoing, images: [], saved: {} }])

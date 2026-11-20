@@ -239,7 +239,7 @@ export function initRuntime(opts: {
     profile: async () => profileForClassifier(await readFile(path.join(home, "INVESTOR.md"), "utf8").catch(() => undefined)),
   })
   permissions.auto = auto
-  questions.onAnswered = (qs, answers) => auto.log.answer(qs.map((q) => `${q.question} → ${answers[q.question] ?? "(bỏ qua)"}`).join("\n"))
+  questions.onAnswered = (qs, answers) => auto.log.answer(qs.map((q) => `${q.question} → ${answers[q.question] ?? "(skipped)"}`).join("\n"))
   const constraints = createConstraintReader(path.join(home, "memory.db"))
   const subagents = new SubagentManager({
     parent: registry,

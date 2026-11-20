@@ -47,7 +47,7 @@ test("UNC and odd Windows spellings are recognised", () => {
   expect(isUncPath("\\\\?\\C:\\a.txt")).toBe(false)
   expect(isUncPath("C:\\a.txt")).toBe(false)
   expect(suspiciousWindowsPath("C:\\a\\b.txt:secret", "win32")).toContain("data stream")
-  expect(suspiciousWindowsPath("C:\\a\\NUL.txt", "win32")).toContain("thiết bị")
+  expect(suspiciousWindowsPath("C:\\a\\NUL.txt", "win32")).toContain("DOS device")
   expect(suspiciousWindowsPath("C:\\PROGRA~1\\x", "win32")).toContain("8.3")
   expect(suspiciousWindowsPath("C:\\a\\b. ", "win32")).toBeDefined()
   expect(suspiciousWindowsPath("C:\\Dau-tu\\ke-hoach.md", "win32")).toBeUndefined()

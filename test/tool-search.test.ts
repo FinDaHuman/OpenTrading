@@ -49,8 +49,8 @@ test("select: takes full names, server/tool and unambiguous short names", async 
   const out = await search(r, "select:mcp__ot__money_flow, ot/market_snapshot ,vn_quote_history")
   expect(firstLine(out)).toBe(`${LOADED_PREFIX}mcp__ot__money_flow, mcp__ot__market_snapshot, mcp__ot__vn_quote_history`)
   // Parameters are spelled out so the model can call the tool right away.
-  expect(out).toContain("- symbol (string, bắt buộc) — Mã cổ phiếu")
-  expect(out).toContain("- days (integer, mặc định 365)")
+  expect(out).toContain("- symbol (string, required) — Mã cổ phiếu")
+  expect(out).toContain("- days (integer, default 365)")
 })
 
 test("a `::` separator resolves like the real one", () => {

@@ -71,7 +71,7 @@ test("protected writes: OpenTrading data and config, tool folders, rc files, aut
   expect(protectedWriteReason(path.join(project, ".mcp.json"), env)).toBeDefined()
   expect(protectedWriteReason(path.join(home, ".bashrc"), env)).toBeDefined()
   expect(protectedWriteReason(path.join(home, "Documents", "WindowsPowerShell", "Microsoft.PowerShell_profile.ps1"), env)).toBeDefined()
-  expect(protectedWriteReason(path.join(home, "AppData", "Roaming", "Microsoft", "Windows", "Start Menu", "Programs", "Startup", "x.bat"), env)).toContain("đăng nhập")
+  expect(protectedWriteReason(path.join(home, "AppData", "Roaming", "Microsoft", "Windows", "Start Menu", "Programs", "Startup", "x.bat"), env)).toContain("at login")
   expect(protectedWriteReason(path.join(project, ".env"), env)).toBeDefined()
   expect(protectedWriteReason(path.join(project, "bao-cao", "fpt.md"), env)).toBeUndefined()
 })
