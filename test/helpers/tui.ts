@@ -55,12 +55,27 @@ export async function captureIdle(setup: Capturable, ms = 5_000) {
   return setup.captureCharFrame()
 }
 
+function patient<A extends unknown[], R>(wait: (...args: A) => Promise<R>) {
+  return async (...args: A): Promise<R> => {
+    const end = Date.now() + 5_000
+    for (;;) {
+      try {
+        return await wait(...args)
+      } catch (error) {
+        if (Date.now() > end || !String(error).includes("Timed out waiting")) throw error
+      }
+    }
+  }
+}
+
 /** Shared native renderer setup: clipboard is deterministic and frame waits use wall time. */
 export async function testRender(...args: Parameters<typeof nativeTestRender>) {
   const setup = await nativeTestRender(...args)
   setup.renderer.copyToClipboardOSC52 = () => true
-  setup.waitForFrame = (check) => renderedFrame(setup, check)
-  setup.waitFor = (check) => until(check, 5_000)
+  // OpenTUI's waitFor/waitForFrame give up after 20 frames (~0.33 s), whatever the test timeout says.
+  // Keep their frame-driven behaviour, but try again until 5 s of real time have passed.
+  setup.waitForFrame = patient(setup.waitForFrame)
+  setup.waitFor = patient(setup.waitFor)
   return setup
 }
 
