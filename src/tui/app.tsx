@@ -20,7 +20,7 @@ import {
 import { estimateTokens } from "../core/prompt/budget"
 import { acceptsImageInput } from "../core/agent"
 import { attachMentions, mentionText } from "../core/mentions"
-import { FileIndex, INDEX_MISS_MS, matchPaths } from "../core/fs/file-index"
+import { INDEX_MISS_MS, matchPaths, WorkspaceIndex } from "../core/fs/file-index"
 import { connectedProviders } from "../core/auth"
 import { describeError } from "../core/chat"
 import { TurnHeldError, type BoundSource, type Waiver } from "../core/memory/binding/bind"
@@ -1161,7 +1161,8 @@ export function App(props: {
    * the draft changes.
    */
   const [cursor, setCursor] = createSignal(0)
-  const fileIndex = new FileIndex(props.runtime.workspace.primary, props.runtime.workspace.env())
+  // Every root: /add-dir folders are indexed too, by absolute path (#345).
+  const fileIndex = new WorkspaceIndex(() => props.runtime.workspace.roots(), props.runtime.workspace.env())
   const [indexed, setIndexed] = createSignal(0)
   const mention = createMemo(() => {
     const d = draft()
