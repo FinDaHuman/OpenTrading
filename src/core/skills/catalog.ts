@@ -24,7 +24,7 @@ export function renderCatalog(skills: Skill[], budgetTokens: number): { text: st
   const auto = skills.filter((s) => s.activation === "auto")
   if (auto.length === 0 || budgetTokens <= 0) return undefined
   const header =
-    "The skills below are in-depth analysis guides. When one fits the question, load it with load_skill and follow it. Never guess a skill's content before loading it."
+    "The skills below are in-depth analysis guides. Load with load_skill only the skill the question is about (two only when it clearly asks for both), then follow it; a skill that only touches a side topic of the question is not needed. Never guess a skill's content before loading it."
   const full = [header, ...auto.map((s) => entry(s, true))].join("\n")
   if (estimateTokens(full) <= budgetTokens) return { text: full, truncated: false }
 

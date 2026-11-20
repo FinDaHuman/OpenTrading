@@ -305,7 +305,9 @@ test("real bundled catalog fits A with headroom; B preserves descriptions and C 
   const names = skills.filter((s) => s.activation === "auto").map((s) => s.name).sort()
   const full = renderCatalog(skills, 100_000)!
   expect(BUDGETS.skill_catalog).toEqual({ A: 2_600, B: 1_200, C: 280 })
-  expect(estimateTokens(full.text)).toBeLessThanOrEqual(BUDGETS.skill_catalog!.A! * 0.8)
+  // 82%: the English header asks for only the skill the question is about (20/11/2026 live routing eval:
+  // the shorter header picked an extra skill twice as often); 2 104 of 2 600 tokens measured.
+  expect(estimateTokens(full.text)).toBeLessThanOrEqual(BUDGETS.skill_catalog!.A! * 0.82)
   for (const tier of ["A", "B", "C"] as const) {
     const catalog = renderCatalog(skills, BUDGETS.skill_catalog![tier]!)!
     const entries = catalog.text.split("\n").filter((line) => line.startsWith("- "))

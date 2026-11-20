@@ -208,7 +208,8 @@ test("tool guidance lives in one place and the format example carries no real-lo
   // The 16/11/2026 English tool texts (the <tool_hoan> and MCP headers) also count higher in chars/4
   // although real tokens fell: 2 260 measured with all six English PRs merged. 2 309 after the
   // 20/11/2026 style.md rule against mixing languages (mixed answers 5/27 vs 1/27 in the #357 eval).
-  expect(Math.ceil(a.system.length / 4)).toBeLessThan(2_320)
+  // 2 338 after the 21/11/2026 skill-catalog header (load only the skill the question is about).
+  expect(Math.ceil(a.system.length / 4)).toBeLessThan(2_350)
 })
 
 test("the constraints budget key is explicit and never cuts on any tier", () => {
