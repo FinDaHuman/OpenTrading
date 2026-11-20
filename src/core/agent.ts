@@ -59,7 +59,7 @@ import { FAILURE_STREAK_FINAL, FAILURE_STREAK_STOP, failureNudge, gapsAnswer, tu
 import { answerAfterTools } from "./loop/history-shape"
 import { markupStreamFilter, stripMarkup, type MarkupFilter } from "./loop/markup"
 import type { PromptProfile } from "./prompt/assemble"
-import { MIN_REQUEST_BUDGET, RequestBudget } from "./request-budget"
+import { activeBudget, MIN_REQUEST_BUDGET, RequestBudget, type TurnBudget } from "./request-budget"
 import { answeredAndClosedTodos, figureSources, isEmptyAnswer, isUnfetched, GAPS_RESCUE_START, judgeStop, MAX_RECOVERIES, sourcesFailed, ranDataTool, stripEchoes, ungroundedInTurn, unfetchedFigures, type RecoveryKind, type Verdict } from "./loop/stop-gate"
 import { MAX_TOOLS_PER_REQUEST, modelOutput, stripImages, type BuiltToolSet, type ToolRegistry, type ToolSetOptions } from "./tools/registry"
 import { describeTool, LOADED_PREFIX, resolveToolName } from "./tools/search"
@@ -1190,8 +1190,10 @@ export async function previewContext(opts: TurnInput) {
  * always ending in `done` with history that is safe to send back next turn.
  */
 export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
-  // A subagent spends its parent's budget (the parent's counter sees its requests).
-  if (opts.maxRequests === undefined || opts.role === "subagent") return yield* runTurn(opts)
+  // A subagent spends its parent's budget (the parent's counter sees its requests), less the reserve
+  // kept for the parent's answer: its view closes early enough for its own summary (#328).
+  if (opts.role === "subagent") return yield* runTurn(opts, activeBudget()?.forChild())
+  if (opts.maxRequests === undefined) return yield* runTurn(opts)
   // The caller's number as it is: raising a cap of 1 or 2 would pass it. Anything else is a setup
   // error, thrown before any request: NaN (`Number(process.env.X)` unset) would silently mean no cap.
   if (!Number.isInteger(opts.maxRequests) || opts.maxRequests < MIN_REQUEST_BUDGET) throw new Error(`maxRequests phải là số nguyên từ ${MIN_REQUEST_BUDGET} trở lên (nhận ${opts.maxRequests}).`)
@@ -1203,9 +1205,11 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
   }
 }
 
-async function* runTurn(opts: RunOptions, budget?: RequestBudget): AsyncGenerator<AgentEvent> {
+async function* runTurn(opts: RunOptions, budget?: TurnBudget): AsyncGenerator<AgentEvent> {
   const sessionId = opts.sessionId ?? ""
   const role = opts.role ?? "main"
+  // Subagents started during this turn run with its prompt profile (#328): the manager reads it here.
+  if (role !== "subagent") opts.registry.turnProfile = opts.profile
   // The profile and the constraints first: a source that failed to read holds the turn (TurnHeldError)
   // before the model is resolved and before any hook runs, so a retry after the user chooses does not
   // run the hooks twice. Read once per turn: the stop gate's reruns reuse this turn's system part.

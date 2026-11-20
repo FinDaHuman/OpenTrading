@@ -144,7 +144,7 @@ const openCodeFetch = (base: typeof globalThis.fetch, conversation: string | und
  * take it too, so no path to a gateway goes out without them.
  */
 export function requestFetch(providerId: string, modelId: string, baseURL: string | undefined, conversation?: string): typeof globalThis.fetch {
-  const counted = countedFetch(providerId, modelId)
+  const counted = countedFetch(providerId, modelId, conversation)
   return isOpenCode(baseURL) ? openCodeFetch(counted, conversation) : counted
 }
 
