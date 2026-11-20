@@ -47,7 +47,8 @@ jobs:
   shell-platforms:
     # #330: the shell's arithmetic and listing behaviour on the awks and shells users have, which
     # the quality matrix does not cover: BSD awk (macOS), mawk with a comma-decimal locale
-    # (Debian/Ubuntu default awk on minimal images), and PowerShell 7 next to Windows PowerShell 5.1.
+    # (Debian/Ubuntu default awk on minimal images). PowerShell 7 is covered already: the Windows runner
+    # has pwsh and detectShell prefers it, so quality (windows-latest) runs it.
     timeout-minutes: 15
     strategy:
       fail-fast: false
@@ -58,8 +59,6 @@ jobs:
           - name: ubuntu-mawk-de-locale
             os: ubuntu-latest
             mawk: true
-          - name: windows-pwsh7
-            os: windows-latest
     name: shell (${{ matrix.name }})
     runs-on: ${{ matrix.os }}
     steps:
