@@ -7,6 +7,8 @@ import path from "node:path"
 import type { ModelMessage } from "ai"
 import { samePathKey } from "../fs/path-safety"
 import { dataDir } from "../paths"
+import { loadConfig } from "../config"
+import { imagesDirOf, restoreImages, SESSION_IMAGES_MAX_BYTES, storedBytes, userImages, writeImages, type ImageRef, type PendingImage } from "./images"
 import type { ChartData } from "../tools/chart/data"
 import { memoryLines } from "../memory/notebook/history-blocks"
 import type { RedactionCheck } from "../memory/redaction/check"
@@ -36,7 +38,13 @@ export type SessionEntry =
       promptVersion?: string
       skills?: { name: string; version?: string }[]
     }
-  | { type: "message"; ts: string; message: ModelMessage }
+  | {
+      type: "message"
+      ts: string
+      /** User images are a text placeholder here; `images` names the stored copies (images.ts, #344). */
+      message: ModelMessage
+      images?: ImageRef[]
+    }
   | {
       type: "turn_end"
       ts: string
@@ -59,7 +67,7 @@ export type SessionEntry =
    * The history was compacted: `messages` replaces everything before it for the model. The
    * earlier `message` entries stay in the file, so the transcript can still show them.
    */
-  | { type: "compact"; ts: string; trigger: "auto" | "manual"; before: number; after: number; messages: ModelMessage[] }
+  | { type: "compact"; ts: string; trigger: "auto" | "manual"; before: number; after: number; messages: ModelMessage[]; images?: ImageRef[] }
   /**
    * A chart drawn for a tool call: the model only got a summary (and a `from_call` chart's
    * input holds just a ref), so the picture is kept here for the transcript on resume.
@@ -221,9 +229,12 @@ export interface TurnInfo {
  * One write waiting in a session's queue: a turn or a compaction, its lines built when it was
  * queued. A turn keeps its first user text (the fallback title), not its messages.
  */
+/** A line whose user images are written with it, and get their refs once on disk (images.ts). */
+type LineImages = { line: SessionEntry & { images?: ImageRef[] }; pending: PendingImage[] }
+
 type Part =
-  | { kind: "turn"; turn: number; ts: string; firstText: string; info: SessionInfo & TurnInfo; lines: SessionEntry[] }
-  | { kind: "compact"; lines: SessionEntry[] }
+  | { kind: "turn"; turn: number; ts: string; firstText: string; info: SessionInfo & TurnInfo; lines: SessionEntry[]; images?: LineImages[] }
+  | { kind: "compact"; lines: SessionEntry[]; images?: LineImages[] }
   | { kind: "redact"; lines: SessionEntry[] }
   | { kind: "card"; lines: SessionEntry[] }
 
@@ -317,6 +328,8 @@ export class Session {
   private indexInfo: { updatedAt: string; provider?: string; model?: string; cwd: string } | undefined
   private stopped = false
   private lastError: Error | undefined
+  /** Bytes in this session's image folder; read from disk at the first image written. */
+  private imageBytes: number | undefined
 
   private constructor(
     readonly id: string,
@@ -415,8 +428,9 @@ export class Session {
     if (!this.file && this.queuedTurns === 0) return Promise.resolve(this.receipt([]))
     const ts = new Date().toISOString()
     const line: SessionEntry = { type: "compact", ts, ...entry, messages: stripImages(entry.messages) }
+    const pending = userImages(entry.messages)
     // A stopped session never writes again: count the compaction, keep none of its content.
-    this.queue.push({ kind: "compact", lines: this.stopped ? [] : [line] })
+    this.queue.push({ kind: "compact", lines: this.stopped ? [] : [line], images: pending.length > 0 ? [{ line, pending }] : undefined })
     return this.drain()
   }
 
@@ -441,8 +455,15 @@ export class Session {
   appendTurn(messages: ModelMessage[], info: SessionInfo & TurnInfo): Promise<SaveReceipt> {
     const ts = new Date().toISOString()
     const lines: SessionEntry[] = []
-    // Screenshots would bloat the file by megabytes per turn; keep a text placeholder.
-    for (const message of stripImages(messages)) lines.push({ type: "message", ts, message })
+    const images: LineImages[] = []
+    // Screenshots would bloat the file by megabytes per turn: a text placeholder, and the image in its own file.
+    const stripped = stripImages(messages)
+    stripped.forEach((message, i) => {
+      const line: SessionEntry = { type: "message", ts, message }
+      lines.push(line)
+      const pending = userImages([messages[i]!])
+      if (pending.length > 0) images.push({ line, pending })
+    })
     for (const chart of this.pendingCharts.splice(0)) lines.push({ type: "chart", ts, ...chart })
     for (const text of this.pendingHarness.splice(0)) lines.push({ type: "harness", ts, text })
     for (const card of this.pendingCards.splice(0)) lines.push({ type: "card", ts, ...card, state: "pending" })
@@ -462,7 +483,7 @@ export class Session {
     })
     const firstText = messages.map(userText).find((t) => t.trim()) ?? ""
     // A stopped session never writes again: keep the turn's number for the receipt, not its content.
-    this.queue.push({ kind: "turn", turn, ts, firstText, info, lines: this.stopped ? [] : lines })
+    this.queue.push({ kind: "turn", turn, ts, firstText, info, lines: this.stopped ? [] : lines, images: images.length > 0 && !this.stopped ? images : undefined })
     return this.drain()
   }
 
@@ -493,6 +514,18 @@ export class Session {
     }
   }
 
+  /** Writes the user images of a part next to the session and gives each line the refs of what is stored. */
+  private async storeImages(file: string, images: LineImages[]) {
+    if ((await loadConfig()).sessions?.images === false) return
+    const dir = path.join(sessionsDir(), imagesDirOf(file))
+    this.imageBytes ??= await storedBytes(dir)
+    for (const { line, pending } of images) {
+      const { refs, written } = await writeImages(dir, pending, SESSION_IMAGES_MAX_BYTES - this.imageBytes)
+      this.imageBytes += written
+      if (refs.length > 0) line.images = refs
+    }
+  }
+
   private async write(): Promise<SaveReceipt> {
     const saved: number[] = []
     let error: Error | undefined
@@ -513,6 +546,11 @@ export class Session {
           promptVersion: info.promptVersion,
           skills: info.skills,
         })
+      }
+      // The images first, so a line names only what is on disk. Failing to store one never fails the turn.
+      if ((part.kind === "turn" || part.kind === "compact") && part.images) {
+        await this.storeImages(file, part.images).catch(() => {})
+        part.images = undefined
       }
       try {
         await appendLines(path.join(sessionsDir(), file), lines.map((l) => JSON.stringify(l)).join("\n") + "\n", true)
@@ -672,6 +710,7 @@ export async function loadSession(id: string, opts: { check?: RedactionCheck } =
   const summary = (await listSessions()).find((s) => s.id === id || s.id.startsWith(id))
   if (!summary) throw new Error(`Không tìm thấy phiên "${id}". Gõ /sessions để xem danh sách.`)
   const text = await readFile(path.join(sessionsDir(), summary.file), "utf8")
+  const imagesDir = path.join(sessionsDir(), imagesDirOf(summary.file))
   let meta: LoadedSession["meta"]
   let raw: ModelMessage[] = []
   let shown: ModelMessage[] = []
@@ -689,9 +728,13 @@ export async function loadSession(id: string, opts: { check?: RedactionCheck } =
       else if (entry.type === "message") {
         // A damaged message is dropped alone; the rest of the session still loads.
         if (!isStoredMessage(entry.message)) continue
-        raw.push(entry.message)
-        shown.push(entry.message)
+        // The user's images back where their placeholders are (#344); a missing file keeps the placeholder.
+        const message = entry.images ? restoreImages([entry.message], entry.images, imagesDir)[0]! : entry.message
+        raw.push(message)
+        shown.push(message)
       } else if (entry.type === "compact" && Array.isArray(entry.messages)) {
+        // Refs index the stored list: restored before damaged messages are dropped.
+        if (entry.images) entry.messages = restoreImages(entry.messages, entry.images, imagesDir)
         entry.messages = entry.messages.filter(isStoredMessage)
         raw = [...entry.messages]
         // The marker and summary (absent when only tool results were pruned).
