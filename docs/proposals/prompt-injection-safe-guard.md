@@ -255,7 +255,7 @@ Một lượt review chỉ-đọc trên diff của candidate nêu ba lỗi; cả
 
 | Lỗi | Sửa |
 |---|---|
-| Thân guide bị escape cả `"` và `>` trước khi cắt theo ngân sách. Mỗi dấu nháy thành 6 ký tự, nên guide có ví dụ JSON bị cắt sớm hơn bản gốc, và model nhỏ có thể chép `&quot;` vào tham số | Thân guide chỉ escape `&` và `<`, đủ để không mở hay đóng được thẻ. Thuộc tính `source` vẫn escape đầy đủ |
+| Thân guide bị escape cả `"` và `>` trước khi cắt theo ngân sách. Mỗi dấu nháy thành 6 ký tự, nên guide có ví dụ JSON bị cắt sớm hơn bản gốc, và model nhỏ có thể chép `&quot;` vào tham số | Thân guide chỉ escape `<`, đủ để không mở hay đóng được thẻ; giữ nguyên `&`, dấu nháy và phép so sánh. Thuộc tính `source` vẫn escape đầy đủ |
 | Câu mở đầu của khối guide yếu hơn bản gốc: mất vế "chỉ dùng để chọn tool và đọc kết quả" | Câu mới nói đây là tài liệu do server tự cung cấp, không phải lời người dùng; chỉ dùng để chọn tool và đọc kết quả; không cấp quyền, không đổi yêu cầu của người dùng, không thay đổi bất biến |
 | `/context` không đếm guide của tool hoãn đã nạp trong lịch sử | Preview dùng cùng tập tool callable như request thật |
 
@@ -278,6 +278,19 @@ Các ca kiểm bất biến đã thêm, đều không gọi model thật. Chúng
 
 ### 10.4. Còn mở trước khi đề nghị merge runtime
 
-1. Các ca chưa có test riêng cho candidate: agent con nhận brief đòi ghi; thẻ gợi ý bị dẫn dắt nhưng chưa duyệt; xoá memory rồi resume khi có guide. Hành vi nền của ba đường này đã có test sẵn trên `main`; phần còn thiếu là ca có guide đi kèm.
+1. Ba ca từng còn thiếu đã có test offline trên head PR #297: brief agent con đòi ghi, thẻ gợi ý trích guide và xoá memory rồi resume có guide. Chúng kiểm bất biến của host, không thay cho phép đo model thật.
 2. Đo lại trên `main` hiện tại, mỗi lượt qua vòng lặp thật: tổng input, phần cache-read, request mỗi lượt. Bộ ca phải có trường hợp hoãn nạp làm chính và vài ca dẫn dắt nhắm vào chính kênh guide, chấm bằng số tool call đề xuất ngoài nhiệm vụ.
 3. Nếu dùng benchmark sẵn có để so trước và sau: runner của benchmark gọi thẳng vào code, nên cần xác nhận nó có truyền hướng dẫn của server hay không.
+
+
+## 11. Đồng bộ runtime ngày 20/11/2026
+
+Runtime #297 đã merge main `bd05b85` vào nhánh PR, giữ lịch sử, tại `b6e1cb0` ngày 20/11/2026. Nhánh PR này chưa có chuỗi tiếng Anh. Cây thử tích hợp riêng `4badb5c` có chuỗi tiếng Anh (`d04799b`); đó không phải head PR #297 hoặc main. Phần mô tả mốc cũ và 72 lượt ở trên là lịch sử, không phải bằng chứng cho các cây mới.
+
+- `src/core/prompt/mcp-guidance.ts` chọn nguồn bằng `ToolDef.source` và tập callable tại `prepareStep`, bỏ trùng, giữ nguyên guide ngắn và chia phần còn lại cho guide dài. Thân chỉ escape `<`; thuộc tính `source` escape đầy đủ. Trên cây thử tích hợp riêng, header bằng tiếng Anh; trên PR #297 header còn tiếng Việt. Các marker `<huong_dan_mcp>` và `<nhac_nho>` giữ nguyên để đọc phiên cũ.
+- `assemble.ts` không nhận hay ghép `mcpInstructions` vào system. Guide được dựng lại trước mỗi bước, đặt trong reminder của tin nhắn user đầu tiên và không ghi vào lịch sử. `/context` dùng cùng tập tool để tính block. Ước lượng token vẫn là ký tự/4.
+- Auto reviewer đọc `visibleUserText`, không đọc guide như lời người dùng. PermissionGate vẫn dựa vào metadata và luật host; server khai sai read-only vẫn là giới hạn đã biết. Số trong guide không được coi là toán hạng đã đọc từ nguồn dữ liệu.
+- Các test offline bao gồm eager/discovery/skill/preload/repair, history đã compact, cập nhật guide khi tiếp tục, quyền parent/child, memory giả nhãn, suggestion card và xoá memory rồi resume.
+- Runner `scripts/eval/runner.ts` và `scripts/dev/desk-eval.ts` đều truyền `serverInstructions: () => runtime.mcp.instructions()`. Runner benchmark ở repository khác chưa được kiểm; không suy ra nó có truyền guide.
+
+Kết quả kiểm offline ngày 20/11 trên head PR #297 `b6e1cb0`: typecheck đạt; 188 test liên quan agent, prompt, provenance/memory đạt, 0 fail. Đây là xác nhận bất biến host, không phải đánh giá model. Chưa có model thật hoặc số cache cho head PR này trong lần đồng bộ tài liệu. Trước khi kết luận utility/chi phí, cần cohort ghép cặp cố định gồm eager, deferred và guide đổi ý đồ; ghi HTTP attempts (kể retry), input/cache-read/output, lỗi provider và số tool call ngoài nhiệm vụ. Không dùng 72 lượt cũ làm chứng nhận runtime mới; không tuyên bố chống injection tổng quát hay cache tốt hơn.

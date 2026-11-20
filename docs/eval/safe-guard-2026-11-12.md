@@ -165,3 +165,8 @@ Ba giới hạn cần đọc cùng các bảng trên:
 - **Bootstrap với 6 cặp mỗi nhóm** dễ cho khoảng hẹp hơn thực tế; chỉ coi là thăm dò.
 
 Ngưỡng fixture `< 2.100` ở mục 7 là của mốc `1737b93`; trên `main` hiện tại ngưỡng là `< 2.160`. Mọi con số trong tài liệu này chỉ đúng cho hai mốc ở mục 1.
+
+
+## 11. Phạm vi sau tích hợp ngày 19/11/2026
+
+Runtime #297 đã merge main `bd05b85` vào nhánh PR tại `b6e1cb0`; chuỗi tiếng Anh chỉ có trong cây thử tích hợp riêng `4badb5c`, chưa có trong head PR này. Mọi số đo trong báo cáo này vẫn chỉ thuộc hai SHA ở mục 1. Không có lượt model hoặc cache mới trong bước đồng bộ; test offline của cây mới được ghi riêng trong báo cáo thực thi phase 1–2. Xem [mục 11 của proposal](../proposals/prompt-injection-safe-guard.md#11-đồng-bộ-runtime-ngày-20112026) để phân biệt code hiện hành, giới hạn quyền host và phần đánh giá còn thiếu.
