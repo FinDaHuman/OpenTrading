@@ -44,7 +44,7 @@ interface Page {
   fetchedAt: string
   title?: string
   markdown: string
-  /** Plain text of the page (markdown without its syntax) or the raw HTML. */
+  /** What the reader should know about the page: a scanned PDF, a near-empty (JS-rendered) page, no main article found. */
   note?: string
 }
 

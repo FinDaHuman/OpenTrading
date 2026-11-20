@@ -17,6 +17,13 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ### Fixed
 
+- `tool_search "tin tức"` finds `web_search`. "tin tức" expanded to `news`, which no tool carried, so only "tin"
+  scored, once in `web_search`'s description and once in `send_message`'s ("thông tin"): a tie, broken by name,
+  loaded `send_message` (#316). `web_search` now has a search hint (tin tức, thời sự, báo chí, sự kiện, news,
+  headlines) and its description says "tin tức, thời sự".
+- `glob_files` and `doctor_local` are no longer deferred below the tool-search threshold (#317). Hidden, turns
+  listed files and checked the setup with `shell` instead, which asks for approval where these read-only tools
+  do not. About 230 tokens per request in those turns; past the threshold they are deferred as before.
 - Figure reading (`loop/figures.ts`): a decimal with four or more digits after the separator ("6,9034",
   "6.9034") is read whole. A three-digit group must end there to count as thousands; before, "6,9034" read as
   6,903 and dropped the 4, so a copied figure looked ungrounded (MyToDoList 43j/43z).

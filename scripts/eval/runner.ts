@@ -1,11 +1,13 @@
 import { setConversation } from "../../src/core/conversation"
-import { copyFile, mkdir, rm, writeFile } from "node:fs/promises"
+import { createHash } from "node:crypto"
+import { copyFile, mkdir, readFile, rm, writeFile } from "node:fs/promises"
 import path from "node:path"
 import type { ModelMessage } from "ai"
 import { z } from "zod"
 import { ABLATIONS, type Ablation, type Ablations } from "../../src/core/ablation"
 import { runAgent } from "../../src/core/agent"
 import type { Target } from "../../src/core/chat"
+import type { Effort } from "../../src/core/effort"
 import { cleanRouting, type OpenRouterRouting } from "../../src/core/openrouter-routing"
 import { promptVersion, type PromptProfile } from "../../src/core/prompt/assemble"
 import { onModelRequest } from "../../src/core/requests"
@@ -73,13 +75,28 @@ export function parseAblations(list: string[]): Ablated {
  */
 export const skillsFor = (skills: Skill[], ablated?: Ablated) => (ablated?.setup.has("skills") ? [] : skills)
 
-/** A run's own home: same model and connections as `from`, none of the user's other state. */
-export async function prepareHome(from: string, to: string, target: { provider: string; model: string }, ablated?: Ablated, routing?: OpenRouterRouting) {
+/** What a run sets beyond the model (#338): stated by its flags, never read from the user's own config. */
+export interface HomeOptions {
+  /** Reasoning effort written into the run's config (`--effort`). */
+  effort?: Effort
+  /** A fixture copied as the run's INVESTOR.md (`--investor`); the user's own profile never is. */
+  investor?: string
+}
+
+/**
+ * A run's own home: same model and connections as `from`, none of the user's other state.
+ * Returns the sha256 of the investor fixture, when one is given, for the trace.
+ */
+export async function prepareHome(from: string, to: string, target: { provider: string; model: string }, ablated?: Ablated, routing?: OpenRouterRouting, options: HomeOptions = {}) {
   await mkdir(path.join(to, "cache"), { recursive: true })
   for (const file of HOME_FILES) await copyFile(path.join(from, file), path.join(to, file)).catch(() => {})
   // The pin comes from this run's flags only, never from the user's config: a run states it.
   const pin = routing ? { openrouter: { routing: { [target.model]: routing } } } : {}
-  await writeFile(path.join(to, "config.json"), JSON.stringify({ ...target, ...(ablated?.setup.has("tool-deferral") ? { toolSearch: "off" } : {}), ...pin }))
+  await writeFile(path.join(to, "config.json"), JSON.stringify({ ...target, ...(options.effort ? { effort: options.effort } : {}), ...(ablated?.setup.has("tool-deferral") ? { toolSearch: "off" } : {}), ...pin }))
+  if (!options.investor) return {}
+  const body = await readFile(options.investor)
+  await writeFile(path.join(to, "INVESTOR.md"), body)
+  return { investorSha256: createHash("sha256").update(body).digest("hex") }
 }
 
 /** Finished model steps per upstream provider over a trace's answers (OpenRouter's `served_by`). */

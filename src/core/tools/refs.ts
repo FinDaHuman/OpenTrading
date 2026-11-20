@@ -112,6 +112,12 @@ function writeResultFile(ref: string, text: string) {
   }
 }
 
+/**
+ * What one stored result holds, in UTF-8 bytes: the text the model read and the raw reply kept
+ * beside it (#336). A storage budget, not a measure of the JS heap.
+ */
+const storedBytes = (r: Pick<StoredResult, "text" | "rawText">) => Buffer.byteLength(r.text) + (r.rawText ? Buffer.byteLength(r.rawText) : 0)
+
 export function rememberResult(tool: string, text: string, source: Partial<Pick<StoredResult, "callId" | "sourceInput" | "rawText" | "rawSha256" | "visibleSha256">> = {}): string {
   const ref = `r${++counter}`
   store.set(ref, { ref, tool, text, at: Date.now(), session, ...source })
@@ -119,11 +125,11 @@ export function rememberResult(tool: string, text: string, source: Partial<Pick<
   // reply: a script must see the same dates as the model. Its sha256 is the evidence row's `visibleSha256`
   // when the result is plain JSON (#311 review F5).
   writeResultFile(ref, text)
-  bytes += text.length
+  bytes += storedBytes(store.get(ref)!)
   while (store.size > MAX_ENTRIES || bytes > MAX_BYTES) {
     const oldest = store.keys().next().value
     if (oldest === undefined) break
-    bytes -= store.get(oldest)!.text.length
+    bytes -= storedBytes(store.get(oldest)!)
     store.delete(oldest)
   }
   return ref

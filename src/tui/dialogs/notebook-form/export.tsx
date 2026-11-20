@@ -11,11 +11,12 @@ import { createFormUi, FormFrame } from "./frame"
 export function ExportForm(props: { admin: NotebookAdmin }) {
   const ui = createFormUi()
   const [withDecisions, setWithDecisions] = createSignal(false)
+  const [asFolder, setAsFolder] = createSignal(false)
   const [running, setRunning] = createSignal(false)
 
   async function run() {
     setRunning(true)
-    const result = await props.admin.exportMarkdown({ decisions: withDecisions() })
+    const result = await props.admin.exportMarkdown({ decisions: withDecisions(), folder: asFolder() })
     setRunning(false)
     if (!result.ok) {
       ui.setError(result.message)
@@ -41,9 +42,21 @@ export function ExportForm(props: { admin: NotebookAdmin }) {
           value: withDecisions() ? "yes" : "no",
           onPick: (v) => setWithDecisions(v === "yes"),
         },
+        {
+          id: "format",
+          label: "Dạng",
+          kind: "choice",
+          options: [
+            { value: "file", label: "Một file" },
+            { value: "folder", label: "Thư mục theo loại" },
+          ],
+          value: asFolder() ? "folder" : "file",
+          onPick: (v) => setAsFolder(v === "folder"),
+        },
       ]}
       info={[
         "File ghi vào thư mục xuất của OpenTrading (exports trong thư mục dữ liệu), không phải thư mục làm việc.",
+        "Thư mục theo loại: mỗi mục một file Markdown có frontmatter, thêm README.md làm mục lục.",
         "File xuất là bản sao; xoá trong sổ không xoá file này.",
       ]}
       warnings={

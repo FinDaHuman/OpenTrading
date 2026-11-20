@@ -19,6 +19,9 @@ export interface Calendar {
   note: string
   asof: string
   timezone: string
+  /** Inclusive range supported by the sourced holiday notices; session-slot verification is separate. */
+  holidayRange?: { from: string; to: string }
+  holidaySources?: { url: string; published: string; scope: string }[]
   holidays: string[]
   exchanges: Record<string, Slot[]>
 }
@@ -99,5 +102,8 @@ export function renderClock(state: ClockState, calendar: Calendar = loadCalendar
     "Khối này chỉ gửi lại khi phiên thay đổi; cần giờ chính xác thì gọi tool current_time.",
   ]
   if (!calendar.verified) lines.push(`(Lịch phiên chưa kiểm chứng, dữ liệu tới ${calendar.asof}: nhắc người dùng đối chiếu thông báo của sàn.)`)
+  if (calendar.holidayRange && (state.date < calendar.holidayRange.from || state.date > calendar.holidayRange.to)) {
+    lines.push(`(Lịch nghỉ ngày ${state.date} chưa kiểm chứng; nguồn chỉ phủ ${calendar.holidayRange.from} đến ${calendar.holidayRange.to}. Đối chiếu thông báo của sàn trước khi coi là ngày giao dịch.)`)
+  }
   return lines.join("\n")
 }
