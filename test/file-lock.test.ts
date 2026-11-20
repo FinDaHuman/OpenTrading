@@ -52,6 +52,10 @@ test("a holder that stopped refreshing loses the lock and its write is refused b
   const inside = new Promise<void>((r) => (entered = r))
   let releaseB!: () => void
   const bMayRelease = new Promise<void>((r) => (releaseB = r))
+  // A learns it lost the lock as soon as B takes it over, which can be before B's write lands (#341):
+  // every check of B's write waits for this.
+  let bWrote!: () => void
+  const bWritten = new Promise<void>((r) => (bWrote = r))
   let bToken: string | undefined
   const a = withFileLock(
     file,
@@ -69,18 +73,24 @@ test("a holder that stopped refreshing loses the lock and its write is refused b
     async () => {
       await store.writeJson(file, "B")
       bToken = tokenOf(await readFile(`${file}.lock`, "utf8"))
+      bWrote()
       await bMayRelease
     },
     { staleMs: 100 },
   )
-  await expect(a).rejects.toThrow("bị tiến trình khác chiếm")
-  expect(JSON.parse(await readFile(file, "utf8"))).toBe("B")
-  // A's release left B's lock alone (scenario 4).
-  expect(bToken).toBeDefined()
-  expect(tokenOf(await readFile(`${file}.lock`, "utf8"))).toBe(bToken)
-  expect((await readdir(home)).filter((f) => f.endsWith(".tmp"))).toEqual([])
-  releaseB()
-  await b
+  try {
+    await expect(a).rejects.toThrow("bị tiến trình khác chiếm")
+    await bWritten
+    expect(JSON.parse(await readFile(file, "utf8"))).toBe("B")
+    // A's release left B's lock alone (scenario 4).
+    expect(bToken).toBeDefined()
+    expect(tokenOf(await readFile(`${file}.lock`, "utf8"))).toBe(bToken)
+    expect((await readdir(home)).filter((f) => f.endsWith(".tmp"))).toEqual([])
+  } finally {
+    // Released even when a check above failed: a B still writing would land in the next test's folder.
+    releaseB()
+    await b
+  }
   expect(await Bun.file(`${file}.lock`).exists()).toBe(false)
 })
 
