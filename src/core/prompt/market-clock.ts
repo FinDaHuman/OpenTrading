@@ -19,6 +19,9 @@ export interface Calendar {
   note: string
   asof: string
   timezone: string
+  /** Inclusive range supported by the sourced holiday notices; session-slot verification is separate. */
+  holidayRange?: { from: string; to: string }
+  holidaySources?: { url: string; published: string; scope: string }[]
   holidays: string[]
   exchanges: Record<string, Slot[]>
 }
@@ -99,5 +102,8 @@ export function renderClock(state: ClockState, calendar: Calendar = loadCalendar
     "This block is resent only when the session phase changes; call current_time for the exact time.",
   ]
   if (!calendar.verified) lines.push(`(Trading calendar not verified, data up to ${calendar.asof}: remind the user to check the exchange's notices.)`)
+  if (calendar.holidayRange && (state.date < calendar.holidayRange.from || state.date > calendar.holidayRange.to)) {
+    lines.push(`(Holiday calendar not verified for ${state.date}; sourced range ${calendar.holidayRange.from} to ${calendar.holidayRange.to}. Check the exchange notices before treating this as a trading day.)`)
+  }
   return lines.join("\n")
 }

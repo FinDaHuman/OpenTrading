@@ -70,7 +70,7 @@ export function chartCompareTool(): ToolDef<ChartCompareInput> {
     summarize: (input) => `chart_compare(${input.from_calls?.join(", ") ?? input.series?.map((s) => s.label).join(" vs ") ?? ""})`,
     async execute(raw) {
       if (raw.ymin !== undefined && raw.ymax !== undefined && raw.ymin >= raw.ymax) throw new Error("ymin must be smaller than ymax.")
-      if ((raw.ymin === undefined) !== (raw.ymax === undefined)) throw new Error("ymin and ymax go together.")
+      if ((raw.ymin === undefined) !== (raw.ymax === undefined)) throw new Error("ymin and ymax must go together.")
       let input = raw as ChartCompareInput & { series: { label: string; values: number[] }[] }
       if (raw.from_calls) {
         // A batch result gives one series per symbol it holds. `symbols` filters the union of

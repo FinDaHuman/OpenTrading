@@ -148,7 +148,7 @@ test("runs in the workspace, returns UTF-8 output and the exit code", async () =
   expect(failed).toContain("trước")
   if (win) {
     const err = text(await tool.execute({ command: "Write-Error 'hỏng rồi'" }, ctx()))
-    expect(err).toContain("LỖI: hỏng rồi")
+    expect(err).toContain("ERROR: hỏng rồi")
     expect(err).not.toContain("CLIXML")
     expect(err).toContain("exit code 1")
   }
@@ -205,7 +205,7 @@ test("Windows PowerShell 5.1 (what most users have; CI's default is pwsh): UTF-8
   const tool = shellTool(ws(), { shell: { kind: "powershell", path: legacy } })
   const out = text(await tool.execute({ command: "Write-Output 'Lợi nhuận quý 3'; Write-Error 'hỏng rồi'; cmd /c exit 3" }, ctx()))
   expect(out).toContain("Lợi nhuận quý 3")
-  expect(out).toContain("LỖI: hỏng rồi")
+  expect(out).toContain("ERROR: hỏng rồi")
   expect(out).not.toContain("CLIXML")
   expect(out).toContain("exit code 3")
   expect(text(await tool.execute({ command: "Write-Error 'chỉ lỗi'" }, ctx()))).toContain("exit code 1")

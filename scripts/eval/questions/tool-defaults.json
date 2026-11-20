@@ -1,0 +1,44 @@
+[
+ {
+  "id": "news-01",
+  "group": "F",
+  "now": "2026-11-16T10:00:00+07:00",
+  "question": "Tin tức mới nhất về FPT tuần này có gì?",
+  "note": "#316: đếm lượt có gọi web_search (hoặc tool tin tức của MCP); tool_search có nạp send_message không."
+ },
+ {
+  "id": "news-02",
+  "group": "F",
+  "now": "2026-11-16T10:00:00+07:00",
+  "question": "Thời sự thị trường chứng khoán Việt Nam hôm nay: có sự kiện gì đáng chú ý?",
+  "note": "#316: như news-01."
+ },
+ {
+  "id": "news-03",
+  "group": "F",
+  "now": "2026-11-16T10:00:00+07:00",
+  "question": "Có tin gì về việc Hòa Phát (HPG) mở rộng Dung Quất gần đây không?",
+  "note": "#316: như news-01."
+ },
+ {
+  "id": "news-04",
+  "group": "F",
+  "now": "2026-11-16T10:00:00+07:00",
+  "question": "Ngân hàng Nhà nước vừa có thông báo gì mới về lãi suất điều hành?",
+  "note": "#316: như news-01."
+ },
+ {
+  "id": "local-01",
+  "group": "F",
+  "now": "2026-11-16T10:00:00+07:00",
+  "question": "Trong thư mục làm việc hiện tại có những file markdown nào?",
+  "note": "#317: đếm lệnh shell thay cho glob_files."
+ },
+ {
+  "id": "local-02",
+  "group": "F",
+  "now": "2026-11-16T10:00:00+07:00",
+  "question": "Kiểm tra giúp OpenTrading trên máy tôi đang cấu hình model và MCP server nào, có lỗi gì không?",
+  "note": "#317: đếm lệnh shell thay cho doctor_local."
+ }
+]

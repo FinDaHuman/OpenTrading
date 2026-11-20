@@ -234,7 +234,7 @@ test("every accepted form really runs in this machine's shell and exits 0", asyn
   }))
   cases.forEach((command, i) => {
     expect([command, outs[i]!.split("\n")[0]!.includes("exit code 0")]).toEqual([command, true])
-    expect(outs[i], command).not.toContain("LỖI:")
+    expect(outs[i], command).not.toContain("ERROR:")
   })
 }, 60_000)
 
