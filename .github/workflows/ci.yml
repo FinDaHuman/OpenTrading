@@ -44,6 +44,53 @@ jobs:
       # hang still ends at the job's timeout.
       - run: bun test --parallel --timeout=20000
 
+  shell-platforms:
+    # #330: the shell's arithmetic and listing behaviour on the awks and shells users have, which
+    # the quality matrix does not cover: BSD awk (macOS), mawk with a comma-decimal locale
+    # (Debian/Ubuntu default awk on minimal images). PowerShell 7 is covered already: the Windows runner
+    # has pwsh and detectShell prefers it, so quality (windows-latest) runs it.
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macos-bsd-awk
+            os: macos-latest
+          - name: ubuntu-mawk-de-locale
+            os: ubuntu-latest
+            mawk: true
+    name: shell (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+      - uses: actions/cache@v6
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+      - run: bun install --frozen-lockfile
+      - name: Make mawk the awk, with a comma-decimal locale available
+        if: matrix.mawk
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y -q mawk locales
+          sudo update-alternatives --set awk /usr/bin/mawk
+          sudo locale-gen de_DE.UTF-8
+          awk -W version 2>&1 | head -1
+      - name: Which awk / shell
+        shell: bash
+        run: |
+          command -v awk && (awk --version 2>/dev/null || awk -W version 2>/dev/null || true) | head -1
+          command -v pwsh && pwsh -NoProfile -Command '$PSVersionTable.PSVersion.ToString()' || true
+      - name: Shell tests
+        shell: bash
+        env:
+          # mawk/gawk print 1,5 under a comma-decimal LC_NUMERIC unless the harness pins LC_ALL=C.
+          LC_ALL: ${{ matrix.mawk && 'de_DE.UTF-8' || '' }}
+        run: bun test --timeout=20000 test/shell-math.test.ts test/shell.test.ts test/shell-listing.test.ts test/operand-note.test.ts
+
   build:
     # The standalone binary (scripts/build.ts) on Linux for every pull request; the script itself
     # runs --version and --self-check (bundled skills/agents/prompts, OpenTUI native, tree-sitter).
