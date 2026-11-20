@@ -13,6 +13,8 @@ import {
   compactHistory,
   compactPrompt,
   pruneToolResults,
+  shrinkRecentResults,
+  TAIL_RESULT_MAX_CHARS,
   shouldAutoCompact,
   splitTurns,
 } from "../src/core/compact"
@@ -366,4 +368,57 @@ test("idle: pruning alone brings it under summarizeAbove → no request; too sho
   const one = await compactHistory(turn(1, "x", "1"), { contextTokens: 250_000, limits: limits(1_000_000, 900_000), summarizeAbove: 200_000, summarize: neverSummarize })
   expect(one.summary).toBeUndefined()
   expect(one.error).toBeUndefined()
+})
+
+// --- #335: the kept turn alone is too large ---
+
+test("#335: a 27k result in the only turn keeps its start and its end, with a read_result way back, without a summary", async () => {
+  const huge = `DAU-BANG\n${"d".repeat(26_981)}\nTONG-CUOI`
+  expect(huge).toHaveLength(27_000)
+  const history = turn(1, "mcp__ot__financials", huge)
+  const result = await compactHistory(history, { manual: false, limits: limits(8_000), summarize: neverSummarize })
+  const out = outputOf(result.messages, "c1")!
+  expect(out.length).toBeLessThan(TAIL_RESULT_MAX_CHARS + 300)
+  expect(out).toContain(`read_result id="c1"`)
+  expect(out).toContain(`kept the first 6000 and the last 2000 of 27000 characters`)
+  // A table's head and its totals at the end are both still there.
+  expect(out).toContain("DAU-BANG")
+  expect(out).toContain("TONG-CUOI")
+  expect(out).toContain("[… middle cut …]")
+  // The pairing and the rest of the turn are intact.
+  expect(result.messages.map((m) => m.role)).toEqual(["user", "assistant", "tool", "assistant"])
+  expect(result.after).toBeLessThan(result.before)
+  expect(result.pruned).toBe(1)
+})
+
+test("#335: with older turns, the summarized head is dropped and the kept turn's large result is cut too", async () => {
+  const history = [...turn(1), ...turn(2), ...turn(3, "mcp__ot__financials", "d".repeat(27_000))]
+  const result = await compactHistory(history, { manual: false, limits: limits(8_000), summarize: async () => "tóm tắt" })
+  expect(isCompactMarker(result.messages[0]!)).toBe(true)
+  expect(outputOf(result.messages, "c3")).toContain(`read_result id="c3"`)
+})
+
+test("#335: read_result output, a cut result, subagent metadata and the loaded-tools line are never cut", () => {
+  const big = "z".repeat(20_000)
+  const read = turn(1, "read_result", big)
+  const { messages: once } = shrinkRecentResults(turn(2, "mcp__ot__x", big))
+  expect(shrinkRecentResults(read).shrunk).toBe(0)
+  expect(shrinkRecentResults(once).shrunk).toBe(0)
+  expect(shrinkRecentResults(turn(3, "spawn_agent", `${big}\n<subagent_meta>id=a1</subagent_meta>`)).shrunk).toBe(0)
+  // A non-MCP tool has no evidence copy: the note says so instead of offering read_result.
+  const local = shrinkRecentResults(turn(4, "shell", big)).messages
+  expect(outputOf(local, "c4")).toContain("the middle is no longer in context")
+})
+
+test("#335: the model reads the full result back right after: the next compaction neither cuts it again nor asks for a summary", async () => {
+  const huge = "d".repeat(27_000)
+  const first = await compactHistory(turn(1, "mcp__ot__financials", huge), { manual: false, limits: limits(8_000), summarize: neverSummarize })
+  // Same turn, then read_result brings the full 27k back.
+  const readBack: ModelMessage[] = [
+    { role: "assistant", content: [{ type: "tool-call", toolCallId: "r1", toolName: "read_result", input: { id: "c1" } }] },
+    { role: "tool", content: [{ type: "tool-result", toolCallId: "r1", toolName: "read_result", output: { type: "text", value: huge } }] },
+  ]
+  const again = await compactHistory([...first.messages, ...readBack], { manual: false, limits: limits(8_000), summarize: neverSummarize })
+  expect(outputOf(again.messages, "r1")).toBe(huge)
+  expect(outputOf(again.messages, "c1")).toBe(outputOf(first.messages, "c1"))
 })
