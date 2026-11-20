@@ -117,3 +117,13 @@ test("writeExport without --force never overwrites a file created while it was g
   await expect(writing).rejects.toThrow("--force")
   expect(await readFile(file, "utf8")).toBe("của người khác")
 })
+
+test("#349: an export says what it does not hold (capped tool output, no subagent internals, image placeholders)", async () => {
+  const { formatTranscript, EXPORT_LIMITS } = await import("../src/core/session/export")
+  const md = formatTranscript(
+    { summary: { id: "s1", title: "t", createdAt: new Date(0).toISOString(), updatedAt: new Date(0).toISOString(), turns: 0 } as never, display: [] as never },
+    { label: (name) => name },
+  )
+  expect(md).toContain(EXPORT_LIMITS)
+  expect(EXPORT_LIMITS).toContain("30.000")
+})
