@@ -261,3 +261,18 @@ test("identityLayer is exactly the identity text each role's system part starts 
   const sub = assemble(base({ role: "subagent" }))
   expect(sub.system.startsWith(`<subagent>\n${identityLayer("subagent", undefined, gateContext(base({ role: "subagent" })))}\n</subagent>`)).toBe(true)
 })
+
+
+test("sourced 2026 exchange holidays close all exchanges; administrative Saturdays stay closed", () => {
+  expect(calendar.holidays.length).toBe(14)
+  for (const day of [...calendar.holidays, "2026-01-10", "2026-08-22"]) {
+    const state = clockState(at("10:00", day), calendar)
+    expect(state.tradingDay).toBe(false)
+    expect(state.exchanges.every((e) => e.phase === "closed-day")).toBe(true)
+  }
+  for (const day of ["2026-01-05", "2026-02-23", "2026-04-28", "2026-09-03", "2026-11-25"]) {
+    expect(clockState(at("10:00", day), calendar).tradingDay).toBe(true)
+  }
+  expect(renderClock(clockState(at("10:00", "2027-01-04"), calendar), calendar)).toContain("Lịch nghỉ ngày 2027-01-04 chưa kiểm chứng")
+  expect(renderClock(clockState(at("10:00", "2026-11-25"), calendar), calendar)).not.toContain("Lịch nghỉ ngày")
+})
