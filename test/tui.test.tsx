@@ -17,6 +17,12 @@ for (const env of ["GROQ_API_KEY", "GOOGLE_GENERATIVE_AI_API_KEY", "GEMINI_API_K
   delete process.env[env]
 
 // A tiny models.dev-shaped catalog: two supported providers and one that must stay hidden.
+/**
+ * How long a wait for a frame or a state keeps trying. 5 s was too short on the busy Windows runner
+ * (#341: a correct approval flow failed at 5.5 s); under the 20 s test timeout, so a wait that never
+ * succeeds still fails on its own condition rather than on the test's timeout.
+ */
+const PATIENCE_MS = 15_000
 const text = { input: ["text"], output: ["text"] }
 const CATALOG = {
   groq: {
@@ -334,10 +340,10 @@ beforeAll(async () => {
   setup.renderer.requestLive()
   // OpenTUI's waitFor/waitForFrame give up after 20 frames (~0.33 s), whatever the test timeout says.
   // With every CPU busy the app is correct but late: a streamed answer reached the screen after more
-  // than 20 frames. In this file both keep their own behaviour but try again until 5 s have passed.
+  // than 20 frames. In this file both keep their own behaviour but try again until PATIENCE_MS have passed.
   const patient = <A extends unknown[], R>(wait: (...args: A) => Promise<R>) =>
     async (...args: A): Promise<R> => {
-      const end = Date.now() + 5_000
+      const end = Date.now() + PATIENCE_MS
       for (;;) {
         try {
           return await wait(...args)
