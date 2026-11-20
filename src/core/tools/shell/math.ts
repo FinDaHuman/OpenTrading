@@ -376,7 +376,26 @@ export const AWK_NUMBER_FORMAT = "%.15g"
  * so `print 2.5e12/3` showed 8.33333e+11). Only for a command mathOnlyCommand accepted.
  */
 export function awkWithPrecision(command: string): string {
-  return command.trim().replace(/^awk[ \t]+/, `awk -v OFMT=${AWK_NUMBER_FORMAT} -v CONVFMT=${AWK_NUMBER_FORMAT} `)
+  return spacedOperators(command.trim()).replace(/^awk[ \t]+/, `awk -v OFMT=${AWK_NUMBER_FORMAT} -v CONVFMT=${AWK_NUMBER_FORMAT} `)
+}
+
+/**
+ * The awk program with a space around each binary + and - that follows a number or `)`. The awk
+ * of macOS (onetrue awk) reads a run like `12000000+12000001+…` as one number token and dies past
+ * about 108 characters ("pushed back too much"), while the same sum with spaces runs (measured
+ * with original-awk, #372). The spaces change nothing for awk. Strings (the printf format, a label)
+ * are left as they are, and so is an exponent's sign (`1e+5`: the sign follows a letter).
+ */
+export function spacedOperators(command: string): string {
+  const open = command.indexOf("'")
+  const close = command.lastIndexOf("'")
+  if (open < 0 || close <= open) return command
+  const program = command
+    .slice(open + 1, close)
+    .split(/("[^"]*")/)
+    .map((part, i) => (i % 2 === 1 ? part : part.replace(/([0-9.)])\s*([+-])\s*/g, "$1 $2 ")))
+    .join("")
+  return command.slice(0, open + 1) + program + command.slice(close)
 }
 
 /** Only numbers, operators, brackets, commas and a few function names: an expression, whatever its form. */

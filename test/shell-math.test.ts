@@ -4,7 +4,7 @@ import os from "node:os"
 import path from "node:path"
 import { Workspace } from "../src/core/fs/workspace"
 import { PermissionGate } from "../src/core/permission"
-import { mathNearMiss, mathOnlyCommand } from "../src/core/tools/shell/math"
+import { awkWithPrecision, mathNearMiss, mathOnlyCommand, spacedOperators } from "../src/core/tools/shell/math"
 import { shellArgs } from "../src/core/tools/shell/run"
 import { shellTool } from "../src/core/tools/shell/shell"
 import { RwLock, runTool } from "../src/core/tools/wrap"
@@ -307,7 +307,7 @@ test("PowerShell arithmetic is printed in the invariant culture (vi-VN would pri
   expect(script("Get-Date")).not.toContain("InvariantCulture")
   // POSIX: the C locale, so printf never writes a decimal comma.
   // … and `print` keeps a value's digits (awk's own default is six).
-  expect(shellArgs({ kind: "bash", path: "bash" }, ` ${AWK_OK[0]} `).at(-1)).toBe(`LC_ALL=C awk -v OFMT=%.15g -v CONVFMT=%.15g ${AWK_OK[0]!.slice(4)}`)
+  expect(shellArgs({ kind: "bash", path: "bash" }, ` ${AWK_OK[0]} `).at(-1)).toBe(`LC_ALL=C awk -v OFMT=%.15g -v CONVFMT=%.15g ${spacedOperators(AWK_OK[0]!).slice(4)}`)
   expect(shellArgs({ kind: "bash", path: "bash" }, "ls").at(-1)).toBe("ls")
   if (!win) return
   const tool = shellTool(ws())
@@ -392,3 +392,14 @@ test("a near miss is a tool error with the accepted form, before any approval: n
     expect(error, command).not.toContain("DỪNG")
   }
 }, 30_000)
+
+test("#372: binary + and - get spaces, so the awk of macOS reads a long sum; strings and exponents are left alone", () => {
+  const sum = Array.from({ length: 300 }, (_, i) => 12_000_000 + i).join("+")
+  const run = awkWithPrecision(`awk 'BEGIN{printf "%.0f", (${sum})/300}'`)
+  // No run of digits and signs longer than one number: original-awk failed past ~108 characters.
+  expect(run.match(/[0-9eE.+-]{20,}/)).toBeNull()
+  expect(run).toContain("(12000000 + 12000001 + 12000002")
+  expect(spacedOperators(`awk 'BEGIN{print 1e+5+2-3}'`)).toBe(`awk 'BEGIN{print 1e+5 + 2 - 3}'`)
+  expect(spacedOperators(`awk 'BEGIN{x=(1.5e3+2)*2; printf "a+b-c=%.1f", x}'`)).toBe(`awk 'BEGIN{x=(1.5e3 + 2)*2; printf "a+b-c=%.1f", x}'`)
+  expect(spacedOperators(`awk 'BEGIN{print 3--2, 2-1E-3}'`)).toBe(`awk 'BEGIN{print 3 - -2, 2 - 1E-3}'`)
+})
