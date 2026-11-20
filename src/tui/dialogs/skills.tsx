@@ -35,7 +35,7 @@ export function SkillsDialog() {
         <Picker
           items={state.skills.map((s) => ({
             label: s.name,
-            hint: `${s.source} · ${ACTIVATION[s.activation]} · ${s.description}`,
+            hint: `${s.source} · ${ACTIVATION[s.activation]} · ${s.match_text ?? s.description}`,
             mark: s.activation === "always" || state.activeSkills.includes(s.name) ? "●" : "○",
             value: s.name,
           }))}
