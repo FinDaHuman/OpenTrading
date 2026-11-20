@@ -164,7 +164,12 @@ export function isQuotaError(error: unknown): boolean {
 
 /** How long a model whose search hit its quota is skipped (the fallbacks run at once). */
 export const NATIVE_PAUSE_MS = 10 * 60_000
-const nativePaused = new Map<string, number>()
+/** Why a model's search is skipped, and until when: the message must name the real reason (#343). */
+interface NativePause {
+  reason: "quota" | "not-in-plan"
+  until: number
+}
+const nativePaused = new Map<string, NativePause>()
 
 /** Said once when grounding is not in the key's plan (notInPlan). */
 export const NOT_IN_PLAN_NOTE = "Google Search grounding is not in this key's free Gemini 3 plan; other sources serve until the quota day ends."
@@ -182,18 +187,21 @@ const hhmm = (ms: number) => new Date(ms).toLocaleTimeString("vi-VN", { timeZone
  * quota again and waiting on every search.
  */
 export async function guardedNative<T>(key: string, run: () => Promise<T>, now: () => number = Date.now): Promise<T> {
-  const until = nativePaused.get(key)
-  if (until !== undefined && until > now()) throw new Error(`skipped until ${hhmm(until)}: the model quota is exhausted (429)`)
+  const pause = nativePaused.get(key)
+  if (pause && pause.until > now()) {
+    const why = pause.reason === "not-in-plan" ? "Google Search grounding is not in this key's plan" : "the model quota is exhausted (429)"
+    throw new Error(`skipped until ${hhmm(pause.until)}: ${why}`)
+  }
   try {
     return await run()
   } catch (error) {
     if (!isQuotaError(error)) throw error
     if (notInPlan(error)) {
-      nativePaused.set(key, nextPacificMidnight(now()))
+      nativePaused.set(key, { reason: "not-in-plan", until: nextPacificMidnight(now()) })
       // Within the 120 chars runSearch keeps of a native failure.
       throw new Error(NOT_IN_PLAN_NOTE)
     }
-    nativePaused.set(key, now() + NATIVE_PAUSE_MS)
+    nativePaused.set(key, { reason: "quota", until: now() + NATIVE_PAUSE_MS })
     throw new Error(`${quotaText(error)} The model's search is skipped for 10 minutes.`)
   }
 }
