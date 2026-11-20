@@ -203,7 +203,9 @@ test("tool guidance lives in one place and the format example carries no real-lo
   // shorter wording held 2/3 instead of 3/3 on gemini-3.5-flash-lite; guard +10), ≈2.22k after the
   // 16/11/2026 English prompt files: chars/4 counts English higher than Vietnamese although real tokens
   // fell (terminal system o200k 3 376 → 3 015, DeepSeek 4 635 → 3 180); the guard follows the proxy.
-  expect(Math.ceil(a.system.length / 4)).toBeLessThan(2_230)
+  // ≈2.25k after the 20/11/2026 #355 review: bat_bien 3 keeps the general "do not choose in any
+  // form" ban, and the no-tags rule exempts the the_goi_y card (guard +30).
+  expect(Math.ceil(a.system.length / 4)).toBeLessThan(2_260)
 })
 
 test("the constraints budget key is explicit and never cuts on any tier", () => {
