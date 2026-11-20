@@ -351,3 +351,34 @@ test("turn_end records the stop gate's recoveries, an unanswered turn and retire
   expect(ends[0]).toMatchObject({ recoveries: [{ kind: "empty", attempt: 1 }], unanswered: true, retiredTodos: 2 })
   for (const key of ["recoveries", "unanswered", "retiredTodos"]) expect(Object.keys(ends[1])).not.toContain(key)
 })
+
+
+test("source warnings retain every turn position across compaction and old sessions have none", async () => {
+  const { compactPair } = await import("../src/core/compact-marker")
+  const s = Session.create()
+  const first: ModelMessage[] = [{ role: "user", content: "first" }, { role: "assistant", content: "partial first" }]
+  const second: ModelMessage[] = [{ role: "user", content: "second" }, { role: "assistant", content: "complete second" }]
+  const third: ModelMessage[] = [{ role: "user", content: "third" }, { role: "assistant", content: "partial third" }]
+  await s.appendTurn(first, { ...info, dataGaps: ["quote_history: timeout"] })
+  await s.appendCompact({ trigger: "manual", before: 1000, after: 100, messages: compactPair("summary", { tools: [], skills: [], todos: [] }) })
+  await s.appendTurn(second, info)
+  await s.appendTurn(third, { ...info, dataGaps: ["financial_detail: unavailable"] })
+  const loaded = await loadSession(s.id)
+  expect(loaded.dataGaps).toEqual([{ at: 2, sources: ["quote_history: timeout"] }, { at: 8, sources: ["financial_detail: unavailable"] }])
+  expect(loaded.messages).not.toContainEqual(first[1])
+  expect(loaded.display[loaded.dataGaps[0]!.at - 1]).toEqual(first[1])
+  expect(loaded.display[loaded.dataGaps[1]!.at - 1]).toEqual(third[1])
+  const old = Session.create()
+  await old.appendTurn(second, info)
+  expect((await loadSession(old.id)).dataGaps).toEqual([])
+})
+
+test("source warning follows repaired dangling calls, before the next user turn", async () => {
+  const s = Session.create()
+  await s.appendTurn([{ role: "user", content: "first" }, { role: "assistant", content: [{ type: "tool-call", toolCallId: "dangling-gap", toolName: "quote_history", input: {} }] }], { ...info, dataGaps: ["quote_history: interrupted"] })
+  await s.appendTurn([{ role: "user", content: "next" }, { role: "assistant", content: "answer" }], info)
+  const loaded = await loadSession(s.id)
+  expect(loaded.dataGaps[0]?.at).toBe(3)
+  expect(loaded.display[2]?.role).toBe("tool")
+  expect(loaded.display[3]).toEqual({ role: "user", content: "next" })
+})

@@ -565,6 +565,30 @@ describe("masking memory blocks (spec 006)", () => {
     }
   })
 
+  test("resume restores source warnings after their own answers, including before later turns", async () => {
+    const s = await session()
+    runtime = initRuntime({ home, skills: () => [] })
+    await s.startSession(runtime, "startup")
+    const first = [{ role: "user" as const, content: "first" }, { role: "assistant" as const, content: "partial first" }]
+    const second = [{ role: "user" as const, content: "second" }, { role: "assistant" as const, content: "partial second" }]
+    s.recordTurn(first, undefined, { dataGaps: ["quote_history: timeout"] })
+    s.recordTurn(second, undefined, { dataGaps: ["financial_detail: unavailable"] })
+    await s.currentSession().flush()
+    const id = s.currentSession().id
+    await s.startSession(runtime, "clear")
+    await s.resumeSession(runtime, id)
+    const text = state.lines.filter((line) => "text" in line).map((line) => (line as { text: string }).text)
+    const firstAnswer = text.indexOf("partial first")
+    const secondQuestion = text.indexOf("second")
+    const firstWarning = text.findIndex((line) => line.includes("quote_history: timeout"))
+    const secondAnswer = text.indexOf("partial second")
+    const secondWarning = text.findIndex((line) => line.includes("financial_detail: unavailable"))
+    expect(firstWarning).toBe(firstAnswer + 1)
+    expect(secondQuestion).toBe(firstWarning + 1)
+    expect(secondWarning).toBe(secondAnswer + 1)
+    expect(state.history).toEqual([...first, ...second])
+  })
+
   test("resume: a deleted item is masked, told once, and recorded; reading never changed the file before", async () => {
     const other = otherWindow()
     seedExample(other)

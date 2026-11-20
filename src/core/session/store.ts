@@ -633,6 +633,8 @@ export interface LoadedSession {
    * before the card (the card follows its turn's answer).
    */
   cards: LoadedCard[]
+  /** Source warnings, positioned after each completed turn in the display transcript. */
+  dataGaps: { at: number; sources: string[] }[]
   redaction: {
     /** Redact lines in the file that were applied. */
     fromFile: number
@@ -672,6 +674,7 @@ export async function loadSession(id: string, opts: { check?: RedactionCheck } =
   const summary = (await listSessions()).find((s) => s.id === id || s.id.startsWith(id))
   if (!summary) throw new Error(`Không tìm thấy phiên "${id}". Gõ /sessions để xem danh sách.`)
   const text = await readFile(path.join(sessionsDir(), summary.file), "utf8")
+  const dataGaps: { at: number; sources: string[]; after?: ModelMessage }[] = []
   let meta: LoadedSession["meta"]
   let raw: ModelMessage[] = []
   let shown: ModelMessage[] = []
@@ -700,6 +703,10 @@ export async function loadSession(id: string, opts: { check?: RedactionCheck } =
       } else if (entry.type === "turn_end") {
         // A line with its number says it; an older one is the previous number plus one.
         lastTurn = Number.isInteger(entry.turn) && entry.turn! > 0 ? entry.turn! : lastTurn + 1
+        if (Array.isArray(entry.dataGaps)) {
+          const sources = entry.dataGaps.filter((source): source is string => typeof source === "string" && source.length > 0)
+          if (sources.length) dataGaps.push({ at: shown.length, sources, after: shown.at(-1) })
+        }
         if (entry.contextTokens !== undefined) contextTokens = entry.contextTokens
       } else if (entry.type === "chart" && entry.callId && entry.data) charts.set(entry.callId, entry.data)
       else if (entry.type === "harness" && typeof entry.text === "string") harness.push(entry.text)
@@ -743,7 +750,14 @@ export async function loadSession(id: string, opts: { check?: RedactionCheck } =
     const i = after ? display.indexOf(after) : -1
     return { ...c, at: i >= 0 ? i + 1 : Math.min(c.at, display.length) }
   })
-  return { summary, meta, messages, display, contextTokens, patched, charts, harness, lastTurn, cards: placed, redaction }
+  const warnings = dataGaps.map(({ after, ...gap }) => {
+    // Anchor before the next original message, so any repaired dangling results stay in this turn.
+    const next = shown[gap.at]
+    const nextIndex = next ? display.indexOf(next) : display.length
+    const i = after ? display.indexOf(after) : -1
+    return { ...gap, at: nextIndex >= 0 ? nextIndex : i >= 0 ? i + 1 : Math.min(gap.at, display.length) }
+  })
+  return { summary, meta, messages, display, contextTokens, patched, charts, harness, lastTurn, cards: placed, dataGaps: warnings, redaction }
 }
 
 /**

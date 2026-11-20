@@ -1,3 +1,4 @@
+import { gapsLine } from "../core/loop/failures"
 import { setConversation } from "../core/conversation"
 import type { ModelMessage } from "ai"
 import { label, visibleUserText } from "../core/agent"
@@ -435,10 +436,14 @@ export async function resumeSession(runtime: Runtime, id: string, live: () => bo
   // transcript is built turn by turn around them: a card sits between two turns, never inside one.
   const lines: Line[] = []
   let fromMessage = 0
-  for (const c of [...loaded.cards].sort((a, b) => a.at - b.at)) {
-    lines.push(...transcriptFromMessages(loaded.display.slice(fromMessage, c.at)).flatMap(toLines))
-    lines.push({ kind: "card", card: c.card, state: c.state, ...(c.saved ? { saved: c.saved } : {}) })
-    fromMessage = c.at
+  const inserts: { at: number; line: Line }[] = [
+    ...loaded.dataGaps.map((gap) => ({ at: gap.at, line: { kind: "info" as const, text: gapsLine(gap.sources) } })),
+    ...loaded.cards.map((c) => ({ at: c.at, line: { kind: "card" as const, card: c.card, state: c.state, ...(c.saved ? { saved: c.saved } : {}) } })),
+  ]
+  for (const insert of inserts.sort((a, b) => a.at - b.at)) {
+    lines.push(...transcriptFromMessages(loaded.display.slice(fromMessage, insert.at)).flatMap(toLines))
+    lines.push(insert.line)
+    fromMessage = insert.at
   }
   lines.push(...transcriptFromMessages(loaded.display.slice(fromMessage)).flatMap(toLines))
   const notes: Line[] = [...left, { kind: "info", text: `Mở lại phiên "${loaded.summary.title}" · ${session.turns} lượt` }]
