@@ -13,152 +13,151 @@ version: 1.0.0
 
 # Vận tải & logistics Việt Nam — framework phân tích
 
-Ngành vận tải VN là **chu kỳ cước, không phải chu kỳ nhu cầu nội địa**: dòng thu
-bám cước vận chuyển quốc tế và thể tích hàng qua cảng. Skill này đọc ngành qua cước
-tuyến, cầu xuất khẩu (tín hiệu dẫn của lưu lượng), công suất cảng (nơi chứa biên
-lợi nhuận bền vững nhất), và **tỷ lệ hợp đồng cố định** — thứ quyết định ai thực
-sự hưởng sóng cước và ai bị khóa giá bỏ lỡ.
+Vietnamese transport is a **freight-rate cycle, not a domestic demand cycle**: revenue
+tracks international freight rates and the volume of cargo through ports. This skill reads the sector through
+route freight rates, export demand (the leading signal for throughput), port capacity (where the most
+durable margins sit), and **the share of fixed-rate contracts** — which decides who really
+benefits from a freight wave and who is locked into prices and misses it.
 
-Yếu tố thứ hai: **phân khúc**. Cảng nước sâu, vận tải container nội Á, và vận tải
-dầu nằm trong ba chu kỳ khác nhau — cước tàu dầu đắt kỷ lục có thể đi kèm với vận
-tải container bị siết.
+The second factor: **segments**. Deep-water ports, intra-Asia container shipping and oil
+tankers are three different cycles — record-high tanker rates can come with a squeezed
+container business.
 
 ## Khi nào dùng
 
-- Dùng khi: user hỏi xu hướng nhóm vận tải, cước vận chuyển tác động ra sao, một
-  công ty cảng có còn dư địa, thuế quan ảnh hưởng ai.
-- Khi KHÔNG dùng (dùng skill khác thay thế):
-  - Hỏi pha thị trường / luân chuyển ngành / sóng ngành tiếp theo → `dinh-vi-chu-ky-vn`.
-  - Phân tích toàn diện một mã → `phan-tich-chuyen-sau-1-ma`.
-  - Chỉ định giá một mã → `dinh-gia-chuyen-sau`.
-  - Chỉ đọc BCTC một mã không có mảng ngành → `co-ban-chuyen-sau`.
-  - Vận tải thuộc tập đoàn dầu khí (mảng vận chuyển) → đọc tiếp ở `dau-khi-vn`.
+- Use when: the user asks about transport-group trends, how freight rates act, whether a
+  port company still has room, whom tariffs affect.
+- Do NOT use (use another skill instead):
+  - Market phase / sector rotation / the next sector wave → `dinh-vi-chu-ky-vn`.
+  - A full ticker analysis → `phan-tich-chuyen-sau-1-ma`.
+  - Valuing one ticker only → `dinh-gia-chuyen-sau`.
+  - Only one ticker's statements without the sector angle → `co-ban-chuyen-sau`.
+  - Shipping inside the oil & gas group (the shipping segment) → continue in `dau-khi-vn`.
 
 ## Trụ cột driver
 
-| Driver | Kênh truyền dẫn | Đọc/xác minh bằng |
+| Driver | Transmission channel | Read/verify with |
 |---|---|---|
-| Cước vận chuyển | Bảng cước theo tuyến (xuyên Đại Dương, nội Á, Âu-Mỹ) quyết định doanh thu mảng vận tải. Cước lên không đồng đều: tuyến ngắn và bến trung chuyển chịu quy luật khác | Cước tuyến: `news_market`/`web_search`, ghi rõ chỉ số cước + ngày; riêng mã giá thu bình quân trong `financial_detail` |
-| Cầu xuất khẩu | Lưu lượng hàng qua cảng bám xuất khẩu và nhập khẩu linh kiện. Đọc sản lượng TEU/tấn qua cảng và tổng lưu lượng thương mại; giá trị nhập thiết bị tăng không chứng minh nhu cầu vận tải tăng | Xuất/nhập khẩu theo kỳ: `vs_xnk_detail`; cầu ngành tổng hợp: `news_market` |
-| Công suất cảng | Bến mới chạy chưa đủ tải làm chi phí cố định đội lên; công suất đủ thì giá thu được giữ. Đây là nguồn biên bền vững nhất ngành | Tỷ lệ sử dụng bến + cước dịch vụ: `news_market`/`web_search`; riêng mã doanh thu/cước bình quân trong `financial_detail` |
-| Tỷ lệ khóa giá | Hợp đồng vận chuyển theo định kỳ dài hạn co giãn thu nhập: tỷ lệ khóa cao thì sóng cước không vào doanh thu ngay | Tỷ trọng hợp đồng cố định: `news_market`/`web_search`; dấu hiệu gián tiếp ở doanh thu/khối lượng trong `financial_detail` |
-| Nhiên liệu | Chi phí nhiên liệu và chi phí bến siết biên **vận tải và hàng không**; ngược lại ít ảnh hưởng cảng. Chiều ngược nhau theo phân khúc: tàu dầu hưởng khi giá dầu tăng (cước theo giá dầu), hàng không bị bóp (nhiên liệu chiếm phần lớn chi phí) | Giá nhiên liệu: `yf_commodities` theo chu kỳ |
-| Chính sách thương mại | Thuế quan đổi hướng tuyến: tuyến nội Á chịu ít hơn tuyến đi Mỹ | Thuế/chính sách: `news_market`/`web_search` |
+| Freight rates | Rates by route (transoceanic, intra-Asia, Europe–America) decide shipping revenue. Rates do not rise evenly: short routes and transshipment hubs follow different rules | Route rates: `news_market`/`web_search`, stating the rate index + date; for the ticker, average realised rates in `financial_detail` |
+| Export demand | Port throughput tracks exports and component imports. Read TEU/tonnes through ports and total trade flows; rising equipment-import value does not prove rising transport demand | Exports/imports by period: `vs_xnk_detail`; aggregate sector demand: `news_market` |
+| Port capacity | New berths running below capacity push up fixed costs; with enough utilisation, tariffs hold. This is the sector's most durable source of margin | Berth utilisation + service tariffs: `news_market`/`web_search`; for the ticker, revenue/average tariff in `financial_detail` |
+| Rate-locking share | Long-term periodic shipping contracts smooth income: a high locked share means a freight wave does not reach revenue at once | Fixed-contract share: `news_market`/`web_search`; indirect signs in revenue/volume in `financial_detail` |
+| Fuel | Fuel and port costs squeeze margins of **shipping and airlines**; ports are little affected. The direction differs by segment: tankers benefit when oil prices rise (rates follow oil), airlines get squeezed (fuel is most of their costs) | Fuel prices: `yf_commodities` by cycle |
+| Trade policy | Tariffs redirect routes: intra-Asia routes are less affected than routes to the US | Tariffs/policy: `news_market`/`web_search` |
 
 ## Các bước
 
-**Bước 1: Nhận diện phân khúc (song song).**
+**Bước 1: Identify the segment (in parallel).**
 
-`symbol_lookup` · `vn_company` (mảng: cảng / container nội Á / tàu dầu / giao nhận
-chuyển phát / hàng không) · `financial_detail` (doanh thu theo mảng). Ghi rõ phân khúc.
+`symbol_lookup` · `vn_company` (segments: ports / intra-Asia container / tankers / freight forwarding
+and delivery / airlines) · `financial_detail` (revenue by segment). State the segment.
 
-**Bước 2: Cước + cầu (song song).**
+**Bước 2: Rates + demand (in parallel).**
 
-`news_market` (cước tuyến, chỉ số cước, cước tàu dầu nếu liên quan) ·
-`vs_xnk_detail` (tổng xuất + nhập cùng kỳ làm bối cảnh; tách giá/khối lượng, không suy TEU từ giá trị).
+`news_market` (route rates, rate indices, tanker rates if relevant) ·
+`vs_xnk_detail` (total exports + imports for the same period as context; separate price/volume, never infer TEU from value).
 
-**Bước 3: Công suất + khối lượng + chi phí (song song).**
+**Bước 3: Capacity + volume + costs (in parallel).**
 
-`news_market` (tỷ lệ sử dụng bến, lưu lượng qua cảng, tuyến mới) ·
-`financial_detail` (doanh thu, giá vốn, chi phí tài chính, tồn kho nhiên liệu) ·
-`yf_commodities` (nhiên liệu tham chiếu nếu đường biển).
+`news_market` (berth utilisation, port throughput, new routes) ·
+`financial_detail` (revenue, cost of goods, financial costs, fuel inventory) ·
+`yf_commodities` (reference fuel for sea routes).
 
-**Bước 4: Neo kỳ vọng + vị thế nhóm.**
+**Bước 4: Expectation anchor + position in the group.**
 
-`planned_targets` · `analyst_consensus` · `peer_compare` (so **trong cùng phân
-khúc** — so cảng với vận tải container bị cấm).
+`planned_targets` · `analyst_consensus` · `peer_compare` (compare **within the same
+segment** — comparing ports with container shipping is forbidden).
 
-Đối chiếu công cụ: `peer_compare` chỉ dùng các key tổng quan thực sự có trong kết quả (như P/E, P/B, ROE); tham số `metrics` không tạo thêm chỉ tiêu. Biên, sản lượng, chi phí, tồn kho và KPI vận hành phải đọc `financial_detail` từng peer cùng kỳ; nếu không có thì tra công bố doanh nghiệp qua `news_symbol`/`web_search`, ghi nguồn, công thức và kỳ. Thiếu dữ liệu thì để trống, không xếp hạng.
+Tool check: `peer_compare` uses only the overview keys actually present in the result (such as P/E, P/B, ROE); its `metrics` parameter does not create extra metrics. Margins, volumes, costs, inventory and operating KPIs must be read from each peer's `financial_detail` for the same period; if missing, look up company disclosures via `news_symbol`/`web_search`, stating the source, formula and period. With missing data, leave it blank and do not rank.
 
 ## Cây quyết định công ty vận tải đang được tiếp sức hay siết
 
+Follow the matching branch; record intermediate states and stop only at ★. Every conclusion must separate known data from what is missing; never fill in numbers or turn "chưa rõ" into "xấu".
 
-Đi theo nhánh phù hợp; ghi nhận trạng thái trung gian và chỉ dừng ở ★. Mọi kết luận phải tách dữ liệu đã biết và phần còn thiếu, không bù số hay đổi "chưa rõ" thành "xấu".
-
-Q1. Công ty thuộc phân khúc nào?
-├─ Cảng/bến → Q4 (cảng)
+Q1. Which segment is the company in?
+├─ Ports/berths → Q4 (ports)
 ├─ Container → Q2 (container)
-├─ Tàu dầu/hàng rời → ★ "Đánh giá cước tuyến, tonne-mile, sản lượng và hợp đồng; thiếu thì chưa đủ dữ liệu cho phân khúc"
-├─ Giao nhận/chuyển phát → ★ "Đánh giá lưu lượng bưu kiện, giá dịch vụ và chi phí; thiếu thì chưa đủ dữ liệu cho phân khúc"
-├─ Hàng không → ★ "Đánh giá ngược chiều giá dầu: giá dầu tăng bóp biên (nhiên liệu chiếm phần lớn chi phí) trong khi tàu dầu hưởng; kèm nhu cầu đi lại theo mùa và giá vé; thiếu dữ liệu thì chưa đủ cho phân khúc"
-├─ Nhiều phân khúc → đánh giá độc lập từng phân khúc theo Q1 rồi tổng hợp theo tỷ trọng công bố
-└─ Chưa rõ → ★ "Chưa đủ dữ liệu phân khúc"
+├─ Tankers/dry bulk → ★ "Đánh giá cước tuyến, tonne-mile, sản lượng và hợp đồng; thiếu thì chưa đủ dữ liệu cho phân khúc"
+├─ Forwarding/delivery → ★ "Đánh giá lưu lượng bưu kiện, giá dịch vụ và chi phí; thiếu thì chưa đủ dữ liệu cho phân khúc"
+├─ Airlines → ★ "Đánh giá ngược chiều giá dầu: giá dầu tăng bóp biên (nhiên liệu chiếm phần lớn chi phí) trong khi tàu dầu hưởng; kèm nhu cầu đi lại theo mùa và giá vé; thiếu dữ liệu thì chưa đủ cho phân khúc"
+├─ Several segments → assess each segment independently per Q1, then combine by the disclosed weights
+└─ Unclear → ★ "Chưa đủ dữ liệu phân khúc"
 
-Q2 (container). Cước và tỷ lệ khóa giá ra sao?
-├─ Cước lên, hợp đồng cho phép hưởng giá mới → ghi thuận lợi, tiếp Q3
-├─ Cước giảm hoặc khóa giá làm chậm hưởng lợi → ghi áp lực/độ trễ, tiếp Q3
-└─ Chưa rõ cước/hợp đồng → ghi thiếu, tiếp Q3
+Q2 (container). How are rates and the rate-locking share?
+├─ Rates up, contracts allow capturing new prices → record favourable, continue Q3
+├─ Rates down or locking delays the benefit → record pressure/lag, continue Q3
+└─ Rates/contracts unclear → record missing, continue Q3
 
-Q3 (container). Chính sách thương mại ảnh hưởng tuyến thực tế thế nào?
-├─ Tuyến và lưu lượng giữ được, đã xác minh thuế theo hàng/xuất xứ/đích/ngày → tiếp Q5
-├─ Có bằng chứng mất hàng hoặc chuyển tuyến gây chi phí → ghi áp lực chính sách, tiếp Q5
-└─ Chưa rõ chính sách/tuyến → ghi thiếu, tiếp Q5
+Q3 (container). How does trade policy affect actual routes?
+├─ Routes and volumes held, tariffs verified by product/origin/destination/date → continue Q5
+├─ Evidence of lost cargo or rerouting costs → record policy pressure, continue Q5
+└─ Policy/routes unclear → record missing, continue Q5
 
-Q4 (cảng). Công suất và lưu lượng bến ra sao?
-├─ TEU/tấn và tỷ lệ sử dụng tăng → ghi thuận lợi, tiếp Q5
-├─ Bến mới chưa đủ tải hoặc sản lượng giảm → ghi áp lực chi phí cố định, tiếp Q5
-└─ Chưa có số liệu → ghi thiếu, tiếp Q5
+Q4 (ports). How are berth capacity and throughput?
+├─ TEU/tonnes and utilisation rising → record favourable, continue Q5
+├─ New berths under capacity or falling volume → record fixed-cost pressure, continue Q5
+└─ No figures → record missing, continue Q5
 
-Q5 (chung). Cầu nền và biên có xác nhận không?
-├─ TEU/tấn tăng cùng kỳ, biên giữ được, cước/công suất thuận lợi → ★ "Được tiếp sức bởi lưu lượng và vận hành đã xác minh"
-├─ TEU/tấn giảm hoặc doanh thu chỉ tăng nhờ giá/cước → ★ "Có áp lực cầu hoặc phụ thuộc giá; nêu bằng chứng và độ nhạy cước"
-└─ Chỉ có giá trị thương mại hoặc dữ liệu thiếu/trái chiều → ★ "Chưa đủ dữ liệu cầu thực; không suy cầu từ nhập máy móc tăng nhanh hơn xuất khẩu"
+Q5 (common). Do underlying demand and margins confirm it?
+├─ TEU/tonnes up year on year, margins held, favourable rates/capacity → ★ "Được tiếp sức bởi lưu lượng và vận hành đã xác minh"
+├─ TEU/tonnes down or revenue up only on prices/rates → ★ "Có áp lực cầu hoặc phụ thuộc giá; nêu bằng chứng và độ nhạy cước"
+└─ Only trade values, or data missing/conflicting → ★ "Chưa đủ dữ liệu cầu thực; không suy cầu từ nhập máy móc tăng nhanh hơn xuất khẩu"
 
 ## Chỉ báo đặc thù ngành
 
-Bảng chỉ báo ngành vận tải + cách đọc ở `references/kpi.md`.
+The transport indicator table + how to read it is in `references/kpi.md`.
 
 ## Định giá theo đặc thù ngành
 
-Vận tải định giá **theo phân khúc**: cảng/cảng biển theo P/E ổn định hơn (doanh
-thu theo hợp đồng dài hạn), vận tải container theo EV/EBITDA chu kỳ (không P/E tại
-đỉnh cước). Neo kỳ vọng bằng `planned_targets` và `analyst_consensus`. Cước đang
-ở đỉnh chu kỳ thì mọi multiple đều rẻ — ghi rõ vị thế trong vòng trước khi so.
+Value transport **by segment**: ports on a steadier P/E (revenue under
+long-term contracts), container shipping on cyclical EV/EBITDA (never P/E at the
+rate peak). Anchor expectations with `planned_targets` and `analyst_consensus`. With rates
+at a cycle peak every multiple looks cheap — state the position in the loop before comparing.
 
 ## Rủi ro đặc thù
 
-- **Rủi ro cước đảo chiều**: cước vận chuyển biến động trong vài tuần, không phải
-  vài quý.
-- **Rủi ro công suất bến**: bến mới chưa đủ tải, chi phí cố định chạy trước doanh
-  thu.
-- **Rủi ro chính sách thương mại**: thuế quan đổi hướng tuyến và lưu lượng, tác
-  động chênh lệch giữa các công ty.
-- **Rủi ro nhiên liệu**: siết biên vận tải ngay khi cước chưa kịp điều chỉnh.
-- **Rủi ro hỗn hợp phân khúc**: công ty vừa cảng vừa tàu sẽ cho con số hợp nhất
-  lệch khỏi cả hai chu kỳ.
+- **Rate-reversal risk**: freight rates swing within weeks, not
+  quarters.
+- **Berth-capacity risk**: new berths under capacity, fixed costs running ahead of
+  revenue.
+- **Trade-policy risk**: tariffs redirect routes and volumes, with uneven effects
+  across companies.
+- **Fuel risk**: squeezes shipping margins before rates can adjust.
+- **Mixed-segment risk**: a company with both ports and ships gives a consolidated figure
+  that matches neither cycle.
 
 ## Ranh giới
 
-- Không xác định pha thị trường, không suy "vận tải sắp dẫn sóng" → `dinh-vi-chu-ky-vn`.
-- Không chọn mã khuyến nghị mua/bán → `phan-tich-chuyen-sau-1-ma`.
-- Không suy cước tuyến từ một kỳ báo cáo: cước là chu kỳ ngắn, phải tra cước theo
-  thời gian gần và ghi ngày nguồn.
-- Chỉ xếp hạng trong cùng phân khúc; so cảng với container bị cấm.
+- Do not determine the market phase or infer "vận tải sắp dẫn sóng" → `dinh-vi-chu-ky-vn`.
+- Do not pick tickers to buy/sell → `phan-tich-chuyen-sau-1-ma`.
+- Never infer route rates from one reporting period: rates are a short cycle; look up rates
+  for the recent period and state the source date.
+- Rank only within the same segment; comparing ports with containers is forbidden.
 
 ## Giới hạn
 
-- Cước tuyến là chu kỳ ngắn và biến động mạnh: kết luận phải ghi ngày tra, không
-  dùng số tuần trước.
-- Xuất/nhập khẩu từ `vs_xnk_detail` là tín hiệu cầu chung, không phải lưu lượng
-  của riêng công ty.
-- Tỷ lệ hợp đồng cố định không công bố đều: khi thiếu, hạ độ tin cậy nhánh Q2.
+- Route rates are a short, volatile cycle: conclusions must state the check date, never
+  last week's numbers.
+- Exports/imports from `vs_xnk_detail` are a general demand signal, not the company's own
+  throughput.
+- Fixed-contract shares are not disclosed regularly: when missing, lower the confidence of the Q2 branch.
 
 ## Ví dụ
 
 **Ví dụ 1:**
 Hỏi: Cước vận chuyển lên thì cả nhóm vận tải hưởng không?
-Đạt khi: tách được phân khúc, có cước tuyến + ngày tra, tỷ lệ khóa giá, và verdict
-theo cây Q1→Q5 cho từng phân khúc.
+Đạt khi: segments separated, route rates + check date, the rate-locking share, and a verdict
+following the Q1→Q5 tree for each segment.
 
 ## Trực quan hóa
 
-Chỉ vẽ khi người dùng muốn xem hình; tối đa 1 biểu đồ. Hợp với dữ liệu skill này:
-multiline cước tuyến với giá thu bình quân, bar biên lãi gộp theo phân khúc, bar
-lưu lượng qua cảng. Vẽ bằng `chart_render` với `from_call` (mã `[ref …]`) từ kết
-quả tool đã có; cần chọn loại hình thì nạp `ve-bieu-do`.
+Draw only when the user wants a picture; at most 1 chart. Fitting this skill's data:
+multiline route rates with average realised rates, bar gross margin by segment, bar
+port throughput. Draw with `chart_render` using `from_call` (the `[ref …]` code) from
+tool results you have; load `ve-bieu-do` to choose the chart type.
 
 ## File tham chiếu
 
-| File | Dùng khi |
+| File | Use when |
 |---|---|
-| `references/kpi.md` | Cần cách phân khúc, đọc giá thu bình quân và biên theo phân khúc, dùng cước tuyến và cầu xuất khẩu |
+| `references/kpi.md` | You need the segmentation, reading average realised rates and margins by segment, using route rates and export demand |

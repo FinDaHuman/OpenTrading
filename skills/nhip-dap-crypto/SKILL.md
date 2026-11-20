@@ -11,39 +11,39 @@ version: 1.3.0
 
 # Nhịp đập crypto
 
-Viết cho người ít chuyên crypto: mọi thuật ngữ bắt buộc giải thích 1 dòng kèm theo số. Trả lời đúng 3 câu. Crypto chạy 24/7 nên số "hôm nay" khác phiên chứng khoán VN — đừng so lệch phiên.
+Write for readers new to crypto: every term must get a one-line explanation next to its number. Answer in exactly 3 sentences. Crypto trades 24/7, so "today's" figures differ from the Vietnamese stock session — never compare mismatched sessions.
 
 ## Khi nào dùng
 
-- Dùng khi: user hỏi BTC/ETH/SOL sao rồi, crypto lên hay xuống, funding/OI nói gì, giá crypto quy ra VND, crypto có liên thông gì tới chứng khoán VN.
-- Khi KHÔNG dùng (dùng skill khác thay thế): bối cảnh regime vĩ mô toàn cầu (chỉ dùng `danh-gia-vi-mo-quoc-te`); odds xác suất sự kiện crypto (chỉ dùng `du-doan-polymarket`); phân tích vàng/tỷ giá (chỉ dùng `phan-tich-vang-ty-gia`).
+- Use when: the user asks how BTC/ETH/SOL are doing, whether crypto is up or down, what funding/OI say, crypto prices in VND, how crypto links to Vietnamese stocks.
+- Do NOT use (use another skill instead): the global macro regime (use `danh-gia-vi-mo-quoc-te` only); event odds for crypto (use `du-doan-polymarket` only); gold/FX analysis (use `phan-tich-vang-ty-gia` only).
 
 ## Các bước
 
-**Bước 1: Giá spot.**
+**Bước 1: Spot prices.**
 
-Chạy `crypto_spot` (BTC ETH SOL — tối đa 3 đồng/wave 1). Giá + % 24h = "tăng/giảm bao nhiêu hôm nay". CẤM dùng `vn_crypto_ohlcv` thay thế (giá quy VND ≠ giá USD thật) — tool đó chỉ dùng ở Bước 3 khi user hỏi giá VND.
+Run `crypto_spot` (BTC ETH SOL — at most 3 coins in wave 1). Price + 24h % = "tăng/giảm bao nhiêu hôm nay". NEVER substitute `vn_crypto_ohlcv` (VND-converted prices ≠ real USD prices) — that tool is only for Bước 3 when the user asks for VND prices.
 
-**Bước 2: Đòn bẩy derivs.**
+**Bước 2: Derivatives leverage.**
 
-Chạy `crypto_derivs` (BTC ETH). Giải thích kèm số: funding rate = "phe mua đang trả tiền cho phe bán (dương = đám đông cược lên)"; OI = "tổng tiền đang cược"; long/short = "bên nào đông hơn"; funding cao + OI cao = đòn bẩy nóng, dễ đảo chiều. Funding/OI rỗng do Binance geo-block từ worker Singapore thì ghi "không lấy được do giới hạn vùng", không kết luận thị trường chết.
+Run `crypto_derivs` (BTC ETH). Explain with numbers: funding rate = "phe mua đang trả tiền cho phe bán (dương = đám đông cược lên)"; OI = "tổng tiền đang cược"; long/short = "bên nào đông hơn"; high funding + high OI = hot leverage, prone to reversal. If funding/OI is empty because Binance geo-blocks the Singapore worker, write "không lấy được do giới hạn vùng"; do not conclude the market is dead.
 
-**Bước 3: Sentiment + giá VND.**
+**Bước 3: Sentiment + VND prices.**
 
-Chạy `world_fear_greed` + `vn_crypto_ohlcv` (path quy VND). Chỉ drill Polymarket crypto khi user hỏi xác suất; không tự lan sang odds/event-study.
+Run `world_fear_greed` + `vn_crypto_ohlcv` (the VND path). Drill into Polymarket crypto only if the user asks for probabilities; never drift into odds/event studies yourself.
 
 ## Cấu trúc câu trả lời
 
-Trình bày kết luận đúng cấu trúc sau (đúng 3 câu):
+Present the conclusion in exactly this structure (exactly 3 sentences):
 
-1. Xu hướng gì (lên/xuống/đi ngang + %). 2. Đòn bẩy có nóng không (funding cao + OI cao = dễ đảo chiều). 3. Liên thông gì tới VN (giá VND + chứng khoán còn lại — không có thì ghi "độc lập").
+1. The trend (up/down/sideways + %). 2. Whether leverage is hot (high funding + high OI = prone to reversal). 3. The link to Vietnam (VND price + the rest of the stock market — if none, write "độc lập").
 
 ## Ví dụ
 
 **Ví dụ 1:**
 Hỏi: BTC sao rồi
-Đạt khi: 3 câu trả lời + 0 jargon không giải thích, ≤6 calls.
+Đạt khi: a 3-sentence answer + 0 unexplained jargon, ≤6 calls.
 
 ## Trực quan hóa
 
-Chỉ vẽ khi người dùng muốn xem hình, hoặc khi có chuỗi thời gian / so sánh mà bảng khó đọc; tối đa 1 biểu đồ mỗi câu trả lời. Vẽ bằng `chart_render` với `from_call` (mã `[ref …]` ở đầu kết quả tool) để không phải gõ lại số; cần chọn loại hình thì nạp `ve-bieu-do`. Hình hợp với dữ liệu skill này: bar diverging %24h, bar funding, gauge fear/greed.
+Draw only when the user wants a picture, or when a time series / comparison is hard to read as a table; at most 1 chart per answer. Draw with `chart_render` using `from_call` (the `[ref …]` code at the top of a tool result) so you never retype numbers; load `ve-bieu-do` to choose the chart type. Fitting this skill's data: bar diverging %24h, bar funding, gauge fear/greed.

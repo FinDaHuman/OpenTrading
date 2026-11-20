@@ -13,63 +13,63 @@ version: 1.5.1
 
 # Phân tích toàn diện một mã
 
-Skill điều phối: tự làm nhận diện mã + ngành + tin + sự kiện, giao kỹ thuật và định giá cho 2 subagent chạy song song, rồi gộp kết luận.
+A coordinating skill: identify the ticker + sector + news + events yourself, hand technicals and valuation to 2 subagents running in parallel, then merge the conclusions.
 
 ## Khi nào dùng
 
-- Dùng khi: user yêu cầu phân tích toàn diện 1 mã (`phân tích FPT`, `VCB thế nào`, `mã này sao`).
-- Khi KHÔNG dùng (dùng skill khác thay thế):
-  - Chỉ hỏi kỹ thuật (RSI, breakout, đa khung, higher-high/lower-low) → `ky-thuat-chuyen-sau`.
-  - Chỉ hỏi BCTC/cơ bản (M-Score, cổ đông, cổ tức) → `co-ban-chuyen-sau`.
-  - Chỉ hỏi định giá (fair value, PER, upside) → `dinh-gia-chuyen-sau`.
-  - So sánh 2-6 mã cùng ngành → `so-sanh-cung-nganh`.
-  - Đánh giá setup trước khi BCTC ra → `danh-gia-truoc-bctc`.
+- Use when: the user asks for a full analysis of 1 ticker (`phân tích FPT`, `VCB thế nào`, `mã này sao`).
+- Do NOT use (use another skill instead):
+  - Technicals only (RSI, breakout, multi-timeframe, higher-high/lower-low) → `ky-thuat-chuyen-sau`.
+  - Statements/fundamentals only (M-Score, shareholders, dividends) → `co-ban-chuyen-sau`.
+  - Valuation only (fair value, PER, upside) → `dinh-gia-chuyen-sau`.
+  - Comparing 2–6 tickers in one sector → `so-sanh-cung-nganh`.
+  - The setup before earnings come out → `danh-gia-truoc-bctc`.
 
 ## Các bước
 
-Khoảng 7 bước model: nạp skill, 5 lượt gọi tool (mỗi lượt gọi song song), trả lời. Kỹ thuật và định giá chạy trong subagent nên không tốn bước của lượt chính.
+About 7 model steps: load the skill, 5 tool rounds (each round in parallel), answer. Technicals and valuation run in subagents, so they cost no steps of the main turn.
 
-**Bước 1: Xác định mã.**
+**Bước 1: Identify the ticker.**
 
-Chạy `symbol_lookup` (tên công ty) hoặc `symbol_resolve` (mã đa loại, có xếp hạng). Mã nhập nhằng (vàng/BTC/USD) thì bắt buộc `symbol_resolve` trước. `symbol_resolve` trả nhiều ứng viên → chọn hạng cao nhất và ghi rõ đã resolve từ tên nào sang mã nào; thiếu mã thì dừng và hỏi lại, không đoán mã. Cổ phiếu VN → tools `vn_*`/`vs_*`; crypto → `crypto_spot`.
+Run `symbol_lookup` (company name) or `symbol_resolve` (multi-type codes, ranked). For ambiguous codes (gold/BTC/USD) you must `symbol_resolve` first. If `symbol_resolve` returns several candidates → take the highest ranked and state which name you resolved to which ticker; without a ticker, stop and ask; never guess. Vietnamese stocks → `vn_*`/`vs_*` tools; crypto → `crypto_spot`.
 
-**Bước 2: Ngành + kiếm tiền nhờ đâu (song song).**
+**Bước 2: Sector + how the company makes money (in parallel).**
 
-Chạy `vn_company` · `vs_company_info` · `vs_industry_tree`. Lấy ngành GICS, mô hình kinh doanh, nguồn thu chính. Mã chưa phân loại ngành (`vs_industry_tree` không match) → ghi "chưa phân loại", vẫn làm các bước còn lại.
+Run `vn_company` · `vs_company_info` · `vs_industry_tree`. Get the GICS sector, business model, main revenue sources. An unclassified ticker (`vs_industry_tree` does not match) → write "chưa phân loại" and still do the remaining steps.
 
-**Bước 3: Kỹ thuật + định giá bằng 2 subagent chạy song song.**
+**Bước 3: Technicals + valuation with 2 subagents in parallel.**
 
-Khi có tool `desk_run` (người dùng đã bật ultradesk) → gọi `desk_run` với key `tranh_bien` cho mã ở Bước 1 thay cho Bước 3–5; kết quả về sau, báo ngắn là run đang chạy.
+When the `desk_run` tool is available (the user turned ultradesk on) → call `desk_run` with the key `tranh_bien` for the Bước 1 ticker instead of Bước 3–5; the result arrives later; say briefly that the run is going.
 
-Gọi `spawn_subagent` hai lần trong cùng một lượt (loại `nghien-cuu`): một subagent nạp `ky-thuat-chuyen-sau`, một subagent nạp `dinh-gia-chuyen-sau`, cùng mã ở Bước 1. Mỗi brief: `task` nêu mã và skill cần nạp, `questions` là các câu hỏi cụ thể của skill đó, `output` "5–8 dòng có số, khung thời gian và tên tool nguồn". Không gọi trực tiếp `signals_technical` / `valuation_run` / `stock_forensic` ở lượt chính.
+Call `spawn_subagent` twice in the same round (type `nghien-cuu`): one subagent loads `ky-thuat-chuyen-sau`, the other loads `dinh-gia-chuyen-sau`, both for the Bước 1 ticker. Each brief: `task` names the ticker and the skill to load, `questions` are that skill's specific questions, `output` "5–8 dòng có số, khung thời gian và tên tool nguồn". Do not call `signals_technical` / `valuation_run` / `stock_forensic` directly in the main turn.
 
-**Bước 4: Lợi nhuận quý + tin + sự kiện (song song, cùng lượt với Bước 3 nếu được).**
+**Bước 4: Quarterly profit + news + events (in parallel, in the same round as Bước 3 if possible).**
 
-Chạy `financial_detail` (KQKD 4 quý + so QoQ/YoY/biên — không đào sâu M-Score/F-score, đó là việc của `co-ban-chuyen-sau`), `news_symbol` + `company_events` (tin + công bố), `event_calendar_vn` (lịch 30–90 ngày: BCTC/ĐHĐCĐ/cổ tức).
+Run `financial_detail` (4 quarters of results + QoQ/YoY/margins — do not dig into M-Score/F-score; that is `co-ban-chuyen-sau`'s job), `news_symbol` + `company_events` (news + disclosures), `event_calendar_vn` (30–90 day calendar: earnings/AGMs/dividends).
 
-**Bước 5: Tổng hợp + kiểm chứng.**
+**Bước 5: Synthesis + verification.**
 
-Chạy `evidence_bundle` để khóa kết luận thành bảng Tích cực / Tiêu cực / Động lực tương lai. Một subagent lỗi thì vẫn ra kết luận với phần còn lại và ghi rõ phần thiếu, không bù số. User hỏi một chiều (`RSI FPT`) thì dùng thẳng sub-skill tương ứng, không chạy đủ các bước. Đủ dữ liệu ra bảng 3 cột thì dừng, không gọi thêm vòng tin/sự kiện thứ hai.
+Run `evidence_bundle` to lock the conclusion into a Tích cực / Tiêu cực / Động lực tương lai table. If one subagent fails, still conclude with the rest and state what is missing; never fill in numbers. If the user asks about one dimension (`RSI FPT`), use the matching sub-skill directly instead of running all steps. Once the data fills the 3-column table, stop; no second round of news/events.
 
 ## Trực quan hóa
 
-Chỉ vẽ khi người dùng muốn xem hình; tối đa 1 biểu đồ. Vẽ bằng `chart_render` với `from_call` trỏ vào kết quả nến hoặc `financial_detail` đã có (mã `[ref …]`), không lấy thêm dữ liệu chỉ để vẽ; cần chọn loại hình thì nạp `ve-bieu-do`. Hình hợp với dữ liệu skill này: nến + khối lượng, stacked DT/LN theo quý.
+Draw only when the user wants a picture; at most 1 chart. Draw with `chart_render` using `from_call` pointing at candle or `financial_detail` results you have (the `[ref …]` code); never fetch extra data just to draw; load `ve-bieu-do` to choose the chart type. Fitting this skill's data: candles + volume, stacked revenue/profit by quarter.
 
 ## Cấu trúc câu trả lời
 
-Trình bày kết luận đúng cấu trúc sau, mỗi mục ghi số + trend + provenance (tool/sub-skill nào ra số đó):
+Present the conclusion in exactly this structure, each item with figures + trend + provenance (which tool/sub-skill gave the figure):
 
-1. Nhận định 1 câu (khuyến nghị/tone chính).
-2. Ngành + cách kiếm tiền (2 dòng, từ Bước 2).
-3. Kỹ thuật (`provenance: ky-thuat-chuyen-sau`, từ subagent, kèm khung 1D/1W).
-4. Định giá (`provenance: dinh-gia-chuyen-sau`, từ subagent, kèm UPSIDE/DOWNSIDE % nếu có).
-5. Lợi nhuận quý (số DT/LN 4 quý + trend QoQ/YoY + biên, từ `financial_detail` Bước 4).
-6. Tin + sự kiện sắp tới (từ `news_symbol` / `company_events` / `event_calendar_vn`).
-7. Bảng Tích cực / Tiêu cực / Động lực tương lai (3 cột, khóa bằng `evidence_bundle`).
-8. Kết luận 1 câu chốt lại toàn mã.
+1. A 1-sentence view (the main stance/tone of the analysis — not a personal buy/sell recommendation).
+2. Sector + how it makes money (2 lines, from Bước 2).
+3. Technicals (`provenance: ky-thuat-chuyen-sau`, from the subagent, with the 1D/1W timeframes).
+4. Valuation (`provenance: dinh-gia-chuyen-sau`, from the subagent, with UPSIDE/DOWNSIDE % if available).
+5. Quarterly profit (4 quarters of revenue/profit + QoQ/YoY trend + margins, from `financial_detail` in Bước 4).
+6. News + upcoming events (from `news_symbol` / `company_events` / `event_calendar_vn`).
+7. The Tích cực / Tiêu cực / Động lực tương lai table (3 columns, locked with `evidence_bundle`).
+8. A 1-sentence conclusion for the whole ticker.
 
 ## Ví dụ
 
 **Ví dụ 1:**
 Hỏi: Phân tích FPT
-Đạt khi: đủ các mục ở trên, có bảng 3 cột tích cực/tiêu cực/động lực; số kỹ thuật và định giá lấy từ 2 subagent, không bịa số tại skill này.
+Đạt khi: all items above, with the 3-column positives/negatives/drivers table; technical and valuation figures from the 2 subagents, no invented numbers in this skill.

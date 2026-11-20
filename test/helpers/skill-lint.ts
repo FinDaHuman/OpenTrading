@@ -122,7 +122,7 @@ export function decisionTreeIssues(body: string): string[] {
       for (const ref of branch.text.matchAll(/\bQ\d+[a-z]*\b/g)) {
         if (!ids.has(ref[0])) issues.push(`${node[1]}: tham chiếu ${ref[0]} không tồn tại`)
       }
-      if (branch.text.includes("★") && /(?:→|tiếp|rồi|sang)\s*Q\d+[a-z]*\b/.test(branch.text)) {
+      if (branch.text.includes("★") && /(?:→|tiếp|rồi|sang|continue(?: with| to)?|then|go to)\s*Q\d+[a-z]*\b/i.test(branch.text)) {
         issues.push(`${node[1]}: ★ vừa kết luận vừa chuyển Q`)
       }
     }

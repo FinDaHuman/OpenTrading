@@ -11,48 +11,48 @@ version: 1.5.0
 
 # So sánh mã cùng ngành
 
-Skill điều phối thứ hai (cùng họ `phan-tich-chuyen-sau-1-ma`): xác định mã cùng ngành, gọi 1 sub-skill cho từng mã, gộp xếp hạng. Mỗi mã chỉ 1 sub-skill theo câu hỏi (momentum → kỹ thuật; chất lượng → cơ bản; đắt rẻ → định giá) — không chạy full 3 chiều/mã, không chạy vòng sub-skill thứ hai.
+The second coordinating skill (same family as `phan-tich-chuyen-sau-1-ma`): identify peers in the sector, call 1 sub-skill per ticker, merge into a ranking. Each ticker gets only 1 sub-skill according to the question (momentum → technicals; quality → fundamentals; cheap/expensive → valuation) — never all 3 dimensions per ticker, never a second round of sub-skills.
 
 ## Khi nào dùng
 
-- Dùng khi: user hỏi so sánh/xếp hạng 2–6 mã cùng ngành (`VCB vs BID vs CTG`, `steel mạnh nhất là ai`, `ngân hàng nào đáng mua nhất`).
-- Khi KHÔNG dùng (dùng skill khác thay thế):
-  - Chỉ 1 mã → `phan-tich-chuyen-sau-1-ma`.
-  - Hỏi lẻ 1 chiều 1 mã (RSI → `ky-thuat-chuyen-sau`; BCTC → `co-ban-chuyen-sau`; fair value → `dinh-gia-chuyen-sau`).
+- Use when: the user asks to compare/rank 2–6 tickers in one sector (`VCB vs BID vs CTG`, `steel mạnh nhất là ai`, `ngân hàng nào đáng mua nhất`).
+- Do NOT use (use another skill instead):
+  - Only 1 ticker → `phan-tich-chuyen-sau-1-ma`.
+  - One dimension of one ticker (RSI → `ky-thuat-chuyen-sau`; financial statements → `co-ban-chuyen-sau`; fair value → `dinh-gia-chuyen-sau`).
 
 ## Các bước
 
-**Bước 0: Xác định mã cùng ngành (gọi trực tiếp).**
+**Bước 0: Identify the peers (direct calls).**
 
-Chạy `vn_reference` (industry) hoặc `vs_industry_tree` (tra GICS) → chọn tối đa 6 mã; chỉ cho tên ngành thì dùng `stock_screener` (filter ngành, pool hẹp) rồi tự chọn tối đa 6 mã thanh khoản cao nhất và nêu giả định đó ở đầu câu trả lời. Người dùng tự liệt kê trên 6 mã thì hỏi họ thu hẹp, không tự bỏ mã. `vn_reference` industry không match → thử `vs_industry_tree` 1 lần, vẫn không ra thì hỏi lại ngành, không đoán mã.
+Run `vn_reference` (industry) or `vs_industry_tree` (GICS lookup) → choose at most 6 tickers; given only a sector name, use `stock_screener` (sector filter, narrow pool), pick at most the 6 most liquid tickers yourself and state that assumption at the start of the answer. If the user lists more than 6 tickers, ask them to narrow it; never drop tickers yourself. If the `vn_reference` industry does not match → try `vs_industry_tree` once; if still nothing, ask for the sector again; never guess tickers.
 
-**Bước 1: Bảng nhanh (gọi trực tiếp).**
+**Bước 1: Quick table (direct calls).**
 
-Chạy `compare_equities` (≤4 mã/lần; 5–6 mã thì chia 4+2 với `peer_compare`) + `vn_equity_quote_batch` (≤6 mã, 1 call): overview + momentum + bảng giá 1 shot.
+Run `compare_equities` (≤4 tickers per call; for 5–6 tickers split 4+2 with `peer_compare`) + `vn_equity_quote_batch` (≤6 tickers, 1 call): overview + momentum + price board in one shot.
 
-**Bước 2: Gọi sub-skill cho từng mã (dispatch, song song tối đa 4).**
+**Bước 2: Call a sub-skill per ticker (dispatch, at most 4 in parallel).**
 
-Dispatch `ky-thuat-chuyen-sau` HOẶC `co-ban-chuyen-sau` HOẶC `dinh-gia-chuyen-sau` cho mỗi mã theo câu hỏi. Không gọi trực tiếp `signals_technical` / `financial_detail` / `valuation_run` ở đây.
+Dispatch `ky-thuat-chuyen-sau` OR `co-ban-chuyen-sau` OR `dinh-gia-chuyen-sau` for each ticker per the question. Do not call `signals_technical` / `financial_detail` / `valuation_run` directly here.
 
-**Bước 3: Nền ngành + validate.**
+**Bước 3: Sector backdrop + validate.**
 
-Chạy `vs_gics_index` (group) làm nền index ngành (1 call). Enrich throttle giờ cao điểm → ratios rỗng → verdict kỹ thuật-only + ghi chú thiếu, không bịa PE/ROE. Thiếu dữ liệu 1 tiêu chí → xếp hạng partial + ghi "n/6 mã có đủ", không loại mã âm thầm.
+Run `vs_gics_index` (group) as the sector index backdrop (1 call). Enrichment throttled at peak hours → empty ratios → a technicals-only verdict + a note on what is missing; never invent P/E/ROE. Missing data for one criterion → a partial ranking + "n/6 mã có đủ"; never drop a ticker silently.
 
 ## Cấu trúc câu trả lời
 
-Trình bày kết luận đúng cấu trúc sau, mỗi mục ghi số + provenance:
+Present the conclusion in exactly this structure, each item with numbers + provenance:
 
-1. Bảng xếp hạng {mã · PE · ROE · momentum · RS · giá} (`provenance: compare_equities` / `peer_compare` / `vn_equity_quote_batch` + sub-skill Bước 2).
-2. 1 dòng luận chọn: leader = chất lượng × momentum; định giá tốt = PE thấp trong nhóm ROE cao.
-3. Cảnh báo tương quan nhóm khi chia tiền cả nhóm (cross-ref `correlation_matrix`, chỉ tham chiếu).
-4. Kết luận 1 câu: chọn mã nào + vì sao.
+1. Ranking table {ticker · PE · ROE · momentum · RS · price} (`provenance: compare_equities` / `peer_compare` / `vn_equity_quote_batch` + the Bước 2 sub-skills).
+2. 1 line of reasoning: leader = quality × momentum; good value = low P/E within the high-ROE group.
+3. A group-correlation warning when splitting money across the group (cross-ref `correlation_matrix`, reference only).
+4. 1-sentence conclusion: which ticker leads the ranking + why. Never a personal buy recommendation.
 
 ## Ví dụ
 
 **Ví dụ 1:**
 Hỏi: So sánh bank
-Đạt khi: peer list ≤6 + sub-skill calls có giới hạn + bảng xếp hạng, ≤8 calls nhà.
+Đạt khi: a peer list ≤6 + bounded sub-skill calls + a ranking table, ≤8 own calls.
 
 ## Trực quan hóa
 
-Chỉ vẽ khi người dùng muốn xem hình, hoặc khi có chuỗi thời gian / so sánh mà bảng khó đọc; tối đa 1 biểu đồ mỗi câu trả lời. Vẽ bằng `chart_render` với `from_call` (mã `[ref …]` ở đầu kết quả tool) để không phải gõ lại số; cần chọn loại hình thì nạp `ve-bieu-do`. Hình hợp với dữ liệu skill này: bar so 1 metric, multiline PE series cùng đơn vị, heatmap correlation.
+Draw only when the user wants a picture, or when a time series / comparison is hard to read as a table; at most 1 chart per answer. Draw with `chart_render` using `from_call` (the `[ref …]` code at the top of a tool result) so you never retype numbers; load `ve-bieu-do` to choose the chart type. Fitting this skill's data: bar for 1 metric, multiline PE series in the same unit, heatmap correlation.

@@ -13,146 +13,145 @@ version: 1.0.0
 
 # Dầu khí Việt Nam — framework phân tích
 
-Ngành dầu khí VN gồm **bốn vòng kinh doanh khác nhau** trong một nhãn chung: khai
-thác (thượng nguồn), vận chuyển, lọc hoá dầu, và dịch vụ kỹ thuật. Nhãn chung là
-bẫy: biên của khai thác phụ thuộc giá dầu, biên của lọc dầu phụ thuộc chênh lệch
-tinh chế dầu thô, biên của dịch vụ phụ thuộc chi tiêu đầu tư. Skill này đọc ngành
-bằng giá dầu quốc tế, **độ dài đường đi của dầu (tonne-mile)** — yếu tố làm cước
-vận chuyển tăng kể cả khi lượng dầu qua kênh vận tải giảm — và năng lực thay thế
-trữ lượng của công ty. Và một ranh giới cứng: **không xem ngành này là mắt xích
-của chuỗi luân chuyển ngành** (đó là nhiệm vụ của skill chu kỳ).
+Vietnamese oil & gas holds **four different business loops** under one label: upstream
+production, shipping, refining/petrochemicals, and technical services. The shared label is a
+trap: upstream margins depend on oil prices, refining margins on the crude
+refining spread, services margins on capital spending. This skill reads the sector
+through international oil prices, **the distance oil travels (tonne-miles)** — what pushes
+freight rates up even when the volume through a shipping lane falls — and the company's
+reserve replacement. And one hard boundary: **this sector is not treated as a link
+in the sector rotation chain** (that is the cycle skill's job).
 
 ## Khi nào dùng
 
-- Dùng khi: user hỏi xu hướng nhóm dầu khí, một công ty dầu khí chịu gì từ giá dầu,
-  khác nhau giữa khai thác và lọc dầu, cú sốc địa chính trị đổi gì cho ngành.
-- Khi KHÔNG dùng (dùng skill khác thay thế):
-  - Hỏi pha thị trường, luân chuyển ngành, sóng ngành tiếp theo → `dinh-vi-chu-ky-vn`.
-  - Phân tích toàn diện một mã → `phan-tich-chuyen-sau-1-ma`.
-  - Chỉ định giá một mã → `dinh-gia-chuyen-sau`.
-  - Chỉ đọc BCTC một mã không có mảng ngành → `co-ban-chuyen-sau`.
-  - Số liệu vĩ mô quốc tế chi tiết (dự báo nguồn cung toàn cầu) → `danh-gia-vi-mo-quoc-te`.
-  - Vận tải biển nói chung (container, logistics) → `van-tai-vn`.
+- Use when: the user asks about oil & gas group trends, what an oil & gas company faces from oil prices,
+  the difference between upstream and refining, what a geopolitical shock changes for the sector.
+- Do NOT use (use another skill instead):
+  - Market phase, sector rotation, the next sector wave → `dinh-vi-chu-ky-vn`.
+  - A full ticker analysis → `phan-tich-chuyen-sau-1-ma`.
+  - Valuing one ticker only → `dinh-gia-chuyen-sau`.
+  - Only one ticker's statements without the sector angle → `co-ban-chuyen-sau`.
+  - Detailed international macro figures (global supply forecasts) → `danh-gia-vi-mo-quoc-te`.
+  - Shipping in general (containers, logistics) → `van-tai-vn`.
 
 ## Trụ cột driver
 
-| Driver | Kênh truyền dẫn | Đọc/xác minh bằng |
+| Driver | Transmission channel | Read/verify with |
 |---|---|---|
-| Giá dầu thô | Hầu hết dòng thu của ngành bám giá dầu. Nhạy theo mảng vòng kinh doanh: thượng nguồn nhạy trực tiếp, lọc dầu nhạy chênh lệch tinh chế, dịch vụ nhạy ngân sách đầu tư | `yf_commodities` (WTI, Brent) theo chu kỳ; đối chiếu giá dầu trong `news_market` |
-| Độ dài đường đi của dầu (tonne-mile) | Khi tuyến vận chuyển dài lên, cước tàu tăng kể cả khi tổng khối lượng dầu không đổi. Đây là driver của vòng vận chuyển, khác với driver của thượng nguồn | Tình trạng tuyến vận chuyển: `news_market`/`web_search`, ghi rõ nguồn và kỳ |
-| Thay thế trữ lượng | Sản lượng hiện tại chỉ bền khi trữ lượng mới được bù đắp. Trữ lượng bù đắp thấp hơn sản lượng kéo dài = sản lượng sẽ giảm trong tương lai gần | Sản lượng + trữ lượng phát hiện mới: công bố ngành trong `news_market`/`web_search`; dư đọng chi phí thăm dò trong `financial_detail` |
-| Chi tiêu đầu tư | Ngân sách E&P của tập đoàn quyết định doanh thu của vòng dịch vụ kỹ thuật, và thứ tự dự án quyết định vòng thượng nguồn | Kế hoạch đầu tư 5 năm: `news_market`/`web_search`; chỉ báo riêng mã: dự án trong `company_events` |
-| Cơ cấu mảng | Cùng một nhãn ngành, biên hoàn toàn khác. Đọc nhầm vòng kinh doanh sẽ kết luận ngược | Mảng trong `financial_detail` + bảng mảng ở `vn_company` |
-| Mùa vụ quốc tế | Nhu cầu theo mùa và các họp của nhóm sản xuất tạo nhịp giá; tác động đến nhịp ngành nhưng không đổi kỳ vọng dài hạn | Nhịp theo kỳ: `yf_commodities` theo chu kỳ |
+| Crude oil price | Most of the sector's revenue tracks oil prices. Sensitivity depends on the loop: upstream directly, refining through the refining spread, services through investment budgets | `yf_commodities` (WTI, Brent) by cycle; cross-check oil prices in `news_market` |
+| Distance oil travels (tonne-miles) | When shipping routes lengthen, tanker freight rises even if total oil volume is unchanged. This drives the shipping loop, distinct from the upstream driver | Shipping-route status: `news_market`/`web_search`, stating the source and period |
+| Reserve replacement | Current output lasts only if new reserves replace it. Replacement below production for long = output will fall in the near future | Output + new discoveries: sector disclosures in `news_market`/`web_search`; capitalised exploration costs in `financial_detail` |
+| Capital spending | The group's E&P budget decides the technical-services loop's revenue, and project ordering decides the upstream loop | The 5-year investment plan: `news_market`/`web_search`; ticker-specific: projects in `company_events` |
+| Segment mix | The same sector label, entirely different margins. Misreading the business loop leads to the opposite conclusion | Segments in `financial_detail` + the segment table in `vn_company` |
+| International seasonality | Seasonal demand and producer-group meetings set the price rhythm; they affect the sector's rhythm without changing long-term expectations | Periodic rhythm: `yf_commodities` by cycle |
 
 ## Các bước
 
-**Bước 1: Nhận diện vòng kinh doanh (song song).**
+**Bước 1: Identify the business loop (in parallel).**
 
-`symbol_lookup` · `vn_company` + `financial_detail` để xác định mảng nào nuôi lãi:
-thượng nguồn / lọc dầu / vận chuyển / dịch vụ. Ghi rõ vòng đang phân tích.
+`symbol_lookup` · `vn_company` + `financial_detail` to see which segment feeds profit:
+upstream / refining / shipping / services. State which loop you are analysing.
 
-**Bước 2: Giá dầu + cú sốc tuyến vận chuyển (song song).**
+**Bước 2: Oil prices + shipping-route shocks (in parallel).**
 
-`yf_commodities` (giá dầu theo chu kỳ) · `news_market` (trạng thái tuyến vận chuyển,
-cước tàu dầu nếu liên quan, diễn biến địa chính trị).
+`yf_commodities` (oil prices by cycle) · `news_market` (shipping-route status,
+tanker freight if relevant, geopolitical developments).
 
-**Bước 3: Sản lượng + trữ lượng + dự án (song song).**
+**Bước 3: Output + reserves + projects (in parallel).**
 
-`news_market` (sản lượng, trữ lượng phát hiện, dự án mới, khởi công) ·
-`company_events` (sự kiện dự án của riêng mã). `financial_detail`: chi phí thăm dò,
-xu hướng giá vốn.
+`news_market` (output, discovered reserves, new projects, groundbreakings) ·
+`company_events` (the ticker's own project events). `financial_detail`: exploration costs,
+the cost-of-goods trend.
 
-**Bước 4: Neo kỳ vọng + vị thế nhóm.**
+**Bước 4: Expectation anchor + position in the group.**
 
-`planned_targets` · `analyst_consensus` · `peer_compare` (so chỉ trong **cùng vòng
-kinh doanh** — so thượng nguồn với lọc dầu là vô nghĩa).
+`planned_targets` · `analyst_consensus` · `peer_compare` (compare only within **the same business
+loop** — comparing upstream with refining is meaningless).
 
-Đối chiếu công cụ: `peer_compare` chỉ dùng các key tổng quan thực sự có trong kết quả (như P/E, P/B, ROE); tham số `metrics` không tạo thêm chỉ tiêu. Biên, sản lượng, chi phí, tồn kho và KPI vận hành phải đọc `financial_detail` từng peer cùng kỳ; nếu không có thì tra công bố doanh nghiệp qua `news_symbol`/`web_search`, ghi nguồn, công thức và kỳ. Thiếu dữ liệu thì để trống, không xếp hạng.
+Tool check: `peer_compare` uses only the overview keys actually present in the result (such as P/E, P/B, ROE); its `metrics` parameter does not create extra metrics. Margins, volumes, costs, inventory and operating KPIs must be read from each peer's `financial_detail` for the same period; if missing, look up company disclosures via `news_symbol`/`web_search`, stating the source, formula and period. With missing data, leave it blank and do not rank.
 
 ## Cây quyết định công ty dầu khí đang được tiếp sức hay siết
 
+Follow the matching branch; record intermediate states and stop only at ★. Every conclusion must separate known data from what is missing; never fill in numbers or turn "chưa rõ" into "xấu".
 
-Đi theo nhánh phù hợp; ghi nhận trạng thái trung gian và chỉ dừng ở ★. Mọi kết luận phải tách dữ liệu đã biết và phần còn thiếu, không bù số hay đổi "chưa rõ" thành "xấu".
+Q1. Which segment feeds the company's profit?
+├─ Upstream → continue Q2
+├─ Refining/petrochemicals → ★ "Đánh giá chênh lệch tinh chế, tồn kho và công suất; thiếu thì chưa đủ dữ liệu cho mảng lọc dầu"
+├─ Shipping → ★ "Đánh giá riêng cước tàu, tonne-mile và hợp đồng dài hạn; tuyến dài không mặc nhiên tăng lãi toàn công ty"
+├─ Technical services → ★ "Đánh giá ngân sách E&P, backlog và tiến độ nghiệm thu; thiếu thì chưa đủ dữ liệu mảng dịch vụ"
+├─ Several segments → analyse each segment independently per Q1, then combine by the disclosed profit weights
+└─ Mix unclear → ★ "Chưa đủ dữ liệu phân mảng; không dùng giá dầu đại diện cả công ty"
 
-Q1. Mảng nào nuôi lợi nhuận công ty?
-├─ Thượng nguồn → tiếp Q2
-├─ Lọc hóa dầu → ★ "Đánh giá chênh lệch tinh chế, tồn kho và công suất; thiếu thì chưa đủ dữ liệu cho mảng lọc dầu"
-├─ Vận chuyển → ★ "Đánh giá riêng cước tàu, tonne-mile và hợp đồng dài hạn; tuyến dài không mặc nhiên tăng lãi toàn công ty"
-├─ Dịch vụ kỹ thuật → ★ "Đánh giá ngân sách E&P, backlog và tiến độ nghiệm thu; thiếu thì chưa đủ dữ liệu mảng dịch vụ"
-├─ Nhiều mảng → phân tích độc lập từng mảng theo Q1, sau đó tổng hợp theo tỷ trọng lợi nhuận công bố
-└─ Chưa rõ cơ cấu → ★ "Chưa đủ dữ liệu phân mảng; không dùng giá dầu đại diện cả công ty"
+Q2. How do oil prices compare with realised prices and sourced expectations?
+├─ Higher or rising → record favourable for upstream, continue Q3
+├─ Lower or falling → record upstream pressure, continue Q3
+└─ No expectations/realised prices → record missing, continue Q3
 
-Q2. Giá dầu so với giá thực hiện và kỳ vọng có nguồn ra sao?
-├─ Cao hơn hoặc tăng → ghi thuận lợi cho thượng nguồn, tiếp Q3
-├─ Thấp hơn hoặc giảm → ghi áp lực thượng nguồn, tiếp Q3
-└─ Chưa có kỳ vọng/giá thực hiện → ghi thiếu, tiếp Q3
+Q3. Are output and reserves sustained?
+├─ Output stable/rising, reserve replacement confirmed → record favourable, continue Q4
+├─ Reserves declining or replacement projects late → record verified pressure, continue Q4
+└─ Not disclosed → record missing reserves/output, continue Q4
 
-Q3. Sản lượng và trữ lượng có được duy trì không?
-├─ Sản lượng ổn/tăng, trữ lượng bù đắp được xác nhận → ghi thuận lợi, tiếp Q4
-├─ Trữ lượng suy giảm hoặc dự án bù sản lượng trễ → ghi áp lực đã xác minh, tiếp Q4
-└─ Chưa công bố → ghi thiếu trữ lượng/sản lượng, tiếp Q4
-
-Q4. Biên và mức tập trung có xác nhận khả năng chịu chu kỳ không?
-├─ Biên giữ được ở giá thấp, dự án đa dạng, dữ liệu đủ → ★ "Thượng nguồn có sức chống chịu; nêu điều kiện về giá và sản lượng"
-├─ Biên giảm hoặc phụ thuộc một dự án/hợp đồng → ★ "Thượng nguồn chịu áp lực hoặc tập trung rủi ro theo bằng chứng; không suy lợi ích từ cước tàu"
-└─ Chưa có dữ liệu/không đồng kỳ → ★ "Chưa đủ dữ liệu kết luận thượng nguồn; tách rõ tín hiệu giá đã biết"
+Q4. Do margins and concentration confirm resilience through the cycle?
+├─ Margins held at low prices, diversified projects, enough data → ★ "Thượng nguồn có sức chống chịu; nêu điều kiện về giá và sản lượng"
+├─ Margins falling or dependent on one project/contract → ★ "Thượng nguồn chịu áp lực hoặc tập trung rủi ro theo bằng chứng; không suy lợi ích từ cước tàu"
+└─ No data/periods misaligned → ★ "Chưa đủ dữ liệu kết luận thượng nguồn; tách rõ tín hiệu giá đã biết"
 
 ## Chỉ báo đặc thù ngành
 
-Bảng chỉ báo ngành dầu khí + cách đọc ở `references/kpi.md`.
+The oil & gas indicator table + how to read it is in `references/kpi.md`.
 
 ## Định giá theo đặc thù ngành
 
-Dầu khí định giá bằng **EV/EBITDA** (chỉ khi EBITDA dương và có thể so sánh; EBITDA không dương thì không diễn giải bội số, chuyển sang dòng tiền chuẩn hóa hoặc tài sản) và **giá trị
-trữ lượng** cho vòng thượng nguồn; vòng lọc dầu theo EV/EBITDA chu kỳ; vòng dịch
-vụ theo triển vọng ngân sách đầu tư. Không dùng P/E tại đỉnh chu kỳ: cùng một P/E
-có thể là đáy hoặc đỉnh tuỳ vị thế trong vòng. Neo kỳ vọng bằng `planned_targets` và
+Value oil & gas with **EV/EBITDA** (only when EBITDA is positive and comparable; with non-positive EBITDA, do not interpret the multiple — switch to normalised cash flow or assets) and **reserve
+value** for the upstream loop; the refining loop by cyclical EV/EBITDA; the services
+loop by the investment-budget outlook. Never use P/E at the cycle peak: the same P/E
+can be a trough or a peak depending on the position in the loop. Anchor expectations with `planned_targets` and
 `analyst_consensus`.
 
 ## Rủi ro đặc thù
 
-- **Rủi ro giá dầu đảo chiều**: trong nửa năm, không phải một quý.
-- **Rủi ro suy giảm trữ lượng**: sản lượng hiện tại không bền khi trữ lượng không
-  được bù đắp — rủi ro này chỉ hiện ra nhiều năm sau.
-- **Rủi ro chuyển dịch năng lượng**: làm khó tài trợ cho dự án mới, đặc biệt thăm
-  dò nước sâu.
-- **Rủi ro tập trung**: một dự án hoặc một giao dịch định kỳ có thể nuôi cả năm.
-- **Rủi ro đọc sai vòng kinh doanh**: nhãn ngành giấu bốn chu kỳ khác nhau.
+- **Oil price reversal risk**: within half a year, not one quarter.
+- **Reserve decline risk**: current output does not last when reserves are not
+  replaced — a risk that shows only years later.
+- **Energy transition risk**: makes new projects harder to finance, especially deep-water
+  exploration.
+- **Concentration risk**: one project or one recurring transaction can feed a whole year.
+- **Business-loop misreading risk**: the sector label hides four different cycles.
 
 ## Ranh giới
 
-- Không xác định pha thị trường, không xem dầu khí là mắt xích của chuỗi luân
-  chuyển ngành, không suy "dầu khí sẽ theo sau nhóm X" → `dinh-vi-chu-ky-vn` (nơi
-  giữ quy tắc chuỗi).
-- Không chọn mã khuyến nghị mua/bán → `phan-tich-chuyen-sau-1-ma`.
-- Không suy giá dầu kỳ vọng từ một kỳ báo cáo: dùng kỳ vọng công bố có nguồn rõ,
-  ghi kỳ.
-- Chỉ xếp hạng trong cùng vòng kinh doanh; so thượng nguồn với lọc dầu bị cấm.
+- Do not determine the market phase, treat oil & gas as a link in the sector rotation
+  chain, or infer "dầu khí sẽ theo sau nhóm X" → `dinh-vi-chu-ky-vn` (which
+  holds the chain rules).
+- Do not pick tickers to buy/sell → `phan-tich-chuyen-sau-1-ma`.
+- Never infer expected oil prices from one reporting period: use published expectations with a clear source,
+  stating the period.
+- Rank only within the same business loop; comparing upstream with refining is forbidden.
 
 ## Giới hạn
 
-- Giá dầu từ `yf_commodities` là theo chu kỳ tra được, không phải giá thực hiện của
-  hợp đồng từng công ty — ghi rõ khi dùng.
-- Trạng thái tuyến vận chuyển và cước tàu là tin có độ trễ, ghi rõ ngày nguồn.
-- Sản lượng và trữ lượng là công bố không định kỳ: ghi kỳ công bố, không nội suy.
+- Oil prices from `yf_commodities` are by the cycle available, not each company's contract
+  realised prices — say so when using them.
+- Shipping-route status and freight rates are lagged news; state the source date.
+- Output and reserves are disclosed irregularly: state the disclosure period; never extrapolate.
 
 ## Ví dụ
 
 **Ví dụ 1:**
 Hỏi: Giá dầu giảm thì nhóm dầu khí chịu gì?
-Đạt khi: xác định được vòng kinh doanh đang hỏi, có giá dầu + nguồn, tác động đến
-từng vòng theo cây Q1, và verdict ghi rõ vòng nào được tiếp sức vòng nào bị siết.
+Đạt khi: the business loop asked about is identified, oil prices + source, the effect on
+each loop per the Q1 tree, and a verdict stating which loop is supported and which is squeezed.
 
 ## Trực quan hóa
 
-Chỉ vẽ khi người dùng muốn xem hình; tối đa 1 biểu đồ. Hợp với dữ liệu skill này:
-multiline giá dầu với doanh thu mảng thượng nguồn, bar biên theo vòng kinh doanh,
-waterfall từ giá dầu ra biên đơn giản. Vẽ bằng `chart_render` với `from_call`
-(mã `[ref …]`) từ kết quả tool đã có; cần chọn loại hình thì nạp `ve-bieu-do`.
+Draw only when the user wants a picture; at most 1 chart. Fitting this skill's data:
+multiline oil prices with upstream revenue, bar margins by business loop,
+waterfall from the oil price to a simple margin. Draw with `chart_render` using `from_call`
+(the `[ref …]` code) from tool results you have; load `ve-bieu-do` to choose the chart type.
 
 ## File tham chiếu
 
-| File | Dùng khi |
+| File | Use when |
 |---|---|
-| `references/kpi.md` | Cần cách tách bốn vòng kinh doanh, đọc biên theo vòng và chỉ báo trữ lượng – sản lượng |
+| `references/kpi.md` | You need to separate the four business loops, read margins by loop and reserve–output indicators |

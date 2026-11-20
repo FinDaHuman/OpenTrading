@@ -11,39 +11,39 @@ version: 1.3.0
 
 # Kiểm tra nguồn dữ liệu
 
-Trả về bảng trạng thái 9 nguồn + 1 dòng khuyến nghị skill nào chạy được. Smoke ở đây là ping (limit/days nhỏ nhất), không lấy dữ liệu thật. Skill này không phân tích thị trường.
+Return a status table of the 9 sources + 1 line recommending which skills can run. The smoke tests here are pings (smallest limit/days), not real data pulls. This skill does no market analysis.
 
 ## Khi nào dùng
 
-- Dùng khi: user hỏi server còn sống không, Vietstock chết chưa, sáng nay có đủ data không, check nguồn trước phiên, hoặc khi các skill khác báo unavailable hàng loạt.
-- Khi KHÔNG dùng (dùng skill khác thay thế): phân tích mã/thị trường (dùng `phan-tich-chuyen-sau-1-ma`, `ky-thuat-chuyen-sau`).
+- Use when: the user asks whether the server is up, whether Vietstock is down, whether there is enough data this morning, a source check before the session, or when other skills report unavailable in bulk.
+- Do NOT use (use another skill instead): ticker/market analysis (use `phan-tich-chuyen-sau-1-ma`, `ky-thuat-chuyen-sau`).
 
 ## Các bước
 
 **Bước 0: Doctor.**
 
-Chạy `doctor` (env keys + versions local).
+Run `doctor` (local env keys + versions).
 
-**Bước 1: Tổng quan (song song).**
+**Bước 1: Overview (in parallel).**
 
-Chạy `source_status` + `vs_auth_status`: tổng quan upstream + hạn JWT.
+Run `source_status` + `vs_auth_status`: upstream overview + JWT expiry.
 
-**Bước 2: Smoke từng upstream (song song, limit/days nhỏ nhất).**
+**Bước 2: Smoke each upstream (in parallel, smallest limit/days).**
 
-`vn_quote_history` (VCB, days=5) · `vs_market_index` · `dnse_latest_trade` (VN30F1M) · `yf_market_pins` · `crypto_spot` (BTCUSDT), rồi `news_market` (limit=1) · `fred_series` (DGS10, limit=1) · `world_prediction_odds` (limit=1) · `sbv_rates`. Retry tối đa 1 lần/upstream. Tài khoản Vietstock login Google thì password fallback bị từ chối ("đăng nhập bằng Google!") — phải re-login Google + export HAR/cookie mới.
+`vn_quote_history` (VCB, days=5) · `vs_market_index` · `dnse_latest_trade` (VN30F1M) · `yf_market_pins` · `crypto_spot` (BTCUSDT), then `news_market` (limit=1) · `fred_series` (DGS10, limit=1) · `world_prediction_odds` (limit=1) · `sbv_rates`. At most 1 retry per upstream. For a Vietstock account that logs in with Google, the password fallback is refused ("đăng nhập bằng Google!") — a new Google login + HAR/cookie export is needed.
 
-**Bước 3: Validate trước khi chốt.**
+**Bước 3: Validate before concluding.**
 
-Chính skill này cũng có thể partial (1–2 nguồn chết) — verdict vẫn ra đủ bảng, đánh dấu đỏ nguồn chết.
+This skill itself may be partial (1–2 sources down) — the verdict still gives the full table, marking dead sources in red.
 
 ## Cấu trúc câu trả lời
 
-Trình bày kết luận đúng cấu trúc sau: bảng {Nguồn · Trạng thái · Độ trễ · Skill nào ảnh hưởng nếu nguồn đó chết} cho đủ 9 nguồn: vnstock · Vietstock · DNSE · yfinance · Binance · GDELT · Fireant · Gamma · FRED + 1 dòng khuyến nghị ("sáng nay đủ data chạy ..." hay "chỉ chạy được phần không dùng Vietstock").
+Present the conclusion in exactly this structure: a table {Nguồn · Trạng thái · Độ trễ · Skill nào ảnh hưởng nếu nguồn đó chết} covering all 9 sources: vnstock · Vietstock · DNSE · yfinance · Binance · GDELT · Fireant · Gamma · FRED + 1 recommendation line ("sáng nay đủ data chạy ..." or "chỉ chạy được phần không dùng Vietstock").
 
-Trạng thái viết bằng lời của người dùng hiểu được: "còn dùng được, dữ liệu mới nhất đến 12/10 14:02", "đang chậm, giới hạn số lượt gọi", "hết phiên đăng nhập". Không nói cơ chế bên trong (JWT, phiên đăng nhập HAR, TTL đệm, hạ tầng): hỏi "nguồn nào chậm" thì trả lời về dữ liệu, không về hạ tầng.
+Write statuses in words the user understands: "còn dùng được, dữ liệu mới nhất đến 12/10 14:02", "đang chậm, giới hạn số lượt gọi", "hết phiên đăng nhập". Never describe internals (JWT, HAR login sessions, cache TTL, infrastructure): asked "nguồn nào chậm", answer about the data, not the infrastructure.
 
 ## Ví dụ
 
 **Ví dụ 1:**
 Hỏi: check nguồn trước phiên
-Đạt khi: bảng đủ 9 nguồn + khuyến nghị, ≤12 calls, ≤3 phút.
+Đạt khi: a table of all 9 sources + a recommendation, ≤12 calls, ≤3 minutes.

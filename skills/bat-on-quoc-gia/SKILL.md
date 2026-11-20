@@ -11,36 +11,36 @@ version: 1.3.0
 
 # Đánh giá độ ổn định của một quốc gia
 
-Đánh giá 1 quốc gia theo thang ỔN ĐỊNH / CẢNH BÁO / BẤT ỔN / NGHIÊM TRỌNG, mỗi mức kèm evidence có URL. Hỏi nhiều nước thì chạy lặp skill này mỗi nước 1 lượt thay vì gộp.
+Assess 1 country on the scale ỔN ĐỊNH / CẢNH BÁO / BẤT ỔN / NGHIÊM TRỌNG, each level with evidence and a URL. For several countries, run this skill once per country instead of merging.
 
 ## Khi nào dùng
 
-- Dùng khi: user nêu tên MỘT quốc gia + hỏi bất ổn/ổn định/biểu tình/đảo chính.
-- Khi KHÔNG dùng (dùng skill khác thay thế):
-  - So sánh/bản đồ nhiều nước, bầu cử/chính sách toàn cầu → `danh-gia-tinh-hinh-chinh-tri-toan-cau`.
-  - Chiến sự/xung đột vũ trang + ảnh hưởng thị trường → `danh-gia-tinh-hinh-xung-dot`.
+- Use when: the user names ONE country + asks about instability/stability/protests/a coup.
+- Do NOT use (use another skill instead):
+  - Comparing/mapping several countries, global elections/policy → `danh-gia-tinh-hinh-chinh-tri-toan-cau`.
+  - War/armed conflict + market impact → `danh-gia-tinh-hinh-xung-dot`.
 
 ## Các bước
 
-**Bước 1: Đo cường độ (bắt buộc).**
+**Bước 1: Measure intensity (required).**
 
-Chạy song song 2 calls cùng upstream GDELT: `geo_intel` (topic = tên nước tiếng Anh) + `event_stats` (query = tên nước tiếng Anh). `geo_intel` đã lọc tin chính trị (bỏ thể thao/nhiễu) và trả aggregate (count/by_day/top_sources); `event_stats` trả aggregate base-rate — dùng geo_intel cho articles, event_stats cho count so baseline. CẤM đi web_search/web_fetch trước khi có counts GDELT — web chỉ dùng ở Bước 2 khi Bước 1 mỏng. Query tiếng Anh 1 lần + tối đa 1 biến thể; query tiếng Việt rỗng là đặc trưng data, không phải lỗi. GDELT rate-limit thì retry tối đa 1 lần sau backoff (server đã cache 600s); vẫn lỗi thì ghi trung thực và verdict dựa trên dữ liệu cũ.
+Run 2 calls in parallel on the same GDELT upstream: `geo_intel` (topic = the country's English name) + `event_stats` (query = the country's English name). `geo_intel` already filters political news (drops sport/noise) and returns an aggregate (count/by_day/top_sources); `event_stats` returns a base-rate aggregate — use geo_intel for articles, event_stats for counts vs the baseline. NEVER go to web_search/web_fetch before you have the GDELT counts — the web is only for Bước 2 when Bước 1 is thin. One English query + at most 1 variant; an empty Vietnamese query is a feature of the data, not an error. GDELT rate-limited → retry at most once after a backoff (the server caches 600s); if it still fails, say so honestly and base the verdict on older data.
 
-**Bước 2: Xác minh bằng tin (chỉ khi Bước 1 mỏng).**
+**Bước 2: Verify with news (only when Bước 1 is thin).**
 
-Chạy `news_market` (sources=gdelt, lọc theo tên nước) tuần tự sau Bước 1. Đủ counts + titles ở Bước 1 thì dừng, không chạy Bước 2. Coverage mỏng là KẾT QUẢ ("low-coverage ≠ stable"), không suy diễn thành ỔN ĐỊNH.
+Run `news_market` (sources=gdelt, filtered by country name) sequentially after Bước 1. If Bước 1 has enough counts + titles, stop; skip Bước 2. Thin coverage is a RESULT ("low-coverage ≠ stable"); never infer ỔN ĐỊNH from it.
 
-**Bước 3: Chốt verdict.**
+**Bước 3: Settle the verdict.**
 
-Chỉ thêm `yf_commodities` hoặc `assets_rotation` (1 call) khi user hỏi rõ "ảnh hưởng thị trường". Tối đa 6 calls/run vì mỗi call ngoài tốn quota còn làm verdict loãng — dừng ngay khi đủ evidence.
+Add `yf_commodities` or `assets_rotation` (1 call) only when the user explicitly asks about "ảnh hưởng thị trường". At most 6 calls per run, since every extra call costs quota and dilutes the verdict — stop as soon as the evidence is enough.
 
 ## Cấu trúc câu trả lời
 
-Trình bày kết luận đúng cấu trúc sau:
+Present the conclusion in exactly this structure:
 
-1. **Verdict 4 mức (chỉ chọn 1):** ỔN ĐỊNH / CẢNH BÁO / BẤT ỔN / NGHIÊM TRỌNG.
-2. **Căn cứ (mỗi mục 1 dòng + URL):** tần suất event GDELT (run này là baseline) · mức độ (keywords protest/conflict/coup trong titles) · coverage nước láng giềng · transmission sang giá nếu có Step phụ (dầu/vàng, đơn vị USD/oz hoặc % move).
-3. **Provenance:** mỗi mục bắt buộc 1 dòng evidence + URL nguồn.
+1. **4-level verdict (pick exactly 1):** ỔN ĐỊNH / CẢNH BÁO / BẤT ỔN / NGHIÊM TRỌNG.
+2. **Grounds (1 line + URL each):** GDELT event frequency (this run is the baseline) · severity (protest/conflict/coup keywords in titles) · coverage of neighbouring countries · transmission to prices if the extra step ran (oil/gold, in USD/oz or % move).
+3. **Provenance:** every item must have 1 line of evidence + a source URL.
 
 ## Ví dụ
 
@@ -57,8 +57,8 @@ Provenance: (1 dòng evidence + URL cho mỗi mục trên)
 
 **Ví dụ 2:**
 Hỏi: Bất ổn Lào
-Trả lời: Verdict kèm ghi chú trung thực "low-coverage ≠ stable", không suy diễn thành ỔN ĐỊNH.
+Trả lời: a verdict with the honest note "low-coverage ≠ stable", never inferring ỔN ĐỊNH.
 
 ## Trực quan hóa
 
-Chỉ vẽ khi người dùng muốn xem hình, hoặc khi có chuỗi thời gian / so sánh mà bảng khó đọc; tối đa 1 biểu đồ mỗi câu trả lời. Vẽ bằng `chart_render` với `from_call` (mã `[ref …]` ở đầu kết quả tool) để không phải gõ lại số; cần chọn loại hình thì nạp `ve-bieu-do`. Hình hợp với dữ liệu skill này: line event counts, line oil/gold.
+Draw only when the user wants a picture, or when a time series / comparison is hard to read as a table; at most 1 chart per answer. Draw with `chart_render` using `from_call` (the `[ref …]` code at the top of a tool result) so you never retype numbers; load `ve-bieu-do` to choose the chart type. Fitting this skill's data: line event counts, line oil/gold.

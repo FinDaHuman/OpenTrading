@@ -273,7 +273,7 @@ test("SKILL.md trỏ sang cây thay vì bảng phẳng", async () => {
   const viz = skills.find((s) => s.name === "ve-bieu-do")!
   expect(viz.body).not.toContain("## Bảng chọn hình")
   expect(viz.body).toContain("choosing-a-form.md")
-  expect(viz.body).toContain("DỪNG ở node")
+  expect(viz.body).toContain("STOP at the first matching ★ node")
 })
 
 test("exclusion metadata is optional, typed, and uses the trigger word boundaries", () => {
