@@ -44,7 +44,7 @@ A new ticker with <60 candles → null indicators → report "thiếu lịch s�
 
 Present the conclusion in exactly this structure, for EACH timeframe (1D/1W[/1M]), each item with figures + trend + provenance:
 
-1. Trend: SMA stack + ADX. 2. Momentum: RSI/MACD/stoch/CCI, each indicator specifically. 3. That timeframe's S-R. 4. Structure: HH/HL/LH/LL + Fibo + Elliott pattern/invalidation + Wyckoff phase + confidence. 5. Timeframe conclusion: higher-high or lower-low. 6. Synthesis: multi-timeframe agreement or divergence + price triggers → timing MUA/CHỜ/BÁN. 7. A 1-sentence conclusion for the whole ticker.
+1. Trend: SMA stack + ADX. 2. Momentum: RSI/MACD/stoch/CCI, each indicator specifically. 3. That timeframe's S-R. 4. Structure: HH/HL/LH/LL + Fibo + Elliott pattern/invalidation + Wyckoff phase + confidence. 5. Timeframe conclusion: higher-high or lower-low. 6. Synthesis: multi-timeframe agreement or divergence → scenarios (tích cực / cơ sở / tiêu cực), each with the price behaviour that would confirm it and the one that would invalidate it (e.g. a close above or below a support–resistance zone), and a likelihood (cao / trung bình / thấp) with the reason. A confirming or invalidating level is a condition of the scenario, never an entry, exit or stop-loss point and never a buy/wait/sell timing call. 7. A 1-sentence conclusion for the whole ticker: the most likely scenario, not a personal buy/sell recommendation.
 
 ## Ngôn ngữ trình bày
 
