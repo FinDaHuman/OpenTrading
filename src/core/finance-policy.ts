@@ -2,7 +2,7 @@ import { createHash } from "node:crypto"
 import { parseResult, recallResult } from "./tools/refs"
 import { financialValue } from "./tools/financial-source"
 /** Opt-in native read-only finance safeguards. No task IDs, oracle or financial gold. */
-import Ajv from "ajv"
+import type AjvType from "ajv"
 import type { JSONSchema7 } from "@ai-sdk/provider"
 import type { ToolDef } from "./tools/types"
 
@@ -11,16 +11,26 @@ export interface FinanceAuditOrigin {
   origin_memory_session?: string; origin_memory_turn?: number; origin_native_session_id?: string
 }
 export interface FinancePolicyOptions { enabled: true; machineResponse?: boolean; auditContext?: () => {provider_request_index?:number;memory_session?:string;memory_turn?:number;native_session_id?:string} }
-const ajv = new Ajv({ strict: false, strictSchema: true, allErrors: true, coerceTypes: false, useDefaults: false, removeAdditional: false, validateFormats: false })
-for (const keyword of ["x-opentrading-schema-profile", "x-repair-fields", "x-finite-request-variants", "x-scope-aliases"]) ajv.addKeyword({ keyword, valid: true })
-const schemaValidators = new WeakMap<object, ReturnType<typeof ajv.compile>>()
+/**
+ * Ajv loads on the first validation, not at startup (~35 ms of every launch, #336). Synchronous on
+ * purpose: callers validate inline, so a dynamic import() would change their contract.
+ */
+let ajvInstance: AjvType | undefined
+function ajv(): AjvType {
+  if (ajvInstance) return ajvInstance
+  const Ajv = (require("ajv") as { default: typeof AjvType }).default
+  const instance = new Ajv({ strict: false, strictSchema: true, allErrors: true, coerceTypes: false, useDefaults: false, removeAdditional: false, validateFormats: false })
+  for (const keyword of ["x-opentrading-schema-profile", "x-repair-fields", "x-finite-request-variants", "x-scope-aliases"]) instance.addKeyword({ keyword, valid: true })
+  return (ajvInstance = instance)
+}
+const schemaValidators = new WeakMap<object, ReturnType<AjvType["compile"]>>()
 /** The same authoritative request validation applies to both financial benchmark arms. */
 export function validateAuthoritativeInput(schema: unknown, value: unknown) {
   if (!obj(schema)) return {success:false as const,error:new Error("invalid_tool_schema: MCP input contract must be an object; arguments were not executed.")}
   let validate = schemaValidators.get(schema)
-  try { if (!validate) { validate=ajv.compile(schema as JSONSchema7); schemaValidators.set(schema,validate) } }
+  try { if (!validate) { validate=ajv().compile(schema as JSONSchema7); schemaValidators.set(schema,validate) } }
   catch(error) { return {success:false as const,error:new Error(`invalid_tool_schema: ${error instanceof Error ? error.message : String(error)}; arguments were not executed.`)} }
-  return validate(value) ? {success:true as const,value} : {success:false as const,error:new Error(`invalid_argument: ${ajv.errorsText(validate.errors)}. Correct arguments to the declared schema; rejected input is not evidence of missing data.`)}
+  return validate(value) ? {success:true as const,value} : {success:false as const,error:new Error(`invalid_argument: ${ajv().errorsText(validate.errors)}. Correct arguments to the declared schema; rejected input is not evidence of missing data.`)}
 }
 const key = (v: unknown): string => JSON.stringify(v, (_k, x) => x && typeof x === "object" && !Array.isArray(x) ? Object.fromEntries(Object.entries(x).sort(([a],[b])=>a.localeCompare(b))) : x)
 const comparisonValue = (v:unknown):unknown => Array.isArray(v) ? v.map(comparisonValue).sort((a,b)=>key(a).localeCompare(key(b))) : typeof v === "string" ? v.trim().toUpperCase() : obj(v) ? Object.fromEntries(Object.entries(v).map(([k,x])=>[k,comparisonValue(x)])) : v
@@ -239,7 +249,7 @@ export class FinancePolicyState {
       try {
         const contract = JSON.parse(publicContract[1]!)
         if (obj(contract) && typeof contract.version === "string" && obj(contract.refusalSchema) && value.value === null) {
-          const valid = ajv.compile(contract.refusalSchema)
+          const valid = ajv().compile(contract.refusalSchema)
           refusal = !!valid(value)
           if (!refusal) issues.push("Refusal must satisfy the public refusal schema: value:null, nonempty reason, evidence array.")
           if (["values","ranking","items"].some(k=>value[k] !== undefined && (Array.isArray(value[k]) ? value[k].length > 0 : obj(value[k]) ? Object.keys(value[k]).length > 0 : value[k] !== null))) issues.push("Refusal cannot contain incompatible nonempty success fields.")
