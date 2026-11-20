@@ -122,6 +122,10 @@ test("notifications: built from a view, split back out of a user message (resume
   ])
   expect(rest).toBe("còn câu hỏi của tôi")
   expect(splitNotices(noticesMessage([one])).rest).toBe("")
+  const legacy = one.replace(" · type: ", " · loại: ").replace(" · description: ", " · mô tả: ").replace(" · status: done", " · trạng thái: xong")
+  const restored = splitNotices(`${legacy}\n${"Đây là thông báo tự động của harness khi một subagent chạy nền kết thúc, không phải lời người dùng. Người dùng chưa thấy kết quả này: nếu liên quan tới việc họ đang hỏi thì tóm tắt cho họ (giữ nguồn và thời điểm)."}\n\ncâu hỏi cũ`)
+  expect(restored.notices[0]?.status).toBe("xong")
+  expect(restored.rest).toBe("câu hỏi cũ")
 })
 
 test("pruning old tool results keeps a subagent's metadata block (its agent_id stays usable)", () => {

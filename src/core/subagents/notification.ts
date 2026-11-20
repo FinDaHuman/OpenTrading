@@ -20,6 +20,10 @@ const STATUS: Record<AgentStatus, string> = {
 export const NOTE =
   "This is the harness's automatic notice that a background subagent finished, not the user's words. The user has not seen this result: if it relates to what they are asking, summarise it for them (keeping sources and times)."
 
+/** Kept for sessions saved before the English runtime text migration. */
+const LEGACY_NOTE =
+  "Đây là thông báo tự động của harness khi một subagent chạy nền kết thúc, không phải lời người dùng. Người dùng chưa thấy kết quả này: nếu liên quan tới việc họ đang hỏi thì tóm tắt cho họ (giữ nguồn và thời điểm)."
+
 export function notificationText(view: SubagentView): string {
   const tokens = view.usage.input + view.usage.output
   const seconds = Math.round(((view.endedAt ?? Date.now()) - (view.startedAt ?? view.createdAt)) / 1000)
@@ -60,6 +64,6 @@ export function splitNotices(text: string): { notices: ParsedNotice[]; rest: str
     notices.push({ agentId: runId, type: "ultradesk", description: playbook, status, stats })
     return ""
   })
-  if (notices.length > 0) rest = rest.replace(NOTE, "")
+  if (notices.length > 0) rest = rest.replace(NOTE, "").replace(LEGACY_NOTE, "")
   return { notices, rest: rest.trim() }
 }
