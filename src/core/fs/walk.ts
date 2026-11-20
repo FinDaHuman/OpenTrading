@@ -29,7 +29,7 @@ export async function walkFiles(root: string, opts: { signal?: AbortSignal; maxE
   const queue: string[] = [root]
   let seen = 0
   while (queue.length > 0) {
-    if (opts.signal?.aborted) throw new Error("Đã huỷ.")
+    if (opts.signal?.aborted) throw new Error("Cancelled.")
     const dir = queue.shift()!
     let entries: Dirent[]
     try {

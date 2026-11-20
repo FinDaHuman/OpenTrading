@@ -415,7 +415,7 @@ export class PermissionGate {
           }
         } catch (error) {
           const why = error instanceof Error ? error.message : String(error)
-          pending!.resolve({ allow: false, reason: "unsaved", message: `không lưu được quyền "luôn cho phép" (${why}); chưa cấp quyền nào, người dùng có thể duyệt lại "chỉ lần này" hoặc "cả phiên"` })
+          pending!.resolve({ allow: false, reason: "unsaved", message: `the "always allow" permission could not be saved (${why}); nothing was granted, the user can approve again with "chỉ lần này" or "cả phiên"` })
           return
         }
       }

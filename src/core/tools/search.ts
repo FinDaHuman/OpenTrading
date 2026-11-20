@@ -12,7 +12,15 @@ import type { ToolDef } from "./types"
  */
 
 /** First line of every tool_search / load_skill result that made tools callable. */
-export const LOADED_PREFIX = "Đã nạp tool: "
+export const LOADED_PREFIX = "Tools loaded: "
+/** The same line before 20/11/2026: saved sessions and compact markers still hold it. */
+export const LEGACY_LOADED_PREFIX = "Đã nạp tool: "
+
+/** The loaded-tools prefix `line` starts with, in either language, or undefined. */
+export function loadedPrefixOf(line: string | undefined): string | undefined {
+  if (line === undefined) return undefined
+  return line.startsWith(LOADED_PREFIX) ? LOADED_PREFIX : line.startsWith(LEGACY_LOADED_PREFIX) ? LEGACY_LOADED_PREFIX : undefined
+}
 
 const words = (text: string) => fold(text).split(/[^a-z0-9]+/).filter(Boolean)
 
@@ -173,7 +181,7 @@ export function describeTool(registry: ToolRegistry, def: ToolDef) {
   const required = new Set(schema.required ?? [])
   const params = Object.entries(schema.properties ?? {}).map(([name, raw]) => {
     const p = (typeof raw === "object" ? raw : {}) as JSONSchema7
-    const bits = [typeOf(p), required.has(name) ? "bắt buộc" : undefined, p.default !== undefined ? `mặc định ${JSON.stringify(p.default)}` : undefined]
+    const bits = [typeOf(p), required.has(name) ? "required" : undefined, p.default !== undefined ? `default ${JSON.stringify(p.default)}` : undefined]
     const note = p.description ? ` — ${clip(p.description, 80)}` : ""
     return `- ${name} (${bits.filter(Boolean).join(", ")})${note}`
   })
@@ -181,5 +189,5 @@ export function describeTool(registry: ToolRegistry, def: ToolDef) {
   // description says commands wait for approval, which contradicts the declared one.
   const present = new Set(registry.list().map((d) => d.name))
   const description = def.descriptionFor?.(present, registry.gate?.mode) ?? def.description
-  return [`## ${def.name}`, clip(description, 400), params.length > 0 ? `Tham số:\n${params.join("\n")}` : "Không có tham số."].join("\n")
+  return [`## ${def.name}`, clip(description, 400), params.length > 0 ? `Parameters:\n${params.join("\n")}` : "No parameters."].join("\n")
 }

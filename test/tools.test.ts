@@ -120,7 +120,7 @@ test("load_skill loads the deferred tools a skill requires (first line, for the 
     () => deferred,
   )
   const out = (await tool.execute({ name: "prices" }, ctx())) as string
-  expect(out.split("\n")[0]).toBe("Đã nạp tool: mcp__ot__vn_quote_history, mcp__ot__vn_index_ohlcv")
+  expect(out.split("\n")[0]).toBe("Tools loaded: mcp__ot__vn_quote_history, mcp__ot__vn_index_ohlcv")
   expect(out).toContain("BODY")
   expect(((await tool.execute({ name: "plain" }, ctx())) as string).startsWith("Skill folder")).toBe(true)
 })

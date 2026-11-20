@@ -93,11 +93,11 @@ export function secretReason(abs: string, e?: SafetyEnv): string | undefined {
   const { home, data, platform } = env(e)
   const flavor = pathFor(platform)
   const name = flavor.basename(abs)
-  if (SECRET_NAME.test(name) && !ENV_TEMPLATE.test(name)) return `tên file bí mật (${name})`
-  for (const file of DATA_SECRETS) if (samePathKey(abs, platform) === samePathKey(flavor.join(data, file), platform)) return `khoá/token của OpenTrading (${file})`
-  for (const dir of DATA_SECRET_DIRS) if (isInside(abs, flavor.join(data, dir), platform)) return `bản sao file của OpenTrading (${dir})`
-  for (const dir of HOME_SECRET_DIRS) if (isInside(abs, flavor.join(home, dir), platform)) return `thư mục chứa thông tin đăng nhập (~/${dir})`
-  for (const file of HOME_SECRET_FILES) if (samePathKey(abs, platform) === samePathKey(flavor.join(home, file), platform)) return `file chứa token (~/${file})`
+  if (SECRET_NAME.test(name) && !ENV_TEMPLATE.test(name)) return `a secret file name (${name})`
+  for (const file of DATA_SECRETS) if (samePathKey(abs, platform) === samePathKey(flavor.join(data, file), platform)) return `an OpenTrading key/token file (${file})`
+  for (const dir of DATA_SECRET_DIRS) if (isInside(abs, flavor.join(data, dir), platform)) return `OpenTrading's file backups (${dir})`
+  for (const dir of HOME_SECRET_DIRS) if (isInside(abs, flavor.join(home, dir), platform)) return `a folder holding login credentials (~/${dir})`
+  for (const file of HOME_SECRET_FILES) if (samePathKey(abs, platform) === samePathKey(flavor.join(home, file), platform)) return `a file holding tokens (~/${file})`
   return undefined
 }
 
@@ -125,14 +125,14 @@ const DEVICE = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])(\..*)?$/i
  */
 export function suspiciousWindowsPath(p: string, platform: NodeJS.Platform = process.platform, opts: { shortNames?: boolean } = {}): string | undefined {
   if (!isWin(platform)) return undefined
-  if (/^\\\\[?.]\\/.test(p)) return "tiền tố \\\\?\\ hoặc \\\\.\\"
+  if (/^\\\\[?.]\\/.test(p)) return "a \\\\?\\ or \\\\.\\ prefix"
   const rest = p.replace(/^[a-zA-Z]:/, "")
-  if (rest.includes(":")) return "alternate data stream (dấu : trong đường dẫn)"
+  if (rest.includes(":")) return "an alternate data stream (a : inside the path)"
   for (const segment of rest.split(/[\\/]+/)) {
     if (!segment || segment === "." || segment === "..") continue
-    if (DEVICE.test(segment)) return `tên thiết bị DOS (${segment})`
-    if (/[. ]$/.test(segment)) return `đoạn đường dẫn kết thúc bằng dấu chấm/khoảng trắng (${segment})`
-    if (opts.shortNames !== false && /~\d/.test(segment)) return `tên ngắn 8.3 (${segment})`
+    if (DEVICE.test(segment)) return `a DOS device name (${segment})`
+    if (/[. ]$/.test(segment)) return `a path segment ending in a dot or space (${segment})`
+    if (opts.shortNames !== false && /~\d/.test(segment)) return `an 8.3 short name (${segment})`
   }
   return undefined
 }
@@ -205,14 +205,14 @@ export function protectedWriteReason(abs: string, e?: SafetyEnv): string | undef
   // The fallback workspace sits in the data dir (itself named .opentrading): folder names
   // count from the workspace down, not above it.
   const fallback = flavor.join(data, "workspace")
-  if (isInside(abs, data, platform) && !isInside(abs, fallback, platform)) return "dữ liệu và cấu hình của OpenTrading"
+  if (isInside(abs, data, platform) && !isInside(abs, fallback, platform)) return "OpenTrading's data and configuration"
   const name = flavor.basename(abs)
-  if (PROTECTED_NAME.test(name)) return `file cấu hình (${name})`
+  if (PROTECTED_NAME.test(name)) return `a configuration file (${name})`
   const below = isInside(abs, fallback, platform) ? flavor.relative(fallback, abs) : flavor.normalize(abs)
   const segments = below.split(/[\\/]+/)
   const dir = segments.slice(0, -1).find((s) => PROTECTED_DIR.has(s.toLowerCase()))
-  if (dir) return `thư mục cấu hình ${dir}`
-  if (AUTOSTART.some((d) => isInside(abs, flavor.join(home, d), platform))) return "thư mục tự chạy khi đăng nhập"
+  if (dir) return `the configuration folder ${dir}`
+  if (AUTOSTART.some((d) => isInside(abs, flavor.join(home, d), platform))) return "a folder that runs at login"
   return undefined
 }
 
@@ -246,13 +246,13 @@ export function writeCheck(
   inScratch: (p: string) => boolean = () => false,
 ): WriteCheck {
   const platform = e?.platform ?? process.platform
-  if (isUncPath(abs)) return { block: "không ghi lên đường dẫn mạng (\\\\server\\share)" }
+  if (isUncPath(abs)) return { block: "no writes to a network path (\\\\server\\share)" }
   const odd = suspiciousWindowsPath(abs, platform, { shortNames: false })
-  if (odd) return { block: `đường dẫn dạng lạ: ${odd}` }
+  if (odd) return { block: `unusual path form: ${odd}` }
   const resolved = real(abs)
   // 8.3 short names only on the real path (the given one may be C:\Users\RUNNER~1\…).
   const oddReal = suspiciousWindowsPath(resolved, platform)
-  if (oddReal) return { block: `đường dẫn dạng lạ: ${oddReal}` }
+  if (oddReal) return { block: `unusual path form: ${oddReal}` }
   const { home, data } = env(e)
   const realEnv: SafetyEnv = { home: real(home), data: real(data), platform }
   // Before the protected names (`git init`, a .venv in the temp folder are fine), after key

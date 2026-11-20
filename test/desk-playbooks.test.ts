@@ -160,7 +160,7 @@ test("sang-loc: too few scorecards ends early as failed with a resumable note, n
   )
   // Not "done": /desk must show it unfinished, and r must resume it as the note says.
   expect(view.status).toBe("failed")
-  expect(view.error).toContain("Không đủ dữ liệu")
+  expect(view.error).toContain("Not enough data to screen")
   expect(view.error).toContain("/desk resume")
   expect(specs.some((s) => s.type === "tong-hop")).toBe(false)
 })
@@ -168,7 +168,7 @@ test("sang-loc: too few scorecards ends early as failed with a resumable note, n
 test("sang-loc: no scorecard at all (0/2) ends failed, not done", async () => {
   const { view } = await runPlaybook(sangLoc, { tickers: ["FPT", "VCB"] }, "small", () => fail())
   expect(view.status).toBe("failed")
-  expect(view.error).toContain("0/2 thẻ điểm")
+  expect(view.error).toContain("0/2 scorecards")
 })
 
 test("sang-loc: a card about another ticker is rejected, never relabelled as the ticker asked for", async () => {
@@ -307,7 +307,7 @@ test("tranh-bien: a failed analyst is logged and named to the referee; no report
   expect(partial.specs.find((s) => s.type === "tong-hop")!.prompt).toContain("missing tin-tuc reports")
   const none = await runPlaybook(tranhBien, { ticker: "FPT" }, "small", () => fail())
   expect(none.view.status).toBe("failed")
-  expect(none.view.error).toContain("Không lấy được báo cáo nào")
+  expect(none.view.error).toContain("No analyst report on")
   expect(none.specs.some((s) => s.type === "bull")).toBe(false)
 })
 

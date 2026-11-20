@@ -53,6 +53,19 @@ test("every failure the harness writes gets its class", () => {
     ['MCP server "ot" đang lỗi kết nối liên tiếp nên lần gọi này chưa được gửi đi.', "transport"],
     ['MCP server "ot" chưa kết nối: x. Xem /mcp.', "transport"],
     ["Error executing tool x: boom", "tool-error"],
+    // Denials and the loader line in both languages: sessions saved before 20/11/2026 hold the Vietnamese.
+    ["Auto mode blocked shell [Git phá huỷ]: x.", "denied"],
+    ["Auto mode chặn shell [Git phá huỷ]: x.", "denied"],
+    ["The user declined to run this tool.", "denied"],
+    ["Người dùng từ chối chạy tool này.", "denied"],
+    ["A block rule of the user's (permissions.deny) does not allow shell.", "denied"],
+    ["Quy tắc chặn của người dùng (permissions.deny) không cho chạy shell.", "denied"],
+    ["Could not run: unusual path form: an 8.3 short name (PROGRA~1).", "denied"],
+    ["Không chạy được: đường dẫn dạng lạ: tên ngắn 8.3 (PROGRA~1).", "denied"],
+    ["Tools loaded: mcp__ot__x\nTool mcp__ot__x was not in this step", "deferred"],
+    ["Đã nạp tool: mcp__ot__x\nTool mcp__ot__x chưa có trong bước này nên chưa chạy", "deferred"],
+    ["Cancelled.", "aborted"],
+    ["Tool interrupted because the previous session ended midway.", "aborted"],
   ]
   for (const [text, outcome] of cases) expect([text, classifyOutcome(false, text)]).toEqual([text, outcome])
   expect(classifyOutcome(true, "giá 98.5")).toBe("ok")
@@ -143,7 +156,7 @@ test("loads and denials neither add to the streak nor break it", () => {
 test("the reminder names the gaps, and the streak only once", () => {
   expect(failureNudge({ gaps: [], streak: 0 })).toBeUndefined()
   expect(failureNudge({ gaps: ["a", "b"], streak: 1 })).toContain("a, b")
-  expect(failureNudge({ gaps: [], streak: FAILURE_STREAK_NUDGE })).toContain("bước liên tiếp")
+  expect(failureNudge({ gaps: [], streak: FAILURE_STREAK_NUDGE })).toContain("steps in a row")
   expect(failureNudge({ gaps: [], streak: FAILURE_STREAK_NUDGE + 1 })).toBeUndefined()
 })
 

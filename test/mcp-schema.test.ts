@@ -152,7 +152,7 @@ test("synthetic: a root union keeps every variant's parameters (as optional)", (
 
 test("Gemini: non-string enums keep their type and move into the description", () => {
   const out = sanitizeSchema({ type: "object", properties: { level: { type: "integer", enum: [1, 2, 3], description: "Mức" } } }, "gemini") as Record<string, any>
-  expect(out.properties.level).toEqual({ type: "integer", description: "Mức Một trong: 1, 2, 3." })
+  expect(out.properties.level).toEqual({ type: "integer", description: "Mức One of: 1, 2, 3." })
   const plain = sanitizeSchema({ type: "object", properties: { level: { type: "integer", enum: [1, 2] } } }) as Record<string, any>
   expect(plain.properties.level.enum).toEqual([1, 2])
 })

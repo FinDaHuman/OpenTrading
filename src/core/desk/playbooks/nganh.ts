@@ -168,7 +168,7 @@ async function run(ctx: DeskContext<Args>): Promise<string> {
   const cards = cardResults.flatMap((c, i) => (c ? [{ ...c, ticker: companies[i]! }] : []))
   const missing = [...tier.themes.filter((_, i) => !themeResults[i]).map((t) => `báo cáo ${t.type}`), ...companies.filter((_, i) => !cardResults[i])]
   if (missing.length > 0) ctx.log(`Thiếu: ${missing.join(", ")}`)
-  if (cards.length === 0 && themes.length === 0) throw new DeskNoData(`Không lấy được dữ liệu nào cho ngành ${ctx.args.nganh}. Chạy tiếp bằng /desk resume.`)
+  if (cards.length === 0 && themes.length === 0) throw new DeskNoData(`No data could be fetched for the sector ${ctx.args.nganh}. The user can continue with /desk resume.`)
   const ranked = rank(cards, ctx.args.cau_hoi)
 
   const extra: { q: string; a: string }[] = []

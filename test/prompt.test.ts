@@ -104,7 +104,7 @@ test("investor profile rides the static system prefix, capped per tier, and neve
   const row = a.report.find((r) => r.id === "ho_so_nha_dau_tu")!
   expect(row.truncated).toBe(true)
   expect(row.tokens).toBeLessThanOrEqual(1_400)
-  expect(a.system).toContain("đã được cắt bớt")
+  expect(a.system).toContain("cut to fit the context budget")
 })
 
 test("tier C keeps style (reader-language rules cannot be dropped) and the market clock", () => {
@@ -206,8 +206,10 @@ test("tool guidance lives in one place and the format example carries no real-lo
   // ≈2.25k after the 20/11/2026 #355 review: bat_bien 3 keeps the general "do not choose in any
   // form" ban, and the no-tags rule exempts the the_goi_y card (guard +30).
   // The 16/11/2026 English tool texts (the <tool_hoan> and MCP headers) also count higher in chars/4
-  // although real tokens fell.
-  expect(Math.ceil(a.system.length / 4)).toBeLessThan(2_300)
+  // although real tokens fell: 2 260 measured with all six English PRs merged. 2 309 after the
+  // 20/11/2026 style.md rule against mixing languages (mixed answers 5/27 vs 1/27 in the #357 eval).
+  // 2 338 after the 21/11/2026 skill-catalog header (load only the skill the question is about).
+  expect(Math.ceil(a.system.length / 4)).toBeLessThan(2_350)
 })
 
 test("the constraints budget key is explicit and never cuts on any tier", () => {

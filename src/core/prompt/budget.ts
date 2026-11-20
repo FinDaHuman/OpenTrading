@@ -51,12 +51,17 @@ export interface Fitted {
   dropped: boolean
 }
 
+/** The line `fit` ends a cut text with. */
+export const BUDGET_MARK = "[… the rest was cut to fit the context budget]"
+/** The same line before 20/11/2026 (Vietnamese), still in saved sessions. */
+export const LEGACY_BUDGET_MARK = "[… phần còn lại đã được cắt bớt để vừa ngân sách ngữ cảnh]"
+
 /** Cut `text` to `budget` tokens (keeping the start) and say so, or drop it when budget is 0. */
 export function fit(text: string, budget: number | undefined): Fitted {
   const tokens = estimateTokens(text)
   if (budget === undefined || tokens <= budget) return { text, tokens, truncated: false, dropped: false }
   if (budget <= 0) return { text: "", tokens: 0, truncated: false, dropped: true }
-  const note = "\n[… phần còn lại đã được cắt bớt để vừa ngân sách ngữ cảnh]"
+  const note = `\n${BUDGET_MARK}`
   const cut = text.slice(0, Math.max(0, budget * 4 - note.length)).trimEnd() + note
   return { text: cut, tokens: estimateTokens(cut), truncated: true, dropped: false }
 }

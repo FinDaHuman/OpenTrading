@@ -74,9 +74,9 @@ test("keyword: a whole word, any case, never inside another word", () => {
 
 test("reminder: why the request may run playbooks, and each playbook's use", () => {
   const text = deskReminder("keyword", [playbook])
-  expect(text).toContain("gõ ultradesk")
+  expect(text).toContain("typed ultradesk")
   expect(text).toContain("- sang_loc: So sánh, xếp hạng nhiều mã")
-  expect(text).toContain("thay vì tự điều phối theo skill")
+  expect(text).toContain("instead of orchestrating the skill yourself")
   expect(deskReminder("session", [playbook])).toContain("/desk on")
 })
 
@@ -120,7 +120,7 @@ test("▸▸ auto with an opt-in asks once per playbook: yes remembers it", asyn
 test("bad playbook or args go back to the model before any card", async () => {
   const h = harness({ optIn: "keyword" })
   await expect(h.prepare({ khong_co: {} })).rejects.toThrow("Fill exactly one playbook")
-  await expect(h.prepare({ sang_loc: { tickers: [] } })).rejects.toThrow("không hợp lệ")
+  await expect(h.prepare({ sang_loc: { tickers: [] } })).rejects.toThrow("Invalid arguments")
   expect(h.asked).toHaveLength(0)
 })
 

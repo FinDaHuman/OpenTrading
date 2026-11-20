@@ -795,7 +795,7 @@ export async function loadSession(id: string, opts: { check?: RedactionCheck } =
  * `ensure_call_outputs_present`), and drop results whose call is missing. `reason`
  * lets an aborted turn say so instead of blaming a finished session.
  */
-export function closeDanglingToolCalls(messages: ModelMessage[], reason = "Tool bị ngắt vì phiên trước kết thúc giữa chừng."): { messages: ModelMessage[]; patched: number } {
+export function closeDanglingToolCalls(messages: ModelMessage[], reason = "Tool interrupted because the previous session ended midway."): { messages: ModelMessage[]; patched: number } {
   const results = new Set<string>()
   const calls = new Set<string>()
   for (const m of messages) {

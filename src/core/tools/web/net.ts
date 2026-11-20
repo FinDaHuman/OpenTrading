@@ -53,30 +53,30 @@ const systemResolver: Resolver = async (host) => (await lookup(host, { all: true
  * differently in between.
  */
 export async function assertPublicHost(host: string, resolve: Resolver = systemResolver) {
-  if (isPrivateHost(host)) throw new Error("Không tải địa chỉ nội bộ (localhost, mạng LAN).")
+  if (isPrivateHost(host)) throw new Error("Local addresses (localhost, LAN) are not fetched.")
   if (isIP(host.replace(/^\[|\]$/g, ""))) return
   let addresses: string[]
   try {
     addresses = await resolve(host)
   } catch {
-    throw new Error(`Không phân giải được tên miền ${host}.`)
+    throw new Error(`Could not resolve the domain ${host}.`)
   }
-  if (addresses.some(isPrivateAddress)) throw new Error(`Tên miền ${host} trỏ về địa chỉ nội bộ; không tải.`)
+  if (addresses.some(isPrivateAddress)) throw new Error(`The domain ${host} points to a local address; not fetched.`)
 }
 
 /** Validate and normalise a URL the model gave: https, no credentials, a real host. */
 export function checkUrl(raw: string): URL {
-  if (raw.length > MAX_URL_LENGTH) throw new Error(`URL dài quá ${MAX_URL_LENGTH} ký tự.`)
+  if (raw.length > MAX_URL_LENGTH) throw new Error(`The URL is longer than ${MAX_URL_LENGTH} characters.`)
   let url: URL
   try {
     url = new URL(raw)
   } catch {
-    throw new Error(`URL không hợp lệ: ${raw.slice(0, 200)}`)
+    throw new Error(`Invalid URL: ${raw.slice(0, 200)}`)
   }
   if (url.protocol === "http:") url.protocol = "https:"
-  if (url.protocol !== "https:") throw new Error("Chỉ tải được http(s).")
-  if (url.username || url.password) throw new Error("URL không được chứa tên đăng nhập/mật khẩu.")
-  if (!url.hostname.includes(".") && !isIP(url.hostname)) throw new Error(`Tên miền không hợp lệ: ${url.hostname}`)
+  if (url.protocol !== "https:") throw new Error("Only http(s) can be fetched.")
+  if (url.username || url.password) throw new Error("The URL must not contain a username or password.")
+  if (!url.hostname.includes(".") && !isIP(url.hostname)) throw new Error(`Invalid domain: ${url.hostname}`)
   return url
 }
 
@@ -91,7 +91,7 @@ export type Fetched =
 /** Read at most MAX_BYTES; a larger body is an error rather than a silent cut. */
 async function readCapped(res: Response): Promise<Uint8Array> {
   const declared = Number(res.headers.get("content-length") ?? 0)
-  if (declared > MAX_BYTES) throw new Error(`Trang quá lớn (${Math.round(declared / 1024 / 1024)}MB > ${MAX_BYTES / 1024 / 1024}MB).`)
+  if (declared > MAX_BYTES) throw new Error(`The page is too large (${Math.round(declared / 1024 / 1024)}MB > ${MAX_BYTES / 1024 / 1024}MB).`)
   if (!res.body) return new Uint8Array()
   const reader = res.body.getReader()
   const chunks: Uint8Array[] = []
@@ -102,7 +102,7 @@ async function readCapped(res: Response): Promise<Uint8Array> {
     size += value.byteLength
     if (size > MAX_BYTES) {
       await reader.cancel()
-      throw new Error(`Trang quá lớn (> ${MAX_BYTES / 1024 / 1024}MB).`)
+      throw new Error(`The page is too large (> ${MAX_BYTES / 1024 / 1024}MB).`)
     }
     chunks.push(value)
   }
@@ -141,9 +141,9 @@ export async function fetchPublic(start: URL, signal: AbortSignal, deps: { fetch
     await res.body?.cancel()
     const next = new URL(location, url)
     if (next.protocol === "http:" && sameSite(new URL(next.href.replace(/^http:/, "https:")), url)) next.protocol = "https:"
-    if (!/^https?:$/.test(next.protocol)) throw new Error("Trang chuyển hướng tới địa chỉ không phải http(s).")
+    if (!/^https?:$/.test(next.protocol)) throw new Error("The page redirects to a non-http(s) address.")
     if (!sameSite(next, url)) return { kind: "redirect", from: start, to: next, status: res.status }
-    if (hop >= MAX_SAME_HOST_REDIRECTS) throw new Error(`Quá nhiều lần chuyển hướng (> ${MAX_SAME_HOST_REDIRECTS}).`)
+    if (hop >= MAX_SAME_HOST_REDIRECTS) throw new Error(`Too many redirects (> ${MAX_SAME_HOST_REDIRECTS}).`)
     url = next
   }
 }

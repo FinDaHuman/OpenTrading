@@ -34,6 +34,21 @@ export const USER_DENY_PREFIX = "The user declined to run this tool"
 export const RULE_DENY_PREFIX = "A block rule of the user's"
 export const USER_NOTE = "The user's message: "
 
+/**
+ * The same prefixes as written before the runtime text moved to English (20/11/2026). Sessions
+ * saved earlier still hold them, so every reader takes both lists.
+ */
+export const LEGACY_AUTO_BLOCK_PREFIX = "Auto mode chặn "
+export const LEGACY_USER_DENY_PREFIX = "Người dùng từ chối chạy tool này"
+export const LEGACY_RULE_DENY_PREFIX = "Quy tắc chặn của người dùng"
+export const LEGACY_USER_NOTE = "Lời nhắn của người dùng: "
+export const AUTO_BLOCK_PREFIXES = [AUTO_BLOCK_PREFIX, LEGACY_AUTO_BLOCK_PREFIX] as const
+export const USER_DENY_PREFIXES = [USER_DENY_PREFIX, LEGACY_USER_DENY_PREFIX] as const
+export const RULE_DENY_PREFIXES = [RULE_DENY_PREFIX, LEGACY_RULE_DENY_PREFIX] as const
+
+/** The prefix of `prefixes` that `text` starts with, or undefined. */
+export const prefixOf = (text: string, prefixes: readonly string[]) => prefixes.find((p) => text.startsWith(p))
+
 const NO_WORKAROUND =
   "Do not do this same thing with another tool or command (write_file, edit_file, an MCP tool, a subagent, a script, a rewritten command): that works around this decision and will be blocked too. " +
   "Only a clearly safer way that does not have that effect is allowed (e.g. writing a new file instead of overwriting, or giving the command for the user to run)."
@@ -96,9 +111,9 @@ export function deniedMessage(decision: DenyInfo, opts: { tool?: string; agent?:
 
 /** The user's note in a denial the model read (the TUI's one-line summary). */
 export function userNoteOf(text: string): string | undefined {
-  const at = text.indexOf(USER_NOTE)
-  if (at < 0) return undefined
-  const rest = text.slice(at + USER_NOTE.length)
+  const mark = [USER_NOTE, LEGACY_USER_NOTE].find((m) => text.includes(m))
+  if (!mark) return undefined
+  const rest = text.slice(text.indexOf(mark) + mark.length)
   const end = rest.indexOf("\n\n")
   return (end < 0 ? rest : rest.slice(0, end)).trim() || undefined
 }

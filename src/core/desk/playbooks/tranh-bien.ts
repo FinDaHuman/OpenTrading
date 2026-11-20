@@ -108,7 +108,7 @@ async function run(ctx: DeskContext<Args>): Promise<string> {
   const reports = tier.analysts.flatMap((a, i) => (results[i] ? [{ a, text: results[i]! }] : []))
   const missing = tier.analysts.filter((_, i) => !results[i]).map((a) => a.type)
   if (missing.length > 0) ctx.log(`Thiếu báo cáo: ${missing.join(", ")}`)
-  if (reports.length === 0) throw new DeskNoData(`Không lấy được báo cáo nào về ${ticker}: không đủ bằng chứng để tranh biện. Chạy tiếp bằng /desk resume.`)
+  if (reports.length === 0) throw new DeskNoData(`No analyst report on ${ticker} could be fetched: not enough evidence for a debate. The user can continue with /desk resume.`)
   const block = reportsBlock(reports)
 
   ctx.phase("Tranh luận")

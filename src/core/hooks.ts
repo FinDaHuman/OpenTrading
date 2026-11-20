@@ -64,7 +64,7 @@ export class HookBus {
     }
     const joined = outcome.context.join("\n\n")
     if (joined.length > MAX_HOOK_CONTEXT_CHARS) {
-      outcome.context = [joined.slice(0, MAX_HOOK_CONTEXT_CHARS) + "\n[… đã cắt bớt]"]
+      outcome.context = [joined.slice(0, MAX_HOOK_CONTEXT_CHARS) + "\n[… cut]"]
     }
     return outcome
   }

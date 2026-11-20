@@ -15,7 +15,7 @@ export const Ticker = z
 export function cardFor(ticker: string) {
   return (card: { ticker?: unknown } | null | undefined): string | undefined => {
     const got = typeof card?.ticker === "string" ? Ticker.safeParse(card.ticker) : undefined
-    return got?.success && got.data === ticker ? undefined : `thẻ điểm của mã ${String(card?.ticker ?? "(trống)")}, không phải ${ticker}`
+    return got?.success && got.data === ticker ? undefined : `a scorecard for ${String(card?.ticker ?? "(empty)")}, not ${ticker}`
   }
 }
 

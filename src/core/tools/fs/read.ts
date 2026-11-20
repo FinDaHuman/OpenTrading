@@ -156,7 +156,7 @@ function readSheet(abs: string, bytes: Uint8Array, input: ReadOptions) {
   try {
     book = readXlsx(bytes, input.sheet)
   } catch (error) {
-    throw new Error(`Không đọc được ${abs}: ${error instanceof Error ? error.message : String(error)}`)
+    throw new Error(`Could not read ${abs}: ${error instanceof Error ? error.message : String(error)}`)
   }
   if (book.sheets.length === 0) return `Excel ${abs} · no sheets.`
   const list =
@@ -183,7 +183,7 @@ export async function readFileAt(abs: string, input: ReadOptions, state?: FileSt
   if (imageType) {
     if (info.size > MAX_IMAGE_BYTES) throw new Error(`Image ${abs} is ${Math.round(info.size / 1024)} KB, over ${Math.round(MAX_IMAGE_BYTES / 1024)} KB: ask the user to shrink or crop it.`)
     const bytes = new Uint8Array(await Bun.file(abs).arrayBuffer())
-    return { output: `Ảnh ${abs} (${Math.round(info.size / 1024)} KB).`, images: [{ data: Buffer.from(bytes).toString("base64"), mediaType: imageType }] }
+    return { output: `Image ${abs} (${Math.round(info.size / 1024)} KB).`, images: [{ data: Buffer.from(bytes).toString("base64"), mediaType: imageType }] }
   }
 
   if (ext === ".pdf") {
@@ -201,7 +201,7 @@ export async function readFileAt(abs: string, input: ReadOptions, state?: FileSt
     try {
       text = readDocx(new Uint8Array(await Bun.file(abs).arrayBuffer()))
     } catch (error) {
-      throw new Error(`Không đọc được ${abs}: ${error instanceof Error ? error.message : String(error)}`)
+      throw new Error(`Could not read ${abs}: ${error instanceof Error ? error.message : String(error)}`)
     }
     return paged(`Word ${abs}`, text.split("\n"), input, "lines")
   }

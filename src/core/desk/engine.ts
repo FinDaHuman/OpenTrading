@@ -224,7 +224,7 @@ export class DeskEngine {
     const playbook = this.playbook(name)
     if (!playbook) {
       const known = this.deps.playbooks().map((p) => p.meta.name)
-      throw new Error(`Không có playbook "${name}".${known.length ? ` Có: ${known.join(", ")}.` : ""}`)
+      throw new Error(`No playbook "${name}".${known.length ? ` Available: ${known.join(", ")}.` : ""}`)
     }
     return playbook
   }
@@ -314,11 +314,11 @@ export class DeskEngine {
       size: state.view.size,
       agent: (prompt, opts = {}) => this.agent(state, playbook, prompt, { ...opts, phase: opts.phase !== undefined ? prefix + opts.phase : undefined }),
       parallel: (thunks) => {
-        if (thunks.length > MAX_ITEMS) throw new Error(`parallel() nhận tối đa ${MAX_ITEMS} việc, nhận ${thunks.length}.`)
+        if (thunks.length > MAX_ITEMS) throw new Error(`parallel() takes at most ${MAX_ITEMS} tasks, got ${thunks.length}.`)
         return Promise.all(thunks.map((thunk) => Promise.resolve().then(thunk).catch((error) => this.dropped(state, error))))
       },
       pipeline: (items, ...stages) => {
-        if (items.length > MAX_ITEMS) throw new Error(`pipeline() nhận tối đa ${MAX_ITEMS} mục, nhận ${items.length}.`)
+        if (items.length > MAX_ITEMS) throw new Error(`pipeline() takes at most ${MAX_ITEMS} items, got ${items.length}.`)
         return Promise.all(
           items.map((item, index) =>
             stages
@@ -340,7 +340,7 @@ export class DeskEngine {
         requests: () => state.view.counters.requests,
       },
       playbook: async (name, args, opts) => {
-        if (depth >= 1) throw new Error("Playbook chỉ lồng được một cấp.")
+        if (depth >= 1) throw new Error("Playbooks nest only one level deep.")
         const child = this.require(name)
         const childCtx = this.context(state, child, depth + 1)
         childCtx.args = parseArgs(child, args)
@@ -362,7 +362,7 @@ export class DeskEngine {
     const { view, settings } = state
     if (view.cut) throw new DeskCut(view.cut)
     const type = opts.type ?? DEFAULT_DESK_TYPE
-    if (!playbook.meta.agentTypes.includes(type)) throw new Error(`Playbook ${playbook.meta.name} không khai báo loại agent "${type}".`)
+    if (!playbook.meta.agentTypes.includes(type)) throw new Error(`Playbook ${playbook.meta.name} does not declare the agent type "${type}".`)
     const effort = opts.effort ?? settings.effort
     const model = opts.model ?? settings.model
     // The key holds what the playbook asked for, not the settings: a user who switches
@@ -412,7 +412,7 @@ export class DeskEngine {
       if (view.cut) throw new DeskCut(view.cut)
 
       const spec = typeSpec(this.deps.agents(), type)
-      if (!spec) throw new Error(`Không có loại agent "${type}".`)
+      if (!spec) throw new Error(`No agent type "${type}".`)
       const narrowed = spec.toolFilter
       this.claimAgent(state)
       entry.status = "running"
@@ -456,7 +456,7 @@ export class DeskEngine {
       const value = result.status === "completed" ? (opts.schema ? result.data : result.text) : undefined
       const rejected = result.status === "completed" ? opts.accept?.(value) : undefined
       if (rejected !== undefined) {
-        entry.error = `Kết quả không dùng được: ${rejected}`
+        entry.error = `Unusable result: ${rejected}`
         throw new Error(entry.error)
       }
       if (result.status === "completed") {
@@ -472,7 +472,7 @@ export class DeskEngine {
       entry.failure = result.failure
       if (result.failure === "daily-quota") this.cut(state, "quota")
       if (result.status === "stopped" && view.cut) throw new DeskCut(view.cut)
-      throw new Error(result.error ?? (result.status === "stopped" ? "Agent bị dừng." : "Agent lỗi."))
+      throw new Error(result.error ?? (result.status === "stopped" ? "The agent was stopped." : "The agent failed."))
     } catch (error) {
       // A first agent that never started must not keep its siblings waiting.
       if (leads) state.stagger.get(prefix)?.release()
@@ -643,8 +643,8 @@ function schemaKey(schema: z.ZodObject | undefined) {
 function parseArgs(playbook: Playbook, args: unknown) {
   const parsed = playbook.meta.args.safeParse(args)
   if (!parsed.success) {
-    const issues = parsed.error.issues.map((i) => `${i.path.join(".") || "(gốc)"}: ${i.message}`).join("; ")
-    throw new Error(`Tham số của playbook ${playbook.meta.name} không hợp lệ: ${issues}`)
+    const issues = parsed.error.issues.map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`).join("; ")
+    throw new Error(`Invalid arguments for playbook ${playbook.meta.name}: ${issues}`)
   }
   return parsed.data
 }

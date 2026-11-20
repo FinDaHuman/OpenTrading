@@ -25,14 +25,14 @@ export function readZip(bytes: Uint8Array, maxEntry = MAX_ENTRY_BYTES): Map<stri
       break
     }
   }
-  if (eocd < 0) throw new Error("không phải file ZIP hợp lệ (có thể file bị hỏng hoặc có mật khẩu)")
+  if (eocd < 0) throw new Error("not a valid ZIP file (it may be damaged or password-protected)")
   const count = view.getUint16(eocd + 10, true)
   let at = view.getUint32(eocd + 16, true)
-  if (at === 0xffffffff) throw new Error("file quá lớn (ZIP64) chưa đọc được")
+  if (at === 0xffffffff) throw new Error("the file is too large (ZIP64) and cannot be read yet")
   const files = new Map<string, () => Uint8Array>()
   const decoder = new TextDecoder("utf-8")
   for (let n = 0; n < count; n++) {
-    if (view.getUint32(at, true) !== 0x02014b50) throw new Error("thư mục ZIP bị hỏng")
+    if (view.getUint32(at, true) !== 0x02014b50) throw new Error("the ZIP directory is damaged")
     const flags = view.getUint16(at + 8, true)
     const method = view.getUint16(at + 10, true)
     const compressed = view.getUint32(at + 20, true)
@@ -44,8 +44,8 @@ export function readZip(bytes: Uint8Array, maxEntry = MAX_ENTRY_BYTES): Map<stri
     const name = decoder.decode(bytes.subarray(at + 46, at + 46 + nameLen))
     at += 46 + nameLen + extraLen + commentLen
     files.set(name, () => {
-      if (flags & 1) throw new Error("file có mật khẩu, không đọc được")
-      if (size > maxEntry || compressed > maxEntry) throw new Error(`phần ${name} quá lớn`)
+      if (flags & 1) throw new Error("the file is password-protected and cannot be read")
+      if (size > maxEntry || compressed > maxEntry) throw new Error(`part ${name} is too large`)
       const start = local + 30 + view.getUint16(local + 26, true) + view.getUint16(local + 28, true)
       const data = bytes.subarray(start, start + compressed)
       if (method === 0) return data
@@ -53,11 +53,11 @@ export function readZip(bytes: Uint8Array, maxEntry = MAX_ENTRY_BYTES): Map<stri
         try {
           return new Uint8Array(inflateRawSync(data, { maxOutputLength: maxEntry }))
         } catch (error) {
-          if (error instanceof RangeError || (error as { code?: string }).code === "ERR_BUFFER_TOO_LARGE") throw new Error(`phần ${name} quá lớn khi giải nén`)
-          throw new Error(`phần ${name} bị hỏng`)
+          if (error instanceof RangeError || (error as { code?: string }).code === "ERR_BUFFER_TOO_LARGE") throw new Error(`part ${name} is too large once decompressed`)
+          throw new Error(`part ${name} is damaged`)
         }
       }
-      throw new Error(`kiểu nén ${method} chưa hỗ trợ`)
+      throw new Error(`compression method ${method} is not supported`)
     })
   }
   return files
@@ -140,7 +140,7 @@ function columnOf(ref: string) {
 export function readXlsx(bytes: Uint8Array, pick?: string, maxEntry = MAX_ENTRY_BYTES): Workbook {
   const files = readZip(bytes, maxEntry)
   const workbook = part(files, "xl/workbook.xml")
-  if (!workbook) throw new Error("không thấy xl/workbook.xml: không phải file Excel .xlsx")
+  if (!workbook) throw new Error("no xl/workbook.xml: not an Excel .xlsx file")
   const wb = names(workbook, NS.sheet, "")
   const rid = names(workbook, NS.rel, "r")("id")
   const rels = part(files, "xl/_rels/workbook.xml.rels")
@@ -166,7 +166,7 @@ export function readXlsx(bytes: Uint8Array, pick?: string, maxEntry = MAX_ENTRY_
   // A sheet named "2026" is that sheet, not the 2026th: an exact name wins over a number.
   const byName = want ? entries.findIndex((e) => e.name.trim().toLowerCase() === want.toLowerCase()) : -1
   const index = !want ? 0 : byName >= 0 ? byName : /^\d+$/.test(want) ? Number(want) - 1 : -1
-  if (!entries[index]) throw new Error(`không có sheet "${want}". Các sheet: ${entries.map((e, i) => `${i + 1}. ${e.name}`).join(" · ")}`)
+  if (!entries[index]) throw new Error(`no sheet "${want}". Sheets: ${entries.map((e, i) => `${i + 1}. ${e.name}`).join(" · ")}`)
   const sheet = part(files, entries[index]!.path)
   const ws = names(sheet, NS.sheet, "")
   const [ROW, C, V, T] = [ws("row"), ws("c"), ws("v"), ws("t")]
@@ -246,7 +246,7 @@ function table(tbl: Element, w: W): string {
 export function readDocx(bytes: Uint8Array, maxEntry = MAX_ENTRY_BYTES): string {
   const files = readZip(bytes, maxEntry)
   const doc = part(files, "word/document.xml")
-  if (!doc) throw new Error("không thấy word/document.xml: không phải file Word .docx")
+  if (!doc) throw new Error("no word/document.xml: not a Word .docx file")
   const w = names(doc, NS.word, "w")
   const body = byTag(doc, w("body"))[0]
   if (!body) return ""

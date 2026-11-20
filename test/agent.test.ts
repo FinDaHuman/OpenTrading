@@ -335,7 +335,7 @@ test("a data gap reaches the model in the one tail of the step, is never stored,
   const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: failingSource() }))
   const tail = bodies[1]!.messages.at(-1)!
   expect(tail.role).toBe("user")
-  expect(lastUserText(bodies[1]!)).toContain("chưa lấy được dữ liệu từ: source")
+  expect(lastUserText(bodies[1]!)).toContain("has not got data from: source")
   expect(lastUserText(bodies[1]!)).toContain(TOOL_NUDGE_START)
   expect(bodies[1]!.messages.filter((m) => m.role === "user")).toHaveLength(2)
   expect(done(events).dataGaps).toEqual(["source"])
@@ -362,7 +362,7 @@ test("an alternative the server named clears the gap, through the output the mod
     { tool: "mcp__ot__other", args: {} },
   ]
   const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: r }))
-  expect(lastUserText(bodies[1]!)).toContain("chưa lấy được dữ liệu từ: source")
+  expect(lastUserText(bodies[1]!)).toContain("has not got data from: source")
   expect(lastUserText(bodies[2]!)).not.toContain("chưa lấy được dữ liệu")
   expect(done(events).dataGaps).toBeUndefined()
 })
@@ -371,13 +371,13 @@ test("a run of failed steps is told once, then tools go off and the turn answers
   plan = { tool: "boom", args: {}, always: true }
   const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: registry() }))
   expect(bodies).toHaveLength(9)
-  expect(bodies.filter((b) => lastUserText(b).includes("bước liên tiếp chỉ toàn lỗi. Đổi cách khác"))).toHaveLength(1)
-  expect(lastUserText(bodies[4]!)).toContain("4 bước liên tiếp")
+  expect(bodies.filter((b) => lastUserText(b).includes("steps in a row returned nothing but errors. Try another way"))).toHaveLength(1)
+  expect(lastUserText(bodies[4]!)).toContain("4 steps in a row")
   expect(bodies[7]!.tool_choice).not.toBe("none")
   expect(bodies[8]!.tool_choice).toBe("none")
-  expect(lastUserText(bodies[8]!)).toContain("tool đã tắt")
+  expect(lastUserText(bodies[8]!)).toContain("tools are off for this step")
   expect(done(events).outcome).toBe("completed")
-  expect(JSON.stringify(done(events).messages)).not.toContain("tool đã tắt")
+  expect(JSON.stringify(done(events).messages)).not.toContain("tools are off for this step")
 })
 
 test("a run that must end in its final tool still can when its steps keep failing", async () => {
@@ -611,7 +611,7 @@ test("tool search: many MCP tools go out by name only; a loaded tool is callable
   expect(systemText(bodies[0])).toContain("big (130): t000, t001")
   expect(events.some((e) => e.type === "notice" && e.text.includes("Đang hoãn 130 tool (130 MCP của big)"))).toBe(true)
   // tool_search loaded two tools; the very next step declares exactly those.
-  expect(ends(events)[0]!.output.split("\n")[0]).toBe("Đã nạp tool: mcp__big__t001, mcp__big__t002")
+  expect(ends(events)[0]!.output.split("\n")[0]).toBe("Tools loaded: mcp__big__t001, mcp__big__t002")
   expect(toolNames(bodies[1])).toEqual(expect.arrayContaining(["mcp__big__t001", "mcp__big__t002"]))
   expect(toolNames(bodies[1])).not.toContain("mcp__big__t003")
   expect(ends(events)[1]).toMatchObject({ ok: true, output: 'mcp__big__t001 {"symbol":"FPT"}' })
@@ -630,7 +630,7 @@ test("tool search: keyword search finds tools by description, ignoring diacritic
   const r = bigRegistry(60)
   script = [{ tool: "tool_search", args: { query: "lich su gia" } }]
   const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: r }))
-  expect(ends(events)[0]!.output.split("\n")[0]).toBe("Đã nạp tool: mcp__big__t007")
+  expect(ends(events)[0]!.output.split("\n")[0]).toBe("Tools loaded: mcp__big__t007")
   expect(ends(events)[0]!.output).toContain("- symbol (string)")
   expect(toolNames(bodies[1])).toContain("mcp__big__t007")
 })
@@ -639,7 +639,7 @@ test("tool search: a deferred tool written with a :: separator loads like its re
   const r = bigRegistry(60)
   script = [{ tool: "mcp__big::t005", args: { symbol: "HPG" } }]
   const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: r }))
-  expect(ends(events)[0]!.output.startsWith("Đã nạp tool: mcp__big__t005\n")).toBe(true)
+  expect(ends(events)[0]!.output.startsWith("Tools loaded: mcp__big__t005\n")).toBe(true)
   expect(toolNames(bodies[1])).toContain("mcp__big__t005")
 })
 
@@ -651,7 +651,7 @@ test("tool search: calling a deferred tool before loading it loads it — the er
   const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: r }))
   const end = ends(events)[0]!
   expect(end.ok).toBe(false)
-  expect(end.output.startsWith("Đã nạp tool: mcp__big__t005\nTool mcp__big__t005 was not in this step")).toBe(true)
+  expect(end.output.startsWith("Tools loaded: mcp__big__t005\nTool mcp__big__t005 was not in this step")).toBe(true)
   expect(end.output).toContain("## mcp__big__t005")
   expect(end.output).not.toContain("AI_")
   expect(toolNames(bodies[1])).toContain("mcp__big__t005")
@@ -694,7 +694,7 @@ test("a call by a folded-away name whose new tool is deferred loads it and names
   const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: r }))
   const end = ends(events)[0]!
   expect(end.ok).toBe(false)
-  expect(end.output.startsWith("Đã nạp tool: chart_render\n")).toBe(true)
+  expect(end.output.startsWith("Tools loaded: chart_render\n")).toBe(true)
   expect(end.output).toContain('kind="compare"')
   expect(toolNames(bodies[1])).toContain("chart_render")
 })
@@ -1003,7 +1003,7 @@ test("a deferred tool with wrong arguments, called before loading, is loaded (it
   r.register({ name: "mcp__big__strict", source: "mcp:big", deferrable: true, description: "x", input: z.object({ n: z.number() }), readOnly: true, execute: async () => "ok" })
   script = [{ tool: "mcp__big__strict", args: { n: "x" } }]
   const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: r }))
-  expect(ends(events)[0]!.output.startsWith("Đã nạp tool: mcp__big__strict")).toBe(true)
+  expect(ends(events)[0]!.output.startsWith("Tools loaded: mcp__big__strict")).toBe(true)
 })
 
 test("a loaded tool cut by the per-request cap is reported as such, not as 'loaded, call again' (no loop)", async () => {

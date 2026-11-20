@@ -118,8 +118,8 @@ export class AutoReviewer {
     const tag = `${agent.type}#${agent.id}`
     // Only reads of trusted data: nothing to look back over (a desk run of research agents costs nothing).
     if (!this.log.all().some((e) => e.kind === "action" && e.agent === tag && e.effect)) return undefined
-    const unreviewed = (why: string) => `[auto mode] Chưa rà được các hành động của subagent ${tag} (${why}).`
-    if (this.paused()) return unreviewed("model duyệt đang tạm dừng vì hết quota")
+    const unreviewed = (why: string) => `[auto mode] The actions of subagent ${tag} could not be reviewed (${why}).`
+    if (this.paused()) return unreviewed("the reviewing model is paused: its quota is exhausted")
     const target = await this.deps.target().catch(() => undefined)
     if (!target) return undefined
     let verdict: Verdict
@@ -232,7 +232,7 @@ export class AutoReviewer {
 /** What the main agent reads in front of a sub-agent's result when its actions were flagged (a warning, not a block). */
 export function handoffWarning(agent: string, label: string | undefined, reason: string) {
   return (
-    `[Cảnh báo an toàn từ auto mode] Model duyệt cho rằng subagent ${agent} đã làm việc vượt yêu cầu${label ? ` [${label}]` : ""}: ${reason}. ` +
-    "Kết quả bên dưới vẫn được giữ nguyên. Kiểm tra lại các thay đổi của subagent trước khi dựa vào nó, và báo người dùng nếu cần."
+    `[Auto mode safety warning] The reviewing model judged that subagent ${agent} went beyond its task${label ? ` [${label}]` : ""}: ${reason}. ` +
+    "The result below is kept as it is. Check the subagent's changes before relying on it, and tell the user if needed."
   )
 }

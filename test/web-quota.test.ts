@@ -35,7 +35,7 @@ test("a 429 on the side calls is sent once, not three times (no SDK retries)", a
   expect(isQuotaError(error)).toBe(true)
   calls = 0
   await expect(extractWithModel("nội dung", "tóm tắt", "https://cafef.vn/x", target, new AbortController().signal)).rejects.toThrow(
-    "Gọi lại web_fetch không kèm prompt",
+    "Call web_fetch again without prompt",
   )
   expect(calls).toBe(1)
 })
@@ -48,8 +48,8 @@ test("a model out of quota is skipped for 10 minutes, then tried again; another 
     runs++
     return Promise.reject(Object.assign(new Error("You exceeded your current quota"), { statusCode: 429 }))
   }
-  await expect(guardedNative("google/m", quota, clock)).rejects.toThrow("Hết quota hoặc bị giới hạn tốc độ (429)")
-  await expect(guardedNative("google/m", quota, clock)).rejects.toThrow("tạm bỏ qua tới 21:10 vì model hết quota (429)")
+  await expect(guardedNative("google/m", quota, clock)).rejects.toThrow("quota is exhausted or rate-limited (429)")
+  await expect(guardedNative("google/m", quota, clock)).rejects.toThrow("skipped until 21:10: the model quota is exhausted (429)")
   expect(runs).toBe(1)
   expect(await guardedNative("google/other", async () => "ok", clock)).toBe("ok")
   now += NATIVE_PAUSE_MS + 1
@@ -64,7 +64,7 @@ test("web_search reports the quota once in plain words and still answers from a 
     native: () => guardedNative("google/m", () => Promise.reject(Object.assign(new Error("quota"), { statusCode: 429 }))),
     backends: () => [{ name: "duckduckgo", run: async () => [{ title: "FPT", url: "https://cafef.vn/fpt.chn" }] }],
   })
-  expect(out).toContain("Hết quota hoặc bị giới hạn tốc độ (429)")
+  expect(out).toContain("quota is exhausted or rate-limited (429)")
   expect(out).not.toContain("AI_APICallError")
   expect(out).not.toContain("Failed after")
   expect(out).toContain("cafef.vn")
@@ -101,13 +101,13 @@ test("grounding not in the key's plan (30/10 body): skipped until Gemini's quota
   let now = Date.parse("2026-10-29T20:23:00Z")
   expect(nextPacificMidnight(now)).toBe(Date.parse("2026-10-30T07:00:00Z"))
   const clock = () => now
-  await expect(guardedNative("google/gemini-3.1-flash-lite", rejected(NOT_IN_PLAN), clock)).rejects.toThrow("gói free Gemini 3 của key này")
+  await expect(guardedNative("google/gemini-3.1-flash-lite", rejected(NOT_IN_PLAN), clock)).rejects.toThrow("free Gemini 3 plan")
   // runSearch keeps 120 chars of a native failure: the whole note fits.
   expect(NOT_IN_PLAN_NOTE.length).toBeLessThanOrEqual(120)
   let runs = 0
   const count = () => ((runs += 1), Promise.resolve("ok"))
   now += NATIVE_PAUSE_MS + 1
-  await expect(guardedNative("google/gemini-3.1-flash-lite", count, clock)).rejects.toThrow("tạm bỏ qua tới 14:00")
+  await expect(guardedNative("google/gemini-3.1-flash-lite", count, clock)).rejects.toThrow("skipped until 14:00")
   expect(runs).toBe(0)
   now = Date.parse("2026-10-30T07:00:01Z")
   expect(await guardedNative("google/gemini-3.1-flash-lite", count, clock)).toBe("ok")
@@ -116,7 +116,7 @@ test("grounding not in the key's plan (30/10 body): skipped until Gemini's quota
 test("a per-minute 429 (RetryInfo, QuotaFailure) keeps the 10-minute pause", async () => {
   let now = Date.parse("2026-10-11T14:00:00Z")
   const clock = () => now
-  await expect(guardedNative("google/m2", rejected(PER_MINUTE), clock)).rejects.toThrow("tạm bỏ qua 10 phút")
+  await expect(guardedNative("google/m2", rejected(PER_MINUTE), clock)).rejects.toThrow("skipped for 10 minutes")
   now += NATIVE_PAUSE_MS + 1
   expect(await guardedNative("google/m2", async () => "ok", clock)).toBe("ok")
 })

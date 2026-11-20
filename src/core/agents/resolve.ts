@@ -45,11 +45,17 @@ export function toolFilter(def: Pick<AgentDefinition, "tools" | "disallowedTools
   }
 }
 
-/** "tất cả", "chỉ đọc", or the patterns — for the tool description and /agents. */
-export function toolSummary(def: Pick<AgentDefinition, "tools" | "disallowedTools">) {
+const SUMMARY_WORDS = {
+  vi: { all: "tất cả", readOnly: "chỉ đọc", except: "trừ" },
+  en: { all: "all", readOnly: "read-only", except: "except" },
+}
+
+/** "tất cả", "chỉ đọc", or the patterns — Vietnamese for /agents, English (`en`) for the tool description the model reads. */
+export function toolSummary(def: Pick<AgentDefinition, "tools" | "disallowedTools">, lang: "vi" | "en" = "vi") {
+  const w = SUMMARY_WORDS[lang]
   const listed = def.tools ?? ["*"]
   const readOnly = listed.includes(READ_ONLY)
   const patterns = listed.filter((p) => p !== READ_ONLY && p !== "*")
-  const base = patterns.length > 0 ? patterns.join(", ") + (readOnly ? " (chỉ đọc)" : "") : readOnly ? "chỉ đọc" : "tất cả"
-  return def.disallowedTools?.length ? `${base}, trừ ${def.disallowedTools.join(", ")}` : base
+  const base = patterns.length > 0 ? patterns.join(", ") + (readOnly ? ` (${w.readOnly})` : "") : readOnly ? w.readOnly : w.all
+  return def.disallowedTools?.length ? `${base}, ${w.except} ${def.disallowedTools.join(", ")}` : base
 }

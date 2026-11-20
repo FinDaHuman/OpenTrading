@@ -123,7 +123,7 @@ test("ve-bieu-do references đọc được qua load_skill file=", async () => {
     const body = await readSkillFile(viz, f)
     expect(body.length).toBeGreaterThan(100)
   }
-  await expect(readSkillFile(viz, "../SKILL.md")).rejects.toThrow("nằm ngoài thư mục")
+  await expect(readSkillFile(viz, "../SKILL.md")).rejects.toThrow("is outside the folder")
 })
 
 test("every supporting file a bundled skill names exists in its directory", async () => {
@@ -142,9 +142,9 @@ test("supporting files are readable only inside the skill directory", async () =
   await writeFile(path.join(dir, "secret.txt"), "không được đọc")
   const bank = (await loadSkills([{ dir, source: "user" }])).skills[0]!
   expect(await readSkillFile(bank, "kpi.md")).toBe("NIM, CASA")
-  await expect(readSkillFile(bank, "../secret.txt")).rejects.toThrow("nằm ngoài thư mục")
-  await expect(readSkillFile(bank, path.join(dir, "secret.txt"))).rejects.toThrow("nằm ngoài thư mục")
-  await expect(readSkillFile(bank, "missing.md")).rejects.toThrow("Không có file")
+  await expect(readSkillFile(bank, "../secret.txt")).rejects.toThrow("is outside the folder")
+  await expect(readSkillFile(bank, path.join(dir, "secret.txt"))).rejects.toThrow("is outside the folder")
+  await expect(readSkillFile(bank, "missing.md")).rejects.toThrow("No file")
 })
 
 test("catalog lists auto skills only and stays within budget", () => {
@@ -305,7 +305,9 @@ test("real bundled catalog fits A with headroom; B preserves descriptions and C 
   const names = skills.filter((s) => s.activation === "auto").map((s) => s.name).sort()
   const full = renderCatalog(skills, 100_000)!
   expect(BUDGETS.skill_catalog).toEqual({ A: 2_600, B: 1_200, C: 280 })
-  expect(estimateTokens(full.text)).toBeLessThanOrEqual(BUDGETS.skill_catalog!.A! * 0.8)
+  // 82%: the English header asks for only the skill the question is about (20/11/2026 live routing eval:
+  // the shorter header picked an extra skill twice as often); 2 104 of 2 600 tokens measured.
+  expect(estimateTokens(full.text)).toBeLessThanOrEqual(BUDGETS.skill_catalog!.A! * 0.82)
   for (const tier of ["A", "B", "C"] as const) {
     const catalog = renderCatalog(skills, BUDGETS.skill_catalog![tier]!)!
     const entries = catalog.text.split("\n").filter((line) => line.startsWith("- "))
