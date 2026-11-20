@@ -17,6 +17,7 @@ import {
   type ToolResultPart,
   type ToolSet,
   wrapLanguageModel,
+  type LanguageModelMiddleware,
 } from "ai"
 import { ChatSetupError, describeError, resolveTarget, type Target } from "./chat"
 import { effortOptions, isEffort, mergeProviderOptions, type Effort } from "./effort"
@@ -59,7 +60,7 @@ import { FAILURE_STREAK_FINAL, FAILURE_STREAK_STOP, failureNudge, gapsAnswer, tu
 import { answerAfterTools } from "./loop/history-shape"
 import { markupStreamFilter, stripMarkup, type MarkupFilter } from "./loop/markup"
 import type { PromptProfile } from "./prompt/assemble"
-import { MIN_REQUEST_BUDGET, RequestBudget } from "./request-budget"
+import { activeBudget, MIN_REQUEST_BUDGET, RequestBudget, type TurnBudget } from "./request-budget"
 import { answeredAndClosedTodos, figureSources, isEmptyAnswer, isUnfetched, GAPS_RESCUE_START, judgeStop, MAX_RECOVERIES, sourcesFailed, ranDataTool, stripEchoes, ungroundedInTurn, unfetchedFigures, type RecoveryKind, type Verdict } from "./loop/stop-gate"
 import { MAX_TOOLS_PER_REQUEST, modelOutput, stripImages, type BuiltToolSet, type ToolRegistry, type ToolSetOptions } from "./tools/registry"
 import { describeTool, LOADED_PREFIX, resolveToolName } from "./tools/search"
@@ -76,7 +77,7 @@ const isArithmetic = (command: string) => mathOnlyCommand(command, detectShell()
 export const DEFAULT_MAX_STEPS = Number.POSITIVE_INFINITY
 
 const SUMMARY_PROMPT =
-  "Đã hết số lượt gọi tool cho câu hỏi này. Không gọi thêm tool. Hãy tổng kết câu trả lời dựa trên dữ liệu đã có, nói rõ phần nào còn thiếu."
+  "The tool-call budget for this question is used up. Call no more tools. Write the answer from the data you have, saying which parts are missing."
 
 /**
  * No stream part at all for this long: the request is stalled, not slow. Codex and opencode
@@ -102,7 +103,7 @@ const stallMessage = (ms: number) =>
  * the request, so the cached prefix is unchanged.
  */
 export const TOOL_NUDGE =
-  "<nhac_nho>\nNếu còn cần dữ liệu, gọi cùng lúc mọi tool không phụ thuộc nhau. Khi trả lời: ngày tuyệt đối, mỗi cột một đơn vị, số dòng khớp lời nói, mỗi số có nguồn.\n</nhac_nho>"
+  "<nhac_nho>\nIf you still need data, call every independent tool at once. When answering: absolute dates, one unit per column, row counts matching the text, a source for every figure.\n</nhac_nho>"
 
 /** Model steps since the last todo_write call in this request: past this, the list is likely behind. */
 export const TODO_BEHIND_STEPS = 2
@@ -121,10 +122,10 @@ export function toolNudge(messages: readonly ModelMessage[]): string {
   const running = open.find((t) => t.status === "in_progress")
   const since = stepsSinceTodoWrite(messages)
   const behind =
-    running && since >= TODO_BEHIND_STEPS ? `\nĐã ${since} bước chưa cập nhật danh sách: nếu dữ liệu cho "${running.content}" đã có ở trên thì đánh completed ngay.` : ""
+    running && since >= TODO_BEHIND_STEPS ? `\nThe list has not been updated for ${since} steps: if the data for "${running.content}" is already above, mark it completed now.` : ""
   return TOOL_NUDGE.replace(
     "\n</nhac_nho>",
-    `\nViệc cần làm còn mở:\n${items}${behind}\nCập nhật trạng thái bằng todo_write CÙNG lượt với các tool tiếp theo. Khi viết câu trả lời cuối, gọi todo_write đóng danh sách trong cùng bước đó.\n</nhac_nho>`,
+    `\nOpen tasks:\n${items}${behind}\nUpdate their status with todo_write in the SAME round as the next tools. When writing the final answer, call todo_write to close the list in that same step.\n</nhac_nho>`,
   )
 }
 
@@ -280,7 +281,7 @@ function stringify(value: unknown) {
   // A tool's own result: show its text; images are never dumped as base64 into the UI.
   if (value && typeof value === "object" && "output" in value && typeof (value as ToolResult).output === "string") {
     const r = value as ToolResult
-    return r.images?.length ? `${r.output}\n[${r.images.length} ảnh]` : r.output
+    return r.images?.length ? `${r.output}\n[${r.images.length} images]` : r.output
   }
   try {
     return JSON.stringify(value, null, 2)
@@ -529,12 +530,12 @@ async function repairCall<T extends { toolName: string; input?: string }>(
   if (names.length === 1 && (!active || active.includes(names[0]!))) return { ...toolCall, toolName: names[0]! }
   if (names.length === 1 && deferring) {
     const name = names[0]!
-    const how = renamed ? ` và ${renamed.field}="${renamed.value}" (${toolCall.toolName} đã gộp vào ${name})` : ""
+    const how = renamed ? ` and ${renamed.field}="${renamed.value}" (${toolCall.toolName} was merged into ${name})` : ""
     // Loaded already yet still not active: cut by the per-request cap. Saying "loaded,
     // call again" here would loop.
     if (loaded.includes(name)) {
       throw new Error(
-        `Tool ${name} đã nạp nhưng không gửi kèm được trong bước này: đã chạm trần ${MAX_TOOLS_PER_REQUEST} tool mỗi lần gọi model. Dùng các tool đang có để trả lời.`,
+        `Tool ${name} is loaded but could not be sent with this step: the cap of ${MAX_TOOLS_PER_REQUEST} tools per model call is reached. Answer with the tools you have.`,
       )
     }
     const def = registry.get(name)
@@ -542,14 +543,14 @@ async function repairCall<T extends { toolName: string; input?: string }>(
     throw new Error(
       [
         `${LOADED_PREFIX}${name}`,
-        `Tool ${name} chưa có trong bước này nên chưa chạy; đã nạp xong — gọi lại đúng lệnh với tên ${name}${how}.`,
+        `Tool ${name} was not in this step, so it did not run; it is loaded now — make the same call again with the name ${name}${how}.`,
         ...(def ? ["", describeTool(registry, def)] : []),
       ].join("\n"),
     )
   }
   if (!deferring) return null
-  const many = names.length > 1 ? ` Tên này khớp nhiều tool: ${names.join(", ")}.` : ""
-  throw new Error(`Không có tool "${toolCall.toolName}".${many} Gọi tool_search (query "select:<tên>" hoặc từ khoá) để nạp tool rồi gọi lại.`)
+  const many = names.length > 1 ? ` This name matches several tools: ${names.join(", ")}.` : ""
+  throw new Error(`No tool "${toolCall.toolName}".${many} Call tool_search (query "select:<name>" or keywords) to load the tool, then call again.`)
 }
 
 interface Outcome {
@@ -848,7 +849,7 @@ export const DEFAULT_DEFER_MIN_TOOLS = 40
  * Whether deferrable tools (MCP and the optional built-in ones) go out by name only this
  * request (tool search). "auto" defers all of them once they are many (tool choice degrades
  * past ~30–50) or heavy for the context; below that it defers only the `deferByDefault` local
- * tools that turns rarely use (grep/glob, sessions, doctor, send/stop). A subagent's
+ * tools that turns rarely use (grep, sessions, send/stop; glob_files and doctor_local stay visible, #317). A subagent's
  * tools are already narrowed by its type, so it keeps them visible.
  */
 export function shouldDefer(
@@ -946,7 +947,7 @@ export function fileAccessNote(registry: TurnInput["registry"], mode: Parameters
   const files = resultExportDir()
   const shown = files && workspace.contains(files) ? path.relative(workspace.primary, files) || "." : files
   const filesLine = shown
-    ? `Kết quả dữ liệu có nhãn [ref rN] có bản JSON đầy đủ ở ${shown}/rN.json: phép tính trên chuỗi số thì để script đọc file đó, không chép tay số.`
+    ? `Data results labelled [ref rN] have the full JSON at ${shown}/rN.json: for calculations on a series, have a script read that file; do not copy numbers by hand.`
     : undefined
   return [workspace.describe(present), filesLine, modeNote(mode, present, profile)].filter(Boolean).join("\n")
 }
@@ -1030,6 +1031,45 @@ async function prepare(opts: TurnInput, bound: Bound, extras: TurnExtras): Promi
   }
 }
 
+/** Messages that carry an Anthropic cache breakpoint: the last two (with the system prompt, 3 of the 4 allowed). */
+export const CACHED_TAIL_MESSAGES = 2
+
+/** A message without a cache mark an earlier step left on it. */
+function unmarked<M extends { providerOptions?: Record<string, unknown> }>(m: M): M {
+  const anthropic = m.providerOptions?.anthropic as Record<string, unknown> | undefined
+  if (!anthropic || !("cacheControl" in anthropic)) return m
+  const { cacheControl: _, ...rest } = anthropic
+  return { ...m, providerOptions: { ...m.providerOptions, anthropic: rest } }
+}
+
+/**
+ * Anthropic cache breakpoints on the last messages of a request (copies: the history is not
+ * changed). Marks on older messages are taken off, so a request holds at most `count` of them
+ * besides the system prompt's (Anthropic allows 4). The SDK puts a message's cacheControl on its
+ * last content part.
+ */
+export function withCacheMarks<M extends { role: string; providerOptions?: Record<string, unknown> }>(messages: M[], count = CACHED_TAIL_MESSAGES): M[] {
+  const from = Math.max(0, messages.length - count)
+  return messages.map((m, i) =>
+    m.role === "system"
+      ? m
+      : i < from
+        ? unmarked(m)
+        : { ...m, providerOptions: { ...m.providerOptions, anthropic: { ...(m.providerOptions?.anthropic as object | undefined), cacheControl: { type: "ephemeral" } } } },
+  )
+}
+
+/**
+ * The cache marks on every request the model sends, each step of a turn included (#333). Marking
+ * the turn's first request only (requestFor) left the tool calls and results of later steps out
+ * of the cache: prepareStep rebuilds each step's messages from the first request's. As a model
+ * middleware the marks follow the end of each step's prompt, so each step reads the previous
+ * step's whole prompt from cache.
+ */
+export const anthropicCacheMiddleware = (count = CACHED_TAIL_MESSAGES): LanguageModelMiddleware => ({
+  transformParams: async ({ params }) => ({ ...params, prompt: withCacheMarks(params.prompt, count) }),
+})
+
 /**
  * The request as sent: placeholders for images the model cannot see, the user/session
  * context on the first user message, the cache mark for Anthropic, and the tools visible
@@ -1038,14 +1078,19 @@ async function prepare(opts: TurnInput, bound: Bound, extras: TurnExtras): Promi
 function requestFor(p: Prepared, messages: ModelMessage[], retry: RetryOptions = {}) {
   // After /model to a model without vision, earlier screenshots become placeholders.
   const visible = p.images && p.userImages ? messages : stripImages(messages, { tool: !p.images, user: !p.userImages })
+  const anthropic = p.target.provider.npm === "@ai-sdk/anthropic"
+  // Anthropic caches only where asked: the static system prompt is marked here, the end of each
+  // step's prompt by anthropicCacheMiddleware (#333). Others cache by prefix.
   const request = withContext(visible, p.assembled.context)
-  // Anthropic caches only where asked: mark the static system prompt. Others cache by prefix.
-  const system: string | SystemModelMessage =
-    p.target.provider.npm === "@ai-sdk/anthropic"
-      ? { role: "system", content: p.assembled.system, providerOptions: { anthropic: { cacheControl: { type: "ephemeral" } } } }
-      : p.assembled.system
+  const system: string | SystemModelMessage = anthropic
+    ? { role: "system", content: p.assembled.system, providerOptions: { anthropic: { cacheControl: { type: "ephemeral" } } } }
+    : p.assembled.system
   // Requests are retried by kind of failure (retry.ts); the SDK's own retry stays off.
-  const model = wrapLanguageModel({ model: languageModel(p.target.provider, p.target.model, p.target.apiKey, { routing: p.target.routing, conversation: p.conversation }), middleware: retryMiddleware(retry) })
+  // The cache marks are set per step (anthropicCacheMiddleware), inside the retry: a retry resends the same prompt.
+  const model = wrapLanguageModel({
+    model: languageModel(p.target.provider, p.target.model, p.target.apiKey, { routing: p.target.routing, conversation: p.conversation }),
+    middleware: anthropic ? [retryMiddleware(retry), anthropicCacheMiddleware()] : retryMiddleware(retry),
+  })
   const providerOptions = mergeProviderOptions(thoughtOptions(p.target), effortOptions(p.target, p.effort))
   return { system, request, model, active: activeFor(p.built, request), providerOptions }
 }
@@ -1089,8 +1134,12 @@ function stepSize(usage: LanguageModelUsage | undefined, messages: readonly Mode
   return usage.inputTokens + (usage.outputTokens ?? 0) + tokensOf(messages.slice(answeredAt + 1))
 }
 
-const estimateRequest = (system: string | SystemModelMessage, messages: ModelMessage[], toolTokens = 0) =>
-  estimateTokens(JSON.stringify([system, ...messages])) + toolTokens
+/**
+ * The next request's size when the provider reported no usage. An image counts as IMAGE_TOKENS
+ * (tokensOf), not as its base64: a 1 MB screenshot is ~1.6k tokens, not ~350k (#332).
+ */
+export const estimateRequest = (system: string | SystemModelMessage, messages: ModelMessage[], toolTokens = 0) =>
+  estimateTokens(typeof system === "string" ? system : JSON.stringify(system)) + tokensOf(messages) + toolTokens
 
 /**
  * Compaction step 2: the model condenses `head` (older turns) into a structured summary.
@@ -1190,8 +1239,10 @@ export async function previewContext(opts: TurnInput) {
  * always ending in `done` with history that is safe to send back next turn.
  */
 export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
-  // A subagent spends its parent's budget (the parent's counter sees its requests).
-  if (opts.maxRequests === undefined || opts.role === "subagent") return yield* runTurn(opts)
+  // A subagent spends its parent's budget (the parent's counter sees its requests), less the reserve
+  // kept for the parent's answer: its view closes early enough for its own summary (#328).
+  if (opts.role === "subagent") return yield* runTurn(opts, activeBudget()?.forChild())
+  if (opts.maxRequests === undefined) return yield* runTurn(opts)
   // The caller's number as it is: raising a cap of 1 or 2 would pass it. Anything else is a setup
   // error, thrown before any request: NaN (`Number(process.env.X)` unset) would silently mean no cap.
   if (!Number.isInteger(opts.maxRequests) || opts.maxRequests < MIN_REQUEST_BUDGET) throw new Error(`maxRequests phải là số nguyên từ ${MIN_REQUEST_BUDGET} trở lên (nhận ${opts.maxRequests}).`)
@@ -1203,9 +1254,11 @@ export async function* runAgent(opts: RunOptions): AsyncGenerator<AgentEvent> {
   }
 }
 
-async function* runTurn(opts: RunOptions, budget?: RequestBudget): AsyncGenerator<AgentEvent> {
+async function* runTurn(opts: RunOptions, budget?: TurnBudget): AsyncGenerator<AgentEvent> {
   const sessionId = opts.sessionId ?? ""
   const role = opts.role ?? "main"
+  // Subagents started during this turn run with its prompt profile (#328): the manager reads it here.
+  if (role !== "subagent") opts.registry.turnProfile = opts.profile
   // The profile and the constraints first: a source that failed to read holds the turn (TurnHeldError)
   // before the model is resolved and before any hook runs, so a retry after the user chooses does not
   // run the hooks twice. Read once per turn: the stop gate's reruns reuse this turn's system part.
@@ -1624,7 +1677,7 @@ async function* runTurn(opts: RunOptions, budget?: RequestBudget): AsyncGenerato
   // as sent.
   const text = outcome.text && stripCardBlocks(markupTags ? stripMarkup(outcome.text).text : outcome.text).text
   // A stopped or failed turn has no card, and its card blocks never reach history either (spec 007).
-  const cut = closeDanglingToolCalls(outcome.progress, "Tool bị ngắt vì lượt bị dừng giữa chừng.").messages
+  const cut = closeDanglingToolCalls(outcome.progress, "Tool interrupted because the turn was stopped midway.").messages
   const progress = stripCardMessages(markupTags ? stripEchoMessages(cut, { echoes: false }) : cut).messages
   // No square brackets: the markdown renderer read "[Đã dừng]" as a link. The closed steps
   // already carry their text, so the trailing note appears only when nothing else closes the

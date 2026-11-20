@@ -2,7 +2,7 @@ import type { Ablations } from "../ablation"
 import { isCallTag, stripMarkup } from "./markup"
 import { answerFigures, sourceNumbers, tracesTo, ungroundedFigures } from "./figures"
 import type { ModelMessage, StepResult, ToolSet } from "ai"
-import { hasOpenTodos, LEGACY_TODO_PREFIX, TODO_PREFIX, TODO_WRITE, type Todo } from "../tools/todos"
+import { hasOpenTodos, LEGACY_TODO_PREFIX, TODO_PREFIX, TODO_WRITE, VI_TODO_PREFIX, type Todo } from "../tools/todos"
 
 /**
  * When a turn may end. Every harness read (Claude Code, Codex, opencode, Gemini CLI) ends a
@@ -61,7 +61,7 @@ const MALFORMED = /^(MALFORMED_FUNCTION_CALL|UNEXPECTED_TOOL_CALL)$/i
 const BLOCKED = /^(SAFETY|RECITATION|BLOCKLIST|PROHIBITED_CONTENT|SPII|IMAGE_SAFETY|LANGUAGE)$/i
 
 export const RESCUE_MALFORMED =
-  "<nhac_nho>\nLời gọi tool vừa rồi sai định dạng nên không chạy. Gọi lại tool đúng tham số, hoặc trả lời người dùng nếu đã đủ dữ liệu.\n</nhac_nho>"
+  "<nhac_nho>\nThe last tool call was malformed, so it did not run. Call the tool again with valid arguments, or answer the user if you have enough data.\n</nhac_nho>"
 /**
  * The step was only a tool call written as text (DeepSeek's DSML in issues #268 and #278, a
  * `<tool_call>` block): markup.ts took it out and nothing ran. Tools stay on. The empty-answer
@@ -69,31 +69,31 @@ export const RESCUE_MALFORMED =
  * meant to run in its head.
  */
 export const RESCUE_TEXT_CALL =
-  "<nhac_nho>\nLời gọi tool vừa rồi được viết thành chữ trong câu trả lời nên chưa chạy. Gọi lại tool đó bằng tool call ngay trong bước này, hoặc trả lời người dùng nếu đã đủ dữ liệu. Không viết thẻ lời gọi tool thành chữ.\n</nhac_nho>"
+  "<nhac_nho>\nThe last tool call was written out as text in the answer, so it did not run. Make that call as a real tool call in this step, or answer the user if you have enough data. Never write tool-call tags as text.\n</nhac_nho>"
 export const RESCUE_LENGTH =
-  "<nhac_nho>\nCâu trả lời bị cắt vì chạm giới hạn độ dài output. Viết tiếp ngay từ chỗ dừng: không xin lỗi, không tóm tắt lại phần đã viết.\n</nhac_nho>"
+  "<nhac_nho>\nThe answer was cut off at the output length limit. Continue right where it stopped: no apology, no recap of what was written.\n</nhac_nho>"
 /** Gemini CLI's nudge after an empty answer: the answer, or a tool when data is missing. */
 export const RESCUE_EMPTY =
-  "<nhac_nho>\nBạn chưa viết câu trả lời nào cho người dùng. Trả lời ngay dựa trên dữ liệu đã có, hoặc gọi tool nếu còn thiếu dữ liệu. Không viết dòng trạng thái việc cần làm.\n</nhac_nho>"
+  "<nhac_nho>\nYou have not written any answer for the user. Answer now from the data you have, or call a tool if data is missing. Do not write a task-status line.\n</nhac_nho>"
 export const RESCUE_PROMISE =
-  "<nhac_nho>\nBước trước kết thúc mà không gọi tool nào. Thiếu dữ liệu thì gọi tool ngay trong bước này; đủ rồi thì trả lời người dùng.\n</nhac_nho>"
+  "<nhac_nho>\nThe last step ended without any tool call. If data is missing, call a tool in this step; if you have enough, answer the user.\n</nhac_nho>"
 export const RESCUE_FRAGMENT =
-  "<nhac_nho>\nTrả lời trực tiếp tin nhắn mới nhất của người dùng ở trên; gọi tool nếu cần dữ liệu.\n</nhac_nho>"
+  "<nhac_nho>\nAnswer the user's latest message above directly; call tools if you need data.\n</nhac_nho>"
 export const RESCUE_UNFETCHED =
-  "<nhac_nho>\nLượt này chưa có tool nào chạy. Gọi tool lấy dữ liệu ngay trong bước này rồi mới viết số liệu; không lấy được thì nói rõ là thiếu dữ liệu và không viết số.\n</nhac_nho>"
+  "<nhac_nho>\nNo tool has run in this turn. Call a tool for the data in this step before writing any figures; if it cannot be fetched, say the data is missing and write no numbers.\n</nhac_nho>"
 export const RESCUE_DRAFT =
-  "<nhac_nho>\nBạn chưa viết câu trả lời cho người dùng. Viết ngay câu trả lời hoàn chỉnh từ kết quả tool ở trên, theo cấu trúc của skill đã nạp; mục nào chưa có dữ liệu thì ghi rõ là thiếu. Không viết dàn ý, kế hoạch hay tên tool.\n</nhac_nho>"
+  "<nhac_nho>\nYou have not written the answer for the user. Write the complete answer now from the tool results above, following the loaded skill's structure; mark any section without data as missing. Do not write an outline, a plan or tool names.\n</nhac_nho>"
 /** A draft written before any data came: fetch first, or answer. */
 export const RESCUE_DRAFT_FETCH =
-  "<nhac_nho>\nBạn chưa viết câu trả lời cho người dùng và lượt này chưa lấy dữ liệu nào. Gọi tool lấy dữ liệu ngay trong bước này rồi trả lời; không viết dàn ý, kế hoạch hay tên tool.\n</nhac_nho>"
+  "<nhac_nho>\nYou have not written the answer for the user and no data was fetched this turn. Call tools for the data in this step, then answer; do not write an outline, a plan or tool names.\n</nhac_nho>"
 /** Tools off (it brought 2.5-flash-lite's empty answers back). */
-export const RESCUE_EMPTY_FINAL = "Hãy trả lời câu hỏi của người dùng dựa trên kết quả tool ở trên. Không gọi thêm tool. Số cần tính mà chưa tính được thì tự tính từ đúng các số tool đã trả về và ghi rõ công thức cùng từng số đầu vào."
+export const RESCUE_EMPTY_FINAL = "Answer the user's question from the tool results above. Call no more tools. Any figure still to compute, compute yourself from exactly the numbers the tools returned and state the formula and every input."
 
 /** Data sources failed this turn and none brought data (a clock or file tool may still have run). */
 export const sourcesFailed = (last: Pick<LastStep, "gaps" | "fetchedData">) => !!last.gaps?.length && last.fetchedData === false
 
 /** How the gap rescue starts: the loop leaves out the failure reminder beside it (same gaps). */
-export const GAPS_RESCUE_START = "<nhac_nho>\nCác nguồn sau chưa trả dữ liệu trong lượt này:"
+export const GAPS_RESCUE_START = "<nhac_nho>\nThese sources returned no data this turn:"
 
 /**
  * An empty answer when every data source of the turn failed: answer about what is missing. 13/11
@@ -101,12 +101,12 @@ export const GAPS_RESCUE_START = "<nhac_nho>\nCác nguồn sau chưa trả dữ 
  * lại với nguồn dữ liệu mới", work nothing in the harness does, hence the clause against it.
  */
 export function rescueGaps(gaps: readonly string[]): string {
-  return `${GAPS_RESCUE_START} ${gaps.join(", ")}. Viết ngay câu trả lời cho người dùng: nói rõ phần nào chưa lấy được và vì sao (nguồn lỗi, quá thời gian), dùng phần dữ liệu khác nếu đã có, không tự điền số cho phần thiếu, gợi ý thử lại sau. Không viết là bạn đang khắc phục hay kết nối lại nguồn. Không viết dòng nhắc việc hay thẻ hệ thống.\n</nhac_nho>`
+  return `${GAPS_RESCUE_START} ${gaps.join(", ")}. Write the answer for the user now: say which parts could not be fetched and why (source error, timeout), use the other data you have, never fill in numbers for the missing parts, suggest trying again later. Do not say you are fixing or reconnecting the source. Do not write reminder lines or system tags.\n</nhac_nho>`
 }
 
 /** Last empty-answer rescue: data is in the turn, write the final answer now. */
 export const RESCUE_ANSWER_NOW =
-  "Viết NGAY câu trả lời cuối cùng cho người dùng, đúng định dạng được yêu cầu, chỉ dùng các số tool đã trả về ở trên (số chưa tính được thì tự tính và ghi công thức cùng từng số đầu vào). Không suy luận dài, không gọi tool, không trả lời rỗng."
+  "Write the final answer for the user NOW, in the requested format, using only the numbers the tools returned above (compute any missing figure yourself and state the formula and every input). No long reasoning, no tool calls, no empty answer."
 
 export function judgeStop(last: LastStep, done: readonly RecoveryKind[], disabled?: Ablations): Verdict {
   // Still calling tools: the step cap ended the run, and its summary step has its own rules.
@@ -182,7 +182,7 @@ export function judgeStop(last: LastStep, done: readonly RecoveryKind[], disable
  * prefix, the TUI's one-line label, "(Đã hoàn thành các việc cần làm)".
  */
 const ECHO_LINE = new RegExp(
-  `^(${escape(TODO_PREFIX)}|${escape(LEGACY_TODO_PREFIX)}|Cập nhật việc cần làm|Đã hoàn thành (hết |tất cả |toàn bộ )?(các )?việc cần làm|Đã đóng (danh sách )?việc cần làm)`,
+  `^(${escape(TODO_PREFIX)}|${escape(VI_TODO_PREFIX)}|${escape(LEGACY_TODO_PREFIX)}|Cập nhật việc cần làm|Đã hoàn thành (hết |tất cả |toàn bộ )?(các )?việc cần làm|Đã đóng (danh sách )?việc cần làm)`,
   "i",
 )
 /** A rendered todo item (renderTodos): only dropped next to an echoed status line. */

@@ -39,7 +39,7 @@ test("the third identical read asks; 'deny' tells the model to stop, 'session' s
   await tick()
   expect(gate.head()!.description).toContain(`cùng tham số ${LOOP_THRESHOLD} lần liên tiếp`)
   await gate.respond(gate.head()!.id, "deny")
-  expect(await third).toContain("Người dùng dừng vòng lặp")
+  expect(await third).toContain("The user stopped a loop")
 
   const fourth = runTool(quote, { symbol: "FPT" }, ctx, lock, gate)
   await tick()
@@ -56,6 +56,6 @@ test("without a UI the loop is stopped, and other symbols are unaffected", async
   const lock = new RwLock()
   await runTool(quote, { symbol: "FPT" }, ctx, lock, gate)
   await runTool(quote, { symbol: "FPT" }, ctx, lock, gate)
-  expect(await runTool(quote, { symbol: "FPT" }, ctx, lock, gate).catch((e: Error) => e.message)).toContain("dừng vòng lặp")
+  expect(await runTool(quote, { symbol: "FPT" }, ctx, lock, gate).catch((e: Error) => e.message)).toContain("stopped a loop")
   expect(await runTool(quote, { symbol: "HPG" }, ctx, lock, gate)).toEqual({ output: "nến" })
 })

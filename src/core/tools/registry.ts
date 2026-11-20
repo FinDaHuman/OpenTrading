@@ -4,6 +4,7 @@ import type { JSONSchema7 } from "@ai-sdk/provider"
 import { z } from "zod"
 import type { Workspace } from "../fs/workspace"
 import type { PermissionGate } from "../permission"
+import type { PromptProfile } from "../prompt/assemble"
 import { sanitizeSchema, type SchemaFlavor } from "../mcp/schema"
 import type { AgentOrigin, ToolDef, ToolResult } from "./types"
 import { RwLock, runTool } from "./wrap"
@@ -63,7 +64,7 @@ export interface BuiltToolSet {
   tokens: number
 }
 
-const imageNote = (mediaType: string, why: string) => `[ảnh ${mediaType} — ${why}]`
+const imageNote = (mediaType: string, why: string) => `[image ${mediaType} — ${why}]`
 
 /** What the model receives for a tool result: text, plus images only when it can see them. */
 export function modelOutput(result: ToolResult, images: boolean) {
@@ -71,7 +72,7 @@ export function modelOutput(result: ToolResult, images: boolean) {
   const sendable = images ? list.filter((i) => i.data.length <= MAX_IMAGE_BASE64).slice(0, MAX_IMAGES_PER_RESULT) : []
   const notes = list
     .filter((i) => !sendable.includes(i))
-    .map((i) => imageNote(i.mediaType, images ? "quá lớn hoặc quá nhiều ảnh, không gửi cho model" : "model này không xem được ảnh"))
+    .map((i) => imageNote(i.mediaType, images ? "too large or too many images, not sent to the model" : "this model cannot view images"))
   const text = [result.output, ...notes, ...(result.provenance ? [`[${result.provenance}]`] : [])].filter(Boolean).join("\n")
   if (sendable.length === 0) return { type: "text" as const, value: text }
   return {
@@ -98,6 +99,8 @@ export class ToolRegistry {
   gate?: PermissionGate
   /** Folders the file tools work in; its description reaches the model as `<quyen_tep>`. */
   workspace?: Workspace
+  /** The prompt profile of the main turn now running (agent.ts); subagents it starts run with it (#328). */
+  turnProfile?: PromptProfile
 
   constructor(opts: { lock?: RwLock; origin?: AgentOrigin } = {}) {
     // A subagent shares its parent's lock, so its writes exclude the parent's and siblings'.
@@ -257,7 +260,7 @@ export function stripImages<M extends ModelMessage>(messages: M[], which: { tool
       if (typeof parts === "string" || !parts.some((p) => p.type === "image" || p.type === "file")) return m
       const content = parts.map((p) =>
         p.type === "image" || p.type === "file"
-          ? { type: "text" as const, text: imageNote(p.mediaType ?? "image", "model này không xem được ảnh, hoặc ảnh không còn trong lịch sử") }
+          ? { type: "text" as const, text: imageNote(p.mediaType ?? "image", "this model cannot view images, or the image is no longer in the history") }
           : p,
       )
       return { ...m, content } as M
@@ -268,7 +271,7 @@ export function stripImages<M extends ModelMessage>(messages: M[], which: { tool
       if (part.type !== "tool-result" || part.output.type !== "content") return part
       changed = true
       const text = part.output.value
-        .map((item) => (item.type === "text" ? item.text : imageNote("mediaType" in item ? String(item.mediaType) : item.type, "không còn trong lịch sử")))
+        .map((item) => (item.type === "text" ? item.text : imageNote("mediaType" in item ? String(item.mediaType) : item.type, "no longer in the history")))
         .join("\n")
       return { ...part, output: { type: "text" as const, value: text } }
     })

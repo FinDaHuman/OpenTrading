@@ -27,21 +27,21 @@ const base = (over: Partial<AssembleInput> = {}): AssembleInput => ({
 })
 const prompts = path.join(import.meta.dir, "..", "prompts")
 /** How the tools.md lines that only serve a person watching a terminal begin. */
-const TERMINAL_ONLY = ["- Nói theo việc đã làm", "- Trước lượt tool đầu hoặc khi đổi hướng"]
+const TERMINAL_ONLY = ["- Talk about what you did", "- Before the first tool round or when changing direction"]
 
 test("machine: no style guide, the machine citations, tools.md without the lines for a person watching", () => {
   const terminal = assemble(base())
   const machine = assemble(base({ profile: "machine" }))
   expect(terminal.system).toContain("<style>")
   expect(machine.system).not.toContain("<style>")
-  expect(machine.system).toContain("Ngày theo dạng YYYY-MM-DD")
+  expect(machine.system).toContain("Dates as YYYY-MM-DD")
   expect(machine.system).not.toContain("128.400đ")
   for (const start of TERMINAL_ONLY) {
     expect(terminal.system).toContain(start)
     expect(machine.system).not.toContain(start)
   }
   // The invariants, the priority order, the computing rule and the stop rule stay.
-  for (const kept of ["<bat_bien>", "<thu_tu_uu_tien>", "Không tính nhẩm", "Chỉ dừng khi đã trả lời đủ"]) expect(machine.system).toContain(kept)
+  for (const kept of ["<bat_bien>", "<thu_tu_uu_tien>", "No mental arithmetic", "Stop only when the answer is complete"]) expect(machine.system).toContain(kept)
   // What it saves on every request, in the chars/4 estimate the budget guard uses.
   const saved = Math.ceil(terminal.system.length / 4) - Math.ceil(machine.system.length / 4)
   expect(saved).toBeGreaterThan(800)
@@ -51,7 +51,7 @@ test("machine: no style guide, the machine citations, tools.md without the lines
 test("the lines for a person watching are marked terminal-only in tools.md, and the stop rule is not", () => {
   const tools = readFileSync(path.join(prompts, "tools.md"), "utf8").split("\n")
   for (const start of TERMINAL_ONLY) expect([start, tools.filter((l) => l.startsWith(start) && l.endsWith("<!-- khi: terminal -->")).length]).toEqual([start, 1])
-  expect(tools.filter((l) => l.startsWith("- Chỉ dừng khi") && !l.includes("<!--")).length).toBe(1)
+  expect(tools.filter((l) => l.startsWith("- Stop only when") && !l.includes("<!--")).length).toBe(1)
 })
 
 test("the stop gate accepts machine-format answers (dot decimals, ISO dates, no thousands separator): no recovery request", () => {
@@ -77,7 +77,7 @@ test("useCalculatorShell swaps in the arithmetic-only shell and puts the full on
   registry.register(full)
   const restore = useCalculatorShell(registry)
   const swapped = registry.get("shell")!
-  expect(swapped.description).toStartWith("Máy tính")
+  expect(swapped.description).toStartWith("Calculator")
   expect(swapped.readOnly).toBe(true)
   expect(swapped.description.length).toBeLessThan(full.description.length)
   restore()
@@ -100,6 +100,6 @@ test("a prompt folder without citations-machine.md (a benchmark's own variant) s
   mkdirSync(dir, { recursive: true })
   for (const id of ["identity", "tools", "citations", "style"]) writeFileSync(path.join(dir, `${id}.md`), readFileSync(path.join(prompts, `${id}.md`), "utf8"))
   const machine = assemble(base({ profile: "machine" }), dir)
-  expect(machine.system).toContain("Ngày theo dạng YYYY-MM-DD")
+  expect(machine.system).toContain("Dates as YYYY-MM-DD")
   expect(machine.system).not.toContain("<style>")
 })

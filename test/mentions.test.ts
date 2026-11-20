@@ -73,7 +73,7 @@ describe("attachMentions", () => {
     expect(a.parts).toHaveLength(1)
     const part = a.parts[0]!
     expect(attachmentAttrs(part)).toMatchObject({ path: "ghi-chu.md" })
-    expect(part).toContain('harness đã đọc sẵn bằng read_file(path="ghi-chu.md")')
+    expect(part).toContain('the harness already read it with read_file(path="ghi-chu.md")')
     expect(part).toContain("1\tdòng 1")
     expect(part.endsWith("</tep_dinh_kem>")).toBe(true)
     expect(files.get(path.join(root, "ghi-chu.md"))?.full).toBe(true)
@@ -103,7 +103,7 @@ describe("attachMentions", () => {
   test("a big file is cut at the per-file cap, with where to read on", async () => {
     const a = await attach("@lon.txt")
     expect(a.parts[0]!.length).toBeLessThan(MENTION_FILE_CHARS + 1_500)
-    expect(a.parts[0]).toMatch(/còn \d+ dòng; đọc tiếp với offset=\d+/)
+    expect(a.parts[0]).toMatch(/\d+ lines left; continue with offset=\d+/)
     expect(a.files[0]!.note).toMatch(/^Đã đọc lon\.txt \(dòng 1–[\d.]+\/3\.000\)$/)
   })
 
@@ -184,7 +184,7 @@ describe("pruneAttachments", () => {
     const [m] = withoutOrphanStubs([{ role: "user", content: [{ type: "text", text: "lại" }, { type: "text", text: stub }] }])
     const text = (m!.content as { text: string }[])[1]!.text
     expect(attachmentAttrs(text)).toMatchObject({ path: "a.md", da_don: "1" })
-    expect(text).toContain("gọi read_file")
+    expect(text).toContain("call read_file")
   })
 
   test("compaction clears them whatever their size", () => {

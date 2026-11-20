@@ -21,12 +21,12 @@ export class Limiter {
 
   /** Resolves with a release function once a slot is free; rejects if `signal` aborts first. */
   acquire(signal?: AbortSignal): Promise<() => void> {
-    if (signal?.aborted) return Promise.reject(new Error("Đã huỷ."))
+    if (signal?.aborted) return Promise.reject(new Error("Cancelled."))
     if (this.waiters.length === 0 && this.running < this.limit()) return Promise.resolve(this.take())
     return new Promise((resolve, reject) => {
       const onAbort = () => {
         this.waiters = this.waiters.filter((w) => w !== waiter)
-        reject(new Error("Đã huỷ."))
+        reject(new Error("Cancelled."))
         this.emit()
       }
       const waiter = { resolve, cleanup: () => signal?.removeEventListener("abort", onAbort) }

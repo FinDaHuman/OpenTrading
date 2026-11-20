@@ -33,9 +33,9 @@ const MAX_WRITE_CHARS = 2_000_000
 
 async function readBytes(abs: string): Promise<Uint8Array | undefined> {
   try {
-    if (!(await stat(abs)).isFile()) throw new Error(`${abs} là thư mục.`)
+    if (!(await stat(abs)).isFile()) throw new Error(`${abs} is a directory.`)
   } catch (error) {
-    if (error instanceof Error && error.message.endsWith("là thư mục.")) throw error
+    if (error instanceof Error && error.message.endsWith("is a directory.")) throw error
     return undefined
   }
   return new Uint8Array(await Bun.file(abs).arrayBuffer())
@@ -44,9 +44,9 @@ async function readBytes(abs: string): Promise<Uint8Array | undefined> {
 /** Why `abs` (currently `bytes`) must not be changed now, or undefined. */
 function notReadYet(abs: string, bytes: Uint8Array, state: FileState, whole: boolean): string | undefined {
   const seen = state.get(abs)
-  if (!seen) return `Chưa đọc ${abs}: gọi read_file trước khi ${whole ? "ghi đè" : "sửa"} (để không mất nội dung chưa xem).`
-  if (whole && !seen.full) return `Mới đọc một phần ${abs}: đọc toàn bộ bằng read_file trước khi ghi đè cả file, hoặc dùng edit_file để sửa đúng chỗ.`
-  if (hashBytes(bytes) !== seen.hash) return `${abs} đã thay đổi kể từ lần read_file gần nhất (người dùng hoặc chương trình khác sửa). Đọc lại rồi mới ghi.`
+  if (!seen) return `${abs} has not been read: call read_file before ${whole ? "overwriting" : "editing"} it (so no unseen content is lost).`
+  if (whole && !seen.full) return `Only part of ${abs} has been read: read it whole with read_file before overwriting it, or use edit_file to change the exact place.`
+  if (hashBytes(bytes) !== seen.hash) return `${abs} changed since the last read_file (the user or another program edited it). Read it again before writing.`
   return undefined
 }
 
@@ -98,7 +98,7 @@ async function commitWrite(deps: WriteDeps, abs: string, before: Uint8Array | un
     try {
       await writeFile(abs, bytes, { flag: "wx" })
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "EEXIST") throw new Error(`${abs} vừa được tạo bởi chương trình khác. Đọc nó bằng read_file trước khi ghi.`)
+      if ((error as NodeJS.ErrnoException).code === "EEXIST") throw new Error(`${abs} was just created by another program. Read it with read_file before writing.`)
       throw error
     }
   }
@@ -114,18 +114,18 @@ const previewOf = (title: string, d: Diff): ApprovalPreview => ({ title, diff: d
 
 export function writeFileTool(deps: WriteDeps): ToolDef<WriteFileInput> {
   async function validate(input: WriteFileInput) {
-    if (input.content.length > MAX_WRITE_CHARS) return `Nội dung quá dài (${input.content.length} ký tự, tối đa ${MAX_WRITE_CHARS}).`
+    if (input.content.length > MAX_WRITE_CHARS) return `Content too long (${input.content.length} characters, at most ${MAX_WRITE_CHARS}).`
     const abs = deps.workspace.resolve(input.path)
     const current = await readBytes(abs)
     if (!current) return undefined
-    if (isBinary(abs, current)) return `${abs} là file nhị phân; write_file không ghi đè file nhị phân.`
+    if (isBinary(abs, current)) return `${abs} is a binary file; write_file does not overwrite binary files.`
     return notReadYet(abs, current, deps.state, true)
   }
   return {
     name: "write_file",
     description:
-      "Tạo hoặc ghi đè cả một file text (đường dẫn tính từ workspace, tên không dấu). Dùng khi người dùng muốn lưu kết quả thành file (.md, .csv, .json, .html tự chứa). " +
-      "Không dùng khi chỉ sửa vài chỗ (dùng edit_file) hay khi người dùng chỉ hỏi đáp. Ghi đè file có sẵn thì read_file trước.",
+      "Creates or overwrites a whole text file (path relative to the workspace, file name without Vietnamese diacritics). Use when the user wants a result saved as a file (.md, .csv, .json, self-contained .html). " +
+      "Do not use to change a few places (use edit_file) or when the user only asks a question. Read an existing file with read_file before overwriting it.",
     input: z.object({
       path: z.string().min(1),
       content: z.string(),
@@ -155,7 +155,7 @@ export function writeFileTool(deps: WriteDeps): ToolDef<WriteFileInput> {
       const current = await readBytes(abs)
       const { bytes, text } = encodeLike(input.content, current)
       await commitWrite(deps, abs, current, bytes, "write_file")
-      return current ? `Đã ghi đè ${abs} (${lineCount(text)} dòng). Người dùng hoàn tác được bằng /undo.` : `Đã tạo ${abs} (${lineCount(text)} dòng).`
+      return current ? `Overwrote ${abs} (${lineCount(text)} lines). The user can undo with /undo.` : `Created ${abs} (${lineCount(text)} lines).`
     },
   }
 }
@@ -176,8 +176,8 @@ function curlify(text: string) {
 
 /** The edited text, or why it cannot be done. Works on LF text; the caller restores CRLF. */
 export function applyEdit(text: string, oldString: string, newString: string, all = false): { text: string; count: number } | { error: string } {
-  if (oldString === "") return { error: "old_string rỗng: tạo file mới thì dùng write_file." }
-  if (oldString === newString) return { error: "old_string và new_string giống hệt nhau: không có gì để sửa." }
+  if (oldString === "") return { error: "old_string is empty: use write_file to create a new file." }
+  if (oldString === newString) return { error: "old_string and new_string are identical: nothing to change." }
   let target = oldString.replace(/\r\n/g, "\n")
   let replacement = newString.replace(/\r\n/g, "\n")
   let count = text.split(target).length - 1
@@ -191,8 +191,8 @@ export function applyEdit(text: string, oldString: string, newString: string, al
       count = text.split(target).length - 1
     }
   }
-  if (count === 0) return { error: "Không tìm thấy old_string trong file. Kiểm tra lại từng ký tự, khoảng trắng và xuống dòng (đọc lại đoạn đó bằng read_file); không chép số dòng vào old_string." }
-  if (count > 1 && !all) return { error: `old_string xuất hiện ${count} lần. Thêm vài dòng xung quanh cho duy nhất, hoặc đặt replace_all=true để sửa mọi chỗ.` }
+  if (count === 0) return { error: "old_string was not found in the file. Check every character, space and line break (read that part again with read_file); do not copy line numbers into old_string." }
+  if (count > 1 && !all) return { error: `old_string occurs ${count} times. Add surrounding lines to make it unique, or set replace_all=true to change every occurrence.` }
   return { text: all ? text.split(target).join(replacement) : text.replace(target, () => replacement), count }
 }
 
@@ -201,8 +201,8 @@ export function editFileTool(deps: WriteDeps): ToolDef<EditFileInput> {
   async function plan(input: EditFileInput) {
     const abs = deps.workspace.resolve(input.path)
     const current = await readBytes(abs)
-    if (!current) return { error: `Không có file ${abs}. Tạo file mới bằng write_file.` }
-    if (isBinary(abs, current)) return { error: `${abs} là file nhị phân; edit_file chỉ sửa file text.` }
+    if (!current) return { error: `No file ${abs}. Create a new file with write_file.` }
+    if (isBinary(abs, current)) return { error: `${abs} is a binary file; edit_file only edits text files.` }
     const stale = notReadYet(abs, current, deps.state, false)
     if (stale) return { error: stale }
     const decoded = decodeFile(current)
@@ -214,15 +214,15 @@ export function editFileTool(deps: WriteDeps): ToolDef<EditFileInput> {
   return {
     name: "edit_file",
     description:
-      "Sửa một đoạn trong file text đã có: thay old_string bằng new_string (old_string phải khớp đúng từng ký tự và chỉ xuất hiện một lần, trừ khi replace_all=true). " +
-      "Phải read_file file đó trước trong phiên; giữ nguyên thụt đầu dòng như trong file, không chép số dòng của read_file vào old_string. " +
-      "Dùng khi cập nhật vài chỗ trong kế hoạch, báo cáo, ghi chú hay bảng số liệu có sẵn. Không dùng khi tạo file mới hoặc viết lại gần hết file (dùng write_file). " +
-      "Mỗi lần sửa người dùng duyệt (diff hiện trong hộp thoại) và có thể hoàn tác.",
+      "Edits a passage in an existing text file: replaces old_string with new_string (old_string must match character for character and occur once, unless replace_all=true). " +
+      "The file must have been read with read_file in this session; keep the file's indentation and do not copy read_file's line numbers into old_string. " +
+      "Use to update a few places in an existing plan, report, note or table. Do not use to create a file or rewrite most of one (use write_file). " +
+      "The user approves each edit (the diff is shown in a dialog) and can undo it.",
     input: z.object({
-      path: z.string().min(1).describe("Đường dẫn file cần sửa"),
-      old_string: z.string().describe("Đoạn cần thay, chép đúng từ file"),
-      new_string: z.string().describe("Đoạn mới"),
-      replace_all: z.boolean().optional().describe("Thay mọi chỗ khớp (mặc định false)"),
+      path: z.string().min(1).describe("Path of the file to edit"),
+      old_string: z.string().describe("The passage to replace, copied exactly from the file"),
+      new_string: z.string().describe("The new passage"),
+      replace_all: z.boolean().optional().describe("Replace every match (default false)"),
     }),
     ...gateHooks(deps),
     async validate(input) {
@@ -244,7 +244,7 @@ export function editFileTool(deps: WriteDeps): ToolDef<EditFileInput> {
       const text = p.decoded.eol === "\r\n" ? p.after.replace(/\n/g, "\r\n") : p.after
       await commitWrite(deps, p.abs, p.current, encodeFile(text, p.decoded.encoding), "edit_file")
       const diff = lineDiff(p.before, p.after)
-      return `Đã sửa ${p.abs}${p.count > 1 ? ` (${p.count} chỗ)` : ""}: +${diff.added} −${diff.removed} dòng. Người dùng hoàn tác được bằng /undo.`
+      return `Edited ${p.abs}${p.count > 1 ? ` (${p.count} places)` : ""}: +${diff.added} −${diff.removed} lines. The user can undo with /undo.`
     },
   }
 }

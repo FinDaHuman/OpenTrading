@@ -65,7 +65,7 @@ test("Shift+Tab reaches bypass only when the session started with --yolo", () =>
   expect(cycleMode("auto", { bypass: true })).toBe("bypass")
   expect(cycleMode("bypass", { bypass: true })).toBe("read-only")
   expect(cycleMode("ask", { auto: false, bypass: true })).toBe("bypass")
-  expect(modeNote("bypass")).toContain("▸▸▸ bỏ qua quyền")
+  expect(modeNote("bypass")).toContain("▸▸▸ bypass")
 })
 
 test("bypass runs writes, shell and MCP writes headless, and never calls the classifier", async () => {

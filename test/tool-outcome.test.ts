@@ -36,29 +36,29 @@ test("without server fields the notice leaves a repeat open and states no wait",
   const state = readSourceState(envelope({ availability: "unavailable", warnings: ["x briefly unavailable (recent timeout), retry shortly"] }))!
   const notice = sourceNotice("mcp__ot__vn_fundamentals", state)
   expect(notice.startsWith(`${SOURCE_FAILED_PREFIX} vn_fundamentals: x briefly unavailable`)).toBe(true)
-  expect(notice).toContain("Gọi lại đúng lời gọi này một lần ở bước kế tiếp")
-  expect(notice).toContain("không tự điền số")
+  expect(notice).toContain("Repeat this exact call once in the next step")
+  expect(notice).toContain("never fill in numbers yourself")
   expect(notice).not.toMatch(/\d+s\b/)
 })
 
 test("a wait and alternatives appear only when the server gave them", () => {
   const state = readSourceState(envelope({ availability: "unavailable", reason: "recent_failure", retryable: true, retry_after_s: 34.2, alternatives: ["financial_ratios"] }))!
   expect(sourceNotice("mcp__ot__vn_fundamentals", state)).toBe(
-    `${SOURCE_FAILED_PREFIX} vn_fundamentals: nguồn vừa lỗi. Gọi financial_ratios ngay ở bước kế tiếp. Nguồn này thử lại được sau 35s. Nếu vẫn không có, báo phần còn thiếu, không tự điền số.`,
+    `${SOURCE_FAILED_PREFIX} vn_fundamentals: the source just failed. Call financial_ratios in the very next step. This source can be retried after 35s. If it is still missing, report what is missing; never fill in numbers yourself.`,
   )
 })
 
 test("a failure the server calls permanent says a repeat will not help", () => {
   const state = readSourceState(envelope({ availability: "unavailable", reason: "not_configured", retryable: false, retry_after_s: 90 }))!
   const notice = sourceNotice("mcp__ot__x", state)
-  expect(notice).toContain("nguồn chưa được cấu hình")
-  expect(notice).toContain("Gọi lại không giúp được")
+  expect(notice).toContain("the source is not configured")
+  expect(notice).toContain("Calling again will not help")
   expect(notice).not.toContain("thử lại được sau")
 })
 
 test("a wait without an alternative is a fact, not an order to repeat now", () => {
   const notice = sourceNotice("mcp__ot__x", readSourceState(envelope({ availability: "unavailable", retry_after_s: 20 }))!)
-  expect(notice).toContain("Nguồn này thử lại được sau 20s.")
+  expect(notice).toContain("This source can be retried after 20s.")
   expect(notice).not.toContain("Gọi lại đúng lời gọi này")
 })
 
@@ -78,7 +78,7 @@ test("runTool puts the notice first and keeps the envelope", async () => {
 test("partial data keeps its ref and gets a status line", async () => {
   const raw = JSON.stringify({ data: [{ close: 1 }, { close: 2 }], availability: "partial", warnings: ["thiếu quý 3"] })
   const result = await runTool(dataTool(raw), {}, ctx(), new RwLock())
-  expect(result.output.split("\n")[0]).toBe("[Dữ liệu một phần]: thiếu quý 3. Nêu rõ giới hạn này khi dùng số liệu.")
+  expect(result.output.split("\n")[0]).toBe("[Partial data]: thiếu quý 3. State this limit when using the figures.")
   expect(result.output.split("\n")[1]!.startsWith("[ref ")).toBe(true)
 })
 

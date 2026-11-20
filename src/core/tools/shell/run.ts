@@ -64,7 +64,7 @@ export function detectShell(platform: NodeJS.Platform = process.platform): Shell
 /**
  * The PowerShell wrapper. With a redirected stderr, Windows PowerShell writes errors (and
  * progress) as CLIXML, so the command runs in a script block with its error stream merged
- * into stdout and each error record printed as one "LỖI: …" line; progress is off; tables
+ * into stdout and each error record printed as one "ERROR: …" line; progress is off; tables
  * become text at 200 columns. Exit code: the last native program's, else 1 after an error.
  */
 function psScript(command: string) {
@@ -76,7 +76,7 @@ function psScript(command: string) {
     "$__otErr = $false",
     "& {",
     command,
-    '} 2>&1 | ForEach-Object { if ($_ -is [System.Management.Automation.ErrorRecord]) { $__otErr = $true; "LỖI: " + $_.ToString() } else { $_ } } | Out-String -Stream -Width 200',
+    '} 2>&1 | ForEach-Object { if ($_ -is [System.Management.Automation.ErrorRecord]) { $__otErr = $true; "ERROR: " + $_.ToString() } else { $_ } } | Out-String -Stream -Width 200',
     "if ($LASTEXITCODE) { exit $LASTEXITCODE } elseif ($__otErr) { exit 1 }",
   ].join("\n")
 }
@@ -265,7 +265,7 @@ export async function runShell(
       saved = undefined
     }
   }
-  const output = dropped > 0 ? `${head}\n[... đã bỏ ${dropped} ký tự ở giữa ...]\n${tail}` : head + tail
+  const output = dropped > 0 ? `${head}\n[... ${dropped} characters dropped from the middle ...]\n${tail}` : head + tail
   // Chunks are normalised as they come; a \r\n split across two chunks is joined here.
   return { output: output.replace(/\r\n/g, "\n"), exitCode: proc.exitCode, timedOut, aborted, ms: Date.now() - started, dropped, ...(saved ? { saved } : {}) }
 }

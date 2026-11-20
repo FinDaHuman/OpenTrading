@@ -373,7 +373,7 @@ test("prompts, resources, images and lenient output schemas work end to end", as
   expect(manager.allPrompts()[0]).toMatchObject({ server: "data", name: "ticker_analysis" })
 
   const text = await manager.getPrompt("data", "ticker_analysis", { ticker: "VCB", focus: "biên lãi" })
-  expect(text).toBe("Phân tích VCB (trọng tâm: biên lãi)\n\n(gợi ý của server) Tôi sẽ dùng dữ liệu giá.")
+  expect(text).toBe("Phân tích VCB (trọng tâm: biên lãi)\n\n(the server's suggestion) Tôi sẽ dùng dữ liệu giá.")
 
   // Resource tools appear because a server offers resources.
   const listed = (await registry.get("list_mcp_resources")!.execute({}, ctx)) as string
@@ -506,13 +506,13 @@ test("a read-only call is retried after a 502 page; a write call is not, and the
   remote.failCalls.count = 3
   const failed = await errorOf(Promise.resolve(registry.get("mcp__data__slow")!.execute({ ms: 1 }, ctx)))
   expect(failed).toContain("HTTP 502")
-  expect(failed).toContain("Đã thử lại 2 lần")
+  expect(failed).toContain("Retried 2 times")
   remote.failCalls.count = 0
 
   remote.failCalls.count = 1
   const write = await errorOf(Promise.resolve(registry.get("mcp__data__note")!.execute({ text: "a" }, ctx)))
   expect(write).toContain("HTTP 502")
-  expect(write).toContain("không tự thử lại")
+  expect(write).toContain("not retried automatically")
   expect(write).not.toContain("<html")
   expect(write.length).toBeLessThan(400)
   expect(remote.failCalls.count).toBe(0)
@@ -540,17 +540,17 @@ test("after three connection failures calls are refused without being sent, then
   expect(remote.failCalls.count).toBe(7)
 
   const refused = await errorOf(slow())
-  expect(refused).toContain("chưa được gửi đi")
-  expect(refused).toContain("nêu phần còn thiếu")
+  expect(refused).toContain("was not sent")
+  expect(refused).toContain("state what is missing")
   // The write path is refused too, and nothing reached the server.
-  expect(await errorOf(Promise.resolve(registry.get("mcp__data__note")!.execute({ text: "a" }, ctx)))).toContain("chưa được gửi đi")
+  expect(await errorOf(Promise.resolve(registry.get("mcp__data__note")!.execute({ text: "a" }, ctx)))).toContain("was not sent")
   expect(remote.failCalls.count).toBe(7)
 
   // A failed test opens it again.
   clock.now += 60_000
   expect(await errorOf(slow())).toContain("HTTP 502")
   expect(remote.failCalls.count).toBe(6)
-  expect(await errorOf(slow())).toContain("chưa được gửi đi")
+  expect(await errorOf(slow())).toContain("was not sent")
 
   // A test that succeeds closes it.
   remote.failCalls.count = 0
@@ -616,11 +616,11 @@ test("a server that stays down trips the breaker through the wait for a reconnec
   const errors: string[] = []
   for (let i = 0; i < 8; i++) {
     errors.push(await errorOf(Promise.resolve(registry.get("mcp__data__slow")!.execute({ ms: 1 }, ctx))))
-    if (errors.at(-1)!.includes("chưa được gửi đi")) break
+    if (errors.at(-1)!.includes("was not sent")) break
   }
-  expect(errors.at(-1)).toContain("chưa được gửi đi")
+  expect(errors.at(-1)).toContain("was not sent")
   expect(errors.length).toBeLessThanOrEqual(4)
-  expect(errors.some((e) => e.includes("chưa kết nối lại được"))).toBe(true)
+  expect(errors.some((e) => e.includes("did not reconnect"))).toBe(true)
 }, 20_000)
 
 test("a reconnect lets a call test the server before the period ends", async () => {
@@ -635,7 +635,7 @@ test("a reconnect lets a call test the server before the period ends", async () 
   const slow = () => Promise.resolve(registry.get("mcp__data__slow")!.execute({ ms: 1 }, ctx))
   remote.failCalls.count = 3
   for (let i = 0; i < 3; i++) await errorOf(slow())
-  expect(await errorOf(slow())).toContain("chưa được gửi đi")
+  expect(await errorOf(slow())).toContain("was not sent")
   await manager.restart("data")
   expect(await slow()).toBeDefined()
 }, 20_000)
@@ -667,14 +667,14 @@ test("a retry_after over 30s fails at once and says how long to wait; a write is
   const started = Date.now()
   const error = await errorOf(Promise.resolve(registry.get("mcp__data__slow")!.execute({ ms: 1 }, ctx)))
   expect(Date.now() - started).toBeLessThan(1000)
-  expect(error).toContain("giới hạn tốc độ (HTTP 429)")
-  expect(error).toContain("chờ 45 giây")
+  expect(error).toContain("is rate-limited (HTTP 429)")
+  expect(error).toContain("wait 45 seconds")
   expect(remote.failCalls.count).toBe(2)
 
   Object.assign(remote.failCalls, { count: 3, status: 429, body: { error: "rate_limited", retry_after: 1 } })
   const write = await errorOf(Promise.resolve(registry.get("mcp__data__note")!.execute({ text: "a" }, ctx)))
-  expect(write).toContain("không tự thử lại")
-  expect(write).toContain("từ chối trước khi chạy")
+  expect(write).toContain("not retried automatically")
+  expect(write).toContain("refused before running it")
   expect(remote.failCalls.count).toBe(2)
   expect(stats.notes).toBe(0)
 }, 20_000)
@@ -704,7 +704,7 @@ test("quota_exceeded is not retried, on a tool call or on initialize", async () 
   await manager.start()
   Object.assign(remote.failCalls, { count: 3, status: 429, body: { error: "quota_exceeded", retry_after: 3600 } })
   const error = await errorOf(Promise.resolve(registry.get("mcp__data__slow")!.execute({ ms: 1 }, ctx)))
-  expect(error).toContain("hết quota trong ngày")
+  expect(error).toContain("daily quota is exhausted")
   expect(error).not.toContain("quota_exceeded")
   expect(remote.failCalls.count).toBe(2)
   expect(stats.calls).toBe(0)
@@ -766,8 +766,8 @@ test("the server dies with calls in flight: read-only calls finish after it is b
   await Bun.sleep(100)
   first.stop()
   const writeError = await Promise.race([write, Bun.sleep(3000).then(() => "(hang)")])
-  expect(writeError).toContain("lỗi tạm thời")
-  expect(writeError).toContain("không tự thử lại")
+  expect(writeError).toContain("temporary error")
+  expect(writeError).toContain("not retried automatically")
   const again = startHttpServer({ port: first.port, stats })
   cleanups.push(again.stop)
   const results = await Promise.all(reads)
@@ -840,7 +840,7 @@ test("a queued call can be cancelled before it reaches the server", async () => 
   const queued = errorOf(Promise.resolve(slow.execute({ ms: 1 }, { signal: abort.signal, callId: "c2" })))
   await Bun.sleep(50)
   abort.abort()
-  expect(await queued).toContain("Đã huỷ")
+  expect(await queued).toContain("Cancelled")
   await running
   expect(stats.calls).toBe(1)
 }, 20_000)

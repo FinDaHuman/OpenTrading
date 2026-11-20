@@ -86,7 +86,7 @@ describe("memory_read (Story 5)", () => {
   test("exactly one field: none or two get directions; an unknown field is refused by the schema", async () => {
     const { tool, read } = setup()
     const directions = await read({})
-    expect(directions).toContain("đúng một")
+    expect(directions).toContain("exactly one")
     expect(await read({ lesson: 7, query: "x" })).toBe(directions)
     expect(await read({ subject: "  " })).toBe(directions)
     const schema = tool.input as z.ZodType

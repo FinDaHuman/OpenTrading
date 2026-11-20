@@ -49,14 +49,14 @@ export function unsafeRoot(dir: string, e: WorkspaceEnv = {}): string | undefine
   const flavor = pathFor(platform)
   const abs = flavor.resolve(dir)
   const key = samePathKey(abs, platform)
-  if (key === samePathKey(home, platform)) return "thư mục home"
+  if (key === samePathKey(home, platform)) return "the home folder"
   const root = flavor.parse(abs).root
-  if (key === samePathKey(root, platform)) return "gốc ổ đĩa"
+  if (key === samePathKey(root, platform)) return "a drive root"
   const topLevel = samePathKey(flavor.dirname(abs), platform) === samePathKey(root, platform)
   // Windows: D:\Dau-tu is an ordinary folder; only the system ones are off limits.
   // POSIX: every direct child of / is a system folder (/usr, /etc, /home, /tmp…).
-  if (topLevel && (platform !== "win32" || WINDOWS_SYSTEM.has(flavor.basename(abs).toLowerCase()))) return "thư mục hệ thống cấp 1"
-  if (isInside(abs, data, platform)) return "thư mục dữ liệu của OpenTrading"
+  if (topLevel && (platform !== "win32" || WINDOWS_SYSTEM.has(flavor.basename(abs).toLowerCase()))) return "a top-level system folder"
+  if (isInside(abs, data, platform)) return "OpenTrading's data folder"
   return undefined
 }
 
@@ -149,21 +149,21 @@ export class Workspace {
   describe(present?: ReadonlySet<string>): string {
     const has = (name: string) => !present || present.has(name)
     const readHint = [
-      has("read_file") && "File/thư mục người dùng đưa (kể cả ngoài workspace) đọc bằng read_file",
-      has("glob_files") && "tìm file bằng glob_files",
-      has("grep_files") && "tìm chữ trong file bằng grep_files",
+      has("read_file") && "Read files/folders the user gives (even outside the workspace) with read_file",
+      has("glob_files") && "find files with glob_files",
+      has("grep_files") && "search text in files with grep_files",
     ].filter(Boolean)
     const lines = [
-      `Thư mục làm việc (workspace): ${this.primary}${this.fallbackReason ? ` (người dùng mở OpenTrading ở ${this.fallbackReason} nên dùng thư mục riêng này)` : ""}.`,
-      ...(this.extra.length > 0 ? [`Thư mục thêm: ${this.extra.join("; ")}.`] : []),
+      `Workspace: ${this.primary}${this.fallbackReason ? ` (the user opened OpenTrading in ${this.fallbackReason}, so this separate folder is used)` : ""}.`,
+      ...(this.extra.length > 0 ? [`Extra folders: ${this.extra.join("; ")}.`] : []),
       readHint.length === 3
-        ? "Đường dẫn tương đối tính từ workspace. File/thư mục người dùng đưa (kể cả ngoài workspace) đọc bằng read_file; tìm file bằng glob_files, tìm chữ trong file bằng grep_files."
-        : `Đường dẫn tương đối tính từ workspace.${readHint.length > 0 ? ` ${capitalize(readHint.join("; "))}.` : ""}`,
+        ? "Relative paths are from the workspace. Read files/folders the user gives (even outside the workspace) with read_file; find files with glob_files, search text in files with grep_files."
+        : `Relative paths are from the workspace.${readHint.length > 0 ? ` ${capitalize(readHint.join("; "))}.` : ""}`,
     ]
     const scratch = this.scratch?.dir()
     if (scratch) {
       lines.push(
-        `Thư mục tạm của phiên: ${scratch}. Dùng cho file tạm (script, kết quả trung gian, file xuất không thuộc dự án của người dùng) thay cho %TEMP% hay /tmp (file người dùng muốn giữ thì vẫn đặt trong workspace); ghi file vào đây không cần hỏi (trừ chế độ chỉ-đọc), lệnh shell vẫn duyệt như thường. Chỉ dùng thư mục tạm khác khi người dùng yêu cầu.`,
+        `Session temp folder: ${scratch}. Use it for temporary files (scripts, intermediate results, exports that are not part of the user's project) instead of %TEMP% or /tmp (files the user wants to keep still go in the workspace); writing here needs no approval (except in read-only mode), shell commands are approved as usual. Use another temp folder only if the user asks.`,
       )
     }
     return lines.join("\n")

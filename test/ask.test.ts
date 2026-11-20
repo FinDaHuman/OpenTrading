@@ -30,7 +30,7 @@ test("schema: 1–4 questions, 2–4 options, short header, no duplicates", () =
 test("without a UI the model is told to ask in plain text", async () => {
   const tool = askUserTool(new AskBroker())
   const out = await runTool(tool, q, ctx(), new RwLock())
-  expect(out.output).toContain("hỏi bằng một câu hỏi ngắn")
+  expect(out.output).toContain("Ask one short question")
 })
 
 test("answers come back in Claude Code's format; skipping tells the model to assume and go on", async () => {
@@ -43,12 +43,12 @@ test("answers come back in Claude Code's format; skipping tells the model to ass
   expect(head.callId).toBe("call_q")
   expect(head.questions[0]!.header).toBe("Khung TG")
   broker.respond(head.id, { "Bạn đầu tư trong bao lâu?": "1–3 năm" })
-  expect((await running).output).toBe('Người dùng đã trả lời: "Bạn đầu tư trong bao lâu?"="1–3 năm". Tiếp tục dựa trên các câu trả lời này.')
+  expect((await running).output).toBe('The user answered: "Bạn đầu tư trong bao lâu?"="1–3 năm". Carry on based on these answers.')
 
   const declined = runTool(tool, q, ctx(), new RwLock())
   await tick()
   broker.respond(broker.head()!.id, undefined)
-  expect((await declined).output).toContain("nêu giả định ở đầu câu trả lời rồi làm tiếp")
+  expect((await declined).output).toContain("state the assumption at the start of the answer and carry on")
 })
 
 test("waiting for an answer neither times the tool out nor blocks a write tool", async () => {
@@ -80,10 +80,10 @@ test("aborting the turn cancels the open question", async () => {
   controller.abort()
   await running
   expect(broker.head()).toBeUndefined()
-  expect(formatAskResult({ answered: false, reason: "cancelled" })).toBe("Lượt hỏi đã bị huỷ.")
+  expect(formatAskResult({ answered: false, reason: "cancelled" })).toBe("The question was cancelled.")
 })
 
 test("a typed answer containing quotes stays well-formed for the model", () => {
   const out = formatAskResult({ answered: true, answers: { "Mã nào?": 'VCB "và" CTG' } })
-  expect(out).toBe('Người dùng đã trả lời: "Mã nào?"="VCB \\"và\\" CTG". Tiếp tục dựa trên các câu trả lời này.')
+  expect(out).toBe('The user answered: "Mã nào?"="VCB \\"và\\" CTG". Carry on based on these answers.')
 })
