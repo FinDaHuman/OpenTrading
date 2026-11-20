@@ -1,13 +1,13 @@
 # Anti-patterns — những gì KHÔNG được vẽ
 
-- Không vẽ khi thiếu điểm tối thiểu (nến <5, line <2, boxplot nhóm <4, pie toàn ≤0...).
-- Không multiline giá nhiều mã (lệch magnitude → xẹp) — dùng `chart_render kind=compare`.
-- Không pie >7 lát (đọc legend bar thay thế).
-- Không pie 2 lát / donut cho phân phối — donut chỉ cho 1 value/max.
-- Không boxplot các nhóm khác magnitude.
-- Không scatter thiếu groups khi có ≥2 mã (chấm braille cùng cỡ, không màu = không phân biệt).
-- Không gauge thiếu max; không heatmap matrix rỗng.
-- Không tự phối màu — tăng xanh lá, giảm đỏ (bảng giá VN).
-- Không map theo tên tool — cùng tool có thể ra nhiều shape (`money_flow` vừa có
-  sign → winloss, vừa có BuyVal−SellVal → waterfall); luôn nhìn SHAPE data.
-- Không chép hình vào câu trả lời — chart màu tự hiện trong TUI, chỉ verdict 2–3 câu.
+- Never draw without the minimum points (candles <5, line <2, boxplot groups <4, pie all ≤0...).
+- Never multiline the prices of several tickers (different magnitudes → flattened) — use `chart_render kind=compare`.
+- Never a pie with >7 slices (read a legend bar instead).
+- Never a 2-slice pie / a donut for a distribution — a donut is only for 1 value/max.
+- Never a boxplot of groups with different magnitudes.
+- Never a scatter without groups when there are ≥2 tickers (braille dots of the same size, no colour = indistinguishable).
+- Never a gauge without max; never a heatmap with an empty matrix.
+- Never pick colours yourself — rising green, falling red (the Vietnamese price board).
+- Never map by tool name — the same tool can produce several shapes (`money_flow` has both
+  a sign → winloss and BuyVal−SellVal → waterfall); always look at the data SHAPE.
+- Never copy the picture into the answer — the colour chart shows in the TUI by itself; give only a 2–3 sentence verdict.

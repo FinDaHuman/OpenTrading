@@ -45,7 +45,7 @@ const card = (ticker: string, diem: Scorecard["diem"], chi_so: Partial<Scorecard
   nguon: ["vn_fundamentals"],
 })
 const flat = (n: number) => ({ chat_luong: n, dinh_gia: n, tang_truong: n, suc_khoe: n })
-const tickerIn = (prompt: string) => /mã ([A-Z0-9]{3,5})/.exec(prompt)?.[1] ?? "???"
+const tickerIn = (prompt: string) => /scorecard (?:for|of) ([A-Z0-9]{3,5})/.exec(prompt)?.[1] ?? "???"
 
 test("every bundled playbook declares its phases, agent types and an estimate per size; small stays well under the warning", () => {
   expect(PLAYBOOKS.map((p) => p.meta.name)).toEqual(["sang-loc", "kiem-chung", "tranh-bien", "nganh"])
@@ -119,7 +119,7 @@ test("sang-loc medium: scorecards in parallel, refuters move a ticker down, the 
     }
     if (spec.schema === VERDICT) {
       // FPT's numbers do not hold up: refuted and marked down by 3.
-      const refuted = spec.prompt.includes("mã FPT")
+      const refuted = spec.prompt.includes("scorecard of FPT")
       return ok("", { giu_nguyen: !refuted, dieu_chinh: refuted ? -3 : 0, so_lieu_sai: refuted ? ["ROE 12% chứ không phải 25% (Q2/2026)"] : [], ly_do: "kiểm" })
     }
     return ok("BÁO CÁO TỔNG HỢP")
@@ -141,8 +141,8 @@ test("sang-loc medium: scorecards in parallel, refuters move a ticker down, the 
   // The referee sees the cards as framed evidence, and is told the ranking is done.
   const referee = specs.find((s) => s.type === "tong-hop")!.prompt
   expect(referee).toContain("<bang_chung")
-  expect(referee).toContain("không xếp lại")
-  expect(referee).toContain("Không khuyến nghị mua, bán")
+  expect(referee).toContain("do not re-rank")
+  expect(referee).toContain("Never recommend buying, selling")
 })
 
 test("sang-loc small: more tickers than the tier are cut with a log line, no refuters", async () => {
@@ -184,7 +184,7 @@ test("sang-loc: a card about another ticker is rejected, never relabelled as the
   expect(fpt.error).toContain("HPG")
   const referee = specs.find((s) => s.type === "tong-hop")!.prompt
   expect(referee).not.toContain("999")
-  expect(referee).toContain("không lấy được dữ liệu của FPT")
+  expect(referee).toContain("could not get data for FPT")
   expect(String(view.result)).not.toMatch(/FPT[^\n]*999/)
 })
 
@@ -208,14 +208,14 @@ test("kiem-chung medium: claims by importance, three lenses per claim, wrong vs 
     if (spec.schema === CLAIMS) return ok("", { claims })
     if (spec.schema === CHECK) {
       if (spec.prompt.includes('"chi_tieu":"ROE"')) return fail("daily-quota")
-      if (spec.prompt.includes('"chi_tieu":"P/E"')) return ok("", { ket_luan: spec.prompt.includes("kỳ và đơn vị") ? "dung" : "sai", gia_tri_tim_thay: "24 lần", nguon: "vn_fundamentals", giai_thich: "P/E là 24" })
+      if (spec.prompt.includes('"chi_tieu":"P/E"')) return ok("", { ket_luan: spec.prompt.includes("period and unit") ? "dung" : "sai", gia_tri_tim_thay: "24 lần", nguon: "vn_fundamentals", giai_thich: "P/E là 24" })
       return ok("", { ket_luan: "dung", gia_tri_tim_thay: "2.098 tỷ", nguon: "financial_statements", thoi_diem: "Q2/2026", giai_thich: "khớp" })
     }
     return ok("?")
   })
   const checks = specs.filter((s) => s.schema === CHECK)
   // The quota cut stops agents that had not started yet: at least the first claim got its 3 lenses.
-  expect(checks.slice(0, 3).map((s) => (s.prompt.includes("số liệu gốc") ? 0 : s.prompt.includes("kỳ và đơn vị") ? 1 : 2))).toEqual([0, 1, 2])
+  expect(checks.slice(0, 3).map((s) => (s.prompt.includes("source data") ? 0 : s.prompt.includes("period and unit") ? 1 : 2))).toEqual([0, 1, 2])
   expect(checks[0]!.prompt).toContain("LNST Q2")
   const result = String(view.result)
   expect(result).toContain("✓ đúng")
@@ -284,7 +284,7 @@ test("tranh-bien medium: 5 analysts, bull and bear open then rebut once, the ref
   const judge = specs.find((s) => s.type === "tong-hop")!.prompt
   expect(judge).toContain("Báo cáo vi-mo")
   expect(judge).toContain("BEAR: bear vòng 1")
-  expect(judge).toContain("Không khuyến nghị mua, bán, giữ")
+  expect(judge).toContain("Never recommend buying, selling, holding")
   expect(String(view.result)).toBe("PHÁN QUYẾT TRỌNG TÀI")
   expect(view.counters.agents).toBe(tranhBien.meta.estimate(tranhBien.meta.args.parse({ ticker: "FPT" }), "medium").agents)
 })
@@ -296,7 +296,7 @@ test("tranh-bien large: the debaters' numbers go through kiem-chung at the small
   // Small tier: one voter per claim.
   expect(specs.filter((s) => s.schema === CHECK)).toHaveLength(1)
   expect(view.agents.some((a) => a.phase.startsWith("kiem-chung › "))).toBe(true)
-  expect(specs.find((s) => s.type === "tong-hop")!.prompt).toContain("kiểm chứng số liệu")
+  expect(specs.find((s) => s.type === "tong-hop")!.prompt).toContain("fact-check of both sides")
   expect(String(view.result)).toContain("✘ sai")
   expect(view.counters.agents).toBeLessThanOrEqual(tranhBien.meta.estimate(tranhBien.meta.args.parse({ ticker: "FPT" }), "large").agents)
 })
@@ -304,7 +304,7 @@ test("tranh-bien large: the debaters' numbers go through kiem-chung at the small
 test("tranh-bien: a failed analyst is logged and named to the referee; no report at all ends early", async () => {
   const partial = await runPlaybook(tranhBien, { ticker: "FPT" }, "small", (spec) => (spec.type === "tin-tuc" ? fail() : debateRespond(spec)))
   expect(partial.view.logs.some((l) => l.includes("Thiếu báo cáo: tin-tuc"))).toBe(true)
-  expect(partial.specs.find((s) => s.type === "tong-hop")!.prompt).toContain("thiếu báo cáo tin-tuc")
+  expect(partial.specs.find((s) => s.type === "tong-hop")!.prompt).toContain("missing tin-tuc reports")
   const none = await runPlaybook(tranhBien, { ticker: "FPT" }, "small", () => fail())
   expect(none.view.status).toBe("failed")
   expect(none.view.error).toContain("Không lấy được báo cáo nào")
@@ -328,7 +328,7 @@ test("nganh small: scope picks the companies (cut to the tier) and the sector me
   expect(view.logs.some((l) => l.includes("bỏ 2: TLH, SMC"))).toBe(true)
   expect(view.logs).toContain("Skill ngành: thep-vn")
   // The sector skill is loaded once, by the scope agent; the companies get its metrics.
-  expect(specs.find((s) => s.schema === SCOPE)!.prompt).toContain("Nạp skill thep-vn")
+  expect(specs.find((s) => s.schema === SCOPE)!.prompt).toContain("Load skill thep-vn")
   const cardText = specs.find((s) => s.schema === SCORECARD)!.prompt
   expect(cardText).toContain("giá bán HRC, sản lượng tiêu thụ")
   expect(cardText).not.toContain("load_skill")

@@ -6,7 +6,7 @@ export const Ticker = z
   .string()
   .trim()
   .transform((s) => s.toUpperCase())
-  .pipe(z.string().regex(/^[A-Z0-9]{3,5}$/, "mã chứng khoán 3–5 ký tự, ví dụ FPT"))
+  .pipe(z.string().regex(/^[A-Z0-9]{3,5}$/, "a 3–5 character ticker, e.g. FPT"))
 
 /**
  * For AgentOpts.accept on a scorecard: the card must be about the ticker that was asked for

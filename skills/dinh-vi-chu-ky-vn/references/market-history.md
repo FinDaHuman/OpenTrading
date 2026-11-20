@@ -1,38 +1,38 @@
 # Lịch sử chu kỳ VN 2011→ (đối chiếu pha — narrative giữ, số tra tool)
 
-> Timeline và nguyên nhân là tri thức nền (giữ trong file). Mọi con số returns/đỉnh/đáy tra tools (`cycle_turning`, `cycle_trough_events`, `cycle_yearly`).
+> The timeline and causes are background knowledge (kept in this file). Every return/peak/trough figure is looked up with tools (`cycle_turning`, `cycle_trough_events`, `cycle_yearly`).
 
 ## 1. Timeline – nguyên nhân (mức đỉnh/đáy: tra `cycle_turning(year=...)`)
 
-| Giai đoạn | Diễn biến | Nguyên nhân chính |
+| Period | What happened | Main causes |
 |---|---|---|
-| 2012 | Đáy đầu năm, hồi cuối năm | Nợ xấu, thắt chặt 2011; tín dụng phục hồi |
-| 2014 | Sập giữa năm rồi hồi | Sự kiện biển Đông |
-| 2016–2017 | Uptrend dài | Tín dụng cao, bank + Vingroup dẫn dắt |
-| 2018 | Đỉnh tháng 4, chỉnh sâu | Fed thắt chặt, chiến tranh thương mại Mỹ–Trung |
-| 2019 | Đi ngang | VIC/VHM + VCB dẫn dắt |
-| 2020 | Đáy COVID tháng 3, hồi mạnh cuối năm | SBV hạ lãi suất điều hành 3 lần; tiền rẻ + margin |
-| 2021 | Mega-cycle, đỉnh cuối năm | Lãi suất đáy, nhà đầu tư mới + margin; CK→Bank→BĐS→thép→dầu khí |
-| 2022 | Đỉnh đầu năm, đáy panic cuối năm | Vạn Thịnh Phát/SCB, trái phiếu DN, Fed tăng lãi suất |
-| 2023 | Hồi | SBV hạ lãi suất nhiều lần; CK-growth hồi |
-| 2024 | Đi ngang biên rộng | Tín dụng tăng; CNTT bứt phá |
-| 2025 | Sốc thuế quan tháng 4, rồi uptrend mạnh | Kỳ vọng FTSE nâng hạng, tín dụng cao |
-| 2026 | Chốt lời sau nâng hạng | Brent cao; năm chưa kết thúc — tra `cycle_yearly(year=2026)`, ghi rõ "tính đến `as_of`" |
+| 2012 | Trough early in the year, rebound late | Bad debt, 2011 tightening; credit recovery |
+| 2014 | Mid-year crash, then rebound | The East Sea incident |
+| 2016–2017 | Long uptrend | High credit, bank + Vingroup in the lead |
+| 2018 | April peak, deep correction | Fed tightening, the US–China trade war |
+| 2019 | Sideways | VIC/VHM + VCB in the lead |
+| 2020 | COVID trough in March, strong rebound late in the year | SBV cut the policy rate 3 times; cheap money + margin |
+| 2021 | Mega-cycle, peak at year end | Rock-bottom rates, new investors + margin; securities→bank→real estate→steel→oil & gas |
+| 2022 | Peak early in the year, panic trough at year end | Van Thinh Phat/SCB, corporate bonds, Fed hikes |
+| 2023 | Rebound | SBV cut rates several times; securities/growth rebound |
+| 2024 | Wide sideways range | Credit growth; IT breakout |
+| 2025 | April tariff shock, then a strong uptrend | Expectations of the FTSE upgrade, high credit |
+| 2026 | Profit-taking after the upgrade | High Brent; the year is not over — look up `cycle_yearly(year=2026)` and state "tính đến `as_of`" |
 
-Bảng trên là ghi chú định tính, chưa kiểm chứng bằng tool. Muốn nêu mức điểm, ngày hay % của năm nào thì tra `cycle_turning` / `cycle_yearly` trước.
+The table above is qualitative notes, not verified with tools. To state any year's index level, date or %, look up `cycle_turning` / `cycle_yearly` first.
 
-> `cycle_yearly` xếp hạng theo **lợi suất năm tuyệt đối**, không phải RS (RS = lợi suất vượt VNI). Muốn "mảng dẫn RS" thì tự trừ lợi suất VN-Index cùng năm và nói rõ cách tính.
+> `cycle_yearly` ranks by **absolute annual return**, not RS (RS = return in excess of VNI). For "RS leaders", subtract the VN-Index return for the same year yourself and state the method.
 
 ## 2. Ai dẫn sau các đáy lớn (tra `cycle_trough_events`)
 
-Cách đọc:
-- Số đáy đủ dữ liệu ít (coverage từ 2018-10) — **nêu số đáy theo kết quả tool** và coi là mẫu nhỏ.
-- Chỉ mảng **top 3 ở mọi đáy** mới coi là nhóm dẫn sau đáy. Xếp hạng bằng cách đọc thẳng lợi suất 3 tháng sau đáy mà tool trả, sắp từ cao xuống thấp (tool không có cột rank).
-- "Thứ hạng lệch rõ" = một đáy vào top 3 nhưng đáy khác nằm ngoài top 5 → mảng đó không dùng làm kinh nghiệm bắt đáy.
-- Cột `vin` đọc như mọi cột: thứ hạng lệch giữa các đáy thì không dùng.
-- **Dưới 3 đáy: chỉ nêu dạng quan sát, không chốt nhóm dẫn.**
-- Không trích thứ hạng từ file này.
+How to read it:
+- Few troughs have complete data (coverage since 2018-10) — **state the number of troughs from the tool result** and treat it as a small sample.
+- Only groups ranked **in the top 3 at every trough** count as post-trough leaders. Rank them by reading the 3-month post-trough returns the tool returns directly, sorted high to low (the tool has no rank column).
+- "Rank differs clearly" = in the top 3 at one trough but outside the top 5 at another → that group is not used as trough-buying experience.
+- Read the `vin` column like any other: if its rank differs across troughs, do not use it.
+- **Fewer than 3 troughs: state it only as an observation; do not settle the leaders.**
+- Never quote ranks from this file.
 
 ## 3. Quán quân theo năm (tra `cycle_yearly`)
 
-Cách đọc: xếp mảng theo lợi suất năm rồi đối chiếu **loại năm** trong bảng mục 1 (mega-cycle, bear, hồi, năm có sóng riêng) để tìm pha lịch sử tương đồng. Loại năm chỉ là nhãn của timeline — **không** suy ra mảng dẫn từ đó; mảng dẫn phải tra `cycle_yearly` mỗi lần dùng. Năm chưa kết thúc thì ghi rõ "tính đến `as_of`" (`as_of` lấy từ `cycle_stats_check`).
+How to read it: rank groups by annual return, then match the **year type** in the section 1 table (mega-cycle, bear, rebound, a year with its own wave) to find the most similar historical phase. The year type is only a timeline label — **never** infer the leading group from it; the leading group must be looked up in `cycle_yearly` each time. For an unfinished year, state "tính đến `as_of`" (`as_of` comes from `cycle_stats_check`).

@@ -7,6 +7,13 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ### Changed
 
+- Skill references (`skills/*/references/*.md`, read on demand) and the model-facing text of the desk playbooks
+  (agent prompts, lenses, `.describe()` of arguments and result schemas, `whenToUse`, the evidence note) are in
+  English. Kept Vietnamese: headings, quoted user wording, the ranking/fact-check tables and reports the user
+  reads, phase names, logs, the approval-card description, zod keys and enum values. The references lint that
+  stops copied table results now also catches the English shapes ("strongest in the whole table", "samples ~8",
+  "led both troughs") and English amounts ("billion"). References: DeepSeek 31 262 → 21 589 tokens (−31%).
+
 - Skill bodies (`skills/*/SKILL.md`, read when a skill loads) are in English: steps, driver tables, decision
   trees and boundaries. Section headings, example questions, the quoted ★ verdicts and every line the model
   copies to the user stay Vietnamese, as do the `tao-ho-so` questions. Four skills now say outright that a
@@ -14,11 +21,13 @@ adopt Semantic Versioning when it exposes a stable public API.
   `danh-gia-truoc-bctc`, `tim-co-hoi-bao-cao-ctck`, `phan-tich-chuyen-sau-1-ma`). The 43 bodies: DeepSeek
   98 878 → 71 815 tokens (−27%), o200k 75 667 → 66 259. `references/` and desk playbooks follow separately.
 
+
 - Skill descriptions (the `<skill_catalog>` sent with every request) and the subagent types (description and
   prompt, `agents/*.md`) are in English; report wording the user reads stays Vietnamese. Soft skill routing
   (`matchSoft`) scores the new `match_text` frontmatter, which keeps the former Vietnamese description, so
   suggestions for Vietnamese questions are unchanged (routing eval: same floors). Skill catalog: o200k 2 662 →
   ~2 090, DeepSeek 3 585 → ~2 120 tokens.
+
 
 
 - Runtime text the model reads is in English (E3): stop-gate and todo reminders, rescue prompts, tool-call
