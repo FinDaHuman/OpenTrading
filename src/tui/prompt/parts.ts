@@ -121,6 +121,11 @@ export class PromptParts {
   }
 
   private sweeping = false
+  /**
+   * Set by the key handler while an undo or redo key is handled: the text it brings back (half a
+   * label, then the whole pill) is left alone, or Ctrl+Z could never get past a sweep.
+   */
+  undoing = false
 
   /**
    * A pill is one thing (#353): an edit that cut part of it (Ctrl+W, Alt+Backspace, a selection
@@ -129,20 +134,17 @@ export class PromptParts {
    */
   sweep(): number {
     const input = this.input()
-    if (!input || this.sweeping) return 0
-    const cut = this.all().filter((m) => !m.intact)
+    if (!input || this.sweeping || this.undoing) return 0
+    // A mark with nothing left under it is gone already; one with text left is a cut pill.
+    const cut = this.all().filter((m) => !m.intact && m.end > m.start)
     if (cut.length === 0) return 0
     this.sweeping = true
     try {
-      // Right to left: removing one leaves the offsets of those before it as they were.
+      // Right to left: removing one leaves the offsets of those before it as they were. Only the
+      // text goes: the mark's entry and the pill's content stay, so Ctrl+Z brings the pill back whole.
       for (const m of cut.sort((a, b) => b.start - a.start)) {
-        input.extmarks.delete(m.mark)
-        this.marks.delete(m.mark)
-        this.parts.delete(m.id)
-        if (m.end > m.start) {
-          input.setSelection(m.start, m.end)
-          input.deleteSelection()
-        }
+        input.setSelection(m.start, m.end)
+        input.deleteSelection()
       }
     } finally {
       this.sweeping = false

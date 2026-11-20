@@ -2,7 +2,7 @@ import { afterEach, expect, test } from "bun:test"
 import type { TextareaRenderable } from "@opentui/core"
 import { testRender } from "@opentui/solid"
 import { BURST_GAP_MS, BURST_MIN_KEYS, PasteBurst } from "../src/tui/prompt/burst"
-import { PROMPT_KEYS } from "../src/tui/prompt/input"
+import { isUndoKey, PROMPT_KEYS } from "../src/tui/prompt/input"
 import { offsetWidth, PromptParts } from "../src/tui/prompt/parts"
 
 // #353: a pill is one thing (Ctrl+W takes all of it), copies as what it holds, and a paste typed
@@ -16,7 +16,7 @@ afterEach(() => {
 
 const PASTED = Array.from({ length: 5 }, (_, i) => `dòng ${i + 1}`).join("\n")
 
-/** A bare prompt box wired like app.tsx: every change of the box sweeps cut pills. */
+/** A bare prompt box wired like app.tsx: every change of the box sweeps cut pills, except an undo's. */
 async function box() {
   let input: TextareaRenderable | undefined
   const parts = new PromptParts(
@@ -36,6 +36,7 @@ async function box() {
     ),
     { width: 80, height: 5 },
   )
+  setup.renderer.keyInput.on("keypress", (evt) => (parts.undoing = isUndoKey(evt)))
   await setup.renderOnce()
   return { input: () => input!, parts, setup }
 }
@@ -137,3 +138,28 @@ test("paste burst: 16 keys under 8 ms apart make the Enter after them a line bre
   expect(burst.enterIsPaste()).toBe(false)
   expect(BURST_GAP_MS).toBeLessThan(40)
 })
+
+test("after a line break and wide characters: copy through the box's own selection, Ctrl+W, then Ctrl+Z twice brings the pill back whole", async () => {
+  const { input, parts, setup } = await box()
+  await setup.mockInput.typeText("Giá 漢字")
+  setup.mockInput.pressKey("LINEFEED")
+  await setup.mockInput.typeText("dữ liệu ")
+  parts.insert({ kind: "text", text: "a\nb\nc\nd" })
+  await setup.mockInput.typeText("xong")
+  input().selectAll()
+  const range = input().getSelection()!
+  expect(parts.copyText(range.start, range.end)).toBe("Giá 漢字\ndữ liệu a\nb\nc\nd xong")
+  input().clearSelection()
+  input().gotoBufferEnd()
+  for (let i = 0; i < 5; i++) setup.mockInput.pressBackspace() // "xong" and the space
+  setup.mockInput.pressKey("w", { ctrl: true })
+  await setup.renderOnce()
+  expect(input().plainText).toBe("Giá 漢字\ndữ liệu ")
+  // The first Ctrl+Z gives back what the sweep took, the second what Ctrl+W took: the pill, with its text.
+  setup.mockInput.pressKey("z", { ctrl: true })
+  setup.mockInput.pressKey("z", { ctrl: true })
+  await setup.renderOnce()
+  expect(input().plainText).toBe("Giá 漢字\ndữ liệu [Pasted text #1 +3 lines]")
+  expect(parts.expand().text).toBe("Giá 漢字\ndữ liệu a\nb\nc\nd")
+})
+
