@@ -3250,7 +3250,7 @@ test("/agents lists the subagent types by source; ctrl+r picks up a new file; en
   // Picker shows 10 rows per page so tra-cuu sits on page 2: its presence
   // is asserted on the spawn description (full list, no pagination).
   show(frame)
-  expect(runtime.registry.get("spawn_subagent")!.description).toContain("- tra-cuu: Dùng khi cần tra cứu nhanh")
+  expect(runtime.registry.get("spawn_subagent")!.description).toContain("- tra-cuu: Use for a quick lookup")
   expect(runtime.registry.get("spawn_subagent")!.description).toContain("- rieng-tui: Loại riêng để thử (Tool: current_time)")
   await setup.mockInput.typeText("rieng")
   setup.mockInput.pressEnter()

@@ -1,6 +1,7 @@
 ---
 name: dinh-gia-chuyen-sau
-description: "Tính vùng giá hợp lý và % upside/downside của một mã (P/E, P/B so với lịch sử 2–3 năm). Dùng khi hỏi mã đắt hay rẻ, fair value, còn upside không."
+description: "Computes a fair price range and % upside/downside for a ticker (P/E, P/B vs its 2–3 year history). Use when asked whether a stock is expensive or cheap, fair value, remaining upside."
+match_text: "Tính vùng giá hợp lý và % upside/downside của một mã (P/E, P/B so với lịch sử 2–3 năm). Dùng khi hỏi mã đắt hay rẻ, fair value, còn upside không."
 activation: auto
 requires_tools: [mcp__opentrading__valuation_run]
 uses_tools: [mcp__opentrading__valuation_run]

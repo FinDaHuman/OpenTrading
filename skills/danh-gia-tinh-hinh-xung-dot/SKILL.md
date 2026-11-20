@@ -1,6 +1,7 @@
 ---
 name: danh-gia-tinh-hinh-xung-dot
-description: "Đánh giá một cuộc xung đột: cường độ, dầu/vàng đã phản ánh chưa, kênh tác động, xác suất leo thang. Dùng khi hỏi chiến sự ảnh hưởng thị trường."
+description: "Assesses one conflict: intensity, whether oil/gold have priced it in, transmission channels, escalation probability. Use when asked how a war affects markets."
+match_text: "Đánh giá một cuộc xung đột: cường độ, dầu/vàng đã phản ánh chưa, kênh tác động, xác suất leo thang. Dùng khi hỏi chiến sự ảnh hưởng thị trường."
 activation: auto
 requires_tools: [mcp__opentrading__event_stats]
 triggers:

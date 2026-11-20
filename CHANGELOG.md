@@ -7,6 +7,12 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ### Changed
 
+- Skill descriptions (the `<skill_catalog>` sent with every request) and the subagent types (description and
+  prompt, `agents/*.md`) are in English; report wording the user reads stays Vietnamese. Soft skill routing
+  (`matchSoft`) scores the new `match_text` frontmatter, which keeps the former Vietnamese description, so
+  suggestions for Vietnamese questions are unchanged (routing eval: same floors). Skill catalog: o200k 2 662 →
+  ~2 090, DeepSeek 3 585 → ~2 120 tokens.
+
 - Runtime text the model reads is in English (E3): stop-gate and todo reminders, rescue prompts, tool-call
   repair errors, source notices (`[Source failed]`, `[Partial data]`, `[Stale data]`), source lines of web/MCP
   results, argument errors, denials and auto-mode blocks, compaction prompt and marker, subagent and ultradesk

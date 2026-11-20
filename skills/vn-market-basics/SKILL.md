@@ -1,6 +1,7 @@
 ---
 name: vn-market-basics
-description: "Giải thích cơ chế giao dịch VN: sàn HOSE/HNX/UPCoM, phiên ATO/ATC, biên độ, bước giá, lô, T+2, loại lệnh. Dùng khi hỏi quy định giao dịch."
+description: "Explains VN trading mechanics: HOSE/HNX/UPCoM, ATO/ATC sessions, price bands, tick sizes, lots, T+2, order types. Use for trading rules."
+match_text: "Giải thích cơ chế giao dịch VN: sàn HOSE/HNX/UPCoM, phiên ATO/ATC, biên độ, bước giá, lô, T+2, loại lệnh. Dùng khi hỏi quy định giao dịch."
 activation: auto
 triggers:
   keywords: [biên độ, bước giá, lô chẵn, lô lẻ, ATO, ATC, loại lệnh, thanh toán T, phiên giao dịch]

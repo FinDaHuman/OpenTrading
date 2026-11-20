@@ -1,6 +1,7 @@
 ---
 name: tin-tuc-nong-quoc-te
-description: "Tóm tắt 5 tin thế giới tác động thị trường, kèm phản ứng giá xác nhận bằng số. Dùng khi hỏi tin quốc tế, Mỹ, Trung Quốc hôm nay."
+description: "Summarises 5 world news items moving markets, with the price reaction confirmed in numbers. Use for today's international, US or China news."
+match_text: "Tóm tắt 5 tin thế giới tác động thị trường, kèm phản ứng giá xác nhận bằng số. Dùng khi hỏi tin quốc tế, Mỹ, Trung Quốc hôm nay."
 activation: auto
 requires_tools: [mcp__opentrading__news_market]
 triggers:

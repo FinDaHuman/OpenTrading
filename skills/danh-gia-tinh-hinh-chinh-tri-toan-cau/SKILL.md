@@ -1,6 +1,7 @@
 ---
 name: danh-gia-tinh-hinh-chinh-tri-toan-cau
-description: "Lập 4–6 rủi ro chính trị toàn cầu (bầu cử, chính sách, căng thẳng), mỗi mục có odds và tin xác nhận. Dùng khi hỏi rủi ro chính trị ở nhiều nước."
+description: "Lists 4–6 global political risks (elections, policy, tensions), each with odds and confirming news. Use for political risk across several countries."
+match_text: "Lập 4–6 rủi ro chính trị toàn cầu (bầu cử, chính sách, căng thẳng), mỗi mục có odds và tin xác nhận. Dùng khi hỏi rủi ro chính trị ở nhiều nước."
 activation: auto
 triggers:
   keywords: [địa chính trị, bầu cử, chính trị, chính sách mỹ, căng thẳng quốc tế, rủi ro chính trị]

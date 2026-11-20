@@ -1,6 +1,7 @@
 ---
 name: ve-bieu-do
-description: "Vẽ biểu đồ màu trong terminal từ dữ liệu tool đã có (nến + khối lượng, đường giá, bar, pie, waterfall, heatmap, sổ lệnh…). Dùng khi người dùng muốn xem biểu đồ, hoặc khi chuỗi số khó đọc dạng bảng và cần trực quan hóa."
+description: "Draws colour charts in the terminal from tool data you already have (candles + volume, line, bar, pie, waterfall, heatmap, order book…). Use when the user wants a chart, or a series is hard to read as a table."
+match_text: "Vẽ biểu đồ màu trong terminal từ dữ liệu tool đã có (nến + khối lượng, đường giá, bar, pie, waterfall, heatmap, sổ lệnh…). Dùng khi người dùng muốn xem biểu đồ, hoặc khi chuỗi số khó đọc dạng bảng và cần trực quan hóa."
 activation: auto
 requires_tools: [chart_render]
 uses_tools: [chart_render]

@@ -1,6 +1,7 @@
 ---
 name: kiem-tra-nguon-du-lieu
-description: "Quét tình trạng các nguồn dữ liệu của server MCP trong một lượt và nói skill nào chạy được. Dùng khi hỏi nguồn còn sống không hoặc nhiều tool báo unavailable."
+description: "Scans the MCP server's data sources in one pass and says which skills can run. Use when asked whether sources are up or many tools report unavailable."
+match_text: "Quét tình trạng các nguồn dữ liệu của server MCP trong một lượt và nói skill nào chạy được. Dùng khi hỏi nguồn còn sống không hoặc nhiều tool báo unavailable."
 activation: manual
 requires_tools: [mcp__opentrading__doctor]
 triggers:

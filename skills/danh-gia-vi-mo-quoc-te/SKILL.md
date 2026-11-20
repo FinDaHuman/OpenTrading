@@ -1,6 +1,7 @@
 ---
 name: danh-gia-vi-mo-quoc-te
-description: "Đọc chu kỳ kinh tế Mỹ và trạng thái rủi ro toàn cầu (soft/hard landing, đường cong lợi suất, risk-on/off). Dùng khi hỏi bối cảnh vĩ mô Mỹ/thế giới."
+description: "Reads the US business cycle and global risk state (soft/hard landing, yield curve, risk-on/off). Use for the US/global macro backdrop."
+match_text: "Đọc chu kỳ kinh tế Mỹ và trạng thái rủi ro toàn cầu (soft/hard landing, đường cong lợi suất, risk-on/off). Dùng khi hỏi bối cảnh vĩ mô Mỹ/thế giới."
 activation: auto
 requires_tools: [mcp__opentrading__fred_series]
 triggers:

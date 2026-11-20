@@ -1,6 +1,7 @@
 ---
 name: devil-advocate
-description: "Phản biện luận điểm mua/giữ để chống thiên kiến xác nhận: 3–5 lý do có thể sai, dấu hiệu theo dõi, điều kiện bỏ luận điểm. Dùng khi người dùng đang giữ hoặc thích một mã."
+description: "Challenges a buy/hold thesis against confirmation bias: 3–5 ways it could be wrong, signals to watch, conditions to drop the thesis. Use when the user holds or likes a ticker."
+match_text: "Phản biện luận điểm mua/giữ để chống thiên kiến xác nhận: 3–5 lý do có thể sai, dấu hiệu theo dõi, điều kiện bỏ luận điểm. Dùng khi người dùng đang giữ hoặc thích một mã."
 activation: auto
 triggers:
   keywords: [phản biện, bear case, có nên giữ, rủi ro gì, đang nắm, đang giữ]

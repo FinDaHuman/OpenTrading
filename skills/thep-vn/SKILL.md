@@ -1,6 +1,7 @@
 ---
 name: thep-vn
-description: "Pha/sóng: dùng skill chu kỳ. Phân tích ngành thép VN theo spread nguyên liệu–thành phẩm, phòng vệ thương mại, cơ cấu sản phẩm và biên lãi gộp. Dùng khi hỏi xu hướng nhóm thép, đọc kết quả nhà máy thép, lãi gộp hay chi phí đầu vào."
+description: "Phase/wave: use dinh-vi-chu-ky-vn. Analyses VN steel by the raw-material–product spread, trade defence, product mix and gross margin. Use for steel trends, mill results, gross margin or input costs."
+match_text: "Pha/sóng: dùng skill chu kỳ. Phân tích ngành thép VN theo spread nguyên liệu–thành phẩm, phòng vệ thương mại, cơ cấu sản phẩm và biên lãi gộp. Dùng khi hỏi xu hướng nhóm thép, đọc kết quả nhà máy thép, lãi gộp hay chi phí đầu vào."
 activation: auto
 requires_tools: [financial_detail]
 uses_tools: [financial_detail, financial_ratios, planned_targets, analyst_consensus, peer_compare, news_symbol, news_market, symbol_lookup, vn_company]
