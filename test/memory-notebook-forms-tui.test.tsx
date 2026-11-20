@@ -1253,7 +1253,7 @@ describe("/memory: edit, change a thesis state, export", () => {
     expect(f).toContain("File xuất là bản sao; xoá trong sổ không xoá file này.")
     expect(f).toContain("(•) 1. Không")
     expect(f).not.toContain("File sẽ có nhật ký quyết định")
-    tab()
+    tab(2) // past the format choice, to the button
     enter()
     await until(() => notice().startsWith("Đã xuất sổ ghi nhớ: "))
     const plainFile = notice().slice("Đã xuất sổ ghi nhớ: ".length)
@@ -1267,7 +1267,7 @@ describe("/memory: edit, change a thesis state, export", () => {
     key("2")
     f = flat(await frameWith("File sẽ có nhật ký quyết định"))
     expect(f).toContain("File sẽ có nhật ký quyết định. Model đọc được file này nếu bạn đưa nó vào thư mục làm việc.")
-    tab()
+    tab(2) // past the format choice, to the button
     enter()
     await until(() => notice().startsWith("Đã xuất sổ ghi nhớ: ") && notice() !== "Đã xuất sổ ghi nhớ: " + plainFile)
     const withLog = notice().slice("Đã xuất sổ ghi nhớ: ".length)
@@ -1277,6 +1277,16 @@ describe("/memory: edit, change a thesis state, export", () => {
     await openMemory()
     ctrlX()
     expect(flat(await frameWith("Xuất sổ ghi nhớ ra Markdown"))).toContain("(•) 1. Không")
+    // #346: the folder form, by group, with an index.
+    tab()
+    key("2")
+    await frameWith("(•) 2. Thư mục theo loại")
+    tab()
+    enter()
+    await until(() => notice().startsWith("Đã xuất sổ ghi nhớ: ") && ![plainFile, withLog].includes(notice().slice("Đã xuất sổ ghi nhớ: ".length)))
+    const folder = notice().slice("Đã xuất sổ ghi nhớ: ".length)
+    expect(readFileSync(path.join(folder, "README.md"), "utf8")).toContain("## Ràng buộc")
+    expect(readFileSync(path.join(folder, "rang-buoc", "001-khong-dung-margin-ke-ca-t-0.md"), "utf8")).toContain("Không dùng margin, kể cả T+0")
     rmSync(path.join(home, "exports"), { recursive: true, force: true })
   })
 
