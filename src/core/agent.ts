@@ -1089,8 +1089,12 @@ function stepSize(usage: LanguageModelUsage | undefined, messages: readonly Mode
   return usage.inputTokens + (usage.outputTokens ?? 0) + tokensOf(messages.slice(answeredAt + 1))
 }
 
-const estimateRequest = (system: string | SystemModelMessage, messages: ModelMessage[], toolTokens = 0) =>
-  estimateTokens(JSON.stringify([system, ...messages])) + toolTokens
+/**
+ * The next request's size when the provider reported no usage. An image counts as IMAGE_TOKENS
+ * (tokensOf), not as its base64: a 1 MB screenshot is ~1.6k tokens, not ~350k (#332).
+ */
+export const estimateRequest = (system: string | SystemModelMessage, messages: ModelMessage[], toolTokens = 0) =>
+  estimateTokens(typeof system === "string" ? system : JSON.stringify(system)) + tokensOf(messages) + toolTokens
 
 /**
  * Compaction step 2: the model condenses `head` (older turns) into a structured summary.
