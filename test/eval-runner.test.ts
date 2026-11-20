@@ -308,10 +308,10 @@ test("a rule switched off stays off, notice included, and the rest still run", a
 test("the nudge after tool results can go, alone or with only its todo part", async () => {
   const sent = () => JSON.stringify(bodies.at(-1)!.messages)
   await run([question("q1")])
-  expect(sent()).toContain("Nếu còn cần dữ liệu, gọi cùng lúc")
+  expect(sent()).toContain("If you still need data, call every independent tool at once")
   bodies.length = 0
   await run([question("q1")], 1, undefined, parseAblations(["tool-nudge"]))
-  expect(sent()).not.toContain("Nếu còn cần dữ liệu, gọi cùng lúc")
+  expect(sent()).not.toContain("If you still need data, call every independent tool at once")
 })
 
 test("setup ablations take their tools away and reach the config", async () => {

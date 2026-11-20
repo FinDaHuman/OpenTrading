@@ -68,10 +68,10 @@ function summary(line: ToolLine): { tone: "ok" | "denied" | "answers" | "warning
   if (line.status === "error" && out.startsWith(USER_DENY_PREFIX)) {
     const note = userNoteOf(out)
     // A hand-off the user refused keeps auto mode's reason: "(auto mode đã chặn [nhãn]: lý do)".
-    const auto = /^ \(auto mode đã chặn[^\n]*\)(?=\.)/.exec(out.slice(USER_DENY_PREFIX.length))?.[0] ?? ""
+    const auto = /^ \(auto mode (?:had blocked it|đã chặn)[^\n]*\)(?=\.)/.exec(out.slice(USER_DENY_PREFIX.length))?.[0] ?? ""
     return { tone: "denied", lines: [`✘ Đã từ chối${auto}${note ? ` — "${note}"` : ""}`], wrap: Boolean(auto) }
   }
-  if (line.status === "ok" && out.startsWith("Người dùng đã trả lời:")) {
+  if (line.status === "ok" && (out.startsWith("The user answered:") || out.startsWith("Người dùng đã trả lời:"))) {
     const pairs = [...out.matchAll(/("(?:[^"\\]|\\.)*")=("(?:[^"\\]|\\.)*")/g)].map((m) => `· ${JSON.parse(m[1]!)} → ${JSON.parse(m[2]!)}`)
     if (pairs.length > 0) return { tone: "answers", lines: pairs }
   }
@@ -265,7 +265,7 @@ function Row(props: { line: Line; prev?: Line; index: number; width: number }) {
       <Match when={props.line.kind === "agent-notice" && props.line}>
         {(line) => {
           const l = line() as Extract<Line, { kind: "agent-notice" }>
-          const fg = l.status === "xong" || l.status === "completed" ? color.tang : l.status === "lỗi" || l.status === "failed" ? color.giam : color.tx3
+          const fg = l.status === "xong" || l.status === "completed" || l.status === "done" ? color.tang : l.status === "lỗi" || l.status === "failed" ? color.giam : color.tx3
           return <Hanging glyph="◆" glyphColor={fg} text={l.text} fg={color.tx2} />
         }}
       </Match>

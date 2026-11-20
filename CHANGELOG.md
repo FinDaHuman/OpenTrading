@@ -7,6 +7,17 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ### Changed
 
+- Runtime text the model reads is in English (E3): stop-gate and todo reminders, rescue prompts, tool-call
+  repair errors, source notices (`[Source failed]`, `[Partial data]`, `[Stale data]`), source lines of web/MCP
+  results, argument errors, denials and auto-mode blocks, compaction prompt and marker, subagent and ultradesk
+  notices, briefs' parameter help, MCP call errors and content placeholders, `@mention` attachments, ask_user
+  results, operand notes, truncation marks. Kept Vietnamese: the notebook's memory blocks and their labels
+  (spec 007 fixes them byte for byte and the history masking reads them), brief section names the subagent
+  prompt cites, TUI notices and `/mcp`, `/memory`, `/desk` interface text. Readers of these texts accept both
+  languages (failure classes, transcript rows, subagent/desk notice parsers, pruned markers, the truncate mark
+  in memory history, the compact marker's skill line).
+
+
 - Tool descriptions, parameter descriptions and the text tools return to the model are in English (all built-in
   tools: shell, files, web, charts, todo, subagents, skills, sessions, watchlist, desk), and so are the
   request-wide blocks: `<quyen_tep>`, the permission-mode line, the market clock (`market/calendar.json`
@@ -16,6 +27,7 @@ adopt Semantic Versioning when it exposes a stable public API.
   Parsers of these texts accept both languages (failure classes, operand notes, `@mentions` line counts,
   eval shell routes, saved todo prefixes). Tool definitions: o200k 8 104 → 7 886, DeepSeek 9 325 → 8 295
   tokens; always-sent tools DeepSeek 3 773 → 3 184.
+
 
 - System prompt files (`prompts/*.md`) are in English, same rules in the same order. Tags, gate markers, slash
   commands, the Vietnamese phrases the model must not write ("đã lưu"…) and Vietnamese examples stay as they

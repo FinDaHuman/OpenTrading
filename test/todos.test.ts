@@ -147,8 +147,8 @@ test("the nudge names the running item once the list is two steps behind", async
     { role: "tool", content: [{ type: "tool-result", toolCallId: id, toolName: "current_time", output: { type: "text", value: "x" } }] },
   ]
   const base: ModelMessage[] = [{ role: "user", content: "x" }, call("1", list), result("1")]
-  expect(toolNudge([...base, ...step("a")])).not.toContain("bước chưa cập nhật")
-  expect(toolNudge([...base, ...step("a"), ...step("b")])).toContain('Đã 2 bước chưa cập nhật danh sách: nếu dữ liệu cho "Lấy dữ liệu 3 mã"')
+  expect(toolNudge([...base, ...step("a")])).not.toContain("has not been updated for")
+  expect(toolNudge([...base, ...step("a"), ...step("b")])).toContain('The list has not been updated for 2 steps: if the data for "Lấy dữ liệu 3 mã"')
 })
 
 test("a retired list is shown again on resume and in /export: the items stay unconfirmed", async () => {

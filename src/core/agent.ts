@@ -77,7 +77,7 @@ const isArithmetic = (command: string) => mathOnlyCommand(command, detectShell()
 export const DEFAULT_MAX_STEPS = Number.POSITIVE_INFINITY
 
 const SUMMARY_PROMPT =
-  "Đã hết số lượt gọi tool cho câu hỏi này. Không gọi thêm tool. Hãy tổng kết câu trả lời dựa trên dữ liệu đã có, nói rõ phần nào còn thiếu."
+  "The tool-call budget for this question is used up. Call no more tools. Write the answer from the data you have, saying which parts are missing."
 
 /**
  * No stream part at all for this long: the request is stalled, not slow. Codex and opencode
@@ -103,7 +103,7 @@ const stallMessage = (ms: number) =>
  * the request, so the cached prefix is unchanged.
  */
 export const TOOL_NUDGE =
-  "<nhac_nho>\nNếu còn cần dữ liệu, gọi cùng lúc mọi tool không phụ thuộc nhau. Khi trả lời: ngày tuyệt đối, mỗi cột một đơn vị, số dòng khớp lời nói, mỗi số có nguồn.\n</nhac_nho>"
+  "<nhac_nho>\nIf you still need data, call every independent tool at once. When answering: absolute dates, one unit per column, row counts matching the text, a source for every figure.\n</nhac_nho>"
 
 /** Model steps since the last todo_write call in this request: past this, the list is likely behind. */
 export const TODO_BEHIND_STEPS = 2
@@ -122,10 +122,10 @@ export function toolNudge(messages: readonly ModelMessage[]): string {
   const running = open.find((t) => t.status === "in_progress")
   const since = stepsSinceTodoWrite(messages)
   const behind =
-    running && since >= TODO_BEHIND_STEPS ? `\nĐã ${since} bước chưa cập nhật danh sách: nếu dữ liệu cho "${running.content}" đã có ở trên thì đánh completed ngay.` : ""
+    running && since >= TODO_BEHIND_STEPS ? `\nThe list has not been updated for ${since} steps: if the data for "${running.content}" is already above, mark it completed now.` : ""
   return TOOL_NUDGE.replace(
     "\n</nhac_nho>",
-    `\nViệc cần làm còn mở:\n${items}${behind}\nCập nhật trạng thái bằng todo_write CÙNG lượt với các tool tiếp theo. Khi viết câu trả lời cuối, gọi todo_write đóng danh sách trong cùng bước đó.\n</nhac_nho>`,
+    `\nOpen tasks:\n${items}${behind}\nUpdate their status with todo_write in the SAME round as the next tools. When writing the final answer, call todo_write to close the list in that same step.\n</nhac_nho>`,
   )
 }
 
@@ -281,7 +281,7 @@ function stringify(value: unknown) {
   // A tool's own result: show its text; images are never dumped as base64 into the UI.
   if (value && typeof value === "object" && "output" in value && typeof (value as ToolResult).output === "string") {
     const r = value as ToolResult
-    return r.images?.length ? `${r.output}\n[${r.images.length} ảnh]` : r.output
+    return r.images?.length ? `${r.output}\n[${r.images.length} images]` : r.output
   }
   try {
     return JSON.stringify(value, null, 2)
@@ -530,12 +530,12 @@ async function repairCall<T extends { toolName: string; input?: string }>(
   if (names.length === 1 && (!active || active.includes(names[0]!))) return { ...toolCall, toolName: names[0]! }
   if (names.length === 1 && deferring) {
     const name = names[0]!
-    const how = renamed ? ` và ${renamed.field}="${renamed.value}" (${toolCall.toolName} đã gộp vào ${name})` : ""
+    const how = renamed ? ` and ${renamed.field}="${renamed.value}" (${toolCall.toolName} was merged into ${name})` : ""
     // Loaded already yet still not active: cut by the per-request cap. Saying "loaded,
     // call again" here would loop.
     if (loaded.includes(name)) {
       throw new Error(
-        `Tool ${name} đã nạp nhưng không gửi kèm được trong bước này: đã chạm trần ${MAX_TOOLS_PER_REQUEST} tool mỗi lần gọi model. Dùng các tool đang có để trả lời.`,
+        `Tool ${name} is loaded but could not be sent with this step: the cap of ${MAX_TOOLS_PER_REQUEST} tools per model call is reached. Answer with the tools you have.`,
       )
     }
     const def = registry.get(name)
@@ -543,14 +543,14 @@ async function repairCall<T extends { toolName: string; input?: string }>(
     throw new Error(
       [
         `${LOADED_PREFIX}${name}`,
-        `Tool ${name} chưa có trong bước này nên chưa chạy; đã nạp xong — gọi lại đúng lệnh với tên ${name}${how}.`,
+        `Tool ${name} was not in this step, so it did not run; it is loaded now — make the same call again with the name ${name}${how}.`,
         ...(def ? ["", describeTool(registry, def)] : []),
       ].join("\n"),
     )
   }
   if (!deferring) return null
-  const many = names.length > 1 ? ` Tên này khớp nhiều tool: ${names.join(", ")}.` : ""
-  throw new Error(`Không có tool "${toolCall.toolName}".${many} Gọi tool_search (query "select:<tên>" hoặc từ khoá) để nạp tool rồi gọi lại.`)
+  const many = names.length > 1 ? ` This name matches several tools: ${names.join(", ")}.` : ""
+  throw new Error(`No tool "${toolCall.toolName}".${many} Call tool_search (query "select:<name>" or keywords) to load the tool, then call again.`)
 }
 
 interface Outcome {
@@ -1677,7 +1677,7 @@ async function* runTurn(opts: RunOptions, budget?: TurnBudget): AsyncGenerator<A
   // as sent.
   const text = outcome.text && stripCardBlocks(markupTags ? stripMarkup(outcome.text).text : outcome.text).text
   // A stopped or failed turn has no card, and its card blocks never reach history either (spec 007).
-  const cut = closeDanglingToolCalls(outcome.progress, "Tool bị ngắt vì lượt bị dừng giữa chừng.").messages
+  const cut = closeDanglingToolCalls(outcome.progress, "Tool interrupted because the turn was stopped midway.").messages
   const progress = stripCardMessages(markupTags ? stripEchoMessages(cut, { echoes: false }) : cut).messages
   // No square brackets: the markdown renderer read "[Đã dừng]" as a link. The closed steps
   // already carry their text, so the trailing note appears only when nothing else closes the

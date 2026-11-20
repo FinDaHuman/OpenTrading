@@ -32,7 +32,7 @@ export const DEFAULT_SUBAGENT_TYPE = "nghien-cuu"
 /** A subagent that reports nothing for this long (not queued, not waiting on the user) is stopped. */
 export const SUBAGENT_IDLE_MS = 5 * 60_000
 /** "5 phút" for the default, "0.4 giây" for a test-sized idleMs. */
-const idleText = (ms: number) => (ms >= 60_000 ? `${Math.round(ms / 60_000)} phút` : `${(ms / 1000).toFixed(ms % 1000 ? 1 : 0)} giây`)
+const idleText = (ms: number) => (ms >= 60_000 ? `${Math.round(ms / 60_000)} min` : `${(ms / 1000).toFixed(ms % 1000 ? 1 : 0)} s`)
 /** How often the idle watchdog checks a run. */
 const watchdogTick = (idleMs: number) => Math.min(10_000, idleMs)
 /** Finished runs kept in memory (the sidechain files keep the rest). */
@@ -73,7 +73,7 @@ export function childRegistry(parent: ToolRegistry, origin: AgentOrigin, filter?
   child.gate = parent.gate
   child.workspace = parent.workspace
   const candidates = childTools(parent.list(), filter)
-  if (candidates.length === 0) throw new Error("Subagent không có tool nào để dùng (danh sách tool rỗng hoặc không khớp).")
+  if (candidates.length === 0) throw new Error("The subagent has no tools to use (the tool list is empty or matches nothing).")
   for (const def of candidates) child.register(def)
   if (candidates.some((t) => t.deferrable)) child.register(toolSearchTool(child))
   if (skills) {
@@ -364,7 +364,7 @@ export class SubagentManager {
     const known = this.list()
       .filter((v) => this.owners.get(v.id) === this.session?.id)
       .map((v) => v.id)
-    const missing = () => new Error(`Không có subagent "${id}".${known.length > 0 ? ` Các subagent hiện có: ${known.join(", ")}.` : ""}`)
+    const missing = () => new Error(`No subagent "${id}".${known.length > 0 ? ` Existing subagents: ${known.join(", ")}.` : ""}`)
     if (!this.session || !/^ag-[a-z0-9]+$/.test(id)) throw missing()
     const text = await readFile(new Sidechain(this.session.dir, id).file, "utf8").catch(() => undefined)
     if (!text) throw missing()
@@ -458,7 +458,7 @@ export class SubagentManager {
       const fell = fallback.find((e) => e.type === "notice")
       if (fell?.type === "notice") run.notice = fell.text
       if (target.provider.models[target.model]?.tool_call === false) {
-        throw new Error(`Model ${target.model} không hỗ trợ gọi tool nên không chạy được subagent. Đổi "Model cho subagent" trong /config.`)
+        throw new Error(`Model ${target.model} does not support tool calls, so the subagent cannot run. Change "Model cho subagent" in /config.`)
       }
       this.emit(run)
       if (sidechain && session && first) {
@@ -626,15 +626,15 @@ export class SubagentManager {
       // Messages that arrived for a turn that never came: say so rather than drop them.
       if (context.inbox.length > 0) {
         const lost = context.inbox.splice(0)
-        run.error = `${run.error ? `${run.error}. ` : ""}Chưa xử lý ${lost.length} tin nhắn gửi thêm: ${lost.join(" / ").slice(0, 300)}`
+        run.error = `${run.error ? `${run.error}. ` : ""}${lost.length} follow-up messages were not handled: ${lost.join(" / ").slice(0, 300)}`
       }
       if (idleStop) {
-        run.error = `Subagent không có tiến triển trong ${idleText(this.idleMs)} nên đã bị dừng.`
+        run.error = `The subagent made no progress for ${idleText(this.idleMs)}, so it was stopped.`
         failure = "stall"
       }
       if (spec.schema && run.status === "completed" && context.data === undefined) {
         run.status = "failed"
-        run.error = `Subagent không trả kết quả đúng schema qua ${RESULT_TOOL} sau ${attempts} lượt.`
+        run.error = `The subagent did not return a schema-valid result through ${RESULT_TOOL} after ${attempts} turns.`
         failure = "invalid-output"
       }
     } catch (error) {

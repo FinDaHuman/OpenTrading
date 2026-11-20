@@ -239,7 +239,7 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     }
     // "HỨA-GIỜ": a bare promise; after the stop gate's reminder (joined onto the same user message), the clock.
     if (last.includes("HỨA-GIỜ") && !answeredThisTurn) {
-      if (!last.includes("không gọi tool nào")) return sseOf(chunk({ role: "assistant", content: "Mình sẽ lấy giờ hiện tại:" }) + chunk({}, "stop") + "data: [DONE]\n\n")
+      if (!last.includes("without any tool call")) return sseOf(chunk({ role: "assistant", content: "Mình sẽ lấy giờ hiện tại:" }) + chunk({}, "stop") + "data: [DONE]\n\n")
       const call = { index: 0, id: "call_promised", type: "function", function: { name: "current_time", arguments: "{}" } }
       return sseOf(chunk({ role: "assistant", tool_calls: [call] }) + chunk({}, "tool_calls") + "data: [DONE]\n\n")
     }
@@ -259,7 +259,7 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     // "NHÁP-TODO": the clock, then a draft beside a closing todo_write (08/11), then, reminded, the answer.
     const draftAt = request.messages.findLastIndex((m) => m.role === "user" && JSON.stringify(m.content ?? "").includes("NHÁP-TODO"))
     const draftTurn = draftAt >= 0 && request.messages.slice(draftAt + 1).every((m) => m.role !== "user" || JSON.stringify(m.content ?? "").includes("<nhac_nho>"))
-    if (draftTurn && !last.includes("chưa viết câu trả lời")) {
+    if (draftTurn && !last.includes("have not written the answer")) {
       const sent = JSON.stringify(request.messages.slice(draftAt))
       if (!sent.includes("call_draft_clock")) {
         const call = { index: 0, id: "call_draft_clock", type: "function", function: { name: "current_time", arguments: "{}" } }
@@ -1203,13 +1203,13 @@ test("an auto-mode block reads as one line with its rule and reason; ctrl+o show
   try {
     let frame = await setup.waitForFrame((f) => f.includes("NHÁNH-X") && f.includes("HOST-LẠ"))
     show(frame)
-    expect(frame).toContain("✘ Auto mode chặn shell [Git phá huỷ]")
+    expect(frame).toContain("✘ Auto mode blocked shell [Git phá huỷ]")
     expect(frame).toContain("/permissions để cho thử lại")
-    expect(frame).toContain("✘ Đã từ chối (auto mode đã chặn [Gửi dữ liệu ra ngoài]")
+    expect(frame).toContain("✘ Đã từ chối (auto mode had blocked it [Gửi dữ liệu ra ngoài]")
     // The guidance for the model stays out of the collapsed view.
-    expect(frame).not.toContain("Đừng làm đúng việc này")
+    expect(frame).not.toContain("Do not do this same thing")
     setState("expandTools", true)
-    frame = await setup.waitForFrame((f) => f.includes("Đừng làm đúng việc này"))
+    frame = await setup.waitForFrame((f) => f.includes("Do not do this same thing"))
     show(frame)
   } finally {
     setState("expandTools", false)
@@ -1336,7 +1336,7 @@ test("a write tool asks first: esc denies just that call (the turn goes on), 2 a
   // The still background can leave a dot in the left gutter of any row: match past it.
   frame = await setup.waitForFrame((f) => /● demo · ghi_chu.*\n[^\n]*⎿  ✘ Đã từ chối/.test(f))
   await waitMcp(() => !state.streaming)
-  expect(toolResult()).toContain("Người dùng từ chối chạy tool này")
+  expect(toolResult()).toContain("The user declined to run this tool")
   expect(state.approval).toBeUndefined()
   const answer = state.history.at(-1)
   expect(answer?.role).toBe("assistant")
@@ -1577,7 +1577,7 @@ test("ask_user: one single-choice question sends on pick and the turn goes on", 
     expect(frame).not.toContain("Hỏi về thị trường") // the prompt input is hidden meanwhile
     await setup.mockInput.typeText("2")
     await waitMcp(() => !state.streaming)
-    expect(lastTool()).toContain('Người dùng đã trả lời: \\"Bạn đầu tư trong bao lâu?\\"=\\"1–3 năm\\"')
+    expect(lastTool()).toContain('The user answered: \\"Bạn đầu tư trong bao lâu?\\"=\\"1–3 năm\\"')
     expect(JSON.stringify(state.history.at(-1)?.content)).toContain("HẾT-CÂU-TRẢ-LỜI")
     expect(state.question).toBeUndefined()
   } finally {
@@ -1593,7 +1593,7 @@ test("ask_user: esc declines without stopping the turn; 'Khác' takes a typed an
     await questionShown()
     setup.mockInput.pressEscape()
     await waitMcp(() => !state.streaming && state.question === undefined)
-    expect(lastTool()).toContain("Người dùng bỏ qua các câu hỏi")
+    expect(lastTool()).toContain("The user skipped the questions")
     expect(JSON.stringify(state.history.at(-1)?.content)).toContain("HẾT-CÂU-TRẢ-LỜI")
     expect(JSON.stringify(state.history.at(-1)?.content)).not.toContain("đã dừng")
 
@@ -2917,7 +2917,7 @@ test("prompt: Alt+V pastes a clipboard image as [Image #N]; blocked for a text-o
     await sendWith("test-model", "còn gì nữa?")
     const all = JSON.stringify(chatBodies.at(-1)!.messages)
     expect(all).not.toContain(png)
-    expect(all).toContain("không xem được ảnh")
+    expect(all).toContain("cannot view images")
   } finally {
     setImageReader(undefined)
   }

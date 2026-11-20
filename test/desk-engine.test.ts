@@ -249,7 +249,7 @@ test("a daily quota cuts the run: later agents never start, and they are unverif
   const notice = deskNotification(view)
   expect(notice).toContain(`<${DESK_TAG}>`)
   expect(notice).toContain(`/desk resume ${view.id}`)
-  expect(notice).toContain("chưa kiểm chứng")
+  expect(notice).toContain("unverified")
 })
 
 test("resume after a restart: answered agents come back from the journal, identical calls keep their own slots", async () => {

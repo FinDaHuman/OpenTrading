@@ -51,7 +51,7 @@ test("the note names the numbers, says the command ran, and leaves the decision 
   const note = operandNote(["21500000"])
   expect(note).toStartWith("<nhac_nho>")
   expect(note).toContain("21500000")
-  expect(note).toContain("bỏ qua nhắc này")
+  expect(note).toContain("ignore this note")
   for (const word of ["Không chạy", "bị chặn", "DỪNG"]) expect(note).not.toContain(word)
 })
 

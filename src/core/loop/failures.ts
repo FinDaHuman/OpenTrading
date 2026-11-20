@@ -38,14 +38,14 @@ const NEUTRAL = new Set<ToolOutcome>(["deferred", "denied", "aborted"])
 /** The call could have brought data and did not. */
 const DATA_LOST = new Set<ToolOutcome>(["source-unavailable", "timeout", "rate-limited", "quota", "transport"])
 
-const DEFERRED = /chưa (được nạp|có trong bước)/
-const DENIED = [AUTO_BLOCK_PREFIX, USER_DENY_PREFIX, RULE_DENY_PREFIX, "Người dùng dừng vòng lặp", "The user stopped a loop", "Lời gọi tool đã bị huỷ", "Không chạy được", "Lời gọi này cần người dùng xác nhận"]
-const INVALID = /^(Tham số (không hợp lệ|của )|Không có tool|No tool "|Model tried to call)/
-const ABORTED = /^Đã huỷ|^Cancelled\.|^Stopped\.|^Tool bị ngắt/
-const QUOTA = /hết quota/
-const RATE_LIMITED = /giới hạn tốc độ|Server yêu cầu chờ/
+const DEFERRED = /chưa (được nạp|có trong bước)|was not in this step|could not be sent with this step/
+const DENIED = [AUTO_BLOCK_PREFIX, USER_DENY_PREFIX, RULE_DENY_PREFIX, "Người dùng dừng vòng lặp", "The user stopped a loop", "Lời gọi tool đã bị huỷ", "Không chạy được", "Lời gọi này cần người dùng xác nhận", "Người dùng từ chối chạy tool này", "Auto mode chặn ", "Quy tắc chặn của người dùng", "The tool call was cancelled", "Could not run", "This call needs the user's confirmation"]
+const INVALID = /^(Tham số (không hợp lệ|của )|Invalid arguments|The arguments of|Không có tool|No tool "|Model tried to call)/
+const ABORTED = /^Đã huỷ|^Cancelled\.|^Stopped\.|^Tool bị ngắt|^Tool interrupted/
+const QUOTA = /hết quota|quota is exhausted/
+const RATE_LIMITED = /giới hạn tốc độ|rate-limit|Server yêu cầu chờ|asks to wait/i
 const TIMEOUT = /quá thời gian|timed out|stopped after \d+s|Hết thời gian/i
-const TRANSPORT = /lỗi tạm thời|đang lỗi kết nối|chưa kết nối|Connection closed|Streamable HTTP|fetch failed|ECONN/
+const TRANSPORT = /lỗi tạm thời|đang lỗi kết nối|chưa kết nối|temporary error|failing to connect|is not connected|Connection closed|Streamable HTTP|fetch failed|ECONN/
 
 /** The kind of a tool result, from what the harness wrote in it. */
 export function classifyOutcome(ok: boolean, text: string): ToolOutcome {
