@@ -39,7 +39,7 @@ import {
  *   --arm       chỉ chạy một nhánh (không chấm)
  *   --judge     model chấm (mặc định: model của phiên); nên dùng model mạnh hơn hai nhánh
  *   --max-requests  trần cứng số request của lần chạy, đếm ở fetch (retry, subagent, agent desk, judge
- *               đều tính); mặc định bằng số dự kiến. Request vượt trần bị chặn trước khi gửi (#350)
+ *               đều tính); mặc định 1,2× số dự kiến (retry và ca dài cần chỗ). Request vượt trần bị chặn trước khi gửi (#350)
  *   --daily-cap trần request trong ngày của model phiên, cộng dồn qua các lần chạy (mặc định 500)
  *   --out       nơi ghi kết quả JSON (mặc định ~/.opentrading/exports/desk-eval-<thời điểm>.json)
  *   --yes       chạy thật; không có cờ này thì chỉ in số ca và request dự kiến rồi thoát
@@ -74,7 +74,8 @@ if (!process.argv.includes("--yes")) {
   process.exit(0)
 }
 
-const maxRequests = Number(arg("--max-requests") ?? projected)
+// Headroom over the projection: retries and a long case would otherwise cut the last cases as "infrastructure".
+const maxRequests = Number(arg("--max-requests") ?? Math.ceil(projected * 1.2))
 const dailyCap = Number(arg("--daily-cap") ?? 500)
 if (!(maxRequests > 0) || !(dailyCap > 0)) {
   console.error("--max-requests và --daily-cap cần số dương.")
