@@ -17,6 +17,7 @@ import {
   type ToolResultPart,
   type ToolSet,
   wrapLanguageModel,
+  type LanguageModelMiddleware,
 } from "ai"
 import { ChatSetupError, describeError, resolveTarget, type Target } from "./chat"
 import { effortOptions, isEffort, mergeProviderOptions, type Effort } from "./effort"
@@ -1033,19 +1034,41 @@ async function prepare(opts: TurnInput, bound: Bound, extras: TurnExtras): Promi
 /** Messages that carry an Anthropic cache breakpoint: the last two (with the system prompt, 3 of the 4 allowed). */
 export const CACHED_TAIL_MESSAGES = 2
 
+/** A message without a cache mark an earlier step left on it. */
+function unmarked<M extends { providerOptions?: Record<string, unknown> }>(m: M): M {
+  const anthropic = m.providerOptions?.anthropic as Record<string, unknown> | undefined
+  if (!anthropic || !("cacheControl" in anthropic)) return m
+  const { cacheControl: _, ...rest } = anthropic
+  return { ...m, providerOptions: { ...m.providerOptions, anthropic: rest } }
+}
+
 /**
  * Anthropic cache breakpoints on the last messages of a request (copies: the history is not
- * changed). The SDK puts a message's cacheControl on its last content part. A step's new
- * breakpoint sits after the previous one, so the previous request's prefix is read from cache.
+ * changed). Marks on older messages are taken off, so a request holds at most `count` of them
+ * besides the system prompt's (Anthropic allows 4). The SDK puts a message's cacheControl on its
+ * last content part.
  */
-export function withCacheMarks(messages: ModelMessage[], count = CACHED_TAIL_MESSAGES): ModelMessage[] {
+export function withCacheMarks<M extends { role: string; providerOptions?: Record<string, unknown> }>(messages: M[], count = CACHED_TAIL_MESSAGES): M[] {
   const from = Math.max(0, messages.length - count)
   return messages.map((m, i) =>
-    i < from || m.role === "system"
+    m.role === "system"
       ? m
-      : ({ ...m, providerOptions: { ...m.providerOptions, anthropic: { ...m.providerOptions?.anthropic, cacheControl: { type: "ephemeral" } } } } as ModelMessage),
+      : i < from
+        ? unmarked(m)
+        : { ...m, providerOptions: { ...m.providerOptions, anthropic: { ...(m.providerOptions?.anthropic as object | undefined), cacheControl: { type: "ephemeral" } } } },
   )
 }
+
+/**
+ * The cache marks on every request the model sends, each step of a turn included (#333). Marking
+ * the turn's first request only (requestFor) left the tool calls and results of later steps out
+ * of the cache: prepareStep rebuilds each step's messages from the first request's. As a model
+ * middleware the marks follow the end of each step's prompt, so each step reads the previous
+ * step's whole prompt from cache.
+ */
+export const anthropicCacheMiddleware = (count = CACHED_TAIL_MESSAGES): LanguageModelMiddleware => ({
+  transformParams: async ({ params }) => ({ ...params, prompt: withCacheMarks(params.prompt, count) }),
+})
 
 /**
  * The request as sent: placeholders for images the model cannot see, the user/session
@@ -1056,14 +1079,18 @@ function requestFor(p: Prepared, messages: ModelMessage[], retry: RetryOptions =
   // After /model to a model without vision, earlier screenshots become placeholders.
   const visible = p.images && p.userImages ? messages : stripImages(messages, { tool: !p.images, user: !p.userImages })
   const anthropic = p.target.provider.npm === "@ai-sdk/anthropic"
-  // Anthropic caches only where asked: mark the static system prompt and the conversation's end
-  // (#333), so each step reads the previous step's prefix. Others cache by prefix.
-  const request = anthropic ? withCacheMarks(withContext(visible, p.assembled.context)) : withContext(visible, p.assembled.context)
+  // Anthropic caches only where asked: the static system prompt is marked here, the end of each
+  // step's prompt by anthropicCacheMiddleware (#333). Others cache by prefix.
+  const request = withContext(visible, p.assembled.context)
   const system: string | SystemModelMessage = anthropic
     ? { role: "system", content: p.assembled.system, providerOptions: { anthropic: { cacheControl: { type: "ephemeral" } } } }
     : p.assembled.system
   // Requests are retried by kind of failure (retry.ts); the SDK's own retry stays off.
-  const model = wrapLanguageModel({ model: languageModel(p.target.provider, p.target.model, p.target.apiKey, { routing: p.target.routing, conversation: p.conversation }), middleware: retryMiddleware(retry) })
+  // The cache marks are set per step (anthropicCacheMiddleware), inside the retry: a retry resends the same prompt.
+  const model = wrapLanguageModel({
+    model: languageModel(p.target.provider, p.target.model, p.target.apiKey, { routing: p.target.routing, conversation: p.conversation }),
+    middleware: anthropic ? [retryMiddleware(retry), anthropicCacheMiddleware()] : retryMiddleware(retry),
+  })
   const providerOptions = mergeProviderOptions(thoughtOptions(p.target), effortOptions(p.target, p.effort))
   return { system, request, model, active: activeFor(p.built, request), providerOptions }
 }
