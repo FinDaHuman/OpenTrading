@@ -117,6 +117,14 @@ const PRUNED_PREFIX = "(đã dọn kết quả cũ"
 /** After the first line of a failed call: there was no data to fetch again. */
 export const PRUNED_ERROR_TEXT = "(lần gọi cũ này đã lỗi, chi tiết đã được dọn; lần gọi đó không trả về số liệu)"
 const PRUNED_ERROR_HEAD_CHARS = 200
+/** A kept turn's tool result longer than this is cut to its start when the kept turn alone is too large (#335). */
+export const TAIL_RESULT_MAX_CHARS = 8_000
+/** How a cut recent result starts its note; a result starting with it is never cut again. */
+const SHRUNK_PREFIX = "(kết quả lớn đã rút gọn"
+export const shrunkNote = (id: string | undefined, kept: number, total: number) =>
+  id
+    ? `${SHRUNK_PREFIX}: giữ ${kept}/${total} ký tự đầu; bản đầy đủ đúng như lúc lấy: read_result id="${id}".)`
+    : `${SHRUNK_PREFIX}: giữ ${kept}/${total} ký tự đầu; phần còn lại không còn trong context.)`
 /** Their results are small and carry state the harness or the model still needs. */
 const PROTECTED = new Set(["todo_write", "load_skill", "ask_user"])
 
@@ -388,6 +396,34 @@ export function pruneAttachmentsForRequest(history: readonly ModelMessage[], con
   return { messages, pruned, contextTokens: contextTokens === undefined ? undefined : scaled(contextTokens, history, messages) }
 }
 
+/**
+ * Emergency step for the turns compaction keeps (#335): when they alone exceed their share of the
+ * window, every large tool result there keeps its start plus a note. The tool-call/result pairing
+ * stays; the loaded-tools line, a subagent's metadata, errors and protected tools are untouched.
+ * A result the model read back with read_result is not cut again, so compaction cannot loop on
+ * "cut → read_result → cut".
+ */
+export function shrinkRecentResults(messages: readonly ModelMessage[], maxChars = TAIL_RESULT_MAX_CHARS): { messages: ModelMessage[]; shrunk: number } {
+  let shrunk = 0
+  const out = messages.map((message) => {
+    if (message.role !== "tool") return message
+    const content = message.content.map((part) => {
+      const p = part as ResultPart
+      if (p.type !== "tool-result" || (p.toolName && (PROTECTED.has(p.toolName) || p.toolName === "read_result"))) return part
+      if (p.output?.type !== "text" && p.output?.type !== "json") return part
+      const text = typeof p.output.value === "string" ? p.output.value : JSON.stringify(p.output.value)
+      const head = firstLine(p.output)
+      if (text.length <= maxChars || head?.startsWith(SHRUNK_PREFIX) || head?.startsWith(PRUNED_PREFIX) || head?.startsWith(LOADED_PREFIX) || subagentMeta(p.output)) return part
+      shrunk++
+      const id = p.toolName?.startsWith("mcp__") ? p.toolCallId : undefined
+      const kept = text.slice(0, maxChars)
+      return { ...part, output: { type: "text", value: `${shrunkNote(id, kept.length, text.length)}\n${kept}` } } as typeof part
+    })
+    return { ...message, content } as ModelMessage
+  })
+  return { messages: out, shrunk }
+}
+
 export async function compactHistory(history: readonly ModelMessage[], opts: CompactOptions): Promise<CompactResult> {
   const before = opts.contextTokens ?? tokensOf(history)
   const tools = pruneToolResults(history)
@@ -401,11 +437,19 @@ export async function compactHistory(history: readonly ModelMessage[], opts: Com
 
   const turns = splitTurns(prunedMessages)
   let keep = KEEP_TURNS
-  if (opts.limits && tokensOf(turns.slice(-keep).flat()) > opts.limits.window * TAIL_MAX_SHARE) keep = 1
-  // Too short to summarize: worth saying only when the user asked.
-  if (turns.length <= keep) return { ...base, error: opts.manual && turns.length > 0 ? "Hội thoại còn quá ngắn để tóm tắt." : undefined }
+  const tailShare = opts.limits ? opts.limits.window * TAIL_MAX_SHARE : Infinity
+  if (tokensOf(turns.slice(-keep).flat()) > tailShare) keep = 1
+  // Even one kept turn is too large: cut its large results to their start, keeping a way back.
+  let tail = turns.slice(-keep).flat()
+  let shrunk = 0
+  if (tokensOf(tail) > tailShare) ({ messages: tail, shrunk } = shrinkRecentResults(tail))
+  // Too short to summarize: worth saying only when the user asked, unless cutting results helped.
+  if (turns.length <= keep) {
+    if (shrunk === 0) return { ...base, error: opts.manual && turns.length > 0 ? "Hội thoại còn quá ngắn để tóm tắt." : undefined }
+    const messages = [...turns.slice(0, -keep).flat(), ...tail]
+    return { messages, before, after: scaled(before, history, messages), pruned: pruned + shrunk }
+  }
   const head = turns.slice(0, -keep).flat()
-  const tail = turns.slice(-keep).flat()
 
   let summary: string
   opts.onSummarize?.()
@@ -423,7 +467,7 @@ export async function compactHistory(history: readonly ModelMessage[], opts: Com
   }
   // A kept "unchanged, see above" file stub may point into the summarized head.
   const messages = withoutOrphanStubs([...compactPair(summary, carry), ...tail])
-  return { messages, before, after: scaled(before, history, messages), pruned, summary }
+  return { messages, before, after: scaled(before, history, messages), pruned: pruned + shrunk, summary }
 }
 
 /** Whether the next turn should compact first. */
