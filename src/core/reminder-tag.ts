@@ -6,4 +6,6 @@
 export const REMINDER_TAG = "nhac_nho"
 
 /** What the agent loop appends when it cuts the recalled memory section to its cap. */
-export const REMINDER_CAP_MARK = "[… đã cắt bớt]"
+export const REMINDER_CAP_MARK = "[… cut]"
+/** The same mark before 20/11/2026 (Vietnamese), still in saved sessions. */
+export const LEGACY_REMINDER_CAP_MARK = "[… đã cắt bớt]"

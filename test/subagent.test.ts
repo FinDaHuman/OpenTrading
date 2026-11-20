@@ -310,7 +310,7 @@ test("the parent's report says which data the child did not get", async () => {
   const events = await collect(runAgent({ history: [], input: "x", skills: [], registry }))
   const [end] = ends(events)
   expect(end!.ok).toBe(true)
-  expect(end!.output).toContain("! 1 nguồn lỗi chưa khắc phục trong lượt này: source")
+  expect(end!.output).toContain("! 1 failed sources not recovered in this run: source")
 })
 
 test("a child that fails with nothing to show fails the call; the error reaches the parent model", async () => {
@@ -409,7 +409,7 @@ test("▸▸: a child whose actions the classifier flags on handoff reaches the 
   const events = await collect(runAgent({ history: [], input: "x", skills: [], registry }))
   const end = ends(events)[0]!
   expect(end.ok).toBe(true)
-  expect(String(end.output)).toContain("[Cảnh báo an toàn từ auto mode]")
+  expect(String(end.output)).toContain("[Auto mode safety warning]")
   expect(String(end.output)).toContain("Báo cáo: FPT ổn.")
   expect(prompts).toHaveLength(3)
   expect(prompts[1]).toContain("handing its result back")

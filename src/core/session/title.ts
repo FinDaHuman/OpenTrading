@@ -14,7 +14,7 @@ import { webTarget } from "../tools/web/side-model"
 export function titlePrompt(): string {
   return (
     promptFile("title") ??
-    "Đặt tiêu đề ngắn cho cuộc hội thoại dưới đây. Chỉ trả về một dòng, không giải thích."
+    "Write a short Vietnamese title for the conversation below. Return one line only, no explanation."
   )
 }
 

@@ -1177,6 +1177,34 @@ test("a deferred tool loaded by its first call reads as a grey note, wrapped, no
   }
 })
 
+test("a session saved before the English runtime text (20/11/2026) still shows its blocks, refusals and loaded tools as such", async () => {
+  // The texts exactly as denial.ts and the tool loader wrote them in Vietnamese.
+  const blocked = "Auto mode chặn shell [Git phá huỷ]: Xoá nhánh remote khi người dùng chưa nêu tên NHÁNH-CŨ.\n\nĐừng làm đúng việc này bằng tool hay lệnh khác (write_file, edit_file, tool MCP, subagent, script, lệnh viết lại): HƯỚNG-DẪN-CŨ."
+  const refused =
+    "Người dùng từ chối chạy tool này (auto mode đã chặn [Gửi dữ liệu ra ngoài]: Gửi file ra HOST-CŨ). Lời nhắn của người dùng: SAU\n\nĐừng làm đúng việc này bằng tool hay lệnh khác."
+  const loaded = "Đã nạp tool: mcp__opentrading__market_movers\nTool mcp__opentrading__market_movers chưa có trong bước này nên chưa chạy. NẠP-CŨ"
+  const before = state.lines.length
+  setState("lines", (lines) => [
+    ...lines,
+    { kind: "tool", callId: "c-old-block", name: "shell", label: "shell git push origin --delete x", status: "error", output: blocked },
+    { kind: "tool", callId: "c-old-refused", name: "mcp__x__create", label: "x · create", status: "error", output: refused },
+    { kind: "tool", callId: "c-old-loaded", name: "market_movers", label: "market_movers()", status: "error", output: loaded },
+  ])
+  try {
+    const frame = await setup.waitForFrame((f) => f.includes("NHÁNH-CŨ") && f.includes("HOST-CŨ") && f.includes("NẠP-CŨ"))
+    show(frame)
+    expect(frame).toContain("✘ Auto mode chặn shell [Git phá huỷ]")
+    expect(frame).toContain("/permissions để cho thử lại")
+    expect(frame).toContain('✘ Đã từ chối (auto mode đã chặn [Gửi dữ liệu ra ngoài]: Gửi file ra HOST-CŨ) — "SAU"')
+    // The deferred tool its first call loaded: the grey one-line note, not the loader line.
+    expect(frame).not.toContain("Đã nạp tool:")
+    // Collapsed like a new session: the old guidance for the model stays out of view.
+    expect(frame).not.toContain("HƯỚNG-DẪN-CŨ")
+  } finally {
+    setState("lines", (lines) => lines.slice(0, before))
+  }
+})
+
 test("a source that failed shows its notice, not the envelope, and no green dot", async () => {
   const notice = `${SOURCE_FAILED_PREFIX} vn_fundamentals: nguồn quá thời gian. Có thể thử lại một lần ở bước sau. CUỐI-CÂU`
   const output = `${notice}\n{"availability":"unavailable","ENVELOPE":1}`
@@ -2836,11 +2864,11 @@ test("/kiem-chung with a pasted multi-line report: the whole text reaches the mo
   show(frame)
   await sendWith("test-model", "/kiem-chung")
   const sent = lastUserContent()
-  expect(sent).toContain("Chạy playbook ultradesk kiem-chung")
+  expect(sent).toContain("Run the ultradesk playbook kiem-chung")
   expect(sent).toContain("dòng-báo-cáo-1:")
   expect(sent).toContain("dòng-báo-cáo-30")
   // The <ultradesk> reminder rides on the message, and desk_run is declared for this turn only.
-  expect(sent).toContain("thay vì tự điều phối theo skill")
+  expect(sent).toContain("instead of orchestrating the skill yourself")
   const tools = (chatBodies.at(-1) as unknown as { tools?: { function: { name: string } }[] }).tools ?? []
   expect(tools.some((t) => t.function.name === "desk_run")).toBe(true)
   // The fake model answered in text: the transcript says the playbook never started.

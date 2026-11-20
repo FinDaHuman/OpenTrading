@@ -50,7 +50,7 @@ export function clip(text: string, max = FIELD_CHARS) {
   if (text.length <= max) return text
   const head = Math.floor(max * 0.6)
   const tail = max - head
-  return `${text.slice(0, head)}[đã lược ${text.length - head - tail} ký tự]${text.slice(text.length - tail)}`
+  return `${text.slice(0, head)}[${text.length - head - tail} chars omitted]${text.slice(text.length - tail)}`
 }
 
 /** The parts of a call that decide what it does, short. */

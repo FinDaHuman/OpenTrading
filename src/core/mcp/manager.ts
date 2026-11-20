@@ -756,7 +756,8 @@ export class McpManager {
     if (now && this.statuses.get(name)?.state === "connected") return now
     const entry = this.entries.get(name)
     const stuck = (s?: McpServerStatus) => !s || s.state === "disabled" || s.state === "needs-auth" || s.state === "untrusted"
-    const notConnected = (s?: McpServerStatus) => new Error(`MCP server "${name}" is not connected${s?.error ? `: ${s.error}` : ""}. See /mcp.`)
+    // The state, not the status error: that one is the /mcp line, written in Vietnamese for the user.
+    const notConnected = (s?: McpServerStatus) => new Error(`MCP server "${name}" is not connected${s ? ` (${s.state})` : ""}; the user can see why in /mcp.`)
     const status = this.statuses.get(name)
     if (!entry?.config || !isRemote(entry.config) || stuck(status)) throw notConnected(status)
     // Failed for good (e.g. it was still down when the app started): start trying again.

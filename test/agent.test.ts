@@ -335,7 +335,7 @@ test("a data gap reaches the model in the one tail of the step, is never stored,
   const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: failingSource() }))
   const tail = bodies[1]!.messages.at(-1)!
   expect(tail.role).toBe("user")
-  expect(lastUserText(bodies[1]!)).toContain("chưa lấy được dữ liệu từ: source")
+  expect(lastUserText(bodies[1]!)).toContain("has not got data from: source")
   expect(lastUserText(bodies[1]!)).toContain(TOOL_NUDGE_START)
   expect(bodies[1]!.messages.filter((m) => m.role === "user")).toHaveLength(2)
   expect(done(events).dataGaps).toEqual(["source"])
@@ -362,7 +362,7 @@ test("an alternative the server named clears the gap, through the output the mod
     { tool: "mcp__ot__other", args: {} },
   ]
   const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: r }))
-  expect(lastUserText(bodies[1]!)).toContain("chưa lấy được dữ liệu từ: source")
+  expect(lastUserText(bodies[1]!)).toContain("has not got data from: source")
   expect(lastUserText(bodies[2]!)).not.toContain("chưa lấy được dữ liệu")
   expect(done(events).dataGaps).toBeUndefined()
 })
@@ -371,13 +371,13 @@ test("a run of failed steps is told once, then tools go off and the turn answers
   plan = { tool: "boom", args: {}, always: true }
   const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: registry() }))
   expect(bodies).toHaveLength(9)
-  expect(bodies.filter((b) => lastUserText(b).includes("bước liên tiếp chỉ toàn lỗi. Đổi cách khác"))).toHaveLength(1)
-  expect(lastUserText(bodies[4]!)).toContain("4 bước liên tiếp")
+  expect(bodies.filter((b) => lastUserText(b).includes("steps in a row returned nothing but errors. Try another way"))).toHaveLength(1)
+  expect(lastUserText(bodies[4]!)).toContain("4 steps in a row")
   expect(bodies[7]!.tool_choice).not.toBe("none")
   expect(bodies[8]!.tool_choice).toBe("none")
-  expect(lastUserText(bodies[8]!)).toContain("tool đã tắt")
+  expect(lastUserText(bodies[8]!)).toContain("tools are off for this step")
   expect(done(events).outcome).toBe("completed")
-  expect(JSON.stringify(done(events).messages)).not.toContain("tool đã tắt")
+  expect(JSON.stringify(done(events).messages)).not.toContain("tools are off for this step")
 })
 
 test("a run that must end in its final tool still can when its steps keep failing", async () => {

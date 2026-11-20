@@ -11,9 +11,9 @@ import { CardRow } from "./card-row"
 import { useSpinner } from "./ui/clock"
 import { fmtElapsed } from "./activity"
 import { LEGACY_TODO_PREFIX, TODO_PREFIX } from "../core/tools/todos"
-import { LOADED_PREFIX } from "../core/tools/search"
+import { loadedPrefixOf } from "../core/tools/search"
 import { SOURCE_FAILED_PREFIX } from "../core/tools/outcome"
-import { AUTO_BLOCK_PREFIX, USER_DENY_PREFIX, userNoteOf } from "../core/permission/denial"
+import { AUTO_BLOCK_PREFIXES, prefixOf, USER_DENY_PREFIXES, userNoteOf } from "../core/permission/denial"
 import { isSpawn, SubagentRow } from "./subagent-row"
 import { DESK_RUN } from "../core/desk/tool"
 import { DeskCard, deskRunIdOf, isLiveRun, runSummary } from "./desk-card"
@@ -56,19 +56,21 @@ function summary(line: ToolLine): { tone: "ok" | "denied" | "answers" | "warning
   if (line.status === "ok" && (out.startsWith(TODO_PREFIX) || out.startsWith(LEGACY_TODO_PREFIX)) && !state.expandTools) return { tone: "ok", lines: [] }
   // A deferred tool called before loading: the call loaded it. One sentence; ctrl+o shows the
   // parameters the model got with it.
-  if (line.status === "error" && out.startsWith(LOADED_PREFIX) && !state.expandTools) {
+  if (line.status === "error" && loadedPrefixOf(out) && !state.expandTools) {
     return { tone: "ok", lines: [out.split("\n")[1] ?? out], wrap: true }
   }
   // The live card under the row says the rest.
   if (line.name === DESK_RUN && line.status === "ok" && deskRunIdOf(out)) return { tone: "ok", lines: [out.split("\n")[0] ?? out] }
   // Auto mode's block: its summary line; ctrl+o shows what the model was told.
-  if (line.status === "error" && out.startsWith(AUTO_BLOCK_PREFIX) && !state.expandTools) {
+  // Both languages: sessions saved before 20/11/2026 hold the Vietnamese prefixes.
+  if (line.status === "error" && prefixOf(out, AUTO_BLOCK_PREFIXES) && !state.expandTools) {
     return { tone: "denied", lines: [`✘ ${out.split("\n")[0]} · /permissions để cho thử lại`], wrap: true }
   }
-  if (line.status === "error" && out.startsWith(USER_DENY_PREFIX)) {
+  const denied = line.status === "error" ? prefixOf(out, USER_DENY_PREFIXES) : undefined
+  if (denied) {
     const note = userNoteOf(out)
     // A hand-off the user refused keeps auto mode's reason: "(auto mode đã chặn [nhãn]: lý do)".
-    const auto = /^ \(auto mode (?:had blocked it|đã chặn)[^\n]*\)(?=\.)/.exec(out.slice(USER_DENY_PREFIX.length))?.[0] ?? ""
+    const auto = /^ \(auto mode (?:had blocked it|đã chặn)[^\n]*\)(?=\.)/.exec(out.slice(denied.length))?.[0] ?? ""
     return { tone: "denied", lines: [`✘ Đã từ chối${auto}${note ? ` — "${note}"` : ""}`], wrap: Boolean(auto) }
   }
   if (line.status === "ok" && (out.startsWith("The user answered:") || out.startsWith("Người dùng đã trả lời:"))) {
@@ -97,7 +99,7 @@ function ToolRow(props: { line: ToolLine; first: boolean; width: number }) {
     preview(props.line.output ?? "", state.expandTools, props.line.status === "error" ? COLLAPSED_ERROR_LINES : COLLAPSED_LINES)
   const textWidth = () => Math.max(10, props.width - RESULT.length)
   // A deferred tool the call just loaded is not a failure: grey, not red.
-  const loaded = () => (props.line.output ?? "").startsWith(LOADED_PREFIX)
+  const loaded = () => Boolean(loadedPrefixOf(props.line.output ?? ""))
   const outColor = () => (props.line.status === "error" && !loaded() ? color.giam : color.tx3)
 
   /** First result line gets "  ⎿  ", the rest line up under it. */

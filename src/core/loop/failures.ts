@@ -1,8 +1,8 @@
 import type { ModelMessage } from "ai"
-import { AUTO_BLOCK_PREFIX, RULE_DENY_PREFIX, USER_DENY_PREFIX } from "../permission/denial"
+import { AUTO_BLOCK_PREFIXES, RULE_DENY_PREFIXES, USER_DENY_PREFIXES } from "../permission/denial"
 import { stableJson } from "../tools/loop-guard"
 import { noticeAlternatives, SOURCE_FAILED_PREFIX } from "../tools/outcome"
-import { LOADED_PREFIX } from "../tools/search"
+import { loadedPrefixOf } from "../tools/search"
 
 /**
  * What the failed calls of a turn add up to, read from the turn's messages: they are the same
@@ -39,7 +39,20 @@ const NEUTRAL = new Set<ToolOutcome>(["deferred", "denied", "aborted"])
 const DATA_LOST = new Set<ToolOutcome>(["source-unavailable", "timeout", "rate-limited", "quota", "transport"])
 
 const DEFERRED = /chưa (được nạp|có trong bước)|was not in this step|could not be sent with this step/
-const DENIED = [AUTO_BLOCK_PREFIX, USER_DENY_PREFIX, RULE_DENY_PREFIX, "Người dùng dừng vòng lặp", "The user stopped a loop", "Lời gọi tool đã bị huỷ", "Không chạy được", "Lời gọi này cần người dùng xác nhận", "Người dùng từ chối chạy tool này", "Auto mode chặn ", "Quy tắc chặn của người dùng", "The tool call was cancelled", "Could not run", "This call needs the user's confirmation"]
+// English first, then the Vietnamese texts of sessions saved before 20/11/2026.
+const DENIED = [
+  ...AUTO_BLOCK_PREFIXES,
+  ...USER_DENY_PREFIXES,
+  ...RULE_DENY_PREFIXES,
+  "The user stopped a loop",
+  "The tool call was cancelled",
+  "Could not run",
+  "This call needs the user's confirmation",
+  "Người dùng dừng vòng lặp",
+  "Lời gọi tool đã bị huỷ",
+  "Không chạy được",
+  "Lời gọi này cần người dùng xác nhận",
+]
 const INVALID = /^(Tham số (không hợp lệ|của )|Invalid arguments|The arguments of|Không có tool|No tool "|Model tried to call)/
 const ABORTED = /^Đã huỷ|^Cancelled\.|^Stopped\.|^Tool bị ngắt|^Tool interrupted/
 const QUOTA = /hết quota|quota is exhausted/
@@ -50,7 +63,7 @@ const TRANSPORT = /lỗi tạm thời|đang lỗi kết nối|chưa kết nối|
 /** The kind of a tool result, from what the harness wrote in it. */
 export function classifyOutcome(ok: boolean, text: string): ToolOutcome {
   if (ok) return text.startsWith(SOURCE_FAILED_PREFIX) ? "source-unavailable" : "ok"
-  if (text.startsWith(LOADED_PREFIX) || DEFERRED.test(text)) return "deferred"
+  if (loadedPrefixOf(text) || DEFERRED.test(text)) return "deferred"
   if (DENIED.some((prefix) => text.startsWith(prefix))) return "denied"
   if (INVALID.test(text)) return "invalid-call"
   if (ABORTED.test(text)) return "aborted"
@@ -145,15 +158,20 @@ const remind = (text: string) => `<nhac_nho>\n${text}\n</nhac_nho>`
 /** Reminder for the next step, if the turn has one to give. */
 export function failureNudge({ gaps, streak }: Pick<TurnFailures, "gaps" | "streak">): string | undefined {
   const lines = [
-    ...(gaps.length > 0 ? [`Lượt này chưa lấy được dữ liệu từ: ${gaps.join(", ")}. Khi trả lời, nêu rõ phần còn thiếu và không tự điền số cho phần đó.`] : []),
-    ...(streak === FAILURE_STREAK_NUDGE ? [`${streak} bước liên tiếp chỉ toàn lỗi. Đổi cách khác, hoặc trả lời bằng dữ liệu đã có.`] : []),
+    ...(gaps.length > 0 ? [`This turn has not got data from: ${gaps.join(", ")}. When you answer, say plainly what is missing and do not fill in figures for it.`] : []),
+    ...(streak === FAILURE_STREAK_NUDGE ? [`${streak} steps in a row returned nothing but errors. Try another way, or answer with the data you have.`] : []),
   ]
   return lines.length > 0 ? remind(lines.join("\n")) : undefined
 }
 
-export const FAILURE_STREAK_FINAL = remind("Quá nhiều bước liên tiếp chỉ toàn lỗi nên tool đã tắt ở bước này. Trả lời bằng dữ liệu đã có, nêu rõ phần còn thiếu, không tự điền số.")
+export const FAILURE_STREAK_FINAL = remind("Too many steps in a row returned nothing but errors, so tools are off for this step. Answer with the data you have, say plainly what is missing, and do not fill in figures.")
 
 /** The line under the answer: from the harness, so it holds whatever the model wrote. */
 export function gapsLine(gaps: readonly string[]) {
   return `! ${gaps.length} nguồn lỗi chưa khắc phục trong lượt này: ${gaps.join(", ")}`
+}
+
+/** The same line under a subagent's result, which the main agent reads. */
+export function gapsNote(gaps: readonly string[]) {
+  return `! ${gaps.length} failed sources not recovered in this run: ${gaps.join(", ")}`
 }

@@ -104,7 +104,7 @@ test("investor profile rides the static system prefix, capped per tier, and neve
   const row = a.report.find((r) => r.id === "ho_so_nha_dau_tu")!
   expect(row.truncated).toBe(true)
   expect(row.tokens).toBeLessThanOrEqual(1_400)
-  expect(a.system).toContain("đã được cắt bớt")
+  expect(a.system).toContain("cut to fit the context budget")
 })
 
 test("tier C keeps style (reader-language rules cannot be dropped) and the market clock", () => {
