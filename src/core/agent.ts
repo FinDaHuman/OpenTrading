@@ -1030,6 +1030,23 @@ async function prepare(opts: TurnInput, bound: Bound, extras: TurnExtras): Promi
   }
 }
 
+/** Messages that carry an Anthropic cache breakpoint: the last two (with the system prompt, 3 of the 4 allowed). */
+export const CACHED_TAIL_MESSAGES = 2
+
+/**
+ * Anthropic cache breakpoints on the last messages of a request (copies: the history is not
+ * changed). The SDK puts a message's cacheControl on its last content part. A step's new
+ * breakpoint sits after the previous one, so the previous request's prefix is read from cache.
+ */
+export function withCacheMarks(messages: ModelMessage[], count = CACHED_TAIL_MESSAGES): ModelMessage[] {
+  const from = Math.max(0, messages.length - count)
+  return messages.map((m, i) =>
+    i < from || m.role === "system"
+      ? m
+      : ({ ...m, providerOptions: { ...m.providerOptions, anthropic: { ...m.providerOptions?.anthropic, cacheControl: { type: "ephemeral" } } } } as ModelMessage),
+  )
+}
+
 /**
  * The request as sent: placeholders for images the model cannot see, the user/session
  * context on the first user message, the cache mark for Anthropic, and the tools visible
@@ -1038,12 +1055,13 @@ async function prepare(opts: TurnInput, bound: Bound, extras: TurnExtras): Promi
 function requestFor(p: Prepared, messages: ModelMessage[], retry: RetryOptions = {}) {
   // After /model to a model without vision, earlier screenshots become placeholders.
   const visible = p.images && p.userImages ? messages : stripImages(messages, { tool: !p.images, user: !p.userImages })
-  const request = withContext(visible, p.assembled.context)
-  // Anthropic caches only where asked: mark the static system prompt. Others cache by prefix.
-  const system: string | SystemModelMessage =
-    p.target.provider.npm === "@ai-sdk/anthropic"
-      ? { role: "system", content: p.assembled.system, providerOptions: { anthropic: { cacheControl: { type: "ephemeral" } } } }
-      : p.assembled.system
+  const anthropic = p.target.provider.npm === "@ai-sdk/anthropic"
+  // Anthropic caches only where asked: mark the static system prompt and the conversation's end
+  // (#333), so each step reads the previous step's prefix. Others cache by prefix.
+  const request = anthropic ? withCacheMarks(withContext(visible, p.assembled.context)) : withContext(visible, p.assembled.context)
+  const system: string | SystemModelMessage = anthropic
+    ? { role: "system", content: p.assembled.system, providerOptions: { anthropic: { cacheControl: { type: "ephemeral" } } } }
+    : p.assembled.system
   // Requests are retried by kind of failure (retry.ts); the SDK's own retry stays off.
   const model = wrapLanguageModel({ model: languageModel(p.target.provider, p.target.model, p.target.apiKey, { routing: p.target.routing, conversation: p.conversation }), middleware: retryMiddleware(retry) })
   const providerOptions = mergeProviderOptions(thoughtOptions(p.target), effortOptions(p.target, p.effort))
