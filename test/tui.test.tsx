@@ -171,7 +171,7 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
       })
     }
     // The todo test keeps its turn running (slow tool) right after the list is saved.
-    if (callSlowTool && last.includes("[todo_write] Đã lưu")) {
+    if (callSlowTool && last.includes("[todo_write] Saved")) {
       const call = { index: 0, id: "call_slow", type: "function", function: { name: "cho_lau", arguments: "{}" } }
       return new Response(chunk({ role: "assistant", tool_calls: [call] }) + chunk({}, "tool_calls") + "data: [DONE]\n\n", {
         headers: { "content-type": "text/event-stream" },
@@ -1063,7 +1063,7 @@ test("a tool call renders as a ● row with its result under ⎿, then the answe
   expect(frame).toContain("  ⎿  ")
   expect(frame).toContain("❯ MẤY-GIỜ rồi?")
   expect(frame).not.toContain("◆ OpenTrading")
-  expect(frame).toContain("giờ Việt Nam")
+  expect(frame).toContain("Vietnam time")
   show(frame)
   await setup.waitFor(() => !state.streaming)
   const roles = state.history.map((m) => m.role)
@@ -3270,7 +3270,7 @@ test("background subagent: the answer ends at once; /tasks and the mode line sho
   try {
     await setup.mockInput.typeText("SUBAGENT-NEN")
     setup.mockInput.pressEnter()
-    await waitMcp(() => !state.streaming && state.history.some((m) => m.role === "tool" && JSON.stringify(m.content).includes("Đã chạy nền subagent")))
+    await waitMcp(() => !state.streaming && state.history.some((m) => m.role === "tool" && JSON.stringify(m.content).includes("started in the background")))
     let frame = await setup.waitForFrame((f) => f.includes("1 subagent · 1 nền · ↓ quản lý") && f.includes("nghien-cuu (Nền FPT) · chạy nền"))
     show(frame)
     const id = Object.values(state.agents).find((a) => a.background && a.status !== "completed")!.id

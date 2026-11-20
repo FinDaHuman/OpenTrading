@@ -947,7 +947,7 @@ export function fileAccessNote(registry: TurnInput["registry"], mode: Parameters
   const files = resultExportDir()
   const shown = files && workspace.contains(files) ? path.relative(workspace.primary, files) || "." : files
   const filesLine = shown
-    ? `Kết quả dữ liệu có nhãn [ref rN] có bản JSON đầy đủ ở ${shown}/rN.json: phép tính trên chuỗi số thì để script đọc file đó, không chép tay số.`
+    ? `Data results labelled [ref rN] have the full JSON at ${shown}/rN.json: for calculations on a series, have a script read that file; do not copy numbers by hand.`
     : undefined
   return [workspace.describe(present), filesLine, modeNote(mode, present, profile)].filter(Boolean).join("\n")
 }

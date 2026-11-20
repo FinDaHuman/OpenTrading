@@ -57,8 +57,8 @@ test("<quyen_tep> says where the files are, relative inside the workspace", () =
   expect(fileAccessNote(registry, "bypass", "machine")).not.toContain("rN.json")
   exportResultsTo(path.join(project, "ot-data"))
   const note = fileAccessNote(registry, "bypass", "machine")
-  expect(note).toContain("Kết quả dữ liệu có nhãn [ref rN] có bản JSON đầy đủ ở ot-data/rN.json")
-  expect(note).toContain("không chép tay số")
+  expect(note).toContain("Data results labelled [ref rN] have the full JSON at ot-data/rN.json")
+  expect(note).toContain("do not copy numbers by hand")
 })
 
 test("config results.exportDir: used inside the workspace, ignored outside it", () => {

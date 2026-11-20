@@ -25,7 +25,7 @@ const PROMPT_INPUT = 100_000
 /** The whole call's limit (wrap.ts races it): download and the side model share it. */
 export const FETCH_TOOL_TIMEOUT_MS = 125_000
 /** How a result opens when the side model's provider blocked its output (stable, like `REDIRECT:`, for tests and traces). */
-export const FILTERED_PREFIX = "BỊ CHẶN:"
+export const FILTERED_PREFIX = "BLOCKED:"
 /** The page download's own limit. */
 const DOWNLOAD_TIMEOUT_MS = 60_000
 /** The side model's own limit, inside what the download left of the call's. */
@@ -63,7 +63,7 @@ async function load(url: URL, signal: AbortSignal, deps: FetchDeps): Promise<Pag
   if (cached) return cached
   const got = await fetchPublic(url, signal, { fetch: deps.fetch, resolve: deps.resolve })
   if (got.kind === "redirect") return { redirect: got.to.href, status: got.status }
-  if (got.status >= 400) throw new Error(`HTTP ${got.status} ${got.statusText} khi tải ${got.url.href}.${got.status === 401 || got.status === 403 ? " Trang cần đăng nhập hoặc chặn bot." : ""}`)
+  if (got.status >= 400) throw new Error(`HTTP ${got.status} ${got.statusText} fetching ${got.url.href}.${got.status === 401 || got.status === 403 ? " The page needs a login or blocks bots." : ""}`)
   const base = { url: got.url.href, status: got.status, statusText: got.statusText, contentType: got.contentType.split(";")[0]!.trim(), bytes: got.bytes.byteLength, fetchedAt: vnStamp() }
   let page: Page
   if (isPdf(got.contentType, got.bytes)) {
@@ -72,7 +72,7 @@ async function load(url: URL, signal: AbortSignal, deps: FetchDeps): Promise<Pag
     page = {
       ...base,
       markdown: text,
-      note: scanned ? `PDF ${pages} trang gần như không có lớp chữ (bản scan): không đọc được nội dung; tìm bản HTML hoặc dữ liệu qua tool MCP.` : `PDF ${pages} trang.`,
+      note: scanned ? `PDF of ${pages} pages with almost no text layer (a scan): its content cannot be read; look for an HTML version or the data through MCP tools.` : `PDF of ${pages} pages.`,
     }
   } else if (isTextual(got.contentType)) {
     const text = decodeText(got.bytes, got.contentType)
@@ -83,11 +83,11 @@ async function load(url: URL, signal: AbortSignal, deps: FetchDeps): Promise<Pag
         ...base,
         title,
         markdown,
-        note: thin ? "Trang gần như trống sau khi lấy nội dung: có thể render bằng JavaScript; số liệu thị trường hãy lấy bằng tool dữ liệu MCP." : extracted ? undefined : "Không tách được bài chính; đây là toàn trang (đã bỏ menu/chân trang).",
+        note: thin ? "The page is almost empty after extraction: it may be rendered by JavaScript; get market figures with the MCP data tools." : extracted ? undefined : "The main article could not be isolated; this is the whole page (menus/footers removed).",
       }
     } else page = { ...base, markdown: text }
   } else {
-    throw new Error(`Nội dung ${got.contentType || "nhị phân"} (${Math.round(got.bytes.byteLength / 1024)}KB) không đọc được dạng chữ.`)
+    throw new Error(`${got.contentType || "Binary"} content (${Math.round(got.bytes.byteLength / 1024)}KB) cannot be read as text.`)
   }
   cache.set(url.href, page)
   return page
@@ -107,30 +107,30 @@ export async function runFetch(input: WebFetchInput, signal: AbortSignal, deps: 
   const page = await load(url, AbortSignal.any([signal, AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS)]), deps)
   if ("redirect" in page) {
     return [
-      "REDIRECT: URL chuyển hướng sang host khác.",
-      `URL gốc: ${url.href}`,
-      `URL chuyển tới: ${page.redirect}`,
-      `Mã: ${page.status}`,
+      "REDIRECT: the URL redirects to another host.",
+      `Original URL: ${url.href}`,
+      `Redirect URL: ${page.redirect}`,
+      `Status: ${page.status}`,
       "",
-      "Muốn đọc tiếp thì gọi lại web_fetch với:",
+      "To continue, call web_fetch again with:",
       `- url: "${page.redirect}"`,
       ...(input.prompt ? [`- prompt: "${input.prompt}"`] : []),
     ].join("\n")
   }
-  const header = `URL: ${page.url} | HTTP ${page.status} | ${page.contentType || "?"} | ${Math.max(1, Math.round(page.bytes / 1024))}KB | lấy lúc ${page.fetchedAt}${cachedBefore ? " | (cache)" : ""}${page.title ? `\nTiêu đề: ${page.title}` : ""}${page.note ? `\nGhi chú: ${page.note}` : ""}`
+  const header = `URL: ${page.url} | HTTP ${page.status} | ${page.contentType || "?"} | ${Math.max(1, Math.round(page.bytes / 1024))}KB | fetched ${page.fetchedAt}${cachedBefore ? " | (cache)" : ""}${page.title ? `\nTitle: ${page.title}` : ""}${page.note ? `\nNote: ${page.note}` : ""}`
   const body = page.markdown
 
   if (input.prompt) {
-    const content = body.length > PROMPT_INPUT ? `${body.slice(0, PROMPT_INPUT)}\n[nội dung bị cắt vì quá dài]` : body
+    const content = body.length > PROMPT_INPUT ? `${body.slice(0, PROMPT_INPUT)}\n[content cut: too long]` : body
     const extract =
       deps.extract ??
       (async (c: string, p: string, u: string, s: AbortSignal) => {
         const target = await webTarget()
-        if (!target) throw new Error("Chưa có model để đọc trang theo prompt (gõ /model).")
+        if (!target) throw new Error("No model to read the page with a prompt (type /model).")
         return extractWithModel(c, p, u, target, s)
       })
     const budget = Math.min(EXTRACT_MAX_MS, FETCH_TOOL_TIMEOUT_MS - (now() - started) - EXTRACT_MARGIN_MS)
-    if (budget < EXTRACT_MIN_MS) return withPage(header, body, "không còn đủ thời gian sau khi tải trang")
+    if (budget < EXTRACT_MIN_MS) return withPage(header, body, "not enough time left after downloading the page")
     let got: Extracted
     try {
       const out = await extract(content, input.prompt, page.url, AbortSignal.any([signal, AbortSignal.timeout(budget)]))
@@ -138,26 +138,26 @@ export async function runFetch(input: WebFetchInput, signal: AbortSignal, deps: 
     } catch (error) {
       // The user's Esc and the side model's own errors (quota…) stay errors; its limit does not.
       if (signal.aborted || (error as { name?: string })?.name !== "TimeoutError") throw error
-      return withPage(header, body, `quá ${Math.round(budget / 1000)}s`)
+      return withPage(header, body, `over ${Math.round(budget / 1000)}s`)
     }
     // A provider block is a terminal result, not an incomplete extraction to replace with the page.
     // The line states what happened and nothing else: no advice the model could read as an order.
     if (got.finishReason === "content-filter") {
       // A code word of the provider (RECITATION, SAFETY, content_filter…): anything else is not copied into the result.
       const reason = got.rawFinishReason && /^[A-Za-z0-9_-]{1,40}$/.test(got.rawFinishReason) ? got.rawFinishReason : undefined
-      const raw = reason ? `, lý do của provider: ${reason}` : ""
-      const line = `${FILTERED_PREFIX} model phụ đọc trang bị provider chặn đầu ra (finishReason=content-filter${raw}).`
+      const raw = reason ? `, provider reason: ${reason}` : ""
+      const line = `${FILTERED_PREFIX} the provider blocked the output of the page-reading model (finishReason=content-filter${raw}).`
       // RECITATION is a block over quoting the page, not over what the page says: the page is what
       // web_fetch without a prompt returns anyway, so it comes back (as data, after the stated
       // block). Financial news trips it often; a bare block left the model with nothing to read.
       // The side model was never an injection barrier (a timeout or an empty answer returns the raw
       // page too, and the model may fetch without a prompt): the barrier is "tool results are data".
-      if (reason === "RECITATION") return `${header}\n\n${line} Dưới đây là nội dung trang.${pageChunk(body, 0)}`
-      return `${header}\n\n${line} Chưa có kết quả đọc cho yêu cầu này.`
+      if (reason === "RECITATION") return `${header}\n\n${line} The page content follows.${pageChunk(body, 0)}`
+      return `${header}\n\n${line} There is no reading result for this request.`
     }
     const text = got.text.trim()
-    if (!text) return withPage(header, body, `không trả lời${got.finishReason ? `, finishReason=${got.finishReason}` : ""}`)
-    if (got.finishReason === "length") return withPage(header, body, "câu trả lời bị cắt (finishReason=length)", text)
+    if (!text) return withPage(header, body, `no answer${got.finishReason ? `, finishReason=${got.finishReason}` : ""}`)
+    if (got.finishReason === "length") return withPage(header, body, "the answer was cut (finishReason=length)", text)
     return `${header}\n\n${text}`
   }
   return `${header}${pageChunk(body, input.start_char)}`
@@ -170,19 +170,19 @@ export async function runFetch(input: WebFetchInput, signal: AbortSignal, deps: 
  * start_char hint would be wrong).
  */
 function withPage(header: string, body: string, why: string, partial?: string): string {
-  const note = `Ghi chú: model phụ không đọc xong trang (${why}); dưới đây là nội dung trang, đọc tiếp bằng start_char.`
+  const note = `Note: the page-reading model did not finish (${why}); the page content follows, continue with start_char.`
   const size = Math.max(PAGE_MIN, PAGE - (partial?.length ?? 0))
-  return `${header}\n${note}${partial ? `\n\nTrả lời dở của model phụ:\n${partial}` : ""}${pageChunk(body, 0, size)}`
+  return `${header}\n${note}${partial ? `\n\nThe page-reading model's partial answer:\n${partial}` : ""}${pageChunk(body, 0, size)}`
 }
 
 /** `body` from `start_char`, one page at a time, with how to read on. */
 function pageChunk(body: string, startChar: number | undefined, size = PAGE): string {
   const start = Math.max(0, startChar ?? 0)
-  if (start >= body.length && body.length > 0) return `\n\n(start_char ${start} vượt quá độ dài ${body.length} ký tự.)`
+  if (start >= body.length && body.length > 0) return `\n\n(start_char ${start} is past the length of ${body.length} characters.)`
   const chunk = body.slice(start, start + size)
   const rest = body.length - (start + chunk.length)
-  const more = rest > 0 ? `\n\n(còn ${rest} ký tự; gọi lại web_fetch với start_char=${start + chunk.length}, hoặc dùng prompt để hỏi đúng phần cần)` : ""
-  return `${start > 0 ? `\n(từ ký tự ${start})` : ""}\n\n${chunk || "(trang không có nội dung chữ)"}${more}`
+  const more = rest > 0 ? `\n\n(${rest} characters left; call web_fetch again with start_char=${start + chunk.length}, or use prompt to ask for the part you need)` : ""
+  return `${start > 0 ? `\n(from character ${start})` : ""}\n\n${chunk || "(the page has no text content)"}${more}`
 }
 
 const hostOf = (raw: string) => {
@@ -197,11 +197,11 @@ export function webFetchTool(deps: FetchDeps = {}): ToolDef<WebFetchInput> {
   return {
     name: "web_fetch",
     description:
-      "Đọc một URL công khai (HTML thành markdown, PDF lấy chữ). Dùng khi cần nội dung một trang hay báo cáo cụ thể. Không dùng để tìm kiếm (dùng web_search); không đọc được trang cần đăng nhập hay chỉ chạy JavaScript. " +
-      "Trang dài: truyền prompt để chỉ nhận phần cần, hoặc đọc tiếp bằng start_char.",
+      "Reads a public URL (HTML as markdown, text from PDFs). Use when you need the content of a specific page or report. Not for searching (use web_search); cannot read pages that need a login or run only in JavaScript. " +
+      "Long page: pass prompt to get only the part you need, or continue with start_char.",
     input: z.object({
       url: z.string().min(8),
-      prompt: z.string().min(3).max(1000).optional().describe("Câu hỏi cần trả lời từ trang"),
+      prompt: z.string().min(3).max(1000).optional().describe("The question to answer from the page"),
       start_char: z.number().int().min(0).optional(),
     }),
     readOnly: true,

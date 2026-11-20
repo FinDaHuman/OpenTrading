@@ -498,14 +498,14 @@ export const mathNearMiss = (command: string, shell: Pick<ShellInfo, "kind">): b
 /** What to tell the model about its command, before the accepted form (mathHint). */
 export function rewriteAdvice(miss: ComputeMiss, shell: Pick<ShellInfo, "kind">): string {
   const ps = shell.kind === "pwsh" || shell.kind === "powershell"
-  if (miss === "series") return "Lệnh dùng mảng hoặc vòng lặp. Viết thẳng từng số của chuỗi vào biểu thức (trung bình là (a+b+c)/3) và gán mỗi bước trung gian vào một biến."
-  if (miss === "interpreter") return `Lệnh dùng Python hoặc Node. Viết lại phép tính đó bằng ${ps ? "biểu thức PowerShell" : "awk"} theo dạng dưới đây.`
+  if (miss === "series") return "The command uses arrays or loops. Write each number of the series into the expression (an average is (a+b+c)/3) and assign each intermediate step to a variable."
+  if (miss === "interpreter") return `The command uses Python or Node. Rewrite that calculation as ${ps ? "a PowerShell expression" : "awk"} in the form below.`
   return ""
 }
 
 /** The arithmetic form for this machine's shell, for the tool description. */
 export function mathHint(shell: Pick<ShellInfo, "kind">): string {
   return shell.kind === "pwsh" || shell.kind === "powershell"
-    ? "Tính số: lệnh chỉ gồm phép tính, ví dụ `$g = 128.4/112 - 1; $g*100; [math]::Pow(1 + $g, 3)` (mỗi câu lệnh cách nhau bằng ; hoặc xuống dòng; biến $ten phải gán trước khi dùng; biểu thức trần in ra giá trị; hàm chỉ [math]::Round/Abs/Sqrt/Pow/Log/Log10/Exp/Max/Min/Floor/Ceiling/Truncate; không mảng, không vòng lặp: chuỗi số thì viết thẳng (a+b+c)/3) chạy ngay, không cần người dùng duyệt. Giữ đủ chữ số ở bước trung gian, chỉ làm tròn ở kết quả cuối."
-    : "Tính số: lệnh dạng `awk 'BEGIN{ g = 128.4/112 - 1; printf \"%.15g %.15g\\n\", g*100, (1+g)^3 }'` (mỗi câu lệnh cách nhau bằng ; hoặc xuống dòng; biến phải gán trước khi dùng; in bằng print hoặc printf; hàm chỉ sqrt/log/exp/int; so sánh và ?: đặt trong ngoặc; không mảng, split hay vòng lặp: chuỗi số thì viết thẳng (a+b+c)/3) chạy ngay, không cần người dùng duyệt. Giữ đủ chữ số ở bước trung gian, chỉ làm tròn ở kết quả cuối."
+    ? "Numbers: a command made only of arithmetic, e.g. `$g = 128.4/112 - 1; $g*100; [math]::Pow(1 + $g, 3)` (statements separated by ; or newlines; a $name must be assigned before use; a bare expression prints its value; functions only [math]::Round/Abs/Sqrt/Pow/Log/Log10/Exp/Max/Min/Floor/Ceiling/Truncate; no arrays, no loops: write a series out, (a+b+c)/3) runs at once, with no approval from the user. Keep all digits in intermediate steps; round only the final result."
+    : "Numbers: a command of the form `awk 'BEGIN{ g = 128.4/112 - 1; printf \"%.15g %.15g\\n\", g*100, (1+g)^3 }'` (statements separated by ; or newlines; variables must be assigned before use; print with print or printf; functions only sqrt/log/exp/int; put comparisons and ?: in parentheses; no arrays, split or loops: write a series out, (a+b+c)/3) runs at once, with no approval from the user. Keep all digits in intermediate steps; round only the final result."
 }

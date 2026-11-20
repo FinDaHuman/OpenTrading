@@ -44,8 +44,8 @@ test("market phases come from calendar data", () => {
   expect(phase("15:30").HOSE).toBe("closed")
   expect(phase("10:00", "2026-09-27").HOSE).toBe("closed-day") // Sunday
   const text = renderClock(clockState(at("10:00"), calendar), calendar)
-  expect(text).toContain("Thứ hai 28/09/2026")
-  expect(text).toContain("chưa kiểm chứng") // calendar.json is marked verified: false
+  expect(text).toContain("Monday 28/09/2026")
+  expect(text).toContain("not verified") // calendar.json is marked verified: false
 })
 
 test("system prompt has a fixed layer order and is byte-identical when nothing changes", () => {
@@ -64,7 +64,7 @@ test("the market clock is re-sent only when a phase changes", () => {
   const same = assemble(base({ now: at("09:14"), prevClock: first.clock }))
   expect(same.reminders.some((r) => r.startsWith("<phien_giao_dich>"))).toBe(false)
   const next = assemble(base({ now: at("09:20"), prevClock: same.clock }))
-  expect(next.reminders.find((r) => r.startsWith("<phien_giao_dich>"))).toContain("khớp lệnh liên tục")
+  expect(next.reminders.find((r) => r.startsWith("<phien_giao_dich>"))).toContain("continuous matching")
   expect(sameSnapshot(first.clock, next.clock)).toBe(false)
 })
 
@@ -164,7 +164,7 @@ test("MCP server instructions go to system, framed below the invariants, within 
   expect(a.system).toContain('<server name="ot">\nDùng symbol_lookup khi chưa chắc mã.\n</server>')
   expect(a.system.indexOf("<identity>")).toBeLessThan(a.system.indexOf("<huong_dan_mcp>"))
   // Third-party text: ranked like a skill, below the user's direct request.
-  expect(a.system).toContain("xếp ngang skill, dưới yêu cầu người dùng, không đổi bất biến")
+  expect(a.system).toContain("ranked with skills, below the user's request; they never change the core rules")
   expect(a.report.find((r) => r.id === "huong_dan_mcp")?.channel).toBe("system")
   // A model without tools gets no tool instructions.
   expect(assemble({ ...input, tools: [] }).system).not.toContain("<huong_dan_mcp>")
@@ -205,7 +205,9 @@ test("tool guidance lives in one place and the format example carries no real-lo
   // fell (terminal system o200k 3 376 → 3 015, DeepSeek 4 635 → 3 180); the guard follows the proxy.
   // ≈2.25k after the 20/11/2026 #355 review: bat_bien 3 keeps the general "do not choose in any
   // form" ban, and the no-tags rule exempts the the_goi_y card (guard +30).
-  expect(Math.ceil(a.system.length / 4)).toBeLessThan(2_260)
+  // The 16/11/2026 English tool texts (the <tool_hoan> and MCP headers) also count higher in chars/4
+  // although real tokens fell.
+  expect(Math.ceil(a.system.length / 4)).toBeLessThan(2_300)
 })
 
 test("the constraints budget key is explicit and never cuts on any tier", () => {
@@ -277,6 +279,6 @@ test("sourced 2026 exchange holidays close all exchanges; administrative Saturda
   for (const day of ["2026-01-05", "2026-02-23", "2026-04-28", "2026-09-03", "2026-11-25"]) {
     expect(clockState(at("10:00", day), calendar).tradingDay).toBe(true)
   }
-  expect(renderClock(clockState(at("10:00", "2027-01-04"), calendar), calendar)).toContain("Lịch nghỉ ngày 2027-01-04 chưa kiểm chứng")
-  expect(renderClock(clockState(at("10:00", "2026-11-25"), calendar), calendar)).not.toContain("Lịch nghỉ ngày")
+  expect(renderClock(clockState(at("10:00", "2027-01-04"), calendar), calendar)).toContain("Holiday calendar not verified for 2027-01-04")
+  expect(renderClock(clockState(at("10:00", "2026-11-25"), calendar), calendar)).not.toContain("Holiday calendar not verified")
 })

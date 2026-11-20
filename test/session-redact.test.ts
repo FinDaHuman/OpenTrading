@@ -154,7 +154,7 @@ describe("session_get (the main agent's tool for old sessions)", () => {
     const withStore = String(await get(createRedactionCheck(stores.file())))
     const noStore = String(await get(createRedactionCheck(path.join(home, "khong-co.db"))))
     for (const out of [withStore, noStore]) {
-      expect(out).toContain(`Phiên ${s.id}`)
+      expect(out).toContain(`Session ${s.id}`)
       expect(out).not.toContain("DANHDAU-7")
     }
     expect((await readFile(fileOf(s))).equals(before)).toBe(true)

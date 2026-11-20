@@ -185,9 +185,9 @@ test("--profile machine --turn-requests: the request carries the machine prompt 
   expect(system).not.toContain("<style>")
   expect(system).toContain("YYYY-MM-DD")
   const shell = (first.tools as { function: { name: string; description: string } }[] | undefined)?.find((t) => t.function.name === "shell")
-  expect(shell?.function.description).toStartWith("Máy tính")
+  expect(shell?.function.description).toStartWith("Calculator")
   expect(seen.at(-1)!.body!.tool_choice).toBe("none")
   expect([0, 1]).toContain(code)
   // The caller's own runtime gets its full shell back after the turn.
-  expect(rt.registry.get("shell")?.description).not.toStartWith("Máy tính")
+  expect(rt.registry.get("shell")?.description).not.toStartWith("Calculator")
 })

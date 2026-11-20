@@ -94,7 +94,7 @@ test("finished tool calls do not leave abort listeners on the turn's signal", as
 test("current_time reports Vietnam time", async () => {
   const tool = currentTimeTool(() => new Date("2026-09-28T02:30:00Z"))
   const out = (await tool.execute({}, ctx())) as string
-  expect(out).toContain("Thứ hai, 28/09/2026 09:30:00")
+  expect(out).toContain("Monday, 28/09/2026 09:30:00")
   expect(out).toContain("+07:00")
 })
 
@@ -105,8 +105,8 @@ test("load_skill returns a body, refuses manual skills and unknown names", async
     { ...base, name: "hand-only", activation: "manual" },
   ])
   expect(await tool.execute({ name: "devil-advocate" }, ctx())).toContain("BODY")
-  await expect(tool.execute({ name: "hand-only" }, ctx())).rejects.toThrow("chỉ người dùng bật")
-  await expect(tool.execute({ name: "x" }, ctx())).rejects.toThrow("Không có skill")
+  await expect(tool.execute({ name: "hand-only" }, ctx())).rejects.toThrow("can only be switched on by the user")
+  await expect(tool.execute({ name: "x" }, ctx())).rejects.toThrow("No skill")
 })
 
 test("load_skill loads the deferred tools a skill requires (first line, for the agent loop)", async () => {
@@ -122,7 +122,7 @@ test("load_skill loads the deferred tools a skill requires (first line, for the 
   const out = (await tool.execute({ name: "prices" }, ctx())) as string
   expect(out.split("\n")[0]).toBe("Đã nạp tool: mcp__ot__vn_quote_history, mcp__ot__vn_index_ohlcv")
   expect(out).toContain("BODY")
-  expect(((await tool.execute({ name: "plain" }, ctx())) as string).startsWith("Thư mục skill")).toBe(true)
+  expect(((await tool.execute({ name: "plain" }, ctx())) as string).startsWith("Skill folder")).toBe(true)
 })
 
 test("registry builds a sorted AI SDK tool set and unregisters by prefix", () => {

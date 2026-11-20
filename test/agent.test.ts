@@ -1163,7 +1163,7 @@ test("<quyen_tep> names the session's temp folder to an agent with only shell, a
   r.register(shellTool(workspace))
   const userOf = (i: number) => JSON.stringify(bodies[i]!.messages.filter((m) => m.role === "user").at(-1))
   const first = done(await collect(runAgent({ history: [], input: "tính thử", skills: [], registry: r })))
-  expect(userOf(0)).toContain("Thư mục tạm của phiên")
+  expect(userOf(0)).toContain("Session temp folder")
   expect(userOf(0)).toContain(JSON.stringify(workspace.scratch.dir()).slice(1, -1))
   workspace.scratch.attach("phien-2")
   bodies.length = 0
@@ -1185,7 +1185,7 @@ test("no <quyen_tep> for an agent whose shell only computes numbers (read-only s
   await collect(runAgent({ history: [], input: "tính thử", skills: [], registry: r }))
   const user = JSON.stringify(bodies[0]!.messages.filter((m) => m.role === "user").at(-1))
   expect(user).not.toContain("quyen_tep")
-  expect(JSON.stringify(bodies[0]!.tools ?? bodies[0])).toContain("Máy tính")
+  expect(JSON.stringify(bodies[0]!.tools ?? bodies[0])).toContain("Calculator")
 })
 
 test("read-only sends write_file/edit_file by name only; ask mode declares them; <quyen_tep> says the mode", async () => {
@@ -1211,13 +1211,13 @@ test("read-only sends write_file/edit_file by name only; ask mode declares them;
   const first = done(await collect(runAgent({ history: [], input: "lập kế hoạch", skills: [], registry: r })))
   expect(toolNames(bodies[0])).not.toContain("write_file")
   expect(systemText(bodies[0])).toContain("write_file")
-  expect(userOf(0)).toContain("chỉ đọc")
+  expect(userOf(0)).toContain("read-only")
   r.gate.setMode("ask")
   bodies.length = 0
   await collect(runAgent({ history: first.messages, input: "ghi file đi", skills: [], registry: r, prevClock: first.clock }))
   expect(toolNames(bodies[0])).toContain("write_file")
   expect(toolNames(bodies[0])).toContain("edit_file")
-  expect(userOf(0)).toContain("sửa có hỏi")
+  expect(userOf(0)).toContain("ask before changes")
 })
 
 // --- Operand note (loop/operands.ts, issue #278 N2) ---
