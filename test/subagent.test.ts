@@ -832,7 +832,7 @@ test("#328: with fewer than 3 requests left for subagents, spawn_subagent refuse
   const events = await collect(runAgent({ history: [], input: "định giá FPT", skills: [], registry, maxRequests: 4 }))
   const [end] = ends(events)
   expect(end!.ok).toBe(false)
-  expect(end!.output).toContain("Not started: 1 model requests are left for subagents")
+  expect(end!.output).toContain("Not started: 1 model requests are left for another subagent")
   expect(childBodies).toHaveLength(0)
   expect(events.some((e) => e.type === "text-delta" && e.text.includes("Đã tổng hợp."))).toBe(true)
 })
@@ -855,4 +855,16 @@ test("#328: a child never spends the parent's reserve: it closes on its own summ
   // The parent's answer still went out after the child.
   expect(events.some((e) => e.type === "text-delta" && e.text.includes("Đã tổng hợp."))).toBe(true)
   expect(done(events).unanswered).toBeUndefined()
+})
+
+test("#328: parallel spawns share the room: each running child keeps 3 requests of it, so the second of two is refused", async () => {
+  const { registry } = setup()
+  parentCalls = [spawn("Định giá FPT"), spawn("Định giá HPG")]
+  // 8 requests: after the parent's first step 7 are left, 2 of them its reserve: room 5 = one child of 3, not two.
+  const events = await collect(runAgent({ history: [], input: "so sánh FPT và HPG", skills: [], registry, maxRequests: 8 }))
+  const results = ends(events)
+  expect(results).toHaveLength(2)
+  expect(results.filter((e) => e.ok)).toHaveLength(1)
+  expect(results.find((e) => !e.ok)!.output).toContain("Not started: 2 model requests are left for another subagent")
+  expect(parentBodies.length + childBodies.length).toBeLessThanOrEqual(8)
 })

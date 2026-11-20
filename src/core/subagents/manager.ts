@@ -288,10 +288,14 @@ export class SubagentManager {
   start(spec: StartSpec): SubagentRun {
     // A child shares the turn's request budget but not the reserve for the parent's answer (#328):
     // with too little left it would end before doing anything, so the main agent answers itself.
+    // Children still running or waiting share that room: each keeps SUBAGENT_MIN_REQUESTS of it, so a
+    // batch of parallel spawns cannot all pass and then starve each other.
     const room = activeBudget()?.childRoom()
-    if (room !== undefined && room < SUBAGENT_MIN_REQUESTS) {
+    const others = [...this.runs.values()].filter((r) => r.status === "running" || r.status === "queued").length
+    const left = room === undefined ? undefined : room - others * SUBAGENT_MIN_REQUESTS
+    if (left !== undefined && left < SUBAGENT_MIN_REQUESTS) {
       throw new Error(
-        `Not started: ${Math.max(0, room)} model requests are left for subagents in this turn's budget (at least ${SUBAGENT_MIN_REQUESTS} needed). Do the step yourself, or answer with the data you already have.`,
+        `Not started: ${Math.max(0, left)} model requests are left for another subagent in this turn's budget (at least ${SUBAGENT_MIN_REQUESTS} needed). Do the step yourself, or answer with the data you already have.`,
       )
     }
     const id = newId()
