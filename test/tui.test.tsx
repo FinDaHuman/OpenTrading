@@ -3279,7 +3279,7 @@ test("/agents lists the subagent types by source; ctrl+r picks up a new file; en
   // is asserted on the spawn description (full list, no pagination).
   show(frame)
   expect(runtime.registry.get("spawn_subagent")!.description).toContain("- tra-cuu: Use for a quick lookup")
-  expect(runtime.registry.get("spawn_subagent")!.description).toContain("- rieng-tui: Loại riêng để thử (Tool: current_time)")
+  expect(runtime.registry.get("spawn_subagent")!.description).toContain("- rieng-tui: Loại riêng để thử (Tools: current_time)")
   await setup.mockInput.typeText("rieng")
   setup.mockInput.pressEnter()
   frame = await setup.waitForFrame((f) => f.includes("Subagent · rieng-tui") && f.includes("Tool hiện có (1): current_time"), { maxPasses: 60 })
