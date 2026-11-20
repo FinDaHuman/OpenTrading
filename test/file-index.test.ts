@@ -113,6 +113,13 @@ test("#345: @ finds files in /add-dir folders too, by absolute path; a root adde
   // Same build, same array: no remapping on every key press.
   expect(index.current()).not.toBe(index.current()) // concatenated per call…
   expect(index.current()[1]).toBe(index.current()[1]) // …but extra entries are cached
+  // Its folder lists by its absolute path, as typed after @ (either slash).
+  const abs = extra.split(path.sep).join("/")
+  expect(matchPaths(index.current(), `${abs}/`, 10).map((p) => p.rel)).toEqual([`${abs}/du-lieu-fpt.csv`])
+  expect(matchPaths(index.current(), `${extra}${path.sep}`, 10).map((p) => p.rel)).toEqual([`${abs}/du-lieu-fpt.csv`])
+  // A query matches what is under the root, never the root's own path (every file there would).
+  expect(matchPaths(index.current(), "ot-idx-extra", 10)).toEqual([])
+  expect(matchPaths(index.current(), "src/", 10)).toEqual([])
   roots.pop()
   expect(matchPaths(index.current(), "fpt", 10)).toEqual([])
   await rm(main, { recursive: true, force: true })

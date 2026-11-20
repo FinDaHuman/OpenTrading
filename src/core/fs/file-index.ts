@@ -25,6 +25,11 @@ export interface IndexedPath {
   /** Lowercased, accents removed: what queries match against. */
   folded: string
   base: string
+  /**
+   * An /add-dir root's path is listed by its absolute path (#345): this many characters of `folded`
+   * are that root, which a typed query must not match (every file under C:/Users/… would).
+   */
+  rootLength?: number
 }
 
 async function gitFiles(root: string): Promise<string[] | undefined> {
@@ -101,8 +106,8 @@ export function matchPaths(paths: readonly IndexedPath[], query: string, limit =
     let score: number
     if (p.base.startsWith(q)) score = 4000
     else if (p.base.includes(q)) score = 3000
-    else if (p.folded.includes(q)) score = 2000
-    else if (subsequence(p.folded, q)) score = 1000
+    else if (own(p).includes(q)) score = 2000
+    else if (subsequence(own(p), q)) score = 1000
     else continue
     scored.push({ p, score: score - Math.min(999, p.rel.length) })
   }
@@ -111,6 +116,9 @@ export function matchPaths(paths: readonly IndexedPath[], query: string, limit =
     .slice(0, limit)
     .map((s) => s.p)
 }
+
+/** The part of a path a query matches: under its root. */
+const own = (p: IndexedPath) => (p.rootLength ? p.folded.slice(p.rootLength) : p.folded)
 
 function subsequence(text: string, query: string) {
   let i = 0
@@ -213,7 +221,9 @@ export class WorkspaceIndex {
     let out = this.mapped.get(paths)
     if (!out) {
       const root = index.root.split(path.sep).join("/").replace(/\/+$/, "")
-      out = paths.map((p) => ({ ...p, rel: `${root}/${p.rel}` }))
+      // Folded with its root, so `@D:/data/` lists that folder; queries skip the root (rootLength).
+      const prefix = fold(`${root}/`)
+      out = paths.map((p) => ({ ...p, rel: `${root}/${p.rel}`, folded: prefix + p.folded, rootLength: prefix.length }))
       this.mapped.set(paths, out)
     }
     return out
