@@ -123,7 +123,7 @@ test("ve-bieu-do references đọc được qua load_skill file=", async () => {
     const body = await readSkillFile(viz, f)
     expect(body.length).toBeGreaterThan(100)
   }
-  await expect(readSkillFile(viz, "../SKILL.md")).rejects.toThrow("nằm ngoài thư mục")
+  await expect(readSkillFile(viz, "../SKILL.md")).rejects.toThrow("is outside the folder")
 })
 
 test("every supporting file a bundled skill names exists in its directory", async () => {
@@ -142,9 +142,9 @@ test("supporting files are readable only inside the skill directory", async () =
   await writeFile(path.join(dir, "secret.txt"), "không được đọc")
   const bank = (await loadSkills([{ dir, source: "user" }])).skills[0]!
   expect(await readSkillFile(bank, "kpi.md")).toBe("NIM, CASA")
-  await expect(readSkillFile(bank, "../secret.txt")).rejects.toThrow("nằm ngoài thư mục")
-  await expect(readSkillFile(bank, path.join(dir, "secret.txt"))).rejects.toThrow("nằm ngoài thư mục")
-  await expect(readSkillFile(bank, "missing.md")).rejects.toThrow("Không có file")
+  await expect(readSkillFile(bank, "../secret.txt")).rejects.toThrow("is outside the folder")
+  await expect(readSkillFile(bank, path.join(dir, "secret.txt"))).rejects.toThrow("is outside the folder")
+  await expect(readSkillFile(bank, "missing.md")).rejects.toThrow("No file")
 })
 
 test("catalog lists auto skills only and stays within budget", () => {

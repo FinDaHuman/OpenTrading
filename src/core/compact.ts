@@ -3,7 +3,7 @@ import { estimateTokens } from "./prompt/budget"
 import { loadedTools } from "./tools/loaded"
 import { compactCarry, compactPair, isCompactMarker } from "./compact-marker"
 import { SOURCE_FAILED_PREFIX } from "./tools/outcome"
-import { LOADED_PREFIX } from "./tools/search"
+import { loadedPrefixOf } from "./tools/search"
 import { currentTodos } from "./tools/todos"
 import { attachmentAttrs, attachmentKey, attachmentsOf, clearedAttachment, withoutOrphanStubs } from "./mentions"
 
@@ -278,7 +278,7 @@ export function pruneToolResults(messages: readonly ModelMessage[], keepTurns = 
         // a subagent's metadata block keeps its agent_id reachable for send_message.
         const meta = subagentMeta(p.output)
         const failed = p.output?.type === "error-text" || p.output?.type === "error-json"
-        const value = head?.startsWith(LOADED_PREFIX)
+        const value = loadedPrefixOf(head)
           ? `${head}\n${PRUNED_TEXT}`
           : meta
             ? `${PRUNED_TEXT}\n${meta}`

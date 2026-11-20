@@ -1,6 +1,6 @@
 import type { ModelMessage } from "ai"
 import { REMINDER_TAG } from "./reminder-tag"
-import { LOADED_PREFIX } from "./tools/search"
+import { LOADED_PREFIX, loadedPrefixOf } from "./tools/search"
 
 /**
  * The user message that opens a compacted history. Besides telling the model what happened,
@@ -40,10 +40,10 @@ export function compactCarry(m: ModelMessage): { tools: string[]; skills: string
         .map((s) => s.trim())
         .filter(Boolean)
     : []
-  const line = text.split("\n").find((l) => l.startsWith(LOADED_PREFIX))
+  const line = text.split("\n").find((l) => loadedPrefixOf(l))
   const tools = line
     ? line
-        .slice(LOADED_PREFIX.length)
+        .slice(loadedPrefixOf(line)!.length)
         .split(",")
         .map((s) => s.trim())
         .filter(Boolean)

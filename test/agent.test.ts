@@ -611,7 +611,7 @@ test("tool search: many MCP tools go out by name only; a loaded tool is callable
   expect(systemText(bodies[0])).toContain("big (130): t000, t001")
   expect(events.some((e) => e.type === "notice" && e.text.includes("Đang hoãn 130 tool (130 MCP của big)"))).toBe(true)
   // tool_search loaded two tools; the very next step declares exactly those.
-  expect(ends(events)[0]!.output.split("\n")[0]).toBe("Đã nạp tool: mcp__big__t001, mcp__big__t002")
+  expect(ends(events)[0]!.output.split("\n")[0]).toBe("Tools loaded: mcp__big__t001, mcp__big__t002")
   expect(toolNames(bodies[1])).toEqual(expect.arrayContaining(["mcp__big__t001", "mcp__big__t002"]))
   expect(toolNames(bodies[1])).not.toContain("mcp__big__t003")
   expect(ends(events)[1]).toMatchObject({ ok: true, output: 'mcp__big__t001 {"symbol":"FPT"}' })
@@ -630,7 +630,7 @@ test("tool search: keyword search finds tools by description, ignoring diacritic
   const r = bigRegistry(60)
   script = [{ tool: "tool_search", args: { query: "lich su gia" } }]
   const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: r }))
-  expect(ends(events)[0]!.output.split("\n")[0]).toBe("Đã nạp tool: mcp__big__t007")
+  expect(ends(events)[0]!.output.split("\n")[0]).toBe("Tools loaded: mcp__big__t007")
   expect(ends(events)[0]!.output).toContain("- symbol (string)")
   expect(toolNames(bodies[1])).toContain("mcp__big__t007")
 })
@@ -639,7 +639,7 @@ test("tool search: a deferred tool written with a :: separator loads like its re
   const r = bigRegistry(60)
   script = [{ tool: "mcp__big::t005", args: { symbol: "HPG" } }]
   const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: r }))
-  expect(ends(events)[0]!.output.startsWith("Đã nạp tool: mcp__big__t005\n")).toBe(true)
+  expect(ends(events)[0]!.output.startsWith("Tools loaded: mcp__big__t005\n")).toBe(true)
   expect(toolNames(bodies[1])).toContain("mcp__big__t005")
 })
 
@@ -651,7 +651,7 @@ test("tool search: calling a deferred tool before loading it loads it — the er
   const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: r }))
   const end = ends(events)[0]!
   expect(end.ok).toBe(false)
-  expect(end.output.startsWith("Đã nạp tool: mcp__big__t005\nTool mcp__big__t005 was not in this step")).toBe(true)
+  expect(end.output.startsWith("Tools loaded: mcp__big__t005\nTool mcp__big__t005 was not in this step")).toBe(true)
   expect(end.output).toContain("## mcp__big__t005")
   expect(end.output).not.toContain("AI_")
   expect(toolNames(bodies[1])).toContain("mcp__big__t005")
@@ -694,7 +694,7 @@ test("a call by a folded-away name whose new tool is deferred loads it and names
   const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: r }))
   const end = ends(events)[0]!
   expect(end.ok).toBe(false)
-  expect(end.output.startsWith("Đã nạp tool: chart_render\n")).toBe(true)
+  expect(end.output.startsWith("Tools loaded: chart_render\n")).toBe(true)
   expect(end.output).toContain('kind="compare"')
   expect(toolNames(bodies[1])).toContain("chart_render")
 })
@@ -1003,7 +1003,7 @@ test("a deferred tool with wrong arguments, called before loading, is loaded (it
   r.register({ name: "mcp__big__strict", source: "mcp:big", deferrable: true, description: "x", input: z.object({ n: z.number() }), readOnly: true, execute: async () => "ok" })
   script = [{ tool: "mcp__big__strict", args: { n: "x" } }]
   const events = await collect(runAgent({ history: [], input: "x", skills: [], registry: r }))
-  expect(ends(events)[0]!.output.startsWith("Đã nạp tool: mcp__big__strict")).toBe(true)
+  expect(ends(events)[0]!.output.startsWith("Tools loaded: mcp__big__strict")).toBe(true)
 })
 
 test("a loaded tool cut by the per-request cap is reported as such, not as 'loaded, call again' (no loop)", async () => {

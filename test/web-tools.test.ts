@@ -31,8 +31,8 @@ const html = (body: string, title = "Trang") =>
 test("URLs: http becomes https; credentials, other schemes and bare hosts are refused", () => {
   expect(checkUrl("http://cafef.vn/a").href).toBe("https://cafef.vn/a")
   expect(() => checkUrl("ftp://x.vn/y")).toThrow("http")
-  expect(() => checkUrl("https://user:pw@cafef.vn/")).toThrow("tên đăng nhập")
-  expect(() => checkUrl("https://intranet/")).toThrow("Tên miền")
+  expect(() => checkUrl("https://user:pw@cafef.vn/")).toThrow("username or password")
+  expect(() => checkUrl("https://intranet/")).toThrow("Invalid domain")
   expect(() => checkUrl(`https://a.vn/${"x".repeat(2100)}`)).toThrow("2000")
 })
 
@@ -48,7 +48,7 @@ test("private addresses, including CGNAT and v4-mapped v6; look-alike public nam
 test("a public name resolving to a private IP is refused before any request", async () => {
   const sent: string[] = []
   const f = (async (u: URL) => (sent.push(u.href), new Response("x"))) as unknown as typeof fetch
-  await expect(fetchPublic(new URL("https://rebind.example/"), signal(), { fetch: f, resolve: async () => ["10.0.0.5"] })).rejects.toThrow("nội bộ")
+  await expect(fetchPublic(new URL("https://rebind.example/"), signal(), { fetch: f, resolve: async () => ["10.0.0.5"] })).rejects.toThrow("local address")
   expect(sent).toEqual([])
 })
 
