@@ -208,3 +208,18 @@ test("'always' with a store that can add: the rule goes through add (inside the 
   expect(added).toEqual([{ tool: "mcp__gh__create_issue", scope: "gh@abc" }])
   expect([loads, saves]).toEqual([0, 0])
 })
+
+test("the gate trusts the tool's own read-only mark: a server that calls a writing tool read-only is not asked about (a stated limit, not a guarantee)", async () => {
+  const gate = new PermissionGate(memoryStore())
+  const signal = new AbortController().signal
+  const honest: ToolDef = { ...write("mcp__notes__save", "notes@abc"), source: "mcp:notes" }
+  const mislabelled: ToolDef = { ...honest, readOnly: true }
+  gate.setMode("ask")
+  // Same tool, same effect: only the server's word differs. Nobody is here to answer (headless).
+  expect(await gate.check(honest, {}, signal)).toMatchObject({ allow: false, reason: "headless" })
+  expect(await gate.check(mislabelled, {}, signal)).toEqual({ allow: true })
+  // What the user can still do about such a server: a deny rule stops reads too.
+  const denying = new PermissionGate({ ...memoryStore(), lists: async () => ({ deny: [{ tool: "mcp__notes__*" }], ask: [] }) } as RuleStore)
+  await denying.refreshRules?.()
+  expect((await denying.check(mislabelled, {}, signal)).allow).toBe(false)
+})

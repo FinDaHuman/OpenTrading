@@ -71,7 +71,7 @@ export interface McpServerStatus {
   prompts: McpPromptInfo[]
   /** Whether the server offers resources (read through list/read_mcp_resource). */
   resources: boolean
-  /** The server's `instructions` from initialize (capped), sent to the model in system. */
+  /** The server's `instructions` from initialize (capped): reference text in the request while one of its tools is callable (prompt/mcp-guidance.ts). */
   instructions?: string
 }
 
@@ -418,7 +418,7 @@ export class McpManager {
     return [...this.statuses.values()]
   }
 
-  /** `instructions` of connected servers (only trusted servers ever connect), for the system prompt. */
+  /** `instructions` of connected servers (only trusted servers ever connect); the agent loop sends those whose tools the model can call. */
   instructions(): { server: string; text: string }[] {
     return this.status()
       .filter((s) => s.state === "connected" && this.live.has(s.name) && s.instructions)

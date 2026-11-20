@@ -25,7 +25,7 @@ import type { Ablations } from "./ablation"
 import { bindLenient, bindTurn, checkFits, type Bound, type Waiver } from "./memory/binding/bind"
 import type { ConstraintReader } from "./memory/binding/constraints"
 import type { RedactionCheck } from "./memory/redaction/check"
-import { REMINDER_CAP_MARK, REMINDER_TAG } from "./reminder-tag"
+import { REMINDER_CAP_MARK, REMINDER_TAG, reminderBlock } from "./reminder-tag"
 import { redactHistory } from "./memory/redaction/redact"
 import { labelsOnly } from "./memory/notebook/labels-only"
 import { acceptCard } from "./memory/cards/check"
@@ -34,6 +34,7 @@ import { stripCardBlocks } from "./memory/cards/block"
 import type { CardOutcome } from "./memory/cards/types"
 import { typedText } from "./memory/notebook/topics"
 import { assemble, validatePromptDir, type Assembled } from "./prompt/assemble"
+import { renderMcpGuidance } from "./prompt/mcp-guidance"
 import { estimateTokens, tierOf, type Tier } from "./prompt/budget"
 import type { ClockSnapshot } from "./prompt/market-clock"
 import { languageModel } from "./providers"
@@ -452,7 +453,7 @@ export function userMessage(input: string, reminders: string[], images: RunOptio
   return {
     role: "user",
     content: [
-      ...(reminders.length > 0 ? [{ type: "text" as const, text: `<${REMINDER_TAG}>\n${reminders.join("\n\n")}\n</${REMINDER_TAG}>` }] : []),
+      ...(reminders.length > 0 ? [{ type: "text" as const, text: reminderBlock(reminders.join("\n\n")) }] : []),
       { type: "text" as const, text: input },
       ...attachments.map((text) => ({ type: "text" as const, text })),
       ...images.map((i) => ({ type: "file" as const, data: i.data, mediaType: i.mediaType })),
@@ -951,6 +952,19 @@ export function fileAccessNote(registry: TurnInput["registry"], mode: Parameters
   return [workspace.describe(present), filesLine, modeNote(mode, present, profile)].filter(Boolean).join("\n")
 }
 
+function serverGuidance(opts: Pick<RunOptions, "registry" | "serverInstructions">, names: readonly string[], tier: Tier) {
+  if (!opts.serverInstructions) return undefined
+  const sources = new Set(names.flatMap((name) => {
+    const source = opts.registry.get(name)?.source
+    return source?.startsWith("mcp:") ? [source] : []
+  }))
+  const guide = sources.size ? renderMcpGuidance(opts.serverInstructions(), sources, tier) : undefined
+  if (!guide) return undefined
+  // As it is sent: a reminder part, so the readers of a user's words skip it (visibleUserText).
+  const text = reminderBlock(guide.text)
+  return { text, tokens: estimateTokens(text), truncated: guide.truncated }
+}
+
 async function assembleFor(opts: TurnInput, target: Target | undefined, bound: Bound, extras: TurnExtras = {}) {
   const info = target?.provider.models[target.model]
   const supportsTools = info?.tool_call !== false
@@ -988,7 +1002,6 @@ async function assembleFor(opts: TurnInput, target: Target | undefined, bound: B
     // Every tool the policy defers, loaded or not: loading one must not change the system prompt.
     deferredTools: built && built.deferrable.length > 0 ? deferredByServer(opts.registry, built.deferrable) : undefined,
     declaredTools: built ? Object.keys(built.tools) : undefined,
-    mcpInstructions: opts.serverInstructions?.(),
     todos: currentTodos(opts.history ?? []),
     fileAccess: toolNames.some((t) => fileTool(opts.registry, t)) && opts.registry.workspace ? fileAccessNote(opts.registry, mode, opts.profile) : undefined,
     prevFileAccess: lastReminder(opts.history ?? [], "quyen_tep"),
@@ -1168,6 +1181,9 @@ export async function previewContext(opts: TurnInput) {
   }
   const bound = await bindLenient({ role: opts.role ?? "main", constraints: opts.constraints })
   const { assembled, tier, built } = await assembleFor(opts, target, bound)
+  // The tools the next request can call, deferred ones the history loaded included: what runAgent uses.
+  const guidance = serverGuidance(opts, activeFor(built, opts.history ?? []) ?? built?.names ?? [], tier)
+  if (guidance) assembled.report.push({ id: "huong_dan_mcp", layer: 7, channel: "context", tokens: guidance.tokens, truncated: guidance.truncated, dropped: false })
   const loaded = new Set(loadedTools(opts.history ?? []))
   return {
     report: assembled.report,
@@ -1314,6 +1330,7 @@ async function* runTurn(opts: RunOptions, budget?: RequestBudget): AsyncGenerato
   // Visible tools at the current step; deferred tools join once loaded (tool search).
   let active = activeFor(built, request)
   let loaded = loadedTools(request)
+  let guidanceTokens = 0
   // Steps used by earlier runs of this turn: a recovery run counts from 0 again, but the step
   // cap (and its forced summary) is for the whole turn.
   let stepsUsed = 0
@@ -1350,6 +1367,18 @@ async function* runTurn(opts: RunOptions, budget?: RequestBudget): AsyncGenerato
         }
         active = activeFor(built, messages)
         loaded = loadedTools(messages)
+        // Rebuilt from the host each step: discovery, skill preload and repaired calls all
+        // use the active tool set. The reminder marker keeps this out of the user's intent
+        // seen by auto approval, and the temporary part never reaches saved history.
+        // It changes only when a tool of another server becomes callable, the step the request's
+        // tool list changes too.
+        const guidance = serverGuidance(opts, active ?? built?.names ?? [], prepared.tier)
+        // What the model and the tools wrote, without the guide: the checks below read the
+        // conversation, and a server's text is not something the model read from a tool.
+        const said = messages
+        messages = withContext(messages, guidance?.text)
+        // No user message to carry it (nothing was added): nothing to count.
+        guidanceTokens = guidance && messages !== said ? guidance.tokens : 0
         const failures = turnFailures(messages)
         const stopped = failures.streak >= FAILURE_STREAK_STOP
         // A run that must end in its final tool ends there: with tools off it could not.
@@ -1372,7 +1401,7 @@ async function* runTurn(opts: RunOptions, budget?: RequestBudget): AsyncGenerato
               : undefined
           // Numbers typed into an arithmetic command that nothing read holds (loop/operands.ts): a
           // one-step note, on the same routes as the other nudges. The command already ran.
-          const operands = nudge && afterTool && !opts.disabled?.has("operand-note") ? untracedOperands(messages, isArithmetic, [bound.profile, bound.constraints, assembled.context].filter(Boolean).join("\n")) : []
+          const operands = nudge && afterTool && !opts.disabled?.has("operand-note") ? untracedOperands(said, isArithmetic, [bound.profile, bound.constraints, assembled.context].filter(Boolean).join("\n")) : []
           const tail = [base, added, operands.length > 0 ? operandNote(operands) : undefined].filter(Boolean).join("\n") || undefined
           const choice = stopped || rescueNow?.toolChoice === "none" || (rescueNow && !tail) ? { toolChoice: "none" as const } : {}
           return { ...(active ? { activeTools: active } : {}), ...choice, messages: tail ? withNudge(messages, tail) : messages }
@@ -1594,7 +1623,7 @@ async function* runTurn(opts: RunOptions, budget?: RequestBudget): AsyncGenerato
     const usage =
       tokens !== undefined
         ? { contextTokens: tokens + midTurnSaved, estimated: false, total: outcome.usage }
-        : { contextTokens: estimateRequest(system, [...request, ...messages], built?.tokens), estimated: true, total: outcome.usage }
+        : { contextTokens: estimateRequest(system, [...request, ...messages], (built?.tokens ?? 0) + guidanceTokens), estimated: true, total: outcome.usage }
     yield {
       type: "done",
       messages: [user, ...messages],
@@ -1637,7 +1666,7 @@ async function* runTurn(opts: RunOptions, budget?: RequestBudget): AsyncGenerato
     messages: [user, ...progress, ...closing],
     clock: assembled.clock,
     usage: {
-      contextTokens: estimateRequest(system, [...request, ...progress, ...closing], built?.tokens),
+      contextTokens: estimateRequest(system, [...request, ...progress, ...closing], (built?.tokens ?? 0) + guidanceTokens),
       estimated: true,
       total: outcome.usage,
     },
