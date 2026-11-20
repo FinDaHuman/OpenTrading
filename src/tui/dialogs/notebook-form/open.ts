@@ -3,6 +3,7 @@ import { stillApplyLine } from "../../../core/memory/binding/render"
 import type { NotebookCommand } from "../../../core/memory/notebook/commands"
 import { notebookAdmin } from "../../../core/memory/notebook/admin"
 import type { MemoryProvider } from "../../../core/memory/types"
+import type { CardDraft } from "../../../core/memory/cards/types"
 import { setState, type NotebookFormRequest } from "../../state"
 
 /**
@@ -67,4 +68,19 @@ export function showNotebookForm(request: NotebookFormRequest, back = false) {
 /** undefined: the form is open. A string: why it cannot open (nothing written, nothing opened). */
 export function openNotebookForm(memory: MemoryProvider, name: NotebookCommand, args: string): string | undefined {
   return openNotebookRequest(memory, requestFor(name, args), name)
+}
+
+/**
+ * A constraint or style card saved as its form would save it unchanged (config `memory.cardsAutoSave`,
+ * tui/cards.ts autoSaveCard). Only a card whose rule is itself the user's own words of the turn
+ * (`verbatim`, cards/check.ts): a rule the model wrote, even next to a valid quote, may carry text a web page
+ * or a tool planted, so it waits for the user in the form. A lesson or a notebook that cannot be written is
+ * not saved either. Lives here: only the notebook forms hold the write handle.
+ */
+export function saveCardNow(memory: MemoryProvider, card: CardDraft): { group: "constraint" | "style"; id: number } | undefined {
+  if (card.kind === "lesson" || !card.verbatim || !card.quote || !card.text) return undefined
+  const admin = notebookAdmin(memory)
+  if (!admin) return undefined
+  const result = admin.saveConstraint({ kind: card.kind, text: card.text }, undefined, { card: true })
+  return result.ok ? { group: card.kind, id: result.saved.id } : undefined
 }

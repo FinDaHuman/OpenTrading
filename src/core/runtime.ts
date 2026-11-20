@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises"
+import { exportResultsTo } from "./tools/refs"
 import path from "node:path"
 import { HookBus } from "./hooks"
 import { AskBroker } from "./ask"
@@ -16,8 +17,7 @@ import type { Skill } from "./skills/schema"
 import { currentTimeTool } from "./tools/builtin/current-time"
 import { readResultTool } from "./tools/builtin/read-result"
 import { loadSkillTool } from "./tools/builtin/load-skill"
-import { chartDepthTool, chartRenderTool } from "./tools/chart/render"
-import { chartCompareTool } from "./tools/chart/compare"
+import { chartRenderTool } from "./tools/chart/render"
 import { doctorLocalTool, sessionHistoryTools } from "./tools/session/history"
 import { sendMessageTool, spawnSubagentTool, stopAgentTool } from "./tools/subagent/spawn"
 import { SubagentManager } from "./subagents/manager"
@@ -127,6 +127,11 @@ export function initRuntime(opts: {
   workspaceDirs?: string[]
   /** The session's temp folder (scratch.ts): the TUI turns it on; tests and evals leave it off. */
   scratchpad?: ScratchOptions | false
+  /**
+   * Config `results.exportDir`: a folder inside the workspace where data results are also written as
+   * `<ref>.json` for scripts (refs.ts). Without it they go to the session's temp folder, if any.
+   */
+  resultFiles?: string
   /** See `McpManagerOptions.transport`. */
   mcpTransport?: McpManagerOptions["transport"]
 }): Runtime {
@@ -137,6 +142,19 @@ export function initRuntime(opts: {
   const workspace = new Workspace(opts.cwd ?? process.cwd(), { data: home, dirs: opts.workspaceDirs })
   registry.workspace = workspace
   if (opts.scratchpad) workspace.scratch = new Scratchpad(opts.cwd ?? process.cwd(), opts.scratchpad)
+  // Issue #309 A2: data results as files a script can read. A configured folder must be in the workspace
+  // and is always used (the host chose it). Without one, the session's temp folder is used only in ▸▸▸
+  // bypass: in ‖ and ▸ a script that opens a file always asks the user, while a typed arithmetic command
+  // runs unasked, so pointing the model at the files there would turn every series sum into a prompt
+  // (#311 review F2). The reminder line follows the same folder (agent.ts fileAccessNote).
+  const wanted = opts.resultFiles ? path.resolve(workspace.primary, opts.resultFiles) : undefined
+  if (wanted && workspace.contains(wanted)) exportResultsTo(wanted)
+  else if (workspace.scratch) exportResultsTo(() => {
+    if (permissions.mode !== "bypass") return undefined
+    const dir = workspace.scratch?.dir()
+    return dir && path.join(dir, "ket-qua")
+  })
+  else exportResultsTo(undefined)
   const files = new FileState()
   const historyRoot = path.join(home, "file-history")
   const history = new FileHistory(historyRoot)
@@ -166,8 +184,6 @@ export function initRuntime(opts: {
     ),
   )
   registry.register(chartRenderTool())
-  registry.register(chartCompareTool())
-  registry.register(chartDepthTool())
   const redaction = createRedactionCheck(path.join(home, "memory.db"))
   for (const tool of sessionHistoryTools({ redaction })) registry.register(tool)
   for (const tool of localWatchlistTools(home)) registry.register(tool)

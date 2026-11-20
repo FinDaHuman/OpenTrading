@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test"
 import { writeFile } from "node:fs/promises"
 import path from "node:path"
-import { assemble, identityLayer, type AssembleInput } from "../src/core/prompt/assemble"
+import { assemble, gateContext, identityLayer, type AssembleInput } from "../src/core/prompt/assemble"
 import { BUDGETS, fit, tierOf } from "../src/core/prompt/budget"
 import { renderMcpGuidance } from "../src/core/prompt/mcp-guidance"
 import { clockState, loadCalendar, renderClock, sameSnapshot } from "../src/core/prompt/market-clock"
@@ -112,7 +112,7 @@ test("tier C keeps style (reader-language rules cannot be dropped) and the marke
   const c = assemble(base({ tier: "C" }))
   expect(c.report.find((r) => r.id === "style")!.dropped).toBe(false)
   expect(c.system).toContain("Ngôn ngữ cho người đọc")
-  expect(c.system).toContain("chú giải ngay trong cùng câu")
+  expect(c.system).toContain("chú giải ngay trong câu")
   expect(c.system).toContain("<identity>")
   expect(c.reminders.some((r) => r.startsWith("<phien_giao_dich>"))).toBe(true)
 })
@@ -247,8 +247,12 @@ test("tool guidance lives in one place and the format example carries no real-lo
   // computed figure comes from a tool; since 13/11/2026 an arithmetic-only shell command), ≈2.11k
   // after the 13/11/2026 no-harness-markup line (the model copied <nhac_nho> into its answer),
   // ≈2.15k after the 15/11/2026 priority order (issue #278 P1: the user's format, schema and units
-  // rank above the default presentation rules; plan allowed the guard +40).
-  expect(Math.ceil(a.system.length / 4)).toBeLessThan(2_160)
+  // rank above the default presentation rules; plan allowed the guard +40), ≈1.94k after the
+  // 15/11/2026 dedupe (style's repeated rules and examples, the shell retry line;
+  // docs/superpowers/plans/2026-11-15-system-prompt-optimization.md items 4–5), ≈1.98k after the
+  // 16/11/2026 bat_bien 3 sentence for a forced pick, a yes/no or "if you were me" (issue #303: a
+  // shorter wording held 2/3 instead of 3/3 on gemini-3.5-flash-lite; guard +10).
+  expect(Math.ceil(a.system.length / 4)).toBeLessThan(1_990)
 })
 
 test("the constraints budget key is explicit and never cuts on any tier", () => {
@@ -303,8 +307,8 @@ test("the investor profile is escaped: no text can close its block or open anoth
 
 test("identityLayer is exactly the identity text each role's system part starts with", () => {
   const main = assemble(base())
-  expect(main.system.startsWith(`<identity>\n${identityLayer("main")}\n</identity>`)).toBe(true)
+  expect(main.system.startsWith(`<identity>\n${identityLayer("main", undefined, gateContext(base()))}\n</identity>`)).toBe(true)
   expect(identityLayer(undefined)).toBe(identityLayer("main"))
   const sub = assemble(base({ role: "subagent" }))
-  expect(sub.system.startsWith(`<subagent>\n${identityLayer("subagent")}\n</subagent>`)).toBe(true)
+  expect(sub.system.startsWith(`<subagent>\n${identityLayer("subagent", undefined, gateContext(base({ role: "subagent" })))}\n</subagent>`)).toBe(true)
 })

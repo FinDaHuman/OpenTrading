@@ -1,0 +1,23 @@
+[
+  {
+    "id": "series-01-vol60",
+    "group": "B",
+    "question": "Dùng dữ liệu giá đóng cửa ngày của FPT: tính độ biến động năm hoá trong 60 phiên giao dịch kết thúc ngày 13/11/2026, tức độ lệch chuẩn mẫu của 60 log return ngày (cần 61 giá đóng cửa, phiên đầu là 18/08/2026) nhân căn bậc hai của 252, theo %. Ghi 3 chữ số thập phân.",
+    "now": "2026-11-16T10:00:00+07:00",
+    "expected": { "kind": "number", "value": 29.33970192493404, "tolerance_pct": 0.5 }
+  },
+  {
+    "id": "series-02-corr40",
+    "group": "B",
+    "question": "Tính hệ số tương quan Pearson giữa tỷ suất sinh lợi ngày (thay đổi % đơn giản của giá đóng cửa) của HPG và của chỉ số VNINDEX trong 40 phiên giao dịch kết thúc ngày 13/11/2026 (40 tỷ suất, cần 41 giá đóng cửa mỗi bên, phiên đầu là 18/09/2026). Ghi 4 chữ số thập phân.",
+    "now": "2026-11-16T10:00:00+07:00",
+    "expected": { "kind": "number", "value": 0.32296242167364253, "tolerance_pct": 0.5 }
+  },
+  {
+    "id": "series-03-avg5",
+    "group": "B",
+    "question": "Tính % thay đổi giá đóng cửa từ phiên 15/10/2026 đến phiên 13/11/2026 của từng mã FPT, HPG, VNM, MWG, VCB, rồi lấy trung bình cộng của 5 con số đó. Ghi trung bình với 3 chữ số thập phân.",
+    "now": "2026-11-16T10:00:00+07:00",
+    "expected": { "kind": "number", "value": -3.748724694386452, "tolerance_pct": 0.5 }
+  }
+]

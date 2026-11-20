@@ -1,4 +1,6 @@
 import { FinancePolicyState, type FinancePolicyOptions } from "./finance-policy"
+import path from "node:path"
+import { resultExportDir } from "./tools/refs"
 import {
   generateText,
   NoSuchToolError,
@@ -47,7 +49,8 @@ import { isContextOverflow, pruneAttachments, pruneToolResults, tokensOf } from 
 import { isAttachmentText } from "./mentions"
 import { classifyFailure, retryMiddleware, type RetryNotice, type RetryOptions } from "./retry"
 import { loadedTools } from "./tools/loaded"
-import { operandNote, untracedOperands } from "./loop/operands"
+import { RENAMED_TOOLS, renamedInput } from "./tools/renamed"
+import { operandNote, pythonComputation, untracedOperands } from "./loop/operands"
 import { mathOnlyCommand } from "./tools/shell/math"
 import { detectShell } from "./tools/shell/run"
 import { modeNote } from "./permission/mode"
@@ -67,7 +70,7 @@ import { LOCAL_SOURCE, type ToolResult } from "./tools/types"
 import type { ChartData } from "./tools/chart/data"
 
 /** A shell command the math grammar takes, for the shell this machine runs (loop/operands.ts). */
-const isArithmetic = (command: string) => mathOnlyCommand(command, detectShell())
+const isArithmetic = (command: string) => mathOnlyCommand(command, detectShell()) || pythonComputation(command)
 
 /** Unlimited: the turn ends when the model stops calling tools. A cap is opt-in via
  *  config `maxSteps` or the caller's `opts.maxSteps`; when capped, the last step forces a summary. */
@@ -361,6 +364,18 @@ export function dropFinalText(messages: ModelMessage[]): ModelMessage[] {
   return [...messages.slice(0, index), { ...message, content: parts }, ...messages.slice(index + 1)]
 }
 
+/**
+ * How many of a run's last model requests lose their text in dropFinalText, so a UI takes as many off
+ * the screen: 2 when the last request wrote no message at all (`requests` counts it, the messages do
+ * not), so the text dropped is the one written beside the tool calls of the request before it.
+ */
+export function droppedRequests(response: ModelMessage[], requests: number): 1 | 2 {
+  const index = response.findLastIndex((m) => m.role === "assistant")
+  const assistants = response.filter((m) => m.role === "assistant").length
+  const tail = response.slice(index + 1)
+  return index >= 0 && requests > assistants && tail.length > 0 && tail.every((m) => m.role === "tool") ? 2 : 1
+}
+
 /** A cut answer and its continuation become one assistant message (the nudge between is not kept). */
 export function continueAnswer(kept: ModelMessage[], more: ModelMessage[]): ModelMessage[] {
   const prev = kept.at(-1)
@@ -488,7 +503,7 @@ export function lastReminder(history: readonly ModelMessage[], id: string): stri
  * with its parameters, and the model calls it again instead of spending a tool_search step.
  * `null` = keep the SDK's own error.
  */
-async function repairCall<T extends { toolName: string }>(
+async function repairCall<T extends { toolName: string; input?: string }>(
   registry: ToolRegistry,
   built: BuiltToolSet | undefined,
   active: string[] | undefined,
@@ -499,10 +514,23 @@ async function repairCall<T extends { toolName: string }>(
   if (!built) return null
   const deferring = built.deferring || built.deferred.length > 0
   if (!NoSuchToolError.isInstance(error)) return null
-  const names = resolveToolName(registry, toolCall.toolName).filter((n) => n in built.tools)
+  // A tool #278 folded into another (a resumed conversation, a model copying its history): the call
+  // runs as the new tool with the action/kind the old one stood for. Deferred, it loads like any
+  // deferred tool below, the error naming the field to pass.
+  const renamed = Object.hasOwn(RENAMED_TOOLS, toolCall.toolName) ? RENAMED_TOOLS[toolCall.toolName] : undefined
+  if (renamed && renamed.tool in built.tools && (!active || active.includes(renamed.tool))) {
+    let input: Record<string, unknown> = {}
+    try {
+      const parsed = JSON.parse(toolCall.input || "{}")
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) input = parsed
+    } catch {}
+    return { ...toolCall, toolName: renamed.tool, input: JSON.stringify(renamedInput(renamed, input)) }
+  }
+  const names = renamed && renamed.tool in built.tools ? [renamed.tool] : resolveToolName(registry, toolCall.toolName).filter((n) => n in built.tools)
   if (names.length === 1 && (!active || active.includes(names[0]!))) return { ...toolCall, toolName: names[0]! }
   if (names.length === 1 && deferring) {
     const name = names[0]!
+    const how = renamed ? ` và ${renamed.field}="${renamed.value}" (${toolCall.toolName} đã gộp vào ${name})` : ""
     // Loaded already yet still not active: cut by the per-request cap. Saying "loaded,
     // call again" here would loop.
     if (loaded.includes(name)) {
@@ -515,7 +543,7 @@ async function repairCall<T extends { toolName: string }>(
     throw new Error(
       [
         `${LOADED_PREFIX}${name}`,
-        `Tool ${name} chưa có trong bước này nên chưa chạy; đã nạp xong — gọi lại đúng lệnh với tên ${name}.`,
+        `Tool ${name} chưa có trong bước này nên chưa chạy; đã nạp xong — gọi lại đúng lệnh với tên ${name}${how}.`,
         ...(def ? ["", describeTool(registry, def)] : []),
       ].join("\n"),
     )
@@ -819,7 +847,10 @@ export const DEFAULT_DEFER_MIN_TOOLS = 40
 
 /**
  * Whether deferrable tools (MCP and the optional built-in ones) go out by name only this
- * request (tool search). "auto" defers once the deferrable tools are many (tool choice degrades past ~30–50) or heavy for the context.
+ * request (tool search). "auto" defers all of them once they are many (tool choice degrades
+ * past ~30–50) or heavy for the context; below that it defers only the `deferByDefault` local
+ * tools that turns rarely use (grep/glob, sessions, doctor, send/stop). A subagent's
+ * tools are already narrowed by its type, so it keeps them visible.
  */
 export function shouldDefer(
   config: Pick<Config, "toolSearch" | "toolSearchMinTools">,
@@ -833,7 +864,9 @@ export function shouldDefer(
   if (deferrable.length === 0) return false
   if (mode === "on") return true
   if (deferrable.length > (config.toolSearchMinTools ?? DEFAULT_DEFER_MIN_TOOLS)) return true
-  return !!context && registry.estimateTokens(deferrable, flavor) > context * DEFER_CONTEXT_SHARE
+  if (context && registry.estimateTokens(deferrable, flavor) > context * DEFER_CONTEXT_SHARE) return true
+  if (registry.origin) return false
+  return deferrable.some((d) => d.deferByDefault) ? "default" : false
 }
 
 /** Deferred tool names grouped by MCP server, short names where they are unambiguous. */
@@ -854,14 +887,35 @@ export function deferredByServer(registry: ToolRegistry, names: string[]) {
  * Tools the model may call at a step: the visible set plus deferred tools the conversation
  * loaded (tool_search results, load_skill, direct calls). Undefined = no narrowing.
  */
+/**
+ * Tools offered only once a message names them (issue #309 B2). `read_result` reads back a result the
+ * conversation no longer holds, and every way to need it names it: a pruned result's line, the compaction
+ * summary, a capped table's note. Declared from the start (so it never shifts the declared set), it costs
+ * its ~200 tokens only in requests that can use it: in or16, 10 of 309 OpenTrading trials called it.
+ */
+export const ON_MENTION_TOOLS = ["read_result"]
+
+const textOfMessage = (m: ModelMessage): string =>
+  typeof m.content === "string" ? m.content : JSON.stringify(m.content)
+
+/** The on-mention tools no message names yet. */
+function unmentioned(built: BuiltToolSet, messages: readonly ModelMessage[]): Set<string> {
+  const pending = ON_MENTION_TOOLS.filter((n) => n in built.tools)
+  if (pending.length === 0) return new Set()
+  const named = new Set<string>()
+  for (const m of messages) for (const n of pending) if (!named.has(n) && textOfMessage(m).includes(n)) named.add(n)
+  return new Set(pending.filter((n) => !named.has(n)))
+}
+
 export function activeFor(built: BuiltToolSet | undefined, messages: readonly ModelMessage[]): string[] | undefined {
   if (!built) return undefined
-  // Nothing deferred and nothing cut: every declared tool is callable. (With search on, a
-  // history that loaded more than the cap declares them all; the cap must still apply.)
-  if (built.deferred.length === 0 && built.names.length === Object.keys(built.tools).length) return undefined
+  const hidden = unmentioned(built, messages)
+  // Nothing deferred, nothing cut, nothing waiting to be named: every declared tool is callable.
+  // (With search on, a history that loaded more than the cap declares them all; the cap must still apply.)
+  if (built.deferred.length === 0 && built.names.length === Object.keys(built.tools).length && hidden.size === 0) return undefined
   const visible = new Set(built.names)
   const extra = loadedTools(messages).filter((n) => !visible.has(n) && n in built.tools)
-  return [...built.names, ...extra].slice(0, MAX_TOOLS_PER_REQUEST)
+  return [...built.names, ...extra].filter((n) => !hidden.has(n)).slice(0, MAX_TOOLS_PER_REQUEST)
 }
 
 type TurnInput = Omit<RunOptions, "history" | "signal" | "maxSteps"> & {
@@ -884,6 +938,19 @@ const cap = (text: string | undefined, max: number) =>
  */
 const FILE_TOOLS = ["read_file", "write_file", "shell"]
 const fileTool = (registry: TurnInput["registry"], name: string) => FILE_TOOLS.includes(name) && (name !== "shell" || registry.get(name)?.effect === "shell")
+
+/** `<quyen_tep>`: the workspace and the mode line, naming only the file tools the registry holds. */
+export function fileAccessNote(registry: TurnInput["registry"], mode: Parameters<typeof modeNote>[0], profile?: "terminal" | "machine"): string {
+  const present = new Set(registry.list().map((d) => d.name))
+  const workspace = registry.workspace!
+  // Issue #309 A2: data results are also files a script can read, so the model never re-types numbers.
+  const files = resultExportDir()
+  const shown = files && workspace.contains(files) ? path.relative(workspace.primary, files) || "." : files
+  const filesLine = shown
+    ? `Kết quả dữ liệu có nhãn [ref rN] có bản JSON đầy đủ ở ${shown}/rN.json: phép tính trên chuỗi số thì để script đọc file đó, không chép tay số.`
+    : undefined
+  return [workspace.describe(present), filesLine, modeNote(mode, present, profile)].filter(Boolean).join("\n")
+}
 
 function serverGuidance(opts: Pick<RunOptions, "registry" | "serverInstructions">, names: readonly string[], tier: Tier) {
   if (!opts.serverInstructions) return undefined
@@ -932,10 +999,11 @@ async function assembleFor(opts: TurnInput, target: Target | undefined, bound: B
     now: opts.now ?? new Date(),
     clockPolicy: opts.clockPolicy,
     prevClock: opts.prevClock,
-    deferredTools: built && built.deferred.length > 0 ? deferredByServer(opts.registry, built.deferred) : undefined,
+    // Every tool the policy defers, loaded or not: loading one must not change the system prompt.
+    deferredTools: built && built.deferrable.length > 0 ? deferredByServer(opts.registry, built.deferrable) : undefined,
     declaredTools: built ? Object.keys(built.tools) : undefined,
     todos: currentTodos(opts.history ?? []),
-    fileAccess: toolNames.some((t) => fileTool(opts.registry, t)) && opts.registry.workspace ? `${opts.registry.workspace.describe()}\n${modeNote(mode)}` : undefined,
+    fileAccess: toolNames.some((t) => fileTool(opts.registry, t)) && opts.registry.workspace ? fileAccessNote(opts.registry, mode, opts.profile) : undefined,
     prevFileAccess: lastReminder(opts.history ?? [], "quyen_tep"),
     disabled: opts.disabled,
   }, opts.promptDir === undefined ? undefined : validatePromptDir(opts.promptDir))
@@ -1211,7 +1279,8 @@ async function* runTurn(opts: RunOptions, budget?: RequestBudget): AsyncGenerato
   }
   // Tell the user once whenever deferral or the hidden tools change. Keyed on every
   // deferrable tool, not on those still unloaded: loading tools must not repeat the notice.
-  const deferrable = built?.deferring ? opts.registry.list().filter((d) => d.deferrable).map((d) => d.name) : []
+  // Deferring only the default local tools is the normal state and stays silent (/tools shows it).
+  const deferrable = built?.deferring === true ? opts.registry.list().filter((d) => d.deferrable).map((d) => d.name) : []
   const hiddenKey = JSON.stringify([built?.hidden ?? [], deferrable.length])
   if (hiddenKey !== opts.registry.lastHiddenNotice) {
     opts.registry.lastHiddenNotice = hiddenKey
@@ -1489,6 +1558,8 @@ async function* runTurn(opts: RunOptions, budget?: RequestBudget): AsyncGenerato
       // A cut answer stays and the rest is joined onto it; any other broken step is dropped.
       kept = verdict.kind === "length" ? (continuing ? continueAnswer(kept, response) : [...kept, ...response]) : [...kept, ...dropFinalText(response)]
       rescue = { nudge: verdict.nudge, toolChoice: verdict.toolChoice }
+      // 13/11 eval m3: the screen showed the dropped answer and then the new one.
+      if (verdict.kind !== "length") yield { type: "retract", steps: droppedRequests(response, last.steps) }
       yield { type: "notice", text: `${RESCUE_NOTICE[verdict.kind]} Đã nhắc model trả lời tiếp (${recoveries.length}/${Math.max(MAX_RECOVERIES, recoveries.length)}).` }
       continue
     }

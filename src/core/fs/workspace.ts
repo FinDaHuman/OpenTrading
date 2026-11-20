@@ -60,6 +60,8 @@ export function unsafeRoot(dir: string, e: WorkspaceEnv = {}): string | undefine
   return undefined
 }
 
+const capitalize = (text: string) => text.charAt(0).toUpperCase() + text.slice(1)
+
 export class Workspace {
   /** Relative paths resolve here; artifacts go here by default. */
   readonly primary: string
@@ -140,12 +142,23 @@ export class Workspace {
     return { dir }
   }
 
-  /** The `<quyen_tep>` reminder: where relative paths go and which folders are the workspace. */
-  describe(): string {
+  /**
+   * The `<quyen_tep>` reminder: where relative paths go and which folders are the workspace.
+   * `present`: the registered tools; the read/find hint names only those (none: no hint).
+   */
+  describe(present?: ReadonlySet<string>): string {
+    const has = (name: string) => !present || present.has(name)
+    const readHint = [
+      has("read_file") && "File/thư mục người dùng đưa (kể cả ngoài workspace) đọc bằng read_file",
+      has("glob_files") && "tìm file bằng glob_files",
+      has("grep_files") && "tìm chữ trong file bằng grep_files",
+    ].filter(Boolean)
     const lines = [
       `Thư mục làm việc (workspace): ${this.primary}${this.fallbackReason ? ` (người dùng mở OpenTrading ở ${this.fallbackReason} nên dùng thư mục riêng này)` : ""}.`,
       ...(this.extra.length > 0 ? [`Thư mục thêm: ${this.extra.join("; ")}.`] : []),
-      "Đường dẫn tương đối tính từ workspace. File/thư mục người dùng đưa (kể cả ngoài workspace) đọc bằng read_file; tìm file bằng glob_files, tìm chữ trong file bằng grep_files.",
+      readHint.length === 3
+        ? "Đường dẫn tương đối tính từ workspace. File/thư mục người dùng đưa (kể cả ngoài workspace) đọc bằng read_file; tìm file bằng glob_files, tìm chữ trong file bằng grep_files."
+        : `Đường dẫn tương đối tính từ workspace.${readHint.length > 0 ? ` ${capitalize(readHint.join("; "))}.` : ""}`,
     ]
     const scratch = this.scratch?.dir()
     if (scratch) {

@@ -178,6 +178,11 @@ test("labels: order, contains and no figures", () => {
   expect(score({ kind: "contains", any: ["Q2/2026"] }, "Quý gần nhất là Q2/2026")).toBe(true)
   expect(score({ kind: "no_figures" }, "Chưa có số liệu công bố.")).toBe(true)
   expect(score({ kind: "no_figures" }, "Lợi nhuận 1.200 tỷ.")).toBe(false)
+  // A negative label: the sign written before the figure counts, a positive answer does not pass.
+  const fall = { kind: "number", value: -3.7487, tolerance_pct: 0.5 }
+  expect(score(fall, "Trung bình: -3,749%.")).toBe(true)
+  expect(score(fall, "Trung bình: − 3,749%.")).toBe(true)
+  expect(score(fall, "Trung bình: 3,749%.")).toBe(false)
 })
 
 test("the interval is fixed by the seed and covers the mean", () => {

@@ -27,11 +27,38 @@ export const OPERAND_SCALES = [1, 0.01, 1e3, 1e-3, 1e6, 1e-6, 1e9, 1e-9]
 const LITERAL = /(?<![\w.$])\d+(?:\.\d+)?(?:[eE][+-]?\d{1,3})?(?![\w.])/g
 /** An array index (`data[6]`, `$prices[$i-1]`): a position, not a figure. */
 const INDEX = /([A-Za-z_]\w*)\s*\[[^\]\n]*\]/g
+/**
+ * A slice (`c[-61:]`, `[...][1:]` after INDEX took the name, `[a:b:2]`): positions too. Only slice syntax
+ * (numbers or names around the colons), so a list of dicts (`[{"p": 21500000}]`) keeps its figures.
+ */
+const BOUND = String.raw`\s*-?(?:\d+|[A-Za-z_]\w*)?\s*`
+const SLICE = new RegExp(String.raw`\[${BOUND}:${BOUND}(?::${BOUND})?\]`, "g")
+/**
+ * A quoted file path (`open('/tmp/…/ket-qua/r3.json')`): only path characters, a separator and a letter. Its
+ * digits (a session id, a date) are no operands (#311 review F4). Code in quotes (`python3 -c "…"`) keeps its
+ * parentheses or spaces, so it never matches.
+ */
+const PATH_STRING = /(['"])(?=[^'"\n]*[A-Za-z])(?:[A-Za-z]:)?[\w.~:\\/-]*[\\/][\w.~:\\/-]*\1/g
+/** The digits argument of round (`round(v, 6)`, `[math]::Round($x, 2)`): a precision, not a figure. */
+const ROUND_DIGITS = /(\bround\s*\((?:[^()\n]|\([^()\n]*\))*?),\s*\d{1,2}\s*\)/gi
+
+/**
+ * A one-shot Python computation: `python3 -c "…"`, a heredoc fed to Python, or a heredoc written to a
+ * .py file and run in the same command. With bypass (--yolo, a sandboxed benchmark) the model computes
+ * series in Python, and its typed literals are re-typed figures like awk's (issue #309 A3).
+ */
+const PYTHON_RUN = /^\s*(?:(?:python3?|py)(?:\s+-[A-Za-z]+)*\s+(?:-c\b|-?\s*<<)|cat\s+>\s*\S+\.py\s+<<[\s\S]*\n\s*python3?\s+\S+\.py)/
+export const pythonComputation = (command: string) => PYTHON_RUN.test(command)
 
 /** The numbers typed into an arithmetic command, with the decimals they were written with. */
 export function operandsOf(command: string): { text: string; value: number; decimals: number }[] {
   // A printf format is not an operand ("%.2f"); other quoted text may be the code (python -c "…").
-  const code = command.replace(/"[^"]*%[^"]*"/g, '""').replace(INDEX, "$1")
+  const code = command
+    .replace(PATH_STRING, '""')
+    .replace(/"[^"]*%[^"]*"/g, '""')
+    .replace(ROUND_DIGITS, "$1)")
+    .replace(INDEX, "$1")
+    .replace(SLICE, "")
   return [...code.matchAll(LITERAL)].map((m) => {
     const text = m[0]
     const mantissa = text.split(/[eE]/)[0]!

@@ -29,7 +29,7 @@ const PERIODS = /\b[QH]\d(?:\/\d{2,4})?\b|\b(?:quý|năm|tháng|phiên|ngày)\s+
  * A number and its unit. "2,49T" is a trillion dong ("nghìn tỷ") as finance writers shorten it:
  * only right after a decimal number and before no letter, digit or "+" ("T+2", "T3" are not).
  */
-const FIGURE = /(?<![\p{L}\d.,])(\d{1,3}(?:[.,]\d{3})+(?:[.,]\d+)?|\d+[.,]\d+|\d+)(?:\s*(%|đồng|đ(?!\p{L})|nghìn tỷ|tỷ|triệu|nghìn|lần)|(?<=[.,]\d+)(T)(?![\p{L}\p{N}+]))?/gu
+const FIGURE = /(?<![\p{L}\d.,])(\d{1,3}(?:[.,]\d{3})+(?!\d)(?:[.,]\d+)?|\d+[.,]\d+|\d+)(?:\s*(%|đồng|đ(?!\p{L})|nghìn tỷ|tỷ|triệu|nghìn|lần)|(?<=[.,]\d+)(T)(?![\p{L}\p{N}+]))?/gu
 /** A whole number with no unit is usually a count or a heading, not market data. */
 const isFigure = (token: string, unit: string | undefined) => unit !== undefined || /[.,]/.test(token)
 
@@ -75,9 +75,10 @@ const SOURCE_LINE = /\n\[Nguồn: [^\n]*\]\s*$/u
 const JSON_NUMBER = /-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/g
 /**
  * Numbers as a Vietnamese web page writes them: 1.234,5 and 24,1. A subagent's report also
- * groups with commas ("90,300đ", "53,442 tỷ"): both readings are kept, as for an answer.
+ * groups with commas ("90,300đ", "53,442 tỷ"): both readings are kept, as for an answer. A group of three
+ * digits must end there: "6,9034" is a decimal, not 6,903 and a stray 4 (MyToDoList 43j).
  */
-const VIETNAMESE_NUMBER = /\d{1,3}(?:\.\d{3})+(?:,\d+)?|\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+,\d{1,2}(?!\d)/g
+const VIETNAMESE_NUMBER = /\d{1,3}(?:\.\d{3})+(?!\d)(?:,\d+)?|\d{1,3}(?:,\d{3})+(?!\d)(?:\.\d+)?|\d+,\d{1,2}(?!\d)|(?<![\d.,])\d{1,3},\d{4,}(?![\d.,])/g
 
 /** A JSON string literal's content, the last one possibly cut before its closing quote. */
 const JSON_STRING = /"((?:[^"\\]|\\.)*)(?:"|$)/g

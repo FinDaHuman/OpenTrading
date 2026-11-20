@@ -104,7 +104,7 @@ describe("card blocks in the agent loop (spec 007)", () => {
     seedExample(nb.store())
     replies = [`${ANSWER}\n\n${BLOCK}`]
     const { done, cards, requests } = await turn(TYPED)
-    expect(cards.map((c) => c.card)).toEqual([{ kind: "constraint", text: "Không gợi ý cổ phiếu penny", quote: TYPED }])
+    expect(cards.map((c) => c.card)).toEqual([{ kind: "constraint", text: "Không gợi ý cổ phiếu penny", quote: TYPED, verbatim: false }])
     expect(JSON.stringify(done.messages)).not.toContain("the_goi_y")
     expect(JSON.stringify(done.messages)).toContain(ANSWER)
     // The guide went with the request.

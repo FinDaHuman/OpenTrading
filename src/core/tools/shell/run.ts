@@ -17,6 +17,35 @@ export interface ShellInfo {
 }
 
 let cached: ShellInfo | undefined
+let pythonChecked = false
+let pythonCached: string | undefined
+
+/**
+ * The Python command that really runs on this machine (`python3`, then `python`), or undefined.
+ * Found on PATH is not enough: Windows ships `python3`/`python` aliases that only open the Microsoft
+ * Store and exit 9009/49, so each candidate must print the answer to a tiny script (16/11 measurement:
+ * 10 of 33 commands hit that alias). Checked once per process, only when a description asks.
+ * `OPENTRADING_PYTHON` (a command name, or "none") replaces the check for a host whose commands run in
+ * another environment than OT itself.
+ */
+export function detectPython(): string | undefined {
+  if (pythonChecked) return pythonCached
+  pythonChecked = true
+  // A host whose commands run elsewhere (a benchmark's Docker sandbox) says what is there: a command
+  // name, or "none". The machine OT itself runs on may differ.
+  const told = process.env.OPENTRADING_PYTHON?.trim()
+  if (told) return (pythonCached = told === "none" ? undefined : told)
+  for (const cmd of ["python3", "python"]) {
+    if (!Bun.which(cmd)) continue
+    try {
+      const run = Bun.spawnSync([cmd, "-c", "print(6*7)"], { stdout: "pipe", stderr: "ignore", stdin: "ignore", timeout: 5_000 })
+      if (run.exitCode === 0 && run.stdout.toString().trim() === "42") return (pythonCached = cmd)
+    } catch {
+      // not runnable: try the next one
+    }
+  }
+  return undefined
+}
 
 export function detectShell(platform: NodeJS.Platform = process.platform): ShellInfo {
   if (cached && platform === process.platform) return cached
@@ -108,10 +137,25 @@ export function childEnv(env: NodeJS.ProcessEnv): Record<string, string> {
   return out
 }
 
+/**
+ * POSIX PATH without empty or relative entries (`PATH=:/usr/bin`, `.`, `bin`): those make the
+ * shell look in the working directory, so a bare `ls` or `awk` (which run unasked: read-only.ts,
+ * math.ts) would run an `ls` file of a freshly cloned repo. Review of #290.
+ */
+export function absolutePathOnly(value: string): string {
+  return value.split(":").filter((entry) => entry.startsWith("/")).join(":")
+}
+
 /** Collected output is capped in memory: past this, the middle is dropped. */
 const MEMORY_CAP = 4 * 1024 * 1024
 /** A runaway command must not fill the disk: the spill file stops here. */
 export const SPILL_CAP = 64 * 1024 * 1024
+
+/** The child's PATH on POSIX: absolute entries only (Windows PowerShell never searches the current folder). */
+function posixPath(env: Record<string, string>): Record<string, string> {
+  if (process.platform === "win32" || env.PATH === undefined) return env
+  return { ...env, PATH: absolutePathOnly(env.PATH) }
+}
 
 export async function runShell(
   command: string,
@@ -135,7 +179,7 @@ export async function runShell(
     // Python prints Vietnamese as UTF-8 even on a Windows console code page. Provider keys
     // set as environment variables stay out of the child: `printenv` would put them in the
     // transcript the model provider receives.
-    env: { ...childEnv(process.env), PYTHONIOENCODING: "utf-8", PYTHONUTF8: "1", ...opts.env },
+    env: posixPath({ ...childEnv(process.env), PYTHONIOENCODING: "utf-8", PYTHONUTF8: "1", ...opts.env }),
     windowsHide: true,
     // POSIX: its own process group, so a timeout kills the children too.
     detached: process.platform !== "win32",

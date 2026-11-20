@@ -1,5 +1,5 @@
 import { createResource, createSignal, type JSX } from "solid-js"
-import { cardsSwitchOn, loadConfig, memoryChoiceOf, saveConfig } from "../../core/config"
+import { cardsAutoSave, cardsSwitchOn, loadConfig, memoryChoiceOf, saveConfig } from "../../core/config"
 import { stillApplyLine } from "../../core/memory/binding/render"
 import { closeMemory, createMemory, switchMemory, type MemoryChoice, type Runtime } from "../../core/runtime"
 import { say } from "../notify"
@@ -53,6 +53,22 @@ export async function toggleCardsSwitch() {
   )
 }
 
+/** `memory.cardsAutoSave` (issue #307): a rule or style card quoting the user's own words is saved without the form. */
+export async function toggleCardsAutoSave() {
+  let on = false
+  await saveConfig((current) => {
+    on = current.memory?.cardsAutoSave !== true
+    return { memory: { ...current.memory, cardsAutoSave: on } }
+  })
+  say(
+    on
+      ? "Đã bật tự lưu thẻ gợi ý: ràng buộc hay cách trình bày có nội dung đúng nguyên văn lời bạn gõ ở tin nhắn đó được lưu ngay; thẻ model diễn đạt lại và bài học vẫn chờ bạn xác nhận. Xoá bằng /memory."
+      : "Đã tắt tự lưu thẻ gợi ý: mọi thẻ chờ bạn xác nhận trong form.",
+    "success",
+    8000,
+  )
+}
+
 /**
  * Memory on or off and the suggestion-card switch: /config › Memory and the Cài đặt tab of /memory.
  * `header` replaces the title (the tab row); `onChanged` runs after a choice was saved.
@@ -61,7 +77,7 @@ export function MemorySettings(props: {
   runtime: Runtime
   hint: string
   header?: JSX.Element
-  onChanged?: (what: MemoryChoice | "cards") => void
+  onChanged?: (what: MemoryChoice | "cards" | "cardsAutoSave") => void
 }) {
   const [config, { refetch }] = createResource(loadConfig)
   // The runtime's memory is replaced in place and is not reactive: `changed` makes the view read it again.
@@ -83,8 +99,9 @@ export function MemorySettings(props: {
     },
   )
 
-  async function pick(value: MemoryChoice | "cards") {
+  async function pick(value: MemoryChoice | "cards" | "cardsAutoSave") {
     if (value === "cards") await toggleCardsSwitch()
+    else if (value === "cardsAutoSave") await toggleCardsAutoSave()
     else await saveMemoryChoice(props.runtime, value)
     setChanged((n) => n + 1)
     await refetch()
@@ -112,7 +129,7 @@ export function MemorySettings(props: {
             label: c.label,
             hint: c.hint,
             mark: running() === c.value ? "●" : " ",
-            value: c.value as MemoryChoice | "cards",
+            value: c.value as MemoryChoice | "cards" | "cardsAutoSave",
           })),
           // The switch belongs to the notebook that is running, not to what the config file says.
           ...(running() === "notebook"
@@ -125,6 +142,18 @@ export function MemorySettings(props: {
                   mark: cardsSwitchOn(config() ?? {}) ? "●" : "○",
                   value: "cards" as const,
                 },
+                ...(cardsSwitchOn(config() ?? {})
+                  ? [
+                      {
+                        label: "Tự lưu thẻ ràng buộc và cách trình bày",
+                        hint: cardsAutoSave(config() ?? {})
+                          ? "bật · thẻ có nội dung đúng nguyên văn lời bạn được lưu ngay, thẻ khác chờ xác nhận · enter để tắt"
+                          : "tắt · mọi thẻ chờ bạn xác nhận · enter để bật",
+                        mark: cardsAutoSave(config() ?? {}) ? "●" : "○",
+                        value: "cardsAutoSave" as const,
+                      },
+                    ]
+                  : []),
               ]
             : []),
         ]}

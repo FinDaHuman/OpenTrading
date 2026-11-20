@@ -14,7 +14,9 @@ export interface Config {
    * as "notebook" (memoryChoiceOf) and written back by the TUI at startup. `cards`: suggestion cards (spec 007),
    * on unless false; only with the notebook.
    */
-  memory?: { provider?: "none" | "file" | "notebook"; cards?: boolean }
+  memory?: { provider?: "none" | "file" | "notebook"; cards?: boolean; cardsAutoSave?: boolean }
+  /** `exportDir`: folder inside the workspace for data results as `<ref>.json` (default: the session's temp folder). */
+  results?: { exportDir?: string }
   /**
    * Permissions (core/permission): `allow` = "always allow" answers; `deny` / `ask` = rules the
    * user writes by hand (tool name with `*`, optional `pattern` on the path or command);
@@ -174,6 +176,13 @@ export function memoryChoiceOf(config: Config): "none" | "notebook" {
 
 /** The suggestion-card switch of the notebook (spec 007): on unless set off. */
 export const cardsSwitchOn = (config: Config) => config.memory?.cards !== false
+
+/**
+ * `memory.cardsAutoSave` (off unless true; issue #307, #309 C2): a constraint or style card whose rule is
+ * itself the user's own words of this turn, verbatim (cards/check.ts `verbatim`), is saved at once instead of
+ * waiting for the form. A rule the model reworded, and every lesson card, still waits for the user.
+ */
+export const cardsAutoSave = (config: Config) => config.memory?.cardsAutoSave === true
 
 /** Suggestion cards are on: the notebook is chosen and its switch is not off. */
 export const cardsEnabled = (config: Config) => memoryChoiceOf(config) === "notebook" && cardsSwitchOn(config)

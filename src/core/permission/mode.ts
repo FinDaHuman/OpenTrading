@@ -41,10 +41,22 @@ export function startMode(permissions: { defaultMode?: string; autoAcknowledged?
 }
 
 /** The mode line of the `<quyen_tep>` reminder: what the model may expect when it writes. */
-export function modeNote(mode: PermissionMode): string {
-  if (mode === "read-only")
-    return "Chế độ quyền: ‖ chỉ đọc. Ghi file (write_file, edit_file) và chạy lệnh (shell) cần người dùng duyệt từng lần trong hộp thoại; vẫn gọi các tool này khi người dùng muốn tạo hay sửa file, đừng chỉ dán nội dung vào câu trả lời."
+/**
+ * `present`: the registered tools (the ‖ line names only write tools it holds). `profile`: a program
+ * caller (`--profile machine`) gets the short ▸▸▸ line: the long one speaks to a person who chose
+ * --yolo, and it rides in every request of the turn (issue #309).
+ */
+export function modeNote(mode: PermissionMode, present?: ReadonlySet<string>, profile?: "terminal" | "machine"): string {
+  if (mode === "read-only") {
+    // Name only the write tools the registry holds (`present`; without it, all of them).
+    const writers = ["write_file", "edit_file"].filter((name) => !present || present.has(name))
+    if (writers.length === 0)
+      return "Chế độ quyền: ‖ chỉ đọc. Chạy lệnh (shell) cần người dùng duyệt từng lần trong hộp thoại, trừ lệnh chỉ tính số hay chỉ liệt kê thư mục trong workspace."
+    return `Chế độ quyền: ‖ chỉ đọc. Ghi file (${writers.join(", ")}) và chạy lệnh (shell) cần người dùng duyệt từng lần trong hộp thoại, trừ lệnh chỉ tính số hay chỉ liệt kê thư mục trong workspace; vẫn gọi các tool này khi người dùng muốn tạo hay sửa file, đừng chỉ dán nội dung vào câu trả lời.`
+  }
   if (mode === "ask") return "Chế độ quyền: ▸ sửa có hỏi. Mỗi lần ghi file hay chạy lệnh người dùng duyệt trong hộp thoại (có thể cho phép cả thư mục, hoặc một lệnh, trong phiên)."
+  if (mode === "bypass" && profile === "machine")
+    return "Chế độ quyền: ▸▸▸ bỏ qua quyền (người gọi là chương trình): lệnh và tool ghi chạy ngay, không ai duyệt. Không xoá hay ghi đè dữ liệu có sẵn, không gửi dữ liệu ra ngoài, không đặt lệnh hay chuyển tiền thật; bị từ chối thì không làm cùng việc đó bằng cách khác."
   if (mode === "bypass")
     return "Chế độ quyền: ▸▸▸ bỏ qua quyền. Người dùng chạy bạn với --yolo: ghi file, chạy lệnh và tool ghi chạy ngay, không ai duyệt. Vì vậy tự cẩn trọng: chỉ làm đúng việc được yêu cầu, không xoá hay ghi đè dữ liệu có sẵn, không gửi dữ liệu ra ngoài, không đặt lệnh hay chuyển tiền thật khi người dùng chưa nói rõ. Luật chặn của người dùng, file khoá, thư mục cấu hình (.git, .opentrading…) và ngoài workspace vẫn cần người dùng; bị từ chối thì không làm cùng việc đó bằng cách khác."
   return "Chế độ quyền: ▸▸ tự động. Người dùng chọn để bạn làm liên tục không hỏi từng bước: một model duyệt từng hành động thay người dùng. Cứ làm các việc thường lệ người dùng yêu cầu (đọc, tạo file trong workspace, chạy script đã viết). Không tự xoá hay ghi đè dữ liệu có sẵn, không gửi dữ liệu ra ngoài, không đặt lệnh hay chuyển tiền thật khi người dùng chưa nói rõ đúng việc đó. Hành động bị chặn thì làm theo chỉ dẫn trong kết quả: không làm đúng việc đó bằng tool, lệnh hay subagent khác; làm tiếp việc không phụ thuộc; việc bắt buộc thì dừng lại, nói lý do và để người dùng quyết."

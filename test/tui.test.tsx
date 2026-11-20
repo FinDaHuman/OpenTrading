@@ -89,6 +89,8 @@ let callSlowTool = false
 let overloaded = 0
 /** "TRÀN-NGỮ-CẢNH" requests fail as too long for the model this many times. */
 let overflowing = 0
+/** Requests of the "DẠO-ĐẦU" turn after its tool result (the first one writes nothing). */
+let preambleAfterTool = 0
 /** Subagent requests wait for this before answering (their rows stay "running"). */
 let childGate: Promise<void> | undefined
 /** A "CON-DOC" subagent waits for this after its first tool (between two model steps). */
@@ -228,6 +230,41 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
         return sseOf(chunk({ role: "assistant", tool_calls: [call] }) + chunk({}, "tool_calls") + usage + "data: [DONE]\n\n")
       }
       await usageGate
+    }
+    // "HỨA-GIỜ": a bare promise; after the stop gate's reminder (joined onto the same user message), the clock.
+    if (last.includes("HỨA-GIỜ") && !answeredThisTurn) {
+      if (!last.includes("không gọi tool nào")) return sseOf(chunk({ role: "assistant", content: "Mình sẽ lấy giờ hiện tại:" }) + chunk({}, "stop") + "data: [DONE]\n\n")
+      const call = { index: 0, id: "call_promised", type: "function", function: { name: "current_time", arguments: "{}" } }
+      return sseOf(chunk({ role: "assistant", tool_calls: [call] }) + chunk({}, "tool_calls") + "data: [DONE]\n\n")
+    }
+    // "DẠO-ĐẦU": a preamble beside the clock call, then a step that writes nothing; reminded, the answer.
+    const preambleAt = request.messages.findLastIndex((m) => m.role === "user" && JSON.stringify(m.content ?? "").includes("DẠO-ĐẦU"))
+    const preambleTurn = preambleAt >= 0 && request.messages.slice(preambleAt + 1).every((m) => m.role !== "user" || JSON.stringify(m.content ?? "").includes("<nhac_nho>"))
+    // Counted by request, not by the reminder's wording: the first after the tool writes nothing.
+    if (preambleTurn) {
+      if (!request.messages.slice(preambleAt).some((m) => m.role === "tool")) {
+        preambleAfterTool = 0
+        const call = { index: 0, id: "call_preamble", type: "function", function: { name: "current_time", arguments: "{}" } }
+        return sseOf(chunk({ role: "assistant", content: "Mình sẽ xem giờ trước, LỜI-DẠO-ĐẦU." }) + chunk({ tool_calls: [call] }) + chunk({}, "tool_calls") + "data: [DONE]\n\n")
+      }
+      if (preambleAfterTool++ === 0) return sseOf(chunk({ role: "assistant", content: "" }) + chunk({}, "stop") + "data: [DONE]\n\n")
+      return sseOf(chunk({ role: "assistant", content: "Bây giờ là 10:00. HẾT-CÂU-TRẢ-LỜI" }) + chunk({}, "stop") + "data: [DONE]\n\n")
+    }
+    // "NHÁP-TODO": the clock, then a draft beside a closing todo_write (08/11), then, reminded, the answer.
+    const draftAt = request.messages.findLastIndex((m) => m.role === "user" && JSON.stringify(m.content ?? "").includes("NHÁP-TODO"))
+    const draftTurn = draftAt >= 0 && request.messages.slice(draftAt + 1).every((m) => m.role !== "user" || JSON.stringify(m.content ?? "").includes("<nhac_nho>"))
+    if (draftTurn && !last.includes("chưa viết câu trả lời")) {
+      const sent = JSON.stringify(request.messages.slice(draftAt))
+      if (!sent.includes("call_draft_clock")) {
+        const call = { index: 0, id: "call_draft_clock", type: "function", function: { name: "current_time", arguments: "{}" } }
+        return sseOf(chunk({ role: "assistant", tool_calls: [call] }) + chunk({}, "tool_calls") + "data: [DONE]\n\n")
+      }
+      if (!sent.includes("call_draft_todo")) {
+        const { DRAFT } = await import("./fixtures/draft-answer")
+        const todos = [{ content: "Lấy dữ liệu", status: "completed" }]
+        const call = { index: 0, id: "call_draft_todo", type: "function", function: { name: "todo_write", arguments: JSON.stringify({ todos }) } }
+        return sseOf(chunk({ role: "assistant", content: DRAFT }) + chunk({ tool_calls: [call] }) + chunk({}, "tool_calls") + "data: [DONE]\n\n")
+      }
     }
     if (last.includes("MẤY-GIỜ") && !request.messages.some((m) => m.role === "tool")) {
       const call = { index: 0, id: "call_1", type: "function", function: { name: "current_time", arguments: "{}" } }
@@ -833,9 +870,9 @@ test("/tools lists built-in and MCP tools", async () => {
     await setup.mockInput.typeText("/tools")
     setup.mockInput.pressEnter()
     // 6 core built-ins (current_time, load_skill, ask_user, todo_write, tool_search, read_file)
-    // + 24 local tools (glob_files, grep_files, write_file, edit_file, shell, chart, session, watchlist, web, spawn_subagent, send_message, stop_agent, doctor_local, desk_run)
+    // + 16 local tools (glob_files, grep_files, write_file, edit_file, shell, chart, session, watchlist_local, web, spawn_subagent, send_message, stop_agent, doctor_local, desk_run)
     // + read_result + 4 from the demo MCP server (memory is off here: no memory_read)
-    frame = await setup.waitForFrame((f) => f.includes("Tool · 35") && f.includes("24 tool hoãn"))
+    frame = await setup.waitForFrame((f) => f.includes("Tool · 27") && f.includes("16 tool hoãn"))
     show(frame)
     // Regression for the 01/10 screenshot: every tool is exactly one line, long descriptions
     // end in "…" instead of wrapping mid-word, and the mark column is straight.
@@ -849,19 +886,19 @@ test("/tools lists built-in and MCP tools", async () => {
     expect(frame).not.toMatch(/^\s+Asia\/H/m)
     expect(frame).toContain("Có sẵn")
     // 3 demo tools (add is alwaysLoad) + 21 optional local tools (incl. glob_files/grep_files/write_file/edit_file) (incl. web_search/web_fetch) (chart, session, watchlist, doctor, send_message, stop_agent); desk_run is on demand, shell always declared (arithmetic)
-    expect(frame).toContain("24 tool hoãn: model chỉ thấy tên")
+    expect(frame).toContain("16 tool hoãn: model chỉ thấy tên")
     expect(timeRow).not.toContain("hoãn · ")
     // read_file and spawn_subagent sit below the fold now.
     expect(rows.find((r) => r.includes(" glob_files "))).toContain("hoãn · ")
     expect(rows.find((r) => r.includes(" chart_render "))).toContain("hoãn · ")
     // ↑ from the first row wraps to the last: the MCP group sits below the fold (memory is off: no Memory group).
     setup.mockInput.pressArrow("up")
-    frame = await setup.waitForFrame((f) => f.includes("MCP · demo") && f.includes("35/35"))
+    frame = await setup.waitForFrame((f) => f.includes("MCP · demo") && f.includes("27/27"))
     show(frame)
     const tail = frame.split("\n").filter((l) => /^ {2}(❯ |  )[◇◆] \S/.test(l))
     expect(tail.find((r) => r.includes(" echo "))).toContain("hoãn · ")
     setup.mockInput.pressArrow("down")
-    await setup.waitForFrame((f) => f.includes("1/35"))
+    await setup.waitForFrame((f) => f.includes("1/27"))
   } finally {
     await saveConfig({ toolSearch: undefined })
   }
@@ -872,7 +909,7 @@ test("/tools lists built-in and MCP tools", async () => {
   expect(frame).toContain("ask_user")
   expect(frame).toMatch(/• questions \(bắt buộc\): array/)
   setup.mockInput.pressEscape()
-  await setup.waitForFrame((f) => f.includes("Tool · 35"))
+  await setup.waitForFrame((f) => f.includes("Tool · 27"))
   setup.mockInput.pressEscape()
   await setup.waitFor(() => state.dialog === undefined)
 })
@@ -1025,6 +1062,75 @@ test("a tool call renders as a ● row with its result under ⎿, then the answe
   await setup.waitFor(() => !state.streaming)
   const roles = state.history.map((m) => m.role)
   expect(roles.slice(-4)).toEqual(["user", "assistant", "tool", "assistant"])
+})
+
+/** Assistant texts of the last turn: on screen (from its user line) and in history (from its user message). */
+function lastTurnAnswers(prompt: string) {
+  const from = state.lines.findLastIndex((l) => l.kind === "user" && l.text === prompt)
+  const shown = state.lines.slice(from).flatMap((l) => (l.kind === "assistant" && l.text.trim() ? [l.text.trim()] : []))
+  const at = state.history.findLastIndex((m) => m.role === "user")
+  const stored = state.history.slice(at).flatMap((m) => {
+    if (m.role !== "assistant") return []
+    const text = typeof m.content === "string" ? m.content : m.content.flatMap((p) => (p.type === "text" ? [p.text] : [])).join("")
+    return text.trim() ? [text.trim()] : []
+  })
+  return { shown, stored }
+}
+
+/** Waits until the turn of `prompt` has ended with the mock's answer on screen, and returns that frame. */
+async function turnEnded(prompt: string) {
+  await setup.waitFor(() => {
+    const from = state.lines.findLastIndex((l) => l.kind === "user" && l.text === prompt)
+    return from >= 0 && !state.streaming && state.lines.slice(from).some((l) => l.kind === "assistant" && l.text.includes("HẾT-CÂU-TRẢ-LỜI"))
+  })
+  // The answer under this turn's prompt (an earlier answer above it does not count), streaming done.
+  return setup.waitForFrame((f) => {
+    const at = f.lastIndexOf(`❯ ${prompt}`)
+    return at >= 0 && f.slice(at).includes("HẾT-CÂU-TRẢ-LỜI") && !f.includes("đang trả lời")
+  })
+}
+
+test("a promise the stop gate sends back leaves the screen: the notice stays, the answer shows once (13/11 m3)", async () => {
+  const prompt = "HỨA-GIỜ bây giờ?"
+  await setup.mockInput.typeText(prompt)
+  setup.mockInput.pressEnter()
+  const frame = await turnEnded(prompt)
+  show(frame)
+  expect(frame).not.toContain("Mình sẽ lấy giờ hiện tại")
+  expect(frame).toContain("Model nói sẽ lấy thêm dữ liệu")
+  expect(frame).toContain("● current_time()")
+  // The screen holds what a reopened session shows.
+  const { shown, stored } = lastTurnAnswers(prompt)
+  expect(shown).toEqual(stored)
+  expect(shown).toHaveLength(1)
+})
+
+test("a preamble beside a tool call, then an empty step: the preamble leaves the screen as it leaves history", async () => {
+  const prompt = "DẠO-ĐẦU mấy giờ?"
+  await setup.mockInput.typeText(prompt)
+  setup.mockInput.pressEnter()
+  const frame = await turnEnded(prompt)
+  show(frame)
+  // History dropped the preamble with the empty step (dropFinalText); the screen used to keep it.
+  expect(frame).not.toContain("LỜI-DẠO-ĐẦU")
+  expect(frame).toContain("● current_time()")
+  const { shown, stored } = lastTurnAnswers(prompt)
+  expect(stored.join(" ")).not.toContain("LỜI-DẠO-ĐẦU")
+  expect(shown).toEqual(stored)
+})
+
+test("a draft beside a closing todo_write is taken off the screen; its todo row stays", async () => {
+  const prompt = "NHÁP-TODO phân tích FPT"
+  await setup.mockInput.typeText(prompt)
+  setup.mockInput.pressEnter()
+  const frame = await turnEnded(prompt)
+  show(frame)
+  expect(frame).not.toContain("Kết quả đã lấy")
+  expect(frame).toContain("bản nháp")
+  const from = state.lines.findLastIndex((l) => l.kind === "user" && l.text === prompt)
+  expect(state.lines.slice(from).some((l) => l.kind === "tool" && l.callId === "call_draft_todo")).toBe(true)
+  const { shown, stored } = lastTurnAnswers(prompt)
+  expect(shown).toEqual(stored)
 })
 
 test("ctrl+o wraps a long error line instead of cutting it with …", async () => {

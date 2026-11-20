@@ -26,7 +26,7 @@ import { describeError } from "../core/chat"
 import { TurnHeldError, type BoundSource, type Waiver } from "../core/memory/binding/bind"
 import { waiveLabel } from "../core/memory/binding/render"
 import type { AgentEvent } from "../core/events"
-import { cardsSwitchOn, loadConfig, saveConfig } from "../core/config"
+import { cardsAutoSave, cardsSwitchOn, loadConfig, saveConfig } from "../core/config"
 import { idleCompactSettings, IdleTimer } from "../core/idle-compact"
 import { loadCatalog } from "../core/catalog"
 import { closeMemory, type Runtime } from "../core/runtime"
@@ -48,7 +48,7 @@ import { MemoryDialog } from "./dialogs/memory"
 import { migrateLegacyMemory } from "../core/memory/legacy"
 import { cardStreamFilter } from "../core/memory/cards/stream"
 import type { Card, CardDraft } from "../core/memory/cards/types"
-import { cardOutcomes, pendingCards, takeCard } from "./cards"
+import { autoSaveCard, cardOutcomes, pendingCards, takeCard } from "./cards"
 import { NotebookFormDialog } from "./dialogs/notebook-form/forms"
 import { offWithConstraints, openNotebookForm } from "./dialogs/notebook-form/open"
 import { notebookCommandOf } from "../core/memory/notebook/commands"
@@ -598,6 +598,38 @@ async function sendTurn(
     }
     edit(current, (l) => (l.text += text))
   }
+  /**
+   * Where the screen stood when each of the last model requests began: lines so far, and the
+   * assistant line then open with its length; [before the one before last, before the last, now].
+   * A retract (the stop gate dropped the text of the last `steps` requests) cuts the screen back:
+   * to before the last request, or, when that one wrote nothing and history lost the preamble
+   * beside the previous request's tool calls, to before that one.
+   */
+  type StepMark = { lines: number; current: number; length: number }
+  const mark = (): StepMark => {
+    const open = state.lines[current]
+    return { lines: state.lines.length, current, length: open?.kind === "assistant" ? open.text.length : 0 }
+  }
+  let stepMarks: [StepMark, StepMark, StepMark] = [mark(), mark(), mark()]
+  const retract = (steps: 1 | 2) => {
+    pending = ""
+    if (flushTimer) clearTimeout(flushTimer)
+    flushTimer = undefined
+    cards = cardStreamFilter()
+    const from = steps === 2 ? stepMarks[0] : stepMarks[1]
+    if (live()) {
+      setState(
+        produce((s) => {
+          const open = s.lines[from.current]
+          if (from.current >= 0 && open?.kind === "assistant") open.text = open.text.slice(0, from.length)
+          // Only the dropped request's text goes: its tool lines (a todo_write beside a draft) stay.
+          s.lines = s.lines.filter((l, i) => i < from.lines || l.kind !== "assistant")
+        }),
+      )
+    }
+    current = from.current >= 0 && from.current < from.lines ? from.current : -1
+    stepMarks = [mark(), mark(), mark()]
+  }
   const closeText = () => {
     pending += cards.end()
     cards = cardStreamFilter()
@@ -630,7 +662,9 @@ async function sendTurn(
     // Sub-agents started in this turn take the same choice (SubagentManager reads it at start).
     runtime.turnWaiver = mode.waive
     // Cards follow the notebook's switch in /config, read for each turn (spec 007).
-    const cardsOn = runtime.memory.id === "notebook" && cardsSwitchOn(await loadConfig())
+    const cardConfig = await loadConfig()
+    const cardsOn = runtime.memory.id === "notebook" && cardsSwitchOn(cardConfig)
+    const autoSave = cardsOn && cardsAutoSave(cardConfig)
     const turn = runAgent({
       history: state.history,
       input: msg.text,
@@ -690,6 +724,13 @@ async function sendTurn(
         case "notice":
           pushLine({ kind: "info", text: event.text })
           break
+        case "step":
+          // Pending text was flushed above: the screen as the next request begins.
+          stepMarks = [stepMarks[1], stepMarks[2], mark()]
+          break
+        case "retract":
+          retract(event.steps)
+          break
         case "memory-redaction": {
           // Masks the store confirmed replace the history for good; held ones were only in what was sent.
           if (event.record.length > 0) {
@@ -741,6 +782,7 @@ async function sendTurn(
       // Never takes the keys: the user's next keystroke belongs to the prompt (an "x" there must not dismiss
       // the card). It is saved or dismissed in /memory, on the Gợi ý tab.
       pushLine({ kind: "card", card: madeCard, state: "pending" })
+      if (autoSave) autoSaveCard(runtime.memory, madeCard)
     }
     madeCard = undefined
     if (live() && controller.signal.aborted) pushLine({ kind: "info", text: "Đã dừng." })
