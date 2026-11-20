@@ -153,7 +153,12 @@ export function isQuotaError(error: unknown): boolean {
 
 /** How long a model whose search hit its quota is skipped (the fallbacks run at once). */
 export const NATIVE_PAUSE_MS = 10 * 60_000
-const nativePaused = new Map<string, number>()
+/** Why a model's search is skipped, and until when: the message must name the real reason. */
+interface NativePause {
+  reason: "quota" | "not-in-plan"
+  until: number
+}
+const nativePaused = new Map<string, NativePause>()
 
 /** Said once when grounding is not in the key's plan (notInPlan). */
 export const NOT_IN_PLAN_NOTE = "Google Search grounding không có ở gói free Gemini 3 của key này; dùng nguồn khác tới hết ngày quota (đổi ở /config)."
@@ -171,18 +176,21 @@ const hhmm = (ms: number) => new Date(ms).toLocaleTimeString("vi-VN", { timeZone
  * quota again and waiting on every search.
  */
 export async function guardedNative<T>(key: string, run: () => Promise<T>, now: () => number = Date.now): Promise<T> {
-  const until = nativePaused.get(key)
-  if (until !== undefined && until > now()) throw new Error(`tạm bỏ qua tới ${hhmm(until)} vì model hết quota (429)`)
+  const pause = nativePaused.get(key)
+  if (pause && pause.until > now()) {
+    const why = pause.reason === "not-in-plan" ? "gói của key không có Google Search grounding" : "model hết quota (429)"
+    throw new Error(`tạm bỏ qua tới ${hhmm(pause.until)} vì ${why}`)
+  }
   try {
     return await run()
   } catch (error) {
     if (!isQuotaError(error)) throw error
     if (notInPlan(error)) {
-      nativePaused.set(key, nextPacificMidnight(now()))
+      nativePaused.set(key, { reason: "not-in-plan", until: nextPacificMidnight(now()) })
       // Within the 120 chars runSearch keeps of a native failure.
       throw new Error(NOT_IN_PLAN_NOTE)
     }
-    nativePaused.set(key, now() + NATIVE_PAUSE_MS)
+    nativePaused.set(key, { reason: "quota", until: now() + NATIVE_PAUSE_MS })
     throw new Error(`${describeError(error)} Tìm kiếm của model tạm bỏ qua 10 phút.`)
   }
 }
