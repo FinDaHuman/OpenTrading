@@ -16,12 +16,12 @@ export function toolSearchTool(registry: ToolRegistry, pending: () => string[] =
   return {
     name: TOOL_SEARCH,
     description: [
-      "Nạp tool đang hoãn (tên trong <tool_hoan>) để gọi được ngay. Dùng khi cần một tool chưa có schema.",
-      'query: "select:ten_a,ten_b" nạp đúng tên (gộp mọi tool sẽ cần vào một lần gọi); hoặc từ khoá Việt/Anh như "gia lich su", "foreign flow"; "+tu" bắt buộc khớp; "mcp__server" lấy cả server.',
+      "Loads deferred tools (names in <tool_hoan>) so they can be called right away. Use when you need a tool that has no schema yet.",
+      'query: "select:name_a,name_b" loads those exact names (put every tool you will need in one call); or Vietnamese/English keywords such as "gia lich su", "foreign flow"; "+word" must match; "mcp__server" takes the whole server.',
     ].join(" "),
     input: z.object({
       query: z.string(),
-      max_results: z.number().int().min(1).max(MAX_RESULTS).optional().describe(`Số tool tối đa (mặc định ${DEFAULT_RESULTS})`),
+      max_results: z.number().int().min(1).max(MAX_RESULTS).optional().describe(`Maximum number of tools (default ${DEFAULT_RESULTS})`),
     }),
     readOnly: true,
     summarize: (input) => `tool_search ${input.query}`,
@@ -36,10 +36,10 @@ export function toolSearchTool(registry: ToolRegistry, pending: () => string[] =
         for (const raw of q.slice("select:".length).split(",").map((s) => s.trim()).filter(Boolean)) {
           const names = resolveToolName(registry, raw)
           const def = names.length === 1 ? registry.get(names[0]!) : undefined
-          if (def?.onDemand) notes.push(`${def.name} chỉ dùng được khi người dùng bật nó cho yêu cầu (ví dụ gõ ultradesk); không nạp bằng tool_search.`)
+          if (def?.onDemand) notes.push(`${def.name} is only available when the user turns it on for a request (e.g. by typing ultradesk); it cannot be loaded with tool_search.`)
           else if (def) found.push(def)
-          else if (names.length > 1) notes.push(`"${raw}" khớp nhiều tool: ${names.join(", ")} — ghi rõ server/tên.`)
-          else notes.push(`Không có tool "${raw}".`)
+          else if (names.length > 1) notes.push(`"${raw}" matches several tools: ${names.join(", ")} — give server/name.`)
+          else notes.push(`No tool "${raw}".`)
         }
       } else if (/^mcp__[A-Za-z0-9_-]+$/.test(q)) {
         const prefix = q.endsWith("__") ? q : `${q}__`
@@ -66,12 +66,12 @@ export function toolSearchTool(registry: ToolRegistry, pending: () => string[] =
         const list = [...servers].map(([s, n]) => `${s.replace(/^mcp:/, "")} (${n} tool)`).join(", ")
         const waiting = pending()
         return [
-          `Không tìm thấy tool khớp "${q}".`,
+          `No tool matches "${q}".`,
           ...notes,
-          list ? `Các server có tool hoãn: ${list}. Thử từ khoá khác hoặc "mcp__<server>" để xem tool của một server.` : "",
-          local.length > 0 ? `Tool có sẵn đang hoãn (nạp bằng "select:<tên>"): ${local.join(", ")}.` : "",
-          !list && local.length === 0 ? "Không có tool hoãn nào." : "",
-          waiting.length > 0 ? `Server đang kết nối (thử lại sau): ${waiting.join(", ")}.` : "",
+          list ? `Servers with deferred tools: ${list}. Try other keywords or "mcp__<server>" to see one server's tools.` : "",
+          local.length > 0 ? `Deferred built-in tools (load with "select:<name>"): ${local.join(", ")}.` : "",
+          !list && local.length === 0 ? "No deferred tools." : "",
+          waiting.length > 0 ? `Servers still connecting (try again later): ${waiting.join(", ")}.` : "",
         ]
           .filter(Boolean)
           .join("\n")

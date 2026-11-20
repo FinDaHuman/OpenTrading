@@ -119,7 +119,7 @@ export function untracedOperands(messages: readonly ModelMessage[], isArithmetic
   }
   const results = messages.slice(at + 1).filter((m) => m.role === "tool")
   const ran = (id: string) =>
-    results.some((m) => typeof m.content !== "string" && m.content.some((p) => p.type === "tool-result" && p.toolCallId === id && /^\[mã thoát 0 /.test(outputText(p.output))))
+    results.some((m) => typeof m.content !== "string" && m.content.some((p) => p.type === "tool-result" && p.toolCallId === id && /^\[(?:exit code|mã thoát) 0 /.test(outputText(p.output))))
   const out: string[] = []
   for (const call of calls) {
     const command = (call.input as { command?: unknown } | undefined)?.command
@@ -134,5 +134,5 @@ export function untracedOperands(messages: readonly ModelMessage[], isArithmetic
 
 /** The one-step note after such a command: the command ran, the model decides. */
 export function operandNote(values: readonly string[]): string {
-  return `<nhac_nho>\nSố ${values.join(", ")} trong lệnh tính vừa rồi không thấy trong dữ liệu đã có (câu hỏi, kết quả tool, output lệnh trước). Nếu đó là số chép lại thì đối chiếu với nguồn rồi chạy lại lệnh trước khi dùng kết quả; nếu là hằng số hay số bạn tự đặt thì bỏ qua nhắc này.\n</nhac_nho>`
+  return `<nhac_nho>\nThe number(s) ${values.join(", ")} in the last calculation do not appear in the data so far (the question, tool results, earlier command output). If they were copied, check them against the source and rerun the command before using the result; if they are constants or values you chose, ignore this note.\n</nhac_nho>`
 }

@@ -10,10 +10,10 @@ export function todoWriteTool(): ToolDef<TodoWriteInput> {
   return {
     name: TODO_WRITE,
     description: [
-      "Ghi danh sách việc cho câu hỏi đang trả lời; giao diện ghim cho người dùng thấy tiến độ.",
-      "Dùng khi: dự kiến từ 3 lượt gọi tool, hoặc người dùng đưa danh sách việc. Không dùng khi: 1–2 lượt tool là xong.",
-      "Mỗi việc là một giai đoạn (một lượt gọi tool song song), không chia theo từng mã. Gửi toàn bộ danh sách mỗi lần, cập nhật cùng lượt với tool của bước kế tiếp; chỉ một việc in_progress.",
-      "CHỈ đánh completed khi việc xong thật (thiếu dữ liệu hay tool lỗi thì giữ in_progress; bỏ thì cancelled). Bước trả lời cuối đóng danh sách trong cùng bước.",
+      "Writes the task list for the question being answered; the interface pins it so the user sees progress.",
+      "Use when: you expect 3 or more tool rounds, or the user gives a list of tasks. Do not use when: 1–2 tool rounds will do.",
+      "Each task is a stage (one round of parallel tool calls), not one per ticker. Send the whole list every time, updating it in the same round as the next step's tools; only one task in_progress.",
+      "Mark completed ONLY when the task is really done (missing data or a failed tool keeps it in_progress; dropped means cancelled). The final answer step closes the list in the same step.",
     ].join(" "),
     input: TodoWriteInput,
     readOnly: true,
@@ -24,13 +24,13 @@ export function todoWriteTool(): ToolDef<TodoWriteInput> {
     },
     async execute({ todos }) {
       const problems = todoProblems(todos)
-      if (problems.length > 0) throw new Error(`Danh sách chưa hợp lệ, gửi lại toàn bộ danh sách đã sửa:\n- ${problems.join("\n- ")}`)
+      if (problems.length > 0) throw new Error(`The list is not valid; send the whole corrected list again:\n- ${problems.join("\n- ")}`)
       const { done, total } = todoProgress(todos)
-      const note = "Giao diện đang hiện danh sách cho người dùng; KHÔNG chép danh sách hay dòng này vào câu trả lời."
-      if (todos.length === 0) return `${TODO_PREFIX} danh sách trống. ${note}`
+      const note = "The interface is showing the list to the user; do NOT copy the list or this line into the answer."
+      if (todos.length === 0) return `${TODO_PREFIX} the list is empty. ${note}`
       const running = todos.find((t) => t.status === "in_progress")
-      const next = running ? ` Làm tiếp: ${running.content}.` : done === total ? " Danh sách đã đóng." : ""
-      return `${TODO_PREFIX} (${done}/${total} xong). ${note}${next}`
+      const next = running ? ` Next: ${running.content}.` : done === total ? " The list is closed." : ""
+      return `${TODO_PREFIX} (${done}/${total} done). ${note}${next}`
     },
   }
 }

@@ -13,8 +13,45 @@ adopt Semantic Versioning when it exposes a stable public API.
   suggestions for Vietnamese questions are unchanged (routing eval: same floors). Skill catalog: o200k 2 662 →
   ~2 090, DeepSeek 3 585 → ~2 120 tokens.
 
+- Runtime text the model reads is in English (E3): stop-gate and todo reminders, rescue prompts, tool-call
+  repair errors, source notices (`[Source failed]`, `[Partial data]`, `[Stale data]`), source lines of web/MCP
+  results, argument errors, denials and auto-mode blocks, compaction prompt and marker, subagent and ultradesk
+  notices, briefs' parameter help, MCP call errors and content placeholders, `@mention` attachments, ask_user
+  results, operand notes, truncation marks. Kept Vietnamese: the notebook's memory blocks and their labels
+  (spec 007 fixes them byte for byte and the history masking reads them), brief section names the subagent
+  prompt cites, TUI notices and `/mcp`, `/memory`, `/desk` interface text. Readers of these texts accept both
+  languages (failure classes, transcript rows, subagent/desk notice parsers, pruned markers, the truncate mark
+  in memory history, the compact marker's skill line).
+
+
+- Tool descriptions, parameter descriptions and the text tools return to the model are in English (all built-in
+  tools: shell, files, web, charts, todo, subagents, skills, sessions, watchlist, desk), and so are the
+  request-wide blocks: `<quyen_tep>`, the permission-mode line, the market clock (`market/calendar.json`
+  labels), the MCP and deferred-tool headers, the skill hint and the `ot-data` line. Interface-only text
+  (`summarize`, approval previews, the mode label) stays Vietnamese; the model is told to write
+  user-visible fields (ask_user questions, todo items, shell and subagent descriptions) in Vietnamese.
+  Parsers of these texts accept both languages (failure classes, operand notes, `@mentions` line counts,
+  eval shell routes, saved todo prefixes). Tool definitions: o200k 8 104 → 7 886, DeepSeek 9 325 → 8 295
+  tokens; always-sent tools DeepSeek 3 773 → 3 184.
+
+
+- System prompt files (`prompts/*.md`) are in English, same rules in the same order. Tags, gate markers, slash
+  commands, the Vietnamese phrases the model must not write ("đã lưu"…) and Vietnamese examples stay as they
+  were. A literal translation weakened rules (memory disclosure 3/9 vs 9/9 on gemini-3.5-flash-lite), so a few
+  rules spell out what the Vietnamese implied: no target range or buy zone, no bare ticker or yes/no as the
+  choice, LaTeX as a prohibition, Vietnamese also in free-text JSON fields, the three things a "save this"
+  answer must say. Terminal system prompt: o200k 3 376 → 3 015 tokens, DeepSeek 4 635 → 3 180. Paired evals
+  (16/11, nemotron-3.5-super-vl): red-team 18/18 vs 17/18, memory 8/9 vs 6/9, compute 15/15 both.
+
 ### Fixed
 
+- `tool_search "tin tức"` finds `web_search`. "tin tức" expanded to `news`, which no tool carried, so only "tin"
+  scored, once in `web_search`'s description and once in `send_message`'s ("thông tin"): a tie, broken by name,
+  loaded `send_message` (#316). `web_search` now has a search hint (tin tức, thời sự, báo chí, sự kiện, news,
+  headlines) and its description says "tin tức, thời sự".
+- `glob_files` and `doctor_local` are no longer deferred below the tool-search threshold (#317). Hidden, turns
+  listed files and checked the setup with `shell` instead, which asks for approval where these read-only tools
+  do not. About 230 tokens per request in those turns; past the threshold they are deferred as before.
 - Figure reading (`loop/figures.ts`): a decimal with four or more digits after the separator ("6,9034",
   "6.9034") is read whole. A three-digit group must end there to count as thousands; before, "6,9034" read as
   6,903 and dropped the 4, so a copied figure looked ungrounded (MyToDoList 43j/43z).

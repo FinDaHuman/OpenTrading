@@ -141,7 +141,7 @@ test("manual: the head is summarized; marker + summary + kept turns, and the har
   // The todo list was written in the summarized head and is still current: it is carried.
   expect(currentTodos(history)).toEqual([...todos])
   expect(currentTodos(result.messages)).toEqual([...todos])
-  expect(JSON.stringify(result.messages[0])).toContain("Skill đã nạp: devil-advocate")
+  expect(JSON.stringify(result.messages[0])).toContain("Skills loaded: devil-advocate")
   // The transcript shows one compact item for the marker + summary.
   expect(transcriptFromMessages(result.messages)[0]).toEqual({ kind: "compact", text: "## Yêu cầu của người dùng\nphân tích FPT" })
 })
@@ -197,8 +197,8 @@ test("auto-compaction triggers at the threshold, waits for growth after a compac
 test("the summary prompt asks for verbatim sourced figures and carries the user's extra instructions", () => {
   const prompt = compactPrompt("tập trung vào ngân hàng")
   expect(prompt).toContain("## Số liệu đã xác minh")
-  expect(prompt).toContain("không làm tròn")
-  expect(prompt).toContain("không gọi tool")
+  expect(prompt).toContain("no rounding")
+  expect(prompt).toContain("no tool calls")
   expect(prompt).toContain("tập trung vào ngân hàng")
   expect(compactPrompt()).not.toContain("Yêu cầu thêm")
 })
@@ -207,7 +207,7 @@ test("one request: an <analysis> scratchpad then the <summary>; lean drops the a
   const full = compactPrompt()
   expect(full).toContain("<analysis>")
   expect(full).toContain("<summary>")
-  expect(full).toContain("không gọi tool")
+  expect(full).toContain("no tool calls")
   expect(full).toContain("## Phân tích và kết luận đã đưa ra")
   const lean = compactPrompt(undefined, "lean")
   expect(lean).toContain("## Số liệu đã xác minh")
@@ -217,13 +217,13 @@ test("one request: an <analysis> scratchpad then the <summary>; lean drops the a
   // Spec 007 (design.md L7): the lean variant keeps what the user said about risk, horizon and style too.
   for (const prompt of [full, lean]) {
     expect(prompt).toContain("## Ràng buộc và sở thích")
-    expect(prompt).toContain("Điều người dùng đã nói trong hội thoại này")
+    expect(prompt).toContain("What the user said in this conversation")
     // Memory, saved constraints and the profile are sent again with every request: labels only.
-    expect(prompt).toContain('Không chép nội dung khối memory ("[Memory · …]"), ràng buộc đã lưu hay hồ sơ nhà đầu tư')
+    expect(prompt).toContain('Do not copy the content of memory blocks ("[Memory · …]"), saved constraints or the investor profile')
     expect(prompt).toContain('"bài học #7"')
   }
   // A figure only an earlier answer gave is not sourced to a tool (30/10, AAA "LNTT +29,3%").
-  for (const prompt of [full, lean]) expect(prompt).toContain('ghi nguồn là "câu trả lời trước", không ghi tên tool')
+  for (const prompt of [full, lean]) expect(prompt).toContain('gets the source "câu trả lời trước", never a tool name')
 })
 
 test("the stored summary drops the scratchpad; a cut-off analysis is no summary", () => {
@@ -297,9 +297,9 @@ test("loaded skills survive a second compaction (read back from the first marker
     { role: "assistant", content: "ok" },
   ]
   const first = await compactHistory([...skillTurn, ...turn(2), ...turn(3)], { manual: true, summarize: async () => "t1" })
-  expect(JSON.stringify(first.messages[0])).toContain("Skill đã nạp: devil-advocate")
+  expect(JSON.stringify(first.messages[0])).toContain("Skills loaded: devil-advocate")
   const second = await compactHistory([...first.messages, ...turn(4), ...turn(5)], { manual: true, summarize: async () => "t2" })
-  expect(JSON.stringify(second.messages[0])).toContain("Skill đã nạp: devil-advocate")
+  expect(JSON.stringify(second.messages[0])).toContain("Skills loaded: devil-advocate")
 })
 
 test("tokensOf counts an image as IMAGE_TOKENS, but a long non-image `data` string as text", async () => {

@@ -28,7 +28,7 @@ import {
   type NewSubjectDraft,
   type ThesisDraft,
 } from "./drafts"
-import { renderNotebookMarkdown, writeNotebookExport } from "./export"
+import { renderNotebookFolder, renderNotebookMarkdown, writeNotebookExport, writeNotebookFolderExport } from "./export"
 import { formatDate, THESIS_STATE_LABEL } from "./render"
 
 /**
@@ -131,8 +131,11 @@ export interface NotebookAdmin {
   saveLesson(draft: LessonDraft, edit?: { id: number; expected: number }, from?: { card?: boolean }): SaveResult
   saveDecision(subject: SubjectTarget | NewSubjectDraft, draft: DecisionDraft): SaveResult
   setThesisState(subjectId: number, expected: number, state: ThesisStateChoice): SaveResult
-  /** A Markdown copy of the notebook in the exports folder; decisions only when asked for this once. */
-  exportMarkdown(opts: { decisions: boolean }): Promise<{ ok: true; file: string } | { ok: false; message: string }>
+  /**
+   * A Markdown copy of the notebook in the exports folder; decisions only when asked for this once.
+   * `folder`: a folder per group with one file per entry and an index (#346); `file` is the path of that folder.
+   */
+  exportMarkdown(opts: { decisions: boolean; folder?: boolean }): Promise<{ ok: true; file: string } | { ok: false; message: string }>
 }
 
 /** What lifecycle.ts hands over: the store's user side, while it is open. */
@@ -543,7 +546,7 @@ export function createNotebookAdmin(side: AdminSide): NotebookAdmin {
       })
     },
 
-    async exportMarkdown(opts: { decisions: boolean }) {
+    async exportMarkdown(opts: { decisions: boolean; folder?: boolean }) {
       const reader = side.closed() ? undefined : side.reader()
       if (!reader) return { ok: false as const, message: unavailable() ?? "Sổ ghi nhớ chưa mở được." }
       let entries: NotebookEntry[]
@@ -558,7 +561,9 @@ export function createNotebookAdmin(side: AdminSide): NotebookAdmin {
       // workspace; in tests, the temp folder.
       const dir = path.join(path.dirname(side.path), "exports")
       try {
-        const file = await writeNotebookExport(dir, renderNotebookMarkdown(entries, { decisions: opts.decisions, at }), at)
+        const file = opts.folder
+          ? await writeNotebookFolderExport(dir, renderNotebookFolder(entries, { decisions: opts.decisions, at }), at)
+          : await writeNotebookExport(dir, renderNotebookMarkdown(entries, { decisions: opts.decisions, at }), at)
         return { ok: true as const, file }
       } catch (error) {
         const why = error instanceof Error ? error.message : String(error)

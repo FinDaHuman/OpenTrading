@@ -198,7 +198,7 @@ export function criticalDelete(command: string, env: CriticalEnv): string | unde
     const targets = w.slice(1).filter((a) => !a.startsWith("-") && !/^\/[a-z]$/i.test(a))
     if (!recursive(w) && !isRemoveItem) continue
     const hit = targets.find((t) => criticalTarget(t, env))
-    if (hit) return `lệnh xoá đệ quy nhắm vào "${hit}" (thư mục gốc, ổ đĩa, home, thư mục hệ thống hoặc gốc workspace)`
+    if (hit) return `a recursive delete aimed at "${hit}" (a root folder, drive, home, system folder or the workspace root)`
   }
   return undefined
 }

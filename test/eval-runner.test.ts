@@ -284,10 +284,10 @@ test("--memory notebook: each question gets an empty notebook (guide in the prom
     const system = streamed.map((b) => JSON.stringify(b.messages.find((m) => m.role === "system")?.content ?? ""))
     const offered = streamed.map((b) => (b.tools ?? []).some((t) => t.function.name === "memory_read"))
     if (memory === "notebook") {
-      expect(system.every((s) => s.includes("Sổ ghi nhớ là ghi chép"))).toBe(true)
+      expect(system.every((s) => s.includes("The notebook (sổ ghi nhớ) holds notes"))).toBe(true)
       expect(offered.some(Boolean)).toBe(true)
     } else {
-      expect(system.some((s) => s.includes("Sổ ghi nhớ là ghi chép"))).toBe(false)
+      expect(system.some((s) => s.includes("The notebook (sổ ghi nhớ) holds notes"))).toBe(false)
       expect(offered.some(Boolean)).toBe(false)
     }
     expect(opened).toEqual([memory, memory])
@@ -308,10 +308,10 @@ test("a rule switched off stays off, notice included, and the rest still run", a
 test("the nudge after tool results can go, alone or with only its todo part", async () => {
   const sent = () => JSON.stringify(bodies.at(-1)!.messages)
   await run([question("q1")])
-  expect(sent()).toContain("Nếu còn cần dữ liệu, gọi cùng lúc")
+  expect(sent()).toContain("If you still need data, call every independent tool at once")
   bodies.length = 0
   await run([question("q1")], 1, undefined, parseAblations(["tool-nudge"]))
-  expect(sent()).not.toContain("Nếu còn cần dữ liệu, gọi cùng lúc")
+  expect(sent()).not.toContain("If you still need data, call every independent tool at once")
 })
 
 test("setup ablations take their tools away and reach the config", async () => {
@@ -358,6 +358,22 @@ test("prepareHome copies connections, not the user's profile, and pins the model
   expect(await readFile(path.join(to, "auth.json"), "utf8")).toBe("{}")
   expect(await Bun.file(path.join(to, "INVESTOR.md")).exists()).toBe(false)
   expect(JSON.parse(await readFile(path.join(to, "config.json"), "utf8"))).toEqual({ provider: "groq", model: "tooly" })
+  await rm(from, { recursive: true, force: true })
+  await rm(to, { recursive: true, force: true })
+})
+
+test("#338: --effort is written into the run's own config and --investor copies a fixture with its sha256", async () => {
+  const from = await mkdtemp(path.join(os.tmpdir(), "ot-eval-from-"))
+  const to = await mkdtemp(path.join(os.tmpdir(), "ot-eval-to-"))
+  const fixture = path.join(from, "investor-fixture.md")
+  await writeFile(path.join(from, "INVESTOR.md"), "hồ sơ riêng của người chạy")
+  await writeFile(fixture, "Hồ sơ cố định: dài hạn, ngân hàng")
+  const { investorSha256 } = await prepareHome(from, to, { provider: "groq", model: "tooly" }, undefined, undefined, { effort: "high", investor: fixture })
+  expect(JSON.parse(await readFile(path.join(to, "config.json"), "utf8"))).toEqual({ provider: "groq", model: "tooly", effort: "high" })
+  expect(await readFile(path.join(to, "INVESTOR.md"), "utf8")).toBe("Hồ sơ cố định: dài hạn, ngân hàng")
+  expect(investorSha256).toBe(new Bun.CryptoHasher("sha256").update("Hồ sơ cố định: dài hạn, ngân hàng").digest("hex"))
+  // Without the flags: no effort, no profile, whatever the user's own config says.
+  expect(await prepareHome(from, to, { provider: "groq", model: "tooly" })).toEqual({})
   await rm(from, { recursive: true, force: true })
   await rm(to, { recursive: true, force: true })
 })

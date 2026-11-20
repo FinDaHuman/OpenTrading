@@ -32,10 +32,10 @@ const secretRoot = (workspace: Workspace) => (input: unknown) => {
 
 async function ensureDir(abs: string) {
   try {
-    if (!(await stat(abs)).isDirectory()) throw new Error(`${abs} là file, không phải thư mục (đọc bằng read_file).`)
+    if (!(await stat(abs)).isDirectory()) throw new Error(`${abs} is a file, not a directory (read it with read_file).`)
   } catch (error) {
-    if (error instanceof Error && error.message.includes("không phải thư mục")) throw error
-    throw new Error(`Không có thư mục ${abs}.`)
+    if (error instanceof Error && error.message.includes("not a directory")) throw error
+    throw new Error(`No directory ${abs}.`)
   }
 }
 
@@ -58,15 +58,15 @@ export function globFilesTool(workspace: Workspace): ToolDef<GlobInput> {
   return {
     name: "glob_files",
     description:
-      'Tìm file theo mẫu tên (glob, ví dụ "*.pdf", "bao-cao/**/*.md"), mới sửa nhất trước, tối đa 100. ' +
-      "Dùng khi cần biết có file nào trước khi đọc. Không dùng khi tìm chữ trong file (dùng grep_files).",
+      'Finds files by name pattern (glob, e.g. "*.pdf", "bao-cao/**/*.md"), most recently modified first, at most 100. ' +
+      "Use to see which files exist before reading. Not for searching text inside files (use grep_files).",
     input: z.object({
       pattern: z.string().min(1),
-      path: z.string().optional().describe("Mặc định workspace"),
+      path: z.string().optional().describe("Default: the workspace"),
     }),
     readOnly: true,
     deferrable: true,
-    deferByDefault: true,
+    // Not deferred by default (#317): hidden, turns listed files or checked config with shell instead.
     source: LOCAL_SOURCE,
     askFor: secretRoot(workspace),
     subject: (input) => rootOf(workspace, input.path),
@@ -78,11 +78,11 @@ export function globFilesTool(workspace: Workspace): ToolDef<GlobInput> {
       const { files, capped } = await walkFiles(root, { signal: ctx.signal, accept: match, env: workspace.env() })
       const sorted = await byMtime(files)
       const shown = sorted.slice(0, GLOB_LIMIT)
-      if (shown.length === 0) return `Không có file nào khớp "${input.pattern}" trong ${root}.${capped ? " (Thư mục quá lớn, đã dừng giữa chừng: thu hẹp path.)" : ""}`
+      if (shown.length === 0) return `No file matches "${input.pattern}" in ${root}.${capped ? " (The directory is too large and the search stopped early: narrow path.)" : ""}`
       return [
-        `${sorted.length} file khớp "${input.pattern}" trong ${root}${sorted.length > shown.length ? ` (hiện ${shown.length} file mới nhất; thu hẹp mẫu hoặc path)` : ""}:`,
+        `${sorted.length} files match "${input.pattern}" in ${root}${sorted.length > shown.length ? ` (showing the ${shown.length} newest; narrow the pattern or path)` : ""}:`,
         ...shown.map((f) => f.abs),
-        ...(capped ? ["(Thư mục quá lớn, đã dừng giữa chừng: kết quả có thể thiếu; thu hẹp path.)"] : []),
+        ...(capped ? ["(The directory is too large and the search stopped early: results may be incomplete; narrow path.)"] : []),
       ].join("\n")
     },
   }
@@ -102,16 +102,16 @@ export function grepFilesTool(workspace: Workspace): ToolDef<GrepInput> {
   return {
     name: "grep_files",
     description:
-      "Tìm chữ (regex JavaScript) trong file text của một thư mục hoặc file. output_mode: files_with_matches (mặc định), content (dòng khớp, thêm context), count. " +
-      "Dùng khi tìm một mã, con số, từ khoá trong nhiều file hay file dài. Không dùng khi tìm file theo tên (dùng glob_files); không đọc PDF, ảnh.",
+      "Searches text (JavaScript regex) in the text files of a directory or one file. output_mode: files_with_matches (default), content (matching lines, plus context), count. " +
+      "Use to find a ticker, number or keyword across many files or in a long file. Not for finding files by name (use glob_files); does not read PDFs or images.",
     input: z.object({
       pattern: z.string().min(1),
-      path: z.string().optional().describe("Mặc định workspace"),
-      glob: z.string().optional().describe('Lọc file, ví dụ "*.md"'),
+      path: z.string().optional().describe("Default: the workspace"),
+      glob: z.string().optional().describe('File filter, e.g. "*.md"'),
       ignore_case: z.boolean().optional(),
       output_mode: z.enum(["files_with_matches", "content", "count"]).optional(),
       context: z.number().int().min(0).max(10).optional(),
-      head_limit: z.number().int().min(1).max(2000).optional().describe("Mặc định 250"),
+      head_limit: z.number().int().min(1).max(2000).optional().describe("Default 250"),
     }),
     readOnly: true,
     deferrable: true,
@@ -125,14 +125,14 @@ export function grepFilesTool(workspace: Workspace): ToolDef<GrepInput> {
       try {
         re = new RegExp(input.pattern, input.ignore_case ? "iu" : "u")
       } catch (error) {
-        throw new Error(`Biểu thức "${input.pattern}" không hợp lệ: ${error instanceof Error ? error.message : String(error)}`)
+        throw new Error(`Invalid pattern "${input.pattern}": ${error instanceof Error ? error.message : String(error)}`)
       }
       const target = rootOf(workspace, input.path)
       let info
       try {
         info = await stat(target)
       } catch {
-        throw new Error(`Không có file hoặc thư mục ${target}.`)
+        throw new Error(`No file or directory ${target}.`)
       }
       let files: WalkEntry[]
       let capped = false
@@ -151,7 +151,7 @@ export function grepFilesTool(workspace: Workspace): ToolDef<GrepInput> {
       const tooBig: string[] = []
       const unreadable: string[] = []
       for (const file of files) {
-        if (ctx.signal.aborted) throw new Error("Đã huỷ.")
+        if (ctx.signal.aborted) throw new Error("Cancelled.")
         let bytes: Uint8Array
         try {
           const size = (await stat(file.abs)).size
@@ -188,8 +188,8 @@ export function grepFilesTool(workspace: Workspace): ToolDef<GrepInput> {
       }
       const skipped = skippedNote(tooBig, unreadable)
       if (hits.length === 0) {
-        if (info.isFile() && skipped) throw new Error(`Không tìm được trong ${target}: ${skipped}`)
-        return [`Không tìm thấy "${input.pattern}" trong ${target}.${capped ? " (Thư mục quá lớn, đã dừng giữa chừng: thu hẹp path.)" : ""}`, ...(skipped ? [`(${skipped})`] : [])].join("\n")
+        if (info.isFile() && skipped) throw new Error(`Could not search ${target}: ${skipped}`)
+        return [`"${input.pattern}" not found in ${target}.${capped ? " (The directory is too large and the search stopped early: narrow path.)" : ""}`, ...(skipped ? [`(${skipped})`] : [])].join("\n")
       }
       const ordered = mode === "content" ? hits : await byMtimeHits(hits)
       const out =
@@ -201,9 +201,9 @@ export function grepFilesTool(workspace: Workspace): ToolDef<GrepInput> {
       const shown = out.slice(0, limit)
       const total = hits.reduce((n, h) => n + h.count, 0)
       return [
-        `${total} dòng khớp trong ${hits.length} file${out.length > shown.length ? ` (hiện ${shown.length}/${out.length} dòng kết quả; tăng head_limit hoặc thu hẹp path/glob)` : ""}:`,
+        `${total} matching lines in ${hits.length} files${out.length > shown.length ? ` (showing ${shown.length}/${out.length} result lines; raise head_limit or narrow path/glob)` : ""}:`,
         ...shown,
-        ...(capped ? ["(Thư mục quá lớn, đã dừng giữa chừng: kết quả có thể thiếu; thu hẹp path.)"] : []),
+        ...(capped ? ["(The directory is too large and the search stopped early: results may be incomplete; narrow path.)"] : []),
         ...(skipped ? [`(${skipped})`] : []),
       ].join("\n")
     },
@@ -214,10 +214,10 @@ export function grepFilesTool(workspace: Workspace): ToolDef<GrepInput> {
 function skippedNote(tooBig: string[], unreadable: string[]): string | undefined {
   const list = (files: string[]) => `${files.slice(0, 5).join(", ")}${files.length > 5 ? `, … (+${files.length - 5})` : ""}`
   const parts = [
-    tooBig.length ? `bỏ qua ${tooBig.length} file lớn hơn ${GREP_MAX_FILE_BYTES / 1024 / 1024} MiB: ${list(tooBig)}` : "",
-    unreadable.length ? `không đọc được ${unreadable.length} file: ${list(unreadable)}` : "",
+    tooBig.length ? `skipped ${tooBig.length} files over ${GREP_MAX_FILE_BYTES / 1024 / 1024} MiB: ${list(tooBig)}` : "",
+    unreadable.length ? `could not read ${unreadable.length} files: ${list(unreadable)}` : "",
   ].filter(Boolean)
-  return parts.length ? `${parts.join("; ")}; kết quả có thể thiếu (đọc phần cần thiết bằng read_file với offset/limit).` : undefined
+  return parts.length ? `${parts.join("; ")}; results may be incomplete (read the part you need with read_file and offset/limit).` : undefined
 }
 
 async function byMtimeHits<T extends { file: WalkEntry }>(hits: T[]) {

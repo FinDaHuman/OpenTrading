@@ -28,8 +28,8 @@ test("doctor_local names providers (never keys), the data folder, MCP errors and
     hiddenSkills: () => [{ name: "dinh-vi-chu-ky-vn", missing: ["cycle_stats_check"] }],
   })
   const out = (await doctor.execute({}, ctx)) as string
-  expect(out).toContain("Provider đã có key: google, groq")
+  expect(out).toContain("Providers with a key: google, groq")
   expect(out).toContain("- opentrading: failed (0 tool) — HTTP 502")
-  expect(out).toContain("- dinh-vi-chu-ky-vn: thiếu cycle_stats_check")
-  expect(out).toContain("Thư mục dữ liệu: /tmp/ot")
+  expect(out).toContain("- dinh-vi-chu-ky-vn: missing cycle_stats_check")
+  expect(out).toContain("Data folder: /tmp/ot")
 })

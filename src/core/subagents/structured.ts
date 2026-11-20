@@ -16,18 +16,18 @@ export const MAX_RESULT_ATTEMPTS = 5
 
 /** Sent when a turn ended without a valid call; the next turn's last step forces the tool. */
 export const RESULT_REMINDER =
-  `Bạn chưa gọi ${RESULT_TOOL} với kết quả hợp lệ. Gọi ${RESULT_TOOL} ngay, đúng schema, với những gì đã có; ` +
-  "thiếu số liệu thì ghi rõ là thiếu, không bịa."
+  `You have not called ${RESULT_TOOL} with a valid result. Call ${RESULT_TOOL} now, matching the schema, with what you have; ` +
+  "mark missing figures as missing, never invent them."
 
 /** The last step of a run with a schema: answer through the tool, not in prose. */
-export const RESULT_LAST_STEP = `Đây là bước cuối. Gọi ${RESULT_TOOL} ngay với kết quả hiện có; thiếu gì thì ghi rõ là thiếu.`
+export const RESULT_LAST_STEP = `This is the last step. Call ${RESULT_TOOL} now with the result you have; mark anything missing as missing.`
 
 export function resultTool(schema: z.ZodObject, sink: (data: unknown) => void): ToolDef {
   return {
     name: RESULT_TOOL,
     description:
-      `Trả kết quả cuối cùng của nhiệm vụ cho bên giao việc, đúng schema. Gọi đúng một lần khi đã xong; ` +
-      "sau khi gọi thì dừng, không viết thêm.",
+      `Returns the task's final result to whoever assigned it, matching the schema. Call exactly once when done; ` +
+      "after the call, stop and write nothing more.",
     input: schema,
     readOnly: true,
     // Ahead of every other tool, so a provider's tool cap can never drop it.
@@ -38,7 +38,7 @@ export function resultTool(schema: z.ZodObject, sink: (data: unknown) => void): 
       // (defaults and transforms applied once). Parsing it again would break transforms
       // such as z.string().transform(Number).
       sink(input)
-      return "Đã nhận kết quả. Dừng tại đây."
+      return "Result received. Stop here."
     },
   }
 }

@@ -98,7 +98,7 @@ test("load_skill preloads uses_tools (not every gate tool) and refuses a skill w
   expect(out).not.toContain("cycle_stats_refresh")
 
   const missing = loadSkillTool(() => [skill], () => [], () => new Set(["current_time"]))
-  await expect(missing.execute({ name: "chu-ky" }, ctx)).rejects.toThrow("đang tắt vì thiếu tool: cycle_stats_check")
+  await expect(missing.execute({ name: "chu-ky" }, ctx)).rejects.toThrow("is off because tools are missing: cycle_stats_check")
 })
 
 

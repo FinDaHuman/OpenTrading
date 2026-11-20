@@ -109,7 +109,7 @@ export function suggestedSkills(input: string, skills: Awaited<ReturnType<typeof
     now: new Date("2026-10-13T03:00:00Z"),
   })
   const hint = assembled.reminders.find((r) => r.startsWith("<goi_y_skill>"))
-  const match = hint?.match(/skill: ([^.]+)\./)
+  const match = hint?.match(/skill(?:\(s\))?: ([^.]+)\./)
   return match ? match[1]!.split(", ").map((s) => s.trim()) : []
 }
 

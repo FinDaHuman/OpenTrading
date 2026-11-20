@@ -1,29 +1,70 @@
 {
   "verified": false,
-  "note": "Lịch phiên viết theo hiểu biết chung về HOSE/HNX/UPCoM, CHƯA đối chiếu thông báo chính thức. Quy chế giao dịch có thể đổi (KRX, lộ trình CCP). Thay file này bằng dữ liệu từ exchange-calendar service khi có.",
-  "asof": "2026-09-29",
+  "note": "Intraday session slots remain unverified. Holiday dates for 2026 follow HOSE/HNX notices below; Saturday administrative make-up days are not trading sessions. Dates outside this range have no verified holiday calendar.",
+  "asof": "2026-11-20",
   "timezone": "Asia/Ho_Chi_Minh",
-  "holidays": [],
+  "holidays": [
+    "2026-01-01",
+    "2026-01-02",
+    "2026-02-16",
+    "2026-02-17",
+    "2026-02-18",
+    "2026-02-19",
+    "2026-02-20",
+    "2026-04-27",
+    "2026-04-30",
+    "2026-05-01",
+    "2026-08-31",
+    "2026-09-01",
+    "2026-09-02",
+    "2026-11-24"
+  ],
+  "holidayRange": {
+    "from": "2026-01-01",
+    "to": "2026-12-31"
+  },
+  "holidaySources": [
+    {
+      "url": "https://www.hsx.vn/vi/tin-tuc/hose-thong-bao-lich-nghi-giao-dich-nam-2026/2437411",
+      "published": "2026-04-29",
+      "scope": "HOSE 2026 annual holidays"
+    },
+    {
+      "url": "https://staticfile.hsx.vn/Uploads/UploadDocuments/2426350/20251225_Thong%20bao%20%20ve%20%20viec%20cap%20nhat%20lich%20nghi%20giao%20dich%20Tet%20Duong%20lich%202026%20toan%20thi%20truong.pdf",
+      "published": "2025-12-25",
+      "scope": "2410/TB-SGDHCM: adds January 2"
+    },
+    {
+      "url": "https://www.gov.hnx.vn/vi-vn/chi-tiet-lich-nghi-gd-60021971.html?_page=1",
+      "published": "2025-12-03",
+      "scope": "HNX/UPCoM 2026 annual holidays"
+    },
+    {
+      "url": "https://hnx.vn/vi-vn/chi-tiet-lich-nghi-gd-60023839.html?_page=1",
+      "published": "2026-11-10",
+      "scope": "4892/TB-SGDHN: November 24 closure"
+    }
+  ],
   "exchanges": {
     "HOSE": [
-      { "from": "09:00", "to": "09:15", "phase": "ATO", "label": "khớp lệnh định kỳ mở cửa (ATO)" },
-      { "from": "09:15", "to": "11:30", "phase": "continuous", "label": "khớp lệnh liên tục (sáng)" },
-      { "from": "11:30", "to": "13:00", "phase": "break", "label": "nghỉ trưa" },
-      { "from": "13:00", "to": "14:30", "phase": "continuous", "label": "khớp lệnh liên tục (chiều)" },
-      { "from": "14:30", "to": "14:45", "phase": "ATC", "label": "khớp lệnh định kỳ đóng cửa (ATC)" },
-      { "from": "14:45", "to": "15:00", "phase": "put-through", "label": "chỉ giao dịch thoả thuận" }
+      { "from": "09:00", "to": "09:15", "phase": "ATO", "label": "opening call auction (ATO)" },
+      { "from": "09:15", "to": "11:30", "phase": "continuous", "label": "continuous matching (morning)" },
+      { "from": "11:30", "to": "13:00", "phase": "break", "label": "lunch break" },
+      { "from": "13:00", "to": "14:30", "phase": "continuous", "label": "continuous matching (afternoon)" },
+      { "from": "14:30", "to": "14:45", "phase": "ATC", "label": "closing call auction (ATC)" },
+      { "from": "14:45", "to": "15:00", "phase": "put-through", "label": "put-through trades only" }
     ],
     "HNX": [
-      { "from": "09:00", "to": "11:30", "phase": "continuous", "label": "khớp lệnh liên tục (sáng)" },
-      { "from": "11:30", "to": "13:00", "phase": "break", "label": "nghỉ trưa" },
-      { "from": "13:00", "to": "14:30", "phase": "continuous", "label": "khớp lệnh liên tục (chiều)" },
-      { "from": "14:30", "to": "14:45", "phase": "ATC", "label": "khớp lệnh định kỳ đóng cửa (ATC)" },
-      { "from": "14:45", "to": "15:00", "phase": "post-close", "label": "phiên sau giờ (PLO)" }
+      { "from": "09:00", "to": "11:30", "phase": "continuous", "label": "continuous matching (morning)" },
+      { "from": "11:30", "to": "13:00", "phase": "break", "label": "lunch break" },
+      { "from": "13:00", "to": "14:30", "phase": "continuous", "label": "continuous matching (afternoon)" },
+      { "from": "14:30", "to": "14:45", "phase": "ATC", "label": "closing call auction (ATC)" },
+      { "from": "14:45", "to": "15:00", "phase": "post-close", "label": "post-close session (PLO)" }
     ],
     "UPCoM": [
-      { "from": "09:00", "to": "11:30", "phase": "continuous", "label": "khớp lệnh liên tục (sáng)" },
-      { "from": "11:30", "to": "13:00", "phase": "break", "label": "nghỉ trưa" },
-      { "from": "13:00", "to": "15:00", "phase": "continuous", "label": "khớp lệnh liên tục (chiều)" }
+      { "from": "09:00", "to": "11:30", "phase": "continuous", "label": "continuous matching (morning)" },
+      { "from": "11:30", "to": "13:00", "phase": "break", "label": "lunch break" },
+      { "from": "13:00", "to": "15:00", "phase": "continuous", "label": "continuous matching (afternoon)" }
     ]
   }
 }
