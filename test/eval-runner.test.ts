@@ -284,10 +284,10 @@ test("--memory notebook: each question gets an empty notebook (guide in the prom
     const system = streamed.map((b) => JSON.stringify(b.messages.find((m) => m.role === "system")?.content ?? ""))
     const offered = streamed.map((b) => (b.tools ?? []).some((t) => t.function.name === "memory_read"))
     if (memory === "notebook") {
-      expect(system.every((s) => s.includes("Sổ ghi nhớ là ghi chép"))).toBe(true)
+      expect(system.every((s) => s.includes("The notebook (sổ ghi nhớ) holds notes"))).toBe(true)
       expect(offered.some(Boolean)).toBe(true)
     } else {
-      expect(system.some((s) => s.includes("Sổ ghi nhớ là ghi chép"))).toBe(false)
+      expect(system.some((s) => s.includes("The notebook (sổ ghi nhớ) holds notes"))).toBe(false)
       expect(offered.some(Boolean)).toBe(false)
     }
     expect(opened).toEqual([memory, memory])

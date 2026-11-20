@@ -110,8 +110,8 @@ test("investor profile rides the static system prefix, capped per tier, and neve
 test("tier C keeps style (reader-language rules cannot be dropped) and the market clock", () => {
   const c = assemble(base({ tier: "C" }))
   expect(c.report.find((r) => r.id === "style")!.dropped).toBe(false)
-  expect(c.system).toContain("Ngôn ngữ cho người đọc")
-  expect(c.system).toContain("chú giải ngay trong câu")
+  expect(c.system).toContain("Language for the reader")
+  expect(c.system).toContain("glossed right in the sentence")
   expect(c.system).toContain("<identity>")
   expect(c.reminders.some((r) => r.startsWith("<phien_giao_dich>"))).toBe(true)
 })
@@ -181,7 +181,7 @@ test("tool guidance lives in one place and the format example carries no real-lo
   // Formatting rules are in <citations>, which is never cut (style is dropped on tier C).
   const tierC = assemble(base({ tier: "C" })).system
   expect(tierC).toContain("dd/mm/yyyy")
-  expect(tierC).toContain("đơn vị")
+  expect(tierC).toContain("unit")
   const example = a.system.slice(a.system.indexOf("<vi_du>"), a.system.indexOf("</vi_du>"))
   expect(example.length).toBeGreaterThan(0)
   expect(example).not.toMatch(/\d/)
@@ -200,8 +200,12 @@ test("tool guidance lives in one place and the format example carries no real-lo
   // 15/11/2026 dedupe (style's repeated rules and examples, the shell retry line;
   // docs/superpowers/plans/2026-11-15-system-prompt-optimization.md items 4–5), ≈1.98k after the
   // 16/11/2026 bat_bien 3 sentence for a forced pick, a yes/no or "if you were me" (issue #303: a
-  // shorter wording held 2/3 instead of 3/3 on gemini-3.5-flash-lite; guard +10).
-  expect(Math.ceil(a.system.length / 4)).toBeLessThan(1_990)
+  // shorter wording held 2/3 instead of 3/3 on gemini-3.5-flash-lite; guard +10), ≈2.22k after the
+  // 16/11/2026 English prompt files: chars/4 counts English higher than Vietnamese although real tokens
+  // fell (terminal system o200k 3 376 → 3 015, DeepSeek 4 635 → 3 180); the guard follows the proxy.
+  // ≈2.25k after the 20/11/2026 #355 review: bat_bien 3 keeps the general "do not choose in any
+  // form" ban, and the no-tags rule exempts the the_goi_y card (guard +30).
+  expect(Math.ceil(a.system.length / 4)).toBeLessThan(2_260)
 })
 
 test("the constraints budget key is explicit and never cuts on any tier", () => {
