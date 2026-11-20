@@ -15,8 +15,7 @@ import { createXai } from "@ai-sdk/xai"
 import { createOpenRouter } from "@openrouter/ai-sdk-provider"
 import type { LanguageModel } from "ai"
 import type { Catalog, CatalogModel, CatalogProvider } from "./catalog"
-import pkg from "../../package.json"
-import { build } from "./build-info"
+import { appVersion } from "./build-info"
 import { conversationId } from "./conversation"
 import { countedFetch } from "./requests"
 import type { OpenRouterRouting } from "./openrouter-routing"
@@ -125,7 +124,7 @@ function isOpenCode(baseURL: string | undefined) {
   }
 }
 
-export const USER_AGENT = `opentrading/${build?.version ?? pkg.version} (${process.platform} ${process.arch})`
+export const USER_AGENT = `opentrading/${appVersion} (${process.platform} ${process.arch})`
 
 /** `conversation`: this request's conversation id (a subagent's own); unset = the process's current one. */
 const openCodeFetch = (base: typeof globalThis.fetch, conversation: string | undefined) =>
