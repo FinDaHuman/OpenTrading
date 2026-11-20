@@ -25,7 +25,7 @@ export function fence(text: string, lang = "") {
 
 /** What an export does not hold (#349): said in the file, so a reader does not take it as complete. */
 export const EXPORT_LIMITS =
-  "> Bản xuất này: output tool là bản model đã nhận (đã cắt khi tool chạy, tối đa 30.000 ký tự mỗi kết quả); không gồm hội thoại bên trong subagent; ảnh chỉ còn chỗ đánh dấu."
+  "> Bản xuất này: output tool là bản model đã nhận (đã cắt theo trần của từng tool, mặc định 30.000 ký tự mỗi kết quả); không gồm hội thoại bên trong subagent; ảnh chỉ còn chỗ đánh dấu."
 
 export function formatTranscript(loaded: Pick<LoadedSession, "summary" | "display">, opts: { label: (name: string, input: unknown) => string }) {
   const s = loaded.summary

@@ -125,5 +125,5 @@ test("#349: an export says what it does not hold (capped tool output, no subagen
     { label: (name) => name },
   )
   expect(md).toContain(EXPORT_LIMITS)
-  expect(EXPORT_LIMITS).toContain("30.000")
+  expect(EXPORT_LIMITS).toContain("mặc định 30.000")
 })
