@@ -17,6 +17,12 @@ for (const env of ["GROQ_API_KEY", "GOOGLE_GENERATIVE_AI_API_KEY", "GEMINI_API_K
   delete process.env[env]
 
 // A tiny models.dev-shaped catalog: two supported providers and one that must stay hidden.
+/**
+ * How long a wait for a frame or a state keeps trying. 5 s was too short on the busy Windows runner
+ * (#341: a correct approval flow failed at 5.5 s); under the 20 s test timeout, so a wait that never
+ * succeeds still fails on its own condition rather than on the test's timeout.
+ */
+const PATIENCE_MS = 15_000
 const text = { input: ["text"], output: ["text"] }
 const CATALOG = {
   groq: {
@@ -334,10 +340,10 @@ beforeAll(async () => {
   setup.renderer.requestLive()
   // OpenTUI's waitFor/waitForFrame give up after 20 frames (~0.33 s), whatever the test timeout says.
   // With every CPU busy the app is correct but late: a streamed answer reached the screen after more
-  // than 20 frames. In this file both keep their own behaviour but try again until 5 s have passed.
+  // than 20 frames. In this file both keep their own behaviour but try again until PATIENCE_MS have passed.
   const patient = <A extends unknown[], R>(wait: (...args: A) => Promise<R>) =>
     async (...args: A): Promise<R> => {
-      const end = Date.now() + 5_000
+      const end = Date.now() + PATIENCE_MS
       for (;;) {
         try {
           return await wait(...args)
@@ -2573,6 +2579,28 @@ test("prompt: Ctrl+J and \ + Enter add a line; Enter alone sends", async () => {
   show(frame)
   expect(promptRows(frame)).toEqual(["dong1", "dong2", "dong3", "dong4"])
   await clearPrompt()
+})
+
+test("prompt: ui.pasteBurst on, a paste typed out key by key keeps its line breaks; a burst that ends in Enter still sends (#353)", async () => {
+  const { setState: set } = await import("../src/tui/state")
+  set("pasteBurst", true)
+  try {
+    // The mock types every key at once, like a terminal typing out a paste: the Enter is held, and
+    // the next key behind it makes it a line break.
+    await setup.mockInput.typeText("dong-mot-cua-ban-dan")
+    setup.mockInput.pressEnter()
+    await setup.mockInput.typeText("dong-hai")
+    const frame = await setup.waitForFrame((f) => promptRows(f).includes("dong-hai"))
+    expect(promptRows(frame)).toEqual(["dong-mot-cua-ban-dan", "dong-hai"])
+    await clearPrompt()
+    // Nothing behind the Enter: it sends (keys a busy app read all at once end like this).
+    const before = chatCalls.length
+    await setup.mockInput.typeText("Gửi ngay cả khi gõ rất nhanh")
+    setup.mockInput.pressEnter()
+    await setup.waitFor(() => chatCalls.length > before && !state.streaming)
+  } finally {
+    set("pasteBurst", false)
+  }
 })
 
 test("prompt: a pasted CR or CRLF (Windows Terminal) becomes a line break", async () => {

@@ -52,6 +52,8 @@ let answerReasoning: string[] = []
 let childSlowReasoning = false
 /** The child sends one reasoning chunk, then the stream never closes (stall tests). */
 let childDanglingStream = false
+/** The child calls childCall at every step while tools are on (request budget tests). */
+let childAlwaysCalls = false
 
 const chunk = chunkFor("tooly")
 let ids = 0
@@ -132,7 +134,7 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
       new Promise<void>((_, reject) => init?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")))),
     ])
     if (childStatus) return Response.json({ error: { message: "upstream down", type: "server_error" } }, { status: childStatus })
-    if (childCall && !hasToolResult && body.tool_choice !== "none") return toolCalls([childCall])
+    if (childCall && (childAlwaysCalls || !hasToolResult) && body.tool_choice !== "none") return toolCalls([childCall])
     if (childDanglingStream) return sseDangling()
     if (childSlowReasoning) return sseSlow(Array.from({ length: 15 }, (_, i) => `nghĩ bước ${i}`), childReport, 80)
     return answer(childReport, childUsage)
@@ -175,6 +177,7 @@ beforeEach(async () => {
   answerReasoning = []
   childSlowReasoning = false
   childDanglingStream = false
+  childAlwaysCalls = false
   await saveConfig({ provider: "groq", model: "tooly", subagents: undefined })
 })
 
@@ -194,6 +197,7 @@ async function collect(gen: AsyncGenerator<AgentEvent>) {
   for await (const e of gen) events.push(e)
   return events
 }
+const done = (events: AgentEvent[]) => events.find((e) => e.type === "done") as Extract<AgentEvent, { type: "done" }>
 const ends = (events: AgentEvent[]) => events.filter((e) => e.type === "tool-end") as Extract<AgentEvent, { type: "tool-end" }>[]
 /** The brief fields spawn_subagent takes (brief.ts); the child gets them laid out by renderBrief. */
 const brief = (task: string) => ({ task, purpose: "trả lời người dùng", questions: ["Số liệu chính?"], output: "≤ 5 dòng" })
@@ -485,7 +489,7 @@ test("the main agent's prompt does not change with the subagent role in place; i
   expect(child.system).toContain("<subagent>")
   expect(child.system).toContain("<thu_tu_uu_tien>")
   expect(child.system).toContain("<chi_dan_agent>\nCHỈ-DẪN\n</chi_dan_agent>")
-  expect(child.system).not.toContain("Bạn là OpenTrading, trợ lý")
+  expect(child.system).not.toContain("You are OpenTrading, a Vietnamese")
 })
 
 test("an agent type brings its instructions, tool filter, step limit and model", async () => {
@@ -796,4 +800,71 @@ test("the auto-mode log gets the user's words from the main turn and the task as
   expect(log).toContain('{"user":"phân tích HPG giúp mình"}')
   expect(log).toContain('"main_agent_task":"Phân tích Kỹ thuật HPG (mức kỹ: vừa).')
   expect(log).not.toContain('{"user":"Phân tích Kỹ thuật HPG"}')
+})
+
+// --- #328: the session's profile and the turn's request budget reach subagents ---
+
+/** prompts/tools.md lines shown only in the terminal profile, without their marker. */
+const terminalOnly = async () =>
+  (await readFile(path.join(import.meta.dir, "..", "prompts", "tools.md"), "utf8"))
+    .split("\n")
+    .filter((l) => l.includes("<!-- khi: terminal -->"))
+    .map((l) => l.replace("<!-- khi: terminal -->", "").trim())
+
+test("#328: a child started in a machine-profile turn runs with the machine profile; a terminal turn's child keeps terminal", async () => {
+  const lines = await terminalOnly()
+  expect(lines.length).toBeGreaterThan(0)
+  const { registry } = setup()
+  parentCalls = [spawn("Định giá FPT")]
+  await collect(runAgent({ history: [], input: "định giá FPT", skills: [], registry, profile: "machine" }))
+  const machine = childBodies[0]!.messages[0]!.content as string
+  for (const line of lines) expect(machine).not.toContain(line)
+  childBodies.length = 0
+  await collect(runAgent({ history: [], input: "định giá FPT", skills: [], registry }))
+  const terminal = childBodies[0]!.messages[0]!.content as string
+  expect(lines.some((line) => terminal.includes(line))).toBe(true)
+})
+
+test("#328: with fewer than 3 requests left for subagents, spawn_subagent refuses at once and the parent still answers", async () => {
+  const { registry } = setup()
+  parentCalls = [spawn("Định giá FPT")]
+  // 4 requests: the parent's first step leaves 3, of which 2 are its reserve: room for 1 child request.
+  const events = await collect(runAgent({ history: [], input: "định giá FPT", skills: [], registry, maxRequests: 4 }))
+  const [end] = ends(events)
+  expect(end!.ok).toBe(false)
+  expect(end!.output).toContain("Not started: 1 model requests are left for another subagent")
+  expect(childBodies).toHaveLength(0)
+  expect(events.some((e) => e.type === "text-delta" && e.text.includes("Đã tổng hợp."))).toBe(true)
+})
+
+test("#328: a child never spends the parent's reserve: it closes on its own summary, then the parent answers within the cap", async () => {
+  const { registry } = setup()
+  parentCalls = [spawn("Định giá FPT")]
+  childCall = { name: "current_time", args: {} }
+  childAlwaysCalls = true
+  const events = await collect(runAgent({ history: [], input: "định giá FPT", skills: [], registry, maxRequests: 7 }))
+  const sent = parentBodies.length + childBodies.length
+  expect(sent).toBeLessThanOrEqual(7)
+  // 7 = 1 parent step + 4 for the child (3 tool steps, then its summary) + the parent's answer, 1 spare.
+  expect(childBodies.length).toBe(4)
+  // The child's last request is its summary, tools off, sent before the reserve was reached.
+  expect(childBodies.at(-1)!.tool_choice).toBe("none")
+  const [end] = ends(events)
+  expect(end!.ok).toBe(true)
+  expect(end!.output).toContain("Báo cáo: FPT ổn.")
+  // The parent's answer still went out after the child.
+  expect(events.some((e) => e.type === "text-delta" && e.text.includes("Đã tổng hợp."))).toBe(true)
+  expect(done(events).unanswered).toBeUndefined()
+})
+
+test("#328: parallel spawns share the room: each running child keeps 3 requests of it, so the second of two is refused", async () => {
+  const { registry } = setup()
+  parentCalls = [spawn("Định giá FPT"), spawn("Định giá HPG")]
+  // 8 requests: after the parent's first step 7 are left, 2 of them its reserve: room 5 = one child of 3, not two.
+  const events = await collect(runAgent({ history: [], input: "so sánh FPT và HPG", skills: [], registry, maxRequests: 8 }))
+  const results = ends(events)
+  expect(results).toHaveLength(2)
+  expect(results.filter((e) => e.ok)).toHaveLength(1)
+  expect(results.find((e) => !e.ok)!.output).toContain("Not started: 2 model requests are left for another subagent")
+  expect(parentBodies.length + childBodies.length).toBeLessThanOrEqual(8)
 })

@@ -4,6 +4,7 @@ import path from "node:path"
 import { agentRoots, loadAgents } from "../../src/core/agents/loader"
 import { resolveTarget } from "../../src/core/chat"
 import { loadConfig } from "../../src/core/config"
+import { EFFORT_LEVELS, isEffort, type Effort } from "../../src/core/effort"
 import { dataDir } from "../../src/core/paths"
 import { initRuntime, setAgents } from "../../src/core/runtime"
 import { loadSkills, skillRoots } from "../../src/core/skills/loader"
@@ -30,6 +31,9 @@ import { traceFile, type TraceEvent } from "./trace"
  *   --mcp-record    ghi câu trả lời MCP; câu đã có trong file thì không gọi server nữa
  *   --mcp-replay    chỉ dùng file đã ghi, không gọi server MCP
  *   --ablate        tắt từng phần của harness để đo (xem docs/eval/runner.md)
+ *   --effort        mức suy luận của lần chạy (low|medium|high|xhigh|max), ghi vào config tạm; không nêu thì
+ *                   dùng mặc định của model, không đọc effort trong config của người chạy (#338)
+ *   --investor      file hồ sơ nhà đầu tư cố định, chép thành INVESTOR.md của lần chạy; trace ghi sha256
  *   --memory        notebook: mỗi câu một sổ ghi nhớ rỗng (prompt có hướng dẫn memory, tool memory_read);
  *                   none: không memory (mặc định của sản phẩm). Bắt buộc nêu rõ, như --model.
  *   --yolo          chế độ ▸▸▸ bỏ qua quyền thay cho danh sách duyệt hẹp (chỉ web_fetch)
@@ -79,6 +83,11 @@ const ablate = arg("--ablate")?.split(",") ?? []
 const ablated = parseAblations(ablate)
 const yolo = process.argv.includes("--yolo")
 const resultFiles = arg("--result-files")
+const effortArg = arg("--effort")
+if (effortArg !== undefined && !isEffort(effortArg)) stop(`--effort chỉ nhận ${EFFORT_LEVELS.join(", ")} (nhận "${effortArg}").`)
+const investorArg = arg("--investor")
+const investor = investorArg ? path.resolve(investorArg) : undefined
+if (investor && !(await Bun.file(investor).exists())) stop(`Không thấy file --investor: ${investor}`)
 const memoryArg = arg("--memory") ?? stop("Thiếu --memory notebook|none: mỗi lần chạy phải nêu rõ có memory hay không.")
 const memory = memoryArg === "notebook" || memoryArg === "none" ? memoryArg : stop(`--memory chỉ nhận notebook hoặc none (nhận "${memoryArg}").`)
 const questions = parseQuestions(await readFile(file, "utf8")).filter((q) => !only || only.includes(q.id))
@@ -101,7 +110,7 @@ const home = await mkdtemp(path.join(os.tmpdir(), "ot-eval-"))
 const work = path.join(home, "work")
 const commit = (await Bun.$`git rev-parse --short HEAD`.cwd(import.meta.dir).quiet().nothrow().text()).trim()
 await mkdir(work)
-await prepareHome(realHome, home, model, ablated, routing)
+const { investorSha256 } = await prepareHome(realHome, home, model, ablated, routing, { ...(effortArg ? { effort: effortArg as Effort } : {}), ...(investor ? { investor } : {}) })
 process.env.OPENTRADING_HOME = home
 const requests = await RequestLedger.open(ledger, pick, cap)
 // The home holds a copy of the keys, and requests already sent are spent quota.
@@ -122,7 +131,7 @@ try {
   const target = await resolveTarget(model)
   const { effort, toolSearch, maxSteps } = await loadConfig()
   // The shell decides which arithmetic form runs unasked (awk on bash/sh, expressions on PowerShell).
-  const settings = { effort, toolSearch, maxSteps, ablate, memory, shell: detectShell().kind, profile: profile ?? "terminal", ...(turnRequests !== undefined ? { turn_requests: turnRequests } : {}), permissions: yolo ? "bypass" : "unattended", ...(resultFiles ? { result_files: resultFiles } : {}), mcp: cassette?.mode ?? "live", ...(routing ? { openrouter_routing: routing } : {}), ...(tape ? { mcp_tape: path.basename(tape), mcp_answers: cassette!.size } : {}) }
+  const settings = { effort, ...(investorSha256 ? { investor_sha256: investorSha256 } : {}), toolSearch, maxSteps, ablate, memory, shell: detectShell().kind, profile: profile ?? "terminal", ...(turnRequests !== undefined ? { turn_requests: turnRequests } : {}), permissions: yolo ? "bypass" : "unattended", ...(resultFiles ? { result_files: resultFiles } : {}), mcp: cassette?.mode ?? "live", ...(routing ? { openrouter_routing: routing } : {}), ...(tape ? { mcp_tape: path.basename(tape), mcp_answers: cassette!.size } : {}) }
   // Tallied from this run's own answers: --out may name a file that already holds earlier runs.
   const answers: TraceEvent[] = []
   const toFile = traceFile(out)

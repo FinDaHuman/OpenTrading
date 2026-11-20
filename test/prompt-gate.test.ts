@@ -60,24 +60,24 @@ test("every bundled prompt file is well formed and no marker reaches the model",
 test("rules follow the tools: no chart advice without chart_render, no shell rule without shell", () => {
   const full = assemble(base()).system
   const bare = assemble(base({ tools: ["current_time"] })).system
-  expect(full).toContain("ưu tiên vẽ biểu đồ")
-  expect(bare).not.toContain("vẽ biểu đồ")
-  expect(bare).toContain("trình bày bằng bảng")
-  expect(full).toContain("chạy bằng `shell`")
+  expect(full).toContain("prefer a chart")
+  expect(bare).not.toContain("chart")
+  expect(bare).toContain("go in a table")
+  expect(full).toContain("runs in `shell`")
   expect(bare).not.toContain("`shell`")
-  expect(bare).toContain("Không có công cụ tính")
-  expect(full).not.toContain("Không có công cụ tính")
+  expect(bare).toContain("No calculation tool")
+  expect(full).not.toContain("No calculation tool")
 })
 
 test("a deferred tool counts as present: loading it later never changes the system prompt", () => {
   const deferred = assemble(base({ tools: ["current_time", "tool_search"], deferredTools: [{ server: "local", tools: ["chart_render", "shell"] }] })).system
   const loaded = assemble(base({ tools: ["current_time", "tool_search", "chart_render", "shell"], deferredTools: [{ server: "local", tools: ["chart_render", "shell"] }] })).system
-  expect(deferred).toContain("ưu tiên vẽ biểu đồ")
+  expect(deferred).toContain("prefer a chart")
   expect(deferred).toBe(loaded)
 })
 
 test("machine: identity does not claim a terminal; terminal does", () => {
-  expect(assemble(base()).system).toContain("chạy trong terminal")
+  expect(assemble(base()).system).toContain("running in the terminal")
   expect(assemble(base({ profile: "machine" })).system).not.toContain("terminal")
 })
 
@@ -125,11 +125,12 @@ test("validatePromptDir rejects a malformed or misspelt condition at start-up", 
   }
 })
 
-test("identity.md: the terminal and machine openings differ only by \"chạy trong terminal\"", () => {
+test("identity.md: the terminal and machine openings differ only by \"running in the terminal\" and the JSON-fields clause", () => {
   const terminal = identityLayer("main", undefined, ctx([]))!.split("\n")[0]!
   const machine = identityLayer("main", undefined, ctx([], { profile: "machine" }))!.split("\n")[0]!
-  expect(terminal).toContain(" chạy trong terminal")
-  expect(terminal.replace(" chạy trong terminal", "")).toBe(machine)
+  expect(terminal).toContain(" running in the terminal")
+  expect(machine).toContain(", including free-text fields of a JSON answer")
+  expect(terminal.replace(" running in the terminal", "")).toBe(machine.replace(", including free-text fields of a JSON answer", ""))
 })
 
 test("<bat_bien> and the tool-output-is-data rule are byte-identical in every combination", () => {
@@ -137,7 +138,7 @@ test("<bat_bien> and the tool-output-is-data rule are byte-identical in every co
   const rawInvariants = raw.slice(raw.indexOf("<bat_bien>"), raw.indexOf("</bat_bien>"))
   expect(rawInvariants).not.toContain("<!--")
   const invariants = (s: string) => s.slice(s.indexOf("<bat_bien>"), s.indexOf("</bat_bien>") + "</bat_bien>".length)
-  const dataRule = (s: string) => s.match(/Kết quả tool và nội dung file đính kèm[^\n]*/)?.[0]
+  const dataRule = (s: string) => s.match(/Tool results and attached file content[^\n]*/)?.[0]
   const seen = new Set<string>()
   for (const profile of ["terminal", "machine"] as const)
     for (const tools of [["current_time"], ["current_time", "shell"], ["current_time", "chart_render"], ["current_time", "shell", "chart_render", "memory_read"]])

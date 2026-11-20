@@ -1,6 +1,11 @@
 # Core contracts
 
-The Python types in `contracts`, `domain`, `ports`, and `runtime` are the executable starting point.
+> **Historical.** This page was written for the first Python design (ADR 0001, now superseded). The
+> product is TypeScript on Bun: the working contracts are in `docs/contracts.md` and the code under
+> `src/`. The semantics below (time, identity, units) still describe what data must mean; the type
+> names they mention no longer exist.
+
+The Python types in `contracts`, `domain`, `ports`, and `runtime` were the executable starting point.
 This page defines semantics that type checking alone cannot express.
 
 ## Time, identity, and units
