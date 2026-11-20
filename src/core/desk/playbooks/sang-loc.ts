@@ -187,7 +187,7 @@ async function run(ctx: DeskContext<Args>): Promise<string> {
   const missing = tickers.filter((_, i) => !cards[i])
   if (missing.length > 0) ctx.log(`Không lấy được thẻ điểm: ${missing.join(", ")}`)
   if (valid.length < 2) {
-    throw new DeskNoData(`Không đủ dữ liệu để sàng lọc: chỉ lấy được ${valid.length}/${tickers.length} thẻ điểm${missing.length ? ` (thiếu ${missing.join(", ")})` : ""}. Có thể do hết quota hoặc nguồn dữ liệu lỗi; chạy tiếp bằng /desk resume.`)
+    throw new DeskNoData(`Not enough data to screen: only ${valid.length}/${tickers.length} scorecards${missing.length ? ` (missing ${missing.join(", ")})` : ""}. The quota may be exhausted or a data source failed; the user can continue with /desk resume.`)
   }
 
   let ranked = rank(valid, ctx.args.tieu_chi)
