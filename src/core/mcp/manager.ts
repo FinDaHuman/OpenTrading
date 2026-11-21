@@ -39,6 +39,7 @@ import {
 import { ServerBreaker } from "./breaker"
 import { isDataServer } from "./catalog"
 import { blockToParts, resultToOutput } from "./convert"
+import { McpModelError, modelErrorText } from "./errors"
 import { serverPrefix, toolName } from "./naming"
 import { McpOAuthProvider, NeedsAuthError, oauthStatus, openBrowser, startCallbackServer } from "./oauth"
 import { clearOAuth, secretEnv, setSecretEnv } from "./secrets"
@@ -255,6 +256,28 @@ export function cleanErrorText(text: string): string {
 }
 
 const errorText = (error: unknown) => cleanErrorText(error instanceof Error ? error.message : String(error))
+const rawMessage = (error: unknown) => (error instanceof Error ? error.message : String(error))
+
+/**
+ * Run a model-facing MCP tool and make whatever it throws safe for the model (#326): our own
+ * worded errors pass as they are; anything else (a stdio server's stack trace, a JSON-RPC
+ * error, a non-retryable HTTP answer with an HTML page) becomes one short English line that
+ * keeps its codes.
+ */
+async function forModel<T>(server: string, signal: AbortSignal, run: () => Promise<T>): Promise<T> {
+  try {
+    return await run()
+  } catch (error) {
+    if (signal.aborted || error instanceof McpModelError) throw error
+    throw new McpModelError(`MCP server "${server}" failed: ${modelErrorText(rawMessage(error), { status: httpStatus(error), max: 260 })}`)
+  }
+}
+
+/** The model's side of an auth failure; the /mcp panel gets the Vietnamese authHint. */
+function authForModel(name: string, error: unknown) {
+  const status = httpStatus(error)
+  return `MCP server "${name}" rejected the credentials${status ? ` (HTTP ${status})` : ""}: the user must sign in again or fix the token in /mcp. Do not call this server's tools again this turn; answer with the data you have and state what is missing.`
+}
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
 class TimeoutError extends Error {}
@@ -757,7 +780,7 @@ export class McpManager {
     const entry = this.entries.get(name)
     const stuck = (s?: McpServerStatus) => !s || s.state === "disabled" || s.state === "needs-auth" || s.state === "untrusted"
     // The state, not the status error: that one is the /mcp line, written in Vietnamese for the user.
-    const notConnected = (s?: McpServerStatus) => new Error(`MCP server "${name}" is not connected${s ? ` (${s.state})` : ""}; the user can see why in /mcp.`)
+    const notConnected = (s?: McpServerStatus) => new McpModelError(`MCP server "${name}" is not connected${s ? ` (${s.state})` : ""}; the user can see why in /mcp.`)
     const status = this.statuses.get(name)
     if (!entry?.config || !isRemote(entry.config) || stuck(status)) throw notConnected(status)
     // Failed for good (e.g. it was still down when the app started): start trying again.
@@ -785,7 +808,7 @@ export class McpManager {
         () =>
           finish(() =>
             reject(
-              new Error(
+              new McpModelError(
                 `MCP server "${name}" is restarting and did not reconnect within ${Math.round(waitMs / 1000)}s. Wait a while and try again; do not call it repeatedly.`,
               ),
             ),
@@ -1036,7 +1059,7 @@ export class McpManager {
         timeoutMs: (tool.annotations?.readOnlyHint ? 2 : 1) * toolTimeoutMs + startupTimeoutMs + 5_000,
         maxOutputChars: config.maxOutputChars,
         summarize: (input) => `${name} · ${tool.name}(${compactArgs(input)})`,
-        execute: async (input, ctx) => {
+        execute: (input, ctx) => forModel(name, ctx.signal, async () => {
           const args = (input as Record<string, unknown>) ?? {}
           // A plain request instead of client.callTool: callTool checks structuredContent
           // against the tool's outputSchema and throws on a mismatch — after the tool ran.
@@ -1077,7 +1100,7 @@ export class McpManager {
           const breaker = isRemote(config) ? this.breaker(name) : undefined
           const refused = breaker?.admit()
           if (refused !== undefined) {
-            throw new Error(
+            throw new McpModelError(
               `MCP server "${name}" is failing to connect repeatedly, so this call was not sent. Try again after ${Math.ceil(refused / 1000)} seconds; for now do not call this server's tools — answer with the data you have and state what is missing.`,
             )
           }
@@ -1097,7 +1120,7 @@ export class McpManager {
               if (ctx.signal.aborted) throw error
               if (isRemote(config) && isAuthError(error)) {
                 this.set(name, { state: "needs-auth", error: authHint(name, config, error) })
-                throw new Error(authHint(name, config, error))
+                throw new McpModelError(authForModel(name, error))
               }
               if (isRemote(config) && isSessionExpired(error) && attempt === 0) {
                 // Session expired on the server: initialize again and retry exactly once.
@@ -1109,8 +1132,8 @@ export class McpManager {
               if (isRemote(config) && isQuotaExceeded(error)) {
                 breaker?.success()
                 const wait = retryAfterMs(error)
-                const reset = wait === undefined ? "" : ` (khoảng ${new Date(Date.now() + wait).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })})`
-                throw new Error(`MCP server "${name}": the daily quota is exhausted; no automatic retry. Call again after the quota resets${reset}.`)
+                const reset = wait === undefined ? "" : ` (around ${new Date(Date.now() + wait).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })} local time)`
+                throw new McpModelError(`MCP server "${name}": the daily quota is exhausted; no automatic retry. Call again after the quota resets${reset}.`)
               }
               if (!isRemote(config) || !isRetryable(error)) throw error
               const wait = retryAfterMs(error)
@@ -1127,7 +1150,7 @@ export class McpManager {
                 // A rate limit or a pause the server asked for comes from a server that is up.
                 if (status === 429 || wait !== undefined) breaker?.success()
                 else breaker?.failure()
-                const why = status ? `HTTP ${status}` : errorText(error)
+                const why = status ? `HTTP ${status}` : modelErrorText(rawMessage(error), { max: 120 })
                 const what = status === 429 ? `is rate-limited (${why})` : `has a temporary error (${why}) — it may be restarting or overloaded`
                 const later = wait === undefined ? "" : ` The server asks to wait ${Math.ceil(wait / 1000)} seconds before calling again.`
                 // A retry_after refusal came before the tool ran: nothing was written to check.
@@ -1140,7 +1163,7 @@ export class McpManager {
                       : wait === undefined
                         ? " This tool may write data, so it is not retried automatically; check its effects before calling again."
                         : " This tool may write data, so it is not retried automatically; the server refused before running it, so it can be called again after waiting."
-                throw new Error(`MCP server "${name}" ${what}.${later}${tail}`)
+                throw new McpModelError(`MCP server "${name}" ${what}.${later}${tail}`)
               }
               await pause(wait ?? retryDelays[attempt]!, ctx.signal)
               continue
@@ -1150,7 +1173,7 @@ export class McpManager {
             breaker?.success()
             return resultToOutput(result)
           }
-        },
+        }),
       })
     }
     this.set(name, { tools: registered, hiddenTools: hidden, capped: this.withCap(name, "tools", toolsCapped) })
@@ -1206,7 +1229,8 @@ export class McpManager {
       input: { type: "object", properties: { server: { type: "string", description: "Server name; empty = every server" } } },
       readOnly: true,
       summarize: (input: { server?: string }) => `list_mcp_resources(${input?.server ?? ""})`,
-      execute: async (input: { server?: string }) => JSON.stringify(await this.listResources(input?.server), null, 2),
+      execute: (input: { server?: string }, ctx) =>
+        forModel(input?.server || "(all)", ctx.signal, async () => JSON.stringify(await this.listResources(input?.server), null, 2)),
     })
     this.registry.register({
       name: "read_mcp_resource",
@@ -1215,7 +1239,7 @@ export class McpManager {
       input: { type: "object", properties: { server: { type: "string" }, uri: { type: "string" } }, required: ["server", "uri"] },
       readOnly: true,
       summarize: (input: { server?: string; uri?: string }) => `read_mcp_resource(${input?.server ?? ""} ${input?.uri ?? ""})`,
-      execute: (input: { server: string; uri: string }) => this.readResource(input.server, input.uri),
+      execute: (input: { server: string; uri: string }, ctx) => forModel(input.server, ctx.signal, () => this.readResource(input.server, input.uri)),
     })
   }
 
