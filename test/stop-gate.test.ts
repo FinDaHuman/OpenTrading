@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test"
 import type { ModelMessage } from "ai"
-import { claimsFetch, figureSources, isDraft, isEmptyAnswer, isFragment, judgeStop, MAX_RECOVERIES, RESCUE_ANSWER_NOW, RESCUE_DRAFT, RESCUE_DRAFT_FETCH, RESCUE_TEXT_CALL, ranDataTool, stripEchoes, ungroundedInTurn, unfetchedFigures, type LastStep } from "../src/core/loop/stop-gate"
+import { claimsFetch, ESTIMATE_RULE, figureSources, isDraft, isEmptyAnswer, isFragment, judgeStop, MAX_RECOVERIES, RESCUE_ANSWER_NOW, RESCUE_DRAFT, RESCUE_EMPTY_FINAL, RESCUE_DRAFT_FETCH, RESCUE_TEXT_CALL, ranDataTool, stripEchoes, ungroundedInTurn, unfetchedFigures, type LastStep } from "../src/core/loop/stop-gate"
+import { DERIVED } from "../src/core/loop/figures"
 import { DRAFT } from "./fixtures/draft-answer"
 
 const step = (over: Partial<LastStep>): LastStep => ({ text: "", toolNames: [], finish: "stop", ...over })
@@ -394,4 +395,17 @@ test("empty after every source failed: the gap rescue, tools off then on; then g
   const clock = step({ afterTools: true, dataInTurn: true, gaps: ["vn_quote_history"], usableData: true, fetchedData: false })
   expect(judgeStop(clock, [])).toMatchObject({ nudge: rescueGaps(["vn_quote_history"]) })
   expect(judgeStop(clock, ["empty", "empty"])).toEqual({ action: "give-up", kind: "empty" })
+})
+
+test("the tools-off rescues ask for every input and an estimate label the figure checks read (#327)", () => {
+  for (const nudge of [RESCUE_EMPTY_FINAL, RESCUE_ANSWER_NOW]) {
+    expect(nudge).toContain(ESTIMATE_RULE)
+    expect(nudge).not.toMatch(/yourself/)
+  }
+  expect(ESTIMATE_RULE).toContain("every input number")
+  const label = ESTIMATE_RULE.match(/"([^"]+)"/)?.[1] ?? ""
+  expect(label).toBe("tự tính, ước tính")
+  // The label the rescue asks for is what figures.ts and the source check treat as the model's own arithmetic.
+  expect(DERIVED.test(`Biên lãi gộp 21,4% (${label}: 1.284 / 6.000)`)).toBe(true)
+  expect(claimsFetch(`Nguồn: ${label} từ số liệu ở trên`)).toBe(false)
 })

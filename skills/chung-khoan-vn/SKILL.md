@@ -56,7 +56,7 @@ brokerage statement lines.
 **Bước 2: Leverage + revenue mix (in parallel).**
 
 `financial_detail`: margin loans · equity · revenue by the 4 businesses ·
-receivables. Compute the leverage level yourself (state the formula) and compare with the regulatory cap.
+receivables. Compute the leverage level with `shell` from those figures (show the formula and inputs) and compare with the regulatory cap.
 
 **Bước 3: Market rhythm + spread (in parallel).**
 

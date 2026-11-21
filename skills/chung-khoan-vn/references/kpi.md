@@ -22,7 +22,7 @@
 | Margin lending revenue | `financial_detail` | Read with loans and the average rate: revenue up while loans fall = higher rates, not volume |
 | Investment revenue | `financial_detail` | The most volatile business. Read 4 quarters and separate the realised recurring part |
 | Advisory revenue | `financial_detail` | Small but the most stable; grows with the IPO/ECM pipeline |
-| Weights of the 4 businesses | Computed yourself (state it) | The mix decides which group suffers in a falling market. Read 4 consecutive quarters before grouping |
+| Weights of the 4 businesses | Computed with `shell` (one arithmetic-only command on figures from tool results): each business's revenue / total revenue; label it "tính từ" | The mix decides which group suffers in a falling market. Read 4 consecutive quarters before grouping |
 
 ## 3. Nhóm vốn và hiệu quả
 

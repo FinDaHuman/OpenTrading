@@ -25,7 +25,7 @@
 
 | Indicator | Read from | How to read |
 |---|---|---|
-| Revenue per employee | Computed yourself (state it) | Rising while revenue rises = efficiency improving |
+| Revenue per employee | Computed with `shell` (one arithmetic-only command on figures from tool results): revenue / average headcount; label it "tính từ" | Rising while revenue rises = efficiency improving |
 | Headcount | `financial_detail` / company disclosures | Growing faster than revenue = expanding by headcount |
 | Gross margin | `financial_detail` | Falling for 2 consecutive quarters during expansion = labour costs squeezing margins |
 | Pre-tax margin | `financial_detail` | Read with the segment split: domestic and foreign margins differ |
