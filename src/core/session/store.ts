@@ -671,6 +671,11 @@ export interface LoadedSession {
    * before the card (the card follows its turn's answer).
    */
   cards: LoadedCard[]
+  /**
+   * The "! N nguồn lỗi" line of each turn that recorded data gaps, in file order. `at`: how many `display`
+   * messages come before it (it follows its turn's answer, before that turn's card).
+   */
+  gaps: LoadedGaps[]
   redaction: {
     /** Redact lines in the file that were applied. */
     fromFile: number
@@ -685,6 +690,11 @@ export interface LoadedCard {
   card: Card
   state: CardState
   saved?: CardOutcome["saved"]
+  at: number
+}
+
+export interface LoadedGaps {
+  gaps: string[]
   at: number
 }
 
@@ -720,6 +730,7 @@ export async function loadSession(id: string, opts: { check?: RedactionCheck } =
   let lastTurn = 0
   let fromFile = 0
   const cards = new Map<string, LoadedCard & { after?: ModelMessage }>()
+  const gaps: (LoadedGaps & { after?: ModelMessage })[] = []
   for (const line of text.split("\n")) {
     if (!line.trim()) continue
     try {
@@ -744,6 +755,8 @@ export async function loadSession(id: string, opts: { check?: RedactionCheck } =
         // A line with its number says it; an older one is the previous number plus one.
         lastTurn = Number.isInteger(entry.turn) && entry.turn! > 0 ? entry.turn! : lastTurn + 1
         if (entry.contextTokens !== undefined) contextTokens = entry.contextTokens
+        const names = Array.isArray(entry.dataGaps) ? entry.dataGaps.filter((g): g is string => typeof g === "string") : []
+        if (names.length > 0) gaps.push({ gaps: names, at: shown.length, after: shown.at(-1) })
       } else if (entry.type === "chart" && entry.callId && entry.data) charts.set(entry.callId, entry.data)
       else if (entry.type === "harness" && typeof entry.text === "string") harness.push(entry.text)
       else if (entry.type === "card" && typeof entry.id === "string" && CARD_STATES.has(entry.state)) {
@@ -782,11 +795,12 @@ export async function loadSession(id: string, opts: { check?: RedactionCheck } =
   const { messages, patched } = closeDanglingToolCalls(raw)
   const display = closeDanglingToolCalls(shown).messages
   // Closing dangling calls may insert results: a card stays after the message it followed.
-  const placed = [...cards.values()].map(({ after, ...c }) => {
+  const place = <T extends { at: number; after?: ModelMessage }>({ after, ...c }: T) => {
     const i = after ? display.indexOf(after) : -1
     return { ...c, at: i >= 0 ? i + 1 : Math.min(c.at, display.length) }
-  })
-  return { summary, meta, messages, display, contextTokens, patched, charts, harness, lastTurn, cards: placed, redaction }
+  }
+  const placed = [...cards.values()].map(place)
+  return { summary, meta, messages, display, contextTokens, patched, charts, harness, lastTurn, cards: placed, gaps: gaps.map(place), redaction }
 }
 
 /**

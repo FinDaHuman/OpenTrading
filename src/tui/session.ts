@@ -7,6 +7,7 @@ import type { Runtime } from "../core/runtime"
 import { listSessions, loadSession, Session, type SaveReceipt, type TurnInfo } from "../core/session/store"
 import { formatTranscript } from "../core/session/export"
 import { transcriptFromMessages } from "../core/session/transcript"
+import { gapsLine } from "../core/loop/failures"
 import { useResultSession } from "../core/tools/refs"
 import { reconcile } from "solid-js/store"
 import { NO_COMPACTION, providerName, pushLine, setState, state, type Line } from "./state"
@@ -429,14 +430,19 @@ export async function resumeSession(runtime: Runtime, id: string) {
     }
     return [item.kind === "user" ? { kind: "user", text: item.text, files: item.files } : { kind: "assistant", text: item.text, done: true }]
   }
-  // Suggestion cards (spec 007) come back under the answer they followed, in their last state. The
-  // transcript is built turn by turn around them: a card sits between two turns, never inside one.
+  // Suggestion cards (spec 007) come back under the answer they followed, in their last state, and so
+  // does a turn's "! N nguồn lỗi" line (#342), above that turn's card as when it ran. The transcript is
+  // built turn by turn around them: they sit between two turns, never inside one.
+  const between: { at: number; order: number; line: Line }[] = [
+    ...loaded.gaps.map((g) => ({ at: g.at, order: 0, line: { kind: "info", text: gapsLine(g.gaps) } as Line })),
+    ...loaded.cards.map((c) => ({ at: c.at, order: 1, line: { kind: "card", card: c.card, state: c.state, ...(c.saved ? { saved: c.saved } : {}) } as Line })),
+  ]
   const lines: Line[] = []
   let fromMessage = 0
-  for (const c of [...loaded.cards].sort((a, b) => a.at - b.at)) {
-    lines.push(...transcriptFromMessages(loaded.display.slice(fromMessage, c.at)).flatMap(toLines))
-    lines.push({ kind: "card", card: c.card, state: c.state, ...(c.saved ? { saved: c.saved } : {}) })
-    fromMessage = c.at
+  for (const b of between.sort((x, y) => x.at - y.at || x.order - y.order)) {
+    lines.push(...transcriptFromMessages(loaded.display.slice(fromMessage, b.at)).flatMap(toLines))
+    lines.push(b.line)
+    fromMessage = b.at
   }
   lines.push(...transcriptFromMessages(loaded.display.slice(fromMessage)).flatMap(toLines))
   const notes: Line[] = [...left, { kind: "info", text: `Mở lại phiên "${loaded.summary.title}" · ${session.turns} lượt` }]
