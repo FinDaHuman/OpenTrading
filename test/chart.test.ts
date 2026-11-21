@@ -242,3 +242,32 @@ test("chart_render folds compare and depth in: same chart data as the old tools"
   expect(depth.chart).toMatchObject({ kind: "depth", depth: 3 })
   await expect(tool.execute({ kind: "depth", bids: [] }, c)).rejects.toThrow("needs bids and asks")
 })
+
+test("chart_render compare by hand: symbols name the rows, % series are accepted with percent: true, a 0 start says what to pass (#331)", async () => {
+  const tool = chartRenderTool()
+  // The 15/11 call: symbols instead of labels, and % changes the model computed itself.
+  const call = { kind: "compare" as const, symbols: ["FPT", "MWG"], matrix: [[0, 2.5, 5], [0, -1, -4]] }
+  const refused = await tool.execute(call, ctx()).then(() => "", (e: Error) => e.message)
+  expect(refused).toContain("Series FPT starts at 0")
+  expect(refused).toContain("Pass the raw prices")
+  expect(refused).toContain("percent: true")
+
+  const res = (await tool.execute({ ...call, percent: true }, ctx())) as ToolResult
+  expect(res.output).toContain("FPT +5%")
+  expect(res.output).toContain("MWG -4%")
+  expect(res.chart).toMatchObject({ kind: "compare", series: [{ label: "FPT", values: [100, 102.5, 105] }, { label: "MWG", values: [100, 99, 96] }] })
+
+  // Raw prices with symbols as names: labeled, not #1/#2.
+  const prices = (await tool.execute({ kind: "compare", symbols: ["VCB", "HPG"], matrix: [[50, 55], [20, 18]] }, ctx())) as ToolResult
+  expect(prices.output).toContain("VCB +10%")
+  expect(prices.output).toContain("HPG -10%")
+  expect(prices.output).not.toContain("#1")
+  // labels win over symbols when both are given.
+  const both = (await tool.execute({ kind: "compare", labels: ["A", "B"], symbols: ["X", "Y"], matrix: [[1, 2], [2, 1]] }, ctx())) as ToolResult
+  expect(both.output).toContain("A +100%")
+
+  // A % series rebased on its own first point, and an impossible change.
+  const rebased = (await chartCompareTool().execute({ percent: true, series: [{ label: "A", values: [10, 21] }, { label: "B", values: [0, 5] }] }, ctx())) as ToolResult
+  expect(rebased.output).toContain("A +10%")
+  await expect(chartCompareTool().execute({ percent: true, series: [{ label: "A", values: [0, -100] }, { label: "B", values: [0, 5] }] }, ctx())).rejects.toThrow("-100%")
+})
