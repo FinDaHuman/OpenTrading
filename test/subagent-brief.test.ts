@@ -23,7 +23,7 @@ test("renderBrief lays every brief out the same way (33e)", () => {
       "Bối cảnh đã có: ROE 2025 = x% (financial_statements)",
       "Việc cần làm:\n- NIM 3 quý?\n- Nợ nhóm 3–5 có tăng?",
       "Phạm vi: VCB, Q1–Q3/2026; không cần giá cổ phiếu",
-      "Trả về: ≤ 8 dòng, mỗi số kèm nguồn và kỳ. Ghi [suy luận] cho ý không lấy từ kết quả tool.",
+      "Trả về: ≤ 8 dòng, mỗi số kèm nguồn và kỳ. Report in English; keep Nguồn lines, the labels tự tính, tính từ, [suy luận] and quoted text in Vietnamese. Mark [suy luận] anything not taken from tool results.",
       "Xong khi: đủ 3 quý cho 2 chỉ tiêu",
     ].join("\n"),
   )
@@ -31,7 +31,7 @@ test("renderBrief lays every brief out the same way (33e)", () => {
 
 test("empty optional parts are left out; depth defaults to medium", () => {
   expect(renderBrief({ task: "Giá FPT", purpose: "trả lời", context: "  ", questions: ["Giá đóng cửa?"], output: "1 dòng" })).toBe(
-    "Giá FPT (mức kỹ: vừa).\nMục đích: trả lời\nViệc cần làm:\n- Giá đóng cửa?\nTrả về: 1 dòng. Ghi [suy luận] cho ý không lấy từ kết quả tool.",
+    "Giá FPT (mức kỹ: vừa).\nMục đích: trả lời\nViệc cần làm:\n- Giá đóng cửa?\nTrả về: 1 dòng. Report in English; keep Nguồn lines, the labels tự tính, tính từ, [suy luận] and quoted text in Vietnamese. Mark [suy luận] anything not taken from tool results.",
   )
 })
 
