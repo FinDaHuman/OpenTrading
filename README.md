@@ -88,6 +88,7 @@ ot D:\Dau-tu             # mở ở thư mục khác
 ot -c                    # mở lại phiên mới nhất của thư mục này
 ot -r <id>               # mở lại một phiên cụ thể
 ot --yolo                # ▸▸▸ bỏ qua quyền (hộp cảnh báo đỏ mỗi lần mở)
+ot --yolo --sandbox      # thêm sandbox cho shell: không mạng, chỉ ghi trong workspace (Linux/macOS)
 ot -p "Giá FPT hôm nay?" # một lượt không giao diện, in câu trả lời rồi thoát
 ot -p "…" --yolo --model openrouter/deepseek/deepseek-v4.1-flash-1017 --output-format json
 ot mcp list              # quản lý MCP server không cần mở TUI (ot mcp --help)
@@ -315,7 +316,7 @@ Bốn chế độ quyền, đổi bằng `shift+tab`:
 | `▸▸ tự động` | Một model phụ duyệt từng hành động thay bạn (cần bật một lần) |
 | `▸▸▸ bỏ qua quyền` | Chỉ khi mở bằng `ot --yolo`: không hỏi gì, có hộp cảnh báo đỏ mỗi lần mở |
 
-File chứa khoá/mật khẩu, cấu hình OpenTrading và việc ghi ra ngoài workspace luôn hỏi bạn. `/undo` hoàn tác thay đổi file của agent. Xem [docs/permissions.md](docs/permissions.md).
+File chứa khoá/mật khẩu, cấu hình OpenTrading và việc ghi ra ngoài workspace luôn hỏi bạn. `/undo` hoàn tác thay đổi file của agent. Xem [docs/permissions.md](docs/permissions.md). Lệnh shell có thể chạy trong sandbox của hệ điều hành (`--sandbox` hoặc `shell.sandbox` trong config, mặc định tắt; Windows chưa cách ly): xem [Sandbox cho shell](docs/permissions.md#sandbox-cho-shell-tuỳ-chọn).
 
 ## Subagent
 

@@ -78,4 +78,4 @@ if (cli.kind === "print") {
 const { compiled, prebundled } = await import("./core/build-info")
 if (!compiled && !prebundled) await import("@opentui/solid/preload")
 const { startTui } = await import("./tui/main")
-await startTui(cli.resume, { yolo: cli.yolo === true })
+await startTui(cli.resume, { yolo: cli.yolo === true, sandbox: cli.sandbox === true })

@@ -4,12 +4,13 @@ import type { ModelMessage } from "ai"
 import { runAgent } from "../core/agent"
 import { agentRoots, loadAgents } from "../core/agents/loader"
 import { describeError, resolveTarget, type Target } from "../core/chat"
-import { loadConfig, memoryChoiceOf } from "../core/config"
+import { loadConfig, memoryChoiceOf, shellSandboxOn } from "../core/config"
 import { FolderTrust, projectExtras } from "../core/folder-trust"
 import { MODE_LABEL, startMode } from "../core/permission/mode"
 import { promptVersion } from "../core/prompt/assemble"
 import { onModelRequest } from "../core/requests"
 import { useCalculatorShell } from "../core/tools/shell/shell"
+import { probeSandbox, sandboxNotice } from "../core/tools/shell/sandbox"
 import { closeMemory, createMemory, initRuntime, setAgents, type Runtime } from "../core/runtime"
 import { useResultSession } from "../core/tools/refs"
 import { Session, sessionsDir } from "../core/session/store"
@@ -32,6 +33,8 @@ import type { PrintFormat } from "./args"
 export interface PrintOptions {
   prompt?: string
   yolo?: boolean
+  /** `--sandbox`: the shell tool runs in the OS sandbox (also config `shell.sandbox`). */
+  sandbox?: boolean
   /** `provider/model`. */
   model?: string
   format: PrintFormat
@@ -96,7 +99,7 @@ export async function runPrint(opts: PrintOptions, deps: { runtime?: Runtime; ta
   if (!trusted) err(`Bỏ qua skill/agent riêng của ${extras!.dir}: thư mục chưa được tin (mở bằng TUI một lần để chọn).`)
   const { skills } = await loadSkills(skillRoots(folder, { project: trusted }))
   const runtime =
-    deps.runtime ?? initRuntime({ skills: () => skills, memory: createMemory(memoryChoiceOf(config)), workspaceDirs: config.workspace?.dirs, scratchpad: false, resultFiles: config.results?.exportDir })
+    deps.runtime ?? initRuntime({ skills: () => skills, memory: createMemory(memoryChoiceOf(config)), workspaceDirs: config.workspace?.dirs, scratchpad: false, resultFiles: config.results?.exportDir, sandbox: shellSandboxOn(config, opts.sandbox) })
   const gate = runtime.permissions
   gate.setMode(startMode(config.permissions))
   if (opts.yolo) {
@@ -105,6 +108,8 @@ export async function runPrint(opts: PrintOptions, deps: { runtime?: Runtime; ta
     gate.setMode("bypass")
     err(`${MODE_LABEL.bypass} (--yolo): ghi file, chạy lệnh và tool ghi chạy luôn, không ai duyệt. Vẫn chặn: luật deny/ask, file khoá, .git/.opentrading/.ssh, ngoài workspace.`)
   }
+  const sandboxLine = sandboxNotice(runtime.shellSandbox, runtime.shellSandbox ? probeSandbox() : undefined, { bypass: opts.yolo === true })
+  if (sandboxLine) err(sandboxLine.text)
   await gate.refreshRules()
   setAgents(runtime, (await loadAgents(agentRoots(folder, { project: trusted }))).agents)
 

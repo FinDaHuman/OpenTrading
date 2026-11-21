@@ -35,6 +35,19 @@ jobs:
           key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
           restore-keys: bun-${{ runner.os }}-
       - run: bun install --frozen-lockfile
+      # #352: the shell sandbox's real tests (test/shell-sandbox.test.ts) need a working bwrap; on
+      # Linux CI they fail instead of skipping when it is missing. Ubuntu 24.04 restricts unprivileged
+      # user namespaces through AppArmor, which bwrap needs: lifted only when the trial run fails.
+      - name: Install bubblewrap (shell sandbox)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y -q bubblewrap
+          probe() { bwrap --ro-bind / / --dev /dev --proc /proc --unshare-net --unshare-pid --unshare-ipc --die-with-parent -- /bin/sh -c true; }
+          if ! probe; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+            probe
+          fi
+          bwrap --version
       # Types do not depend on the OS: checked once.
       - if: runner.os == 'Linux'
         run: bun run typecheck
@@ -56,6 +69,8 @@ jobs:
         include:
           - name: macos-bsd-awk
             os: macos-latest
+            # #352: sandbox-exec's real tests (Linux bwrap runs in the quality job).
+            extra: test/shell-sandbox.test.ts
           - name: ubuntu-mawk-de-locale
             os: ubuntu-latest
             mawk: true
@@ -89,7 +104,7 @@ jobs:
         env:
           # mawk/gawk print 1,5 under a comma-decimal LC_NUMERIC unless the harness pins LC_ALL=C.
           LC_ALL: ${{ matrix.mawk && 'de_DE.UTF-8' || '' }}
-        run: bun test --timeout=20000 test/shell-math.test.ts test/shell.test.ts test/shell-listing.test.ts test/operand-note.test.ts
+        run: bun test --timeout=20000 test/shell-math.test.ts test/shell.test.ts test/shell-listing.test.ts test/operand-note.test.ts ${{ matrix.extra }}
 
   build:
     # The standalone binary (scripts/build.ts) on Linux for every pull request; the script itself

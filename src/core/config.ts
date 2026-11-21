@@ -161,6 +161,13 @@ export interface Config {
    * folders untouched this long are deleted at startup (default 30, 0 = never).
    */
   scratchpad?: { enabled?: boolean; warnMB?: number; keepDays?: number }
+  /**
+   * Shell tool. `sandbox` (default off, #352): every shell command runs in the OS sandbox with no
+   * network, writing only in the workspace and the temp folder (bubblewrap on Linux, sandbox-exec on
+   * macOS; Windows: not isolated, a warning only). Recommended with `--yolo`. Off by default because
+   * it breaks commands that download or install, and on Linux it needs bubblewrap. Same as `--sandbox`.
+   */
+  shell?: { sandbox?: boolean }
 }
 
 export const loadConfig = () => readJson<Config>(configFile(), {})
@@ -196,3 +203,6 @@ export const cardsAutoSave = (config: Config) => config.memory?.cardsAutoSave ==
 
 /** Suggestion cards are on: the notebook is chosen and its switch is not off. */
 export const cardsEnabled = (config: Config) => memoryChoiceOf(config) === "notebook" && cardsSwitchOn(config)
+
+/** The shell sandbox for this session: the `--sandbox` flag, or `shell.sandbox: true` in config. */
+export const shellSandboxOn = (config: Config, flag?: boolean) => flag === true || config.shell?.sandbox === true

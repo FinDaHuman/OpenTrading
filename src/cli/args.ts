@@ -14,9 +14,9 @@ export type Cli =
   | { kind: "self-check" }
   | { kind: "mcp"; args: string[] }
   | { kind: "update"; args: string[] }
-  | { kind: "tui"; dir?: string; resume?: string; yolo?: boolean }
+  | { kind: "tui"; dir?: string; resume?: string; yolo?: boolean; sandbox?: boolean }
   /** `-p`: one turn without the TUI (src/cli/print.ts). No prompt = read stdin. */
-  | { kind: "print"; prompt?: string; dir?: string; yolo?: boolean; model?: string; format: PrintFormat; profile?: "machine"; maxRequests?: number }
+  | { kind: "print"; prompt?: string; dir?: string; yolo?: boolean; sandbox?: boolean; model?: string; format: PrintFormat; profile?: "machine"; maxRequests?: number }
   | { kind: "error"; message: string }
 
 export const HELP = `OpenTrading — harness AI phân tích chứng khoán Việt Nam
@@ -26,6 +26,9 @@ export const HELP = `OpenTrading — harness AI phân tích chứng khoán Việ
   opentrading -r, --resume [id]    mở lại phiên theo id (bỏ trống = mới nhất)
   opentrading --yolo               ▸▸▸ bỏ qua quyền: không hỏi trước khi ghi file/chạy lệnh
                                    (alias --dangerously-skip-permissions; hỏi xác nhận khi mở)
+  opentrading --sandbox            chạy lệnh shell trong sandbox: không mạng, chỉ ghi trong workspace
+                                   và thư mục tạm (Linux: bubblewrap, macOS: sandbox-exec; Windows:
+                                   KHÔNG cách ly). Nên dùng kèm --yolo. Dùng được cả với -p.
   opentrading -p "câu hỏi"         chạy một lượt không giao diện, in câu trả lời rồi thoát
                                    (không có câu hỏi hay "-": đọc từ stdin)
       --model provider/model       model cho lượt này (mặc định: model trong config)
@@ -56,6 +59,7 @@ export function parseCli(argv: string[]): Cli {
   let dir: string | undefined
   let resume: string | undefined
   let yolo = false
+  let sandbox = false
   let print = false
   let prompt: string | undefined
   let model: string | undefined
@@ -73,6 +77,10 @@ export function parseCli(argv: string[]): Cli {
     if (arg === "-v" || arg === "--version") return { kind: "version" }
     if (YOLO_FLAGS.includes(arg)) {
       yolo = true
+      continue
+    }
+    if (arg === "--sandbox") {
+      sandbox = true
       continue
     }
     if (arg === "-p" || arg === "--print") {
@@ -139,10 +147,10 @@ export function parseCli(argv: string[]): Cli {
   }
   if (print) {
     if (resume !== undefined) return { kind: "error", message: "-p luôn mở phiên mới: không dùng cùng -c/-r." }
-    return { kind: "print", format: format ?? "text", ...(prompt !== undefined ? { prompt } : {}), ...(dir !== undefined ? { dir } : {}), ...(yolo ? { yolo } : {}), ...(model ? { model } : {}), ...(profile ? { profile } : {}), ...(maxRequests !== undefined ? { maxRequests } : {}) }
+    return { kind: "print", format: format ?? "text", ...(prompt !== undefined ? { prompt } : {}), ...(dir !== undefined ? { dir } : {}), ...(yolo ? { yolo } : {}), ...(sandbox ? { sandbox } : {}), ...(model ? { model } : {}), ...(profile ? { profile } : {}), ...(maxRequests !== undefined ? { maxRequests } : {}) }
   }
   if (model || format || profile || maxRequests !== undefined) return { kind: "error", message: "--model, --output-format, --profile và --turn-requests chỉ dùng với -p." }
-  return { kind: "tui", dir, resume, ...(yolo ? { yolo } : {}) }
+  return { kind: "tui", dir, resume, ...(yolo ? { yolo } : {}), ...(sandbox ? { sandbox } : {}) }
 }
 
 /** The folder to open, resolved against `cwd` (PowerShell sets no PWD, so never read it). */
