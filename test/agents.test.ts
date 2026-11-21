@@ -8,7 +8,7 @@ import { toolFilter, toolSummary } from "../src/core/agents/resolve"
 import { parseAgent } from "../src/core/agents/schema"
 import { childRegistry, SubagentManager } from "../src/core/subagents/manager"
 import { ToolRegistry } from "../src/core/tools/registry"
-import { spawnSubagentTool } from "../src/core/tools/subagent/spawn"
+import { spawnSubagentTool, typeLine } from "../src/core/tools/subagent/spawn"
 import type { ToolDef } from "../src/core/tools/types"
 
 const tmp = await mkdtemp(path.join(os.tmpdir(), "ot-agents-"))
@@ -100,10 +100,14 @@ test("spawn_subagent lists the types in its description and rejects an unknown t
   // Types marked listed: false are named only, still callable by name.
   expect(spawn.description).toMatch(/Other types \(call by name when a skill asks\): .*\bbear\b.*\bvi-mo\b/)
   expect(spawn.description).not.toMatch(/- bear: /)
-  expect(spawn.description).toMatch(/- tra-cuu: Use for a quick lookup .* \(Tools: read-only\)/)
-  expect(spawn.description).toMatch(/- tin-tuc: .*\(Tools: web_search, web_fetch, \*news\*, \*sentiment\*, current_time\)/)
+  // One line per listed type (#334); the tools and the full description come back at spawn.
+  expect(spawn.description).toMatch(/- tra-cuu: a quick lookup of a few specific figures .*without deep analysis\n/)
+  expect(spawn.description).not.toContain("(Tools:")
+  expect(spawn.description).not.toMatch(/: Use (to|for) /)
+  expect(typeLine("Use for a quick lookup (price, volume). Read-only tools.")).toBe("a quick lookup (price, volume)")
+  expect(typeLine("Use to dissect one ticker's statements: cash flow. Read-only tools.")).toBe("dissect one ticker's statements: cash flow")
   expect(spawn.summarize!({ description: "Giá FPT", task: "x", purpose: "x", questions: ["x"], output: "x", subagent_type: "tra-cuu" })).toBe("tra-cuu(Giá FPT)")
   await expect(
     spawn.execute({ description: "x", task: "x", purpose: "x", questions: ["x"], output: "x", subagent_type: "khong-co" }, { signal: new AbortController().signal, callId: "c" }),
-  ).rejects.toThrow('No subagent type "khong-co". Available types: bear, bull, chu-ky-nganh, co-ban, dinh-gia, du-bao-su-kien, kiem-chien-luoc, ky-thuat, nganh, nghien-cuu, phan-bien, rui-ro-thi-truong, tai-san-toan-cau, tin-tuc, tong-hop, tra-cuu, vi-mo.')
+  ).rejects.toThrow(/^No subagent type "khong-co"\. Available types:\n- co-ban: .*\n[\s\S]*- tin-tuc: .*\(Tools: web_search, web_fetch, \*news\*, \*sentiment\*, current_time\)\n- tra-cuu: Use for a quick lookup .*\(Tools: read-only\)\nOther types: bear, bull, .*vi-mo\.$/)
 })

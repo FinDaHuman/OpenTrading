@@ -42,13 +42,25 @@ export function typeSpec(agents: AgentDefinition[], type: string): TypeSpec | un
 }
 
 /**
- * The agent types, Claude Code's format (`- type: when to use (Tool: …)`) for the listed ones; the
- * rest (`listed: false`, called by name from skills and playbooks) by name only.
+ * One line per listed type: the description's first sentence without "Use to/for" (#334: the list
+ * goes out with every request that loads this tool). The full description and the tools come
+ * back when a spawn names no such type, and the tools with a background start.
+ */
+export function typeLine(description: string) {
+  const first = description.replace(/\s+/g, " ").trim().split(/(?<=\.)\s/)[0] ?? ""
+  return first.replace(/^Use (to|for) /, "").replace(/\.$/, "")
+}
+
+const typeDetail = (a: AgentDefinition) => `- ${a.name}: ${a.description.replace(/\s+/g, " ").trim()} (Tools: ${toolSummary(a, "en")})`
+
+/**
+ * The agent types: `- type: one line` for the listed ones; the rest (`listed: false`, called by
+ * name from skills and playbooks) by name only.
  */
 function typeList(agents: AgentDefinition[]) {
   if (agents.length === 0) return ""
   const listed = agents.filter((a) => a.listed !== false)
-  const lines = listed.map((a) => `- ${a.name}: ${a.description.replace(/\s+/g, " ").trim()} (Tools: ${toolSummary(a, "en")})`)
+  const lines = listed.map((a) => `- ${a.name}: ${typeLine(a.description)}`)
   const others = agents.filter((a) => a.listed === false).map((a) => a.name)
   const more = others.length ? `\nOther types (call by name when a skill asks): ${others.join(", ")}.` : ""
   return `\n\nSubagent types (subagent_type, default ${DEFAULT_SUBAGENT_TYPE}):\n${lines.join("\n")}${more}`
@@ -78,8 +90,11 @@ export function spawnSubagentTool(manager: SubagentManager, agents: AgentDefinit
       const type = input.subagent_type || DEFAULT_SUBAGENT_TYPE
       const spec = typeSpec(agents, type)
       if (!spec) {
-        throw new Error(`No subagent type "${type}". Available types: ${agents.map((a) => a.name).join(", ") || DEFAULT_SUBAGENT_TYPE}.`)
+        const listed = agents.filter((a) => a.listed !== false).map(typeDetail)
+        const others = agents.filter((a) => a.listed === false).map((a) => a.name)
+        throw new Error(`No subagent type "${type}". Available types:\n${listed.join("\n") || `- ${DEFAULT_SUBAGENT_TYPE}`}${others.length ? `\nOther types: ${others.join(", ")}.` : ""}`)
       }
+      const def = agents.find((a) => a.name === type)
       const background = !!input.run_in_background
       const run = manager.start({
         ...spec,
@@ -94,7 +109,7 @@ export function spawnSubagentTool(manager: SubagentManager, agents: AgentDefinit
       })
       if (background) {
         return [
-          `Subagent ${run.id} started in the background (${type} · ${input.description}).`,
+          `Subagent ${run.id} started in the background (${type} · ${input.description}${def ? ` · tools: ${toolSummary(def, "en")}` : ""}).`,
           "The result will arrive by itself in a <thong_bao_subagent> message when done: do not wait, do not poll its status, do not duplicate its work.",
           `More work: send_message with to="${run.id}". Stop: stop_agent.`,
         ].join("\n")
