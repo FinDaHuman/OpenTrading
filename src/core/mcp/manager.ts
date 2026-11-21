@@ -39,7 +39,7 @@ import {
 import { ServerBreaker } from "./breaker"
 import { isDataServer } from "./catalog"
 import { blockToParts, resultToOutput } from "./convert"
-import { McpModelError, modelErrorText } from "./errors"
+import { MAX_MODEL_ERROR, McpModelError, modelErrorText } from "./errors"
 import { serverPrefix, toolName } from "./naming"
 import { McpOAuthProvider, NeedsAuthError, oauthStatus, openBrowser, startCallbackServer } from "./oauth"
 import { clearOAuth, secretEnv, setSecretEnv } from "./secrets"
@@ -264,12 +264,13 @@ const rawMessage = (error: unknown) => (error instanceof Error ? error.message :
  * error, a non-retryable HTTP answer with an HTML page) becomes one short English line that
  * keeps its codes.
  */
-async function forModel<T>(server: string, signal: AbortSignal, run: () => Promise<T>): Promise<T> {
+async function forModel<T>(server: string | undefined, signal: AbortSignal, run: () => Promise<T>): Promise<T> {
   try {
     return await run()
   } catch (error) {
     if (signal.aborted || error instanceof McpModelError) throw error
-    throw new McpModelError(`MCP server "${server}" failed: ${modelErrorText(rawMessage(error), { status: httpStatus(error), max: 260 })}`)
+    const prefix = server ? `MCP server "${server.slice(0, 40)}" failed: ` : "MCP resources failed: "
+    throw new McpModelError(prefix + modelErrorText(rawMessage(error), { status: httpStatus(error), max: MAX_MODEL_ERROR - prefix.length }))
   }
 }
 
@@ -1230,7 +1231,7 @@ export class McpManager {
       readOnly: true,
       summarize: (input: { server?: string }) => `list_mcp_resources(${input?.server ?? ""})`,
       execute: (input: { server?: string }, ctx) =>
-        forModel(input?.server || "(all)", ctx.signal, async () => JSON.stringify(await this.listResources(input?.server), null, 2)),
+        forModel(input?.server || undefined, ctx.signal, async () => JSON.stringify(await this.listResources(input?.server), null, 2)),
     })
     this.registry.register({
       name: "read_mcp_resource",
@@ -1245,7 +1246,7 @@ export class McpManager {
 
   async listResources(server?: string) {
     const targets = this.status().filter((s) => s.state === "connected" && s.resources && (!server || s.name === server))
-    if (server && targets.length === 0) throw new Error(`Server "${server}" has no resources or is not connected.`)
+    if (server && targets.length === 0) throw new McpModelError(`MCP server "${server}" has no resources or is not connected.`)
     const out: { server: string; uri: string; name?: string; description?: string; mimeType?: string }[] = []
     for (const s of targets) {
       const live = this.live.get(s.name)
@@ -1263,7 +1264,7 @@ export class McpManager {
 
   async readResource(server: string, uri: string) {
     const live = this.live.get(server)
-    if (!live) throw new Error(`MCP server "${server}" is not connected. See /mcp.`)
+    if (!live) throw new McpModelError(`MCP server "${server}" is not connected. See /mcp.`)
     const result = await live.client.request({ method: "resources/read", params: { uri } }, LooseReadResource)
     return resultToOutput({ content: result.contents.map((c) => ({ type: "resource", resource: c })) })
   }

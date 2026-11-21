@@ -111,6 +111,23 @@ test("stdio server: an HTML page, a stack trace and a long isError all reach the
   expect(long).toContain("error_code=vendor_disabled")
   expect(long).toContain("reason=upstream_down")
   expect(long).toContain("retryable=false")
+
+  const listed = await modelReads(registry.get("list_mcp_resources")!.execute({}, ctx))
+  expectClean(listed)
+  expect(listed).toContain("MCP resources failed: ENOENT")
+  const read = await modelReads(registry.get("read_mcp_resource")!.execute({ server: "errs", uri: "file:///a" }, ctx))
+  expectClean(read)
+  expect(read).toContain('[HTML error page "504 Gateway Time-out"]')
+}, 30_000)
+
+test("a long server name still leaves the whole line within the cap", async () => {
+  const name = "a-very-long-server-name-for-the-error-length-check-0123456789"
+  const { registry, manager } = await managerWith({ [name]: { command: process.execPath, args: [ERRORS] } })
+  await manager.start()
+  const tool = registry.list().find((t) => t.displayName?.endsWith("html_page"))!
+  const error = await modelReads(tool.execute({}, ctx))
+  expectClean(error)
+  expect(error).toContain("HTTP 502")
 }, 30_000)
 
 test("remote server: a non-retryable status with an HTML page reaches the model as one short line", async () => {
