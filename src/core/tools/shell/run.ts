@@ -167,11 +167,14 @@ export async function runShell(
     env?: Record<string, string>
     /** Past `after` characters, stream everything (from the first byte) to `file`, before the memory cap cuts the middle. */
     spill?: { file: string; after: number }
+    /** Turns the shell's argv into the one spawned (the OS sandbox, sandbox.ts). */
+    wrap?: (argv: string[]) => string[]
   },
 ): Promise<RunResult> {
   const shell = opts.shell ?? detectShell()
   const started = Date.now()
-  const proc = Bun.spawn(shellArgs(shell, command), {
+  const argv = shellArgs(shell, command)
+  const proc = Bun.spawn(opts.wrap ? opts.wrap(argv) : argv, {
     cwd: opts.cwd,
     stdin: "ignore",
     stdout: "pipe",

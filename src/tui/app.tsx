@@ -100,6 +100,7 @@ import { ShortcutsPane } from "./shortcuts"
 import { loadModelPrefs } from "../core/model-prefs"
 import { AgentPanel, isDeskRow, panelAgents } from "./agent-panel"
 import { AutoOptInDialog } from "./dialogs/auto-optin"
+import { probeSandbox, sandboxNotice } from "../core/tools/shell/sandbox"
 import { YoloWarningDialog } from "./dialogs/yolo-warning"
 import { FolderTrustDialog } from "./dialogs/folder-trust"
 import { announceMcp } from "./mcp/notices"
@@ -1123,6 +1124,9 @@ export function App(props: {
     // A config still naming the removed legacy memory: written back as the notebook and said once (spec 007).
     const moved = await migrateLegacyMemory(props.runtime.home).catch(() => undefined)
     if (moved) pushLine({ kind: "info", text: moved })
+    // The shell sandbox (#352): said once at start, a warning when it cannot isolate (Windows) or cannot run.
+    const sandboxLine = sandboxNotice(props.runtime.shellSandbox, probeSandbox(), { bypass: props.runtime.permissions.bypassAvailable })
+    if (sandboxLine) pushLine({ kind: sandboxLine.level, text: sandboxLine.text })
     // A notebook that did not open says why at once (chat still works); it is also in /config and /memory.
     if (props.runtime.memory.id === "notebook") {
       for (const problem of props.runtime.memory.problems?.() ?? []) pushLine({ kind: "error", text: problem })

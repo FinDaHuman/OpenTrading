@@ -11,6 +11,7 @@ import { listingCommand } from "./read-only"
 import { isUncPath, readScope } from "../../fs/path-safety"
 import { realish } from "../../fs/workspace"
 import { detectPython, detectShell, runShell, SPILL_CAP, type ShellInfo } from "./run"
+import { probeSandbox, sandboxDescription, sandboxedArgv, type SandboxPlan, type SandboxStatus } from "./sandbox"
 
 /**
  * shell: run one command on the user's machine (a Python script that crunches a CSV, a
@@ -72,7 +73,7 @@ function bypassMath(ps: boolean, python: string | undefined): string {
  * grammar and the rewrite hint for Python (they exist to spare the user a prompt) do not apply, and
  * saying they do kept the model off Python for series work (issue #309). Other modes: unchanged.
  */
-function describe(shell: ShellInfo, present?: ReadonlySet<string>, mode?: PermissionMode, python: () => string | undefined = detectPython): string {
+function describe(shell: ShellInfo, present?: ReadonlySet<string>, mode?: PermissionMode, python: () => string | undefined = detectPython, sandboxNote = ""): string {
   const has = (name: string) => !present || present.has(name)
   const fileTools = FILE_TOOLS.filter(has)
   const ps = shell.kind === "pwsh" || shell.kind === "powershell"
@@ -84,6 +85,7 @@ function describe(shell: ShellInfo, present?: ReadonlySet<string>, mode?: Permis
   return (
     "Runs one shell command on the user's machine, in the workspace by default; returns the output (stdout and stderr) and the exit code. " +
     `${notes} ` +
+    sandboxNote +
     "Use it to run programs: scripts that read data files or draw charts to a file, format conversion, installing libraries the user agreed to. " +
     (fileTools.length > 0
       ? `Not for reading, finding or editing files (use ${fileTools.join(", ")}), and not for commands that wait for keyboard input or run forever (servers). `
@@ -96,8 +98,28 @@ function describe(shell: ShellInfo, present?: ReadonlySet<string>, mode?: Permis
   )
 }
 
-export function shellTool(workspace: Workspace, opts: { shell?: ShellInfo; python?: () => string | undefined } = {}): ToolDef<ShellInput> {
+export function shellTool(
+  workspace: Workspace,
+  opts: {
+    shell?: ShellInfo
+    python?: () => string | undefined
+    /** The OS sandbox (sandbox.ts): on for the whole session (`--sandbox` or config `shell.sandbox`). */
+    sandbox?: boolean
+    /** Replaces the trial run (tests). */
+    sandboxStatus?: () => SandboxStatus
+  } = {},
+): ToolDef<ShellInput> {
   const shell = opts.shell ?? detectShell()
+  const sandboxStatus = opts.sandboxStatus ?? probeSandbox
+  /**
+   * Writable: the workspace folders and the temp folder (the session's scratchpad is in it).
+   * Read-only on top: OpenTrading's data folder (config, sessions, memory), so a command can
+   * never turn the sandbox off or rewrite permission rules, wherever the workspace is opened.
+   */
+  const plan = (): SandboxPlan => ({
+    writable: [...workspace.roots(), os.tmpdir(), ...(process.env.OPENTRADING_TMPDIR ? [process.env.OPENTRADING_TMPDIR] : []), ...(workspace.scratch?.dir() ? [workspace.scratch.dir()!] : [])],
+    readOnly: workspace.env().data ? [workspace.env().data!] : [],
+  })
   const python = opts.python ?? detectPython
   const cwdOf = (input: ShellInput) => (input.workdir ? workspace.resolve(input.workdir) : workspace.primary)
   // A network workdir (\\host\share, or //host/share on Windows): refused by string alone. Resolving it
@@ -120,7 +142,7 @@ export function shellTool(workspace: Workspace, opts: { shell?: ShellInfo; pytho
   const def: ToolDef<ShellInput> = {
     name: "shell",
     description: describe(shell),
-    descriptionFor: (present, mode) => describe(shell, present, mode, python),
+    descriptionFor: (present, mode) => describe(shell, present, mode, python, (opts.sandbox && sandboxDescription(true, sandboxStatus())) || ""),
     input: z.object({
       command: z.string().min(1).describe("Command to run"),
       description: z.string().max(200).optional().describe("What this command does, 5–10 Vietnamese words shown to the user, e.g.: Vẽ biểu đồ giá FPT ra file PNG"),
@@ -186,7 +208,16 @@ export function shellTool(workspace: Workspace, opts: { shell?: ShellInfo; pytho
       const timeoutMs = lists(input.command, cwd) ? LISTING_TIMEOUT_MS : Math.min(MAX_TIMEOUT_MS, input.timeout_ms ?? DEFAULT_TIMEOUT_MS)
       // Long output goes to this file as it streams, before the memory cap drops its middle.
       const file = path.join(workspace.env().data!, "tool-output", `${ctx.callId.replace(/[^\w-]/g, "_")}.txt`)
-      const result = await runShell(input.command, { cwd, timeoutMs, signal: ctx.signal, shell, spill: { file, after: SHELL_OUTPUT_CHARS } })
+      let wrap: ((argv: string[]) => string[]) | undefined
+      if (opts.sandbox) {
+        const sandbox = sandboxStatus()
+        const sandboxPlan = plan()
+        // Fails closed: the error is thrown before anything is spawned.
+        const probe = sandboxedArgv(sandbox, sandboxPlan, [], cwd)
+        if (!Array.isArray(probe)) throw new Error(probe.error)
+        wrap = (argv) => sandboxedArgv(sandbox, sandboxPlan, argv, cwd) as string[]
+      }
+      const result = await runShell(input.command, { cwd, timeoutMs, signal: ctx.signal, shell, spill: { file, after: SHELL_OUTPUT_CHARS }, wrap })
       const status = result.timedOut
         ? `stopped after ${Math.round(timeoutMs / 1000)}s (child processes killed too); raise timeout_ms for longer commands; commands waiting for input cannot run`
         : result.aborted

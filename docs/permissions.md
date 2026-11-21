@@ -156,6 +156,28 @@ Lệnh liệt kê chạy với giới hạn 20 giây. Quy tắc `deny`/`ask` c�
 - **"Luôn cho phép" một lệnh** chỉ có với lệnh đơn và chỉ đọc (`git status`, `git log`, `Get-ChildItem`, `python --version`…). Quy tắc lưu dưới dạng tiền tố và **không bao giờ** khớp lệnh ghép (`git status; Remove-Item …`).
 - Lệnh xoá, chuyển, ghi, tải, cài, `npm run`, interpreter (`python x.py`, `node`, `npx`…) chỉ được duyệt đúng lệnh đó, tối đa cho cả phiên.
 
+## Sandbox cho shell (tuỳ chọn)
+
+Bật bằng `--sandbox` (TUI và `-p`) hoặc `"shell": { "sandbox": true }` trong `config.json`. **Mặc định tắt**: lệnh tải hay cài (`pip install`, `curl`) sẽ hỏng, và trên Linux cần cài bubblewrap. **Nên bật khi chạy `--yolo`** (▸▸▸ không hỏi trước khi chạy lệnh); lúc đó OpenTrading nhắc một dòng nếu chưa bật. Bật hay tắt được đọc một lần khi mở phiên, nên lệnh trong phiên không tự tắt được.
+
+Khi bật, mọi lệnh của tool `shell` (cả phép tính, lệnh liệt kê, lệnh của subagent và ultradesk):
+
+- **không có mạng**, kể cả `127.0.0.1`;
+- **chỉ ghi được** trong các thư mục workspace và thư mục tạm (thư mục tạm của phiên nằm trong đó). Thư mục dữ liệu `~/.opentrading` (config, phiên, bộ nhớ, quy tắc quyền) luôn **chỉ đọc**, kể cả khi nó nằm trong workspace hay thư mục tạm; workspace `~/.opentrading/workspace` thì vẫn ghi được.
+
+| Hệ điều hành | Cách làm | Khi không chạy được |
+| --- | --- | --- |
+| Linux | bubblewrap (`bwrap`): cả hệ thống file chỉ đọc, bind lại các thư mục được ghi, namespace mạng/PID riêng | **Từ chối mọi lệnh shell** (không chạy lệnh mà không có sandbox). Thiếu `bwrap`: `sudo apt install bubblewrap`. Có `bwrap` mà máy/container chặn user namespace (Docker mặc định, AppArmor của Ubuntu 24.04): báo lỗi đó khi mở phiên |
+| macOS | `sandbox-exec` với profile Seatbelt; đường dẫn truyền bằng tham số `-D`, không chèn vào profile | Từ chối mọi lệnh shell |
+| Windows | **Không cách ly.** Lệnh vẫn chạy thẳng trên máy, có mạng, ghi được mọi nơi bạn ghi được | Khi mở phiên có cảnh báo; model không được báo là có sandbox |
+
+Không thuộc sandbox (giới hạn đã biết):
+
+- **Đọc không bị chặn**: lệnh vẫn đọc được file bạn đọc được, và output đi vào hội thoại gửi tới provider. Các mục "luôn hỏi" ở trên vẫn là thứ bảo vệ file khoá.
+- Chỉ tool `shell`. `write_file`, `edit_file`, tool MCP và tool web không chạy trong sandbox; chúng có luật quyền riêng.
+- Sandbox không thay hộp thoại duyệt: các chế độ quyền và quy tắc `deny`/`ask` giữ nguyên, không hỏi ít đi khi bật sandbox.
+- Benchmark v4.7 đã chạy shell trong Docker không mạng (#309); sandbox này dành cho người dùng chạy `--yolo` trên máy mình.
+
 ## /undo
 
 Trước mỗi lần `write_file` hoặc `edit_file`, bản cũ được chép vào `~/.opentrading/file-history/<lần chạy>/`.
@@ -251,10 +273,9 @@ Mỗi hành động cần duyệt được một model thứ hai xét trước k
 - Model yếu thì duyệt kém hơn.
 - Nếu provider từ chối tuỳ chọn giảm "thinking" (Gemini 3 `thinkingLevel: low`, OpenAI `reasoningEffort: low`), mọi lần duyệt sẽ không có kết quả. Khi đó `▸▸` sẽ hỏi bạn cho mọi thứ, mỗi hộp thoại ghi "model duyệt không trả lời được: …" kèm lỗi. Hãy đổi model duyệt ở `/config`.
 - Bản ghi không lưu kết quả của hành động (chỉ đánh dấu các lời gọi không chạy, và chỉ tới tin nhắn kế tiếp của bạn).
-- Phân tích lệnh shell là dựa trên chuỗi, không phải trình phân tích cú pháp shell, và chưa có sandbox của hệ điều hành.
+- Phân tích lệnh shell là dựa trên chuỗi, không phải trình phân tích cú pháp shell. Sandbox của hệ điều hành là tuỳ chọn, mặc định tắt (xem [Sandbox cho shell](#sandbox-cho-shell-tuỳ-chọn)).
 
 ## Ngoài phạm vi đợt này
 
 - Link file bấm được (OSC 8) trong transcript: bỏ, ghi vào việc sau.
-- Sandbox hệ điều hành cho `shell` (kiểu codex, deepseek): việc sau.
 - Skill hướng dẫn tạo tài liệu/báo cáo: phần của đồng nghiệp (xem [contracts.md](contracts.md)).

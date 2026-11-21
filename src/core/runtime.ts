@@ -92,6 +92,8 @@ export interface Runtime {
   history: FileHistory
   /** ▸▸ auto mode's reviewer; also the log of the user's words and the agent's actions. */
   auto: AutoReviewer
+  /** The shell tool runs in the OS sandbox (tools/shell/sandbox.ts): fixed for the session. */
+  shellSandbox: boolean
 }
 
 export type MemoryChoice = "none" | "notebook"
@@ -134,6 +136,11 @@ export function initRuntime(opts: {
   resultFiles?: string
   /** See `McpManagerOptions.transport`. */
   mcpTransport?: McpManagerOptions["transport"]
+  /**
+   * Run the shell tool in the OS sandbox (`--sandbox`, or config `shell.sandbox`; tools/shell/sandbox.ts).
+   * Read once here: a command can never turn it off during the session.
+   */
+  sandbox?: boolean
 }): Runtime {
   const home = opts.home ?? dataDir()
   const registry = new ToolRegistry()
@@ -171,7 +178,7 @@ export function initRuntime(opts: {
   registry.register(grepFilesTool(workspace))
   registry.register(writeFileTool({ workspace, state: files, history }))
   registry.register(editFileTool({ workspace, state: files, history }))
-  registry.register(shellTool(workspace))
+  registry.register(shellTool(workspace, { sandbox: opts.sandbox === true }))
   registry.register(
     loadSkillTool(
       opts.skills,
@@ -260,7 +267,7 @@ export function initRuntime(opts: {
     waiver: () => runtime.turnWaiver,
   })
   const deskApprovals = new DeskApprovals()
-  const runtime: Runtime = { registry, permissions, questions, mcp, hooks: new HookBus(), memory: new NoopMemory(), constraints, redaction, subagents, desk, deskApprovals, agents: [], home, workspace, files, history, auto }
+  const runtime: Runtime = { registry, permissions, questions, mcp, hooks: new HookBus(), memory: new NoopMemory(), constraints, redaction, subagents, desk, deskApprovals, agents: [], home, workspace, files, history, auto, shellSandbox: opts.sandbox === true }
   registry.register(deskRunTool({ engine: desk, approvals: deskApprovals, playbooks: () => PLAYBOOKS, optIn: () => runtime.deskOptIn, mode: () => permissions.mode }))
   switchMemory(runtime, opts.memory ?? new NoopMemory())
   return runtime
