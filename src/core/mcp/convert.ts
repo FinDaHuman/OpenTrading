@@ -1,4 +1,5 @@
 import type { ToolImage, ToolResult } from "../tools/types"
+import { McpModelError, modelErrorText } from "./errors"
 
 interface ContentBlock {
   type: string
@@ -43,7 +44,8 @@ export function blockToParts(block: ContentBlock): { text?: string; image?: Tool
 
 /**
  * Flatten an MCP tool result into what the model reads: text, plus images for models that
- * can see them. `isError` becomes a thrown error (the AI SDK turns it into a tool-error).
+ * can see them. `isError` becomes a thrown error (the AI SDK turns it into a tool-error),
+ * cut to one short line that keeps its codes (#326).
  * Returns a plain string when there are no images, so text-only callers stay simple.
  */
 export function resultToOutput(result: CallToolResultLike): string | ToolResult {
@@ -56,7 +58,7 @@ export function resultToOutput(result: CallToolResultLike): string | ToolResult 
   }
   if (parts.length === 0 && images.length === 0 && result.structuredContent !== undefined) parts.push(JSON.stringify(result.structuredContent, null, 2))
   const text = parts.join("\n\n")
-  if (result.isError) throw new Error(text || "The MCP tool reported an error without a message.")
+  if (result.isError) throw new McpModelError(text.trim() ? modelErrorText(text) : "The MCP tool reported an error without a message.")
   if (images.length > 0) return { output: text || `(the tool returned ${images.length} images)`, images }
   return text || "(the tool returned no content)"
 }
