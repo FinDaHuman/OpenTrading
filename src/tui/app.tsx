@@ -111,6 +111,7 @@ import { color, promptStyle } from "./theme"
 import { cleanSelection, writeClipboard } from "./clipboard"
 import { ArgumentHint, commandItem, Suggestions } from "./suggestions"
 import { Transcript } from "./transcript"
+import { setLinkRoots } from "./file-links"
 import { scrollSetting, scrollTranscript } from "./scroll"
 import { TodoPanel } from "./todo-panel"
 import { isUndoKey, PromptInput } from "./prompt/input"
@@ -1169,6 +1170,8 @@ export function App(props: {
   const [cursor, setCursor] = createSignal(0)
   // Every root: /add-dir folders are indexed too, by absolute path (#345).
   const fileIndex = new WorkspaceIndex(() => props.runtime.workspace.roots(), props.runtime.workspace.env())
+  // Paths in the transcript link to files of the same roots (OSC 8).
+  setLinkRoots(() => props.runtime.workspace.roots())
   const [indexed, setIndexed] = createSignal(0)
   const mention = createMemo(() => {
     const d = draft()

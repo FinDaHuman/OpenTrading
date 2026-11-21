@@ -17,6 +17,7 @@ import { AUTO_BLOCK_PREFIXES, prefixOf, USER_DENY_PREFIXES, userNoteOf } from ".
 import { isSpawn, SubagentRow } from "./subagent-row"
 import { DESK_RUN } from "../core/desk/tool"
 import { DeskCard, deskRunIdOf, isLiveRun, runSummary } from "./desk-card"
+import { linkMarkdown, linkSegments, useLinks } from "./file-links"
 
 /**
  * The conversation, in Claude Code's style:
@@ -110,7 +111,7 @@ function ToolRow(props: { line: ToolLine; first: boolean; width: number }) {
       <box flexDirection="row" height={1}>
         <Gutter glyph={dot()} fg={dotColor()} />
         <text wrapMode="none">
-          <span style={{ fg: color.tx, bold: true }}>{truncate(props.line.label, props.width - 14)}</span>
+          <Linked text={truncate(props.line.label, props.width - 14)} fg={color.tx} bold />
           <span style={{ fg: color.tx3 }}>{duration(props.line.durationMs)}</span>
         </text>
       </box>
@@ -198,9 +199,31 @@ function ResultLine(props: { prefix: string; text: string; fg: string; wrap?: bo
         {props.prefix}
       </text>
       <text fg={props.fg} wrapMode={props.wrap ? "word" : "none"} flexGrow={props.wrap ? 1 : 0} flexShrink={props.wrap ? 1 : 0}>
-        {props.text}
+        <Linked text={props.text} fg={props.fg} />
       </text>
     </box>
+  )
+}
+
+/**
+ * Text whose file paths are OSC 8 links (#345) while the terminal takes them; the plain text otherwise.
+ * Goes inside a <text>.
+ */
+function Linked(props: { text: string; fg: string; bold?: boolean }) {
+  const links = useLinks(useRenderer())
+  const parts = createMemo(() => (links() ? linkSegments(props.text) : [{ text: props.text }]))
+  return (
+    <For each={parts()}>
+      {(part) =>
+        part.href ? (
+          <a href={part.href} style={{ fg: props.fg, bold: props.bold, underline: true }}>
+            {part.text}
+          </a>
+        ) : (
+          <span style={{ fg: props.fg, bold: props.bold }}>{part.text}</span>
+        )
+      }
+    </For>
   )
 }
 
@@ -295,7 +318,9 @@ function Row(props: { line: Line; prev?: Line; index: number; width: number }) {
  * string only when that changes, so a token inside an unfinished heading costs nothing.
  */
 function AssistantRow(props: { line: Extract<Line, { kind: "assistant" }> }) {
-  const scene = useRenderer().nativeScene
+  const renderer = useRenderer()
+  const scene = renderer.nativeScene
+  const links = useLinks(renderer)
   const view = createMemo(() => streamView(props.line.text, props.line.done), undefined, {
     equals: (a, b) => a.markdown === b.markdown && a.heldTableRows === b.heldTableRows,
   })
@@ -316,7 +341,7 @@ function AssistantRow(props: { line: Extract<Line, { kind: "assistant" }> }) {
             bg={color.bg}
             tableOptions={{ style: "grid" }}
             streaming={!props.line.done}
-            content={view().markdown}
+            content={links() && props.line.done ? linkMarkdown(view().markdown) : view().markdown}
           />
         </Show>
         {/* Outside <markdown>: there the text would be parsed. */}
