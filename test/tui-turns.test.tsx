@@ -8,10 +8,17 @@ import { tuiApp, type TuiSetup } from "./helpers/tui-app"
 // A turn on screen: tool rows, retries, the stop gate, harness markup, streaming; folder trust; the loop guard.
 // Split from tui.test.tsx (#348): this file starts its own app on a fresh home (helpers/tui-app.tsx).
 const app = await tuiApp({ connected: true })
-const { home, cwd, runtime, mock, state, setState, LOADED_PREFIX, SOURCE_FAILED_PREFIX, setKey, show, waitMcp, lastTurnAnswers, turnEnded } = app
+const { home, cwd, runtime, mock, state, setState, LOADED_PREFIX, SOURCE_FAILED_PREFIX, setKey, currentSession, show, waitMcp, lastTurnAnswers, turnEnded } = app
 let setup: TuiSetup
-beforeAll(() => {
+beforeAll(async () => {
   setup = app.setup
+  // A first turn, titled, before the tests that check a turn's lines (in tui.test.tsx earlier tests had
+  // chatted). The first turn's own receipt can say "chưa cập nhật được danh sách phiên" when the
+  // generated title lands while its index line is written (a race of its own, #396).
+  await setup.mockInput.typeText("Chào")
+  setup.mockInput.pressEnter()
+  await until(() => !state.streaming && state.lines.some((l) => l.kind === "assistant" && l.text.includes("HẾT-CÂU-TRẢ-LỜI")), 15_000, "the first turn")
+  await until(() => currentSession().title !== "Chào" && !currentSession().hasPending, 15_000, "the first turn's title")
 })
 
 test("/profile creates INVESTOR.md from a template", async () => {
