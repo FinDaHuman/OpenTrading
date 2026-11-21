@@ -109,7 +109,11 @@ export function chartCompareTool(): ToolDef<ChartCompareInput> {
       } else if (!raw.series) throw new Error("series or from_calls is required.")
       else if (raw.percent) input = { ...input, series: input.series.map((s) => ({ label: s.label, values: fromPercent(s) })) }
       const zero = input.series.find((s) => s.values[0] === 0)
-      if (zero) throw new Error(zeroStart(zero.label))
+      if (zero) {
+        // Numbers from a result are prices (or the chosen field): percent does not apply there.
+        if (raw.from_calls) throw new Error(`Series ${zero.label} (${raw.from_calls.join(", ")}, field ${raw.field ?? "close"}) starts at 0, so % change from the first point cannot be computed. Compare a price field (field: "close") or use another result.`)
+        throw new Error(zeroStart(zero.label))
+      }
       const chart: ChartData = {
         kind: "compare",
         ...(input.title ? { title: input.title } : {}),

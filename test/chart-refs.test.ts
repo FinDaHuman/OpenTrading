@@ -133,6 +133,12 @@ test("batch ref: chart_compare splits one result into one labelled series per sy
   const two = (await chartCompareTool().execute({ from_calls: [ref], symbols: ["nvl", "FPT"] }, ctx())) as ToolResult
   expect(two.output).toContain("FPT +10%, NVL +25%")
   await expect(chartCompareTool().execute({ from_calls: [ref], symbols: ["VCB"] }, ctx())).rejects.toThrow("no ticker VCB")
+  // A result series starting at 0 (#331): no advice to pass percent, which from_calls ignores.
+  const zero = refOf(await callTool(batchTool({ AAA: [0, 5], BBB: [10, 8] })))!
+  const refused = await chartCompareTool().execute({ from_calls: [zero] }, ctx()).then(() => "", (e: Error) => e.message)
+  expect(refused).toContain("Series AAA")
+  expect(refused).toContain('field: "close"')
+  expect(refused).not.toContain("percent")
   await expect(chartCompareTool().execute({ from_calls: [ref], symbols: ["FPT"] }, ctx())).rejects.toThrow("2–5 are needed")
 })
 
