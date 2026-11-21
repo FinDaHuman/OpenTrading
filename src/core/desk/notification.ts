@@ -64,7 +64,7 @@ function gapsText(view: DeskRunView) {
   const gapped = view.agents.filter((a) => (a.status === "done" || a.status === "cached") && a.dataGaps?.length)
   if (gapped.length === 0) return undefined
   let list = gapped.map((a) => `${a.label} (${a.dataGaps!.join(", ")})`).join("; ")
-  if (list.length > MAX_GAPS_CHARS) list = `${list.slice(0, MAX_GAPS_CHARS)}… (+${gapped.length} agents in all)`
+  if (list.length > MAX_GAPS_CHARS) list = `${list.slice(0, MAX_GAPS_CHARS)}… (${gapped.length} agents in all)`
   return `Missing data: ${gapped.length} agents answered without some sources because those tools failed, so the parts built on them are incomplete — say so, do not fill them in: ${list}.`
 }
 

@@ -7,7 +7,7 @@ import type { AgentDefinition } from "../src/core/agents/schema"
 import type { Config } from "../src/core/config"
 import { DeskEngine, type AgentStarter } from "../src/core/desk/engine"
 import { DeskJournal } from "../src/core/desk/journal"
-import { DESK_TAG, deskNotification } from "../src/core/desk/notification"
+import { DESK_NOTICE_PATTERN, DESK_TAG, deskNotification } from "../src/core/desk/notification"
 import { cleanText, evidence } from "../src/core/desk/sanitize"
 import { DESK_DEFAULTS, deskSettings } from "../src/core/desk/settings"
 import type { DeskContext, DeskRunView, Playbook } from "../src/core/desk/types"
@@ -311,6 +311,11 @@ test("sources an agent did not get reach the main agent's notice, and survive a 
   expect(notice).toContain("Missing data: 1 agents answered without some sources")
   expect(notice).toContain("FPT (price_history, financials)")
   expect(notice).not.toContain("MWG (")
+  // A stored notice with the line is still read back on resume (transcript lines).
+  const stored = [...notice.matchAll(DESK_NOTICE_PATTERN)]
+  expect(stored).toHaveLength(1)
+  expect(stored[0]![3]).toBe("done")
+  expect(stored[0]![4]).toStartWith("1 agents (1 reused from the journal)")
 })
 
 test("a run whose agents got all their data has no missing-data line", async () => {
