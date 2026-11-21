@@ -1,9 +1,10 @@
 import {afterEach,expect,test} from 'bun:test'
+import {createHash} from 'node:crypto'
 import {mkdtempSync,rmSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 import {RwLock,runTool} from '../src/core/tools/wrap'
-import {clearResults,recallResult,useResultSession} from '../src/core/tools/refs'
+import {clearResults,recallResult,rememberResult,useResultSession} from '../src/core/tools/refs'
 import {financialLeaves,financialValue} from '../src/core/tools/financial-source'
 import {FinancePolicyState} from '../src/core/finance-policy'
 import {withRetries} from '../src/core/retry'
@@ -58,4 +59,14 @@ test('per-share label is equivalent at the same scale, other overrides still fai
  expect(financialValue({from_call:r,field:'last',unit:'nghìn đồng'})).toMatchObject({value:56.3,unit:'nghìn đồng/cổ phiếu'})
  expect(()=>financialValue({from_call:r,field:'last',unit:'đồng'})).toThrow('cannot be overridden')
  expect(()=>financialValue({from_call:r,field:'last',unit:'tỷ đồng'})).toThrow('cannot be overridden')
+})
+test('a result of the removed calculate/compute tools (an old session resumed) is refused with a clear reason (#336)',async()=>{
+ const raw=JSON.stringify({result:42,unit:'VND',derived_result:{expression:'a*2',inputs:[]}})
+ for(const tool of ['calculate','compute']){
+  const ref=rememberResult(tool,raw,{callId:'old-'+tool,rawText:raw,rawSha256:createHash('sha256').update(raw).digest('hex')})
+  expect(()=>financialValue({from_call:ref,field:'result'})).toThrow(`${ref} is a result of the removed ${tool} tool; results of the old calculator tools are no longer accepted as a source`)
+ }
+ // An ordinary data result still works next to them.
+ const ref=await source({symbol:'AAA',last:20,last_t:'2030-01-02'})
+ expect(financialValue({from_call:ref,field:'last'}).value).toBe(20)
 })
