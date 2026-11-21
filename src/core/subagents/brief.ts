@@ -36,7 +36,7 @@ export function renderBrief(b: Brief): string {
     line("Bối cảnh đã có", b.context),
     ["Việc cần làm:", ...b.questions.map((q) => `- ${q.trim()}`)].join("\n"),
     line("Phạm vi", b.scope),
-    `Trả về: ${b.output.trim().replace(/\.+$/, "")}. Ghi [suy luận] cho ý không lấy từ kết quả tool.`,
+    `Trả về: ${b.output.trim().replace(/\.+$/, "")}. Report in English; keep Nguồn lines, the labels tự tính, tính từ, [suy luận] and quoted text in Vietnamese. Mark [suy luận] anything not taken from tool results.`,
     line("Xong khi", b.done_when),
   ]
     .filter(Boolean)
