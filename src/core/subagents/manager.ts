@@ -441,6 +441,8 @@ export class SubagentManager {
     let attempts = 0
     /** This turn ended because the model ignored the forced tra_ket_qua call. */
     let missedTool = false
+    /** Failed sources over every turn of this run (SubagentResult.dataGaps). */
+    const gaps = new Set<string>()
     try {
       const fallback: SidechainEntry[] = []
       const prepared = this.setup.then(async () => {
@@ -600,6 +602,7 @@ export class SubagentManager {
               break
             case "done": {
               run.messages = [...history, ...event.messages]
+              for (const gap of event.dataGaps ?? []) gaps.add(gap)
               const ts = new Date().toISOString()
               for (const message of event.messages) entries.push({ type: "message", ts, message })
               if (event.outcome === "completed") {
@@ -668,6 +671,7 @@ export class SubagentManager {
       error: run.error,
       ...(run.status === "failed" ? { failure: failure ?? "fatal" } : {}),
       ...(context.data !== undefined ? { data: context.data } : {}),
+      ...(gaps.size > 0 ? { dataGaps: [...gaps] } : {}),
       toolCount: run.toolCount - toolsBefore,
       usage: { input: run.usage.input - usageBefore.input, output: run.usage.output - usageBefore.output },
       requests: (run.requests ?? 0) - requestsBefore,

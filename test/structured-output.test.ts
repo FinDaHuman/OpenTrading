@@ -254,6 +254,42 @@ test("ultradesk wiring: a playbook agent runs on the real manager, read-only, an
   expect(subagents.list()[0]?.deskRunId).toBe(view.id)
 })
 
+test("a schema run whose data tool failed: the result names the gap, the desk notice tells the main agent (#325)", async () => {
+  const { DeskEngine } = await import("../src/core/desk/engine")
+  const { deskNotification } = await import("../src/core/desk/notification")
+  const registry = new ToolRegistry()
+  registry.register({
+    name: "mcp__ot__price_history",
+    description: "prices",
+    input: z.object({}),
+    readOnly: true,
+    async execute() {
+      throw new Error('MCP server "ot" has a temporary error (HTTP 502) — it may be restarting or overloaded. Retried 2 times.')
+    },
+  })
+  const subagents = new SubagentManager({ parent: registry, skills: () => [] })
+  const agents = [{ name: "tra-cuu", description: "tra cứu", tools: ["@chi-doc"], body: "", file: "tra-cuu.md", source: "bundled" as const }]
+  const playbook = {
+    meta: { name: "p", version: "1", description: "p", whenToUse: "p", args: z.object({}), agentTypes: ["tra-cuu"], phases: ["Chấm"], estimate: () => ({ agents: 1, requests: 6 }) },
+    run: (ctx: { agent: (p: string, o: object) => Promise<unknown> }) => ctx.agent("Chấm FPT", { schema: SCORE, label: "FPT" }),
+  }
+  const desk = new DeskEngine({ starter: subagents, agents: () => agents, playbooks: () => [playbook], config: async () => ({ desk: { staggerMs: 0 } }) })
+  replies = [{ call: { name: "mcp__ot__price_history", args: {} } }, { call: { name: RESULT_TOOL, args: { ticker: "FPT", score: 5 } } }]
+  const view = await (await desk.start("p", {})).done
+  expect(view.status).toBe("done")
+  // The playbook still gets its typed data, unwrapped.
+  expect(view.result).toEqual({ ticker: "FPT", score: 5 })
+  expect(view.agents[0]!.dataGaps).toEqual(["price_history"])
+  expect(deskNotification(view)).toContain("FPT (price_history)")
+})
+
+test("a schema run with every source answering reports no gaps", async () => {
+  replies = [{ call: { name: RESULT_TOOL, args: { ticker: "FPT", score: 7 } } }]
+  const result = await manager().start({ description: "chấm FPT", prompt: "Chấm điểm FPT", schema: SCORE }).done
+  expect(result.status).toBe("completed")
+  expect(result.dataGaps).toBeUndefined()
+})
+
 test("desk_run (on demand) exists only in an opted-in turn: never in tool_search, declared with the <ultradesk> reminder", async () => {
   const { runAgent } = await import("../src/core/agent")
   const { toolSearchTool } = await import("../src/core/tools/builtin/tool-search")

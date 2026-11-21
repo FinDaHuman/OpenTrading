@@ -283,6 +283,41 @@ test("resume after a restart: answered agents come back from the journal, identi
   expect((await new DeskJournal(session, run1.id).readMeta())?.status).toBe("done")
 })
 
+test("sources an agent did not get reach the main agent's notice, and survive a resume from the journal (#325)", async () => {
+  const session = path.join(home, "s-gaps")
+  let quota = true
+  const respond: Responder = (spec) => {
+    if (spec.prompt === "b" && quota) return fail("daily-quota")
+    if (spec.prompt === "a") return { ...ok("", { ticker: "FPT", score: 7 }), dataGaps: ["price_history", "financials"] }
+    return ok("", { ticker: "MWG", score: 6 })
+  }
+  const SCORE = z.object({ ticker: z.string(), score: z.number() })
+  const pb = playbook("p", async (ctx) => [await ctx.agent("a", { schema: SCORE, label: "FPT" }), await ctx.agent("b", { schema: SCORE, label: "MWG" })])
+  const e1 = engine(starter(respond), [pb], {}, session)
+  const run1 = await (await e1.start("p", {})).done
+  await e1.flush()
+  expect(run1.agents[0]!.dataGaps).toEqual(["price_history", "financials"])
+  // The typed result is unchanged: the gaps travel beside it, not inside it.
+  expect(run1.agents[0]!.status).toBe("done")
+
+  quota = false
+  const fake2 = starter(respond)
+  const run2 = await (await engine(fake2, [pb], {}, session).resume(run1.id)).done
+  expect(fake2.specs.map((s) => s.prompt)).toEqual(["b"])
+  expect(run2.result).toEqual([{ ticker: "FPT", score: 7 }, { ticker: "MWG", score: 6 }])
+  expect(run2.agents[0]!.status).toBe("cached")
+  expect(run2.agents[0]!.dataGaps).toEqual(["price_history", "financials"])
+  const notice = deskNotification(run2)
+  expect(notice).toContain("Missing data: 1 agents answered without some sources")
+  expect(notice).toContain("FPT (price_history, financials)")
+  expect(notice).not.toContain("MWG (")
+})
+
+test("a run whose agents got all their data has no missing-data line", async () => {
+  const view = await (await engine(starter((s) => ok(s.prompt)), [playbook("p", (ctx) => ctx.agent("a"))]).start("p", {})).done
+  expect(deskNotification(view)).not.toContain("Missing data")
+})
+
 test("a new playbook version reuses nothing on resume", async () => {
   const session = path.join(home, "s-version")
   const fake1 = starter((s) => (s.prompt === "b" ? fail("daily-quota") : ok(s.prompt)))

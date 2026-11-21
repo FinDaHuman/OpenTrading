@@ -68,6 +68,13 @@ export interface SubagentResult {
   failure?: RunFailure
   /** The validated structured result, for a run started with a schema. */
   data?: unknown
+  /**
+   * Data tools (MCP, web) whose data the run did not get, by short name, as the harness saw
+   * them fail (loop/failures.ts), over every turn of this run. A run without a schema also
+   * says so at the end of `text`; a typed result cannot carry the line, so its caller (the
+   * desk) reads this (#325).
+   */
+  dataGaps?: string[]
   toolCount: number
   usage: { input: number; output: number }
   /** Model requests of this run (see SubagentView.requests). */

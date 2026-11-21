@@ -53,6 +53,21 @@ function escape(text: string) {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
 }
 
+/** Longest list of the agents that answered without some of their sources. */
+const MAX_GAPS_CHARS = 1000
+
+/**
+ * Agents that answered but whose tools failed for some sources (#325). A typed answer looks
+ * complete whatever is missing, so the notice names the gaps for the main agent to state.
+ */
+function gapsText(view: DeskRunView) {
+  const gapped = view.agents.filter((a) => (a.status === "done" || a.status === "cached") && a.dataGaps?.length)
+  if (gapped.length === 0) return undefined
+  let list = gapped.map((a) => `${a.label} (${a.dataGaps!.join(", ")})`).join("; ")
+  if (list.length > MAX_GAPS_CHARS) list = `${list.slice(0, MAX_GAPS_CHARS)}… (+${gapped.length} agents in all)`
+  return `Missing data: ${gapped.length} agents answered without some sources because those tools failed, so the parts built on them are incomplete — say so, do not fill them in: ${list}.`
+}
+
 export function deskNotification(view: DeskRunView): string {
   const c = view.counters
   const failed = view.agents.filter((a) => a.status === "failed").length
@@ -64,6 +79,8 @@ export function deskNotification(view: DeskRunView): string {
   ]
   if (view.cut && view.cut !== "stop") lines.push(`Cut short: ${CUT_TEXT[view.cut]} Continue: /desk resume ${view.id}`)
   if (failed + skipped > 0) lines.push(`${failed} agents failed, ${skipped} agents did not run (their results are "unverified", not "wrong").`)
+  const gaps = gapsText(view)
+  if (gaps) lines.push(gaps)
   lines.push(`<ket_qua>\n${resultText(view)}\n</ket_qua>`)
   lines.push(`${c.agents} agents (${c.cached} reused from the journal) · ${groupDigits(c.requests)} request · ${groupDigits(c.input + c.output)} token · ${seconds}s`)
   lines.push(`</${DESK_TAG}>`)
