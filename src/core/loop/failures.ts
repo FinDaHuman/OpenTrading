@@ -58,7 +58,9 @@ const ABORTED = /^Đã huỷ|^Cancelled\.|^Stopped\.|^Tool bị ngắt|^Tool int
 const QUOTA = /hết quota|quota is exhausted/
 const RATE_LIMITED = /giới hạn tốc độ|rate-limit|Server yêu cầu chờ|asks to wait/i
 const TIMEOUT = /quá thời gian|timed out|stopped after \d+s|Hết thời gian/i
-const TRANSPORT = /lỗi tạm thời|đang lỗi kết nối|chưa kết nối|temporary error|failing to connect|is not connected|Connection closed|Streamable HTTP|fetch failed|ECONN/
+// `did not reconnect` and `[HTTP 5xx` are the MCP client's own lines for a server still down
+// after the wait for a reconnect, and for a 5xx it does not retry (mcp/errors.ts, #325).
+const TRANSPORT = /lỗi tạm thời|đang lỗi kết nối|chưa kết nối|temporary error|failing to connect|is not connected|did not reconnect|\[HTTP 5\d\d[,\]]|Connection closed|Streamable HTTP|fetch failed|ECONN/
 
 /** The kind of a tool result, from what the harness wrote in it. */
 export function classifyOutcome(ok: boolean, text: string): ToolOutcome {

@@ -115,6 +115,8 @@ export interface DeskAgentView {
   tokens: { input: number; output: number }
   error?: string
   failure?: RunFailure | "cap" | "stopped"
+  /** Sources the agent's tools failed to fetch (SubagentResult.dataGaps): its answer lacks them. */
+  dataGaps?: string[]
 }
 
 /**

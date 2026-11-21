@@ -23,6 +23,8 @@ export interface JournalEntry {
   requests: number
   tokens: { input: number; output: number }
   agentId?: string
+  /** Sources the agent did not get (DeskAgentView.dataGaps), kept so a resumed run still reports them. */
+  dataGaps?: string[]
   ts: string
 }
 

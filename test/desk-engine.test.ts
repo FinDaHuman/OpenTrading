@@ -7,7 +7,7 @@ import type { AgentDefinition } from "../src/core/agents/schema"
 import type { Config } from "../src/core/config"
 import { DeskEngine, type AgentStarter } from "../src/core/desk/engine"
 import { DeskJournal } from "../src/core/desk/journal"
-import { DESK_TAG, deskNotification } from "../src/core/desk/notification"
+import { DESK_NOTICE_PATTERN, DESK_TAG, deskNotification } from "../src/core/desk/notification"
 import { cleanText, evidence } from "../src/core/desk/sanitize"
 import { DESK_DEFAULTS, deskSettings } from "../src/core/desk/settings"
 import type { DeskContext, DeskRunView, Playbook } from "../src/core/desk/types"
@@ -281,6 +281,46 @@ test("resume after a restart: answered agents come back from the journal, identi
   expect(run2.counters.cached).toBe(2)
   await e2.flush()
   expect((await new DeskJournal(session, run1.id).readMeta())?.status).toBe("done")
+})
+
+test("sources an agent did not get reach the main agent's notice, and survive a resume from the journal (#325)", async () => {
+  const session = path.join(home, "s-gaps")
+  let quota = true
+  const respond: Responder = (spec) => {
+    if (spec.prompt === "b" && quota) return fail("daily-quota")
+    if (spec.prompt === "a") return { ...ok("", { ticker: "FPT", score: 7 }), dataGaps: ["price_history", "financials"] }
+    return ok("", { ticker: "MWG", score: 6 })
+  }
+  const SCORE = z.object({ ticker: z.string(), score: z.number() })
+  const pb = playbook("p", async (ctx) => [await ctx.agent("a", { schema: SCORE, label: "FPT" }), await ctx.agent("b", { schema: SCORE, label: "MWG" })])
+  const e1 = engine(starter(respond), [pb], {}, session)
+  const run1 = await (await e1.start("p", {})).done
+  await e1.flush()
+  expect(run1.agents[0]!.dataGaps).toEqual(["price_history", "financials"])
+  // The typed result is unchanged: the gaps travel beside it, not inside it.
+  expect(run1.agents[0]!.status).toBe("done")
+
+  quota = false
+  const fake2 = starter(respond)
+  const run2 = await (await engine(fake2, [pb], {}, session).resume(run1.id)).done
+  expect(fake2.specs.map((s) => s.prompt)).toEqual(["b"])
+  expect(run2.result).toEqual([{ ticker: "FPT", score: 7 }, { ticker: "MWG", score: 6 }])
+  expect(run2.agents[0]!.status).toBe("cached")
+  expect(run2.agents[0]!.dataGaps).toEqual(["price_history", "financials"])
+  const notice = deskNotification(run2)
+  expect(notice).toContain("Missing data: 1 agents answered without some sources")
+  expect(notice).toContain("FPT (price_history, financials)")
+  expect(notice).not.toContain("MWG (")
+  // A stored notice with the line is still read back on resume (transcript lines).
+  const stored = [...notice.matchAll(DESK_NOTICE_PATTERN)]
+  expect(stored).toHaveLength(1)
+  expect(stored[0]![3]).toBe("done")
+  expect(stored[0]![4]).toStartWith("1 agents (1 reused from the journal)")
+})
+
+test("a run whose agents got all their data has no missing-data line", async () => {
+  const view = await (await engine(starter((s) => ok(s.prompt)), [playbook("p", (ctx) => ctx.agent("a"))]).start("p", {})).done
+  expect(deskNotification(view)).not.toContain("Missing data")
 })
 
 test("a new playbook version reuses nothing on resume", async () => {

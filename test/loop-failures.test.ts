@@ -53,6 +53,9 @@ test("every failure the harness writes gets its class", () => {
     ['MCP server "ot" đang lỗi kết nối liên tiếp nên lần gọi này chưa được gửi đi.', "transport"],
     ['MCP server "ot" chưa kết nối: x. Xem /mcp.', "transport"],
     ["Error executing tool x: boom", "tool-error"],
+    ['MCP server "ot" is restarting and did not reconnect within 30s. Wait a while and try again; do not call it repeatedly.', "transport"],
+    ['MCP server "ot" failed: upstream answered HTTP 502: [HTML error page "502 Bad Gateway"] [HTTP 502, code -32603]', "transport"],
+    ['MCP server "ot" failed: bad symbol [HTTP 400]', "tool-error"],
     // Denials and the loader line in both languages: sessions saved before 20/11/2026 hold the Vietnamese.
     ["Auto mode blocked shell [Git phá huỷ]: x.", "denied"],
     ["Auto mode chặn shell [Git phá huỷ]: x.", "denied"],

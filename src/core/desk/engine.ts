@@ -390,6 +390,8 @@ export class DeskEngine {
     if (cached && opts.accept?.(cached.value) === undefined) {
       entry.status = "cached"
       entry.agentId = cached.agentId
+      const gaps = Array.isArray(cached.dataGaps) ? cached.dataGaps.filter((g): g is string => typeof g === "string") : []
+      if (gaps.length > 0) entry.dataGaps = gaps
       view.counters.cached++
       phaseOf(view, phase).done++
       this.emit(state)
@@ -461,9 +463,21 @@ export class DeskEngine {
       }
       if (result.status === "completed") {
         entry.status = "done"
+        if (result.dataGaps?.length) entry.dataGaps = [...result.dataGaps]
         phaseOf(view, phase).done++
         state.journal?.append(
-          { type: "result", key, label: entry.label, phase, value, requests: entry.requests, tokens: entry.tokens, agentId: run.id, ts: new Date().toISOString() },
+          {
+            type: "result",
+            key,
+            label: entry.label,
+            phase,
+            value,
+            requests: entry.requests,
+            tokens: entry.tokens,
+            agentId: run.id,
+            ...(entry.dataGaps ? { dataGaps: entry.dataGaps } : {}),
+            ts: new Date().toISOString(),
+          },
           this.onPersistError,
         )
         return value as never
@@ -659,7 +673,7 @@ function snapshot(view: DeskRunView): DeskRunView {
   return {
     ...view,
     phases: view.phases.map((p) => ({ ...p })),
-    agents: view.agents.map((a) => ({ ...a, tokens: { ...a.tokens } })),
+    agents: view.agents.map((a) => ({ ...a, tokens: { ...a.tokens }, ...(a.dataGaps ? { dataGaps: [...a.dataGaps] } : {}) })),
     logs: [...view.logs],
     counters: { ...view.counters },
   }
