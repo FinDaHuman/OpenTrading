@@ -266,8 +266,7 @@ test("chart_render compare by hand: symbols name the rows, % series are accepted
   const both = (await tool.execute({ kind: "compare", labels: ["A", "B"], symbols: ["X", "Y"], matrix: [[1, 2], [2, 1]] }, ctx())) as ToolResult
   expect(both.output).toContain("A +100%")
 
-  // A % series rebased on its own first point, and an impossible change.
-  const rebased = (await chartCompareTool().execute({ percent: true, series: [{ label: "A", values: [10, 21] }, { label: "B", values: [0, 5] }] }, ctx())) as ToolResult
-  expect(rebased.output).toContain("A +10%")
+  // Prices sent with percent: true are refused, never drawn as a wrong %; and an impossible change.
+  await expect(chartCompareTool().execute({ percent: true, series: [{ label: "VCB", values: [50, 55] }, { label: "B", values: [0, 5] }] }, ctx())).rejects.toThrow("must start at 0")
   await expect(chartCompareTool().execute({ percent: true, series: [{ label: "A", values: [0, -100] }, { label: "B", values: [0, 5] }] }, ctx())).rejects.toThrow("-100%")
 })

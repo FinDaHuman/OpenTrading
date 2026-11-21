@@ -65,7 +65,7 @@ export function chartCompareTool(): ToolDef<ChartCompareInput> {
       ymax: z.number().optional().describe("Custom upper y-axis (%); needs ymin"),
       times: z.array(z.string()).max(2000).optional().describe("Time labels for the X axis"),
       unit: z.string().max(10).optional().describe("Display unit, e.g. %"),
-      percent: z.boolean().optional().describe("true when series values are already cumulative % change (0, 1.5, -2.3…), not prices; default false"),
+      percent: z.boolean().optional().describe("true when series values are already % change from the first point (starting 0, e.g. 0, 1.5, -2.3), not prices; default false"),
     }),
     readOnly: true,
     deferrable: true,
@@ -136,10 +136,14 @@ function zeroStart(label: string) {
 }
 
 /**
- * Cumulative % changes as index levels (base 100): % change from the first point of the levels
- * is then exactly the change between those percentages, whatever the first one is.
+ * % changes from the first point as index levels (base 100), which the chart rebases back to
+ * the same %. They must start at 0: prices sent with percent: true would otherwise be drawn
+ * as a wrong % without any error.
  */
 function fromPercent(series: { label: string; values: number[] }) {
+  if (series.values[0] !== 0) {
+    throw new Error(`Series ${series.label}: with percent: true each series must start at 0 (% change from its first point). For prices, drop percent.`)
+  }
   if (series.values.some((v) => v <= -100)) throw new Error(`Series ${series.label}: with percent: true a value of -100% or less is not a valid change.`)
   return series.values.map((v) => 100 + v)
 }

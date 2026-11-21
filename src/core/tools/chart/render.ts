@@ -112,7 +112,7 @@ export function chartRenderTool(): ToolDef<ChartToolInput> {
       from_call: z.string().regex(/^r\d+$/, "like r12").optional().describe("rN from [ref rN]"),
       from_calls: z.array(z.string().regex(/^r\d+$/)).min(1).max(5).optional().describe("compare: the rNs"),
       symbols: z.array(z.string().max(20)).max(5).optional().describe("compare: only these tickers (with matrix: the row labels)"),
-      percent: z.boolean().optional().describe("compare with matrix: rows are already cumulative % change, not prices"),
+      percent: z.boolean().optional().describe("compare with matrix: rows are already % change from the first point (starting 0), not prices"),
       field: z.string().max(40).optional().describe("Numeric field with from_call (default: close), e.g. volume"),
       label_field: z.string().max(40).optional().describe("bar/pie: the name field, e.g. symbol"),
       path: z.string().max(80).optional().describe("Array path when the result has several arrays, e.g. data.candles"),
