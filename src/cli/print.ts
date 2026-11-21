@@ -108,7 +108,7 @@ export async function runPrint(opts: PrintOptions, deps: { runtime?: Runtime; ta
     gate.setMode("bypass")
     err(`${MODE_LABEL.bypass} (--yolo): ghi file, chạy lệnh và tool ghi chạy luôn, không ai duyệt. Vẫn chặn: luật deny/ask, file khoá, .git/.opentrading/.ssh, ngoài workspace.`)
   }
-  const sandboxLine = sandboxNotice(runtime.shellSandbox, probeSandbox(), { bypass: opts.yolo === true })
+  const sandboxLine = sandboxNotice(runtime.shellSandbox, runtime.shellSandbox ? probeSandbox() : undefined, { bypass: opts.yolo === true })
   if (sandboxLine) err(sandboxLine.text)
   await gate.refreshRules()
   setAgents(runtime, (await loadAgents(agentRoots(folder, { project: trusted }))).agents)

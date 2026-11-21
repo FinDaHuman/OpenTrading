@@ -1125,7 +1125,7 @@ export function App(props: {
     const moved = await migrateLegacyMemory(props.runtime.home).catch(() => undefined)
     if (moved) pushLine({ kind: "info", text: moved })
     // The shell sandbox (#352): said once at start, a warning when it cannot isolate (Windows) or cannot run.
-    const sandboxLine = sandboxNotice(props.runtime.shellSandbox, probeSandbox(), { bypass: props.runtime.permissions.bypassAvailable })
+    const sandboxLine = sandboxNotice(props.runtime.shellSandbox, props.runtime.shellSandbox ? probeSandbox() : undefined, { bypass: props.runtime.permissions.bypassAvailable })
     if (sandboxLine) pushLine({ kind: sandboxLine.level, text: sandboxLine.text })
     // A notebook that did not open says why at once (chat still works); it is also in /config and /memory.
     if (props.runtime.memory.id === "notebook") {

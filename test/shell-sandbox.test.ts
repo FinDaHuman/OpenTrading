@@ -52,7 +52,7 @@ test("Windows: a clear warning that nothing is isolated, and the model is told n
   expect(notice?.text).toContain("chạy thẳng trên máy")
   expect(sandboxDescription(true, WINDOWS)).toBeUndefined()
   // No recommendation to turn on what would not isolate anything.
-  expect(sandboxNotice(false, WINDOWS, { bypass: true })).toBeUndefined()
+  expect(sandboxNotice(false, undefined, { bypass: true, platform: "win32" })).toBeUndefined()
 })
 
 test("notices: missing bwrap says how to install it and that every command is refused; ready says what is blocked; off says nothing outside bypass", () => {
@@ -66,7 +66,10 @@ test("notices: missing bwrap says how to install it and that every command is re
   expect(sandboxNotice(true, READY_BWRAP)).toEqual({ level: "info", text: expect.stringContaining("không có mạng") })
   expect(sandboxNotice(false, READY_BWRAP)).toBeUndefined()
   // ▸▸▸ without the sandbox: recommended once.
-  expect(sandboxNotice(false, MISSING, { bypass: true })?.text).toContain("--sandbox")
+  // Decided by platform, not by a trial run: the sandbox is off, so nothing is probed.
+  expect(sandboxNotice(false, undefined, { bypass: true, platform: "linux" })?.text).toContain("--sandbox")
+  expect(sandboxNotice(false, undefined, { bypass: true, platform: "darwin" })?.text).toContain("--sandbox")
+  expect(sandboxNotice(false, undefined, { platform: "linux" })).toBeUndefined()
 })
 
 test("a sandbox that cannot run gives the model an English error, never the bare command", () => {
@@ -86,6 +89,10 @@ test("bwrap argv: read-only root, no network, workspace and temp writable, data 
   const argv = bwrapArgv("/usr/bin/bwrap", { writable: [project, root, inner, path.join(root, "khong-co")], readOnly: [data] }, ["/bin/bash", "-c", "echo hi"], project)
   expect(argv.slice(0, 4)).toEqual(["/usr/bin/bwrap", "--ro-bind", "/", "/"])
   for (const flag of ["--unshare-net", "--unshare-pid", "--die-with-parent"]) expect(argv).toContain(flag)
+  // /run (Docker socket, user buses) is emptied before anything is bound back.
+  const run = argv.findIndex((a, i) => a === "--tmpfs" && argv[i + 1] === "/run")
+  expect(run).toBeGreaterThan(0)
+  expect(run).toBeLessThan(argv.indexOf("--bind"))
   const at = (flag: string, dir: string) => argv.findIndex((a, i) => a === flag && argv[i + 1] === real(dir))
   expect(at("--bind", project)).toBeGreaterThan(0)
   expect(at("--ro-bind", data)).toBeGreaterThan(at("--bind", root))
@@ -214,4 +221,42 @@ test.if(real)("sandboxed: exit codes come through, arithmetic still works, and a
   const out = await run("sleep 30 & wait", { sandbox: true, timeout_ms: 1500 })
   expect(out).toContain("stopped after")
   expect(Date.now() - started).toBeLessThan(10_000)
+})
+
+// A new network namespace does not stop connect() on a socket file: /run is emptied (Linux).
+const docker = "/var/run/docker.sock"
+test.if(real && process.platform === "linux" && existsSync(docker) && !!Bun.which("curl"))("sandboxed: the Docker socket under /run is out of reach (control: reachable without the sandbox)", async () => {
+  const ping = `curl -s --max-time 5 --unix-socket ${docker} http://localhost/_ping; echo " curl=$?"`
+  const control = await run(ping, { sandbox: false })
+  // A runner user outside the docker group cannot reach it either way: nothing to show then.
+  if (!control.includes("OK curl=0")) return
+  const sandboxed = await run(ping, { sandbox: true })
+  expect(sandboxed).not.toContain("OK curl=0")
+  expect(sandboxed).not.toContain("curl=0")
+})
+
+// macOS: (deny network*) covers socket files too. A listener in home (outside the workspace and temp).
+test.if(real && process.platform === "darwin" && !!Bun.which("curl"))("sandboxed (macOS): a Unix socket listener is out of reach (control: reachable without the sandbox)", async () => {
+  const sock = path.join(os.homedir(), `.ot-sbx-${process.pid}.sock`)
+  rmSync(sock, { force: true })
+  const reply = "HTTP/1.0 200 OK\r\nContent-Length: 2\r\n\r\nOK"
+  const server = Bun.listen({
+    unix: sock,
+    socket: {
+      data(s) {
+        s.write(reply)
+        s.end()
+      },
+      open() {},
+    },
+  })
+  try {
+    const ping = `curl -s --max-time 5 --unix-socket '${sock}' http://localhost/; echo " curl=$?"`
+    expect(await run(ping, { sandbox: false })).toContain("OK curl=0")
+    const sandboxed = await run(ping, { sandbox: true })
+    expect(sandboxed).not.toContain("curl=0")
+  } finally {
+    server.stop(true)
+    rmSync(sock, { force: true })
+  }
 })

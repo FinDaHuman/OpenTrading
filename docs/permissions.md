@@ -174,6 +174,8 @@ Khi bật, mọi lệnh của tool `shell` (cả phép tính, lệnh liệt kê,
 Không thuộc sandbox (giới hạn đã biết):
 
 - **Đọc không bị chặn**: lệnh vẫn đọc được file bạn đọc được, và output đi vào hội thoại gửi tới provider. Các mục "luôn hỏi" ở trên vẫn là thứ bảo vệ file khoá.
+- **Socket file trên Linux:** namespace mạng riêng không chặn kết nối tới socket file. `/run` (socket Docker, D-Bus, systemd của người dùng) được thay bằng thư mục rỗng, và `.X11-unix` trong thư mục tạm cũng vậy. Socket file ở chỗ khác vẫn kết nối được, ví dụ socket của ssh-agent trong `/tmp`. Trên macOS, `(deny network*)` chặn cả socket file.
+- **File trong workspace sẽ chạy sau này ngoài sandbox:** `.git/hooks`, `.vscode/tasks.json`, `.husky`… nằm trong workspace nên sandbox không chặn ghi. Luật "luôn hỏi" ở trên bắt lệnh có nhắc tên chúng, nhưng không bắt một script tự ghi vào đó. Chúng chạy khi bạn dùng git hay mở thư mục trong editor, không có sandbox. Không tệ hơn ▸▸▸ không sandbox, nhưng cần biết.
 - Chỉ tool `shell`. `write_file`, `edit_file`, tool MCP và tool web không chạy trong sandbox; chúng có luật quyền riêng.
 - Sandbox không thay hộp thoại duyệt: các chế độ quyền và quy tắc `deny`/`ask` giữ nguyên, không hỏi ít đi khi bật sandbox.
 - Benchmark v4.7 đã chạy shell trong Docker không mạng (#309); sandbox này dành cho người dùng chạy `--yolo` trên máy mình.

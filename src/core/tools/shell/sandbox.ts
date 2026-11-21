@@ -71,8 +71,22 @@ export function probeSandbox(): SandboxStatus {
   return probed
 }
 
-/** Namespaces and mounts every sandboxed command gets (the probe uses the same). */
-const BWRAP_BASE = ["--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc", "--unshare-net", "--unshare-pid", "--unshare-ipc", "--die-with-parent"]
+/**
+ * Namespaces and mounts every sandboxed command gets (the probe uses the same). `/run` is an
+ * empty tmpfs: a new network namespace does not stop `connect()` on a socket file, and `/run`
+ * holds the ones that reach outside (the Docker socket, the D-Bus and systemd user buses, whose
+ * `systemd-run --user` starts a process with no sandbox). `/var/run` is a symlink to it.
+ */
+const BWRAP_BASE = ["--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc", "--tmpfs", "/run", "--unshare-net", "--unshare-pid", "--unshare-ipc", "--die-with-parent"]
+
+/** `/var/run` when it is a folder of its own instead of the usual symlink to `/run`. */
+function separateVarRun(): string[] {
+  try {
+    return realpathSync("/var/run") === "/run" ? [] : ["--tmpfs", "/var/run"]
+  } catch {
+    return []
+  }
+}
 
 /** Existing folders, symlinks resolved, without repeats (bwrap refuses a source that does not exist). */
 function realDirs(dirs: string[]): string[] {
@@ -108,8 +122,10 @@ export function sandboxLayers(plan: SandboxPlan): { writable: string[]; readOnly
  */
 export function bwrapArgv(bwrap: string, plan: SandboxPlan, argv: string[], cwd: string): string[] {
   const { writable, readOnly, reopened } = sandboxLayers(plan)
-  const out = [bwrap, ...BWRAP_BASE]
+  const out = [bwrap, ...BWRAP_BASE, ...separateVarRun()]
   for (const dir of writable) out.push("--bind", dir, dir)
+  // The X server's sockets in a writable temp folder: a window client can type into other windows.
+  for (const dir of writable) if (existsSync(path.join(dir, ".X11-unix"))) out.push("--tmpfs", path.join(dir, ".X11-unix"))
   for (const dir of readOnly) out.push("--ro-bind", dir, dir)
   for (const dir of reopened) out.push("--bind", dir, dir)
   out.push("--chdir", cwd, "--")
@@ -162,12 +178,18 @@ export function sandboxDescription(enabled: boolean, status: SandboxStatus): str
 
 /**
  * What the user is told when the session starts (Vietnamese), or undefined when there is
- * nothing to say. `level` "warning": commands run unisolated or not at all.
+ * nothing to say. `level` "warning": commands run unisolated or not at all. `status` is only
+ * needed (and only probed, a trial run) when the sandbox is on.
  */
-export function sandboxNotice(enabled: boolean, status: SandboxStatus, opts: { bypass?: boolean } = {}): { level: "info" | "warning"; text: string } | undefined {
-  if (!enabled) {
+export function sandboxNotice(
+  enabled: boolean,
+  status: SandboxStatus | undefined,
+  opts: { bypass?: boolean; platform?: NodeJS.Platform } = {},
+): { level: "info" | "warning"; text: string } | undefined {
+  if (!enabled || !status) {
     // Recommended for ▸▸▸: nothing asks before a command runs. Pointless where nothing isolates.
-    if (opts.bypass && status.kind !== "unsupported") return { level: "info", text: "Khuyến nghị: chạy kèm --sandbox (hoặc shell.sandbox: true trong config) để lệnh shell không có mạng và chỉ ghi được trong workspace + thư mục tạm." }
+    const platform = opts.platform ?? process.platform
+    if (opts.bypass && (platform === "linux" || platform === "darwin")) return { level: "info", text: "Khuyến nghị: chạy kèm --sandbox (hoặc shell.sandbox: true trong config) để lệnh shell không có mạng và chỉ ghi được trong workspace + thư mục tạm." }
     return undefined
   }
   if (status.kind === "unsupported") {
