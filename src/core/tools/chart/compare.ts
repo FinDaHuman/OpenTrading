@@ -18,6 +18,8 @@ export type ChartCompareInput = {
   ymax?: number
   times?: string[]
   unit?: string
+  /** The values are already % change (cumulative, e.g. 0, 1.5, -2.3), not prices. */
+  percent?: boolean
 }
 
 const BLOCKS = "▁▂▃▄▅▆▇█"
@@ -63,6 +65,7 @@ export function chartCompareTool(): ToolDef<ChartCompareInput> {
       ymax: z.number().optional().describe("Custom upper y-axis (%); needs ymin"),
       times: z.array(z.string()).max(2000).optional().describe("Time labels for the X axis"),
       unit: z.string().max(10).optional().describe("Display unit, e.g. %"),
+      percent: z.boolean().optional().describe("true when series values are already % change from the first point (starting 0, e.g. 0, 1.5, -2.3), not prices; default false"),
     }),
     readOnly: true,
     deferrable: true,
@@ -104,7 +107,13 @@ export function chartCompareTool(): ToolDef<ChartCompareInput> {
         const short = input.series.find((s) => s.values.length < 2)
         if (short) throw new Error(`${short.label}: not enough points to compare.`)
       } else if (!raw.series) throw new Error("series or from_calls is required.")
-      const output = compareText(input)
+      else if (raw.percent) input = { ...input, series: input.series.map((s) => ({ label: s.label, values: fromPercent(s) })) }
+      const zero = input.series.find((s) => s.values[0] === 0)
+      if (zero) {
+        // Numbers from a result are prices (or the chosen field): percent does not apply there.
+        if (raw.from_calls) throw new Error(`Series ${zero.label} (${raw.from_calls.join(", ")}, field ${raw.field ?? "close"}) starts at 0, so % change from the first point cannot be computed. Compare a price field (field: "close") or use another result.`)
+        throw new Error(zeroStart(zero.label))
+      }
       const chart: ChartData = {
         kind: "compare",
         ...(input.title ? { title: input.title } : {}),
@@ -113,17 +122,37 @@ export function chartCompareTool(): ToolDef<ChartCompareInput> {
         ...(input.times ? { times: input.times } : {}),
         ...(input.unit ? { unit: input.unit } : {}),
       }
-      void output // built for its validation (a series starting at 0); the model reads the summary
       return { output: summarizeChart(chart, raw.from_calls?.join(", ")), chart }
     },
   }
+}
+
+/**
+ * Why a series starting at 0 is refused (#331): no price is 0, so it is almost always % change
+ * the model computed itself. Say what to pass instead of only that it failed.
+ */
+function zeroStart(label: string) {
+  return `Series ${label} starts at 0, so it cannot be a price series. Pass the raw prices (e.g. closes): the tool turns them into % change from the first point itself. If these numbers are already % changes, call again with percent: true.`
+}
+
+/**
+ * % changes from the first point as index levels (base 100), which the chart rebases back to
+ * the same %. They must start at 0: prices sent with percent: true would otherwise be drawn
+ * as a wrong % without any error.
+ */
+function fromPercent(series: { label: string; values: number[] }) {
+  if (series.values[0] !== 0) {
+    throw new Error(`Series ${series.label}: with percent: true each series must start at 0 (% change from its first point). For prices, drop percent.`)
+  }
+  if (series.values.some((v) => v <= -100)) throw new Error(`Series ${series.label}: with percent: true a value of -100% or less is not a valid change.`)
+  return series.values.map((v) => 100 + v)
 }
 
 /** Plain-text twin (headless debugging, tests). Throws when a series starts at 0. */
 export function compareText(input: ChartCompareInput & { series: { label: string; values: number[] }[] }) {
   const width = input.width ?? 40
   const bad = input.series.find((s) => s.values[0] === 0)
-  if (bad) throw new Error(`Series ${bad.label} starts at 0, so % change cannot be computed.`)
+  if (bad) throw new Error(zeroStart(bad.label))
   const changes = input.series.map((s) => s.values.map((v) => ((v - s.values[0]!) / Math.abs(s.values[0]!)) * 100))
   const longest = Math.max(...changes.map((c) => c.length))
   const lo = Math.min(...changes.flat())

@@ -84,8 +84,10 @@ export type ChartToolInput = Omit<ChartRenderInput, "kind"> & {
   kind: (typeof TOOL_KINDS)[number]
   /** kind=compare: refs of price results, 2–5 series in all. */
   from_calls?: string[]
-  /** kind=compare: keep only these symbols from from_calls. */
+  /** kind=compare: keep only these symbols from from_calls; without from_calls, the matrix rows' labels. */
   symbols?: string[]
+  /** kind=compare: the matrix rows are already cumulative % change, not prices. */
+  percent?: boolean
   /** kind=depth: order book levels. */
   bids?: { price: number; volume: number }[]
   asks?: { price: number; volume: number }[]
@@ -96,7 +98,7 @@ export type ChartToolInput = Omit<ChartRenderInput, "kind"> & {
 const DESCRIPTION = [
   "Draws a colour chart in the terminal from data you already have; the picture is shown to the user and you get a numeric summary to comment on. Use when the user wants a picture, or a series is hard to read as a table. Do not use before you have the data: get it with a data tool first.",
   "Prefer from_call = the rN in a tool result's [ref rN] (the harness takes the numbers itself; do not retype them); for a result holding several tickers, pick one with from_symbol.",
-  "kind=compare: 2–5 price series as % change on one scale (from_calls, filtered with symbols; or labels + matrix); use instead of multiline when the series differ in magnitude. kind=depth: order book (bids, asks).",
+  "kind=compare: 2–5 price series as % change on one scale (from_calls, filtered with symbols; or labels + matrix of raw prices, percent: true if the rows are already % change); use instead of multiline when the series differ in magnitude. kind=depth: order book (bids, asks).",
   "Hand-typed numbers by kind: candlestick bars (≥5); line/area/sparkline/sparkcolumn/linebox/histogram/winloss series; bar/pie series + labels; heatmap/multiline/stacked/boxplot matrix + labels; waterfall start + series; scatter points; gauge/donut value + max.",
 ].join("\n")
 
@@ -109,7 +111,8 @@ export function chartRenderTool(): ToolDef<ChartToolInput> {
       kind: z.enum(TOOL_KINDS).describe("Chart type; compare = % comparison of several series, depth = order book"),
       from_call: z.string().regex(/^r\d+$/, "like r12").optional().describe("rN from [ref rN]"),
       from_calls: z.array(z.string().regex(/^r\d+$/)).min(1).max(5).optional().describe("compare: the rNs"),
-      symbols: z.array(z.string().max(20)).max(5).optional().describe("compare: only these tickers"),
+      symbols: z.array(z.string().max(20)).max(5).optional().describe("compare: only these tickers (with matrix: the row labels)"),
+      percent: z.boolean().optional().describe("compare with matrix: rows are already % change from the first point (starting 0), not prices"),
       field: z.string().max(40).optional().describe("Numeric field with from_call (default: close), e.g. volume"),
       label_field: z.string().max(40).optional().describe("bar/pie: the name field, e.g. symbol"),
       path: z.string().max(80).optional().describe("Array path when the result has several arrays, e.g. data.candles"),
@@ -163,10 +166,18 @@ export function chartRenderTool(): ToolDef<ChartToolInput> {
 function compareInput(tool: ChartToolInput): ChartCompareInput {
   const base = { title: tool.symbol, from_calls: tool.from_calls, symbols: tool.symbols, field: tool.field, times: tool.times, unit: tool.unit }
   if (tool.from_calls) return base
+  // Without from_calls there is nothing to filter: symbols name the rows, as labels do (#331).
+  const names = tool.labels ?? tool.symbols
   const rows = tool.matrix ?? []
   if (rows.length < 2 || rows.length > 5) throw new Error("kind=compare needs from_calls, or 2–5 matrix rows with labels.")
   if (rows.some((r) => r.length < 2)) throw new Error("kind=compare: each matrix row needs at least 2 points.")
-  return { ...base, series: rows.map((values, i) => ({ label: (tool.labels?.[i] ?? `#${i + 1}`).slice(0, 20), values })) }
+  return {
+    title: tool.symbol,
+    times: tool.times,
+    unit: tool.unit,
+    ...(tool.percent ? { percent: true } : {}),
+    series: rows.map((values, i) => ({ label: (names?.[i] ?? `#${i + 1}`).slice(0, 20), values })),
+  }
 }
 
 /** Fill a render input from a stored tool result (refs.ts). Explicit numbers are ignored. */
