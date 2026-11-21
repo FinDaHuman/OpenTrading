@@ -62,7 +62,7 @@ unearned revenue if available).
 **Bước 3: Operating quality (in parallel).**
 
 `financial_detail`: revenue, profit, costs, headcount. Compute revenue
-per average employee for the same period yourself (state the method); utilisation needs billable/available hours from company disclosures. Without those figures, do not infer utilisation from revenue per employee.
+per average employee for the same period with `shell` (show the formula and inputs); utilisation needs billable/available hours from company disclosures. Without those figures, do not infer utilisation from revenue per employee.
 
 **Bước 4: Expectation anchor + position in the group.**
 
@@ -136,7 +136,7 @@ peak P/E when profit depends on one large temporary order — state the profit q
 ## Giới hạn
 
 - Signed orders are disclosed irregularly: when missing, lower the confidence of the Q1 branch.
-- Revenue per employee is self-computed, before removing seasonal staff and subcontractors —
+- Revenue per employee is derived (label it "tính từ"), before removing seasonal staff and subcontractors —
   say so.
 - The foreign segment carries FX: a quarter's gross margin can jump on the exchange rate, not on
   operations.

@@ -86,8 +86,14 @@ export const RESCUE_DRAFT =
 /** A draft written before any data came: fetch first, or answer. */
 export const RESCUE_DRAFT_FETCH =
   "<nhac_nho>\nYou have not written the answer for the user and no data was fetched this turn. Call tools for the data in this step, then answer; do not write an outline, a plan or tool names.\n</nhac_nho>"
+/**
+ * The tools-off steps' arithmetic (#327): no `shell` here, so a figure still missing is worked
+ * out in the answer itself, every input written out and the result marked as the model's own
+ * estimate. "tự tính" keeps figures.ts DERIVED and the NOT_FETCHED source check reading it.
+ */
+export const ESTIMATE_RULE = 'If a figure still has to be computed, work it out from exactly the numbers the tools returned: write the formula with every input number, and mark the result "tự tính, ước tính".'
 /** Tools off (it brought 2.5-flash-lite's empty answers back). */
-export const RESCUE_EMPTY_FINAL = "Answer the user's question from the tool results above. Call no more tools. Any figure still to compute, compute yourself from exactly the numbers the tools returned and state the formula and every input."
+export const RESCUE_EMPTY_FINAL = `Answer the user's question from the tool results above. Call no more tools. ${ESTIMATE_RULE}`
 
 /** Data sources failed this turn and none brought data (a clock or file tool may still have run). */
 export const sourcesFailed = (last: Pick<LastStep, "gaps" | "fetchedData">) => !!last.gaps?.length && last.fetchedData === false
@@ -106,7 +112,7 @@ export function rescueGaps(gaps: readonly string[]): string {
 
 /** Last empty-answer rescue: data is in the turn, write the final answer now. */
 export const RESCUE_ANSWER_NOW =
-  "Write the final answer for the user NOW, in the requested format, using only the numbers the tools returned above (compute any missing figure yourself and state the formula and every input). No long reasoning, no tool calls, no empty answer."
+  `Write the final answer for the user NOW, in the requested format, using only the numbers the tools returned above. ${ESTIMATE_RULE} No long reasoning, no tool calls, no empty answer.`
 
 export function judgeStop(last: LastStep, done: readonly RecoveryKind[], disabled?: Ablations): Verdict {
   // Still calling tools: the step cap ended the run, and its summary step has its own rules.

@@ -43,7 +43,7 @@ but do not share drivers.
 | Household income | Income is the demand barrier. Slow job creation + frozen public-sector pay slow income growth and drag purchasing power | `vs_indicator_data` (income/wages if available) + `news_market` (income policy). If missing → say so |
 | Purchasing-power policy | VAT cuts on essentials support purchasing power for a set period; "formalising the market" policies (invoices, price listing) reduce the price edge of traditional channels | `news_market` (texts + effective dates), stating the source + date |
 | Modern-retail penetration | Modern retail has a low share versus the region → opening stores is the long-term growth engine. Chains opening faster than the market gain share | Chain developments (store count, floor area) + market share: `news_symbol`/`company_events` or `web_search` on company sources |
-| Same-store sales | New-store openings and same-store growth are two different kinds of growth. Rising same-store sales means taking share from competitors | `financial_detail` + company disclosures via `news_symbol`/`company_events`; compute it yourself if disclosures allow, stating so |
+| Same-store sales | New-store openings and same-store growth are two different kinds of growth. Rising same-store sales means taking share from competitors | `financial_detail` + company disclosures via `news_symbol`/`company_events`; compute it with `shell` from the disclosed figures if they allow, showing the formula |
 | Segment | Food staples (a steady cycle) differ from consumer electronics (a device-replacement cycle). Do not share one driver | Segments in `financial_detail` + `vn_company` |
 
 ## Các bước
