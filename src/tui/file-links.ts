@@ -10,13 +10,16 @@ import { createSignal, type Accessor } from "solid-js"
  * Nothing changes unless the terminal said it understands OSC 8 (`renderer.capabilities.hyperlinks`,
  * detected natively, multiplexers included): the fallback is the plain text shown before. Only existing
  * regular files under the workspace roots (the folder and the /add-dir ones) are linked, never one a click
- * could run (a script or program opens with its handler), never a UNC path (a stat there can stall a
+ * could run (only viewable types; a script or program would run with its handler), never a UNC path (a stat there can stall a
  * frame), never a link longer than the renderer keeps. OPENTRADING_HYPERLINKS=0 turns it off.
  */
 
-/** Opened, not shown, by the OS on a click: never linked. */
-const RUNNABLE = new Set(
-  "bat cmd com exe msi msp msc scr pif cpl lnk url reg hta ps1 psm1 psd1 vbs vbe js jse wsf wsh jar appref-ms application gadget inf scf sh command app".split(" "),
+/**
+ * Types a click opens to look at. An allowlist: on Windows a click goes to the file's handler, and a
+ * script type (.bat, .ps1, .js, .py…) would run instead of opening.
+ */
+const VIEWABLE = new Set(
+  "md markdown txt csv tsv json jsonl log yaml yml toml xml pdf png jpg jpeg gif webp svg xlsx xls docx pptx ts tsx".split(" "),
 )
 
 /** Where relative paths are looked up: the workspace roots. Set by the app. */
@@ -50,9 +53,9 @@ const inside = (root: string, file: string) => {
 }
 
 function resolve(token: string, list: readonly string[]): string | undefined {
-  if (!token || isUnc(token) || /^[a-z][a-z0-9+.-]+:\/\//i.test(token)) return undefined
-  const ext = path.extname(token).slice(1).toLowerCase()
-  if (!ext || RUNNABLE.has(ext)) return undefined
+  // A colon past a drive letter is a URL or an NTFS stream (x.exe::$DATA opens the exe).
+  if (!token || isUnc(token) || token.slice(/^[A-Za-z]:[\\/]/.test(token) ? 2 : 0).includes(":")) return undefined
+  if (!VIEWABLE.has(path.extname(token).slice(1).toLowerCase())) return undefined
   const candidates = path.isAbsolute(token) ? [path.resolve(token)] : list.map((root) => path.resolve(root, token))
   for (const file of candidates) {
     if (isUnc(file) || !list.some((root) => inside(path.resolve(root), file))) continue
@@ -110,7 +113,9 @@ export function linkMarkdown(markdown: string): string {
   let inList = false
   return lines
     .map((line) => {
-      const opener = /^ {0,3}(`{3,}|~{3,})/.exec(line)
+      // Any indentation: a fence inside a list item is often indented 4+ spaces. Too much taken as a
+      // fence only costs a link.
+      const opener = /^\s*(`{3,}|~{3,})/.exec(line)
       if (fence) {
         if (opener && opener[1]![0] === fence[0] && opener[1]!.length >= fence.length && !line.slice(opener[0].length).trim()) fence = undefined
         return line

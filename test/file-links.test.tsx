@@ -14,8 +14,9 @@ const previous = process.env.OPENTRADING_HOME
 process.env.OPENTRADING_HOME = home
 const root = path.join(home, "ws")
 const extra = path.join(home, "them")
-const LONG_DIR = "kết".repeat(60)
-for (const rel of ["src/x.ts", "báo cáo/kết quả (1).md", "run.ps1", "notes.js", "README.md", `${LONG_DIR}/a.md`]) {
+// Two segments: ext4 caps a name at 255 bytes; once encoded the href is still past MAX_LINK_URL_BYTES.
+const LONG_DIR = `${"kết".repeat(25)}/${"kết".repeat(25)}`
+for (const rel of ["src/x.ts", "báo cáo/kết quả (1).md", "run.ps1", "notes.js", "tool.py", "README.md", `${LONG_DIR}/a.md`]) {
   mkdirSync(path.dirname(path.join(root, rel)), { recursive: true })
   writeFileSync(path.join(root, rel), "x")
 }
@@ -23,6 +24,7 @@ mkdirSync(extra, { recursive: true })
 writeFileSync(path.join(extra, "data.csv"), "x")
 writeFileSync(path.join(home, "outside.md"), "x")
 
+const { MAX_LINK_URL_BYTES } = await import("@opentui/core")
 const { fileHref, linkMarkdown, linkSegments, setLinkRoots } = await import("../src/tui/file-links")
 const { markdownStyle } = await import("../src/tui/theme")
 const { Transcript } = await import("../src/tui/transcript")
@@ -38,6 +40,7 @@ afterEach(() => {
   setState({ lines: [] })
 })
 afterAll(async () => {
+  setLinkRoots(() => [])
   if (previous === undefined) delete process.env.OPENTRADING_HOME
   else process.env.OPENTRADING_HOME = previous
   await rm(home, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
@@ -54,8 +57,10 @@ describe("which paths link", () => {
   })
 
   test("never: missing, a folder, outside the roots, runnable, UNC, a URL, or longer than the renderer keeps", () => {
-    for (const token of ["src/y.ts", "src", "../outside.md", path.join(home, "outside.md"), "run.ps1", "notes.js", "\\\\server\\share\\a.md", "https://x.vn/src/x.ts", `${LONG_DIR}/a.md`])
+    for (const token of ["src/y.ts", "src", "../outside.md", path.join(home, "outside.md"), "run.ps1", "notes.js", "tool.py", "src/x.ts::$DATA", "README.md:Zone.Identifier", "\\\\server\\share\\a.md", "https://x.vn/src/x.ts", `${LONG_DIR}/a.md`])
       expect(fileHref(token)).toBeUndefined()
+    // The long one is refused for its href's length, not because it is missing.
+    expect(Buffer.byteLength(href(`${LONG_DIR}/a.md`))).toBeGreaterThan(MAX_LINK_URL_BYTES)
   })
 
   test("in text: tickers, T+2.5 and a URL's tail stay plain; a :line suffix stays out of the link", () => {
@@ -136,7 +141,7 @@ function linksIn(frame: string) {
 }
 
 describe("render", () => {
-  const MD = "# Báo cáo src/x.ts\n\nXem `src/x.ts` và README.md, **đậm** [có sẵn](https://x.vn/b.md).\n\n    src/x.ts\n\n- `src/x.ts` trong danh sách\n\n| Tệp | Cỡ |\n| --- | --- |\n| `báo cáo/kết quả (1).md` | 1 |\n\n```\nsrc/x.ts\n```\n\nHPG T+2.5 https://x.vn/a.md"
+  const MD = "# Báo cáo src/x.ts\n\nXem `src/x.ts` và README.md, **đậm** [có sẵn](https://x.vn/b.md).\n\n    src/x.ts\n\n- `src/x.ts` trong danh sách\n  - lồng\n\n        ```\n        cat src/x.ts\n        ```\n\n| Tệp | Cỡ |\n| --- | --- |\n| `báo cáo/kết quả (1).md` | 1 |\n\n```\nsrc/x.ts\n```\n\nHPG T+2.5 https://x.vn/a.md"
 
   test("with links on, the rewritten answer shows the same characters and the paths are links", async () => {
     const plain = await renderMarkdown(MD, true)
