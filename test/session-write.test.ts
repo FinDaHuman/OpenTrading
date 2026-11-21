@@ -537,6 +537,47 @@ test("R41: a title that arrives while the first index line is being written stil
   expect((await listSessions()).find((x) => x.id === s.id)?.title).toBe("Định giá FPT")
 })
 
+test("#396: a title that arrives while the turn's index line is being written is written in that drain; the turn's receipt reports no index failure", async () => {
+  const realAppend = store.sessionFiles.append
+  let release!: () => void
+  const gate = new Promise<void>((r) => (release = r))
+  let indexStarted!: () => void
+  const started = new Promise<void>((r) => (indexStarted = r))
+  let held = false
+  let indexWrites = 0
+  spy("append").mockImplementation(async (file: string, text: string) => {
+    if (file.endsWith("index.jsonl")) {
+      indexWrites++
+      if (!held) {
+        held = true
+        indexStarted()
+        await gate
+      }
+    }
+    return realAppend(file, text)
+  })
+  const s = Session.create()
+  const first = s.appendTurn(turn(1), info)
+  // The retitle lands exactly while the turn's index line is being appended.
+  await started
+  const titled = s.setTitle("Định giá HPG")
+  release()
+  const receipt = await first
+  expect(receipt.saved).toEqual([1])
+  expect(receipt.indexPending).toBe(false)
+  expect(receipt.error).toBeUndefined()
+  // The TUI says nothing about the index for this receipt (no false "chưa cập nhật được danh sách phiên").
+  expect(tui.receiptLines(s, receipt)).toEqual([])
+  // Already on disk when the turn's receipt arrives, not only after the title's own drain.
+  expect((await listSessions()).find((x) => x.id === s.id)?.title).toBe("Định giá HPG")
+  expect(indexWrites).toBe(2)
+  const second = await titled
+  expect(second.indexPending).toBe(false)
+  expect(second.error).toBeUndefined()
+  // The title's drain found nothing left to write.
+  expect(indexWrites).toBe(2)
+})
+
 test("R42: a session that stopped saving is not reopened, and the refusal says why trying again will not help", async () => {
   const s = await stoppedSession("Đã ngừng")
   const elsewhere = await sessionWith(1)

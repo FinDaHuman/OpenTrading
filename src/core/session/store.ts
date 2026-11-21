@@ -574,7 +574,11 @@ export class Session {
       }
     }
     // Written even when a later part failed, so the turns already on disk show in /sessions.
-    if (this.indexPending && this.file && this.indexInfo) {
+    // A loop: a title that arrives while a line is being written (setTitle from the first turn's
+    // fire-and-forget retitle) leaves the index pending after a successful write. Writing again
+    // here, with the new title, keeps this receipt from reporting an index failure that never
+    // happened (#396). It stops at the first failed write; that one is retried on the next write.
+    while (this.indexPending && this.file && this.indexInfo) {
       const covers = this.indexWanted
       const summary: SessionSummary = {
         id: this.id,
@@ -593,6 +597,7 @@ export class Session {
         this.indexWritten = covers
       } catch (caught) {
         error ??= asError(caught)
+        break
       }
     }
     if (error) this.lastError = error
