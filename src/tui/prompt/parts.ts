@@ -122,19 +122,35 @@ export class PromptParts {
 
   private sweeping = false
   /**
-   * Set by the key handler while an undo or redo key is handled: the text it brings back (half a
-   * label, then the whole pill) is left alone, or Ctrl+Z could never get past a sweep.
+   * Set by the key handler while an undo or redo key is handled ("undo" / "redo"; `true` counts as
+   * "undo"): the text it brings back is not swept, it is paired with the sweep's own steps instead.
    */
-  undoing = false
+  undoing: boolean | "undo" | "redo" = false
+  /** Undo steps the last sweep added (one per pill it removed), still to pair with an undo. */
+  private swept = 0
+  /** Sweep steps an undo took back, still to pair with a redo. */
+  private unswept = 0
+  /**
+   * The box's text right after the sweep's own edits. Change events can come after the edit that
+   * caused them: one that finds this text is the sweep's echo, not a new edit, and keeps the counts.
+   */
+  private after: string | undefined
 
   /**
    * A pill is one thing (#353): an edit that cut part of it (Ctrl+W, Alt+Backspace, a selection
    * that took half of it) removes the rest too, instead of leaving its label as plain text.
-   * Called after every change of the box; returns how many pills it removed.
+   * Called after every change of the box. The sweep is its own undo step, so one Ctrl+Z after it
+   * takes back both (the box never shows half a label), and one Ctrl+Y does both again.
+   * Returns how many extra edits it made (pills removed, or steps undone/redone), 0 when none.
    */
   sweep(): number {
     const input = this.input()
-    if (!input || this.sweeping || this.undoing) return 0
+    if (!input || this.sweeping) return 0
+    if (this.undoing) return this.pair(input, this.undoing === "redo" ? "redo" : "undo")
+    if (this.after !== undefined && input.plainText === this.after) return 0
+    this.after = undefined
+    this.swept = 0
+    this.unswept = 0
     // A mark with nothing left under it is gone already; one with text left is a cut pill.
     const cut = this.all().filter((m) => !m.intact && m.end > m.start)
     if (cut.length === 0) return 0
@@ -149,7 +165,33 @@ export class PromptParts {
     } finally {
       this.sweeping = false
     }
+    this.swept = cut.length
+    this.after = input.plainText
     return cut.length
+  }
+
+  /**
+   * An undo right after a sweep took back one of its steps: take back the rest and the edit that
+   * cut the pill, so the pill is whole again in one key. A redo of that edit does the sweep again.
+   */
+  private pair(input: TextareaRenderable, kind: "undo" | "redo"): number {
+    const n = kind === "undo" ? this.swept : this.unswept
+    if (n === 0) return 0
+    this.sweeping = true
+    try {
+      for (let i = 0; i < n; i++) if (!(kind === "undo" ? input.undo() : input.redo())) break
+    } finally {
+      this.sweeping = false
+    }
+    if (kind === "undo") {
+      this.swept = 0
+      this.unswept = n
+    } else {
+      this.unswept = 0
+      this.swept = n
+    }
+    this.after = input.plainText
+    return n
   }
 
   /**

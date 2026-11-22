@@ -2,7 +2,7 @@ import { afterEach, expect, test } from "bun:test"
 import type { TextareaRenderable } from "@opentui/core"
 import { testRender } from "@opentui/solid"
 import { BURST_GAP_MS, BURST_MIN_KEYS, PasteBurst } from "../src/tui/prompt/burst"
-import { isUndoKey, PROMPT_KEYS } from "../src/tui/prompt/input"
+import { PROMPT_KEYS, undoKeyKind } from "../src/tui/prompt/input"
 import { offsetWidth, PromptParts } from "../src/tui/prompt/parts"
 
 // #353: a pill is one thing (Ctrl+W takes all of it), copies as what it holds, and a paste typed
@@ -36,7 +36,7 @@ async function box() {
     ),
     { width: 80, height: 5 },
   )
-  setup.renderer.keyInput.on("keypress", (evt) => (parts.undoing = isUndoKey(evt)))
+  setup.renderer.keyInput.on("keypress", (evt) => (parts.undoing = undoKeyKind(evt) ?? false))
   await setup.renderOnce()
   return { input: () => input!, parts, setup }
 }
@@ -139,7 +139,7 @@ test("paste burst: 16 keys under 8 ms apart make the Enter after them a line bre
   expect(BURST_GAP_MS).toBeLessThan(40)
 })
 
-test("after a line break and wide characters: copy through the box's own selection, Ctrl+W, then Ctrl+Z twice brings the pill back whole", async () => {
+test("after a line break and wide characters: copy through the box's own selection, Ctrl+W, then one Ctrl+Z brings the pill back whole", async () => {
   const { input, parts, setup } = await box()
   await setup.mockInput.typeText("Giá 漢字")
   setup.mockInput.pressKey("LINEFEED")
@@ -155,11 +155,34 @@ test("after a line break and wide characters: copy through the box's own selecti
   setup.mockInput.pressKey("w", { ctrl: true })
   await setup.renderOnce()
   expect(input().plainText).toBe("Giá 漢字\ndữ liệu ")
-  // The first Ctrl+Z gives back what the sweep took, the second what Ctrl+W took: the pill, with its text.
-  setup.mockInput.pressKey("z", { ctrl: true })
+  // One Ctrl+Z gives back what the sweep took and what Ctrl+W took: the pill, with its text.
   setup.mockInput.pressKey("z", { ctrl: true })
   await setup.renderOnce()
   expect(input().plainText).toBe("Giá 漢字\ndữ liệu [Pasted text #1 +3 lines]")
   expect(parts.expand().text).toBe("Giá 漢字\ndữ liệu a\nb\nc\nd")
 })
 
+test("a cut pill: one Ctrl+Z brings it back whole (never half a label), Ctrl+Y removes it whole again, and so on", async () => {
+  // Seen 22/11: after Ctrl+W the first Ctrl+Z showed "[Pasted text #2 +9" (not a pill: copy gave nothing).
+  const { input, parts, setup } = await box()
+  await setup.mockInput.typeText("Xem ")
+  const label = parts.insert({ kind: "text", text: PASTED })!
+  setup.mockInput.pressBackspace()
+  setup.mockInput.pressKey("w", { ctrl: true })
+  await setup.renderOnce()
+  expect(input().plainText).toBe("Xem ")
+  for (let round = 0; round < 2; round++) {
+    setup.mockInput.pressKey("z", { ctrl: true })
+    await setup.renderOnce()
+    expect(input().plainText).toBe(`Xem ${label}`)
+    expect(parts.copyText(0, offsetWidth(input().plainText))).toBe(`Xem ${PASTED}`)
+    setup.mockInput.pressKey("y", { ctrl: true })
+    await setup.renderOnce()
+    expect(input().plainText).toBe("Xem ")
+  }
+  // Typing after the pill went is a new edit: Ctrl+Z then takes back only that typing.
+  await setup.mockInput.typeText("x")
+  setup.mockInput.pressKey("z", { ctrl: true })
+  await setup.renderOnce()
+  expect(input().plainText).toBe("Xem ")
+})

@@ -115,7 +115,7 @@ import { Transcript } from "./transcript"
 import { setLinkRoots } from "./file-links"
 import { scrollSetting, scrollTranscript } from "./scroll"
 import { TodoPanel } from "./todo-panel"
-import { isUndoKey, PromptInput } from "./prompt/input"
+import { PromptInput, undoKeyKind } from "./prompt/input"
 import { addHistory, HistoryCursor, loadHistory, pastesFor, searchHistory } from "./prompt/history"
 import { imagePath, MAX_IMAGE_BASE64, readClipboardImage, readImageFile, type PromptImage } from "./prompt/image"
 import { isLargePaste, offsetSlice, offsetWidth, pasteLabel, PromptParts, type DraftSnapshot, type ExpandedPrompt } from "./prompt/parts"
@@ -1911,8 +1911,8 @@ export function App(props: {
 
   useKeyboard((evt) => {
     if (evt.eventType === "release") return
-    // Text an undo or redo brings back is not swept (a cut pill comes back whole on the next Ctrl+Z).
-    parts.undoing = isUndoKey(evt)
+    // Text an undo or redo brings back is not swept; an undo after a sweep takes back the cut too (#353).
+    parts.undoing = undoKeyKind(evt) ?? false
     // An Enter held back as part of a paste (below): a key right behind it means it was a line break.
     if (heldEnter !== undefined) {
       clearTimeout(heldEnter)

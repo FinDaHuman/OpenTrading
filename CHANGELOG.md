@@ -62,6 +62,10 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ### Fixed
 
+- One Ctrl+Z brings back a pill that Ctrl+W (or a selection) cut, whole (#353). Before, the first Ctrl+Z only
+  undid the sweep and showed half a label (`[Pasted text #2 +9`), which copied as nothing; a second Ctrl+Z was
+  needed. Ctrl+Y removes the pill whole again.
+
 - Clickable file paths (#345) can be turned on with `OPENTRADING_HYPERLINKS=1` where the terminal supports OSC 8
   but cannot be detected, e.g. PowerShell opened with Win+R and handed to Windows Terminal (no `WT_SESSION`, no
   XTVERSION answer). It forces OpenTUI's own `FORCE_HYPERLINK`; before, the variable could only turn links off.
