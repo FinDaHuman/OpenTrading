@@ -1,6 +1,6 @@
 import { useKeys } from "../ui/keys"
 import { MODE_LABEL, type PermissionMode } from "../../core/permission/mode"
-import { createResource, createSignal, Match, Switch } from "solid-js"
+import { createResource, createSignal, Match, Show, Switch } from "solid-js"
 import { loadConfig, memoryChoiceOf, saveConfig } from "../../core/config"
 import { configFile } from "../../core/paths"
 import type { MemoryChoice, Runtime } from "../../core/runtime"
@@ -19,6 +19,7 @@ import { Picker, type PickerItem } from "./picker"
 import { MemorySettings } from "./memory-settings"
 import { modelChoices, type ModelChoice } from "./model-choices"
 import { describeScroll, nextScrollSetting, scrollSetting } from "../scroll"
+import { lastWebModelCall } from "../../core/tools/web/side-model"
 
 /** Presets of `autoCompactPercent`; "cap" opens the token entry, "uncap" drops the cap. */
 type CompactLevel = number | "cap" | "uncap"
@@ -58,6 +59,17 @@ export function ConfigDialog(props: { runtime: Runtime }) {
   const webModel = () => {
     const w = config()?.webModel
     return w?.model ? `${providerName(w.provider ?? state.provider)} · ${w.model}` : undefined
+  }
+  const slowWebModelHint = () => {
+    const last = lastWebModelCall
+    const selected = config()?.webModel
+    const provider = selected?.model ? selected.provider ?? state.provider : state.provider
+    const model = selected?.model ?? state.model
+    if (!last || last.provider !== provider || last.model !== model || last.durationMs <= 30_000) return undefined
+    const faster = provider === "google"
+      ? toolModels(selected).find((choice) => typeof choice.value === "object" && choice.value.provider === provider && /flash-lite/i.test(choice.value.model) && choice.value.model !== model && !("unavailable" in choice.value))
+      : undefined
+    return `Lần gọi web gần nhất mất ${Math.round(last.durationMs / 1000)} giây.${faster ? ` Có thể chọn ${faster.label}.` : " Có thể chọn model nhanh hơn."}`
   }
   const autoModel = () => {
     const a = config()?.autoMode?.model
@@ -338,6 +350,7 @@ export function ConfigDialog(props: { runtime: Runtime }) {
       <Match when={editing() === "webModel"}>
         <DialogFrame title="Model cho tìm kiếm / đọc web" hint="enter chọn · esc quay lại">
           <text fg={color.tx3}>Dùng cho web_search (tìm kiếm của chính provider: Gemini, Anthropic, OpenAI), web_fetch có prompt và đặt tiêu đề phiên. Model rẻ giúp tiết kiệm quota.</text>
+          <Show when={slowWebModelHint()}>{(hint) => <text fg={color.giam} wrapMode="word">{hint()}</text>}</Show>
           <Picker
             items={[
               { label: "Theo model của phiên (mặc định)", mark: webModel() ? " " : "●", value: "inherit" as SubagentModel },
@@ -467,7 +480,7 @@ export function ConfigDialog(props: { runtime: Runtime }) {
               },
               {
                 label: "Model cho tìm kiếm / đọc web",
-                hint: webModel() ?? "Mặc định: model của phiên · enter để chọn model rẻ hơn",
+                hint: slowWebModelHint() ?? webModel() ?? "Mặc định: model của phiên · enter để chọn model rẻ hơn",
                 mark: webModel() ? "●" : "○",
                 value: "webModel" as Setting,
               },
