@@ -253,6 +253,57 @@ test("DuckDuckGo results are parsed, entities decoded and redirect links unwrapp
   }
 })
 
+test("hosted MCP search is opt-in and falls back in order with filtering", async () => {
+  const calls: string[] = []
+  const hosted = async (provider: "exa" | "parallel") => {
+    calls.push(provider)
+    if (provider === "exa") throw new Error("unavailable")
+    return [
+      { url: "https://blocked.test/article", title: "blocked" },
+      { url: "https://allowed.test/article", title: "allowed", date: "2026-11-21" },
+    ]
+  }
+  const backends = () => [{ name: "duckduckgo", run: async () => { calls.push("duckduckgo"); return [] } }]
+  const input = { query: "news on markets", allowed_domains: ["allowed.test"] }
+  await expect(runSearch(input, signal(), { native: async () => undefined, backends, hostedEnabled: async () => false, hosted })).rejects.toThrow()
+  expect(calls).toEqual(["duckduckgo"])
+  calls.length = 0
+  const result = await runSearch(input, signal(), { native: async () => undefined, backends, hostedEnabled: async () => true, hosted })
+  expect(calls).toEqual(["exa", "parallel"])
+  expect(result).toContain("allowed.test")
+  expect(result).not.toContain("blocked.test")
+})
+
+test("hosted MCP failures leave DuckDuckGo available", async () => {
+  const calls: string[] = []
+  const result = await runSearch({ query: "fallback after MCP" }, signal(), {
+    native: async () => undefined,
+    hostedEnabled: async () => true,
+    hosted: async (provider) => { calls.push(provider); throw new Error("unavailable") },
+    backends: () => [{ name: "duckduckgo", run: async () => { calls.push("duckduckgo"); return [{ url: "https://example.com/news" }] } }],
+  })
+  expect(calls).toEqual(["exa", "parallel", "duckduckgo"])
+  expect(result).toContain("example.com/news")
+})
+
+test("cancelling a hosted search does not start another backend", async () => {
+  const controller = new AbortController()
+  const calls: string[] = []
+  const pending = runSearch({ query: "cancel hosted search" }, controller.signal, {
+    native: async () => undefined,
+    hostedEnabled: async () => true,
+    hosted: async (provider, _plan, hostSignal) => {
+      calls.push(provider)
+      controller.abort()
+      expect(hostSignal.aborted).toBe(true)
+      throw new Error("cancelled")
+    },
+    backends: () => [{ name: "duckduckgo", run: async () => { calls.push("duckduckgo"); return [] } }],
+  })
+  await expect(pending).rejects.toThrow("cancelled")
+  expect(calls).toEqual(["exa"])
+})
+
 // --- web_fetch's side model: its own limit, and the page instead of an error (30/10) ---
 
 const article = () => {

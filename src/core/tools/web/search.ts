@@ -4,6 +4,8 @@ import { vnDay } from "../net-dates"
 import { LOCAL_SOURCE, type ToolDef } from "../types"
 import { cleanDomains, hostMatches, PRESETS, type Preset } from "./domains"
 import { guardedNative, nativeSearch, webTarget, type NativeSearch } from "./side-model"
+import { loadConfig } from "../../config"
+import { hostedSearch } from "./hosted-search"
 
 /**
  * web_search at the level of Claude Code's WebSearch and Codex's web.run:
@@ -33,6 +35,8 @@ export interface Hit {
 
 const TIMEOUT_MS = 45_000
 const NATIVE_TIMEOUT_MS = 15_000
+const HOSTED_TIMEOUT_MS = 25_000
+const DUCKDUCKGO_RESERVE_MS = 5_000
 const cache = new LRUCache<string, string>({ max: 100, ttl: 5 * 60_000 })
 
 const hostOf = (url: string) => {
@@ -287,6 +291,8 @@ export function formatResults(query: string, backend: string, hits: Hit[], summa
 export interface SearchDeps {
   native?: (query: string, plan: SearchPlan, signal: AbortSignal) => Promise<NativeSearch | undefined>
   backends?: () => Backend[]
+  hostedEnabled?: () => Promise<boolean>
+  hosted?: typeof hostedSearch
 }
 
 const defaultNative: NonNullable<SearchDeps["native"]> = async (query, plan, signal) => {
@@ -302,7 +308,9 @@ const defaultNative: NonNullable<SearchDeps["native"]> = async (query, plan, sig
 
 export async function runSearch(input: WebSearchInput, signal: AbortSignal, deps: SearchDeps = {}): Promise<string> {
   const plan = planSearch(input)
-  const key = JSON.stringify(plan)
+  const started = Date.now()
+  const hostedEnabled = await (deps.hostedEnabled ?? (async () => (await loadConfig()).webSearchHostedMcp === true))()
+  const key = JSON.stringify({ plan, hostedEnabled })
   const cached = cache.get(key)
   if (cached) return `${cached}\n(cached result, up to 5 minutes old)`
   const failures: string[] = []
@@ -325,7 +333,21 @@ export async function runSearch(input: WebSearchInput, signal: AbortSignal, deps
     }
     failures.push("model search: every source was removed by the domain filter")
   }
-  for (const backend of (deps.backends ?? keyedBackends)()) {
+  const backends = [...(deps.backends ?? keyedBackends)()]
+  if (hostedEnabled) {
+    const hostedDeadline = Math.min(started + TIMEOUT_MS - DUCKDUCKGO_RESERVE_MS, Date.now() + HOSTED_TIMEOUT_MS)
+    const hosted = (["exa", "parallel"] as const).map((provider): Backend => ({
+      name: `${provider}-mcp`,
+      run: (search, parentSignal) => {
+        const remaining = hostedDeadline - Date.now()
+        if (remaining <= 0) throw new Error("hosted MCP search time budget exhausted")
+        return (deps.hosted ?? hostedSearch)(provider, search, AbortSignal.any([parentSignal, AbortSignal.timeout(remaining)]))
+      },
+    }))
+    const duckIndex = backends.findIndex((backend) => backend.name === "duckduckgo")
+    backends.splice(duckIndex < 0 ? backends.length : duckIndex, 0, ...hosted)
+  }
+  for (const backend of backends) {
     try {
       const hits = filterHits(await backend.run(plan, signal), plan).slice(0, plan.n)
       if (hits.length === 0) {

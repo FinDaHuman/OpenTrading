@@ -352,6 +352,8 @@ Gắn bằng CLI: `ot mcp add <tên> <url>` hoặc `ot mcp add <tên> -- <lệnh
 
 Hầu hết cài đặt chỉnh trong TUI (`/config`, `/effort`, `/model`, `/permissions`) và có hiệu lực ngay. File nằm ở `~/.opentrading/`:
 
+Trong `/config`, mục tìm web qua Exa / Parallel MCP mặc định tắt. Khi bật, câu tìm kiếm có thể được gửi tới Exa hoặc Parallel nếu các nguồn trước đó không có kết quả. Hai dịch vụ có giới hạn lượt miễn phí và không cần API key.
+
 | File | Nội dung |
 | --- | --- |
 | `config.json` | Provider/model, `effort`, `subagents`, `desk` (quy mô, trần agent/request, effort, keyword…), tự nén, quyền, giao diện, `update` (báo bản mới) |

@@ -28,7 +28,7 @@ const COMPACT_PERCENTS = [95, 90, 80, 70]
 type DefaultMode = Exclude<PermissionMode, "bypass">
 const DEFAULT_MODE_NEXT: Record<DefaultMode, DefaultMode> = { "read-only": "ask", ask: "auto", auto: "read-only" }
 
-type Setting = "memory" | "toolSearch" | "autoCompact" | "idleCompact" | "compactLevel" | "maxSteps" | "effort" | "subagentMax" | "subagentModel" | "webModel" | "autoModel" | "defaultMode" | "askEffort" | "tips" | "terminalNotify" | "scroll" | "updateCheck" | "scratchpad"
+type Setting = "memory" | "toolSearch" | "autoCompact" | "idleCompact" | "compactLevel" | "maxSteps" | "effort" | "subagentMax" | "subagentModel" | "webModel" | "webSearchHostedMcp" | "autoModel" | "defaultMode" | "askEffort" | "tips" | "terminalNotify" | "scroll" | "updateCheck" | "scratchpad"
 type SubagentModel = { provider: string; model: string } | "inherit" | "auto"
 
 const TOOL_SEARCH_NEXT = { auto: "on", on: "off", off: "auto" } as const
@@ -166,6 +166,11 @@ export function ConfigDialog(props: { runtime: Runtime }) {
     props.runtime.memory.id === "notebook" ? props.runtime.memory.problems?.()[0] : undefined
 
   async function toggle(setting: Setting) {
+    if (setting === "webSearchHostedMcp") {
+      await saveConfig((current) => ({ webSearchHostedMcp: current.webSearchHostedMcp !== true }))
+      await refetch()
+      return
+    }
     if (
       setting === "memory" ||
       setting === "maxSteps" ||
@@ -470,6 +475,12 @@ export function ConfigDialog(props: { runtime: Runtime }) {
                 hint: webModel() ?? "Mặc định: model của phiên · enter để chọn model rẻ hơn",
                 mark: webModel() ? "●" : "○",
                 value: "webModel" as Setting,
+              },
+              {
+                label: "Tìm web qua Exa / Parallel MCP",
+                hint: config()?.webSearchHostedMcp ? "Bật · câu tìm kiếm có thể gửi tới Exa hoặc Parallel · enter để tắt" : "Tắt · bật để gửi câu tìm kiếm tới Exa hoặc Parallel khi cần nguồn dự phòng",
+                mark: config()?.webSearchHostedMcp ? "●" : "○",
+                value: "webSearchHostedMcp" as Setting,
               },
               {
                 label: "Chế độ quyền khi mở",

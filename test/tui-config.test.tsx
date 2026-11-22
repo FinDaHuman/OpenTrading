@@ -53,6 +53,20 @@ test("/config turns the effort step of /model off and on", async () => {
   await setup.waitFor(() => state.dialog === undefined)
 })
 
+test("/config lets the user enable and disable hosted web search", async () => {
+  await setup.mockInput.typeText("/config")
+  setup.mockInput.pressEnter()
+  await setup.waitForFrame((frame) => frame.includes("Cài đặt"))
+  await setup.mockInput.typeText("Exa / Parallel MCP")
+  await setup.waitForFrame((frame) => frame.includes("Tìm web qua Exa"))
+  setup.mockInput.pressEnter()
+  await setup.waitFor(async () => (await loadConfig()).webSearchHostedMcp === true)
+  setup.mockInput.pressEnter()
+  await setup.waitFor(async () => (await loadConfig()).webSearchHostedMcp === false)
+  setup.mockInput.pressEscape()
+  await setup.waitFor(() => state.dialog === undefined)
+})
+
 test("/config: the auto-compaction threshold is a preset % and an optional token cap, applied live", async () => {
   const configJson = async () => Bun.file(path.join(home, "config.json")).json()
   await setup.mockInput.typeText("/config")
