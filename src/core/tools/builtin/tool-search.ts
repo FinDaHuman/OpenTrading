@@ -12,7 +12,12 @@ const MAX_RESULTS = 20
  * loop reads back from history to make those tools callable (from the next step on, and in
  * later turns and resumed sessions).
  */
-export function toolSearchTool(registry: ToolRegistry, pending: () => string[] = () => []): ToolDef<{ query: string; max_results?: number }> {
+export function toolSearchTool(
+  registry: ToolRegistry,
+  pending: () => string[] = () => [],
+  /** Names load_skill takes: a model that puts one in select: is sent there (#418). */
+  skills: () => string[] = () => [],
+): ToolDef<{ query: string; max_results?: number }> {
   return {
     name: TOOL_SEARCH,
     description: [
@@ -39,6 +44,7 @@ export function toolSearchTool(registry: ToolRegistry, pending: () => string[] =
           if (def?.onDemand) notes.push(`${def.name} is only available when the user turns it on for a request (e.g. by typing ultradesk); it cannot be loaded with tool_search.`)
           else if (def) found.push(def)
           else if (names.length > 1) notes.push(`"${raw}" matches several tools: ${names.join(", ")} — give server/name.`)
+          else if (skills().includes(raw)) notes.push(`"${raw}" is a skill, not a tool: call load_skill with name "${raw}".`)
           else notes.push(`No tool "${raw}".`)
         }
       } else if (/^mcp__[A-Za-z0-9_-]+$/.test(q)) {

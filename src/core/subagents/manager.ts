@@ -14,7 +14,7 @@ import { closeDanglingToolCalls } from "../session/store"
 import type { PromptProfile } from "../prompt/assemble"
 import { activeBudget, SUBAGENT_MIN_REQUESTS } from "../request-budget"
 import type { Skill } from "../skills/schema"
-import { loadSkillTool } from "../tools/builtin/load-skill"
+import { loadSkillTool, loadableSkillNames } from "../tools/builtin/load-skill"
 import { toolSearchTool } from "../tools/builtin/tool-search"
 import { ToolRegistry } from "../tools/registry"
 import type { ChartData } from "../tools/chart/data"
@@ -75,7 +75,7 @@ export function childRegistry(parent: ToolRegistry, origin: AgentOrigin, filter?
   const candidates = childTools(parent.list(), filter)
   if (candidates.length === 0) throw new Error("The subagent has no tools to use (the tool list is empty or matches nothing).")
   for (const def of candidates) child.register(def)
-  if (candidates.some((t) => t.deferrable)) child.register(toolSearchTool(child))
+  if (candidates.some((t) => t.deferrable)) child.register(toolSearchTool(child, undefined, skills && (() => loadableSkillNames(skills()))))
   if (skills) {
     child.register(
       loadSkillTool(skills, () =>

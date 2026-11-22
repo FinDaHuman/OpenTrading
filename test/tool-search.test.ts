@@ -2,11 +2,13 @@ import { expect, test } from "bun:test"
 import type { ModelMessage } from "ai"
 import { z } from "zod"
 import { renderDeferred } from "../src/core/prompt/assemble"
+import { loadableSkillNames } from "../src/core/tools/builtin/load-skill"
 import { toolSearchTool } from "../src/core/tools/builtin/tool-search"
 import { loadedTools } from "../src/core/tools/loaded"
 import { shouldDefer } from "../src/core/agent"
 import { ToolRegistry } from "../src/core/tools/registry"
 import { LOADED_PREFIX, expandQuery, resolveToolName } from "../src/core/tools/search"
+import type { Skill } from "../src/core/skills/schema"
 import type { ToolDef } from "../src/core/tools/types"
 import { RwLock, runTool } from "../src/core/tools/wrap"
 
@@ -67,6 +69,43 @@ test("select: an ambiguous or unknown name is explained, the rest still loads", 
   expect(firstLine(out)).toBe(`${LOADED_PREFIX}mcp__ot__money_flow`)
   expect(out).toContain('"market_snapshot" matches several tools')
   expect(out).toContain('No tool "nope"')
+})
+
+// #418: the model put a skill name in select:, and it was dropped as an unknown tool.
+function withSkills(names: string[]) {
+  const r = registry()
+  r.register(toolSearchTool(r, () => [], () => names))
+  return r
+}
+
+test("select: a skill name points to load_skill, the real tools still load", async () => {
+  const out = await search(withSkills(["thep-vn"]), "select:thep-vn,money_flow")
+  expect(firstLine(out)).toBe(`${LOADED_PREFIX}mcp__ot__money_flow`)
+  expect(out).toContain('"thep-vn" is a skill, not a tool: call load_skill with name "thep-vn".')
+  expect(out).not.toContain('No tool "thep-vn"')
+})
+
+test("select: only a skill name loads nothing and still says to call load_skill", async () => {
+  const out = await search(withSkills(["thep-vn"]), "select:thep-vn")
+  expect(out).not.toContain(LOADED_PREFIX)
+  expect(out).toContain('"thep-vn" is a skill, not a tool: call load_skill with name "thep-vn".')
+})
+
+test("select: a name that is neither a tool nor a skill is still unknown", async () => {
+  const out = await search(withSkills(["thep-vn"]), "select:nope,money_flow")
+  expect(firstLine(out)).toBe(`${LOADED_PREFIX}mcp__ot__money_flow`)
+  expect(out).toContain('No tool "nope".')
+  expect(out).not.toContain("is a skill")
+})
+
+test("only skills load_skill would take are named: auto, with their required tools present", () => {
+  const skill = (name: string, activation: "auto" | "always" | "manual", requires_tools?: string[]) =>
+    ({ name, description: name, activation, body: "", dir: "/x", source: "bundled", requires_tools }) as unknown as Skill
+  const skills = [skill("thep-vn", "auto", ["financial_detail"]), skill("ve-bieu-do", "auto"), skill("pinned", "always"), skill("mine", "manual")]
+  expect(loadableSkillNames(skills)).toEqual(["thep-vn", "ve-bieu-do"])
+  // The MCP server with financial_detail is not connected: the catalog hides thep-vn and load_skill refuses it.
+  expect(loadableSkillNames(skills, new Set(["chart_render"]))).toEqual(["ve-bieu-do"])
+  expect(loadableSkillNames(skills, new Set(["mcp__ot__financial_detail"]))).toEqual(["thep-vn", "ve-bieu-do"])
 })
 
 test("keywords match names, hints, descriptions and parameters, without diacritics", async () => {

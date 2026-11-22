@@ -114,6 +114,14 @@ test("the bundled skills all load cleanly", async () => {
   ])
 })
 
+// #418: thep-vn reads input prices with web_search; loading the skill must make it callable.
+test("thep-vn preloads web_search for ore and coal prices", async () => {
+  const { skills } = await loadSkills(skillRoots(await root()).filter((r) => r.source === "bundled"))
+  const steel = skills.find((s) => s.name === "thep-vn")!
+  expect(steel.uses_tools).toContain("web_search")
+  expect(steel.uses_tools).toContain("financial_detail")
+})
+
 test("ve-bieu-do references đọc được qua load_skill file=", async () => {
   const { skills } = await loadSkills(skillRoots(await root()).filter((r) => r.source === "bundled"))
   const viz = skills.find((s) => s.name === "ve-bieu-do")!

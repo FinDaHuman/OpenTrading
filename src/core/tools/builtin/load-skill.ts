@@ -1,9 +1,18 @@
 import { z } from "zod"
+import { availableSkills } from "../../skills/catalog"
 import { readSkillFile } from "../../skills/loader"
 import type { Skill } from "../../skills/schema"
 import { matchToolPattern } from "../patterns"
 import { LOADED_PREFIX } from "../search"
 import type { ToolDef } from "../types"
+
+/**
+ * Skills the model may load itself: always-group bodies are in the prompt, manual ones are the user's.
+ * With `tools`, also drop those the catalog hides for missing requires_tools (load_skill refuses them).
+ */
+export function loadableSkillNames(skills: Skill[], tools?: ReadonlySet<string>): string[] {
+  return (tools ? availableSkills(skills, tools) : skills).filter((s) => s.activation === "auto").map((s) => s.name)
+}
 
 /**
  * Progressive skill loading: the system prompt lists skills (name + when to use), the body
@@ -33,10 +42,7 @@ export function loadSkillTool(
     async execute({ name, file }) {
       const skill = skills().find((s) => s.name === name)
       if (!skill) {
-        const names = skills()
-          .filter((s) => s.activation === "auto")
-          .map((s) => s.name)
-          .join(", ")
+        const names = loadableSkillNames(skills()).join(", ")
         throw new Error(`No skill "${name}". Available skills: ${names || "none"}.`)
       }
       if (skill.activation === "manual") throw new Error(`Skill "${name}" can only be switched on by the user (/skill ${name}).`)
