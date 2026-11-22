@@ -2,6 +2,7 @@ import { render } from "@opentui/solid"
 import { loadConfig, memoryChoiceOf, shellSandboxOn } from "../core/config"
 import { createMemory, initRuntime } from "../core/runtime"
 import { App } from "./app"
+import { hyperlinkEnvironment } from "./file-links"
 import { requestExit, setState, state } from "./state"
 import { startMode } from "../core/permission/mode"
 import { color } from "./theme"
@@ -28,5 +29,7 @@ export async function startTui(resume: string | undefined, opts: { yolo?: boolea
     exitOnCtrlC: false,
     targetFps: 30,
     backgroundColor: color.bg,
+    // OPENTRADING_HYPERLINKS=1: file links on where the terminal cannot be detected (#345).
+    environment: hyperlinkEnvironment(),
   })
 }

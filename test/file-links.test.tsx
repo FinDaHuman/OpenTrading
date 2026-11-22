@@ -25,7 +25,7 @@ writeFileSync(path.join(extra, "data.csv"), "x")
 writeFileSync(path.join(home, "outside.md"), "x")
 
 const { MAX_LINK_URL_BYTES } = await import("@opentui/core")
-const { fileHref, linkMarkdown, linkSegments, setLinkRoots } = await import("../src/tui/file-links")
+const { fileHref, hyperlinkEnvironment, linkMarkdown, linkSegments, setLinkRoots } = await import("../src/tui/file-links")
 const { markdownStyle } = await import("../src/tui/theme")
 const { Transcript } = await import("../src/tui/transcript")
 const { setState } = await import("../src/tui/state")
@@ -195,5 +195,13 @@ describe("render", () => {
     } finally {
       delete process.env.OPENTRADING_HYPERLINKS
     }
+  })
+
+  test("OPENTRADING_HYPERLINKS=1 forces OpenTUI's link support on, unless FORCE_HYPERLINK is set", () => {
+    // PowerShell from Win+R handed to Windows Terminal: no WT_SESSION, no XTVERSION, links detected off.
+    expect(hyperlinkEnvironment({ OPENTRADING_HYPERLINKS: "1" })).toEqual({ FORCE_HYPERLINK: "1" })
+    expect(hyperlinkEnvironment({ OPENTRADING_HYPERLINKS: "1", FORCE_HYPERLINK: "0" })).toEqual({})
+    expect(hyperlinkEnvironment({})).toEqual({})
+    expect(hyperlinkEnvironment({ OPENTRADING_HYPERLINKS: "0" })).toEqual({})
   })
 })

@@ -105,6 +105,18 @@ Tắt hết các báo dưới đây bằng `/config → Báo khi xong / cần du
 - **Thông báo desktop:** khi trả lời xong, cần bạn duyệt, model hỏi bạn, hoặc lượt bị lỗi. Chỉ gửi khi cửa sổ terminal **không** được focus, và mỗi loại chỉ một lần cho tới khi bạn quay lại.
 - **Trạng thái chương trình (OSC 7501):** gửi cho terminal nào hỗ trợ.
 
+## Đường dẫn file bấm được
+
+Đường dẫn tới file có thật trong thư mục làm việc (và các thư mục `/add-dir`) hiện thành link trong câu trả lời, nhãn tool và kết quả tool: có gạch chân, Ctrl+click mở file bằng app mặc định. Chỉ link loại file để xem (md, csv, json, pdf, ảnh…), không link script hay chương trình.
+
+Link chỉ bật khi terminal báo có hỗ trợ (OSC 8). Có khi terminal hỗ trợ nhưng không báo, ví dụ PowerShell mở bằng Win+R hoặc từ menu Start rồi được chuyển sang Windows Terminal. Khi đó bật bằng tay:
+
+```powershell
+$env:OPENTRADING_HYPERLINKS="1"; ot .
+```
+
+`OPENTRADING_HYPERLINKS=0` tắt link ở mọi terminal.
+
 ## Gắn file bằng `@`
 
 Gõ `@` trong ô nhập để chọn file hoặc thư mục trong thư mục làm việc (giống Claude Code, opencode). File được gắn sẽ được **đọc sẵn và gửi kèm tin nhắn**, model không phải tự gọi `read_file`.
