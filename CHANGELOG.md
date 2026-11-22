@@ -62,6 +62,15 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ### Fixed
 
+- Reading an image from the clipboard (Ctrl+V / Alt+V) or copying no longer breaks a conhost window (#353): the
+  powershell.exe helper shared the TUI's console and reset its code page and title, so every Vietnamese letter
+  turned into "?" until restart. The helpers now get their own hidden console (`windowsHide`), as the shell
+  tool's commands already did.
+
+- One Ctrl+Z brings back a pill that Ctrl+W (or a selection) cut, whole (#353). Before, the first Ctrl+Z only
+  undid the sweep and showed half a label (`[Pasted text #2 +9`), which copied as nothing; a second Ctrl+Z was
+  needed. Ctrl+Y removes the pill whole again.
+
 - Clickable file paths (#345) can be turned on with `OPENTRADING_HYPERLINKS=1` where the terminal supports OSC 8
   but cannot be detected, e.g. PowerShell opened with Win+R and handed to Windows Terminal (no `WT_SESSION`, no
   XTVERSION answer). It forces OpenTUI's own `FORCE_HYPERLINK`; before, the variable could only turn links off.
