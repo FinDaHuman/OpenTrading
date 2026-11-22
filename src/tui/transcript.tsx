@@ -330,12 +330,11 @@ function AssistantRow(props: { line: Extract<Line, { kind: "assistant" }> }) {
       <box flexDirection="column" flexGrow={1} flexShrink={1}>
         <Show when={view().markdown}>
           {/* Props are applied in order: content last, or nested list items are built
-              before the style and block mode reach them (their highlight then fails raw). */}
+              before the style reaches them (their highlight then fails raw). */}
           <markdown
             flexGrow={1}
             flexShrink={1}
             syntaxStyle={markdownStyle(scene)}
-            internalBlockMode="top-level"
             conceal
             fg={color.tx}
             bg={color.bg}

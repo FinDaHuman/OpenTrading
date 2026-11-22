@@ -119,10 +119,11 @@ describe("markdown rewrite", () => {
 async function renderMarkdown(content: string, hyperlinks: boolean) {
   function View() {
     const scene = useRenderer().nativeScene
-    return <markdown conceal syntaxStyle={markdownStyle(scene)} internalBlockMode="top-level" tableOptions={{ style: "grid" }} content={content} />
+    return <markdown conceal syntaxStyle={markdownStyle(scene)} tableOptions={{ style: "grid" }} content={content} />
   }
   setup = await testRender(() => <View />, { width: 100, height: 30 })
-  setRendererCapabilities(setup.renderer, { hyperlinks })
+  // As the terminal does: the capability event makes markdown built before it rebuild its links.
+  setup.renderer.emit("capabilities", setRendererCapabilities(setup.renderer, { hyperlinks }))
   const frame = await renderedFrame(setup, (f) => f.includes("Xem"))
   return frame
 }
