@@ -19,6 +19,12 @@ updates:
       opentui:
         patterns:
           - "@opentui/*"
+    ignore:
+      # @opentui/solid declares solid-js ^1.9 (0.9.7 still does): Solid 2 removes
+      # solid-js/store, createResource, onMount and the JSX namespace it needs (#405).
+      # Lift this once @opentui/solid supports Solid 2.
+      - dependency-name: "solid-js"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: github-actions
     directory: /
     schedule:
