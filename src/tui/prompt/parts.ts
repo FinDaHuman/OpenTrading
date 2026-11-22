@@ -6,6 +6,10 @@ import type { PromptImage } from "./image"
  * `[Image #2]` — like Claude Code. Each pill is a virtual extmark: the cursor jumps over it
  * and one Backspace deletes all of it (OpenTUI does both). The full text is put back when
  * the prompt is sent.
+ *
+ * OpenTUI 0.9 drops a virtual extmark when an edit removes only part of it, so each pill also
+ * has a plain (non-virtual) span mark over the same range: the buffer shrinks that one instead,
+ * which is how a cut pill is still found and swept. Undo brings both back.
  */
 export type PastePart =
   | { kind: "text"; text: string }
@@ -64,9 +68,11 @@ export type ExpandedPrompt = { text: string; images: PromptImage[]; pastes: Reco
 
 export class PromptParts {
   private parts = new Map<number, PastePart>()
-  private marks = new Map<number, number>()
+  /** Span mark id → pill id. */
+  private spans = new Map<number, number>()
   private nextId = 1
   private typeId: number | undefined
+  private spanTypeId: number | undefined
 
   constructor(
     private input: () => TextareaRenderable | undefined,
@@ -80,15 +86,16 @@ export class PromptParts {
     return this.typeId
   }
 
+  private spanType(input: TextareaRenderable) {
+    this.spanTypeId ??= input.extmarks.registerType("prompt-part-span")
+    return this.spanTypeId
+  }
+
   private mark(input: TextareaRenderable, start: number, label: string, id: number, file = false) {
-    const mark = input.extmarks.create({
-      start,
-      end: start + offsetWidth(label),
-      virtual: true,
-      styleId: file ? this.fileStyleId() : this.styleId(),
-      typeId: this.type(input),
-    })
-    this.marks.set(mark, id)
+    const end = start + offsetWidth(label)
+    input.extmarks.create({ start, end, virtual: true, styleId: file ? this.fileStyleId() : this.styleId(), typeId: this.type(input) })
+    const span = input.extmarks.create({ start, end, virtual: false, typeId: this.spanType(input) })
+    this.spans.set(span, id)
   }
 
   /** Put a pill at the cursor (and a space after it, so typing goes on after it). */
@@ -109,10 +116,10 @@ export class PromptParts {
   /** Each pill's mark with what it covers now: intact or cut. */
   private all() {
     const input = this.input()
-    if (!input || this.typeId === undefined) return []
+    if (!input || this.spanTypeId === undefined) return []
     const text = input.plainText
-    return input.extmarks.getAllForTypeId(this.typeId).flatMap((m) => {
-      const id = this.marks.get(m.id)
+    return input.extmarks.getAllForTypeId(this.spanTypeId).flatMap((m) => {
+      const id = this.spans.get(m.id)
       const part = id === undefined ? undefined : this.parts.get(id)
       if (id === undefined || !part) return []
       const slice = offsetSlice(text, m.start, m.end)
@@ -214,11 +221,11 @@ export class PromptParts {
   /** Pills still in the prompt and still intact, left to right. */
   private live() {
     const input = this.input()
-    if (!input || this.typeId === undefined) return []
+    if (!input || this.spanTypeId === undefined) return []
     const text = input.plainText
     return input.extmarks
-      .getAllForTypeId(this.typeId)
-      .map((m) => ({ start: m.start, end: m.end, id: this.marks.get(m.id), slice: offsetSlice(text, m.start, m.end) }))
+      .getAllForTypeId(this.spanTypeId)
+      .map((m) => ({ start: m.start, end: m.end, id: this.spans.get(m.id), slice: offsetSlice(text, m.start, m.end) }))
       .flatMap((m) => {
         const part = m.id === undefined ? undefined : this.parts.get(m.id)
         if (!part || m.id === undefined) return []
@@ -263,7 +270,7 @@ export class PromptParts {
   /** Forget the pills (the text was replaced). Numbers keep counting up, as in Claude Code. */
   reset() {
     this.parts.clear()
-    this.marks.clear()
+    this.spans.clear()
   }
 
   /**
