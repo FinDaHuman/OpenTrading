@@ -62,6 +62,10 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ### Fixed
 
+- Clickable file paths (#345) can be turned on with `OPENTRADING_HYPERLINKS=1` where the terminal supports OSC 8
+  but cannot be detected, e.g. PowerShell opened with Win+R and handed to Windows Terminal (no `WT_SESSION`, no
+  XTVERSION answer). It forces OpenTUI's own `FORCE_HYPERLINK`; before, the variable could only turn links off.
+
 - `tool_search "tin tức"` finds `web_search`. "tin tức" expanded to `news`, which no tool carried, so only "tin"
   scored, once in `web_search`'s description and once in `send_message`'s ("thông tin"): a tie, broken by name,
   loaded `send_message` (#316). `web_search` now has a search hint (tin tức, thời sự, báo chí, sự kiện, news,

@@ -11,7 +11,8 @@ import { createSignal, type Accessor } from "solid-js"
  * detected natively, multiplexers included): the fallback is the plain text shown before. Only existing
  * regular files under the workspace roots (the folder and the /add-dir ones) are linked, never one a click
  * could run (only viewable types; a script or program would run with its handler), never a UNC path (a stat there can stall a
- * frame), never a link longer than the renderer keeps. OPENTRADING_HYPERLINKS=0 turns it off.
+ * frame), never a link longer than the renderer keeps. OPENTRADING_HYPERLINKS=0 turns it off;
+ * OPENTRADING_HYPERLINKS=1 turns it on where the terminal cannot be detected (hyperlinkEnvironment).
  */
 
 /**
@@ -164,6 +165,15 @@ function linkProse(text: string): string {
   return linkSegments(text)
     .map((s) => (s.href && !/[*_[\]<>]/.test(s.text) ? `[${s.text}](${s.href})` : s.text))
     .join("")
+}
+
+/**
+ * Renderer environment for OPENTRADING_HYPERLINKS=1: forces OpenTUI's OSC 8 support on (its own
+ * FORCE_HYPERLINK). Needed where the terminal cannot be detected, e.g. PowerShell opened with Win+R and
+ * handed to Windows Terminal (no WT_SESSION, no XTVERSION answer). An explicit FORCE_HYPERLINK wins.
+ */
+export function hyperlinkEnvironment(env: NodeJS.ProcessEnv = process.env): Record<string, string> {
+  return env.OPENTRADING_HYPERLINKS === "1" && env.FORCE_HYPERLINK === undefined ? { FORCE_HYPERLINK: "1" } : {}
 }
 
 const perRenderer = new WeakMap<CliRenderer, Accessor<boolean>>()
