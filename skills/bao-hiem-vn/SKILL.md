@@ -4,7 +4,7 @@ description: "Phase/wave: use dinh-vi-chu-ky-vn. Analyses life and non-life insu
 match_text: "Pha/sóng: dùng skill chu kỳ. Phân tích bảo hiểm nhân thọ/phi nhân thọ: phí mới, duy trì hợp đồng, bồi thường, combined ratio, tái bảo hiểm và thu nhập đầu tư; tách nghiệp vụ và kênh phân phối."
 activation: auto
 requires_tools: [financial_detail, vs_financial_norms]
-uses_tools: [financial_detail, vs_financial_norms, financial_ratios, planned_targets, analyst_consensus, peer_compare, news_symbol, news_market, symbol_lookup, vn_company]
+uses_tools: [financial_detail, vs_financial_norms, financial_ratios, planned_targets, analyst_consensus, peer_compare, news_symbol, news_market, symbol_lookup, vn_company, vn_reference]
 triggers:
   keywords: [ngành bảo hiểm, hãng bảo hiểm, bảo hiểm phi nhân thọ, bảo hiểm nhân thọ, phí bảo hiểm, bancassurance, công ty bảo hiểm]
   exclude_keywords: [nên mua bảo hiểm, mua bảo hiểm nhân thọ, đỉnh chu kỳ, giai đoạn phân phối, đầu phục hồi, giai đoạn nào, pha tiếp theo, dẫn sóng, pha nào, chu kỳ ngành, sóng ngành, luân chuyển ngành, pha thị trường, chu kỳ thị trường, giai đoạn thị trường, sóng tiếp theo, cuối sóng, giữa sóng, đầu sóng, bank dẫn, chứng dẫn, rotation]
@@ -37,6 +37,19 @@ Both need underwriting results separated from investment, reserves and one-offs.
 | Sales channels and policy | Agents, banks and direct channels differ in cost/sales quality | `news_symbol`, company disclosures, `news_market` for sector figures; look up legal texts + effective dates |
 
 ## Các bước
+
+**Bước 0 — The insurers, when the user names none.** A sector question ("how is non-life
+insurance doing?") needs company figures, not a sector description: list the listed insurers
+with `vn_reference(exchange="HOSE", by="industry", key="bảo hiểm")` and the same call with
+`exchange="HNX"` and `exchange="UPCOM"`, all three in one step (each call reads only its own
+exchange; without `exchange` it reads HOSE); `key` matches part of the Vietnamese ICB industry
+name (`icb_name` in each row; the segment is still classified in Bước 1). It is loaded with this
+skill, so call it directly. The rows carry no size: to pick the largest, run `peer_compare` on
+up to 6 of them and rank by a size key it really returns, saying the ranking covers only the
+insurers compared when the rows were more; without such a key, pick from the rows and say the
+pick is not by size. Run Bước 1–2 on the picks. Never name or rank tickers from memory. If one
+exchange's call fails, name that exchange as missing next to the picks; if no rows come back at
+all, say the list could not be fetched.
 
 **Bước 1 — Identify the segment and the standards.** `symbol_lookup` · `vn_company` ·
 `vs_financial_norms(btype=5)` before choosing lines. Classify life/non-life/
