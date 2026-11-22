@@ -28,7 +28,9 @@ export function clipboardCommand(platform: NodeJS.Platform = process.platform, w
 /** Run the command with the text on stdin; true when it exits 0 in time (3 s by default). */
 export const spawnClipboard: ClipboardSpawn = async (command, text, timeoutMs = 3000) => {
   try {
-    const proc = Bun.spawn(command, { stdin: "pipe", stdout: "ignore", stderr: "ignore" })
+    // windowsHide: its own hidden console. Sharing ours, powershell.exe reset the code page and title
+    // of a conhost window (Vietnamese turned to "?", #353).
+    const proc = Bun.spawn(command, { stdin: "pipe", stdout: "ignore", stderr: "ignore", windowsHide: true })
     proc.stdin.write(new TextEncoder().encode(text))
     await proc.stdin.end()
     const code = await Promise.race([proc.exited, new Promise<number>((r) => setTimeout(() => r(-1), timeoutMs))])

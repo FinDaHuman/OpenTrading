@@ -49,7 +49,9 @@ type Spawn = (command: string[]) => Promise<{ code: number; stdout: string }>
 
 const spawnText: Spawn = async (command) => {
   try {
-    const proc = Bun.spawn(command, { stdin: "ignore", stdout: "pipe", stderr: "ignore" })
+    // windowsHide: its own hidden console. Sharing ours, powershell.exe reset the code page and title
+    // of a conhost window (Vietnamese turned to "?", #353).
+    const proc = Bun.spawn(command, { stdin: "ignore", stdout: "pipe", stderr: "ignore", windowsHide: true })
     const timer = setTimeout(() => proc.kill(), 15_000)
     const stdout = await new Response(proc.stdout).text()
     const code = await proc.exited
@@ -119,7 +121,7 @@ async function readClipboardImageOs(spawn: Spawn = spawnText): Promise<PromptIma
   ]) {
     if (!Bun.which(command[0]!)) continue
     try {
-      const proc = Bun.spawn(command, { stdin: "ignore", stdout: "pipe", stderr: "ignore" })
+      const proc = Bun.spawn(command, { stdin: "ignore", stdout: "pipe", stderr: "ignore", windowsHide: true })
       const bytes = new Uint8Array(await new Response(proc.stdout).arrayBuffer())
       if ((await proc.exited) === 0) return await fromBytes(bytes)
     } catch {
