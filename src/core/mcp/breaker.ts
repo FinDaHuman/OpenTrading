@@ -14,6 +14,7 @@ export const BREAKER_OPEN_MS = 60_000
 export class ServerBreaker {
   private failures = 0
   private openUntil = 0
+  private probing = false
 
   constructor(
     private readonly openMs = BREAKER_OPEN_MS,
@@ -34,6 +35,7 @@ export class ServerBreaker {
     const left = this.openUntil - this.now()
     if (left > 0) return left
     this.openUntil = this.now() + this.openMs
+    this.probing = true
     return undefined
   }
 
@@ -41,15 +43,19 @@ export class ServerBreaker {
   success() {
     this.failures = 0
     this.openUntil = 0
+    this.probing = false
   }
 
   failure() {
     this.failures++
+    this.probing = false
     if (this.open) this.openUntil = this.now() + this.openMs
   }
 
   /** The connection came back: the next call tests it without waiting out the period. */
   reconnected() {
+    if (this.probing && this.now() < this.openUntil) return
+    this.probing = false
     this.openUntil = 0
   }
 }
