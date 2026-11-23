@@ -1112,71 +1112,75 @@ export class McpManager {
           const retryDelays = this.opts.callRetryDelaysMs ?? [1000, 3000]
           // Only read-only calls are retried: a write may already have run on the server.
           const retries = isRemote(config) && tool.annotations?.readOnlyHint ? retryDelays.length : 0
-          for (let attempt = 0; ; attempt++) {
-            const live = await this.ready(name, startupTimeoutMs, ctx.signal).catch((error: unknown) => {
-              // Still down after the wait for a reconnect, not a server that needs the user.
-              if (!ctx.signal.aborted && this.reconnecting.has(name)) breaker?.failure(probeToken)
-              throw error
-            })
-            let result: Awaited<ReturnType<typeof call>>
-            try {
-              result = await limited(live)
-            } catch (error) {
-              if (ctx.signal.aborted) throw error
-              if (isRemote(config) && isAuthError(error)) {
-                this.set(name, { state: "needs-auth", error: authHint(name, config, error) })
-                throw new McpModelError(authForModel(name, error))
-              }
-              if (isRemote(config) && isSessionExpired(error) && attempt === 0) {
-                // Session expired on the server: initialize again and retry exactly once.
-                // Parallel calls that all hit the 404 share one restart instead of killing
-                // each other's fresh session.
-                await this.restartShared(name)
+          try {
+            for (let attempt = 0; ; attempt++) {
+              const live = await this.ready(name, startupTimeoutMs, ctx.signal).catch((error: unknown) => {
+                // Still down after the wait for a reconnect, not a server that needs the user.
+                if (!ctx.signal.aborted && this.reconnecting.has(name)) breaker?.failure(probeToken)
+                throw error
+              })
+              let result: Awaited<ReturnType<typeof call>>
+              try {
+                result = await limited(live)
+              } catch (error) {
+                if (ctx.signal.aborted) throw error
+                if (isRemote(config) && isAuthError(error)) {
+                  this.set(name, { state: "needs-auth", error: authHint(name, config, error) })
+                  throw new McpModelError(authForModel(name, error))
+                }
+                if (isRemote(config) && isSessionExpired(error) && attempt === 0) {
+                  // Session expired on the server: initialize again and retry exactly once.
+                  // Parallel calls that all hit the 404 share one restart instead of killing
+                  // each other's fresh session.
+                  await this.restartShared(name)
+                  continue
+                }
+                if (isRemote(config) && isQuotaExceeded(error)) {
+                  breaker?.success()
+                  const wait = retryAfterMs(error)
+                  const reset = wait === undefined ? "" : ` (around ${new Date(Date.now() + wait).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })} local time)`
+                  throw new McpModelError(`MCP server "${name}": the daily quota is exhausted; no automatic retry. Call again after the quota resets${reset}.`)
+                }
+                if (!isRemote(config) || !isRetryable(error)) throw error
+                const wait = retryAfterMs(error)
+                if (wait !== undefined && wait <= MAX_RETRY_AFTER_MS) {
+                  this.cooldowns.set(name, Math.max(this.cooldowns.get(name) ?? 0, Date.now() + wait))
+                }
+                // The connection itself died: reconnect in the background; the next attempt
+                // (or the model's next call) waits for it in `ready`. A 503 with retry_after is
+                // a live server shedding load, not a host restarting: no probe.
+                if (isConnectionLost(error)) live.drop?.()
+                else if ([502, 503, 504].includes(httpStatus(error) ?? 0) && wait === undefined) await this.probe(live)
+                if (attempt >= retries || (wait !== undefined && wait > MAX_RETRY_AFTER_MS)) {
+                  const status = httpStatus(error)
+                  // A rate limit or a pause the server asked for comes from a server that is up.
+                  if (status === 429 || wait !== undefined) breaker?.success()
+                  else breaker?.failure(probeToken)
+                  const why = status ? `HTTP ${status}` : modelErrorText(rawMessage(error), { max: 120 })
+                  const what = status === 429 ? `is rate-limited (${why})` : `has a temporary error (${why}) — it may be restarting or overloaded`
+                  const later = wait === undefined ? "" : ` The server asks to wait ${Math.ceil(wait / 1000)} seconds before calling again.`
+                  // A retry_after refusal came before the tool ran: nothing was written to check.
+                  const next = wait === undefined ? " Calling again at once rarely helps; use another source or answer with the data you have and state what is missing." : ""
+                  const tail =
+                    attempt > 0
+                      ? ` Retried ${attempt} times.${next}`
+                      : tool.annotations?.readOnlyHint
+                        ? next
+                        : wait === undefined
+                          ? " This tool may write data, so it is not retried automatically; check its effects before calling again."
+                          : " This tool may write data, so it is not retried automatically; the server refused before running it, so it can be called again after waiting."
+                  throw new McpModelError(`MCP server "${name}" ${what}.${later}${tail}`)
+                }
+                await pause(wait ?? retryDelays[attempt]!, ctx.signal)
                 continue
               }
-              if (isRemote(config) && isQuotaExceeded(error)) {
-                breaker?.success()
-                const wait = retryAfterMs(error)
-                const reset = wait === undefined ? "" : ` (around ${new Date(Date.now() + wait).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })} local time)`
-                throw new McpModelError(`MCP server "${name}": the daily quota is exhausted; no automatic retry. Call again after the quota resets${reset}.`)
-              }
-              if (!isRemote(config) || !isRetryable(error)) throw error
-              const wait = retryAfterMs(error)
-              if (wait !== undefined && wait <= MAX_RETRY_AFTER_MS) {
-                this.cooldowns.set(name, Math.max(this.cooldowns.get(name) ?? 0, Date.now() + wait))
-              }
-              // The connection itself died: reconnect in the background; the next attempt
-              // (or the model's next call) waits for it in `ready`. A 503 with retry_after is
-              // a live server shedding load, not a host restarting: no probe.
-              if (isConnectionLost(error)) live.drop?.()
-              else if ([502, 503, 504].includes(httpStatus(error) ?? 0) && wait === undefined) await this.probe(live)
-              if (attempt >= retries || (wait !== undefined && wait > MAX_RETRY_AFTER_MS)) {
-                const status = httpStatus(error)
-                // A rate limit or a pause the server asked for comes from a server that is up.
-                if (status === 429 || wait !== undefined) breaker?.success()
-                else breaker?.failure(probeToken)
-                const why = status ? `HTTP ${status}` : modelErrorText(rawMessage(error), { max: 120 })
-                const what = status === 429 ? `is rate-limited (${why})` : `has a temporary error (${why}) — it may be restarting or overloaded`
-                const later = wait === undefined ? "" : ` The server asks to wait ${Math.ceil(wait / 1000)} seconds before calling again.`
-                // A retry_after refusal came before the tool ran: nothing was written to check.
-                const next = wait === undefined ? " Calling again at once rarely helps; use another source or answer with the data you have and state what is missing." : ""
-                const tail =
-                  attempt > 0
-                    ? ` Retried ${attempt} times.${next}`
-                    : tool.annotations?.readOnlyHint
-                      ? next
-                      : wait === undefined
-                        ? " This tool may write data, so it is not retried automatically; check its effects before calling again."
-                        : " This tool may write data, so it is not retried automatically; the server refused before running it, so it can be called again after waiting."
-                throw new McpModelError(`MCP server "${name}" ${what}.${later}${tail}`)
-              }
-              await pause(wait ?? retryDelays[attempt]!, ctx.signal)
-              continue
+              // Outside the try: an error the tool itself reports (isError) is an answer, not a
+              // dead connection, even when its text says "ECONNRESET".
+              breaker?.success()
+              return resultToOutput(result)
             }
-            // Outside the try: an error the tool itself reports (isError) is an answer, not a
-            // dead connection, even when its text says "ECONNRESET".
-            breaker?.success()
-            return resultToOutput(result)
+          } finally {
+            if (probeToken !== undefined) breaker?.abandon(probeToken)
           }
         }),
       })

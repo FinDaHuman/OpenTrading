@@ -1286,6 +1286,29 @@ async function todoRegistry() {
   return r
 }
 
+test("a repeated user question after fetching data is recovered", async () => {
+  const r = registry()
+  r.register({ name: "mcp__ot__source", description: "data", input: z.object({}), readOnly: true, execute: async () => "28/07/2000, 100 điểm" })
+  const input = "VN-Index bắt đầu được tính từ ngày nào với giá trị gốc bao nhiêu điểm?"
+  respond = (_body, n) => n === 0 ? toolCall("mcp__ot__source", {}, "source") : n === 1 ? answer(input) : answer("VN-Index bắt đầu ngày 28/07/2000 với 100 điểm.")
+  const events = await collect(runAgent({ history: [], input, skills: [], registry: r }))
+  expect(done(events).recoveries).toEqual([{ kind: "question-echo", attempt: 1 }])
+  expect(done(events).unanswered).toBeUndefined()
+  expect(JSON.stringify(done(events).messages.at(-1))).toContain("28/07/2000")
+  expect(events.some((event) => event.type === "retract")).toBe(true)
+})
+
+test("a repeated question with no recovery budget is reported unanswered", async () => {
+  const r = registry()
+  r.register({ name: "mcp__ot__source", description: "data", input: z.object({}), readOnly: true, execute: async () => "28/07/2000, 100 điểm" })
+  const input = "VN-Index bắt đầu được tính từ ngày nào với giá trị gốc bao nhiêu điểm?"
+  respond = (_body, n) => n === 0 ? toolCall("mcp__ot__source", {}, "source") : answer(input)
+  const events = await collect(runAgent({ history: [], input, skills: [], registry: r, maxSteps: 2 }))
+  expect(done(events).unanswered).toBe(true)
+  expect(JSON.stringify(done(events).messages.at(-1))).not.toContain(input)
+  expect(events.some((event) => event.type === "retract")).toBe(true)
+})
+
 test("a preamble, a tool, then an empty last step: the empty step is recovered (the preamble is no answer)", async () => {
   respond = (_body, n) =>
     n === 0 ? toolCall("current_time", {}, "call_1", "Mình sẽ xem giờ trước.") : n === 1 ? answer("") : undefined

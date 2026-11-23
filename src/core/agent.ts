@@ -344,6 +344,7 @@ const RESCUE_NOTICE: Record<RecoveryKind, string> = {
   fragment: "Câu trả lời bị cụt đầu (model viết tiếp câu cũ thay vì trả lời tin nhắn mới).",
   unfetched: "Câu trả lời trên ghi số liệu kèm nguồn nhưng chưa gọi tool nào: đừng dùng các số đó.",
   draft: "Model viết bản nháp (dàn ý, việc sẽ làm) thay vì câu trả lời.",
+  "question-echo": "Model chỉ lặp lại câu hỏi thay vì trả lời.",
 }
 
 type AssistantMessage = Extract<ModelMessage, { role: "assistant" }>
@@ -1557,6 +1558,7 @@ async function* runTurn(opts: RunOptions, budget?: TurnBudget): AsyncGenerator<A
       : judgeStop(
           {
             text: last.stepText ?? "",
+            userText: visibleUserText(user),
             toolNames: last.stepTools ?? [],
             finish: last.finish,
             rawFinish: last.rawFinish,
@@ -1576,7 +1578,7 @@ async function* runTurn(opts: RunOptions, budget?: TurnBudget): AsyncGenerator<A
     const capped = stepsUsed >= maxSteps || (!!budget && budget.remaining() <= 0)
     const continuing = recoveries.at(-1) === "length"
     // Capped, a step with text is the turn's last word (the summary may well say what is missing).
-    if (verdict.action === "accept" || (verdict.action === "continue" && capped && !isEmptyAnswer(last.stepText ?? ""))) {
+    if (verdict.action === "accept" || (verdict.action === "continue" && verdict.kind !== "question-echo" && capped && !isEmptyAnswer(last.stepText ?? ""))) {
       messages = continuing ? continueAnswer(kept, response) : [...kept, ...response]
       // Out of recoveries, the answer stands: the user still hears that nothing backs its figures.
       if (!opts.finalTool && !continuing && isUnfetched({ unfetched })) yield { type: "notice", text: "Câu trả lời ghi số liệu kèm nguồn nhưng lượt này không có tool nào chạy: các số đó chưa được kiểm chứng." }
@@ -1594,6 +1596,7 @@ async function* runTurn(opts: RunOptions, budget?: TurnBudget): AsyncGenerator<A
     }
     // Gave up: say why, and keep a placeholder so the session file shows what happened.
     unanswered = true
+    if (verdict.kind === "question-echo") yield { type: "retract", steps: droppedRequests(response, last.steps) }
     // Every source failed and the model wrote nothing: the harness says what is missing, no figure.
     // Not on a machine-response run (finance): its answer has a contract of its own.
     if (verdict.kind === "empty" && !finance && sourcesFailed({ gaps: failures.gaps, fetchedData: failures.fetched })) {
@@ -1609,7 +1612,9 @@ async function* runTurn(opts: RunOptions, budget?: TurnBudget): AsyncGenerator<A
     const usedTools = [...kept, ...response].some((m) => m.role === "tool")
     yield {
       type: "notice",
-      text: usedTools
+      text: verdict.kind === "question-echo"
+        ? "Model chỉ lặp lại câu hỏi và chưa trả lời. Kết quả tool ở phía trên; thử hỏi lại hoặc đổi model."
+        : usedTools
         ? `Model không trả lời sau khi gọi tool (câu trả lời rỗng).${reason} Kết quả tool ở phía trên; thử hỏi lại hoặc đổi model.`
         : `Model trả về câu trả lời rỗng.${reason} Thử hỏi lại hoặc đổi model.`,
     }

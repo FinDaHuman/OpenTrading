@@ -17,12 +17,14 @@ import { hasOpenTodos, LEGACY_TODO_PREFIX, TODO_PREFIX, TODO_WRITE, VI_TODO_PREF
 /** Recovery requests a turn may spend at most: the gate never loops. */
 export const MAX_RECOVERIES = 2
 
-export type RecoveryKind = "malformed" | "text-call" | "length" | "empty" | "promise" | "fragment" | "unfetched" | "draft"
+export type RecoveryKind = "malformed" | "text-call" | "length" | "empty" | "promise" | "fragment" | "unfetched" | "draft" | "question-echo"
 
 /** What the last request's final step produced. */
 export interface LastStep {
   /** Text of that step only (an earlier step's preamble is not an answer). */
   text: string
+  /** What the user typed this turn, to spot an answer that only repeats it. */
+  userText?: string
   /** Tools it called. */
   toolNames: string[]
   /** The SDK's unified finish reason (stop, length, content-filter…). */
@@ -114,6 +116,30 @@ export function rescueGaps(gaps: readonly string[]): string {
 export const RESCUE_ANSWER_NOW =
   `Write the final answer for the user NOW, in the requested format, using only the numbers the tools returned above. ${ESTIMATE_RULE} No long reasoning, no tool calls, no empty answer.`
 
+/** Asking the user something: "bạn muốn…", "anh/chị cần…", a choice ("… hay …"), "do you mean". */
+const ASKS_USER = /(?<![\p{L}\p{N}])((bạn|anh|chị|quý khách)\s+(\p{L}+\s+)?(muốn|cần|định|đang|hỏi|nói|ý|quan tâm)|hay(?!\p{L})|hoặc|(do|did|would|should)\s+(you|i))(?![\p{L}\p{N}])/iu
+/** Share of an echoed sentence's words that must come from the question. */
+const ECHO_OVERLAP = 0.7
+
+/**
+ * The whole answer is the user's question again (#415: gemini-2.5-flash-lite, after a web_fetch).
+ * Only bare questions count. One that adds a figure the question lacks, offers a choice or speaks
+ * to the user is a clarification, and the user must see it.
+ */
+function echoesQuestion(answer: string, question: string): boolean {
+  const text = answer.trim()
+  if (!text.endsWith("?") || /[.!。！？]/u.test(text) || ASKS_USER.test(text.normalize("NFC"))) return false
+  const words = (value: string) => value.normalize("NFC").toLocaleLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []
+  const original = new Set(words(question.replace(/https?:\/\/\S+/g, "")))
+  const parts = text.split("?").map(words).filter((part) => part.length > 0)
+  return original.size >= 4 && parts.length > 0 && parts.every((part) => {
+    const distinct = new Set(part)
+    if ([...distinct].some((word) => /\p{N}/u.test(word) && !original.has(word))) return false
+    const overlap = [...distinct].filter((word) => original.has(word)).length
+    return overlap >= 4 && overlap / distinct.size >= ECHO_OVERLAP
+  })
+}
+
 export function judgeStop(last: LastStep, done: readonly RecoveryKind[], disabled?: Ablations): Verdict {
   // Still calling tools: the step cap ended the run, and its summary step has its own rules.
   if (last.toolNames.some((name) => name !== TODO_WRITE)) return { action: "accept" }
@@ -161,6 +187,10 @@ export function judgeStop(last: LastStep, done: readonly RecoveryKind[], disable
   // The step ended on its own: no tool, or only a todo_write beside the answer. That one finishes
   // as "tool-calls" (the SDK's name for Gemini's STOP with a function call), not "stop".
   const finished = last.toolNames.every((name) => name === TODO_WRITE) && ["stop", "tool-calls"].includes(last.finish ?? "stop")
+  if (finished && !continuing && last.fetchedData && last.userText && !disabled?.has("gate-question-echo") && echoesQuestion(last.text, last.userText)) {
+    if (left > 0 && used("question-echo") === 0) return { action: "continue", kind: "question-echo", nudge: RESCUE_EMPTY_FINAL, toolChoice: "none" }
+    return { action: "give-up", kind: "question-echo" }
+  }
   // Wrote its own working notes (an outline, "chưa lấy… sẽ", a todo_write to call) as the answer,
   // once. With data fetched, tools off: write the answer from it. Without, it may fetch first.
   if (finished && !continuing && isDraft(last.text) && once("draft")) {
