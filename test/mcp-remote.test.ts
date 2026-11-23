@@ -809,6 +809,31 @@ test("an error the tool reports itself is returned once, even when its text look
   expect(state(manager, "data").state).toBe("connected")
 })
 
+test("an eval breaker counts HTTP failures, not MCP isError results", async () => {
+  const stats = newStats()
+  const remote = startHttpServer({ stats })
+  cleanups.push(remote.stop)
+  const home = await tempDir("ot-eval-breaker-home-")
+  const cwd = await tempDir("ot-eval-breaker-cwd-")
+  await writeFile(path.join(home, "mcp.json"), JSON.stringify({ mcpServers: { data: { type: "http", url: remote.url } } }))
+  const registry = new ToolRegistry()
+  const events: string[] = []
+  const manager = new McpManager(registry, { home, cwd, trustFile: path.join(home, "trust.json"), breakerThreshold: 2, callRetryDelaysMs: [], onBreakerEvent: (_server, event) => events.push(event) })
+  cleanups.push(() => manager.stop())
+  await manager.start()
+  const unavailable = registry.get("mcp__data__upstream_down")!
+  for (let i = 0; i < 3; i++) expect(await errorOf(Promise.resolve(unavailable.execute({}, ctx)))).toContain("ECONNRESET")
+  expect(events).toEqual([])
+  expect(stats.calls).toBe(3)
+  Object.assign(remote.failCalls, { count: 3, status: 503 })
+  const echo = registry.get("mcp__data__echo")!
+  expect(await errorOf(Promise.resolve(echo.execute({ text: "one" }, ctx)))).toContain("HTTP 503")
+  expect(await errorOf(Promise.resolve(echo.execute({ text: "two" }, ctx)))).toContain("HTTP 503")
+  expect(await errorOf(Promise.resolve(echo.execute({ text: "blocked" }, ctx)))).toContain("this call was not sent")
+  expect(remote.failCalls.count).toBe(1)
+  expect(events).toEqual(["opened", "refused"])
+}, 20_000)
+
 test("tool calls to one server are capped at maxConcurrent (default 4), the rest queue", async () => {
   const stats = newStats()
   const remote = startHttpServer({ stats })

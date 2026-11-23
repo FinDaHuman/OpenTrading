@@ -23,6 +23,20 @@ test("calls pass until the threshold, then are refused with the time left", () =
   expect(b.admit()).toBe(15_000)
 })
 
+test("eval breaker threshold is isolated and emits each transition", () => {
+  let now = 1000
+  const events: string[] = []
+  const b = new ServerBreaker(100, () => now, 2, (event) => events.push(event))
+  b.failure()
+  expect(b.admit()).toBeUndefined()
+  b.failure()
+  expect(b.admit()).toBe(100)
+  now += 100
+  expect(b.admit()).toBeUndefined()
+  b.success()
+  expect(events).toEqual(["opened", "refused", "probe", "closed"])
+})
+
 test("an answer from the server resets the count", () => {
   const { b } = breaker()
   b.failure()

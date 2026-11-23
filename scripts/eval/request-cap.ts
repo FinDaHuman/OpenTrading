@@ -9,12 +9,16 @@ import type { RequestLedger } from "./ledger"
  */
 export function requestCap(cap: number, ledger?: RequestLedger) {
   let sent = 0
+  let refused = false
   const stopCount = onModelRequest((request) => {
     sent++
     ledger?.note(`${request.provider}/${request.model}`)
   })
   const stopGuard = guardModelRequests(() => {
-    if (sent >= cap) return `Eval request cap reached (${sent}/${cap}); the request was not sent.`
+    if (sent >= cap) {
+      refused = true
+      return `Eval request cap reached (${sent}/${cap}); the request was not sent.`
+    }
     if (ledger?.exhausted) return `Daily request cap reached (${ledger.spent}/${ledger.cap}); the request was not sent.`
     return undefined
   })
@@ -24,6 +28,9 @@ export function requestCap(cap: number, ledger?: RequestLedger) {
     },
     get capped() {
       return sent >= cap || Boolean(ledger?.exhausted)
+    },
+    get refused() {
+      return refused
     },
     /** Runs `fn` and adds the requests it really sent to its result, replacing any estimate. */
     async measure<T extends { requests: number }>(fn: () => Promise<T>): Promise<T> {
