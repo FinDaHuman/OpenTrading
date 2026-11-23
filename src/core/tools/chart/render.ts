@@ -1,5 +1,6 @@
 import { z } from "zod"
 import { LOCAL_SOURCE, type ToolDef } from "../types"
+import { isMagnitude, parseUnit, sameDims, samePerShare, shortUnit } from "../units"
 import { chartCompareTool, type ChartCompareInput } from "./compare"
 import { renderBoxplot } from "./boxplot"
 import type { ChartData } from "./data"
@@ -153,11 +154,12 @@ export function chartRenderTool(): ToolDef<ChartToolInput> {
         return chartDepthTool().execute({ symbol: tool.symbol, bids: tool.bids, asks: tool.asks, depth: tool.levels, unit: tool.unit }, ctx)
       }
       const raw = tool as ChartRenderInput
-      const input = raw.from_call ? fromCall(raw) : raw
+      const { input, note } = raw.from_call ? fromCall(raw) : { input: raw, note: undefined }
       checkLengths(input)
       await render(input) // validates minimum points; the text itself is not sent
       const chart = chartDataOf(input)
-      return { output: summarizeChart(chart, raw.from_call ? `${raw.from_call}` : undefined), chart }
+      const summary = summarizeChart(chart, raw.from_call ? `${raw.from_call}` : undefined)
+      return { output: note ? `${summary}\n${note}` : summary, chart }
     },
   }
 }
@@ -180,8 +182,36 @@ function compareInput(tool: ChartToolInput): ChartCompareInput {
   }
 }
 
-/** Fill a render input from a stored tool result (refs.ts). Explicit numbers are ignored. */
-export function fromCall(input: ChartRenderInput): ChartRenderInput {
+/** Same quantity in other words: "nghìn đ" for "nghìn đồng/cổ phiếu" (a price), "cp" for "cổ phiếu". */
+function sameUnit(a: string, b: string) {
+  const x = parseUnit(a)
+  const y = parseUnit(b)
+  if (Math.abs(x.factor / y.factor - 1) > 1e-9) return false
+  // A bare magnitude ("k", "nghìn") names the scale only; it matches the source's scale ("%" is a unit, not one).
+  if (isMagnitude(a)) return true
+  // Dropping "/cổ phiếu" must leave a real unit: "lần" is not a share count.
+  return sameDims(x.dims, y.dims) || (samePerShare(x.dims, y.dims) && Object.keys(x.dims).some((k) => k !== "cổ phiếu"))
+}
+
+/**
+ * The unit shown for numbers taken from a result (#329): the source's when its `units` names
+ * one that fits a chart, else the model's. A model unit of other dimensions or scale misreads
+ * the numbers (đ for nghìn đ is 1000x), so the source's wins and the model is told in one line.
+ */
+function chartUnit(model: string | undefined, source: string | undefined, field: string): { unit?: string; note?: string } {
+  const short = source === undefined ? undefined : shortUnit(source)
+  // A blank unit is no unit: nothing to show, nothing to warn about.
+  if (short === undefined) return model?.trim() ? { unit: model } : {}
+  if (!model?.trim() || sameUnit(model, source!)) return { unit: short }
+  // Only the short unit is quoted: it is checked and at most 10 characters of server text.
+  return { unit: short, note: `Unit: the source gives ${field} in "${short}", not "${model}"; the chart shows "${short}".` }
+}
+
+/**
+ * Fill a render input from a stored tool result (refs.ts). Explicit numbers are ignored; `note`
+ * is a line for the model when the unit it gave was replaced by the source's.
+ */
+export function fromCall(input: ChartRenderInput): { input: ChartRenderInput; note?: string } {
   if (!FROM_CALL_KINDS.has(input.kind)) {
     throw new Error(`kind ${input.kind} does not support from_call yet; pass the numbers by hand (matrix/points/value…).`)
   }
@@ -193,11 +223,14 @@ export function fromCall(input: ChartRenderInput): ChartRenderInput {
     symbol: input.from_symbol,
     hint: input.symbol,
   })
-  const base = { kind: input.kind, symbol: input.symbol ?? got.symbol, unit: input.unit, width: input.width, height: input.height, from_call: input.from_call }
+  // The field is a key of the server's payload: only a plain name goes into the harness's note.
+  const field = got.field && /^[\p{L}\p{N}_.-]{1,40}$/u.test(got.field) ? got.field : got.bars ? "the prices" : "the values"
+  const { unit, note } = chartUnit(input.unit, got.unit, field)
+  const base = { kind: input.kind, symbol: input.symbol ?? got.symbol, unit, width: input.width, height: input.height, from_call: input.from_call }
   const tail = <T,>(xs: T[] | undefined, max: number) => (xs && xs.length > max ? xs.slice(-max) : xs)
   if (input.kind === "candlestick") {
     if (!got.bars?.length) throw new Error(`${input.from_call} has no valid candles.`)
-    return { ...base, bars: tail(got.bars, 500), times: tail(got.times, 500) }
+    return { input: { ...base, bars: tail(got.bars, 500), times: tail(got.times, 500) }, note }
   }
   // bar/pie take at most 200 labels: values and labels are cut at the same index, or a
   // 201-row result would pair each label with its neighbour's value.
@@ -208,11 +241,14 @@ export function fromCall(input: ChartRenderInput): ChartRenderInput {
     throw new Error(`${input.from_call}: ${labels.length} labels but ${series.length} values, cannot pair them; choose another label_field/field or pass the numbers by hand.`)
   }
   return {
-    ...base,
-    series,
-    times: tail(got.times, 2000),
-    labels,
-    dirs: input.kind === "sparkcolumn" ? tail(got.dirs, 2000) : undefined,
+    input: {
+      ...base,
+      series,
+      times: tail(got.times, 2000),
+      labels,
+      dirs: input.kind === "sparkcolumn" ? tail(got.dirs, 2000) : undefined,
+    },
+    note,
   }
 }
 

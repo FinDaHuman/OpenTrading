@@ -14,6 +14,13 @@ export const BREAKER_OPEN_MS = 60_000
 export class ServerBreaker {
   private failures = 0
   private openUntil = 0
+  private probing = false
+  private probeSequence = 0
+
+  /** The admitted probe's identity, captured by the call before it awaits. */
+  get probeToken(): number | undefined {
+    return this.probing ? this.probeSequence : undefined
+  }
 
   constructor(
     private readonly openMs = BREAKER_OPEN_MS,
@@ -34,6 +41,8 @@ export class ServerBreaker {
     const left = this.openUntil - this.now()
     if (left > 0) return left
     this.openUntil = this.now() + this.openMs
+    this.probing = true
+    this.probeSequence++
     return undefined
   }
 
@@ -41,15 +50,24 @@ export class ServerBreaker {
   success() {
     this.failures = 0
     this.openUntil = 0
+    this.probing = false
   }
 
-  failure() {
+  failure(probeToken?: number) {
     this.failures++
+    if (probeToken !== undefined && probeToken === this.probeSequence) this.probing = false
     if (this.open) this.openUntil = this.now() + this.openMs
+  }
+
+  /** A probe ended without a verdict (cancelled, timed out): a reconnect may test the server again. */
+  abandon(probeToken: number) {
+    if (probeToken === this.probeSequence) this.probing = false
   }
 
   /** The connection came back: the next call tests it without waiting out the period. */
   reconnected() {
+    if (this.probing && this.now() < this.openUntil) return
+    this.probing = false
     this.openUntil = 0
   }
 }

@@ -1029,9 +1029,9 @@ function depth(bids: { price: number; volume: number }[], asks: { price: number;
 /** Build coloured title + grid rows for one ChartData. */
 export function buildChart(data: ChartData, width: number): Built {
   const built = buildChartInner(data, width)
-  // Đơn vị hiển thị ở mọi chart (trừ gauge/donut đã nhúng unit trong số).
+  // Every chart shows its unit except gauge, which prints it in the number; donutBar does not (#329).
   const unit = (data as { unit?: string }).unit
-  if (unit && data.kind !== "gauge" && data.kind !== "donut") {
+  if (unit && data.kind !== "gauge") {
     built.title = [...built.title, { text: ` [${unit}]` }]
   }
   return built
