@@ -29,7 +29,7 @@ const COMPACT_PERCENTS = [95, 90, 80, 70]
 type DefaultMode = Exclude<PermissionMode, "bypass">
 const DEFAULT_MODE_NEXT: Record<DefaultMode, DefaultMode> = { "read-only": "ask", ask: "auto", auto: "read-only" }
 
-type Setting = "memory" | "toolSearch" | "autoCompact" | "idleCompact" | "compactLevel" | "maxSteps" | "effort" | "subagentMax" | "subagentModel" | "webModel" | "autoModel" | "defaultMode" | "askEffort" | "tips" | "terminalNotify" | "scroll" | "updateCheck" | "scratchpad"
+type Setting = "memory" | "toolSearch" | "autoCompact" | "idleCompact" | "compactLevel" | "maxSteps" | "effort" | "subagentMax" | "subagentModel" | "webModel" | "webSearchHostedMcp" | "autoModel" | "defaultMode" | "askEffort" | "tips" | "terminalNotify" | "scroll" | "updateCheck" | "scratchpad"
 type SubagentModel = { provider: string; model: string } | "inherit" | "auto"
 
 const TOOL_SEARCH_NEXT = { auto: "on", on: "off", off: "auto" } as const
@@ -60,17 +60,26 @@ export function ConfigDialog(props: { runtime: Runtime }) {
     const w = config()?.webModel
     return w?.model ? `${providerName(w.provider ?? state.provider)} · ${w.model}` : undefined
   }
-  const slowWebModelHint = () => {
+  /** Seconds the last web call took, when it was slow and made by the model in use. */
+  const slowWebModel = () => {
     const last = lastWebModelCall
-    const selected = config()?.webModel
-    const provider = selected?.model ? selected.provider ?? state.provider : state.provider
-    const model = selected?.model ?? state.model
+    const { provider, model } = webModelInUse()
     if (!last || last.provider !== provider || last.model !== model || last.durationMs <= 30_000) return undefined
+    return Math.round(last.durationMs / 1000)
+  }
+  const webModelInUse = () => {
+    const selected = config()?.webModel
+    return selected?.model ? { provider: selected.provider ?? state.provider, model: selected.model } : { provider: state.provider, model: state.model }
+  }
+  const slowWebModelHint = () => {
+    const seconds = slowWebModel()
+    if (seconds === undefined) return undefined
+    const { provider, model } = webModelInUse()
     // Names sort by version, so the last match is the newest; a Flash-Lite that is slow has no faster sibling.
     const faster = provider === "google" && !/flash-lite/i.test(model ?? "")
-      ? toolModels(selected).findLast((choice) => typeof choice.value === "object" && choice.value.provider === provider && /flash-lite/i.test(choice.value.model) && !("unavailable" in choice.value))
+      ? toolModels(config()?.webModel).findLast((choice) => typeof choice.value === "object" && choice.value.provider === provider && /flash-lite/i.test(choice.value.model) && !("unavailable" in choice.value))
       : undefined
-    return `Lần gọi web gần nhất mất ${Math.round(last.durationMs / 1000)} giây.${faster ? ` Có thể chọn ${faster.label}.` : " Có thể chọn model nhanh hơn."}`
+    return `Lần gọi web gần nhất mất ${seconds} giây.${faster ? ` Có thể chọn ${faster.label}.` : " Có thể chọn model nhanh hơn."}`
   }
   const autoModel = () => {
     const a = config()?.autoMode?.model
@@ -179,6 +188,11 @@ export function ConfigDialog(props: { runtime: Runtime }) {
     props.runtime.memory.id === "notebook" ? props.runtime.memory.problems?.()[0] : undefined
 
   async function toggle(setting: Setting) {
+    if (setting === "webSearchHostedMcp") {
+      await saveConfig((current) => ({ webSearchHostedMcp: current.webSearchHostedMcp !== true }))
+      await refetch()
+      return
+    }
     if (
       setting === "memory" ||
       setting === "maxSteps" ||
@@ -481,9 +495,15 @@ export function ConfigDialog(props: { runtime: Runtime }) {
               },
               {
                 label: "Model cho tìm kiếm / đọc web",
-                hint: [webModel() ?? "Mặc định: model của phiên", slowWebModelHint() ?? (webModel() ? undefined : "enter để chọn model rẻ hơn")].filter(Boolean).join(" · "),
+                hint: `${slowWebModel() ? `Chậm (${slowWebModel()} giây) · ` : ""}${webModel() ?? "Mặc định: model của phiên · enter để chọn model rẻ hơn"}`,
                 mark: webModel() ? "●" : "○",
                 value: "webModel" as Setting,
+              },
+              {
+                label: "Tìm web qua Exa / Parallel MCP",
+                hint: config()?.webSearchHostedMcp ? "Bật · câu tìm kiếm có thể gửi tới Exa hoặc Parallel · enter để tắt" : "Tắt · bật để gửi câu tìm kiếm tới Exa hoặc Parallel khi cần nguồn dự phòng",
+                mark: config()?.webSearchHostedMcp ? "●" : "○",
+                value: "webSearchHostedMcp" as Setting,
               },
               {
                 label: "Chế độ quyền khi mở",

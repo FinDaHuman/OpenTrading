@@ -61,6 +61,7 @@ test("a model out of quota is skipped for 10 minutes, then tried again; another 
 
 test("web_search reports the quota once in plain words and still answers from a fallback", async () => {
   const out = await runSearch({ query: "FPT tin mới" }, new AbortController().signal, {
+    hostedEnabled: async () => false,
     native: () => guardedNative("google/m", () => Promise.reject(Object.assign(new Error("quota"), { statusCode: 429 }))),
     backends: () => [{ name: "duckduckgo", run: async () => [{ title: "FPT", url: "https://cafef.vn/fpt.chn" }] }],
   })

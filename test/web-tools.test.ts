@@ -1,8 +1,21 @@
-import { beforeEach, expect, test } from "bun:test"
+import { afterAll, beforeEach, expect, test } from "bun:test"
+import { mkdtemp, rm } from "node:fs/promises"
+import os from "node:os"
+import path from "node:path"
 import { PermissionGate } from "../src/core/permission"
 import { clearFetchCache, runFetch, webFetchTool, type FetchDeps } from "../src/core/tools/web/fetch"
 import { checkUrl, fetchPublic, isPrivateAddress, isPrivateHost } from "../src/core/tools/web/net"
 import { clearSearchCache, filterHits, freshnessBucket, keyedBackends, parseDuckDuckGo, planSearch, runSearch, webSearchTool } from "../src/core/tools/web/search"
+
+// runSearch reads the config (hosted search is opt-in): never the real home, whatever it has on.
+const home = await mkdtemp(path.join(os.tmpdir(), "ot-web-tools-"))
+const savedHome = process.env.OPENTRADING_HOME
+process.env.OPENTRADING_HOME = home
+afterAll(async () => {
+  if (savedHome === undefined) delete process.env.OPENTRADING_HOME
+  else process.env.OPENTRADING_HOME = savedHome
+  await rm(home, { recursive: true, force: true })
+})
 
 const signal = () => new AbortController().signal
 const publicDns = async () => ["93.184.216.34"]
@@ -251,6 +264,67 @@ test("DuckDuckGo results are parsed, entities decoded and redirect links unwrapp
     expect(t.deferrable).toBe(true)
     expect(t.source).toBe("local")
   }
+})
+
+test("hosted MCP search is opt-in and falls back in order with filtering", async () => {
+  const calls: string[] = []
+  const hosted = async (provider: "exa" | "parallel") => {
+    calls.push(provider)
+    if (provider === "exa") throw new Error("unavailable")
+    return [
+      { url: "https://blocked.test/article", title: "blocked" },
+      { url: "https://allowed.test/article", title: "allowed", date: "2026-11-21" },
+    ]
+  }
+  const backends = () => [{ name: "duckduckgo", run: async () => { calls.push("duckduckgo"); return [] } }]
+  const input = { query: "news on markets", allowed_domains: ["allowed.test"] }
+  await expect(runSearch(input, signal(), { native: async () => undefined, backends, hostedEnabled: async () => false, hosted })).rejects.toThrow()
+  expect(calls).toEqual(["duckduckgo"])
+  calls.length = 0
+  const result = await runSearch(input, signal(), { native: async () => undefined, backends, hostedEnabled: async () => true, hosted })
+  expect(calls).toEqual(["exa", "parallel"])
+  expect(result).toContain("allowed.test")
+  expect(result).not.toContain("blocked.test")
+})
+
+test("with no config, hosted MCP search is off: the query goes to no hosted server", async () => {
+  const calls: string[] = []
+  await runSearch({ query: "default keeps hosted off" }, signal(), {
+    native: async () => undefined,
+    hosted: async (provider) => { calls.push(provider); return [{ url: "https://example.com/x" }] },
+    backends: () => [{ name: "duckduckgo", run: async () => { calls.push("duckduckgo"); return [{ url: "https://example.com/news" }] } }],
+  })
+  expect(calls).toEqual(["duckduckgo"])
+})
+
+test("hosted MCP failures leave DuckDuckGo available", async () => {
+  const calls: string[] = []
+  const result = await runSearch({ query: "fallback after MCP" }, signal(), {
+    native: async () => undefined,
+    hostedEnabled: async () => true,
+    hosted: async (provider) => { calls.push(provider); throw new Error("unavailable") },
+    backends: () => [{ name: "duckduckgo", run: async () => { calls.push("duckduckgo"); return [{ url: "https://example.com/news" }] } }],
+  })
+  expect(calls).toEqual(["exa", "parallel", "duckduckgo"])
+  expect(result).toContain("example.com/news")
+})
+
+test("cancelling a hosted search does not start another backend", async () => {
+  const controller = new AbortController()
+  const calls: string[] = []
+  const pending = runSearch({ query: "cancel hosted search" }, controller.signal, {
+    native: async () => undefined,
+    hostedEnabled: async () => true,
+    hosted: async (provider, _plan, hostSignal) => {
+      calls.push(provider)
+      controller.abort()
+      expect(hostSignal.aborted).toBe(true)
+      throw new Error("cancelled")
+    },
+    backends: () => [{ name: "duckduckgo", run: async () => { calls.push("duckduckgo"); return [] } }],
+  })
+  await expect(pending).rejects.toThrow("cancelled")
+  expect(calls).toEqual(["exa"])
 })
 
 // --- web_fetch's side model: its own limit, and the page instead of an error (30/10) ---

@@ -364,6 +364,8 @@ Hầu hết cài đặt chỉnh trong TUI (`/config`, `/effort`, `/model`, `/per
 | `bin/` | `opentrading` và `ot` khi cài bằng script (đổi chỗ bằng `OPENTRADING_INSTALL_DIR`) |
 | `bundled/`, `cache/` | Skill/agent/prompt có sẵn mà binary giải ra cho mỗi phiên bản; cache danh sách model, kết quả kiểm tra bản mới |
 
+Trong `/config`, mục "Tìm web qua Exa / Parallel MCP" (`webSearchHostedMcp`) **mặc định tắt**. Khi bật, câu tìm kiếm có thể được gửi tới hai bên thứ ba là Exa (`mcp.exa.ai`) hoặc Parallel (`search.parallel.ai`) khi tìm kiếm của provider và các API có key không trả kết quả, trước khi dùng DuckDuckGo. Câu tìm kiếm có thể để lộ mã bạn đang quan tâm. Hai dịch vụ có giới hạn lượt miễn phí và không cần API key.
+
 Khoá của `desk`: [docs/desk.md](docs/desk.md#cài-đặt-configjson--desk).
 
 ## Chạy từ mã nguồn
