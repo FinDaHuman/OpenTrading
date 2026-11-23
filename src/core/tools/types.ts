@@ -157,9 +157,15 @@ export interface ToolDef<I = any> {
   subject?(input: I): string | undefined
   /**
    * ▸▸ sends this call to the classifier although it is read-only: the read-only claim is the
-   * tool's own (an MCP server's readOnlyHint), not something OpenTrading checked.
+   * tool's own (an MCP server's readOnlyHint), not something OpenTrading checked. Per call for a
+   * tool whose calls differ (read_mcp_resource: every server but the data server).
    */
-  autoReview?: boolean
+  autoReview?: boolean | ((input: I) => boolean)
+  /**
+   * The MCP server this call goes to, for a tool that takes it as an argument (read_mcp_resource);
+   * the name and the trust are the MCP manager's, not the argument's. Other MCP tools: mcpServerOf.
+   */
+  mcpServer?(input: I): { server: string; trusted: boolean } | undefined
   /** ▸▸ auto mode may run this call without the classifier (a new file or one this run created; a read-only shell command). */
   autoSafe?(input: I): Promise<boolean>
   /** Session approvals are shared by tools of one group ("this folder, this session" covers write_file and edit_file). */

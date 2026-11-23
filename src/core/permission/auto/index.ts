@@ -2,7 +2,7 @@ import type { Target } from "../../chat"
 import type { AgentOrigin, ToolDef } from "../../tools/types"
 import { classify, type ClassifierDeps, type Verdict } from "./classifier"
 import { isHardDeny, labelVi, type AutoModeConfig } from "./rules"
-import { ActionLog, compactInput } from "./transcript"
+import { ActionLog, compactInput, mcpServerOf, type McpServer } from "./transcript"
 
 export { ActionLog } from "./transcript"
 
@@ -43,6 +43,8 @@ export interface Denial {
   hard?: boolean
   /** Key of a one-time retry the user may grant. */
   key: string
+  /** The call's MCP server (mcpServerOf), so a granted retry is logged with it. */
+  mcp?: McpServer
 }
 
 export interface ReviewerDeps {
@@ -164,7 +166,7 @@ export class AutoReviewer {
    */
   grantRetry(denial: Denial) {
     this.retries.add(denial.key)
-    this.log.approved(denial.tool, denial.summary)
+    this.log.approved(denial.tool, denial.summary, undefined, denial.mcp)
   }
 
   async review(def: ToolDef, input: unknown, agent: AgentOrigin | undefined, signal: AbortSignal): Promise<Review> {
@@ -178,6 +180,7 @@ export class AutoReviewer {
     if (paused) return { decision: "ask", why: `model duyệt hết quota, tạm hỏi bạn tới ${hhmm(paused)}` }
     const target = await this.deps.target().catch(() => undefined)
     if (!target) return { decision: "ask", why: "chưa có model để duyệt (gõ /model)" }
+    const mcp = mcpServerOf(def, input)
     let verdict: Verdict
     let config: AutoModeConfig | undefined
     try {
@@ -185,7 +188,12 @@ export class AutoReviewer {
       verdict = await classify(
         {
           transcript: this.log.render(),
-          action: { tool: def.name, input: compact, ...(agent ? { agent: `${agent.type}#${agent.id}` } : {}) },
+          action: {
+            tool: def.name,
+            input: compact,
+            ...(agent ? { agent: `${agent.type}#${agent.id}` } : {}),
+            ...(mcp ? { mcp } : {}),
+          },
           environment: await this.deps.environment(),
           config,
           profile: await this.deps.profile?.().catch(() => undefined),
@@ -219,7 +227,7 @@ export class AutoReviewer {
     this.total++
     const label = verdict.rule ? labelVi(verdict.rule) : undefined
     const hard = isHardDeny(verdict.rule, config) ? { hard: true } : {}
-    this.recent.unshift({ at: this.now(), tool: def.name, summary: compact.slice(0, 200), label, reason: verdict.reason, ...hard, key })
+    this.recent.unshift({ at: this.now(), tool: def.name, summary: compact.slice(0, 200), label, reason: verdict.reason, ...hard, key, ...(mcp ? { mcp } : {}) })
     this.recent.splice(20)
     this.emit()
     // At the limit this block is not final: the user decides, so a run of false blocks ends here.

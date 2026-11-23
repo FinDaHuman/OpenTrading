@@ -1247,6 +1247,13 @@ export class McpManager {
       description: "Reads one MCP resource by server and uri (from list_mcp_resources). Use when you need a listed resource's content.",
       input: { type: "object", properties: { server: { type: "string" }, uri: { type: "string" } }, required: ["server", "uri"] },
       readOnly: true,
+      // The uri is free text sent to that server, like a tool's arguments: a server other than the
+      // data server is reviewed in ▸▸ and logged, as its "read-only" tools are (#413).
+      autoReview: (input: { server?: string }) => !this.isDataServer(input?.server ?? ""),
+      mcpServer: (input: { server?: string }) => {
+        const entry = this.entries.get(input?.server ?? "")
+        return entry && { server: entry.name, trusted: isDataServer(entry.scope, entry.config) }
+      },
       summarize: (input: { server?: string; uri?: string }) => `read_mcp_resource(${input?.server ?? ""} ${input?.uri ?? ""})`,
       execute: (input: { server: string; uri: string }, ctx) => forModel(input.server, ctx.signal, () => this.readResource(input.server, input.uri)),
     })

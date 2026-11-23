@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs"
 import path from "node:path"
 import type { ClassifyInput } from "../../src/core/permission/auto/classifier"
 import { formatGitFacts } from "../../src/core/permission/auto/context"
-import { ActionLog, compactInput, type DeniedBy } from "../../src/core/permission/auto/transcript"
+import { ActionLog, compactInput, mcpServerOf, type DeniedBy } from "../../src/core/permission/auto/transcript"
 import type { ToolDef } from "../../src/core/tools/types"
 
 /**
@@ -36,7 +36,7 @@ export interface EvalCase {
 
 export const ROUTES = ["user-only", "no-ask", "auto-safe"] as const
 
-export const KNOWN_TOOLS = /^(shell|write_file|edit_file|read_file|web_fetch|web_search|watchlist_local(_\w+)?|mcp__\w+)$/
+export const KNOWN_TOOLS = /^(shell|write_file|edit_file|read_file|web_fetch|web_search|watchlist_local(_\w+)?|read_mcp_resource|mcp__\w+)$/
 
 export function loadCases(root: string): EvalCase[] {
   const file = path.join(root, "test/fixtures/auto-mode/actions.jsonl")
@@ -46,8 +46,23 @@ export function loadCases(root: string): EvalCase[] {
     .map((l) => JSON.parse(l) as EvalCase)
 }
 
-/** A stand-in definition: only what the log and compactInput read. */
-const defOf = (name: string): ToolDef => ({ name, description: "", input: {}, readOnly: name === "read_file", execute: async () => "" })
+/**
+ * A stand-in definition: only what the log, compactInput and mcpServerOf read. An MCP tool gets its
+ * server as the MCP manager registers it: `opentrading` is the data server (EVAL_ENVIRONMENT), so
+ * only its tools carry `sourceEnvelope`.
+ */
+const defOf = (name: string): ToolDef => {
+  const server = /^mcp__([A-Za-z0-9_-]+?)__/.exec(name)?.[1]
+  return {
+    name,
+    description: "",
+    input: {},
+    readOnly: name === "read_file",
+    execute: async () => "",
+    ...(server ? { source: `mcp:${server}`, ...(server === "opentrading" ? { sourceEnvelope: true } : {}) } : {}),
+    ...(name === "read_mcp_resource" ? { source: "mcp:resources", mcpServer: (i: { server: string }) => ({ server: i.server, trusted: i.server === "opentrading" }) } : {}),
+  }
+}
 
 /** What runtime.ts gives the classifier in production, for the workspace D:\\Dau-tu (a git repo). */
 export const EVAL_ENVIRONMENT = [
@@ -71,5 +86,11 @@ export function caseInput(c: EvalCase): ClassifyInput {
     log.action(defOf(h.tool), h.input)
     if (h.denied) log.denied(defOf(h.tool), h.input, h.denied.by, h.denied.rule)
   }
-  return { transcript: log.render(), action: { tool: c.action.tool, input: compactInput(defOf(c.action.tool), c.action.input) }, environment: EVAL_ENVIRONMENT }
+  const def = defOf(c.action.tool)
+  const mcp = mcpServerOf(def, c.action.input)
+  return {
+    transcript: log.render(),
+    action: { tool: c.action.tool, input: compactInput(def, c.action.input), ...(mcp ? { mcp } : {}) },
+    environment: EVAL_ENVIRONMENT,
+  }
 }

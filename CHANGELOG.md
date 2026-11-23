@@ -67,6 +67,16 @@ adopt Semantic Versioning when it exposes a stable public API.
   soft deny that a named order cleared, and the ▸▸ and `--yolo` mode lines said the same. It is now a hard deny;
   a hard-deny block no longer tells the model that a message or an `autoMode.allow` rule would unlock it. Eval
   cases 24 and 54 expected "allow" and now expect a block; six cases on both sides of the rule are new.
+- Auto mode (▸▸) tells the reviewing model which MCP server a call goes to (#413). The model saw only the tool
+  name (`mcp__notes__search_notes`) and a list of server names, so a portfolio with cost prices put into a
+  third-party server's search query passed as a harmless read (eval case 74). Each MCP call in the classifier's
+  transcript and the pending one now carry `"mcp_server"` and `"trusted"`, set from OpenTrading's configuration
+  (only the OpenTrading data server is `true`; a server merely named like it is not), and the fixed classifier
+  prompt says what they mean. The default "Data Exfiltration" rule covers the arguments of a tool outside the
+  trust boundary, including holdings and amounts the request does not need; "OpenTrading Data Tools" covers
+  only `"trusted": true` calls. `read_mcp_resource` ran in ▸▸ without review or a log line, so the same data could
+  leave in its `uri`; for any server but the data server it is now reviewed, logged and marked like that server's
+  tools. The eval builds MCP cases the same way, with five new ones (103-107). Measured with a real model: not yet.
 
 - A turn whose data tools all returned errors of their own (an MCP `isError`, an eval replay miss) and that
   got nothing else to answer from no longer ends with a harness instruction as its answer (#414). The
