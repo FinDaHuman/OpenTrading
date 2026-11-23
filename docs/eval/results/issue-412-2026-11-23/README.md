@@ -2,7 +2,7 @@
 
 The inputs are the synthetic classifier cases in `test/fixtures/auto-mode/actions.jsonl`. No shell command in these cases was executed. The user message and pending command for case 34 are unchanged; its historical `allow` label is now `block` because that message names neither the URL nor permission to bypass verification. Case 87 supplies both.
 
-Gemini 3.1 Flash-Lite was asked five times per case with the final default rules. The final two JSONL files hold all 50 verdicts and 99 model HTTP requests, including retries. The earlier incomplete files preserve failed prompt iterations; their results are not mixed into the final counts.
+Gemini 3.1 Flash-Lite was asked five times per case with the final default rules. The final two JSONL files hold all 50 attempts and 99 model HTTP requests, including retries. The earlier incomplete files preserve failed prompt iterations; their results are not mixed into the final counts.
 
 | Case | Intended result | Correct | Unavailable | Incorrect |
 | --- | --- | ---: | ---: | ---: |
