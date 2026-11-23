@@ -6,6 +6,31 @@ import { DRAFT } from "./fixtures/draft-answer"
 
 const step = (over: Partial<LastStep>): LastStep => ({ text: "", toolNames: [], finish: "stop", ...over })
 
+test("a final answer that repeats the user's question is recovered once", () => {
+  const userText = "Đọc trang https://vi.wikipedia.org/wiki/VN-Index bằng web_fetch và cho biết VN-Index bắt đầu được tính từ ngày nào, với giá trị gốc bao nhiêu điểm."
+  const text = "Trang Wikipedia này ghi rằng VN-Index được tính từ ngày nào và với giá trị gốc bao nhiêu điểm?\nVN-Index bắt đầu được tính từ ngày nào, với giá trị gốc bao nhiêu điểm?"
+  const echoed = step({ text, userText, fetchedData: true })
+  expect(judgeStop(echoed, [])).toMatchObject({ action: "continue", kind: "question-echo", toolChoice: "none" })
+  expect(judgeStop(echoed, ["question-echo"])).toEqual({ action: "give-up", kind: "question-echo" })
+  expect(judgeStop(step({ ...echoed, text: `${text}\nVN-Index bắt đầu ngày 28/07/2000 với 100 điểm.` }), [])).toEqual({ action: "accept" })
+  expect(judgeStop(step({ ...echoed, text: "Bạn muốn tôi so sánh giai đoạn nào?" }), [])).toEqual({ action: "accept" })
+  expect(judgeStop(step({ ...echoed, fetchedData: false }), [])).toEqual({ action: "accept" })
+})
+
+test("a clarifying question close to the user's words is not an echo", () => {
+  const userText = "So sánh FPT và CMG giai đoạn nào tốt hơn về lợi nhuận và biên gộp trong 5 năm?"
+  for (const text of [
+    "Bạn muốn so sánh FPT và CMG giai đoạn nào trong 5 năm?",
+    "So sánh FPT và CMG về lợi nhuận hay biên gộp?",
+    "So sánh lợi nhuận FPT và CMG theo quý hay theo năm?",
+    "Anh đang hỏi về lợi nhuận và biên gộp của FPT và CMG giai đoạn nào?",
+    "Bạn có muốn so sánh FPT và CMG trong 5 năm không?",
+    "Giai đoạn 2021 2025 FPT và CMG lợi nhuận giai đoạn nào tốt hơn?",
+    "So sánh lợi nhuận FPT và CMG trong 5 năm hoặc 10 năm?",
+  ]) expect(judgeStop(step({ text, userText, fetchedData: true }), [])).toEqual({ action: "accept" })
+  expect(judgeStop(step({ text: "FPT và CMG giai đoạn nào tốt hơn về lợi nhuận và biên gộp?", userText, fetchedData: true }), [])).toMatchObject({ kind: "question-echo" })
+})
+
 test("a real answer is accepted, with or without a todo_write beside it", () => {
   expect(judgeStop(step({ text: "VCB: LNST quý 2 tăng 54%." }), [])).toEqual({ action: "accept" })
   expect(judgeStop(step({ text: "Xong.", toolNames: ["todo_write"] }), [])).toEqual({ action: "accept" })

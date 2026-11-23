@@ -68,6 +68,14 @@ adopt Semantic Versioning when it exposes a stable public API.
   a hard-deny block no longer tells the model that a message or an `autoMode.allow` rule would unlock it. Eval
   cases 24 and 54 expected "allow" and now expect a block; six cases on both sides of the rule are new.
 
+- `chart_render` with `from_call` takes the unit from the data server's `units` instead of the model (#329):
+  candles of `vn_equity_ohlcv` show "nghìn đ", the price board "đ", indices "điểm", volumes "cp", in the chart
+  title and the summary. A model unit of other dimensions or scale ("đ" for a price in nghìn đồng, a 1000x
+  misreading) is replaced by the source's, and the tool output says so in one line. Sources without `units`,
+  or with several units in one entry (a batch of stocks and indices), keep the model's unit. A unit entry that
+  is not short plain text is ignored. `kind=compare` (`from_calls`, % change from each series' first point)
+  still takes the model's unit. The donut chart now shows its unit in the title as the other charts do.
+
 - Reading an image from the clipboard (Ctrl+V / Alt+V) or copying no longer breaks a conhost window (#353): the
   powershell.exe helper shared the TUI's console and reset its code page and title, so every Vietnamese letter
   turned into "?" until restart. The helpers now get their own hidden console (`windowsHide`), as the shell

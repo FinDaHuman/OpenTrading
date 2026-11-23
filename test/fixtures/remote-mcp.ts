@@ -97,6 +97,8 @@ function sloppyServer(flood = 0) {
 export const TINY_PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="
 
 export interface HttpServerOptions {
+  /** Observe or intercept MCP requests before the transport handles them. */
+  onRequest?: (request: Request, method: string | undefined) => Promise<Response | undefined> | Response | undefined
   /** Require OAuth: unauthenticated requests get 401 + RFC 9728 metadata. */
   oauth?: boolean
   /** Require this static bearer token (no OAuth metadata). */
@@ -197,6 +199,12 @@ export function startHttpServer(opts: HttpServerOptions = {}) {
       }
 
       if (url.pathname !== "/mcp") return new Response("not found", { status: 404 })
+
+      if (opts.onRequest) {
+        const body = req.method === "POST" ? await req.clone().json().catch(() => ({})) as { method?: string } : {}
+        const response = await opts.onRequest(req, body.method)
+        if (response) return response
+      }
 
       const auth = req.headers.get("authorization")
       if (opts.oauth && !(auth && validTokens.has(auth.replace(/^Bearer /, "")))) {
