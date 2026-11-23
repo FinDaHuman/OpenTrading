@@ -23,6 +23,8 @@ import type { RequestLedger } from "./ledger"
 import { SHELL_TOOL, shellExecMs, shellRoute } from "./shell-route"
 import { useCalculatorShell } from "../../src/core/tools/shell/shell"
 import { TRACE_VERSION, type TraceEvent, type TraceWriter } from "./trace"
+import type { FailureThresholds } from "../../src/core/loop/failures"
+import type { BreakerEvent } from "../../src/core/mcp/breaker"
 
 const QUESTIONS = z
   .array(
@@ -168,6 +170,9 @@ export function observeTools(registry: ToolRegistry, seen: WeakSet<ToolDef>, ask
 }
 
 export interface EvalRun {
+  failureThresholds?: FailureThresholds
+  breakerEvents?: { server: string; event: BreakerEvent }[]
+  httpCap?: { readonly capped: boolean; readonly refused: boolean; readonly sent: number; cap: number }
   runtime: Runtime
   /** Prefix of each question's conversation id (`eval-<stamp>-<q>#<rep>`); set by runEval when missing. */
   conversationStamp?: string
@@ -252,6 +257,10 @@ export async function runEval(run: EvalRun) {
   try {
     for (let rep = 1; rep <= (run.repeat ?? 1); rep++) {
       for (const question of run.questions) {
+        if (run.httpCap?.capped) {
+          write({ type: "stopped", reason: "request-cap", spent: run.httpCap.sent, cap: run.httpCap.cap })
+          return
+        }
         if (ledger?.exhausted) {
           write({ type: "stopped", reason: "request-cap", spent: ledger.spent, cap: ledger.cap })
           return
@@ -264,6 +273,7 @@ export async function runEval(run: EvalRun) {
           else registry.unregister(def.name)
         }
         asked = { q: question.id, rep }
+        if (run.breakerEvents) run.breakerEvents.length = 0
         observeTools(
           registry,
           seen,
@@ -345,8 +355,11 @@ async function ask(run: EvalRun, question: EvalQuestion, asked: Asked, now: Date
       target: run.target,
       now,
       disabled: run.ablated?.loop,
+      failureThresholds: run.failureThresholds,
+      onFailurePolicy: (event) => say({ type: "notice", ...asked, text: `Failure policy: ${event.action} at streak ${event.streak}, step ${event.step}.`, failure_policy: event }),
       signal: AbortSignal.any([timeout, meter.capped.signal]),
     })) {
+      for (const event of run.breakerEvents?.splice(0) ?? []) say({ type: "notice", ...asked, text: `MCP breaker ${event.server}: ${event.event}.`, breaker: event })
       if (event.type === "text-delta") result.streamed += event.text
       else if (event.type === "tool-start") {
         if (event.name === SHELL_TOOL) shellInputs.set(event.callId, event.input)
@@ -383,6 +396,7 @@ async function ask(run: EvalRun, question: EvalQuestion, asked: Asked, now: Date
   // A background subagent must not write into the next question's trace.
   runtime.subagents.stopAll()
   await runtime.subagents.flush()
+  for (const event of run.breakerEvents?.splice(0) ?? []) say({ type: "notice", ...asked, text: `MCP breaker ${event.server}: ${event.event}.`, breaker: event })
   for (const view of runtime.subagents.list()) {
     if (before.has(view.id)) continue
     result.steps += view.requests ?? 0
@@ -396,7 +410,7 @@ async function ask(run: EvalRun, question: EvalQuestion, asked: Asked, now: Date
     text: result.text.trim(),
     streamed: result.streamed.trim(),
     outcome: result.outcome,
-    ...(meter.capped.signal.aborted ? { abort: "cap" as const } : timeout.aborted ? { abort: "timeout" as const } : {}),
+    ...(meter.capped.signal.aborted || run.httpCap?.refused ? { abort: "cap" as const } : timeout.aborted ? { abort: "timeout" as const } : {}),
     unanswered: result.unanswered,
     recoveries: result.recoveries,
     data_gaps: result.gaps,

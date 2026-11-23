@@ -36,7 +36,7 @@ import {
   type ServerEntry,
   toolAllowed,
 } from "./config"
-import { ServerBreaker } from "./breaker"
+import { ServerBreaker, type BreakerEvent } from "./breaker"
 import { isDataServer } from "./catalog"
 import { blockToParts, resultToOutput } from "./convert"
 import { MAX_MODEL_ERROR, McpModelError, modelErrorText } from "./errors"
@@ -176,6 +176,9 @@ interface Live {
 }
 
 export interface McpManagerOptions {
+  /** Eval-only breaker threshold and event sink. */
+  breakerThreshold?: number
+  onBreakerEvent?: (server: string, event: BreakerEvent) => void
   home: string
   cwd: string
   trustFile: string
@@ -842,7 +845,7 @@ export class McpManager {
 
   private breaker(name: string) {
     let breaker = this.breakers.get(name)
-    if (!breaker) this.breakers.set(name, (breaker = new ServerBreaker(this.opts.breakerOpenMs, this.opts.breakerNow)))
+    if (!breaker) this.breakers.set(name, (breaker = new ServerBreaker(this.opts.breakerOpenMs, this.opts.breakerNow, this.opts.breakerThreshold, (event) => this.opts.onBreakerEvent?.(name, event))))
     return breaker
   }
 

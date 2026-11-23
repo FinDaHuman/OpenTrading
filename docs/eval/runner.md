@@ -95,6 +95,10 @@ bun scripts/dev/shell-replay.ts test/fixtures/shell-commands.jsonl [--ask]
 
 ## Request cap
 
+For failure-policy experiments, `--failure-streak nudge=2,stop=4` changes the reminder and stop thresholds only for the eval, and `--breaker-threshold 3` sets the connection-breaker threshold. Both accept positive integers; nudge must be below stop. Without flags the production defaults are 4/8/3. The run header records `settings.failure_thresholds`. Notice lines carry optional structured `failure_policy` and `breaker` fields, so existing trace readers continue to accept them. A tool's MCP `isError` is a tool failure, not a connection-breaker failure.
+
+`--http-request-cap N` is a hard limit for the entire process at the provider's fetch, including retries, subagents and side models. It refuses the next request before sending it; unlike `--turn-requests`, it does not reserve a request to summarize. Use one fresh process per comparison so breaker state does not carry over.
+
 Every model request is counted at the provider's fetch and added to `<home>/usage/YYYY-MM-DD.json`, by the `provider/model` it went to, in the real home. `--max-requests` (default 500) is a cap for the `--model` model for the day, across runs; a side model on another provider is booked under its own name and does not spend it. The run stops before the next question at the cap, and a question that reaches it mid-way is aborted; a `stopped` line records it. The ledger counts only eval runs, not requests made in the TUI, and the day is the local day, while a provider's quota may reset at another hour.
 
 `--turn-requests N` is a different cap: each question's own, as a benchmark sets one (`maxRequests` in `runAgent`, `ot -p --turn-requests N`). Every request the process sends during the question counts, retries, recoveries and subagents included, and none is sent past N. With two requests left the loop forces the summary step, so the question still ends with an answer unless a retry spent that reserve. The header's `settings.turn_requests` records it.
