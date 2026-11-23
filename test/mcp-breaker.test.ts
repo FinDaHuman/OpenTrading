@@ -98,6 +98,18 @@ test("an older call failing during a probe cannot make a reconnect admit another
   expect(b.probeToken).not.toBe(probe)
 })
 
+test("a probe that ends without a verdict does not hold back a later reconnect", () => {
+  const { b, clock } = breaker()
+  trip(b)
+  clock.now += 60_000
+  expect(b.admit()).toBeUndefined()
+  b.abandon(b.probeToken!)
+  // Still open: the next call waits, unless the connection comes back.
+  expect(b.admit()).toBe(60_000)
+  b.reconnected()
+  expect(b.admit()).toBeUndefined()
+})
+
 test("a reconnect means nothing while it is closed", () => {
   const { b } = breaker()
   b.failure()

@@ -59,6 +59,11 @@ export class ServerBreaker {
     if (this.open) this.openUntil = this.now() + this.openMs
   }
 
+  /** A probe ended without a verdict (cancelled, timed out): a reconnect may test the server again. */
+  abandon(probeToken: number) {
+    if (probeToken === this.probeSequence) this.probing = false
+  }
+
   /** The connection came back: the next call tests it without waiting out the period. */
   reconnected() {
     if (this.probing && this.now() < this.openUntil) return
