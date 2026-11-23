@@ -157,6 +157,8 @@ const PREFERENCES = "What the user said in this conversation about risk appetite
 
 const MISSING_DATA = "Which tools or sources failed, how that was handled, and which figures are still missing. Never fill in numbers for the missing parts."
 
+const REQUEST_HISTORY = "List each user request separately in chronological order, starting with the first, close to its original wording. For each, retain the answer that was actually given, including figures as stated; label user-provided or hypothetical figures as such, and do not imply that an earlier answer was independently verified."
+
 /**
  * Sent after the head when summarizing; the summary must stand in for everything above it.
  * One request, as Claude Code's /compact does: the model first inventories
@@ -168,7 +170,7 @@ export function compactPrompt(instructions?: string, variant: CompactVariant = "
     variant === "lean"
       ? [
           "## Yêu cầu của người dùng",
-          "The goal and each request, close to the original words.",
+          REQUEST_HISTORY,
           "## Ràng buộc và sở thích",
           PREFERENCES,
           "## Số liệu đã xác minh",
@@ -180,7 +182,7 @@ export function compactPrompt(instructions?: string, variant: CompactVariant = "
         ]
       : [
           "## Yêu cầu của người dùng",
-          "The user's goal and each request, close to the original words.",
+          REQUEST_HISTORY,
           "## Ràng buộc và sở thích",
           PREFERENCES,
           "## Số liệu đã xác minh",
