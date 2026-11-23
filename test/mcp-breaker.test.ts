@@ -86,6 +86,17 @@ test("a reconnect lets the next call test it at once, and only that one", () => 
   expect(b.admit()).toBe(60_000)
 })
 
+test("a reconnect while a probe waits does not admit another probe", () => {
+  const { b, clock } = breaker()
+  trip(b)
+  clock.now += 60_000
+  expect(b.admit()).toBeUndefined()
+  b.reconnected()
+  expect(b.admit()).toBe(60_000)
+  clock.now += 60_000
+  expect(b.admit()).toBeUndefined()
+})
+
 test("a reconnect means nothing while it is closed", () => {
   const { b } = breaker()
   b.failure()
