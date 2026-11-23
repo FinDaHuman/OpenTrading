@@ -1,0 +1,43 @@
+{
+  "syntheticData": true,
+  "lateRecovery": true,
+  "maxRequestsPerRun": 10,
+  "runs": [
+    {
+      "model": "gemini-3.5-flash-lite",
+      "nudge": 4,
+      "stop": 8,
+      "requests": 3,
+      "outcome": "completed",
+      "gaps": [
+        "vcb_ratios",
+        "bid_ratios"
+      ],
+      "text": "Nguồn: dữ liệu giả của bài kiểm thử · 01/01/2026.\n\nMình đã thử gọi công cụ MCP để lấy P/E và ROE năm 2025 của VCB và BID, nhưng nguồn dữ liệu giả gặp lỗi tạm thời (không truy vấn được). Do đó, hiện tại không có số liệu P/E và ROE năm 2025 cho cả hai cổ phiếu VCB và BID trong hệ thống. Mình không tự suy đoán hay ước tính các con số này.",
+      "calls": [
+        "vcb_ratios",
+        "bid_ratios"
+      ],
+      "exitCode": 0
+    },
+    {
+      "model": "gemini-3.5-flash-lite",
+      "nudge": 2,
+      "stop": 4,
+      "requests": 4,
+      "outcome": "completed",
+      "gaps": [
+        "vcb_ratios",
+        "bid_ratios"
+      ],
+      "text": "Nguồn: Dữ liệu giả kiểm thử · 01/01/2026.\n\nMình đã gọi công cụ lấy P/E (hệ số giá trên lợi nhuận một cổ phiếu) và ROE (lợi nhuận trên vốn chủ sở hữu) năm 2025 cho hai mã cổ phiếu VCB và BID, tuy nhiên nguồn dữ liệu giả đang gặp lỗi tạm thời và không trả về kết quả. \n\nPhần không lấy được: Toàn bộ chỉ số P/E và ROE năm 2025 của VCB và BID.",
+      "calls": [
+        "vcb_ratios",
+        "bid_ratios",
+        "vcb_ratios",
+        "bid_ratios"
+      ],
+      "exitCode": 0
+    }
+  ]
+}

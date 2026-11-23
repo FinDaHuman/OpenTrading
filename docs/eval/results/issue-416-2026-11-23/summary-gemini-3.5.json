@@ -1,0 +1,54 @@
+{
+  "syntheticData": true,
+  "maxRequestsPerRun": 10,
+  "runs": [
+    {
+      "model": "gemini-3.5-flash-lite",
+      "nudge": 4,
+      "stop": 8,
+      "requests": 2,
+      "outcome": "completed",
+      "gaps": [
+        "bid_ratios"
+      ],
+      "text": "Nguồn: MCP data · năm 2025.\n\nDữ liệu P/E (hệ số giá trên lợi nhuận) và ROE (lợi nhuận trên vốn chủ sở hữu) cho năm 2025 của VCB và BID như sau:\n\n| Mã cổ phiếu | P/E (lần) | ROE (%) |\n| --- | --- | --- |\n| VCB | 8,4 | 19,1 |\n| BID | Không lấy được do lỗi từ nguồn dữ liệu (MCP data) | Không lấy được do lỗi từ nguồn dữ liệu (MCP data) |\n\nPhần không lấy được: Toàn bộ chỉ số P/E và ROE năm 2025 của BID do công cụ lấy dữ liệu báo lỗi tạm thời từ nguồn MCP.",
+      "calls": [
+        "vcb_ratios",
+        "bid_ratios"
+      ],
+      "exitCode": 0
+    },
+    {
+      "model": "gemini-3.5-flash-lite",
+      "nudge": 2,
+      "stop": 8,
+      "requests": 2,
+      "outcome": "completed",
+      "gaps": [
+        "bid_ratios"
+      ],
+      "text": "Nguồn: Dữ liệu thử nghiệm (MCP data) · năm 2025.\n\nDữ liệu P/E (hệ số giá trên lợi nhuận) và ROE (lợi nhuận trên vốn chủ sở hữu) cho năm 2025:\n\n| Mã cổ phiếu | P/E (lần) | ROE (%) |\n| --- | --- | --- |\n| VCB | 8,4 | 19,1 |\n| BID | Không lấy được (lỗi tạm thời từ nguồn dữ liệu) | Không lấy được (lỗi tạm thời từ nguồn dữ liệu) |\n\nPhần không lấy được là toàn bộ chỉ số P/E và ROE năm 2025 của mã BID do nguồn dữ liệu MCP báo lỗi tạm thời.",
+      "calls": [
+        "vcb_ratios",
+        "bid_ratios"
+      ],
+      "exitCode": 0
+    },
+    {
+      "model": "gemini-3.5-flash-lite",
+      "nudge": 2,
+      "stop": 4,
+      "requests": 3,
+      "outcome": "completed",
+      "gaps": [
+        "bid_ratios"
+      ],
+      "text": "Nguồn: MCP data · 2025.\n\nDữ liệu P/E và ROE cho năm 2025 của VCB và BID:\n\n| Mã cổ phiếu | P/E (lần) | ROE (%) |\n| --- | --- | --- |\n| VCB | 8,4 | 19,1 |\n| BID | Không lấy được do máy chủ MCP data trả về lỗi tạm thời | Không lấy được do máy chủ MCP data trả về lỗi tạm thời |\n\nPhần dữ liệu của mã BID không lấy được do lỗi từ nguồn MCP data, mình không tự suy đoán hay điền số liệu thay thế.",
+      "calls": [
+        "vcb_ratios",
+        "bid_ratios"
+      ],
+      "exitCode": 0
+    }
+  ]
+}
