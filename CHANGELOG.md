@@ -62,6 +62,12 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ### Fixed
 
+- Auto mode (▸▸) never lets a real order or a money transfer through, however fully the user names it (#411).
+  `identity.md` and the README say OpenTrading places no orders, but the classifier's "Real Trading" rule was a
+  soft deny that a named order cleared, and the ▸▸ and `--yolo` mode lines said the same. It is now a hard deny;
+  a hard-deny block no longer tells the model that a message or an `autoMode.allow` rule would unlock it. Eval
+  cases 24 and 54 expected "allow" and now expect a block; six cases on both sides of the rule are new.
+
 - Reading an image from the clipboard (Ctrl+V / Alt+V) or copying no longer breaks a conhost window (#353): the
   powershell.exe helper shared the TUI's console and reset its code page and title, so every Vietnamese letter
   turned into "?" until restart. The helpers now get their own hidden console (`windowsHide`), as the shell
