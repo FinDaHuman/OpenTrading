@@ -434,3 +434,146 @@ test("the tools-off rescues ask for every input and an estimate label the figure
   expect(DERIVED.test(`Biên lãi gộp 21,4% (${label}: 1.284 / 6.000)`)).toBe(true)
   expect(claimsFetch(`Nguồn: ${label} từ số liệu ở trên`)).toBe(false)
 })
+
+// #414: every MCP call of the turn came back isError (a replay miss), the model answered empty,
+// then wrote these after the rescue. Both were accepted as the answer.
+const ECHO_ISSUE = "If no data is available for any part, state clearly what is missing."
+const ECHO_ISSUE_ABLATED = 'If the tools provided no data, state clearly: "Hiện tại, không có dữ liệu cập nhật về P/E và ROE cho VCB và BID trong hệ thống."'
+
+test("#414: empty after every data call returned an error: the rescue names those tools, as for a failed source", async () => {
+  const { rescueGaps } = await import("../src/core/loop/stop-gate")
+  const errored = step({ afterTools: true, toolsInTurn: true, dataInTurn: true, gaps: [], errored: ["vn_ratios", "vn_quote"], usableData: false, fetchedData: false })
+  expect(judgeStop(errored, [])).toEqual({ action: "continue", kind: "empty", nudge: rescueGaps([], ["vn_ratios", "vn_quote"]), toolChoice: "none" })
+  // Tools on: the error may come from the call's own arguments, so a corrected call is allowed.
+  expect(judgeStop(errored, ["empty"])).toEqual({ action: "continue", kind: "empty", nudge: rescueGaps([], ["vn_ratios", "vn_quote"], { retry: true }), toolChoice: "auto" })
+  expect(judgeStop(errored, ["empty", "empty"])).toEqual({ action: "give-up", kind: "empty" })
+  // A failed source and an erroring tool are named together, once each.
+  expect(judgeStop({ ...errored, gaps: ["vn_quote"] }, [])).toMatchObject({ nudge: rescueGaps(["vn_quote"], ["vn_ratios"]) })
+  // One data tool returned data, or another tool (a file, a skill) gave something to answer from: the usual rescue.
+  expect(judgeStop({ ...errored, usableData: true, fetchedData: true }, [])).toMatchObject({ nudge: RESCUE_EMPTY_FINAL })
+  expect(judgeStop({ ...errored, usableData: true }, [])).toMatchObject({ nudge: RESCUE_EMPTY_FINAL })
+})
+
+test("#414: the rescue for tools that returned errors never calls them an outage; a failed source keeps its words", async () => {
+  const { rescueGaps } = await import("../src/core/loop/stop-gate")
+  expect(rescueGaps(["a"])).toBe(rescueGaps(["a"], []))
+  expect(rescueGaps(["a"])).toContain("(source error, timeout)")
+  for (const nudge of [rescueGaps([], ["vn_ratios"]), rescueGaps([], ["vn_ratios"], { retry: true })]) {
+    expect(nudge).toStartWith("<nhac_nho>\nThese sources returned no data this turn: vn_ratios.")
+    expect(nudge).not.toContain("timeout")
+    expect(nudge).not.toContain("trying again later")
+    expect(nudge).toContain("in the user's language")
+  }
+  expect(rescueGaps([], ["vn_ratios"])).not.toContain("corrected arguments")
+  expect(rescueGaps([], ["vn_ratios"], { retry: true })).toContain("corrected arguments")
+})
+
+test("#414: an answer that only restates a harness instruction is sent back once, tools off, then given up", async () => {
+  const { rescueGaps, RESCUE_NUDGE_ECHO } = await import("../src/core/loop/stop-gate")
+  const noData = { afterTools: true, toolsInTurn: true, dataInTurn: true, gaps: [], errored: ["vn_ratios"], usableData: false, fetchedData: false }
+  for (const text of [ECHO_ISSUE, ECHO_ISSUE_ABLATED, RESCUE_EMPTY_FINAL, "Answer now from the data you have. Do not write a task-status line.", "1. State which data is missing.\n2. Do not write figures."]) {
+    // The nudge is never stored: the one after an echo names the failed tools again.
+    expect(judgeStop(step({ ...noData, text }), ["empty"])).toEqual({ action: "continue", kind: "nudge-echo", nudge: rescueGaps([], ["vn_ratios"]), toolChoice: "none" })
+    expect(judgeStop(step({ ...noData, text }), ["empty", "nudge-echo"])).toEqual({ action: "give-up", kind: "nudge-echo" })
+    expect(judgeStop(step({ ...noData, text }), ["empty", "empty"])).toEqual({ action: "give-up", kind: "nudge-echo" })
+  }
+  // Only a clock or a file answered: nothing names the failed tools, the plain echo rescue.
+  const clock = step({ ...noData, text: ECHO_ISSUE, usableData: true })
+  expect(judgeStop(clock, ["empty"])).toEqual({ action: "continue", kind: "nudge-echo", nudge: RESCUE_NUDGE_ECHO, toolChoice: "none" })
+  // With data in the turn: a copy of the rescue is an echo, a paraphrase may be an answer.
+  const some = { ...noData, usableData: true, fetchedData: true }
+  expect(judgeStop(step({ ...some, text: RESCUE_EMPTY_FINAL }), ["empty"])).toEqual({ action: "continue", kind: "nudge-echo", nudge: RESCUE_NUDGE_ECHO, toolChoice: "none" })
+  expect(judgeStop(step({ ...some, text: ECHO_ISSUE }), ["empty"])).toEqual({ action: "accept" })
+  expect(RESCUE_NUDGE_ECHO).toStartWith("<nhac_nho>\n")
+  expect(judgeStop(step({ ...noData, text: ECHO_ISSUE }), ["empty"], new Set(["gate-nudge-echo"]))).toEqual({ action: "accept" })
+})
+
+test("#414: real answers, advice to the user and turns without harness text are not instruction echoes", () => {
+  const noData = { afterTools: true, toolsInTurn: true, dataInTurn: true, gaps: [], errored: ["vn_ratios"], usableData: false, fetchedData: false }
+  for (const text of [
+    "Hiện chưa lấy được P/E và ROE của VCB và BID: các tool dữ liệu đều báo lỗi trong lượt này. Bạn thử hỏi lại sau.",
+    "VCB has a P/E of 15.2 and an ROE of 18%. BID trades at a P/E of 10.1.",
+    "The data tools returned errors, so I could not get P/E or ROE for VCB and BID. Please try again later.",
+    "Please try again later; the data tools returned errors.",
+    "If you need the data, ask again in a few minutes.",
+    "Note: data for BID is missing.",
+    "Answer: VCB has a P/E of 15.2; BID data is missing.",
+    `${ECHO_ISSUE}\nHiện chưa lấy được P/E và ROE của VCB và BID.`,
+  ]) expect(judgeStop(step({ ...noData, text }), ["empty"])).toEqual({ action: "accept" })
+  // Nothing from the harness was read this turn: no tool ran, no rescue was sent.
+  expect(judgeStop(step({ text: ECHO_ISSUE }), [])).toEqual({ action: "accept" })
+  // A tool brought data and no rescue was sent: advice in English to an English question stands.
+  const advice = "Use the P/E from the latest results. Never rely on a single figure."
+  expect(judgeStop(step({ text: advice, afterTools: true, toolsInTurn: true, dataInTurn: true, usableData: true, fetchedData: true }), [])).toEqual({ action: "accept" })
+})
+
+test("#414 review: a failed source beside an erroring tool keeps the clause against 'reconnecting'", async () => {
+  const { rescueGaps } = await import("../src/core/loop/stop-gate")
+  for (const nudge of [rescueGaps(["vn_quote_history"], ["vn_ratios"]), rescueGaps([], ["vn_ratios"], { retry: true })])
+    expect(nudge).toContain("Do not say you are fixing or reconnecting the source.")
+})
+
+test("#414 review: right after tool errors, with no rescue sent, an answer telling the user what to do stands", () => {
+  const noData = { afterTools: true, toolsInTurn: true, dataInTurn: true, gaps: [], errored: ["vn_quote"], usableData: false, fetchedData: false }
+  expect(judgeStop(step({ ...noData, text: "Provide a valid ticker symbol so I can fetch the data." }), [])).toEqual({ action: "accept" })
+})
+
+test("#414 review: a curly apostrophe is still an order", async () => {
+  const { echoesInstruction } = await import("../src/core/loop/stop-gate")
+  expect(echoesInstruction("Don’t fill in numbers for missing parts. State clearly what is missing.")).toBe(true)
+})
+
+test("#414 review: sentences that start with a verb-like word, and advice, are answers even after a rescue", async () => {
+  const { echoesInstruction, copiesRescue } = await import("../src/core/loop/stop-gate")
+  for (const text of [
+    "State Bank of Vietnam data shows the rate at 4.5%.",
+    "State Bank of Vietnam data is missing.",
+    "Call options give the holder the right to buy; see the data.",
+    "Report date is missing for BID.",
+    "List prices are in the data table.",
+    "Use cases include data pipelines.",
+    "Provide a valid ticker symbol so I can fetch the data.",
+    "Give me the ticker and I will fetch the missing data.",
+    "Tell me the ticker of the company that is missing.",
+    "Never rely on a single source of income.",
+    "Use the P/E from the latest results. Never rely on a single figure.",
+    "Work in progress inventory figures rose to 1,200 tỷ.",
+    "Mark Mobius said the data was good.",
+    "If you want the figures, provide the ticker.",
+    "Use FiinTrade or Vietstock as data sources for the missing part.",
+    "Give priority to companies with strong cash-flow numbers.",
+    "Include only companies whose audited results are out.",
+    "Keep position sizes small when the results are uncertain.",
+    "When the results come out, report dates may move.",
+    "Do not buy before the missing results are published.",
+    "Use SUM(B2:B10) to add the numbers.",
+    "Answer: BID data is missing.",
+    "Note that BID data is missing.",
+    "These sources returned no data this turn: vn_ratios.",
+    "The data is missing.",
+    "Data is missing.",
+  ]) expect([text, echoesInstruction(text), copiesRescue(text)]).toEqual([text, false, false])
+  // A turn without a failed data call: an English order can be what the user asked for.
+  for (const turn of [{}, { afterTools: true, toolsInTurn: true, dataInTurn: true, usableData: true, fetchedData: true }, { afterTools: true, toolsInTurn: true, dataInTurn: true, usableData: true, fetchedData: false, gaps: [], errored: [] }])
+    expect(judgeStop(step({ ...turn, text: "Write the report in plain words. State clearly what is missing." }), ["empty"])).toEqual({ action: "accept" })
+})
+
+test("#414 review: other shapes of the echoed instruction are still caught", async () => {
+  const { echoesInstruction, copiesRescue, rescueGaps } = await import("../src/core/loop/stop-gate")
+  for (const text of [
+    `"${ECHO_ISSUE}"`,
+    `- ${ECHO_ISSUE}`,
+    "Tell the user that no data is available. Do not invent numbers.",
+    "If the data for Q3 2026 is missing, clearly state which parts could not be fetched.",
+  ]) expect([text, echoesInstruction(text)]).toEqual([text, true])
+  // The rescue itself, with the tag or the tool names, in part or whole.
+  for (const text of [rescueGaps([], ["vn_ratios"]), rescueGaps(["vn_quote"]), rescueGaps([], ["vn_ratios"], { retry: true })])
+    expect(copiesRescue(text.replace(/<\/?nhac_nho>/g, "").trim())).toBe(true)
+  expect(copiesRescue("Answer now from the data you have, or call a tool if data is missing.")).toBe(true)
+  expect(copiesRescue(`${RESCUE_EMPTY_FINAL} VCB: P/E 15,2.`)).toBe(false)
+})
+
+test("#414 review: a rescue copied in a turn where no tool ran leaves tools on", async () => {
+  const { RESCUE_EMPTY } = await import("../src/core/loop/stop-gate")
+  expect(judgeStop(step({ text: "Do not write a task-status line." }), ["empty"])).toEqual({ action: "continue", kind: "nudge-echo", nudge: RESCUE_EMPTY, toolChoice: "auto" })
+})

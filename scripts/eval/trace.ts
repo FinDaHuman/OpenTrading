@@ -67,7 +67,7 @@ export type TraceEvent =
       ungrounded?: string[]
       /** Harness markup the loop took out of the answer (loop/markup.ts). */
       markup_stripped?: string[]
-      /** The harness wrote the answer: the model gave none and sources failed (loop/failures.ts gapsAnswer). */
+      /** The harness wrote the answer: the model gave none (or only echoed a reminder) and no data tool brought data (loop/failures.ts gapsAnswer). */
       fallback?: boolean
       /** Finished model steps, subagents included. */
       model_steps: number

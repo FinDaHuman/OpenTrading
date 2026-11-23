@@ -61,7 +61,7 @@ import { answerAfterTools } from "./loop/history-shape"
 import { markupStreamFilter, stripMarkup, type MarkupFilter } from "./loop/markup"
 import type { PromptProfile } from "./prompt/assemble"
 import { activeBudget, MIN_REQUEST_BUDGET, RequestBudget, type TurnBudget } from "./request-budget"
-import { answeredAndClosedTodos, figureSources, isEmptyAnswer, isUnfetched, GAPS_RESCUE_START, judgeStop, MAX_RECOVERIES, sourcesFailed, ranDataTool, stripEchoes, ungroundedInTurn, unfetchedFigures, type RecoveryKind, type Verdict } from "./loop/stop-gate"
+import { answeredAndClosedTodos, figureSources, isEmptyAnswer, isUnfetched, GAPS_RESCUE_START, judgeStop, MAX_RECOVERIES, noDataFrom, ranDataTool, stripEchoes, ungroundedInTurn, unfetchedFigures, type RecoveryKind, type Verdict } from "./loop/stop-gate"
 import { MAX_TOOLS_PER_REQUEST, modelOutput, stripImages, type BuiltToolSet, type ToolRegistry, type ToolSetOptions } from "./tools/registry"
 import { describeTool, LOADED_PREFIX, resolveToolName } from "./tools/search"
 import { cleanToolErrors, toolErrorText } from "./tools/errors"
@@ -345,6 +345,7 @@ const RESCUE_NOTICE: Record<RecoveryKind, string> = {
   unfetched: "Câu trả lời trên ghi số liệu kèm nguồn nhưng chưa gọi tool nào: đừng dùng các số đó.",
   draft: "Model viết bản nháp (dàn ý, việc sẽ làm) thay vì câu trả lời.",
   "question-echo": "Model chỉ lặp lại câu hỏi thay vì trả lời.",
+  "nudge-echo": "Model chép lại lời nhắc của harness thay vì trả lời.",
 }
 
 type AssistantMessage = Extract<ModelMessage, { role: "assistant" }>
@@ -1569,6 +1570,7 @@ async function* runTurn(opts: RunOptions, budget?: TurnBudget): AsyncGenerator<A
             gaps: failures.gaps,
             usableData: failures.usable,
             fetchedData: failures.fetched,
+            errored: failures.errored,
             unfetched,
           },
           recoveries,
@@ -1578,7 +1580,9 @@ async function* runTurn(opts: RunOptions, budget?: TurnBudget): AsyncGenerator<A
     const capped = stepsUsed >= maxSteps || (!!budget && budget.remaining() <= 0)
     const continuing = recoveries.at(-1) === "length"
     // Capped, a step with text is the turn's last word (the summary may well say what is missing).
-    if (verdict.action === "accept" || (verdict.action === "continue" && verdict.kind !== "question-echo" && capped && !isEmptyAnswer(last.stepText ?? ""))) {
+    // An echo is never the answer, capped or not.
+    const echo = verdict.action === "continue" && (verdict.kind === "question-echo" || verdict.kind === "nudge-echo")
+    if (verdict.action === "accept" || (verdict.action === "continue" && !echo && capped && !isEmptyAnswer(last.stepText ?? ""))) {
       messages = continuing ? continueAnswer(kept, response) : [...kept, ...response]
       // Out of recoveries, the answer stands: the user still hears that nothing backs its figures.
       if (!opts.finalTool && !continuing && isUnfetched({ unfetched })) yield { type: "notice", text: "Câu trả lời ghi số liệu kèm nguồn nhưng lượt này không có tool nào chạy: các số đó chưa được kiểm chứng." }
@@ -1596,13 +1600,16 @@ async function* runTurn(opts: RunOptions, budget?: TurnBudget): AsyncGenerator<A
     }
     // Gave up: say why, and keep a placeholder so the session file shows what happened.
     unanswered = true
-    if (verdict.kind === "question-echo") yield { type: "retract", steps: droppedRequests(response, last.steps) }
-    // Every source failed and the model wrote nothing: the harness says what is missing, no figure.
+    if (verdict.kind === "question-echo" || verdict.kind === "nudge-echo") yield { type: "retract", steps: droppedRequests(response, last.steps) }
+    // Every data call failed or errored and the model wrote nothing, or only an echoed instruction
+    // (#414): the harness says what is missing, no figure.
     // Not on a machine-response run (finance): its answer has a contract of its own.
-    if (verdict.kind === "empty" && !finance && sourcesFailed({ gaps: failures.gaps, fetchedData: failures.fetched })) {
-      const text = gapsAnswer(failures.gaps)
+    const failed = noDataFrom({ gaps: failures.gaps, errored: failures.errored, fetchedData: failures.fetched, usableData: failures.usable })
+    if ((verdict.kind === "empty" || verdict.kind === "nudge-echo") && !finance && failed) {
+      const text = gapsAnswer(failed.gaps, failed.errored)
       yield { type: "text-delta", text }
-      yield { type: "notice", text: "Model không viết được câu trả lời khi nguồn dữ liệu lỗi; câu trên do OpenTrading tự ghi phần còn thiếu." }
+      const what = verdict.kind === "nudge-echo" ? "Model chỉ chép lại lời nhắc của harness" : "Model không viết được câu trả lời"
+      yield { type: "notice", text: `${what} khi không lấy được dữ liệu; câu trên do OpenTrading tự ghi phần còn thiếu.` }
       fallback = true
       messages = [...kept, ...dropFinalText(response), { role: "assistant", content: text }]
       break
@@ -1614,6 +1621,8 @@ async function* runTurn(opts: RunOptions, budget?: TurnBudget): AsyncGenerator<A
       type: "notice",
       text: verdict.kind === "question-echo"
         ? "Model chỉ lặp lại câu hỏi và chưa trả lời. Kết quả tool ở phía trên; thử hỏi lại hoặc đổi model."
+        : verdict.kind === "nudge-echo"
+        ? `Model chỉ chép lại lời nhắc của harness và chưa trả lời.${usedTools ? " Kết quả tool ở phía trên; thử" : " Thử"} hỏi lại hoặc đổi model.`
         : usedTools
         ? `Model không trả lời sau khi gọi tool (câu trả lời rỗng).${reason} Kết quả tool ở phía trên; thử hỏi lại hoặc đổi model.`
         : `Model trả về câu trả lời rỗng.${reason} Thử hỏi lại hoặc đổi model.`,

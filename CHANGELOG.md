@@ -78,6 +78,16 @@ adopt Semantic Versioning when it exposes a stable public API.
   leave in its `uri`; for any server but the data server it is now reviewed, logged and marked like that server's
   tools. The eval builds MCP cases the same way, with five new ones (103-107). Measured with a real model: not yet.
 
+- A turn whose data tools all returned errors of their own (an MCP `isError`, an eval replay miss) and that
+  got nothing else to answer from no longer ends with a harness instruction as its answer (#414). The
+  empty-answer rescue now names those tools, as it does for a source that is down, but asks the model to say
+  what the tool's error said rather than call it an outage, and on the tools-on try allows a corrected call.
+  After a rescue, an answer that copies the rescue, or that only restates an instruction when every data call
+  failed ("If no data is available for any part, state clearly what is missing."), is sent back once, then
+  given up; with no data in the turn the harness writes the answer naming what is missing, no figure. These
+  tools are not data gaps: the gap line and `dataGaps` are unchanged. The echo check can be turned off with the ablation `gate-nudge-echo`; the new
+  rescue wording has no ablation of its own.
+
 - `chart_render` with `from_call` takes the unit from the data server's `units` instead of the model (#329):
   candles of `vn_equity_ohlcv` show "nghìn đ", the price board "đ", indices "điểm", volumes "cp", in the chart
   title and the summary. A model unit of other dimensions or scale ("đ" for a price in nghìn đồng, a 1000x
