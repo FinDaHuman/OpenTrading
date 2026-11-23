@@ -114,6 +114,14 @@ test("the bundled skills all load cleanly", async () => {
   ])
 })
 
+// #418: thep-vn reads input prices with web_search; loading the skill must make it callable.
+test("thep-vn preloads web_search for ore and coal prices", async () => {
+  const { skills } = await loadSkills(skillRoots(await root()).filter((r) => r.source === "bundled"))
+  const steel = skills.find((s) => s.name === "thep-vn")!
+  expect(steel.uses_tools).toContain("web_search")
+  expect(steel.uses_tools).toContain("financial_detail")
+})
+
 // #419: the model called the company-list tools directly; not preloaded, each call cost a step.
 test("bao-hiem-vn preloads the tool that lists insurers, and its body names only preloaded ones", async () => {
   const { skills } = await loadSkills(skillRoots(await root()).filter((r) => r.source === "bundled"))

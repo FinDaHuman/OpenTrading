@@ -16,7 +16,7 @@ import { dataDir } from "./paths"
 import type { Skill } from "./skills/schema"
 import { currentTimeTool } from "./tools/builtin/current-time"
 import { readResultTool } from "./tools/builtin/read-result"
-import { loadSkillTool } from "./tools/builtin/load-skill"
+import { loadSkillTool, loadableSkillNames } from "./tools/builtin/load-skill"
 import { chartRenderTool } from "./tools/chart/render"
 import { doctorLocalTool, sessionHistoryTools } from "./tools/session/history"
 import { sendMessageTool, spawnSubagentTool, stopAgentTool } from "./tools/subagent/spawn"
@@ -223,7 +223,13 @@ export function initRuntime(opts: {
       },
     }),
   )
-  registry.register(toolSearchTool(registry, () => mcp.status().filter((s) => s.state === "connecting").map((s) => s.name)))
+  registry.register(
+    toolSearchTool(
+      registry,
+      () => mcp.status().filter((s) => s.state === "connecting").map((s) => s.name),
+      () => loadableSkillNames(opts.skills(), new Set(registry.list().map((d) => d.name))),
+    ),
+  )
   const git = new GitContext()
   const auto = new AutoReviewer({
     target: async () => {

@@ -4,7 +4,7 @@ description: "Phase/wave: use dinh-vi-chu-ky-vn. Analyses VN steel by the raw-ma
 match_text: "Pha/sóng: dùng skill chu kỳ. Phân tích ngành thép VN theo spread nguyên liệu–thành phẩm, phòng vệ thương mại, cơ cấu sản phẩm và biên lãi gộp. Dùng khi hỏi xu hướng nhóm thép, đọc kết quả nhà máy thép, lãi gộp hay chi phí đầu vào."
 activation: auto
 requires_tools: [financial_detail]
-uses_tools: [financial_detail, financial_ratios, planned_targets, analyst_consensus, peer_compare, news_symbol, news_market, symbol_lookup, vn_company]
+uses_tools: [financial_detail, financial_ratios, planned_targets, analyst_consensus, peer_compare, news_symbol, news_market, symbol_lookup, vn_company, web_search]
 triggers:
   exclude_keywords: [đỉnh chu kỳ, giai đoạn phân phối, đầu phục hồi, giai đoạn nào, dẫn sóng, pha nào, chu kỳ ngành, sóng ngành, luân chuyển ngành, pha thị trường, chu kỳ thị trường, giai đoạn thị trường, sóng tiếp theo, cuối sóng, giữa sóng, đầu sóng, bank dẫn, chứng dẫn, rotation, pha tiếp theo]
   keywords: [ngành thép, thép xây dựng, thép cuộn, nhà máy thép, sản xuất thép, biên lợi nhuận thép, thép nhập khẩu, sản lượng thép, lãi gộp thép, chi phí đầu vào thép]
@@ -52,6 +52,8 @@ rising raw materials at once cut profit even as output rose.
 weights from mill releases (`news_market`), stating the period.
 
 **Bước 2: Both ends of the spread (in parallel).**
+
+An input-cost question ("what does coal/ore do to steel?") is a data question, not a general one: before concluding, fetch at least one dated iron ore or coking coal price and the mills' gross margin. Read the mills the user names; otherwise HPG (blast furnace: coal and ore are its own inputs) and HSG, NKG (they buy hot-rolled coil, so coal reaches them only through HRC prices). If no comparable input price is found, say that it is missing and what was searched; never answer from general knowledge alone.
 
 `web_search` for prices from mill/exchange/industry-body releases (iron ore, coking coal, steel); record the date, period, unit, grade and delivery terms before comparing. `financial_detail` for revenue, cost of goods → quarterly gross margin. The default COMMO set of `yf_commodities` has no iron ore/coking coal/steel: do not use it to build the spread. Without comparable prices, do not compute the spread; the gross margin is only supporting data.
 
@@ -138,6 +140,12 @@ in ramp-up: state the capacity running versus design.
 Hỏi: Bán nhiều thép hơn mà lãi không theo, tại sao?
 Đạt khi: the finished-product − raw-material pair with both ends' periods, output/utilisation,
 quarterly gross margin, the inventory lag, and a verdict following the Q1→Q4 tree.
+
+**Ví dụ 2:**
+Hỏi: Thép chịu gì từ giá than?
+Đạt khi: a dated coking coal (or ore) price from `web_search` and the gross margin of HPG/HSG/NKG
+from `financial_detail` are fetched before the conclusion, each cited; the answer separates the
+blast-furnace mill from the coil buyers and states any missing price instead of filling it in.
 
 ## Trực quan hóa
 
