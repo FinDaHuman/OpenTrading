@@ -1,7 +1,7 @@
 import { startHttpServer } from "./remote-mcp"
 
 /** Synthetic figures: VCB is available; BID's upstream source reports an MCP tool error. */
-export function startFailureScenario() {
+export function startFailureScenario(options: { vcbFailures?: number } = {}) {
   const calls: string[] = []
   const remote = startHttpServer({ onRequest: async (request, method) => {
     if (method !== "tools/list" && method !== "tools/call") return
@@ -13,9 +13,10 @@ export function startFailureScenario() {
     }
     const name = body.params?.name ?? ""
     calls.push(name)
-    const result = name === "vcb_ratios"
+    const vcbAvailable = name === "vcb_ratios" && calls.filter((call) => call === "vcb_ratios").length > (options.vcbFailures ?? 0)
+    const result = vcbAvailable
       ? { content: [{ type: "text", text: "TEST DATA, not market data: VCB, year 2025, P/E 8.4, ROE 19.1%." }] }
-      : { isError: true, content: [{ type: "text", text: "MCP server data: temporary error; BID test ratios source is unavailable." }] }
+      : { isError: true, content: [{ type: "text", text: `MCP server data: temporary error; ${name === "vcb_ratios" ? "VCB" : "BID"} test ratios source is unavailable.` }] }
     return Response.json({ jsonrpc: "2.0", id: body.id, result }, { headers })
   } })
   return { ...remote, calls }
