@@ -1,0 +1,87 @@
+{
+  "syntheticData": true,
+  "maxRequestsPerRun": 10,
+  "runs": [
+    {
+      "model": "gemini-3.1-flash-lite",
+      "nudge": 4,
+      "stop": 8,
+      "requests": 2,
+      "outcome": "completed",
+      "gaps": [
+        "bid_ratios"
+      ],
+      "text": "Dưới đây là các chỉ số tài chính năm 2025 thu thập được từ dữ liệu kiểm thử:\n\nNguồn: MCP data · 01/01/2026.\n\n| Ticker | P/E (lần) | ROE (%) |\n| --- | --- | --- |\n| VCB | 8,4 | 19,1 |\n| BID | Không có dữ liệu | Không có dữ liệu |\n\nDữ liệu cho BID không lấy được do lỗi từ nguồn cung cấp thông tin. Bạn vui lòng kiểm tra lại các nguồn công bố chính thức hoặc thử lại sau.",
+      "calls": [
+        "vcb_ratios",
+        "bid_ratios"
+      ],
+      "exitCode": 0
+    },
+    {
+      "model": "gemini-3.1-flash-lite",
+      "nudge": 2,
+      "stop": 8,
+      "requests": 3,
+      "outcome": "completed",
+      "gaps": [
+        "bid_ratios"
+      ],
+      "text": "Dưới đây là các chỉ số tài chính cho năm 2025 từ dữ liệu thử nghiệm:\n\nNguồn: MCP data · 2025.\n\n| Ticker | P/E | ROE |\n| --- | --- | --- |\n| VCB | 8,4 | 19,1% |\n\nDữ liệu cho mã **BID** hiện không lấy được do lỗi tạm thời từ nguồn cung cấp dữ liệu. Mình không thực hiện suy đoán đối với chỉ số này.",
+      "calls": [
+        "bid_ratios",
+        "vcb_ratios"
+      ],
+      "exitCode": 0
+    },
+    {
+      "model": "gemini-3.1-flash-lite",
+      "nudge": 2,
+      "stop": 4,
+      "requests": 2,
+      "outcome": "completed",
+      "gaps": [
+        "bid_ratios"
+      ],
+      "text": "Dưới đây là các chỉ số tài chính cơ bản của VCB và BID cho năm 2025 từ dữ liệu thử nghiệm:\n\nNguồn: MCP data · 2025.\n\n| Mã cổ phiếu | P/E (lần) | ROE (%) |\n| :--- | :--- | :--- |\n| VCB | 8,4 | 19,1 |\n| BID | Không lấy được dữ liệu | Không lấy được dữ liệu |\n\nDữ liệu về chỉ số P/E và ROE của BID năm 2025 không lấy được do lỗi từ nguồn cung cấp dữ liệu thử nghiệm. Mình không có cơ sở dữ liệu khác cho các chỉ số này nên không thể cung cấp thông tin thay thế.",
+      "calls": [
+        "vcb_ratios",
+        "bid_ratios"
+      ],
+      "exitCode": 0
+    },
+    {
+      "model": "gemini-2.5-flash-lite",
+      "nudge": 4,
+      "stop": 8,
+      "requests": 1,
+      "outcome": "failed",
+      "gaps": [],
+      "text": "(lỗi)",
+      "calls": [],
+      "exitCode": 0
+    },
+    {
+      "model": "gemini-2.5-flash-lite",
+      "nudge": 2,
+      "stop": 8,
+      "requests": 1,
+      "outcome": "failed",
+      "gaps": [],
+      "text": "(lỗi)",
+      "calls": [],
+      "exitCode": 0
+    },
+    {
+      "model": "gemini-2.5-flash-lite",
+      "nudge": 2,
+      "stop": 4,
+      "requests": 1,
+      "outcome": "failed",
+      "gaps": [],
+      "text": "(lỗi)",
+      "calls": [],
+      "exitCode": 0
+    }
+  ]
+}
