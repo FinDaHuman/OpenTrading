@@ -578,6 +578,136 @@ test("#396: a title that arrives while the turn's index line is being written is
   expect(indexWrites).toBe(2)
 })
 
+/** Holds the next index append until released; a session-file append can be made to fail meanwhile. */
+function holdIndexWrite() {
+  const realAppend = store.sessionFiles.append
+  let release!: () => void
+  const gate = new Promise<void>((r) => (release = r))
+  let indexStarted!: () => void
+  const started = new Promise<void>((r) => (indexStarted = r))
+  let held = false
+  const failure: { index?: Error; session?: Error } = {}
+  spy("append").mockImplementation(async (file: string, text: string) => {
+    const isIndex = file.endsWith("index.jsonl")
+    if (isIndex && !held) {
+      held = true
+      indexStarted()
+      await gate
+    }
+    const error = isIndex ? failure.index : failure.session
+    if (error) {
+      if (isIndex) failure.index = undefined
+      throw error
+    }
+    return realAppend(file, text)
+  })
+  return { started, release, failure }
+}
+
+test("a turn queued while the previous turn's index line is being written is not reported as unsaved", async () => {
+  const s = await sessionWith(5)
+  const index = holdIndexWrite()
+  const first = s.appendTurn(turn(6), info)
+  await index.started
+  const second = s.appendTurn(turn(7), info)
+  index.release()
+  const r6 = await first
+  // Read before turn 7's own receipt arrives, as the TUI does.
+  const said6 = tui.receiptLines(s, r6)
+  const r7 = await second
+  const said7 = tui.receiptLines(s, r7)
+  // No false "Chưa lưu được lượt 7: lỗi không rõ", so no "Đã lưu bù lượt 7" after it.
+  expect({ said6, said7 }).toEqual({ said6: [], said7: [] })
+  expect(r6).toMatchObject({ pending: [], indexPending: false, error: undefined })
+  expect(r7).toMatchObject({ pending: [], indexPending: false, error: undefined })
+  expect([...r6.saved, ...r7.saved]).toEqual([6, 7])
+  expect((await loadSession(s.id)).messages).toEqual([1, 2, 3, 4, 5, 6, 7].flatMap(turn))
+  expect((await listSessions()).find((x) => x.id === s.id)?.turns).toBe(7)
+})
+
+test("a compaction, a redact line or a card state queued while the index line is being written is not reported as unsaved", async () => {
+  const queue: [string, (s: import("../src/core/session/store").Session) => Promise<import("../src/core/session/store").SaveReceipt>][] = [
+    ["compact", (s) => s.appendCompact({ trigger: "manual", before: 2, after: 1, messages: turn(9) })],
+    ["redact", (s) => s.appendRedaction([{ kind: "lesson", id: 1, versions: [1] }])],
+    ["card", (s) => s.appendCardState("c1", "dismissed")],
+  ]
+  for (const [kind, append] of queue) {
+    const s = await sessionWith(1)
+    // An error already over must not come back as this receipt's reason either.
+    const failing = spyOn(store.sessionFiles, "append").mockImplementationOnce(async () => {
+      throw fail("lỗi cũ", "EIO")
+    })
+    expect((await s.appendTurn(turn(2), info)).error?.message).toBe("lỗi cũ")
+    // Restored first: holdIndexWrite calls the real append.
+    failing.mockRestore()
+    const index = holdIndexWrite()
+    const first = s.appendTurn(turn(3), info)
+    await index.started
+    const second = append(s)
+    index.release()
+    const receipt = await first
+    expect({ kind, ...receipt }).toMatchObject({ kind, pending: [], pendingCompactions: 0, pendingRedactions: 0, error: undefined })
+    expect((await second).error).toBeUndefined()
+    expect((await lines(fileOf(s))).filter((l) => JSON.parse(l).type === kind)).toHaveLength(1)
+    for (const held of spies.splice(0)) held.mockRestore()
+  }
+})
+
+test("a turn queued while the index line is being written that then cannot be saved is reported with the real error", async () => {
+  const s = await sessionWith(1)
+  const index = holdIndexWrite()
+  const first = s.appendTurn(turn(2), info)
+  await index.started
+  const second = s.appendTurn(turn(3), info)
+  index.failure.session = fail("đĩa đầy", "ENOSPC")
+  index.release()
+  const r2 = await first
+  const r3 = await second
+  expect(r2.saved).toEqual([2])
+  expect(r3).toMatchObject({ saved: [], pending: [3] })
+  for (const receipt of [r2, r3]) if (receipt.pending.length > 0) expect(receipt.error?.message).toBe("đĩa đầy")
+  expect(tui.receiptLines(s, r3).map((l) => l.text).join()).toContain("chưa lưu được lượt 3: đĩa đầy")
+  index.failure.session = undefined
+  expect(await s.flush()).toMatchObject({ saved: [3], pending: [], error: undefined })
+})
+
+test("an index line that could not be written is not the reason given for a turn queued meanwhile", async () => {
+  const s = await sessionWith(1)
+  const index = holdIndexWrite()
+  index.failure.index = fail("index bận", "EBUSY")
+  const first = s.appendTurn(turn(2), info)
+  await index.started
+  const second = s.appendTurn(turn(3), info)
+  index.release()
+  const r2 = await first
+  expect(r2.pending).toEqual([])
+  expect(tui.receiptLines(s, r2).map((l) => l.text).join()).not.toContain("lượt 3")
+  expect(await second).toMatchObject({ pending: [], indexPending: false, error: undefined })
+  expect((await listSessions()).find((x) => x.id === s.id)?.turns).toBe(3)
+})
+
+test("flush leaves nothing behind: a turn queued while it writes the index line is on disk when it resolves", async () => {
+  const s = await sessionWith(1)
+  const index = holdIndexWrite()
+  // The index line of turn 2 fails, so the flush has only that line to write.
+  index.failure.index = fail("index bận", "EBUSY")
+  const first = s.appendTurn(turn(2), info)
+  await index.started
+  index.release()
+  expect((await first).indexPending).toBe(true)
+  for (const held of spies.splice(0)) held.mockRestore()
+
+  const retry = holdIndexWrite()
+  const flushed = s.flush()
+  await retry.started
+  void s.appendTurn(turn(3), info)
+  retry.release()
+  // Switching, exit and reopening trust this receipt: the file is read back right after it.
+  expect(await flushed).toMatchObject({ pending: [], indexPending: false, error: undefined })
+  expect(s.hasPending).toBe(false)
+  expect((await loadSession(s.id)).messages).toEqual([1, 2, 3].flatMap(turn))
+})
+
 test("R42: a session that stopped saving is not reopened, and the refusal says why trying again will not help", async () => {
   const s = await stoppedSession("Đã ngừng")
   const elsewhere = await sessionWith(1)
