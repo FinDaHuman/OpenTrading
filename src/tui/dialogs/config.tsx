@@ -66,8 +66,9 @@ export function ConfigDialog(props: { runtime: Runtime }) {
     const provider = selected?.model ? selected.provider ?? state.provider : state.provider
     const model = selected?.model ?? state.model
     if (!last || last.provider !== provider || last.model !== model || last.durationMs <= 30_000) return undefined
-    const faster = provider === "google"
-      ? toolModels(selected).find((choice) => typeof choice.value === "object" && choice.value.provider === provider && /flash-lite/i.test(choice.value.model) && choice.value.model !== model && !("unavailable" in choice.value))
+    // Names sort by version, so the last match is the newest; a Flash-Lite that is slow has no faster sibling.
+    const faster = provider === "google" && !/flash-lite/i.test(model ?? "")
+      ? toolModels(selected).findLast((choice) => typeof choice.value === "object" && choice.value.provider === provider && /flash-lite/i.test(choice.value.model) && !("unavailable" in choice.value))
       : undefined
     return `Lần gọi web gần nhất mất ${Math.round(last.durationMs / 1000)} giây.${faster ? ` Có thể chọn ${faster.label}.` : " Có thể chọn model nhanh hơn."}`
   }
@@ -480,7 +481,7 @@ export function ConfigDialog(props: { runtime: Runtime }) {
               },
               {
                 label: "Model cho tìm kiếm / đọc web",
-                hint: slowWebModelHint() ?? webModel() ?? "Mặc định: model của phiên · enter để chọn model rẻ hơn",
+                hint: [webModel() ?? "Mặc định: model của phiên", slowWebModelHint() ?? (webModel() ? undefined : "enter để chọn model rẻ hơn")].filter(Boolean).join(" · "),
                 mark: webModel() ? "●" : "○",
                 value: "webModel" as Setting,
               },

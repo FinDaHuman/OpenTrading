@@ -26,6 +26,7 @@ export interface NativeSearch {
   sources: SearchSource[]
 }
 
+/** The last web side-model call and how long it took, timeouts included: /config hints at a faster model (#388). */
 export let lastWebModelCall: { provider: string; model: string; durationMs: number } | undefined
 
 export async function measureWebModelCall<T>(target: Pick<Target, "provider" | "model">, run: () => Promise<T>, now = Date.now): Promise<T> {
