@@ -180,7 +180,7 @@ export class AutoReviewer {
     if (paused) return { decision: "ask", why: `model duyệt hết quota, tạm hỏi bạn tới ${hhmm(paused)}` }
     const target = await this.deps.target().catch(() => undefined)
     if (!target) return { decision: "ask", why: "chưa có model để duyệt (gõ /model)" }
-    const mcp = mcpServerOf(def)
+    const mcp = mcpServerOf(def, input)
     let verdict: Verdict
     let config: AutoModeConfig | undefined
     try {

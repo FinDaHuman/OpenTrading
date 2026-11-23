@@ -51,14 +51,19 @@ export interface McpServer {
  * which a server chooses and which is sanitized or shortened): `source` is "mcp:<server>", and
  * `sourceEnvelope` is set only for the data server (manager.ts, catalog.ts isDataServer). The
  * classifier reads it next to the call, so a third-party tool named like a read ("search_notes")
- * is still seen as sending its arguments out of the trust boundary (#413). Undefined for others,
- * including list_mcp_resources / read_mcp_resource ("mcp:resources"), which name the server in
- * their arguments; a server's tools are always "mcp__<server>__…" (mcp/naming.ts).
+ * is still seen as sending its arguments out of the trust boundary (#413). A server's tools are
+ * always "mcp__<server>__…" (mcp/naming.ts); read_mcp_resource ("mcp:resources") takes the server
+ * as an argument and asks the manager about it (`mcpServer`). Undefined for other tools, including
+ * list_mcp_resources, which sends a server nothing.
  */
-export function mcpServerOf(def: Pick<ToolDef, "name" | "source" | "sourceEnvelope">): McpServer | undefined {
+export function mcpServerOf(def: Pick<ToolDef, "name" | "source" | "sourceEnvelope" | "mcpServer">, input?: unknown): McpServer | undefined {
+  if (def.mcpServer) return def.mcpServer(input)
   if (!def.name.startsWith("mcp__") || !def.source?.startsWith("mcp:")) return undefined
   return { server: def.source.slice("mcp:".length), trusted: def.sourceEnvelope === true }
 }
+
+/** Whether ▸▸ sends this read-only call to the classifier (ToolDef.autoReview). */
+export const autoReviews = (def: Pick<ToolDef, "autoReview">, input: unknown) => (typeof def.autoReview === "function" ? def.autoReview(input) : def.autoReview === true)
 
 /** The keys a call's JSON line carries after the call itself: its MCP server, then which sub-agent made it. */
 export const callMarks = (mcp: McpServer | undefined, agent: string | undefined) => ({
@@ -172,21 +177,22 @@ export class ActionLog {
     // A read that runs without asking (a plain read_file, a data-server quote) is not an action
     // that needs judging, and dozens per turn would push the scripts out of the log. A tool that
     // only claims to be read-only (another MCP server) is: its arguments go to another program.
-    if (def.readOnly && !def.autoReview && !ALWAYS_LOGGED.has(def.name) && def.askFor?.(input) === undefined) return
-    const mcp = mcpServerOf(def)
+    const review = autoReviews(def, input)
+    if (def.readOnly && !review && !ALWAYS_LOGGED.has(def.name) && def.askFor?.(input) === undefined) return
+    const mcp = mcpServerOf(def, input)
     this.entries.push({
       kind: "action",
       tool: def.name,
       input: compactInput(def, input),
       ...(agent ? { agent: `${agent.type}#${agent.id}` } : {}),
-      ...(!def.readOnly || def.autoReview ? { effect: true as const } : {}),
+      ...(!def.readOnly || review ? { effect: true as const } : {}),
       ...(mcp ? { mcp } : {}),
     })
   }
 
   /** The call just checked did not run: who stopped it, and the auto-mode rule if it was auto mode. */
-  denied(def: Pick<ToolDef, "name" | "subject" | "source" | "sourceEnvelope">, input: unknown, by: DeniedBy, rule?: string, agent?: AgentOrigin) {
-    const mcp = mcpServerOf(def)
+  denied(def: Pick<ToolDef, "name" | "subject" | "source" | "sourceEnvelope" | "mcpServer">, input: unknown, by: DeniedBy, rule?: string, agent?: AgentOrigin) {
+    const mcp = mcpServerOf(def, input)
     this.entries.push({
       kind: "denied",
       tool: def.name,

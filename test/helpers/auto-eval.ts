@@ -36,7 +36,7 @@ export interface EvalCase {
 
 export const ROUTES = ["user-only", "no-ask", "auto-safe"] as const
 
-export const KNOWN_TOOLS = /^(shell|write_file|edit_file|read_file|web_fetch|web_search|watchlist_local(_\w+)?|mcp__\w+)$/
+export const KNOWN_TOOLS = /^(shell|write_file|edit_file|read_file|web_fetch|web_search|watchlist_local(_\w+)?|read_mcp_resource|mcp__\w+)$/
 
 export function loadCases(root: string): EvalCase[] {
   const file = path.join(root, "test/fixtures/auto-mode/actions.jsonl")
@@ -60,6 +60,7 @@ const defOf = (name: string): ToolDef => {
     readOnly: name === "read_file",
     execute: async () => "",
     ...(server ? { source: `mcp:${server}`, ...(server === "opentrading" ? { sourceEnvelope: true } : {}) } : {}),
+    ...(name === "read_mcp_resource" ? { source: "mcp:resources", mcpServer: (i: { server: string }) => ({ server: i.server, trusted: i.server === "opentrading" }) } : {}),
   }
 }
 
@@ -86,7 +87,7 @@ export function caseInput(c: EvalCase): ClassifyInput {
     if (h.denied) log.denied(defOf(h.tool), h.input, h.denied.by, h.denied.rule)
   }
   const def = defOf(c.action.tool)
-  const mcp = mcpServerOf(def)
+  const mcp = mcpServerOf(def, c.action.input)
   return {
     transcript: log.render(),
     action: { tool: c.action.tool, input: compactInput(def, c.action.input), ...(mcp ? { mcp } : {}) },

@@ -74,7 +74,9 @@ adopt Semantic Versioning when it exposes a stable public API.
   (only the OpenTrading data server is `true`; a server merely named like it is not), and the fixed classifier
   prompt says what they mean. The default "Data Exfiltration" rule covers the arguments of a tool outside the
   trust boundary, including holdings and amounts the request does not need; "OpenTrading Data Tools" covers
-  only `"trusted": true` calls. The eval builds MCP cases the same way. Measured with a real model: not yet.
+  only `"trusted": true` calls. `read_mcp_resource` ran in ▸▸ without review or a log line, so the same data could
+  leave in its `uri`; for any server but the data server it is now reviewed, logged and marked like that server's
+  tools. The eval builds MCP cases the same way, with five new ones (103-107). Measured with a real model: not yet.
 
 - `chart_render` with `from_call` takes the unit from the data server's `units` instead of the model (#329):
   candles of `vn_equity_ohlcv` show "nghìn đ", the price board "đ", indices "điểm", volumes "cp", in the chart

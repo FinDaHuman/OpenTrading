@@ -3,7 +3,7 @@ import { loadConfig, saveConfig } from "../config"
 import { isInside, isSensitiveScope } from "../fs/path-safety"
 import type { AgentOrigin, ApprovalPreview, ToolDef } from "../tools/types"
 import type { AutoReviewer, Review } from "./auto"
-import { compactInput, mcpServerOf } from "./auto/transcript"
+import { autoReviews, compactInput, mcpServerOf } from "./auto/transcript"
 import type { AutoBlock, DenyInfo } from "./denial"
 import type { PermissionMode } from "./mode"
 
@@ -143,6 +143,8 @@ export function choicesFor(def: ToolDef, scope: string | undefined, mode: Permis
   if (mode === "read-only" && def.effect) return ["once", "mode", "deny"]
   // A folder for the session, never "always" for every file write.
   if (def.effect === "file") return ["once", "session", "deny"]
+  // The server is an argument (read_mcp_resource): a longer approval would cover every server.
+  if (def.mcpServer) return ["once", "deny"]
   // A chained command or an interpreter: this exact command for the session at most.
   if (scope?.startsWith("cmd!")) return ["once", "session", "deny"]
   return ["once", "session", "always", "deny"]
@@ -314,7 +316,7 @@ export class PermissionGate {
     // Deny rules first, from memory: they stop reads too (refreshRules loads them).
     if (this.lists?.deny.some((r) => listMatches(r, def, subject, input))) return this.refused(def, input, agent)
     // Calls that never ask run at once, as before: no await, so parallel calls keep their order.
-    if (!userOnly(scope) && !needsApproval(def, input) && !(this.current === "auto" && def.autoReview)) return this.ran()
+    if (!userOnly(scope) && !needsApproval(def, input) && !(this.current === "auto" && autoReviews(def, input))) return this.ran()
     const lists = this.lists ?? (await this.rules.lists?.()) ?? { deny: [], ask: [] }
     if (!this.lists && lists.deny.some((r) => listMatches(r, def, subject, input))) return this.refused(def, input, agent)
     const key = this.keyOf(def, input)
@@ -421,7 +423,7 @@ export class PermissionGate {
       }
       // Auto mode handed this one over and the user let it run: their decision, in their log.
       if (pending!.request.mode === "auto" && pending!.request.notice) {
-        this.auto?.log.approved(pending!.def.name, compactInput(pending!.def, pending!.request.input), pending!.request.agent, mcpServerOf(pending!.def))
+        this.auto?.log.approved(pending!.def.name, compactInput(pending!.def, pending!.request.input), pending!.request.agent, mcpServerOf(pending!.def, pending!.request.input))
       }
       if (choice === "mode") this.setMode("ask")
       if (choice === "session" || choice === "always") {
