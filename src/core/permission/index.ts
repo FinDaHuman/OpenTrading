@@ -348,7 +348,7 @@ export class PermissionGate {
       const review = await this.auto.review(def, input, agent, signal).catch((error): Review => ({ decision: "ask", why: `model duyệt lỗi: ${error instanceof Error ? error.message : String(error)}` }))
       if (signal.aborted) return { allow: false, reason: "cancelled" }
       if (review?.decision === "allow") return { allow: true }
-      if (review?.decision === "block") return { allow: false, reason: "classifier", auto: { ...(review.label ? { label: review.label } : {}), reason: review.reason } }
+      if (review?.decision === "block") return { allow: false, reason: "classifier", auto: { ...(review.label ? { label: review.label } : {}), reason: review.reason, ...(review.hard ? { hard: true } : {}) } }
       notice = review?.why ?? "model duyệt lỗi"
       handedOver = review?.blocked
     }

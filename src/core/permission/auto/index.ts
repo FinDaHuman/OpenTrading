@@ -1,7 +1,7 @@
 import type { Target } from "../../chat"
 import type { AgentOrigin, ToolDef } from "../../tools/types"
 import { classify, type ClassifierDeps, type Verdict } from "./classifier"
-import { labelVi, type AutoModeConfig } from "./rules"
+import { isHardDeny, labelVi, type AutoModeConfig } from "./rules"
 import { ActionLog, compactInput } from "./transcript"
 
 export { ActionLog } from "./transcript"
@@ -24,12 +24,13 @@ export const QUOTA_PAUSE_MS = 10 * 60_000
 
 export type Review =
   | { decision: "allow" }
-  | { decision: "block"; label?: string; reason: string }
+  /** `hard`: a hard-deny rule (the user's message or an allow rule does not clear it). */
+  | { decision: "block"; label?: string; reason: string; hard?: boolean }
   /**
    * Ask the user instead, and say why (shown in the prompt). `blocked`: this call was blocked
    * (the one that reached the limit), so a "no" from the user keeps the classifier's reason.
    */
-  | { decision: "ask"; why: string; blocked?: { label?: string; reason: string } }
+  | { decision: "ask"; why: string; blocked?: { label?: string; reason: string; hard?: boolean } }
 
 export interface Denial {
   at: number
@@ -38,6 +39,8 @@ export interface Denial {
   summary: string
   label?: string
   reason: string
+  /** Blocked by a hard-deny rule. */
+  hard?: boolean
   /** Key of a one-time retry the user may grant. */
   key: string
 }
@@ -176,13 +179,15 @@ export class AutoReviewer {
     const target = await this.deps.target().catch(() => undefined)
     if (!target) return { decision: "ask", why: "chưa có model để duyệt (gõ /model)" }
     let verdict: Verdict
+    let config: AutoModeConfig | undefined
     try {
+      config = await this.deps.config()
       verdict = await classify(
         {
           transcript: this.log.render(),
           action: { tool: def.name, input: compact, ...(agent ? { agent: `${agent.type}#${agent.id}` } : {}) },
           environment: await this.deps.environment(),
-          config: await this.deps.config(),
+          config,
           profile: await this.deps.profile?.().catch(() => undefined),
         },
         target,
@@ -213,7 +218,8 @@ export class AutoReviewer {
     this.consecutive++
     this.total++
     const label = verdict.rule ? labelVi(verdict.rule) : undefined
-    this.recent.unshift({ at: this.now(), tool: def.name, summary: compact.slice(0, 200), label, reason: verdict.reason, key })
+    const hard = isHardDeny(verdict.rule, config) ? { hard: true } : {}
+    this.recent.unshift({ at: this.now(), tool: def.name, summary: compact.slice(0, 200), label, reason: verdict.reason, ...hard, key })
     this.recent.splice(20)
     this.emit()
     // At the limit this block is not final: the user decides, so a run of false blocks ends here.
@@ -221,11 +227,11 @@ export class AutoReviewer {
       return {
         decision: "ask",
         why: `auto mode chặn ${label ? `[${label}] ` : ""}${verdict.reason} — đã chặn ${this.consecutive >= MAX_CONSECUTIVE ? `${this.consecutive} lần liên tiếp` : `${this.total} lần`}, bạn quyết định`,
-        blocked: { ...(label ? { label } : {}), reason: verdict.reason },
+        blocked: { ...(label ? { label } : {}), reason: verdict.reason, ...hard },
       }
     }
     this.log.denied(def, input, "auto_mode", verdict.rule, agent)
-    return { decision: "block", label, reason: verdict.reason }
+    return { decision: "block", label, reason: verdict.reason, ...hard }
   }
 }
 

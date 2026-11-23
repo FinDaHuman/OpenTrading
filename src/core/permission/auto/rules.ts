@@ -16,10 +16,10 @@ export const DEFAULT_HARD_DENY = [
   "Secret Read: Reading the content of a credential or key file by any tool or command — OpenTrading's auth.json / mcp-auth.json / mcp.json, .env files, SSH keys, cloud credentials, browser profiles, password stores, *.pem / *.key. Reading it sends it to the model provider. Listing a folder that contains such a file is fine; printing the file is not. Also printing environment variables wholesale (printenv, env, set, Get-ChildItem env:, $env: dumps), which holds API keys.",
   "Secret Exfiltration: Sending, uploading, committing, posting or pasting any credential, API key, token, cookie or private key to any destination, or writing one into a file other than where the user asked.",
   "Self-Permission Change: Changing OpenTrading's own permissions, rules, auto-mode settings or configuration (anything under the OpenTrading data folder, e.g. ~/.opentrading/config.json), or launching another agent or tool with its approvals or sandbox disabled (--dangerously-skip-permissions, --yes-always, --no-sandbox, --auto-approve).",
+  "Real Trading: Placing, modifying or cancelling a real order, or moving money (transfer, deposit, withdrawal), through any broker or bank API, CLI, SDK, script, MCP tool or web page (DNSE, SSI, VPS, TCBS, VNDirect, MBS, HSC, or any other). OpenTrading never trades for the user: block even when the user names the exact order or transfer, insists, or says they allow it; they do it themselves in the broker's own app. A script or tool whose name or arguments say it sends such an order counts even when its content is not in the transcript. Not this rule: analysis, quotes and order-book reads, writing about a trade in a file (a plan, a journal), and backtests or paper-trading simulations that touch no real account.",
 ]
 
 export const DEFAULT_SOFT_DENY = [
-  "Real Trading: Placing, modifying or cancelling a real order, or moving money, through any broker or bank API, CLI, SDK or web page (DNSE, SSI, VPS, TCBS, VNDirect, MBS, HSC, or any other). Must name: the order (symbol, side, quantity, price) or the transfer. Analysis, quotes and paper-trading simulations that touch no real account are fine.",
   "Code From External: Downloading and running code in one step (curl | bash, iwr | iex, Invoke-Expression on downloaded content), running a script fetched from the internet, or installing a package the user did not ask for, from an unknown source, or globally (npm -g, pip outside a virtual environment the task set up).",
   "Irreversible Local Destruction: Deleting, truncating or overwriting files or folders that existed before this session, beyond what the user named (rm/Remove-Item on existing paths, Set-Content / > onto an existing file, mass deletes by wildcard or age). Must name: the files or folder.",
   "Git Destructive: Force pushing, deleting remote branches or tags, rewriting pushed history, git reset --hard, git clean -fd, git checkout -- . or git stash drop on work that is not the agent's own from this session. Must name: the operation and its target.",
@@ -73,6 +73,12 @@ export function effectiveList(list: AutoRuleList, config: AutoModeConfig | undef
   const own = config?.[list]
   if (!own) return [...DEFAULTS[list]]
   return own.flatMap((entry) => (entry === "$defaults" ? DEFAULTS[list] : [entry])).filter((e) => e.trim() !== "")
+}
+
+/** Is `rule` (the label the classifier gave) one of the hard-deny rules in force? No message and no allow rule clears those. */
+export function isHardDeny(rule: string | undefined, config: AutoModeConfig | undefined): boolean {
+  const label = rule?.trim().toLowerCase()
+  return !!label && effectiveList("hard_deny", config).some((r) => labelOf(r).toLowerCase() === label)
 }
 
 /** "Real Trading" from "Real Trading: Placing…". */

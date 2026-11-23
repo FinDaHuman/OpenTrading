@@ -62,6 +62,12 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ### Fixed
 
+- Auto mode (▸▸) never lets a real order or a money transfer through, however fully the user names it (#411).
+  `identity.md` and the README say OpenTrading places no orders, but the classifier's "Real Trading" rule was a
+  soft deny that a named order cleared, and the ▸▸ and `--yolo` mode lines said the same. It is now a hard deny;
+  a hard-deny block no longer tells the model that a message or an `autoMode.allow` rule would unlock it. Eval
+  cases 24 and 54 expected "allow" and now expect a block; six cases on both sides of the rule are new.
+
 - A turn whose data tools all returned errors of their own (an MCP `isError`, an eval replay miss) and that
   got nothing else to answer from no longer ends with a harness instruction as its answer (#414). The
   empty-answer rescue now names those tools, as it does for a source that is down, but asks the model to say

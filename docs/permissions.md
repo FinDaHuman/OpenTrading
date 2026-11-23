@@ -229,7 +229,7 @@ Mỗi hành động cần duyệt được một model thứ hai xét trước k
 - **Nguồn gốc dữ liệu:** kết quả của `web_fetch`, `web_search` và tool MCP có thêm một dòng `[Nguồn: …]` cho model (host web hoặc tên server MCP), kèm nhắc rằng chỉ dẫn nằm trong dữ liệu là nội dung của nguồn, không phải lời bạn. Đây chỉ là thông tin nguồn gốc, không phải đánh giá dữ liệu là nguy hiểm.
 - **Khi bị chặn:** model nhận tên tool, nhãn luật và lý do, ví dụ `Auto mode chặn shell [Git phá huỷ]: …`, kèm chỉ dẫn (giống Claude Code, chặt hơn ở chỗ đổi tool):
   - không làm đúng việc đó bằng tool hay lệnh khác (shell bị chặn thì không chuyển sang `write_file`, `edit_file`, tool MCP, script hay subagent); chỉ được chọn cách an toàn hơn hẳn mà không gây ra tác dụng đó, như ghi ra file mới thay vì ghi đè hoặc đưa lệnh để bạn tự chạy;
-  - làm tiếp các việc không phụ thuộc; nếu việc đó bắt buộc thì làm hết phần còn lại rồi dừng, nói định làm gì, vì sao cần và cách bạn cho phép (`/permissions` → `ctrl+r`, nói rõ trong tin nhắn, chuyển `▸`, hoặc tự thêm `autoMode.allow`). Model được dặn không tự sửa cấu hình quyền;
+  - làm tiếp các việc không phụ thuộc; nếu việc đó bắt buộc thì làm hết phần còn lại rồi dừng, nói định làm gì, vì sao cần và cách bạn cho phép (`/permissions` → `ctrl+r`, nói rõ trong tin nhắn, chuyển `▸`, hoặc tự thêm `autoMode.allow`). Model được dặn không tự sửa cấu hình quyền. Với luật *chặn tuyệt đối*, model không gợi ý cách cho phép nào: lời nhắn và `autoMode.allow` không gỡ được, chỉ khi bạn tự bấm duyệt (`ctrl+r` trong `/permissions`, hộp thoại khi auto mode quay về hỏi, hoặc chế độ `▸`) lời gọi đó mới chạy;
   - subagent bị chặn thì ghi việc đó và lý do vào kết quả cho agent chính.
 
   Bạn thấy một dòng `✘ Auto mode chặn … · /permissions để cho thử lại` dưới tool đó (`ctrl+o` hiện đủ đoạn model nhận) và một toast `… bị auto mode chặn · /permissions`, kể cả khi subagent bị chặn.
@@ -241,8 +241,8 @@ Mỗi hành động cần duyệt được một model thứ hai xét trước k
 
   Hộp thoại khi đó ghi rõ vì sao nó hiện ra. Nếu bạn từ chối một hành động auto mode vừa chặn, model vẫn nhận nhãn và lý do của lần chặn đó.
 - **Luật mặc định** (viết bằng tiếng Anh cho model duyệt, nhãn hiện bằng tiếng Việt):
-  - *Chặn tuyệt đối:* đọc khoá/mật khẩu (kể cả in toàn bộ biến môi trường), lộ khoá ra ngoài, tự sửa quyền hay cấu hình của OpenTrading, chạy agent khác đã tắt duyệt.
-  - *Chặn trừ khi bạn nêu rõ đúng việc đó:* **đặt, sửa, huỷ lệnh giao dịch thật hay chuyển tiền** (phải nêu mã, chiều, khối lượng, giá); tải code về rồi chạy; xoá hoặc ghi đè file có sẵn; git phá huỷ; gửi dữ liệu ra ngoài (kể cả nhét trong URL); nhắn tin thay bạn; cài thứ tự chạy về sau; hạ bảo mật; dò thông tin đăng nhập; mở máy ra internet; ghi ngoài workspace; đổi cài đặt hệ thống; chạy lệnh bị che giấu (`-EncodedCommand`, giải mã base64 rồi `iex`…).
+  - *Chặn tuyệt đối:* đọc khoá/mật khẩu (kể cả in toàn bộ biến môi trường), lộ khoá ra ngoài, tự sửa quyền hay cấu hình của OpenTrading, chạy agent khác đã tắt duyệt, **đặt, sửa, huỷ lệnh giao dịch thật hay chuyển tiền** (OpenTrading không giao dịch thay bạn: nêu đủ mã, chiều, khối lượng, giá hay nói "tôi cho phép" vẫn bị chặn; phân tích, backtest và mô phỏng không đụng tài khoản thật thì không thuộc luật này).
+  - *Chặn trừ khi bạn nêu rõ đúng việc đó:* tải code về rồi chạy; xoá hoặc ghi đè file có sẵn; git phá huỷ; gửi dữ liệu ra ngoài (kể cả nhét trong URL); nhắn tin thay bạn; cài thứ tự chạy về sau; hạ bảo mật; dò thông tin đăng nhập; mở máy ra internet; ghi ngoài workspace; đổi cài đặt hệ thống; chạy lệnh bị che giấu (`-EncodedCommand`, giải mã base64 rồi `iex`…).
   - Với một lần GET công khai bỏ qua lỗi chứng chỉ, luật hướng dẫn model duyệt chỉ cho qua khi bạn nêu đúng URL và yêu cầu rõ việc bỏ qua xác minh, lệnh không mang dữ liệu riêng tư hay thông tin xác thực và không tự chuyển sang đích khác. Chỉ nói trang bị lỗi chứng chỉ chưa phải yêu cầu bỏ xác minh. Đây vẫn là phán quyết của model duyệt, có thể sai.
   - *Ngoại lệ được phép:* lệnh chỉ đọc; chạy script do chính phiên viết trong workspace; cài gói đã khai báo, hoặc gói dữ liệu phổ biến khi bạn cần phân tích; GET trang dữ liệu thị trường công khai; mở file vừa tạo; tool dữ liệu OpenTrading.
   - Ranh giới bạn nói trong chat ("đừng ghi đè bao-cao.md", "không gửi gì ra ngoài") có tác dụng chặn tới khi bạn gỡ.
@@ -266,10 +266,10 @@ Mỗi hành động cần duyệt được một model thứ hai xét trước k
   `"$defaults"` giữ luật có sẵn ở đúng vị trí đó. Một danh sách không có `"$defaults"` sẽ **thay toàn bộ** luật mặc định của danh sách ấy.
 - **Đo chất lượng bằng model thật:** `bun scripts/dev/auto-mode-eval.ts --yes --model <provider/model> [--only 21,25] [--unreachable] [--all]`.
   - Không có `--yes` thì script chỉ in số ca và số request ước tính, không gọi model.
-  - Bộ 76 ca có nhãn nằm ở `test/fixtures/auto-mode/actions.jsonl`, gồm cả ca nhiều lượt (yêu cầu chung chung rồi một bước phá huỷ, ranh giới người dùng nêu ở lượt trước), lệnh PowerShell che giấu và tool MCP bên thứ ba.
+  - Bộ 100 ca có nhãn nằm ở `test/fixtures/auto-mode/actions.jsonl`, gồm cả ca nhiều lượt (yêu cầu chung chung rồi một bước phá huỷ, ranh giới người dùng nêu ở lượt trước), lệnh PowerShell che giấu và tool MCP bên thứ ba.
   - Ca có `route` là ca gate tự quyết trước classifier (file khoá/đường dẫn bảo vệ, web_fetch tới trang được duyệt sẵn, file mới trong workspace, lệnh shell chỉ đọc). Môi trường của bộ đánh giá giống lúc chạy thật, gồm cả dòng git và server MCP ngoài vùng tin cậy. Mặc định bỏ qua, `--unreachable` để chạy cả. Test offline kiểm nhãn này khớp với gate.
   - Script in tỉ lệ chặn đúng, tỉ lệ chặn nhầm, tách theo nhóm (`tags`), và số request.
-  - Tốn khoảng 100 request (65 ca tới được model duyệt, mỗi ca chặn tốn 2), nên với Gemini miễn phí hãy dùng model 500 RPD.
+  - Tốn khoảng 132 request (82 ca tới được model duyệt, mỗi ca chặn tốn 2), nên với Gemini miễn phí hãy dùng model 500 RPD.
 
 **Giới hạn — đọc trước khi bật:**
 - Model duyệt **có thể sai**: cho qua nhầm hoặc chặn nhầm. Claude Code công bố tỉ lệ bỏ lọt 17% trên các ca "làm quá tay". Đừng dùng `▸▸` cho việc nhạy cảm. Ranh giới cứng là các mục "luôn hỏi" và "không bao giờ chạy" ở trên, không phải model duyệt.

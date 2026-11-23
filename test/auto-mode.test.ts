@@ -11,7 +11,8 @@ import { Workspace } from "../src/core/fs/workspace"
 import { PermissionGate, type AllowRule } from "../src/core/permission"
 import { AutoReviewer, MAX_CONSECUTIVE, QUOTA_PAUSE_MS } from "../src/core/permission/auto"
 import { classify, lowThinking, needsHeadroom, parseBlock, parseTag, systemPrompt, THINKING_HEADROOM } from "../src/core/permission/auto/classifier"
-import { DEFAULT_SOFT_DENY, effectiveList, labelOf } from "../src/core/permission/auto/rules"
+import { DEFAULT_SOFT_DENY, effectiveList, labelOf, isHardDeny } from "../src/core/permission/auto/rules"
+import { modeNote } from "../src/core/permission/mode"
 import { ActionLog, clip, compactInput, MAX_CHARS } from "../src/core/permission/auto/transcript"
 import { readFileTool } from "../src/core/tools/fs/read"
 import { editFileTool, writeFileTool } from "../src/core/tools/fs/write"
@@ -59,12 +60,31 @@ test("rule lists: defaults when unset, $defaults spliced in place, a list withou
   const mine = "Staging: never touch D:\\Live"
   expect(effectiveList("soft_deny", { soft_deny: [mine, "$defaults"] })).toEqual([mine, ...DEFAULT_SOFT_DENY])
   expect(effectiveList("soft_deny", { soft_deny: [mine] })).toEqual([mine])
-  expect(labelOf(DEFAULT_SOFT_DENY[0]!)).toBe("Real Trading")
+  expect(labelOf(DEFAULT_SOFT_DENY[0]!)).toBe("Code From External")
   const system = systemPrompt({ environment: ["Workspace folders: D:\\Dau-tu"], config: { allow: ["$defaults", "Trusted site: cafef.vn"] } })
   expect(system).toContain("- Workspace folders: D:\\Dau-tu")
   expect(system).toContain("- Trusted site: cafef.vn")
-  expect(system).toContain("Real Trading:")
+  // OpenTrading never trades: a hard deny, which no message clears (#411).
+  expect(/<hard_deny>([\s\S]*?)<\/hard_deny>/.exec(system)![1]).toContain("Real Trading:")
+  expect(/<soft_deny>([\s\S]*?)<\/soft_deny>/.exec(system)![1]).not.toContain("Real Trading")
   expect(system).toContain("Secret Read:")
+})
+
+test("hard-deny labels: the defaults and the user's own, whatever case the classifier writes; soft ones are not", () => {
+  expect(isHardDeny(" real trading ", undefined)).toBe(true)
+  expect(isHardDeny("Secret Read", undefined)).toBe(true)
+  expect(isHardDeny("Data Exfiltration", undefined)).toBe(false)
+  expect(isHardDeny(undefined, undefined)).toBe(false)
+  expect(isHardDeny("My Rule", { hard_deny: ["$defaults", "My Rule: never"] })).toBe(true)
+  expect(isHardDeny("Real Trading", { hard_deny: ["My Rule: never"] })).toBe(false)
+})
+
+test("no eval case lets a real order or a transfer run; the mode lines never make an exception for one (#411)", async () => {
+  const { loadCases } = await import("./helpers/auto-eval")
+  const trading = loadCases(path.resolve(import.meta.dir, "..")).filter((c) => c.tags?.includes("trading"))
+  expect(trading.filter((c) => c.expect === "allow").map((c) => c.id)).toEqual([99, 100, 101])
+  expect(trading.filter((c) => c.expect === "block").map((c) => c.id).sort((a, b) => a - b)).toEqual([24, 25, 26, 54, 61, 62, 66, 96, 97, 98])
+  for (const line of [modeNote("auto"), modeNote("bypass")]) expect(line).toMatch(/never place real orders or move money, even if asked/i)
 })
 
 // ── transcript ──────────────────────────────────────────────────────────────

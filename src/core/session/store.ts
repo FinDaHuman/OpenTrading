@@ -528,78 +528,88 @@ export class Session {
 
   private async write(): Promise<SaveReceipt> {
     const saved: number[] = []
-    let error: Error | undefined
-    // Once a failed write could not be cut back, appending more would build on a partial line.
-    while (!this.stopped && this.queue.length > 0) {
-      const part = this.queue[0]!
-      const lines = [...part.lines]
-      const file = this.file ?? path.join(this.createdAt.slice(0, 4), this.createdAt.slice(5, 7), `${this.id}.jsonl`)
-      // The meta line goes with the first write that succeeds, so the file always starts with it.
-      if (!this.file && part.kind === "turn") {
-        const { info } = part
-        lines.unshift({
-          type: "meta",
-          format: SESSION_FORMAT,
+    let partError: Error | undefined
+    let indexError: Error | undefined
+    // A loop: a turn, compaction, redact or card line queued while the index line is being written
+    // is written here too. Nothing failed for it, so the receipt must not count it as unsaved, and
+    // flush() must not resolve (session switched, file read back) before it is on disk.
+    do {
+      // Once a failed write could not be cut back, appending more would build on a partial line.
+      while (!this.stopped && this.queue.length > 0) {
+        const part = this.queue[0]!
+        const lines = [...part.lines]
+        const file = this.file ?? path.join(this.createdAt.slice(0, 4), this.createdAt.slice(5, 7), `${this.id}.jsonl`)
+        // The meta line goes with the first write that succeeds, so the file always starts with it.
+        if (!this.file && part.kind === "turn") {
+          const { info } = part
+          lines.unshift({
+            type: "meta",
+            format: SESSION_FORMAT,
+            id: this.id,
+            createdAt: this.createdAt,
+            cwd: info.cwd,
+            promptVersion: info.promptVersion,
+            skills: info.skills,
+          })
+        }
+        // The images first, so a line names only what is on disk. Failing to store one never fails the turn.
+        if ((part.kind === "turn" || part.kind === "compact") && part.images) {
+          await this.storeImages(file, part.images).catch(() => {})
+          part.images = undefined
+        }
+        try {
+          await appendLines(path.join(sessionsDir(), file), lines.map((l) => JSON.stringify(l)).join("\n") + "\n", true)
+        } catch (caught) {
+          if (caught instanceof StoppedError) {
+            this.stopped = true
+            partError = caught.cause
+            for (const waiting of this.queue) waiting.lines = []
+          } else partError = asError(caught)
+          break
+        }
+        this.file = file
+        this.queue.shift()
+        if (part.kind === "turn") {
+          this.turns++
+          saved.push(part.turn)
+          if (!this.title) this.title = part.firstText.replace(/\s+/g, " ").trim().slice(0, 60) || "(không tiêu đề)"
+          const { provider, model, cwd } = part.info
+          this.indexInfo = { updatedAt: part.ts, provider, model, cwd }
+          this.indexWanted++
+        }
+      }
+      // Only the latest attempt counts: the index line is written again after each round of parts.
+      indexError = undefined
+      // Written even when a later part failed, so the turns already on disk show in /sessions.
+      // A loop: a title that arrives while a line is being written (setTitle from the first turn's
+      // fire-and-forget retitle) leaves the index pending after a successful write. Writing again
+      // here, with the new title, keeps this receipt from reporting an index failure that never
+      // happened (#396). It stops at the first failed write; that one is retried on the next write.
+      while (this.indexPending && this.file && this.indexInfo) {
+        const covers = this.indexWanted
+        const summary: SessionSummary = {
           id: this.id,
+          file: this.file.split(path.sep).join("/"),
+          title: this.title,
           createdAt: this.createdAt,
-          cwd: info.cwd,
-          promptVersion: info.promptVersion,
-          skills: info.skills,
-        })
+          ...this.indexInfo,
+          turns: this.turns,
+        }
+        try {
+          // Not cut back on failure: a duplicate index line is harmless (the last one per id wins).
+          // Limit: two windows appending to index.jsonl at once, A may read the last byte while B
+          // is mid-line and put a newline into B's line. That line heals on B's next turn, since
+          // every turn writes its index line again.
+          await appendLines(indexFile(), JSON.stringify(summary) + "\n", false)
+          this.indexWritten = covers
+        } catch (caught) {
+          indexError = asError(caught)
+          break
+        }
       }
-      // The images first, so a line names only what is on disk. Failing to store one never fails the turn.
-      if ((part.kind === "turn" || part.kind === "compact") && part.images) {
-        await this.storeImages(file, part.images).catch(() => {})
-        part.images = undefined
-      }
-      try {
-        await appendLines(path.join(sessionsDir(), file), lines.map((l) => JSON.stringify(l)).join("\n") + "\n", true)
-      } catch (caught) {
-        if (caught instanceof StoppedError) {
-          this.stopped = true
-          error = caught.cause
-          for (const waiting of this.queue) waiting.lines = []
-        } else error = asError(caught)
-        break
-      }
-      this.file = file
-      this.queue.shift()
-      if (part.kind === "turn") {
-        this.turns++
-        saved.push(part.turn)
-        if (!this.title) this.title = part.firstText.replace(/\s+/g, " ").trim().slice(0, 60) || "(không tiêu đề)"
-        const { provider, model, cwd } = part.info
-        this.indexInfo = { updatedAt: part.ts, provider, model, cwd }
-        this.indexWanted++
-      }
-    }
-    // Written even when a later part failed, so the turns already on disk show in /sessions.
-    // A loop: a title that arrives while a line is being written (setTitle from the first turn's
-    // fire-and-forget retitle) leaves the index pending after a successful write. Writing again
-    // here, with the new title, keeps this receipt from reporting an index failure that never
-    // happened (#396). It stops at the first failed write; that one is retried on the next write.
-    while (this.indexPending && this.file && this.indexInfo) {
-      const covers = this.indexWanted
-      const summary: SessionSummary = {
-        id: this.id,
-        file: this.file.split(path.sep).join("/"),
-        title: this.title,
-        createdAt: this.createdAt,
-        ...this.indexInfo,
-        turns: this.turns,
-      }
-      try {
-        // Not cut back on failure: a duplicate index line is harmless (the last one per id wins).
-        // Limit: two windows appending to index.jsonl at once, A may read the last byte while B
-        // is mid-line and put a newline into B's line. That line heals on B's next turn, since
-        // every turn writes its index line again.
-        await appendLines(indexFile(), JSON.stringify(summary) + "\n", false)
-        this.indexWritten = covers
-      } catch (caught) {
-        error ??= asError(caught)
-        break
-      }
-    }
+      // A part that could not be written blocks those behind it until the next write.
+    } while (!partError && !this.stopped && this.queue.length > 0)
+    const error = partError ?? indexError
     if (error) this.lastError = error
     // Nothing left failing: an old error must not show up in a later receipt.
     else if (!this.stopped && !this.indexWaiting && this.queue.length === 0) this.lastError = undefined

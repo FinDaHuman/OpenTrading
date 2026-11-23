@@ -19,6 +19,8 @@ import type { AgentOrigin } from "../tools/types"
 export interface AutoBlock {
   label?: string
   reason: string
+  /** A hard-deny rule: the denial names no way to allow it (a message or an allow rule would not). */
+  hard?: boolean
 }
 
 export interface DenyInfo {
@@ -62,6 +64,12 @@ const THEN_REPORT =
 const ALLOW_AUTO =
   "How to allow it (the user does this; never change the permission settings yourself): /permissions → pick the block → ctrl+r to run it once; name the exact action and its target in a message; switch to ▸ ask before changes (Shift+Tab) to approve it themselves; or add an autoMode.allow rule in ~/.opentrading/config.json."
 
+const HARD_STOP =
+  "This is a hard rule: the user naming the action in a message, or an autoMode.allow rule, does not clear it. Do not ask the user to allow it. Carry on with other work that does not depend on it, then tell the user it was not done and that they can do it themselves outside OpenTrading."
+
+const HARD_REPORT =
+  "This is a hard rule: nothing the user or the main agent says clears it. Carry on with the work that does not depend on this action, then state in your result what was blocked and why."
+
 const ALLOW_RULE = "How to allow it (the user does this; never change the permission settings yourself): remove or edit that rule in /permissions."
 
 /** "Lý do." with one final period whatever the classifier wrote. */
@@ -76,7 +84,9 @@ const afterBlock = (agent: AgentOrigin | undefined) => (agent ? THEN_REPORT : TH
 
 /** What the model reads when the classifier blocks. */
 export function blockedMessage(tool: string, block: AutoBlock, agent?: AgentOrigin) {
-  return paragraphs(`${AUTO_BLOCK_PREFIX}${tool}${labelled(block)}`, NO_WORKAROUND, afterBlock(agent), ALLOW_AUTO)
+  const head = `${AUTO_BLOCK_PREFIX}${tool}${labelled(block)}`
+  if (block.hard) return paragraphs(head, NO_WORKAROUND, agent ? HARD_REPORT : HARD_STOP)
+  return paragraphs(head, NO_WORKAROUND, afterBlock(agent), ALLOW_AUTO)
 }
 
 /** The error the model reads when a call does not run. `tool` is the model-visible name. */

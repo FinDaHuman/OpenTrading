@@ -26,6 +26,22 @@ test("a classifier block: summary on line 1, then no-workaround, go on with othe
   expect(text.length).toBeLessThan(1_500)
 })
 
+test("a hard-deny block names no way to allow it: a message or an allow rule would not clear it (#411)", () => {
+  const block = { label: "Giao dịch thật", reason: "Đặt lệnh mua thật.", hard: true }
+  const main = blockedMessage("shell", block)
+  expect(main.split("\n\n")[0]).toBe(`${AUTO_BLOCK_PREFIX}shell [Giao dịch thật]: Đặt lệnh mua thật.`)
+  expect(main).toContain(NO_WORKAROUND)
+  expect(main).toContain("does not clear it")
+  expect(main).toContain("Do not ask the user to allow it")
+  const agent = blockedMessage("shell", block, subagent)
+  expect(agent).toContain("state in your result")
+  for (const text of [main, agent]) {
+    expect(text).not.toContain("How to allow it")
+    expect(text).not.toContain("/permissions")
+    expect(text.length).toBeLessThan(1_500)
+  }
+})
+
 test("the tool-error cleaner keeps the summary line and the guidance", () => {
   const text = blockedMessage("shell", { label: "Git phá huỷ", reason: "x".repeat(300) })
   expect(toolErrorText(new Error(text))).toBe(text)
@@ -162,6 +178,24 @@ test("the gate marks auto-mode blocks, user refusals and deny rules; approving a
   await ruled.refreshRules()
   expect((await ruled.check(mcpWrite, {}, signal())).reason).toBe("rule")
   expect(ruled.auto!.log.all().at(-1)).toMatchObject({ kind: "denied", by: "deny_rule" })
+})
+
+test("a hard-deny verdict carries the flag through the gate, /permissions and the hand-off; a soft one does not", async () => {
+  const HARD = ["<block>yes</block>", "<block>yes</block><rule> real trading </rule><reason>Đặt lệnh thật.</reason>"]
+  const gate = autoGate([...HARD, ...BLOCK, ...HARD])
+  gate.interactive = true
+  const hard = await gate.check(mcpWrite, { a: 1 }, signal())
+  expect(hard).toMatchObject({ allow: false, reason: "classifier", auto: { hard: true, reason: "Đặt lệnh thật." } })
+  expect(deniedMessage(hard as never, { tool: "x" })).not.toContain("How to allow it")
+  expect(gate.auto!.recent[0]).toMatchObject({ hard: true })
+  const soft = await gate.check(mcpWrite, { a: 2 }, signal())
+  expect((soft as { auto?: { hard?: boolean } }).auto?.hard).toBeUndefined()
+  expect(deniedMessage(soft as never, { tool: "x" })).toContain("How to allow it")
+  // The third in a row goes to the user: their own click still decides.
+  const pending = gate.check(mcpWrite, { a: 3 }, signal())
+  await tick()
+  await gate.respond(gate.head()!.id, "once")
+  expect((await pending).allow).toBe(true)
 })
 
 test("a hand-off the user approves is logged as their answer", async () => {
