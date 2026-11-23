@@ -42,14 +42,11 @@ Both need underwriting results separated from investment, reserves and one-offs.
 insurance doing?") needs company figures, not a sector description: list the listed insurers
 with `vn_reference(exchange="HOSE", by="industry", key="bảo hiểm")` and the same call with
 `exchange="HNX"` and `exchange="UPCOM"`, all three in one step (each call reads only its own
-exchange; without `exchange` it reads HOSE); `key` matches part of the Vietnamese ICB industry
-name (`icb_name` in each row; the segment is still classified in Bước 1). It is loaded with this
-skill, so call it directly. The rows carry no size: to pick the largest, run `peer_compare` on
-up to 6 of them and rank by a size key it really returns, saying the ranking covers only the
-insurers compared when the rows were more; without such a key, pick from the rows and say the
-pick is not by size. Run Bước 1–2 on the picks. Never name or rank tickers from memory. If one
-exchange's call fails, name that exchange as missing next to the picks; if no rows come back at
-all, say the list could not be fetched.
+exchange). It is loaded with this skill, so call it directly. `icb_name` in each row gives the
+segment (nhân thọ, phi nhân thọ, tái bảo hiểm): keep the rows of the segment asked, pick up to 4
+and run Bước 1–2 on them, saying the pick is not by size (the rows carry none). Never name or rank
+tickers from memory. If one exchange's call fails, name that exchange as missing next to the
+picks; if no rows come back at all, say the list could not be fetched.
 
 **Bước 1 — Identify the segment and the standards.** `symbol_lookup` · `vn_company` ·
 `vs_financial_norms(btype=5)` before choosing lines. Classify life/non-life/
