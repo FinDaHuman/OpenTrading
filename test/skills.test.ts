@@ -122,6 +122,18 @@ test("thep-vn preloads web_search for ore and coal prices", async () => {
   expect(steel.uses_tools).toContain("financial_detail")
 })
 
+// #419: the model called the company-list tools directly; not preloaded, each call cost a step.
+test("bao-hiem-vn preloads the tool that lists insurers, and its body names only preloaded ones", async () => {
+  const { skills } = await loadSkills(skillRoots(await root()).filter((r) => r.source === "bundled"))
+  const insurance = skills.find((s) => s.name === "bao-hiem-vn")!
+  expect(insurance.uses_tools).toContain("vn_reference")
+  // vn_reference reads one exchange per call (default HOSE): a sample call without exchange misses HNX/UPCOM insurers.
+  for (const exchange of ["HOSE", "HNX", "UPCOM"]) expect(insurance.body).toContain(`exchange="${exchange}"`)
+  for (const t of ["vn_reference", "vs_industry_tree", "stock_screener", "vs_categories"]) {
+    if (insurance.body.includes(`\`${t}`)) expect(insurance.uses_tools).toContain(t)
+  }
+})
+
 test("ve-bieu-do references đọc được qua load_skill file=", async () => {
   const { skills } = await loadSkills(skillRoots(await root()).filter((r) => r.source === "bundled"))
   const viz = skills.find((s) => s.name === "ve-bieu-do")!
