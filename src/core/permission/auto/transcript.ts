@@ -27,14 +27,44 @@ export type LogEntry =
   | { kind: "task"; agent: string; text: string }
   /** Something the harness delivered as a user turn (background subagent results). */
   | { kind: "notice"; text: string }
-  /** `effect`: the tool is not read-only (or only claims to be): worth a sub-agent return check. */
-  | { kind: "action"; agent?: string; tool: string; input: string; effect?: true }
+  /**
+   * `effect`: the tool is not read-only (or only claims to be): worth a sub-agent return check.
+   * `mcp`: the MCP server the tool belongs to and whether it is the trusted data server (mcpServerOf).
+   */
+  | { kind: "action"; agent?: string; tool: string; input: string; effect?: true; mcp?: McpServer }
   /** A call that did not run, and who stopped it (`rule`: the auto-mode rule's label, when it was auto mode). */
-  | { kind: "denied"; agent?: string; tool: string; input: string; by: DeniedBy; rule?: string }
+  | { kind: "denied"; agent?: string; tool: string; input: string; by: DeniedBy; rule?: string; mcp?: McpServer }
   /** A call auto mode handed to the user, who let it run (or a /permissions retry). */
-  | { kind: "approved"; agent?: string; tool: string; input: string }
+  | { kind: "approved"; agent?: string; tool: string; input: string; mcp?: McpServer }
 
 export type DeniedBy = "auto_mode" | "user" | "deny_rule"
+
+/** The MCP server a call goes to, as OpenTrading configured it. */
+export interface McpServer {
+  server: string
+  /** The configured OpenTrading data server; every other server is outside the trust boundary. */
+  trusted: boolean
+}
+
+/**
+ * The server of an MCP tool, from what the MCP manager registered (never from the tool's name,
+ * which a server chooses and which is sanitized or shortened): `source` is "mcp:<server>", and
+ * `sourceEnvelope` is set only for the data server (manager.ts, catalog.ts isDataServer). The
+ * classifier reads it next to the call, so a third-party tool named like a read ("search_notes")
+ * is still seen as sending its arguments out of the trust boundary (#413). Undefined for others,
+ * including list_mcp_resources / read_mcp_resource ("mcp:resources"), which name the server in
+ * their arguments; a server's tools are always "mcp__<server>__…" (mcp/naming.ts).
+ */
+export function mcpServerOf(def: Pick<ToolDef, "name" | "source" | "sourceEnvelope">): McpServer | undefined {
+  if (!def.name.startsWith("mcp__") || !def.source?.startsWith("mcp:")) return undefined
+  return { server: def.source.slice("mcp:".length), trusted: def.sourceEnvelope === true }
+}
+
+/** The keys a call's JSON line carries after the call itself: its MCP server, then which sub-agent made it. */
+export const callMarks = (mcp: McpServer | undefined, agent: string | undefined) => ({
+  ...(mcp ? { mcp_server: mcp.server, trusted: mcp.trusted } : {}),
+  ...(agent ? { by: agent } : {}),
+})
 
 /** Per field, then per entry: long text keeps its head and tail with an explicit marker. */
 export const FIELD_CHARS = 2_000
@@ -143,17 +173,20 @@ export class ActionLog {
     // that needs judging, and dozens per turn would push the scripts out of the log. A tool that
     // only claims to be read-only (another MCP server) is: its arguments go to another program.
     if (def.readOnly && !def.autoReview && !ALWAYS_LOGGED.has(def.name) && def.askFor?.(input) === undefined) return
+    const mcp = mcpServerOf(def)
     this.entries.push({
       kind: "action",
       tool: def.name,
       input: compactInput(def, input),
       ...(agent ? { agent: `${agent.type}#${agent.id}` } : {}),
       ...(!def.readOnly || def.autoReview ? { effect: true as const } : {}),
+      ...(mcp ? { mcp } : {}),
     })
   }
 
   /** The call just checked did not run: who stopped it, and the auto-mode rule if it was auto mode. */
-  denied(def: Pick<ToolDef, "name" | "subject">, input: unknown, by: DeniedBy, rule?: string, agent?: AgentOrigin) {
+  denied(def: Pick<ToolDef, "name" | "subject" | "source" | "sourceEnvelope">, input: unknown, by: DeniedBy, rule?: string, agent?: AgentOrigin) {
+    const mcp = mcpServerOf(def)
     this.entries.push({
       kind: "denied",
       tool: def.name,
@@ -161,12 +194,19 @@ export class ActionLog {
       by,
       ...(rule ? { rule } : {}),
       ...(agent ? { agent: `${agent.type}#${agent.id}` } : {}),
+      ...(mcp ? { mcp } : {}),
     })
   }
 
-  /** The user let this call run after auto mode handed it over. `input` is compact already. */
-  approved(tool: string, input: string, agent?: AgentOrigin) {
-    this.entries.push({ kind: "approved", tool, input: clip(input, DENIED_CHARS), ...(agent ? { agent: `${agent.type}#${agent.id}` } : {}) })
+  /** The user let this call run after auto mode handed it over. `input` is compact already; `mcp` from mcpServerOf. */
+  approved(tool: string, input: string, agent?: AgentOrigin, mcp?: McpServer) {
+    this.entries.push({
+      kind: "approved",
+      tool,
+      input: clip(input, DENIED_CHARS),
+      ...(agent ? { agent: `${agent.type}#${agent.id}` } : {}),
+      ...(mcp ? { mcp } : {}),
+    })
   }
 
   /** A subagent handed back: its marks stop counting. */
@@ -216,11 +256,16 @@ export class ActionLog {
         case "notice":
           return JSON.stringify({ harness_notice: e.text })
         case "action":
-          return JSON.stringify({ [e.tool]: asJson(e.input), ...(e.agent ? { by: e.agent } : {}) })
+          return JSON.stringify({ [e.tool]: asJson(e.input), ...callMarks(e.mcp, e.agent) })
         case "denied":
-          return JSON.stringify({ denied_previous_action: { [e.tool]: asJson(e.input) }, stopped_by: e.by, ...(e.rule ? { rule: e.rule } : {}), ...(e.agent ? { by: e.agent } : {}) })
+          return JSON.stringify({
+            denied_previous_action: { [e.tool]: asJson(e.input), ...callMarks(e.mcp, undefined) },
+            stopped_by: e.by,
+            ...(e.rule ? { rule: e.rule } : {}),
+            ...(e.agent ? { by: e.agent } : {}),
+          })
         case "approved":
-          return JSON.stringify({ user_approved_action: { [e.tool]: asJson(e.input) }, ...(e.agent ? { by: e.agent } : {}) })
+          return JSON.stringify({ user_approved_action: { [e.tool]: asJson(e.input), ...callMarks(e.mcp, undefined) }, ...(e.agent ? { by: e.agent } : {}) })
       }
     }
     const lines = this.entries.map((e) => ({ e, text: line(e) }))

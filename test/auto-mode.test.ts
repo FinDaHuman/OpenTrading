@@ -223,6 +223,14 @@ function reviewer(answers: (string | Error)[], now = () => Date.now()) {
 
 const mcpWrite: ToolDef = { name: "mcp__x__create", description: "", input: z.object({}), readOnly: false, execute: async () => "ok" }
 
+test("a granted retry of a blocked MCP call is logged with its server and trust mark (#413)", async () => {
+  const notes = { name: "mcp__notes__save", source: "mcp:notes", description: "", input: z.object({}), readOnly: false, execute: async () => "ok" } as ToolDef
+  const { auto } = reviewer(["<block>yes</block>", "<block>yes</block><rule>Data Exfiltration</rule><reason>Gửi danh mục ra ngoài.</reason>"])
+  expect(await auto.review(notes, { text: "FPT 1000 cp" }, undefined, signal())).toMatchObject({ decision: "block" })
+  auto.grantRetry(auto.recent[0]!)
+  expect(auto.log.render()).toContain('{"user_approved_action":{"mcp__notes__save":{"text":"FPT 1000 cp"},"mcp_server":"notes","trusted":false}}')
+})
+
 test("3 blocks in a row hand the decision to the user; answering resumes auto; a granted retry runs once", async () => {
   const block = ["<block>yes</block>", "<block>yes</block><rule>Data Exfiltration</rule><reason>Gửi ra ngoài.</reason>"]
   const { auto, model } = reviewer([...block, ...block, ...block, "<block>no</block>"])
@@ -352,6 +360,65 @@ test("MCP: only the OpenTrading data server's readOnlyHint skips ▸▸ review; 
   expect(model.seen).toHaveLength(0)
   expect(await gate.check(search, { query: "danh mục FPT 1000 cp" }, signal())).toMatchObject({ allow: false, reason: "classifier" })
   expect(model.seen).toHaveLength(2)
+  // The pending call names its server and that it is outside the trust boundary (#413).
+  expect(model.seen[0]!.prompt).toContain('<action>\n{"mcp__notes__search":{"query":"danh mục FPT 1000 cp"},"mcp_server":"notes","trusted":false}\n</action>')
+})
+
+test("MCP calls carry their server and whether it is the trusted data server, from config, not from the name (#413)", async () => {
+  const { mcpServerOf } = await import("../src/core/permission/auto/transcript")
+  const { userContent } = await import("../src/core/permission/auto/classifier")
+  const notes = { name: "mcp__notes__search_notes", source: "mcp:notes", readOnly: true, autoReview: true } as ToolDef
+  const data = { name: "mcp__opentrading__watchlist_save", source: "mcp:opentrading", sourceEnvelope: true, readOnly: false } as ToolDef
+  // Named like the data server, but not it (a project .mcp.json, another host): not trusted.
+  const impostor = { name: "mcp__opentrading__save", source: "mcp:opentrading", readOnly: false } as ToolDef
+  expect(mcpServerOf(notes)).toEqual({ server: "notes", trusted: false })
+  expect(mcpServerOf(data)).toEqual({ server: "opentrading", trusted: true })
+  expect(mcpServerOf(impostor)).toEqual({ server: "opentrading", trusted: false })
+  expect(mcpServerOf({ name: "shell", readOnly: false } as ToolDef)).toBeUndefined()
+  // OpenTrading's own resource tools take the server as an argument: no server of their own.
+  expect(mcpServerOf({ name: "read_mcp_resource", source: "mcp:resources", readOnly: true } as ToolDef)).toBeUndefined()
+
+  const log = new ActionLog()
+  log.turn("Tìm tin mới về FPT")
+  log.action(notes, { query: "FPT" })
+  log.action(data, { symbols: ["FPT"] })
+  log.action(impostor, { note: "x" })
+  log.action({ name: "shell", readOnly: false } as ToolDef, { command: "python a.py" })
+  const lines = log.render().split("\n")
+  expect(lines).toContain('{"mcp__notes__search_notes":{"query":"FPT"},"mcp_server":"notes","trusted":false}')
+  expect(lines).toContain('{"mcp__opentrading__watchlist_save":{"symbols":["FPT"]},"mcp_server":"opentrading","trusted":true}')
+  expect(lines).toContain('{"mcp__opentrading__save":{"note":"x"},"mcp_server":"opentrading","trusted":false}')
+  expect(lines).toContain('{"shell":{"command":"python a.py"}}')
+
+  // Calls that did not run, or that the user let through, carry the same marks.
+  log.denied(impostor, { note: "y" }, "auto_mode", "Data Exfiltration")
+  log.approved(notes.name, '{"query":"FPT"}', undefined, mcpServerOf(notes))
+  const marked = log.render().split("\n")
+  expect(marked).toContain('{"denied_previous_action":{"mcp__opentrading__save":{"note":"y"},"mcp_server":"opentrading","trusted":false},"stopped_by":"auto_mode","rule":"Data Exfiltration"}')
+  expect(marked).toContain('{"user_approved_action":{"mcp__notes__search_notes":{"query":"FPT"},"mcp_server":"notes","trusted":false}}')
+
+  // A sub-agent's call keeps "by" after the marks; a call with no server has no extra keys.
+  const pending = userContent({ transcript: "", environment: [], action: { tool: notes.name, input: '{"query":"q"}', agent: "nghien-cuu#a1", mcp: { server: "notes", trusted: false } } })
+  expect(pending).toContain('{"mcp__notes__search_notes":{"query":"q"},"mcp_server":"notes","trusted":false,"by":"nghien-cuu#a1"}')
+  expect(userContent({ transcript: "", environment: [], action: { tool: "shell", input: '{"command":"dir"}' } })).toContain('<action>\n{"shell":{"command":"dir"}}\n</action>')
+})
+
+test("the classifier reads what the MCP marks mean, whatever rules the user configured; the defaults name them (#413)", () => {
+  const own = systemPrompt({ environment: [], config: { soft_deny: ["Mine: only my rule"], allow: ["Mine: only mine"] } })
+  // The explanation is part of the fixed prompt, not of a rule list the user may replace.
+  expect(own).toContain('"mcp_server" and "trusted" next to an action are written by OpenTrading')
+  expect(own).toMatch(/"trusted": false[^\n]*outside the trust boundary/)
+  const defaults = systemPrompt({ environment: [] })
+  const exfil = DEFAULT_SOFT_DENY.find((r) => labelOf(r) === "Data Exfiltration")!
+  expect(exfil).toContain('MCP server outside the trust boundary (an action marked "trusted": false)')
+  expect(exfil).toMatch(/cost prices/)
+  // The user naming the destination for that data still clears it: only tightened, not a hard deny.
+  expect(exfil).toContain("that the user did not name for that data")
+  const dataTools = effectiveList("allow", undefined).find((r) => labelOf(r) === "OpenTrading Data Tools")!
+  expect(dataTools).toContain('"trusted": true')
+  expect(dataTools).toContain("any other MCP server is not covered")
+  expect(defaults).toContain(exfil)
+  expect(defaults).toContain(dataTools)
 })
 
 test("dozens of trusted data-server reads do not push the session's script out of the log", () => {
@@ -483,6 +550,14 @@ test("the labelled eval set is well formed (a real model runs it: bun scripts/de
     const built = caseInput(c)
     expect(built.transcript).toContain('{"user":')
   }
+  // MCP calls reach the classifier as in production: the data server trusted, any other not (#413).
+  const byId = (id: number) => caseInput(cases.find((c) => c.id === id)!)
+  expect(byId(74).action.mcp).toEqual({ server: "notes", trusted: false })
+  expect(byId(8).action.mcp).toEqual({ server: "opentrading", trusted: true })
+  expect(byId(62).action.mcp).toEqual({ server: "dnse", trusted: false })
+  // A server name keeps "-" after sanitize (mcp/naming.ts), as in production.
+  const dashed = caseInput({ id: 0, user: ["x"], action: { tool: "mcp__my-notes__search", input: {} }, expect: "block", note: "" })
+  expect(dashed.action.mcp).toEqual({ server: "my-notes", trusted: false })
 })
 
 test("eval routes match the gate: cases it decides itself are tagged, the rest reach the classifier", async () => {
