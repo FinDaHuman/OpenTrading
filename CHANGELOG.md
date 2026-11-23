@@ -72,10 +72,10 @@ adopt Semantic Versioning when it exposes a stable public API.
   got nothing else to answer from no longer ends with a harness instruction as its answer (#414). The
   empty-answer rescue now names those tools, as it does for a source that is down, but asks the model to say
   what the tool's error said rather than call it an outage, and on the tools-on try allows a corrected call.
-  After a rescue, an answer that only restates an instruction ("If no data is available for any part, state
-  clearly what is missing.") is sent back once with tools off, then given up; with no data in the turn the
-  harness writes the answer naming what is missing, no figure. These tools are not data gaps: the gap line and
-  `dataGaps` are unchanged. The echo check can be turned off with the ablation `gate-nudge-echo`; the new
+  After a rescue, an answer that copies the rescue, or that only restates an instruction when every data call
+  failed ("If no data is available for any part, state clearly what is missing."), is sent back once, then
+  given up; with no data in the turn the harness writes the answer naming what is missing, no figure. These
+  tools are not data gaps: the gap line and `dataGaps` are unchanged. The echo check can be turned off with the ablation `gate-nudge-echo`; the new
   rescue wording has no ablation of its own.
 
 - `chart_render` with `from_call` takes the unit from the data server's `units` instead of the model (#329):

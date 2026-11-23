@@ -139,7 +139,7 @@ export function rescueGaps(gaps: readonly string[], errored: readonly string[] =
   return `${GAPS_RESCUE_START} ${names}.${fix} Write the answer for the user now, in the user's language: say which parts could not be fetched and what the tool's error said, use the other data you have, never fill in numbers for the missing parts. Do not call a source down unless its error says so. Do not say you are fixing or reconnecting the source. Do not write reminder lines or system tags.\n</nhac_nho>`
 }
 
-/** The answer only restated a harness instruction (#414), in a turn with data to answer from. */
+/** The answer only restated a harness instruction (#414), in a turn with something to answer from. */
 export const RESCUE_NUDGE_ECHO =
   "<nhac_nho>\nYour last reply repeated an instruction instead of answering. Write the answer for the user now, in the user's language, from the tool results above; say which parts are missing and write no figures for them. Do not write instructions.\n</nhac_nho>"
 
@@ -172,35 +172,57 @@ function echoesQuestion(answer: string, question: string): boolean {
 }
 
 /**
- * Verbs a harness instruction starts with; advice to the user ("try again", "check") is not one,
- * nor a label ("Note:", "Answer:"), hence a word after the verb.
+ * Verbs of reporting an instruction starts with. Verbs that also start advice to the user ("use",
+ * "call", "provide", "keep") are left out. Most are nouns too ("State Bank…", "Report date…",
+ * "Answer:"), hence the word an order goes on with (REPORT_TO).
  */
-const ORDER = String.raw`(state|say|report|write|answer|mention|call|use|reply|respond|explain|list|work|mark|give|provide|include|cite|keep)`
+const REPORT = "state|say|report|write|answer|mention|reply|respond|explain|indicate|tell|inform"
+const REPORT_TO = "clearly|plainly|explicitly|briefly|which|what|that|whether|the|an?|this|no|now|only|any|all|each|it|in|from|with"
+/** What an instruction forbids: filling in, making up. "Do not buy…" is advice. */
+const FORBID = "write|fill|invent|guess|estimate|make up|fabricate|repeat|include|mention|state|report|claim|call|use"
 /** A sentence in the imperative, maybe after a condition: "If no data is available…, state…". */
-const IMPERATIVE = new RegExp(String.raw`^((if|when|unless|once|where)\s[^.;:!?]{1,160}?,\s*(then\s+)?)?((do not|don['’]t|never)\s+\p{L}+|${ORDER}\s+\p{L})`, "iu")
-/** What harness instructions are about. */
-const HARNESS_TOPIC = /(?<![\p{L}\p{N}])(data|tools?|missing|figures?|numbers?|answer|user|sources?|results?)(?![\p{L}\p{N}])/iu
+const IMPERATIVE = new RegExp(String.raw`^((if|when|where|for)\s[^.;:!?]{1,160}?,\s*(then\s+)?)?((do not|don['’]t|never)\s+(${FORBID})|(clearly\s+)?(${REPORT})\s+(${REPORT_TO}))(?![\p{L}\p{N}])`, "iu")
+/** What harness instructions are about: "data" or "results" alone also fit advice to the user. */
+const HARNESS_TOPIC = /(?<![\p{L}\p{N}])(no data|missing|unavailable|not available|tools?|the user|the answer)(?![\p{L}\p{N}])/iu
+/** The model speaks for itself: an answer, not an order to it. */
+const FIRST_PERSON = /(?<![\p{L}\p{N}])(I|me|my|we|our)(?![\p{L}\p{N}])/u
 /** Above this, the text is an answer of its own. */
 export const INSTRUCTION_MAX_CHARS = 400
 
+const sentencesOf = (text: string) =>
+  text
+    .split(/(?<=[.!?])\s+|\n+/)
+    // A list marker ("1.", "-") left alone by the split is no sentence.
+    .map((s) => s.replace(/^[\s>*_•-]+|^\d+[.)]\s*/g, "").trim())
+    .filter(Boolean)
+
 /**
- * The whole answer is an instruction to the model, like the harness's own reminders, not an answer
- * for the user: every sentence is an English imperative about data, tools or the answer (#414:
- * "If no data is available for any part, state clearly what is missing."). Quoted text is left out
- * (an instruction may quote the sentence to write); any sentence that is not an order, Vietnamese
- * or a statement, makes it an answer.
+ * The whole answer reads as an instruction to the model about a missing answer, not as an answer
+ * (#414: "If no data is available for any part, state clearly what is missing."): every sentence is
+ * an English order to report. Quoted text is left out (an instruction may quote the sentence to
+ * write). Any other sentence, a figure or a first person makes it an answer.
  */
 export function echoesInstruction(text: string): boolean {
-  const body = stripEchoes(invisible(text)).normalize("NFC").trim()
+  const body = stripEchoes(invisible(text)).normalize("NFC").trim().replace(/^["“]([^"“”]*)["”]$/, "$1")
   if (!body || body.length > INSTRUCTION_MAX_CHARS) return false
   const unquoted = body.replace(/"[^"\n]*"|“[^”\n]*”/g, "")
-  if (!HARNESS_TOPIC.test(unquoted)) return false
-  // A list marker ("1.", "-") left alone by the split is no sentence.
-  const sentences = unquoted
-    .split(/(?<=[.!?])\s+|\n+/)
-    .map((s) => s.replace(/^[\s>*_-]+|^\d+[.)]\s*/g, "").trim())
-    .filter(Boolean)
+  if (!HARNESS_TOPIC.test(unquoted) || FIRST_PERSON.test(unquoted) || answerFigures(unquoted).length > 0) return false
+  const sentences = sentencesOf(unquoted)
   return sentences.length > 0 && sentences.every((sentence) => IMPERATIVE.test(sentence))
+}
+
+const words = (text: string) => (text.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []).join(" ")
+/** Every sentence the rescues are made of. */
+const RESCUE_SENTENCES =
+  [RESCUE_EMPTY, RESCUE_PROMISE, RESCUE_FRAGMENT, RESCUE_UNFETCHED, RESCUE_DRAFT, RESCUE_DRAFT_FETCH, RESCUE_EMPTY_FINAL, RESCUE_NUDGE_ECHO, RESCUE_ANSWER_NOW, RESCUE_MALFORMED, RESCUE_TEXT_CALL, rescueGaps([]), rescueGaps([], ["x"], { retry: true })]
+    .flatMap((nudge) => sentencesOf(nudge.replace(/<\/?nhac_nho>/g, "")))
+    .map(words)
+
+/** The whole answer is sentences of the harness's own rescues, word for word, maybe cut short (#414). */
+export function copiesRescue(text: string): boolean {
+  const body = stripEchoes(invisible(text)).normalize("NFC").replace(/^\s*These sources returned no data this turn:[^.\n]*\./, "")
+  const sentences = sentencesOf(body).map(words).filter(Boolean)
+  return sentences.length > 0 && sentences.every((sentence) => sentence.split(" ").length >= 4 && RESCUE_SENTENCES.some((rescue) => `${rescue} `.startsWith(`${sentence} `)))
 }
 
 export function judgeStop(last: LastStep, done: readonly RecoveryKind[], disabled?: Ablations): Verdict {
@@ -257,14 +279,17 @@ export function judgeStop(last: LastStep, done: readonly RecoveryKind[], disable
     if (left > 0 && used("question-echo") === 0) return { action: "continue", kind: "question-echo", nudge: RESCUE_EMPTY_FINAL, toolChoice: "none" }
     return { action: "give-up", kind: "question-echo" }
   }
-  // Restated a harness instruction instead of answering (#414): once, tools off. The nudge is not
-  // stored, so with nothing fetched it names what failed again. Judged only after a rescue: before
-  // one, an English sentence telling the user what to do ("Provide a valid ticker…") is an answer.
-  const failed = noDataFrom(last)
-  if (finished && !continuing && done.length > 0 && !disabled?.has("gate-nudge-echo") && echoesInstruction(last.text)) {
-    if (left > 0 && used("nudge-echo") === 0)
-      return { action: "continue", kind: "nudge-echo", nudge: failed ? rescueGaps(failed.gaps, failed.errored) : RESCUE_NUDGE_ECHO, toolChoice: "none" }
-    return { action: "give-up", kind: "nudge-echo" }
+  // Restated a harness instruction instead of answering (#414): once, tools off. Judged only after a
+  // rescue. A copy of a rescue is never an answer; a paraphrase counts only when every data call of
+  // the turn failed: with data there, or no data tool called, an English order may be the answer.
+  const unserved = last.fetchedData === false && ((last.gaps?.length ?? 0) > 0 || (last.errored?.length ?? 0) > 0)
+  if (finished && !continuing && done.length > 0 && !disabled?.has("gate-nudge-echo") && (copiesRescue(last.text) || (unserved && echoesInstruction(last.text)))) {
+    if (left <= 0 || used("nudge-echo") > 0) return { action: "give-up", kind: "nudge-echo" }
+    // No tool ran: the answer may need one.
+    if (!last.toolsInTurn) return { action: "continue", kind: "nudge-echo", nudge: RESCUE_EMPTY, toolChoice: "auto" }
+    // The nudge is not stored, so with nothing fetched it names what failed again.
+    const failed = noDataFrom(last)
+    return { action: "continue", kind: "nudge-echo", nudge: failed ? rescueGaps(failed.gaps, failed.errored) : RESCUE_NUDGE_ECHO, toolChoice: "none" }
   }
   // Wrote its own working notes (an outline, "chưa lấy… sẽ", a todo_write to call) as the answer,
   // once. With data fetched, tools off: write the answer from it. Without, it may fetch first.

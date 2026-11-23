@@ -1622,7 +1622,7 @@ async function* runTurn(opts: RunOptions, budget?: TurnBudget): AsyncGenerator<A
       text: verdict.kind === "question-echo"
         ? "Model chỉ lặp lại câu hỏi và chưa trả lời. Kết quả tool ở phía trên; thử hỏi lại hoặc đổi model."
         : verdict.kind === "nudge-echo"
-        ? "Model chỉ chép lại lời nhắc của harness và chưa trả lời. Kết quả tool ở phía trên; thử hỏi lại hoặc đổi model."
+        ? `Model chỉ chép lại lời nhắc của harness và chưa trả lời.${usedTools ? " Kết quả tool ở phía trên; thử" : " Thử"} hỏi lại hoặc đổi model.`
         : usedTools
         ? `Model không trả lời sau khi gọi tool (câu trả lời rỗng).${reason} Kết quả tool ở phía trên; thử hỏi lại hoặc đổi model.`
         : `Model trả về câu trả lời rỗng.${reason} Thử hỏi lại hoặc đổi model.`,

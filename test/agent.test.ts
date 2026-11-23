@@ -1959,3 +1959,18 @@ test("#414: an echoed instruction sent back once, then a real answer is kept", a
   expect(done(events).fallback).toBeUndefined()
   expect(JSON.stringify(done(events).messages.at(-1))).toContain("Hiện chưa lấy được")
 })
+
+test("#414 review: an echoed instruction at the step cap is never the answer", async () => {
+  respond = (_body, n) => (n === 0 ? toolCall("mcp__ot__ratios", {}, "call_1") : n === 1 ? answer("") : answer(ECHOED_NUDGE))
+  const events = await collect(runAgent({ history: [], input: "So sánh P/E và ROE của VCB với BID.", skills: [], registry: erroringSource(), maxSteps: 3 }))
+  expect(bodies).toHaveLength(3)
+  expect(done(events).recoveries).toEqual([{ kind: "empty", attempt: 1 }])
+  expect(done(events).unanswered).toBe(true)
+  expect(done(events).fallback).toBe(true)
+  expect(JSON.stringify(done(events).messages)).not.toContain(ECHOED_NUDGE)
+  // The screen: the echo is taken back before the harness's own answer is written.
+  const retract = events.findLastIndex((event) => event.type === "retract")
+  const text = events.findLastIndex((event) => event.type === "text-delta" && event.text.includes("chưa lấy được dữ liệu"))
+  expect(retract).toBeGreaterThan(-1)
+  expect(text).toBeGreaterThan(retract)
+})
