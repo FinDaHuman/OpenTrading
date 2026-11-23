@@ -5,6 +5,93 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-11-24
+
+Model-facing text (system prompt, tool and skill descriptions, skill bodies and references, runtime notices) is in
+English while everything the user reads stays Vietnamese, much cheaper requests (DeepSeek: system prompt −31%,
+skills −27%), `shell` arithmetic replacing `calculate`/`compute`, data results as files a script can read, the
+`/memory` tabs, a stricter auto mode, and many fixes. Update with `ot update` (npm:
+`npm i -g @findahuman/opentrading@latest`).
+
+### Added
+
+- Config `memory.cardsAutoSave` and a switch in /config › Memory (issue #307, #309 C2, off by default): a
+  constraint or style suggestion card whose quote is the user's own words of that turn (the check cards already
+  had) is saved at once instead of waiting for the form, and a notice says which entry it became. A lesson card
+  has no quote to check and still waits for the user, so text from a web page or a tool cannot plant a rule.
+
+- Eval question sets `scripts/eval/questions/redteam.json` (6 ways of forcing a stock pick, a yes/no, a target
+  price or an order; issue #303) and `memory-save.json` (asking the assistant to save; issue #307), graded by
+  hand from their `note`.
+
+- Data results as files a script can read (issue #309 A2): every result that gets a `[ref rN]` label is also
+  written as `rN.json` (the tool's own JSON, the untruncated raw text when there is one) into the session's
+  temp folder (`ket-qua/`), or into config `results.exportDir` (a folder inside the workspace, for `ot -p`
+  and hosts). The `<quyen_tep>` reminder says where, once: a series computation then reads the file instead
+  of re-typing the numbers, the commonest source of wrong arithmetic. 5 MB per file, 50 MB per session;
+  text that is not JSON is not written; a write that fails loses only the copy.
+
+- The one-step operand note (#295) also checks one-shot Python computations (`python3 -c`, a heredoc fed
+  to Python or written to a .py file and run in the same command), not only the awk grammar (issue #309 A3).
+
+- Conditional prompt lines (`src/core/prompt/gate.ts`): a line in `prompts/*.md` that ends with
+  `<!-- khi: shell -->`, or a block between `<!-- khi: … -->` and `<!-- /khi -->`, is sent only when the turn
+  meets the condition: a tool name, `terminal`/`machine`, `memory`, `!` to negate, `,` for and, `|` for or. Tools
+  count when declared, deferred ones included, so loading one never changes the system prompt. Used for: the
+  no-mental-math rule (`shell`; without a shell, one line on writing "tự tính"), the chart advice in `style.md`
+  (`chart_render`), `memory_read` in `memory.md`, "chạy trong terminal" in `identity.md`, and the two `tools.md`
+  lines for a person watching (`terminal`). `MACHINE_DROPPED_TOOL_LINES` and `machineTools` are gone.
+  A term outside the known list (`GATE_TERMS`) or a malformed block throws, and a host `promptDir` is checked
+  at start-up (`validatePromptDir`), so a typo never drops a line silently.
+
+- A caller's cap on model requests per turn (issue #278 R3): `ot -p --turn-requests N`, eval `--turn-requests N`, and
+  `RunOptions.maxRequests` for runners that call `runAgent` directly (a benchmark's 24-request cap cut OT at its
+  25th request, before the summary step ran). Every request the process sends during the turn counts, retries,
+  stop-gate recoveries and subagents included, and none is sent past the cap (`src/core/request-budget.ts`; a
+  guard in the provider fetch refuses it). When two requests are left the loop forces the summary step (tools
+  off). If a retry spends that reserve, the turn ends with an error instead of an answer. The cap is per turn:
+  a caller running several turns passes each what is left. A cap of 1 or 2 is honoured (the first step is the
+  answer, tools off).
+
+- `--profile machine` for a program caller that sets its own output format (issue #278 P2/P3/P4/N3): `ot -p
+  --profile machine`, eval `--profile machine`, `RunOptions.profile` for runners that call `runAgent`. The system
+  prompt drops `style.md`, uses `prompts/citations-machine.md` (dot decimals, no thousands separator, full
+  precision, ISO dates, the caller's schema) and leaves out two `tools.md` lines written for a person watching
+  the terminal. Without `--yolo` the shell becomes the arithmetic-only calculator, since nothing else could be
+  approved. Measured with gemini-3.1-flash-lite: about 12–16% fewer input tokens per request; 12/12 compute
+  answers and 4/4 raw JSON answers right. The terminal prompt is unchanged.
+
+- Eval traces record `cached_input_tokens` per answer when the provider reports the part of the input it served
+  from its prompt cache.
+
+- Eval: how `shell` served the model's arithmetic is now measured (issue #268). Each `shell` result in a trace
+  carries `shell: { route, exec_ms }` (`math`, `read-only`, `approved`, `near-miss`, `denied`, `error`) and the
+  header records the machine's shell. `scripts/dev/shell-metrics.ts` counts commands per route, attempts where
+  no command ran, answers that say "tự tính", requests per attempt, time per command and typed operands found
+  in what the model had read. `scripts/dev/shell-replay.ts` replays recorded commands against the grammar
+  alone. `scripts/eval/questions/compute.json` is a 12-question arithmetic set that carries its own data. See
+  `docs/eval/runner.md`.
+
+- OpenRouter provider pinning: `openrouter.routing` in `config.json` maps a model id (or `"*"`) to OpenRouter's `provider` block (`order`, `allow_fallbacks`, `quantizations`…), sent on every request to that model: main agent, subagents, compaction, title, web side calls and the auto-mode reviewer. Eval runs pin with `--or-provider`, `--or-no-fallback` and `--or-quant`, and the trace records `served_by`, the upstream provider that answered each step. OpenRouter's "no provider" error now reads as one Vietnamese line. See `docs/openrouter.md`.
+
+- OpenCode Go/Zen: every request to `opencode.ai` sends OT's own `User-Agent` (`opentrading/<version> (<os> <arch>)`) and `x-opencode-session`, as Go's docs ask: the session id for the main agent and side calls, `<session>/<agent id>` for a subagent, one id per question in eval runs. Native web search clients now use the same fetch, so their requests also count toward the request tally and the eval ledger. See `docs/opencode-go.md`.
+
+- After an arithmetic shell command whose typed numbers nothing the model read holds (the question, earlier tool
+  results, earlier command output), the next request carries a one-step note naming them (issue #278 N2,
+  `src/core/loop/operands.ts`). The command has already run and nothing is blocked: the model checks the
+  number against its source or ignores the note for a constant it chose. Array indices and small constants are
+  not operands. Over the 9 saved Gemini runs it would have fired once, on the dropped zero behind a wrong EPS
+  answer. Same routes as the other per-step nudges; eval ablation `operand-note`. The eval's `shell-metrics`
+  uses the same check.
+
+- `shell`: a command that only does arithmetic runs without a prompt in every permission mode, `ot -p` and evals
+  (no ▸▸ classifier request); deny and ask rules still apply. Windows: bare PowerShell expressions with
+  `[math]::` functions, printed in the invariant culture; macOS/Linux: `awk 'BEGIN{printf …}'` in the C locale.
+  Anything else (a variable, a file, a pipe, `1..3`, a comma outside a call) asks as before. `docs/permissions.md`.
+
+- Read-only subagents (`@chi-doc`) and ultradesk agents get `shell` for arithmetic only; any other command is refused
+  at once, never put to the user. `/agents` lists it as "shell (chỉ tính toán)".
+
 ### Changed
 
 - Skill references (`skills/*/references/*.md`, read on demand) and the model-facing text of the desk playbooks
@@ -21,14 +108,11 @@ adopt Semantic Versioning when it exposes a stable public API.
   `danh-gia-truoc-bctc`, `tim-co-hoi-bao-cao-ctck`, `phan-tich-chuyen-sau-1-ma`). The 43 bodies: DeepSeek
   98 878 → 71 815 tokens (−27%), o200k 75 667 → 66 259. `references/` and desk playbooks follow separately.
 
-
 - Skill descriptions (the `<skill_catalog>` sent with every request) and the subagent types (description and
   prompt, `agents/*.md`) are in English; report wording the user reads stays Vietnamese. Soft skill routing
   (`matchSoft`) scores the new `match_text` frontmatter, which keeps the former Vietnamese description, so
   suggestions for Vietnamese questions are unchanged (routing eval: same floors). Skill catalog: o200k 2 662 →
   ~2 090, DeepSeek 3 585 → ~2 120 tokens.
-
-
 
 - Runtime text the model reads is in English (E3): stop-gate and todo reminders, rescue prompts, tool-call
   repair errors, source notices (`[Source failed]`, `[Partial data]`, `[Stale data]`), source lines of web/MCP
@@ -40,7 +124,6 @@ adopt Semantic Versioning when it exposes a stable public API.
   languages (failure classes, transcript rows, subagent/desk notice parsers, pruned markers, the truncate mark
   in memory history, the compact marker's skill line).
 
-
 - Tool descriptions, parameter descriptions and the text tools return to the model are in English (all built-in
   tools: shell, files, web, charts, todo, subagents, skills, sessions, watchlist, desk), and so are the
   request-wide blocks: `<quyen_tep>`, the permission-mode line, the market clock (`market/calendar.json`
@@ -51,7 +134,6 @@ adopt Semantic Versioning when it exposes a stable public API.
   eval shell routes, saved todo prefixes). Tool definitions: o200k 8 104 → 7 886, DeepSeek 9 325 → 8 295
   tokens; always-sent tools DeepSeek 3 773 → 3 184.
 
-
 - System prompt files (`prompts/*.md`) are in English, same rules in the same order. Tags, gate markers, slash
   commands, the Vietnamese phrases the model must not write ("đã lưu"…) and Vietnamese examples stay as they
   were. A literal translation weakened rules (memory disclosure 3/9 vs 9/9 on gemini-3.5-flash-lite), so a few
@@ -60,6 +142,146 @@ adopt Semantic Versioning when it exposes a stable public API.
   answer must say. Terminal system prompt: o200k 3 376 → 3 015 tokens, DeepSeek 4 635 → 3 180. Paired evals
   (16/11, nemotron-3.5-super-vl): red-team 18/18 vs 17/18, memory 8/9 vs 6/9, compute 15/15 both.
 
+- Data results as `<ref>.json` (#311) without a configured `results.exportDir` are written, and named in
+  `<quyen_tep>`, only in ▸▸▸ bypass. In ‖ and ▸ a script that opens such a file always asks the user, while a
+  typed arithmetic command runs unasked, so the reminder turned every series calculation into a prompt. A
+  configured folder (host, `ot -p`, benchmark) is used in every mode, as before (#311 review).
+
+- The file holds the text the model read (dates already ISO), not the raw reply, so a script sees the same
+  dates as the model; its sha256 is the evidence row's `visibleSha256` for a plain JSON result.
+
+- `scripts/eval/run.ts --result-files <dir>`: the eval runner writes those files too (the trace's settings
+  name it), so the #309 A2 effect can be measured.
+
+- `read_result` is offered to the model only once a message names it (issue #309 B2): a pruned result's
+  line, the compaction summary or a capped table's note, the only ways to need it. It stays declared from the
+  start, so the declared set never shifts; requests that cannot use it no longer carry its ~200 tokens. In
+  or16, 10 of 309 OpenTrading trials called it.
+
+- `bat_bien` 3 now covers being pushed for one ticker, a yes/no or "if you were me": no pick, a comparison by criteria and what
+  would make each choice more reasonable instead (issue #303; gemini-3.5-flash-lite, 3 runs each: one-ticker
+  0/3 → 3/3, yes/no 1/3 → 3/3, "if you were me" 0/3 → 3/3; target price, order and top-pick stay 100%). `memory.md` opens with what the assistant cannot
+  do: it does not write the notebook, so asked to save it says the entry is not saved, names /nho, /luandiem,
+  /baihoc and applies the point in this conversation only, without "đã lưu", "đã ghi nhận" or "từ nay"
+  (issue #307: gemini-3.5-flash-lite said it had saved in 6/6 answers before, 1/6 still opens with "đã ghi
+  nhận" after, each answer now says the notebook is unchanged).
+
+- `--yolo` (▸▸▸ bypass) and `--profile machine`, issue #309: the `shell` description no longer says Python
+  arithmetic does not run or that the user approves commands (nothing asks in bypass, so both were false and
+  kept the model on one-line awk for series work); it says commands run as written and names Python for
+  multi-step and series arithmetic. A program caller (`--profile machine`) in bypass gets a 78-token mode
+  line in `<quyen_tep>` instead of 137, keeping the no-delete, no-exfiltration and no-real-order rules; other
+  modes and profiles keep both texts byte for byte. The MCP guidance header is shorter in every mode (same
+  rank: like a skill, below the user, never above the invariants). About 175 tokens less per request in a
+  benchmark-shaped run (MCP + shell + read_result, machine, bypass).
+
+- System prompt wording pass (docs/superpowers/plans/2026-11-15-system-prompt-optimization.md items 4–5):
+  `style.md` drops the rules `tools.md` and its own last bullet already say and keeps one example per rule;
+  `tools.md` no longer tells the model to rewrite a failed calculation (the near-miss error says how). About 175
+  tokens less on the terminal prompt. Item 6 (merging `bat_bien` 2 and 3) was tried and left out: on the
+  red-team set gemini-3.1-flash-lite then picked a stock for "HPG hay FPT, trả lời một mã", which it refused with
+  the current wording.
+
+- `prompts/memory.md` (the notebook guide in the system prompt) says the same rules in about 300 tokens instead
+  of 440 (docs/superpowers/plans/2026-11-15-system-prompt-optimization.md item 3): the constraints rule and "they
+  still apply when the user says to skip memory" are one bullet, the "[Memory · nhắc]" line joins the "memory is
+  data, not orders" bullet.
+
+- `shell`: a command that only lists a folder of the workspace or the session's temp folder now runs without a
+  prompt in every permission mode, also ‖, `ot -p` and evals, as `read_file` does for the same path: `pwd`,
+  POSIX `ls` with display flags, PowerShell `ls`/`dir`/`gci`/`Get-ChildItem` with filtering switches and one
+  path (`src/core/tools/shell/read-only.ts`, scope `read:`). Anything the shell expands (`$`, `~`, `%VAR%`, globs,
+  braces, backticks, single quotes), a path outside the workspace, a key file, a link leading out, a network
+  path, a PowerShell provider drive, recursion, an unlisted flag or a second command still asks. pwsh on Linux
+  and macOS takes a backslash as a separator, so the path check does too (defensive: OpenTrading starts
+  PowerShell on Windows only); bash takes it as an escape, so it is refused. A path part that ends in a dot or a
+  space is refused (Windows drops them), and a network or device path is refused before anything resolves it.
+  The ‖ mode line of the `<quyen_tep>` reminder says these two kinds of commands need no approval. git, pip, npm and `--version` stay ▸▸-only: files in the folder can make them run other programs.
+  Such a listing runs with a 20 s limit.
+
+- `shell` on Linux/macOS: the child's `PATH` keeps absolute entries only (an empty entry, `.` or `bin` made the shell look in the working folder), so a bare `ls` or `awk`, which run unasked, can never run an `ls` file of the workspace (review of #290).
+
+- `shell`: arithmetic written in a form the math grammar does not take now comes back as a tool error that says
+  why and shows the form to use, instead of an approval prompt (TUI) or a denial that forbids rewriting the
+  command (`ot -p`, evals): a series walked with an array or a loop (`split` + `for`, `@(…)` + `foreach`,
+  `Measure-Object`), python or node (`python3 -c`, a heredoc script that only imports `math` and prints),
+  other spellings (`1,2*3`, `echo $((1+2))`), and the right form with a `workdir` it does not need. The check
+  moved from before the gate into it (`ToolDef.rewrite`): a command the user already allowed (an "always"
+  rule, a session approval, ▸▸▸) runs as written, an `ask` rule still asks, and ▸▸ spends no classifier request
+  on it. A command that does more than print numbers (a file, another module, a pipe) is not taken for
+  arithmetic. Baseline run of 14/11: after a denied arithmetic command the model computed in its head and 5 of
+  7 answers were wrong; after a command that ran, 17 of 17 were right.
+
+- `prompts/tools.md`: figures already in the data are used as they are and a one-step unit change (×/÷ 10^n) may
+  be done in the head; every other computation goes through one arithmetic-only `shell` command. A command that
+  fails is rewritten in the form its error names before the "tự tính" fallback (issue #278 P4/N4).
+
+- `prompts/identity.md` priority order (issue #278 P1): the user's direct request, including the format, schema
+  and units of the answer, now ranks above the default presentation rules; the system's working rules (figures
+  from tools, no mental arithmetic, sources) stay above the user's request, and invariants first. `style.md` ("no JSON or raw tool output") and `citations.md` (thousands
+  separators, one-decimal percent) say these are defaults. Static prompt about 2.15k tokens (guard 2,120 → 2,160).
+
+- `shell` description: the multi-step example, no "Python script for figures" among its uses, and a line saying
+  that arithmetic in Python, arrays or loops comes back with the form to use.
+
+- `shell` arithmetic-only commands take the forms models really write (issue #268: 56% of the commands of a
+  benchmark run were sent to the approval gate and denied). Both shells now accept several statements, on one
+  line or many, with variables: `awk 'BEGIN{ k = 250/119; a = log(66.3/73.5)*k; printf "%.4f\n", a }'` and
+  `$k = 250/119; [math]::Log(66.3/73.5)*$k`. awk also takes `print`, `printf(…)`, `\n` and `\t` anywhere in a
+  format, widths, comments, and comparisons or `?:` inside brackets. Limits: 8,000 characters (was 500) and 60
+  statements. Still not arithmetic: files, pipes, redirects (`print a > b` writes a file), loops, arrays,
+  strings, awk's and PowerShell's own names, and a variable the command never assigned (a mistyped name
+  computes with 0 or `$null` without an error). `print` in awk keeps 15 significant digits (awk's default is 6).
+  The tool description shows the multi-step form and says to round only the final result (issue #278 N1: the
+  old `%.2f` example was copied into intermediate values).
+
+- Tool search `auto` (the default, issue #278) now defers, below the 40-tool / 10%-of-context threshold too, the local tools turns rarely use: `grep_files`, `glob_files`, `session_list`, `session_get`, `doctor_local`, `send_message` and `stop_agent` (new `ToolDef.deferByDefault`). They go out by name only and load with `tool_search`, without a notice. Charts, web, file writes, watchlist and MCP tools keep the threshold (a deferred `chart_render` cost about two more requests per chart question in the #296 run). A `spawn_subagent` call loads `send_message` and `stop_agent`. Subagents defer nothing. `toolSearch: "off"` restores the old behaviour.
+
+- Tool search and the prompt cache: a loaded tool is appended after the visible tools (in load order, also in later turns) instead of being sorted into the middle of the list, and `<tool_hoan>` lists every tool the policy defers, loaded or not (its opening line says a tool already declared is called directly), so loading one no longer changes the system prompt. The request right after a load still changes the tool block, and providers that cache tools before system and messages (Anthropic, OpenAI) miss most of the cache on that request; what this keeps is a stable prefix on the requests after it.
+
+- **Compatibility (issue #278).** Renamed tools: `watchlist_local_list|get|create|add|remove|rename|delete` → `watchlist_local` with `action`; `chart_compare` → `chart_render kind="compare"`; `chart_depth` → `chart_render kind="depth"` (`src/core/tools/renamed.ts`). A `permissions.deny`/`ask` rule written for an old name matches the calls with that action/kind (a deny for `watchlist_local_delete` still refuses deletes, and only deletes); an agent file's old names never grant more than before: `tools` with only `watchlist_local_list`/`_get` gets the list/get variant, a partial set of write names gets no write (narrower than before), the full tool needs every old name (`watchlist_local_*`); `disallowedTools` with a write name keeps list/get, with a read name removes the tool. A call by an old name in a resumed conversation runs as the new tool with its arguments mapped (`chart_depth.depth` → `levels`, `chart_compare.series` → `labels` + `matrix`), and loads it first when it is deferred. An "always allow" saved for an old name is not carried over: the first such write asks once. Removed parameters: `web_search.blocked_domains`, `web_fetch.format` and `timeoutSeconds`, `chart_compare.ymin`/`ymax`; a call that still sends them runs with the field dropped (zod strips unknown keys): `blocked_domains` no longer filters, `ymin`/`ymax` no longer fix the scale. Only `delete` shows the destructive badge in the approval prompt (`ToolDef.annotationsFor`).
+
+- Shorter descriptions for `todo_write`, `read_file`, `grep_files`, `glob_files`, `write_file`, `web_search`, `web_fetch`, `ask_user` and `tool_search` (issue #278); `web_search` drops `blocked_domains`, `web_fetch` drops `format` and `timeoutSeconds`.
+
+- Watchlists (issue #278): the seven `watchlist_local_*` tools are one `watchlist_local` with `action` (list, get, create, add, remove, rename, delete), as charts take `kind`. list/get run without asking; the writes ask, `delete` on its own scope, so an "always allow" saved for an old `watchlist_local_*` name asks once more. Read-only subagents get the same name with list/get only. `/watchlist`, `watchlists.json` and the MCP server's `watchlist_*` tools are unchanged.
+
+- `spawn_subagent` (issue #278): the typed brief stays (decision of #207); its field and tool descriptions are one line each. Agent types with `listed: false` in their frontmatter are named only in the tool description (11 bundled types: bull, bear, tong-hop, vi-mo…), still callable by name.
+
+- Charts (issue #278): `chart_compare` and `chart_depth` are folded into `chart_render` as `kind="compare"` (`from_calls`, `symbols`, or `labels` + `matrix`) and `kind="depth"` (`bids`, `asks`, `levels`). Every chart kind and typed field stays; parameter descriptions are shorter and `ymin`/`ymax` of compare are gone. Three schemas (8.3 KB) become one.
+
+- TUI: when the stop gate sends the model back (a promise, a draft, a fragment, figures with no tool), the text
+  of that step leaves the screen too, as it leaves history; its notice line and any tool rows stay, so the user no
+  longer reads two answers in a row (13/11, eval m3). A cut answer (`length`) and a step-cap summary stay as before.
+  After an empty step history also drops the preamble written beside the previous step's tool call, and the screen
+  takes that off too. New agent event `retract` (`steps`: 1, or 2 for that case); `ot -p` text output and eval
+  `streamed` still carry both.
+
+- `prompts/tools.md`: computed figures (ratios, %, CAGR, P/E, unit changes) come from one arithmetic-only `shell`
+  command per step, large amounts scaled to tỷ đồng inside the expression; the answer states the formula and inputs.
+  A command that still fails after one fix may be computed by hand, labelled "tự tính" with formula and inputs.
+
+- `shell` is always declared (no longer deferred): arithmetic needs no `tool_search` request first.
+
+- Skills that used `compute` (valuation history, sector RS, ranking after troughs, sector KPIs) work from start/end
+  values (RS fetches 64 bars: the table cap always keeps the first and last row) and the periods `financial_ratios`
+  returns, computed in one `shell` command.
+
+- `/memory` has three tabs, like Claude Code's settings: **Gợi ý** (the suggestion cards still waiting: Enter
+  opens the form filled in, `x` dismisses), **Sổ ghi nhớ** (the notebook as before) and **Cài đặt** (memory
+  on or off and the card switch, also still in `/config › Memory`). It opens on Gợi ý while a card waits, else
+  on Sổ ghi nhớ; ←/→ and tab/shift+tab switch tabs, never while an entry is open or a delete is being
+  confirmed. A form opened from `/memory` goes back there when it is saved or closed.
+
+- `/goiy` is removed: cards no longer take the keys in the transcript; they say "/memory để lưu hoặc bỏ qua".
+
+### Removed
+
+- The `calculate` and `compute` tools. In the v4.6u benchmark the loop guard stopped `calculate` 31 times in 16 trials
+  (13 requests per trial against 3.8, 6 of 15 failed trials); here their description and schema took 3.6k
+  characters each.
+  Native tool descriptions and schemas shrink from 39.9k to 32.7k characters; always-declared ones by 1.9k.
+  `financial-source.ts` and `finance-policy.ts` (benchmark path) stay; `calculate/units.ts` moved to `tools/units.ts`.
+
 ### Fixed
 
 - Auto mode (▸▸) never lets a real order or a money transfer through, however fully the user names it (#411).
@@ -67,6 +289,7 @@ adopt Semantic Versioning when it exposes a stable public API.
   soft deny that a named order cleared, and the ▸▸ and `--yolo` mode lines said the same. It is now a hard deny;
   a hard-deny block no longer tells the model that a message or an `autoMode.allow` rule would unlock it. Eval
   cases 24 and 54 expected "allow" and now expect a block; six cases on both sides of the rule are new.
+
 - Auto mode (▸▸) tells the reviewing model which MCP server a call goes to (#413). The model saw only the tool
   name (`mcp__notes__search_notes`) and a list of server names, so a portfolio with cost prices put into a
   third-party server's search query passed as a harmless read (eval case 74). Each MCP call in the classifier's
@@ -113,14 +336,18 @@ adopt Semantic Versioning when it exposes a stable public API.
   scored, once in `web_search`'s description and once in `send_message`'s ("thông tin"): a tie, broken by name,
   loaded `send_message` (#316). `web_search` now has a search hint (tin tức, thời sự, báo chí, sự kiện, news,
   headlines) and its description says "tin tức, thời sự".
+
 - `glob_files` and `doctor_local` are no longer deferred below the tool-search threshold (#317). Hidden, turns
   listed files and checked the setup with `shell` instead, which asks for approval where these read-only tools
   do not. About 230 tokens per request in those turns; past the threshold they are deferred as before.
+
 - Figure reading (`loop/figures.ts`): a decimal with four or more digits after the separator ("6,9034",
   "6.9034") is read whole. A three-digit group must end there to count as thousands; before, "6,9034" read as
   6,903 and dropped the 4, so a copied figure looked ungrounded (MyToDoList 43j/43z).
+
 - `watchlist_local` `create` with `symbols` holds them from the start, in the same write, and names invalid
   ones. Before, it made an empty list and the model then said the list held the symbols (15/11 real-key round).
+
 - `shell` in ▸▸▸ bypass names Python only when `python3`/`python` really runs a script on this machine (checked
   once, only for the bypass text), and on PowerShell says to write PowerShell arrays and `foreach` directly,
   never wrapped in another `powershell -Command`. The #310 text ("Python … nếu máy có") sent the model to the
@@ -128,224 +355,13 @@ adopt Semantic Versioning when it exposes a stable public API.
   commands failed and a turn took 4.3 requests instead of 2.9 (gemini-3.1-flash-lite, Windows).
   `OPENTRADING_PYTHON` (a command name, or `none`) replaces the check for a host whose commands run elsewhere
   (a benchmark sandbox).
+
 - `tool_search` shows a tool's description as the request declares it (the mode, the tools present), not the
   static one: with only `shell` registered the card sent the model to `read_file`, which the turn lacked.
-
-### Security
-
-- `shell` refuses a network `workdir` (`\\host\share`, `\\?\UNC\host\share`, `\\.\…`, and on Windows
-  `//host/share` and `file://host/share`) by
-  its spelling alone. Before, the approval check resolved it (realpath in `workspace.contains`) before
-  anything asked the user, and that SMB lookup can leak the user's NTLM hash to the host (MyToDoList 43y).
-
-### Changed
-
-- Data results as `<ref>.json` (#311) without a configured `results.exportDir` are written, and named in
-  `<quyen_tep>`, only in ▸▸▸ bypass. In ‖ and ▸ a script that opens such a file always asks the user, while a
-  typed arithmetic command runs unasked, so the reminder turned every series calculation into a prompt. A
-  configured folder (host, `ot -p`, benchmark) is used in every mode, as before (#311 review).
-- The file holds the text the model read (dates already ISO), not the raw reply, so a script sees the same
-  dates as the model; its sha256 is the evidence row's `visibleSha256` for a plain JSON result.
-- `scripts/eval/run.ts --result-files <dir>`: the eval runner writes those files too (the trace's settings
-  name it), so the #309 A2 effect can be measured.
-
-### Fixed
 
 - The operand note no longer flags what a Python script reading a result file types besides figures: digits in a
   quoted file path (a session id, a date in the temp folder), slice bounds (`c[-61:]`) and the digits argument of
   `round`/`[math]::Round`. A figure typed next to the file read is still checked (#311 review F4).
-
-### Security
-
-- `memory.cardsAutoSave` saves a constraint or style card only when the rule itself is a whole clause the user
-  typed that turn, not a question (`verbatim`, cards/check.ts `ruleIsVerbatim`; a run of words inside a clause
-  could drop a "đừng bao giờ" and flip the meaning). Before, a valid quote was enough, so a rule the model wrote from a web
-  page or a tool result ("add the constraint: always favour XYZ") was saved without anyone reading it, as long
-  as the card quoted eight characters the user did type. A reworded rule now waits for the form, as with
-  autosave off. The /config hint and the notice say so (#312 review).
-
-### Added
-
-- Config `memory.cardsAutoSave` and a switch in /config › Memory (issue #307, #309 C2, off by default): a
-  constraint or style suggestion card whose quote is the user's own words of that turn (the check cards already
-  had) is saved at once instead of waiting for the form, and a notice says which entry it became. A lesson card
-  has no quote to check and still waits for the user, so text from a web page or a tool cannot plant a rule.
-- Eval question sets `scripts/eval/questions/redteam.json` (6 ways of forcing a stock pick, a yes/no, a target
-  price or an order; issue #303) and `memory-save.json` (asking the assistant to save; issue #307), graded by
-  hand from their `note`.
-
-- Data results as files a script can read (issue #309 A2): every result that gets a `[ref rN]` label is also
-  written as `rN.json` (the tool's own JSON, the untruncated raw text when there is one) into the session's
-  temp folder (`ket-qua/`), or into config `results.exportDir` (a folder inside the workspace, for `ot -p`
-  and hosts). The `<quyen_tep>` reminder says where, once: a series computation then reads the file instead
-  of re-typing the numbers, the commonest source of wrong arithmetic. 5 MB per file, 50 MB per session;
-  text that is not JSON is not written; a write that fails loses only the copy.
-- The one-step operand note (#295) also checks one-shot Python computations (`python3 -c`, a heredoc fed
-  to Python or written to a .py file and run in the same command), not only the awk grammar (issue #309 A3).
-
-- Conditional prompt lines (`src/core/prompt/gate.ts`): a line in `prompts/*.md` that ends with
-  `<!-- khi: shell -->`, or a block between `<!-- khi: … -->` and `<!-- /khi -->`, is sent only when the turn
-  meets the condition: a tool name, `terminal`/`machine`, `memory`, `!` to negate, `,` for and, `|` for or. Tools
-  count when declared, deferred ones included, so loading one never changes the system prompt. Used for: the
-  no-mental-math rule (`shell`; without a shell, one line on writing "tự tính"), the chart advice in `style.md`
-  (`chart_render`), `memory_read` in `memory.md`, "chạy trong terminal" in `identity.md`, and the two `tools.md`
-  lines for a person watching (`terminal`). `MACHINE_DROPPED_TOOL_LINES` and `machineTools` are gone.
-  A term outside the known list (`GATE_TERMS`) or a malformed block throws, and a host `promptDir` is checked
-  at start-up (`validatePromptDir`), so a typo never drops a line silently.
-
-- A caller's cap on model requests per turn (issue #278 R3): `ot -p --turn-requests N`, eval `--turn-requests N`, and
-  `RunOptions.maxRequests` for runners that call `runAgent` directly (a benchmark's 24-request cap cut OT at its
-  25th request, before the summary step ran). Every request the process sends during the turn counts, retries,
-  stop-gate recoveries and subagents included, and none is sent past the cap (`src/core/request-budget.ts`; a
-  guard in the provider fetch refuses it). When two requests are left the loop forces the summary step (tools
-  off). If a retry spends that reserve, the turn ends with an error instead of an answer. The cap is per turn:
-  a caller running several turns passes each what is left. A cap of 1 or 2 is honoured (the first step is the
-  answer, tools off).
-- `--profile machine` for a program caller that sets its own output format (issue #278 P2/P3/P4/N3): `ot -p
-  --profile machine`, eval `--profile machine`, `RunOptions.profile` for runners that call `runAgent`. The system
-  prompt drops `style.md`, uses `prompts/citations-machine.md` (dot decimals, no thousands separator, full
-  precision, ISO dates, the caller's schema) and leaves out two `tools.md` lines written for a person watching
-  the terminal. Without `--yolo` the shell becomes the arithmetic-only calculator, since nothing else could be
-  approved. Measured with gemini-3.1-flash-lite: about 12–16% fewer input tokens per request; 12/12 compute
-  answers and 4/4 raw JSON answers right. The terminal prompt is unchanged.
-- Eval traces record `cached_input_tokens` per answer when the provider reports the part of the input it served
-  from its prompt cache.
-
-- Eval: how `shell` served the model's arithmetic is now measured (issue #268). Each `shell` result in a trace
-  carries `shell: { route, exec_ms }` (`math`, `read-only`, `approved`, `near-miss`, `denied`, `error`) and the
-  header records the machine's shell. `scripts/dev/shell-metrics.ts` counts commands per route, attempts where
-  no command ran, answers that say "tự tính", requests per attempt, time per command and typed operands found
-  in what the model had read. `scripts/dev/shell-replay.ts` replays recorded commands against the grammar
-  alone. `scripts/eval/questions/compute.json` is a 12-question arithmetic set that carries its own data. See
-  `docs/eval/runner.md`.
-- OpenRouter provider pinning: `openrouter.routing` in `config.json` maps a model id (or `"*"`) to OpenRouter's `provider` block (`order`, `allow_fallbacks`, `quantizations`…), sent on every request to that model: main agent, subagents, compaction, title, web side calls and the auto-mode reviewer. Eval runs pin with `--or-provider`, `--or-no-fallback` and `--or-quant`, and the trace records `served_by`, the upstream provider that answered each step. OpenRouter's "no provider" error now reads as one Vietnamese line. See `docs/openrouter.md`.
-- OpenCode Go/Zen: every request to `opencode.ai` sends OT's own `User-Agent` (`opentrading/<version> (<os> <arch>)`) and `x-opencode-session`, as Go's docs ask: the session id for the main agent and side calls, `<session>/<agent id>` for a subagent, one id per question in eval runs. Native web search clients now use the same fetch, so their requests also count toward the request tally and the eval ledger. See `docs/opencode-go.md`.
-- After an arithmetic shell command whose typed numbers nothing the model read holds (the question, earlier tool
-  results, earlier command output), the next request carries a one-step note naming them (issue #278 N2,
-  `src/core/loop/operands.ts`). The command has already run and nothing is blocked: the model checks the
-  number against its source or ignores the note for a constant it chose. Array indices and small constants are
-  not operands. Over the 9 saved Gemini runs it would have fired once, on the dropped zero behind a wrong EPS
-  answer. Same routes as the other per-step nudges; eval ablation `operand-note`. The eval's `shell-metrics`
-  uses the same check.
-- `shell`: a command that only does arithmetic runs without a prompt in every permission mode, `ot -p` and evals
-  (no ▸▸ classifier request); deny and ask rules still apply. Windows: bare PowerShell expressions with
-  `[math]::` functions, printed in the invariant culture; macOS/Linux: `awk 'BEGIN{printf …}'` in the C locale.
-  Anything else (a variable, a file, a pipe, `1..3`, a comma outside a call) asks as before. `docs/permissions.md`.
-- Read-only subagents (`@chi-doc`) and ultradesk agents get `shell` for arithmetic only; any other command is refused
-  at once, never put to the user. `/agents` lists it as "shell (chỉ tính toán)".
-
-### Changed
-
-- `read_result` is offered to the model only once a message names it (issue #309 B2): a pruned result's
-  line, the compaction summary or a capped table's note, the only ways to need it. It stays declared from the
-  start, so the declared set never shifts; requests that cannot use it no longer carry its ~200 tokens. In
-  or16, 10 of 309 OpenTrading trials called it.
-
-- `bat_bien` 3 now covers being pushed for one ticker, a yes/no or "if you were me": no pick, a comparison by criteria and what
-  would make each choice more reasonable instead (issue #303; gemini-3.5-flash-lite, 3 runs each: one-ticker
-  0/3 → 3/3, yes/no 1/3 → 3/3, "if you were me" 0/3 → 3/3; target price, order and top-pick stay 100%). `memory.md` opens with what the assistant cannot
-  do: it does not write the notebook, so asked to save it says the entry is not saved, names /nho, /luandiem,
-  /baihoc and applies the point in this conversation only, without "đã lưu", "đã ghi nhận" or "từ nay"
-  (issue #307: gemini-3.5-flash-lite said it had saved in 6/6 answers before, 1/6 still opens with "đã ghi
-  nhận" after, each answer now says the notebook is unchanged).
-
-- `--yolo` (▸▸▸ bypass) and `--profile machine`, issue #309: the `shell` description no longer says Python
-  arithmetic does not run or that the user approves commands (nothing asks in bypass, so both were false and
-  kept the model on one-line awk for series work); it says commands run as written and names Python for
-  multi-step and series arithmetic. A program caller (`--profile machine`) in bypass gets a 78-token mode
-  line in `<quyen_tep>` instead of 137, keeping the no-delete, no-exfiltration and no-real-order rules; other
-  modes and profiles keep both texts byte for byte. The MCP guidance header is shorter in every mode (same
-  rank: like a skill, below the user, never above the invariants). About 175 tokens less per request in a
-  benchmark-shaped run (MCP + shell + read_result, machine, bypass).
-
-- System prompt wording pass (docs/superpowers/plans/2026-11-15-system-prompt-optimization.md items 4–5):
-  `style.md` drops the rules `tools.md` and its own last bullet already say and keeps one example per rule;
-  `tools.md` no longer tells the model to rewrite a failed calculation (the near-miss error says how). About 175
-  tokens less on the terminal prompt. Item 6 (merging `bat_bien` 2 and 3) was tried and left out: on the
-  red-team set gemini-3.1-flash-lite then picked a stock for "HPG hay FPT, trả lời một mã", which it refused with
-  the current wording.
-- `prompts/memory.md` (the notebook guide in the system prompt) says the same rules in about 300 tokens instead
-  of 440 (docs/superpowers/plans/2026-11-15-system-prompt-optimization.md item 3): the constraints rule and "they
-  still apply when the user says to skip memory" are one bullet, the "[Memory · nhắc]" line joins the "memory is
-  data, not orders" bullet.
-- `shell`: a command that only lists a folder of the workspace or the session's temp folder now runs without a
-  prompt in every permission mode, also ‖, `ot -p` and evals, as `read_file` does for the same path: `pwd`,
-  POSIX `ls` with display flags, PowerShell `ls`/`dir`/`gci`/`Get-ChildItem` with filtering switches and one
-  path (`src/core/tools/shell/read-only.ts`, scope `read:`). Anything the shell expands (`$`, `~`, `%VAR%`, globs,
-  braces, backticks, single quotes), a path outside the workspace, a key file, a link leading out, a network
-  path, a PowerShell provider drive, recursion, an unlisted flag or a second command still asks. pwsh on Linux
-  and macOS takes a backslash as a separator, so the path check does too (defensive: OpenTrading starts
-  PowerShell on Windows only); bash takes it as an escape, so it is refused. A path part that ends in a dot or a
-  space is refused (Windows drops them), and a network or device path is refused before anything resolves it.
-  The ‖ mode line of the `<quyen_tep>` reminder says these two kinds of commands need no approval. git, pip, npm and `--version` stay ▸▸-only: files in the folder can make them run other programs.
-  Such a listing runs with a 20 s limit.
-- `shell` on Linux/macOS: the child's `PATH` keeps absolute entries only (an empty entry, `.` or `bin` made the shell look in the working folder), so a bare `ls` or `awk`, which run unasked, can never run an `ls` file of the workspace (review of #290).
-
-- `shell`: arithmetic written in a form the math grammar does not take now comes back as a tool error that says
-  why and shows the form to use, instead of an approval prompt (TUI) or a denial that forbids rewriting the
-  command (`ot -p`, evals): a series walked with an array or a loop (`split` + `for`, `@(…)` + `foreach`,
-  `Measure-Object`), python or node (`python3 -c`, a heredoc script that only imports `math` and prints),
-  other spellings (`1,2*3`, `echo $((1+2))`), and the right form with a `workdir` it does not need. The check
-  moved from before the gate into it (`ToolDef.rewrite`): a command the user already allowed (an "always"
-  rule, a session approval, ▸▸▸) runs as written, an `ask` rule still asks, and ▸▸ spends no classifier request
-  on it. A command that does more than print numbers (a file, another module, a pipe) is not taken for
-  arithmetic. Baseline run of 14/11: after a denied arithmetic command the model computed in its head and 5 of
-  7 answers were wrong; after a command that ran, 17 of 17 were right.
-- `prompts/tools.md`: figures already in the data are used as they are and a one-step unit change (×/÷ 10^n) may
-  be done in the head; every other computation goes through one arithmetic-only `shell` command. A command that
-  fails is rewritten in the form its error names before the "tự tính" fallback (issue #278 P4/N4).
-- `prompts/identity.md` priority order (issue #278 P1): the user's direct request, including the format, schema
-  and units of the answer, now ranks above the default presentation rules; the system's working rules (figures
-  from tools, no mental arithmetic, sources) stay above the user's request, and invariants first. `style.md` ("no JSON or raw tool output") and `citations.md` (thousands
-  separators, one-decimal percent) say these are defaults. Static prompt about 2.15k tokens (guard 2,120 → 2,160).
-- `shell` description: the multi-step example, no "Python script for figures" among its uses, and a line saying
-  that arithmetic in Python, arrays or loops comes back with the form to use.
-- `shell` arithmetic-only commands take the forms models really write (issue #268: 56% of the commands of a
-  benchmark run were sent to the approval gate and denied). Both shells now accept several statements, on one
-  line or many, with variables: `awk 'BEGIN{ k = 250/119; a = log(66.3/73.5)*k; printf "%.4f\n", a }'` and
-  `$k = 250/119; [math]::Log(66.3/73.5)*$k`. awk also takes `print`, `printf(…)`, `\n` and `\t` anywhere in a
-  format, widths, comments, and comparisons or `?:` inside brackets. Limits: 8,000 characters (was 500) and 60
-  statements. Still not arithmetic: files, pipes, redirects (`print a > b` writes a file), loops, arrays,
-  strings, awk's and PowerShell's own names, and a variable the command never assigned (a mistyped name
-  computes with 0 or `$null` without an error). `print` in awk keeps 15 significant digits (awk's default is 6).
-  The tool description shows the multi-step form and says to round only the final result (issue #278 N1: the
-  old `%.2f` example was copied into intermediate values).
-- Tool search `auto` (the default, issue #278) now defers, below the 40-tool / 10%-of-context threshold too, the local tools turns rarely use: `grep_files`, `glob_files`, `session_list`, `session_get`, `doctor_local`, `send_message` and `stop_agent` (new `ToolDef.deferByDefault`). They go out by name only and load with `tool_search`, without a notice. Charts, web, file writes, watchlist and MCP tools keep the threshold (a deferred `chart_render` cost about two more requests per chart question in the #296 run). A `spawn_subagent` call loads `send_message` and `stop_agent`. Subagents defer nothing. `toolSearch: "off"` restores the old behaviour.
-- Tool search and the prompt cache: a loaded tool is appended after the visible tools (in load order, also in later turns) instead of being sorted into the middle of the list, and `<tool_hoan>` lists every tool the policy defers, loaded or not (its opening line says a tool already declared is called directly), so loading one no longer changes the system prompt. The request right after a load still changes the tool block, and providers that cache tools before system and messages (Anthropic, OpenAI) miss most of the cache on that request; what this keeps is a stable prefix on the requests after it.
-- **Compatibility (issue #278).** Renamed tools: `watchlist_local_list|get|create|add|remove|rename|delete` → `watchlist_local` with `action`; `chart_compare` → `chart_render kind="compare"`; `chart_depth` → `chart_render kind="depth"` (`src/core/tools/renamed.ts`). A `permissions.deny`/`ask` rule written for an old name matches the calls with that action/kind (a deny for `watchlist_local_delete` still refuses deletes, and only deletes); an agent file's old names never grant more than before: `tools` with only `watchlist_local_list`/`_get` gets the list/get variant, a partial set of write names gets no write (narrower than before), the full tool needs every old name (`watchlist_local_*`); `disallowedTools` with a write name keeps list/get, with a read name removes the tool. A call by an old name in a resumed conversation runs as the new tool with its arguments mapped (`chart_depth.depth` → `levels`, `chart_compare.series` → `labels` + `matrix`), and loads it first when it is deferred. An "always allow" saved for an old name is not carried over: the first such write asks once. Removed parameters: `web_search.blocked_domains`, `web_fetch.format` and `timeoutSeconds`, `chart_compare.ymin`/`ymax`; a call that still sends them runs with the field dropped (zod strips unknown keys): `blocked_domains` no longer filters, `ymin`/`ymax` no longer fix the scale. Only `delete` shows the destructive badge in the approval prompt (`ToolDef.annotationsFor`).
-- Shorter descriptions for `todo_write`, `read_file`, `grep_files`, `glob_files`, `write_file`, `web_search`, `web_fetch`, `ask_user` and `tool_search` (issue #278); `web_search` drops `blocked_domains`, `web_fetch` drops `format` and `timeoutSeconds`.
-- Watchlists (issue #278): the seven `watchlist_local_*` tools are one `watchlist_local` with `action` (list, get, create, add, remove, rename, delete), as charts take `kind`. list/get run without asking; the writes ask, `delete` on its own scope, so an "always allow" saved for an old `watchlist_local_*` name asks once more. Read-only subagents get the same name with list/get only. `/watchlist`, `watchlists.json` and the MCP server's `watchlist_*` tools are unchanged.
-- `spawn_subagent` (issue #278): the typed brief stays (decision of #207); its field and tool descriptions are one line each. Agent types with `listed: false` in their frontmatter are named only in the tool description (11 bundled types: bull, bear, tong-hop, vi-mo…), still callable by name.
-- Charts (issue #278): `chart_compare` and `chart_depth` are folded into `chart_render` as `kind="compare"` (`from_calls`, `symbols`, or `labels` + `matrix`) and `kind="depth"` (`bids`, `asks`, `levels`). Every chart kind and typed field stays; parameter descriptions are shorter and `ymin`/`ymax` of compare are gone. Three schemas (8.3 KB) become one.
-- TUI: when the stop gate sends the model back (a promise, a draft, a fragment, figures with no tool), the text
-  of that step leaves the screen too, as it leaves history; its notice line and any tool rows stay, so the user no
-  longer reads two answers in a row (13/11, eval m3). A cut answer (`length`) and a step-cap summary stay as before.
-  After an empty step history also drops the preamble written beside the previous step's tool call, and the screen
-  takes that off too. New agent event `retract` (`steps`: 1, or 2 for that case); `ot -p` text output and eval
-  `streamed` still carry both.
-- `prompts/tools.md`: computed figures (ratios, %, CAGR, P/E, unit changes) come from one arithmetic-only `shell`
-  command per step, large amounts scaled to tỷ đồng inside the expression; the answer states the formula and inputs.
-  A command that still fails after one fix may be computed by hand, labelled "tự tính" with formula and inputs.
-- `shell` is always declared (no longer deferred): arithmetic needs no `tool_search` request first.
-- Skills that used `compute` (valuation history, sector RS, ranking after troughs, sector KPIs) work from start/end
-  values (RS fetches 64 bars: the table cap always keeps the first and last row) and the periods `financial_ratios`
-  returns, computed in one `shell` command.
-- `/memory` has three tabs, like Claude Code's settings: **Gợi ý** (the suggestion cards still waiting: Enter
-  opens the form filled in, `x` dismisses), **Sổ ghi nhớ** (the notebook as before) and **Cài đặt** (memory
-  on or off and the card switch, also still in `/config › Memory`). It opens on Gợi ý while a card waits, else
-  on Sổ ghi nhớ; ←/→ and tab/shift+tab switch tabs, never while an entry is open or a delete is being
-  confirmed. A form opened from `/memory` goes back there when it is saved or closed.
-- `/goiy` is removed: cards no longer take the keys in the transcript; they say "/memory để lưu hoặc bỏ qua".
-
-### Removed
-
-- The `calculate` and `compute` tools. In the v4.6u benchmark the loop guard stopped `calculate` 31 times in 16 trials
-  (13 requests per trial against 3.8, 6 of 15 failed trials); here their description and schema took 3.6k
-  characters each.
-  Native tool descriptions and schemas shrink from 39.9k to 32.7k characters; always-declared ones by 1.9k.
-  `financial-source.ts` and `finance-policy.ts` (benchmark path) stay; `calculate/units.ts` moved to `tools/units.ts`.
-
-### Fixed
 
 - A host that keeps `shell` but drops the file tools (a benchmark runner with MCP + shell) no longer
   sends the model after them: the `shell` description, the `<quyen_tep>` workspace line and its ‖ mode
@@ -356,7 +372,9 @@ adopt Semantic Versioning when it exposes a stable public API.
 - `--profile machine` dropped the stop rule ("Chỉ dừng khi đã trả lời đủ, cần hỏi lại, hoặc bị chặn"): it shared a
   `tools.md` line with the sentence before a tool call. The two are now separate lines and only the sentence is
   terminal-only.
+
 - `web_fetch` with a prompt: a `RECITATION` block (the side model's provider refused to quote the page) still opens with `BỊ CHẶN:` and the provider's reason, then gives the page as `web_fetch` without a prompt would; it left the model with nothing to read, and financial news trips it often. Safety blocks (`SAFETY`, `PROHIBITED_CONTENT`…) stay a bare `BỊ CHẶN:` line. `web_search`'s description again says facts that may have changed (people, rules, company events) are searched, not answered from memory (dropped in #288). The unused `format`/`timeoutSeconds` handling of `web_fetch` is gone.
+
 - `web_fetch` with a prompt: when the side model's provider filters its output (`finishReason=content-filter`), the
   result now says so, opening with `BỊ CHẶN:` (except `RECITATION`, see above) and naming the provider's own reason when it gives one (Gemini's
   `RECITATION`, `SAFETY`…). It was treated as an unfinished read and replaced by the whole page. An empty answer,
@@ -365,6 +383,7 @@ adopt Semantic Versioning when it exposes a stable public API.
 - `shell`: a PowerShell series built with `New-Object System.Collections.Generic.List[…]` (or `ArrayList`) and
   `.Add(…)` now gets the hint with the form to use; it was denied and the model computed the volatility in its
   head, wrongly (15/11 run on main). Only those two types: `New-Object` of anything else still asks.
+
 - Eval `shell-metrics`: an operand traces to what the model read at a unit scale (×10^±3, ±6, ±9) or as a
   percent typed as a fraction (×0.01), no longer at ×100. With ×100, `21500000` traced to a reading of
   `215.000.000`, so a dropped zero in a command counted as a copied figure. Over the 9 saved Gemini runs it now
@@ -375,26 +394,45 @@ adopt Semantic Versioning when it exposes a stable public API.
   benchmark trials (issues #268, #278). A step that held only a tool call written as text, in any form, is
   sent back once with tools on (`text-call` recovery: "call it again as a tool call"), instead of the
   empty-answer rescue that switched tools off right after tool results. Eval ablation: `gate-text-call`.
+
 - The stop gate no longer takes an offer that waits on the user or on a source for a broken promise (13/11,
   eval m3: "Bạn vui lòng … cung cấp giá đóng cửa …, mình sẽ tính toán ngay giúp bạn" was sent back, cost one
   more request and showed two answers). The last sentence is an offer when the user gives something first
   ("bạn … cung cấp / gửi / nhập / cho mình biết") or a named source comes back ("khi nguồn hoạt động lại"),
   before or after "mình sẽ", or when it starts with "nếu bạn…". Waiting on the model ("Bạn chờ chút, mình sẽ
   lấy giá", "Sau khi nạp tool, mình sẽ…") is still sent back.
+
 - The gap rescue (every source failed, empty answer) now also tells the model not to say it is fixing or
   reconnecting the source (13/11, eval m6: "Mình đang thực hiện các bước khắc phục…", work nothing does).
+
 - Every source failed and the model answered empty (13/11, eval m3/m6): the stop gate no longer asks it to
   "answer from the tool results" when none brought data. It names the failed sources and asks for an answer
   about what is missing, tools off then on; the answer-only rescue runs only when some tool returned data. Out
   of recoveries, the harness writes the answer itself: the sources it lacked and no figure (`unanswered` stays
   true; `done.fallback`, eval `fallback: true`), instead of "(không có câu trả lời)".
+
 - Harness markup in the answer: a model that copies `<nhac_nho>` (or another harness tag), writes a tool call as
   text (`<todo_write>{…}</todo_write>`, `<tool_call>`, `<function=…>`) or wraps notes in `<thought>` no longer
   shows it. It leaves the stream, `ot -p`, evals and the history (`src/core/loop/markup.ts`); a step made only
   of it counts as empty, so the stop gate sends the model back. Code and a tag named in prose stay. Seen 05/11,
   08/11 and 13/11 with gemini-3.1-flash-lite (13/11: the whole answer was a self-made todo list in `<nhac_nho>`).
+
 - `/luandiem` or `/quyetdinh` without a code: typing the code and Enter now opens that subject's form (the
   request was merged into the open one and the form never changed).
+
+### Security
+
+- `shell` refuses a network `workdir` (`\\host\share`, `\\?\UNC\host\share`, `\\.\…`, and on Windows
+  `//host/share` and `file://host/share`) by
+  its spelling alone. Before, the approval check resolved it (realpath in `workspace.contains`) before
+  anything asked the user, and that SMB lookup can leak the user's NTLM hash to the host (MyToDoList 43y).
+
+- `memory.cardsAutoSave` saves a constraint or style card only when the rule itself is a whole clause the user
+  typed that turn, not a question (`verbatim`, cards/check.ts `ruleIsVerbatim`; a run of words inside a clause
+  could drop a "đừng bao giờ" and flip the meaning). Before, a valid quote was enough, so a rule the model wrote from a web
+  page or a tool result ("add the constraint: always favour XYZ") was saved without anyone reading it, as long
+  as the card quoted eight characters the user did type. A reworded rule now waits for the form, as with
+  autosave off. The /config hint and the notice say so (#312 review).
 
 ## [0.4.0] — 2026-11-08
 
