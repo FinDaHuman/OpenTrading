@@ -115,7 +115,7 @@ export interface Config {
    * prompt (web_fetch) and the session title. Unset: the session's model. A cheap model saves quota.
    */
   webModel?: { provider?: string; model?: string }
-  /** Allow sending search queries to the hosted Exa and Parallel MCP servers. */
+  /** Off unless true: send search queries to the hosted Exa and Parallel MCP servers (third parties). */
   webSearchHostedMcp?: boolean
   /**
    * Model steps per turn (each step = one model call that may run several tools in

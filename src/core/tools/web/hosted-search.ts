@@ -36,7 +36,7 @@ function parallelHits(text: string): Hit[] {
 
 export async function hostedSearch(provider: HostedProvider, plan: SearchPlan, signal: AbortSignal): Promise<Hit[]> {
   const client = new Client({ name: "opentrading", version: appVersion }, { capabilities: {} })
-  const url = provider === "exa" ? "https://mcp.exa.ai/mcp" : "https://mcp.parallel.ai/mcp"
+  const url = provider === "exa" ? "https://mcp.exa.ai/mcp" : "https://search.parallel.ai/mcp"
   const transport = new StreamableHTTPClientTransport(new URL(url))
   const query = withSiteOperators(plan)
   const objective = plan.since ? `${query} after:${plan.since}` : query
