@@ -7,6 +7,10 @@ if (!process.argv.includes("--yes")) throw new Error("This experiment can send u
 if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) throw new Error("GOOGLE_GENERATIVE_AI_API_KEY is required.")
 
 const root = path.resolve(import.meta.dir, "../..")
+const modelFlag = process.argv.indexOf("--model")
+const selectedModel = modelFlag < 0 ? undefined : process.argv[modelFlag + 1]
+if (modelFlag >= 0 && (!selectedModel || !/^gemini-[a-z0-9.-]+$/.test(selectedModel))) throw new Error("--model needs a Gemini model id.")
+const models = selectedModel ? [selectedModel] : ["gemini-3.1-flash-lite", "gemini-2.5-flash-lite"]
 const home = await mkdtemp(path.join(os.tmpdir(), "ot-416-home-"))
 const output = await mkdtemp(path.join(os.tmpdir(), "ot-416-evidence-"))
 const server = startFailureScenario()
@@ -16,7 +20,7 @@ try {
   await writeFile(path.join(home, "mcp.json"), JSON.stringify({ mcpServers: { data: { type: "http", url: server.url, alwaysLoad: true } } }))
   await writeFile(questionFile, JSON.stringify([{ id: "ratios", group: "A", question: "Đây là dữ liệu giả của bài kiểm thử. Hãy dùng công cụ MCP lấy P/E và ROE của VCB và BID cho năm 2025. Nêu rõ phần không lấy được, không tự suy đoán.", now: "2026-01-01T10:00:00+07:00" }]))
   await mkdir(path.join(home, "cache"), { recursive: true })
-  for (const model of ["gemini-3.1-flash-lite", "gemini-2.5-flash-lite"]) {
+  for (const model of models) {
     for (const [nudge, stop] of [[4, 8], [2, 8], [2, 4]] as const) {
       const name = `${model}-${nudge}-${stop}-3`
       const trace = path.join(output, `${name}.jsonl`)
