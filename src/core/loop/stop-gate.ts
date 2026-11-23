@@ -23,6 +23,7 @@ export type RecoveryKind = "malformed" | "text-call" | "length" | "empty" | "pro
 export interface LastStep {
   /** Text of that step only (an earlier step's preamble is not an answer). */
   text: string
+  /** What the user typed this turn, to spot an answer that only repeats it. */
   userText?: string
   /** Tools it called. */
   toolNames: string[]
@@ -115,16 +116,27 @@ export function rescueGaps(gaps: readonly string[]): string {
 export const RESCUE_ANSWER_NOW =
   `Write the final answer for the user NOW, in the requested format, using only the numbers the tools returned above. ${ESTIMATE_RULE} No long reasoning, no tool calls, no empty answer.`
 
+/** Asking the user something: "bạn muốn…", "anh/chị cần…", a choice ("… hay …"), "do you mean". */
+const ASKS_USER = /(?<![\p{L}\p{N}])((bạn|anh|chị|quý khách)\s+(\p{L}+\s+)?(muốn|cần|định|đang|hỏi|nói|ý|quan tâm)|hay(?!\p{L})|hoặc|(do|did|would|should)\s+(you|i))(?![\p{L}\p{N}])/iu
+/** Share of an echoed sentence's words that must come from the question. */
+const ECHO_OVERLAP = 0.7
+
+/**
+ * The whole answer is the user's question again (#415: gemini-2.5-flash-lite, after a web_fetch).
+ * Only bare questions count. One that adds a figure the question lacks, offers a choice or speaks
+ * to the user is a clarification, and the user must see it.
+ */
 function echoesQuestion(answer: string, question: string): boolean {
   const text = answer.trim()
-  if (!text.endsWith("?") || /[.!。！？]/u.test(text)) return false
-  const words = (value: string) => value.toLocaleLowerCase().normalize("NFC").match(/[\p{L}\p{N}]+/gu) ?? []
+  if (!text.endsWith("?") || /[.!。！？]/u.test(text) || ASKS_USER.test(text.normalize("NFC"))) return false
+  const words = (value: string) => value.normalize("NFC").toLocaleLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []
   const original = new Set(words(question.replace(/https?:\/\/\S+/g, "")))
-  const parts = text.split("?").map((part) => words(part)).filter((part) => part.length > 0)
+  const parts = text.split("?").map(words).filter((part) => part.length > 0)
   return original.size >= 4 && parts.length > 0 && parts.every((part) => {
     const distinct = new Set(part)
+    if ([...distinct].some((word) => /\p{N}/u.test(word) && !original.has(word))) return false
     const overlap = [...distinct].filter((word) => original.has(word)).length
-    return overlap >= 4 && overlap / distinct.size >= 0.6
+    return overlap >= 4 && overlap / distinct.size >= ECHO_OVERLAP
   })
 }
 
