@@ -184,3 +184,38 @@ test("gapsAnswer names every gap and states no figure", async () => {
   expect(text).toContain("vn_quote_history, market_candles_batch")
   expect(text).not.toMatch(/\d/)
 })
+
+const REPLAY_MISS = '[replay] Không có trong bản ghi: {"name":"vn_ratios"}'
+
+test("#414: a data tool's own error (isError) is listed apart from the gaps", () => {
+  const failures = turnFailures(turn(
+    step({ tool: "mcp__ot__vn_ratios", error: REPLAY_MISS }, { tool: "mcp__ot__vn_ratios", input: { s: "BID" }, error: REPLAY_MISS }),
+    step({ tool: "web_fetch", error: "404 Not Found" }, { tool: "shell", error: "exit 1" }),
+  ))
+  expect(failures.errored).toEqual(["vn_ratios", "web_fetch"])
+  // Not a lost source: the UI line, subagent results and eval thresholds read the gaps.
+  expect(failures.gaps).toEqual([])
+  expect(failures.fetched).toBe(false)
+})
+
+test("#414: bad arguments are not an errored source: the model can fix the call", () => {
+  expect(turnFailures(turn(step({ tool: "mcp__ot__a", error: "Invalid arguments for a:\n- f: required" }))).errored).toEqual([])
+})
+
+test("#414: gapsAnswer names tools that returned errors without calling them a source outage", async () => {
+  const { gapsAnswer } = await import("../src/core/loop/failures")
+  expect(gapsAnswer(["a"])).toBe(gapsAnswer(["a"], []))
+  const text = gapsAnswer([], ["vn_ratios", "vn_quote"])
+  expect(text).toContain("vn_ratios, vn_quote")
+  expect(text).toContain("tool báo lỗi")
+  expect(text).not.toMatch(/\d/)
+  expect(gapsAnswer(["vn_quote_history"], ["vn_ratios"])).toContain("vn_quote_history, vn_ratios")
+})
+
+test("#414 review: with only tools that returned errors, the harness's answer names no outage and no wait", async () => {
+  const { gapsAnswer } = await import("../src/core/loop/failures")
+  const text = gapsAnswer([], ["vn_ratios"])
+  expect(text).not.toContain("nguồn lỗi")
+  expect(text).not.toContain("quá thời gian")
+  expect(text).not.toContain("ít phút")
+})
