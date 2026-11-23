@@ -32,6 +32,7 @@ export type ToolOutcome =
 export const FAILURE_STREAK_NUDGE = 4
 /** Then tools are switched off for a step, so the turn ends with an answer. */
 export const FAILURE_STREAK_STOP = 8
+export interface FailureThresholds { nudge: number; stop: number }
 
 /** Neither a success nor a failure of the call itself. */
 const NEUTRAL = new Set<ToolOutcome>(["deferred", "denied", "aborted"])
@@ -158,10 +159,10 @@ export function gapsAnswer(gaps: readonly string[]): string {
 const remind = (text: string) => `<nhac_nho>\n${text}\n</nhac_nho>`
 
 /** Reminder for the next step, if the turn has one to give. */
-export function failureNudge({ gaps, streak }: Pick<TurnFailures, "gaps" | "streak">): string | undefined {
+export function failureNudge({ gaps, streak }: Pick<TurnFailures, "gaps" | "streak">, threshold = FAILURE_STREAK_NUDGE): string | undefined {
   const lines = [
     ...(gaps.length > 0 ? [`This turn has not got data from: ${gaps.join(", ")}. When you answer, say plainly what is missing and do not fill in figures for it.`] : []),
-    ...(streak === FAILURE_STREAK_NUDGE ? [`${streak} steps in a row returned nothing but errors. Try another way, or answer with the data you have.`] : []),
+    ...(streak === threshold ? [`${streak} steps in a row returned nothing but errors. Try another way, or answer with the data you have.`] : []),
   ]
   return lines.length > 0 ? remind(lines.join("\n")) : undefined
 }

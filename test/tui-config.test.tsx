@@ -273,3 +273,89 @@ test("/model → a model with effort levels → the effort step; esc goes back, 
     setState("catalog", "groq", groq as never)
   }
 })
+
+test("/config suggests a faster web model only after a slow call for the selected model", async () => {
+  const { measureWebModelCall } = await import("../src/core/tools/web/side-model")
+  const provider = state.catalog[state.provider!]
+  const model = state.model!
+  let now = 0
+  await measureWebModelCall({ provider: provider!, model }, async () => { now += 31_000 }, () => now)
+  await setup.mockInput.typeText("/config")
+  setup.mockInput.pressEnter()
+  await setup.waitForFrame((frame) => frame.includes("Cài đặt"))
+  await setup.mockInput.typeText("model cho tim kiem")
+  setup.mockInput.pressEnter()
+  await setup.waitForFrame((frame) => frame.includes("gõ tên model"))
+  await setup.waitForFrame((frame) => frame.includes("Lần gọi web gần nhất mất 31 giây"))
+  setup.mockInput.pressEscape()
+  await setup.waitForFrame((frame) => frame.includes("Cài đặt"))
+  setup.mockInput.pressEscape()
+  await setup.waitFor(() => state.dialog === undefined)
+  await measureWebModelCall({ provider: provider!, model }, async () => { now += 30_000 }, () => now)
+  await setup.mockInput.typeText("/config")
+  setup.mockInput.pressEnter()
+  await setup.waitForFrame((frame) => frame.includes("Cài đặt"))
+  await setup.mockInput.typeText("model cho tim kiem")
+  setup.mockInput.pressEnter()
+  const fastFrame = await setup.waitForFrame((frame) => frame.includes("gõ tên model"))
+  expect(fastFrame).not.toContain("Lần gọi web gần nhất")
+  setup.mockInput.pressEscape()
+  await setup.waitForFrame((frame) => frame.includes("Cài đặt"))
+  setup.mockInput.pressEscape()
+  await setup.waitFor(() => state.dialog === undefined)
+  await measureWebModelCall({ provider: provider!, model }, async () => { now += 31_000 }, () => now)
+  setState("model", "another-model")
+  await setup.mockInput.typeText("/config")
+  setup.mockInput.pressEnter()
+  await setup.waitForFrame((frame) => frame.includes("Cài đặt"))
+  await setup.mockInput.typeText("model cho tim kiem")
+  setup.mockInput.pressEnter()
+  const otherFrame = await setup.waitForFrame((frame) => frame.includes("gõ tên model"))
+  expect(otherFrame).not.toContain("Lần gọi web gần nhất")
+  setup.mockInput.pressEscape()
+  await setup.waitForFrame((frame) => frame.includes("Cài đặt"))
+  setup.mockInput.pressEscape()
+  await setup.waitFor(() => state.dialog === undefined)
+  setState("model", model)
+})
+
+test("/config names the newest Flash-Lite for a slow Gemini model, beside the current model; a slow Flash-Lite gets no name", async () => {
+  const { measureWebModelCall } = await import("../src/core/tools/web/side-model")
+  const saved = { provider: state.provider, model: state.model, connected: [...state.connected] }
+  const text = { input: ["text"], output: ["text"] }
+  const google = {
+    id: "google", name: "Google", env: ["GEMINI_API_KEY"], npm: "@ai-sdk/google",
+    models: Object.fromEntries(
+      [["gemini-2.5-flash-lite", "Gemini 2.5 Flash-Lite"], ["gemini-3.5-flash", "Gemini 3.5 Flash"], ["gemini-3.5-flash-lite", "Gemini 3.5 Flash-Lite"]].map(([id, name]) => [id, { id, name, tool_call: true, modalities: text }]),
+    ),
+  }
+  setState("catalog", "google", google as never)
+  setState("connected", [...saved.connected, "google"])
+  const frameFor = async (model: string) => {
+    setState({ provider: "google", model })
+    let now = 0
+    await measureWebModelCall({ provider: google as never, model }, async () => { now += 95_000 }, () => now)
+    await setup.mockInput.typeText("/config")
+    setup.mockInput.pressEnter()
+    await setup.waitForFrame((frame) => frame.includes("Cài đặt"))
+    await setup.mockInput.typeText("model cho tim kiem")
+    const row = await setup.waitForFrame((frame) => frame.includes("mất 95 giây"))
+    setup.mockInput.pressEnter()
+    const frame = await setup.waitForFrame((f) => f.includes("gõ tên model") && f.includes("mất 95 giây"))
+    setup.mockInput.pressEscape()
+    await setup.waitForFrame((f) => f.includes("Cài đặt"))
+    setup.mockInput.pressEscape()
+    await setup.waitFor(() => state.dialog === undefined)
+    return { row, frame }
+  }
+  try {
+    const slow = await frameFor("gemini-3.5-flash")
+    expect(slow.row).toContain("Mặc định: model của phiên · Lần gọi web gần nhất mất 95 giây")
+    expect(slow.frame).toContain("Có thể chọn Gemini 3.5 Flash-Lite")
+    const lite = await frameFor("gemini-3.5-flash-lite")
+    expect(lite.frame).toContain("Có thể chọn model nhanh hơn")
+  } finally {
+    setState({ provider: saved.provider, model: saved.model, connected: saved.connected })
+    setState("catalog", "google", undefined as never)
+  }
+})

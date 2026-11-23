@@ -1,5 +1,5 @@
 import { afterAll, expect, test } from "bun:test"
-import { nativeSearch, nativeSearchSetup } from "../src/core/tools/web/side-model"
+import { lastWebModelCall, measureWebModelCall, nativeSearch, nativeSearchSetup } from "../src/core/tools/web/side-model"
 import type { Target } from "../src/core/chat"
 
 const realFetch = globalThis.fetch
@@ -41,6 +41,16 @@ test("Gemini: the side call sends only google_search and returns the grounding s
   expect(sent.url).toContain("generativelanguage")
   expect(JSON.stringify(sent.body.tools)).toContain("googleSearch")
   expect(JSON.stringify(sent.body.tools)).not.toContain("functionDeclarations")
+  expect(lastWebModelCall).toMatchObject({ provider: "p", model: "gemini-3.1-flash-lite" })
+})
+
+test("side model timing is recorded for success and timeout", async () => {
+  let now = 100
+  const model = target("@ai-sdk/google")
+  expect(await measureWebModelCall(model, async () => { now += 30_000; return "ok" }, () => now)).toBe("ok")
+  expect(lastWebModelCall?.durationMs).toBe(30_000)
+  await expect(measureWebModelCall(model, async () => { now += 31_000; throw new Error("timeout") }, () => now)).rejects.toThrow("timeout")
+  expect(lastWebModelCall).toEqual({ provider: "p", model: model.model, durationMs: 31_000 })
 })
 
 test("which providers get a native search: OpenAI only on its own API; others fall back to keyed search", () => {

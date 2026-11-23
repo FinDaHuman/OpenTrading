@@ -23,9 +23,11 @@ test("#350: requests are counted at fetch, refused past the cap, and an arm repo
   })
   expect(arm.requests).toBe(2)
   await send("https://x")
+  expect(meter.refused).toBe(false)
   await expect(send("https://x")).rejects.toThrow("Eval request cap reached (3/3)")
   expect(meter.sent).toBe(3)
   expect(meter.capped).toBe(true)
+  expect(meter.refused).toBe(true)
   meter.stop()
   // Stopped: no guard left behind for later code.
   await send("https://x")

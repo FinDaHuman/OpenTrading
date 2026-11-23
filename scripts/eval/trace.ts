@@ -47,7 +47,7 @@ export type TraceEvent =
   /** What the tool returned, before any cap: `agent` is set when a subagent made the call. */
   | (Asked & { type: "tool_raw"; call_id: string; tool: string; input: unknown; ok: boolean; raw: string; agent?: string })
   | (Asked & { type: "retry"; attempt: number; delay_ms: number; label: string })
-  | (Asked & { type: "notice"; text: string })
+  | (Asked & { type: "notice"; text: string; failure_policy?: { action: "nudge" | "stop"; streak: number; step: number }; breaker?: { server: string; event: import("../../src/core/mcp/breaker").BreakerEvent } })
   | (Asked & { type: "error"; message: string; kind?: string })
   /** The run ended early: questions after this one were not asked. */
   | { type: "stopped"; reason: "request-cap"; spent: number; cap: number }
