@@ -136,6 +136,8 @@ export function initRuntime(opts: {
   resultFiles?: string
   /** See `McpManagerOptions.transport`. */
   mcpTransport?: McpManagerOptions["transport"]
+  mcpBreakerThreshold?: McpManagerOptions["breakerThreshold"]
+  onMcpBreakerEvent?: McpManagerOptions["onBreakerEvent"]
   /**
    * Run the shell tool in the OS sandbox (`--sandbox`, or config `shell.sandbox`; tools/shell/sandbox.ts).
    * Read once here: a command can never turn it off during the session.
@@ -202,6 +204,8 @@ export function initRuntime(opts: {
     cwd: opts.cwd ?? process.cwd(),
     trustFile: path.join(home, "mcp-trust.json"),
     transport: opts.mcpTransport,
+    breakerThreshold: opts.mcpBreakerThreshold,
+    onBreakerEvent: opts.onMcpBreakerEvent,
   })
   registry.register(
     doctorLocalTool({

@@ -22,6 +22,7 @@ const { TRACE_VERSION } = await import("../scripts/eval/trace")
 const { readTrace } = await import("../scripts/eval/read-trace")
 const { shellMetrics } = await import("../scripts/eval/shell-metrics")
 const { ledgerFile, RequestLedger, spentToday } = await import("../scripts/eval/ledger")
+const { requestCap } = await import("../scripts/eval/request-cap")
 type TraceEvent = import("../scripts/eval/trace").TraceEvent
 
 const CATALOG = {
@@ -34,7 +35,7 @@ const CATALOG = {
   },
 }
 
-type Body = { stream?: boolean; messages: { role: string; content?: unknown }[]; tools?: { function: { name: string } }[] }
+type Body = { stream?: boolean; messages: { role: string; content?: unknown }[]; tools?: { function: { name: string } }[]; tool_choice?: unknown }
 const bodies: Body[] = []
 /** Streamed requests fail with this status instead of answering. */
 let failStatus: number | undefined
@@ -46,6 +47,7 @@ let hang = false
 let failFirst = 0
 /** Shell commands the model sends, one per request, before it answers. */
 let commands: string[] | undefined
+let failedSourceCalls = false
 
 const chunk = chunkFor("tooly")
 
@@ -62,6 +64,14 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   if (failFirst > 0) {
     failFirst--
     return Response.json({ error: { message: "rate limited" } }, { status: 429 })
+  }
+  if (failedSourceCalls) {
+    const calls = body.messages.filter((m) => m.role === "tool").length
+    if (body.tool_choice === "none" || bodies.length > 8) return sse([chunk({ role: "assistant", content: "Không lấy được dữ liệu." }), chunk({}, "stop")])
+    return sse([
+      chunk({ role: "assistant", tool_calls: [{ index: 0, id: `source_${calls}`, type: "function", function: { name: "mcp__data__source", arguments: JSON.stringify({ attempt: calls }) } }] }),
+      chunk({}, "tool_calls"),
+    ])
   }
   if (commands) {
     const calls = body.messages.filter((m) => m.role === "tool").length
@@ -96,6 +106,7 @@ beforeEach(() => {
   failFirst = 0
   hang = false
   commands = undefined
+  failedSourceCalls = false
 })
 
 const LONG = "x".repeat(40_000)
@@ -121,6 +132,42 @@ async function run(questions: ReturnType<typeof parseQuestions>, repeat = 1, led
 
 const question = (id: string, group: "A" | "F" = "A") => ({ id, group, question: "Giá FPT?", now: "2026-03-10T10:00:00+07:00" })
 const of = <T extends TraceEvent["type"]>(events: TraceEvent[], type: T) => events.filter((e): e is Extract<TraceEvent, { type: T }> => e.type === type)
+
+test("eval trace records the configured nudge and stop on the real agent loop", async () => {
+  failedSourceCalls = true
+  const runtime = initRuntime({ home, cwd: home, skills: () => [] })
+  runtime.registry.register({ name: "mcp__data__source", description: "source", input: z.object({ attempt: z.number() }), readOnly: true, execute: async () => { throw new Error('MCP server "data" has a temporary error (HTTP 503)') } })
+  const events: TraceEvent[] = []
+  const target = await resolveTarget({ provider: "groq", model: "tooly" })
+  const cap = requestCap(12)
+  try {
+    await runEval({ runtime, skills: [], target, questions: parseQuestions(JSON.stringify([question("thresholds")])), write: (e) => events.push(e), version: "0.0.0", timeoutMs: 5000, failureThresholds: { nudge: 2, stop: 4 }, settings: { failure_thresholds: { nudge: 2, stop: 4, breaker: 3 } } })
+  } finally {
+    cap.stop()
+  }
+  expect(of(events, "run")[0]?.settings?.failure_thresholds).toEqual({ nudge: 2, stop: 4, breaker: 3 })
+  expect(of(events, "notice").flatMap((event) => event.failure_policy ? [event.failure_policy] : [])).toEqual([{ action: "nudge", streak: 2, step: 2 }, { action: "stop", streak: 4, step: 4 }])
+  expect(of(events, "tool_result")).toHaveLength(4)
+  expect(of(events, "answer")[0]?.data_gaps).toEqual(["source"])
+  expect(readTrace(events.map((event) => JSON.stringify(event)).join("\n")).attempts).toHaveLength(1)
+})
+
+test("the HTTP cap is recorded when the next request is refused", async () => {
+  const runtime = initRuntime({ home, cwd: home, skills: () => [] })
+  runtime.registry.register({ name: "fake_quote", description: "quote", input: z.object({}), readOnly: true, execute: async () => "42" })
+  const events: TraceEvent[] = []
+  const target = await resolveTarget({ provider: "groq", model: "tooly" })
+  const cap = requestCap(1)
+  try {
+    await runEval({ runtime, skills: [], target, questions: parseQuestions(JSON.stringify([question("cap"), question("later")])), write: (e) => events.push(e), version: "0.0.0", timeoutMs: 5000, httpCap: { get capped() { return cap.capped }, get refused() { return cap.refused }, get sent() { return cap.sent }, cap: 1 } })
+    expect(cap.sent).toBe(1)
+    expect(cap.refused).toBe(true)
+    expect(of(events, "answer")[0]?.abort).toBe("cap")
+    expect(of(events, "stopped")).toEqual([{ type: "stopped", reason: "request-cap", spent: 1, cap: 1 }])
+  } finally {
+    cap.stop()
+  }
+})
 
 test("the trace holds what the model saw and what the tool really returned", async () => {
   const { events } = await run([question("q1")])

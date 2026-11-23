@@ -380,6 +380,30 @@ test("a run of failed steps is told once, then tools go off and the turn answers
   expect(JSON.stringify(done(events).messages)).not.toContain("tools are off for this step")
 })
 
+test("eval thresholds nudge at two failures and turn tools off at four", async () => {
+  plan = { tool: "boom", args: {}, always: true }
+  const policy: { action: string; streak: number; step: number }[] = []
+  await collect(runAgent({ history: [], input: "x", skills: [], registry: registry(), maxSteps: 12, failureThresholds: { nudge: 2, stop: 4 }, onFailurePolicy: (event) => policy.push(event) }))
+  expect(lastUserText(bodies[2]!)).toContain("2 steps in a row")
+  expect(bodies[3]!.tool_choice).not.toBe("none")
+  expect(bodies[4]!.tool_choice).toBe("none")
+  expect(policy).toEqual([{ action: "nudge", streak: 2, step: 2 }, { action: "stop", streak: 4, step: 4 }])
+})
+
+test("a successful step resets the eval failure streak", async () => {
+  respond = (body, n) => {
+    if (body.tool_choice === "none") return answer("done")
+    return toolCall(n === 2 ? "current_time" : "boom", {}, `call_${n}`)
+  }
+  const policy: { action: string; streak: number; step: number }[] = []
+  await collect(runAgent({ history: [], input: "x", skills: [], registry: registry(), maxSteps: 12, failureThresholds: { nudge: 2, stop: 4 }, onFailurePolicy: (event) => policy.push(event) }))
+  expect(policy).toEqual([
+    { action: "nudge", streak: 2, step: 2 },
+    { action: "nudge", streak: 2, step: 5 },
+    { action: "stop", streak: 4, step: 7 },
+  ])
+})
+
 test("a run that must end in its final tool still can when its steps keep failing", async () => {
   plan = { tool: "boom", args: {}, always: true }
   respond = (_body, n) =>

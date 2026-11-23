@@ -56,7 +56,7 @@ import { detectShell } from "./tools/shell/run"
 import { modeNote } from "./permission/mode"
 import { NOTE as NOTICE_NOTE } from "./subagents/notification"
 import { currentTodos, retiredNote, retireLeftTodos, todoMark, TODO_WRITE } from "./tools/todos"
-import { FAILURE_STREAK_FINAL, FAILURE_STREAK_STOP, failureNudge, gapsAnswer, turnFailures } from "./loop/failures"
+import { FAILURE_STREAK_FINAL, FAILURE_STREAK_NUDGE, FAILURE_STREAK_STOP, failureNudge, gapsAnswer, turnFailures, type FailureThresholds } from "./loop/failures"
 import { answerAfterTools } from "./loop/history-shape"
 import { markupStreamFilter, stripMarkup, type MarkupFilter } from "./loop/markup"
 import type { PromptProfile } from "./prompt/assemble"
@@ -167,6 +167,9 @@ export function nudgeAfterTools(target: TargetLike | undefined): boolean {
 export { REMINDER_TAG }
 
 export interface RunOptions {
+  /** Eval-only override and observer for failure thresholds. */
+  failureThresholds?: FailureThresholds
+  onFailurePolicy?: (event: { action: "nudge" | "stop"; streak: number; step: number }) => void
   providerRetry?: Pick<RetryOptions, "maxRetries">
   groundedFinancial?: boolean
   financePolicy?: FinancePolicyOptions
@@ -1405,7 +1408,7 @@ async function* runTurn(opts: RunOptions, budget?: TurnBudget): AsyncGenerator<A
         active = activeFor(built, messages)
         loaded = loadedTools(messages)
         const failures = turnFailures(messages)
-        const stopped = failures.streak >= FAILURE_STREAK_STOP
+        const stopped = failures.streak >= (opts.failureThresholds?.stop ?? FAILURE_STREAK_STOP)
         // A run that must end in its final tool ends there: with tools off it could not.
         const finalNow = stopped && !!opts.finalTool && registryHas(built, opts.finalTool)
         if (stepsUsed + stepNumber < maxSteps - 1 && !finalNow && !budget?.closing) {
@@ -1422,12 +1425,14 @@ async function* runTurn(opts: RunOptions, budget?: TurnBudget): AsyncGenerator<A
                 ? FAILURE_STREAK_FINAL
                 : opts.disabled?.has("failure-nudge")
                   ? undefined
-                  : failureNudge(gapRescue ? { gaps: [], streak: failures.streak } : failures)
+                  : failureNudge(gapRescue ? { gaps: [], streak: failures.streak } : failures, opts.failureThresholds?.nudge)
               : undefined
           // Numbers typed into an arithmetic command that nothing read holds (loop/operands.ts): a
           // one-step note, on the same routes as the other nudges. The command already ran.
           const operands = nudge && afterTool && !opts.disabled?.has("operand-note") ? untracedOperands(messages, isArithmetic, [bound.profile, bound.constraints, assembled.context].filter(Boolean).join("\n")) : []
           const tail = [base, added, operands.length > 0 ? operandNote(operands) : undefined].filter(Boolean).join("\n") || undefined
+          if (stopped) opts.onFailurePolicy?.({ action: "stop", streak: failures.streak, step: stepsUsed + stepNumber })
+          else if (added && failures.streak === (opts.failureThresholds?.nudge ?? FAILURE_STREAK_NUDGE)) opts.onFailurePolicy?.({ action: "nudge", streak: failures.streak, step: stepsUsed + stepNumber })
           const choice = stopped || rescueNow?.toolChoice === "none" || (rescueNow && !tail) ? { toolChoice: "none" as const } : {}
           return { ...(active ? { activeTools: active } : {}), ...choice, messages: tail ? withNudge(messages, tail) : messages }
         }

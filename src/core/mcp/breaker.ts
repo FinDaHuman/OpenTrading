@@ -10,6 +10,7 @@
 
 export const BREAKER_THRESHOLD = 3
 export const BREAKER_OPEN_MS = 60_000
+export type BreakerEvent = "opened" | "refused" | "probe" | "closed" | "reconnected"
 
 export class ServerBreaker {
   private failures = 0
@@ -25,10 +26,12 @@ export class ServerBreaker {
   constructor(
     private readonly openMs = BREAKER_OPEN_MS,
     private readonly now: () => number = Date.now,
+    private readonly threshold = BREAKER_THRESHOLD,
+    private readonly observe?: (event: BreakerEvent) => void,
   ) {}
 
   private get open() {
-    return this.failures >= BREAKER_THRESHOLD
+    return this.failures >= this.threshold
   }
 
   /**
@@ -39,15 +42,17 @@ export class ServerBreaker {
   admit(): number | undefined {
     if (!this.open) return undefined
     const left = this.openUntil - this.now()
-    if (left > 0) return left
+    if (left > 0) { this.observe?.("refused"); return left }
     this.openUntil = this.now() + this.openMs
     this.probing = true
     this.probeSequence++
+    this.observe?.("probe")
     return undefined
   }
 
   /** The server answered, whatever the answer. */
   success() {
+    if (this.open) this.observe?.("closed")
     this.failures = 0
     this.openUntil = 0
     this.probing = false
@@ -55,6 +60,7 @@ export class ServerBreaker {
 
   failure(probeToken?: number) {
     this.failures++
+    if (this.failures === this.threshold) this.observe?.("opened")
     if (probeToken !== undefined && probeToken === this.probeSequence) this.probing = false
     if (this.open) this.openUntil = this.now() + this.openMs
   }
@@ -66,6 +72,7 @@ export class ServerBreaker {
 
   /** The connection came back: the next call tests it without waiting out the period. */
   reconnected() {
+    if (this.open) this.observe?.("reconnected")
     if (this.probing && this.now() < this.openUntil) return
     this.probing = false
     this.openUntil = 0
