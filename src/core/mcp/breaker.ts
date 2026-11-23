@@ -16,6 +16,12 @@ export class ServerBreaker {
   private failures = 0
   private openUntil = 0
   private probing = false
+  private probeSequence = 0
+
+  /** The admitted probe's identity, captured by the call before it awaits. */
+  get probeToken(): number | undefined {
+    return this.probing ? this.probeSequence : undefined
+  }
 
   constructor(
     private readonly openMs = BREAKER_OPEN_MS,
@@ -39,6 +45,7 @@ export class ServerBreaker {
     if (left > 0) { this.observe?.("refused"); return left }
     this.openUntil = this.now() + this.openMs
     this.probing = true
+    this.probeSequence++
     this.observe?.("probe")
     return undefined
   }
@@ -51,10 +58,10 @@ export class ServerBreaker {
     this.probing = false
   }
 
-  failure() {
+  failure(probeToken?: number) {
     this.failures++
     if (this.failures === this.threshold) this.observe?.("opened")
-    this.probing = false
+    if (probeToken !== undefined && probeToken === this.probeSequence) this.probing = false
     if (this.open) this.openUntil = this.now() + this.openMs
   }
 
