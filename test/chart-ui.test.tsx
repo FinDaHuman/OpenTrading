@@ -244,9 +244,12 @@ test("unit hiện ở tiêu đề mọi chart", () => {
   expect(bar.title.map((t) => t.text).join("")).toContain("[%]")
   const cmp = buildChart({ kind: "compare", series: [{ label: "A", values: [1, 2] }, { label: "B", values: [2, 1] }], unit: "%" }, 80)
   expect(cmp.title.map((t) => t.text).join("")).toContain("[%]")
-  // gauge/donut đã nhúng unit trong số — không lặp.
+  // gauge đã nhúng unit trong số — không lặp.
   const gauge = buildChart({ kind: "gauge", value: 73, max: 100, unit: "%" }, 80)
   expect(gauge.title.map((t) => t.text).join("")).not.toContain("[%]")
+  // donut draws a ratio bar without the unit in its number: the unit goes in the title (#329).
+  const donut = buildChart({ kind: "donut", value: 35, max: 100, unit: "%" }, 80)
+  expect(donut.title.map((t) => t.text).join("")).toContain("[%]")
 })
 
 test("compare giữ trục Y riêng từng series", () => {

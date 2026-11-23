@@ -1,3 +1,4 @@
+import { unitsOf } from "../envelope"
 import { parseResult, recallResult, storedResults } from "../refs"
 import type { ChartBar } from "./data"
 
@@ -110,6 +111,8 @@ export interface Extracted {
   dirs?: boolean[]
   /** Which field the series came from. */
   field?: string
+  /** Unit of the drawn field (close for candles) in the server's words, from the envelope's `units` (#329). */
+  unit?: string
 }
 
 export interface ExtractOptions {
@@ -181,6 +184,20 @@ export function refSymbols(ref: string, opts: { ohlc?: boolean } = {}): string[]
   return symbolsIn(pool.slice().sort((a, b) => a.path.localeCompare(b.path, undefined, { numeric: true })))
 }
 
+/** The unit `units` gives a field; a key "bid_price_N" stands for bid_price_1, bid_price_2… */
+function unitFor(units: Map<string, string>, field: string | undefined) {
+  if (!field) return undefined
+  // Row keys are matched without case (keyOf), so units are too: "Close" is "close".
+  field = field.toLowerCase()
+  const exact = units.get(field)
+  if (exact !== undefined) return exact
+  for (const [name, unit] of units) {
+    const stem = name.endsWith("_n") ? name.slice(0, -1) : undefined
+    if (stem && field.startsWith(stem) && /^\d+$/.test(field.slice(stem.length))) return unit
+  }
+  return undefined
+}
+
 /** Resolve `ref` and read the array the chart needs. Throws a readable error otherwise. */
 export function extractFromRef(ref: string, opts: ExtractOptions = {}): Extracted {
   const { stored, value, all, pool } = locate(ref, opts.ohlc)
@@ -212,7 +229,11 @@ export function extractFromRef(ref: string, opts: ExtractOptions = {}): Extracte
     )
   }
   const base = { ref, tool: stored.tool, path: chosen.path || "(root)" }
-  if (typeof chosen.rows[0] === "number") return { ...base, series: chosen.rows as number[] }
+  if (typeof chosen.rows[0] === "number") {
+    // A column of numbers is named by its key: "data.close" → close.
+    const unit = unitFor(unitsOf(value), chosen.path.match(/([^.[\]]+)$/)?.[1])
+    return { ...base, series: chosen.rows as number[], ...(unit !== undefined ? { unit } : {}) }
+  }
 
   let rows = chosen.rows as Row[]
   const sample = rows[0]!
@@ -222,6 +243,7 @@ export function extractFromRef(ref: string, opts: ExtractOptions = {}): Extracte
   const times = timeKey ? rows.map((r) => isoDay(r[timeKey])) : undefined
   const symbol = chosen.symbol ?? symbolOf(value, rows)
   checkSymbol(ref, symbol, opts)
+  const units = unitsOf(value)
 
   if (opts.ohlc) {
     const [o, h, l, c] = [ALIASES.open, ALIASES.high, ALIASES.low, ALIASES.close].map((a) => keyOf(sample, a)!)
@@ -235,7 +257,8 @@ export function extractFromRef(ref: string, opts: ExtractOptions = {}): Extracte
       bars.push({ o: bar.o, h: bar.h, l: bar.l, c: bar.c, ...(vol !== undefined ? { v: vol } : {}) })
       if (times) barTimes.push(times[i]!)
     })
-    return { ...base, symbol, bars, ...(times ? { times: barTimes } : {}) }
+    const unit = unitFor(units, c)
+    return { ...base, symbol, bars, ...(times ? { times: barTimes } : {}), ...(unit !== undefined ? { unit } : {}) }
   }
 
   const fieldKey = keyOf(sample, ALIASES.close, opts.field) ?? (opts.field ? undefined : Object.keys(sample).find((k) => k !== timeKey && num(sample[k]) !== undefined))
@@ -258,6 +281,7 @@ export function extractFromRef(ref: string, opts: ExtractOptions = {}): Extracte
     if (closeKey) closes.push(num(r[closeKey]) ?? NaN)
   })
   const dirs = closes.length === series.length && closes.every(Number.isFinite) ? closes.map((c, i) => i === 0 || c >= closes[i - 1]!) : undefined
+  const unit = unitFor(units, fieldKey)
   return {
     ...base,
     symbol,
@@ -266,6 +290,7 @@ export function extractFromRef(ref: string, opts: ExtractOptions = {}): Extracte
     ...(times ? { times: kept } : {}),
     ...(labelKey ? { labels } : {}),
     ...(dirs ? { dirs } : {}),
+    ...(unit !== undefined ? { unit } : {}),
   }
 }
 

@@ -158,6 +158,13 @@ const PREFERENCES = "What the user said in this conversation about risk appetite
 const MISSING_DATA = "Which tools or sources failed, how that was handled, and which figures are still missing. Never fill in numbers for the missing parts."
 
 /**
+ * The order and the answers let a resumed model say what came first (#420). One sentence each: a
+ * summary over COMPACT_MAX_OUTPUT_TOKENS is thrown away, so a long conversation must still fit.
+ */
+const REQUEST_HISTORY =
+  "The overall goal. Then each user request on its own numbered line, in chronological order from the first, close to its original wording, followed by the answer that was given: one short sentence with its key figures as stated. Label figures the user provided or assumed as such; do not imply that an earlier answer was independently verified."
+
+/**
  * Sent after the head when summarizing; the summary must stand in for everything above it.
  * One request, as Claude Code's /compact does: the model first inventories
  * the conversation in an <analysis> scratchpad, then writes the <summary>;
@@ -168,7 +175,7 @@ export function compactPrompt(instructions?: string, variant: CompactVariant = "
     variant === "lean"
       ? [
           "## Yêu cầu của người dùng",
-          "The goal and each request, close to the original words.",
+          REQUEST_HISTORY,
           "## Ràng buộc và sở thích",
           PREFERENCES,
           "## Số liệu đã xác minh",
@@ -180,7 +187,7 @@ export function compactPrompt(instructions?: string, variant: CompactVariant = "
         ]
       : [
           "## Yêu cầu của người dùng",
-          "The user's goal and each request, close to the original words.",
+          REQUEST_HISTORY,
           "## Ràng buộc và sở thích",
           PREFERENCES,
           "## Số liệu đã xác minh",
