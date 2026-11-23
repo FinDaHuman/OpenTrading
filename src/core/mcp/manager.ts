@@ -1105,13 +1105,14 @@ export class McpManager {
               `MCP server "${name}" is failing to connect repeatedly, so this call was not sent. Try again after ${Math.ceil(refused / 1000)} seconds; for now do not call this server's tools — answer with the data you have and state what is missing.`,
             )
           }
+          const probeToken = breaker?.probeToken
           const retryDelays = this.opts.callRetryDelaysMs ?? [1000, 3000]
           // Only read-only calls are retried: a write may already have run on the server.
           const retries = isRemote(config) && tool.annotations?.readOnlyHint ? retryDelays.length : 0
           for (let attempt = 0; ; attempt++) {
             const live = await this.ready(name, startupTimeoutMs, ctx.signal).catch((error: unknown) => {
               // Still down after the wait for a reconnect, not a server that needs the user.
-              if (!ctx.signal.aborted && this.reconnecting.has(name)) breaker?.failure()
+              if (!ctx.signal.aborted && this.reconnecting.has(name)) breaker?.failure(probeToken)
               throw error
             })
             let result: Awaited<ReturnType<typeof call>>
@@ -1150,7 +1151,7 @@ export class McpManager {
                 const status = httpStatus(error)
                 // A rate limit or a pause the server asked for comes from a server that is up.
                 if (status === 429 || wait !== undefined) breaker?.success()
-                else breaker?.failure()
+                else breaker?.failure(probeToken)
                 const why = status ? `HTTP ${status}` : modelErrorText(rawMessage(error), { max: 120 })
                 const what = status === 429 ? `is rate-limited (${why})` : `has a temporary error (${why}) — it may be restarting or overloaded`
                 const later = wait === undefined ? "" : ` The server asks to wait ${Math.ceil(wait / 1000)} seconds before calling again.`
