@@ -62,6 +62,12 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ### Fixed
 
+- Auto mode (▸▸) never lets a real order or a money transfer through, however fully the user names it (#411).
+  `identity.md` and the README say OpenTrading places no orders, but the classifier's "Real Trading" rule was a
+  soft deny that a named order cleared, and the ▸▸ and `--yolo` mode lines said the same. It is now a hard deny;
+  a hard-deny block no longer tells the model that a message or an `autoMode.allow` rule would unlock it. Eval
+  cases 24 and 54 expected "allow" and now expect a block; six cases on both sides of the rule are new.
+
 - `chart_render` with `from_call` takes the unit from the data server's `units` instead of the model (#329):
   candles of `vn_equity_ohlcv` show "nghìn đ", the price board "đ", indices "điểm", volumes "cp", in the chart
   title and the summary. A model unit of other dimensions or scale ("đ" for a price in nghìn đồng, a 1000x

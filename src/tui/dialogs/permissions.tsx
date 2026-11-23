@@ -119,7 +119,9 @@ export function PermissionsDialog(props: { mode: PermissionMode; workspace: Work
               {d().reason}
             </text>
             <text fg={color.tx3} marginTop={1} wrapMode="word">
-              {"ctrl+r: lần sau model gọi đúng lời gọi này thì chạy luôn (một lần). Muốn cho phép lâu dài: nói rõ trong tin nhắn, hoặc thêm luật autoMode.allow trong config.json."}
+              {d().hard
+                ? "Luật chặn tuyệt đối: nói rõ trong tin nhắn hay thêm autoMode.allow đều không gỡ được. ctrl+r: bạn tự cho đúng lời gọi này chạy một lần."
+                : "ctrl+r: lần sau model gọi đúng lời gọi này thì chạy luôn (một lần). Muốn cho phép lâu dài: nói rõ trong tin nhắn, hoặc thêm luật autoMode.allow trong config.json."}
             </text>
           </DialogFrame>
         )}
