@@ -35,9 +35,9 @@ const MAGNITUDES: [string, number][] = [
 
 /** Names of one base unit, all read as the first. */
 const BASES: [string, string[]][] = [
-  ["đồng", ["đồng", "đ", "vnd", "vnđ", "dong"]],
+  ["đồng", ["đồng", "đ", "₫", "vnd", "vnđ", "dong"]],
   ["cổ phiếu", ["cổ phiếu", "cp", "cổ", "share", "shares"]],
-  ["điểm", ["điểm", "point", "points"]],
+  ["điểm", ["điểm", "point", "points", "pt", "pts"]],
   ["usd", ["usd", "$", "đô", "đô la"]],
   ["ngày", ["ngày", "day", "days"]],
   ["năm", ["năm", "year", "years"]],
@@ -57,7 +57,17 @@ function baseOf(word: string): string | undefined {
 
 /** One factor of a unit: "tỷ đồng", "cổ phiếu", "%". */
 function term(raw: string): Unit {
-  const aliases: Record<string,string> = {vndbn:"tỷ đồng", vndmn:"triệu đồng", vndk:"nghìn đồng", "vnd/share":"đồng/cổ phiếu", "vnd/cổ phiếu":"đồng/cổ phiếu", "billion vnd":"tỷ đồng", "million vnd":"triệu đồng"}
+  const aliases: Record<string, string> = {
+    vndbn: "tỷ đồng",
+    vndmn: "triệu đồng",
+    vndk: "nghìn đồng",
+    kvnd: "nghìn đồng",
+    "kđ": "nghìn đồng",
+    "vnd/share": "đồng/cổ phiếu",
+    "vnd/cổ phiếu": "đồng/cổ phiếu",
+    "billion vnd": "tỷ đồng",
+    "million vnd": "triệu đồng",
+  }
   const text = aliases[norm(raw)] ?? norm(raw)
   if (text in DIMENSIONLESS) return { factor: DIMENSIONLESS[text]!, dims: {} }
   for (const [word, scale] of MAGNITUDES) {
@@ -124,4 +134,31 @@ export const samePerShare = (a: Dims, b: Dims) => {
   delete x["cổ phiếu"]
   delete y["cổ phiếu"]
   return sameDims(x, y)
+}
+
+/** A magnitude word alone ("k", "nghìn", "tỷ"): a scale with no unit. */
+export const isMagnitude = (raw: string) => MAGNITUDES.some(([word]) => word === norm(raw))
+
+/** Longest unit a chart shows (chart_render's `unit` schema). */
+const MAX_CHART_UNIT = 10
+
+/**
+ * A server unit short enough for a chart title and summary (#329): "nghìn đồng/cổ phiếu
+ * (64,27 = 64.270 đ)" → "nghìn đ", "cổ phiếu" → "cp". The per-share denominator goes (a chart of
+ * prices needs no "/cp"). Undefined when it holds several units ("…; chỉ số (VNINDEX): điểm") or
+ * stays too long: no unit is better than a cut one.
+ */
+export function shortUnit(raw: string): string | undefined {
+  if (raw.includes(";")) return undefined
+  // Matched without case, shown with the server's capitals ("USD" stays "USD").
+  const text = raw
+    .replace(/\([^)]*\)/g, " ")
+    .normalize("NFC")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\s*\/\s*cổ phiếu$/iu, "")
+    .replace(/cổ phiếu/giu, "cp")
+    .replace(/(^|[\s/])đồng(?=[\s/]|$)/giu, "$1đ")
+    .trim()
+  return text && text.length <= MAX_CHART_UNIT ? text : undefined
 }
