@@ -205,6 +205,22 @@ test("the summary prompt asks for verbatim sourced figures and carries the user'
   expect(compactPrompt()).not.toContain("Yêu cầu thêm")
 })
 
+// #420: after /compact and --continue the model took the kept turns for the start of the conversation.
+test("both variants keep the requests in order with a one-sentence answer each, and the marker says the summary comes first", async () => {
+  for (const prompt of [compactPrompt(), compactPrompt(undefined, "lean")]) {
+    expect(prompt).toContain("The overall goal.")
+    expect(prompt).toContain("in chronological order from the first")
+    expect(prompt).toContain("one short sentence with its key figures")
+    expect(prompt).toContain("Label figures the user provided or assumed")
+  }
+  const history: ModelMessage[] = [1, 2, 3, 4].flatMap((n): ModelMessage[] => [{ role: "user", content: `câu ${n}` }, { role: "assistant", content: `trả lời ${n}` }])
+  const out = await compactHistory(history, { manual: true, summarize: async () => "## Yêu cầu của người dùng" })
+  const marker = out.messages[0]!
+  expect(isCompactMarker(marker)).toBe(true)
+  expect(JSON.stringify(marker)).toContain("the messages after it came later")
+  expect(JSON.stringify(out.messages.slice(2))).toContain("câu 3")
+})
+
 test("one request: an <analysis> scratchpad then the <summary>; lean drops the analysis section, keeps preferences", () => {
   const full = compactPrompt()
   expect(full).toContain("<analysis>")

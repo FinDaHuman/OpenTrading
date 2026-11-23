@@ -16,7 +16,7 @@ const SKILLS_PREFIX = "Skills loaded: "
 const VI_SKILLS_PREFIX = "Skill đã nạp: "
 
 const COMPACT_HEADER =
-  "The start of the conversation was compressed into the summary in the next message. Figures in the summary keep their source and time. Omitted details: read them with read_result if the summary has an id; call the tool again for newer figures."
+  "The start of the conversation was compressed into the summary in the next message; the messages after it came later. For the first question or earlier answers, consult the summary before the later messages. Figures in the summary keep their source and time. Omitted details: read them with read_result if the summary has an id; call the tool again for newer figures."
 
 interface CarriedTodo {
   content: string
