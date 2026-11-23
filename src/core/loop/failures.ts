@@ -98,6 +98,12 @@ export interface TurnFailures {
   usable: boolean
   /** A data tool (MCP, web) returned data: with gaps and none of this, every source failed. */
   fetched: boolean
+  /**
+   * Data tools that returned an error of their own (an MCP isError, an eval replay miss), by short
+   * name. Not gaps: the call may have been the model's mistake, so the UI line and the subagent's
+   * dataGaps leave them out, but a turn where these are all it got has nothing to answer from (#414).
+   */
+  errored: string[]
 }
 
 /** Tools that run the harness, not fetch data: their success is nothing to answer from. */
@@ -109,6 +115,7 @@ export function turnFailures(messages: readonly ModelMessage[]): TurnFailures {
   const inputs = new Map<string, unknown>()
   const missing = new Map<string, { name: string; alternatives: string[] }>()
   const worked = new Set<string>()
+  const errored = new Set<string>()
   let streak = 0
   let usable = false
   let fetched = false
@@ -132,6 +139,7 @@ export function turnFailures(messages: readonly ModelMessage[]): TurnFailures {
         worked.add(shortName(part.toolName))
       } else if (!NEUTRAL.has(outcome)) {
         failed = true
+        if (outcome === "tool-error" && bringsData(part.toolName)) errored.add(shortName(part.toolName))
         if (DATA_LOST.has(outcome) && bringsData(part.toolName)) {
           missing.set(key, { name: shortName(part.toolName), alternatives: outcome === "source-unavailable" ? noticeAlternatives(resultText(output)) : [] })
         }
@@ -141,18 +149,29 @@ export function turnFailures(messages: readonly ModelMessage[]): TurnFailures {
     else if (failed) streak++
   }
   const gaps = [...missing.values()].filter((gap) => !gap.alternatives.some((name) => worked.has(name))).map((gap) => gap.name)
-  return { gaps: [...new Set(gaps)], streak, usable, fetched }
+  return { gaps: [...new Set(gaps)], streak, usable, fetched, errored: [...errored] }
 }
 
 /**
  * The answer the harness writes when the model gave none after every recovery and sources
  * failed: it names what is missing and states no figure. Seen 13/11 (eval m6): both price
- * sources down, the model answered empty three times.
+ * sources down, the model answered empty three times. Tools that returned errors of their own
+ * (#414) are named too, without calling them an outage.
  */
-export function gapsAnswer(gaps: readonly string[]): string {
+export function gapsAnswer(gaps: readonly string[], errored: readonly string[] = []): string {
+  const names = [...new Set([...gaps, ...errored])]
+  // An error of the tool's own may come from the question (a wrong ticker or period): no outage, no wait.
+  const why = gaps.length === 0
+    ? "tool báo lỗi"
+    : errored.length > 0
+      ? "tool báo lỗi, nguồn lỗi hoặc quá thời gian"
+      : "nguồn lỗi hoặc quá thời gian"
+  const next = gaps.length === 0
+    ? "Bạn kiểm tra lại mã hoặc kỳ trong câu hỏi rồi hỏi lại, hoặc hỏi phần dữ liệu khác."
+    : "Bạn thử hỏi lại sau ít phút, hoặc hỏi phần dữ liệu khác."
   return [
-    `Mình chưa trả lời được câu này vì chưa lấy được dữ liệu cần thiết: ${gaps.join(", ")} (nguồn lỗi hoặc quá thời gian trong lượt này).`,
-    "Mình không đưa ra con số nào cho phần thiếu để tránh sai. Bạn thử hỏi lại sau ít phút, hoặc hỏi phần dữ liệu khác.",
+    `Mình chưa trả lời được câu này vì chưa lấy được dữ liệu cần thiết: ${names.join(", ")} (${why} trong lượt này).`,
+    `Mình không đưa ra con số nào cho phần thiếu để tránh sai. ${next}`,
   ].join("\n\n")
 }
 

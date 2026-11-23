@@ -1911,3 +1911,66 @@ test("a request budget that is not a whole number of at least 1 is a setup error
     expect(bodies.filter((b) => (b as { stream?: boolean }).stream)).toHaveLength(0)
   }
 })
+
+/** A data tool whose server answers isError (an eval replay miss): a tool-error, not a lost source. */
+function erroringSource() {
+  const r = registry()
+  r.register({
+    name: "mcp__ot__ratios",
+    description: "a data tool",
+    input: z.object({}),
+    readOnly: true,
+    async execute() {
+      throw new Error('[replay] Không có trong bản ghi: {"name":"ratios"}')
+    },
+  })
+  return r
+}
+
+const ECHOED_NUDGE = "If no data is available for any part, state clearly what is missing."
+
+test("#414: every data call errored, the model echoes the rescue twice: the harness answers, the turn is not completed", async () => {
+  respond = (_body, n) => (n === 0 ? toolCall("mcp__ot__ratios", {}, "call_1") : n === 1 ? answer("") : answer(ECHOED_NUDGE))
+  const events = await collect(runAgent({ history: [], input: "So sánh P/E và ROE của VCB với BID.", skills: [], registry: erroringSource() }))
+  expect(bodies).toHaveLength(4)
+  // Both rescues (requests 2 and 3) name the tool that errored, tools off: a nudge is never stored.
+  for (const n of [2, 3]) {
+    expect(lastSent(n)).toContain("returned no data this turn: ratios")
+    expect(bodies[n]!.tool_choice).toBe("none")
+  }
+  expect(done(events).recoveries).toEqual([{ kind: "empty", attempt: 1 }, { kind: "nudge-echo", attempt: 2 }])
+  expect(done(events).fallback).toBe(true)
+  expect(done(events).unanswered).toBe(true)
+  const last = JSON.stringify(done(events).messages.at(-1))
+  expect(last).toContain("ratios")
+  expect(last).toContain("tool báo lỗi")
+  expect(JSON.stringify(done(events).messages)).not.toContain(ECHOED_NUDGE)
+  expect(events.some((event) => event.type === "retract")).toBe(true)
+  // Not a lost source: no gap line for the UI.
+  expect(done(events).dataGaps).toBeUndefined()
+})
+
+test("#414: an echoed instruction sent back once, then a real answer is kept", async () => {
+  const real = "Hiện chưa lấy được P/E và ROE của VCB và BID: tool dữ liệu báo lỗi. Bạn thử hỏi lại sau."
+  respond = (_body, n) => (n === 0 ? toolCall("mcp__ot__ratios", {}, "call_1") : n === 1 ? answer("") : n === 2 ? answer(ECHOED_NUDGE) : answer(real))
+  const events = await collect(runAgent({ history: [], input: "So sánh P/E và ROE của VCB với BID.", skills: [], registry: erroringSource(), maxSteps: 10 }))
+  expect(done(events).recoveries?.map((r) => r.kind)).toEqual(["empty", "nudge-echo"])
+  expect(done(events).unanswered).toBeUndefined()
+  expect(done(events).fallback).toBeUndefined()
+  expect(JSON.stringify(done(events).messages.at(-1))).toContain("Hiện chưa lấy được")
+})
+
+test("#414 review: an echoed instruction at the step cap is never the answer", async () => {
+  respond = (_body, n) => (n === 0 ? toolCall("mcp__ot__ratios", {}, "call_1") : n === 1 ? answer("") : answer(ECHOED_NUDGE))
+  const events = await collect(runAgent({ history: [], input: "So sánh P/E và ROE của VCB với BID.", skills: [], registry: erroringSource(), maxSteps: 3 }))
+  expect(bodies).toHaveLength(3)
+  expect(done(events).recoveries).toEqual([{ kind: "empty", attempt: 1 }])
+  expect(done(events).unanswered).toBe(true)
+  expect(done(events).fallback).toBe(true)
+  expect(JSON.stringify(done(events).messages)).not.toContain(ECHOED_NUDGE)
+  // The screen: the echo is taken back before the harness's own answer is written.
+  const retract = events.findLastIndex((event) => event.type === "retract")
+  const text = events.findLastIndex((event) => event.type === "text-delta" && event.text.includes("chưa lấy được dữ liệu"))
+  expect(retract).toBeGreaterThan(-1)
+  expect(text).toBeGreaterThan(retract)
+})
