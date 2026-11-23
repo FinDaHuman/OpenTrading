@@ -339,7 +339,7 @@ test("/config names the newest Flash-Lite for a slow Gemini model, beside the cu
     setup.mockInput.pressEnter()
     await setup.waitForFrame((frame) => frame.includes("Cài đặt"))
     await setup.mockInput.typeText("model cho tim kiem")
-    const row = await setup.waitForFrame((frame) => frame.includes("mất 95 giây"))
+    const row = await setup.waitForFrame((frame) => frame.includes("Chậm (95 giây)"))
     setup.mockInput.pressEnter()
     const frame = await setup.waitForFrame((f) => f.includes("gõ tên model") && f.includes("mất 95 giây"))
     setup.mockInput.pressEscape()
@@ -350,7 +350,7 @@ test("/config names the newest Flash-Lite for a slow Gemini model, beside the cu
   }
   try {
     const slow = await frameFor("gemini-3.5-flash")
-    expect(slow.row).toContain("Mặc định: model của phiên · Lần gọi web gần nhất mất 95 giây")
+    expect(slow.row).toContain("Chậm (95 giây) · Mặc định: model của phiên")
     expect(slow.frame).toContain("Có thể chọn Gemini 3.5 Flash-Lite")
     const lite = await frameFor("gemini-3.5-flash-lite")
     expect(lite.frame).toContain("Có thể chọn model nhanh hơn")

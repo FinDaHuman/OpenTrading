@@ -60,17 +60,26 @@ export function ConfigDialog(props: { runtime: Runtime }) {
     const w = config()?.webModel
     return w?.model ? `${providerName(w.provider ?? state.provider)} · ${w.model}` : undefined
   }
-  const slowWebModelHint = () => {
+  /** Seconds the last web call took, when it was slow and made by the model in use. */
+  const slowWebModel = () => {
     const last = lastWebModelCall
-    const selected = config()?.webModel
-    const provider = selected?.model ? selected.provider ?? state.provider : state.provider
-    const model = selected?.model ?? state.model
+    const { provider, model } = webModelInUse()
     if (!last || last.provider !== provider || last.model !== model || last.durationMs <= 30_000) return undefined
+    return Math.round(last.durationMs / 1000)
+  }
+  const webModelInUse = () => {
+    const selected = config()?.webModel
+    return selected?.model ? { provider: selected.provider ?? state.provider, model: selected.model } : { provider: state.provider, model: state.model }
+  }
+  const slowWebModelHint = () => {
+    const seconds = slowWebModel()
+    if (seconds === undefined) return undefined
+    const { provider, model } = webModelInUse()
     // Names sort by version, so the last match is the newest; a Flash-Lite that is slow has no faster sibling.
     const faster = provider === "google" && !/flash-lite/i.test(model ?? "")
-      ? toolModels(selected).findLast((choice) => typeof choice.value === "object" && choice.value.provider === provider && /flash-lite/i.test(choice.value.model) && !("unavailable" in choice.value))
+      ? toolModels(config()?.webModel).findLast((choice) => typeof choice.value === "object" && choice.value.provider === provider && /flash-lite/i.test(choice.value.model) && !("unavailable" in choice.value))
       : undefined
-    return `Lần gọi web gần nhất mất ${Math.round(last.durationMs / 1000)} giây.${faster ? ` Có thể chọn ${faster.label}.` : " Có thể chọn model nhanh hơn."}`
+    return `Lần gọi web gần nhất mất ${seconds} giây.${faster ? ` Có thể chọn ${faster.label}.` : " Có thể chọn model nhanh hơn."}`
   }
   const autoModel = () => {
     const a = config()?.autoMode?.model
@@ -486,7 +495,7 @@ export function ConfigDialog(props: { runtime: Runtime }) {
               },
               {
                 label: "Model cho tìm kiếm / đọc web",
-                hint: [webModel() ?? "Mặc định: model của phiên", slowWebModelHint() ?? (webModel() ? undefined : "enter để chọn model rẻ hơn")].filter(Boolean).join(" · "),
+                hint: `${slowWebModel() ? `Chậm (${slowWebModel()} giây) · ` : ""}${webModel() ?? "Mặc định: model của phiên · enter để chọn model rẻ hơn"}`,
                 mark: webModel() ? "●" : "○",
                 value: "webModel" as Setting,
               },
