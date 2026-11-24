@@ -7,9 +7,9 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ### Fixed
 
-- A new npm version is announced only when it can be installed: the release publishes `@findahuman/opentrading`
-  after npm serves every platform package, and leaves draft after npm serves the main one (0.5.0 was accepted by
-  npm 2–6 minutes before all its packages could be downloaded).
+- The release publishes `@findahuman/opentrading` only after npm serves every platform package to the release
+  runner, and leaves draft after npm serves the main one (0.5.0 was accepted by npm 2–6 minutes before all its
+  packages could be downloaded, so an install in between could miss its binary).
 
 ## [0.5.0] — 2026-11-24
 
