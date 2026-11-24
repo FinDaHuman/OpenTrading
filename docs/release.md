@@ -17,16 +17,29 @@ tảng (`opentrading-windows-x64`, …) chứa binary (`scripts/npm.ts`). Trư�
    - Phần *Packages and scopes*: chọn **Read and write (publish and stage)** và **All packages** (gói chưa
      có nên chưa chọn riêng được). "stage only" không dùng được cho CI: bản stage phải duyệt tay trên npmjs.com.
    - Token có quyền ghi sống tối đa **90 ngày** (quy định của npm từ 11/2025). Ghi ngày hết hạn lại; hết hạn thì
-     job `npm` lỗi và release kẹt ở nháp.
+     job `npm` lỗi và release kẹt ở nháp. Token hiện tại tạo ngày 23/10/2026, muộn nhất 21/01/2027 là hết hạn.
    - npm báo (23/10/2026): token bypass-2FA đăng thẳng sẽ **bị bỏ vào tháng 01/2027**. Token chỉ dùng cho các bản
-     đầu; trước 01/2027 phải chuyển sang trusted publishing (bước 4).
+     đầu; trước 01/2027 phải chuyển sang trusted publishing (phần dưới).
 3. GitHub → Settings → Secrets and variables → Actions → **New repository secret** `NPM_TOKEN`.
-4. **Trước 01/2027** chuyển sang **trusted publishing** (OIDC, không cần token): sau lần đăng đầu, vào từng gói trên
-   npmjs.com → Settings → Trusted publisher → GitHub Actions, repo `FinDaHuman/OpenTrading`, workflow
-   `release.yml`. Job `npm` đã có `id-token: write`; khi đó bỏ `NODE_AUTH_TOKEN`. Kiểm lại yêu cầu (phiên bản
-   npm CLI, gói chưa tồn tại có dùng được không) trong tài liệu npm trước khi đổi.
 
-Thiếu `NPM_TOKEN` thì job `npm` lỗi và release vẫn là nháp: không ai được báo bản mới.
+Thiếu `NPM_TOKEN` (khi chưa có trusted publishing) thì job `npm` lỗi và release vẫn là nháp: không ai được báo bản mới.
+
+### Chuyển sang trusted publishing (trước 01/2027)
+
+npm nhận thẳng danh tính của workflow (OIDC), không cần token. Cấu hình mới **hết hạn nếu sau 2 ngày chưa đăng được
+bản nào**, nên chỉ làm ngay trước khi phát hành:
+
+1. Trên máy của chủ gói (npm 11.15 trở lên): `npm login`, rồi `bun scripts/npm-trust.ts --yes`. Lệnh đầu hỏi 2FA
+   trên trình duyệt; chọn bỏ qua 2FA trong 5 phút để 9 gói còn lại không hỏi lại. Không có `--yes` thì chỉ in lệnh.
+   Cách khác: làm tay từng gói trên npmjs.com → Settings → Trusted publisher → GitHub Actions, repo
+   `FinDaHuman/OpenTrading`, workflow `release.yml`, không có environment, **cho phép `npm publish`** (mặc định của
+   npm chỉ cho `npm stage publish`).
+2. Phát hành trong vòng 2 ngày. npm thử OIDC trước, không được thì **lặng lẽ** dùng `NPM_TOKEN`; job `npm` in
+   cảnh báo cho gói nào vẫn đăng bằng token.
+3. Không còn cảnh báo nào: bỏ `NODE_AUTH_TOKEN` trong `release.yml`, xoá secret `NPM_TOKEN` và token trên npmjs.com.
+   Rồi ở từng gói: Settings → Publishing access → *Require two-factor authentication and disallow tokens*.
+
+Đổi tên `release.yml` hoặc repo thì phải tạo lại cấu hình (npm so đúng tên, phân biệt hoa thường).
 
 ## Các bước
 
@@ -45,9 +58,15 @@ Thiếu `NPM_TOKEN` thì job `npm` lỗi và release vẫn là nháp: không ai 
    - build 9 binary trên runner Windows, Ubuntu, macOS (`bun run build --targets …`), ký ad-hoc bản macOS,
      chạy `--self-check` với bản của chính runner, nén (`scripts/package.ts`);
    - tạo release **nháp** kèm các file nén + `SHA256SUMS`, ghi chú lấy từ CHANGELOG (`scripts/release-notes.ts`);
-   - job `npm` đăng các gói (bản đã có trên npm thì bỏ qua, nên chạy lại được), xong mới bỏ nháp. Release còn nháp thì `releases/latest` chưa thấy nó, nên
+   - job `npm` đăng các gói nền tảng, chờ npm thật sự phục vụ đủ (bản 0.5.0: 2–6 phút sau khi `npm publish` báo xong),
+     mới đăng gói chính rồi chờ tiếp (bản đã có trên npm thì bỏ qua, nên chạy lại được); xong mới bỏ nháp. Release còn nháp thì `releases/latest` chưa thấy nó, nên
      không ai được báo cập nhật lên bản mà một kênh chưa có.
-5. Workflow lỗi giữa chừng: sửa, xoá release nháp và tag (`git push --delete origin v0.2.0`), rồi đẩy tag lại.
+   - job `verify` (`verify-release.yml`) cài bản vừa phát hành trên máy thật của từng hệ điều hành và CPU: script cài,
+     `ot update` từ bản trước, npm cài mới và nâng cấp, mở TUI (macOS, Linux). Chạy tay lúc nào cũng được: Actions →
+     Verify release (kiểm bản mới nhất). Job này đỏ nghĩa là bản **đã phát hành** có người không cài được.
+5. Job `npm` lỗi: **giữ nguyên tag**, sửa nguyên nhân (token, npm chậm) rồi chạy lại các job lỗi
+   (`gh run rerun <id> --failed`). Version đã lên npm không đăng lại được.
+6. Lỗi trước khi có gì lên npm: sửa, xoá release nháp và tag (`git push --delete origin v0.2.0`), rồi đẩy tag lại.
 
 ## Chạy thử không phát hành
 

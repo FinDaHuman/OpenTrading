@@ -43,3 +43,17 @@ test("release.yml builds every target exactly once", async () => {
   const listed = [...yml.matchAll(/targets: (.+)/g)].flatMap((m) => m[1]!.trim().split(","))
   expect(listed.sort()).toEqual(TARGETS.map(targetName).sort())
 })
+
+test("release.yml checks the published release, and npm comes before publishing it", async () => {
+  const yml = await Bun.file(path.resolve(import.meta.dir, "../.github/workflows/release.yml")).text()
+  const { jobs } = Bun.YAML.parse(yml) as { jobs: Record<string, { needs?: string | string[]; uses?: string }> }
+  expect(jobs.publish!.needs).toEqual(["release", "npm"])
+  expect(jobs.verify).toMatchObject({ needs: "publish", uses: "./.github/workflows/verify-release.yml" })
+})
+
+test("verify-release.yml runs on every OS and CPU the release ships", async () => {
+  const yml = await Bun.file(path.resolve(import.meta.dir, "../.github/workflows/verify-release.yml")).text()
+  const { jobs } = Bun.YAML.parse(yml) as { jobs: { install: { strategy: { matrix: { include: { target: string }[] } } } } }
+  const ran = jobs.install.strategy.matrix.include.map((m) => m.target)
+  expect(ran.sort()).toEqual(TARGETS.filter((t) => !t.baseline).map(targetName).sort())
+})

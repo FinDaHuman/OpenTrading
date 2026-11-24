@@ -2,6 +2,7 @@ import { chmod, copyFile, mkdir, readdir, rm } from "node:fs/promises"
 import path from "node:path"
 import pkg from "../package.json"
 import { NPM_PACKAGE } from "../src/core/update"
+import { trustedPublisher, waitForNpm } from "./npm-registry"
 import { TARGETS, archiveName, targetName, type Target } from "./targets"
 
 /**
@@ -14,7 +15,8 @@ import { TARGETS, archiveName, targetName, type Target } from "./targets"
  * Cách chạy:
  *   bun scripts/npm.ts                       pack from dist/opentrading-<target>/bin (bun run build)
  *   bun scripts/npm.ts --archives release    pack from release archives (.zip / .tar.gz)
- *   add --publish to publish (skips versions already on npm; needs NODE_AUTH_TOKEN, --provenance in CI)
+ *   add --publish to publish (skips versions already on npm; trusted publishing or NODE_AUTH_TOKEN, --provenance
+ *   in CI) and wait until npm serves them: the platform packages before the main one goes out, then the main one
  * Output: dist/npm/<package>/ and dist/npm/<package>-<version>.tgz
  */
 
@@ -87,13 +89,15 @@ await Bun.write(
   ),
 )
 
-// Platform packages first: the main package must never point at versions npm lacks.
+// Platform packages first, and not only accepted but served: the main package is what `npm i -g`
+// and the update notice see, so it must never point at versions npm still lacks.
 for (const name of [...Object.keys(platforms), NPM_PACKAGE]) {
   const dir = name === NPM_PACKAGE ? main : path.join(out, name)
   const packed = npm(["pack", "--pack-destination", out], dir)
   if (!packed.ok) throw new Error(`npm pack ${name}: ${packed.text}`)
   console.log(`packed ${name}@${version}`)
   if (!publish) continue
+  if (name === NPM_PACKAGE) await waitForNpm(Object.keys(platforms), version)
   if (npm(["view", `${name}@${version}`, "version"], dir).ok) {
     console.log(`  already on npm: ${name}@${version}`)
     continue
@@ -101,6 +105,15 @@ for (const name of [...Object.keys(platforms), NPM_PACKAGE]) {
   const pub = npm(["publish", "--access", "public", ...(process.env.CI ? ["--provenance"] : [])], dir)
   if (!pub.ok) throw new Error(`npm publish ${name}: ${pub.text}`)
   console.log(`  published ${name}@${version}`)
+}
+if (publish) {
+  await waitForNpm([NPM_PACKAGE], version, { latest: true })
+  // npm falls back to the token without a word when OIDC is refused, so say which one it was.
+  for (const name of [...Object.keys(platforms), NPM_PACKAGE]) {
+    if ((await trustedPublisher(name, version)) === false) {
+      console.log(`::warning::${name}@${version} was published with a token, not by the trusted publisher (docs/release.md)`)
+    }
+  }
 }
 
 /** Copy the binary for `target` into `binDir` from the build folder or a release archive. */
