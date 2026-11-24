@@ -5,6 +5,12 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ## [Unreleased]
 
+### Fixed
+
+- A new npm version is announced only when it can be installed: the release publishes `@findahuman/opentrading`
+  after npm serves every platform package, and leaves draft after npm serves the main one (0.5.0 was accepted by
+  npm 2–6 minutes before all its packages could be downloaded).
+
 ## [0.5.0] — 2026-11-24
 
 Model-facing text (system prompt, tool and skill descriptions, skill bodies and references, runtime notices) is in

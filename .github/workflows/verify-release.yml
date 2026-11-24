@@ -1,0 +1,133 @@
+name: Verify release
+
+# The published release on real machines, the way users get it: install.sh / install.ps1 from main,
+# `ot update` from the release before, npm (fresh and upgrade), and on macOS and Linux the TUI in a
+# real terminal. One runner per OS and CPU; the release builds cross-compile most of them.
+# release.yml calls it after publishing; a manual run checks the latest release.
+
+on:
+  workflow_call:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/verify-release.yml
+      - scripts/dev/tui-start.py
+
+permissions:
+  contents: read
+
+jobs:
+  versions:
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.find.outputs.version }}
+      previous: ${{ steps.find.outputs.previous }}
+    steps:
+      - id: find
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          case "$GITHUB_REF" in
+            refs/tags/v*) tag=$GITHUB_REF_NAME ;;
+            *) tag=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName) ;;
+          esac
+          previous=$(gh release list --repo "$GITHUB_REPOSITORY" --exclude-drafts --exclude-pre-releases --limit 50 --json tagName --jq '.[].tagName' \
+            | { cat; echo "$tag"; } | sort -Vu | grep -xF -B1 -- "$tag" | head -n 1)
+          test -n "$previous" && test "$previous" != "$tag"
+          echo "version=${tag#v}" | tee -a "$GITHUB_OUTPUT"
+          echo "previous=${previous#v}" | tee -a "$GITHUB_OUTPUT"
+
+  install:
+    needs: versions
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: windows-latest, target: windows-x64 }
+          - { os: windows-11-arm, target: windows-arm64 }
+          - { os: ubuntu-latest, target: linux-x64 }
+          - { os: ubuntu-24.04-arm, target: linux-arm64 }
+          - { os: macos-latest, target: darwin-arm64 }
+          - { os: macos-15-intel, target: darwin-x64 }
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      VERSION: ${{ needs.versions.outputs.version }}
+      PREVIOUS: ${{ needs.versions.outputs.previous }}
+      TARGET: ${{ matrix.target }}
+      INSTALLER: https://raw.githubusercontent.com/${{ github.repository }}/main/install
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: scripts/dev
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - name: Helpers
+        run: |
+          cat > "$RUNNER_TEMP/lib.sh" <<'EOF'
+          set -euo pipefail
+          # "opentrading 0.5.0 (e5d44a8, linux-x64)": this version, built for this machine. An x64
+          # runner without AVX2 rightly gets the baseline build.
+          is() {
+            local line; line=$("$1" --version | head -n 1); echo "$1: $line"
+            case "$line" in "opentrading $2 ("*", $TARGET)" | "opentrading $2 ("*", $TARGET-baseline)") ;; *) echo "expected opentrading $2 for $TARGET"; return 1 ;; esac
+          }
+          # script_install <folder> [version]
+          script_install() {
+            if [ "$RUNNER_OS" = Windows ]; then
+              curl -fsSL --retry 5 --retry-all-errors "$INSTALLER.ps1" -o "$RUNNER_TEMP/install.ps1"
+              OPENTRADING_INSTALL_DIR=$(cygpath -w "$1") OPENTRADING_VERSION=${2:-} \
+                powershell -NoProfile -ExecutionPolicy Bypass -Command "Get-Content -Raw '$(cygpath -w "$RUNNER_TEMP/install.ps1")' | Invoke-Expression"
+            else
+              curl -fsSL --retry 5 --retry-all-errors "$INSTALLER.sh" | OPENTRADING_VERSION=${2:-} bash -s -- --dir "$1"
+            fi
+          }
+          npm_bin() { if [ "$RUNNER_OS" = Windows ]; then echo "$1"; else echo "$1/bin"; fi; }
+          EOF
+      - name: Install script, latest
+        run: |
+          . "$RUNNER_TEMP/lib.sh"
+          script_install "$RUNNER_TEMP/script"
+          is "$RUNNER_TEMP/script/ot" "$VERSION"
+          is "$RUNNER_TEMP/script/opentrading" "$VERSION"
+          "$RUNNER_TEMP/script/ot" --self-check
+      - name: TUI starts in a terminal
+        if: runner.os != 'Windows'
+        run: python3 scripts/dev/tui-start.py "$RUNNER_TEMP/script/ot"
+      - name: Install script, previous release, then ot update
+        run: |
+          . "$RUNNER_TEMP/lib.sh"
+          script_install "$RUNNER_TEMP/old" "$PREVIOUS"
+          is "$RUNNER_TEMP/old/ot" "$PREVIOUS"
+          # The version is given because "latest" asks api.github.com, which rate-limits shared runners.
+          "$RUNNER_TEMP/old/ot" update "$VERSION"
+          is "$RUNNER_TEMP/old/ot" "$VERSION"
+          "$RUNNER_TEMP/old/ot" --self-check
+      - name: npm, fresh
+        run: |
+          . "$RUNNER_TEMP/lib.sh"
+          npm i -g --prefix "$RUNNER_TEMP/npm" @findahuman/opentrading
+          bin=$(npm_bin "$RUNNER_TEMP/npm")
+          is "$bin/ot" "$VERSION"
+          is "$bin/opentrading" "$VERSION"
+          "$bin/ot" --self-check
+      - name: npm, baseline build (x64)
+        if: endsWith(matrix.target, '-x64')
+        run: |
+          . "$RUNNER_TEMP/lib.sh"
+          file=$(find "$RUNNER_TEMP/npm" -path "*opentrading-$TARGET-baseline/bin/opentrading*" -type f)
+          "$file" --version | grep -F "opentrading $VERSION (" | grep -F "$TARGET-baseline"
+          "$file" --self-check
+      - name: npm, upgrade from the previous release
+        run: |
+          . "$RUNNER_TEMP/lib.sh"
+          npm i -g --prefix "$RUNNER_TEMP/npm-old" "@findahuman/opentrading@$PREVIOUS"
+          is "$(npm_bin "$RUNNER_TEMP/npm-old")/ot" "$PREVIOUS"
+          npm i -g --prefix "$RUNNER_TEMP/npm-old" @findahuman/opentrading@latest
+          is "$(npm_bin "$RUNNER_TEMP/npm-old")/ot" "$VERSION"
