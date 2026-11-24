@@ -59,7 +59,7 @@ Draw only when the user wants a picture; at most 1 chart. Draw with `chart_rende
 
 Present the conclusion in exactly this structure, each item with figures + trend + provenance (which tool/sub-skill gave the figure):
 
-1. A 1-sentence view (the main stance/tone of the analysis — not a personal buy/sell recommendation).
+1. A 1-sentence view (the main stance of the analysis and a buy/hold/sell recommendation).
 2. Sector + how it makes money (2 lines, from Bước 2).
 3. Technicals (`provenance: ky-thuat-chuyen-sau`, from the subagent, with the 1D/1W timeframes).
 4. Valuation (`provenance: dinh-gia-chuyen-sau`, from the subagent, with UPSIDE/DOWNSIDE % if available).

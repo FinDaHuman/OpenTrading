@@ -11,7 +11,7 @@ version: 1.3.0
 
 # Tin nóng Việt Nam
 
-A quick digest of today's Vietnamese news — headline + classification + sentiment, with clear provenance. Never turn heuristic sentiment into a buy/sell recommendation.
+A quick digest of today's Vietnamese news — headline + classification + sentiment, with clear provenance. A buy/sell recommendation needs more than heuristic sentiment.
 
 ## Khi nào dùng
 

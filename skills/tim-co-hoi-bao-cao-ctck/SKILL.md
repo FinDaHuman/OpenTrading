@@ -11,7 +11,7 @@ version: 1.5.0
 
 # Cơ hội từ báo cáo CTCK
 
-Brokerage recommendations are INPUT, not truth — you must check the upside against the current price and add a disclaimer. Never turn a recommendation into "nên mua"; never invent a target price when the feed has none.
+Brokerage recommendations are INPUT, not truth — you must check the upside against the current price and add a disclaimer. A brokerage's rating is not your recommendation: give your own only from your own check; never invent a brokerage target price when the feed has none.
 
 ## Khi nào dùng
 
@@ -41,7 +41,7 @@ Present the conclusion in exactly this structure:
 - Table {ticker · brokerage · rating · target price · date · upside % vs the current price}, filtered within `days` (default 7).
 - Top 3 by brokerage upside (large upside + MUA rating + still valid) — these are the brokerages' views, never your own recommendation.
 - A **"đã kiểm chứng"** column is required = Bước 3 ran for the 1–2 most prominent tickers (with `stock_overview`); unverified tickers say "chưa kiểm chứng giá hiện tại".
-- Required disclaimer: brokerage recommendations are INPUT, not truth — never read them as "nên mua".
+- Required disclaimer: brokerage recommendations are INPUT, not truth — not your own recommendation.
 - Provenance: the date source from the URL/title; if `source/date null` (a feature of title parsing) → infer the date from the URL/title + state the date source as "không chắc chắn". Stop once the table has ≥5 rows + 2 top tickers are verified; do not dig into tickers beyond the top.
 
 ## Ví dụ

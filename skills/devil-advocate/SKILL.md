@@ -39,6 +39,6 @@ In this order: the thesis summarised (1–2 sentences) · 3–5 risks, each with
 
 **Ví dụ 1:**
 Hỏi: đang giữ HPG, có nên giữ không
-Trả lời: a 1–2 sentence summary + 3–5 risks with signals + invalidation conditions, neutral tone, no buy/sell recommendation.
+Trả lời: a 1–2 sentence summary + 3–5 risks with signals + invalidation conditions, neutral tone.
 
 **Tránh:** only praising along with the user to confirm their bias; concluding "nên bán" yourself.
