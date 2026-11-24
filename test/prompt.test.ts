@@ -209,6 +209,8 @@ test("tool guidance lives in one place and the format example carries no real-lo
   // although real tokens fell: 2 260 measured with all six English PRs merged. 2 309 after the
   // 20/11/2026 style.md rule against mixing languages (mixed answers 5/27 vs 1/27 in the #357 eval).
   // 2 338 after the 21/11/2026 skill-catalog header (load only the skill the question is about).
+  // 24/11/2026 owner decision: bat_bien 3 now makes the pick the user asks for (careful, highest return the
+  // data supports, risks stated) instead of the #303 "do not choose in any form" ban; same length class.
   expect(Math.ceil(a.system.length / 4)).toBeLessThan(2_350)
 })
 
