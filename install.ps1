@@ -58,7 +58,15 @@ function Test-OnPath([string]$Path, [string]$Dir) {
 }
 
 function Get-Target {
-  $arch = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()
+  # The machine's own value: OSArchitecture says X64 on Windows on ARM when this PowerShell runs
+  # emulated (started from an x64 program such as Git Bash).
+  $arch = ""
+  try {
+    $key = [Microsoft.Win32.Registry]::LocalMachine.OpenSubKey("SYSTEM\CurrentControlSet\Control\Session Manager\Environment")
+    try { $arch = [string]$key.GetValue("PROCESSOR_ARCHITECTURE") } finally { $key.Close() }
+  } catch {}
+  if ($arch -eq "AMD64") { $arch = "X64" }
+  if ($arch -ne "Arm64" -and $arch -ne "X64") { $arch = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString() }
   if ($arch -eq "Arm64") { return "windows-arm64" }
   if ($arch -ne "X64") { Fail "unsupported CPU architecture: $arch (OpenTrading ships x64 and arm64)" }
   # PF_AVX2_INSTRUCTIONS_AVAILABLE = 40. When the check itself fails, the baseline build is the safe one.

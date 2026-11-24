@@ -93,18 +93,6 @@ jobs:
           }
           npm_bin() { if [ "$RUNNER_OS" = Windows ]; then echo "$1"; else echo "$1/bin"; fi; }
           EOF
-      - name: DIAG native
-        if: runner.os == 'Windows'
-        shell: powershell
-        run: |
-          "process $env:PROCESSOR_ARCHITECTURE / W6432 $env:PROCESSOR_ARCHITEW6432 / PSVersion $($PSVersionTable.PSVersion)"
-          "OSArchitecture $([Runtime.InteropServices.RuntimeInformation]::OSArchitecture) ProcessArchitecture $([Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture)"
-          "registry $((Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Environment').PROCESSOR_ARCHITECTURE)"
-      - name: DIAG from bash
-        if: runner.os == 'Windows'
-        run: |
-          echo "bash $(uname -m) $PROCESSOR_ARCHITECTURE"
-          powershell -NoProfile -Command '"process $env:PROCESSOR_ARCHITECTURE / W6432 $env:PROCESSOR_ARCHITEW6432"; "OSArchitecture $([Runtime.InteropServices.RuntimeInformation]::OSArchitecture) ProcessArchitecture $([Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture)"; "registry $((Get-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Environment").PROCESSOR_ARCHITECTURE)"'
       - name: Install script, latest
         run: |
           . "$RUNNER_TEMP/lib.sh"
@@ -112,6 +100,18 @@ jobs:
           is "$RUNNER_TEMP/script/ot" "$VERSION"
           is "$RUNNER_TEMP/script/opentrading" "$VERSION"
           "$RUNNER_TEMP/script/ot" --self-check
+      - name: Install script, latest, from PowerShell itself (Windows)
+        # The step above starts PowerShell from Git Bash, an x64 process: on Windows on ARM it runs
+        # emulated there and natively here, and both must install the ARM64 build.
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          $env:OPENTRADING_INSTALL_DIR = "$env:RUNNER_TEMP\native"
+          Invoke-RestMethod "$env:INSTALLER.ps1" | Invoke-Expression
+          $line = @(& "$env:RUNNER_TEMP\native\ot.exe" --version)[0]
+          "$line"
+          if ($line -notlike "opentrading $env:VERSION (*, $env:TARGET*)") { throw "expected opentrading $env:VERSION for $env:TARGET" }
       - name: TUI starts in a terminal
         if: runner.os != 'Windows'
         run: python3 scripts/dev/tui-start.py "$RUNNER_TEMP/script/ot"

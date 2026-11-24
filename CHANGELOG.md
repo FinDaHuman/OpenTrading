@@ -10,6 +10,9 @@ adopt Semantic Versioning when it exposes a stable public API.
 - The release publishes `@findahuman/opentrading` only after npm serves every platform package to the release
   runner, and leaves draft after npm serves the main one (0.5.0 was accepted by npm 2–6 minutes before all its
   packages could be downloaded, so an install in between could miss its binary).
+- `install.ps1` on Windows on ARM installed the x64 build (slower, emulated) when PowerShell was started from an x64
+  program such as Git Bash; it now reads the machine's CPU. `ot update` keeps the build it finds, so run the install
+  script once more to move to the ARM64 build.
 
 ## [0.5.0] — 2026-11-24
 
