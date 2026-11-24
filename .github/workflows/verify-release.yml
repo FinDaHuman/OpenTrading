@@ -12,6 +12,8 @@ on:
     paths:
       - .github/workflows/verify-release.yml
       - scripts/dev/tui-start.py
+      - install.ps1
+      - install.sh
 
 permissions:
   contents: read
@@ -59,7 +61,8 @@ jobs:
       VERSION: ${{ needs.versions.outputs.version }}
       PREVIOUS: ${{ needs.versions.outputs.previous }}
       TARGET: ${{ matrix.target }}
-      INSTALLER: https://raw.githubusercontent.com/${{ github.repository }}/main/install
+      # What users run, except on a pull request: there, the installers it changes.
+      INSTALLER: https://raw.githubusercontent.com/${{ github.repository }}/${{ github.event.pull_request.head.sha || 'main' }}/install
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -90,6 +93,18 @@ jobs:
           }
           npm_bin() { if [ "$RUNNER_OS" = Windows ]; then echo "$1"; else echo "$1/bin"; fi; }
           EOF
+      - name: DIAG native
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          "process $env:PROCESSOR_ARCHITECTURE / W6432 $env:PROCESSOR_ARCHITEW6432 / PSVersion $($PSVersionTable.PSVersion)"
+          "OSArchitecture $([Runtime.InteropServices.RuntimeInformation]::OSArchitecture) ProcessArchitecture $([Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture)"
+          "registry $((Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Environment').PROCESSOR_ARCHITECTURE)"
+      - name: DIAG from bash
+        if: runner.os == 'Windows'
+        run: |
+          echo "bash $(uname -m) $PROCESSOR_ARCHITECTURE"
+          powershell -NoProfile -Command '"process $env:PROCESSOR_ARCHITECTURE / W6432 $env:PROCESSOR_ARCHITEW6432"; "OSArchitecture $([Runtime.InteropServices.RuntimeInformation]::OSArchitecture) ProcessArchitecture $([Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture)"; "registry $((Get-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Environment").PROCESSOR_ARCHITECTURE)"'
       - name: Install script, latest
         run: |
           . "$RUNNER_TEMP/lib.sh"
