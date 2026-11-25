@@ -20,13 +20,14 @@ mkdirSync(project, { recursive: true })
 afterAll(() => rmSync(root, { recursive: true, force: true }))
 
 const win = process.platform === "win32"
-const legacy = win ? Bun.which("powershell") : undefined
+/** Every PowerShell here: Windows PowerShell 5.1 and PowerShell 7 (the CI runners have both, Linux the second). */
+const ENGINES = [...(win ? [["powershell", Bun.which("powershell")] as const] : []), ["pwsh", Bun.which("pwsh")] as const].filter((e): e is readonly ["powershell" | "pwsh", string] => !!e[1])
 const ws = () => new Workspace(project, { home: path.join(root, "home"), data })
 const PS = { kind: "powershell" as const }
 const PS_SHELL = { kind: "powershell" as const, path: "powershell" }
 const BASH = { kind: "bash" as const }
 
-/** Accepted commands and what Windows PowerShell 5.1 prints for them. */
+/** Accepted commands and what PowerShell prints for them. */
 const OK: [string, string][] = [
   // The forms of the 25/11 measurement.
   ['$r = 62.849 / 35.657; $cagr = ([math]::Pow($r, 1/4) - 1) * 100; "cagr % = $cagr"; [math]::Round($cagr, 3)', "cagr % = 15.22"],
@@ -457,12 +458,12 @@ for ($i = 0; $i -lt $lines.Count; $i++) {
 }
 `
 
-async function violations(commands: string[]): Promise<string[]> {
+async function violations(engine: string, commands: string[]): Promise<string[]> {
   const file = path.join(root, "commands.txt")
   const script = path.join(root, "check.ps1")
   writeFileSync(file, commands.map((c) => Buffer.from(c, "utf16le").toString("base64")).join("\n"))
   writeFileSync(script, CHECKER)
-  const proc = Bun.spawn([legacy!, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", script, file], { stdout: "pipe", stderr: "pipe" })
+  const proc = Bun.spawn([engine, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", script, file], { stdout: "pipe", stderr: "pipe" })
   const [out, err] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text()])
   if (err.trim()) throw new Error(err)
   return out
@@ -502,26 +503,26 @@ function fuzz(seed: number, count: number): string[] {
   return [...accepted]
 }
 
-test.skipIf(!legacy)("PowerShell's own parser sees only arithmetic and labels in what the grammar accepts", async () => {
+test.each([...ENGINES])("the parser of %s sees only arithmetic and labels in what the grammar accepts", async (_, engine) => {
   // The checker itself: it must see through what the grammar refuses.
   const caught = ['"$(1)"', '"a\u201d; Get-Date; "b"', '5"a"', '"$env:PATH"', '"a".Length', '"a" * 3', '"{0}" -f 5 * 3', '$s = "a"', '1 > x', '"a" | iex', '1 + "a"', "[math]::Round('5')", '$x = 1; "$x: b"', "1 }; { 2", '"$ròng"']
-  expect((await violations(caught)).length).toBe(caught.length)
+  expect((await violations(engine, caught)).length).toBe(caught.length)
   const accepted = [...OK.map(([c]) => c), ...fuzz(Number(process.env.OT_FUZZ_SEED ?? 268), Number(process.env.OT_FUZZ ?? 6_000))]
   if (process.env.OT_FUZZ) console.log("accepted", accepted.length)
   expect(accepted.length).toBeGreaterThan(200)
-  expect(await violations(accepted)).toEqual([])
+  expect(await violations(engine, accepted)).toEqual([])
 }, 600_000)
 
 // ── running ────────────────────────────────────────────────────────────────
 
-test.skipIf(!legacy)("labels print in the invariant culture, also when the user's is vi-VN", async () => {
+test.each([...ENGINES])("%s prints labels in the invariant culture, also when the user's is vi-VN", async (kind, engine) => {
   const commands = OK.map(([c]) => c)
   const outs: string[] = []
   for (let i = 0; i < commands.length; i += 4)
     outs.push(
       ...(await Promise.all(
         commands.slice(i, i + 4).map(async (command) => {
-          const args = shellArgs({ kind: "powershell", path: legacy! }, command)
+          const args = shellArgs({ kind, path: engine }, command)
           const script = `[System.Threading.Thread]::CurrentThread.CurrentCulture='vi-VN'\n${Buffer.from(args.at(-1)!, "base64").toString("utf16le")}`
           const proc = Bun.spawn([...args.slice(0, -1), Buffer.from(script, "utf16le").toString("base64")], { stdout: "pipe", stderr: "pipe" })
           const out = await new Response(proc.stdout).text()
