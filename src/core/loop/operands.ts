@@ -50,12 +50,20 @@ const ROUND_DIGITS = /(\bround\s*\((?:[^()\n]|\([^()\n]*\))*?),\s*\d{1,2}\s*\)/g
 const PYTHON_RUN = /^\s*(?:(?:python3?|py)(?:\s+-[A-Za-z]+)*\s+(?:-c\b|-?\s*<<)|cat\s+>\s*\S+\.py\s+<<[\s\S]*\n\s*python3?\s+\S+\.py)/
 export const pythonComputation = (command: string) => PYTHON_RUN.test(command)
 
+/**
+ * awk or Python, where a quoted text may be a printf format or a file path. Anything else is PowerShell
+ * arithmetic (math.ts), whose strings are labels: a figure typed in one (`"ROE % = 25.7"`, `"P/E: 12.4"`)
+ * comes back as the command's output, so it is checked like an operand.
+ */
+const FORMATS_AND_PATHS = /^\s*(?:awk|python3?|py|cat)\b/
+/** A value's place in a -f format (`{5:N2}`): a position, not a figure. */
+const FORMAT_ITEM = /\{\d(?::[A-Za-z]\d{0,2})?\}/g
+
 /** The numbers typed into an arithmetic command, with the decimals they were written with. */
 export function operandsOf(command: string): { text: string; value: number; decimals: number }[] {
   // A printf format is not an operand ("%.2f"); other quoted text may be the code (python -c "…").
-  const code = command
-    .replace(PATH_STRING, '""')
-    .replace(/"[^"]*%[^"]*"/g, '""')
+  const bare = FORMATS_AND_PATHS.test(command) ? command.replace(PATH_STRING, '""').replace(/"[^"]*%[^"]*"/g, '""') : command.replace(FORMAT_ITEM, "")
+  const code = bare
     .replace(ROUND_DIGITS, "$1)")
     .replace(INDEX, "$1")
     .replace(SLICE, "")
