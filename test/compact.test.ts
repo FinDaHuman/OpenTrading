@@ -243,8 +243,38 @@ test("one request: an <analysis> scratchpad then the <summary>; lean drops the a
   for (const prompt of [full, lean]) {
     const figures = prompt.split("## Số liệu đã xác minh\n")[1]!.split("\n## ")[0]!
     expect(figures).toContain("only figures supported by a tool result with a source and time")
-    expect(figures).toContain("keep them in the request history with their actual origin")
+    // A figure with no tool behind it is not sourced to one (30/10, AAA "LNTT +29,3%") and is not lost.
+    expect(figures).toContain("The answer of a turn without a tool call supports no figure.")
+    expect(figures).toContain("Never enter user-provided, hypothetical or earlier-answer-only figures in this table")
+    expect(figures).toContain('keep them under "Yêu cầu của người dùng" with their actual origin, never a tool name')
+    expect(prompt).toContain("## Yêu cầu của người dùng\n")
+    // A figure of a pruned result, or of an earlier summary, keeps its row and its read_result id.
+    expect(figures).toContain("enter every figure the answer of that same turn took from it, with its read_result id in the source column")
+    expect(figures).toContain("Rows of an earlier summary's table that name a tool, a link or a read_result id stay as they are")
   }
+})
+
+// Why the table must take figures whose result is no longer visible (VERIFIED_FIGURES).
+test("the summarizer sees old data results only as a read_result id, and an earlier summary only as an answer", async () => {
+  const turn = (n: number): ModelMessage[] => [
+    { role: "user", content: `P/E FPT lần ${n}` },
+    { role: "assistant", content: [{ type: "tool-call", toolCallId: `call_${n}`, toolName: "mcp__opentrading__ratios", input: {} }] },
+    { role: "tool", content: [{ type: "tool-result", toolCallId: `call_${n}`, toolName: "mcp__opentrading__ratios", output: { type: "text", value: `pe 14.7${n} `.repeat(100) } }] },
+    { role: "assistant", content: `P/E FPT là 14,7${n} lần.` },
+  ]
+  const heads: ModelMessage[][] = []
+  const summarize = async (head: ModelMessage[]) => {
+    heads.push(head)
+    return "## Số liệu đã xác minh\n| P/E FPT | 14,71 | lần | ratios, read_result call_1 | 2026-11-20 |"
+  }
+  const first = await compactHistory([1, 2, 3, 4].flatMap(turn), { manual: true, summarize })
+  const results = JSON.stringify(heads[0]!.filter((m) => m.role === "tool"))
+  expect(results).toContain('read_result id=\\"call_1\\"')
+  expect(results).not.toContain("14.71")
+  expect(JSON.stringify(heads[0])).toContain("14,71")
+  await compactHistory([...first.messages, ...[5, 6].flatMap(turn)], { manual: true, summarize })
+  const table = heads[1]!.find((m) => JSON.stringify(m).includes("read_result call_1 |"))
+  expect(table?.role).toBe("assistant")
 })
 
 test("the stored summary drops the scratchpad; a cut-off analysis is no summary", () => {
