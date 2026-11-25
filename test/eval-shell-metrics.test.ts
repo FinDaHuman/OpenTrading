@@ -211,3 +211,18 @@ test("the commands of the 15/11 runs on main that #289 still denied now get the 
   const commands = parseCommands(await Bun.file(path.join(import.meta.dir, "fixtures", "shell-commands.jsonl")).text()).filter((c) => c.source === "r2-gemini-flash-lite")
   expect(replayAll(commands).total).toEqual({ run: 0, near: commands.length, ask: 0 })
 })
+
+test("the 38 PowerShell commands of the 25/11 measurement (#268, nemotron-3.5-super): labels run, nothing reaches the gate", async () => {
+  const commands = parseCommands(await Bun.file(path.join(import.meta.dir, "fixtures", "shell-commands.jsonl")).text()).filter((c) => c.source === "m268-nemotron")
+  const report = replayAll(commands)
+  // Before labels were in the grammar: run 17, near 13, ask 8.
+  expect(report.total).toEqual({ run: 29, near: 9, ask: 0 })
+  expect(report.forms.ran).toEqual({ run: 17, near: 0, ask: 0 })
+  const reasons: Record<string, number> = {}
+  for (const c of commands) {
+    const miss = computeIntent(c.command, { kind: c.shell })
+    if (miss) reasons[miss] = (reasons[miss] ?? 0) + 1
+  }
+  // "series" was the reason given for 11 of them, with an array or a loop in two.
+  expect(reasons).toEqual({ series: 5, brackets: 2, write: 1, subexpression: 1 })
+})

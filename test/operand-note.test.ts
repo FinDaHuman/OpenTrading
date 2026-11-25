@@ -25,6 +25,18 @@ test("an array index is a position, not a figure", () => {
   expect(untracedOperands(step("awk 'BEGIN{ d[6] = 1315800000000; print d[6] / 215000000 }'"), arithmetic)).toEqual([])
 })
 
+test("#268: a PowerShell label is no format: the figures typed in it and between two of them are checked", () => {
+  const texts = (command: string) => operandsOf(command).map((o) => o.text)
+  expect(texts('$x = 1; "ROE % = 25.7"')).toEqual(["1", "25.7"])
+  expect(texts('"P/25.7" + 1')).toEqual(["25.7", "1"])
+  expect(texts('"a" + (21500000 % 7) + "b"')).toEqual(["21500000", "7"])
+  expect(texts('"a"; $x = 21500000; "lai % = $x"')).toEqual(["21500000"])
+  // A value's place and its format are not figures, nor is a name with a digit in it.
+  expect(texts('"MA20 {0:N3} {5:F2}%" -f 48.5')).toEqual(["48.5"])
+  // awk and Python as before: a printf format, a path.
+  expect(texts(String.raw`awk 'BEGIN{printf "lai 3 nam %.2f%%\n", 48.5*2}'`)).toEqual(["48.5", "2"])
+})
+
 test("numbers from an earlier command's output trace; its status line does not", () => {
   const messages: ModelMessage[] = [
     ...step("1315800000000 / 215000000", "[mã thoát 0 · 0.7s · /w]\n61200"),
