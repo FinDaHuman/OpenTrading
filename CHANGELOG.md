@@ -5,6 +5,12 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ## [Unreleased]
 
+## [0.5.1] — 2026-11-25
+
+OpenTrading may now give buy/sell/hold recommendations, PowerShell calculations with labels run without asking, a
+security fix in the shell arithmetic, and corrected sector and valuation skills. Update with `ot update` (npm:
+`npm i -g @findahuman/opentrading@latest`).
+
 ### Changed
 
 - OpenTrading may recommend (#437, owner decision of 25/11/2026, replaces the ban of issue #303): it gives
@@ -29,8 +35,6 @@ adopt Semantic Versioning when it exposes a stable public API.
   in a string, two numbers joined after a label, a variable not assigned yet) instead of "arrays or loops" for any
   command with `[math]::` in it; calculations with labels in Vietnamese or with `$name` get the hint instead of an
   approval prompt (#268).
-- PowerShell arithmetic with a byte order mark or a Unicode space around it no longer runs unasked: `<BOM>3/2` is one
-  word to PowerShell, the path of a file it would run.
 - Handbook: eight links to Python files that left the repository are plain text now, and the two pages that still
   spoke of the Python design say they are historical (#349). A test checks every relative handbook link.
 - The release publishes `@findahuman/opentrading` only after npm serves every platform package to the release
@@ -47,6 +51,18 @@ adopt Semantic Versioning when it exposes a stable public API.
 - Sector content dropped when two branches were joined on 2026-10-21 is back in the sector skills (#340): gas and
   petroleum distribution, the phosphorus chain with its export duty, VAT on fertiliser, airlines, renewables, telecom,
   retail segments, steel production routes, and the limits of `financial_detail` and `news_market`.
+- A question the model repeats as a numbered list instead of answering is sent back once like other echoed questions;
+  numbered options and a leading year keep theirs (#439).
+- Web search through the hosted MCP servers leaves time for Parallel when Exa times out; DuckDuckGo keeps its reserve
+  (#440).
+- After `/compact`, figures without a tool result no longer enter the table of verified figures; they stay in the
+  request history with their origin (#438).
+- The Gemini guide (`docs/gemini-limits.md`) has the November limits, model redirects and grounding quota (#445).
+
+### Security
+
+- PowerShell arithmetic with a byte order mark or a Unicode space around it no longer runs unasked: `<BOM>3/2` is one
+  word to PowerShell, the path of a file it would run.
 
 ## [0.5.0] — 2026-11-24
 
