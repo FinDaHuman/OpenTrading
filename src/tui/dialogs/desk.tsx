@@ -54,7 +54,7 @@ function agentItems(run: DeskRunView) {
       const doing = a.status === "running" ? (live?.tools.findLast((t) => t.status === "running") ?? live?.tools.at(-1))?.label : undefined
       const span = live?.startedAt ? fmtElapsed((live.endedAt ?? Date.now()) - live.startedAt) : ""
       const out = live?.usage.output ?? a.tokens.output
-      const hint = [doing ?? AGENT_STATUS[a.status], a.requests > 0 ? `${a.requests} req` : "", span, out > 0 ? `↓${fmtTokens(out)}` : "", a.error ? truncate(a.error, 40) : ""]
+      const hint = [doing ?? AGENT_STATUS[a.status], a.requests > 0 ? `${a.requests} req` : "", span, out > 0 ? `↓${fmtTokens(out)}` : "", a.dataGaps?.length ? `! ${a.dataGaps.length} nguồn lỗi` : "", a.error ? truncate(a.error, 40) : ""]
         .filter(Boolean)
         .join(" · ")
       return { label: `${a.type} · ${truncate(a.label, 40)}`, group: a.phase, hint, mark: AGENT_GLYPH[a.status], markColor: AGENT_COLOR[a.status], value: a.key }
@@ -220,6 +220,9 @@ export function DeskDialog(props: { runtime: Runtime }) {
               >
                 <Show when={a().error}>
                   <text fg={color.giam} wrapMode="word">{`Lỗi: ${a().error}`}</text>
+                </Show>
+                <Show when={a().dataGaps?.length}>
+                  <text fg={color.tham} wrapMode="word">{`! ${a().dataGaps!.length} nguồn lỗi, câu trả lời của agent thiếu dữ liệu từ: ${a().dataGaps!.join(", ")}`}</text>
                 </Show>
                 <Show when={live()}>
                   {(v) => (
