@@ -13,6 +13,8 @@ adopt Semantic Versioning when it exposes a stable public API.
 - `install.ps1` on Windows on ARM installed the x64 build (slower, emulated) when PowerShell was started from an x64
   program such as Git Bash; it now reads the machine's CPU. `ot update` keeps the build it finds, so run the install
   script once more to move to the ARM64 build.
+- Handbook: eight links to Python files that left the repository are plain text now, and the two pages that still
+  spoke of the Python design say they are historical (#349). A test checks every relative handbook link.
 
 ## [0.5.0] — 2026-11-24
 
