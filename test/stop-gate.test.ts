@@ -12,8 +12,12 @@ test("a final answer that repeats the user's question is recovered once", () => 
   const echoed = step({ text, userText, fetchedData: true })
   expect(judgeStop(echoed, [])).toMatchObject({ action: "continue", kind: "question-echo", toolChoice: "none" })
   expect(judgeStop(echoed, ["question-echo"])).toEqual({ action: "give-up", kind: "question-echo" })
-  const numbered = text.split("\n").map((line, index) => `${index + 1}. ${line}`).join("\n")
-  expect(judgeStop({ ...echoed, text: numbered }, [])).toMatchObject({ action: "continue", kind: "question-echo" })
+  for (const marker of [(n: number) => `${n}. `, (n: number) => `${n}) `, () => "- ", () => "* "]) {
+    for (const eol of ["\n", "\r\n\r\n"]) {
+      const listed = text.split("\n").map((line, index) => marker(index + 1) + line).join(eol)
+      expect(judgeStop({ ...echoed, text: listed }, [])).toMatchObject({ action: "continue", kind: "question-echo" })
+    }
+  }
   expect(judgeStop(step({ ...echoed, text: `${text}\nVN-Index bắt đầu ngày 28/07/2000 với 100 điểm.` }), [])).toEqual({ action: "accept" })
   expect(judgeStop(step({ ...echoed, text: "Bạn muốn tôi so sánh giai đoạn nào?" }), [])).toEqual({ action: "accept" })
   expect(judgeStop(step({ ...echoed, fetchedData: false }), [])).toEqual({ action: "accept" })
@@ -29,6 +33,14 @@ test("a clarifying question close to the user's words is not an echo", () => {
     "Bạn có muốn so sánh FPT và CMG trong 5 năm không?",
     "Giai đoạn 2021 2025 FPT và CMG lợi nhuận giai đoạn nào tốt hơn?",
     "So sánh lợi nhuận FPT và CMG trong 5 năm hoặc 10 năm?",
+    // Numbered options, and a year that only looks like a list marker.
+    "Chọn một phương án:\n1. So sánh FPT và CMG về lợi nhuận\n2. So sánh FPT và CMG về biên gộp?",
+    "Phương án nào:\n1) So sánh FPT và CMG về lợi nhuận?\n2) So sánh FPT và CMG về biên gộp?",
+    "1. So sánh FPT và CMG về lợi nhuận\n2. So sánh FPT và CMG về biên gộp\nGiai đoạn nào tốt hơn trong 5 năm?",
+    "Bạn muốn:\n1. So sánh FPT và CMG về lợi nhuận?\n2. So sánh FPT và CMG về biên gộp?",
+    "2025. FPT và CMG giai đoạn nào tốt hơn về lợi nhuận và biên gộp?",
+    "So sánh FPT và CMG về lợi nhuận và biên gộp đến\n2025. Giai đoạn nào tốt hơn về lợi nhuận?",
+    "1. FPT và CMG giai đoạn nào tốt hơn về lợi nhuận trong 10 năm?",
   ]) expect(judgeStop(step({ text, userText, fetchedData: true }), [])).toEqual({ action: "accept" })
   expect(judgeStop(step({ text: "FPT và CMG giai đoạn nào tốt hơn về lợi nhuận và biên gộp?", userText, fetchedData: true }), [])).toMatchObject({ kind: "question-echo" })
 })
