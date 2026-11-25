@@ -8,8 +8,8 @@ import { kiemChung } from "./kiem-chung"
  * tranh-bien: a bull/bear debate on one ticker (TauricResearch/TradingAgents' shape, driven by
  * code instead of the main agent pasting reports around). Analysts report in parallel; bull
  * and bear open, then rebut each other for 0–2 rounds; at the large tier the key numbers of
- * both sides go through a small kiem-chung; a referee weighs the evidence into scenarios —
- * never a buy/sell call.
+ * both sides go through a small kiem-chung; a referee weighs the evidence into scenarios and
+ * makes the buy/hold/sell call, when the evidence supports one.
  */
 
 const Args = z.object({
@@ -47,7 +47,7 @@ function analystPrompt(a: Analyst, args: Args) {
     `Analyse ${args.ticker} from the angle of ${a.role}.${args.cau_hoi ? ` The user cares about: ${args.cau_hoi}.` : ""}`,
     "- Call the fewest tools that let you conclude; call independent tools together. Load a skill only when truly needed.",
     "- Report in at most 12 lines: a one-sentence conclusion, then points with numbers. Every number with its source and time. If data is missing, say so; never estimate.",
-    "- The bull and bear sides will use this report as evidence: state only the facts and your angle's assessment; never recommend buying or selling.",
+    "- The bull and bear sides will use this report as evidence: state only the facts and your angle's assessment; leave the buy/hold/sell call to the referee.",
   ].join("\n")
 }
 
@@ -61,7 +61,7 @@ function openingPrompt(side: "bull" | "bear", ticker: string, reports: string) {
     EVIDENCE_NOTE,
     reports,
     "- 4–6 points, each citing evidence (number, source, time) from the reports; at most 1–2 tools to check a disputed number.",
-    "- Say clearly what would make your case wrong. Never advise the user to buy or sell.",
+    "- Say clearly what would make your case wrong. Leave the buy/hold/sell call to the referee.",
   ].join("\n")
 }
 
@@ -72,7 +72,7 @@ function rebuttalPrompt(side: "bull" | "bear", ticker: string, round: number, mi
     evidence(mine, "your latest case"),
     evidence(theirs, `the ${side === "bull" ? "bear" : "bull"} side's latest case`),
     "- Break each of the other side's strongest points with specific figures; concede the points of theirs that hold.",
-    "- Update your case (at most 10 lines). Never repeat the previous round verbatim; never recommend buying or selling.",
+    "- Update your case (at most 10 lines). Never repeat the previous round verbatim; leave the buy/hold/sell call to the referee.",
   ].join("\n")
 }
 
@@ -89,7 +89,7 @@ function judgePrompt(args: Args, reports: string, bull: string[], bear: string[]
     "2. Three scenarios tích cực / cơ sở / tiêu cực: qualitative likelihood, triggers, milestones to watch.",
     "3. Each side's strongest point that still stands; say clearly which figures the fact-check found wrong.",
     `4. Limits: ${missing.length > 0 ? `missing ${missing.join(", ")} reports; ` : ""}which data is old or unchecked.`,
-    "Never recommend buying, selling, holding or a weighting: the decision belongs to the user.",
+    "5. The call (mua / giữ / bán / chờ), unless the user's question is not about what to do: the evidence it rests on, its main risks, what would make it wrong. Any price level comes from the reports' figures. If the evidence is balanced or too thin, say it does not support a call instead of picking one.",
   ].join("\n")
 }
 
@@ -151,7 +151,7 @@ export const tranhBien: Playbook<Args, string> = {
   meta: {
     name: "tranh-bien",
     version: "1",
-    description: "Tranh biện một mã: các analyst báo cáo song song, phe lạc quan và thận trọng phản bác nhau, trọng tài đưa ra kịch bản",
+    description: "Tranh biện một mã: các analyst báo cáo song song, phe lạc quan và thận trọng phản bác nhau, trọng tài đưa ra kịch bản và khuyến nghị",
     whenToUse: "A multi-angle analysis of one ticker with a bull/bear debate, e.g. \"FPT có đáng giữ không, nhìn cả hai phía\". Not for one-dimensional questions (only RSI, only P/E).",
     args: Args,
     // kiem-chung (large) runs with its own agent types.

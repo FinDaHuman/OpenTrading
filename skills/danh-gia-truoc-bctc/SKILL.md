@@ -48,7 +48,7 @@ Present the conclusion in exactly this structure:
 2. 1 line of evidence per leg (6 lines, each with figure + trend + provenance).
 3. Suggested size (from `scenario_simulate` −5%).
 4. Explicit unknowns (list what is not known).
-5. 1-sentence conclusion: the grade + the setup's main strength + the biggest risk going into the release. Never a personal buy/hold recommendation.
+5. 1-sentence conclusion: the grade + the setup's main strength + the biggest risk going into the release. Asked whether to buy or hold through it → the call, with what would make it wrong; too few legs with data → say they do not support a call.
 
 Partial data (missing positioning, expectations or forensics) → a provisional verdict + unknowns. A mildly negative/positive `sentiment_score` is reported as the heuristic it is, never promoted to a green/red leg.
 

@@ -148,7 +148,7 @@ ot --help                # mọi tuỳ chọn
 
 ## Ultradesk: nghiên cứu nhiều agent
 
-Ultradesk điều phối nhiều subagent theo một **playbook**: code của playbook giữ vòng lặp, rẽ nhánh và kết quả trung gian; agent chính chỉ nhận kết quả cuối. Ý tưởng lấy từ dynamic workflows / `ultracode` của Claude Code, chỉnh cho gói API miễn phí (quota theo request) và kết luận ở dạng kịch bản, không khuyến nghị Mua/Bán. Tài liệu đầy đủ: [docs/desk.md](docs/desk.md).
+Ultradesk điều phối nhiều subagent theo một **playbook**: code của playbook giữ vòng lặp, rẽ nhánh và kết quả trung gian; agent chính chỉ nhận kết quả cuối. Ý tưởng lấy từ dynamic workflows / `ultracode` của Claude Code, chỉnh cho gói API miễn phí (quota theo request) và kết luận ở dạng kịch bản, kèm khuyến nghị Mua/Giữ/Bán/Chờ khi bằng chứng đủ. Tài liệu đầy đủ: [docs/desk.md](docs/desk.md).
 
 ### Playbook có sẵn
 

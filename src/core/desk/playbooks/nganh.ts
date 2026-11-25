@@ -9,8 +9,8 @@ import { rank, rankingTable, SCORECARD, type Scorecard } from "./sang-loc"
  * themes (money-flow cycle, macro, global assets) and a scorecard per company run in
  * parallel; the sector skill (#116, 3–4k tokens each) is loaded once, by the scope agent, which
  * hands the companies its 2–4 sector metrics instead; a critic names what is still
- * missing and one extra round answers it; a referee writes the sector picture — scenarios,
- * never a buy/sell call.
+ * missing and one extra round answers it; a referee writes the sector picture — scenarios
+ * and, when asked, which companies to buy.
  */
 
 const Args = z.object({
@@ -86,7 +86,7 @@ function themePrompt(theme: Theme, args: Args, scope: Scope | null) {
   return [
     theme.ask(scope?.nganh ?? args.nganh),
     scope?.dong_luc.length ? `Drivers identified: ${scope.dong_luc.join("; ")}.` : "",
-    "- Report in at most 10 lines, every number with its source and time; never recommend specific tickers.",
+    "- Report in at most 10 lines, every number with its source and time; leave ticker recommendations to the referee.",
   ]
     .filter(Boolean)
     .join("\n")
@@ -131,7 +131,7 @@ function refereePrompt(args: Args, scope: Scope | null, themes: { type: string; 
     "2. The company table: rank, ticker, score, P/E, P/B, ROE, net profit growth, a short note. One line of source and time under the table.",
     "3. Sector scenarios tích cực / cơ sở / tiêu cực, each with its triggers and milestones to watch.",
     `4. Limits: ${missing.length > 0 ? `missing ${missing.join(", ")}; ` : ""}old data or data missing from the scorecards.`,
-    "Never recommend buying, selling or a weighting.",
+    "5. The call, only when the question asks what to buy, hold or avoid: which ranked companies to buy, wait for or avoid, with the reason, main risks and what would make it wrong. If the data is too thin, say it does not support a call instead of picking one.",
   ]
     .filter(Boolean)
     .join("\n")

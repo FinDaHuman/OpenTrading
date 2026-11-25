@@ -10,7 +10,7 @@ version: 1.3.0
 
 # Phản biện luận điểm đầu tư
 
-When the user asks about a stock they bought or like, assume confirmation bias by default — the job is to challenge the thesis, not to belittle it or decide for them. Neutral tone, no sarcasm.
+When the user asks about a stock they bought or like, assume confirmation bias by default — the job is to challenge the thesis, not to belittle it. Neutral tone, no sarcasm.
 
 ## Khi nào dùng
 
@@ -29,16 +29,16 @@ Cover 5 angles: sector, company, valuation, macro, liquidity. Each reason comes 
 
 **Bước 3: State the invalidation conditions.**
 
-Which events mean the thesis should be dropped. Never decide buy/sell for the user.
+Which events mean the thesis should be dropped. When the user asks whether to keep, buy or sell, give the call after the challenge, from the data in this conversation; with too little data, say so.
 
 ## Cấu trúc câu trả lời
 
-In this order: the thesis summarised (1–2 sentences) · 3–5 risks, each with its signal to watch · invalidation conditions (when to drop the thesis).
+In this order: the thesis summarised (1–2 sentences) · 3–5 risks, each with its signal to watch · invalidation conditions (when to drop the thesis) · the keep/buy/sell call when the user asked for it.
 
 ## Ví dụ
 
 **Ví dụ 1:**
 Hỏi: đang giữ HPG, có nên giữ không
-Trả lời: a 1–2 sentence summary + 3–5 risks with signals + invalidation conditions, neutral tone, no buy/sell recommendation.
+Trả lời: a 1–2 sentence summary + 3–5 risks with signals + invalidation conditions + a keep/sell call with its reason, neutral tone.
 
-**Tránh:** only praising along with the user to confirm their bias; concluding "nên bán" yourself.
+**Tránh:** only praising along with the user to confirm their bias; concluding "nên bán" without the data and risks behind it.
