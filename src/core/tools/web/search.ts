@@ -335,13 +335,17 @@ export async function runSearch(input: WebSearchInput, signal: AbortSignal, deps
   }
   const backends = [...(deps.backends ?? keyedBackends)()]
   if (hostedEnabled) {
-    const hostedDeadline = Math.min(started + TIMEOUT_MS - DUCKDUCKGO_RESERVE_MS, Date.now() + HOSTED_TIMEOUT_MS)
+    let hostedDeadline: number | undefined
     const hosted = (["exa", "parallel"] as const).map((provider): Backend => ({
       name: `${provider}-mcp`,
       run: (search, parentSignal) => {
-        const remaining = hostedDeadline - Date.now()
+        const now = Date.now()
+        hostedDeadline ??= Math.min(started + TIMEOUT_MS - DUCKDUCKGO_RESERVE_MS, now + HOSTED_TIMEOUT_MS)
+        const remaining = hostedDeadline - now
         if (remaining <= 0) throw new Error("hosted MCP search time budget exhausted")
-        return (deps.hosted ?? hostedSearch)(provider, search, AbortSignal.any([parentSignal, AbortSignal.timeout(remaining)]))
+        // Let Parallel use any time that Exa leaves, even if Exa times out.
+        const budget = provider === "exa" ? Math.ceil(remaining / 2) : remaining
+        return (deps.hosted ?? hostedSearch)(provider, search, AbortSignal.any([parentSignal, AbortSignal.timeout(budget)]))
       },
     }))
     const duckIndex = backends.findIndex((backend) => backend.name === "duckduckgo")
