@@ -35,19 +35,23 @@ latency, cost, recovery, security boundaries, and maintenance effort.
 
 ## Implementation traceability
 
+> **Historical.** The table was written for the first Python design (ADR 0001, now superseded). The
+> `.py` files it names are no longer in the repository and its status column describes that design; the
+> product is TypeScript on Bun, see `docs/contracts.md` and the code under `src/`.
+
 The mechanisms below are adaptations of the inspected snapshots, not bundled dependencies or claims
 that OpenTrading reproduces the complete upstream runtime. `Implemented contract` means executable
 types and validation exist; it does not mean the runtime behavior has been implemented.
 
 | Inspiration | OpenTrading adaptation and location | Current status and next verification |
 | --- | --- | --- |
-| Codex typed operations and lifecycle | [Session/run/event contracts](../../src/opentrading/contracts/events.py), [session ADR](../architecture/adr/0004-session-event-model.md) | Implemented contracts and validation; durable append, terminal transitions, and crash recovery need storage integration tests |
+| Codex typed operations and lifecycle | Session/run/event contracts (`contracts/events.py`), [session ADR](../architecture/adr/0004-session-event-model.md) | Implemented contracts and validation; durable append, terminal transitions, and crash recovery need storage integration tests |
 | Codex shared core across interfaces | [Architecture](../architecture/architecture.md), [CLI/TUI contract](../interfaces/cli-tui.md) | CLI/TUI shells implemented; shared research application and runtime specified |
-| OpenCode permission boundary | [Tool specifications and policy port](../../src/opentrading/ports/tools.py), [read-only ADR](../architecture/adr/0003-read-only-tools.md) | Permission and concurrency declarations implemented; policy enforcement and dispatch specified |
-| OpenCode provider separation | [Provider port and conversation models](../../src/opentrading/ports/provider.py) | Typed tool-call history and fake provider implemented; real wire-format adapters and stream conformance tests pending |
-| DeepSeek Harness ordered session facts | [Session store port](../../src/opentrading/ports/session.py), [event contracts](../../src/opentrading/contracts/events.py) | Sequence/CAS and resume contracts exist; SQLite transaction and replay behavior specified |
-| DeepSeek Harness bounded parallel execution | [Runtime policies](../contracts/runtime-policies.md), [tool concurrency declaration](../../src/opentrading/ports/tools.py) | Parallel/exclusive metadata implemented; scheduler, cancellation and ordering barriers specified |
-| Claude Code context management | [Run budgets and summary payload](../../src/opentrading/contracts/events.py), [runtime policies](../contracts/runtime-policies.md) | Budget fields and summary references implemented; token accounting, context selection and compaction execution specified |
+| OpenCode permission boundary | Tool specifications and policy port (`ports/tools.py`), [read-only ADR](../architecture/adr/0003-read-only-tools.md) | Permission and concurrency declarations implemented; policy enforcement and dispatch specified |
+| OpenCode provider separation | Provider port and conversation models (`ports/provider.py`) | Typed tool-call history and fake provider implemented; real wire-format adapters and stream conformance tests pending |
+| DeepSeek Harness ordered session facts | Session store port (`ports/session.py`), event contracts (`contracts/events.py`) | Sequence/CAS and resume contracts exist; SQLite transaction and replay behavior specified |
+| DeepSeek Harness bounded parallel execution | [Runtime policies](../contracts/runtime-policies.md), tool concurrency declaration (`ports/tools.py`) | Parallel/exclusive metadata implemented; scheduler, cancellation and ordering barriers specified |
+| Claude Code context management | Run budgets and summary payload (`contracts/events.py`), [runtime policies](../contracts/runtime-policies.md) | Budget fields and summary references implemented; token accounting, context selection and compaction execution specified |
 | Cursor study on relevant context | [Agent runtime specification](../architecture/agent-runtime.md) | Design guidance only; proprietary implementation unverified; retrieval must be evaluated on research tasks |
 
 ## General engineering foundations and financial adaptations
@@ -59,7 +63,7 @@ an individual harness. See the [architecture](../architecture/architecture.md) a
 
 OpenTrading adds financial-domain contracts for evidence identity, claim-to-evidence references,
 calculation identity, data availability, aware timestamps, price units and futures identity. These
-are purpose-built adaptations for the product, captured in the [domain models](../../src/opentrading/domain/market.py)
+are purpose-built adaptations for the product, captured in the domain models (`domain/market.py`)
 and [evidence ADR](../architecture/adr/0002-evidence-first-reports.md). Traceability alone does not
 prove that evidence supports a claim; the future evaluation suite must assess that separately.
 

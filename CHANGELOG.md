@@ -20,6 +20,8 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ### Fixed
 
+- Handbook: eight links to Python files that left the repository are plain text now, and the two pages that still
+  spoke of the Python design say they are historical (#349). A test checks every relative handbook link.
 - The release publishes `@findahuman/opentrading` only after npm serves every platform package to the release
   runner, and leaves draft after npm serves the main one (0.5.0 was accepted by npm 2–6 minutes before all its
   packages could be downloaded, so an install in between could miss its binary).
