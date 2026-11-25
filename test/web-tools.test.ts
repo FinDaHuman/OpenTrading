@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, expect, test } from "bun:test"
+import { afterAll, beforeEach, expect, spyOn, test } from "bun:test"
 import { mkdtemp, rm } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
@@ -307,6 +307,37 @@ test("hosted MCP failures leave DuckDuckGo available", async () => {
   })
   expect(calls).toEqual(["exa", "parallel", "duckduckgo"])
   expect(result).toContain("example.com/news")
+})
+
+test("an Exa timeout leaves time for Parallel before DuckDuckGo", async () => {
+  let now = Date.now()
+  let lastBudget = 0
+  const clock = spyOn(Date, "now").mockImplementation(() => now)
+  const timeout = spyOn(AbortSignal, "timeout").mockImplementation((ms) => {
+    lastBudget = ms
+    return signal()
+  })
+  try {
+    const calls: string[] = []
+    const result = await runSearch({ query: "hosted fallback after Exa timeout" }, signal(), {
+      native: async () => undefined,
+      hostedEnabled: async () => true,
+      hosted: async (provider) => {
+        calls.push(provider)
+        if (provider === "exa") {
+          now += lastBudget
+          throw new Error("timeout")
+        }
+        return [{ url: "https://example.com/parallel" }]
+      },
+      backends: () => [{ name: "duckduckgo", run: async () => { calls.push("duckduckgo"); return [] } }],
+    })
+    expect(calls).toEqual(["exa", "parallel"])
+    expect(result).toContain("example.com/parallel")
+  } finally {
+    timeout.mockRestore()
+    clock.mockRestore()
+  }
 })
 
 test("cancelling a hosted search does not start another backend", async () => {
