@@ -40,8 +40,8 @@ one good quarter's margin says nothing about capability yet.
 |---|---|---|
 | Fertiliser price cycle | The selling price is variable no. 1: prices jump on supply shocks (geopolitics, weather, exports) then fall back. The sector lives on **price windows**, not long trends | International and domestic fertiliser prices: `news_market`/`web_search`, stating the price index + date |
 | China's export policy | China is a large supplier; export controls (quotas, bans, duties) make global prices jump, and the reverse | Export policy: `news_market`/`web_search`, stating the text/notice + date |
-| Export share | A company exporting most of its output tracks international prices and trade; a domestic seller's profit is set by the domestic price frame and demand | Export share: company disclosures via `news_symbol`/`web_search`; fertiliser exports by product group: Customs figures with a clear period and unit, via `web_search` |
-| Gas input costs | Gas under long-term contracts is a large cost that moves with volume and price terms; reference fuels help the forecast | Reference fuel costs: `yf_commodities` by cycle; cost of goods in `financial_detail` |
+| Export share | A company exporting most of its output tracks international prices and trade; a domestic seller's profit is set by domestic market prices and demand (the state does not set fertiliser prices; nitrogen, DAP and NPK are only on the price-stabilisation list) | Export share: company disclosures via `news_symbol`/`web_search`; fertiliser exports by product group: Customs figures with a clear period and unit, via `web_search` |
+| Gas input costs | Gas is the large cost of gas-based urea plants; contract length differs by plant (yearly or multi-year) and the price is usually tied to fuel oil/Brent, so oil up = input cost up. Coal-based plants follow coal instead | Contract terms: company disclosures via `news_symbol`/`web_search`; direction: Brent in `yf_commodities` (it has no fuel oil, and Henry Hub is not the VN gas price); cost of goods in `financial_detail` |
 | Domestic demand | Domestic demand is sensitive to farm prices (e.g. rice); weak when farm prices are low or fertiliser prices high | Domestic demand: `news_market`, `vs_categories` → `vs_indicator_data` (look up the agricultural-production category codes that exist; if missing, use the statistics office's releases) |
 | Historical-cost inventory | Inventory bought before a rise supports margins for 1–2 quarters, then reverses — the "window" label of the whole sector | Inventory in `financial_detail`; export share in company disclosures |
 
@@ -114,13 +114,13 @@ as a "price window" and do not extrapolate it. Anchor expectations with `planned
 
 - **Window-closing risk**: prices recover after a supply shock and margins shrink back within 1–2 quarters.
 - **Chinese policy reversal risk**: easing exports lowers global prices,
-  affecting domestic sellers too through the price frame.
+  affecting domestic sellers too through competing imports.
 - **High-cost inventory risk**: inputs bought before a rise, then prices fall → margins squeezed
   from both sides.
 - **Domestic demand risk**: demand is sensitive to farm prices; weak farm prices mean weak fertiliser
   demand.
-- **Domestic price-frame risk**: domestic sellers do not capture the full international
-  window.
+- **Domestic price risk**: domestic sellers do not capture the full international
+  window (competition, farm demand).
 
 ## Ranh giới
 
@@ -133,7 +133,7 @@ as a "price window" and do not extrapolate it. Anchor expectations with `planned
 
 ## Giới hạn
 
-- Energy prices from `yf_commodities` are a reference, not each plant's long-term contract gas
+- Energy prices from `yf_commodities` are a reference, not each plant's contract gas
   price.
 - The export share is disclosed irregularly: when missing, lower the confidence of the Q1 branch.
 - Price cycles are short: every conclusion must state the date prices were checked.
