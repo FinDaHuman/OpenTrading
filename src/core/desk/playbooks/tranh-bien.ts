@@ -89,7 +89,7 @@ function judgePrompt(args: Args, reports: string, bull: string[], bear: string[]
     "2. Three scenarios tích cực / cơ sở / tiêu cực: qualitative likelihood, triggers, milestones to watch.",
     "3. Each side's strongest point that still stands; say clearly which figures the fact-check found wrong.",
     `4. Limits: ${missing.length > 0 ? `missing ${missing.join(", ")} reports; ` : ""}which data is old or unchecked.`,
-    "5. The call (mua / giữ / bán / chờ), answering the user's question: the evidence it rests on, its main risks, what would make it wrong. Any price level comes from the reports' figures. If the evidence is balanced or too thin, say it does not support a call instead of picking one.",
+    "5. The call (mua / giữ / bán / chờ), unless the user's question is not about what to do: the evidence it rests on, its main risks, what would make it wrong. Any price level comes from the reports' figures. If the evidence is balanced or too thin, say it does not support a call instead of picking one.",
   ].join("\n")
 }
 

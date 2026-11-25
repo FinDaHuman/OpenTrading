@@ -143,6 +143,7 @@ test("sang-loc medium: scorecards in parallel, refuters move a ticker down, the 
   expect(referee).toContain("<bang_chung")
   expect(referee).toContain("do not re-rank")
   // Owner decision 25/11/2026: the referee may call buy/wait/avoid, and may say the data does not support one.
+  expect(referee).toContain("only when the criteria ask what to buy, hold or avoid")
   expect(referee).toContain("buy, wait for or avoid, following the ranking")
   expect(referee).toContain("do not support a call")
   expect(referee).not.toMatch(/never recommend/i)
