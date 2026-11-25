@@ -117,6 +117,16 @@ test("PowerShell: arrays, ranges, variables, other types, invocation and chainin
     "1 # note\u0085Remove-Item x",
     "1 # note\u000bRemove-Item x",
     "1 # \u001b[2J",
+    // String.trim() drops these, PowerShell does not: `<BOM>3/2` is one word, the path of a file it runs.
+    "\ufeff3/2",
+    " \ufeff3/2",
+    "3/2\ufeff",
+    "\u00a03/2",
+    "3/2\u3000",
+    "\r3/2",
+    "3/2\r",
+    "3/2\u2028",
+    "\u000c3/2",
     "$x = 1 +\n2", // a line ending in an operator continues in PowerShell: not parsed the same way
     ". (1)",
     "&(1)",
@@ -144,6 +154,8 @@ test("PowerShell: arrays, ranges, variables, other types, invocation and chainin
     "()",
     "[math]::Round()",
     "[math]::Round 1",
+    "[math]::Round (1)", // a parse error, as is a literal past a double
+    "24000000e305",
     "Get-Date",
     "(1+2",
     `${"1+".repeat(4001)}1`, // over MATH_MAX_CHARS

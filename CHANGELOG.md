@@ -20,6 +20,16 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ### Fixed
 
+- A PowerShell calculation that prints a label next to its number (`"g = $g"`, `"g % = " + ($g*100)`,
+  `"g={0:N2}" -f $g`) runs at once like any other arithmetic; it was refused or sent back (12 of the 21 commands that
+  did not run in the 25/11 measurement of #268). A label is plain text and variables the command assigned, first in a
+  statement that prints; `$(…)`, `${…}`, `$env:`, backticks, member access and strings anywhere else are still refused.
+- The hint for a calculation that did not run names the real reason (brackets that do not match, Write-Output, `$(…)`
+  in a string, two numbers joined after a label, a variable not assigned yet) instead of "arrays or loops" for any
+  command with `[math]::` in it; calculations with labels in Vietnamese or with `$name` get the hint instead of an
+  approval prompt (#268).
+- PowerShell arithmetic with a byte order mark or a Unicode space around it no longer runs unasked: `<BOM>3/2` is one
+  word to PowerShell, the path of a file it would run.
 - Handbook: eight links to Python files that left the repository are plain text now, and the two pages that still
   spoke of the Python design say they are historical (#349). A test checks every relative handbook link.
 - The release publishes `@findahuman/opentrading` only after npm serves every platform package to the release

@@ -59,7 +59,9 @@ test("computeIntent names why arithmetic missed the grammar: a series, an interp
   for (const c of [PS_FOREACH, PS_PIPELINE]) expect(computeIntent(c, PS), c).toBe("series")
   for (const c of [PY_MULTILINE, PY_HEREDOC, 'python3 -c "print((128.4/112-1)*100)"', "python3 - <<'EOF'\nprint(1.08**3)\nEOF", 'node -e "console.log(2**10)"']) expect(computeIntent(c, BASH), c).toBe("interpreter")
   expect(computeIntent('python -c "print(1.2*3)"', PS)).toBe("interpreter")
-  for (const c of ["1,2*3", "2^3", "echo $((1+2))", "expr 3 + 4", '$x = 5; "{0:N2}" -f ($x * 1.5)', "$x = 5; Write-Output ($x*2)"]) expect(computeIntent(c, PS), c).toBe("form")
+  for (const c of ["1,2*3", "2^3", "echo $((1+2))", "expr 3 + 4","$x = 5; $x -f 2*3"]) expect(computeIntent(c, PS), c).toBe("form")
+  expect(computeIntent("$x = 5; Write-Output ($x*2)", PS)).toBe("write")
+  expect(computeIntent('$x = 5; "{0:N2}" -f ($x * 1.5)', PS)).toBeUndefined() // a label: runs (#268)
   for (const c of ["3/2", "echo 1.5*3 | bc -l", `awk -v x=5 'BEGIN{print x*2}'`, `awk 'BEGIN{ printf "%s\\n", 1/3 }'`, `awk 'BEGIN{print 2**3}'`]) expect(computeIntent(c, BASH), c).toBe("form")
   // What the grammar takes is no miss.
   expect(computeIntent("$x = 5; $x*2", PS)).toBeUndefined()
