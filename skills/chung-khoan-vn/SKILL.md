@@ -107,8 +107,8 @@ The table of brokerage statement lines + how to read each indicator is in `refer
 
 Value brokerages with **P/B anchored on ROE**: at the same P/B, a brokerage with 13% ROE and one with
 25% ROE are worth different amounts. Group by business model (balanced domestic /
-bank-linked domestic / foreign), then compare P/B within the group (`valuation_run` for the
-range, `peer_compare` for ranking). Anchor expectations with `planned_targets` and
+bank-linked domestic / foreign), then compare P/B within the group (`valuation_run` with `btype=2` for the
+current P/B, it gives no range; `peer_compare` for ranking). Anchor expectations with `planned_targets` and
 `analyst_consensus`. Profit dependent on proprietary trading → one unusually profitable quarter does not
 last: state the profit quality before using P/E.
 

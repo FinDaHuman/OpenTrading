@@ -370,6 +370,23 @@ test("sector cycle intent selects the cycle skill and excludes all thirteen sect
 })
 
 
+// Owner decision 25/11/2026 (#437): the skills that answer "buy or not" may call it, never from thin data;
+// a brokerage's rating stays an input.
+test("skills: a call is allowed with an exit for thin data, and brokerage ratings stay an input", async () => {
+  const { skills } = await loadSkills(skillRoots(await root()).filter((r) => r.source === "bundled"))
+  const body = (name: string) => skills.find((s) => s.name === name)!.body
+  for (const name of ["ky-thuat-chuyen-sau", "danh-gia-truoc-bctc"]) expect(body(name), name).toContain("support a call")
+  expect(body("phan-tich-chuyen-sau-1-ma")).toContain("when the data is too thin for one, say so")
+  expect(body("so-sanh-cung-nganh")).toContain("too partial to separate them")
+  expect(body("devil-advocate")).toContain("with too little data, say so")
+  expect(body("ky-thuat-chuyen-sau")).toContain("it comes from the tool's levels, never invented")
+  expect(body("tim-co-hoi-bao-cao-ctck")).toContain("A brokerage's rating is not your recommendation")
+  expect(body("tim-co-hoi-bao-cao-ctck")).toContain("never invent a brokerage target price")
+  // The old ban is gone everywhere, so no skill argues with bat_bien 3.
+  const BAN = /never a personal buy|not a personal buy|no (direct )?buy\/sell recommendation|never decide buy\/sell/i
+  for (const s of skills) expect(s.body, s.name).not.toMatch(BAN)
+})
+
 test("combined business, technical and valuation intent retains comprehensive stock analysis", async () => {
   const { skills } = await loadSkills(skillRoots(await root()).filter((r) => r.source === "bundled"))
   const question = "Tôi đang muốn hiểu rõ FPT lúc này, bạn phân tích giúp tôi từ mảng kinh doanh, kỹ thuật, định giá tới kết quả 4 quý gần nhất và tin tức sắp tới nhé?"

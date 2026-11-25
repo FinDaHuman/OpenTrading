@@ -12,7 +12,7 @@
 | Ports / berths | Service tariffs + capacity + port throughput | The same port group |
 | Intra-Asia container shipping | Intra-Asia route rates + routes + rate locking | The same container group |
 | Tankers / dry bulk | Tanker rates by route + supply shocks | The same tanker group |
-| Airlines (passenger/cargo) | Fuel costs moving **opposite** to oil prices + seasonal travel demand + fares | The same airline group — noted separately in SKILL.md because the oil-price effect runs **opposite** to tankers |
+| Airlines (passenger/cargo) | Fuel costs rising with oil prices (margins move **opposite** to oil) + seasonal travel demand + fares | The same airline group — noted separately in SKILL.md: tankers depend on tonne-miles and ship supply, airlines on fuel |
 | Forwarding / delivery | Parcel volumes + fuel costs | The same delivery group |
 
 ## 2. Nhóm giá và khối lượng

@@ -11,7 +11,7 @@ version: 1.3.0
 
 # Tác động của xung đột vũ trang
 
-Answer 5 fixed items: intensity → what prices have priced in → transmission channels → escalation probability → positioning implications. No direct buy/sell recommendation.
+Answer 5 fixed items: intensity → what prices have priced in → transmission channels → escalation probability → positioning implications.
 
 ## Khi nào dùng
 
@@ -51,7 +51,7 @@ Present the conclusion in exactly this structure:
 2. **Priced in or not:** oil/gold move vs baseline (USD/barrel, USD/oz, % move) + URL.
 3. **Transmission channel:** energy → inflation → rates, 1–2 lines + URL.
 4. **Escalation probability:** odds prob_pct (%) + end-date + event URL.
-5. **Positioning implications:** cushion/size (see leg 6 of `danh-gia-truoc-bctc`), NO direct buy/sell recommendation.
+5. **Positioning implications:** cushion/size (see leg 6 of `danh-gia-truoc-bctc`); a buy/sell/hold recommendation with its conditions only when the user asks for one and the figures above support it.
 
 ## Ví dụ
 

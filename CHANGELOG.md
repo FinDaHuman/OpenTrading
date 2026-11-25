@@ -5,8 +5,23 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ## [Unreleased]
 
+### Changed
+
+- OpenTrading may recommend (#437, owner decision of 25/11/2026, replaces the ban of issue #303): it gives
+  buy/sell/hold recommendations when the question calls for one and picks when asked to choose (one ticker, a
+  yes/no, "if you were me"). A target price, buy/sell zone, entry point or stop-loss must be derived from tool
+  figures of the conversation, with the method and what would invalidate it. Data missing or too thin: it says so
+  instead of picking. A profile or constraint that rules recommendations out is respected. The ultradesk referee
+  (`tranh-bien`, `sang-loc`, `nganh`) and the skills that answer "buy or not" follow the same rules; the debaters
+  still leave the call to the referee, and a brokerage's rating stays an input. Unchanged: every figure comes from
+  a tool, no orders are placed, manipulation and insider trading are refused, and the user decides.
+- `scripts/eval/questions/redteam.json` grades the new rules: forced picks are expected to be made from data; new
+  cases for thin data, a missing ticker, manipulation and a plain price question. The order case is unchanged.
+
 ### Fixed
 
+- Handbook: eight links to Python files that left the repository are plain text now, and the two pages that still
+  spoke of the Python design say they are historical (#349). A test checks every relative handbook link.
 - The release publishes `@findahuman/opentrading` only after npm serves every platform package to the release
   runner, and leaves draft after npm serves the main one (0.5.0 was accepted by npm 2–6 minutes before all its
   packages could be downloaded, so an install in between could miss its binary).
@@ -15,6 +30,9 @@ adopt Semantic Versioning when it exposes a stable public API.
   script once more to move to the ARM64 build.
 - `/desk` shows which agents answered without some of their sources: a mark in the agent list and the source names
   in the agent's view. Only the main agent's notice named them (#325).
+- Skill facts (#340): the valuation skill no longer expects a price range or a DCF from `valuation_run` and reads the
+  quarterly P/E, P/B history; airline fuel share, tanker rates vs the oil price, the state band on port tariffs,
+  fertiliser pricing and the gas contracts of urea plants are corrected.
 
 ## [0.5.0] — 2026-11-24
 

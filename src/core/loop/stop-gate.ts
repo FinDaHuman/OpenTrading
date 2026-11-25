@@ -158,7 +158,12 @@ const ECHO_OVERLAP = 0.7
  * to the user is a clarification, and the user must see it.
  */
 function echoesQuestion(answer: string, question: string): boolean {
-  const text = answer.trim()
+  const trimmed = answer.trim()
+  // The markers of a numbered list of questions are no words of it. Options to choose from have
+  // lines that ask nothing (an introduction, all but the last option) and keep theirs, and so does
+  // a longer number: "2025. " is content.
+  const questions = trimmed.split("\n").every((line) => !line.trim() || line.trimEnd().endsWith("?"))
+  const text = questions ? trimmed.replace(/^[\t ]*\d{1,2}[.)][\t ]+/gm, "") : trimmed
   if (!text.endsWith("?") || /[.!。！？]/u.test(text) || ASKS_USER.test(text.normalize("NFC"))) return false
   const words = (value: string) => value.normalize("NFC").toLocaleLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []
   const original = new Set(words(question.replace(/https?:\/\/\S+/g, "")))
