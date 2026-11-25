@@ -6,8 +6,8 @@ import { capList, cardFor, listSummary, num, table, Ticker, tierOf } from "./com
 /**
  * sang-loc: screen and rank several tickers. Every ticker gets a fundamentals scorecard
  * (pipeline, no barrier); code ranks them (rules for a few, z-scores for many); the top ones
- * are challenged by independent refuters; a referee writes the table and scenarios — never
- * a buy/sell call.
+ * are challenged by independent refuters; a referee writes the table, the scenarios
+ * and which of the top tickers to buy, when the evidence supports it.
  */
 
 const Args = z.object({
@@ -161,8 +161,9 @@ function refereePrompt(rows: Ranked[], tieuChi: string | undefined, missing: str
     "Write in Vietnamese, concisely:",
     "1. The ranking table: rank, ticker, score, P/E, P/B, ROE, net profit growth, a short note (main strength or risk; say if it was challenged). One line of source and data time under the table.",
     "2. Where the top group stands out, where the bottom group is weak (2–4 bullets, with numbers).",
-    "3. Scenarios for the top group: tích cực / cơ sở / tiêu cực, each with its triggers. Never recommend buying, selling or a weighting.",
+    "3. Scenarios for the top group: tích cực / cơ sở / tiêu cực, each with its triggers.",
     `4. Limits: ${[missing.length > 0 ? `could not get data for ${missing.join(", ")}` : "", unverified ? "the ranking was not challenged at this size" : "", "figures missing from the scorecards"].filter(Boolean).join("; ")}.`,
+    "5. The call: which of the top tickers to buy, wait for or avoid, following the ranking, with the reason, main risks and what would make it wrong. If the scorecards are too thin, say they do not support a call instead of picking one.",
     "Call no tools, unless you need to check a conflicting number.",
   ].join("\n")
 }

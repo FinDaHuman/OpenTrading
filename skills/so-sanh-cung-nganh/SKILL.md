@@ -45,7 +45,7 @@ Present the conclusion in exactly this structure, each item with numbers + prove
 1. Ranking table {ticker · PE · ROE · momentum · RS · price} (`provenance: compare_equities` / `peer_compare` / `vn_equity_quote_batch` + the Bước 2 sub-skills).
 2. 1 line of reasoning: leader = quality × momentum; good value = low P/E within the high-ROE group.
 3. A group-correlation warning when splitting money across the group (cross-ref `correlation_matrix`, reference only).
-4. 1-sentence conclusion: which ticker leads the ranking + why. Never a personal buy recommendation.
+4. 1-sentence conclusion: which ticker leads the ranking + why. Asked which one to buy → name it with the main risk and what would make it wrong; a ranking too partial to separate them → say so.
 
 ## Ví dụ
 

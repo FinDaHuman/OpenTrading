@@ -11,7 +11,7 @@ version: 1.5.0
 
 # Cơ hội từ báo cáo CTCK
 
-Brokerage recommendations are INPUT, not truth — you must check the upside against the current price and add a disclaimer. A brokerage's rating is not your recommendation: give your own only from your own check; never invent a brokerage target price when the feed has none.
+Brokerage recommendations are INPUT, not truth — you must check the upside against the current price and add a disclaimer. A brokerage's rating is not your recommendation: give your own only from your own analysis of the ticker, kept apart from theirs; never invent a brokerage target price when the feed has none.
 
 ## Khi nào dùng
 

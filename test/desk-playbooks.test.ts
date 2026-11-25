@@ -142,7 +142,10 @@ test("sang-loc medium: scorecards in parallel, refuters move a ticker down, the 
   const referee = specs.find((s) => s.type === "tong-hop")!.prompt
   expect(referee).toContain("<bang_chung")
   expect(referee).toContain("do not re-rank")
-  expect(referee).toContain("Never recommend buying, selling")
+  // Owner decision 25/11/2026: the referee may call buy/wait/avoid, and may say the data does not support one.
+  expect(referee).toContain("buy, wait for or avoid, following the ranking")
+  expect(referee).toContain("do not support a call")
+  expect(referee).not.toMatch(/never recommend/i)
 })
 
 test("sang-loc small: more tickers than the tier are cut with a log line, no refuters", async () => {
@@ -284,7 +287,11 @@ test("tranh-bien medium: 5 analysts, bull and bear open then rebut once, the ref
   const judge = specs.find((s) => s.type === "tong-hop")!.prompt
   expect(judge).toContain("Báo cáo vi-mo")
   expect(judge).toContain("BEAR: bear vòng 1")
-  expect(judge).toContain("Never recommend buying, selling, holding")
+  // The referee makes the call or says there is none; the debaters and analysts leave it to the referee.
+  expect(judge).toContain("The call (mua / giữ / bán / chờ)")
+  expect(judge).toContain("does not support a call")
+  expect(judge).not.toMatch(/never recommend/i)
+  for (const s of specs.filter((s) => s.type !== "tong-hop")) expect(s.prompt, s.description).toMatch(/eave the buy\/hold\/sell call to the referee/)
   expect(String(view.result)).toBe("PHÁN QUYẾT TRỌNG TÀI")
   expect(view.counters.agents).toBe(tranhBien.meta.estimate(tranhBien.meta.args.parse({ ticker: "FPT" }), "medium").agents)
 })

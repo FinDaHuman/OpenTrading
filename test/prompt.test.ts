@@ -209,9 +209,41 @@ test("tool guidance lives in one place and the format example carries no real-lo
   // although real tokens fell: 2 260 measured with all six English PRs merged. 2 309 after the
   // 20/11/2026 style.md rule against mixing languages (mixed answers 5/27 vs 1/27 in the #357 eval).
   // 2 338 after the 21/11/2026 skill-catalog header (load only the skill the question is about).
-  // 24/11/2026 owner decision: bat_bien 3 now makes the pick the user asks for (careful, highest return the
-  // data supports, risks stated) instead of the #303 "do not choose in any form" ban; same length class.
+  // 2 346 after the 25/11/2026 owner decision (#437): bat_bien 3 makes the pick the user asks for instead of
+  // the #303 "do not choose in any form" ban; paid for by shorter wording in the role line and bat_bien 2–3.
   expect(Math.ceil(a.system.length / 4)).toBeLessThan(2_350)
+})
+
+// Owner decision 25/11/2026 (#437): recommendations are allowed; these limits stay.
+test("bat_bien: a pick is made when asked, figures come from tools, thin data may be declared, no orders", () => {
+  for (const role of ["main", "subagent"] as const) {
+    const rules = identityLayer(role, undefined, undefined)!
+    const rule = (n: number) => rules.split("\n").find((l) => l.startsWith(`${n}. `))!
+    expect(rule(1)).toContain("Every figure on prices, volumes, financials or macro comes from tool results in this conversation")
+    expect(rule(1)).toContain("do not estimate or use remembered figures")
+    // A level of its own is derived and explained; with no figures there is none.
+    expect(rule(2)).toContain("entry point or stop-loss you give is derived from tool figures in this conversation, with how you got it and what would invalidate it; without them, give none")
+    expect(rule(2)).toContain("always given as scenarios")
+    expect(rule(3)).toContain("Asked to choose")
+    expect(rule(3)).toContain("give the choice itself, not a neutral comparison")
+    // The highest return stays inside what the user can take.
+    expect(rule(3)).toContain("within the user's risk tolerance, horizon and constraints")
+    expect(rule(3)).toContain("with the main risks and what would make it wrong")
+    // Not on every question, and not for a user whose profile says no buy/sell calls (INVESTOR.md's own example).
+    expect(rule(3)).toContain("when the question calls for one, unless the user ruled them out")
+    // Never pushed into inventing a reason.
+    expect(rule(3)).toContain("If the data is missing or too thin for a call, say so instead of picking")
+    expect(rule(3)).toMatch(/Never place orders\.$/)
+    expect(rule(4)).toContain("Refuse to help with price manipulation, insider trading")
+    expect(rules).not.toMatch(/do not choose|never refuse/i)
+  }
+})
+
+test("the role line says the same with and without a terminal, the decision stays the user's", () => {
+  for (const ctx of [gateContext({ tools: [] }), gateContext({ tools: [], profile: "machine" })]) {
+    const first = identityLayer("main", undefined, ctx)!.split("\n")[0]!
+    expect(first).toContain("recommend what to buy, hold or sell. The user always makes the final decision.")
+  }
 })
 
 test("the constraints budget key is explicit and never cuts on any tier", () => {
