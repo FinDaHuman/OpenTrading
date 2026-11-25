@@ -139,12 +139,8 @@ export const COMPACT_LEAN_TOKENS = 100_000
 
 export type CompactVariant = "full" | "lean"
 
-/**
- * A figure found only in an earlier answer was sourced to a tool on 30/10 (AAA "LNTT +29,3%":
- * in the answer, in no tool result, summarized with "MCP opentrading" as its source).
- */
-const OWN_FIGURES =
-  'A figure found only in an earlier answer (in no tool result) gets the source "câu trả lời trước", never a tool name. For a pruned result with a read_result id, put that id in the source column.'
+const VERIFIED_FIGURES =
+  "Table: chỉ tiêu | giá trị | đơn vị | nguồn | thời điểm. Include only figures supported by a tool result with a source and time. Copy values and units verbatim, no rounding. For a pruned result whose visible excerpt still supports the figure, include its read_result id in the source column. Never enter user-provided, hypothetical or earlier-answer-only figures in this table; keep them in the request history with their actual origin. If there are no supported figures, write (không có)."
 
 /**
  * Spec 007: memory, the user's saved constraints and the investor profile are sent again with every
@@ -179,7 +175,7 @@ export function compactPrompt(instructions?: string, variant: CompactVariant = "
           "## Ràng buộc và sở thích",
           PREFERENCES,
           "## Số liệu đã xác minh",
-          `Table: chỉ tiêu | giá trị | đơn vị | nguồn | thời điểm. Copy verbatim, no rounding. Drop any figure without a source and time. ${OWN_FIGURES}`,
+          VERIFIED_FIGURES,
           "## Lỗi và dữ liệu còn thiếu",
           MISSING_DATA,
           "## Việc đang dở và bước tiếp theo",
@@ -191,7 +187,7 @@ export function compactPrompt(instructions?: string, variant: CompactVariant = "
           "## Ràng buộc và sở thích",
           PREFERENCES,
           "## Số liệu đã xác minh",
-          `Table: chỉ tiêu | giá trị | đơn vị | nguồn | thời điểm. Copy verbatim from the tool results, no rounding, no unit changes. Drop any figure without a source and time. ${OWN_FIGURES}`,
+          VERIFIED_FIGURES,
           "## Phân tích và kết luận đã đưa ra",
           "The main views, their assumptions, the risks raised.",
           "## Lỗi và dữ liệu còn thiếu",

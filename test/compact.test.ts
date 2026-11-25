@@ -240,8 +240,11 @@ test("one request: an <analysis> scratchpad then the <summary>; lean drops the a
     expect(prompt).toContain('Do not copy the content of memory blocks ("[Memory · …]"), saved constraints or the investor profile')
     expect(prompt).toContain('"bài học #7"')
   }
-  // A figure only an earlier answer gave is not sourced to a tool (30/10, AAA "LNTT +29,3%").
-  for (const prompt of [full, lean]) expect(prompt).toContain('gets the source "câu trả lời trước", never a tool name')
+  for (const prompt of [full, lean]) {
+    const figures = prompt.split("## Số liệu đã xác minh\n")[1]!.split("\n## ")[0]!
+    expect(figures).toContain("only figures supported by a tool result with a source and time")
+    expect(figures).toContain("keep them in the request history with their actual origin")
+  }
 })
 
 test("the stored summary drops the scratchpad; a cut-off analysis is no summary", () => {
