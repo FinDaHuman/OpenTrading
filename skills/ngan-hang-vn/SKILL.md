@@ -119,7 +119,7 @@ when you need the exact line names in `vs_financial_norms(btype=3)` or interpret
 
 Value banks with **P/B anchored on ROE**, not P/E: at the same P/B, a bank with
 20% ROE and one with 13% ROE are worth entirely different amounts. Group by ROE, then compare P/B
-within the group (`valuation_run` for the range; `peer_compare` to rank within the same-segment
+within the group (`valuation_run` with `btype=3` for the current P/B, it gives no range; `peer_compare` to rank within the same-segment
 group). Anchor expectations with `planned_targets` (the year's profit plan) and
 `analyst_consensus`. A bank with a one-off loss/gain → P/E is meaningless; say so
 instead of inventing a fair value.

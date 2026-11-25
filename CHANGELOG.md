@@ -13,6 +13,9 @@ adopt Semantic Versioning when it exposes a stable public API.
 - `install.ps1` on Windows on ARM installed the x64 build (slower, emulated) when PowerShell was started from an x64
   program such as Git Bash; it now reads the machine's CPU. `ot update` keeps the build it finds, so run the install
   script once more to move to the ARM64 build.
+- Skill facts (#340): the valuation skill no longer expects a price range or a DCF from `valuation_run` and reads the
+  quarterly P/E, P/B history; airline fuel share, tanker rates vs the oil price, the state band on port tariffs,
+  fertiliser pricing and the gas contracts of urea plants are corrected.
 
 ## [0.5.0] — 2026-11-24
 

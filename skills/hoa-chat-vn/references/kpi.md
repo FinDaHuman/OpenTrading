@@ -9,7 +9,7 @@
 
 | Criterion | Domestic sales | Exports |
 |---|---|---|
-| Price tracks | The domestic price frame + domestic demand | International prices at the time of the deal |
+| Price tracks | Domestic market prices + domestic demand | International prices at the time of the deal |
 | Deciding variable | Farm demand + crop prices | Supply shocks + export policy |
 | Cycle | Slower, smoother | Fast and volatile |
 | What to read | Domestic sales volume + domestic selling prices | Export share + international prices + inventory |
@@ -44,7 +44,7 @@
 ## 5. Bẫy đọc thường gặp
 
 - One quarter's profit jumping sharply: check inventory at original cost before extrapolating it into capability.
-- International prices up but the company sells domestically: the domestic price frame caps the part
+- International prices up but the company sells domestically: domestic competition and farm demand limit the part
   it can raise — a different verdict from an exporter.
 - China easing its policy: the whole group's price cycle is pulled down even if the company does not
   export to China.

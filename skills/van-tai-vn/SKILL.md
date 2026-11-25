@@ -40,9 +40,9 @@ container business.
 |---|---|---|
 | Freight rates | Rates by route (transoceanic, intra-Asia, Europe–America) decide shipping revenue. Rates do not rise evenly: short routes and transshipment hubs follow different rules | Route rates: `news_market`/`web_search`, stating the rate index + date; for the ticker, average realised rates in `financial_detail` |
 | Export demand | Port throughput tracks exports and component imports. Read TEU/tonnes through ports and total trade flows; rising equipment-import value does not prove rising transport demand | Exports/imports by period: `vs_xnk_detail`; aggregate sector demand: `news_market` |
-| Port capacity | New berths running below capacity push up fixed costs; with enough utilisation, tariffs hold. This is the sector's most durable source of margin | Berth utilisation + service tariffs: `news_market`/`web_search`; for the ticker, revenue/average tariff in `financial_detail` |
+| Port capacity | New berths running below capacity push up fixed costs; with enough utilisation, tariffs hold. Container handling, berth and towage tariffs move only inside the minimum–maximum band set by the Ministry of Construction, so a band change is itself a revenue driver. This is the sector's most durable source of margin | Berth utilisation + the tariff-band decision in force (number + date): `news_market`/`web_search`; for the ticker, revenue/average tariff in `financial_detail` |
 | Rate-locking share | Long-term periodic shipping contracts smooth income: a high locked share means a freight wave does not reach revenue at once | Fixed-contract share: `news_market`/`web_search`; indirect signs in revenue/volume in `financial_detail` |
-| Fuel | Fuel and port costs squeeze margins of **shipping and airlines**; ports are little affected. The direction differs by segment: tankers benefit when oil prices rise (rates follow oil), airlines get squeezed (fuel is most of their costs) | Fuel prices: `yf_commodities` by cycle |
+| Fuel | Fuel and port costs squeeze margins of **shipping and airlines**; ports are little affected. The direction differs by segment: tanker rates follow tonne-miles and ship supply, not the oil price level (they can jump while oil falls); airlines get squeezed (fuel is one of their largest costs, not the majority) and domestic basic-economy fares sit under a state ceiling, which limits the pass-through | Fuel prices: `yf_commodities` by cycle |
 | Trade policy | Tariffs redirect routes: intra-Asia routes are less affected than routes to the US | Tariffs/policy: `news_market`/`web_search` |
 
 ## Các bước
@@ -79,7 +79,7 @@ Q1. Which segment is the company in?
 ├─ Container → Q2 (container)
 ├─ Tankers/dry bulk → ★ "Đánh giá cước tuyến, tonne-mile, sản lượng và hợp đồng; thiếu thì chưa đủ dữ liệu cho phân khúc"
 ├─ Forwarding/delivery → ★ "Đánh giá lưu lượng bưu kiện, giá dịch vụ và chi phí; thiếu thì chưa đủ dữ liệu cho phân khúc"
-├─ Airlines → ★ "Đánh giá ngược chiều giá dầu: giá dầu tăng bóp biên (nhiên liệu chiếm phần lớn chi phí) trong khi tàu dầu hưởng; kèm nhu cầu đi lại theo mùa và giá vé; thiếu dữ liệu thì chưa đủ cho phân khúc"
+├─ Airlines → ★ "Đánh giá ngược chiều giá dầu: giá dầu tăng bóp biên (nhiên liệu là một trong các khoản chi phí lớn nhất, đọc tỷ trọng trong báo cáo); kèm nhu cầu đi lại theo mùa và giá vé (vé phổ thông cơ bản nội địa có giá trần); thiếu dữ liệu thì chưa đủ cho phân khúc"
 ├─ Several segments → assess each segment independently per Q1, then combine by the disclosed weights
 └─ Unclear → ★ "Chưa đủ dữ liệu phân khúc"
 

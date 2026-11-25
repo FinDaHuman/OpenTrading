@@ -27,26 +27,26 @@ Return exactly 6 items: price vs the fair range → PER/PB vs history → why ch
 
 **Bước 1: Core fair value (in parallel, direct calls).**
 
-Run `valuation_run` (symbol, default method auto — change the method only if the user insists) + `vs_overview_trading` (symbol).
+Run `valuation_run` (symbol, `btype`: 1 ordinary company, 2 brokerage, 3 bank, 5 insurer; leave `method` at auto unless the user insists). It returns today's price, EPS of the last four quarters, BVPS and the current `per`, `pb` — no price range and no DCF; the range is computed in Bước 2. `vs_overview_trading` carries no multiples, do not call it here.
 
 **Bước 2: Historical anchor (in parallel, direct calls).**
 
-Run `financial_ratios` (symbol) + `vn_quote_history` (symbol, days=365), and compute the 2–3 year average PER/PB from the PER/PB periods `financial_ratios` returns (the default period is yearly: 2–3 figures; if quarterly figures exist, use quarters): sum the periods and divide by their count in one `shell` command, stating the number of periods and the first/last period. `vn_quote_history` gives the current price for comparison. Without price history, drop the historical comparison: a partial verdict + note what is missing.
+Run `financial_ratios` (symbol, period="quarter" — the default is yearly and gives too few points) + `vn_quote_history` (symbol, days=365, the price context of the year). Take the last 8–12 quarters of `p_e`, `p_b` ending at `latest_period` (`periods` runs oldest → newest); skip quarters that are missing or not positive. Each multiple is at its own quarter end, on the same four-quarter EPS basis as `per`. Compute the average in one `shell` command, stating the number of periods and the first/last period. Fair range = average P/E × current EPS and average P/B × current BVPS (say "tính từ"), the two ends of the range; banks and brokerages: P/B only. Quarterly figures unavailable → use the yearly ones and say so. No PER/PB periods at all → drop the historical comparison: a partial verdict + note what is missing. Per-share figures are not restated for bonus/rights issues after their period: when `eps_note` applies and an issue happened, say the comparison is distorted.
 
 **Bước 3: Rate backdrop (only when needed).**
 
-Run `yf_yield_curve` + `vs_trading_info` for PB-heavy tickers (banks). Once you have the fair value + the historical comparison, stop; do not open Bước 3 to fill time. One `method` per run; a `method` outside the enum → warning → back to auto; do not retry odd methods.
+Run `yf_yield_curve` + `vs_trading_info` for PB-heavy tickers (banks). Once you have the fair value + the historical comparison, stop; do not open Bước 3 to fill time. One `method` per run (auto, per, pb or ensemble): it is only a label, the figures do not change with it.
 
 **Bước 4: Validate before concluding.**
 
-Do not rebuild a DCF yourself (it is already computed in `valuation_run`). Do not call `signals_technical` / `financial_detail` / `stock_forensic` here; for fundamental quality cross-ref `co-ban-chuyen-sau` without calling that skill's tools again. For banks prefer per_pb and say why.
+Do not build a DCF yourself, and never say one was computed: no tool returns it. Do not call `signals_technical` / `financial_detail` / `stock_forensic` here; for fundamental quality cross-ref `co-ban-chuyen-sau` without calling that skill's tools again. For banks and brokerages P/B leads (`pb_bank_broker`); say why.
 
 ## Cấu trúc câu trả lời
 
 Present the conclusion in exactly this structure, each item with figures + trend + provenance:
 
-1. Current price vs the fair range: which method leads, the gap in % (`provenance: valuation_run` + `vs_overview_trading`).
-2. Current PER/PB vs the 2–3 year average (computed from the PER/PB periods of `financial_ratios`; `provenance: financial_ratios` + `vn_quote_history`).
+1. Current price vs the fair range: which method leads, the gap in % (`provenance: valuation_run` + `financial_ratios`).
+2. Current PER/PB vs the 2–3 year average (current: `per`, `pb` of `valuation_run`; average: the PER/PB periods of `financial_ratios`).
 3. Why cheap/expensive: growth + quality (cross-ref `co-ban-chuyen-sau`) + rates.
 4. Upside/downside % + confidence (high if 2 methods agree).
 5. Expectation anchor: brokerages' target price (`provenance: tim-co-hoi-bao-cao-ctck` cross-ref, reference only).
