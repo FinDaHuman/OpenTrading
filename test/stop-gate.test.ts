@@ -12,6 +12,8 @@ test("a final answer that repeats the user's question is recovered once", () => 
   const echoed = step({ text, userText, fetchedData: true })
   expect(judgeStop(echoed, [])).toMatchObject({ action: "continue", kind: "question-echo", toolChoice: "none" })
   expect(judgeStop(echoed, ["question-echo"])).toEqual({ action: "give-up", kind: "question-echo" })
+  const numbered = text.split("\n").map((line, index) => `${index + 1}. ${line}`).join("\n")
+  expect(judgeStop({ ...echoed, text: numbered }, [])).toMatchObject({ action: "continue", kind: "question-echo" })
   expect(judgeStop(step({ ...echoed, text: `${text}\nVN-Index bắt đầu ngày 28/07/2000 với 100 điểm.` }), [])).toEqual({ action: "accept" })
   expect(judgeStop(step({ ...echoed, text: "Bạn muốn tôi so sánh giai đoạn nào?" }), [])).toEqual({ action: "accept" })
   expect(judgeStop(step({ ...echoed, fetchedData: false }), [])).toEqual({ action: "accept" })

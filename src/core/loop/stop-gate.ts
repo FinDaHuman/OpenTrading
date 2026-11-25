@@ -158,7 +158,7 @@ const ECHO_OVERLAP = 0.7
  * to the user is a clarification, and the user must see it.
  */
 function echoesQuestion(answer: string, question: string): boolean {
-  const text = answer.trim()
+  const text = answer.trim().replace(/^[\t ]*\d{1,9}[.)][\t ]+/gm, "")
   if (!text.endsWith("?") || /[.!。！？]/u.test(text) || ASKS_USER.test(text.normalize("NFC"))) return false
   const words = (value: string) => value.normalize("NFC").toLocaleLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []
   const original = new Set(words(question.replace(/https?:\/\/\S+/g, "")))
