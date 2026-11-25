@@ -66,7 +66,7 @@ call them separately, batched in parallel in one round:
   off-balance-sheet → for **the 3 asset-quality layers** (these metrics sit in the notes,
   not in KQKD).
 
-Compare each metric QoQ/YoY, recording the number + period + which `statement` it came from.
+Compare each metric QoQ/YoY, recording the number + period + which `statement` it came from. A `TM` row without a name cannot be used: take that item from the bank's own disclosures, or say it is missing.
 
 **Bước 3: Funding context + prudential ratios (in parallel).**
 

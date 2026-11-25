@@ -54,7 +54,7 @@ mixed by revenue, profit and disclosed liabilities; if unclear, do not force a c
 
 **Bước 2 — Underwriting by segment.** Call `financial_detail(statement=KQKD)`,
 `financial_detail(statement=CDKT)` and `financial_detail(statement=TM)` separately; do not pass
-`btype` to this tool. Missing specific KPIs → take company/association reports from a
+`btype` to this tool. A `TM` row without a name cannot be used. Missing specific KPIs → take company/association reports from a
 verifiable source, stating the period. Life uses new premiums/retention; non-life uses the
 loss ratio/combined ratio/reinsurance. Never substitute market news for a company's own figures.
 

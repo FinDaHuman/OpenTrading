@@ -4,7 +4,7 @@ description: "Phase/wave: use dinh-vi-chu-ky-vn. Analyses VN consumer and retail
 match_text: "Pha/sóng: dùng skill chu kỳ. Phân tích ngành tiêu dùng và bán lẻ Việt Nam theo bán lẻ thực, thu nhập hộ gia đình, chính sách thuế và độ thâm nhập bán lẻ hiện đại. Dùng khi hỏi xu hướng nhóm tiêu dùng hoặc kết quả chuỗi bán lẻ."
 activation: auto
 requires_tools: [financial_detail, vs_indicator_data]
-uses_tools: [financial_detail, vs_indicator_data, vs_categories, financial_ratios, planned_targets, analyst_consensus, peer_compare, news_symbol, company_events, news_market, symbol_lookup, vn_company, yf_commodities]
+uses_tools: [financial_detail, vs_indicator_data, vs_categories, financial_ratios, planned_targets, analyst_consensus, peer_compare, news_symbol, company_events, news_market, symbol_lookup, vn_company, vn_retail_gold]
 triggers:
   exclude_keywords: [đỉnh chu kỳ, giai đoạn phân phối, đầu phục hồi, giai đoạn nào, dẫn sóng, pha nào, chu kỳ ngành, sóng ngành, luân chuyển ngành, pha thị trường, chu kỳ thị trường, giai đoạn thị trường, sóng tiếp theo, cuối sóng, giữa sóng, đầu sóng, bank dẫn, chứng dẫn, rotation, pha tiếp theo]
   keywords: [ngành tiêu dùng, chuỗi bán lẻ, hàng tiêu dùng, bán lẻ hiện đại, thu nhập hộ gia đình, sức mua, thị phần bán lẻ, mảng tiêu dùng]
@@ -45,7 +45,7 @@ roll-out) or **consumer-goods producers** (raw materials, volume; no stores).
 | Purchasing-power policy | VAT cuts on essentials support purchasing power for a set period; "formalising the market" policies (invoices, price listing) reduce the price edge of traditional channels | `news_market` (texts + effective dates), stating the source + date |
 | Modern-retail penetration | Modern retail has a low share versus the region → opening stores is the long-term growth engine. Chains opening faster than the market gain share | Chain developments (store count, floor area) + market share: `news_symbol`/`company_events` or `web_search` on company sources |
 | Same-store sales | New-store openings and same-store growth are two different kinds of growth. Rising same-store sales means taking share from competitors | `financial_detail` + company disclosures via `news_symbol`/`company_events`; compute it with `shell` from the disclosed figures if they allow, showing the formula |
-| Input costs | Producers carry raw materials (milk powder, sugar, grain, packaging); jewellers carry the gold price. A rise before selling prices follow squeezes margins | Cost of goods in `financial_detail`; raw-material prices: `web_search`; gold: `yf_commodities` |
+| Input costs | Producers carry raw materials (milk powder, sugar, grain, packaging); jewellers carry the gold price. A rise before selling prices follow squeezes margins | Cost of goods in `financial_detail`; raw-material prices: `web_search`; domestic gold price: `vn_retail_gold` |
 | Segment | Food staples (a steady cycle) differ from consumer electronics (a device-replacement cycle). Do not share one driver | Segments in `financial_detail` + `vn_company` |
 
 ## Các bước
@@ -77,7 +77,7 @@ inventory, receivables/payables) are read with `financial_detail` **for each pee
 from company disclosures via `news_symbol`/`company_events` — `peer_compare` cannot return
 those lines.
 
-`financial_detail` returns one `statement` per call (default `KQKD`): `CDKT` for inventory, receivables, borrowings and advances, `LCTT` for depreciation and cash flow, `TM` for notes; a row without a name cannot be used, take that item from company disclosures. `news_market` is the latest-news feed and cannot be searched by topic or ticker: sector figures, prices and legal texts come from `web_search` (source + date).
+`financial_detail` returns one `statement` per call (default `KQKD`): `CDKT` for inventory, receivables, borrowings and advances, `LCTT` for depreciation and cash flow, `TM` for notes; a row without a name cannot be used, take that item from company disclosures. `news_market` is the latest-news feed and cannot be searched by topic or ticker: wherever this skill names it for sector figures, prices or legal texts, look them up with `web_search` (source + date) and keep `news_market` for the day's headlines.
 
 Tool check: `peer_compare` uses only the overview keys actually present in the result (such as P/E, P/B, ROE); its `metrics` parameter does not create extra metrics. Margins, volumes, costs, inventory and operating KPIs must be read from each peer's `financial_detail` for the same period; if missing, look up company disclosures via `news_symbol`/`web_search`, stating the source, formula and period. With missing data, leave it blank and do not rank.
 
