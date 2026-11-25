@@ -138,7 +138,7 @@ ot --help                # every option
 
 ## Ultradesk: multi-agent research
 
-Ultradesk coordinates several subagents through a **playbook**. The playbook's code holds the loops, branches and intermediate results, and the main agent only receives the final result. The idea comes from Claude Code's dynamic workflows (`ultracode`), adapted to free API tiers (quota counted per request) and to conclusions written as scenarios rather than Buy/Sell calls. Full documentation: [docs/desk.md](docs/desk.md) (Vietnamese).
+Ultradesk coordinates several subagents through a **playbook**. The playbook's code holds the loops, branches and intermediate results, and the main agent only receives the final result. The idea comes from Claude Code's dynamic workflows (`ultracode`), adapted to free API tiers (quota counted per request) and to conclusions written as scenarios, with a Buy/Hold/Sell/Wait call when the evidence supports one. Full documentation: [docs/desk.md](docs/desk.md) (Vietnamese).
 
 ### Built-in playbooks
 
