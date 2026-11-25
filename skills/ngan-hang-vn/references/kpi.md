@@ -23,6 +23,7 @@ Never pass `btype` to `financial_detail`. State the unit, period and formula; co
 | Group 2 loans | `TM`: group 2 loans / total loans of the same scope | An early indicator; never infer migration rates from two closing balances |
 | NPL coverage | Provisions for customer loans / group 3–5 loans, same scope and period | Never call it loan coverage; state general/specific provisions as disclosed |
 | Credit risk provisioning expense | `KQKD` | Compare with pre-provision profit; credit cost needs the annualised expense / average loans |
+| Written-off or sold bad loans | `TM` or the bank's disclosures | NPLs falling through write-offs differ from NPLs falling through recoveries |
 | Off-balance-sheet | `TM` or the bank's disclosures | Guarantees/commitments are not the same as NPLs; use credit equivalents only with suitable conversion factors |
 
 ## Tăng trưởng, vốn và thanh khoản

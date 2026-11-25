@@ -14,6 +14,15 @@
 | Cycle | Slower, smoother | Fast and volatile |
 | What to read | Domestic sales volume + domestic selling prices | Export share + international prices + inventory |
 
+Product groups (compare only within a group):
+
+| Group | Price follows | Main inputs |
+|---|---|---|
+| Nitrogen (urea) | World and domestic urea prices | Gas under contract, or coal |
+| Phosphate, NPK | Domestic prices, crop season | Apatite ore, sulphur, bought-in urea/potash |
+| Phosphorus chain | Export and regional prices, export duty | Apatite ore, electricity, coke, sulphur |
+| Basic chemicals | Domestic prices, industrial customers | Salt, electricity |
+
 ## 2. Nhóm giá và biên
 
 | Indicator | Read from | How to read |
@@ -28,6 +37,9 @@
 | Indicator | Read from | How to read |
 |---|---|---|
 | Inventory | `financial_detail` | Read under the rule in the SKILL.md §Trụ cột driver (inventory at original cost decides how long margins stay supported): low-cost inventory keeps supporting margins; high-cost inventory compresses margins when prices fall |
+| Finished-goods inventory | Company disclosures (`CDKT` gives only total inventory) | Rising sharply = selling slower than producing |
+| Inventory days | Computed with `shell`: average inventory / quarterly cost of goods × 90; label it "tính từ" | Long days after a price rise mean cheap stock still supports margins; after a fall, dear stock still squeezes them |
+| Cash and deposits | `financial_detail` (`CDKT`) | Deposit interest supports profit when the price window closes: separate it |
 | Gas/raw-material costs | `financial_detail` + `yf_commodities` | When they catch up with selling prices, the window closes |
 | Period exports | Customs/industry bodies via `web_search`, with clear product group and period | Separate volume and value to tell price rises from demand rises; never take `vs_xnk_detail`'s by-country series as a product group |
 | China's policy | `news_market` | A global supply variable; state the source and date |

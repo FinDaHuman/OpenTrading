@@ -58,6 +58,8 @@ brokerage statement lines.
 `financial_detail`: margin loans · equity · revenue by the 4 businesses ·
 receivables. Compute the leverage level with `shell` from those figures (show the formula and inputs) and compare with the regulatory cap.
 
+`financial_detail` returns one `statement` per call (default `KQKD`): `CDKT` for inventory, receivables, borrowings and advances, `LCTT` for depreciation and cash flow, `TM` for notes; a row without a name cannot be used, take that item from company disclosures. `news_market` is the latest-news feed and cannot be searched by topic or ticker: sector figures, prices and legal texts come from `web_search` (source + date).
+
 **Bước 3: Market rhythm + spread (in parallel).**
 
 `market_overview` (bluechip prices, movers, breadth) · `breadth_scan` (is the breadth
@@ -122,6 +124,8 @@ last: state the profit quality before using P/E.
   around it.
 - **Portfolio-quality risk**: proprietary books holding corporate bonds → corporate
   clients' credit risk leaks onto the brokerage's balance sheet.
+- **Collateral-concentration risk**: margin loans on a few tickers can turn into bad debt when one falls limit-down for
+  several sessions.
 - **Session-rhythm dependence**: falling liquidity drags all 3 businesses.
 
 ## Ranh giới

@@ -13,10 +13,10 @@ version: 1.0.0
 
 # Dầu khí Việt Nam — framework phân tích
 
-Vietnamese oil & gas holds **four different business loops** under one label: upstream
-production, shipping, refining/petrochemicals, and technical services. The shared label is a
+Vietnamese oil & gas holds **five different business loops** under one label: upstream
+production, shipping, refining/petrochemicals, technical services, and gas/petroleum distribution. The shared label is a
 trap: upstream margins depend on oil prices, refining margins on the crude
-refining spread, services margins on capital spending. This skill reads the sector
+refining spread, services margins on capital spending, distribution margins on sales volume and the pricing mechanism. This skill reads the sector
 through international oil prices, **the distance oil travels (tonne-miles)** — what pushes
 freight rates up even when the volume through a shipping lane falls — and the company's
 reserve replacement. And one hard boundary: **this sector is not treated as a link
@@ -42,6 +42,8 @@ in the sector rotation chain** (that is the cycle skill's job).
 | Distance oil travels (tonne-miles) | When shipping routes lengthen, tanker freight rises even if total oil volume is unchanged. This drives the shipping loop, distinct from the upstream driver | Shipping-route status: `news_market`/`web_search`, stating the source and period |
 | Reserve replacement | Current output lasts only if new reserves replace it. Replacement below production for long = output will fall in the near future | Output + new discoveries: sector disclosures in `news_market`/`web_search`; capitalised exploration costs in `financial_detail` |
 | Capital spending | The group's E&P budget decides the technical-services loop's revenue, and project ordering decides the upstream loop | The 5-year investment plan: `news_market`/`web_search`; ticker-specific: projects in `company_events` |
+| Gas and petroleum distribution | Earns on sales volume and the margin the pricing mechanism leaves: retail petrol prices follow a state mechanism, gas to power and fertiliser plants follows contracts. Fast oil moves create one-off inventory gains or losses | Mechanism in force (number + date; it can change): `web_search`; volumes and contracts: `news_symbol`; inventory: `financial_detail` (`CDKT`) |
+| Refining spread and inventory | Product prices minus crude input set the margin; crude and product stock turns a price reversal into a one-quarter gain or loss | Regional spread: `web_search`; gross margin and inventory: `financial_detail` |
 | Segment mix | The same sector label, entirely different margins. Misreading the business loop leads to the opposite conclusion | Segments in `financial_detail` + the segment table in `vn_company` |
 | International seasonality | Seasonal demand and producer-group meetings set the price rhythm; they affect the sector's rhythm without changing long-term expectations | Periodic rhythm: `yf_commodities` by cycle |
 
@@ -50,7 +52,7 @@ in the sector rotation chain** (that is the cycle skill's job).
 **Bước 1: Identify the business loop (in parallel).**
 
 `symbol_lookup` · `vn_company` + `financial_detail` to see which segment feeds profit:
-upstream / refining / shipping / services. State which loop you are analysing.
+upstream / refining / shipping / services / gas and petroleum distribution. State which loop you are analysing.
 
 **Bước 2: Oil prices + shipping-route shocks (in parallel).**
 
@@ -68,6 +70,10 @@ the cost-of-goods trend.
 `planned_targets` · `analyst_consensus` · `peer_compare` (compare only within **the same business
 loop** — comparing upstream with refining is meaningless).
 
+If the yearly plan states an oil price assumption, compare it with the current price before judging the plan.
+
+`financial_detail` returns one `statement` per call (default `KQKD`): `CDKT` for inventory, receivables, borrowings and advances, `LCTT` for depreciation and cash flow, `TM` for notes; a row without a name cannot be used, take that item from company disclosures. `news_market` is the latest-news feed and cannot be searched by topic or ticker: sector figures, prices and legal texts come from `web_search` (source + date).
+
 Tool check: `peer_compare` uses only the overview keys actually present in the result (such as P/E, P/B, ROE); its `metrics` parameter does not create extra metrics. Margins, volumes, costs, inventory and operating KPIs must be read from each peer's `financial_detail` for the same period; if missing, look up company disclosures via `news_symbol`/`web_search`, stating the source, formula and period. With missing data, leave it blank and do not rank.
 
 ## Cây quyết định công ty dầu khí đang được tiếp sức hay siết
@@ -79,6 +85,7 @@ Q1. Which segment feeds the company's profit?
 ├─ Refining/petrochemicals → ★ "Đánh giá chênh lệch tinh chế, tồn kho và công suất; thiếu thì chưa đủ dữ liệu cho mảng lọc dầu"
 ├─ Shipping → ★ "Đánh giá riêng cước tàu, tonne-mile và hợp đồng dài hạn; tuyến dài không mặc nhiên tăng lãi toàn công ty"
 ├─ Technical services → ★ "Đánh giá ngân sách E&P, backlog và tiến độ nghiệm thu; thiếu thì chưa đủ dữ liệu mảng dịch vụ"
+├─ Gas/petroleum distribution → ★ "Đánh giá sản lượng bán, biên theo cơ chế giá hoặc hợp đồng, và lãi/lỗ tồn kho một lần; thiếu thì chưa đủ dữ liệu mảng phân phối"
 ├─ Several segments → analyse each segment independently per Q1, then combine by the disclosed profit weights
 └─ Mix unclear → ★ "Chưa đủ dữ liệu phân mảng; không dùng giá dầu đại diện cả công ty"
 
@@ -105,7 +112,7 @@ The oil & gas indicator table + how to read it is in `references/kpi.md`.
 
 Value oil & gas with **EV/EBITDA** (only when EBITDA is positive and comparable; with non-positive EBITDA, do not interpret the multiple — switch to normalised cash flow or assets) and **reserve
 value** for the upstream loop; the refining loop by cyclical EV/EBITDA; the services
-loop by the investment-budget outlook. Never use P/E at the cycle peak: the same P/E
+loop by the investment-budget outlook; the distribution loop by P/E and dividends (steadier cash flow). Strip inventory gains/losses from refining and distribution profit first. Never use P/E at the cycle peak: the same P/E
 can be a trough or a peak depending on the position in the loop. Anchor expectations with `planned_targets` and
 `analyst_consensus`.
 
@@ -117,7 +124,9 @@ can be a trough or a peak depending on the position in the loop. Anchor expectat
 - **Energy transition risk**: makes new projects harder to finance, especially deep-water
   exploration.
 - **Concentration risk**: one project or one recurring transaction can feed a whole year.
-- **Business-loop misreading risk**: the sector label hides four different cycles.
+- **Inventory risk**: refining and distribution book losses when oil falls fast.
+- **Pricing-mechanism risk**: a new rule on retail petrol prices changes the distribution margin.
+- **Business-loop misreading risk**: the sector label hides five different cycles.
 
 ## Ranh giới
 

@@ -40,7 +40,7 @@ with bank-type reports), not with the generic joint-stock company line set.
 | CASA | The non-term funding share cushions funding costs: the larger the retail customer base, the better the spread holds | Funding mix in `financial_detail` (bank standards); compare with same-segment peers via each bank's `financial_detail`/notes, same period |
 | 3-layer asset quality | NPLs are only the top layer. Group 2 (special mention) loans rising while NPLs stay flat = risk forming but not yet reported; a falling coverage ratio = a thinning provision buffer. Only reading **all 3 layers together** gives a conclusion | `financial_detail`: NPL ratio, group 2 ratio, NPL coverage, credit cost — each quarter, with the QoQ trend |
 | Off-balance-sheet | Off-balance-sheet credit equivalents (guarantees, commitments) are outside published NPLs and provisions → the real risk exceeds the balance sheet | `financial_detail` off-balance-sheet lines if the period has them; sector aggregates from `news_market`/`web_search`, stating the source and period |
-| Liquidity + prudential ratios | Credit growing faster than deposits can pressure funding. LDR, CAR, LCR/NSFR have different definitions and scopes; never assume Basel III replaces or exempts LDR without a text applying to that bank and period | Confirm with texts: look up `news_market`/`web_search` for **the text number + effective date + cap/roadmap in force**, then cite the source in the answer. **Never infer new thresholds from memory** — if no text is found, say "chưa xác nhận"; do not guess |
+| Liquidity + prudential ratios | Credit growing faster than deposits can pressure funding. LDR, the ratio of short-term funds used for medium- and long-term loans, CAR, LCR/NSFR have different definitions and scopes; never assume Basel III replaces or exempts LDR without a text applying to that bank and period | Confirm with texts: look up `news_market`/`web_search` for **the text number + effective date + cap/roadmap in force**, then cite the source in the answer. **Never infer new thresholds from memory** — if no text is found, say "chưa xác nhận"; do not guess |
 
 ## Các bước
 
@@ -128,6 +128,8 @@ instead of inventing a fair value.
 
 - **Late-formation risk**: NPLs are an outcome that already happened; group 2 loans + coverage are
   leading indicators. Watching only NPLs reads the whole cycle late.
+- **Reported-NPL risk**: restructured or deferred loans under a policy, and loans written off or sold, make reported NPLs
+  look better than the loan book.
 - **Prudential risk**: LCR/NSFR roadmaps force small banks to hold excess liquid
   assets → credit easing slows or gets more expensive.
 - **Quota risk**: using up the quota before Q4 makes the last quarter's growth drop.

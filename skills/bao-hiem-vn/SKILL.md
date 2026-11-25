@@ -30,9 +30,9 @@ Both need underwriting results separated from investment, reserves and one-offs.
 | Segment/driver | Indicators and mechanism | Source |
 |---|---|---|
 | Life | New premiums/APE per the published definition, renewal premiums, retention for the same cohort/term, acquisition costs and policy liabilities | Company/association disclosures with period and definition; never infer retention from total premium revenue |
-| Non-life | Gross premiums, retained premiums, earned premiums, incurred claims and the combined ratio; rising premiums with high claims/costs can still mean an underwriting loss | Statements and notes per `vs_financial_norms(btype=5)`; compute per `references/kpi.md` |
+| Non-life | Gross premiums, retained premiums, earned premiums, incurred claims and the combined ratio; rising premiums with high claims/costs can still mean an underwriting loss; motor, health, property and marine lines have different claim levels, and price cuts in motor and health raise the loss ratio | Statements and notes per `vs_financial_norms(btype=5)`; compute per `references/kpi.md` |
 | Reinsurance | Cession ratio, claim recoveries, reserves and counterparty risk; check gross/net movements | `financial_detail(statement=TM)` or company notes |
-| Investment | Recurring investment income, realised/unrealised gains/losses, yield and asset duration vs liabilities | `KQKD`, `CDKT`, `TM` and disclosures for the same period |
+| Investment | Recurring investment income, realised/unrealised gains/losses, yield and asset duration vs liabilities; deposits maturing into lower rates shrink investment income step by step | `KQKD`, `CDKT`, `TM` and disclosures for the same period |
 | Reserves and solvency | Rising reserves can reflect liabilities or changed assumptions and do not by themselves mean a healthy book; accounting capital does not prove the solvency margin is met | Statements and capital-adequacy disclosures under the applicable rules |
 | Sales channels and policy | Agents, banks and direct channels differ in cost/sales quality | `news_symbol`, company disclosures, `news_market` for sector figures; look up legal texts + effective dates |
 
@@ -109,17 +109,17 @@ premiums), on the same period and standards. If a denominator is missing or zero
 Use P/B together with ROE, reserve quality and capital; P/E on normalised profit after
 costs and tax on the same scope. For life, embedded value may be referenced if the company
 publishes its method and assumptions; never build a value from total premiums. Mixed groups use
-SOTP when data allows; never compare consolidated profit with a single segment's underwriting profit.
+SOTP when data allows; never compare consolidated profit with a single segment's underwriting profit. Never compare an insurer's P/B with a bank's.
 
 ## Rủi ro đặc thù
 
 Mis-selling and lapses, natural disasters/large claims, reserve development,
-reinsurance counterparties, asset/liability duration mismatch and investment markets all need weighing.
+reinsurance counterparties, asset/liability duration mismatch and investment markets all need weighing. One large loss can push the combined ratio above 100% for a period: read 4 quarters before calling a trend. Under-provisioning makes the current period look better than it is.
 A good combined ratio achieved by ceding more risk may trade away costs and retained profit.
 
 ## Ranh giới và giới hạn
 
-Do not determine phases/waves or pick tickers to buy or sell. Never infer laws, ownership room or
+Do not determine phases/waves or pick tickers to buy or sell, and do not advise on buying insurance products. Never infer laws, ownership room or
 capital-safety thresholds from memory: look up the texts and their effective periods. Never infer retention
 or loss ratios from total premiums; with missing KPIs, say there is not enough data. Never call
 rising reserves positive before understanding the liabilities. Disclosures on different bases must be explained,

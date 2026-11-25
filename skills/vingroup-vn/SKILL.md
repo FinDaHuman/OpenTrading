@@ -4,7 +4,7 @@ description: "Vin group KPIs; phase/wave: use dinh-vi-chu-ky-vn. SOTP for VIC: V
 match_text: "KPI nhóm Vin; pha/sóng dùng skill chu kỳ. SOTP VIC: Vinhomes bàn giao, VinFast đốt tiền, Vincom cho thuê; kiểm tra giao dịch liên kết, tái cấp vốn và trọng số chỉ số Vingroup."
 activation: auto
 requires_tools: [financial_detail, company_events]
-uses_tools: [financial_detail, company_events, news_symbol, news_market, financial_ratios, planned_targets, analyst_consensus, peer_compare, breadth_scan, market_snapshot, vn_equity_quote_batch, event_calendar_vn, symbol_lookup, vn_company]
+uses_tools: [financial_detail, company_events, news_symbol, news_market, financial_ratios, planned_targets, analyst_consensus, peer_compare, breadth_scan, market_snapshot, vn_equity_quote_batch, event_calendar_vn, symbol_lookup, vn_company, stock_overview]
 triggers:
   keywords: [nhóm vin, tập đoàn vingroup, phân tích vingroup, sức khỏe tài chính vingroup, SOTP Vingroup, quỹ đất vinhomes, hiệu quả vinfast, dòng tiền vinfast, kinh doanh vincom, vinfast lỗ]
   exclude_keywords: [đỉnh chu kỳ, giai đoạn phân phối, đầu phục hồi, giai đoạn nào, pha tiếp theo, dẫn sóng, pha nào, chu kỳ ngành, sóng ngành, luân chuyển ngành, pha thị trường, chu kỳ thị trường, giai đoạn thị trường, sóng tiếp theo, cuối sóng, giữa sóng, đầu sóng, bank dẫn, chứng dẫn, rotation]
@@ -68,6 +68,8 @@ company disclosures) before concluding anything about the consolidated whole:
 `financial_detail`: EV segment revenue and losses, debt, bonds, cash,
 interest costs. `news_market`: maturing bond wall, new issuance, restructuring.
 
+`financial_detail` returns one `statement` per call (default `KQKD`): `CDKT` for inventory, receivables, borrowings and advances, `LCTT` for depreciation and cash flow, `TM` for notes; a row without a name cannot be used, take that item from company disclosures. `news_market` is the latest-news feed and cannot be searched by topic or ticker: sector figures, prices and legal texts come from `web_search` (source + date).
+
 **Bước 4: Index impact + expectation anchor.**
 
 `breadth_scan` (exchange-wide breadth) · index-provider releases or reports
@@ -122,8 +124,8 @@ The group indicator table + how to read it is in `references/kpi.md`.
 
 A multi-segment group is **not valued with one consolidated multiple**: value it as **the sum
 of its segments (SOTP)** with the fitting multiple for each (real estate by P/B and NAV, EVs
-by revenue/margins or discounted cash flow, retail by P/E), then subtract a conglomerate
-discount. Anchor expectations with `planned_targets` and `analyst_consensus`. Never compare
+by revenue/margins or discounted cash flow, retail by P/E), then subtract the parent's net debt and a conglomerate
+discount; the steps are in `references/kpi.md` §5. Anchor expectations with `planned_targets` and `analyst_consensus`. Never compare
 the consolidated P/E with a pure real-estate company.
 
 ## Rủi ro đặc thù

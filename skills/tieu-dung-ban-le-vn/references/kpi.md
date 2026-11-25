@@ -11,6 +11,9 @@
 |---|---|---|
 | Food – staples | Income + market prices | A smooth cycle; margins depend on food raw-material prices |
 | Consumer electronics retail | The device replacement cycle | Its own cycle — **never** use the food drivers |
+| Jewellery | Gold price, wedding and gift demand | Margin when gold moves sharply |
+| Pharmacies | Steady demand, chain roll-out | Revenue per store, time for a store to break even |
+| Consumer-goods producers | Volume, raw materials, distribution channel | Gross margin, selling expenses |
 | Consumer services (food service, travel) | Income + tourism | Seasonal growth; read with tourism in `vs_indicator_data` |
 
 ## 2. Nhóm sức mua
@@ -20,7 +23,7 @@
 | Nominal total retail sales | `vs_indicator_data(category_id from vs_categories)` | Only a starting point — conclude nothing yet. No preset; look up the category first |
 | Consumer price index | `vs_indicator_data(indicator="CPI")` | The denominator for real growth — CPI has a preset |
 | Core price index | `vs_indicator_data(category_id from vs_categories)` | Core above target = pressure on purchasing power — no preset |
-| Real retail sales | Computed with `shell` (one arithmetic-only command on figures from tool results): nominal growth adjusted for CPI; show the formula, label it "tính từ" | Negative real growth = the nominal growth came from prices |
+| Real retail sales | Computed with `shell` (one arithmetic-only command on figures from tool results): (1 + nominal growth) / (1 + inflation) − 1, same comparison period; show the formula and the price index used, label it "tính từ" | Negative real growth = the nominal growth came from prices |
 
 ## 3. Nhóm chất lượng tăng trưởng
 
@@ -30,6 +33,8 @@
 | Same-store growth | Computed with `shell` (one arithmetic-only command on figures from tool results), only if disclosures give the figures; label it "tính từ" | Weighs more than growth from new stores when judging market share |
 | Gross margin | `financial_detail` | Falling for 2 consecutive quarters alongside strong growth = a sign of buying growth with promotions |
 | Inventory | `financial_detail` | Inventory growing faster than revenue = selling slower than expected |
+| Selling expenses | `financial_detail` | Growing faster than revenue = openings, promotions or rent |
+| Trade payables | `financial_detail` (`CDKT`) | Large chains use supplier credit; a sudden fall = suppliers tightening terms |
 | Receivables | `financial_detail` | Customer receivables growing fast = selling on credit, especially in traditional channels |
 
 ## 4. Nhóm đối chiếu bên ngoài

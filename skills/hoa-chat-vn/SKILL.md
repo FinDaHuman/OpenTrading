@@ -19,6 +19,10 @@ through the fertiliser price cycle, **China's export policy** (the global supply
 variable), the export share (whether a company tracks domestic or international prices), and
 gas input costs.
 
+Separate the **product groups** first, each with its own price, inputs and policy: nitrogen (urea) from gas or
+coal; phosphate and NPK, sold mainly at home by crop season; the phosphorus chain (yellow phosphorus,
+phosphoric acid and derivatives); basic chemicals (caustic soda, chlorine, acids) sold to industry.
+
 One easy misreading sits in the driver table below (**historical-cost inventory**): when market prices
 jump, margins stay supported for a few quarters by inventory bought before the rise, then reverse —
 one good quarter's margin says nothing about capability yet.
@@ -42,6 +46,9 @@ one good quarter's margin says nothing about capability yet.
 | China's export policy | China is a large supplier; export controls (quotas, bans, duties) make global prices jump, and the reverse | Export policy: `news_market`/`web_search`, stating the text/notice + date |
 | Export share | A company exporting most of its output tracks international prices and trade; a domestic seller's profit is set by domestic market prices and demand (the state does not set fertiliser prices; nitrogen, DAP and NPK are only on the price-stabilisation list) | Export share: company disclosures via `news_symbol`/`web_search`; fertiliser exports by product group: Customs figures with a clear period and unit, via `web_search` |
 | Gas input costs | Gas is the large cost of gas-based urea plants; contract length differs by plant (yearly or multi-year) and the price is usually tied to fuel oil/Brent, so oil up = input cost up. Coal-based plants follow coal instead | Contract terms: company disclosures via `news_symbol`/`web_search`; direction: Brent in `yf_commodities` (it has no fuel oil, and Henry Hub is not the VN gas price); cost of goods in `financial_detail` |
+| Phosphorus chain | Costs sit in apatite ore, electricity, coke and sulphur; ore supply (own mine or bought) and the export duty decide an exporter's margin. The duty can rise by steps set in advance: use the rate in force on the date analysed | Export duty schedule and ore supply: `web_search` (text + effective date); reference prices: `web_search` (grade, place, date); costs: company disclosures via `news_symbol` |
+| VAT on fertiliser | Whether fertiliser sales are taxed decides if the producer's input VAT is deductible or becomes cost, so a change of rule moves cost of goods and the position against imports | Text in force (number + effective date): `web_search`; deductible VAT: `financial_detail` (`CDKT`) |
+| Season and plant outages | Sales follow the crop seasons; a maintenance stop cuts a whole quarter's volume | Season, crop prices: `web_search`; outages, output: `news_symbol` |
 | Domestic demand | Domestic demand is sensitive to farm prices (e.g. rice); weak when farm prices are low or fertiliser prices high | Domestic demand: `news_market`, `vs_categories` → `vs_indicator_data` (look up the agricultural-production category codes that exist; if missing, use the statistics office's releases) |
 | Historical-cost inventory | Inventory bought before a rise supports margins for 1–2 quarters, then reverses — the "window" label of the whole sector | Inventory in `financial_detail`; export share in company disclosures |
 
@@ -49,7 +56,7 @@ one good quarter's margin says nothing about capability yet.
 
 **Bước 1: Identify the segment mix (in parallel).**
 
-`symbol_lookup` · `vn_company` (segments: fertiliser / chemicals / trading) ·
+`symbol_lookup` · `vn_company` (product groups: urea / phosphate–NPK / phosphorus chain / basic chemicals / trading) ·
 `financial_detail` (revenue by segment). State the export share if disclosed.
 
 **Bước 2: Both ends of the price (in parallel).**
@@ -66,6 +73,8 @@ costs. Read 4 consecutive quarters to tell a "price window" from durable capabil
 **Bước 4: Expectation anchor + position in the group.**
 
 `planned_targets` · `peer_compare` (overview metrics within the group) · `analyst_consensus`.
+
+`financial_detail` returns one `statement` per call (default `KQKD`): `CDKT` for inventory, receivables, borrowings and advances, `LCTT` for depreciation and cash flow, `TM` for notes; a row without a name cannot be used, take that item from company disclosures. `news_market` is the latest-news feed and cannot be searched by topic or ticker: sector figures, prices and legal texts come from `web_search` (source + date).
 
 Tool check: `peer_compare` uses only the overview keys actually present in the result (such as P/E, P/B, ROE); its `metrics` parameter does not create extra metrics. Margins, volumes, costs, inventory and operating KPIs must be read from each peer's `financial_detail` for the same period; if missing, look up company disclosures via `news_symbol`/`web_search`, stating the source, formula and period. With missing data, leave it blank and do not rank.
 
@@ -107,7 +116,7 @@ The chemicals/fertiliser indicator table + how to read it is in `references/kpi.
 
 Chemicals/fertilisers are a price cycle: value with **EV/EBITDA through the cycle** and **P/B against
 the sector's own troughs**, never P/E at the peak of a price window. Mark an unusual profit period clearly
-as a "price window" and do not extrapolate it. Anchor expectations with `planned_targets` and
+as a "price window" and do not extrapolate it. Compare only within the same product group. Cash-rich companies: separate deposit interest from operating profit, it can hold profit up after the window closes. Anchor expectations with `planned_targets` and
 `analyst_consensus`.
 
 ## Rủi ro đặc thù
@@ -121,13 +130,16 @@ as a "price window" and do not extrapolate it. Anchor expectations with `planned
   demand.
 - **Domestic price risk**: domestic sellers do not capture the full international
   window (competition, farm demand).
+- **Input–output divergence risk**: oil-linked gas costs rise while urea prices fall.
+- **Tax and duty risk**: a change in VAT or export duty moves costs and selling prices from its effective date.
+- **Outage and ore-supply risk**: a maintenance stop or a closed mine cuts volume or forces dearer purchases.
 
 ## Ranh giới
 
 - Do not determine the market phase or infer "hoá chất sắp dẫn sóng" → `dinh-vi-chu-ky-vn`.
 - Do not pick tickers to buy/sell → `phan-tich-chuyen-sau-1-ma`.
-- Never infer Chinese export policy from memory: look up current notices/texts,
-  stating the source and date.
+- Never state Chinese export policy, VAT, export duties or contract gas prices from memory: look up current
+  notices/texts, stating the source and date.
 - Never use international prices in place of the company's actual selling prices — the prices in the company's
   disclosures are the ones that apply.
 

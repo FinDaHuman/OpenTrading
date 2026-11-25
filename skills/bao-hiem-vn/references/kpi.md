@@ -10,6 +10,7 @@ State the accounting standard, unit, period, gross or net of reinsurance, and th
 | KPI | How to read |
 |---|---|
 | New premiums, APE, renewal premiums | Compare only under the same APE definition and period; total premium revenue does not replace new premiums |
+| New vs total premiums | Total premiums rising while new premiums fall = the old book is still collecting, the new source is weak |
 | Persistency | Number/value of policies in force / the original cohort for the exact month 13/25/... and the insurer's disclosure; never infer it from premium revenue |
 | Acquisition costs | Commissions and distribution costs for the matching premium set; never compare loosely with total premiums |
 | Reserves/liabilities and solvency margin | Read the interest-rate and lapse assumptions and the legal scope; rising reserves are not by themselves good quality |
@@ -19,6 +20,7 @@ State the accounting standard, unit, period, gross or net of reinsurance, and th
 | KPI | Formula and conditions |
 |---|---|
 | Earned premiums | Premiums written in the period − the increase in the unearned premium reserve, per the report's definition; separate direct, assumed and ceded premiums |
+| Premiums by line | Motor, health, property–engineering, marine, from notes or company disclosures: which line drives growth and which one drives claims |
 | Loss ratio | Incurred claims (paid + change in claim reserves) / earned premiums on the same gross or net basis; never use cash paid in place of incurred |
 | Expense ratio | Allocated acquisition and underwriting admin costs / earned premiums on the same basis; if the insurer uses written premiums, say so and never add it directly to a ratio on a different basis |
 | Combined ratio | Loss ratio + expense ratio when they share a denominator and scope. Below 100% usually shows an underwriting profit before investment, not consolidated net profit |

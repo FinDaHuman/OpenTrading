@@ -13,6 +13,9 @@
 | Equity | `financial_detail` | The denominator for leverage. Stock dividends usually reclassify within equity and do not by themselves cut total equity; check actual equity movements |
 | Leverage | Computed with `shell` (a command made only of arithmetic): loans / equity (state that it is derived) | Compare with the regulatory cap in force. This indicates **remaining room for growth**, not quality |
 | Receivables | `financial_detail` | Receivables from margin trades growing faster than loans = receivables piling up |
+| Impairment of loans and collateral | `financial_detail` (`CDKT`) | Rising fast = margin loans hard to recover |
+| Short-term borrowings, issued bonds | `financial_detail` (`CDKT`) | The funding behind margin loans; growing faster than equity = leverage rising |
+| Average margin yield | Computed with `shell`: interest on loans / average loans; label it "tính từ" | An estimate; compare its direction with interest expense |
 
 ## 2. Nhóm doanh thu
 
@@ -21,6 +24,7 @@
 | Brokerage revenue | `financial_detail` | Fees are structurally compressed by zero-fee competition. Falling brokerage revenue does **not** mean the sector is worse |
 | Margin lending revenue | `financial_detail` | Read with loans and the average rate: revenue up while loans fall = higher rates, not volume |
 | Investment revenue | `financial_detail` | The most volatile business. Read 4 quarters and separate the realised recurring part |
+| FVTPL / AFS / HTM assets | `financial_detail` (`CDKT`) | Size and mix of the book: more shares = market-sensitive, more bonds/deposits = rate and credit risk |
 | Advisory revenue | `financial_detail` | Small but the most stable; grows with the IPO/ECM pipeline |
 | Weights of the 4 businesses | Computed with `shell` (one arithmetic-only command on figures from tool results): each business's revenue / total revenue; label it "tính từ" | The mix decides which group suffers in a falling market. Read 4 consecutive quarters before grouping |
 

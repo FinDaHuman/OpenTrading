@@ -4,7 +4,7 @@ description: "Phase/wave: use dinh-vi-chu-ky-vn. Analyses VN transport and logis
 match_text: "Pha/sóng: dùng skill chu kỳ. Phân tích ngành vận tải và logistics Việt Nam theo cước vận chuyển, cầu xuất khẩu, công suất cảng và chi phí nhiên liệu. Dùng khi hỏi xu hướng nhóm vận tải, công ty cảng hay cước vận chuyển."
 activation: auto
 requires_tools: [financial_detail, vs_xnk_detail]
-uses_tools: [financial_detail, vs_xnk_detail, financial_ratios, planned_targets, analyst_consensus, peer_compare, yf_commodities, news_symbol, news_market, symbol_lookup, vn_company]
+uses_tools: [financial_detail, vs_xnk_detail, financial_ratios, planned_targets, analyst_consensus, peer_compare, yf_commodities, news_symbol, news_market, symbol_lookup, vn_company, vn_forex_ohlcv]
 triggers:
   exclude_keywords: [đỉnh chu kỳ, giai đoạn phân phối, đầu phục hồi, giai đoạn nào, dẫn sóng, pha nào, chu kỳ ngành, sóng ngành, luân chuyển ngành, pha thị trường, chu kỳ thị trường, giai đoạn thị trường, sóng tiếp theo, cuối sóng, giữa sóng, đầu sóng, bank dẫn, chứng dẫn, rotation, pha tiếp theo]
   keywords: [ngành vận tải, vận tải biển, cảng biển, cước vận chuyển, tàu chở container, luồng hàng hoá, công ty cảng, mảng logistics, hãng hàng không, vận tải hàng không]
@@ -19,8 +19,8 @@ route freight rates, export demand (the leading signal for throughput), port cap
 durable margins sit), and **the share of fixed-rate contracts** — which decides who really
 benefits from a freight wave and who is locked into prices and misses it.
 
-The second factor: **segments**. Deep-water ports, intra-Asia container shipping and oil
-tankers are three different cycles — record-high tanker rates can come with a squeezed
+The second factor: **segments**. Deep-water ports, intra-Asia container shipping, oil
+tankers and dry bulk, airlines and logistics are different cycles — record-high tanker rates can come with a squeezed
 container business.
 
 ## Khi nào dùng
@@ -43,6 +43,8 @@ container business.
 | Port capacity | New berths running below capacity push up fixed costs; with enough utilisation, tariffs hold. Container handling, berth and towage tariffs move only inside the minimum–maximum band set by the Ministry of Construction, so a band change is itself a revenue driver. This is the sector's most durable source of margin | Berth utilisation + the tariff-band decision in force (number + date): `news_market`/`web_search`; for the ticker, revenue/average tariff in `financial_detail` |
 | Rate-locking share | Long-term periodic shipping contracts smooth income: a high locked share means a freight wave does not reach revenue at once | Fixed-contract share: `news_market`/`web_search`; indirect signs in revenue/volume in `financial_detail` |
 | Fuel | Fuel and port costs squeeze margins of **shipping and airlines**; ports are little affected. The direction differs by segment: tanker rates follow tonne-miles and ship supply, not the oil price level (they can jump while oil falls); airlines get squeezed (fuel is one of their largest costs, not the majority) and domestic basic-economy fares sit under a state ceiling, which limits the pass-through | Fuel prices: `yf_commodities` by cycle |
+| Airlines | Passengers (international, domestic), aircraft actually in service and fares set revenue; fuel and USD aircraft leases/debt set costs, so a weaker dong squeezes margins | Passengers by period: `web_search`; fleet, fares: `news_symbol`; USD/VND: `vn_forex_ohlcv`; borrowings: `financial_detail` (`CDKT`) |
+| Ship and berth supply | New ships or berths arriving together cut rates and utilisation; depreciation and interest start before volume | Order book, new berths: `web_search`; ticker's own: `news_symbol`, assets under construction in `financial_detail` (`CDKT`) |
 | Trade policy | Tariffs redirect routes: intra-Asia routes are less affected than routes to the US | Tariffs/policy: `news_market`/`web_search` |
 
 ## Các bước
@@ -67,6 +69,8 @@ and delivery / airlines) · `financial_detail` (revenue by segment). State the s
 
 `planned_targets` · `analyst_consensus` · `peer_compare` (compare **within the same
 segment** — comparing ports with container shipping is forbidden).
+
+`financial_detail` returns one `statement` per call (default `KQKD`): `CDKT` for inventory, receivables, borrowings and advances, `LCTT` for depreciation and cash flow, `TM` for notes; a row without a name cannot be used, take that item from company disclosures. `news_market` is the latest-news feed and cannot be searched by topic or ticker: sector figures, prices and legal texts come from `web_search` (source + date).
 
 Tool check: `peer_compare` uses only the overview keys actually present in the result (such as P/E, P/B, ROE); its `metrics` parameter does not create extra metrics. Margins, volumes, costs, inventory and operating KPIs must be read from each peer's `financial_detail` for the same period; if missing, look up company disclosures via `news_symbol`/`web_search`, stating the source, formula and period. With missing data, leave it blank and do not rank.
 
@@ -110,8 +114,8 @@ The transport indicator table + how to read it is in `references/kpi.md`.
 ## Định giá theo đặc thù ngành
 
 Value transport **by segment**: ports on a steadier P/E (revenue under
-long-term contracts), container shipping on cyclical EV/EBITDA (never P/E at the
-rate peak). Anchor expectations with `planned_targets` and `analyst_consensus`. With rates
+long-term contracts), container and bulk shipping on cyclical EV/EBITDA and P/B against fleet value (never P/E at the
+rate peak), airlines on EV/EBITDA because lease debt is large. Anchor expectations with `planned_targets` and `analyst_consensus`. With rates
 at a cycle peak every multiple looks cheap — state the position in the loop before comparing.
 
 ## Rủi ro đặc thù
@@ -123,6 +127,8 @@ at a cycle peak every multiple looks cheap — state the position in the loop be
 - **Trade-policy risk**: tariffs redirect routes and volumes, with uneven effects
   across companies.
 - **Fuel risk**: squeezes shipping margins before rates can adjust.
+- **FX risk**: USD aircraft leases and ship loans cost more when the dong weakens.
+- **Oversupply risk**: ships or berths delivered together lower rates for everyone; a large line can also move its call to another port.
 - **Mixed-segment risk**: a company with both ports and ships gives a consolidated figure
   that matches neither cycle.
 

@@ -12,8 +12,9 @@
 | Borrowings | `financial_detail` | The 4–8 quarter trend. Growing faster than equity = leverage widening |
 | Issued bonds | `financial_detail` | Read with the (external) issuance coupon: fast growth in **expensive** debt is a leading signal, not a lagging one |
 | Equity | `financial_detail` | The denominator for leverage against the regulatory ceiling |
-| Net interest cost | `financial_detail` | Growing faster than total debt = the average rate is rising |
+| Net interest cost | `financial_detail` | Growing faster than total debt = the average rate is rising; part of the interest may be capitalised into projects, so it can look lower than it is |
 | Cash received from customers | `financial_detail` | Cheap long-term advances: steady growth is support; a fall signals slow sales before recognised revenue is affected |
+| Cash vs debt due in 4 quarters | `financial_detail` (`CDKT`) + bond schedule from disclosures | Debt due above cash and confirmed sources = refinancing pressure |
 
 ## 2. Nhóm chất lượng bán hàng
 
@@ -22,6 +23,8 @@
 | Pre-sales (contracted in the period) | Company disclosures; `planned_targets` is only the plan | Read with gross margin: pre-sales up + margin down = growth through price cuts |
 | Unrecognised contract backlog | Company disclosures/notes | Not the same as buyer advances or accounting unearned revenue; track handovers and cancellations |
 | Accumulated work in progress | `financial_detail` | The basis for profit at handover. Compare with unrecognised revenue to see whether the stage is long or short |
+| Completed unsold stock | Company disclosures (`CDKT` gives only total inventory) | Rising = slow sales |
+| Operating cash flow | `financial_detail` (`LCTT`) | Compare with revenue: sales that do not turn into cash |
 | Real-estate gross margin | `financial_detail` | The sector's quality metric. Margin falling while revenue rises = competing supply or discounts |
 
 ## 3. Nhóm phân khúc
@@ -29,7 +32,7 @@
 | Segment | What to read | Compare with |
 |---|---|---|
 | Commercial housing | Pre-sales, margin, accumulated work in progress, borrowing costs | The same housing-segment group |
-| Industrial | New leased area, leased area, average rent, occupancy | Industrial-park peers in the same region (north / south) |
+| Industrial | New leased area, leased area, average rent, occupancy, clean land bank, unearned revenue from prepaid land leases | Industrial-park peers in the same region (north / south) |
 | Retail – services | Service revenue, occupancy, operating costs | The retail group; also read `tieu-dung-ban-le-vn` |
 
 ## 4. Nhóm đối chiếu bên ngoài

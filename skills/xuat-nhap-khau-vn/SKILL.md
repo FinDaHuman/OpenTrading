@@ -19,7 +19,7 @@ is one number, but inside it product groups run on different cycles
 
 1. **Tariffs by their actual scope** — rates can differ by origin, product code/group,
    destination market and effective date. Base/reciprocal tariffs, anti-dumping,
-   countervailing duties, sector measures and exemptions can interact; check the stacking
+   countervailing duties, sector measures, exemptions and origin/transshipment rules can interact; check the stacking
    rules in the text; never assume the same rate for every partner.
 2. **The global technology cycle** — electronics and components have their own cycle, not moving
    with textiles.
@@ -123,6 +123,10 @@ Anchor expectations with `planned_targets` and `analyst_consensus`.
 - **Thematic tariff risk**: exemption lists change with policy rounds; non-exempt
   groups lose price advantage against exempt competitors.
 - **Order risk**: small agricultural/seafood exporters are prone to cancelled orders and investigations.
+- **Origin risk**: goods with a high share of imported inputs can face a different rate under origin or
+  transshipment rules.
+- **Carbon border risk**: steel, aluminium, cement and fertilisers sold to the EU carry a carbon cost; check the rule and
+  product scope in force.
 - **Technology-cycle risk**: electronics jump during growth, but also fall sharply
   when the replacement cycle stalls.
 - **Exchange-rate risk**: imported raw-material costs and export value move in opposite
@@ -138,6 +142,7 @@ Anchor expectations with `planned_targets` and `analyst_consensus`.
 - Never infer tariff rates from memory without looking them up: tariffs are a policy variable; state
   the source and text date.
 - Never mix trade totals with expectations for a specific product group.
+- Never mix foreign investors' flows on the stock exchange with FDI: two different things.
 
 ## Giới hạn
 

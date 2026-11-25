@@ -16,6 +16,9 @@ adopt Semantic Versioning when it exposes a stable public API.
 - Skill facts (#340): the valuation skill no longer expects a price range or a DCF from `valuation_run` and reads the
   quarterly P/E, P/B history; airline fuel share, tanker rates vs the oil price, the state band on port tariffs,
   fertiliser pricing and the gas contracts of urea plants are corrected.
+- Sector content dropped when two branches were joined on 2026-10-21 is back in the sector skills (#340): gas and
+  petroleum distribution, the phosphorus chain with its export duty, VAT on fertiliser, airlines, renewables, telecom,
+  retail segments, steel production routes, and the limits of `financial_detail` and `news_market`.
 
 ## [0.5.0] — 2026-11-24
 

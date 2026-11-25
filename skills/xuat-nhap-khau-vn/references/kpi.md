@@ -12,6 +12,8 @@ State the period and unit, separate volume from value, and preliminary from offi
 |---|---|
 | Electronics, components, equipment | Customs/statistics office commodity statistics; cross-check orders, prices and output. Never assume electronics are tariff-exempt |
 | Textiles, footwear, handicrafts | Commodity statistics for the same period; check seasonality and demand. Never assume this group moves sideways or is not exempt |
+| Wood furniture | Housing market of the importing country; sector measures and anti-dumping cases |
+| Steel, aluminium, cement, fertilisers | Commodity prices; sector duties; the EU carbon border charge |
 | Agriculture, forestry, seafood | Output, unit prices, quarantine, quotas and trade measures by group |
 | Equipment/machinery imports | Commodity statistics; a rise may come from new investment, replacement or re-exports. Projects and progress are needed to confirm capacity |
 | Component/raw-material imports | Commodity statistics; a rise may come from prices, stockpiling or production. Never infer new orders/capacity from rising imports alone |
