@@ -1,6 +1,6 @@
 # Playbook 4 pha + ma trận pha→mảng (số tra tool, file giữ logic)
 
-> The suggestions here are GROUPS (with hit rates looked up from `cycle_chains`): no stock picking, no buy/sell rules.
+> The suggestions here are GROUPS (with hit rates looked up from `cycle_chains`): ticker picks and buy/sell calls come from analysing the tickers inside a group.
 
 ## 1. Định nghĩa 4 pha
 
