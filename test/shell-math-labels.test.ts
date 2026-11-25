@@ -516,22 +516,15 @@ test.each([...ENGINES])("the parser of %s sees only arithmetic and labels in wha
 // ── running ────────────────────────────────────────────────────────────────
 
 test.each([...ENGINES])("%s prints labels in the invariant culture, also when the user's is vi-VN", async (kind, engine) => {
-  const commands = OK.map(([c]) => c)
-  const outs: string[] = []
-  for (let i = 0; i < commands.length; i += 4)
-    outs.push(
-      ...(await Promise.all(
-        commands.slice(i, i + 4).map(async (command) => {
-          const args = shellArgs({ kind, path: engine }, command)
-          const script = `[System.Threading.Thread]::CurrentThread.CurrentCulture='vi-VN'\n${Buffer.from(args.at(-1)!, "base64").toString("utf16le")}`
-          const proc = Bun.spawn([...args.slice(0, -1), Buffer.from(script, "utf16le").toString("base64")], { stdout: "pipe", stderr: "pipe" })
-          const out = await new Response(proc.stdout).text()
-          expect(await proc.exited, `${command}\n${out}`).toBe(0)
-          return out
-        }),
-      )),
-    )
-  OK.forEach(([command, expected], i) => expect(outs[i], command).toContain(expected))
+  // One command made of them all (a PowerShell start each took 13 s in CI).
+  const command = OK.map(([c]) => c).join("\n")
+  expect(mathOnlyCommand(command, PS)).toBe(true)
+  const args = shellArgs({ kind, path: engine }, command)
+  const script = `[System.Threading.Thread]::CurrentThread.CurrentCulture='vi-VN'\n${Buffer.from(args.at(-1)!, "base64").toString("utf16le")}`
+  const proc = Bun.spawn([...args.slice(0, -1), Buffer.from(script, "utf16le").toString("base64")], { stdout: "pipe", stderr: "pipe" })
+  const lines = (await new Response(proc.stdout).text()).split(/\r?\n/)
+  expect(await proc.exited, lines.join("\n")).toBe(0)
+  for (const [c, expected] of OK) expect(lines.some((line) => line.startsWith(expected)), `${c}\n${lines.join("\n")}`).toBe(true)
 }, 60_000)
 
 // ── the hint ───────────────────────────────────────────────────────────────
