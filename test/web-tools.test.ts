@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, expect, test } from "bun:test"
+import { afterAll, beforeEach, expect, spyOn, test } from "bun:test"
 import { mkdtemp, rm } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
@@ -307,6 +307,65 @@ test("hosted MCP failures leave DuckDuckGo available", async () => {
   })
   expect(calls).toEqual(["exa", "parallel", "duckduckgo"])
   expect(result).toContain("example.com/news")
+})
+
+/** Runs a search on a fake clock: how long each backend takes (ms, cut at its budget) before it answers or fails. */
+async function timedSearch(query: string, backends: Record<string, { takes: number; hits?: boolean }>, keyed: string[] = []) {
+  const start = Date.now()
+  let now = start
+  let lastBudget = 0
+  const calls: { name: string; at: number; budget?: number }[] = []
+  const clock = spyOn(Date, "now").mockImplementation(() => now)
+  const timeout = spyOn(AbortSignal, "timeout").mockImplementation((ms) => {
+    lastBudget = ms
+    return signal()
+  })
+  const take = (name: string, budget?: number) => {
+    const { takes, hits } = backends[name]!
+    calls.push({ name, at: now - start, ...(budget === undefined ? {} : { budget }) })
+    now += Math.min(takes, budget ?? takes)
+    if (!hits || (budget !== undefined && takes > budget)) throw new Error("timeout")
+    return [{ url: `https://example.com/${name}` }]
+  }
+  try {
+    const result = await runSearch({ query }, signal(), {
+      native: async () => undefined,
+      hostedEnabled: async () => true,
+      hosted: async (provider) => take(provider, lastBudget),
+      backends: () => [...keyed, "duckduckgo"].map((name) => ({ name, run: async () => take(name) })),
+    })
+    return { calls, result }
+  } finally {
+    timeout.mockRestore()
+    clock.mockRestore()
+  }
+}
+
+test("an Exa timeout leaves half the hosted budget to Parallel; a fast failure leaves it nearly all", async () => {
+  const slow = await timedSearch("exa uses its share", { exa: { takes: 60_000 }, parallel: { takes: 1_000, hits: true } })
+  expect(slow.calls).toEqual([{ name: "exa", at: 0, budget: 12_500 }, { name: "parallel", at: 12_500, budget: 12_500 }])
+  expect(slow.result).toContain("example.com/parallel")
+  const fast = await timedSearch("exa refuses at once", { exa: { takes: 500 }, parallel: { takes: 20_000, hits: true } })
+  expect(fast.calls).toEqual([{ name: "exa", at: 0, budget: 12_500 }, { name: "parallel", at: 500, budget: 24_500 }])
+  expect(fast.result).toContain("example.com/parallel")
+})
+
+test("both hosted searches timing out still leave DuckDuckGo its reserve, even after a slow keyed backend", async () => {
+  const none = { exa: { takes: 60_000 }, parallel: { takes: 60_000 }, duckduckgo: { takes: 1_000, hits: true } }
+  const plain = await timedSearch("both hosted time out", none)
+  expect(plain.calls.map((c) => [c.name, c.at])).toEqual([["exa", 0], ["parallel", 12_500], ["duckduckgo", 25_000]])
+  // The hosted clock starts at the first hosted call (30 s in) and ends 5 s before the search's own limit.
+  const late = await timedSearch("slow keyed backend first", { ...none, tavily: { takes: 30_000 } }, ["tavily"])
+  expect(late.calls).toEqual([
+    { name: "tavily", at: 0 },
+    { name: "exa", at: 30_000, budget: 5_000 },
+    { name: "parallel", at: 35_000, budget: 5_000 },
+    { name: "duckduckgo", at: 40_000 },
+  ])
+  expect(late.result).toContain("example.com/duckduckgo")
+  // Nothing left for the hosted pair: neither is called.
+  const spent = await timedSearch("keyed backend uses it all", { ...none, tavily: { takes: 41_000 } }, ["tavily"])
+  expect(spent.calls.map((c) => c.name)).toEqual(["tavily", "duckduckgo"])
 })
 
 test("cancelling a hosted search does not start another backend", async () => {
