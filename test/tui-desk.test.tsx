@@ -188,6 +188,44 @@ test("/desk: ctrl+p/ctrl+x act on the run and leave the filter alone; a plain p 
   }
 })
 
+test("/desk: an agent that answered without some sources says so in the list and in its own view (#325)", async () => {
+  const agent = (key: string, label: string) => ({ key, label, phase: "Thu thập", type: "phan-tich", status: "done" as const, requests: 2, tokens: { input: 10, output: 5 } })
+  setState("deskRuns", "dk-gaps01", {
+    id: "dk-gaps01",
+    playbook: "sang-loc",
+    version: "1",
+    args: {},
+    size: "small" as const,
+    status: "done" as const,
+    phases: [{ title: "Thu thập", total: 2, done: 2, failed: 0 }],
+    agents: [{ ...agent("k1", "FPT"), dataGaps: ["price_history", "financials"] }, agent("k2", "VCB")],
+    logs: [],
+    createdAt: Date.now() - 1000,
+    endedAt: Date.now(),
+    counters: { agents: 2, cached: 0, requests: 4, input: 20, output: 10 },
+    sessionId: undefined,
+  })
+  try {
+    await setup.mockInput.typeText("/desk")
+    setup.mockInput.pressEnter()
+    let frame = await setup.waitForFrame((f) => f.includes("Ultradesk · dk-gaps01") && f.includes("phan-tich · VCB"))
+    show(frame)
+    const row = (label: string) => frame.split("\n").find((r) => r.includes(`phan-tich · ${label}`))!
+    expect(row("FPT")).toContain("! 2 nguồn lỗi")
+    expect(row("VCB")).not.toContain("nguồn lỗi")
+    setup.mockInput.pressEnter()
+    frame = await setup.waitForFrame((f) => f.includes("esc quay lại"))
+    show(frame)
+    expect(frame).toContain("! 2 nguồn lỗi, câu trả lời của agent thiếu dữ liệu từ: price_history, financials")
+    setup.mockInput.pressEscape()
+    await setup.waitForFrame((f) => f.includes("↑↓ chọn agent"))
+  } finally {
+    setup.mockInput.pressEscape()
+    await setup.waitFor(() => state.dialog === undefined)
+    setState("deskRuns", reconcile({}))
+  }
+})
+
 test("ultradesk card: ←→ change the size and its cost, a large run warns, enter runs with what was chosen", async () => {
   const estimates = { small: { agents: 6, requests: 36 }, medium: { agents: 14, requests: 84 }, large: { agents: 46, requests: 276 }, unrestricted: { agents: 46, requests: 276 } }
   const asking = runtime.deskApprovals.ask({
