@@ -15,8 +15,8 @@ version: 1.0.0
 
 Vietnamese power has **one structural point that decides everything else**: most plant revenue rests on power purchase agreements with the power buyer; verify the contract mechanism and any direct power purchase arrangement that applies to each project. So the key variable is **the electricity pricing and contract mechanism**, together with real demand/dispatch: retail prices that do not cover costs can create financial pressure on the buyer and payment risk. Price adjustments can ease that pressure, but the plant's actual collections must still be checked. Expecting demand growth while ignoring this variable misreads the whole sector.
 
-The second factor: **the source type**. Hydropower, gas, coal and grid equipment are
-four entirely different cycles, and hydrology (reservoir levels) decides which group gets
+The second factor: **the source type**. Hydropower, gas, coal, renewables and grid equipment are
+five entirely different cycles, and hydrology (reservoir levels) decides which group gets
 de-rated in the dry season.
 
 ## Khi nào dùng
@@ -39,6 +39,7 @@ de-rated in the dry season.
 | Generation mix | The generation mix by source type decides which group is dispatched first. Falling water raises the share of thermal power running as backup | Generation mix by period: `news_market` (sector reports), otherwise sourced `web_search` |
 | Hydrology | Reservoir levels decide hydropower output and the backup dispatch order. A long dry season de-rates the hydropower group for several periods | Reservoir levels/operations: `news_market`, stating the period and region |
 | Grid development plans | Decide future capacity scale and reserve margins; plan revisions change which projects get capital priority | Plan texts + revisions: `news_market`/`web_search`, stating the text + date |
+| Renewable pricing and curtailment | Revenue depends on which price applies to each project (old feed-in, generation price frame, direct purchase) and on how much output the grid curtails | Price frame or mechanism in force (number + date): `web_search`; project contract, curtailed output: `news_symbol` |
 | New load | Data-centre load (flat) and EVs reshape the demand curve: favouring baseload and transmission | New-load expectations: `news_market`/`web_search` |
 | Input fuel | Coal, imported gas and the exchange rate decide thermal costs; imported gas is more FX-sensitive than domestic coal | Reference natural gas: `yf_commodities`; thermal coal/LNG and contract prices: dated published sources via `web_search`, with unit and grade; exchange rate: `vn_forex_ohlcv` if context is needed |
 
@@ -65,6 +66,8 @@ incentive pricing mechanisms).
 
 `planned_targets` · `analyst_consensus` · `peer_compare` (compare within the same source
 group — the rule is in §Ranh giới, not repeated here).
+
+`financial_detail` returns one `statement` per call (default `KQKD`): `CDKT` for inventory, receivables, borrowings and advances, `LCTT` for depreciation and cash flow, `TM` for notes; a row without a name cannot be used, take that item from company disclosures. `news_market` is the latest-news feed and cannot be searched by topic or ticker: wherever this skill names it for sector figures, prices or legal texts, look them up with `web_search` (source + date) and keep `news_market` for the day's headlines.
 
 Tool check: `peer_compare` uses only the overview keys actually present in the result (such as P/E, P/B, ROE); its `metrics` parameter does not create extra metrics. Margins, volumes, costs, inventory and operating KPIs must be read from each peer's `financial_detail` for the same period; if missing, look up company disclosures via `news_symbol`/`web_search`, stating the source, formula and period. With missing data, leave it blank and do not rank.
 
@@ -111,7 +114,7 @@ The power indicator table + how to read it is in `references/kpi.md`.
 Value power **by source group**; there is no single multiple pair for the whole sector: the
 thermal group in the dry season and the hydropower group in the same period are two different cycles. Use
 P/E and P/B within **the same source group** (the comparison rule is in §Ranh giới), with cash flow from
-receivables to judge revenue quality. Anchor expectations with `planned_targets` (output/revenue
+receivables to judge revenue quality. Hydropower and fully depreciated plants: read P/E with dividends over several years (a wet year makes P/E look low); new, heavily indebted plants: EV/EBITDA and contract-life cash flow. Anchor expectations with `planned_targets` (output/revenue
 plans) and `analyst_consensus`. For plants that have not yet signed a power purchase
 agreement: state that the revenue is not yet certain.
 
@@ -121,6 +124,7 @@ agreement: state that the revenue is not yet certain.
   into receivables.
 - **Hydrology risk**: a long dry season de-rates the hydropower group for several periods in a row.
 - **Imported-fuel risk**: imported gas and the exchange rate decide gas-power costs.
+- **Renewable-price risk**: a project's purchase price can be reviewed, and curtailment cuts output.
 - **Dispatch risk**: a high reserve margin creates competition, but each plant's output also depends on variable costs, the grid, technical factors and contracts.
 - **Contracting risk**: projects without a signed purchase agreement have uncertain revenue,
   even with the infrastructure finished.

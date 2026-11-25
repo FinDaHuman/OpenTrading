@@ -13,8 +13,9 @@ version: 1.0.0
 
 # Công nghệ Việt Nam — framework phân tích
 
-Vietnamese technology is an **outsourced engineering (IT services)** sector, not a consumer-product
-sector. Its drivers are therefore signed orders, contract quality
+Vietnamese technology is mainly an **outsourced engineering (IT services)** sector, not a consumer-product
+sector; **telecom and digital infrastructure** (internet, towers, data centres) is a separate loop read by
+subscribers, revenue per subscriber, capital spending and depreciation. Its drivers are therefore signed orders, contract quality
 (long terms, large orders), the split between foreign and domestic markets, and staff
 utilisation. This skill reads the sector through those four things, **not through stock prices
 or international tech indices**.
@@ -43,6 +44,7 @@ exactly the period it is strong.
 | Foreign vs domestic split | Foreign depends on international clients' cycles (Japan/EU/US); domestic depends on e-government and businesses. Two different cycles | Domestic/foreign segments in `financial_detail` or company disclosures |
 | Contract quality | Large orders (above a threshold) with 2–3 year terms give more durable revenue than small one-offs | Large-order share + terms: the company's own disclosures via `news_symbol`/`company_events` |
 | Staff and productivity | Utilisation = billable hours / available hours per the company's definition; a low rate may come from hiring ahead of contracts, training or a lack of work, and does not by itself prove an outdated structure | Utilisation from company disclosures; revenue per average employee from `financial_detail` and staffing disclosures is only a productivity indicator, not a substitute for utilisation |
+| Telecom, digital infrastructure | Subscribers × revenue per subscriber set revenue; network and data-centre spending comes first and depreciation stays, so cash flow says more than signed orders | Subscribers, prices: `news_symbol`/`web_search`; capital spending, depreciation: `financial_detail` (`LCTT`) |
 | AI input costs | Computers and infrastructure get dearer with global AI demand, pushing up delivery costs | `yf_commodities` (the metals cycle if context is needed) + `news_market` |
 
 ## Các bước
@@ -68,6 +70,8 @@ per average employee for the same period with `shell` (show the formula and inpu
 
 `planned_targets` (revenue/profit plan) · `peer_compare` (overview metrics within the group) · `analyst_consensus`.
 
+`financial_detail` returns one `statement` per call (default `KQKD`): `CDKT` for inventory, receivables, borrowings and advances, `LCTT` for depreciation and cash flow, `TM` for notes; a row without a name cannot be used, take that item from company disclosures. `news_market` is the latest-news feed and cannot be searched by topic or ticker: wherever this skill names it for sector figures, prices or legal texts, look them up with `web_search` (source + date) and keep `news_market` for the day's headlines.
+
 Tool check: `peer_compare` uses only the overview keys actually present in the result (such as P/E, P/B, ROE); its `metrics` parameter does not create extra metrics. Margins, volumes, costs, inventory and operating KPIs must be read from each peer's `financial_detail` for the same period; if missing, look up company disclosures via `news_symbol`/`web_search`, stating the source, formula and period. With missing data, leave it blank and do not rank.
 
 ## Cây quyết định công ty công nghệ đang được tiếp sức hay siết
@@ -82,6 +86,7 @@ Q1. How are signed orders and the backlog?
 Q2. Which segment drives revenue/profit?
 ├─ Foreign → Q3 (international)
 ├─ Domestic → Q4 (domestic)
+├─ Telecom/digital infrastructure → ★ "Đánh giá thuê bao, doanh thu mỗi thuê bao, chi đầu tư, khấu hao và dòng tiền tự do; không dùng hợp đồng ký mới cho mảng này"
 ├─ Mixed → consider Q3 and Q4 separately by the disclosed weights
 └─ Mix unclear → record missing, continue Q5
 
@@ -110,7 +115,7 @@ The tech indicator table + how to read it is in `references/kpi.md`.
 Value tech with **P/E** (its profits are steadier than commodity cycles) and **P/E
 on net profit from long-term signed orders** when margins are improving. Anchor expectations with
 `planned_targets` (the yearly revenue/profit plan) and `analyst_consensus`. Do not use
-peak P/E when profit depends on one large temporary order — state the profit quality.
+peak P/E when profit depends on one large temporary order — state the profit quality. Telecom and digital infrastructure: EV/EBITDA, because depreciation is large. Several loops in one company: value each and add them up, stating the assumptions.
 
 ## Rủi ro đặc thù
 
@@ -122,6 +127,8 @@ peak P/E when profit depends on one large temporary order — state the profit q
   drags down the whole foreign segment.
 - **Policy-driven domestic risk**: the domestic segment relies on e-government, sensitive to
   budgets.
+- **Client-currency risk**: a client market's currency weakening cuts revenue in dong without any change in orders.
+- **Wage risk**: competition for engineers raises costs before prices adjust.
 - **AI input-cost risk**: computer and infrastructure prices push costs up
   when the company builds its own infrastructure.
 

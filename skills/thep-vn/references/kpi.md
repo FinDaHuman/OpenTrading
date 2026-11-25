@@ -13,6 +13,7 @@
 | Cost of goods sold | `financial_detail` | Where raw-material prices sit. Growing faster than revenue = margins compressing |
 | Gross margin | `financial_detail` (or computed with `shell`, stated) | Read over consecutive quarters; one compressed quarter may be inventory timing, not deterioration |
 | Financial costs carrying inventory | `financial_detail` | Large inventory + high rates = heavy carrying costs, especially for imported raw materials |
+| EBITDA | Computed with `shell`: pre-tax profit + interest + depreciation (`LCTT`); state the formula | Input for EV/EBITDA |
 
 ## 2. Nhóm đầu vào
 
@@ -20,6 +21,8 @@
 |---|---|---|
 | Iron ore price | `web_search` (published sources with date, unit, grade) | An international reference price by cycle — state the period and that it is a reference, not a contract price |
 | Coking coal price | `web_search` (published sources with date, unit, grade) | More volatile than ore; often the main margin squeeze within half a year |
+| Scrap price | `web_search` (published sources with date, unit, grade) | The electric-furnace input |
+| Regional hot-rolled coil price | `web_search` (dated exchange/mill releases) | Selling price for coil makers, input cost for coated sheet and pipe mills: the same move helps one and squeezes the other |
 | International reference steel price | `web_search` (dated exchange/mill releases) | For internationally traded products; it does **not** replace domestic selling prices |
 
 ## 3. Nhóm khối lượng và công suất
@@ -29,6 +32,7 @@
 | Sales volume by group | `news_market` / mill reports | Separate domestic products from internationally traded ones — two price logics |
 | Capacity utilisation | `news_market` / mill reports | A new mill below capacity has low margins even with high revenue |
 | Raw-material inventory | `financial_detail` | Decides the cost lag: while high-priced inventory is unused, margins stay compressed |
+| Inventory days | Computed with `shell`: average inventory / quarterly cost of goods × 90; label it "tính từ" | High days bought near the price peak = margins still to be compressed |
 
 ## 4. Nhóm thương mại
 

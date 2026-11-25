@@ -41,7 +41,7 @@ this skill.
 | `chung-khoan-vn` | margin debt, brokerage leverage, the 4-business revenue mix |
 | `bat-dong-san-vn` | real-estate credit, the bond channel and maturity wall, housing vs industrial parks |
 | `thep-vn` | the ore–coking coal spread, the hot-rolled coil mix, steel trade defence |
-| `dau-khi-vn` | oil prices, shipping routes/tonne-miles, the 4 oil & gas business loops |
+| `dau-khi-vn` | oil prices, shipping routes/tonne-miles, the 5 oil & gas business loops |
 | `dien-luc-vn` | electricity prices and retail tariff reform, generation mix, hydrology, grid development plans |
 | `van-tai-vn` | route freight rates, port capacity, rate-locking share, export demand |
 | `hoa-chat-vn` | the urea/fertiliser price cycle, China's export policy, export share |

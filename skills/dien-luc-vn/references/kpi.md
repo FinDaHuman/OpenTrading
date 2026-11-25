@@ -13,6 +13,7 @@
 | Hydropower | Water levels and flow (hydrology) | The dry season cuts output, for several periods | The same hydropower group |
 | Thermal (coal) | Electricity prices + dispatch share + coal prices | When hydropower drops, thermal runs as backup → its share rises | The same thermal group |
 | Gas / LNG | Electricity prices + imported gas costs + the exchange rate | The most FX- and import-sensitive of the thermal groups | The same gas group |
+| Wind / solar | The price regime of each project + curtailment + wind/sun | Seasonal resource; curtailment when the grid is full | The same renewable group |
 | Transmission / equipment | Grid investment spending, plans | Follows the public-investment cycle, not the dry season | The same equipment group |
 
 ## 2. Nhóm dòng thu và công nợ
@@ -21,8 +22,10 @@
 |---|---|---|
 | Revenue | `financial_detail` | Read with output: is revenue up from prices or volume |
 | Receivables from the power buyer | `financial_detail` | **Where the sector's main risk sits**: growing faster than revenue signals checking collection quality; it does not by itself prove retail prices are the cause |
+| Receivable days | Computed with `shell`: average receivables / quarterly revenue × 90; label it "tính từ" | Compare 4–8 quarters |
 | Gross margin | `financial_detail` | Read by source group; the consolidated margin hides gaps between hydro/gas/thermal |
 | Financial costs | `financial_detail` | BOT projects with large borrowings: fixed interest costs before operation |
+| Depreciation, dividends paid | `financial_detail` (`LCTT`) | A plant past its depreciation shows higher accounting profit: check before comparing P/E |
 
 ## 3. Nhóm sản lượng
 

@@ -54,6 +54,8 @@ and rents). Reading it as one sector misreads both.
 `financial_detail`: borrowings, issued bonds, equity, net interest cost.
 `news_market`: sector credit, sector bond issuance, the maturity wall.
 
+`financial_detail` returns one `statement` per call (default `KQKD`): `CDKT` for inventory, receivables, borrowings and advances, `LCTT` for depreciation and cash flow, `TM` for notes; a row without a name cannot be used, take that item from company disclosures. `news_market` is the latest-news feed and cannot be searched by topic or ticker: wherever this skill names it for sector figures, prices or legal texts, look them up with `web_search` (source + date) and keep `news_market` for the day's headlines.
+
 **Bước 3: Sales quality + progress (in parallel).**
 
 `financial_detail`: buyer advances, work in progress; contracted sales/backlog from company disclosures if no separate line exists;
@@ -106,7 +108,7 @@ The real-estate indicator table + how to read each one is in `references/kpi.md`
 
 Value real estate with **P/B centred on the discount to book value** and
 **P/E on profit projected from the backlog with a clear method**, not only P/E on recognised profit — real-estate
-revenue is recognised by handover batch, so P/E jumps with progress. Never divide the price by backlog revenue and call it P/E; projected profit needs margins, progress and tax on a sound basis. A P/E must state **how much unrecognised revenue** comes with it. Anchor expectations with `planned_targets` (the
+revenue is recognised by handover batch, so P/E jumps with progress. Developers with a disclosed land bank can also be read by **revalued net asset value (RNAV)** per project: state the selling-price, progress and discount assumptions and their source; without them, do not compute it. Never divide the price by backlog revenue and call it P/E; projected profit needs margins, progress and tax on a sound basis. A P/E must state **how much unrecognised revenue** comes with it. Anchor expectations with `planned_targets` (the
 pre-sales/handover plan) and `analyst_consensus`. Compare **within the same
 segment**: comparing housing P/B with industrial is meaningless.
 
@@ -120,6 +122,7 @@ segment**: comparing housing P/B with industrial is meaningless.
   falls even as revenue rises.
 - **Approval-progress risk**: depends on periodically published land price tables and the approval
   chain; one delayed step pushes up financial costs.
+- **Foreign-capital risk (industrial)**: demand for land follows FDI and the trade policy of investors' home and target markets.
 - **Segment-divergence risk**: one "real-estate sector" number fails when housing and
   industrial move in opposite directions.
 

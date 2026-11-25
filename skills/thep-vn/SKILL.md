@@ -20,6 +20,9 @@ prices hold or are lost to imports. Reading finished-product prices without the 
 leads to the opposite conclusion: there have been periods of higher sales where falling prices and
 rising raw materials at once cut profit even as output rose.
 
+Name the **production route** first, it decides the input: blast furnace (iron ore, coking coal), electric
+furnace (scrap), coated sheet and pipe mills (hot-rolled coil bought in).
+
 ## Khi nào dùng
 
 - Use when: the user asks about steel-group trends, why selling more did not lift profit,
@@ -37,12 +40,12 @@ rising raw materials at once cut profit even as output rose.
 
 | Driver | Transmission channel | Read/verify with |
 |---|---|---|
-| Finished-product − raw-material spread | The spread is the selling price minus raw-material costs on the same unit; gross margin = (revenue − cost of goods) / revenue, not the same as the spread. Iron ore and coking coal are most of the cost of goods. Note: raw-material costs reach the reports **with a lag** through inventory and shipping time | Finished-product + ore/coal prices from mill, exchange or industry-body releases via `web_search`; same period, unit, grade and delivery terms; cross-check `financial_detail` |
+| Finished-product − raw-material spread | The spread is the selling price minus raw-material costs on the same unit; gross margin = (revenue − cost of goods) / revenue, not the same as the spread. Inputs follow the route: iron ore and coking coal for blast furnaces, scrap for electric furnaces, hot-rolled coil for coated sheet and pipe mills. Note: raw-material costs reach the reports **with a lag** through inventory and shipping time | Finished-product + ore/coal prices from mill, exchange or industry-body releases via `web_search`; same period, unit, grade and delivery terms; cross-check `financial_detail` |
 | Real volume | Production and capacity utilisation explain fixed costs spread per unit; never multiply output by utilisation again. A new mill below capacity has low margins even with high revenue | Output and utilisation: `news_market`/`web_search` (mill releases) + `financial_detail` (revenue, cost of goods) |
 | Trade defence | Anti-dumping/safeguard duties set a price wall for imports. Expiry or a scope change → immediate pressure on domestic prices | Trade-defence texts + changes: `news_market`/`web_search`, with source and date; imports by steel group from Customs/industry bodies via `web_search`, with clear period/unit |
 | Product mix | Construction steel serves domestic projects, priced with the construction season. Hot-rolled coil trades internationally, priced with the region and export orders — two different price logics | Product weights: mill releases in `news_market`; margins by segment in `financial_detail` |
 | Public investment demand | Public-investment disbursement drives demand for construction steel for infrastructure | Disbursement progress: `news_market`; system figures via `danh-gia-vi-mo-viet-nam` if the user needs depth |
-| Exports and destination tariffs | Exports are the outlet for surplus, but the first place anti-dumping investigations hit | Exports by steel group: Customs/industry bodies via `web_search`; investigation risk: `news_market` |
+| Exports and destination tariffs | Exports are the outlet for surplus, but the first place anti-dumping investigations hit and, in the EU, where the carbon border charge on steel applies | Exports by steel group: Customs/industry bodies via `web_search`; investigation risk: `news_market` |
 
 ## Các bước
 
@@ -65,6 +68,8 @@ imports) · `web_search` (steel exports by product group from Customs/industry b
 **Bước 4: Expectation anchor + position in the group.**
 
 `planned_targets` (the yearly plan) · `peer_compare` (overview metrics within the segment) · `analyst_consensus` (expectation anchor).
+
+`financial_detail` returns one `statement` per call (default `KQKD`): `CDKT` for inventory, receivables, borrowings and advances, `LCTT` for depreciation and cash flow, `TM` for notes; a row without a name cannot be used, take that item from company disclosures. `news_market` is the latest-news feed and cannot be searched by topic or ticker: wherever this skill names it for sector figures, prices or legal texts, look them up with `web_search` (source + date) and keep `news_market` for the day's headlines.
 
 Tool check: `peer_compare` uses only the overview keys actually present in the result (such as P/E, P/B, ROE); its `metrics` parameter does not create extra metrics. Margins, volumes, costs, inventory and operating KPIs must be read from each peer's `financial_detail` for the same period; if missing, look up company disclosures via `news_symbol`/`web_search`, stating the source, formula and period. With missing data, leave it blank and do not rank.
 
@@ -114,6 +119,7 @@ in ramp-up: state the capacity running versus design.
   direct price shock to domestic market share.
 - **Destination-market investigation risk**: high exports mean a high risk of investigation
   in that very market.
+- **Carbon border risk**: steel sold to the EU carries a carbon cost; check the rule and the product scope in force.
 - **New-mill risk**: low capacity utilisation during ramp-up.
 
 ## Ranh giới

@@ -11,7 +11,8 @@
 | Signed revenue | Company disclosures (`news_symbol`/`company_events`) | A **leading** signal; a strong signing period does not reach revenue at once. State the signing period |
 | Contract duration | Company disclosures | 2–3-year contracts give more durable revenue than short-term orders |
 | Share of large orders | Company disclosures | Large orders create unusual profit: mark them as one-off; never extrapolate |
-| Backlog / unrecognised revenue | `financial_detail` (if available) | The stock of future revenue; falling = the backlog is being used up |
+| Backlog | Company disclosures | The stock of signed, undelivered work; falling = it is being used up |
+| Unearned revenue | `financial_detail` (`CDKT`) | Only what clients prepaid: never read it as the whole backlog |
 
 ## 2. Nhóm mảng
 
@@ -29,6 +30,8 @@
 | Headcount | `financial_detail` / company disclosures | Growing faster than revenue = expanding by headcount |
 | Gross margin | `financial_detail` | Falling for 2 consecutive quarters during expansion = labour costs squeezing margins |
 | Pre-tax margin | `financial_detail` | Read with the segment split: domestic and foreign margins differ |
+| Trade receivables | `financial_detail` (`CDKT`) | Growing faster than revenue = clients paying late, often in the domestic segment |
+| Capital spending, depreciation | `financial_detail` (`LCTT`) | Telecom, data centres: spending runs ahead of revenue |
 
 ## 4. Nhóm đối chiếu
 

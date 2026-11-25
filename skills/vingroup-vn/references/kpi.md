@@ -32,6 +32,8 @@
 | Cash | `financial_detail` | Compare with what falls due in the next 6 months |
 | Interest cost and average cost of capital | `financial_detail` / `news_market` | Growing faster than revenue = profit eaten by financial costs |
 | EV accumulated losses | The company's statements/notes via `financial_detail`/`news_symbol`/`web_search` | Accounting losses are not the same as cash burned; cross-check operating and investing cash flow |
+| Operating cash flow | `financial_detail` (`LCTT`) | Negative for long while profit is positive = profit not turning into cash |
+| Related-party transactions | Company disclosures (notes) | Size against the period's profit; selling a subsidiary is one-off |
 
 ## 4. Nhóm quản trị và chỉ số
 
@@ -43,7 +45,16 @@
 | Index releases with weights and dates | Weights, constituent price changes for the same index/period and the start-of-period index level | Compute contribution only with complete compatible data; VN30 quotes carry no exchange market-cap denominator or weights. Share of exchange market cap differs from index weight and point contribution |
 | `peer_compare` | The overview keys it really returns (P/B, ROE...) | Segment margin/leverage KPIs must come from each peer's statements/disclosures for the same period; never compare a multi-sector consolidated group with a pure real-estate company |
 
-## 5. Bẫy đọc thường gặp
+## 5. SOTP (tự tính, ghi rõ giả định)
+
+| Part | How to compute |
+|---|---|
+| Listed subsidiaries | Market cap (`MarketCapital` in `stock_overview` of each ticker) × the parent's ownership (company disclosures; `vn_company` does not return it) |
+| Unlisted segments | A method that fits the segment; not enough figures → write "chưa định giá", never guess |
+| Parent net debt | Parent-only borrowings − parent-only cash (separate statements if available) |
+| Conglomerate discount | State the assumed level and the reason |
+
+## 6. Bẫy đọc thường gặp
 
 - Comparing consolidated revenue/profit with a prior period right after spinning off or divesting a segment: the conclusion is
   meaningless; read the entity differences first.

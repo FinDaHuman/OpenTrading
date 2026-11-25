@@ -23,6 +23,8 @@
 | Average realised rate / volume | Computed with `shell` (one arithmetic-only command on figures from tool results): revenue / volume; label it "tính từ" | Compare QoQ/YoY. Prices up + volume down is unsustainable growth |
 | Route rates (external) | `news_market` | State the route and check date; rates are a short cycle |
 | Berth utilisation | `news_market` | New berths not yet filled = fixed costs running ahead of revenue |
+| Passengers, seat load factor, aircraft in service | `news_symbol`/`web_search` | Airlines: read with fares; more seats with a lower load factor is not growth |
+| Warehouse area, forwarded volume | `news_symbol`/`web_search` | Logistics: follows export + import volume |
 
 ## 3. Nhóm chi phí
 
@@ -30,6 +32,8 @@
 |---|---|---|
 | Fuel costs | `financial_detail` (if available) / `yf_commodities` | Squeeze shipping margins before rates adjust |
 | Financial costs | `financial_detail` | New ships/berths bought with borrowings: interest costs run ahead of capacity |
+| Assets under construction, depreciation | `financial_detail` (`CDKT`, `LCTT`) | Ships and berths coming into use raise depreciation before volume; needed for EBITDA |
+| FX loss, USD debt | `financial_detail` / company disclosures | Airlines, shipowners: a weaker dong hits costs and debt at once |
 | Gross margin | `financial_detail` | Read by segment; the consolidated figure hides the port–ship gap |
 
 ## 4. Nhóm tín hiệu cầu
