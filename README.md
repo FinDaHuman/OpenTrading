@@ -2,9 +2,9 @@
 
 [English](README.en.md) · **Tiếng Việt**
 
-Harness AI phân tích chứng khoán Việt Nam, chạy trong terminal. Kết nối hơn 200 nhà cung cấp LLM, gắn MCP server lấy dữ liệu thị trường, để agent gọi tool, giao việc cho subagent, chạy playbook nghiên cứu nhiều agent (ultradesk) và trích nguồn số liệu. Giao diện, prompt và tài liệu bằng tiếng Việt.
+Harness AI phân tích chứng khoán Việt Nam, chạy trong terminal. Kết nối hơn 200 nhà cung cấp LLM, gắn MCP server lấy dữ liệu thị trường, để agent gọi tool, giao việc cho subagent, chạy playbook nghiên cứu nhiều agent (ultradesk), trích nguồn số liệu và đưa khuyến nghị Mua/Giữ/Bán khi bạn hỏi. Giao diện, câu trả lời và tài liệu bằng tiếng Việt; prompt gửi cho model viết bằng tiếng Anh để tốn ít token hơn.
 
-> **Bản demo.** Đã có TUI, kết nối LLM, agent loop gọi tool, MCP client (dữ liệu thị trường qua server `opentrading-mcp`), skills, subagent, ultradesk, effort suy luận, nén hội thoại và lưu phiên. Đây không phải tư vấn đầu tư (xem [Miễn trừ trách nhiệm](#miễn-trừ-trách-nhiệm--disclaimer)). Tiến độ: [docs/STATUS.md](docs/STATUS.md).
+> **Bản demo.** Đã có TUI, kết nối LLM, agent loop gọi tool, MCP client (dữ liệu thị trường qua server `opentrading-mcp`), skills, subagent, ultradesk, effort suy luận, nén hội thoại và lưu phiên. Khi được hỏi, OpenTrading đưa khuyến nghị Mua/Giữ/Bán, giá mục tiêu, điểm vào và cắt lỗ dựa trên số liệu từ tool; nó không đặt lệnh và quyết định là của bạn (xem [Miễn trừ trách nhiệm](#miễn-trừ-trách-nhiệm--disclaimer)). Tiến độ: [docs/STATUS.md](docs/STATUS.md).
 
 ![Màn hình đầu của OpenTrading trong Windows Terminal](docs/images/tui-home.png)
 
@@ -38,8 +38,8 @@ Cài xong, **mở terminal mới** rồi gõ `ot` (hoặc `opentrading`).
 
 - Script cài chọn đúng bản cho máy (Windows/macOS/Linux, x64/arm64, CPU x64 đời cũ không có AVX2) và kiểm tra file tải về với `SHA256SUMS` của bản phát hành. Sau đó nó đặt `opentrading` và `ot` vào `~/.opentrading/bin` rồi thêm thư mục đó vào PATH: Windows sửa PATH của user; macOS/Linux thêm một dòng có ghi chú vào `.zshrc`, `.bashrc` hoặc `config.fish`.
 - Cài một bản cụ thể:
-  - PowerShell: đặt biến trước khi chạy, `$env:OPENTRADING_VERSION="0.2.0"; irm … | iex`.
-  - bash: `curl … | bash -s -- --version 0.2.0`.
+  - PowerShell: đặt biến trước khi chạy, `$env:OPENTRADING_VERSION="0.5.0"; irm … | iex`.
+  - bash: `curl … | bash -s -- --version 0.5.0`.
   - Tuỳ chọn khác: `--dir`, `--no-modify-path`, `--uninstall` (xem `install.sh --help`, hoặc phần đầu file `install.ps1`).
 - Binary chưa ký số: lần đầu chạy, Windows SmartScreen có thể cảnh báo. Trên macOS, file nén tải bằng trình duyệt bị Gatekeeper chặn; script cài dùng `curl` nên không bị.
 - Linux dùng musl (Alpine) chưa có bản dựng sẵn: [chạy từ mã nguồn](#chạy-từ-mã-nguồn).
@@ -50,7 +50,7 @@ Cài xong, **mở terminal mới** rồi gõ `ot` (hoặc `opentrading`).
 ```bash
 ot update            # cập nhật lên bản mới nhất
 ot update --check    # chỉ xem có bản mới không
-ot update 0.2.0      # cài đúng một bản (kể cả bản cũ hơn)
+ot update 0.5.0      # cài đúng một bản (kể cả bản cũ hơn)
 ```
 
 - Khi mở, OpenTrading kiểm tra bản mới tối đa một lần mỗi ngày và hiện thông báo ở góc phải. Tắt trong `/config` → **Báo bản mới**, hoặc đặt `OPENTRADING_DISABLE_UPDATE_CHECK=1`.
@@ -138,6 +138,7 @@ ot --help                # mọi tuỳ chọn
 | --- | --- |
 | **Hơn 200 provider** | Groq, Gemini, NVIDIA, OpenAI, Anthropic, OpenRouter, DeepSeek… (danh sách từ [models.dev](https://models.dev)); `/model` có yêu thích, dùng gần đây, nhóm theo provider, và hỏi effort ngay khi model có nhiều mức |
 | **Agent gọi tool** | Tool có sẵn (giờ phiên, chart, watchlist, web, file, shell, todo, hỏi lại người dùng) và tool của MCP server; tool ít dùng được nạp khi cần (`tool_search`) |
+| **Khuyến nghị** | Hỏi "có nên mua FPT không" hay "chọn giúp một mã" thì nhận câu trả lời Mua/Giữ/Bán hoặc một lựa chọn. Model được hướng dẫn tính giá mục tiêu, vùng mua, cắt lỗ từ số liệu tool trong hội thoại, ghi phương pháp và điều kiện làm nó sai, và nói thiếu dữ liệu thay vì đoán (model nhỏ đôi khi không làm đủ: hãy kiểm tra). Nếu hồ sơ hay ràng buộc của bạn ghi không muốn nhận khuyến nghị, OpenTrading tôn trọng điều đó |
 | **Ultradesk** | Chạy một *playbook* nghiên cứu nhiều agent (sàng lọc mã, kiểm chứng số liệu, tranh biện, phân tích ngành) với card tiến độ trực tiếp trong chat và bảng `/desk` |
 | **Effort** | `/effort` và `ctrl+t` chỉnh mức suy luận cho agent chính, subagent và ultradesk; thanh trạng thái hiện mức model thật sự nhận |
 | **Subagent** | Giao việc cho agent con chạy song song hoặc chạy nền, có panel theo dõi dưới ô nhập |
@@ -332,7 +333,7 @@ OpenTrading không kèm dữ liệu. Số liệu đến từ MCP server bạn g�
 - Mã nguồn server: [opentrading-mcp](https://github.com/DoanDuyLong212/opentrading-mcp). Bạn có thể tự chạy server này, hoặc gắn bất kỳ MCP server nào khác (stdio, Streamable HTTP, SSE, OAuth).
 - Không có MCP server thì agent chỉ còn các tool có sẵn (web, file, chart, watchlist) để làm việc.
 
-Gắn bằng CLI: `ot mcp add <tên> <url>` hoặc `ot mcp add <tên> -- <lệnh>`; `ot mcp list` để xem. Kết quả dạng bảng số được gắn mã `[ref rN]`: chart đọc số trực tiếp từ đó, model không phải chép lại.
+Gắn bằng CLI: `ot mcp add <tên> <url>` hoặc `ot mcp add <tên> -- <lệnh>`; `ot mcp list` để xem. Kết quả dạng bảng số được gắn mã `[ref rN]`: chart đọc số trực tiếp từ đó, model không phải chép lại. Mỗi kết quả có mã `[ref rN]` cũng được ghi thành file `rN.json` trong thư mục tạm của phiên (hoặc `results.exportDir` trong config), để một lệnh tính toán đọc thẳng từ file thay vì gõ lại số.
 
 ## Provider, model và key
 
@@ -345,7 +346,7 @@ Gắn bằng CLI: `ot mcp add <tên> <url>` hoặc `ot mcp add <tên> -- <lệnh
 
 - Hội thoại được lưu ở `~/.opentrading/sessions/`, gắn với thư mục đã mở; `/sessions` mở lại (mặc định phiên của thư mục này, `tab` xem mọi thư mục), tiêu đề được đặt tự động sau lượt đầu.
 - Gần đầy ngữ cảnh thì tự nén (ngưỡng trong `/config`); `/compact` nén tay.
-- Memory (Sổ ghi nhớ, bật trong `/config`): tự ghi ràng buộc, cách trình bày, luận điểm, bài học bằng `/nho`, `/luandiem`, `/baihoc`; xem, sửa, xoá trong `/memory`. Model có thể gợi ý lưu bằng một thẻ dưới câu trả lời; chỉ lưu khi bạn xác nhận trong form (lưu hoặc bỏ qua ở tab Gợi ý của `/memory`).
+- Memory (Sổ ghi nhớ, bật trong `/config`): tự ghi ràng buộc, cách trình bày, luận điểm, bài học bằng `/nho`, `/luandiem`, `/baihoc`; xem, sửa, xoá trong `/memory`. Model có thể gợi ý lưu bằng một thẻ dưới câu trả lời; chỉ lưu khi bạn xác nhận trong form (lưu hoặc bỏ qua ở tab Gợi ý của `/memory`). Bật **Tự lưu thẻ ràng buộc và cách trình bày** (`/config` → Memory, hoặc tab Cài đặt của `/memory`) thì thẻ ràng buộc/cách trình bày trích đúng lời bạn được lưu ngay (mặc định tắt; thẻ bài học vẫn chờ bạn).
 - Hồ sơ nhà đầu tư `INVESTOR.md` (`/profile`) luôn có trong ngữ cảnh.
 
 ## Cấu hình
@@ -451,13 +452,14 @@ Xem [docs/decisions/0001-typescript.md](docs/decisions/0001-typescript.md) để
 
 ## Miễn trừ trách nhiệm / Disclaimer
 
-OpenTrading là phần mềm nghiên cứu. Nó **không phải dịch vụ tư vấn đầu tư chứng khoán** và không đặt lệnh giao dịch.
+OpenTrading là phần mềm nghiên cứu, không đặt lệnh giao dịch. Từ bản 0.5.1, khi bạn hỏi, nó có thể đưa khuyến nghị Mua/Giữ/Bán, chọn mã, giá mục tiêu, điểm vào và cắt lỗ. Những khuyến nghị đó do model AI tạo ra từ số liệu của tool; chúng không đến từ một công ty chứng khoán hay người hành nghề tư vấn đầu tư được cấp phép, và không xét đến toàn bộ hoàn cảnh tài chính của bạn.
 
-- Câu trả lời do model AI viết, có thể sai, thiếu hoặc dựa trên số liệu cũ. Hãy kiểm tra lại với nguồn gốc trước khi dùng.
+- Câu trả lời và khuyến nghị có thể sai, thiếu hoặc dựa trên số liệu cũ. Hãy kiểm tra lại với nguồn gốc trước khi dùng.
 - Mọi quyết định đầu tư và rủi ro đi kèm là của bạn.
+- OpenTrading từ chối giúp thao túng giá hay giao dịch nội gián.
 - Tác giả và người đóng góp không chịu trách nhiệm về thiệt hại phát sinh từ việc dùng phần mềm (xem điều 7–8 của `LICENSE`).
 
-OpenTrading is research software, not an investment advisory service, and it does not place orders. Answers are written by AI models and may be wrong, incomplete or based on stale data; verify them against the original sources. You are solely responsible for your investment decisions. The software is provided "AS IS", without warranties (see sections 7–8 of `LICENSE`).
+OpenTrading is research software and does not place orders. When asked, it may give buy/hold/sell recommendations, picks, target prices, entries and stop-losses; these are generated by AI models from tool data, not by a licensed securities firm or investment adviser, and do not consider your full financial situation. Answers and recommendations are written by AI models and may be wrong, incomplete or based on stale data; verify them against the original sources. You are solely responsible for your investment decisions. The software is provided "AS IS", without warranties (see sections 7–8 of `LICENSE`).
 
 ## Giấy phép / License
 

@@ -5,6 +5,12 @@ adopt Semantic Versioning when it exposes a stable public API.
 
 ## [Unreleased]
 
+### Changed
+
+- README (both languages) describes the buy/hold/sell recommendations of #437 and its disclaimer is rewritten to
+  match: recommendations come from AI models and tool data, not a licensed adviser; no orders; the user decides.
+  It also says the prompts sent to the model are in English, and covers `rN.json` data results and card auto-save.
+
 ## [0.5.1] — 2026-11-25
 
 OpenTrading may now give buy/sell/hold recommendations, PowerShell calculations with labels run without asking, a
