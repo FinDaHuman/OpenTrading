@@ -2,9 +2,9 @@
 
 **English** · [Tiếng Việt](README.md)
 
-A terminal AI harness for researching Vietnamese equities. It connects to 200+ LLM providers and to MCP servers for market data. The agent calls tools, hands work to subagents, runs multi-agent research playbooks (ultradesk) and cites its sources. The UI, prompts and most docs are in Vietnamese; this page is the English guide.
+A terminal AI harness for researching Vietnamese equities. It connects to 200+ LLM providers and to MCP servers for market data. The agent calls tools, hands work to subagents, runs multi-agent research playbooks (ultradesk), cites its sources and gives a buy/hold/sell call when you ask for one. The UI, its answers and most docs are in Vietnamese (the prompts sent to the model are in English, which costs fewer tokens); this page is the English guide.
 
-> **Demo release.** Working today: the TUI, LLM connections, a tool-calling agent loop, an MCP client (market data through the `opentrading-mcp` server), skills, subagents, ultradesk, reasoning effort, conversation compaction and saved sessions. It is not investment advice (see [Disclaimer](#disclaimer)). Progress: [docs/STATUS.md](docs/STATUS.md) (Vietnamese).
+> **Demo release.** Working today: the TUI, LLM connections, a tool-calling agent loop, an MCP client (market data through the `opentrading-mcp` server), skills, subagents, ultradesk, reasoning effort, conversation compaction and saved sessions. When asked, OpenTrading gives buy/hold/sell recommendations, target prices, entries and stop-losses derived from tool data; it places no orders and the decision is yours (see [Disclaimer](#disclaimer)). Progress: [docs/STATUS.md](docs/STATUS.md) (Vietnamese).
 
 ![OpenTrading's home screen in Windows Terminal](docs/images/tui-home.png)
 
@@ -38,8 +38,8 @@ Then **open a new terminal** and run `ot` (or `opentrading`).
 
 - The installers pick the build for your machine: Windows/macOS/Linux, x64/arm64, and a baseline build for older x64 CPUs without AVX2. They check the download against the release's `SHA256SUMS`. Then they put `opentrading` and `ot` in `~/.opentrading/bin` and add that folder to PATH: the user PATH on Windows, one marked line in `.zshrc`, `.bashrc` or `config.fish` on macOS/Linux.
 - To install a given version:
-  - PowerShell: set a variable first, `$env:OPENTRADING_VERSION="0.2.0"; irm … | iex`.
-  - bash: `curl … | bash -s -- --version 0.2.0`.
+  - PowerShell: set a variable first, `$env:OPENTRADING_VERSION="0.5.0"; irm … | iex`.
+  - bash: `curl … | bash -s -- --version 0.5.0`.
   - Other options: `--dir`, `--no-modify-path`, `--uninstall` (see `install.sh --help`, or the top of `install.ps1`).
 - The binaries are not code-signed yet. Windows SmartScreen may warn on the first run. On macOS, Gatekeeper blocks an archive downloaded with a browser; the installer uses `curl`, which avoids that.
 - musl-based Linux (Alpine) has no prebuilt binary yet: [run from source](#run-from-source).
@@ -50,7 +50,7 @@ Then **open a new terminal** and run `ot` (or `opentrading`).
 ```bash
 ot update            # update to the latest release
 ot update --check    # only tell me whether there is one
-ot update 0.2.0      # install that exact version (older ones too)
+ot update 0.5.0      # install that exact version (older ones too)
 ```
 
 - When it opens, OpenTrading checks for a new release at most once a day and shows a notice in the top-right corner. Turn this off in `/config` → **Báo bản mới** ("new version notice"), or set `OPENTRADING_DISABLE_UPDATE_CHECK=1`.
@@ -128,6 +128,7 @@ ot --help                # every option
 | --- | --- |
 | **200+ providers** | Groq, Gemini, NVIDIA, OpenAI, Anthropic, OpenRouter, DeepSeek… (list from [models.dev](https://models.dev)). `/model` has favorites, recent models, grouping by provider, and asks for the effort when a model has levels |
 | **Tool-calling agent** | Built-in tools (market clock, charts, watchlist, web, files, shell, todos, asking you back) plus every MCP server's tools. Rarely used tools are loaded on demand (`tool_search`) |
+| **Recommendations** | Ask "should I buy FPT?" or "pick one for me" and you get a buy/hold/sell call or a pick. The model is instructed to derive a target price, buy zone or stop-loss from tool figures in the conversation, state the method and what would invalidate it, and say when the data is too thin instead of guessing (small models do not always manage all of it: check). A profile or constraint that rules recommendations out is respected |
 | **Ultradesk** | Runs a multi-agent research *playbook* (screening, fact-checking, bull/bear debate, sector overview) with a live progress card in the chat and a `/desk` view |
 | **Effort** | `/effort` and `ctrl+t` set the reasoning effort for the main agent, subagents and ultradesk; the status bar shows what the model actually receives |
 | **Subagents** | Hand work to child agents that run in parallel or in the background, with a panel under the prompt |
@@ -344,7 +345,7 @@ OpenTrading ships no market data. Figures come from the MCP servers you add (see
 - The server's source: [opentrading-mcp](https://github.com/DoanDuyLong212/opentrading-mcp). You can run it yourself, or add any other MCP server (stdio, Streamable HTTP, SSE, OAuth).
 - With no MCP server, the agent works with its built-in tools only (web, files, charts, watchlist).
 
-From the command line: `ot mcp add <name> <url>` or `ot mcp add <name> -- <command>`; `ot mcp list` to see them. Tabular results get an `[ref rN]` tag, and charts read the numbers from it, so the model never copies them by hand.
+From the command line: `ot mcp add <name> <url>` or `ot mcp add <name> -- <command>`; `ot mcp list` to see them. Tabular results get an `[ref rN]` tag, and charts read the numbers from it, so the model never copies them by hand. Every `[ref rN]` result is also written as `rN.json` in the session's temp folder (or config `results.exportDir`), so a calculation can read the file instead of retyping the numbers.
 
 ## Providers, models and keys
 
@@ -357,7 +358,7 @@ From the command line: `ot mcp add <name> <url>` or `ot mcp add <name> -- <comma
 
 - Conversations are saved in `~/.opentrading/sessions/`, tied to the folder they were opened in. `/sessions` reopens one: this folder's by default, `tab` for every folder. A title is set automatically after the first turn.
 - Near the context limit the conversation is compacted automatically (threshold in `/config`); `/compact` does it by hand.
-- Memory (the notebook, on in `/config`): you write constraints, presentation style, theses and lessons with `/nho`, `/luandiem`, `/baihoc`, and view, edit or delete them in `/memory`. The model may suggest saving one with a card under its answer; nothing is saved until you confirm the form (save or dismiss it on the suggestions tab of `/memory`).
+- Memory (the notebook, on in `/config`): you write constraints, presentation style, theses and lessons with `/nho`, `/luandiem`, `/baihoc`, and view, edit or delete them in `/memory`. The model may suggest saving one with a card under its answer; nothing is saved until you confirm the form (save or dismiss it on the suggestions tab of `/memory`). With **Tự lưu thẻ ràng buộc và cách trình bày** on (`/config` → Memory, or the settings tab of `/memory`; off by default), a constraint or style card that quotes your own words is saved at once; lesson cards still wait for you.
 - Your investor profile `INVESTOR.md` (`/profile`) is always in the context.
 
 ## Configuration
@@ -461,10 +462,11 @@ docs/         topic guides; docs/decisions/ architecture decisions
 
 ## Disclaimer
 
-OpenTrading is research software, not an investment advisory service, and it does not place orders.
+OpenTrading is research software and does not place orders. Since 0.5.1, when you ask, it may give buy/hold/sell recommendations, picks, target prices, entries and stop-losses. They are generated by AI models from tool data, not by a licensed securities firm or investment adviser, and they do not consider your full financial situation.
 
-- Answers are written by AI models and may be wrong, incomplete or based on stale data. Verify them against the original sources.
+- Answers and recommendations may be wrong, incomplete or based on stale data. Verify them against the original sources.
 - You alone are responsible for your investment decisions and their risks.
+- OpenTrading refuses to help with price manipulation or insider trading.
 - The software is provided "AS IS", without warranties; the authors and contributors are not liable for damages from its use (see sections 7–8 of `LICENSE`).
 
 ## License
